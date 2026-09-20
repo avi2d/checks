@@ -59,8 +59,9 @@ jobs:
     uses: avi2d/checks/.github/workflows/commitlint.yml@main
 ```
 
-It lints every commit in the pull request plus the pull request title.
-The title step exists because squash merges use the PR title as the main commit subject.
+It lints the pull request title and nothing else. The title is the
+enforced subject because squash merges use the PR title as the main
+commit subject; per-commit messages are not linted.
 
 ## Why it is shaped this way
 
