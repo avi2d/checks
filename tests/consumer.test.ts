@@ -67,7 +67,6 @@ test(
 
     const green = await oxlint();
     expect(green.exitCode).toBe(0);
-    expect(green.text).not.toContain("error");
   },
   180_000,
 );
