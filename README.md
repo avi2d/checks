@@ -52,7 +52,7 @@ reaches a consumer on its next `bun install`.
   `bun build effect-channel/index.ts --outdir dist --target node --format esm`.
   Node refuses to type-strip a `.ts` plugin under `node_modules`, so the
   `.ts` source would fail to load from an installed package.
-- `dist/` is committed. Bun does not run `prepare` on a `file:` install,
+- `dist/` is committed. Bun runs no lifecycle script on a `file:` install,
   so a consumer would otherwise get no `dist/`. Rebuild it after pulling
   with `bun run build`; CI fails when the committed bundle is stale.
 

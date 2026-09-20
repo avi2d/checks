@@ -8,10 +8,8 @@
     "./tsconfig.effect.json": "./tsconfig.effect.json",
     "./dist/index.js": "./dist/index.js"
   },
-  "files": ["oxlintrc.json", "tsconfig.effect.json", "dist/", "effect-channel/"],
   "scripts": {
     "build": "bun build effect-channel/index.ts --outdir dist --target node --format esm",
-    "prepare": "bun run build",
     "lint": "oxlint --type-aware",
     "typecheck": "tsc --noEmit",
     "test": "bun test"

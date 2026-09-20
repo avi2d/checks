@@ -3,7 +3,7 @@
 This file is the project's committed home for project-intrinsic agent knowledge: build, test, release, architecture, and sharp-edge notes that should travel with the code.
 
 - Add durable project-specific notes here as they are discovered through real work.
-- `dist/` is committed because bun skips `prepare` on `file:` installs; rebuild with `bun run build`. See README.md "Why it is shaped this way".
+- `dist/` is committed because bun runs no build on `file:` installs; rebuild with `bun run build`. See README.md "Why it is shaped this way".
 - Consumer `.oxlintrc.json` must restate `plugins`: oxlint does not inherit them through `extends`.
 
 ## Maintaining this file
