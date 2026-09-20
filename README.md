@@ -59,7 +59,7 @@ jobs:
     uses: avi2d/checks/.github/workflows/commitlint.yml@main
 ```
 
-It lints every commit in the pull request plus the pull request title.
+It lints every commit in the pull request.
 
 ## Why it is shaped this way
 

@@ -8,6 +8,8 @@ jobs:
   commitlint:
     if: github.event_name == 'pull_request'
     uses: ./.github/workflows/commitlint.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
   checks:
     runs-on: ubuntu-latest
     steps:

@@ -1,6 +1,11 @@
 name: commitlint
 on:
   workflow_call:
+    inputs:
+      ref:
+        description: Ref of avi2d/checks to lint with
+        type: string
+        default: main
 
 jobs:
   commitlint:
@@ -12,12 +17,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: avi2d/checks
-          ref: main
+          ref: ${{ inputs.ref }}
           path: checks
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
         working-directory: checks
       - run: ./checks/node_modules/.bin/commitlint --config ./checks/commitlint.config.js --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
-      - run: printf '%s' "$PR_TITLE" | ./checks/node_modules/.bin/commitlint --config ./checks/commitlint.config.js
-        env:
-          PR_TITLE: ${{ github.event.pull_request.title }}

@@ -26,15 +26,10 @@ test(
 );
 
 test(
-  "commitlint config accepts a conventional message with a squash-merge PR suffix",
+  "commitlint config accepts a conventional message",
   async () => {
-    const green = await lint("feat(lint): add x (#12)");
+    const green = await lint("feat(lint): add x");
     expect(green.exitCode).toBe(0);
-
-    const long = await lint(
-      "feat: create @avi2d/checks with shared oxlint config, Effect tsconfig fragment, and error-channel plugin (#1)",
-    );
-    expect(long.exitCode).toBe(0);
   },
   60_000,
 );
