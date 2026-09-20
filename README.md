@@ -43,6 +43,24 @@ bun add -d file:../checks oxlint@1.83.0 oxlint-tsgolint@7.0.2002 @effect/tsgo@0.
 The lockfile pins nothing for the `file:` dependency, so a change here
 reaches a consumer on its next `bun install`.
 
+## Commit lint
+
+Commits follow `@commitlint/config-conventional`, shared from
+`@avi2d/checks/commitlint.config.js`. It arrives with the `file:`
+dependency above, since `@commitlint/cli` and
+`@commitlint/config-conventional` are dependencies, not peers.
+Enforcement runs in CI on pull requests, because `jj` never fires a
+git hook. Add this workflow to the consuming repo:
+
+```yaml
+on: pull_request
+jobs:
+  commitlint:
+    uses: avi2d/checks/.github/workflows/commitlint.yml@main
+```
+
+It lints every commit in the pull request plus the pull request title.
+
 ## Why it is shaped this way
 
 - `plugins` does not inherit through oxlint `extends`. `rules`,

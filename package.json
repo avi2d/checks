@@ -4,6 +4,7 @@
   "description": "Deterministic checks shared across the captain's TypeScript repos",
   "type": "module",
   "exports": {
+    "./commitlint.config.js": "./commitlint.config.js",
     "./oxlintrc.json": "./oxlintrc.json",
     "./tsconfig.effect.json": "./tsconfig.effect.json",
     "./dist/index.js": "./dist/index.js"
@@ -27,5 +28,9 @@
     "oxlint": "1.83.0",
     "oxlint-tsgolint": "7.0.2002",
     "typescript": "7.0.2"
+  },
+  "dependencies": {
+    "@commitlint/cli": "21.2.3",
+    "@commitlint/config-conventional": "21.2.3"
   }
 }

@@ -1,0 +1,23 @@
+name: commitlint
+on:
+  workflow_call:
+
+jobs:
+  commitlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: avi2d/checks
+          ref: main
+          path: checks
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+        working-directory: checks
+      - run: ./checks/node_modules/.bin/commitlint --config ./checks/commitlint.config.js --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
+      - run: printf '%s' "$PR_TITLE" | ./checks/node_modules/.bin/commitlint --config ./checks/commitlint.config.js
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
