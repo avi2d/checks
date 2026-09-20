@@ -2,8 +2,8 @@
 
 Deterministic checks shared across my TypeScript repos. One package,
 `@avi2d/checks`: the oxlint base config, the tsconfig fragment with the
-Effect language-service block, and the Effect error-channel plugin
-compiled to JavaScript.
+Effect language-service block, the shared commitlint config, and the
+Effect error-channel plugin compiled to JavaScript.
 
 Consumed by a `file:` dependency on the local checkout. No npm publish.
 
@@ -42,6 +42,28 @@ bun add -d file:../checks oxlint@1.83.0 oxlint-tsgolint@7.0.2002 @effect/tsgo@0.
 
 The lockfile pins nothing for the `file:` dependency, so a change here
 reaches a consumer on its next `bun install`.
+
+## Commit lint
+
+Commits follow `@commitlint/config-conventional`, shared from
+`@avi2d/checks/commitlint.config.js`. It arrives with the `file:`
+dependency above, since `@commitlint/cli` and
+`@commitlint/config-conventional` are dependencies, not peers.
+Enforcement runs in CI on pull requests, because `jj` never fires a
+git hook. Add this workflow to the consuming repo:
+
+```yaml
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+jobs:
+  commitlint:
+    uses: avi2d/checks/.github/workflows/commitlint.yml@main
+```
+
+It lints the pull request title and nothing else. The title is the
+enforced subject because squash merges use the PR title as the main
+commit subject; per-commit messages are not linted.
 
 ## Why it is shaped this way
 
