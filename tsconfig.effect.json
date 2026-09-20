@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "erasableSyntaxOnly": true,
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "diagnosticSeverity": {
+          "anyUnknownInErrorContext": "error",
+          "unsafeEffectTypeAssertion": "error",
+          "missingEffectError": "error",
+          "unknownInEffectCatch": "error",
+          "globalErrorInEffectCatch": "error",
+          "globalErrorInEffectFailure": "error",
+          "catchUnfailableEffect": "error",
+          "catchAllToMapError": "error",
+          "missingReturnYieldStar": "error",
+          "floatingEffect": "error",
+          "outdatedApi": "error"
+        }
+      }
+    ]
+  }
+}

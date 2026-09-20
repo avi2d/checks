@@ -1,0 +1,21 @@
+{
+  "plugins": ["typescript", "oxc", "eslint", "import"],
+  "jsPlugins": ["./dist/index.js"],
+  "categories": { "correctness": "error", "suspicious": "error" },
+  "rules": {
+    "effect-channel/no-error-channel-escape": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/ban-ts-comment": ["error", { "ts-expect-error": true }],
+    "typescript/no-inferrable-types": "error",
+    "typescript/explicit-module-boundary-types": "error",
+    "typescript/switch-exhaustiveness-check": "error",
+    "typescript/prefer-readonly": "error",
+    "typescript/no-unnecessary-condition": ["error", { "allowConstantLoopConditions": true }],
+    "typescript/no-unnecessary-type-parameters": "error",
+    "typescript/use-unknown-in-catch-callback-variable": "error",
+    "eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_", "ignoreRestSiblings": true }],
+    "typescript/no-unsafe-type-assertion": "off",
+    "typescript/no-non-null-assertion": "off",
+    "typescript/consistent-return": "off"
+  }
+}
