@@ -28,7 +28,7 @@ test(
 test(
   "commitlint config accepts a conventional message",
   async () => {
-    const green = await lint("feat(lint): add x");
+    const green = await lint("feat(lint): add x (#12)");
     expect(green.exitCode).toBe(0);
   },
   60_000,

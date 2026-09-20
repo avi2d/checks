@@ -59,7 +59,8 @@ jobs:
     uses: avi2d/checks/.github/workflows/commitlint.yml@main
 ```
 
-It lints every commit in the pull request.
+It lints every commit in the pull request plus the pull request title.
+The title step exists because squash merges use the PR title as the main commit subject.
 
 ## Why it is shaped this way
 
