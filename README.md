@@ -53,7 +53,9 @@ Enforcement runs in CI on pull requests, because `jj` never fires a
 git hook. Add this workflow to the consuming repo:
 
 ```yaml
-on: pull_request
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
 jobs:
   commitlint:
     uses: avi2d/checks/.github/workflows/commitlint.yml@main
