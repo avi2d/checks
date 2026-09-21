@@ -9,7 +9,6 @@ const houseTypes = [
   "home",
   "audit",
   "comments",
-  "tests",
   "unslop",
 ];
 

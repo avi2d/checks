@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 
 const CHECKOUT = resolve(import.meta.dir, "..");
 const SCRIPT = join(CHECKOUT, "scripts", "lint-coverage.sh");
-const OXLINT = join(CHECKOUT, "node_modules", ".bin", "oxlint");
+const BIN = join(CHECKOUT, "node_modules", ".bin");
 const PLANT = "src/skipped.ts";
 
 let dir = "";
@@ -14,7 +14,7 @@ let dir = "";
 async function coverage(): Promise<{ exitCode: number; text: string }> {
   const result = await $`${SCRIPT}`
     .cwd(dir)
-    .env({ ...process.env, OXLINT_BIN: OXLINT })
+    .env({ ...process.env, PATH: `${BIN}:${process.env.PATH ?? ""}` })
     .nothrow()
     .quiet();
   return {

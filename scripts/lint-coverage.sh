@@ -2,11 +2,6 @@
 # lint-coverage: fail when oxlint silently skips a tracked TypeScript source.
 set -eu
 
-bin="${OXLINT_BIN:-./node_modules/.bin/oxlint}"
-if ! [ -x "$bin" ]; then
-  bin="oxlint"
-fi
-
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
@@ -17,7 +12,7 @@ if ! [ -s "$tmp/expected" ]; then
 fi
 
 # Explicit paths bypass ignore files, so only an unscoped walk proves coverage.
-"$bin" --debug=files 2>/dev/null | grep -E '\.tsx?$' | LC_ALL=C sort > "$tmp/walked" || true
+oxlint --debug=files 2>/dev/null | grep -E '\.tsx?$' | LC_ALL=C sort > "$tmp/walked" || true
 
 expected_count="$(wc -l < "$tmp/expected" | tr -d ' ')"
 walked_count="$(grep -c . "$tmp/walked" || true)"

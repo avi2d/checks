@@ -46,7 +46,6 @@ test(
       "home",
       "audit",
       "comments",
-      "tests",
       "unslop",
     ];
     for (const type of house) {
