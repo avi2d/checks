@@ -136,6 +136,9 @@ subject, not the bare title.
   API for dependency-cruiser to use. Without `@swc/core` installed the
   cruise silently skips every `.ts` file, so this repo's test asserts its
   own TypeScript is cruised.
+- `bun` counts as a built-in module. Nothing installed resolves it except
+  `@types/bun`, which would otherwise make every runtime `bun` import look
+  like a dev-only dependency.
 - `no-deep-imports` judges the import specifier, never the resolved file.
   The base honours `exports` maps, so a subpath the map publishes resolves
   and passes, one it omits fails to resolve and is reported, and a package

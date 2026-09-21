@@ -63,6 +63,7 @@ export default {
   ],
   options: {
     parser: "swc",
+    builtInModules: { add: ["bun"] },
     doNotFollow: { path: ["node_modules"] },
     enhancedResolveOptions: {
       exportsFields: ["exports"],

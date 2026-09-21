@@ -132,6 +132,37 @@ async function writePackage(name: string, manifest: Record<string, unknown>, fil
 }
 
 test(
+  "not-to-dev-dep goes red on a runtime dev import, green on a bare bun import that only @types/bun answers",
+  async () => {
+    dir = await mkdtemp(join(tmpdir(), "checks-depcruiser-bun-"));
+    await writeProject({
+      "src/entry.test.js": `import "./entry.js";\n`,
+      "src/entry.js": `import { dev } from "fake-dev";\nexport const entry = dev;\n`,
+    });
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({
+        name: "checks-depcruiser-fixture",
+        type: "module",
+        devDependencies: { "@types/bun": "1.0.0", "fake-dev": "1.0.0" },
+      }),
+    );
+    await writePackage("fake-dev", {}, { "index.js": `export const dev = 1;\n` });
+    await writePackage("@types/bun", { types: "index.d.ts" }, { "index.d.ts": `declare module "bun" { export const $: unknown; }\n` });
+    const config = await writeConfig();
+
+    const red = await depcruise(config, "src");
+    expect(red.exitCode).not.toBe(0);
+    expect(red.text).toContain("not-to-dev-dep");
+
+    await writeFile(join(dir, "src/entry.js"), `import { $ } from "bun";\nexport const entry = $;\n`);
+    const green = await depcruise(config, "src");
+    expect(green.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
   "not-to-unresolvable goes red on a missing package, green once it is installed",
   async () => {
     dir = await mkdtemp(join(tmpdir(), "checks-depcruiser-unresolvable-"));
