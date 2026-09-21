@@ -36,7 +36,7 @@ bun add -d file:../checks oxlint@1.83.0 oxlint-tsgolint@7.0.2002 @effect/tsgo@0.
 `package.json` gains two scripts:
 
 ```json
-"lint": "oxlint --type-aware && ./node_modules/@avi2d/checks/scripts/lint-coverage.sh --type-aware",
+"lint": "oxlint --type-aware && ./node_modules/@avi2d/checks/scripts/lint-coverage.sh",
 "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict"
 ```
 

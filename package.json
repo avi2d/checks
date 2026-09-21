@@ -12,7 +12,7 @@
   },
   "scripts": {
     "build": "bun build effect-channel/index.ts --outdir dist --target node --format esm",
-    "lint": "oxlint --type-aware",
+    "lint": "oxlint --type-aware && ./scripts/lint-coverage.sh",
     "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
     "test": "bun test"
   },
