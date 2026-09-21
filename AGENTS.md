@@ -5,6 +5,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - Add durable project-specific notes here as they are discovered through real work.
 - `dist/` is committed because bun runs no build on `file:` installs; rebuild with `bun run build`. See README.md "Why it is shaped this way".
 - Consumer `.oxlintrc.json` must restate `plugins`: oxlint does not inherit them through `extends`.
+- `bun run lint` also cruises dependencies via `.dependency-cruiser.cjs`, which extends the shared base; new root-level source files must join the cruise scope in the `lint` script or they go unchecked.
 
 ## Maintaining this file
 

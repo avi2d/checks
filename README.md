@@ -2,8 +2,9 @@
 
 Deterministic checks shared across my TypeScript repos. One package,
 `@avi2d/checks`: the oxlint base config, the tsconfig fragment with the
-Effect language-service block, the shared commitlint config, and the
-Effect error-channel plugin compiled to JavaScript.
+Effect language-service block, the shared commitlint config, the shared
+dependency-cruiser base, and the Effect error-channel plugin compiled to
+JavaScript.
 
 Consumed by a `file:` dependency on the local checkout. No npm publish.
 
@@ -12,7 +13,7 @@ Consumed by a `file:` dependency on the local checkout. No npm publish.
 From the consuming repo, with this checkout beside it:
 
 ```sh
-bun add -d file:../checks oxlint@1.83.0 oxlint-tsgolint@7.0.2002 @effect/tsgo@0.45.0 typescript@7.0.2
+bun add -d file:../checks oxlint@1.83.0 oxlint-tsgolint@7.0.2002 @effect/tsgo@0.45.0 typescript@7.0.2 dependency-cruiser@18.4.0 @swc/core@1.16.2
 ```
 
 `.oxlintrc.json`:
@@ -46,6 +47,53 @@ bun add -d file:../checks oxlint@1.83.0 oxlint-tsgolint@7.0.2002 @effect/tsgo@0.
 
 The lockfile pins nothing for the `file:` dependency, so a change here
 reaches a consumer on its next `bun install`.
+
+## Dependency rules
+
+`.dependency-cruiser.cjs` extends the shared base, which carries
+`no-circular`, `no-orphans`, `not-to-dev-dep` (shipped source importing
+a dev-only package), `not-to-unresolvable` (nothing installed answers the
+specifier), and `no-deep-imports` (a subpath the package's exports map
+does not publish):
+
+```js
+module.exports = {
+  extends: "./node_modules/@avi2d/checks/dependency-cruiser.config.js",
+  forbidden: [
+    {
+      name: "ui-cannot-reach-server",
+      severity: "error",
+      from: { path: "^src/ui" },
+      to: { path: "^src/server" },
+    },
+  ],
+};
+```
+
+That last block is the layer-boundary recipe: append a named rule per
+boundary you own. A rule that restates a base name overrides it field
+by field, which is how an entry point stops being an orphan:
+redeclare `no-orphans` with your entry added to its `pathNot`.
+This repo's own `.dependency-cruiser.cjs` does that for the plugin
+entry.
+
+`package.json` gains the script:
+
+```json
+"lint:deps": "depcruise --config .dependency-cruiser.cjs src"
+```
+
+Enforcement runs in CI beside the other checks:
+
+```yaml
+jobs:
+  lint:
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run lint:deps
+```
 
 ## Commit lint
 
@@ -85,6 +133,22 @@ subject, not the bare title.
 - `dist/` is committed. Bun runs no lifecycle script on a `file:` install,
   so a consumer would otherwise get no `dist/`. Rebuild it after pulling
   with `bun run build`; CI fails when the committed bundle is stale.
+- The base parses with swc because typescript 7 (tsgo) has no compiler
+  API for dependency-cruiser to use. Without `@swc/core` installed the
+  cruise silently skips every `.ts` file, so this repo's test asserts its
+  own TypeScript is cruised.
+- `bun` counts as a built-in module. Nothing installed resolves it except
+  `@types/bun`, which would otherwise make every runtime `bun` import look
+  like a dev-only dependency.
+- `no-deep-imports` judges the import specifier, never the resolved file.
+  The base honours `exports` maps, so a subpath the map publishes resolves
+  and passes, one it omits fails to resolve and is reported, and a package
+  without an `exports` map publishes every file. A bare import always
+  passes whatever file its entry lives in. Setting your own
+  `options.enhancedResolveOptions` replaces the base's, so restate
+  `exportsFields` and `conditionNames` if you do.
+- dependency-cruiser `extends` merges same-name `forbidden` rules with the
+  child's fields winning. That is the entry-point and layer recipe above.
 
 ## Develop
 
