@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./commitlint.config.js": "./commitlint.config.js",
+    "./dependency-cruiser.config.js": "./dependency-cruiser.config.js",
     "./scripts/lint-coverage.sh": "./scripts/lint-coverage.sh",
     "./oxlintrc.json": "./oxlintrc.json",
     "./tsconfig.effect.json": "./tsconfig.effect.json",
@@ -12,19 +13,22 @@
   },
   "scripts": {
     "build": "bun build effect-channel/index.ts --outdir dist --target node --format esm",
-    "lint": "oxlint --type-aware && ./scripts/lint-coverage.sh",
+    "lint": "oxlint --type-aware && ./scripts/lint-coverage.sh && depcruise --config .dependency-cruiser.cjs effect-channel tests commitlint.config.js dependency-cruiser.config.js .dependency-cruiser.cjs",
     "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
     "test": "bun test"
   },
   "peerDependencies": {
+    "dependency-cruiser": "18.4.0",
     "@effect/tsgo": "0.45.0",
     "oxlint": "1.83.0",
     "oxlint-tsgolint": "7.0.2002"
   },
   "devDependencies": {
+    "dependency-cruiser": "18.4.0",
     "@effect/tsgo": "0.45.0",
     "@oxlint/plugins": "1.83.0",
     "@types/bun": "^1.3.0",
+    "dependency-cruiser": "18.4.0",
     "effect": "4.0.0-rc.115",
     "oxlint": "1.83.0",
     "oxlint-tsgolint": "7.0.2002",
