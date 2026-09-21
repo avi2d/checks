@@ -2,8 +2,9 @@
 
 Deterministic checks shared across my TypeScript repos. One package,
 `@avi2d/checks`: the oxlint base config, the tsconfig fragment with the
-Effect language-service block, the shared commitlint config, and the
-Effect error-channel plugin compiled to JavaScript.
+Effect language-service block, the shared commitlint config, the shared
+dependency-cruiser base, and the Effect error-channel plugin compiled to
+JavaScript.
 
 Consumed by a `file:` dependency on the local checkout. No npm publish.
 
