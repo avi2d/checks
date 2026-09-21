@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./commitlint.config.js": "./commitlint.config.js",
+    "./scripts/lint-coverage.sh": "./scripts/lint-coverage.sh",
     "./oxlintrc.json": "./oxlintrc.json",
     "./tsconfig.effect.json": "./tsconfig.effect.json",
     "./dist/index.js": "./dist/index.js"
@@ -12,7 +13,7 @@
   "scripts": {
     "build": "bun build effect-channel/index.ts --outdir dist --target node --format esm",
     "lint": "oxlint --type-aware",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
     "test": "bun test"
   },
   "peerDependencies": {

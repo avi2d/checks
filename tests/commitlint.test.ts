@@ -33,3 +33,32 @@ test(
   },
   60_000,
 );
+
+test(
+  "commitlint config accepts house prefixes, rejects unknown types and long headers",
+  async () => {
+    const house = [
+      "theme",
+      "herdr",
+      "renamer",
+      "shell",
+      "pi",
+      "home",
+      "audit",
+      "comments",
+      "tests",
+      "unslop",
+    ];
+    for (const type of house) {
+      const green = await lint(`${type}(scope): add x`);
+      expect(green.exitCode).toBe(0);
+    }
+    const red = await lint("frobnicate(scope): add x");
+    expect(red.exitCode).not.toBe(0);
+    const header = `feat(scope): ${"x".repeat(101 - "feat(scope): ".length)}`;
+    expect(header.length).toBe(101);
+    const long = await lint(header);
+    expect(long.exitCode).not.toBe(0);
+  },
+  120_000,
+);

@@ -19,8 +19,9 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
         working-directory: checks
-      # Only the title is linted: squash merges carry just the title to main,
-      # and automated fix commits are not conventional.
-      - run: printf '%s' "$PR_TITLE" | ./checks/node_modules/.bin/commitlint --config ./checks/commitlint.config.js
+      # Only the title is linted: per-commit messages are never conventional,
+      # and the title is what a squash merge lands, with GitHub appending
+      # " (#N)" to it. Lint the landed string, not the bare title.
+      - run: printf '%s' "$PR_TITLE (#0000)" | ./checks/node_modules/.bin/commitlint --config ./checks/commitlint.config.js
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}

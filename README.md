@@ -36,9 +36,13 @@ bun add -d file:../checks oxlint@1.83.0 oxlint-tsgolint@7.0.2002 @effect/tsgo@0.
 `package.json` gains two scripts:
 
 ```json
-"lint": "oxlint --type-aware",
+"lint": "oxlint --type-aware && ./node_modules/@avi2d/checks/scripts/lint-coverage.sh --type-aware",
 "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict"
 ```
+
+`lint-coverage.sh` fails when oxlint silently skips a tracked `.ts` or
+`.tsx` file, for example through a stray `.gitignore` entry. It compares
+`git ls-files` against oxlint's own file walk and names the missing files.
 
 The lockfile pins nothing for the `file:` dependency, so a change here
 reaches a consumer on its next `bun install`.
