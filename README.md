@@ -12,7 +12,7 @@ Consumed by a `file:` dependency on the local checkout. No npm publish.
 From the consuming repo, with this checkout beside it:
 
 ```sh
-bun add -d file:../checks oxlint@1.83.0 oxlint-tsgolint@7.0.2002 @effect/tsgo@0.45.0 typescript@7.0.2 dependency-cruiser@18.4.0
+bun add -d file:../checks oxlint@1.83.0 oxlint-tsgolint@7.0.2002 @effect/tsgo@0.45.0 typescript@7.0.2 dependency-cruiser@18.4.0 @swc/core@1.16.2
 ```
 
 `.oxlintrc.json`:
@@ -51,8 +51,9 @@ reaches a consumer on its next `bun install`.
 
 `.dependency-cruiser.cjs` extends the shared base, which carries
 `no-circular`, `no-orphans`, `not-to-dev-dep` (shipped source importing
-a dev-only package), and `no-deep-imports` (a subpath past a package
-entry into its internals):
+a dev-only package), `not-to-unresolvable` (nothing installed answers the
+specifier), and `no-deep-imports` (a subpath the package's exports map
+does not publish):
 
 ```js
 module.exports = {
@@ -131,6 +132,10 @@ subject, not the bare title.
 - `dist/` is committed. Bun runs no lifecycle script on a `file:` install,
   so a consumer would otherwise get no `dist/`. Rebuild it after pulling
   with `bun run build`; CI fails when the committed bundle is stale.
+- The base parses with swc because typescript 7 (tsgo) has no compiler
+  API for dependency-cruiser to use. Without `@swc/core` installed the
+  cruise silently skips every `.ts` file, so this repo's test asserts its
+  own TypeScript is cruised.
 - `no-deep-imports` judges the import specifier, never the resolved file.
   The base honours `exports` maps, so a subpath the map publishes resolves
   and passes, one it omits fails to resolve and is reported, and a package

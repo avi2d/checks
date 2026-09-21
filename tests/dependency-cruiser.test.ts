@@ -48,9 +48,9 @@ test(
   async () => {
     dir = await mkdtemp(join(tmpdir(), "checks-depcruiser-circular-"));
     await writeProject({
-      "src/entry.test.js": `import "./entry.js";\n`,
-      "src/entry.js": `import "./helper.js";\nexport const entry = 1;\n`,
-      "src/helper.js": `import "./entry.js";\nexport const helper = 1;\n`,
+      "src/entry.test.ts": `import "./entry.ts";\n`,
+      "src/entry.ts": `import "./helper.ts";\nexport const entry: number = 1;\n`,
+      "src/helper.ts": `import "./entry.ts";\nexport const helper: number = 1;\n`,
     });
     const config = await writeConfig();
 
@@ -58,7 +58,7 @@ test(
     expect(red.exitCode).not.toBe(0);
     expect(red.text).toContain("no-circular");
 
-    await writeFile(join(dir, "src/helper.js"), `export const helper = 1;\n`);
+    await writeFile(join(dir, "src/helper.ts"), `export const helper: number = 1;\n`);
     const green = await depcruise(config, "src");
     expect(green.exitCode).toBe(0);
   },
@@ -130,6 +130,28 @@ async function writePackage(name: string, manifest: Record<string, unknown>, fil
     await writeFile(join(root, file), content);
   }
 }
+
+test(
+  "not-to-unresolvable goes red on a missing package, green once it is installed",
+  async () => {
+    dir = await mkdtemp(join(tmpdir(), "checks-depcruiser-unresolvable-"));
+    await writeProject({
+      "src/entry.test.js": `import "./entry.js";\n`,
+      "src/entry.js": `import { gone } from "missing-pkg";\nexport const entry = gone;\n`,
+    });
+    const config = await writeConfig();
+
+    const red = await depcruise(config, "src");
+    expect(red.exitCode).not.toBe(0);
+    expect(red.text).toContain("not-to-unresolvable");
+    expect(red.text).not.toContain("no-deep-imports");
+
+    await writePackage("missing-pkg", {}, { "index.js": `export const gone = 1;\n` });
+    const green = await depcruise(config, "src");
+    expect(green.exitCode).toBe(0);
+  },
+  60_000,
+);
 
 test(
   "no-deep-imports goes red on a subpath the exports map omits, green on a published subpath and on bare entries",

@@ -43,6 +43,13 @@ export default {
       },
     },
     {
+      name: "not-to-unresolvable",
+      severity: "error",
+      comment: "Nothing installed answers to this specifier. Install the package or fix the path.",
+      from: {},
+      to: { couldNotResolve: true },
+    },
+    {
       name: "no-deep-imports",
       severity: "error",
       comment:
@@ -55,6 +62,7 @@ export default {
     },
   ],
   options: {
+    parser: "swc",
     doNotFollow: { path: ["node_modules"] },
     enhancedResolveOptions: {
       exportsFields: ["exports"],
