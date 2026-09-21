@@ -46,18 +46,19 @@ export default {
       name: "no-deep-imports",
       severity: "error",
       comment:
-        "A subpath reaches past the package entry into its internals. Depend on the entry point instead.",
+        "The specifier reaches past the package name into a subpath its exports map does not publish. Depend on a published entry instead.",
       from: {},
-      // Bare entries resolve inside the package folder too, so the second
-      // segment keeps them allowed while subpaths stay forbidden. Entries
-      // live in index files, so those stay allowed as well.
       to: {
-        path: "(^|/)node_modules/(@[^/]+/[^/]+|[^@/][^/]*)/[^/]+/.+",
-        pathNot: "/index[.][^/]+$",
+        couldNotResolve: true,
+        path: "^(@[^/]+/[^/]+|[^@./#][^/]*)/",
       },
     },
   ],
   options: {
     doNotFollow: { path: ["node_modules"] },
+    enhancedResolveOptions: {
+      exportsFields: ["exports"],
+      conditionNames: ["types", "import", "require", "node", "default"],
+    },
   },
 };

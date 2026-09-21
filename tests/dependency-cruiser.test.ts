@@ -121,8 +121,18 @@ test(
   60_000,
 );
 
+async function writePackage(name: string, manifest: Record<string, unknown>, files: Record<string, string>): Promise<void> {
+  const root = join(dir, "node_modules", name);
+  await mkdir(root, { recursive: true });
+  await writeFile(join(root, "package.json"), JSON.stringify({ name, version: "1.0.0", ...manifest }));
+  for (const [file, content] of Object.entries(files)) {
+    await mkdir(join(root, file, ".."), { recursive: true });
+    await writeFile(join(root, file), content);
+  }
+}
+
 test(
-  "no-deep-imports goes red on a subpath past the entry, green on the bare entry",
+  "no-deep-imports goes red on a subpath the exports map omits, green on a published subpath and on bare entries",
   async () => {
     dir = await mkdtemp(join(tmpdir(), "checks-depcruiser-deep-"));
     await writeProject({
@@ -134,20 +144,47 @@ test(
       JSON.stringify({
         name: "checks-depcruiser-fixture",
         type: "module",
-        dependencies: { "fake-pkg": "1.0.0" },
+        dependencies: { "fake-pkg": "1.0.0", mainpkg: "1.0.0", "@scope/pkg": "1.0.0" },
       }),
     );
-    await mkdir(join(dir, "node_modules", "fake-pkg", "lib"), { recursive: true });
-    await writeFile(join(dir, "node_modules", "fake-pkg", "package.json"), JSON.stringify({ name: "fake-pkg", version: "1.0.0" }));
-    await writeFile(join(dir, "node_modules", "fake-pkg", "index.js"), `export const top = 1;\n`);
-    await writeFile(join(dir, "node_modules", "fake-pkg", "lib", "internal.js"), `export const deep = 1;\n`);
+    await writePackage(
+      "fake-pkg",
+      { exports: { ".": "./index.js", "./published": "./lib/published.js" } },
+      {
+        "index.js": `export const top = 1;\n`,
+        "lib/published.js": `export const published = 1;\n`,
+        "lib/internal.js": `export const deep = 1;\n`,
+      },
+    );
+    await writePackage("mainpkg", { main: "lib/main.js" }, { "lib/main.js": `export const m = 1;\n` });
+    await writePackage(
+      "@scope/pkg",
+      { exports: { ".": "./dist/cli.mjs" } },
+      { "dist/cli.mjs": `export const scoped = 1;\n`, "dist/private.mjs": `export const hidden = 1;\n` },
+    );
     const config = await writeConfig();
 
     const red = await depcruise(config, "src");
     expect(red.exitCode).not.toBe(0);
     expect(red.text).toContain("no-deep-imports");
+    expect(red.text).toContain("fake-pkg/lib/internal.js");
 
-    await writeFile(join(dir, "src/entry.js"), `import { top } from "fake-pkg";\nexport const entry = top;\n`);
+    await writeFile(join(dir, "src/entry.js"), `import { hidden } from "@scope/pkg/dist/private.mjs";\nexport const entry = hidden;\n`);
+    const scopedRed = await depcruise(config, "src");
+    expect(scopedRed.exitCode).not.toBe(0);
+    expect(scopedRed.text).toContain("no-deep-imports");
+
+    await writeFile(
+      join(dir, "src/entry.js"),
+      [
+        `import { top } from "fake-pkg";`,
+        `import { published } from "fake-pkg/published";`,
+        `import { m } from "mainpkg";`,
+        `import { scoped } from "@scope/pkg";`,
+        `export const entry = top + published + m + scoped;`,
+        ``,
+      ].join("\n"),
+    );
     const green = await depcruise(config, "src");
     expect(green.exitCode).toBe(0);
   },

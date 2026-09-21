@@ -131,9 +131,13 @@ subject, not the bare title.
 - `dist/` is committed. Bun runs no lifecycle script on a `file:` install,
   so a consumer would otherwise get no `dist/`. Rebuild it after pulling
   with `bun run build`; CI fails when the committed bundle is stale.
-- `no-deep-imports` allows index leaves. A bare import can resolve to a
-  nested entry such as `lib/index.js`, which is the public entry rather
-  than a deep import, and the two are indistinguishable by resolved path.
+- `no-deep-imports` judges the import specifier, never the resolved file.
+  The base honours `exports` maps, so a subpath the map publishes resolves
+  and passes, one it omits fails to resolve and is reported, and a package
+  without an `exports` map publishes every file. A bare import always
+  passes whatever file its entry lives in. Setting your own
+  `options.enhancedResolveOptions` replaces the base's, so restate
+  `exportsFields` and `conditionNames` if you do.
 - dependency-cruiser `extends` merges same-name `forbidden` rules with the
   child's fields winning. That is the entry-point and layer recipe above.
 
