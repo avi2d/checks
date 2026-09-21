@@ -49,7 +49,8 @@ reaches a consumer on its next `bun install`.
 
 ## Commit lint
 
-Commits follow `@commitlint/config-conventional`, shared from
+Commits follow `@commitlint/config-conventional` plus the house
+prefixes listed in `commitlint.config.js`, shared from
 `@avi2d/checks/commitlint.config.js`. It arrives with the `file:`
 dependency above, since `@commitlint/cli` and
 `@commitlint/config-conventional` are dependencies, not peers.
@@ -67,7 +68,10 @@ jobs:
 
 It lints the pull request title and nothing else. The title is the
 enforced subject because squash merges use the PR title as the main
-commit subject; per-commit messages are not linted.
+commit subject; per-commit messages are not linted. GitHub appends
+` (#N)` to the squashed subject, so the workflow lints the title with
+that suffix attached and the header length limit applies to the landed
+subject, not the bare title.
 
 ## Why it is shaped this way
 
