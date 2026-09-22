@@ -14,6 +14,21 @@ test("code that is not a comment is not read as one", () => {
   expect(comments("src/probe.ts", source)).toEqual([]);
 });
 
+test("a URL in JSX text is not a comment, and a trailing one still is", () => {
+  const source = [
+    "export const Help = () => (",
+    "  <p>",
+    "    Report it at https://github.com/acme/app/issues/42 before you file.",
+    "  </p>",
+    ");",
+  ].join("\n");
+  expect(comments("src/Help.tsx", source)).toEqual([]);
+  expect(refused("src/Help.tsx", source)).toEqual([]);
+  expect(comments("src/Help.tsx", "const a = 1; // the caller holds the lock\n")).toEqual([
+    { line: 1, text: "// the caller holds the lock" },
+  ]);
+});
+
 test("a shell `#` is a comment only where it opens a word", () => {
   const source = [
     "#!/usr/bin/env bash",

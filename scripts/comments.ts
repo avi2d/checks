@@ -16,7 +16,7 @@ const escaping = (token: string): Quote => ({ token, backslashEscapes: true });
 const literal = (token: string): Quote => ({ token, backslashEscapes: false });
 
 const SLASHES: readonly (readonly [string, string])[] = [["/*", "*/"]];
-const SLASH_SLASH = [anywhere("//")];
+const SLASH_SLASH = [startingAWord("//")];
 const DASHES = [anywhere("--")];
 const STRINGS = [escaping('"'), escaping("'")];
 
