@@ -120,7 +120,7 @@ function endOfQuoted(source: string, start: number, quote: Quote): number {
     else if (source.startsWith(quote.token, i)) return i + quote.token.length;
     else i += 1;
   }
-  return source.length;
+  return start + quote.token.length;
 }
 
 function endOfRegex(source: string, start: number): number {
@@ -213,11 +213,16 @@ const LICENCE = /copyright|spdx-license-identifier|all rights reserved|licen[cs]
 // file's own opening is the shape of a paragraph rather than of one fact.
 const A_WRAPPED_SENTENCE_FITS_WITHIN = 3;
 
-function openingBlock(found: readonly Comment[]): Comment[] {
-  if (found.length === 0 || found[0]!.line !== 1) return [];
+function beginsItsLine(comment: Comment, lines: readonly string[]): boolean {
+  return lines[comment.line - 1]!.trimStart().startsWith(comment.text.split("\n")[0]!);
+}
+
+function openingBlock(found: readonly Comment[], source: string): Comment[] {
+  const lines = source.split("\n");
+  if (found.length === 0 || found[0]!.line !== 1 || !beginsItsLine(found[0]!, lines)) return [];
   const block = [found[0]!];
   let next = found[0]!.line + found[0]!.text.split("\n").length;
-  for (let i = 1; i < found.length && found[i]!.line === next; i++) {
+  for (let i = 1; i < found.length && found[i]!.line === next && beginsItsLine(found[i]!, lines); i++) {
     block.push(found[i]!);
     next = found[i]!.line + found[i]!.text.split("\n").length;
   }
@@ -257,7 +262,7 @@ export function refused(path: string, source: string, within?: ReadonlySet<numbe
   const out: string[] = [];
   const found = comments(path, source);
 
-  const opening = openingBlock(found);
+  const opening = openingBlock(found, source);
   const openingText = opening.map((comment) => comment.text).join("\n");
   const openingLines = opening.reduce((sum, comment) => sum + comment.text.split("\n").length, 0);
   if (

@@ -124,6 +124,14 @@ test("an opening block only counts when it opens the file, not when it merely op
   expect(refused("suite.yml", source)).toEqual([]);
 });
 
+test("trailing comments after code do not extend the opening block", () => {
+  const script = ["#!/usr/bin/env bash", "set -e # keep going", 'cd "$(dirname "$0")" # root', "run # go"].join("\n");
+  expect(refused("run.sh", script)).toEqual([]);
+  const module = ["// one", "// two", "// three", "const a = 1; // trailing fact"].join("\n");
+  expect(refused("src/probe.ts", module)).toEqual([]);
+  expect(refused("src/probe.ts", ["// one", "// two", "// three", "// four", "const a = 1;"].join("\n"))).toHaveLength(1);
+});
+
 test("a long opening block that is licence content is not an essay", () => {
   const header = [
     "# Copyright (c) 2026 the authors.",
@@ -141,6 +149,18 @@ test("yaml and toml read `#` comments, trailing or on their own line", () => {
     { line: 2, text: "# own line" },
   ]);
   expect(comments("a.toml", 'name = "x" # trailing\n')).toEqual([{ line: 1, text: "# trailing" }]);
+});
+
+test("a quote that never closes does not hide the comments after it", () => {
+  const workflow = [
+    "name: ci",
+    "description: Don't run this on forks",
+    "jobs:",
+    "  x:",
+    "    # see owner/repo#12",
+    "    runs-on: ubuntu-latest",
+  ].join("\n");
+  expect(comments("ci.yml", workflow)).toEqual([{ line: 5, text: "# see owner/repo#12" }]);
 });
 
 test("code the checks cannot read is named rather than passed over", () => {
