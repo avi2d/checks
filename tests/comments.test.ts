@@ -163,6 +163,30 @@ test("a quote that never closes does not hide the comments after it", () => {
   expect(comments("ci.yml", workflow)).toEqual([{ line: 5, text: "# see owner/repo#12" }]);
 });
 
+test("apostrophes inside words do not pair up into a string that hides comments", () => {
+  const workflow = [
+    "name: Don't run on forks",
+    "jobs:",
+    "  x:",
+    "    # see owner/repo#12",
+    "    runs-on: ubuntu-latest",
+    "    name: It's the build",
+    "    tag: 'a # b'",
+  ].join("\n");
+  expect(comments("ci.yml", workflow)).toEqual([{ line: 4, text: "# see owner/repo#12" }]);
+  const component = [
+    "export const A = () => (",
+    "  <div>",
+    "    <p>Don't do this</p>",
+    "    {/* see acme/app#42 */}",
+    "    <p>It's fine</p>",
+    "  </div>",
+    ");",
+  ].join("\n");
+  expect(comments("src/A.tsx", component)).toEqual([{ line: 4, text: "/* see acme/app#42 */" }]);
+  expect(comments("src/a.ts", "const a = ['// x', '/* y */'];\n")).toEqual([]);
+});
+
 test("code the checks cannot read is named rather than passed over", () => {
   expect(() => comments("src/main.pl", "# a comment")).toThrow(
     "src/main.pl is code the comment checks cannot read: add a comment syntax for .pl to scripts/comments.ts",

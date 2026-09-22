@@ -1,7 +1,7 @@
 export type Comment = { line: number; text: string };
 
 type Marker = { readonly token: string; readonly afterAWordBreak: boolean };
-type Quote = { readonly token: string; readonly backslashEscapes: boolean };
+type Quote = { readonly token: string; readonly backslashEscapes: boolean; readonly opensMidWord: boolean };
 
 type Syntax = {
   readonly line: readonly Marker[];
@@ -12,15 +12,21 @@ type Syntax = {
 
 const anywhere = (token: string): Marker => ({ token, afterAWordBreak: false });
 const startingAWord = (token: string): Marker => ({ token, afterAWordBreak: true });
-const escaping = (token: string): Quote => ({ token, backslashEscapes: true });
-const literal = (token: string): Quote => ({ token, backslashEscapes: false });
+const escaping = (token: string): Quote => ({ token, backslashEscapes: true, opensMidWord: true });
+const literal = (token: string): Quote => ({ token, backslashEscapes: false, opensMidWord: true });
+const outsideAWord = (quote: Quote): Quote => ({ ...quote, opensMidWord: false });
 
 const SLASHES: readonly (readonly [string, string])[] = [["/*", "*/"]];
 const SLASH_SLASH = [startingAWord("//")];
 const DASHES = [anywhere("--")];
 const STRINGS = [escaping('"'), escaping("'")];
 
-const JS: Syntax = { line: SLASH_SLASH, block: SLASHES, quotes: [...STRINGS, escaping("`")], regexLiterals: true };
+const JS: Syntax = {
+  line: SLASH_SLASH,
+  block: SLASHES,
+  quotes: [escaping('"'), outsideAWord(escaping("'")), escaping("`")],
+  regexLiterals: true,
+};
 const CURLY: Syntax = { ...JS, regexLiterals: false };
 const PHP: Syntax = { line: [...SLASH_SLASH, anywhere("#")], block: SLASHES, quotes: STRINGS, regexLiterals: false };
 const HASH: Syntax = {
@@ -29,7 +35,8 @@ const HASH: Syntax = {
   quotes: [escaping('"'), literal("'")],
   regexLiterals: false,
 };
-const SQL: Syntax = { line: DASHES, block: SLASHES, quotes: STRINGS, regexLiterals: false };
+const YAML: Syntax = { ...HASH, quotes: [escaping('"'), outsideAWord(literal("'"))] };
+const SQL: Syntax ={ line: DASHES, block: SLASHES, quotes: STRINGS, regexLiterals: false };
 const LUA: Syntax = { line: DASHES, block: [["--[[", "]]"]], quotes: STRINGS, regexLiterals: false };
 const HASKELL: Syntax = { line: DASHES, block: [["{-", "-}"]], quotes: [escaping('"')], regexLiterals: false };
 const ML: Syntax = { line: [], block: [["(*", "*)"]], quotes: [escaping('"')], regexLiterals: false };
@@ -67,8 +74,8 @@ export const SYNTAXES: Readonly<Record<string, Syntax>> = {
   sql: SQL,
   lua: LUA,
   hs: HASKELL,
-  yaml: HASH,
-  yml: HASH,
+  yaml: YAML,
+  yml: YAML,
   toml: HASH,
   ml: ML,
 };
@@ -179,7 +186,10 @@ export function comments(path: string, source: string): Comment[] {
       continue;
     }
 
-    const quote = syntax.quotes.find(({ token }) => source.startsWith(token, i));
+    const quote = syntax.quotes.find(
+      ({ token, opensMidWord }) =>
+        source.startsWith(token, i) && (opensMidWord || i === 0 || !WORD.test(source[i - 1]!)),
+    );
     if (quote) {
       advance(endOfQuoted(source, i, quote));
       previous = quote.token;
