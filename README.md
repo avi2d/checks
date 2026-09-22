@@ -68,7 +68,7 @@ reaches a consumer on its next `bun install`.
 repo holds this shape, and names the file and the path to move it to when
 it does not:
 
-- Every test file is `tests/**/*.test.ts`. A `*.test.ts`, `*.spec.ts` or
+- Every test file is `tests/**/*.test.ts` or `.tsx`. A `*.test.ts`, `*.spec.ts` or
   `*_test.ts` under `src/`, `test/`, `__tests__/` or the repo root fails.
   Tracked and untracked files that `git ls-files --exclude-standard`
   reports are scanned, so `node_modules/` and every gitignored tree are
