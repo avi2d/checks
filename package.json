@@ -18,6 +18,9 @@
     "scripts/lint-coverage.sh",
     "scripts/test-layout.ts",
     "scripts/commit-identity.ts",
+    "scripts/comments.ts",
+    "scripts/comment-gate.ts",
+    "scripts/backtest.ts",
     "oxlintrc.json",
     "tsconfig.effect.json",
     "dist/index.js"
@@ -29,13 +32,16 @@
     "./scripts/lint-coverage.sh": "./scripts/lint-coverage.sh",
     "./scripts/test-layout.ts": "./scripts/test-layout.ts",
     "./scripts/commit-identity.ts": "./scripts/commit-identity.ts",
+    "./scripts/comments.ts": "./scripts/comments.ts",
+    "./scripts/comment-gate.ts": "./scripts/comment-gate.ts",
+    "./scripts/backtest.ts": "./scripts/backtest.ts",
     "./oxlintrc.json": "./oxlintrc.json",
     "./tsconfig.effect.json": "./tsconfig.effect.json",
     "./dist/index.js": "./dist/index.js"
   },
   "scripts": {
     "build": "bun build effect-channel/index.ts --outdir dist --target node --format esm",
-    "lint": "oxlint --type-aware && ./scripts/lint-coverage.sh && bun scripts/test-layout.ts && bun scripts/commit-identity.ts HEAD && depcruise --config .dependency-cruiser.cjs effect-channel scripts tests commitlint.config.js dependency-cruiser.config.js .dependency-cruiser.cjs",
+    "lint": "oxlint --type-aware && ./scripts/lint-coverage.sh && bun scripts/test-layout.ts && bun scripts/commit-identity.ts HEAD && bun scripts/comment-gate.ts HEAD && depcruise --config .dependency-cruiser.cjs effect-channel scripts tests commitlint.config.js dependency-cruiser.config.js .dependency-cruiser.cjs",
     "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
     "test": "bun test --randomize"
   },

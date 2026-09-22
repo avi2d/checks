@@ -16,14 +16,22 @@ jobs:
     uses: ./.github/workflows/commit-identity.yml
     with:
       ref: ${{ github.event.pull_request.head.sha }}
+  comment-gate:
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/comment-gate.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
   checks:
     runs-on: ubuntu-latest
     steps:
       # The pull request merge commit is authored by GitHub, which lint's
       # commit-identity check refuses, so lint the head commit itself.
+      # Two commits: lint's comment gate ranges the head against its parent,
+      # which the default depth of one does not fetch.
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run build

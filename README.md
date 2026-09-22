@@ -4,8 +4,9 @@ Deterministic checks shared across my TypeScript repos. One package,
 `@avi2d/checks`: the oxlint base config, the tsconfig fragment with the
 Effect language-service block, the shared commitlint config, the shared
 dependency-cruiser base, the test-layout check with its bunfig preset,
-the commit-identity check with its workflow, and the Effect error-channel
-plugin compiled to JavaScript.
+the commit-identity check with its workflow, the comment gate with its
+workflow and backtest, and the Effect error-channel plugin compiled to
+JavaScript.
 
 Published as `@avi2d/checks` on the public npm registry.
 
@@ -227,6 +228,55 @@ jobs:
 The workflow fetches the consumer's full history and ranges from the
 fetched base branch, not the event's recorded base sha, which GitHub
 leaves stale once the base branch advances after the pull request opens.
+
+## Comment gate
+
+`scripts/comment-gate.ts` runs the comment check over a diff and fails
+when an added line carries a banned comment:
+
+```sh
+bun ./node_modules/@avi2d/checks/scripts/comment-gate.ts <base-ref> <head-ref>
+bun ./node_modules/@avi2d/checks/scripts/comment-gate.ts <ref>
+```
+
+With two arguments it diffs the base against the head. With one it diffs
+that commit against its parent, and exits 2 when that parent is not in
+the clone rather than widening to the whole tree, so a shallow checkout
+running the one-argument form needs `fetch-depth: 2`. Only added lines
+are checked, so a violation in a file the diff never touches stays
+silent, and a refusal counts when any line of the comment carrying it was
+added. The check refuses a machine-read directive, a record or ticket
+pointer, a doc block, and a file opening with a rationale block over
+three lines, licence headers excepted; `scripts/comments.ts` holds the
+scanner the gate and the backtest share.
+
+Enforcement runs on pull requests, where the range from the base branch's
+current tip to the head is visible:
+
+```yaml
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+jobs:
+  comment-gate:
+    uses: avi2d/checks/.github/workflows/comment-gate.yml@main
+```
+
+## Backtest
+
+`scripts/backtest.ts` reports what the comment check would have refused
+at each recent commit, so a repository can measure its own history:
+
+```sh
+bun ./node_modules/@avi2d/checks/scripts/backtest.ts [commit-count]
+```
+
+It walks the last `commit-count` first-parent commits, 60 by default,
+prints a row per commit that touches code and then the totals,
+attributes only the refusals each commit introduced, and counts new
+comment text as a share of added lines.
+`generated/`, `vendor/`, `repos/`, `node_modules/` and `dist/` are out
+of reach, so the figures are authored code.
 
 ## Why it is shaped this way
 
