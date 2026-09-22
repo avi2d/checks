@@ -134,6 +134,11 @@ subject, not the bare title.
 - `node_modules/` is excluded through the consumer's `.gitignore`, not
   `ignorePatterns`: oxlint still walks the installed package when only
   `ignorePatterns` names it.
+- `files` in package.json guards only `bun pm pack` and a registry
+  publish. A `file:` install links the whole checkout and ignores
+  `files`, so a `file:` consumer receives `tests/`, `AGENTS.md` and the
+  `.ts` plugin source too, and its `.gitignore` entry for `node_modules/`
+  is the only thing keeping oxlint out of them.
 - The plugin ships compiled as `dist/index.js`, built with
   `bun build effect-channel/index.ts --outdir dist --target node --format esm`.
   Node refuses to type-strip a `.ts` plugin under `node_modules`, so the
