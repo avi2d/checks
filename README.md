@@ -4,7 +4,8 @@ Deterministic checks shared across my TypeScript repos. One package,
 `@avi2d/checks`: the oxlint base config, the tsconfig fragment with the
 Effect language-service block, the shared commitlint config, the shared
 dependency-cruiser base, the test-layout check with its bunfig preset,
-and the Effect error-channel plugin compiled to JavaScript.
+the commit-identity check with its workflow, and the Effect error-channel
+plugin compiled to JavaScript.
 
 Consumed by a `file:` dependency on the local checkout. No npm publish.
 
@@ -58,6 +59,9 @@ cp node_modules/@avi2d/checks/bunfig.toml bunfig.toml
 `git ls-files` against oxlint's own file walk and names the missing files.
 
 `test-layout.ts` decides the test layout described below.
+
+`commit-identity.ts` refuses a commit with an author other than the
+repository owner; see "Commit identity" below.
 
 The lockfile pins nothing for the `file:` dependency, so a change here
 reaches a consumer on its next `bun install`.
