@@ -4,7 +4,8 @@ Deterministic checks shared across my TypeScript repos. One package,
 `@avi2d/checks`: the oxlint base config, the tsconfig fragment with the
 Effect language-service block, the shared commitlint config, the shared
 dependency-cruiser base, the test-layout check with its bunfig preset,
-and the Effect error-channel plugin compiled to JavaScript.
+the commit-identity check with its workflow, and the Effect error-channel
+plugin compiled to JavaScript.
 
 Consumed by a `file:` dependency on the local checkout. No npm publish.
 
@@ -48,7 +49,7 @@ cp node_modules/@avi2d/checks/bunfig.toml bunfig.toml
 `package.json` gains three scripts:
 
 ```json
-"lint": "oxlint --type-aware && ./node_modules/@avi2d/checks/scripts/lint-coverage.sh && bun ./node_modules/@avi2d/checks/scripts/test-layout.ts",
+"lint": "oxlint --type-aware && ./node_modules/@avi2d/checks/scripts/lint-coverage.sh && bun ./node_modules/@avi2d/checks/scripts/test-layout.ts && bun ./node_modules/@avi2d/checks/scripts/commit-identity.ts HEAD",
 "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
 "test": "bun test --randomize"
 ```
@@ -58,6 +59,9 @@ cp node_modules/@avi2d/checks/bunfig.toml bunfig.toml
 `git ls-files` against oxlint's own file walk and names the missing files.
 
 `test-layout.ts` decides the test layout described below.
+
+`commit-identity.ts` refuses a commit with an author other than the
+repository owner; see "Commit identity" below.
 
 The lockfile pins nothing for the `file:` dependency, so a change here
 reaches a consumer on its next `bun install`.
@@ -176,6 +180,54 @@ commit subject; per-commit messages are not linted. GitHub appends
 that suffix attached and the header length limit applies to the landed
 subject, not the bare title.
 
+It never sees a commit's author or committer fields, nor the
+`Co-authored-by` trailer GitHub writes from a foreign author when it
+squashes, so it cannot enforce who a commit belongs to. The
+commit-identity check below is the enforcement.
+
+## Commit identity
+
+`scripts/commit-identity.ts` walks every commit in a range and fails when
+one carries an identity other than the repository owner's:
+
+```sh
+bun ./node_modules/@avi2d/checks/scripts/commit-identity.ts <base-ref> <head-ref>
+bun ./node_modules/@avi2d/checks/scripts/commit-identity.ts <ref>
+```
+
+With one argument it checks that commit alone, which is the form the
+`lint` script above runs on `HEAD`. It refuses a commit whose author or
+committer is outside the allowlist, and one whose trailer block carries
+a `Co-authored-by:` trailer as git parses it, and it names the offending
+commit and reason. Other trailers and prose mentioning an address in the
+body are left alone. `GitHub <noreply@github.com>` is allowed as
+committer only, since that is who writes a squash merge.
+
+The allowlist defaults to `avi2d <avi2dg@gmail.com>`. A repo with other
+owners restates it in `package.json`:
+
+```json
+"commitIdentity": {
+  "authors": [{ "name": "avi2d", "email": "avi2dg@gmail.com" }]
+}
+```
+
+Enforcement runs on pull requests, where the range from the base branch's
+current tip to the head is visible:
+
+```yaml
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+jobs:
+  commit-identity:
+    uses: avi2d/checks/.github/workflows/commit-identity.yml@main
+```
+
+The workflow fetches the consumer's full history and ranges from the
+fetched base branch, not the event's recorded base sha, which GitHub
+leaves stale once the base branch advances after the pull request opens.
+
 ## Why it is shaped this way
 
 - `plugins` does not inherit through oxlint `extends`. `rules`,
@@ -211,6 +263,11 @@ subject, not the bare title.
 - `bun` counts as a built-in module. Nothing installed resolves it except
   `@types/bun`, which would otherwise make every runtime `bun` import look
   like a dev-only dependency.
+- The pull request merge commit GitHub builds is authored by `GitHub
+  <noreply@github.com>`, which commit-identity refuses as an author. A
+  consumer that runs the check inside `lint` checks out
+  `github.event.pull_request.head.sha` instead of the default merge ref,
+  as this repo's `ci.yml` does.
 - `no-deep-imports` judges the import specifier, never the resolved file.
   The base honours `exports` maps, so a subpath the map publishes resolves
   and passes, one it omits fails to resolve and is reported, and a package
