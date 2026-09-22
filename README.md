@@ -4,7 +4,8 @@ Deterministic checks shared across my TypeScript repos. One package,
 `@avi2d/checks`: the oxlint base config, the tsconfig fragment with the
 Effect language-service block, the shared commitlint config, the shared
 dependency-cruiser base, the test-layout check with its bunfig preset,
-the commit-identity check with its workflow, and the Effect error-channel
+the commit-identity check with its workflow, the comment gate with its
+workflow and backtest, and the Effect error-channel
 plugin compiled to JavaScript.
 
 Consumed by a `file:` dependency on the local checkout. No npm publish.
@@ -227,6 +228,52 @@ jobs:
 The workflow fetches the consumer's full history and ranges from the
 fetched base branch, not the event's recorded base sha, which GitHub
 leaves stale once the base branch advances after the pull request opens.
+
+## Comment gate
+
+`scripts/comment-gate.ts` runs the comment check over a diff and fails
+when an added line carries a banned comment:
+
+```sh
+bun ./node_modules/@avi2d/checks/scripts/comment-gate.ts <base-ref> <head-ref>
+bun ./node_modules/@avi2d/checks/scripts/comment-gate.ts <ref>
+bun ./node_modules/@avi2d/checks/scripts/comment-gate.ts
+```
+
+With two arguments it diffs the base against the head. With one it diffs
+that commit against its parent. With none it diffs the working tree
+against `HEAD`, untracked files included. Only added lines are checked,
+so a violation in a file the diff never touches stays silent. The check
+refuses a machine-read directive, a record or ticket pointer, a doc
+block, and a file opening with a rationale block over three lines,
+licence headers excepted; `scripts/comments.ts` holds the scanner the
+gate and the backtest share.
+
+Enforcement runs on pull requests, where the range from the base branch's
+current tip to the head is visible:
+
+```yaml
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+jobs:
+  comment-gate:
+    uses: avi2d/checks/.github/workflows/comment-gate.yml@main
+```
+
+## Backtest
+
+`scripts/backtest.ts` reports what the comment check would have refused
+at every commit, so a repository can print its own three-window table:
+
+```sh
+bun ./node_modules/@avi2d/checks/scripts/backtest.ts [commit-count]
+```
+
+It walks first-parent commits, attributes only the refusals each commit
+introduced, and counts new comment text as a share of added lines.
+`generated/`, `vendor/`, `repos/`, `node_modules/` and `dist/` are out
+of reach, so the figures are authored code.
 
 ## Why it is shaped this way
 

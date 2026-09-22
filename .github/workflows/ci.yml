@@ -16,6 +16,11 @@ jobs:
     uses: ./.github/workflows/commit-identity.yml
     with:
       ref: ${{ github.event.pull_request.head.sha }}
+  comment-gate:
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/comment-gate.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
   checks:
     runs-on: ubuntu-latest
     steps:
