@@ -11,8 +11,9 @@ jobs:
   commit-identity:
     runs-on: ubuntu-latest
     steps:
-      # The whole history: the check walks every commit between the two shas,
-      # and the base sha is unreachable from a shallow fetch of the head.
+      # The whole history: the range starts at the fetched base branch tip,
+      # which a shallow fetch of the head cannot reach. The event's base sha
+      # goes stale once the base branch advances after the PR opens.
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
@@ -22,7 +23,7 @@ jobs:
           ref: ${{ inputs.ref }}
           path: .checks
       - uses: oven-sh/setup-bun@v2
-      - run: bun .checks/scripts/commit-identity.ts "$BASE_SHA" "$HEAD_SHA"
+      - run: bun .checks/scripts/commit-identity.ts "origin/$BASE_REF" "$HEAD_SHA"
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}

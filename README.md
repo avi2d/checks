@@ -176,12 +176,10 @@ commit subject; per-commit messages are not linted. GitHub appends
 that suffix attached and the header length limit applies to the landed
 subject, not the bare title.
 
-The config also carries `no-co-authored-by`, which rejects any message
-with a `Co-authored-by:` trailer. commitlint reads a message and nothing
-else: the author and committer fields live on the commit object, out of
-its reach, and a foreign author becomes a `Co-authored-by` trailer only
-after GitHub squashes it. That is why the commit-identity check below
-exists as well, and why it is the one that fails a pull request.
+commitlint lints the pull request title only. It never sees a commit's
+author or committer fields, nor the `Co-authored-by` trailer GitHub
+writes from a foreign author when it squashes, so it cannot enforce who
+a commit belongs to. The commit-identity check below is the enforcement.
 
 ## Commit identity
 
@@ -195,11 +193,11 @@ bun ./node_modules/@avi2d/checks/scripts/commit-identity.ts <ref>
 
 With one argument it checks that commit alone, which is the form the
 `lint` script above runs on `HEAD`. It refuses a commit whose author or
-committer is outside the allowlist, and one whose message carries a
-`Co-authored-by:`, `Signed-off-by:`, or any other trailer naming a
-person, and it names the offending commit and reason. `GitHub
-<noreply@github.com>` is allowed as committer only, since that is who
-writes a squash merge.
+committer is outside the allowlist, and one whose trailer block carries
+a `Co-authored-by:` trailer as git parses it, and it names the offending
+commit and reason. Other trailers and prose mentioning an address in the
+body are left alone. `GitHub <noreply@github.com>` is allowed as
+committer only, since that is who writes a squash merge.
 
 The allowlist defaults to `avi2d <avi2dg@gmail.com>`. A repo with other
 owners restates it in `package.json`:
@@ -210,8 +208,8 @@ owners restates it in `package.json`:
 }
 ```
 
-Enforcement runs on pull requests, where the whole range between base and
-head is visible:
+Enforcement runs on pull requests, where the range from the base branch's
+current tip to the head is visible:
 
 ```yaml
 on:
@@ -222,8 +220,9 @@ jobs:
     uses: avi2d/checks/.github/workflows/commit-identity.yml@main
 ```
 
-The workflow fetches the consumer's full history, because the base commit
-is unreachable from a shallow fetch of the head.
+The workflow fetches the consumer's full history and ranges from the
+fetched base branch, not the event's recorded base sha, which GitHub
+leaves stale once the base branch advances after the pull request opens.
 
 ## Why it is shaped this way
 

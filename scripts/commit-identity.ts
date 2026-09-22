@@ -8,7 +8,7 @@ type Commit = {
   readonly subject: string;
   readonly author: Identity;
   readonly committer: Identity;
-  readonly message: string;
+  readonly coAuthoredBy: readonly string[];
 };
 
 type Offence = { readonly commit: Commit; readonly reasons: readonly string[] };
@@ -18,9 +18,8 @@ const DEFAULT_AUTHORS: readonly Identity[] = [{ name: "avi2d", email: "avi2dg@gm
 // GitHub writes the squash commit, so it commits what the owner authored and never authors.
 const SQUASH_COMMITTER: Identity = { name: "GitHub", email: "noreply@github.com" };
 
-const PERSON_TRAILER_KEYS: ReadonlySet<string> = new Set(["co-authored-by", "signed-off-by"]);
-const TRAILER_LINE = /^([A-Za-z][A-Za-z-]*):[ \t]*(\S.*)$/;
-const EMAIL_IN_ANGLES = /<[^<>@\s]+@[^<>@\s]+>/;
+// git's own trailer parser, so only the trailer block counts and prose never does.
+const CO_AUTHORED_BY_FORMAT = "%(trailers:key=Co-authored-by)";
 
 // argv cannot carry a NUL, so git spells the separators itself.
 const FIELD_FORMAT = "%x00";
@@ -73,7 +72,8 @@ function allowedAuthors(): readonly Identity[] {
 
 function readCommits(revisions: readonly string[]): readonly Commit[] {
   const format =
-    ["%H", "%an", "%ae", "%cn", "%ce", "%s", "%B"].join(FIELD_FORMAT) + RECORD_FORMAT;
+    ["%H", "%an", "%ae", "%cn", "%ce", "%s", CO_AUTHORED_BY_FORMAT].join(FIELD_FORMAT) +
+    RECORD_FORMAT;
   const log = git("log", `--format=${format}`, ...revisions);
 
   return log
@@ -81,7 +81,7 @@ function readCommits(revisions: readonly string[]): readonly Commit[] {
     .map((record) => record.replace(/^\n/, ""))
     .filter((record) => record !== "")
     .map((record) => {
-      const [sha, authorName, authorEmail, committerName, committerEmail, subject, message] =
+      const [sha, authorName, authorEmail, committerName, committerEmail, subject, trailers] =
         record.split(FIELD);
       if (
         sha === undefined ||
@@ -90,7 +90,7 @@ function readCommits(revisions: readonly string[]): readonly Commit[] {
         committerName === undefined ||
         committerEmail === undefined ||
         subject === undefined ||
-        message === undefined
+        trailers === undefined
       ) {
         return die(`commit-identity: cannot parse git log record: ${JSON.stringify(record)}`);
       }
@@ -99,7 +99,7 @@ function readCommits(revisions: readonly string[]): readonly Commit[] {
         subject,
         author: { name: authorName, email: authorEmail },
         committer: { name: committerName, email: committerEmail },
-        message,
+        coAuthoredBy: trailers.split("\n").filter((line) => line !== ""),
       };
     });
 }
@@ -112,21 +112,6 @@ function allows(allowed: readonly Identity[], identity: Identity): boolean {
   );
 }
 
-function personTrailers(message: string): readonly string[] {
-  const found: string[] = [];
-  for (const raw of message.split("\n")) {
-    const line = raw.trim();
-    const match = TRAILER_LINE.exec(line);
-    if (match === null) continue;
-    const key = match[1] ?? "";
-    const value = match[2] ?? "";
-    if (PERSON_TRAILER_KEYS.has(key.toLowerCase()) || EMAIL_IN_ANGLES.test(value)) {
-      found.push(line);
-    }
-  }
-  return found;
-}
-
 function inspect(commit: Commit, allowed: readonly Identity[]): Offence | undefined {
   const reasons: string[] = [];
   if (!allows(allowed, commit.author)) {
@@ -135,7 +120,7 @@ function inspect(commit: Commit, allowed: readonly Identity[]): Offence | undefi
   if (!allows([...allowed, SQUASH_COMMITTER], commit.committer)) {
     reasons.push(`committer ${render(commit.committer)}`);
   }
-  for (const trailer of personTrailers(commit.message)) {
+  for (const trailer of commit.coAuthoredBy) {
     reasons.push(`trailer ${trailer}`);
   }
   return reasons.length === 0 ? undefined : { commit, reasons };
