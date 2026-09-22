@@ -1,5 +1,6 @@
 import { $ } from "bun";
 import { afterEach, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -7,13 +8,23 @@ import { join, resolve } from "node:path";
 const CHECKOUT = resolve(import.meta.dir, "..", "..");
 
 let dir = "";
+let packDir = "";
 
 afterEach(async () => {
-  if (dir !== "") {
-    await rm(dir, { recursive: true, force: true });
-    dir = "";
+  for (const path of [dir, packDir]) {
+    if (path !== "") {
+      await rm(path, { recursive: true, force: true });
+    }
   }
+  dir = "";
+  packDir = "";
 });
+
+async function packTarball(): Promise<string> {
+  packDir = await mkdtemp(join(tmpdir(), "checks-pack-"));
+  const packed = await $`bun pm pack --destination ${packDir} --quiet`.cwd(CHECKOUT).quiet();
+  return packed.stdout.toString().trim();
+}
 
 async function oxlint(): Promise<{ exitCode: number; text: string }> {
   const binary = join(dir, "node_modules", ".bin", "oxlint");
@@ -24,7 +35,10 @@ async function oxlint(): Promise<{ exitCode: number; text: string }> {
   };
 }
 
-async function writeConsumerFixture(manifest: Record<string, unknown> = {}): Promise<void> {
+async function writeConsumerFixture(
+  manifest: Record<string, unknown> = {},
+  checks = `file:${CHECKOUT}`,
+): Promise<void> {
   dir = await mkdtemp(join(tmpdir(), "checks-consumer-"));
 
   await writeFile(
@@ -33,7 +47,7 @@ async function writeConsumerFixture(manifest: Record<string, unknown> = {}): Pro
       name: "checks-consumer-fixture",
       type: "module",
       devDependencies: {
-        "@avi2d/checks": `file:${CHECKOUT}`,
+        "@avi2d/checks": checks,
         effect: "4.0.0-rc.115",
         oxlint: "1.83.0",
         "@swc/core": "1.16.2",
@@ -130,6 +144,60 @@ test(
     const greenText = green.stdout.toString() + green.stderr.toString();
     expect(greenText).toContain("satisfy the layout");
     expect(green.exitCode).toBe(0);
+  },
+  180_000,
+);
+
+test(
+  "packed-tarball consumer installs only `files` and runs the README lint recipe from it",
+  async () => {
+    const tarball = await packTarball();
+    await writeConsumerFixture(
+      {
+        scripts: {
+          test: "bun test --randomize",
+          lint: "oxlint --type-aware && ./node_modules/@avi2d/checks/scripts/lint-coverage.sh && bun ./node_modules/@avi2d/checks/scripts/test-layout.ts",
+        },
+      },
+      `file:${tarball}`,
+    );
+
+    const installed = join(dir, "node_modules", "@avi2d", "checks");
+    const manifest = JSON.parse(await readFile(join(CHECKOUT, "package.json"), "utf8")) as {
+      exports: Record<string, string>;
+    };
+    for (const target of Object.values(manifest.exports)) {
+      expect(existsSync(join(installed, target))).toBe(true);
+    }
+    expect(existsSync(join(installed, "effect-channel"))).toBe(false);
+    expect(existsSync(join(installed, "tests"))).toBe(false);
+    expect(existsSync(join(installed, "AGENTS.md"))).toBe(false);
+
+    await writeFile(join(dir, "bunfig.toml"), await readFile(join(CHECKOUT, "bunfig.toml"), "utf8"));
+    await writeFile(join(dir, "widget.ts"), "export const widget = 42;\n");
+    await mkdir(join(dir, "tests"));
+    await writeFile(
+      join(dir, "tests", "widget.test.ts"),
+      `import { expect, test } from "bun:test";\nimport { widget } from "../widget.ts";\ntest("widget", () => {\n  expect(widget).toBe(42);\n});\n`,
+    );
+    await $`git init -q && git add -A`.cwd(dir).quiet();
+
+    const green = await $`bun run lint`.cwd(dir).nothrow().quiet();
+    const greenText = green.stdout.toString() + green.stderr.toString();
+    expect(greenText).toContain("satisfy the layout");
+    expect(green.exitCode).toBe(0);
+
+    await writeFile(
+      join(dir, "plant.ts"),
+      `import { Effect } from "effect";\n\nexport const program = Effect.ignore(Effect.fail("boom"));\n\nEffect.succeed(1);\n`,
+    );
+    await $`git add -A`.cwd(dir).quiet();
+
+    const red = await $`bun run lint`.cwd(dir).nothrow().quiet();
+    const redText = red.stdout.toString() + red.stderr.toString();
+    expect(red.exitCode).not.toBe(0);
+    expect(redText).toContain("plant.ts");
+    expect(redText).toContain("effect-channel(no-error-channel-escape)");
   },
   180_000,
 );

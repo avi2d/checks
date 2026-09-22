@@ -158,7 +158,7 @@ jobs:
 
 Commits follow `@commitlint/config-conventional` plus the house
 prefixes listed in `commitlint.config.js`, shared from
-`@avi2d/checks/commitlint.config.js`. It arrives with the `file:`
+`@avi2d/checks/commitlint.config.js`. It arrives with the registry
 dependency above, since `@commitlint/cli` and
 `@commitlint/config-conventional` are dependencies, not peers.
 Enforcement runs in CI on pull requests, because `jj` never fires a
@@ -236,18 +236,19 @@ leaves stale once the base branch advances after the pull request opens.
 - `node_modules/` is excluded through the consumer's `.gitignore`, not
   `ignorePatterns`: oxlint still walks the installed package when only
   `ignorePatterns` names it.
-- `files` in package.json guards only `bun pm pack` and a registry
-  publish. A `file:` install links the whole checkout and ignores
-  `files`, so a `file:` consumer receives `tests/`, `AGENTS.md` and the
-  `.ts` plugin source too, and its `.gitignore` entry for `node_modules/`
-  is the only thing keeping oxlint out of them.
+- `files` in package.json is the published surface: a consumer receives
+  what it lists and nothing else, so `tests/`, `AGENTS.md` and the `.ts`
+  plugin source never reach an install. `bun pm pack` builds the same
+  tarball the registry serves, which is what the consumer e2e test
+  installs.
 - The plugin ships compiled as `dist/index.js`, built with
   `bun build effect-channel/index.ts --outdir dist --target node --format esm`.
   Node refuses to type-strip a `.ts` plugin under `node_modules`, so the
   `.ts` source would fail to load from an installed package.
-- `dist/` is committed. Bun runs no lifecycle script on a `file:` install,
-  so a consumer would otherwise get no `dist/`. Rebuild it after pulling
-  with `bun run build`; CI fails when the committed bundle is stale.
+- `dist/` is committed. No `prepack` or `prepublishOnly` builds it, so a
+  publish ships whatever bundle the publishing worktree holds. Rebuild it
+  after pulling with `bun run build`; CI fails when the committed bundle
+  is stale.
 - The base parses with swc because typescript 7 (tsgo) has no compiler
   API for dependency-cruiser to use. Without `@swc/core` installed the
   cruise silently skips every `.ts` file, so this repo's test asserts its
