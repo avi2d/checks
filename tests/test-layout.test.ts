@@ -94,6 +94,12 @@ test("isolation reports the line the banned use sits on", () => {
   expect(isolationViolations("tests/widget.test.ts", source)[0]?.line).toBe(3);
 });
 
+test("isolation counts the line from the top of the file when leading trivia precedes the banned use", () => {
+  const source = ["// one", "// two", "", "", 'import cp from "node:child_process";', ""].join("\n");
+
+  expect(isolationViolations("tests/widget.test.ts", source)[0]?.line).toBe(5);
+});
+
 test("isolation reports the right line when a multibyte character precedes the banned use", () => {
   const source = ['const name = "🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀";', 'const b = 1, c = fetch("x");', "", "", "", ""].join("\n");
 

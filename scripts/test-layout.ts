@@ -83,9 +83,9 @@ export function placementViolations(files: readonly string[]): readonly Violatio
   return violations;
 }
 
-function lineOf(source: string, moduleStart: number, start: number): number {
+function lineOf(source: string, start: number): number {
   const bytes = Buffer.from(source, "utf8");
-  const offset = Math.max(0, Math.min(bytes.length, start - moduleStart));
+  const offset = Math.max(0, Math.min(bytes.length, start - 1));
   let line = 1;
   for (let index = 0; index < offset; index += 1) {
     if (bytes[index] === 0x0a) line += 1;
@@ -175,7 +175,6 @@ function outOfProcessUse(node: Record<string, unknown>): string | undefined {
 
 export function isolationViolations(file: string, source: string): readonly Violation[] {
   const module = parseSync(source, { syntax: "typescript", tsx: file.endsWith(".tsx"), target: "esnext" });
-  const moduleStart = spanStart(module as unknown as Record<string, unknown>);
   const violations: Violation[] = [];
   const seen = new Set<unknown>();
 
@@ -191,7 +190,7 @@ export function isolationViolations(file: string, source: string): readonly Viol
       if (use !== undefined) {
         violations.push({
           file,
-          line: lineOf(source, moduleStart, spanStart(node)),
+          line: lineOf(source, spanStart(node)),
           message: `a test outside ${E2E} must stay in-process, and this ${use}; move it to ${E2E}${file.slice(TESTS.length)}`,
         });
       }
