@@ -1,4 +1,2 @@
 [test]
-randomize = true
-coverage = false
 pathIgnorePatterns = ["**/tests/quarantine/**"]

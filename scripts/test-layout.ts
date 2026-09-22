@@ -84,10 +84,11 @@ export function placementViolations(files: readonly string[]): readonly Violatio
 }
 
 function lineOf(source: string, moduleStart: number, start: number): number {
-  const offset = Math.max(0, Math.min(source.length, start - moduleStart));
+  const bytes = Buffer.from(source, "utf8");
+  const offset = Math.max(0, Math.min(bytes.length, start - moduleStart));
   let line = 1;
   for (let index = 0; index < offset; index += 1) {
-    if (source[index] === "\n") line += 1;
+    if (bytes[index] === 0x0a) line += 1;
   }
   return line;
 }
@@ -250,12 +251,14 @@ export function bunfigViolations(consumer: unknown, preset: unknown): readonly V
   return violations;
 }
 
-function trackedFiles(root: string): readonly string[] {
-  const listed = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: root });
+async function workingTreeFiles(root: string): Promise<readonly string[]> {
+  const listed = Bun.spawnSync(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], { cwd: root });
   if (listed.exitCode !== 0) {
     throw new Error(`test-layout: git ls-files failed in ${root}: ${listed.stderr.toString()}`);
   }
-  return listed.stdout.toString().split("\0").filter(Boolean);
+  const listedFiles = listed.stdout.toString().split("\0").filter(Boolean);
+  const present = await Promise.all(listedFiles.map((file) => Bun.file(join(root, file)).exists()));
+  return listedFiles.filter((_, index) => present[index]);
 }
 
 async function parsedToml(path: string): Promise<unknown> {
@@ -268,8 +271,10 @@ async function readManifest(root: string): Promise<unknown> {
   return JSON.parse(text) as unknown;
 }
 
-export async function run(root: string, presetPath: string): Promise<readonly Violation[]> {
-  const files = trackedFiles(root);
+export type Result = { readonly files: number; readonly violations: readonly Violation[] };
+
+export async function run(root: string, presetPath: string): Promise<Result> {
+  const files = await workingTreeFiles(root);
   const violations: Violation[] = [...placementViolations(files)];
 
   const inProcess = files.filter(
@@ -291,11 +296,11 @@ export async function run(root: string, presetPath: string): Promise<readonly Vi
     : undefined;
   violations.push(...bunfigViolations(consumerBunfig, await parsedToml(presetPath)));
 
-  return violations;
+  return { files: files.length, violations };
 }
 
-export function report(violations: readonly Violation[], files: number): string {
-  if (violations.length === 0) return `test-layout: ${files} tracked files satisfy the layout`;
+export function report({ files, violations }: Result): string {
+  if (violations.length === 0) return `test-layout: ${files} files satisfy the layout`;
   const lines = violations.map(
     (violation) =>
       `  ${violation.file}${violation.line === undefined ? "" : `:${violation.line}`}: ${violation.message}`,
@@ -306,7 +311,7 @@ export function report(violations: readonly Violation[], files: number): string 
 if (import.meta.main) {
   const root = process.argv[2] ?? process.cwd();
   const preset = fileURLToPath(new URL("../bunfig.toml", import.meta.url));
-  const violations = await run(root, preset);
-  console.log(report(violations, trackedFiles(root).length));
-  process.exit(violations.length === 0 ? 0 : 1);
+  const result = await run(root, preset);
+  console.log(report(result));
+  process.exit(result.violations.length === 0 ? 0 : 1);
 }

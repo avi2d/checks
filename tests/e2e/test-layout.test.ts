@@ -19,8 +19,8 @@ const CLEAN_TEST = 'import { expect, test } from "bun:test";\ntest("adds", () =>
 
 let dir = "";
 
-async function layout(): Promise<{ exitCode: number; text: string }> {
-  await $`git add -A`.cwd(dir).quiet();
+async function layout(stage = true): Promise<{ exitCode: number; text: string }> {
+  if (stage) await $`git add -A`.cwd(dir).quiet();
   const result = await $`bun ${CHECK} ${dir}`.cwd(dir).nothrow().quiet();
   return { exitCode: result.exitCode, text: result.stdout.toString() + result.stderr.toString() };
 }
@@ -69,16 +69,38 @@ test(
     await writeFile(join(dir, "tests", "widget.test.ts"), CLEAN_TEST);
     expect((await layout()).exitCode).toBe(0);
 
-    await writeFile(join(dir, "bunfig.toml"), "[test]\nrandomize = false\n");
+    await writeFile(join(dir, "bunfig.toml"), "[test]\npathIgnorePatterns = []\n");
     const drifted = await layout();
     expect(drifted.exitCode).toBe(1);
-    expect(drifted.text).toContain("[test].randomize must be true");
+    expect(drifted.text).toContain('[test].pathIgnorePatterns must be ["**/tests/quarantine/**"]');
     expect(drifted.text).toContain("bun has no bunfig extends");
 
     await writeFile(join(dir, "bunfig.toml"), await readFile(PRESET, "utf8"));
     const green = await layout();
     expect(green.exitCode).toBe(0);
     expect(green.text).toContain("satisfy the layout");
+  },
+  60_000,
+);
+
+test(
+  "the layout check sees an unstaged new violation and survives a tracked file removed from disk",
+  async () => {
+    expect((await layout()).exitCode).toBe(0);
+
+    await writeFile(join(dir, "src", "unstaged.test.ts"), CLEAN_TEST);
+    const unstaged = await layout(false);
+    expect(unstaged.exitCode).toBe(1);
+    expect(unstaged.text).toContain("src/unstaged.test.ts: a test file must live at tests/**/*.test.ts");
+    await rm(join(dir, "src", "unstaged.test.ts"));
+
+    await rm(join(dir, "tests", "widget.test.ts"));
+    const removed = await layout(false);
+    expect(removed.exitCode).toBe(0);
+    expect(removed.text).toContain("satisfy the layout");
+
+    await writeFile(join(dir, "tests", "widget.test.ts"), CLEAN_TEST);
+    expect((await layout()).exitCode).toBe(0);
   },
   60_000,
 );

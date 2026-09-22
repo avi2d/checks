@@ -6,7 +6,7 @@ import {
   scriptViolations,
 } from "../scripts/test-layout.ts";
 
-const PRESET = { test: { randomize: true, coverage: false, pathIgnorePatterns: ["**/tests/quarantine/**"] } };
+const PRESET = { test: { pathIgnorePatterns: ["**/tests/quarantine/**"] } };
 
 test("placement names every test file outside tests/**/*.test.ts and its target", () => {
   const violations = placementViolations([
@@ -94,6 +94,12 @@ test("isolation reports the line the banned use sits on", () => {
   expect(isolationViolations("tests/widget.test.ts", source)[0]?.line).toBe(3);
 });
 
+test("isolation reports the right line when a multibyte character precedes the banned use", () => {
+  const source = ['const name = "🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀";', 'const b = 1, c = fetch("x");', "", "", "", ""].join("\n");
+
+  expect(isolationViolations("tests/widget.test.ts", source)[0]?.line).toBe(2);
+});
+
 test("scripts.test must be the exact randomized command and scripts.lint must run the check", () => {
   expect(
     scriptViolations({
@@ -116,10 +122,7 @@ test("the consumer bunfig must carry every [test] key of the shipped preset", ()
 
   expect(bunfigViolations(undefined, PRESET)[0]?.message).toContain("bunfig.toml is missing");
 
-  const drifted = bunfigViolations({ test: { randomize: false, coverage: false } }, PRESET);
-  expect(drifted.map((violation) => violation.message.split(" must be ")[0])).toEqual([
-    "[test].randomize",
-    "[test].pathIgnorePatterns",
-  ]);
+  const drifted = bunfigViolations({ test: { randomize: false, pathIgnorePatterns: [] } }, PRESET);
+  expect(drifted.map((violation) => violation.message.split(" must be ")[0])).toEqual(["[test].pathIgnorePatterns"]);
   expect(drifted[0]?.message).toContain("bun has no bunfig extends");
 });

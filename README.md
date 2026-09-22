@@ -70,8 +70,9 @@ it does not:
 
 - Every test file is `tests/**/*.test.ts`. A `*.test.ts`, `*.spec.ts` or
   `*_test.ts` under `src/`, `test/`, `__tests__/` or the repo root fails.
-  Only files `git ls-files` reports are scanned, so `node_modules/` and
-  every gitignored tree are out of reach.
+  Tracked and untracked files that `git ls-files --exclude-standard`
+  reports are scanned, so `node_modules/` and every gitignored tree are
+  out of reach, and a local run agrees with CI before `git add`.
 - `tests/lib/**` holds helpers and `tests/fixtures/**` holds data; neither
   may hold a test file. Every other directory directly under `tests/` is a
   test group and may nest as deep as it likes.
@@ -202,9 +203,8 @@ subject, not the bare title.
 - `bunfig.toml` has no `extends` and no include: bun ignores an unknown
   top-level key in silence, so a preset cannot be inherited and the
   consumer's copy is compared key by key against the installed one
-  instead. `[test] randomize` and `[test] pathIgnorePatterns` are real
-  bunfig keys, and an empty `--path-ignore-patterns` flag overrides the
-  file's own list.
+  instead. `[test] pathIgnorePatterns` is a real bunfig key, and an empty
+  `--path-ignore-patterns` flag overrides the file's own list.
 - The layout check ships as `.ts` and is invoked with `bun`, which needs
   no build step and no `dist/` entry, unlike the oxlint plugin that node
   loads.
