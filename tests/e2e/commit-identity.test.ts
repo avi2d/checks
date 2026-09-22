@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-const CHECKOUT = resolve(import.meta.dir, "..");
+const CHECKOUT = resolve(import.meta.dir, "..", "..");
 const SCRIPT = join(CHECKOUT, "scripts", "commit-identity.ts");
 
 const OWNER = { name: "avi2d", email: "avi2dg@gmail.com" };
