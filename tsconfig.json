@@ -13,5 +13,5 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["effect-channel/**/*.ts", "tests/**/*.ts"]
+  "include": ["effect-channel/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts"]
 }

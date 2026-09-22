@@ -30,7 +30,7 @@ export default {
       name: "not-to-dev-dep",
       severity: "error",
       comment:
-        "Shipped source cannot rely on a package that is absent in production. Move it to dependencies, or keep the import in a test or config file.",
+        "Shipped source cannot rely on a package that is absent in production. Move it to dependencies or peerDependencies, or keep the import in a test or config file.",
       from: {
         pathNot: [
           "[.](?:spec|test)[.](?:js|mjs|cjs|jsx|ts|mts|cts|tsx)$",
@@ -39,7 +39,7 @@ export default {
       },
       to: {
         dependencyTypes: ["npm-dev"],
-        dependencyTypesNot: ["type-only"],
+        dependencyTypesNot: ["type-only", "npm-peer"],
       },
     },
     {

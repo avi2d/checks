@@ -1,10 +1,10 @@
 import { $ } from "bun";
 import { afterEach, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-const CHECKOUT = resolve(import.meta.dir, "..");
+const CHECKOUT = resolve(import.meta.dir, "..", "..");
 
 let dir = "";
 
@@ -24,7 +24,7 @@ async function oxlint(): Promise<{ exitCode: number; text: string }> {
   };
 }
 
-async function writeConsumerFixture(): Promise<void> {
+async function writeConsumerFixture(manifest: Record<string, unknown> = {}): Promise<void> {
   dir = await mkdtemp(join(tmpdir(), "checks-consumer-"));
 
   await writeFile(
@@ -36,7 +36,9 @@ async function writeConsumerFixture(): Promise<void> {
         "@avi2d/checks": `file:${CHECKOUT}`,
         effect: "4.0.0-rc.115",
         oxlint: "1.83.0",
+        "@swc/core": "1.16.2",
       },
+      ...manifest,
     }),
   );
   await writeFile(
@@ -89,6 +91,45 @@ test(
 
     const result = await oxlint();
     expect(result.exitCode).toBe(0);
+  },
+  180_000,
+);
+
+test(
+  "the README lint recipe runs the installed layout check, red on a colocated test and green once it moves",
+  async () => {
+    await writeConsumerFixture({
+      scripts: {
+        test: "bun test --randomize",
+        lint: "oxlint --type-aware && ./node_modules/@avi2d/checks/scripts/lint-coverage.sh && bun ./node_modules/@avi2d/checks/scripts/test-layout.ts",
+      },
+    });
+    await writeFile(join(dir, "bunfig.toml"), await readFile(join(CHECKOUT, "bunfig.toml"), "utf8"));
+    await writeFile(join(dir, "widget.ts"), "export const widget = 42;\n");
+    await writeFile(
+      join(dir, "widget.test.ts"),
+      `import { expect, test } from "bun:test";\nimport { widget } from "./widget.ts";\ntest("widget", () => {\n  expect(widget).toBe(42);\n});\n`,
+    );
+    await $`git init -q && git add -A`.cwd(dir).quiet();
+
+    const red = await $`bun run lint`.cwd(dir).nothrow().quiet();
+    const redText = red.stdout.toString() + red.stderr.toString();
+    expect(red.exitCode).not.toBe(0);
+    expect(redText).toContain("widget.test.ts: a test file must live at tests/**/*.test.ts");
+    expect(redText).toContain("move it to tests/widget.test.ts");
+
+    await mkdir(join(dir, "tests"));
+    await rename(join(dir, "widget.test.ts"), join(dir, "tests", "widget.test.ts"));
+    await writeFile(
+      join(dir, "tests", "widget.test.ts"),
+      `import { expect, test } from "bun:test";\nimport { widget } from "../widget.ts";\ntest("widget", () => {\n  expect(widget).toBe(42);\n});\n`,
+    );
+    await $`git add -A`.cwd(dir).quiet();
+
+    const green = await $`bun run lint`.cwd(dir).nothrow().quiet();
+    const greenText = green.stdout.toString() + green.stderr.toString();
+    expect(greenText).toContain("satisfy the layout");
+    expect(green.exitCode).toBe(0);
   },
   180_000,
 );

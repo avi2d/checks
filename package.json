@@ -4,26 +4,30 @@
   "description": "Deterministic checks shared across the captain's TypeScript repos",
   "type": "module",
   "files": [
+    "bunfig.toml",
     "commitlint.config.js",
     "dependency-cruiser.config.js",
     "scripts/lint-coverage.sh",
+    "scripts/test-layout.ts",
     "oxlintrc.json",
     "tsconfig.effect.json",
     "dist/index.js"
   ],
   "exports": {
+    "./bunfig.toml": "./bunfig.toml",
     "./commitlint.config.js": "./commitlint.config.js",
     "./dependency-cruiser.config.js": "./dependency-cruiser.config.js",
     "./scripts/lint-coverage.sh": "./scripts/lint-coverage.sh",
+    "./scripts/test-layout.ts": "./scripts/test-layout.ts",
     "./oxlintrc.json": "./oxlintrc.json",
     "./tsconfig.effect.json": "./tsconfig.effect.json",
     "./dist/index.js": "./dist/index.js"
   },
   "scripts": {
     "build": "bun build effect-channel/index.ts --outdir dist --target node --format esm",
-    "lint": "oxlint --type-aware && ./scripts/lint-coverage.sh && depcruise --config .dependency-cruiser.cjs effect-channel tests commitlint.config.js dependency-cruiser.config.js .dependency-cruiser.cjs",
+    "lint": "oxlint --type-aware && ./scripts/lint-coverage.sh && bun scripts/test-layout.ts && depcruise --config .dependency-cruiser.cjs effect-channel scripts/test-layout.ts tests commitlint.config.js dependency-cruiser.config.js .dependency-cruiser.cjs",
     "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
-    "test": "bun test"
+    "test": "bun test --randomize"
   },
   "peerDependencies": {
     "@swc/core": "1.16.2",
