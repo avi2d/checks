@@ -187,6 +187,16 @@ test("apostrophes inside words do not pair up into a string that hides comments"
   expect(comments("src/a.ts", "const a = ['// x', '/* y */'];\n")).toEqual([]);
 });
 
+test("a prefixed char literal still opens where its prefix ends", () => {
+  const matcher = ["match c {", "    b'\\\\' => true,", "    // see acme/app#42", "    _ => c == b'\\'',", "}"].join("\n");
+  expect(comments("src/lib.rs", matcher)).toEqual([{ line: 3, text: "// see acme/app#42" }]);
+  const quote = ["let q = b'\"';", "// see acme/app#42", 'let s = "x";'].join("\n");
+  expect(comments("src/lib.rs", quote)).toEqual([{ line: 2, text: "// see acme/app#42" }]);
+  expect(comments("src/wide.cpp", "auto q = L'\"';\n// see acme/app#42\n")).toEqual([
+    { line: 2, text: "// see acme/app#42" },
+  ]);
+});
+
 test("code the checks cannot read is named rather than passed over", () => {
   expect(() => comments("src/main.pl", "# a comment")).toThrow(
     "src/main.pl is code the comment checks cannot read: add a comment syntax for .pl to scripts/comments.ts",

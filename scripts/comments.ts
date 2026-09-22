@@ -27,7 +27,7 @@ const JS: Syntax = {
   quotes: [escaping('"'), outsideAWord(escaping("'")), escaping("`")],
   regexLiterals: true,
 };
-const CURLY: Syntax = { ...JS, regexLiterals: false };
+const CURLY: Syntax = { ...JS, quotes: [...STRINGS, escaping("`")], regexLiterals: false };
 const PHP: Syntax = { line: [...SLASH_SLASH, anywhere("#")], block: SLASHES, quotes: STRINGS, regexLiterals: false };
 const HASH: Syntax = {
   line: [startingAWord("#")],
@@ -36,7 +36,7 @@ const HASH: Syntax = {
   regexLiterals: false,
 };
 const YAML: Syntax = { ...HASH, quotes: [escaping('"'), outsideAWord(literal("'"))] };
-const SQL: Syntax ={ line: DASHES, block: SLASHES, quotes: STRINGS, regexLiterals: false };
+const SQL: Syntax = { line: DASHES, block: SLASHES, quotes: STRINGS, regexLiterals: false };
 const LUA: Syntax = { line: DASHES, block: [["--[[", "]]"]], quotes: STRINGS, regexLiterals: false };
 const HASKELL: Syntax = { line: DASHES, block: [["{-", "-}"]], quotes: [escaping('"')], regexLiterals: false };
 const ML: Syntax = { line: [], block: [["(*", "*)"]], quotes: [escaping('"')], regexLiterals: false };
