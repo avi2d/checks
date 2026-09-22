@@ -7,14 +7,14 @@ dependency-cruiser base, the test-layout check with its bunfig preset,
 the commit-identity check with its workflow, and the Effect error-channel
 plugin compiled to JavaScript.
 
-Consumed by a `file:` dependency on the local checkout. No npm publish.
+Published as `@avi2d/checks` on the public npm registry.
 
 ## Consume it
 
-From the consuming repo, with this checkout beside it:
+From the consuming repo:
 
 ```sh
-bun add -d file:../checks oxlint@1.83.0 oxlint-tsgolint@7.0.2002 @effect/tsgo@0.45.0 typescript@7.0.2 dependency-cruiser@18.4.0 @swc/core@1.16.2
+bun add -d @avi2d/checks oxlint@1.83.0 oxlint-tsgolint@7.0.2002 @effect/tsgo@0.45.0 typescript@7.0.2 dependency-cruiser@18.4.0 @swc/core@1.16.2
 ```
 
 `.oxlintrc.json`:
@@ -63,8 +63,8 @@ cp node_modules/@avi2d/checks/bunfig.toml bunfig.toml
 `commit-identity.ts` refuses a commit with an author other than the
 repository owner; see "Commit identity" below.
 
-The lockfile pins nothing for the `file:` dependency, so a change here
-reaches a consumer on its next `bun install`.
+The registry version is pinned by the consumer's lockfile; bump
+`@avi2d/checks` to adopt a new release.
 
 ## Test layout
 
