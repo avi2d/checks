@@ -8,7 +8,7 @@ const CHECKOUT = resolve(import.meta.dir, "..", "..");
 const SCRIPT = join(CHECKOUT, "scripts", "commit-identity.ts");
 
 const OWNER = { name: "avi2d", email: "avi2dg@gmail.com" };
-const STRANGER = { name: "David Guseinov", email: "tech@hexn.io" };
+const STRANGER = { name: "Pat Stranger", email: "stranger@example.com" };
 const SQUASH = { name: "GitHub", email: "noreply@github.com" };
 
 type Identity = { name: string; email: string };
@@ -72,7 +72,7 @@ test(
     expect(red.exitCode).toBe(1);
     expect(red.text).toContain(foreign.slice(0, 12));
     expect(red.text).toContain("feat: stolen");
-    expect(red.text).toContain("author David Guseinov <tech@hexn.io>");
+    expect(red.text).toContain("author Pat Stranger <stranger@example.com>");
     expect(red.text).toContain("allowed: avi2d <avi2dg@gmail.com>");
   },
   60_000,
@@ -88,7 +88,7 @@ test(
     const red = await check(base, "HEAD");
     expect(red.exitCode).toBe(1);
     expect(red.text).toContain(foreign.slice(0, 12));
-    expect(red.text).toContain("committer David Guseinov <tech@hexn.io>");
+    expect(red.text).toContain("committer Pat Stranger <stranger@example.com>");
   },
   60_000,
 );
@@ -99,25 +99,25 @@ test(
     await initRepo();
     const base = await commit({ message: "feat: base" });
     const coauthored = await commit({
-      message: "feat: helped\n\nCo-authored-by: David Guseinov <tech@hexn.io>\n",
+      message: "feat: helped\n\nCo-authored-by: Pat Stranger <stranger@example.com>\n",
     });
     const lowercase = await commit({
-      message: "feat: helped again\n\nco-authored-by: David Guseinov <tech@hexn.io>\n",
+      message: "feat: helped again\n\nco-authored-by: Pat Stranger <stranger@example.com>\n",
     });
     await commit({ message: "feat: signed\n\nSigned-off-by: avi2d <avi2dg@gmail.com>\n" });
     await commit({ message: "feat: reviewed\n\nReviewed-by: Someone <someone@example.com>\n" });
     await commit({ message: "fix: reject <foo@bar.com>\n\nError: expected <user@host> in the body.\n" });
     await commit({
       message:
-        "feat: quoted\n\nThe squash wrote Co-authored-by: David Guseinov <tech@hexn.io> in prose.\n\nSee the log.\n",
+        "feat: quoted\n\nThe squash wrote Co-authored-by: Pat Stranger <stranger@example.com> in prose.\n\nSee the log.\n",
     });
 
     const red = await check(base, "HEAD");
     expect(red.exitCode).toBe(1);
     expect(red.text).toContain(coauthored.slice(0, 12));
-    expect(red.text).toContain("trailer Co-authored-by: David Guseinov <tech@hexn.io>");
+    expect(red.text).toContain("trailer Co-authored-by: Pat Stranger <stranger@example.com>");
     expect(red.text).toContain(lowercase.slice(0, 12));
-    expect(red.text).toContain("trailer co-authored-by: David Guseinov <tech@hexn.io>");
+    expect(red.text).toContain("trailer co-authored-by: Pat Stranger <stranger@example.com>");
     expect(red.text).toContain("2 of 6 commit(s)");
   },
   60_000,
