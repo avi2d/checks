@@ -288,3 +288,13 @@ bun run lint
 bun run typecheck
 bun run test
 ```
+
+Release from a green `main`, where CI has proved the committed `dist/`
+matches its source:
+
+```sh
+bun publish
+```
+
+`publishConfig.access` in package.json is what makes the scoped package
+public.
