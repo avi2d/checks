@@ -21,4 +21,4 @@ jobs:
       - run: git diff --exit-code dist/
       - run: bun run lint
       - run: bun run typecheck
-      - run: bun test
+      - run: bun run test

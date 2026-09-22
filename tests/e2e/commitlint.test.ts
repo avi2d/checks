@@ -2,7 +2,7 @@ import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { join, resolve } from "node:path";
 
-const CHECKOUT = resolve(import.meta.dir, "..");
+const CHECKOUT = resolve(import.meta.dir, "..", "..");
 
 async function lint(message: string): Promise<{ exitCode: number; text: string }> {
   const binary = join(CHECKOUT, "node_modules", ".bin", "commitlint");

@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-const CHECKOUT = resolve(import.meta.dir, "..");
+const CHECKOUT = resolve(import.meta.dir, "..", "..");
 const BASE = join(CHECKOUT, "dependency-cruiser.config.js");
 
 let dir = "";
@@ -89,21 +89,25 @@ test(
 );
 
 test(
-  "not-to-dev-dep goes red on a runtime dev import, green once it is local",
+  "not-to-dev-dep goes red on a runtime dev import, green once the package is also a peer, green once it is local",
   async () => {
     dir = await mkdtemp(join(tmpdir(), "checks-depcruiser-devdep-"));
     await writeProject({
       "src/entry.test.js": `import "./entry.js";\n`,
       "src/entry.js": `import { dev } from "fake-dev";\nexport const entry = dev;\n`,
     });
-    await writeFile(
-      join(dir, "package.json"),
-      JSON.stringify({
-        name: "checks-depcruiser-fixture",
-        type: "module",
-        devDependencies: { "fake-dev": "1.0.0" },
-      }),
-    );
+    const manifest = async (extra: Record<string, unknown>): Promise<void> => {
+      await writeFile(
+        join(dir, "package.json"),
+        JSON.stringify({
+          name: "checks-depcruiser-fixture",
+          type: "module",
+          devDependencies: { "fake-dev": "1.0.0" },
+          ...extra,
+        }),
+      );
+    };
+    await manifest({});
     await mkdir(join(dir, "node_modules", "fake-dev"), { recursive: true });
     await writeFile(join(dir, "node_modules", "fake-dev", "package.json"), JSON.stringify({ name: "fake-dev", version: "1.0.0" }));
     await writeFile(join(dir, "node_modules", "fake-dev", "index.js"), `export const dev = 1;\n`);
@@ -112,6 +116,13 @@ test(
     const red = await depcruise(config, "src");
     expect(red.exitCode).not.toBe(0);
     expect(red.text).toContain("not-to-dev-dep");
+
+    await manifest({ peerDependencies: { "fake-dev": "1.0.0" } });
+    const peer = await depcruise(config, "src");
+    expect(peer.exitCode).toBe(0);
+
+    await manifest({});
+    expect((await depcruise(config, "src")).exitCode).not.toBe(0);
 
     await writeFile(join(dir, "src/local.js"), `export const dev = 1;\n`);
     await writeFile(join(dir, "src/entry.js"), `import { dev } from "./local.js";\nexport const entry = dev;\n`);

@@ -3,8 +3,8 @@
 Deterministic checks shared across my TypeScript repos. One package,
 `@avi2d/checks`: the oxlint base config, the tsconfig fragment with the
 Effect language-service block, the shared commitlint config, the shared
-dependency-cruiser base, and the Effect error-channel plugin compiled to
-JavaScript.
+dependency-cruiser base, the test-layout check with its bunfig preset,
+and the Effect error-channel plugin compiled to JavaScript.
 
 Consumed by a `file:` dependency on the local checkout. No npm publish.
 
@@ -39,25 +39,75 @@ node_modules/
 }
 ```
 
-`package.json` gains two scripts:
+`bunfig.toml` is a copy of the shipped preset:
+
+```sh
+cp node_modules/@avi2d/checks/bunfig.toml bunfig.toml
+```
+
+`package.json` gains three scripts:
 
 ```json
-"lint": "oxlint --type-aware && ./node_modules/@avi2d/checks/scripts/lint-coverage.sh",
-"typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict"
+"lint": "oxlint --type-aware && ./node_modules/@avi2d/checks/scripts/lint-coverage.sh && bun ./node_modules/@avi2d/checks/scripts/test-layout.ts",
+"typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
+"test": "bun test --randomize"
 ```
 
 `lint-coverage.sh` fails when oxlint silently skips a tracked `.ts` or
 `.tsx` file, for example through a stray `.gitignore` entry. It compares
 `git ls-files` against oxlint's own file walk and names the missing files.
 
+`test-layout.ts` decides the test layout described below.
+
 The lockfile pins nothing for the `file:` dependency, so a change here
 reaches a consumer on its next `bun install`.
+
+## Test layout
+
+`bun ./node_modules/@avi2d/checks/scripts/test-layout.ts` fails unless the
+repo holds this shape, and names the file and the path to move it to when
+it does not:
+
+- Every test file is `tests/**/*.test.ts` or `.tsx`. A `*.test.ts`, `*.spec.ts` or
+  `*_test.ts` under `src/`, `test/`, `__tests__/` or the repo root fails.
+  Tracked and untracked files that `git ls-files --exclude-standard`
+  reports are scanned, so `node_modules/` and every gitignored tree are
+  out of reach, and a local run agrees with CI before `git add`.
+- `tests/lib/**` holds helpers and `tests/fixtures/**` holds data; neither
+  may hold a test file. Every other directory directly under `tests/` is a
+  test group and may nest as deep as it likes.
+- Two levels. A test outside `tests/e2e/` runs in-process, so it may not
+  import `node:child_process`, `net`, `http`, `https`, `http2`, `tls` or
+  `dgram`, may not import `$`, `spawn`, `spawnSync`, `connect`, `serve` or
+  `listen` from `bun`, may not touch `Bun.$` or `Bun.spawn`, and may not
+  call `fetch`. A test inside `tests/e2e/` may do all of it. Helpers in
+  `tests/lib/**` answer to the same rule, since an in-process test reaches
+  them; `tests/fixtures/**` is data and is not parsed. Detection parses
+  with swc and reads import specifiers and identifier use, so a test that
+  only carries `"node:child_process"` as a string is not a violation.
+- `scripts.test` is exactly `bun test --randomize` and `scripts.lint` runs
+  this check.
+- `bunfig.toml` carries every `[test]` key of the shipped preset with the
+  same value. Other tables, and extra `[test]` keys, are the repo's own.
+
+The in-process half is what a mutation run can mutate; `tests/e2e/**` is
+excluded from a mutate scope by construction, because a subprocess kills
+both the speed and the coverage signal a mutant needs.
+
+The preset also skips `tests/quarantine/**` on a default run. A test that
+turns flaky moves there, so the suite stays trustworthy, and the flake is
+still run on demand:
+
+```sh
+bun test --path-ignore-patterns='' tests/quarantine
+```
 
 ## Dependency rules
 
 `.dependency-cruiser.cjs` extends the shared base, which carries
 `no-circular`, `no-orphans`, `not-to-dev-dep` (shipped source importing
-a dev-only package), `not-to-unresolvable` (nothing installed answers the
+a dev-only package, which a package listed in `peerDependencies` too is
+not), `not-to-unresolvable` (nothing installed answers the
 specifier), and `no-deep-imports` (a subpath the package's exports map
 does not publish):
 
@@ -150,6 +200,14 @@ subject, not the bare title.
   API for dependency-cruiser to use. Without `@swc/core` installed the
   cruise silently skips every `.ts` file, so this repo's test asserts its
   own TypeScript is cruised.
+- `bunfig.toml` has no `extends` and no include: bun ignores an unknown
+  top-level key in silence, so a preset cannot be inherited and the
+  consumer's copy is compared key by key against the installed one
+  instead. `[test] pathIgnorePatterns` is a real bunfig key, and an empty
+  `--path-ignore-patterns` flag overrides the file's own list.
+- The layout check ships as `.ts` and is invoked with `bun`, which needs
+  no build step and no `dist/` entry, unlike the oxlint plugin that node
+  loads.
 - `bun` counts as a built-in module. Nothing installed resolves it except
   `@types/bun`, which would otherwise make every runtime `bun` import look
   like a dev-only dependency.
@@ -170,5 +228,5 @@ bun install
 bun run build
 bun run lint
 bun run typecheck
-bun test
+bun run test
 ```
