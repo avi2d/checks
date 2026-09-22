@@ -5,8 +5,8 @@ Deterministic checks shared across my TypeScript repos. One package,
 Effect language-service block, the shared commitlint config, the shared
 dependency-cruiser base, the test-layout check with its bunfig preset,
 the commit-identity check with its workflow, the comment gate with its
-workflow and backtest, and the Effect error-channel
-plugin compiled to JavaScript.
+workflow and backtest, and the Effect error-channel plugin compiled to
+JavaScript.
 
 Consumed by a `file:` dependency on the local checkout. No npm publish.
 
@@ -245,11 +245,10 @@ the clone rather than widening to the whole tree, so a shallow checkout
 running the one-argument form needs `fetch-depth: 2`. Only added lines
 are checked, so a violation in a file the diff never touches stays
 silent, and a refusal counts when any line of the comment carrying it was
-added. The check
-refuses a machine-read directive, a record or ticket pointer, a doc
-block, and a file opening with a rationale block over three lines,
-licence headers excepted; `scripts/comments.ts` holds the scanner the
-gate and the backtest share.
+added. The check refuses a machine-read directive, a record or ticket
+pointer, a doc block, and a file opening with a rationale block over
+three lines, licence headers excepted; `scripts/comments.ts` holds the
+scanner the gate and the backtest share.
 
 Enforcement runs on pull requests, where the range from the base branch's
 current tip to the head is visible:
@@ -266,14 +265,16 @@ jobs:
 ## Backtest
 
 `scripts/backtest.ts` reports what the comment check would have refused
-at every commit, so a repository can print its own three-window table:
+at each recent commit, so a repository can measure its own history:
 
 ```sh
 bun ./node_modules/@avi2d/checks/scripts/backtest.ts [commit-count]
 ```
 
-It walks first-parent commits, attributes only the refusals each commit
-introduced, and counts new comment text as a share of added lines.
+It walks the last `commit-count` first-parent commits, 60 by default,
+prints a row per commit that touches code and then the totals,
+attributes only the refusals each commit introduced, and counts new
+comment text as a share of added lines.
 `generated/`, `vendor/`, `repos/`, `node_modules/` and `dist/` are out
 of reach, so the figures are authored code.
 
