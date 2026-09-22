@@ -48,7 +48,7 @@ cp node_modules/@avi2d/checks/bunfig.toml bunfig.toml
 `package.json` gains three scripts:
 
 ```json
-"lint": "oxlint --type-aware && ./node_modules/@avi2d/checks/scripts/lint-coverage.sh && bun ./node_modules/@avi2d/checks/scripts/test-layout.ts",
+"lint": "oxlint --type-aware && ./node_modules/@avi2d/checks/scripts/lint-coverage.sh && bun ./node_modules/@avi2d/checks/scripts/test-layout.ts && bun ./node_modules/@avi2d/checks/scripts/commit-identity.ts HEAD",
 "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
 "test": "bun test --randomize"
 ```
@@ -176,6 +176,55 @@ commit subject; per-commit messages are not linted. GitHub appends
 that suffix attached and the header length limit applies to the landed
 subject, not the bare title.
 
+The config also carries `no-co-authored-by`, which rejects any message
+with a `Co-authored-by:` trailer. commitlint reads a message and nothing
+else: the author and committer fields live on the commit object, out of
+its reach, and a foreign author becomes a `Co-authored-by` trailer only
+after GitHub squashes it. That is why the commit-identity check below
+exists as well, and why it is the one that fails a pull request.
+
+## Commit identity
+
+`scripts/commit-identity.ts` walks every commit in a range and fails when
+one carries an identity other than the repository owner's:
+
+```sh
+bun ./node_modules/@avi2d/checks/scripts/commit-identity.ts <base-ref> <head-ref>
+bun ./node_modules/@avi2d/checks/scripts/commit-identity.ts <ref>
+```
+
+With one argument it checks that commit alone, which is the form the
+`lint` script above runs on `HEAD`. It refuses a commit whose author or
+committer is outside the allowlist, and one whose message carries a
+`Co-authored-by:`, `Signed-off-by:`, or any other trailer naming a
+person, and it names the offending commit and reason. `GitHub
+<noreply@github.com>` is allowed as committer only, since that is who
+writes a squash merge.
+
+The allowlist defaults to `avi2d <avi2dg@gmail.com>`. A repo with other
+owners restates it in `package.json`:
+
+```json
+"commitIdentity": {
+  "authors": [{ "name": "avi2d", "email": "avi2dg@gmail.com" }]
+}
+```
+
+Enforcement runs on pull requests, where the whole range between base and
+head is visible:
+
+```yaml
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+jobs:
+  commit-identity:
+    uses: avi2d/checks/.github/workflows/commit-identity.yml@main
+```
+
+The workflow fetches the consumer's full history, because the base commit
+is unreachable from a shallow fetch of the head.
+
 ## Why it is shaped this way
 
 - `plugins` does not inherit through oxlint `extends`. `rules`,
@@ -211,6 +260,11 @@ subject, not the bare title.
 - `bun` counts as a built-in module. Nothing installed resolves it except
   `@types/bun`, which would otherwise make every runtime `bun` import look
   like a dev-only dependency.
+- The pull request merge commit GitHub builds is authored by `GitHub
+  <noreply@github.com>`, which commit-identity refuses as an author. A
+  consumer that runs the check inside `lint` checks out
+  `github.event.pull_request.head.sha` instead of the default merge ref,
+  as this repo's `ci.yml` does.
 - `no-deep-imports` judges the import specifier, never the resolved file.
   The base honours `exports` maps, so a subpath the map publishes resolves
   and passes, one it omits fails to resolve and is reported, and a package

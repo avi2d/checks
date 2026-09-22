@@ -35,6 +35,19 @@ test(
 );
 
 test(
+  "commitlint config rejects a Co-authored-by trailer",
+  async () => {
+    const red = await lint("feat(lint): add x\n\nCo-authored-by: David Guseinov <tech@hexn.io>\n");
+    expect(red.exitCode).not.toBe(0);
+    expect(red.text).toContain("no-co-authored-by");
+
+    const green = await lint("feat(lint): add x\n\nA body with no trailer.\n");
+    expect(green.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
   "commitlint config accepts house prefixes, rejects unknown types and long headers",
   async () => {
     const house = [
