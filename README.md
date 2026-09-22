@@ -176,10 +176,10 @@ commit subject; per-commit messages are not linted. GitHub appends
 that suffix attached and the header length limit applies to the landed
 subject, not the bare title.
 
-commitlint lints the pull request title only. It never sees a commit's
-author or committer fields, nor the `Co-authored-by` trailer GitHub
-writes from a foreign author when it squashes, so it cannot enforce who
-a commit belongs to. The commit-identity check below is the enforcement.
+It never sees a commit's author or committer fields, nor the
+`Co-authored-by` trailer GitHub writes from a foreign author when it
+squashes, so it cannot enforce who a commit belongs to. The
+commit-identity check below is the enforcement.
 
 ## Commit identity
 
