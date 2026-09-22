@@ -93,20 +93,23 @@ test(
 );
 
 test(
-  "the working tree form reads dirty changes without a commit",
+  "the one-argument form refuses to guess when the parent commit is not fetched",
   async () => {
     await initRepo();
+    await writeFile(join(dir, "legacy.ts"), "// @ts-expect-error old suppression\nexport const legacy = 1;\n");
+    await commit("a legacy violation");
     await writeFile(join(dir, "widget.ts"), "export const widget = 1;\n");
-    await commit("clean start");
+    await commit("a clean change");
 
-    await writeFile(join(dir, "widget.ts"), "export const widget = 1;\n// see #41 for why\n");
-    const red = await gate();
-    expect(red.exitCode).toBe(1);
-    expect(red.text).toContain("widget.ts:2 points at a record or a ticket");
-
-    await writeFile(join(dir, "widget.ts"), "export const widget = 1;\n");
-    const green = await gate();
-    expect(green.exitCode).toBe(0);
+    const shallow = await mkdtemp(join(tmpdir(), "checks-comment-gate-shallow-"));
+    try {
+      await $`git clone -q --depth 1 ${`file://${dir}`} ${shallow}`.quiet();
+      const result = await $`bun ${SCRIPT} HEAD`.cwd(shallow).nothrow().quiet();
+      expect(result.exitCode).toBe(2);
+      expect(result.stderr.toString()).toContain("comment-gate: git rev-parse");
+    } finally {
+      await rm(shallow, { recursive: true, force: true });
+    }
   },
   120_000,
 );

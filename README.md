@@ -237,13 +237,15 @@ when an added line carries a banned comment:
 ```sh
 bun ./node_modules/@avi2d/checks/scripts/comment-gate.ts <base-ref> <head-ref>
 bun ./node_modules/@avi2d/checks/scripts/comment-gate.ts <ref>
-bun ./node_modules/@avi2d/checks/scripts/comment-gate.ts
 ```
 
 With two arguments it diffs the base against the head. With one it diffs
-that commit against its parent. With none it diffs the working tree
-against `HEAD`, untracked files included. Only added lines are checked,
-so a violation in a file the diff never touches stays silent. The check
+that commit against its parent, and exits 2 when that parent is not in
+the clone rather than widening to the whole tree, so a shallow checkout
+running the one-argument form needs `fetch-depth: 2`. Only added lines
+are checked, so a violation in a file the diff never touches stays
+silent, and a refusal counts when any line of the comment carrying it was
+added. The check
 refuses a machine-read directive, a record or ticket pointer, a doc
 block, and a file opening with a rationale block over three lines,
 licence headers excepted; `scripts/comments.ts` holds the scanner the

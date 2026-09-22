@@ -7,9 +7,7 @@ export type GateResult = {
   readonly violations: readonly string[];
 };
 
-const USAGE = "usage: comment-gate.ts [<ref> | <base-ref> <head-ref>] (no args checks the working tree against HEAD)";
-
-const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+const USAGE = "usage: comment-gate.ts <ref> | <base-ref> <head-ref>";
 
 function die(message: string): never {
   console.error(message);
@@ -70,25 +68,6 @@ export function parseAddedLines(diff: string): Map<string, Set<number>> {
   return added;
 }
 
-function lineOfViolation(path: string, violation: string): number | undefined {
-  const rest = violation.slice(path.length + 1);
-  const line = Number(rest.slice(0, rest.indexOf(" ")));
-  return Number.isInteger(line) ? line : undefined;
-}
-
-export function checkFile(path: string, source: string, added: ReadonlySet<number>): readonly string[] {
-  let found: readonly string[];
-  try {
-    found = refused(path, source);
-  } catch (error) {
-    return [`${path}: ${error instanceof Error ? error.message : String(error)}`];
-  }
-  return found.filter((violation) => {
-    const line = lineOfViolation(path, violation);
-    return line !== undefined && added.has(line);
-  });
-}
-
 function show(rev: string, path: string, root: string): string | undefined {
   const result = Bun.spawnSync(["git", "show", `${rev}:${path}`], {
     cwd: root,
@@ -98,12 +77,7 @@ function show(rev: string, path: string, root: string): string | undefined {
   return result.success ? result.stdout.toString() : undefined;
 }
 
-async function untracked(root: string): Promise<readonly string[]> {
-  const listed = git(root, "ls-files", "-z", "--others", "--exclude-standard");
-  return listed.split("\0").filter((file) => file !== "");
-}
-
-export async function runRange(root: string, base: string, head: string): Promise<GateResult> {
+export function runRange(root: string, base: string, head: string): GateResult {
   const diff = git(root, "-c", "core.quotePath=false", "diff", "-U0", "--no-color", "--no-prefix", base, head);
   const added = parseAddedLines(diff);
   const violations: string[] = [];
@@ -113,30 +87,7 @@ export async function runRange(root: string, base: string, head: string): Promis
     if (!readable(path)) continue;
     const source = show(head, path, root);
     if (source === undefined) continue;
-    violations.push(...checkFile(path, source, lines));
-  }
-  return { files: added.size, addedLines, violations };
-}
-
-export async function runWorkingTree(root: string, base: string): Promise<GateResult> {
-  const diff = git(root, "-c", "core.quotePath=false", "diff", "-U0", "--no-color", "--no-prefix", base);
-  const added = parseAddedLines(diff);
-  for (const path of await untracked(root)) {
-    const file = Bun.file(`${root}/${path}`);
-    if (!(await file.exists())) continue;
-    const lines = new Set<number>();
-    const count = (await file.text()).split("\n").length;
-    for (let line = 1; line <= count; line += 1) lines.add(line);
-    added.set(path, lines);
-  }
-  const violations: string[] = [];
-  let addedLines = 0;
-  for (const [path, lines] of added) {
-    addedLines += lines.size;
-    if (!readable(path)) continue;
-    const file = Bun.file(`${root}/${path}`);
-    if (!(await file.exists())) continue;
-    violations.push(...checkFile(path, await file.text(), lines));
+    violations.push(...refused(path, source, lines));
   }
   return { files: added.size, addedLines, violations };
 }
@@ -149,25 +100,16 @@ export function report({ files, addedLines, violations }: GateResult): string {
 }
 
 function parentOf(root: string, rev: string): string {
-  const result = Bun.spawnSync(["git", "rev-parse", "--verify", `${rev}^`], {
-    cwd: root,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  return result.success ? result.stdout.toString().trim() : EMPTY_TREE;
+  return git(root, "rev-parse", "--verify", `${rev}^`).trim();
 }
 
 if (import.meta.main) {
   const [first, second, ...extra] = process.argv.slice(2);
-  if (extra.length > 0) die(USAGE);
+  if (first === undefined || extra.length > 0) die(USAGE);
 
   const root = git(process.cwd(), "rev-parse", "--show-toplevel").trim();
   const result =
-    second !== undefined
-      ? await runRange(root, first ?? "", second)
-      : first !== undefined
-        ? await runRange(root, parentOf(root, first), first)
-        : await runWorkingTree(root, "HEAD");
+    second !== undefined ? runRange(root, first, second) : runRange(root, parentOf(root, first), first);
 
   console.log(report(result));
   process.exit(result.violations.length === 0 ? 0 : 1);

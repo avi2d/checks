@@ -247,14 +247,25 @@ const CHECKS: readonly Check[] = [
   },
 ];
 
-export function refused(path: string, source: string): string[] {
+function spans(from: number, lineCount: number, within: ReadonlySet<number> | undefined): boolean {
+  if (within === undefined) return true;
+  for (let line = from; line < from + lineCount; line += 1) if (within.has(line)) return true;
+  return false;
+}
+
+export function refused(path: string, source: string, within?: ReadonlySet<number>): string[] {
   const out: string[] = [];
   const found = comments(path, source);
 
   const opening = openingBlock(found);
   const openingText = opening.map((comment) => comment.text).join("\n");
   const openingLines = opening.reduce((sum, comment) => sum + comment.text.split("\n").length, 0);
-  if (opening.length > 0 && openingLines > A_WRAPPED_SENTENCE_FITS_WITHIN && !LICENCE.test(openingText)) {
+  if (
+    opening.length > 0 &&
+    openingLines > A_WRAPPED_SENTENCE_FITS_WITHIN &&
+    !LICENCE.test(openingText) &&
+    spans(1, openingLines, within)
+  ) {
     out.push(
       `${path}:1 opens with a ${openingLines}-line rationale block. A record this long belongs in docs/adr or the repo's decision log, and the code does not point at it`,
     );
@@ -262,6 +273,7 @@ export function refused(path: string, source: string): string[] {
 
   for (const comment of found) {
     if (LICENCE.test(comment.text)) continue;
+    if (!spans(comment.line, comment.text.split("\n").length, within)) continue;
     for (const check of CHECKS) {
       const [match] = check.find.exec(comment.text) ?? [];
       if (match !== undefined) out.push(`${path}:${comment.line} ${check.refusal(match)}`);
