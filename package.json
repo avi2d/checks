@@ -2,6 +2,14 @@
   "name": "@avi2d/checks",
   "version": "0.1.0",
   "description": "Deterministic checks shared across the captain's TypeScript repos",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/avi2d/checks.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "files": [
     "bunfig.toml",

@@ -7,14 +7,14 @@ dependency-cruiser base, the test-layout check with its bunfig preset,
 the commit-identity check with its workflow, and the Effect error-channel
 plugin compiled to JavaScript.
 
-Consumed by a `file:` dependency on the local checkout. No npm publish.
+Published as `@avi2d/checks` on the public npm registry.
 
 ## Consume it
 
-From the consuming repo, with this checkout beside it:
+From the consuming repo:
 
 ```sh
-bun add -d file:../checks oxlint@1.83.0 oxlint-tsgolint@7.0.2002 @effect/tsgo@0.45.0 typescript@7.0.2 dependency-cruiser@18.4.0 @swc/core@1.16.2
+bun add -d @avi2d/checks oxlint@1.83.0 oxlint-tsgolint@7.0.2002 @effect/tsgo@0.45.0 typescript@7.0.2 dependency-cruiser@18.4.0 @swc/core@1.16.2
 ```
 
 `.oxlintrc.json`:
@@ -63,8 +63,8 @@ cp node_modules/@avi2d/checks/bunfig.toml bunfig.toml
 `commit-identity.ts` refuses a commit with an author other than the
 repository owner; see "Commit identity" below.
 
-The lockfile pins nothing for the `file:` dependency, so a change here
-reaches a consumer on its next `bun install`.
+The registry version is pinned by the consumer's lockfile; bump
+`@avi2d/checks` to adopt a new release.
 
 ## Test layout
 
@@ -158,7 +158,7 @@ jobs:
 
 Commits follow `@commitlint/config-conventional` plus the house
 prefixes listed in `commitlint.config.js`, shared from
-`@avi2d/checks/commitlint.config.js`. It arrives with the `file:`
+`@avi2d/checks/commitlint.config.js`. It arrives with the registry
 dependency above, since `@commitlint/cli` and
 `@commitlint/config-conventional` are dependencies, not peers.
 Enforcement runs in CI on pull requests, because `jj` never fires a
@@ -236,18 +236,19 @@ leaves stale once the base branch advances after the pull request opens.
 - `node_modules/` is excluded through the consumer's `.gitignore`, not
   `ignorePatterns`: oxlint still walks the installed package when only
   `ignorePatterns` names it.
-- `files` in package.json guards only `bun pm pack` and a registry
-  publish. A `file:` install links the whole checkout and ignores
-  `files`, so a `file:` consumer receives `tests/`, `AGENTS.md` and the
-  `.ts` plugin source too, and its `.gitignore` entry for `node_modules/`
-  is the only thing keeping oxlint out of them.
+- `files` in package.json is the published surface: `tests/`, `AGENTS.md`
+  and the `.ts` plugin source never reach an install. npm adds
+  `package.json`, `README` and `LICENSE` to the tarball whatever `files`
+  says. `bun pm pack` builds the same tarball the registry serves, which
+  is what the packed-tarball consumer e2e test installs.
 - The plugin ships compiled as `dist/index.js`, built with
   `bun build effect-channel/index.ts --outdir dist --target node --format esm`.
   Node refuses to type-strip a `.ts` plugin under `node_modules`, so the
   `.ts` source would fail to load from an installed package.
-- `dist/` is committed. Bun runs no lifecycle script on a `file:` install,
-  so a consumer would otherwise get no `dist/`. Rebuild it after pulling
-  with `bun run build`; CI fails when the committed bundle is stale.
+- `dist/` is committed. No `prepack` or `prepublishOnly` builds it, so a
+  publish ships whatever bundle the publishing worktree holds. Rebuild it
+  after pulling with `bun run build`; CI fails when the committed bundle
+  is stale.
 - The base parses with swc because typescript 7 (tsgo) has no compiler
   API for dependency-cruiser to use. Without `@swc/core` installed the
   cruise silently skips every `.ts` file, so this repo's test asserts its
@@ -287,3 +288,13 @@ bun run lint
 bun run typecheck
 bun run test
 ```
+
+Release from a green `main`, where CI has proved the committed `dist/`
+matches its source:
+
+```sh
+bun publish
+```
+
+`publishConfig.access` in package.json is what makes the scoped package
+public.
