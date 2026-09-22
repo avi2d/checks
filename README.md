@@ -21,9 +21,14 @@ bun add -d file:../checks oxlint@1.83.0 oxlint-tsgolint@7.0.2002 @effect/tsgo@0.
 ```json
 {
   "extends": ["./node_modules/@avi2d/checks/oxlintrc.json"],
-  "plugins": ["typescript", "oxc", "eslint", "import"],
-  "ignorePatterns": ["node_modules/**"]
+  "plugins": ["typescript", "oxc", "eslint", "import"]
 }
+```
+
+`.gitignore` keeps oxlint out of `node_modules/`:
+
+```
+node_modules/
 ```
 
 `tsconfig.json` gains one line:
@@ -126,6 +131,9 @@ subject, not the bare title.
 - `plugins` does not inherit through oxlint `extends`. `rules`,
   `categories` and `jsPlugins` do. That is why the consumer snippet
   restates `plugins` and nothing else.
+- `node_modules/` is excluded through the consumer's `.gitignore`, not
+  `ignorePatterns`: oxlint still walks the installed package when only
+  `ignorePatterns` names it.
 - The plugin ships compiled as `dist/index.js`, built with
   `bun build effect-channel/index.ts --outdir dist --target node --format esm`.
   Node refuses to type-strip a `.ts` plugin under `node_modules`, so the

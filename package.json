@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "description": "Deterministic checks shared across the captain's TypeScript repos",
   "type": "module",
+  "files": [
+    "commitlint.config.js",
+    "dependency-cruiser.config.js",
+    "scripts/lint-coverage.sh",
+    "oxlintrc.json",
+    "tsconfig.effect.json",
+    "dist/index.js"
+  ],
   "exports": {
     "./commitlint.config.js": "./commitlint.config.js",
     "./dependency-cruiser.config.js": "./dependency-cruiser.config.js",
