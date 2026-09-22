@@ -171,6 +171,7 @@ test(
     for (const target of targets) {
       expect(existsSync(join(installed, target))).toBe(true);
     }
+    expect(existsSync(join(installed, "LICENSE"))).toBe(true);
     expect(existsSync(join(installed, "effect-channel"))).toBe(false);
     expect(existsSync(join(installed, "tests"))).toBe(false);
     expect(existsSync(join(installed, "AGENTS.md"))).toBe(false);

@@ -12,7 +12,6 @@
   },
   "type": "module",
   "files": [
-    "LICENSE",
     "bunfig.toml",
     "commitlint.config.js",
     "dependency-cruiser.config.js",
