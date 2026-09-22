@@ -236,11 +236,11 @@ leaves stale once the base branch advances after the pull request opens.
 - `node_modules/` is excluded through the consumer's `.gitignore`, not
   `ignorePatterns`: oxlint still walks the installed package when only
   `ignorePatterns` names it.
-- `files` in package.json is the published surface: a consumer receives
-  what it lists and nothing else, so `tests/`, `AGENTS.md` and the `.ts`
-  plugin source never reach an install. `bun pm pack` builds the same
-  tarball the registry serves, which is what the consumer e2e test
-  installs.
+- `files` in package.json is the published surface: `tests/`, `AGENTS.md`
+  and the `.ts` plugin source never reach an install. npm adds
+  `package.json`, `README` and `LICENSE` to the tarball whatever `files`
+  says. `bun pm pack` builds the same tarball the registry serves, which
+  is what the packed-tarball consumer e2e test installs.
 - The plugin ships compiled as `dist/index.js`, built with
   `bun build effect-channel/index.ts --outdir dist --target node --format esm`.
   Node refuses to type-strip a `.ts` plugin under `node_modules`, so the

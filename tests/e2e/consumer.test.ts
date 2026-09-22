@@ -149,7 +149,7 @@ test(
 );
 
 test(
-  "packed-tarball consumer installs only `files` and runs the README lint recipe from it",
+  "packed-tarball consumer installs the files-limited surface and runs the README lint recipe from it",
   async () => {
     const tarball = await packTarball();
     await writeConsumerFixture(
@@ -166,7 +166,9 @@ test(
     const manifest = JSON.parse(await readFile(join(CHECKOUT, "package.json"), "utf8")) as {
       exports: Record<string, string>;
     };
-    for (const target of Object.values(manifest.exports)) {
+    const targets = Object.values(manifest.exports);
+    expect(targets.length).toBeGreaterThan(0);
+    for (const target of targets) {
       expect(existsSync(join(installed, target))).toBe(true);
     }
     expect(existsSync(join(installed, "effect-channel"))).toBe(false);
@@ -201,17 +203,3 @@ test(
   },
   180_000,
 );
-
-test("package files cover every exports target", async () => {
-  const raw = await readFile(join(CHECKOUT, "package.json"), "utf8");
-  const manifest = JSON.parse(raw) as { exports?: Record<string, string>; files?: string[] };
-  const targets = Object.values(manifest.exports ?? {}).map((target) =>
-    target.replace(/^\.\//, ""),
-  );
-  expect(targets.length).toBeGreaterThan(0);
-  for (const target of targets) {
-    expect(manifest.files?.some((entry) => target === entry || target.startsWith(`${entry}/`))).toBe(
-      true,
-    );
-  }
-});
