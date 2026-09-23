@@ -6,8 +6,8 @@ Effect language-service block, the shared commitlint config, the shared
 dependency-cruiser base, the test-layout check with its bunfig preset,
 the commit-identity check with its workflow, the comment gate with its
 workflow and backtest, the Stryker mutation-testing preset with its
-no-regression comparator, and the Effect error-channel plugin compiled
-to JavaScript.
+no-regression comparator, the CI-wiring check, and the Effect
+error-channel plugin compiled to JavaScript.
 
 Published as `@avi2dg/checks` on the public npm registry.
 
@@ -186,7 +186,15 @@ on:
     types: [opened, edited, synchronize, reopened]
 jobs:
   commitlint:
-    uses: avi2d/checks/.github/workflows/commitlint.yml@main
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: printf '%s' "$PR_TITLE (#0000)" > "$RUNNER_TEMP/pr-title"
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+      - run: ./node_modules/.bin/commitlint --config ./node_modules/@avi2dg/checks/commitlint.config.js --edit "$RUNNER_TEMP/pr-title"
 ```
 
 It lints the pull request title and nothing else. The title is the
@@ -237,10 +245,20 @@ on:
     types: [opened, edited, synchronize, reopened]
 jobs:
   commit-identity:
-    uses: avi2d/checks/.github/workflows/commit-identity.yml@main
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bunx checks-commit-identity "origin/$BASE_REF" "$HEAD_SHA"
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
 ```
 
-The workflow fetches the consumer's full history and ranges from the
+The checkout fetches the full history and the range starts at the
 fetched base branch, not the event's recorded base sha, which GitHub
 leaves stale once the base branch advances after the pull request opens.
 
@@ -274,8 +292,99 @@ on:
     types: [opened, edited, synchronize, reopened]
 jobs:
   comment-gate:
-    uses: avi2d/checks/.github/workflows/comment-gate.yml@main
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bunx checks-comment-gate "origin/$BASE_REF" "$HEAD_SHA"
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
 ```
+
+## CI wiring
+
+`checks-ci-wiring` fails when a command the repository's CI must run no
+longer runs on pull requests to the default branch. No local check sees
+that: a workflow whose lint step became a no-op leaves `bun run lint`
+green.
+
+The repository declares its gates once, in `package.json`, and `lint`
+runs the check:
+
+```json
+"ciWiring": {
+  "gates": ["bun run lint", "bun run typecheck", "bun run test"]
+},
+"scripts": {
+  "lint": "oxlint --type-aware && checks-lint-coverage && checks-test-layout && checks-ci-wiring"
+}
+```
+
+It parses every `.github/workflows/*.yml` and `*.yaml` and looks, for
+each gate, for a `run:` step that is the gate command alone on one line,
+optionally followed by plain arguments: words, quoted strings, and
+`$VAR` or `${VAR}` expansions. `bun run lint --quiet` and
+`bunx checks-comment-gate "origin/$BASE_REF" "$HEAD_SHA"` count;
+`bun run lint:deps`, `echo bun run lint` and a step `name:` do not. A
+step whose script has a second line, or any `|`, `||`, `&&`, `;`, `&`,
+`$(...)`, backticks, `<` or `>` redirection, a comment or a leading
+`NAME=value`, never counts, because each can run the gate without its
+failure failing the step; the report names the gate and says to give it
+its own step with nothing else in it. A gate step counts only when:
+
+- its workflow triggers on `pull_request`, any `branches` or
+  `branches-ignore` filter there keeps the default branch, any `types`
+  filter keeps `opened` and `synchronize`, and it sets no `paths` or
+  `paths-ignore` filter, which lets some pull requests skip the gate;
+- neither the step nor its job sets `if: false` or
+  `continue-on-error: true`, bare or as `${{ false }}` and `${{ true }}`;
+- its job needs no job, directly or through a chain, that sets
+  `if: false`, unless a job on that chain has an `if:` calling
+  `always()`, `failure()` or `cancelled()`. GitHub prefixes every other
+  `if:`, including `true` and `success()`, with `success()`, so a job
+  whose needed job was skipped is skipped too.
+
+A job calling a local reusable workflow (`uses: ./.github/workflows/x.yml`)
+passes its own trigger and `if:` down to the called workflow's steps.
+A remote reusable workflow (`uses: owner/repo/...@ref`) is not a
+supported way to wire a gate: it is not read, so a gate must run as a
+`run:` step, such as `bunx checks-comment-gate`, in the repo's own
+workflows.
+
+The default branch is `main`; a repo with another one sets
+`"defaultBranch"` beside `"gates"`.
+
+It exits 1 naming each gap, with every step that runs the gate and why
+that step does not count:
+
+```
+ci-wiring: 1 of 8 gate(s) do not run on pull requests to main:
+  bun run lint
+    .github/workflows/release.yml job publish step 7: .github/workflows/release.yml does not trigger on pull_request
+```
+
+It exits 2 when `package.json` declares no gates, a gate is not one
+plain command, or a workflow does not parse. Whether a workflow is
+well formed is actionlint's question, not this one's.
+
+### Limits
+
+The check reads workflow files and never runs them, so it deliberately
+does not evaluate:
+
+- an `if:` expression other than a constant `true` or `false`, which
+  counts as running;
+- a `strategy.matrix` `include` or `exclude`, so a matrix that drops
+  every combination still counts as running its steps;
+- a remote reusable workflow (`uses: owner/repo/...@ref`), whose steps
+  are never read;
+- anything that happens at run time on the runner: what the gate
+  command itself does, the shell's options, and a step or job that
+  fails or times out before the gate step.
 
 ## Backtest
 
@@ -379,6 +488,12 @@ The shared Stryker preset's `json` reporter writes
   never falls back to the registry the way `bunx` does. The `.ts` checks
   keep a `bun` shebang, which needs no build step and no `dist/`
   entry, unlike the oxlint plugin that node loads.
+- `checks-ci-wiring` runs inside `lint`, not in a workflow of its own:
+  deleting the step that runs a check is the violation it catches, so the
+  local `lint` is where it has to fail.
+- Workflows are parsed with `Bun.YAML`, which the `bun` shebang already
+  provides, so the check adds no dependency. It reads `on` as a string
+  key, not as the YAML 1.1 boolean.
 - `bun` counts as a built-in module. Nothing installed resolves it except
   `@types/bun`, which would otherwise make every runtime `bun` import look
   like a dev-only dependency.
@@ -412,7 +527,7 @@ a tag off `main` and reruns the build, `dist/` check, lint, typecheck
 and tests before it publishes:
 
 ```sh
-git tag v0.3.0 && git push origin v0.3.0
+git tag v0.4.0 && git push origin v0.4.0
 ```
 
 The `release` workflow publishes the tagged version through npm
