@@ -39,6 +39,9 @@ const BANNED_BUN_NAMES: readonly string[] = [
 const BANNED_GLOBAL_CALLS: readonly string[] = ["fetch"];
 
 export const REQUIRED_TEST_SCRIPT = "bun test --randomize";
+const REQUIRED_TEST_TABLE: Record<string, unknown> = {
+  pathIgnorePatterns: ["**/tests/quarantine/**"],
+};
 export const LAYOUT_CHECK_MARK = "scripts/test-layout.ts";
 export const LAYOUT_CHECK_BIN = "checks-test-layout";
 
@@ -236,9 +239,10 @@ export function bunfigViolations(consumer: unknown, preset: unknown): readonly V
   if (!isRecord(presetTest)) {
     return [{ file, line: undefined, message: "the shipped bunfig preset has no [test] table" }];
   }
+  const expected = { ...presetTest, ...REQUIRED_TEST_TABLE };
   const consumerTest = isRecord(consumer) ? consumer["test"] : undefined;
   const violations: Violation[] = [];
-  for (const [key, value] of Object.entries(presetTest)) {
+  for (const [key, value] of Object.entries(expected)) {
     const found = isRecord(consumerTest) ? consumerTest[key] : undefined;
     if (!Bun.deepEquals(found, value)) {
       violations.push({

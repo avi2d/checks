@@ -105,7 +105,10 @@ file and the path to move it to when it does not:
 - `scripts.test` is exactly `bun test --randomize` and `scripts.lint` runs
   this check.
 - `bunfig.toml` carries every `[test]` key of the shipped preset with the
-  same value. Other tables, and extra `[test]` keys, are the repo's own.
+  same value, and `[test].pathIgnorePatterns` is always
+  `["**/tests/quarantine/**"]`: the check pins it itself, so this repo,
+  whose bunfig is the preset, cannot drift it either. Other tables, and
+  extra `[test]` keys, are the repo's own.
 
 The in-process half is what a mutation run can mutate; `tests/e2e/**` is
 excluded from a mutate scope by construction, because a subprocess kills
