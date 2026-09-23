@@ -115,7 +115,7 @@ test(
     await writeConsumerFixture({
       scripts: {
         test: "bun test --randomize",
-        lint: "oxlint --type-aware && ./node_modules/@avi2dg/checks/scripts/lint-coverage.sh && bun ./node_modules/@avi2dg/checks/scripts/test-layout.ts",
+        lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout",
       },
     });
     await writeFile(join(dir, "bunfig.toml"), await readFile(join(CHECKOUT, "bunfig.toml"), "utf8"));
@@ -156,7 +156,7 @@ test(
       {
         scripts: {
           test: "bun test --randomize",
-          lint: "oxlint --type-aware && ./node_modules/@avi2dg/checks/scripts/lint-coverage.sh && bun ./node_modules/@avi2dg/checks/scripts/test-layout.ts",
+          lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout",
         },
       },
       `file:${tarball}`,
@@ -201,6 +201,69 @@ test(
     expect(red.exitCode).not.toBe(0);
     expect(redText).toContain("plant.ts");
     expect(redText).toContain("effect-channel(no-error-channel-escape)");
+  },
+  180_000,
+);
+
+test(
+  "packed-tarball consumer runs every bin by its short name from a package script",
+  async () => {
+    const tarball = await packTarball();
+    await writeConsumerFixture(
+      {
+        scripts: {
+          test: "bun test --randomize",
+          lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout && checks-commit-identity HEAD",
+          gate: "checks-comment-gate HEAD",
+          backtest: "checks-backtest 5",
+        },
+      },
+      `file:${tarball}`,
+    );
+
+    for (const bin of [
+      "checks-lint-coverage",
+      "checks-test-layout",
+      "checks-commit-identity",
+      "checks-comment-gate",
+      "checks-backtest",
+    ]) {
+      expect(existsSync(join(dir, "node_modules", ".bin", bin))).toBe(true);
+    }
+
+    await writeFile(join(dir, "bunfig.toml"), await readFile(join(CHECKOUT, "bunfig.toml"), "utf8"));
+    await writeFile(join(dir, "widget.ts"), "export const widget = 42;\n");
+    await mkdir(join(dir, "tests"));
+    await writeFile(
+      join(dir, "tests", "widget.test.ts"),
+      `import { expect, test } from "bun:test";\nimport { widget } from "../widget.ts";\ntest("widget", () => {\n  expect(widget).toBe(42);\n});\n`,
+    );
+    await $`git init -q && git add -A`.cwd(dir).quiet();
+    await $`git -c user.name=avi2d -c user.email=avi2dg@gmail.com commit -qm "feat: base"`
+      .cwd(dir)
+      .quiet();
+    await writeFile(join(dir, "clean.ts"), `export const answer = 42;\n`);
+    await $`git add -A`.cwd(dir).quiet();
+    await $`git -c user.name=avi2d -c user.email=avi2dg@gmail.com commit -qm "feat: second"`
+      .cwd(dir)
+      .quiet();
+
+    const lint = await $`bun run lint`.cwd(dir).nothrow().quiet();
+    const lintText = lint.stdout.toString() + lint.stderr.toString();
+    expect(lintText).toContain("tracked .ts/.tsx files");
+    expect(lintText).toContain("satisfy the layout");
+    expect(lintText).toContain("carry only allowed identities");
+    expect(lint.exitCode).toBe(0);
+
+    const gate = await $`bun run gate`.cwd(dir).nothrow().quiet();
+    const gateText = gate.stdout.toString() + gate.stderr.toString();
+    expect(gateText).toContain("carry no refused comment");
+    expect(gate.exitCode).toBe(0);
+
+    const backtest = await $`bun run backtest`.cwd(dir).nothrow().quiet();
+    const backtestText = backtest.stdout.toString() + backtest.stderr.toString();
+    expect(backtestText).toContain("commits touching code");
+    expect(backtest.exitCode).toBe(0);
   },
   180_000,
 );

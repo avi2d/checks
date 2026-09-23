@@ -50,7 +50,7 @@ cp node_modules/@avi2dg/checks/bunfig.toml bunfig.toml
 `package.json` gains three scripts:
 
 ```json
-"lint": "oxlint --type-aware && ./node_modules/@avi2dg/checks/scripts/lint-coverage.sh && bun ./node_modules/@avi2dg/checks/scripts/test-layout.ts && bun ./node_modules/@avi2dg/checks/scripts/commit-identity.ts HEAD",
+"lint": "oxlint --type-aware && checks-lint-coverage && checks-test-layout && checks-commit-identity HEAD",
 "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
 "test": "bun test --randomize"
 ```
@@ -69,7 +69,7 @@ The registry version is pinned by the consumer's lockfile; bump
 
 ## Test layout
 
-`bun ./node_modules/@avi2dg/checks/scripts/test-layout.ts` fails unless the
+`checks-test-layout` fails unless the
 repo holds this shape, and names the file and the path to move it to when
 it does not:
 
@@ -192,8 +192,8 @@ commit-identity check below is the enforcement.
 one carries an identity other than the repository owner's:
 
 ```sh
-bun ./node_modules/@avi2dg/checks/scripts/commit-identity.ts <base-ref> <head-ref>
-bun ./node_modules/@avi2dg/checks/scripts/commit-identity.ts <ref>
+checks-commit-identity <base-ref> <head-ref>
+checks-commit-identity <ref>
 ```
 
 With one argument it checks that commit alone, which is the form the
@@ -235,8 +235,8 @@ leaves stale once the base branch advances after the pull request opens.
 when an added line carries a banned comment:
 
 ```sh
-bun ./node_modules/@avi2dg/checks/scripts/comment-gate.ts <base-ref> <head-ref>
-bun ./node_modules/@avi2dg/checks/scripts/comment-gate.ts <ref>
+checks-comment-gate <base-ref> <head-ref>
+checks-comment-gate <ref>
 ```
 
 With two arguments it diffs the base against the head. With one it diffs
@@ -268,7 +268,7 @@ jobs:
 at each recent commit, so a repository can measure its own history:
 
 ```sh
-bun ./node_modules/@avi2dg/checks/scripts/backtest.ts [commit-count]
+checks-backtest [commit-count]
 ```
 
 It walks the last `commit-count` first-parent commits, 60 by default,
@@ -308,9 +308,10 @@ of reach, so the figures are authored code.
   consumer's copy is compared key by key against the installed one
   instead. `[test] pathIgnorePatterns` is a real bunfig key, and an empty
   `--path-ignore-patterns` flag overrides the file's own list.
-- The layout check ships as `.ts` and is invoked with `bun`, which needs
-  no build step and no `dist/` entry, unlike the oxlint plugin that node
-  loads.
+- Each runnable script ships a `checks-` bin entry, so consumer scripts
+  call the short name and npm puts it on `PATH`. The `.ts` checks keep
+  a `bun` shebang, which needs no build step and no `dist/` entry,
+  unlike the oxlint plugin that node loads.
 - `bun` counts as a built-in module. Nothing installed resolves it except
   `@types/bun`, which would otherwise make every runtime `bun` import look
   like a dev-only dependency.
