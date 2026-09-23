@@ -40,6 +40,7 @@ const BANNED_GLOBAL_CALLS: readonly string[] = ["fetch"];
 
 export const REQUIRED_TEST_SCRIPT = "bun test --randomize";
 export const LAYOUT_CHECK_MARK = "scripts/test-layout.ts";
+export const LAYOUT_CHECK_BIN = "checks-test-layout";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -215,11 +216,11 @@ export function scriptViolations(manifest: unknown): readonly Violation[] {
       message: `scripts.test must be exactly "${REQUIRED_TEST_SCRIPT}", found ${JSON.stringify(test ?? null)}`,
     });
   }
-  if (typeof lint !== "string" || !lint.includes(LAYOUT_CHECK_MARK)) {
+  if (typeof lint !== "string" || (!lint.includes(LAYOUT_CHECK_MARK) && !lint.includes(LAYOUT_CHECK_BIN))) {
     violations.push({
       file,
       line: undefined,
-      message: `scripts.lint must run the layout check: add "bun ./node_modules/@avi2dg/checks/${LAYOUT_CHECK_MARK}"`,
+      message: `scripts.lint must run the layout check: add "${LAYOUT_CHECK_BIN}"`,
     });
   }
   return violations;

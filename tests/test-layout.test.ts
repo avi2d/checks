@@ -116,6 +116,15 @@ test("scripts.test must be the exact randomized command and scripts.lint must ru
     }),
   ).toBeEmpty();
 
+  expect(
+    scriptViolations({
+      scripts: {
+        test: "bun test --randomize",
+        lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout",
+      },
+    }),
+  ).toBeEmpty();
+
   const violations = scriptViolations({ scripts: { test: "bun test", lint: "oxlint" } });
   expect(violations).toHaveLength(2);
   expect(violations[0]?.message).toContain('must be exactly "bun test --randomize"');

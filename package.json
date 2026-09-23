@@ -1,6 +1,6 @@
 {
   "name": "@avi2dg/checks",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Deterministic checks shared across the captain's TypeScript repos",
   "license": "MIT",
   "repository": {
@@ -38,6 +38,13 @@
     "./oxlintrc.json": "./oxlintrc.json",
     "./tsconfig.effect.json": "./tsconfig.effect.json",
     "./dist/index.js": "./dist/index.js"
+  },
+  "bin": {
+    "checks-lint-coverage": "scripts/lint-coverage.sh",
+    "checks-test-layout": "scripts/test-layout.ts",
+    "checks-commit-identity": "scripts/commit-identity.ts",
+    "checks-comment-gate": "scripts/comment-gate.ts",
+    "checks-backtest": "scripts/backtest.ts"
   },
   "scripts": {
     "build": "bun build effect-channel/index.ts --outdir dist --target node --format esm",
