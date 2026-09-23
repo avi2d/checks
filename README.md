@@ -69,9 +69,8 @@ The registry version is pinned by the consumer's lockfile; bump
 
 ## Test layout
 
-`checks-test-layout` fails unless the
-repo holds this shape, and names the file and the path to move it to when
-it does not:
+`checks-test-layout` fails unless the repo holds this shape, and names the
+file and the path to move it to when it does not:
 
 - Every test file is `tests/**/*.test.ts` or `.tsx`. A `*.test.ts`, `*.spec.ts` or
   `*_test.ts` under `src/`, `test/`, `__tests__/` or the repo root fails.
