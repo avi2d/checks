@@ -45,6 +45,7 @@ const CONSTANTS = new Map([
   ["true", true],
   ["false", false],
 ]);
+const STATUS_OVERRIDE = /\b(?:always|failure|cancelled)\s*\(/;
 const VARIABLE = /^\$(?:[A-Za-z_][A-Za-z0-9_]*|\{[A-Za-z_][A-Za-z0-9_]*\})/;
 const UNPLAIN = new Set(["|", "&", ";", "<", ">", "(", ")", "`", "\\", "#", "\n"]);
 
@@ -165,12 +166,12 @@ function triggerBlocker(workflow: Workflow, branch: string): string | undefined 
   return undefined;
 }
 
-// An if: of the job's own can override the skip, as always() does, so only a job without one inherits it.
+// GitHub prefixes any other if: with success(), so only a status function overrides a needed job's skip.
 function skippedBy(jobs: Readonly<Record<string, unknown>>, id: string, seen: readonly string[]): string | undefined {
   const job = jobs[id];
   if (!isRecord(job) || seen.includes(id)) return undefined;
   if (constant(job["if"]) === false) return `job ${id} sets if: false`;
-  if (job["if"] !== undefined) return undefined;
+  if (typeof job["if"] === "string" && STATUS_OVERRIDE.test(job["if"])) return undefined;
   for (const need of names(job["needs"]) ?? []) {
     const cause = skippedBy(jobs, need, [...seen, id]);
     if (cause !== undefined) return cause;

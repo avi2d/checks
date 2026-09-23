@@ -141,7 +141,7 @@ test("a pull_request trigger filtered by paths goes red, since some pull request
   }
 });
 
-test("a job that needs a job set to if: false, directly or through a chain, goes red unless its own if: overrides the skip", () => {
+test("a job that needs a job set to if: false, directly or through a chain, goes red unless an if: calling a status function overrides the skip", () => {
   const withNeeds = (checks: string, extra = "") =>
     `on: pull_request\njobs:\n  setup:\n    if: false\n    steps:\n      - run: "true"\n${extra}  checks:\n${checks}    steps:\n      - run: bun run lint\n      - run: bun run test\n`;
   const direct = gapsIn({ [CI]: withNeeds("    needs: setup\n") });
@@ -155,7 +155,20 @@ test("a job that needs a job set to if: false, directly or through a chain, goes
     { location: `${CI} job checks step 1`, blocker: "job checks needs a job that never runs: job setup sets if: false" },
   ]);
 
-  expect(gapsIn({ [CI]: withNeeds("    needs: setup\n    if: always()\n") })).toEqual([]);
+  for (const condition of ["github.event_name == 'pull_request'", "true", "${{ true }}", "success()"]) {
+    expect(gapsIn({ [CI]: withNeeds(`    needs: setup\n    if: ${condition}\n`) })[0]!.blocked).toEqual([
+      { location: `${CI} job checks step 1`, blocker: "job checks needs a job that never runs: job setup sets if: false" },
+    ]);
+  }
+  expect(
+    gapsIn({ [CI]: withNeeds("    needs: [build]\n", "  build:\n    needs: setup\n    if: true\n") })[0]!.blocked,
+  ).toEqual([
+    { location: `${CI} job checks step 1`, blocker: "job checks needs a job that never runs: job setup sets if: false" },
+  ]);
+
+  for (const condition of ["always()", "${{ !cancelled() }}", "failure()"]) {
+    expect(gapsIn({ [CI]: withNeeds(`    needs: setup\n    if: ${condition}\n`) })).toEqual([]);
+  }
   expect(gapsIn({ [CI]: withNeeds("    needs: [build]\n", "  build:\n    needs: setup\n    if: always()\n") })).toEqual(
     [],
   );

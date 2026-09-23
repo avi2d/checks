@@ -342,9 +342,11 @@ its own step with nothing else in it. A gate step counts only when:
   `paths-ignore` filter, which lets some pull requests skip the gate;
 - neither the step nor its job sets `if: false` or
   `continue-on-error: true`, bare or as `${{ false }}` and `${{ true }}`;
-- its job has an `if:` of its own, or needs no job, directly or through
-  a chain, that sets `if: false`, since GitHub skips a job whose needed
-  job was skipped unless its own `if:`, such as `always()`, overrides it.
+- its job needs no job, directly or through a chain, that sets
+  `if: false`, unless a job on that chain has an `if:` calling
+  `always()`, `failure()` or `cancelled()`. GitHub prefixes every other
+  `if:`, including `true` and `success()`, with `success()`, so a job
+  whose needed job was skipped is skipped too.
 
 A job calling a local reusable workflow (`uses: ./.github/workflows/x.yml`)
 passes its own trigger and `if:` down to the called workflow's steps.
