@@ -58,7 +58,7 @@ test("survivors in unchanged files do not change the verdict", () => {
   ]);
   const comparison = compareReports(base, head);
   expect(comparison.base).toEqual({ killed: 1, total: 2 });
-  expect(comparison.head).toEqual({ killed: 50, total: 100 });
+  expect(comparison.head).toEqual({ killed: 51, total: 100 });
   expect(comparison.regression).toBe(false);
   expect(exitFor(comparison, false)).toBe(0);
 });

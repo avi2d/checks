@@ -1,6 +1,6 @@
 {
   "name": "@avi2dg/checks",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Deterministic checks shared across the captain's TypeScript repos",
   "license": "MIT",
   "repository": {
@@ -18,6 +18,7 @@
     "scripts/lint-coverage.sh",
     "scripts/test-layout.ts",
     "scripts/commit-identity.ts",
+    "scripts/mutation-compare.ts",
     "scripts/comments.ts",
     "scripts/comment-gate.ts",
     "scripts/backtest.ts",
@@ -33,6 +34,7 @@
     "./scripts/lint-coverage.sh": "./scripts/lint-coverage.sh",
     "./scripts/test-layout.ts": "./scripts/test-layout.ts",
     "./scripts/commit-identity.ts": "./scripts/commit-identity.ts",
+    "./scripts/mutation-compare.ts": "./scripts/mutation-compare.ts",
     "./scripts/comments.ts": "./scripts/comments.ts",
     "./scripts/comment-gate.ts": "./scripts/comment-gate.ts",
     "./scripts/backtest.ts": "./scripts/backtest.ts",
@@ -45,6 +47,7 @@
     "checks-lint-coverage": "scripts/lint-coverage.sh",
     "checks-test-layout": "scripts/test-layout.ts",
     "checks-commit-identity": "scripts/commit-identity.ts",
+    "checks-mutation-compare": "scripts/mutation-compare.ts",
     "checks-comment-gate": "scripts/comment-gate.ts",
     "checks-backtest": "scripts/backtest.ts"
   },

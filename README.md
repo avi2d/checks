@@ -289,6 +289,52 @@ comment text as a share of added lines.
 `generated/`, `vendor/`, `repos/`, `node_modules/` and `dist/` are out
 of reach, so the figures are authored code.
 
+## Mutation compare
+
+`checks-mutation-compare` gates a pull request on no-regression rather
+than an absolute threshold: the head mutation score may not fall below
+the score at the merge-base.
+
+```sh
+checks-mutation-compare <base-report> <head-report> [--advisory]
+```
+
+Both reports are Stryker `mutation.json` files. It prints the overall
+and per-file score delta and exits 1 when the head score is below the
+base score. `Killed` and `Timeout` count as killed; `Ignored` mutants
+leave the score. The verdict counts only files whose mutant outcomes
+changed between the two reports, so survivors in untouched files cannot
+swing it either way. A file present in only one report is listed and
+left out of the verdict: the comparator cannot tell new code from a
+rename, so it refuses to guess either way.
+
+`--advisory`, or `CHECKS_MUTATION_ADVISORY=1`, prints the same verdict
+and always exits 0. That is how consumers run it for the first month;
+after that they drop the flag and it blocks.
+
+Enforcement runs on pull requests, comparing the head report against a
+report built at the merge-base:
+
+```yaml
+jobs:
+  mutation-compare:
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bunx stryker run
+      - run: |
+          base="$(git merge-base HEAD origin/main)"
+          git worktree add /tmp/mutation-base "$base"
+          (cd /tmp/mutation-base && bun install --frozen-lockfile && bunx stryker run)
+      - run: CHECKS_MUTATION_ADVISORY=1 checks-mutation-compare /tmp/mutation-base/reports/mutation.json reports/mutation.json
+```
+
+The report paths are wherever the `json` reporter's output lands in
+each worktree.
+
 ## Why it is shaped this way
 
 - `plugins` does not inherit through oxlint `extends`. `rules`,
