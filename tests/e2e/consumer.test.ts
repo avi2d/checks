@@ -216,20 +216,32 @@ test(
           lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout && checks-commit-identity HEAD",
           gate: "checks-comment-gate HEAD",
           backtest: "checks-backtest 5",
+          compare: "checks-mutation-compare mutation.json mutation.json",
+          wiring: "checks-ci-wiring",
         },
+        ciWiring: { gates: ["bun run lint"] },
       },
       `file:${tarball}`,
     );
 
-    for (const bin of [
-      "checks-lint-coverage",
-      "checks-test-layout",
-      "checks-commit-identity",
-      "checks-comment-gate",
-      "checks-backtest",
-    ]) {
+    const manifest = JSON.parse(await readFile(join(CHECKOUT, "package.json"), "utf8")) as {
+      bin: Record<string, string>;
+    };
+    const bins = Object.keys(manifest.bin);
+    expect(bins).toContain("checks-ci-wiring");
+    for (const bin of bins) {
       expect(existsSync(join(dir, "node_modules", ".bin", bin))).toBe(true);
     }
+
+    await writeFile(
+      join(dir, "mutation.json"),
+      await readFile(join(CHECKOUT, "tests", "fixtures", "mutation-compare", "base.json"), "utf8"),
+    );
+    await mkdir(join(dir, ".github", "workflows"), { recursive: true });
+    await writeFile(
+      join(dir, ".github", "workflows", "ci.yml"),
+      "on: pull_request\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n",
+    );
 
     await writeFile(join(dir, "bunfig.toml"), await readFile(join(CHECKOUT, "bunfig.toml"), "utf8"));
     await writeFile(join(dir, "widget.ts"), "export const widget = 42;\n");
@@ -264,6 +276,14 @@ test(
     const backtestText = backtest.stdout.toString() + backtest.stderr.toString();
     expect(backtestText).toContain("commits touching code");
     expect(backtest.exitCode).toBe(0);
+
+    const compare = await $`bun run compare`.cwd(dir).nothrow().quiet();
+    expect(compare.stdout.toString()).toContain("no regression");
+    expect(compare.exitCode).toBe(0);
+
+    const wiring = await $`bun run wiring`.cwd(dir).nothrow().quiet();
+    expect(wiring.stdout.toString()).toContain("1 gate(s) run on pull requests to main");
+    expect(wiring.exitCode).toBe(0);
   },
   180_000,
 );

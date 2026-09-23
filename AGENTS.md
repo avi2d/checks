@@ -7,6 +7,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - Consumer `.oxlintrc.json` must restate `plugins`: oxlint does not inherit them through `extends`.
 - `bun run lint` also cruises dependencies via `.dependency-cruiser.cjs`, which extends the shared base; new root-level source files must join the cruise scope in the `lint` script or they go unchecked.
 - `scripts/test-layout.ts` decides this repo's own test layout too, so a new test goes under `tests/**/*.test.ts` and anything that spawns, shells out, or reaches the network goes under `tests/e2e/`. README "Test layout" carries the standard.
+- `package.json` `ciWiring.gates` lists the commands CI must run on pull requests, and `bun run lint` fails when a workflow edit drops or disables one; a new CI gate step joins that list.
 - `bunfig.toml` is at once this repo's config and the preset consumers copy, because bun has no bunfig `extends`. Editing it changes every consumer's required file.
 
 ## Maintaining this file
