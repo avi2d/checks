@@ -2,7 +2,6 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
-  commands,
   findGaps,
   formatReport,
   parseDeclaration,
@@ -69,7 +68,7 @@ test("a step replaced with a no-op goes red", () => {
     `      - run: exit 0 # bun run lint\n`,
     `      - name: bun run lint\n        run: ":"\n`,
   ]) {
-    expect(lintGap(mutate(RESTORED, "      - run: bun run lint\n", noop)).blocked).toEqual([]);
+    lintGap(mutate(RESTORED, "      - run: bun run lint\n", noop));
   }
 });
 
@@ -176,69 +175,63 @@ test("a gate run through a local reusable workflow counts only while the calling
 });
 
 test("a workflow that calls itself is walked once", () => {
-  const looping = `on: pull_request\njobs:\n  again:\n    uses: ./.github/workflows/ci.yml\n  checks:\n    steps:\n      - run: bun run lint && bun run test\n`;
+  const looping = `on: pull_request\njobs:\n  again:\n    uses: ./.github/workflows/ci.yml\n  checks:\n    steps:\n      - run: bun run lint\n      - run: bun run test\n`;
   expect(gapsIn({ [CI]: looping })).toEqual([]);
 });
 
-test("a gate matches the leading words of a command, never a longer word or a later argument", () => {
-  const runs = (script: string) =>
-    gapsIn({ [CI]: `on: pull_request\njobs:\n  j:\n    steps:\n      - run: ${JSON.stringify(script)}\n` });
-  expect(runs("CI=1 bun run lint --quiet 2>&1 && bun run test")).toEqual([]);
-  expect(runs("set -e\nbun run lint | tee out\n(cd . && bun run test)")).toEqual([]);
-  expect(runs("bun run \\\n  lint; bun run test")).toEqual([]);
-  expect(runs("bun run lint:deps && bun run test").map((gap) => gap.gate)).toEqual(["bun run lint"]);
-  expect(runs("bun run 'lint' && bun run test")).toEqual([]);
-  expect(runs("echo 'bun run lint' && bun run test").map((gap) => gap.gate)).toEqual(["bun run lint"]);
-});
+function stepGaps(script: string, gate = "bun run lint") {
+  const declaration = parseDeclaration({ ciWiring: { gates: [gate] } }, "package.json");
+  const workflow = `on: pull_request\njobs:\n  j:\n    steps:\n      - run: ${JSON.stringify(script)}\n`;
+  return gapsIn({ [CI]: workflow }, declaration);
+}
 
-test("a gate whose failure is discarded or that never runs goes red", () => {
-  const lint = parseDeclaration({ ciWiring: { gates: ["bun run lint"] } }, "package.json");
-  const gaps = (script: string) =>
-    gapsIn({ [CI]: `on: pull_request\njobs:\n  j:\n    steps:\n      - run: ${JSON.stringify(script)}\n` }, lint);
-  for (const masked of [
-    "bun run lint || true",
-    "bun run lint && echo passed || true",
-    "bun run lint | tee out || true",
-    "(bun run lint) || true",
-    "{ echo start; bun run lint; } || true",
-    "if bun run lint; then echo ok; fi",
-    "bun run lint &",
-    "bun run lint && echo passed &\nwait",
-    "echo $(bun run lint)",
-    "OUT=$(bun run lint)",
-    "echo `bun run lint`",
-    "cat <(bun run lint)",
-    "exit 0; bun run lint",
-    "exit 0\nbun run lint",
-    "exit 0 && bun run lint",
-  ]) {
-    expect(gaps(masked).map((gap) => gap.gate)).toEqual(["bun run lint"]);
-  }
+test("a gate step counts only as the gate alone on one line with plain arguments", () => {
   for (const plain of [
     "bun run lint",
-    "bun run lint 2>&1",
-    "bun run lint &> lint.log",
-    "bun run lint >&2",
-    "bun run lint && echo passed",
-    "false || bun run lint",
-    "(cd . && bun run lint)",
-    "VERSION=$(git describe) bun run lint",
-    "echo $(date)\nbun run lint",
-    "test -f x || exit 1\nbun run lint",
-    "if [ -n \"$SKIP\" ]; then\n  exit 0\nfi\nbun run lint",
-    "case $X in\n  a) exit 0;;\nesac\nbun run lint",
-    "(exit 0); bun run lint",
+    "bun run lint\n",
+    "bun run lint --quiet",
+    "bun run 'lint'",
+    `bun run lint "$TARGET" \${MODE} '$(not run)' ""`,
   ]) {
-    expect(gaps(plain)).toEqual([]);
+    expect(stepGaps(plain)).toEqual([]);
   }
+  expect(stepGaps(`bunx checks-comment-gate "origin/$BASE_REF" "$HEAD_SHA"`, "bunx checks-comment-gate")).toEqual([]);
+  expect(stepGaps("bun run lint:deps")).toEqual([{ gate: "bun run lint", blocked: [] }]);
 });
 
-test("commands splits a script on control operators and drops comments and leading assignments", () => {
-  expect(commands(`FOO="a b" bun run lint # trailing\n# whole line\nprintf '%s' "$T #1" | commitlint --config x`)).toEqual([
-    ["bun", "run", "lint"],
-    ["printf", "%s", "$T #1"],
-    ["commitlint", "--config", "x"],
-  ]);
+test("a gate step with any shell control, substitution, redirection or second line goes red and says why", () => {
+  for (const shaped of [
+    "bun run lint | tee lint.log",
+    "bun run lint || true",
+    "bun run lint || exit 1",
+    "bun run lint && echo passed",
+    "bun run lint; true",
+    "bun run lint &",
+    "bun run lint $(echo --quiet)",
+    "echo $(bun run lint)",
+    `bun run lint "$(echo --quiet)"`,
+    "bun run lint `echo --quiet`",
+    "bun run lint < /dev/null",
+    "bun run lint > lint.log",
+    "bun run lint 2>&1",
+    "set -e\nbun run lint",
+    "bun run lint\necho done",
+    "exit 0\nbun run lint",
+    "CI=1 bun run lint",
+    "bun run lint # quiet",
+  ]) {
+    expect(stepGaps(shaped)).toEqual([
+      {
+        gate: "bun run lint",
+        blocked: [
+          {
+            location: `${CI} job j step 1`,
+            blocker: "the step runs more than bun run lint; give it its own step with nothing else in it",
+          },
+        ],
+      },
+    ]);
+  }
 });
 
 test("the report names each gap and why each invocation of it does not count", () => {
@@ -264,6 +257,7 @@ test("the declaration names one command per gate and may move the default branch
   expect(() => parseDeclaration({}, "package.json")).toThrow(WiringError);
   expect(() => parseDeclaration({ ciWiring: { gates: [] } }, "package.json")).toThrow(WiringError);
   expect(() => parseDeclaration({ ciWiring: { gates: ["a && b"] } }, "package.json")).toThrow(WiringError);
+  expect(() => parseDeclaration({ ciWiring: { gates: ["bun run lint || true"] } }, "package.json")).toThrow(WiringError);
   expect(() => parseDeclaration({ ciWiring: { gates: ["# nothing"] } }, "package.json")).toThrow(WiringError);
   expect(() => parseDeclaration({ ciWiring: { gates: [1] } }, "package.json")).toThrow(WiringError);
   expect(() => parseDeclaration({ ciWiring: { gates: ["x"], defaultBranch: "" } }, "package.json")).toThrow(

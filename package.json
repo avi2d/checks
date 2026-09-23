@@ -67,7 +67,7 @@
       "bun run lint",
       "bun run typecheck",
       "bun run test",
-      "./checks/node_modules/.bin/commitlint",
+      "./node_modules/.bin/commitlint",
       "bun .checks/scripts/commit-identity.ts",
       "bun .checks/scripts/comment-gate.ts"
     ]

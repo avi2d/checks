@@ -22,6 +22,8 @@ jobs:
       # Only the title is linted: per-commit messages are never conventional,
       # and the title is what a squash merge lands, with GitHub appending
       # " (#N)" to it. Lint the landed string, not the bare title.
-      - run: printf '%s' "$PR_TITLE (#0000)" | ./checks/node_modules/.bin/commitlint --config ./checks/commitlint.config.js
+      - run: printf '%s' "$PR_TITLE (#0000)" > "$RUNNER_TEMP/pr-title"
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
+      - run: ./node_modules/.bin/commitlint --config ./commitlint.config.js --edit "$RUNNER_TEMP/pr-title"
+        working-directory: checks

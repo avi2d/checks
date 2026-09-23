@@ -191,9 +191,10 @@ jobs:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: printf '%s' "$PR_TITLE (#0000)" | ./node_modules/.bin/commitlint --config ./node_modules/@avi2dg/checks/commitlint.config.js
+      - run: printf '%s' "$PR_TITLE (#0000)" > "$RUNNER_TEMP/pr-title"
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
+      - run: ./node_modules/.bin/commitlint --config ./node_modules/@avi2dg/checks/commitlint.config.js --edit "$RUNNER_TEMP/pr-title"
 ```
 
 It lints the pull request title and nothing else. The title is the
@@ -324,17 +325,16 @@ runs the check:
 ```
 
 It parses every `.github/workflows/*.yml` and `*.yaml` and looks, for
-each gate, for a `run:` step that invokes it. The script is split into
-commands at `;`, `&`, `|`, parentheses, backticks and newlines, shell
-comments and leading `NAME=value` assignments are dropped, and a command
-invokes the gate when it starts with the gate's words. `bun run lint
---quiet` invokes `bun run lint`; `bun run lint:deps`, `echo bun run
-lint`, a commented-out line and a step `name:` do not. Nor does a
-command whose failure cannot fail the step: one in a list that `||` or
-a trailing `&` ends (`bun run lint || true`, `(bun run lint) || true`,
-`bun run lint &`), one inside `$(...)`, backticks or `<(...)`, and any
-command after an `exit` that is not inside a condition, loop, group or
-`&&`/`||` list. An invoking step counts only when:
+each gate, for a `run:` step that is the gate command alone on one line,
+optionally followed by plain arguments: words, quoted strings, and
+`$VAR` or `${VAR}` expansions. `bun run lint --quiet` and
+`bunx checks-comment-gate "origin/$BASE_REF" "$HEAD_SHA"` count;
+`bun run lint:deps`, `echo bun run lint` and a step `name:` do not. A
+step whose script has a second line, or any `|`, `||`, `&&`, `;`, `&`,
+`$(...)`, backticks, `<` or `>` redirection, a comment or a leading
+`NAME=value`, never counts, because each can run the gate without its
+failure failing the step; the report names the gate and says to give it
+its own step with nothing else in it. A gate step counts only when:
 
 - its workflow triggers on `pull_request`, any `branches` or
   `branches-ignore` filter there keeps the default branch, and any
@@ -353,8 +353,8 @@ running.
 The default branch is `main`; a repo with another one sets
 `"defaultBranch"` beside `"gates"`.
 
-It exits 1 naming each gap, with every step that invokes the gate and
-why that step does not count:
+It exits 1 naming each gap, with every step that runs the gate and why
+that step does not count:
 
 ```
 ci-wiring: 1 of 8 gate(s) do not run on pull requests to main:

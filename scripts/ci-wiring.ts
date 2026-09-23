@@ -32,7 +32,7 @@ export type Gap = {
 type RunStep = {
   readonly location: string;
   readonly blocker: string | undefined;
-  readonly commands: readonly Command[];
+  readonly script: string;
 };
 
 export class WiringError extends Error {}
@@ -45,16 +45,8 @@ const CONSTANTS = new Map([
   ["true", true],
   ["false", false],
 ]);
-const OPENERS = new Map([
-  ["{", "}"],
-  ["if", "fi"],
-  ["case", "esac"],
-  ["for", "done"],
-  ["select", "done"],
-  ["while", "done"],
-  ["until", "done"],
-]);
-const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+const VARIABLE = /^\$(?:[A-Za-z_][A-Za-z0-9_]*|\{[A-Za-z_][A-Za-z0-9_]*\})/;
+const UNPLAIN = new Set(["|", "&", ";", "<", ">", "(", ")", "`", "\\", "#", "\n"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -66,130 +58,64 @@ function names(value: unknown): readonly string[] | undefined {
   return value.filter((entry): entry is string => typeof entry === "string");
 }
 
-type Frame = {
-  readonly closer: string | undefined;
-  readonly discards: boolean;
-  list: number[];
-  readonly inside: number[];
-};
+function expansion(text: string, from: number): number | undefined {
+  const match = VARIABLE.exec(text.slice(from));
+  return match === null ? undefined : from + match[0].length;
+}
 
-// Only a command whose failure can fail the step counts: one in a list that `||` or a trailing `&` ends,
-// inside `$(...)`, backticks or `<(...)`, or after an unconditional `exit` is dropped.
-export function commands(script: string): readonly Command[] {
-  const found: Command[] = [];
-  const discarded = new Set<number>();
-  const root: Frame = { closer: undefined, discards: false, list: [], inside: [] };
-  const frames: Frame[] = [root];
-  const top = (): Frame => frames.at(-1) ?? root;
-  let words: string[] = [];
+// A script counts only when it is one line of plain words: any shell control, redirection or
+// substitution can run the gate without its failure failing the step.
+function plainCommand(script: string): Command | undefined {
+  const line = script.trim();
+  const words: string[] = [];
   let word: string | undefined;
-  let exited = false;
-
-  const open = (closer: string, discards: boolean): void => {
-    frames.push({ closer, discards, list: [], inside: [] });
-  };
-  const close = (): void => {
-    const frame = frames.length > 1 ? frames.pop() : undefined;
-    if (frame === undefined) return;
-    if (frame.discards) for (const entry of frame.inside) discarded.add(entry);
-    top().list.push(...frame.inside);
-    top().inside.push(...frame.inside);
-  };
-  const endWord = (): void => {
-    if (word === undefined) return;
-    if (words.length === 0 && word === top().closer) close();
-    else if (words.length === 0) {
-      const closer = OPENERS.get(word);
-      if (closer !== undefined) open(closer, false);
-    }
-    words.push(word);
-    word = undefined;
-  };
-  const endCommand = (): void => {
-    endWord();
-    const start = words.findIndex((entry) => !ASSIGNMENT.test(entry));
-    if (start !== -1) {
-      const command = words.slice(start);
-      const frame = top();
-      if (exited) discarded.add(found.length);
-      if (command[0] === "exit" && frames.length === 1 && frame.list.length === 0) exited = true;
-      frame.list.push(found.length);
-      frame.inside.push(found.length);
-      found.push(command);
-    }
-    words = [];
-  };
-  const discardList = (): void => {
-    for (const entry of top().list) discarded.add(entry);
-  };
-  const endList = (): void => {
-    endCommand();
-    top().list = [];
-  };
-
-  for (let index = 0; index < script.length; index += 1) {
-    const char = script.charAt(index);
-    const next = script.charAt(index + 1);
-    if (char === "\\") {
-      index += 1;
-      if (index < script.length && next !== "\n") word = (word ?? "") + next;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line.charAt(index);
+    if (char === " " || char === "\t") {
+      if (word !== undefined) words.push(word);
+      word = undefined;
     } else if (char === "'") {
-      const quote = script.indexOf("'", index + 1);
-      const end = quote === -1 ? script.length : quote;
-      word = (word ?? "") + script.slice(index + 1, end);
-      index = end;
+      const close = line.indexOf("'", index + 1);
+      if (close === -1) return undefined;
+      word = (word ?? "") + line.slice(index + 1, close);
+      index = close;
     } else if (char === '"') {
       let quoted = "";
-      for (index += 1; index < script.length && script.charAt(index) !== '"'; index += 1) {
-        const escaped = script.charAt(index + 1);
-        if (script.charAt(index) === "\\" && escaped !== "" && '"\\$`\n'.includes(escaped)) {
-          index += 1;
-          if (escaped !== "\n") quoted += escaped;
+      for (index += 1; line.charAt(index) !== '"'; index += 1) {
+        const inner = line.charAt(index);
+        if (inner === "" || inner === "\\" || inner === "`") return undefined;
+        if (inner === "$") {
+          const end = expansion(line, index);
+          if (end === undefined) return undefined;
+          quoted += line.slice(index, end);
+          index = end - 1;
         } else {
-          quoted += script.charAt(index);
+          quoted += inner;
         }
       }
       word = (word ?? "") + quoted;
-    } else if (char === "#" && word === undefined) {
-      const newline = script.indexOf("\n", index);
-      index = newline === -1 ? script.length : newline - 1;
-    } else if (char === " " || char === "\t") {
-      endWord();
-    } else if (char === ";" || char === "\n") {
-      endList();
-    } else if (char === "|") {
-      endCommand();
-      if (next === "|") discardList();
-      if (next === "|" || next === "&") index += 1;
-    } else if (char === "&" && next === "&") {
-      endCommand();
-      index += 1;
-    } else if (char === "&" && next !== ">" && !/[<>]$/.test(word ?? "")) {
-      endCommand();
-      discardList();
-      top().list = [];
-    } else if (char === "(") {
-      const substitution = /[$<>]$/.test(word ?? "");
-      endCommand();
-      open(")", substitution);
-    } else if (char === ")") {
-      endCommand();
-      if (top().closer === ")") close();
-    } else if (char === "`") {
-      endCommand();
-      if (top().closer === "`") close();
-      else open("`", true);
+    } else if (char === "$") {
+      const end = expansion(line, index);
+      if (end === undefined) return undefined;
+      word = (word ?? "") + line.slice(index, end);
+      index = end - 1;
+    } else if (UNPLAIN.has(char)) {
+      return undefined;
     } else {
       word = (word ?? "") + char;
     }
   }
-  endCommand();
-  while (frames.length > 1) close();
-  return found.filter((_, index) => !discarded.has(index));
+  if (word !== undefined) words.push(word);
+  return words.length === 0 ? undefined : words;
 }
 
-function invokes(command: Command, gate: Command): boolean {
-  return gate.length <= command.length && gate.every((word, index) => command[index] === word);
+function invokes(command: Command | undefined, gate: Command): boolean {
+  return command !== undefined && gate.length <= command.length && gate.every((word, index) => command[index] === word);
+}
+
+function mentions(script: string, gate: Command): boolean {
+  const tokens = script.split(/[\s|&;<>()`]+/);
+  return tokens.some((_, start) => invokes(tokens.slice(start), gate));
 }
 
 function constant(value: unknown): boolean | undefined {
@@ -267,7 +193,7 @@ function runSteps(workflows: readonly Workflow[], branch: string): readonly RunS
         steps.push({
           location: `${jobLocation} step ${index + 1}`,
           blocker: jobBlocker ?? switchedOff(step, "the step"),
-          commands: commands(step["run"]),
+          script: step["run"],
         });
       });
     }
@@ -282,7 +208,11 @@ function runSteps(workflows: readonly Workflow[], branch: string): readonly RunS
 export function findGaps(declaration: Declaration, workflows: readonly Workflow[]): readonly Gap[] {
   const steps = runSteps(workflows, declaration.defaultBranch);
   return declaration.gates.flatMap((gate) => {
-    const invoking = steps.filter((step) => step.commands.some((command) => invokes(command, gate.words)));
+    const alone = `the step runs more than ${gate.command}; give it its own step with nothing else in it`;
+    const invoking = steps.flatMap(({ location, blocker, script }) => {
+      if (invokes(plainCommand(script), gate.words)) return [{ location, blocker }];
+      return mentions(script, gate.words) ? [{ location, blocker: blocker ?? alone }] : [];
+    });
     if (invoking.some((step) => step.blocker === undefined)) return [];
     const blocked = invoking.flatMap(({ location, blocker }) =>
       blocker === undefined ? [] : [{ location, blocker }],
@@ -310,9 +240,9 @@ export function parseDeclaration(manifest: unknown, source: string): Declaration
     throw new WiringError(`ci-wiring: ${source} sets no ciWiring.gates, a non-empty array of commands`);
   }
   const gates = listed.map((command: unknown): Gate => {
-    const [words, ...rest] = typeof command === "string" ? commands(command) : [];
-    if (typeof command !== "string" || words === undefined || rest.length > 0) {
-      throw new WiringError(`ci-wiring: ${source} ciWiring gate ${JSON.stringify(command)} is not one command`);
+    const words = typeof command === "string" ? plainCommand(command) : undefined;
+    if (typeof command !== "string" || words === undefined) {
+      throw new WiringError(`ci-wiring: ${source} ciWiring gate ${JSON.stringify(command)} is not one plain command`);
     }
     return { command, words };
   });
