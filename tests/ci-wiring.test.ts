@@ -127,6 +127,41 @@ test("a pull_request trigger that skips the default branch or the pushed commits
   );
 });
 
+test("a pull_request trigger filtered by paths goes red, since some pull requests skip the gate", () => {
+  for (const filter of ["    paths: ['src/**']\n", "    paths-ignore: ['**.md']\n"]) {
+    const workflow = mutate(RESTORED, "    types: [opened, edited, synchronize, reopened]\n", `    types: [opened, synchronize]\n${filter}`);
+    const gaps = gapsIn({ [CI]: workflow });
+    expect(gaps.map((gap) => gap.gate)).toEqual(["bun run lint", "bun run test"]);
+    expect(gaps[0]!.blocked).toEqual([
+      {
+        location: `${CI} job checks step 4`,
+        blocker: `${CI} filters pull_request by paths, so some pull requests skip the gate`,
+      },
+    ]);
+  }
+});
+
+test("a job that needs a job set to if: false, directly or through a chain, goes red unless its own if: overrides the skip", () => {
+  const withNeeds = (checks: string, extra = "") =>
+    `on: pull_request\njobs:\n  setup:\n    if: false\n    steps:\n      - run: "true"\n${extra}  checks:\n${checks}    steps:\n      - run: bun run lint\n      - run: bun run test\n`;
+  const direct = gapsIn({ [CI]: withNeeds("    needs: setup\n") });
+  expect(direct.map((gap) => gap.gate)).toEqual(["bun run lint", "bun run test"]);
+  expect(direct[0]!.blocked).toEqual([
+    { location: `${CI} job checks step 1`, blocker: "job checks needs a job that never runs: job setup sets if: false" },
+  ]);
+
+  const chained = gapsIn({ [CI]: withNeeds("    needs: [build]\n", "  build:\n    needs: setup\n") });
+  expect(chained[0]!.blocked).toEqual([
+    { location: `${CI} job checks step 1`, blocker: "job checks needs a job that never runs: job setup sets if: false" },
+  ]);
+
+  expect(gapsIn({ [CI]: withNeeds("    needs: setup\n    if: always()\n") })).toEqual([]);
+  expect(gapsIn({ [CI]: withNeeds("    needs: [build]\n", "  build:\n    needs: setup\n    if: always()\n") })).toEqual(
+    [],
+  );
+  expect(gapsIn({ [CI]: mutate(withNeeds("    needs: setup\n"), "    if: false\n", "") })).toEqual([]);
+});
+
 test("every shape of the on key that carries pull_request to the default branch passes", () => {
   const jobs = RESTORED.slice(RESTORED.indexOf("jobs:"));
   for (const on of [

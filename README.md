@@ -337,18 +337,21 @@ failure failing the step; the report names the gate and says to give it
 its own step with nothing else in it. A gate step counts only when:
 
 - its workflow triggers on `pull_request`, any `branches` or
-  `branches-ignore` filter there keeps the default branch, and any
-  `types` filter keeps `opened` and `synchronize`;
+  `branches-ignore` filter there keeps the default branch, any `types`
+  filter keeps `opened` and `synchronize`, and it sets no `paths` or
+  `paths-ignore` filter, which lets some pull requests skip the gate;
 - neither the step nor its job sets `if: false` or
-  `continue-on-error: true`, bare or as `${{ false }}` and `${{ true }}`.
+  `continue-on-error: true`, bare or as `${{ false }}` and `${{ true }}`;
+- its job has an `if:` of its own, or needs no job, directly or through
+  a chain, that sets `if: false`, since GitHub skips a job whose needed
+  job was skipped unless its own `if:`, such as `always()`, overrides it.
 
 A job calling a local reusable workflow (`uses: ./.github/workflows/x.yml`)
 passes its own trigger and `if:` down to the called workflow's steps.
 A remote reusable workflow (`uses: owner/repo/...@ref`) is not a
 supported way to wire a gate: it is not read, so a gate must run as a
 `run:` step, such as `bunx checks-comment-gate`, in the repo's own
-workflows. Any other `if:` expression is not evaluated and counts as
-running.
+workflows.
 
 The default branch is `main`; a repo with another one sets
 `"defaultBranch"` beside `"gates"`.
@@ -364,6 +367,21 @@ ci-wiring: 1 of 8 gate(s) do not run on pull requests to main:
 
 It exits 2 when `package.json` declares no gates. Whether a workflow is
 well formed is actionlint's question, not this one's.
+
+### Limits
+
+The check reads workflow files and never runs them, so it deliberately
+does not evaluate:
+
+- an `if:` expression other than a constant `true` or `false`, which
+  counts as running;
+- a `strategy.matrix` `include` or `exclude`, so a matrix that drops
+  every combination still counts as running its steps;
+- a remote reusable workflow (`uses: owner/repo/...@ref`), whose steps
+  are never read;
+- anything that happens at run time on the runner: what the gate
+  command itself does, the shell's options, and a step or job that
+  fails or times out before the gate step.
 
 ## Backtest
 

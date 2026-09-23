@@ -156,9 +156,25 @@ function triggerBlocker(workflow: Workflow, branch: string): string | undefined 
   if (ignored?.some((pattern) => new Bun.Glob(pattern).match(branch)) === true) {
     return `${workflow.path} ignores pull_request to ${branch}`;
   }
+  if (filters["paths"] !== undefined || filters["paths-ignore"] !== undefined) {
+    return `${workflow.path} filters pull_request by paths, so some pull requests skip the gate`;
+  }
   const types = names(filters["types"]);
   const missing = types === undefined ? [] : GATING_TYPES.filter((type) => !types.includes(type));
   if (missing.length > 0) return `${workflow.path} limits pull_request to types without ${missing.join(", ")}`;
+  return undefined;
+}
+
+// An if: of the job's own can override the skip, as always() does, so only a job without one inherits it.
+function skippedBy(jobs: Readonly<Record<string, unknown>>, id: string, seen: readonly string[]): string | undefined {
+  const job = jobs[id];
+  if (!isRecord(job) || seen.includes(id)) return undefined;
+  if (constant(job["if"]) === false) return `job ${id} sets if: false`;
+  if (job["if"] !== undefined) return undefined;
+  for (const need of names(job["needs"]) ?? []) {
+    const cause = skippedBy(jobs, need, [...seen, id]);
+    if (cause !== undefined) return cause;
+  }
   return undefined;
 }
 
@@ -181,7 +197,11 @@ function runSteps(workflows: readonly Workflow[], branch: string): readonly RunS
     for (const [id, job] of Object.entries(jobs)) {
       if (!isRecord(job)) continue;
       const jobLocation = `${location} job ${id}`;
-      const jobBlocker = blocker ?? switchedOff(job, `job ${id}`);
+      const skipped = skippedBy(jobs, id, []);
+      const jobBlocker =
+        blocker ??
+        switchedOff(job, `job ${id}`) ??
+        (skipped === undefined ? undefined : `job ${id} needs a job that never runs: ${skipped}`);
       const called = localCall(job["uses"]);
       if (called !== undefined && !walked.includes(called)) {
         visit(documents.get(called), `${jobLocation} > ${called}`, jobBlocker, [...walked, called]);
