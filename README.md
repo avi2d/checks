@@ -367,7 +367,8 @@ ci-wiring: 1 of 8 gate(s) do not run on pull requests to main:
     .github/workflows/release.yml job publish step 7: .github/workflows/release.yml does not trigger on pull_request
 ```
 
-It exits 2 when `package.json` declares no gates. Whether a workflow is
+It exits 2 when `package.json` declares no gates, a gate is not one
+plain command, or a workflow does not parse. Whether a workflow is
 well formed is actionlint's question, not this one's.
 
 ### Limits
