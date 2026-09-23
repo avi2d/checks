@@ -5,7 +5,7 @@ module.exports = {
       name: "no-orphans",
       from: {
         orphan: true,
-        // The plugin entry loads from dist through oxlint, so no source file imports it.
+        // Consumers load these entries, the plugin through its dist bundle, so no source file here imports them.
         pathNot: [
           "(^|/)effect-channel/index[.]ts$",
           "(^|/)stryker[.]preset[.]js$",
