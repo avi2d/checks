@@ -47,7 +47,7 @@ async function writeConsumerFixture(
       name: "checks-consumer-fixture",
       type: "module",
       devDependencies: {
-        "@avi2d/checks": checks,
+        "@avi2dg/checks": checks,
         effect: "4.0.0-rc.115",
         oxlint: "1.83.0",
         "@swc/core": "1.16.2",
@@ -58,7 +58,7 @@ async function writeConsumerFixture(
   await writeFile(
     join(dir, ".oxlintrc.json"),
     JSON.stringify({
-      extends: ["./node_modules/@avi2d/checks/oxlintrc.json"],
+      extends: ["./node_modules/@avi2dg/checks/oxlintrc.json"],
       // oxlint's plugins do not inherit through extends, so the consumer restates them.
       plugins: ["typescript", "oxc", "eslint", "import"],
     }),
@@ -99,7 +99,7 @@ test(
     await writeConsumerFixture();
     await writeFile(join(dir, "clean.ts"), `export const answer = 42;\n`);
     await writeFile(
-      join(dir, "node_modules", "@avi2d", "checks", "effect-channel", "planted.ts"),
+      join(dir, "node_modules", "@avi2dg", "checks", "effect-channel", "planted.ts"),
       `import { Effect } from "effect";\n\nexport const planted = Effect.ignore(Effect.fail("boom"));\n`,
     );
 
@@ -115,7 +115,7 @@ test(
     await writeConsumerFixture({
       scripts: {
         test: "bun test --randomize",
-        lint: "oxlint --type-aware && ./node_modules/@avi2d/checks/scripts/lint-coverage.sh && bun ./node_modules/@avi2d/checks/scripts/test-layout.ts",
+        lint: "oxlint --type-aware && ./node_modules/@avi2dg/checks/scripts/lint-coverage.sh && bun ./node_modules/@avi2dg/checks/scripts/test-layout.ts",
       },
     });
     await writeFile(join(dir, "bunfig.toml"), await readFile(join(CHECKOUT, "bunfig.toml"), "utf8"));
@@ -156,13 +156,13 @@ test(
       {
         scripts: {
           test: "bun test --randomize",
-          lint: "oxlint --type-aware && ./node_modules/@avi2d/checks/scripts/lint-coverage.sh && bun ./node_modules/@avi2d/checks/scripts/test-layout.ts",
+          lint: "oxlint --type-aware && ./node_modules/@avi2dg/checks/scripts/lint-coverage.sh && bun ./node_modules/@avi2dg/checks/scripts/test-layout.ts",
         },
       },
       `file:${tarball}`,
     );
 
-    const installed = join(dir, "node_modules", "@avi2d", "checks");
+    const installed = join(dir, "node_modules", "@avi2dg", "checks");
     const manifest = JSON.parse(await readFile(join(CHECKOUT, "package.json"), "utf8")) as {
       exports: Record<string, string>;
     };

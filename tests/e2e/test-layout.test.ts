@@ -12,7 +12,7 @@ const MANIFEST = {
   name: "consumer",
   scripts: {
     test: "bun test --randomize",
-    lint: "oxlint && bun ./node_modules/@avi2d/checks/scripts/test-layout.ts",
+    lint: "oxlint && bun ./node_modules/@avi2dg/checks/scripts/test-layout.ts",
   },
 };
 const CLEAN_TEST = 'import { expect, test } from "bun:test";\ntest("adds", () => {\n  expect(1 + 1).toBe(2);\n});\n';
