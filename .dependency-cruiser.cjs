@@ -8,6 +8,7 @@ module.exports = {
         // The plugin entry loads from dist through oxlint, so no source file imports it.
         pathNot: [
           "(^|/)effect-channel/index[.]ts$",
+          "(^|/)stryker[.]preset[.]js$",
           "(^|/)[.][^/]+[.](?:js|cjs|mjs|ts|cts|mts|json)$",
           "[.]d[.]ts$",
           "(^|/)tsconfig[.]json$",
