@@ -5,8 +5,9 @@ Deterministic checks shared across my TypeScript repos. One package,
 Effect language-service block, the shared commitlint config, the shared
 dependency-cruiser base, the test-layout check with its bunfig preset,
 the commit-identity check with its workflow, the comment gate with its
-workflow and backtest, the Stryker mutation-testing preset, and the
-Effect error-channel plugin compiled to JavaScript.
+workflow and backtest, the Stryker mutation-testing preset with its
+no-regression comparator, and the Effect error-channel plugin compiled
+to JavaScript.
 
 Published as `@avi2dg/checks` on the public npm registry.
 
@@ -289,6 +290,52 @@ comment text as a share of added lines.
 `generated/`, `vendor/`, `repos/`, `node_modules/` and `dist/` are out
 of reach, so the figures are authored code.
 
+## Mutation compare
+
+`checks-mutation-compare` gates a pull request on no-regression rather
+than an absolute threshold: the head mutation score may not fall below
+the score at the merge-base.
+
+```sh
+checks-mutation-compare <base-report> <head-report> [--advisory]
+```
+
+Both reports are Stryker `mutation.json` files. It prints the overall
+score of each report and the per-file scores that differ, and exits 1
+when the head score is below the base score. The score is Stryker's:
+`Killed` and `Timeout` over those plus `Survived` and `NoCoverage`, so
+`CompileError`, `RuntimeError`, `Ignored` and `Pending` mutants leave
+it. Every file in a report counts toward that report's score, including
+files present in only one of the two.
+
+`--advisory` prints the same verdict and always exits 0. That is how
+consumers run it for the first month; after that they drop the flag and
+it blocks.
+
+Enforcement runs on pull requests, comparing the head report against a
+report built at the merge-base:
+
+```yaml
+jobs:
+  mutation-compare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bunx stryker run
+      - run: |
+          base="$(git merge-base HEAD origin/main)"
+          git worktree add /tmp/mutation-base "$base"
+          (cd /tmp/mutation-base && bun install --frozen-lockfile && bunx stryker run)
+      - run: bun run checks-mutation-compare --advisory /tmp/mutation-base/reports/mutation/mutation.json reports/mutation/mutation.json
+```
+
+The shared Stryker preset's `json` reporter writes
+`reports/mutation/mutation.json` in each worktree.
+
 ## Why it is shaped this way
 
 - `plugins` does not inherit through oxlint `extends`. `rules`,
@@ -362,7 +409,7 @@ a tag off `main` and reruns the build, `dist/` check, lint, typecheck
 and tests before it publishes:
 
 ```sh
-git tag v0.2.0 && git push origin v0.2.0
+git tag v0.3.0 && git push origin v0.3.0
 ```
 
 The `release` workflow publishes the tagged version through npm

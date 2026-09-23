@@ -1,0 +1,248 @@
+{
+  "files": {
+    "src/changed.ts": {
+      "language": "ts",
+      "mutants": [
+        {
+          "coveredBy": [
+            "add adds"
+          ],
+          "id": "0",
+          "killedBy": [
+            "add adds"
+          ],
+          "location": {
+            "end": {
+              "column": 15,
+              "line": 2
+            },
+            "start": {
+              "column": 9,
+              "line": 2
+            }
+          },
+          "mutatorName": "ArithmeticOperator",
+          "replacement": "a - b",
+          "status": "Killed",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "add adds"
+          ],
+          "id": "1",
+          "killedBy": [
+            "add adds"
+          ],
+          "location": {
+            "end": {
+              "column": 15,
+              "line": 2
+            },
+            "start": {
+              "column": 9,
+              "line": 2
+            }
+          },
+          "mutatorName": "EqualityOperator",
+          "replacement": "a + b",
+          "status": "Killed",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "add adds"
+          ],
+          "id": "2",
+          "killedBy": [
+            "add adds"
+          ],
+          "location": {
+            "end": {
+              "column": 15,
+              "line": 2
+            },
+            "start": {
+              "column": 9,
+              "line": 2
+            }
+          },
+          "mutatorName": "BlockStatement",
+          "replacement": "{}",
+          "status": "Killed",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "add adds"
+          ],
+          "id": "3",
+          "killedBy": [
+            "add adds"
+          ],
+          "location": {
+            "end": {
+              "column": 15,
+              "line": 2
+            },
+            "start": {
+              "column": 9,
+              "line": 2
+            }
+          },
+          "mutatorName": "StringLiteral",
+          "replacement": "\"\"",
+          "status": "Killed",
+          "testsCompleted": 1
+        }
+      ],
+      "source": "export function add(a: number, b: number): number {\n  return a + b;\n}\n"
+    },
+    "src/stable.ts": {
+      "language": "ts",
+      "mutants": [
+        {
+          "coveredBy": [
+            "mul multiplies"
+          ],
+          "id": "0",
+          "killedBy": [
+            "mul multiplies"
+          ],
+          "location": {
+            "end": {
+              "column": 15,
+              "line": 2
+            },
+            "start": {
+              "column": 9,
+              "line": 2
+            }
+          },
+          "mutatorName": "ArithmeticOperator",
+          "replacement": "a / b",
+          "status": "Killed",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "mul multiplies"
+          ],
+          "id": "1",
+          "killedBy": [
+            "mul multiplies"
+          ],
+          "location": {
+            "end": {
+              "column": 15,
+              "line": 2
+            },
+            "start": {
+              "column": 9,
+              "line": 2
+            }
+          },
+          "mutatorName": "EqualityOperator",
+          "replacement": "a * b",
+          "status": "Killed",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "mul multiplies"
+          ],
+          "id": "2",
+          "killedBy": [
+            "mul multiplies"
+          ],
+          "location": {
+            "end": {
+              "column": 15,
+              "line": 2
+            },
+            "start": {
+              "column": 9,
+              "line": 2
+            }
+          },
+          "mutatorName": "BlockStatement",
+          "replacement": "{}",
+          "status": "Killed",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "mul multiplies"
+          ],
+          "id": "3",
+          "killedBy": [
+            "mul multiplies"
+          ],
+          "location": {
+            "end": {
+              "column": 15,
+              "line": 2
+            },
+            "start": {
+              "column": 9,
+              "line": 2
+            }
+          },
+          "mutatorName": "ConditionalExpression",
+          "replacement": "true",
+          "status": "Killed",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "mul multiplies"
+          ],
+          "id": "4",
+          "killedBy": [],
+          "location": {
+            "end": {
+              "column": 15,
+              "line": 2
+            },
+            "start": {
+              "column": 9,
+              "line": 2
+            }
+          },
+          "mutatorName": "StringLiteral",
+          "replacement": "\"\"",
+          "status": "Survived",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "mul multiplies"
+          ],
+          "id": "5",
+          "killedBy": [],
+          "location": {
+            "end": {
+              "column": 15,
+              "line": 2
+            },
+            "start": {
+              "column": 9,
+              "line": 2
+            }
+          },
+          "mutatorName": "ArrayDeclaration",
+          "replacement": "[]",
+          "status": "Survived",
+          "testsCompleted": 1
+        }
+      ],
+      "source": "export function mul(a: number, b: number): number {\n  return a * b;\n}\n"
+    }
+  },
+  "schemaVersion": "1.0",
+  "thresholds": {
+    "break": null,
+    "high": 85,
+    "low": 70
+  }
+}
