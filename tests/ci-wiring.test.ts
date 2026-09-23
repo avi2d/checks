@@ -191,6 +191,48 @@ test("a gate matches the leading words of a command, never a longer word or a la
   expect(runs("echo 'bun run lint' && bun run test").map((gap) => gap.gate)).toEqual(["bun run lint"]);
 });
 
+test("a gate whose failure is discarded or that never runs goes red", () => {
+  const lint = parseDeclaration({ ciWiring: { gates: ["bun run lint"] } }, "package.json");
+  const gaps = (script: string) =>
+    gapsIn({ [CI]: `on: pull_request\njobs:\n  j:\n    steps:\n      - run: ${JSON.stringify(script)}\n` }, lint);
+  for (const masked of [
+    "bun run lint || true",
+    "bun run lint && echo passed || true",
+    "bun run lint | tee out || true",
+    "(bun run lint) || true",
+    "{ echo start; bun run lint; } || true",
+    "if bun run lint; then echo ok; fi",
+    "bun run lint &",
+    "bun run lint && echo passed &\nwait",
+    "echo $(bun run lint)",
+    "OUT=$(bun run lint)",
+    "echo `bun run lint`",
+    "cat <(bun run lint)",
+    "exit 0; bun run lint",
+    "exit 0\nbun run lint",
+    "exit 0 && bun run lint",
+  ]) {
+    expect(gaps(masked).map((gap) => gap.gate)).toEqual(["bun run lint"]);
+  }
+  for (const plain of [
+    "bun run lint",
+    "bun run lint 2>&1",
+    "bun run lint &> lint.log",
+    "bun run lint >&2",
+    "bun run lint && echo passed",
+    "false || bun run lint",
+    "(cd . && bun run lint)",
+    "VERSION=$(git describe) bun run lint",
+    "echo $(date)\nbun run lint",
+    "test -f x || exit 1\nbun run lint",
+    "if [ -n \"$SKIP\" ]; then\n  exit 0\nfi\nbun run lint",
+    "case $X in\n  a) exit 0;;\nesac\nbun run lint",
+    "(exit 0); bun run lint",
+  ]) {
+    expect(gaps(plain)).toEqual([]);
+  }
+});
+
 test("commands splits a script on control operators and drops comments and leading assignments", () => {
   expect(commands(`FOO="a b" bun run lint # trailing\n# whole line\nprintf '%s' "$T #1" | commitlint --config x`)).toEqual([
     ["bun", "run", "lint"],

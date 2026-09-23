@@ -45,7 +45,15 @@ const CONSTANTS = new Map([
   ["true", true],
   ["false", false],
 ]);
-const SEPARATORS = new Set([";", "&", "|", "\n", "(", ")"]);
+const OPENERS = new Map([
+  ["{", "}"],
+  ["if", "fi"],
+  ["case", "esac"],
+  ["for", "done"],
+  ["select", "done"],
+  ["while", "done"],
+  ["until", "done"],
+]);
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -58,29 +66,76 @@ function names(value: unknown): readonly string[] | undefined {
   return value.filter((entry): entry is string => typeof entry === "string");
 }
 
+type Frame = {
+  readonly closer: string | undefined;
+  readonly discards: boolean;
+  list: number[];
+  readonly inside: number[];
+};
+
+// Only a command whose failure can fail the step counts: one in a list that `||` or a trailing `&` ends,
+// inside `$(...)`, backticks or `<(...)`, or after an unconditional `exit` is dropped.
 export function commands(script: string): readonly Command[] {
   const found: Command[] = [];
+  const discarded = new Set<number>();
+  const root: Frame = { closer: undefined, discards: false, list: [], inside: [] };
+  const frames: Frame[] = [root];
+  const top = (): Frame => frames.at(-1) ?? root;
   let words: string[] = [];
   let word: string | undefined;
+  let exited = false;
+
+  const open = (closer: string, discards: boolean): void => {
+    frames.push({ closer, discards, list: [], inside: [] });
+  };
+  const close = (): void => {
+    const frame = frames.length > 1 ? frames.pop() : undefined;
+    if (frame === undefined) return;
+    if (frame.discards) for (const entry of frame.inside) discarded.add(entry);
+    top().list.push(...frame.inside);
+    top().inside.push(...frame.inside);
+  };
   const endWord = (): void => {
-    if (word !== undefined) words.push(word);
+    if (word === undefined) return;
+    if (words.length === 0 && word === top().closer) close();
+    else if (words.length === 0) {
+      const closer = OPENERS.get(word);
+      if (closer !== undefined) open(closer, false);
+    }
+    words.push(word);
     word = undefined;
   };
   const endCommand = (): void => {
     endWord();
     const start = words.findIndex((entry) => !ASSIGNMENT.test(entry));
-    if (start !== -1) found.push(words.slice(start));
+    if (start !== -1) {
+      const command = words.slice(start);
+      const frame = top();
+      if (exited) discarded.add(found.length);
+      if (command[0] === "exit" && frames.length === 1 && frame.list.length === 0) exited = true;
+      frame.list.push(found.length);
+      frame.inside.push(found.length);
+      found.push(command);
+    }
     words = [];
+  };
+  const discardList = (): void => {
+    for (const entry of top().list) discarded.add(entry);
+  };
+  const endList = (): void => {
+    endCommand();
+    top().list = [];
   };
 
   for (let index = 0; index < script.length; index += 1) {
     const char = script.charAt(index);
+    const next = script.charAt(index + 1);
     if (char === "\\") {
       index += 1;
-      if (index < script.length && script.charAt(index) !== "\n") word = (word ?? "") + script.charAt(index);
+      if (index < script.length && next !== "\n") word = (word ?? "") + next;
     } else if (char === "'") {
-      const close = script.indexOf("'", index + 1);
-      const end = close === -1 ? script.length : close;
+      const quote = script.indexOf("'", index + 1);
+      const end = quote === -1 ? script.length : quote;
       word = (word ?? "") + script.slice(index + 1, end);
       index = end;
     } else if (char === '"') {
@@ -100,14 +155,37 @@ export function commands(script: string): readonly Command[] {
       index = newline === -1 ? script.length : newline - 1;
     } else if (char === " " || char === "\t") {
       endWord();
-    } else if (SEPARATORS.has(char)) {
+    } else if (char === ";" || char === "\n") {
+      endList();
+    } else if (char === "|") {
       endCommand();
+      if (next === "|") discardList();
+      if (next === "|" || next === "&") index += 1;
+    } else if (char === "&" && next === "&") {
+      endCommand();
+      index += 1;
+    } else if (char === "&" && next !== ">" && !/[<>]$/.test(word ?? "")) {
+      endCommand();
+      discardList();
+      top().list = [];
+    } else if (char === "(") {
+      const substitution = /[$<>]$/.test(word ?? "");
+      endCommand();
+      open(")", substitution);
+    } else if (char === ")") {
+      endCommand();
+      if (top().closer === ")") close();
+    } else if (char === "`") {
+      endCommand();
+      if (top().closer === "`") close();
+      else open("`", true);
     } else {
       word = (word ?? "") + char;
     }
   }
   endCommand();
-  return found;
+  while (frames.length > 1) close();
+  return found.filter((_, index) => !discarded.has(index));
 }
 
 function invokes(command: Command, gate: Command): boolean {

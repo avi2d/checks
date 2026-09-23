@@ -186,7 +186,14 @@ on:
     types: [opened, edited, synchronize, reopened]
 jobs:
   commitlint:
-    uses: avi2d/checks/.github/workflows/commitlint.yml@main
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: printf '%s' "$PR_TITLE (#0000)" | ./node_modules/.bin/commitlint --config ./node_modules/@avi2dg/checks/commitlint.config.js
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
 ```
 
 It lints the pull request title and nothing else. The title is the
@@ -237,10 +244,20 @@ on:
     types: [opened, edited, synchronize, reopened]
 jobs:
   commit-identity:
-    uses: avi2d/checks/.github/workflows/commit-identity.yml@main
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bunx checks-commit-identity "origin/$BASE_REF" "$HEAD_SHA"
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
 ```
 
-The workflow fetches the consumer's full history and ranges from the
+The checkout fetches the full history and the range starts at the
 fetched base branch, not the event's recorded base sha, which GitHub
 leaves stale once the base branch advances after the pull request opens.
 
@@ -274,7 +291,17 @@ on:
     types: [opened, edited, synchronize, reopened]
 jobs:
   comment-gate:
-    uses: avi2d/checks/.github/workflows/comment-gate.yml@main
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bunx checks-comment-gate "origin/$BASE_REF" "$HEAD_SHA"
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
 ```
 
 ## CI wiring
@@ -298,12 +325,16 @@ runs the check:
 
 It parses every `.github/workflows/*.yml` and `*.yaml` and looks, for
 each gate, for a `run:` step that invokes it. The script is split into
-commands at `;`, `&`, `|`, parentheses and newlines, shell comments and
-leading `NAME=value` assignments are dropped, and a command invokes the
-gate when it starts with the gate's words. `bun run lint --quiet`
-invokes `bun run lint`; `bun run lint:deps`, `echo bun run lint`, a
-commented-out line and a step `name:` do not. An invoking step counts
-only when:
+commands at `;`, `&`, `|`, parentheses, backticks and newlines, shell
+comments and leading `NAME=value` assignments are dropped, and a command
+invokes the gate when it starts with the gate's words. `bun run lint
+--quiet` invokes `bun run lint`; `bun run lint:deps`, `echo bun run
+lint`, a commented-out line and a step `name:` do not. Nor does a
+command whose failure cannot fail the step: one in a list that `||` or
+a trailing `&` ends (`bun run lint || true`, `(bun run lint) || true`,
+`bun run lint &`), one inside `$(...)`, backticks or `<(...)`, and any
+command after an `exit` that is not inside a condition, loop, group or
+`&&`/`||` list. An invoking step counts only when:
 
 - its workflow triggers on `pull_request`, any `branches` or
   `branches-ignore` filter there keeps the default branch, and any
@@ -312,10 +343,12 @@ only when:
   `continue-on-error: true`, bare or as `${{ false }}` and `${{ true }}`.
 
 A job calling a local reusable workflow (`uses: ./.github/workflows/x.yml`)
-passes its own trigger and `if:` down to the called workflow's steps. A
-remote one (`uses: avi2d/checks/...@main`) is not read, so a gate that
-runs only inside one cannot be declared. Any other `if:` expression is
-not evaluated and counts as running.
+passes its own trigger and `if:` down to the called workflow's steps.
+A remote reusable workflow (`uses: owner/repo/...@ref`) is not a
+supported way to wire a gate: it is not read, so a gate must run as a
+`run:` step, such as `bunx checks-comment-gate`, in the repo's own
+workflows. Any other `if:` expression is not evaluated and counts as
+running.
 
 The default branch is `main`; a repo with another one sets
 `"defaultBranch"` beside `"gates"`.
