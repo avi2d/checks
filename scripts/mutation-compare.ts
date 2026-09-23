@@ -10,15 +10,12 @@ export type FileComparison = {
   readonly path: string;
   readonly base: Tally;
   readonly head: Tally;
-  readonly changed: boolean;
 };
 
 export type Comparison = {
   readonly base: Tally;
   readonly head: Tally;
   readonly files: readonly FileComparison[];
-  readonly onlyInBase: readonly string[];
-  readonly onlyInHead: readonly string[];
   readonly regression: boolean;
 };
 
@@ -30,7 +27,8 @@ export type Options = {
 
 export class ReportError extends Error {}
 
-const KILLED = new Set(["Killed", "Timeout"]);
+const DETECTED = new Set(["Killed", "Timeout"]);
+const UNDETECTED = new Set(["Survived", "NoCoverage"]);
 const USAGE = "usage: mutation-compare.ts [--advisory] <base-report> <head-report>";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -68,56 +66,31 @@ function tally(statuses: readonly string[]): Tally {
   let killed = 0;
   let total = 0;
   for (const status of statuses) {
-    if (status === "Ignored") continue;
-    total += 1;
-    if (KILLED.has(status)) killed += 1;
+    if (DETECTED.has(status)) killed += 1;
+    if (DETECTED.has(status) || UNDETECTED.has(status)) total += 1;
   }
   return { killed, total };
 }
 
-function sameStatuses(base: readonly string[], head: readonly string[]): boolean {
-  if (base.length !== head.length) return false;
-  const ordered = [...base].sort();
-  const other = [...head].sort();
-  return ordered.every((status, index) => status === other[index]);
-}
-
-function add(into: { killed: number; total: number }, count: Tally): void {
-  into.killed += count.killed;
-  into.total += count.total;
-}
+const EMPTY: Tally = { killed: 0, total: 0 };
 
 export function compareReports(
   baseFiles: ReadonlyMap<string, readonly string[]>,
   headFiles: ReadonlyMap<string, readonly string[]>,
 ): Comparison {
-  const files: FileComparison[] = [];
-  const onlyInBase: string[] = [];
-  const onlyInHead: string[] = [];
-  const baseTotal = { killed: 0, total: 0 };
-  const headTotal = { killed: 0, total: 0 };
-  for (const path of [...baseFiles.keys()].sort()) {
+  const paths = [...new Set([...baseFiles.keys(), ...headFiles.keys()])].sort();
+  const files = paths.map((path) => {
+    const baseStatuses = baseFiles.get(path);
     const headStatuses = headFiles.get(path);
-    if (headStatuses === undefined) {
-      onlyInBase.push(path);
-      continue;
-    }
-    const baseStatuses = baseFiles.get(path) ?? [];
-    const base = tally(baseStatuses);
-    const head = tally(headStatuses);
-    const changed = !sameStatuses(baseStatuses, headStatuses);
-    files.push({ path, base, head, changed });
-    if (changed) {
-      add(baseTotal, base);
-      add(headTotal, head);
-    }
-  }
-  for (const path of [...headFiles.keys()].sort()) {
-    if (!baseFiles.has(path)) onlyInHead.push(path);
-  }
-  const base = { killed: baseTotal.killed, total: baseTotal.total };
-  const head = { killed: headTotal.killed, total: headTotal.total };
-  return { base, head, files, onlyInBase, onlyInHead, regression: regressed(base, head) };
+    return {
+      path,
+      base: baseStatuses === undefined ? EMPTY : tally(baseStatuses),
+      head: headStatuses === undefined ? EMPTY : tally(headStatuses),
+    };
+  });
+  const base = tally([...baseFiles.values()].flat());
+  const head = tally([...headFiles.values()].flat());
+  return { base, head, files, regression: regressed(base, head) };
 }
 
 export function regressed(base: Tally, head: Tally): boolean {
@@ -144,17 +117,17 @@ function deltaPoints(base: Tally, head: Tally): string {
 }
 
 export function formatComparison(comparison: Comparison, advisory: boolean): string {
-  const changed = comparison.files.filter((file) => file.changed);
+  const changed = comparison.files.filter(
+    (file) => file.base.killed !== file.head.killed || file.base.total !== file.head.total,
+  );
   const unchanged = comparison.files.length - changed.length;
   const lines = [
-    `mutation-compare: base ${describe(comparison.base)} head ${describe(comparison.head)} delta ${deltaPoints(comparison.base, comparison.head)} across ${changed.length} changed file(s)`,
+    `mutation-compare: base ${describe(comparison.base)} head ${describe(comparison.head)} delta ${deltaPoints(comparison.base, comparison.head)}`,
   ];
   for (const file of changed) {
-    lines.push(`  ${file.path}: ${percent(file.base)} -> ${percent(file.head)} (${deltaPoints(file.base, file.head)})`);
+    lines.push(`  ${file.path}: ${describe(file.base)} -> ${describe(file.head)}`);
   }
-  if (unchanged > 0) lines.push(`  ${unchanged} unchanged file(s) at +0.00pp`);
-  for (const path of comparison.onlyInBase) lines.push(`  ${path}: only in base (excluded from verdict)`);
-  for (const path of comparison.onlyInHead) lines.push(`  ${path}: only in head (excluded from verdict)`);
+  if (unchanged > 0) lines.push(`  ${unchanged} unchanged file(s)`);
   if (comparison.regression) {
     lines.push(`mutation-compare: REGRESSION (${deltaPoints(comparison.base, comparison.head)})${advisory ? " in advisory mode, exit 0" : ""}`);
   } else {
@@ -163,7 +136,7 @@ export function formatComparison(comparison: Comparison, advisory: boolean): str
   return lines.join("\n");
 }
 
-export function parseArgs(argv: readonly string[], env: { readonly [key: string]: string | undefined }): Options {
+export function parseArgs(argv: readonly string[]): Options {
   let advisory = false;
   const paths: string[] = [];
   for (const arg of argv) {
@@ -171,8 +144,6 @@ export function parseArgs(argv: readonly string[], env: { readonly [key: string]
     else if (arg.startsWith("--")) throw new ReportError(`${USAGE}: unknown flag ${arg}`);
     else paths.push(arg);
   }
-  const flag = env["CHECKS_MUTATION_ADVISORY"];
-  if (flag !== undefined && ["1", "true", "yes"].includes(flag.toLowerCase())) advisory = true;
   if (paths.length !== 2 || paths[0] === undefined || paths[1] === undefined) throw new ReportError(USAGE);
   return { basePath: paths[0], headPath: paths[1], advisory };
 }
@@ -191,7 +162,7 @@ async function load(path: string): Promise<string> {
 
 if (import.meta.main) {
   try {
-    const options = parseArgs(process.argv.slice(2), process.env);
+    const options = parseArgs(process.argv.slice(2));
     const comparison = compareReports(parseReport(await load(options.basePath)), parseReport(await load(options.headPath)));
     console.log(formatComparison(comparison, options.advisory));
     process.exit(exitFor(comparison, options.advisory));

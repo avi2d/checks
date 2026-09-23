@@ -300,17 +300,16 @@ checks-mutation-compare <base-report> <head-report> [--advisory]
 ```
 
 Both reports are Stryker `mutation.json` files. It prints the overall
-and per-file score delta and exits 1 when the head score is below the
-base score. `Killed` and `Timeout` count as killed; `Ignored` mutants
-leave the score. The verdict counts only files whose mutant outcomes
-changed between the two reports, so survivors in untouched files cannot
-swing it either way. A file present in only one report is listed and
-left out of the verdict: the comparator cannot tell new code from a
-rename, so it refuses to guess either way.
+score of each report and the per-file scores that differ, and exits 1
+when the head score is below the base score. The score is Stryker's:
+`Killed` and `Timeout` over those plus `Survived` and `NoCoverage`, so
+`CompileError`, `RuntimeError`, `Ignored` and `Pending` mutants leave
+it. Every file in a report counts toward that report's score, including
+files present in only one of the two.
 
-`--advisory`, or `CHECKS_MUTATION_ADVISORY=1`, prints the same verdict
-and always exits 0. That is how consumers run it for the first month;
-after that they drop the flag and it blocks.
+`--advisory` prints the same verdict and always exits 0. That is how
+consumers run it for the first month; after that they drop the flag and
+it blocks.
 
 Enforcement runs on pull requests, comparing the head report against a
 report built at the merge-base:
@@ -318,6 +317,7 @@ report built at the merge-base:
 ```yaml
 jobs:
   mutation-compare:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
@@ -329,11 +329,11 @@ jobs:
           base="$(git merge-base HEAD origin/main)"
           git worktree add /tmp/mutation-base "$base"
           (cd /tmp/mutation-base && bun install --frozen-lockfile && bunx stryker run)
-      - run: CHECKS_MUTATION_ADVISORY=1 checks-mutation-compare /tmp/mutation-base/reports/mutation.json reports/mutation.json
+      - run: bun run checks-mutation-compare --advisory /tmp/mutation-base/reports/mutation/mutation.json reports/mutation/mutation.json
 ```
 
-The report paths are wherever the `json` reporter's output lands in
-each worktree.
+The shared Stryker preset's `json` reporter writes
+`reports/mutation/mutation.json` in each worktree.
 
 ## Why it is shaped this way
 
