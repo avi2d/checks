@@ -192,8 +192,8 @@ commit-identity check below is the enforcement.
 one carries an identity other than the repository owner's:
 
 ```sh
-bunx checks-commit-identity <base-ref> <head-ref>
-bunx checks-commit-identity <ref>
+bun run checks-commit-identity <base-ref> <head-ref>
+bun run checks-commit-identity <ref>
 ```
 
 With one argument it checks that commit alone, which is the form the
@@ -235,8 +235,8 @@ leaves stale once the base branch advances after the pull request opens.
 when an added line carries a banned comment:
 
 ```sh
-bunx checks-comment-gate <base-ref> <head-ref>
-bunx checks-comment-gate <ref>
+bun run checks-comment-gate <base-ref> <head-ref>
+bun run checks-comment-gate <ref>
 ```
 
 With two arguments it diffs the base against the head. With one it diffs
@@ -268,7 +268,7 @@ jobs:
 at each recent commit, so a repository can measure its own history:
 
 ```sh
-bunx checks-backtest [commit-count]
+bun run checks-backtest [commit-count]
 ```
 
 It walks the last `commit-count` first-parent commits, 60 by default,
@@ -310,8 +310,9 @@ of reach, so the figures are authored code.
   `--path-ignore-patterns` flag overrides the file's own list.
 - Each runnable script ships a `checks-` bin entry, so consumer
   `package.json` scripts call the short name, which the package manager
-  puts on `PATH` only there; a shell runs it through `bunx`. The `.ts`
-  checks keep a `bun` shebang, which needs no build step and no `dist/`
+  puts on `PATH` only there; a shell runs it through `bun run`, which
+  never falls back to the registry the way `bunx` does. The `.ts` checks
+  keep a `bun` shebang, which needs no build step and no `dist/`
   entry, unlike the oxlint plugin that node loads.
 - `bun` counts as a built-in module. Nothing installed resolves it except
   `@types/bun`, which would otherwise make every runtime `bun` import look
