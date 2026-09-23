@@ -5,8 +5,9 @@ Deterministic checks shared across my TypeScript repos. One package,
 Effect language-service block, the shared commitlint config, the shared
 dependency-cruiser base, the test-layout check with its bunfig preset,
 the commit-identity check with its workflow, the comment gate with its
-workflow and backtest, the Stryker mutation-testing preset, and the
-Effect error-channel plugin compiled to JavaScript.
+workflow and backtest, the Stryker mutation-testing preset with its
+no-regression comparator, and the Effect error-channel plugin compiled
+to JavaScript.
 
 Published as `@avi2dg/checks` on the public npm registry.
 
@@ -408,7 +409,7 @@ a tag off `main` and reruns the build, `dist/` check, lint, typecheck
 and tests before it publishes:
 
 ```sh
-git tag v0.2.0 && git push origin v0.2.0
+git tag v0.3.0 && git push origin v0.3.0
 ```
 
 The `release` workflow publishes the tagged version through npm
