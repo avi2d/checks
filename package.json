@@ -1,5 +1,5 @@
 {
-  "name": "@avi2d/checks",
+  "name": "@avi2dg/checks",
   "version": "0.1.0",
   "description": "Deterministic checks shared across the captain's TypeScript repos",
   "license": "MIT",

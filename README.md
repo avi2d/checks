@@ -1,28 +1,28 @@
 # checks
 
 Deterministic checks shared across my TypeScript repos. One package,
-`@avi2d/checks`: the oxlint base config, the tsconfig fragment with the
+`@avi2dg/checks`: the oxlint base config, the tsconfig fragment with the
 Effect language-service block, the shared commitlint config, the shared
 dependency-cruiser base, the test-layout check with its bunfig preset,
 the commit-identity check with its workflow, the comment gate with its
 workflow and backtest, and the Effect error-channel plugin compiled to
 JavaScript.
 
-Published as `@avi2d/checks` on the public npm registry.
+Published as `@avi2dg/checks` on the public npm registry.
 
 ## Consume it
 
 From the consuming repo:
 
 ```sh
-bun add -d @avi2d/checks oxlint@1.83.0 oxlint-tsgolint@7.0.2002 @effect/tsgo@0.45.0 typescript@7.0.2 dependency-cruiser@18.4.0 @swc/core@1.16.2
+bun add -d @avi2dg/checks oxlint@1.83.0 oxlint-tsgolint@7.0.2002 @effect/tsgo@0.45.0 typescript@7.0.2 dependency-cruiser@18.4.0 @swc/core@1.16.2
 ```
 
 `.oxlintrc.json`:
 
 ```json
 {
-  "extends": ["./node_modules/@avi2d/checks/oxlintrc.json"],
+  "extends": ["./node_modules/@avi2dg/checks/oxlintrc.json"],
   "plugins": ["typescript", "oxc", "eslint", "import"]
 }
 ```
@@ -37,20 +37,20 @@ node_modules/
 
 ```json
 {
-  "extends": "@avi2d/checks/tsconfig.effect.json"
+  "extends": "@avi2dg/checks/tsconfig.effect.json"
 }
 ```
 
 `bunfig.toml` is a copy of the shipped preset:
 
 ```sh
-cp node_modules/@avi2d/checks/bunfig.toml bunfig.toml
+cp node_modules/@avi2dg/checks/bunfig.toml bunfig.toml
 ```
 
 `package.json` gains three scripts:
 
 ```json
-"lint": "oxlint --type-aware && ./node_modules/@avi2d/checks/scripts/lint-coverage.sh && bun ./node_modules/@avi2d/checks/scripts/test-layout.ts && bun ./node_modules/@avi2d/checks/scripts/commit-identity.ts HEAD",
+"lint": "oxlint --type-aware && ./node_modules/@avi2dg/checks/scripts/lint-coverage.sh && bun ./node_modules/@avi2dg/checks/scripts/test-layout.ts && bun ./node_modules/@avi2dg/checks/scripts/commit-identity.ts HEAD",
 "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
 "test": "bun test --randomize"
 ```
@@ -65,11 +65,11 @@ cp node_modules/@avi2d/checks/bunfig.toml bunfig.toml
 repository owner; see "Commit identity" below.
 
 The registry version is pinned by the consumer's lockfile; bump
-`@avi2d/checks` to adopt a new release.
+`@avi2dg/checks` to adopt a new release.
 
 ## Test layout
 
-`bun ./node_modules/@avi2d/checks/scripts/test-layout.ts` fails unless the
+`bun ./node_modules/@avi2dg/checks/scripts/test-layout.ts` fails unless the
 repo holds this shape, and names the file and the path to move it to when
 it does not:
 
@@ -118,7 +118,7 @@ does not publish):
 
 ```js
 module.exports = {
-  extends: "./node_modules/@avi2d/checks/dependency-cruiser.config.js",
+  extends: "./node_modules/@avi2dg/checks/dependency-cruiser.config.js",
   forbidden: [
     {
       name: "ui-cannot-reach-server",
@@ -159,7 +159,7 @@ jobs:
 
 Commits follow `@commitlint/config-conventional` plus the house
 prefixes listed in `commitlint.config.js`, shared from
-`@avi2d/checks/commitlint.config.js`. It arrives with the registry
+`@avi2dg/checks/commitlint.config.js`. It arrives with the registry
 dependency above, since `@commitlint/cli` and
 `@commitlint/config-conventional` are dependencies, not peers.
 Enforcement runs in CI on pull requests, because `jj` never fires a
@@ -192,8 +192,8 @@ commit-identity check below is the enforcement.
 one carries an identity other than the repository owner's:
 
 ```sh
-bun ./node_modules/@avi2d/checks/scripts/commit-identity.ts <base-ref> <head-ref>
-bun ./node_modules/@avi2d/checks/scripts/commit-identity.ts <ref>
+bun ./node_modules/@avi2dg/checks/scripts/commit-identity.ts <base-ref> <head-ref>
+bun ./node_modules/@avi2dg/checks/scripts/commit-identity.ts <ref>
 ```
 
 With one argument it checks that commit alone, which is the form the
@@ -235,8 +235,8 @@ leaves stale once the base branch advances after the pull request opens.
 when an added line carries a banned comment:
 
 ```sh
-bun ./node_modules/@avi2d/checks/scripts/comment-gate.ts <base-ref> <head-ref>
-bun ./node_modules/@avi2d/checks/scripts/comment-gate.ts <ref>
+bun ./node_modules/@avi2dg/checks/scripts/comment-gate.ts <base-ref> <head-ref>
+bun ./node_modules/@avi2dg/checks/scripts/comment-gate.ts <ref>
 ```
 
 With two arguments it diffs the base against the head. With one it diffs
@@ -268,7 +268,7 @@ jobs:
 at each recent commit, so a repository can measure its own history:
 
 ```sh
-bun ./node_modules/@avi2d/checks/scripts/backtest.ts [commit-count]
+bun ./node_modules/@avi2dg/checks/scripts/backtest.ts [commit-count]
 ```
 
 It walks the last `commit-count` first-parent commits, 60 by default,

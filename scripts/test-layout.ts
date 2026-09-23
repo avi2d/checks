@@ -219,7 +219,7 @@ export function scriptViolations(manifest: unknown): readonly Violation[] {
     violations.push({
       file,
       line: undefined,
-      message: `scripts.lint must run the layout check: add "bun ./node_modules/@avi2d/checks/${LAYOUT_CHECK_MARK}"`,
+      message: `scripts.lint must run the layout check: add "bun ./node_modules/@avi2dg/checks/${LAYOUT_CHECK_MARK}"`,
     });
   }
   return violations;
@@ -227,7 +227,7 @@ export function scriptViolations(manifest: unknown): readonly Violation[] {
 
 export function bunfigViolations(consumer: unknown, preset: unknown): readonly Violation[] {
   const file = "bunfig.toml";
-  const copy = "bun has no bunfig extends, so copy node_modules/@avi2d/checks/bunfig.toml";
+  const copy = "bun has no bunfig extends, so copy node_modules/@avi2dg/checks/bunfig.toml";
   if (consumer === undefined) {
     return [{ file, line: undefined, message: `bunfig.toml is missing; ${copy}` }];
   }

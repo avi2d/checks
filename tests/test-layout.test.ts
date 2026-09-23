@@ -111,7 +111,7 @@ test("scripts.test must be the exact randomized command and scripts.lint must ru
     scriptViolations({
       scripts: {
         test: "bun test --randomize",
-        lint: "oxlint && bun ./node_modules/@avi2d/checks/scripts/test-layout.ts",
+        lint: "oxlint && bun ./node_modules/@avi2dg/checks/scripts/test-layout.ts",
       },
     }),
   ).toBeEmpty();
