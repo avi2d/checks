@@ -339,8 +339,9 @@ bun run typecheck
 bun run test
 ```
 
-Release by tagging a green `main`, where CI has proved the committed
-`dist/` matches its source:
+Release by tagging a commit on `main`. The `release` workflow refuses
+a tag off `main` and reruns the build, `dist/` check, lint, typecheck
+and tests before it publishes:
 
 ```sh
 git tag v0.2.0 && git push origin v0.2.0
@@ -350,6 +351,13 @@ The `release` workflow publishes the tagged version through npm
 trusted publishing, so the tag and `package.json` must agree. No
 token is stored anywhere: GitHub mints the publish credential for
 each run.
+
+npm attaches a trusted publisher only to a package that already
+exists, so the first version goes out by hand: `npm publish` from the
+tagged commit as `avi2dg`, then add the trusted publisher (repository
+`avi2d/checks`, workflow `release.yml`) in the package's npm settings.
+That first tag's `release` run fails on the already-published version;
+every later tag publishes through the workflow.
 
 `publishConfig.access` in package.json is what makes the scoped package
 public.
