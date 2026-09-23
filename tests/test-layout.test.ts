@@ -141,3 +141,12 @@ test("the consumer bunfig must carry every [test] key of the shipped preset", ()
   expect(drifted.map((violation) => violation.message.split(" must be ")[0])).toEqual(["[test].pathIgnorePatterns"]);
   expect(drifted[0]?.message).toContain("bun has no bunfig extends");
 });
+
+test("the kit fails its own check when consumer and preset read the same drifted file", () => {
+  const drifted = { test: { pathIgnorePatterns: [] as readonly string[] } };
+  const violations = bunfigViolations(drifted, drifted);
+  expect(violations.map((violation) => violation.message.split(" must be ")[0])).toEqual([
+    "[test].pathIgnorePatterns",
+  ]);
+  expect(violations[0]?.message).toContain('["**/tests/quarantine/**"]');
+});
