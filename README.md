@@ -346,9 +346,10 @@ Release by tagging a green `main`, where CI has proved the committed
 git tag v0.2.0 && git push origin v0.2.0
 ```
 
-The `release` workflow publishes the tagged version, so the tag and
-`package.json` must agree. It authenticates with the `NPM_TOKEN`
-repository secret.
+The `release` workflow publishes the tagged version through npm
+trusted publishing, so the tag and `package.json` must agree. No
+token is stored anywhere: GitHub mints the publish credential for
+each run.
 
 `publishConfig.access` in package.json is what makes the scoped package
 public.
