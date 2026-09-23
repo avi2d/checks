@@ -5,8 +5,8 @@ Deterministic checks shared across my TypeScript repos. One package,
 Effect language-service block, the shared commitlint config, the shared
 dependency-cruiser base, the test-layout check with its bunfig preset,
 the commit-identity check with its workflow, the comment gate with its
-workflow and backtest, and the Effect error-channel plugin compiled to
-JavaScript.
+workflow and backtest, the Stryker mutation-testing preset, and the
+Effect error-channel plugin compiled to JavaScript.
 
 Published as `@avi2dg/checks` on the public npm registry.
 
@@ -63,6 +63,18 @@ cp node_modules/@avi2dg/checks/bunfig.toml bunfig.toml
 
 `commit-identity.ts` refuses a commit with an author other than the
 repository owner; see "Commit identity" below.
+
+A repo that runs mutation testing installs `@stryker-mutator/core` and
+`@hughescr/stryker-bun-runner`, then spreads the shipped preset in
+`stryker.conf.mjs`:
+
+```js
+import preset from "@avi2dg/checks/stryker.preset.js";
+
+export default {
+  ...preset,
+};
+```
 
 The registry version is pinned by the consumer's lockfile; bump
 `@avi2dg/checks` to adopt a new release.
@@ -307,6 +319,10 @@ of reach, so the figures are authored code.
   consumer's copy is compared key by key against the installed one
   instead. `[test] pathIgnorePatterns` is a real bunfig key, and an empty
   `--path-ignore-patterns` flag overrides the file's own list.
+- The Stryker preset is a JavaScript module, not JSON: Stryker 10 does
+  not resolve `extends` in a JSON config, but a `.mjs` config that
+  spreads an imported object consumes it. Keys the consumer sets after
+  the spread win.
 - Each runnable script ships a `checks-` bin entry, so consumer
   `package.json` scripts call the short name, which the package manager
   puts on `PATH` only there; a shell runs it through `bun run`, which
