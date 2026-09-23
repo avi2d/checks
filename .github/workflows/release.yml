@@ -1,0 +1,19 @@
+name: release
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - run: git diff --exit-code dist/
+      - name: tag matches package version
+        run: test "v$(bun -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+      - run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

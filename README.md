@@ -339,12 +339,16 @@ bun run typecheck
 bun run test
 ```
 
-Release from a green `main`, where CI has proved the committed `dist/`
-matches its source:
+Release by tagging a green `main`, where CI has proved the committed
+`dist/` matches its source:
 
 ```sh
-bun publish
+git tag v0.2.0 && git push origin v0.2.0
 ```
+
+The `release` workflow publishes the tagged version, so the tag and
+`package.json` must agree. It authenticates with the `NPM_TOKEN`
+repository secret.
 
 `publishConfig.access` in package.json is what makes the scoped package
 public.
