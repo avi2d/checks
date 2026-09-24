@@ -8,23 +8,69 @@ export class GitFailure extends Schema.TaggedError<GitFailure>()("GitFailure", {
 const text = <E>(bytes: Stream.Stream<Uint8Array, E>): Effect.Effect<string, E> =>
   bytes.pipe(Stream.decodeText(), Stream.mkString);
 
-// Both pipes drain while git runs: one left unread fills its buffer and stalls git.
-export const git = Effect.fn("git")(
-  function* (args: readonly string[], cwd?: string) {
+// Both pipes drain while the program runs: one left unread fills its buffer and stalls it.
+export const collect = Effect.fn("collect")(
+  function* (program: string, args: readonly string[], cwd?: string) {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-    const command = `git ${args.join(" ")}`;
-    const failed = (stderr: string): GitFailure => new GitFailure({ message: `${command}: ${stderr.trim()}` });
-    const handle = yield* spawner
-      .spawn(ChildProcess.make("git", args, { cwd }))
-      .pipe(Effect.mapError((cause) => failed(cause.message)));
+    const handle = yield* spawner.spawn(ChildProcess.make(program, args, { cwd }));
     const [stdout, stderr, exitCode] = yield* Effect.all([text(handle.stdout), text(handle.stderr), handle.exitCode], {
       concurrency: "unbounded",
-    }).pipe(Effect.mapError((cause) => failed(cause.message)));
-    if (exitCode !== ChildProcessSpawner.ExitCode(0)) return yield* failed(stderr);
-    return stdout;
+    });
+    return { stdout, stderr, exitCode };
   },
   Effect.scoped,
 );
+
+export const git = Effect.fn("git")(function* (args: readonly string[], cwd?: string) {
+  const failed = (reason: string): GitFailure => new GitFailure({ message: `git ${args.join(" ")}: ${reason.trim()}` });
+  const { stdout, stderr, exitCode } = yield* collect("git", args, cwd).pipe(
+    Effect.mapError((cause) => failed(cause.message)),
+  );
+  if (exitCode !== ChildProcessSpawner.ExitCode(0)) return yield* failed(stderr);
+  return stdout;
+});
+
+export type Change =
+  | { readonly kind: "written" | "deleted"; readonly path: string }
+  | { readonly kind: "renamed"; readonly from: string; readonly path: string; readonly edited: boolean };
+
+const UNCHANGED_RENAME = "R100";
+
+function parseNameStatus(output: string): readonly Change[] {
+  const fields = output.split("\0");
+  const changes: Change[] = [];
+  let index = 0;
+  while (index < fields.length - 1) {
+    const status = fields[index] ?? "";
+    if (status.startsWith("R")) {
+      changes.push({ kind: "renamed", from: fields[index + 1] ?? "", path: fields[index + 2] ?? "", edited: status !== UNCHANGED_RENAME });
+      index += 3;
+    } else if (status.startsWith("C")) {
+      changes.push({ kind: "written", path: fields[index + 2] ?? "" });
+      index += 3;
+    } else {
+      changes.push({ kind: status === "D" ? "deleted" : "written", path: fields[index + 1] ?? "" });
+      index += 2;
+    }
+  }
+  return changes;
+}
+
+export const changedPaths = Effect.fn("changedPaths")(function* (
+  base: string,
+  head: string,
+  pathspecs: readonly string[],
+  cwd?: string,
+) {
+  return parseNameStatus(yield* git(["diff", "--name-status", "-z", "-M", base, head, "--", ...pathspecs], cwd));
+});
+
+const emptyTree = (cwd?: string) => git(["hash-object", "-t", "tree", "/dev/null"], cwd).pipe(Effect.map((sha) => sha.trim()));
+
+export const pathsAt = Effect.fn("pathsAt")(function* (rev: string, pathspecs: readonly string[], cwd?: string) {
+  const listed = yield* git(["diff", "--name-only", "-z", "--no-renames", yield* emptyTree(cwd), rev, "--", ...pathspecs], cwd);
+  return listed.split("\0").filter((path) => path !== "");
+});
 
 function namesAParent(commitObject: string): boolean {
   const [headers = ""] = commitObject.split("\n\n", 1);
@@ -34,8 +80,12 @@ function namesAParent(commitObject: string): boolean {
 // A shallow clone's boundary commit reads as parentless to rev-parse and log, and judged against
 // the empty tree it would carry the whole repository; only the commit object still names its parents.
 export const parentOrEmptyTree = Effect.fn("parentOrEmptyTree")(function* (rev: string, cwd?: string) {
-  if (!namesAParent(yield* git(["cat-file", "commit", rev], cwd))) {
-    return (yield* git(["hash-object", "-t", "tree", "/dev/null"], cwd)).trim();
-  }
+  if (!namesAParent(yield* git(["cat-file", "commit", rev], cwd))) return yield* emptyTree(cwd);
   return (yield* git(["rev-parse", "--verify", `${rev}^`], cwd)).trim();
+});
+
+// From the base branch's tip, a range would charge the head with what the base branch changed after it branched off.
+export const rangeEnds = Effect.fn("rangeEnds")(function* (first: string, second: string | undefined, cwd?: string) {
+  if (second === undefined) return { base: yield* parentOrEmptyTree(first, cwd), head: first };
+  return { base: (yield* git(["merge-base", first, second], cwd)).trim(), head: second };
 });

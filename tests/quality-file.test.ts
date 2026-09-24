@@ -11,6 +11,7 @@ import {
   qualityJsonSchema,
   readQuality,
   renderJson,
+  type Feature,
   type Quality,
 } from "../scripts/quality-file.ts";
 import { SCHEMA_FILE } from "../scripts/quality-schema.ts";
@@ -18,6 +19,14 @@ import { SCHEMA_FILE } from "../scripts/quality-schema.ts";
 const CHECKOUT = resolve(import.meta.dir, "..");
 const AUTHOR = { name: "Wren Fixture", email: "wren@example.com" };
 const METADATA_GATES = ["checks-commit-identity", "checks-comment-gate", "checks-suppressions-ratchet", "checks-ci-wiring"] as const;
+const BILLING = {
+  name: "billing",
+  root: "src/billing",
+  entries: ["src/billing/index.ts"],
+  allowFrom: ["src/main.ts"],
+  proof: "tests/e2e/billing.test.ts",
+} satisfies Feature;
+const PRODUCTION = { production: ["src/**/*.ts"] };
 
 let dir = "";
 
@@ -59,6 +68,9 @@ test("every field decodes, and a key the schema does not name is refused rather 
     gates: { ci: ["bun run lint"], scheduled: ["bunx checks-flake"], lint: METADATA_GATES },
     commitIdentity: { authors: [AUTHOR] },
     sources: { production: ["src/**/*.ts"], effect: { paths: ["src/**/*.ts"], exempt: ["src/host/*.ts"] } },
+    size: { fileLines: 400, functionLines: 100, applies: "changed" },
+    features: [BILLING],
+    changeSignal: "advisory",
     agentRules: { on: ["effect-error-channel"], off: ["right-size-the-work"] },
   } satisfies Quality;
   expect(decoded(full)).toEqual(full);
@@ -87,6 +99,52 @@ test("a Rule switched both on and off is refused, and a Rule name is kebab case"
     "switches fix-what-you-see both on and off",
   );
   expect(refusal({ agentRules: { on: ["Prove It Works"] } })).toContain("Expected a Rule name in kebab case");
+});
+
+test("a size budget holds production files, so it is refused without them, and its budgets are whole lines", () => {
+  const size = { fileLines: 400, functionLines: 100, applies: "all" } as const;
+  expect(decoded({ sources: PRODUCTION, size })).toEqual({ sources: PRODUCTION, size });
+  expect(refusal({ size })).toContain("declares size, which holds nothing without sources.production");
+  expect(refusal({ sources: { production: [] }, size })).toContain("declares size, which holds nothing without sources.production");
+  expect(refusal({ sources: PRODUCTION, size: { ...size, fileLines: 0 } })).toContain('at ["size"]["fileLines"]');
+  expect(refusal({ sources: PRODUCTION, size: { ...size, functionLines: 1.5 } })).toContain('at ["size"]["functionLines"]');
+  expect(refusal({ sources: PRODUCTION, size: { ...size, applies: "touched" } })).toContain('at ["size"]["applies"]');
+});
+
+test("a feature owns one root no other feature shares, lists entries under it, and proves itself under tests/e2e/", () => {
+  const invoices = {
+    name: "invoices",
+    root: "src/invoices",
+    entries: ["src/invoices/index.ts"],
+    proof: "tests/e2e/invoices/flow.test.tsx",
+  } satisfies Feature;
+  expect(decoded({ features: [BILLING, invoices] })).toEqual({ features: [BILLING, invoices] });
+
+  expect(refusal({ features: [{ ...BILLING, entries: ["src/main.ts"] }] })).toContain(
+    "lists src/main.ts among its entries, outside its root src/billing",
+  );
+  expect(refusal({ features: [{ ...BILLING, entries: ["src/billing-extra/index.ts"] }] })).toContain("outside its root");
+  expect(refusal({ features: [BILLING, { ...invoices, name: "billing" }] })).toContain("names billing more than once");
+  expect(refusal({ features: [BILLING, { ...invoices, root: "src/billing/invoices", entries: ["src/billing/invoices/index.ts"] }] })).toContain(
+    "gives src/billing/invoices to both billing and invoices",
+  );
+  for (const proof of ["tests/billing.test.ts", "src/billing/billing.test.ts", "tests/e2e/billing.ts", "tests/e2e/../billing.test.ts"]) {
+    expect(refusal({ features: [{ ...BILLING, proof }] })).toContain("Expected a test file under tests/e2e/");
+  }
+  expect(refusal({ features: [{ ...BILLING, proof: undefined }] })).toContain('at ["features"][0]["proof"]');
+  for (const root of ["src/billing/", "src/*", "./src/billing", "src/../billing"]) {
+    expect(refusal({ features: [{ ...BILLING, root }] })).toContain("Expected a directory from the repository root");
+  }
+  expect(refusal({ features: [{ ...BILLING, entries: ["src/billing/*.ts"] }] })).toContain("Expected a file from the repository root");
+  expect(refusal({ features: [{ ...BILLING, entries: [] }] })).toContain('at ["features"][0]["entries"]');
+  expect(refusal({ features: [{ ...BILLING, name: "Billing" }] })).toContain("Expected a feature name in kebab case");
+});
+
+test("a change signal maps a change to feature owners, so it is refused without them", () => {
+  expect(decoded({ features: [BILLING], changeSignal: "advisory" })).toEqual({ features: [BILLING], changeSignal: "advisory" });
+  expect(refusal({ changeSignal: "advisory" })).toContain("declares changeSignal, which maps a change to no owner without features");
+  expect(refusal({ features: [], changeSignal: "advisory" })).toContain("declares changeSignal");
+  expect(refusal({ features: [BILLING], changeSignal: "refuse" })).toContain('at ["changeSignal"]');
 });
 
 test("package.json ciWiring and commitIdentity decode into the same declaration quality.json holds", () => {
@@ -147,5 +205,15 @@ test("an editor validating against quality.schema.json refuses a selection that 
     const selection = { gates: { lint } };
     expect(validate(selection)).toBe(false);
     expect(refusal(selection)).toContain("checks-lint must run");
+  }
+});
+
+test("an editor validating against quality.schema.json refuses a size without production files and a signal without owners", async () => {
+  const validate = new Ajv2020({ strict: false }).compile(JSON.parse(await readFile(join(CHECKOUT, SCHEMA_FILE), "utf8")));
+  const size = { fileLines: 400, functionLines: 100, applies: "changed" };
+  expect(validate({ sources: PRODUCTION, size, features: [BILLING], changeSignal: "advisory" })).toBe(true);
+  for (const quality of [{ size }, { sources: {}, size }, { sources: { production: [] }, size }, { changeSignal: "advisory" }, { features: [], changeSignal: "advisory" }]) {
+    expect(validate(quality)).toBe(false);
+    expect(refusal(quality)).toContain("which ");
   }
 });

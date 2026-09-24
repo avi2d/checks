@@ -119,10 +119,14 @@ const fragmentProblems = Effect.fn("fragmentProblems")(function* (root: string, 
 });
 
 const unmatchedPaths = Effect.fn("unmatchedPaths")(function* (root: string, quality: Quality) {
+  const declared = [
+    ...(quality.sources?.production ?? []).map((glob) => ({ glob, key: "sources.production", holds: "no source as production" })),
+    ...(quality.sources?.effect?.paths ?? []).map((glob) => ({ glob, key: "sources.effect.paths", holds: "nothing to the Effect rules" })),
+  ];
   const problems: string[] = [];
-  for (const glob of quality.sources?.effect?.paths ?? []) {
+  for (const { glob, key, holds } of declared) {
     const matched = yield* git(["ls-files", "--cached", "--others", "--exclude-standard", "--", `:(glob)${glob}`], root);
-    if (matched.trim() === "") problems.push(`sources.effect.paths ${glob} matches no file, so it holds nothing to the Effect rules`);
+    if (matched.trim() === "") problems.push(`${key} ${glob} matches no file, so it holds ${holds}`);
   }
   return problems;
 });

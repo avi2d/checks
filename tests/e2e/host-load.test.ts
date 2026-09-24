@@ -43,10 +43,10 @@ test(
   "the repo cruise refuses the host-loaded comment matchers an import of effect",
   async () => {
     dir = await mkdtemp(join(tmpdir(), "checks-host-cruise-"));
-    for (const config of [".dependency-cruiser.cjs", "dependency-cruiser.config.js"]) {
+    for (const config of [".dependency-cruiser.cjs", "dependency-cruiser.config.js", "quality.json"]) {
       await copyFile(join(CHECKOUT, config), join(dir, config));
     }
-    await symlink(join(CHECKOUT, "node_modules"), join(dir, "node_modules"));
+    for (const linked of ["node_modules", "dist"]) await symlink(join(CHECKOUT, linked), join(dir, linked));
     await mkdir(join(dir, "scripts"));
     const source = await readFile(join(CHECKOUT, HOST_LOADED), "utf8");
     const cruise = async (text: string): Promise<string> => {

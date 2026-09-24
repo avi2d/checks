@@ -8,6 +8,9 @@
             "include": [
               "scripts/**/*.ts"
             ],
+            "exclude": [
+              "scripts/feature-rules.ts"
+            ],
             "options": {
               "diagnosticSeverity": {
                 "nodeBuiltinImport": "error",

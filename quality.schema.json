@@ -44,7 +44,9 @@
               "checks-comment-gate",
               "checks-suppressions-ratchet",
               "checks-ci-wiring",
-              "checks-quality"
+              "checks-quality",
+              "checks-size-budget",
+              "checks-feature-owners"
             ]
           },
           "allOf": [
@@ -137,6 +139,89 @@
       },
       "additionalProperties": false
     },
+    "size": {
+      "type": "object",
+      "properties": {
+        "fileLines": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "The most lines a file may hold, blank and comment lines counted"
+        },
+        "functionLines": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "The most lines a function may span, blank and comment lines counted"
+        },
+        "applies": {
+          "type": "string",
+          "enum": [
+            "changed",
+            "all"
+          ],
+          "description": "Which production files the budget holds: changed, the ones a range adds or changes; all, every one. The rest are reported as advisory"
+        }
+      },
+      "required": [
+        "fileLines",
+        "functionLines",
+        "applies"
+      ],
+      "additionalProperties": false,
+      "description": "The line budget oxlint holds production files to, read by checks-size-budget"
+    },
+    "features": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "description": "The owner the dependency rule and the change signal name"
+          },
+          "root": {
+            "$ref": "#/$defs/DirectoryPath"
+          },
+          "entries": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "$ref": "#/$defs/FilePath"
+              }
+            ],
+            "minItems": 1,
+            "items": {
+              "$ref": "#/$defs/FilePath"
+            },
+            "description": "The files under root that code outside it imports the feature through"
+          },
+          "allowFrom": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/PathGlob"
+            },
+            "description": "Files outside root that may import past its entries, such as a CLI or a harness; tests/ always may"
+          },
+          "proof": {
+            "$ref": "#/$defs/ProofPath"
+          }
+        },
+        "required": [
+          "name",
+          "root",
+          "entries",
+          "proof"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "changeSignal": {
+      "type": "string",
+      "enum": [
+        "advisory"
+      ],
+      "description": "Report which feature owners a change touches, without failing on it"
+    },
     "agentRules": {
       "type": "object",
       "properties": {
@@ -161,6 +246,49 @@
   "additionalProperties": false,
   "title": "quality.json",
   "description": "What a repository has opted into from @avi2dg/checks, read by its bins and agent Rule selection",
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "size"
+        ]
+      },
+      "then": {
+        "required": [
+          "sources"
+        ],
+        "properties": {
+          "sources": {
+            "required": [
+              "production"
+            ],
+            "properties": {
+              "production": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "changeSignal"
+        ]
+      },
+      "then": {
+        "required": [
+          "features"
+        ],
+        "properties": {
+          "features": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "Command": {
       "type": "string",
@@ -188,6 +316,20 @@
       "type": "string",
       "pattern": "^(?!\\.\\.?(?:\\/|$))(?:\\*\\*|(?:[\\w.@+-]|\\*(?!\\*))+)(?:\\/(?!\\.\\.?(?:\\/|$))(?:\\*\\*|(?:[\\w.@+-]|\\*(?!\\*))+))*\\/(?:[\\w.@+-]|\\*(?!\\*))*\\.\\w+$",
       "description": "A glob from the repository root that oxlint, the Effect language service and git read alike: a directory first, * within a segment, ** as a whole one, a file name with an extension last, and no braces, ?, [ or leading ./"
+    },
+    "DirectoryPath": {
+      "type": "string",
+      "pattern": "^(?!\\.\\.?(?:\\/|$))[\\w.@+-]+(?:\\/(?!\\.\\.?(?:\\/|$))[\\w.@+-]+)*$",
+      "description": "The directory the feature owns"
+    },
+    "FilePath": {
+      "type": "string",
+      "pattern": "^(?:(?!\\.\\.?(?:\\/|$))[\\w.@+-]+\\/)*[\\w.@+-]*\\.\\w+$"
+    },
+    "ProofPath": {
+      "type": "string",
+      "pattern": "^tests\\/e2e\\/(?:(?!\\.\\.?(?:\\/|$))[\\w.@+-]+\\/)*[\\w.@+-]+\\.test\\.tsx?$",
+      "description": "The end-to-end test that imports one of entries"
     },
     "RuleName": {
       "type": "string",
