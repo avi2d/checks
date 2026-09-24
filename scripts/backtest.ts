@@ -1,5 +1,8 @@
 #!/usr/bin/env bun
+import { Console, Effect, Option } from "effect";
 import { comments, refused, SYNTAXES } from "./comments.ts";
+import { git } from "./git.ts";
+import { runMain, Usage } from "./main.ts";
 
 type Landed = {
   readonly sha: string;
@@ -13,37 +16,21 @@ const USAGE = "usage: backtest.ts [commit-count]";
 
 const EXCLUDED = ["generated/", "vendor/", "repos/", "node_modules/", "dist/"];
 
-function die(message: string): never {
-  console.error(message);
-  process.exit(2);
-}
-
-function git(...args: readonly string[]): string {
-  const result = Bun.spawnSync(["git", ...args], { stdout: "pipe", stderr: "pipe" });
-  if (!result.success) {
-    die(`backtest: git ${args.join(" ")}: ${result.stderr.toString().trim()}`);
-  }
-  return result.stdout.toString();
-}
-
 function readable(path: string): boolean {
   if (EXCLUDED.some((prefix) => path.startsWith(prefix))) return false;
   const extension = path.slice(path.lastIndexOf(".") + 1);
   return extension in SYNTAXES;
 }
 
-async function at(sha: string, path: string): Promise<string | undefined> {
-  const result = Bun.spawnSync(["git", "show", `${sha}:${path}`], { stdout: "pipe", stderr: "pipe" });
-  return result.success ? result.stdout.toString() : undefined;
-}
+const at = (sha: string, path: string) => git(["show", `${sha}:${path}`]).pipe(Effect.option);
 
 function withoutLine(refusal: string): string {
   return refusal.replace(/^(\S+?):\d+ /, "$1 ");
 }
 
-export async function backtest(count: string): Promise<string> {
+export const backtest = Effect.fn("backtest")(function* (count: string) {
   const lines: string[] = [];
-  const commits = git("log", "--first-parent", "--format=%H%x09%P%x09%s", "-n", count)
+  const commits = (yield* git(["log", "--first-parent", "--format=%H%x09%P%x09%s", "-n", count]))
     .trim()
     .split("\n")
     .map((row) => {
@@ -55,13 +42,13 @@ export async function backtest(count: string): Promise<string> {
   const landed: Landed[] = [];
 
   for (const { sha, parent, subject } of commits) {
-    const changed = git("diff", "--name-only", "--diff-filter=d", parent, sha)
+    const changed = (yield* git(["diff", "--name-only", "--diff-filter=d", parent, sha]))
       .trim()
       .split("\n")
       .filter((path) => path !== "" && readable(path));
     if (changed.length === 0) continue;
 
-    const numstat = git("diff", "--numstat", parent, sha, "--", ...changed).trim();
+    const numstat = (yield* git(["diff", "--numstat", parent, sha, "--", ...changed])).trim();
     const added =
       numstat === ""
         ? 0
@@ -71,17 +58,17 @@ export async function backtest(count: string): Promise<string> {
     const refusals: string[] = [];
 
     for (const path of changed) {
-      const after = await at(sha, path);
-      if (after === undefined) continue;
-      const before = (await at(parent, path)) ?? "";
+      const after = yield* at(sha, path);
+      if (Option.isNone(after)) continue;
+      const before = Option.getOrElse(yield* at(parent, path), () => "");
 
-      const wasRefused = new Set(refused(path, before).map(withoutLine));
-      for (const refusal of refused(path, after)) {
+      const wasRefused = new Set((yield* refused(path, before)).map(withoutLine));
+      for (const refusal of yield* refused(path, after.value)) {
         if (!wasRefused.has(withoutLine(refusal))) refusals.push(refusal);
       }
 
-      const wasComment = new Set(comments(path, before).map((one) => one.text));
-      for (const one of comments(path, after)) {
+      const wasComment = new Set((yield* comments(path, before)).map((one) => one.text));
+      for (const one of yield* comments(path, after.value)) {
         if (!wasComment.has(one.text)) commentLines += one.text.split("\n").length;
       }
     }
@@ -108,10 +95,13 @@ export async function backtest(count: string): Promise<string> {
     for (const refusal of one.refusals) lines.push(`    ${refusal}`);
   }
   return lines.join("\n");
-}
+});
 
-if (import.meta.main) {
+const main = Effect.gen(function* () {
   const [count = "60", ...extra] = process.argv.slice(2);
-  if (extra.length > 0) die(USAGE);
-  console.log(await backtest(count));
-}
+  if (extra.length > 0) return yield* new Usage({ message: USAGE });
+  yield* Console.log(yield* backtest(count));
+  return true;
+});
+
+if (import.meta.main) runMain("backtest", main);

@@ -1,3 +1,5 @@
+import { Effect, Schema } from "effect";
+
 export type Comment = { line: number; text: string };
 
 type Marker = { readonly token: string; readonly afterAWordBreak: boolean };
@@ -80,15 +82,20 @@ export const SYNTAXES: Readonly<Record<string, Syntax>> = {
   ml: ML,
 };
 
-export function syntaxFor(path: string): Syntax {
+export class UnreadableCode extends Schema.TaggedError<UnreadableCode>()("UnreadableCode", {
+  message: Schema.String,
+}) {}
+
+export function syntaxFor(path: string): Effect.Effect<Syntax, UnreadableCode> {
   const extension = path.slice(path.lastIndexOf(".") + 1);
   const syntax = SYNTAXES[extension];
-  if (!syntax) {
-    throw new Error(
-      `${path} is code the comment checks cannot read: add a comment syntax for .${extension} to scripts/comments.ts`,
-    );
-  }
-  return syntax;
+  return syntax
+    ? Effect.succeed(syntax)
+    : Effect.fail(
+        new UnreadableCode({
+          message: `${path} is code the comment checks cannot read: add a comment syntax for .${extension} to scripts/comments.ts`,
+        }),
+      );
 }
 
 const WORD = /[\w$]/;
@@ -147,8 +154,8 @@ function endOfRegex(source: string, start: number): number {
   return source.length;
 }
 
-export function comments(path: string, source: string): Comment[] {
-  const syntax = syntaxFor(path);
+export const comments = Effect.fn("comments")(function* (path: string, source: string) {
+  const syntax = yield* syntaxFor(path);
   const found: Comment[] = [];
   let i = 0;
   let line = 1;
@@ -215,7 +222,7 @@ export function comments(path: string, source: string): Comment[] {
   }
 
   return found;
-}
+});
 
 const LICENCE = /copyright|spdx-license-identifier|all rights reserved|licen[cs]ed under|permission is hereby granted/i;
 
@@ -268,9 +275,13 @@ function spans(from: number, lineCount: number, within: ReadonlySet<number> | un
   return false;
 }
 
-export function refused(path: string, source: string, within?: ReadonlySet<number>): string[] {
+export const refused = Effect.fn("refused")(function* (
+  path: string,
+  source: string,
+  within?: ReadonlySet<number>,
+) {
   const out: string[] = [];
-  const found = comments(path, source);
+  const found = yield* comments(path, source);
 
   const opening = openingBlock(found, source);
   const openingText = opening.map((comment) => comment.text).join("\n");
@@ -295,4 +306,4 @@ export function refused(path: string, source: string, within?: ReadonlySet<numbe
     }
   }
   return out;
-}
+});

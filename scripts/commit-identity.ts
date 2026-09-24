@@ -1,7 +1,10 @@
 #!/usr/bin/env bun
-import { existsSync, readFileSync } from "node:fs";
+import { Console, Effect, FileSystem, Path, Schema } from "effect";
+import { git } from "./git.ts";
+import { runMain, Usage } from "./main.ts";
 
-type Identity = { readonly name: string; readonly email: string };
+const Identity = Schema.Struct({ name: Schema.String, email: Schema.String });
+type Identity = typeof Identity.Type;
 
 type Commit = {
   readonly sha: string;
@@ -29,80 +32,77 @@ const RECORD = "\u001e";
 
 const USAGE = "usage: commit-identity.ts <ref> | <base-ref> <head-ref>";
 
-function die(message: string): never {
-  console.error(message);
-  process.exit(2);
-}
+const Manifest = Schema.Struct({
+  commitIdentity: Schema.optional(Schema.Struct({ authors: Schema.NonEmptyArray(Identity) })),
+});
+const parseJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
+const decodeManifest = Schema.decodeUnknownEffect(Manifest);
 
-function git(...args: readonly string[]): string {
-  const result = Bun.spawnSync(["git", ...args], { stdout: "pipe", stderr: "pipe" });
-  if (!result.success) {
-    die(`commit-identity: git ${args.join(" ")}: ${result.stderr.toString().trim()}`);
-  }
-  return result.stdout.toString();
-}
+class InvalidAllowlist extends Schema.TaggedError<InvalidAllowlist>()("InvalidAllowlist", {
+  message: Schema.String,
+}) {}
+
+class UnreadableLog extends Schema.TaggedError<UnreadableLog>()("UnreadableLog", {
+  message: Schema.String,
+}) {}
 
 function render(identity: Identity): string {
   return `${identity.name} <${identity.email}>`;
 }
 
-function isIdentity(value: unknown): value is Identity {
-  if (typeof value !== "object" || value === null) return false;
-  const candidate = value as { name?: unknown; email?: unknown };
-  return typeof candidate.name === "string" && typeof candidate.email === "string";
-}
+const allowedAuthors = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
+  const manifestPath = path.join(root, "package.json");
+  if (!(yield* fs.exists(manifestPath))) return DEFAULT_AUTHORS;
 
-function allowedAuthors(): readonly Identity[] {
-  const root = git("rev-parse", "--show-toplevel").trim();
-  const manifestPath = `${root}/package.json`;
-  if (!existsSync(manifestPath)) return DEFAULT_AUTHORS;
+  const parsed = yield* fs.readFileString(manifestPath).pipe(
+    Effect.flatMap(parseJson),
+    Effect.mapError((cause) => new InvalidAllowlist({ message: `cannot read ${manifestPath} as JSON: ${cause.message}` })),
+  );
+  const manifest = yield* decodeManifest(parsed).pipe(
+    Effect.mapError(
+      () =>
+        new InvalidAllowlist({
+          message: `${manifestPath} sets commitIdentity without a non-empty authors array of {name, email}`,
+        }),
+    ),
+  );
+  return manifest.commitIdentity?.authors ?? DEFAULT_AUTHORS;
+});
 
-  const parsed: unknown = JSON.parse(readFileSync(manifestPath, "utf8"));
-  const configured = (parsed as { commitIdentity?: unknown }).commitIdentity;
-  if (configured === undefined) return DEFAULT_AUTHORS;
-
-  const authors = (configured as { authors?: unknown }).authors;
-  if (!Array.isArray(authors) || authors.length === 0 || !authors.every(isIdentity)) {
-    die(
-      `commit-identity: ${manifestPath} sets commitIdentity without a non-empty authors array of {name, email}`,
-    );
-  }
-  return authors;
-}
-
-function readCommits(revisions: readonly string[]): readonly Commit[] {
+const readCommits = Effect.fn("readCommits")(function* (revisions: readonly string[]) {
   const format =
     ["%H", "%an", "%ae", "%cn", "%ce", "%s", CO_AUTHORED_BY_FORMAT].join(FIELD_FORMAT) +
     RECORD_FORMAT;
-  const log = git("log", `--format=${format}`, ...revisions);
+  const log = yield* git(["log", `--format=${format}`, ...revisions]);
 
-  return log
-    .split(RECORD)
-    .map((record) => record.replace(/^\n/, ""))
-    .filter((record) => record !== "")
-    .map((record) => {
-      const [sha, authorName, authorEmail, committerName, committerEmail, subject, trailers] =
-        record.split(FIELD);
-      if (
-        sha === undefined ||
-        authorName === undefined ||
-        authorEmail === undefined ||
-        committerName === undefined ||
-        committerEmail === undefined ||
-        subject === undefined ||
-        trailers === undefined
-      ) {
-        return die(`commit-identity: cannot parse git log record: ${JSON.stringify(record)}`);
-      }
-      return {
-        sha,
-        subject,
-        author: { name: authorName, email: authorEmail },
-        committer: { name: committerName, email: committerEmail },
-        coAuthoredBy: trailers.split("\n").filter((line) => line !== ""),
-      };
+  const commits: Commit[] = [];
+  for (const record of log.split(RECORD).map((one) => one.replace(/^\n/, ""))) {
+    if (record === "") continue;
+    const [sha, authorName, authorEmail, committerName, committerEmail, subject, trailers] = record.split(FIELD);
+    if (
+      sha === undefined ||
+      authorName === undefined ||
+      authorEmail === undefined ||
+      committerName === undefined ||
+      committerEmail === undefined ||
+      subject === undefined ||
+      trailers === undefined
+    ) {
+      return yield* new UnreadableLog({ message: `cannot parse git log record: ${JSON.stringify(record)}` });
+    }
+    commits.push({
+      sha,
+      subject,
+      author: { name: authorName, email: authorEmail },
+      committer: { name: committerName, email: committerEmail },
+      coAuthoredBy: trailers.split("\n").filter((line) => line !== ""),
     });
-}
+  }
+  return commits;
+});
 
 function allows(allowed: readonly Identity[], identity: Identity): boolean {
   return allowed.some(
@@ -126,28 +126,32 @@ function inspect(commit: Commit, allowed: readonly Identity[]): Offence | undefi
   return reasons.length === 0 ? undefined : { commit, reasons };
 }
 
-const [first, second, ...extra] = process.argv.slice(2);
-if (first === undefined || extra.length > 0) die(USAGE);
-const range = second === undefined ? first : `${first}..${second}`;
-const revisions = second === undefined ? ["-1", range] : [range];
+const check = Effect.gen(function* () {
+  const [first, second, ...extra] = process.argv.slice(2);
+  if (first === undefined || extra.length > 0) return yield* new Usage({ message: USAGE });
+  const range = second === undefined ? first : `${first}..${second}`;
+  const revisions = second === undefined ? ["-1", range] : [range];
 
-const allowed = allowedAuthors();
-const commits = readCommits(revisions);
-const offences = commits
-  .map((commit) => inspect(commit, allowed))
-  .filter((offence) => offence !== undefined);
+  const allowed = yield* allowedAuthors;
+  const commits = yield* readCommits(revisions);
+  const offences = commits
+    .map((commit) => inspect(commit, allowed))
+    .filter((offence) => offence !== undefined);
 
-if (offences.length > 0) {
-  console.error(
-    `commit-identity: ${offences.length} of ${commits.length} commit(s) in ${range} carry a foreign identity:`,
-  );
-  for (const { commit, reasons } of offences) {
-    console.error(`  ${commit.sha.slice(0, 12)} ${commit.subject}`);
-    for (const reason of reasons) console.error(`    ${reason}`);
+  if (offences.length > 0) {
+    const lines = [`commit-identity: ${offences.length} of ${commits.length} commit(s) in ${range} carry a foreign identity:`];
+    for (const { commit, reasons } of offences) {
+      lines.push(`  ${commit.sha.slice(0, 12)} ${commit.subject}`);
+      for (const reason of reasons) lines.push(`    ${reason}`);
+    }
+    lines.push(`  allowed: ${allowed.map(render).join(", ")}`);
+    lines.push(`  allowed as committer only: ${render(SQUASH_COMMITTER)}`);
+    yield* Console.error(lines.join("\n"));
+    return false;
   }
-  console.error(`  allowed: ${allowed.map(render).join(", ")}`);
-  console.error(`  allowed as committer only: ${render(SQUASH_COMMITTER)}`);
-  process.exit(1);
-}
 
-console.log(`commit-identity: ${commits.length} commit(s) in ${range} carry only allowed identities`);
+  yield* Console.log(`commit-identity: ${commits.length} commit(s) in ${range} carry only allowed identities`);
+  return true;
+});
+
+runMain("commit-identity", check);

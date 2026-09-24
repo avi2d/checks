@@ -23,6 +23,8 @@ jobs:
           ref: ${{ inputs.ref }}
           path: .checks
       - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+        working-directory: .checks
       - run: bun .checks/scripts/comment-gate.ts "origin/$BASE_REF" "$HEAD_SHA"
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}

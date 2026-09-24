@@ -17,7 +17,7 @@ Published as `@avi2dg/checks` on the public npm registry.
 From the consuming repo:
 
 ```sh
-bun add -d @avi2dg/checks oxlint@1.83.0 oxlint-tsgolint@7.0.2002 @effect/tsgo@0.45.0 typescript@7.0.2 dependency-cruiser@18.4.0 @swc/core@1.16.2
+bun add -d @avi2dg/checks effect@4.0.0-rc.115 oxlint@1.83.0 oxlint-tsgolint@7.0.2002 @effect/tsgo@0.45.0 typescript@7.0.2 dependency-cruiser@18.4.0 @swc/core@1.16.2
 ```
 
 `.oxlintrc.json`:
@@ -122,6 +122,45 @@ A repository turns them on for the paths it writes in Effect through an
 oxlint resolves `files` against the directory of the config that holds
 the override, so a config passed with `-c` from outside the repository
 matches nothing and reports nothing.
+
+This repository's own override for `scripts/**` adds `node/no-sync`,
+`oxc/no-async-await`, `promise/avoid-new` and `unicorn/no-process-exit`,
+which need the `node`, `promise` and `unicorn` plugins in the override's
+`plugins`. `unicorn/no-process-exit` passes over any file that opens with
+a shebang, so a bin also needs `no-restricted-properties` on
+`process.exit`. Sites standing when the override lands go in oxlint's own
+baseline, `oxlint --suppress-all`, so their count can only fall.
+
+The language service holds the same paths to Effect-native IO through
+`overrides` in the plugin block of `tsconfig.json`. effect-tsgo keeps the
+severities `tsconfig.effect.json` sets when the child config restates the
+plugin with only its overrides:
+
+```json
+{
+  "extends": "@avi2dg/checks/tsconfig.effect.json",
+  "compilerOptions": {
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "overrides": [
+          {
+            "include": ["src/**/*.ts"],
+            "options": {
+              "diagnosticSeverity": {
+                "nodeBuiltinImport": "error",
+                "asyncFunction": "error",
+                "newPromise": "error",
+                "extendsNativeError": "error"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
+```
 
 ## Test layout
 
@@ -577,6 +616,14 @@ The shared Stryker preset's `json` reporter writes
   not resolve `extends` in a JSON config, but a `.mjs` config that
   spreads an imported object consumes it. Keys the consumer sets after
   the spread win.
+- The `.ts` bins are written in Effect, so `effect` is a peer dependency
+  and `@effect/platform-bun`, which only the bins use, is a dependency.
+  `@effect/platform-node-shared` is a direct dependency at the same exact
+  version only to pin it: `@effect/platform-bun` asks for it with a `^`
+  range, and a newer rc peers on a newer `effect` than consumers install,
+  so all three move together. The reusable `comment-gate` and
+  `commit-identity` workflows install the kit before running a script
+  from their `.checks/` checkout.
 - Each runnable script ships a `checks-` bin entry, so consumer
   `package.json` scripts call the short name, which the package manager
   puts on `PATH` only there; a shell runs it through `bun run`, which
@@ -622,7 +669,7 @@ a tag off `main` and reruns the build, `dist/` check, lint, typecheck
 and tests before it publishes:
 
 ```sh
-git tag v0.6.0 && git push origin v0.6.0
+git tag v0.7.0 && git push origin v0.7.0
 ```
 
 The `release` workflow publishes the tagged version through npm
