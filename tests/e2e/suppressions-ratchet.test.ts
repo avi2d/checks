@@ -159,11 +159,32 @@ test(
 );
 
 test(
-  "an unreadable baseline or a missing parent exits 2 rather than passing",
+  "the one-argument form judges a root commit against the empty tree, so a baseline it carries has appeared",
+  async () => {
+    await initRepo();
+    await debuggers("counted.ts", 0);
+    const clean = await commit("root without a baseline");
+    const green = await ratchet([clean]);
+    expect(green.exitCode).toBe(0);
+    expect(green.text).toContain("(0 at the head, 0 lowered)");
+
+    await $`git checkout -q --orphan suppressed`.cwd(dir).quiet();
+    await debuggers("counted.ts", 2);
+    await oxlint("--suppress-all");
+    const suppressed = await commit("root with a baseline");
+    const red = await ratchet([suppressed]);
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain("  counted.ts no-debugger appeared with 2");
+  },
+  120_000,
+);
+
+test(
+  "an unreadable baseline or an unfetched parent exits 2 rather than passing",
   async () => {
     await initRepo();
     await writeFile(join(dir, "oxlint-suppressions.json"), '{"counted.ts": {"no-debugger": {"count": 1}}}');
-    const root = await commit("baseline at the root commit");
+    await commit("baseline");
     await writeFile(join(dir, "oxlint-suppressions.json"), '{"counted.ts": {"no-debugger": 2}}');
     await commit("hand-edited baseline");
 
@@ -171,9 +192,17 @@ test(
     expect(malformed.exitCode).toBe(2);
     expect(malformed.text).toContain("holds counted.ts no-debugger without a whole count");
 
-    const orphan = await ratchet([root]);
-    expect(orphan.exitCode).toBe(2);
-    expect(orphan.text).toContain("suppressions-ratchet: git rev-parse");
+    await writeFile(join(dir, "oxlint-suppressions.json"), '{"counted.ts": {"no-debugger": {"count": 1}}}');
+    await commit("restored baseline");
+    const shallow = await mkdtemp(join(tmpdir(), "checks-suppressions-ratchet-shallow-"));
+    try {
+      await $`git clone -q --depth 1 ${`file://${dir}`} ${shallow}`.quiet();
+      const unfetched = await ratchet(["HEAD"], shallow);
+      expect(unfetched.exitCode).toBe(2);
+      expect(unfetched.text).toContain("suppressions-ratchet: git rev-parse");
+    } finally {
+      await rm(shallow, { recursive: true, force: true });
+    }
 
     const usage = await ratchet([]);
     expect(usage.exitCode).toBe(2);
