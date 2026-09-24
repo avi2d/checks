@@ -44,15 +44,31 @@ function entryOf(subject: string): Entry | undefined {
   return { group, text: scope === "" ? description : `**${scope}:** ${description}` };
 }
 
+// A bump not newer than the release before it is a revert: it cancels every release above the version it
+// returns to, except a published one.
+function standing(bumps: readonly Bump[], published: ReadonlySet<string>): readonly Bump[] {
+  return bumps.reduce<readonly Bump[]>((kept, bump) => {
+    const before = kept.at(-1);
+    if (before === undefined || Bun.semver.order(bump.version, before.version) === 1) return [...kept, bump];
+    return kept.filter(({ version }) => published.has(version) || Bun.semver.order(version, bump.version) !== 1);
+  }, []);
+}
+
 // The changelog records what was released: a version older than the newest it lists and absent from it
 // was never published, so its commits roll into the next release.
-export function cuts(bumps: readonly Bump[], recorded: ReadonlyMap<string, string>, pending: Bump | undefined): readonly Cut[] {
+export function cuts(
+  bumps: readonly Bump[],
+  recorded: ReadonlyMap<string, string>,
+  published: ReadonlySet<string>,
+  pending: Bump | undefined,
+): readonly Cut[] {
   const newest = [...recorded.keys()].toSorted(Bun.semver.order).at(-1);
-  const released = bumps.filter(
+  const candidates = standing(pending === undefined ? bumps : [...bumps, pending], published);
+  const released = candidates.filter(
     ({ version }, index) =>
-      index === bumps.length - 1 || newest === undefined || recorded.has(version) || Bun.semver.order(version, newest) !== -1,
+      index === candidates.length - 1 || newest === undefined || recorded.has(version) || Bun.semver.order(version, newest) !== -1,
   );
-  return [...released, ...(pending === undefined ? [] : [pending])].map(({ sha, version, date }, index) => ({
+  return released.map(({ sha, version, date }, index) => ({
     version,
     date: recorded.get(version) ?? date,
     through: sha,

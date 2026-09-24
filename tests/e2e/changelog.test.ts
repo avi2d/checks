@@ -151,6 +151,39 @@ test(
 );
 
 test(
+  "a release reverted before its tag leaves the changelog, and the next bump releases its commits",
+  async () => {
+    await initRepo();
+    await bump("0.1.0");
+    await commit("feat: build a bill (#1)");
+    await bump("0.2.0");
+    await rewritten(2);
+    await commit("chore: release 0.2.0 (#2)");
+    const released = await readFile(join(dir, "CHANGELOG.md"), "utf8");
+    await commit("feat: price a bill (#3)");
+    await bump("0.3.0");
+    await rewritten(3);
+    await commit("chore: release 0.3.0 (#4)");
+
+    await $`git revert --no-edit --no-gpg-sign HEAD`.cwd(dir).env({ ...process.env, ...DATED }).quiet();
+    expect(await rewritten(2)).toBe(released);
+
+    await commit("fix(parts): keep the order of parts (#5)");
+    await bump("0.3.0");
+    const rebumped = await rewritten(3);
+    const pending = /^Released (\S+)\.$/m.exec(rebumped)?.[1] ?? "";
+    expect(rebumped).toBe(
+      written(
+        section("0.3.0", pending, ["Features", "price a bill (#3)"], ["Fixes", "**parts:** keep the order of parts (#5)"]),
+        section("0.2.0", /^Released (\S+)\.$/m.exec(released)?.[1] ?? ""),
+        section("0.1.0", "2026-09-01", ["Features", "build a bill (#1)"]),
+      ),
+    );
+  },
+  { timeout: 30_000 },
+);
+
+test(
   "a shallow checkout is refused rather than written from the part of the history it holds",
   async () => {
     await initRepo();

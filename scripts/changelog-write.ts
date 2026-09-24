@@ -8,6 +8,7 @@ const NAME = "changelog";
 const CHANGELOG = "CHANGELOG.md";
 const MANIFEST = "package.json";
 const FIELD = "\x1f";
+const TAG_PREFIX = "v";
 
 class ChangelogUnreadable extends Schema.TaggedError<ChangelogUnreadable>()("ChangelogUnreadable", {
   message: Schema.String,
@@ -39,6 +40,11 @@ const readBumps = Effect.fn("readBumps")(function* (root: string) {
   return bumps;
 });
 
+const readPublished = Effect.fn("readPublished")(function* (root: string) {
+  const tags = yield* git(["for-each-ref", "--format=%(refname:strip=2)", `refs/tags/${TAG_PREFIX}*`], root);
+  return new Set(tags.split("\n").flatMap((tag) => (tag.startsWith(TAG_PREFIX) ? [tag.slice(TAG_PREFIX.length)] : [])));
+});
+
 const subjectsOf = Effect.fn("subjectsOf")(function* (root: string, { version, date, through, after }: Cut) {
   const log = yield* git(["log", "--topo-order", "--format=%s", through, "--not", ...after], root);
   return { version, date, subjects: log.split("\n").filter((subject) => subject !== "") } satisfies Release;
@@ -55,7 +61,8 @@ const write = Effect.gen(function* () {
   const { name, version } = yield* decodeManifest(yield* fs.readFileString(path.join(root, MANIFEST)), MANIFEST);
   const recorded = (yield* fs.exists(target)) ? releaseDates(yield* fs.readFileString(target)) : new Map<string, string>();
   const pending = version === (yield* versionAt(root, "HEAD")) ? undefined : { sha: "HEAD", version, date: yield* today };
-  const found = (yield* Effect.forEach(cuts(yield* readBumps(root), recorded, pending), (cut) => subjectsOf(root, cut))).toReversed();
+  const released = cuts(yield* readBumps(root), recorded, yield* readPublished(root), pending);
+  const found = (yield* Effect.forEach(released, (cut) => subjectsOf(root, cut))).toReversed();
   yield* fs.writeFileString(target, renderChangelog(name, found));
   yield* Console.log(`${NAME}: wrote ${found.length} release(s) to ${CHANGELOG}`);
   return true;

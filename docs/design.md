@@ -21,7 +21,8 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   CI runs `git diff --exit-code` over the whole tree after the build, because a test that compares a generated file with its source passes on the copy the build just rewrote.
 - `CHANGELOG.md` is generated, so a release commit carries it and the tarball ships it.
   The commit that bumps package.json `version` closes its release, and the `v*` tag goes on that commit, so commits merged after it wait for the next release.
-  Releases come from the commits alone, over all of HEAD's ancestry, so a checkout without tags, a fork and a branch that merged `main` in write the same file.
+  Releases come from the commits, over all of HEAD's ancestry, so a checkout without tags, a fork and a branch that merged `main` in write the same file.
+  A bump not newer than the release before it is a revert: it cancels every release above the version it returns to, and a tag only keeps a reverted release that was already published.
   The committed changelog is the record of what was released: a version older than the newest it lists and absent from it was never published, and its commits go into the next release.
   A section keeps the date it was written with, since the squash merge that lands the release commit may fall on another day.
   Entries come from commit subjects, the squash-merged pull request titles commitlint holds to the conventional format; the bodies are the branch's own messages, which nothing lints.
