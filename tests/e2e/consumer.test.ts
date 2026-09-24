@@ -344,7 +344,7 @@ test(
     expect(compare.exitCode).toBe(0);
 
     const suite = await $`bun run test`.cwd(dir).nothrow().quiet();
-    expect(suite.stderr.toString()).toContain("(pass) widget");
+    expect(suite.stderr.toString()).toContain(" 1 pass");
     expect(suite.stdout.toString()).toContain("checks-test: no test skipped");
     expect(suite.exitCode).toBe(0);
 
