@@ -177,7 +177,7 @@ test(
   async () => {
     await writeConsumerFixture({
       scripts: {
-        test: "bun test --randomize",
+        test: "checks-test",
         lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout",
       },
     });
@@ -218,7 +218,7 @@ test(
     await writeConsumerFixture(
       {
         scripts: {
-          test: "bun test --randomize",
+          test: "checks-test",
           lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout",
         },
       },
@@ -273,13 +273,14 @@ test(
     await writeConsumerFixture(
       {
         scripts: {
-          test: "bun test --randomize",
+          test: "checks-test",
           lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout && checks-commit-identity HEAD",
           gate: "checks-comment-gate HEAD",
           ratchet: "checks-suppressions-ratchet HEAD",
           backtest: "checks-backtest 5",
           compare: "checks-mutation-compare mutation.json mutation.json",
           wiring: "checks-ci-wiring",
+          flake: "checks-flake --runs 2",
           kit: "oxlint --type-aware && checks-lint",
         },
         ciWiring: { gates: ["bun run lint"] },
@@ -341,6 +342,16 @@ test(
     const compare = await $`bun run compare`.cwd(dir).nothrow().quiet();
     expect(compare.stdout.toString()).toContain("no regression");
     expect(compare.exitCode).toBe(0);
+
+    const suite = await $`bun run test`.cwd(dir).nothrow().quiet();
+    expect(suite.stderr.toString()).toContain(" 1 pass");
+    expect(suite.stdout.toString()).toContain("checks-test: no test skipped");
+    expect(suite.exitCode).toBe(0);
+
+    const { GITHUB_STEP_SUMMARY: _summary, ...withoutStepSummary } = process.env;
+    const flake = await $`bun run flake`.cwd(dir).env(withoutStepSummary).nothrow().quiet();
+    expect(flake.stdout.toString()).toContain("checks-flake: 2 run(s) passed, with seeds ");
+    expect(flake.exitCode).toBe(0);
 
     const wiring = await $`bun run wiring`.cwd(dir).nothrow().quiet();
     expect(wiring.stdout.toString()).toContain("1 gate(s) run on pull requests to main");

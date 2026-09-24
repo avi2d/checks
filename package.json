@@ -21,6 +21,9 @@
     "scripts/gates.ts",
     "scripts/lint.ts",
     "scripts/test-layout.ts",
+    "scripts/test.ts",
+    "scripts/test-report.ts",
+    "scripts/flake.ts",
     "scripts/commit-identity.ts",
     "scripts/mutation-compare.ts",
     "scripts/ci-wiring.ts",
@@ -41,6 +44,8 @@
     "./scripts/lint-coverage.sh": "./scripts/lint-coverage.sh",
     "./scripts/lint.ts": "./scripts/lint.ts",
     "./scripts/test-layout.ts": "./scripts/test-layout.ts",
+    "./scripts/test.ts": "./scripts/test.ts",
+    "./scripts/flake.ts": "./scripts/flake.ts",
     "./scripts/commit-identity.ts": "./scripts/commit-identity.ts",
     "./scripts/mutation-compare.ts": "./scripts/mutation-compare.ts",
     "./scripts/ci-wiring.ts": "./scripts/ci-wiring.ts",
@@ -58,6 +63,8 @@
     "checks-lint": "scripts/lint.ts",
     "checks-lint-coverage": "scripts/lint-coverage.sh",
     "checks-test-layout": "scripts/test-layout.ts",
+    "checks-test": "scripts/test.ts",
+    "checks-flake": "scripts/flake.ts",
     "checks-commit-identity": "scripts/commit-identity.ts",
     "checks-mutation-compare": "scripts/mutation-compare.ts",
     "checks-ci-wiring": "scripts/ci-wiring.ts",
@@ -69,7 +76,7 @@
     "build": "bun build effect-channel/index.ts --outdir dist --target node --format esm",
     "lint": "oxlint --type-aware && bun scripts/lint.ts && depcruise --config .dependency-cruiser.cjs .",
     "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
-    "test": "bun test --randomize"
+    "test": "bun scripts/test.ts"
   },
   "ciWiring": {
     "gates": [
@@ -79,6 +86,9 @@
       "bun run typecheck",
       "bun run test",
       "./node_modules/.bin/commitlint"
+    ],
+    "scheduled": [
+      "bun scripts/flake.ts --runs 10 --report flake-report.json"
     ]
   },
   "peerDependencies": {

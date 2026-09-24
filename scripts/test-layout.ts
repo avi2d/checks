@@ -3,7 +3,7 @@ import { parse } from "@swc/core";
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { git } from "./git.ts";
 import { runMain } from "./main.ts";
-import { ENTRY_POINT } from "./gates.ts";
+import { ENTRY_POINT, TEST_ENTRY_POINT } from "./gates.ts";
 
 export type Violation = {
   readonly file: string;
@@ -39,13 +39,13 @@ const BANNED_BUN_NAMES: readonly string[] = [
 ];
 const BANNED_GLOBAL_CALLS: readonly string[] = ["fetch"];
 
-export const REQUIRED_TEST_SCRIPT = "bun test --randomize";
 const REQUIRED_TEST_TABLE: Record<string, unknown> = {
   pathIgnorePatterns: ["**/tests/quarantine/**"],
 };
 export const LAYOUT_CHECK_MARK = "scripts/test-layout.ts";
 export const LAYOUT_CHECK_BIN = "checks-test-layout";
 const OWN_ENTRY_POINT = `scripts/${ENTRY_POINT.script}`;
+const TEST_SCRIPTS: readonly string[] = [TEST_ENTRY_POINT.bin, `bun scripts/${TEST_ENTRY_POINT.script}`];
 
 export class LayoutError extends Schema.TaggedError<LayoutError>()("LayoutError", {
   message: Schema.String,
@@ -226,11 +226,11 @@ export function scriptViolations(manifest: unknown): readonly Violation[] {
   const test = isRecord(scripts) ? scripts["test"] : undefined;
   const lint = isRecord(scripts) ? scripts["lint"] : undefined;
   const violations: Violation[] = [];
-  if (test !== REQUIRED_TEST_SCRIPT) {
+  if (typeof test !== "string" || !TEST_SCRIPTS.includes(test)) {
     violations.push({
       file,
       line: undefined,
-      message: `scripts.test must be exactly "${REQUIRED_TEST_SCRIPT}", found ${JSON.stringify(test ?? null)}`,
+      message: `scripts.test must be exactly "${TEST_ENTRY_POINT.bin}", which runs bun test --randomize and judges its skips, found ${JSON.stringify(test ?? null)}`,
     });
   }
   if (typeof lint !== "string" || !runsLayoutCheck(lint)) {

@@ -47,7 +47,7 @@ async function scaffold(manifest: Record<string, unknown> = {}): Promise<void> {
     JSON.stringify({
       name: "checks-lint-fixture",
       type: "module",
-      scripts: { lint: "checks-lint", test: "bun test --randomize" },
+      scripts: { lint: "checks-lint", test: "checks-test" },
       ciWiring: { gates: ["bun run lint"] },
       ...manifest,
     }),
@@ -412,7 +412,7 @@ test(
     expect(all.exitCode).toBe(1);
 
     await $`git reset -q --hard origin/main`.cwd(dir).quiet();
-    await writeFile(join(dir, "package.json"), JSON.stringify({ scripts: { lint: "checks-lint", test: "bun test --randomize" } }));
+    await writeFile(join(dir, "package.json"), JSON.stringify({ scripts: { lint: "checks-lint", test: "checks-test" } }));
     await commit("chore: drop the wiring");
     const undecided = await lint();
     expect(undecided.text).toContain("ci-wiring:");

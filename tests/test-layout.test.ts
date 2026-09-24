@@ -112,11 +112,11 @@ test("isolation reports the right line when a multibyte character precedes the b
   expect((await isolation("tests/widget.test.ts", source))[0]?.line).toBe(2);
 });
 
-test("scripts.test must be the exact randomized command and scripts.lint must run the check", () => {
+test("scripts.test must be the test entry point and scripts.lint must run the check", () => {
   expect(
     scriptViolations({
       scripts: {
-        test: "bun test --randomize",
+        test: "checks-test",
         lint: "oxlint && bun ./node_modules/@avi2dg/checks/scripts/test-layout.ts",
       },
     }),
@@ -125,26 +125,29 @@ test("scripts.test must be the exact randomized command and scripts.lint must ru
   expect(
     scriptViolations({
       scripts: {
-        test: "bun test --randomize",
+        test: "bun scripts/test.ts",
         lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout",
       },
     }),
   ).toBeEmpty();
 
   for (const lint of ["oxlint --type-aware && checks-lint && depcruise src", "oxlint && bun scripts/lint.ts"]) {
-    expect(scriptViolations({ scripts: { test: "bun test --randomize", lint } })).toBeEmpty();
+    expect(scriptViolations({ scripts: { test: "checks-test", lint } })).toBeEmpty();
   }
   for (const lint of [
     "oxlint && checks-lint-coverage",
     "bun ./node_modules/@avi2dg/checks/scripts/lint.ts",
     "bun .checks/scripts/lint.ts",
   ]) {
-    expect(scriptViolations({ scripts: { test: "bun test --randomize", lint } })).toHaveLength(1);
+    expect(scriptViolations({ scripts: { test: "checks-test", lint } })).toHaveLength(1);
+  }
+  for (const testScript of ["bun test --randomize", "checks-test && echo", "bunx checks-test"]) {
+    expect(scriptViolations({ scripts: { test: testScript, lint: "checks-lint" } })).toHaveLength(1);
   }
 
   const violations = scriptViolations({ scripts: { test: "bun test", lint: "oxlint" } });
   expect(violations).toHaveLength(2);
-  expect(violations[0]?.message).toContain('must be exactly "bun test --randomize"');
+  expect(violations[0]?.message).toContain('must be exactly "checks-test", which runs bun test --randomize and judges its skips');
   expect(violations[1]?.message).toContain("must run the layout check");
 });
 

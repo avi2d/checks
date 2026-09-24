@@ -19,6 +19,8 @@ export type KitGate = Program & {
 
 export const ENTRY_POINT: Program = { bin: "checks-lint", script: "lint.ts" };
 
+export const TEST_ENTRY_POINT: Program = { bin: "checks-test", script: "test.ts" };
+
 export const DEFAULT_BRANCH = "main";
 
 const TYPESCRIPT_SOURCE: TrackedContent = { pathspecs: ["*.ts", "*.tsx"], content: "TypeScript source" };
