@@ -4,7 +4,10 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-const SCRIPT = resolve(import.meta.dir, "..", "..", "scripts", "ci-wiring.ts");
+const CHECKOUT = resolve(import.meta.dir, "..", "..");
+const SCRIPT = join(CHECKOUT, "scripts", "ci-wiring.ts");
+const LINT_COVERAGE = join(CHECKOUT, "scripts", "lint-coverage.sh");
+const METADATA_GATES = ["checks-commit-identity", "checks-comment-gate", "checks-ci-wiring"];
 
 const WORKFLOW = `on:
   pull_request:
@@ -62,6 +65,64 @@ test(
     await mkdir(join(dir, "packages", "nested"), { recursive: true });
     const fromSubdirectory = await check(join(dir, "packages", "nested"));
     expect(fromSubdirectory.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
+  "a selection leaving out the source gates passes a source-free repository and is refused once it tracks source",
+  async () => {
+    await initRepo({ name: "ci-wiring-fixture", ciWiring: { gates: ["bun run lint"], lintGates: METADATA_GATES } }, WORKFLOW);
+    await $`git add -A`.cwd(dir).quiet();
+
+    const sourceFree = await check();
+    expect(sourceFree.text).toContain(
+      "ci-wiring: ciWiring.lintGates leaves out checks-lint-coverage, checks-test-layout, checks-suppressions-ratchet, none of which this repository's contents make applicable",
+    );
+    expect(sourceFree.exitCode).toBe(0);
+
+    await writeFile(join(dir, "widget.tsx"), "export const widget = 42;\n");
+    const untracked = await check();
+    expect(untracked.exitCode).toBe(0);
+
+    await writeFile(join(dir, "oxlint-suppressions.json"), "{}\n");
+    await $`git add -A`.cwd(dir).quiet();
+    const tracked = await check();
+    expect(tracked.text).toContain(
+      [
+        "ci-wiring: ciWiring.lintGates leaves out 3 gate(s) this repository's contents make applicable:",
+        "  checks-lint-coverage: the repository tracks TypeScript source (widget.tsx)",
+        "  checks-test-layout: the repository tracks TypeScript source (widget.tsx)",
+        "  checks-suppressions-ratchet: the repository tracks an oxlint suppressions baseline (oxlint-suppressions.json)",
+      ].join("\n"),
+    );
+    expect(tracked.exitCode).toBe(1);
+  },
+  60_000,
+);
+
+test(
+  "ci-wiring counts as TypeScript source exactly the files lint-coverage checks",
+  async () => {
+    await initRepo({ name: "ci-wiring-fixture", ciWiring: { gates: ["bun run lint"], lintGates: METADATA_GATES } }, WORKFLOW);
+    await mkdir(join(dir, "src"));
+    for (const file of ["a.ts", "b.tsx", "c.mts", "d.cts", "e.js", "f.ts.md"]) {
+      await writeFile(join(dir, "src", file), "export const value = 1;\n");
+    }
+    await $`git add -A`.cwd(dir).quiet();
+
+    const coverage = await $`${LINT_COVERAGE}`
+      .cwd(dir)
+      .env({ ...process.env, PATH: `${join(CHECKOUT, "node_modules", ".bin")}:${process.env["PATH"] ?? ""}` })
+      .nothrow()
+      .quiet();
+    const checked = /^lint-coverage: (?:oxlint skips )?\d+\/(\d+) tracked/m.exec(coverage.stdout.toString());
+    const refused = /^ {2}checks-lint-coverage: the repository tracks TypeScript source \(\S+ and (\d+) more\)$/m.exec(
+      (await check()).text,
+    );
+    expect(checked).not.toBeNull();
+    expect(refused).not.toBeNull();
+    expect(Number(refused?.[1]) + 1).toBe(Number(checked?.[1]));
   },
   60_000,
 );
