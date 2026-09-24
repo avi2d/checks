@@ -924,10 +924,11 @@ cp node_modules/@avi2dg/checks/templates/how-to.md docs/add-a-supplier.md
 | `CHANGELOG.md` | changelog | `templates/changelog.md` |
 | `AGENTS.md` | agents | `templates/agents.md` |
 | `CLAUDE.md` | claude | `templates/claude.md` |
+| `CONTRIBUTING.md` | how-to | `templates/how-to.md` |
 | each file in `docs/adr/` but its generated index, `README.md` | adr | `templates/adr.md` |
 | a page `docs.pages` declares | tutorial, how-to, reference or explanation | `templates/<mode>.md` |
 
-The first four are the files at the repository root.
+The first five are the files at the repository root.
 No other Markdown file is judged, save a page under `docs/`, which needs a mode.
 Which Diátaxis mode a page is written in is a judgment, so `quality.json` declares it:
 

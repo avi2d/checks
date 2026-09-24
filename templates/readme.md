@@ -15,12 +15,14 @@ To install <name>:
 
 <What you see when it worked.>
 
-## <Everyday task, verb first>
+## <Everyday task, verb first, or what the reader looks up>
 
 To <do the task>:
 
 1. <step>
 1. <step>
+
+<Or, for what the reader looks up, a table or a list with no steps.>
 
 ## Where things are
 

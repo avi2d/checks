@@ -74,7 +74,11 @@ export const TEMPLATES: Readonly<Record<Kind, Template>> = {
     sections: [
       BEFORE_YOU_BEGIN,
       fixed("Install", REQUIRED, ["To install <name>:", "", "1. <step>", "1. <step>", "", "<What you see when it worked.>"]),
-      open("<Everyday task, verb first>", "any", REQUIRED, STEPS),
+      open("<Everyday task, verb first, or what the reader looks up>", "any", REQUIRED, [
+        ...STEPS,
+        "",
+        "<Or, for what the reader looks up, a table or a list with no steps.>",
+      ]),
       fixed("Where things are", REQUIRED, ["| Path | What it holds |", "| --- | --- |"]),
       TROUBLESHOOTING,
       RELATED_TOPICS,

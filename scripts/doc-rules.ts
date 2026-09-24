@@ -34,6 +34,7 @@ const ROOT_FILES = new Map<string, Kind>([
   ["CHANGELOG.md", "changelog"],
   ["AGENTS.md", "agents"],
   ["CLAUDE.md", "claude"],
+  ["CONTRIBUTING.md", "how-to"],
 ]);
 
 export function placementOf(path: string, docs: Docs | undefined): Placement {
