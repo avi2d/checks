@@ -14,8 +14,8 @@
     "typescript/no-unnecessary-type-parameters": "error",
     "typescript/use-unknown-in-catch-callback-variable": "error",
     "eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_", "ignoreRestSiblings": true }],
-    "typescript/no-unsafe-type-assertion": "off",
-    "typescript/no-non-null-assertion": "off",
+    "typescript/no-unsafe-type-assertion": "error",
+    "typescript/no-non-null-assertion": "error",
     "typescript/consistent-return": "off"
   }
 }

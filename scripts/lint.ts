@@ -68,12 +68,24 @@ const readWiring = Effect.gen(function* () {
   return { defaultBranch: ciWiring?.defaultBranch ?? DEFAULT_BRANCH, lintGates: ciWiring?.lintGates };
 });
 
-const localEnds = (defaultBranch: string) =>
+const originEnds = (defaultBranch: string) =>
   git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]).pipe(
     Effect.map((ref) => ref.trim()),
     Effect.catchTag("GitFailure", () => Effect.succeed(`origin/${defaultBranch}`)),
     Effect.map((base) => ({ base, head: "HEAD", source: `HEAD against ${base}` })),
   );
+
+// A clone holding any remote-tracking ref but not the default branch is a shallow CI checkout,
+// where judging HEAD alone would pass every commit before it unchecked.
+const localEnds = Effect.fn("localEnds")(function* (defaultBranch: string) {
+  const remoteTracking = yield* git(["for-each-ref", "--count=1", "refs/remotes/"]).pipe(
+    Effect.mapError((cause) => new RangeUnresolved({ message: cause.message })),
+  );
+  if (remoteTracking.trim() === "") {
+    return { base: "HEAD", head: "HEAD", source: "HEAD alone, as the clone has no remote-tracking refs" };
+  }
+  return yield* originEnds(defaultBranch);
+});
 
 const endsOf = Effect.fn("endsOf")(function* (args: readonly string[], defaultBranch: string) {
   const [base, head, ...extra] = args;

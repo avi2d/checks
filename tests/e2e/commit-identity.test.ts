@@ -10,6 +10,7 @@ const SCRIPT = join(CHECKOUT, "scripts", "commit-identity.ts");
 const OWNER = { name: "avi2d", email: "avi2dg@gmail.com" };
 const STRANGER = { name: "Pat Stranger", email: "stranger@example.com" };
 const SQUASH = { name: "GitHub", email: "noreply@github.com" };
+const INTRUDER = { name: "Ivy Intruder", email: "intruder@example.com" };
 
 type Identity = { name: string; email: string };
 
@@ -22,9 +23,9 @@ afterEach(async () => {
   }
 });
 
-function identityEnv(author: Identity, committer: Identity): Record<string, string> {
+function identityEnv(author: Identity, committer: Identity) {
   return {
-    ...(process.env as Record<string, string>),
+    ...process.env,
     GIT_AUTHOR_NAME: author.name,
     GIT_AUTHOR_EMAIL: author.email,
     GIT_COMMITTER_NAME: committer.name,
@@ -157,6 +158,24 @@ test(
     const red = await check(`${base}~1`, "HEAD");
     expect(red.exitCode).toBe(2);
     expect(red.text).toContain("git log");
+  },
+  60_000,
+);
+
+test(
+  "commit-identity judges a root commit in the one-argument form",
+  async () => {
+    await initRepo({ name: "commit-identity-fixture", commitIdentity: { authors: [STRANGER] } });
+    const root = await commit({ message: "feat: first", author: STRANGER, committer: STRANGER });
+    const green = await check(root);
+    expect(green.exitCode).toBe(0);
+    expect(green.text).toContain(`1 commit(s) in ${root} carry only allowed identities`);
+
+    await $`git checkout -q --orphan foreign`.cwd(dir).quiet();
+    const foreign = await commit({ message: "feat: other first", author: INTRUDER, committer: STRANGER });
+    const red = await check(foreign);
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain("author Ivy Intruder <intruder@example.com>");
   },
   60_000,
 );

@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect, Option } from "effect";
 import { refused, SYNTAXES } from "./comments.ts";
-import { git } from "./git.ts";
+import { git, parentOrEmptyTree } from "./git.ts";
 import { runMain, Usage } from "./main.ts";
 
 export type GateResult = {
@@ -83,15 +83,12 @@ export function report({ files, addedLines, violations }: GateResult): string {
   return [`comment-gate: ${violations.length} violation(s):`, ...violations.map((one) => `  ${one}`)].join("\n");
 }
 
-const parentOf = (root: string, rev: string) =>
-  git(["rev-parse", "--verify", `${rev}^`], root).pipe(Effect.map((parent) => parent.trim()));
-
 const gate = Effect.gen(function* () {
   const [first, second, ...extra] = process.argv.slice(2);
   if (first === undefined || extra.length > 0) return yield* new Usage({ message: USAGE });
 
   const root = (yield* git(["rev-parse", "--show-toplevel"], process.cwd())).trim();
-  const base = second === undefined ? yield* parentOf(root, first) : first;
+  const base = second === undefined ? yield* parentOrEmptyTree(first, root) : first;
   const result = yield* runRange(root, base, second ?? first);
 
   yield* Console.log(report(result));

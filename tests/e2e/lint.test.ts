@@ -12,6 +12,7 @@ const STRANGER = ["-c", "user.name=stranger", "-c", "user.email=stranger@example
 const FIXTURE_AUTHOR = { name: "Wren Fixture", email: "wren@example.com" };
 const FIXTURE = ["-c", `user.name=${FIXTURE_AUTHOR.name}`, "-c", `user.email=${FIXTURE_AUTHOR.email}`];
 const METADATA_GATES = ["checks-commit-identity", "checks-comment-gate", "checks-suppressions-ratchet", "checks-ci-wiring"];
+const FOUNDER = { name: "founder", email: "founder@example.com" };
 
 const LOCAL_ENV = {
   ...withoutPullRequestEvent(),
@@ -39,7 +40,7 @@ async function suppressions(count: number): Promise<void> {
   );
 }
 
-async function initRepo(manifest: Record<string, unknown> = {}): Promise<string> {
+async function scaffold(manifest: Record<string, unknown> = {}): Promise<void> {
   dir = await mkdtemp(join(tmpdir(), "checks-lint-"));
   await writeFile(
     join(dir, "package.json"),
@@ -58,8 +59,12 @@ async function initRepo(manifest: Record<string, unknown> = {}): Promise<string>
     "on: pull_request\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n",
   );
   await writeFile(join(dir, "widget.ts"), "export const widget = 42;\n");
-  await suppressions(2);
   await $`git init -q -b main`.cwd(dir).quiet();
+}
+
+async function initRepo(manifest: Record<string, unknown> = {}): Promise<string> {
+  await scaffold(manifest);
+  await suppressions(2);
   const base = await commit("feat: base");
   await $`git update-ref refs/remotes/origin/main HEAD`.cwd(dir).quiet();
   await $`git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main`.cwd(dir).quiet();
@@ -98,9 +103,10 @@ async function initSourceFreeRepo(lintGates?: readonly string[]): Promise<void> 
 async function lint(
   args: readonly string[] = [],
   env: Readonly<Record<string, string>> = {},
+  cwd: string = dir,
 ): Promise<{ exitCode: number; text: string }> {
   const result = await $`bun ${SCRIPT} ${args}`
-    .cwd(dir)
+    .cwd(cwd)
     .env({ ...LOCAL_ENV, ...env })
     .nothrow()
     .quiet();
@@ -180,6 +186,83 @@ test(
       "checks-lint: 3 of 6 gate(s) failed: checks-commit-identity, checks-comment-gate, checks-suppressions-ratchet\n",
     );
     expect(pushed.exitCode).toBe(1);
+  },
+  60_000,
+);
+
+test(
+  "a new repository's root commit, pushed to main, gets a verdict from every range gate",
+  async () => {
+    await scaffold({ commitIdentity: { authors: [FOUNDER] } });
+    const founder = ["-c", `user.name=${FOUNDER.name}`, "-c", `user.email=${FOUNDER.email}`];
+    const clean = await commit("feat: first commit", founder);
+    await $`git update-ref refs/remotes/origin/main HEAD`.cwd(dir).quiet();
+
+    const pushed = await lint();
+    expect(pushed.text).toContain(`checks-lint: tip ${clean} from HEAD against origin/main\n`);
+    expect(pushed.text).toContain("checks-lint: 6 gate(s) pass");
+    expect(pushed.exitCode).toBe(0);
+
+    await suppressions(1);
+    await writeFile(join(dir, "widget.ts"), "// @ts-ignore\nexport const widget = 42;\n");
+    await $`git add -A && git ${founder} commit -q --no-gpg-sign --amend --no-edit`.cwd(dir).quiet();
+    const dirty = (await $`git rev-parse HEAD`.cwd(dir).quiet()).stdout.toString().trim();
+    await $`git update-ref refs/remotes/origin/main HEAD`.cwd(dir).quiet();
+
+    const violated = await lint();
+    expect(violated.text).toContain(`checks-lint: tip ${dirty} from HEAD against origin/main\n`);
+    expect(violated.text).toContain("widget.ts:1 carries the machine-read directive `@ts-ignore`");
+    expect(violated.text).toContain("widget.ts eslint/no-debugger appeared with 1");
+    expect(violated.text).toContain(
+      "checks-lint: 2 of 6 gate(s) failed: checks-comment-gate, checks-suppressions-ratchet\n",
+    );
+    expect(violated.exitCode).toBe(1);
+  },
+  60_000,
+);
+
+test(
+  "a freshly initialised repository with no remote gets HEAD judged alone, its root commit against the empty tree",
+  async () => {
+    await scaffold({ commitIdentity: { authors: [FOUNDER] } });
+    const founder = ["-c", `user.name=${FOUNDER.name}`, "-c", `user.email=${FOUNDER.email}`];
+    const clean = await commit("feat: first commit", founder);
+
+    const passed = await lint();
+    expect(passed.text).toContain(
+      `checks-lint: tip ${clean} from HEAD alone, as the clone has no remote-tracking refs\n`,
+    );
+    expect(passed.text).toContain("checks-lint: 6 gate(s) pass");
+    expect(passed.exitCode).toBe(0);
+
+    await writeFile(join(dir, "widget.ts"), "// @ts-ignore\nexport const widget = 42;\n");
+    await $`git add -A && git ${founder} commit -q --no-gpg-sign --amend --no-edit`.cwd(dir).quiet();
+    const violated = await lint();
+    expect(violated.text).toContain("widget.ts:1 carries the machine-read directive `@ts-ignore`");
+    expect(violated.text).toContain("checks-lint: 1 of 6 gate(s) failed: checks-comment-gate\n");
+    expect(violated.exitCode).toBe(1);
+  },
+  60_000,
+);
+
+test(
+  "a clone with remote-tracking refs but no origin/main still refuses to resolve the range",
+  async () => {
+    await scaffold({ commitIdentity: { authors: [FOUNDER] } });
+    const founder = ["-c", `user.name=${FOUNDER.name}`, "-c", `user.email=${FOUNDER.email}`];
+    await commit("feat: first commit", founder);
+    await $`git checkout -q -b feature`.cwd(dir).quiet();
+    await writeFile(join(dir, "clean.ts"), "export const answer = 42;\n");
+    await commit("feat: clean", founder);
+    await $`git checkout -q main`.cwd(dir).quiet();
+    const clone = join(dir, "clone");
+    await $`git clone -q --single-branch --branch feature ${dir} ${clone}`.quiet();
+
+    const refused = await lint([], {}, clone);
+    expect(refused.text).toContain(
+      "checks-lint: origin/main is not a commit in this clone; a CI checkout needs actions/checkout fetch-depth: 0",
+    );
+    expect(refused.exitCode).toBe(2);
   },
   60_000,
 );
