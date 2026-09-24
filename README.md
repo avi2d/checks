@@ -618,7 +618,10 @@ The shared Stryker preset's `json` reporter writes
   the spread win.
 - The `.ts` bins are written in Effect, so `effect` is a peer dependency
   and `@effect/platform-bun`, which only the bins use, is a dependency.
-  The reusable `comment-gate` and `commit-identity` workflows install the
+  `@effect/platform-node-shared` is a direct dependency at the same exact
+  version only to pin it: `@effect/platform-bun` asks for it with a `^`
+  range, and a newer rc peers on a newer `effect` than consumers install,
+  so all three move together. The reusable `comment-gate` and `commit-identity` workflows install the
   kit before running a script from their `.checks/` checkout.
 - Each runnable script ships a `checks-` bin entry, so consumer
   `package.json` scripts call the short name, which the package manager
