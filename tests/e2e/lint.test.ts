@@ -72,9 +72,10 @@ async function initRepo(manifest: Record<string, unknown> = {}): Promise<string>
 async function lint(
   args: readonly string[] = [],
   env: Readonly<Record<string, string>> = {},
+  cwd: string = dir,
 ): Promise<{ exitCode: number; text: string }> {
   const result = await $`bun ${SCRIPT} ${args}`
-    .cwd(dir)
+    .cwd(cwd)
     .env({ ...LOCAL_ENV, ...env })
     .nothrow()
     .quiet();
@@ -185,6 +186,52 @@ test(
       "checks-lint: 2 of 6 gate(s) failed: checks-comment-gate, checks-suppressions-ratchet\n",
     );
     expect(violated.exitCode).toBe(1);
+  },
+  60_000,
+);
+
+test(
+  "a freshly initialised repository with no remote gets HEAD judged alone, its root commit against the empty tree",
+  async () => {
+    await scaffold({ commitIdentity: { authors: [FOUNDER] } });
+    const founder = ["-c", `user.name=${FOUNDER.name}`, "-c", `user.email=${FOUNDER.email}`];
+    const clean = await commit("feat: first commit", founder);
+
+    const passed = await lint();
+    expect(passed.text).toContain(
+      `checks-lint: tip ${clean} from HEAD alone, as the clone has no remote-tracking refs\n`,
+    );
+    expect(passed.text).toContain("checks-lint: 6 gate(s) pass");
+    expect(passed.exitCode).toBe(0);
+
+    await writeFile(join(dir, "widget.ts"), "// @ts-ignore\nexport const widget = 42;\n");
+    await $`git add -A && git ${founder} commit -q --no-gpg-sign --amend --no-edit`.cwd(dir).quiet();
+    const violated = await lint();
+    expect(violated.text).toContain("widget.ts:1 carries the machine-read directive `@ts-ignore`");
+    expect(violated.text).toContain("checks-lint: 1 of 6 gate(s) failed: checks-comment-gate\n");
+    expect(violated.exitCode).toBe(1);
+  },
+  60_000,
+);
+
+test(
+  "a clone with remote-tracking refs but no origin/main still refuses to resolve the range",
+  async () => {
+    await scaffold({ commitIdentity: { authors: [FOUNDER] } });
+    const founder = ["-c", `user.name=${FOUNDER.name}`, "-c", `user.email=${FOUNDER.email}`];
+    await commit("feat: first commit", founder);
+    await $`git checkout -q -b feature`.cwd(dir).quiet();
+    await writeFile(join(dir, "clean.ts"), "export const answer = 42;\n");
+    await commit("feat: clean", founder);
+    await $`git checkout -q main`.cwd(dir).quiet();
+    const clone = join(dir, "clone");
+    await $`git clone -q --single-branch --branch feature ${dir} ${clone}`.quiet();
+
+    const refused = await lint([], {}, clone);
+    expect(refused.text).toContain(
+      "checks-lint: origin/main is not a commit in this clone; a CI checkout needs actions/checkout fetch-depth: 0",
+    );
+    expect(refused.exitCode).toBe(2);
   },
   60_000,
 );

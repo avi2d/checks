@@ -129,6 +129,20 @@ first commit:
 checks-lint: tip 10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD against origin/main
 ```
 
+A clone with no remote-tracking refs at all, such as a freshly
+initialised repository with no remote or one whose remote was never
+fetched, has no default branch to start from, so each range gate is
+handed `HEAD` alone the same way:
+
+```
+checks-lint: tip 10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD alone, as the clone has no remote-tracking refs
+```
+
+Once any ref sits under `refs/remotes/`, a missing
+`origin/<default branch>` exits 2 instead, since that is the shape of a
+shallow CI checkout, where `HEAD` alone would leave the commits before
+it unchecked.
+
 It prints the range, each gate's own report, then its verdict:
 
 ```
