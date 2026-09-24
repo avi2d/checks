@@ -284,6 +284,7 @@ test(
           quality: "checks-quality --check",
           size: "checks-size-budget HEAD",
           owners: "checks-feature-owners HEAD",
+          docs: "checks-docs HEAD",
           kit: "oxlint --type-aware && checks-lint",
         },
       },
@@ -367,6 +368,7 @@ test(
     for (const [script, report] of [
       ["size", "size-budget: quality.json declares no size budget"],
       ["owners", "feature-owners: quality.json declares no feature"],
+      ["docs", "docs: 0 doc file(s) the range touches hold to their templates"],
     ] as const) {
       const guardrail = await $`bun run ${script}`.cwd(dir).nothrow().quiet();
       expect(guardrail.stdout.toString()).toContain(report);
@@ -382,7 +384,7 @@ test(
     const kitText = kit.stdout.toString() + kit.stderr.toString();
     expect(kitText).toContain("from HEAD against origin/main");
     expect(kitText).toContain("commit-identity: 1 commit(s)");
-    expect(kitText).toContain("checks-lint: 9 gate(s) pass");
+    expect(kitText).toContain("checks-lint: 10 gate(s) pass");
     expect(kit.exitCode).toBe(0);
   },
   180_000,

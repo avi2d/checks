@@ -17,6 +17,7 @@ var KIT_GATES = [
   { bin: "checks-comment-gate", script: "comment-gate.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-suppressions-ratchet", script: "suppressions-ratchet.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-ci-wiring", script: "ci-wiring.ts", reads: "tree", appliesTo: EVERY_REPOSITORY },
+  { bin: "checks-docs", script: "docs.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-quality", script: "quality.ts", reads: "tree", args: ["--check"], appliesTo: QUALITY_DECLARATION },
   { bin: "checks-size-budget", script: "size-budget.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE },
   { bin: "checks-feature-owners", script: "feature-owners.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE }
@@ -123,6 +124,17 @@ var AgentRules = Schema2.Struct({
   const both = on.filter((rule) => off.includes(rule));
   return both.length === 0 || `switches ${both.join(", ")} both on and off`;
 }));
+var pagesIn = (mode) => Schema2.optionalKey(Schema2.Array(PathGlob).annotate({ description: `The pages written as ${mode}` }));
+var Docs = Schema2.Struct({
+  pages: Schema2.optionalKey(Schema2.Struct({
+    tutorial: pagesIn("a tutorial, which teaches by building one thing"),
+    "how-to": pagesIn("a how-to, which walks one task"),
+    reference: pagesIn("reference, which describes a thing to be looked up"),
+    explanation: pagesIn("an explanation, which says why")
+  }).annotate({
+    description: "The Diátaxis mode of each page, whose template checks-docs holds the page to; a page under docs/ needs one"
+  }))
+});
 var Quality = Schema2.Struct({
   $schema: Schema2.optionalKey(Schema2.String),
   defaultBranch: Schema2.optionalKey(Schema2.NonEmptyString.annotate({ description: "The branch pull requests merge into; main when absent" })),
@@ -136,7 +148,8 @@ var Quality = Schema2.Struct({
   changeSignal: Schema2.optionalKey(Schema2.Literal("advisory").annotate({
     description: "Report which feature owners a change touches, without failing on it"
   })),
-  agentRules: Schema2.optionalKey(AgentRules)
+  agentRules: Schema2.optionalKey(AgentRules),
+  docs: Schema2.optionalKey(Docs.annotate({ description: "What checks-docs reads to map a doc file to its template" }))
 }).annotate({
   title: QUALITY_FILE,
   description: "What a repository has opted into from @avi2dg/checks, read by its bins and agent Rule selection"
