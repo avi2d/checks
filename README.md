@@ -3,13 +3,12 @@
 Deterministic checks shared across my TypeScript repos. One package,
 `@avi2dg/checks`: the `checks-lint` entry point that runs every lint gate
 below over a range it resolves itself, the oxlint base config, the
-tsconfig fragment with the
-Effect language-service block, the shared commitlint config, the shared
-dependency-cruiser base, the test-layout check with its bunfig preset,
-the commit-identity check, the comment gate with its backtest, the
-oxlint suppressions ratchet, the Stryker mutation-testing preset with its no-regression comparator, the
-CI-wiring check, and the Effect error-channel plugin compiled to
-JavaScript.
+tsconfig fragment with the Effect language-service block, the shared
+commitlint config, the shared dependency-cruiser base, the test-layout
+check with its bunfig preset, the commit-identity check, the comment
+gate with its backtest, the oxlint suppressions ratchet, the Stryker
+mutation-testing preset with its no-regression comparator, the CI-wiring
+check, and the Effect error-channel plugin compiled to JavaScript.
 
 Published as `@avi2dg/checks` on the public npm registry.
 
