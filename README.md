@@ -4,13 +4,14 @@ Deterministic checks shared across my TypeScript repos. One package,
 `@avi2dg/checks`: the `checks-lint` entry point that runs every lint gate
 below over a range it resolves itself, the `checks-test` entry point
 that runs the suite and refuses an undeclared skip, the `checks-flake`
-run that records the seeds a failing test fails with, the oxlint base config, the
-tsconfig fragment with the Effect language-service block, the shared
-commitlint config, the shared dependency-cruiser base, the test-layout
-check with its bunfig preset, the commit-identity check, the comment
-gate with its backtest, the oxlint suppressions ratchet, the Stryker
-mutation-testing preset with its no-regression comparator, the CI-wiring
-check, and the Effect error-channel plugin compiled to JavaScript.
+run that records the seeds a failing test fails with, the oxlint base
+config, the tsconfig fragment with the Effect language-service block,
+the shared commitlint config, the shared dependency-cruiser base, the
+test-layout check with its bunfig preset, the commit-identity check, the
+comment gate with its backtest, the oxlint suppressions ratchet, the
+Stryker mutation-testing preset with its no-regression comparator, the
+CI-wiring check, and the Effect error-channel plugin compiled to
+JavaScript.
 
 Published as `@avi2dg/checks` on the public npm registry.
 
@@ -347,12 +348,13 @@ checks-test: 1 skipped test(s) undeclared and 1 declaration(s) matching no skipp
 ```
 
 It exits 1 when a test failed or a skip is undeclared or, in a ci run,
-a declaration stale, and 2 when `testSkips` does not parse or bun passed without
-writing its report. It takes no arguments: a `-t` filter reports every
-test it leaves out as skipped and a path filter drops files a
-declaration names, so a narrowed run is plain `bun test --randomize`
-with the arguments. Files under `tests/quarantine/` are never run and so
-never reported; see "Test layout".
+a declaration stale, and 2 when `testSkips` does not parse or bun
+passed without writing its report. It takes no arguments: a `-t`
+filter reports every test it leaves out as skipped and a path filter
+drops files a declaration names, so a narrowed run is plain
+`bun test --randomize` with the arguments. Files under
+`tests/quarantine/` are never run and so never reported; see "Test
+layout".
 
 ## Flake run
 
