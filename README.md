@@ -785,8 +785,8 @@ It exits 1 on an overrun in a file it holds, and 2 when `quality.json`
 does not decode, a ref does not resolve or oxlint cannot run. A
 repository that declares no `size` passes. `quality.json` refuses a
 `size` without `sources.production`, which would hold nothing, and
-`checks-quality` refuses a `sources.production` glob that matches no
-file. Moving `applies` from `changed` to `all` tightens the budget to
+with `size` declared `checks-quality` refuses a `sources.production`
+glob that matches no file. Moving `applies` from `changed` to `all` tightens the budget to
 every production file, once the advisory list names none.
 
 `checks-lint` runs it over each pull request's range; see "Lint entry point".
@@ -861,8 +861,9 @@ entry is not in the head commit, the proof does not parse, or it
 imports none of the feature's entries. An import counts when it is a
 runtime `import`, `export ... from` or `export * from` of a relative
 path that names an entry: by its own name, by the `.js`, `.jsx`, `.mjs`
-or `.cjs` spelling of it, or without an extension, the way a directory
-`index` is imported. `import type` does not count, and neither does a
+or `.cjs` spelling of it, `.js` naming a `.tsx` entry as well as a
+`.ts` one, or without an extension, the way a directory `index` is
+imported. `import type` does not count, and neither does a
 path alias. The proof runs in `bun run test` like any end-to-end test,
 which is what shows it passes.
 
