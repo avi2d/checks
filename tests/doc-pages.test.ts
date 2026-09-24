@@ -12,7 +12,7 @@ function read(file: string): string {
   return readFileSync(resolve(CHECKOUT, file), "utf8");
 }
 
-const Manifest = Schema.Struct({ bin: Schema.Record(Schema.String, Schema.String), files: Schema.Array(Schema.String) });
+const Manifest = Schema.Struct({ bin: Schema.Record(Schema.String, Schema.String) });
 const manifest = Schema.decodeSync(Schema.fromJsonString(Manifest))(read(MANIFEST));
 const bins = Object.keys(manifest.bin);
 
@@ -31,12 +31,4 @@ test("each bin's page is titled for the bin and carries the sections a reader lo
 test("the README links every bin's page, so a new bin reaches the front door", () => {
   const readme = read("README.md");
   expect(bins.filter((bin) => !readme.includes(`](${GATE_PAGES}/${bin}.md)`))).toEqual([]);
-});
-
-test("the README's Where things are names each top-level path the package ships, and nothing else", () => {
-  const readme = parseOutline(read("README.md"));
-  const body = readme.sections.find(({ heading }) => heading.title === "Where things are")?.body ?? [];
-  const named = body.flatMap(({ text }) => /^\| `([^`]+)` \|/.exec(text)?.[1] ?? []);
-  const shipped = new Set(manifest.files.map((file) => (file.includes("/") ? `${file.slice(0, file.indexOf("/"))}/` : file)));
-  expect(named.toSorted()).toEqual([...shipped].toSorted());
 });

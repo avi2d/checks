@@ -151,20 +151,26 @@ A repository that still declares `ciWiring` or `commitIdentity` in `package.json
 
 Every path is relative to the installed package, `node_modules/@avi2dg/checks/`.
 
+<!-- generated shipped: bun run build writes it from package.json and scripts/doc-blocks.ts -->
+
 | Path | What it holds |
 | --- | --- |
-| `oxlintrc.json` | the oxlint base config `.oxlintrc.json` extends |
-| `tsconfig.effect.json` | the tsconfig fragment with the Effect language-service block |
-| `quality.schema.json` | the schema of `quality.json`, which its `$schema` line names |
+| `CHANGELOG.md` | every release, and what it changed |
+| `CONTRIBUTING.md` | how this repository is developed and released |
+| `docs/` | a reference page per bin and per shared config, and why the kit is shaped this way |
 | `bunfig.toml` | the bunfig preset a repository copies |
 | `commitlint.config.js` | the shared commitlint config |
 | `dependency-cruiser.config.js` | the shared dependency-cruiser base |
-| `stryker.preset.js` | the Stryker mutation-testing preset |
-| `presets/` | the Effect rule blocks `checks-quality generate` writes into the fragments |
-| `templates/` | one template per kind of doc file, which a new doc file starts from |
 | `scripts/` | every bin, which a package script calls by its `checks-` name |
+| `templates/` | one template per kind of doc file, which a new doc file starts from |
+| `presets/` | the Effect rule blocks `checks-quality generate` writes into the fragments |
+| `quality.schema.json` | the schema of `quality.json`, which its `$schema` line names |
+| `oxlintrc.json` | the oxlint base config `.oxlintrc.json` extends |
+| `stryker.preset.js` | the Stryker mutation-testing preset |
+| `tsconfig.effect.json` | the tsconfig fragment with the Effect language-service block |
 | `dist/` | the compiled Effect error-channel plugin and `featureRules` |
-| `CHANGELOG.md` | every release, and what it changed |
+
+<!-- end generated shipped -->
 
 ## Related topics
 

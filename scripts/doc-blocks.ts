@@ -12,13 +12,38 @@ const Manifest = Schema.Struct({
   name: Schema.String,
   peerDependencies: Schema.Record(Schema.String, Schema.String),
   devDependencies: Schema.Struct({ typescript: Schema.String }),
+  files: Schema.Array(Schema.String),
 });
 
 const Version = Schema.String.check(Schema.isPattern(/^\d+\.\d+\.\d+$/, { message: "is not a version such as 1.2.3" }));
 
+const SHIPPED = {
+  "CHANGELOG.md": "every release, and what it changed",
+  "CONTRIBUTING.md": "how this repository is developed and released",
+  "docs/": "a reference page per bin and per shared config, and why the kit is shaped this way",
+  "bunfig.toml": "the bunfig preset a repository copies",
+  "commitlint.config.js": "the shared commitlint config",
+  "dependency-cruiser.config.js": "the shared dependency-cruiser base",
+  "scripts/": "every bin, which a package script calls by its `checks-` name",
+  "templates/": "one template per kind of doc file, which a new doc file starts from",
+  "presets/": "the Effect rule blocks `checks-quality generate` writes into the fragments",
+  "quality.schema.json": "the schema of `quality.json`, which its `$schema` line names",
+  "oxlintrc.json": "the oxlint base config `.oxlintrc.json` extends",
+  "stryker.preset.js": "the Stryker mutation-testing preset",
+  "tsconfig.effect.json": "the tsconfig fragment with the Effect language-service block",
+  "dist/": "the compiled Effect error-channel plugin and `featureRules`",
+} as const;
+
+type ShippedPath = keyof typeof SHIPPED;
+
+function isShipped(path: string): path is ShippedPath {
+  return Object.hasOwn(SHIPPED, path);
+}
+
 export type KitFacts = {
   readonly manifest: typeof Manifest.Type;
   readonly bun: string;
+  readonly shipped: readonly ShippedPath[];
 };
 
 export class DocBlocksUnwritable extends Schema.TaggedError<DocBlocksUnwritable>()("DocBlocksUnwritable", {
@@ -28,10 +53,27 @@ export class DocBlocksUnwritable extends Schema.TaggedError<DocBlocksUnwritable>
 const decodeManifest = Schema.decodeUnknownEffect(Schema.fromJsonString(Manifest));
 const decodeVersion = Schema.decodeUnknownEffect(Version);
 
+function topLevel(file: string): string {
+  return file.includes("/") ? file.slice(0, file.indexOf("/") + 1) : file;
+}
+
+function shippedPaths({ files }: typeof Manifest.Type): Effect.Effect<readonly ShippedPath[], DocBlocksUnwritable> {
+  const paths = [...new Set(files.map(topLevel))];
+  const unrowed = paths.filter((path) => !isShipped(path));
+  const unshipped = Object.keys(SHIPPED).filter((path) => !paths.includes(path));
+  if (unrowed.length === 0 && unshipped.length === 0) return Effect.succeed(paths.filter(isShipped));
+  const problems = [
+    ...unrowed.map((path) => `files ships ${path}, which SHIPPED in scripts/doc-blocks.ts has no row for`),
+    ...unshipped.map((path) => `SHIPPED in scripts/doc-blocks.ts has a row for ${path}, which files does not ship`),
+  ];
+  return Effect.fail(new DocBlocksUnwritable({ message: `${MANIFEST}: ${problems.join("; ")}` }));
+}
+
 export const kitFacts = (manifest: string, bunVersion: string): Effect.Effect<KitFacts, DocBlocksUnwritable> =>
-  Effect.all({
-    manifest: decodeManifest(manifest).pipe(Effect.mapError(({ message }) => new DocBlocksUnwritable({ message: `${MANIFEST}: ${message}` }))),
-    bun: decodeVersion(bunVersion.trim()).pipe(Effect.mapError(({ message }) => new DocBlocksUnwritable({ message: `${BUN_VERSION}: ${message}` }))),
+  Effect.gen(function* () {
+    const decoded = yield* decodeManifest(manifest).pipe(Effect.mapError(({ message }) => new DocBlocksUnwritable({ message: `${MANIFEST}: ${message}` })));
+    const bun = yield* decodeVersion(bunVersion.trim()).pipe(Effect.mapError(({ message }) => new DocBlocksUnwritable({ message: `${BUN_VERSION}: ${message}` })));
+    return { manifest: decoded, bun, shipped: yield* shippedPaths(decoded) };
   });
 
 export type Block = {
@@ -189,8 +231,14 @@ const LEGACY_KEYS: Block = {
   ],
 };
 
+const WHERE: Block = {
+  name: "shipped",
+  from: [MANIFEST],
+  render: ({ shipped }) => ["| Path | What it holds |", "| --- | --- |", ...shipped.map((path) => `| ${code(path)} | ${SHIPPED[path]} |`)],
+};
+
 export const TARGETS: readonly { readonly file: string; readonly blocks: readonly Block[] }[] = [
-  { file: "README.md", blocks: [PREREQUISITES, INSTALL, GATES] },
+  { file: "README.md", blocks: [PREREQUISITES, INSTALL, GATES, WHERE] },
   { file: `${GATE_PAGES}/checks-docs.md`, blocks: [DOC_KINDS] },
   { file: "docs/configs/quality-file.md", blocks: [QUALITY_KEYS, LEGACY_KEYS] },
 ];
