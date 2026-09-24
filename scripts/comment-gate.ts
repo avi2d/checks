@@ -95,7 +95,7 @@ const gate = Effect.gen(function* () {
   const result = yield* runRange(root, base, second ?? first);
 
   yield* Console.log(report(result));
-  return result.violations.length === 0 ? 0 : 1;
+  return result.violations.length === 0;
 });
 
 if (import.meta.main) runMain("comment-gate", gate);

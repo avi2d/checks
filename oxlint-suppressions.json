@@ -1,15 +1,4 @@
 {
-  "scripts/backtest.ts": {
-    "no-restricted-properties": {
-      "count": 1
-    },
-    "node/no-sync": {
-      "count": 2
-    },
-    "oxc/no-async-await": {
-      "count": 2
-    }
-  },
   "scripts/ci-wiring.ts": {
     "effect-channel/no-throw": {
       "count": 6

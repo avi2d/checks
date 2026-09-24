@@ -1,8 +1,8 @@
 import { BunRuntime, BunServices } from "@effect/platform-bun";
 import { Cause, Console, Effect, Exit, Schema } from "effect";
 
-export type Status = 0 | 1;
-
+const PASSED = 0;
+const VIOLATED = 1;
 const UNDECIDED = 2;
 const INTERRUPTED = 130;
 
@@ -11,15 +11,16 @@ export class Usage extends Schema.TaggedError<Usage>()("Usage", {
 }) {}
 
 function statusOf<A, E>(exit: Exit.Exit<A, E>): number {
-  if (Exit.isSuccess(exit)) return typeof exit.value === "number" ? exit.value : 0;
+  if (Exit.isSuccess(exit)) return typeof exit.value === "number" ? exit.value : UNDECIDED;
   return Cause.hasInterruptsOnly(exit.cause) ? INTERRUPTED : UNDECIDED;
 }
 
 export function runMain<E extends { readonly message: string }>(
   name: string,
-  check: Effect.Effect<Status, E, BunServices.BunServices>,
+  passes: Effect.Effect<boolean, E, BunServices.BunServices>,
 ): void {
-  const program = check.pipe(
+  const program = passes.pipe(
+    Effect.map((passed) => (passed ? PASSED : VIOLATED)),
     Effect.catch((failure) => Console.error(`${name}: ${failure.message}`).pipe(Effect.as(UNDECIDED))),
     Effect.provide(BunServices.layer),
   );
