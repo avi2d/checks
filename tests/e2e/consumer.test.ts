@@ -94,6 +94,63 @@ test(
 );
 
 test(
+  "file: consumer that turns on no-throw and no-try-catch for src/ goes red on each, green once removed",
+  async () => {
+    await writeConsumerFixture();
+    await writeFile(
+      join(dir, ".oxlintrc.json"),
+      JSON.stringify({
+        extends: ["./node_modules/@avi2dg/checks/oxlintrc.json"],
+        plugins: ["typescript", "oxc", "eslint", "import"],
+        overrides: [
+          {
+            files: ["src/**"],
+            rules: { "effect-channel/no-throw": "error", "effect-channel/no-try-catch": "error" },
+          },
+        ],
+      }),
+    );
+    await mkdir(join(dir, "src"));
+    await mkdir(join(dir, "scripts"));
+    const load = join(dir, "src", "load.ts");
+
+    await writeFile(
+      load,
+      `export const load = (text: string): unknown => {\n  if (text === "") throw new Error("empty manifest");\n  return JSON.parse(text);\n};\n`,
+    );
+    const thrown = await oxlint();
+    expect(thrown.exitCode).not.toBe(0);
+    expect(thrown.text).toContain("effect-channel(no-throw)");
+    expect(thrown.text).toContain("Effect.fail");
+    expect(thrown.text).not.toContain("effect-channel(no-try-catch)");
+
+    await writeFile(
+      load,
+      `export const load = (text: string): unknown => {\n  try {\n    return JSON.parse(text);\n  } catch {\n    return null;\n  }\n};\n`,
+    );
+    const caught = await oxlint();
+    expect(caught.exitCode).not.toBe(0);
+    expect(caught.text).toContain("effect-channel(no-try-catch)");
+    expect(caught.text).toContain("Effect.try");
+    expect(caught.text).not.toContain("effect-channel(no-throw)");
+
+    await writeFile(
+      load,
+      `import { Effect, Schema } from "effect";\n\nexport class InvalidManifest extends Schema.TaggedError<InvalidManifest>()("InvalidManifest", {\n  cause: Schema.Unknown,\n}) {}\n\nexport const load = (text: string): Effect.Effect<unknown, InvalidManifest> =>\n  Effect.try({ try: (): unknown => JSON.parse(text), catch: (cause) => new InvalidManifest({ cause }) });\n\nexport const settle = (release: () => void): void => {\n  try {\n    release();\n  } finally {\n    release();\n  }\n};\n`,
+    );
+    await writeFile(
+      join(dir, "scripts", "edge.ts"),
+      `export const edge = (text: string): unknown => {\n  try {\n    return JSON.parse(text);\n  } catch {\n    throw new Error("outside the override");\n  }\n};\n`,
+    );
+    const green = await oxlint();
+    expect(green.text).not.toContain("effect-channel(no-throw)");
+    expect(green.text).not.toContain("effect-channel(no-try-catch)");
+    expect(green.exitCode).toBe(0);
+  },
+  180_000,
+);
+
+test(
   "file: consumer lint stays green with a lint-dirty file inside the installed package",
   async () => {
     await writeConsumerFixture();
