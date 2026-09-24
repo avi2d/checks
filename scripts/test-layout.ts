@@ -3,6 +3,7 @@ import { parse } from "@swc/core";
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { git } from "./git.ts";
 import { runMain } from "./main.ts";
+import { ENTRY_POINT, runsProgram } from "./gates.ts";
 
 export type Violation = {
   readonly file: string;
@@ -51,6 +52,11 @@ export class LayoutError extends Schema.TaggedError<LayoutError>()("LayoutError"
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function runsLayoutCheck(lint: string): boolean {
+  if (lint.includes(LAYOUT_CHECK_MARK) || lint.includes(LAYOUT_CHECK_BIN)) return true;
+  return lint.split(/[\s|&;()]+/).some((word) => runsProgram(word, ENTRY_POINT));
 }
 
 function startsWithAny(file: string, prefixes: readonly string[]): boolean {
@@ -226,11 +232,11 @@ export function scriptViolations(manifest: unknown): readonly Violation[] {
       message: `scripts.test must be exactly "${REQUIRED_TEST_SCRIPT}", found ${JSON.stringify(test ?? null)}`,
     });
   }
-  if (typeof lint !== "string" || (!lint.includes(LAYOUT_CHECK_MARK) && !lint.includes(LAYOUT_CHECK_BIN))) {
+  if (typeof lint !== "string" || !runsLayoutCheck(lint)) {
     violations.push({
       file,
       line: undefined,
-      message: `scripts.lint must run the layout check: add "${LAYOUT_CHECK_BIN}"`,
+      message: `scripts.lint must run the layout check: add "${ENTRY_POINT.bin}"`,
     });
   }
   return violations;

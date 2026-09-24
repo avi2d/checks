@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { withoutPullRequestEvent } from "../lib/env.ts";
 
 const CHECKOUT = resolve(import.meta.dir, "..", "..");
 
@@ -276,6 +277,7 @@ test(
           backtest: "checks-backtest 5",
           compare: "checks-mutation-compare mutation.json mutation.json",
           wiring: "checks-ci-wiring",
+          kit: "checks-lint",
         },
         ciWiring: { gates: ["bun run lint"] },
       },
@@ -346,6 +348,14 @@ test(
     const ratchet = await $`bun run ratchet`.cwd(dir).nothrow().quiet();
     expect(ratchet.stdout.toString()).toContain("no count in oxlint-suppressions.json rose or appeared");
     expect(ratchet.exitCode).toBe(0);
+
+    await $`git update-ref refs/remotes/origin/main HEAD~1`.cwd(dir).quiet();
+    const kit = await $`bun run kit`.cwd(dir).env(withoutPullRequestEvent()).nothrow().quiet();
+    const kitText = kit.stdout.toString() + kit.stderr.toString();
+    expect(kitText).toContain("from HEAD against origin/main");
+    expect(kitText).toContain("commit-identity: 1 commit(s)");
+    expect(kitText).toContain("checks-lint: 6 gate(s) pass");
+    expect(kit.exitCode).toBe(0);
   },
   180_000,
 );
