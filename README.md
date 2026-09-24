@@ -112,7 +112,8 @@ export default {
 ```
 
 The registry version is pinned by the consumer's lockfile; bump
-`@avi2dg/checks` to adopt a new release.
+`@avi2dg/checks` to adopt a new release. `CHANGELOG.md`, shipped in the
+package, lists what each release changed.
 
 ## Declare policy in the quality file
 
@@ -1225,9 +1226,16 @@ bun run typecheck
 bun run test
 ```
 
-Release by tagging a commit on `main`. The `release` workflow refuses
-a tag off `main` and reruns the build, `dist/` check, lint, typecheck
-and tests before it publishes:
+Release in a pull request that holds only the release. Bump `version`
+in package.json and run `bun run build`, which writes the version's
+section into `CHANGELOG.md` from the conventional commits since the
+last release. Commit both as `chore: release <version>` and title the
+pull request the same: the squash merge lands the title as the commit's
+subject, and a `feat` or `fix` title adds an entry the committed
+changelog lacks. Once it merges, tag that commit on `main`. The
+`release` workflow refuses a tag off `main` and reruns the build, the
+check that the build changed no committed file, lint, typecheck and
+tests before it publishes:
 
 ```sh
 tag="v$(bun -p 'require("./package.json").version')"
@@ -1258,6 +1266,7 @@ public.
 | `dist/` | the committed bundles of the plugin and of `featureRules` |
 | `presets/` | the Effect presets `checks-quality` builds its fragments from |
 | `templates/` | one template per kind of doc file, which `bun run build` renders |
+| `CHANGELOG.md` | every release, which `bun run build` writes from the conventional commits |
 | `tests/` | the suite, with the tests that spawn a process under `tests/e2e/` |
 | `docs/` | pages for whoever develops the kit |
 | the root configs | `oxlintrc.json`, `tsconfig.effect.json`, `bunfig.toml`, `commitlint.config.js`, `dependency-cruiser.config.js`, `stryker.preset.js` and `quality.schema.json`, which a consuming repository extends or copies |
