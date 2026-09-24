@@ -28,6 +28,11 @@ test("each bin's page is titled for the bin and carries the sections a reader lo
   expect(outlines).toEqual(bins.map((bin) => ({ title: bin, sections: SECTIONS })));
 });
 
+test("the README links every bin's page, so a new bin reaches the front door", () => {
+  const readme = read("README.md");
+  expect(bins.filter((bin) => !readme.includes(`](${GATE_PAGES}/${bin}.md)`))).toEqual([]);
+});
+
 test("the README's Where things are names each top-level path the package ships, and nothing else", () => {
   const readme = parseOutline(read("README.md"));
   const body = readme.sections.find(({ heading }) => heading.title === "Where things are")?.body ?? [];
