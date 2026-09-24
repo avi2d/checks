@@ -18,7 +18,7 @@ Published as `@avi2dg/checks` on the public npm registry.
 From the consuming repo:
 
 ```sh
-bun add -d @avi2dg/checks oxlint@1.83.0 oxlint-tsgolint@7.0.2002 @effect/tsgo@0.45.0 typescript@7.0.2 dependency-cruiser@18.4.0 @swc/core@1.16.2
+bun add -d @avi2dg/checks oxlint@1.83.0 oxlint-tsgolint@7.0.2002 @effect/tsgo@0.45.0 typescript@7.0.2 dependency-cruiser@18.4.0 @swc/core@1.16.2 effect@4.0.0-rc.115
 ```
 
 `.oxlintrc.json`:
