@@ -63,6 +63,8 @@ below. Three of them:
 `lint-coverage.sh` fails when oxlint silently skips a tracked `.ts` or
 `.tsx` file, for example through a stray `.gitignore` entry. It compares
 `git ls-files` against oxlint's own file walk and names the missing files.
+It exits 2 when oxlint cannot walk the tree, as when it is not on `PATH`
+or its config does not parse.
 
 `test-layout.ts` decides the test layout described below.
 
