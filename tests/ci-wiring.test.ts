@@ -257,6 +257,55 @@ test("a gate step counts only as the gate alone on one line with plain arguments
   expect(stepGaps("bun run lint:deps")).toEqual([{ gate: "bun run lint", blocked: [] }]);
 });
 
+test("a step running checks-lint covers each kit gate it runs by bare bin name, called the way the gate is declared", () => {
+  const kit = declared(
+    {
+      ciWiring: {
+        gates: [
+          `bunx checks-comment-gate "origin/$BASE_REF" "$HEAD_SHA"`,
+          "bunx checks-suppressions-ratchet",
+          "bun .checks/scripts/commit-identity.ts",
+          "bunx checks-mutation-compare",
+        ],
+      },
+    },
+    "package.json",
+  );
+  const workflow = (steps: readonly string[]) =>
+    `on: pull_request\njobs:\n  j:\n    steps:\n${steps.map((step) => `      - run: ${JSON.stringify(step)}\n`).join("")}`;
+
+  const covered = gapsIn({ [CI]: workflow(["bunx checks-lint", "bun .checks/scripts/lint.ts"]) }, kit);
+  expect(covered.map((gap) => gap.gate)).toEqual(["bun .checks/scripts/commit-identity.ts", "bunx checks-mutation-compare"]);
+
+  const uncovered = gapsIn({ [CI]: workflow(["bunx checks-lint-coverage", "bun run checks-lint"]) }, kit);
+  expect(formatReport(kit, uncovered)).toBe(
+    [
+      "ci-wiring: 4 of 4 gate(s) do not run on pull requests to main:",
+      `  bunx checks-comment-gate "origin/$BASE_REF" "$HEAD_SHA"`,
+      "    no run step invokes it or bunx checks-lint",
+      "  bunx checks-suppressions-ratchet",
+      "    no run step invokes it or bunx checks-lint",
+      "  bun .checks/scripts/commit-identity.ts",
+      "    no run step invokes it",
+      "  bunx checks-mutation-compare",
+      "    no run step invokes it",
+    ].join("\n"),
+  );
+
+  expect(stepGaps("bunx checks-lint || true", "bunx checks-comment-gate")).toEqual([
+    {
+      gate: "bunx checks-comment-gate",
+      entryPoint: "bunx checks-lint",
+      blocked: [
+        {
+          location: `${CI} job j step 1`,
+          blocker: "the step runs more than bunx checks-lint; give it its own step with nothing else in it",
+        },
+      ],
+    },
+  ]);
+});
+
 test("a gate step with any shell control, substitution, redirection or second line goes red and says why", () => {
   for (const shaped of [
     "bun run lint | tee lint.log",

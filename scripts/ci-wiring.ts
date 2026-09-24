@@ -2,6 +2,7 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { git } from "./git.ts";
 import { runMain } from "./main.ts";
+import { DEFAULT_BRANCH, ENTRY_POINT, KIT_GATES } from "./gates.ts";
 
 export type Command = readonly string[];
 
@@ -27,6 +28,7 @@ export type BlockedInvocation = {
 
 export type Gap = {
   readonly gate: string;
+  readonly entryPoint?: string;
   readonly blocked: readonly BlockedInvocation[];
 };
 
@@ -41,7 +43,6 @@ export class WiringError extends Schema.TaggedError<WiringError>()("WiringError"
 }) {}
 
 const WORKFLOWS = ".github/workflows";
-const DEFAULT_BRANCH = "main";
 // Without these a pull_request workflow never sees the commits a pull request pushes.
 const GATING_TYPES = ["opened", "synchronize"];
 const CONSTANTS = new Map([
@@ -229,19 +230,32 @@ function runSteps(workflows: readonly Workflow[], branch: string): readonly RunS
   return steps;
 }
 
+function entryPointCommand(gate: Command): Command | undefined {
+  const index = gate.findIndex((word) => KIT_GATES.some((kitGate) => kitGate.bin === word));
+  return index === -1 ? undefined : [...gate.slice(0, index), ENTRY_POINT.bin];
+}
+
 export function findGaps(declaration: Declaration, workflows: readonly Workflow[]): readonly Gap[] {
   const steps = runSteps(workflows, declaration.defaultBranch);
   return declaration.gates.flatMap((gate) => {
-    const alone = `the step runs more than ${gate.command}; give it its own step with nothing else in it`;
+    const entryPoint = entryPointCommand(gate.words);
+    const commands = [
+      { command: gate.command, words: gate.words },
+      ...(entryPoint === undefined ? [] : [{ command: entryPoint.join(" "), words: entryPoint }]),
+    ];
     const invoking = steps.flatMap(({ location, blocker, script }) => {
-      if (invokes(plainCommand(script), gate.words)) return [{ location, blocker }];
-      return mentions(script, gate.words) ? [{ location, blocker: blocker ?? alone }] : [];
+      const plain = plainCommand(script);
+      if (commands.some(({ words }) => invokes(plain, words))) return [{ location, blocker }];
+      const mentioned = commands.find(({ words }) => mentions(script, words));
+      if (mentioned === undefined) return [];
+      const alone = `the step runs more than ${mentioned.command}; give it its own step with nothing else in it`;
+      return [{ location, blocker: blocker ?? alone }];
     });
     if (invoking.some((step) => step.blocker === undefined)) return [];
     const blocked = invoking.flatMap(({ location, blocker }) =>
       blocker === undefined ? [] : [{ location, blocker }],
     );
-    return [{ gate: gate.command, blocked }];
+    return [{ gate: gate.command, entryPoint: entryPoint?.join(" "), blocked }];
   });
 }
 
@@ -251,7 +265,9 @@ export function formatReport(declaration: Declaration, gaps: readonly Gap[]): st
   const lines = [`ci-wiring: ${gaps.length} of ${declaration.gates.length} gate(s) do not run on ${target}:`];
   for (const gap of gaps) {
     lines.push(`  ${gap.gate}`);
-    if (gap.blocked.length === 0) lines.push("    no run step invokes it");
+    if (gap.blocked.length === 0) {
+      lines.push(gap.entryPoint === undefined ? "    no run step invokes it" : `    no run step invokes it or ${gap.entryPoint}`);
+    }
     for (const { location, blocker } of gap.blocked) lines.push(`    ${location}: ${blocker}`);
   }
   return lines.join("\n");

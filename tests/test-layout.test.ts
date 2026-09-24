@@ -131,6 +131,17 @@ test("scripts.test must be the exact randomized command and scripts.lint must ru
     }),
   ).toBeEmpty();
 
+  for (const lint of ["oxlint --type-aware && checks-lint && depcruise src", "oxlint && bun scripts/lint.ts"]) {
+    expect(scriptViolations({ scripts: { test: "bun test --randomize", lint } })).toBeEmpty();
+  }
+  for (const lint of [
+    "oxlint && checks-lint-coverage",
+    "bun ./node_modules/@avi2dg/checks/scripts/lint.ts",
+    "bun .checks/scripts/lint.ts",
+  ]) {
+    expect(scriptViolations({ scripts: { test: "bun test --randomize", lint } })).toHaveLength(1);
+  }
+
   const violations = scriptViolations({ scripts: { test: "bun test", lint: "oxlint" } });
   expect(violations).toHaveLength(2);
   expect(violations[0]?.message).toContain('must be exactly "bun test --randomize"');

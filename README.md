@@ -1,14 +1,14 @@
 # checks
 
 Deterministic checks shared across my TypeScript repos. One package,
-`@avi2dg/checks`: the oxlint base config, the tsconfig fragment with the
-Effect language-service block, the shared commitlint config, the shared
-dependency-cruiser base, the test-layout check with its bunfig preset,
-the commit-identity check with its workflow, the comment gate with its
-workflow and backtest, the oxlint suppressions ratchet, the Stryker
-mutation-testing preset with its no-regression comparator, the
-CI-wiring check, and the Effect error-channel plugin compiled to
-JavaScript.
+`@avi2dg/checks`: the `checks-lint` entry point that runs every lint gate
+below over a range it resolves itself, the oxlint base config, the
+tsconfig fragment with the Effect language-service block, the shared
+commitlint config, the shared dependency-cruiser base, the test-layout
+check with its bunfig preset, the commit-identity check, the comment
+gate with its backtest, the oxlint suppressions ratchet, the Stryker
+mutation-testing preset with its no-regression comparator, the CI-wiring
+check, and the Effect error-channel plugin compiled to JavaScript.
 
 Published as `@avi2dg/checks` on the public npm registry.
 
@@ -52,10 +52,13 @@ cp node_modules/@avi2dg/checks/bunfig.toml bunfig.toml
 `package.json` gains three scripts:
 
 ```json
-"lint": "oxlint --type-aware && checks-lint-coverage && checks-test-layout && checks-commit-identity HEAD",
+"lint": "oxlint --type-aware && checks-lint",
 "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
 "test": "bun test --randomize"
 ```
+
+`checks-lint` runs every kit gate a lint needs; see "Lint entry point"
+below. Three of them:
 
 `lint-coverage.sh` fails when oxlint silently skips a tracked `.ts` or
 `.tsx` file, for example through a stray `.gitignore` entry. It compares
@@ -80,6 +83,81 @@ export default {
 
 The registry version is pinned by the consumer's lockfile; bump
 `@avi2dg/checks` to adopt a new release.
+
+## Lint entry point
+
+`checks-lint` runs each of the kit's lint gates in turn and names every
+one that fails, rather than stopping at the first:
+
+| Gate | Reads |
+| --- | --- |
+| `checks-lint-coverage` | the working tree |
+| `checks-test-layout` | the working tree |
+| `checks-commit-identity` | the range |
+| `checks-comment-gate` | the range |
+| `checks-suppressions-ratchet` | the range |
+| `checks-ci-wiring` | the working tree |
+
+```sh
+checks-lint
+checks-lint <base-ref> <head-ref>
+```
+
+It resolves the range once and hands the same one to every range gate.
+Locally, and on any event other than a pull request, the range ends at
+`HEAD` and starts where `HEAD` branched from the origin default branch:
+`origin/HEAD`, or when `origin/HEAD` is not set, as in an
+`actions/checkout` clone, `origin/<ciWiring.defaultBranch>` from the
+repository's `package.json` (see "CI wiring"), and `origin/main` when
+that is not declared. In a GitHub Actions pull request, where
+`GITHUB_EVENT_NAME` is `pull_request`, it ends
+at the event's head sha and starts where that branched from
+`origin/<base branch>`, so GitHub's merge commit is never in it. The
+base branch is read from the fetch, not from the event's recorded base
+sha, which GitHub leaves stale once the base branch advances after the
+pull request opens. Explicit base and head arguments override both.
+
+The range always starts at the merge base, never at the base branch's
+tip: commits the base branch gained after the head branched off would
+otherwise count against the head. When the head is the merge base, as
+on a push to the default branch or a local run on it, the range would be
+empty, so each range gate is handed that tip commit alone and checks it
+against its parent:
+
+```
+checks-lint: tip 10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD against origin/main
+```
+
+It prints the range, each gate's own report, then its verdict:
+
+```
+checks-lint: range 2504acf098d120e73a8ece3c96f22b934f35c6a8..10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD against origin/main
+...
+checks-lint: 3 of 6 gate(s) failed: checks-commit-identity, checks-comment-gate, checks-suppressions-ratchet
+```
+
+It exits 1 when any gate found a violation, and 2 when the range does
+not resolve or no failing gate could decide. Every gate runs, so a
+repository on `checks-lint` declares `ciWiring.gates` (see "CI wiring")
+and holds the test layout.
+
+CI runs it through `lint`. The checkout fetches the whole history, which
+the merge base needs:
+
+```yaml
+on:
+  pull_request:
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+```
 
 ## Effect rules
 
@@ -185,7 +263,7 @@ file and the path to move it to when it does not:
   with swc and reads import specifiers and identifier use, so a test that
   only carries `"node:child_process"` as a string is not a violation.
 - `scripts.test` is exactly `bun test --randomize` and `scripts.lint` runs
-  this check.
+  this check, itself or through `checks-lint` called by its bare bin name.
 - `bunfig.toml` carries every `[test]` key of the shipped preset with the
   same value, and `[test].pathIgnorePatterns` is always
   `["**/tests/quarantine/**"]`: the check pins it itself, so this repo,
@@ -301,11 +379,10 @@ bun run checks-commit-identity <base-ref> <head-ref>
 bun run checks-commit-identity <ref>
 ```
 
-With one argument it checks that commit alone, which is the form the
-`lint` script above runs on `HEAD`. It refuses a commit whose author or
-committer is outside the allowlist, and one whose trailer block carries
-a `Co-authored-by:` trailer as git parses it, and it names the offending
-commit and reason. Other trailers and prose mentioning an address in the
+With one argument it checks that commit alone. It refuses a commit
+whose author or committer is outside the allowlist, and one whose
+trailer block carries a `Co-authored-by:` trailer as git parses it, and
+it names the offending commit and reason. Other trailers and prose mentioning an address in the
 body are left alone. `GitHub <noreply@github.com>` is allowed as
 committer only, since that is who writes a squash merge.
 
@@ -318,31 +395,7 @@ owners restates it in `package.json`:
 }
 ```
 
-Enforcement runs on pull requests, where the range from the base branch's
-current tip to the head is visible:
-
-```yaml
-on:
-  pull_request:
-    types: [opened, edited, synchronize, reopened]
-jobs:
-  commit-identity:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
-      - run: bun install --frozen-lockfile
-      - run: bunx checks-commit-identity "origin/$BASE_REF" "$HEAD_SHA"
-        env:
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-```
-
-The checkout fetches the full history and the range starts at the
-fetched base branch, not the event's recorded base sha, which GitHub
-leaves stale once the base branch advances after the pull request opens.
+`checks-lint` runs it over each pull request's range; see "Lint entry point".
 
 ## Comment gate
 
@@ -365,27 +418,7 @@ pointer, a doc block, and a file opening with a rationale block over
 three lines, licence headers excepted; `scripts/comments.ts` holds the
 scanner the gate and the backtest share.
 
-Enforcement runs on pull requests, where the range from the base branch's
-current tip to the head is visible:
-
-```yaml
-on:
-  pull_request:
-    types: [opened, edited, synchronize, reopened]
-jobs:
-  comment-gate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
-      - run: bun install --frozen-lockfile
-      - run: bunx checks-comment-gate "origin/$BASE_REF" "$HEAD_SHA"
-        env:
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-```
+`checks-lint` runs it over each pull request's range; see "Lint entry point".
 
 ## Suppressions ratchet
 
@@ -417,27 +450,7 @@ suppressions-ratchet: 2 count(s) in oxlint-suppressions.json rose or appeared; f
   src/dispatch.ts typescript/no-non-null-assertion rose from 12 to 13
 ```
 
-Enforcement runs on pull requests, where the range from the base branch's
-current tip to the head is visible:
-
-```yaml
-on:
-  pull_request:
-    types: [opened, edited, synchronize, reopened]
-jobs:
-  suppressions-ratchet:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
-      - run: bun install --frozen-lockfile
-      - run: bunx checks-suppressions-ratchet "origin/$BASE_REF" "$HEAD_SHA"
-        env:
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-```
+`checks-lint` runs it over each pull request's range; see "Lint entry point".
 
 ## CI wiring
 
@@ -447,14 +460,14 @@ that: a workflow whose lint step became a no-op leaves `bun run lint`
 green.
 
 The repository declares its gates once, in `package.json`, and `lint`
-runs the check:
+runs the check through `checks-lint`:
 
 ```json
 "ciWiring": {
   "gates": ["bun run lint", "bun run typecheck", "bun run test"]
 },
 "scripts": {
-  "lint": "oxlint --type-aware && checks-lint-coverage && checks-test-layout && checks-ci-wiring"
+  "lint": "oxlint --type-aware && checks-lint"
 }
 ```
 
@@ -489,8 +502,17 @@ supported way to wire a gate: it is not read, so a gate must run as a
 `run:` step, such as `bunx checks-comment-gate`, in the repo's own
 workflows.
 
+A step running `checks-lint` also counts for a declared gate that calls
+one of the gates `checks-lint` runs by its bare bin name, when the step
+calls `checks-lint` the same way: `bunx checks-lint` counts for
+`bunx checks-comment-gate "origin/$BASE_REF" "$HEAD_SHA"`. A step running `bun run lint` counts only for the `bun run lint` gate,
+since the check never reads what a package script runs. So once `lint`
+runs `checks-lint`, the per-gate entries can leave `ciWiring.gates`
+along with the workflows that ran them.
+
 The default branch is `main`; a repo with another one sets
-`"defaultBranch"` beside `"gates"`.
+`"defaultBranch"` beside `"gates"`, which `checks-lint` also reads when
+`origin/HEAD` is not set.
 
 It exits 1 naming each gap, with every step that runs the gate and why
 that step does not count:
@@ -621,15 +643,18 @@ The shared Stryker preset's `json` reporter writes
   `@effect/platform-node-shared` is a direct dependency at the same exact
   version only to pin it: `@effect/platform-bun` asks for it with a `^`
   range, and a newer rc peers on a newer `effect` than consumers install,
-  so all three move together. The reusable `comment-gate` and
-  `commit-identity` workflows install the kit before running a script
-  from their `.checks/` checkout.
+  so all three move together.
 - Each runnable script ships a `checks-` bin entry, so consumer
   `package.json` scripts call the short name, which the package manager
   puts on `PATH` only there; a shell runs it through `bun run`, which
   never falls back to the registry the way `bunx` does. The `.ts` checks
   keep a `bun` shebang, which needs no build step and no `dist/`
   entry, unlike the oxlint plugin that node loads.
+- `checks-lint` runs each gate as its own bin in a child process rather
+  than importing it, so a gate behaves the same called alone or through
+  the entry point, and `lint-coverage.sh` stays a shell script. The
+  gates run one at a time with their output passed straight through, so
+  each report reads whole and in the table's order.
 - `checks-ci-wiring` runs inside `lint`, not in a workflow of its own:
   deleting the step that runs a check is the violation it catches, so the
   local `lint` is where it has to fail.
@@ -640,10 +665,11 @@ The shared Stryker preset's `json` reporter writes
   `@types/bun`, which would otherwise make every runtime `bun` import look
   like a dev-only dependency.
 - The pull request merge commit GitHub builds is authored by `GitHub
-  <noreply@github.com>`, which commit-identity refuses as an author. A
-  consumer that runs the check inside `lint` checks out
-  `github.event.pull_request.head.sha` instead of the default merge ref,
-  as this repo's `ci.yml` does.
+  <noreply@github.com>`, which commit-identity refuses as an author.
+  `checks-lint` ends a pull request's range at the event's head sha, so
+  the merge commit is never in it. A `lint` that calls
+  `checks-commit-identity HEAD` itself checks out
+  `github.event.pull_request.head.sha` instead of the default merge ref.
 - `no-deep-imports` judges the import specifier, never the resolved file.
   The base honours `exports` maps, so a subpath the map publishes resolves
   and passes, one it omits fails to resolve and is reported, and a package
@@ -669,7 +695,7 @@ a tag off `main` and reruns the build, `dist/` check, lint, typecheck
 and tests before it publishes:
 
 ```sh
-git tag v0.7.0 && git push origin v0.7.0
+git tag v0.8.0 && git push origin v0.8.0
 ```
 
 The `release` workflow publishes the tagged version through npm
