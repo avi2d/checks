@@ -11,7 +11,7 @@ const OWNER = ["-c", "user.name=avi2d", "-c", "user.email=avi2dg@gmail.com"];
 const STRANGER = ["-c", "user.name=stranger", "-c", "user.email=stranger@example.com"];
 const FIXTURE_AUTHOR = { name: "Wren Fixture", email: "wren@example.com" };
 const FIXTURE = ["-c", `user.name=${FIXTURE_AUTHOR.name}`, "-c", `user.email=${FIXTURE_AUTHOR.email}`];
-const METADATA_GATES = ["checks-commit-identity", "checks-comment-gate", "checks-ci-wiring"];
+const METADATA_GATES = ["checks-commit-identity", "checks-comment-gate", "checks-suppressions-ratchet", "checks-ci-wiring"];
 
 const LOCAL_ENV = {
   ...withoutPullRequestEvent(),
@@ -270,8 +270,8 @@ test(
     expect(selected.text).toContain(`checks-lint: ciWiring.lintGates selects ${METADATA_GATES.join(", ")}\n`);
     expect(selected.text).not.toContain("test-layout:");
     expect(selected.text).not.toContain("lint-coverage:");
-    expect(selected.text).not.toContain("suppressions-ratchet:");
-    expect(selected.text).toContain("checks-lint: 3 gate(s) pass\n");
+    expect(selected.text).toContain("suppressions-ratchet:");
+    expect(selected.text).toContain("checks-lint: 4 gate(s) pass\n");
     expect(selected.exitCode).toBe(0);
 
     await mkdir(join(dir, "src"));
@@ -285,7 +285,7 @@ test(
         "  checks-test-layout: the repository tracks TypeScript source (src/widget.ts)",
       ].join("\n"),
     );
-    expect(withSource.text).toContain("checks-lint: 1 of 3 gate(s) failed: checks-ci-wiring\n");
+    expect(withSource.text).toContain("checks-lint: 1 of 4 gate(s) failed: checks-ci-wiring\n");
     expect(withSource.exitCode).toBe(1);
   },
   60_000,
@@ -294,11 +294,17 @@ test(
 test(
   "a selection that leaves out a gate every repository runs, or names no kit gate, runs nothing",
   async () => {
-    await initSourceFreeRepo(["checks-commit-identity", "checks-comment-gate"]);
+    await initSourceFreeRepo(["checks-commit-identity", "checks-comment-gate", "checks-suppressions-ratchet"]);
     const withoutWiring = await lint();
     expect(withoutWiring.text).toContain("checks-lint must run checks-ci-wiring, which applies to every repository");
     expect(withoutWiring.text).not.toContain("commit-identity:");
     expect(withoutWiring.exitCode).toBe(2);
+
+    await writeSourceFreeManifest(["checks-commit-identity", "checks-comment-gate", "checks-ci-wiring"]);
+    const withoutRatchet = await lint();
+    expect(withoutRatchet.text).toContain("checks-lint must run checks-suppressions-ratchet, which applies to every repository");
+    expect(withoutRatchet.text).not.toContain("commit-identity:");
+    expect(withoutRatchet.exitCode).toBe(2);
 
     await writeSourceFreeManifest([...METADATA_GATES, "checks-typo"]);
     const unknown = await lint();

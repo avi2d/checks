@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
 const CHECKOUT = resolve(import.meta.dir, "..", "..");
 const SCRIPT = join(CHECKOUT, "scripts", "ci-wiring.ts");
 const LINT_COVERAGE = join(CHECKOUT, "scripts", "lint-coverage.sh");
-const METADATA_GATES = ["checks-commit-identity", "checks-comment-gate", "checks-ci-wiring"];
+const METADATA_GATES = ["checks-commit-identity", "checks-comment-gate", "checks-suppressions-ratchet", "checks-ci-wiring"];
 
 const WORKFLOW = `on:
   pull_request:
@@ -77,7 +77,7 @@ test(
 
     const sourceFree = await check();
     expect(sourceFree.text).toContain(
-      "ci-wiring: ciWiring.lintGates leaves out checks-lint-coverage, checks-test-layout, checks-suppressions-ratchet, none of which this repository's contents make applicable",
+      "ci-wiring: ciWiring.lintGates leaves out checks-lint-coverage, checks-test-layout, none of which this repository's contents make applicable",
     );
     expect(sourceFree.exitCode).toBe(0);
 
@@ -85,15 +85,13 @@ test(
     const untracked = await check();
     expect(untracked.exitCode).toBe(0);
 
-    await writeFile(join(dir, "oxlint-suppressions.json"), "{}\n");
     await $`git add -A`.cwd(dir).quiet();
     const tracked = await check();
     expect(tracked.text).toContain(
       [
-        "ci-wiring: ciWiring.lintGates leaves out 3 gate(s) this repository's contents make applicable:",
+        "ci-wiring: ciWiring.lintGates leaves out 2 gate(s) this repository's contents make applicable:",
         "  checks-lint-coverage: the repository tracks TypeScript source (widget.tsx)",
         "  checks-test-layout: the repository tracks TypeScript source (widget.tsx)",
-        "  checks-suppressions-ratchet: the repository tracks an oxlint suppressions baseline (oxlint-suppressions.json)",
       ].join("\n"),
     );
     expect(tracked.exitCode).toBe(1);

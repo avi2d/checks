@@ -541,7 +541,12 @@ missing `bun test` script and `bunfig.toml`. It declares the gates
 ```json
 "ciWiring": {
   "gates": ["bun run lint"],
-  "lintGates": ["checks-commit-identity", "checks-comment-gate", "checks-ci-wiring"]
+  "lintGates": [
+    "checks-commit-identity",
+    "checks-comment-gate",
+    "checks-suppressions-ratchet",
+    "checks-ci-wiring"
+  ]
 }
 ```
 
@@ -556,9 +561,9 @@ A selection may leave out only a gate that does not apply:
 | --- | --- |
 | `checks-lint-coverage` | tracks a `.ts` or `.tsx` file |
 | `checks-test-layout` | tracks a `.ts` or `.tsx` file |
-| `checks-suppressions-ratchet` | tracks `oxlint-suppressions.json` |
 | `checks-commit-identity` | always |
 | `checks-comment-gate` | always |
+| `checks-suppressions-ratchet` | always |
 | `checks-ci-wiring` | always |
 
 Both bins exit 2 on a `lintGates` that names an unknown or repeated gate

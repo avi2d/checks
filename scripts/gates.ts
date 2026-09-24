@@ -1,5 +1,4 @@
 import { Schema } from "effect";
-import { SUPPRESSIONS } from "./suppressions-ratchet.ts";
 
 export type Program = {
   readonly bin: string;
@@ -29,12 +28,7 @@ export const KIT_GATES = [
   { bin: "checks-test-layout", script: "test-layout.ts", reads: "tree", appliesTo: TYPESCRIPT_SOURCE },
   { bin: "checks-commit-identity", script: "commit-identity.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-comment-gate", script: "comment-gate.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
-  {
-    bin: "checks-suppressions-ratchet",
-    script: "suppressions-ratchet.ts",
-    reads: "range",
-    appliesTo: { pathspecs: [SUPPRESSIONS], content: "an oxlint suppressions baseline" },
-  },
+  { bin: "checks-suppressions-ratchet", script: "suppressions-ratchet.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-ci-wiring", script: "ci-wiring.ts", reads: "tree", appliesTo: EVERY_REPOSITORY },
 ] as const satisfies readonly KitGate[];
 

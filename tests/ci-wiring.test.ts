@@ -367,7 +367,9 @@ test("a step running checks-lint covers no gate its declared selection leaves ou
   const workflow = `on: pull_request\njobs:\n  j:\n    steps:\n      - run: bunx checks-lint\n`;
 
   expect(gapsIn({ [CI]: workflow }, selecting())).toEqual([]);
-  const metadataOnly = selecting({ lintGates: ["checks-commit-identity", "checks-comment-gate", "checks-ci-wiring"] });
+  const metadataOnly = selecting({
+    lintGates: ["checks-commit-identity", "checks-comment-gate", "checks-suppressions-ratchet", "checks-ci-wiring"],
+  });
   expect(gapsIn({ [CI]: workflow }, metadataOnly)).toEqual([{ gate: "bunx checks-test-layout", blocked: [] }]);
 });
 
@@ -375,29 +377,26 @@ test("a selection names each kit gate once and keeps every gate that applies to 
   const refusal = (lintGates: unknown) =>
     Effect.runSync(Effect.flip(parseDeclaration({ ciWiring: { gates: ["x"], lintGates } }, "package.json"))).message;
 
-  expect(refusal(["checks-ci-wiring", "checks-comment-gate"])).toContain(
+  const metadata = ["checks-commit-identity", "checks-comment-gate", "checks-suppressions-ratchet", "checks-ci-wiring"];
+
+  expect(refusal(["checks-ci-wiring", "checks-comment-gate", "checks-suppressions-ratchet"])).toContain(
     "package.json: checks-lint must run checks-commit-identity, which applies to every repository",
   );
+  expect(refusal(["checks-commit-identity", "checks-comment-gate", "checks-ci-wiring"])).toContain(
+    "package.json: checks-lint must run checks-suppressions-ratchet, which applies to every repository",
+  );
   expect(refusal(["checks-lint-coverage"])).toContain(
-    "checks-lint must run checks-commit-identity, checks-comment-gate, checks-ci-wiring, which apply to every repository",
+    "checks-lint must run checks-commit-identity, checks-comment-gate, checks-suppressions-ratchet, checks-ci-wiring, which apply to every repository",
   );
-  expect(refusal(["checks-commit-identity", "checks-comment-gate", "checks-ci-wiring", "checks-ci-wiring"])).toContain(
-    "Expected an array with unique items",
-  );
-  expect(refusal(["checks-commit-identity", "checks-comment-gate", "checks-ci-wiring", "checks-backtest"])).toContain(
-    'Expected "checks-lint-coverage" |',
-  );
+  expect(refusal([...metadata, "checks-ci-wiring"])).toContain("Expected an array with unique items");
+  expect(refusal([...metadata, "checks-backtest"])).toContain('Expected "checks-lint-coverage" |');
   expect(refusal("checks-ci-wiring")).toContain("Expected array");
 
   const selected = declared(
-    { ciWiring: { gates: ["x"], lintGates: ["checks-ci-wiring", "checks-comment-gate", "checks-commit-identity"] } },
+    { ciWiring: { gates: ["x"], lintGates: metadata.toReversed() } },
     "package.json",
   );
-  expect(selected.lintGates.map((gate) => gate.bin)).toEqual([
-    "checks-commit-identity",
-    "checks-comment-gate",
-    "checks-ci-wiring",
-  ]);
+  expect(selected.lintGates.map((gate) => gate.bin)).toEqual(metadata);
 });
 
 test("the declaration names one command per gate and may move the default branch", () => {
