@@ -9,6 +9,9 @@ const CHECKOUT = resolve(import.meta.dir, "..", "..");
 const SCRIPT = join(CHECKOUT, "scripts", "lint.ts");
 const OWNER = ["-c", "user.name=avi2d", "-c", "user.email=avi2dg@gmail.com"];
 const STRANGER = ["-c", "user.name=stranger", "-c", "user.email=stranger@example.com"];
+const FIXTURE_AUTHOR = { name: "Wren Fixture", email: "wren@example.com" };
+const FIXTURE = ["-c", `user.name=${FIXTURE_AUTHOR.name}`, "-c", `user.email=${FIXTURE_AUTHOR.email}`];
+const METADATA_GATES = ["checks-commit-identity", "checks-comment-gate", "checks-suppressions-ratchet", "checks-ci-wiring"];
 const FOUNDER = { name: "founder", email: "founder@example.com" };
 
 const LOCAL_ENV = {
@@ -67,6 +70,34 @@ async function initRepo(manifest: Record<string, unknown> = {}): Promise<string>
   await $`git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main`.cwd(dir).quiet();
   await $`git checkout -q -b feature`.cwd(dir).quiet();
   return base;
+}
+
+async function writeSourceFreeManifest(lintGates?: readonly string[]): Promise<void> {
+  await writeFile(
+    join(dir, "package.json"),
+    JSON.stringify({
+      name: "source-free-fixture",
+      scripts: { lint: "checks-lint" },
+      commitIdentity: { authors: [FIXTURE_AUTHOR] },
+      ciWiring: { gates: ["bun run lint"], lintGates },
+    }),
+  );
+}
+
+async function initSourceFreeRepo(lintGates?: readonly string[]): Promise<void> {
+  dir = await mkdtemp(join(tmpdir(), "checks-lint-source-free-"));
+  await writeSourceFreeManifest(lintGates);
+  await mkdir(join(dir, ".github", "workflows"), { recursive: true });
+  await writeFile(
+    join(dir, ".github", "workflows", "ci.yml"),
+    "on: pull_request\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n",
+  );
+  await writeFile(join(dir, "README.md"), "# Notes\n");
+  await $`git init -q -b main`.cwd(dir).quiet();
+  await commit("docs: base", FIXTURE);
+  await $`git update-ref refs/remotes/origin/main HEAD`.cwd(dir).quiet();
+  await $`git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main`.cwd(dir).quiet();
+  await $`git checkout -q -b feature`.cwd(dir).quiet();
 }
 
 async function lint(
@@ -302,6 +333,66 @@ test(
     const cleared = await lint();
     expect(cleared.text).toContain("checks-lint: 6 gate(s) pass");
     expect(cleared.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
+  "a source-free repository runs only the gates it selects, and TypeScript source refuses that selection",
+  async () => {
+    await initSourceFreeRepo();
+    await writeFile(join(dir, "NOTES.md"), "More notes.\n");
+    await commit("docs: notes", FIXTURE);
+    const everyGate = await lint();
+    expect(everyGate.text).toContain("checks-lint: 1 of 6 gate(s) failed: checks-test-layout\n");
+    expect(everyGate.exitCode).toBe(1);
+
+    await writeSourceFreeManifest(METADATA_GATES);
+    await commit("chore: select the metadata gates", FIXTURE);
+    const selected = await lint();
+    expect(selected.text).toContain(`checks-lint: ciWiring.lintGates selects ${METADATA_GATES.join(", ")}\n`);
+    expect(selected.text).not.toContain("test-layout:");
+    expect(selected.text).not.toContain("lint-coverage:");
+    expect(selected.text).toContain("suppressions-ratchet:");
+    expect(selected.text).toContain("checks-lint: 4 gate(s) pass\n");
+    expect(selected.exitCode).toBe(0);
+
+    await mkdir(join(dir, "src"));
+    await writeFile(join(dir, "src", "widget.ts"), "export const widget = 42;\n");
+    await commit("feat: widget", FIXTURE);
+    const withSource = await lint();
+    expect(withSource.text).toContain(
+      [
+        "ci-wiring: ciWiring.lintGates leaves out 2 gate(s) this repository's contents make applicable:",
+        "  checks-lint-coverage: the repository tracks TypeScript source (src/widget.ts)",
+        "  checks-test-layout: the repository tracks TypeScript source (src/widget.ts)",
+      ].join("\n"),
+    );
+    expect(withSource.text).toContain("checks-lint: 1 of 4 gate(s) failed: checks-ci-wiring\n");
+    expect(withSource.exitCode).toBe(1);
+  },
+  60_000,
+);
+
+test(
+  "a selection that leaves out a gate every repository runs, or names no kit gate, runs nothing",
+  async () => {
+    await initSourceFreeRepo(["checks-commit-identity", "checks-comment-gate", "checks-suppressions-ratchet"]);
+    const withoutWiring = await lint();
+    expect(withoutWiring.text).toContain("checks-lint must run checks-ci-wiring, which applies to every repository");
+    expect(withoutWiring.text).not.toContain("commit-identity:");
+    expect(withoutWiring.exitCode).toBe(2);
+
+    await writeSourceFreeManifest(["checks-commit-identity", "checks-comment-gate", "checks-ci-wiring"]);
+    const withoutRatchet = await lint();
+    expect(withoutRatchet.text).toContain("checks-lint must run checks-suppressions-ratchet, which applies to every repository");
+    expect(withoutRatchet.text).not.toContain("commit-identity:");
+    expect(withoutRatchet.exitCode).toBe(2);
+
+    await writeSourceFreeManifest([...METADATA_GATES, "checks-typo"]);
+    const unknown = await lint();
+    expect(unknown.text).toContain('Expected "checks-lint-coverage" |');
+    expect(unknown.exitCode).toBe(2);
   },
   60_000,
 );

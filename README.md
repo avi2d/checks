@@ -89,7 +89,9 @@ The registry version is pinned by the consumer's lockfile; bump
 ## Lint entry point
 
 `checks-lint` runs each of the kit's lint gates in turn and names every
-one that fails, rather than stopping at the first:
+one that fails, rather than stopping at the first. A repository whose
+tracked files give a gate nothing to check can leave it out through
+`ciWiring.lintGates`; see "Gate selection" under "CI wiring".
 
 | Gate | Reads |
 | --- | --- |
@@ -145,7 +147,8 @@ Once any ref sits under `refs/remotes/`, a missing
 shallow CI checkout, where `HEAD` alone would leave the commits before
 it unchecked.
 
-It prints the range, each gate's own report, then its verdict:
+It prints the range, the declared selection if there is one, each
+gate's own report, then its verdict:
 
 ```
 checks-lint: range 2504acf098d120e73a8ece3c96f22b934f35c6a8..10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD against origin/main
@@ -153,10 +156,11 @@ checks-lint: range 2504acf098d120e73a8ece3c96f22b934f35c6a8..10ba7d8935b73ed7262
 checks-lint: 3 of 6 gate(s) failed: checks-commit-identity, checks-comment-gate, checks-suppressions-ratchet
 ```
 
-It exits 1 when any gate found a violation, and 2 when the range does
-not resolve or no failing gate could decide. Every gate runs, so a
-repository on `checks-lint` declares `ciWiring.gates` (see "CI wiring")
-and holds the test layout.
+It exits 1 when any gate found a violation, and 2 when the range or the
+selection does not resolve, or no failing gate could decide. ci-wiring
+always runs, so a repository on `checks-lint` declares `ciWiring.gates`
+(see "CI wiring"), and it holds the test layout unless its selection
+leaves out `checks-test-layout`.
 
 CI runs it through `lint`. The checkout fetches the whole history, which
 the merge base needs:
@@ -555,6 +559,55 @@ It exits 2 when `package.json` declares no gates, a gate is not one
 plain command, or a workflow does not parse. Whether a workflow is
 well formed is actionlint's question, not this one's.
 
+### Gate selection
+
+A repository with no TypeScript source gives `checks-lint-coverage` and
+`checks-test-layout` nothing to check, and test-layout still refuses its
+missing `bun test` script and `bunfig.toml`. It declares the gates
+`checks-lint` runs as `lintGates`, beside `gates`:
+
+```json
+"ciWiring": {
+  "gates": ["bun run lint"],
+  "lintGates": [
+    "checks-commit-identity",
+    "checks-comment-gate",
+    "checks-suppressions-ratchet",
+    "checks-ci-wiring"
+  ]
+}
+```
+
+`checks-lint` runs exactly those, in the "Lint entry point" table's
+order, and all six when `lintGates` is absent. A step running
+`checks-lint` then counts only for a declared gate that `lintGates`
+keeps.
+
+A selection may leave out only a gate that does not apply:
+
+| Gate | Applies when the repository |
+| --- | --- |
+| `checks-lint-coverage` | tracks a `.ts` or `.tsx` file |
+| `checks-test-layout` | tracks a `.ts` or `.tsx` file |
+| `checks-commit-identity` | always |
+| `checks-comment-gate` | always |
+| `checks-suppressions-ratchet` | always |
+| `checks-ci-wiring` | always |
+
+Both bins exit 2 on a `lintGates` that names an unknown gate or leaves
+out one that always applies. ci-wiring exits 1 when the
+selection leaves out a gate the repository's tracked files make
+applicable, and names the gate and the files:
+
+```
+ci-wiring: ciWiring.lintGates leaves out 2 gate(s) this repository's contents make applicable:
+  checks-lint-coverage: the repository tracks TypeScript source (src/widget.ts)
+  checks-test-layout: the repository tracks TypeScript source (src/widget.ts)
+```
+
+It reads the files tracked at the checkout, so the pull request that
+adds the first TypeScript file is the one refused.
+
 ### Limits
 
 The check reads workflow files and never runs them, so it deliberately
@@ -683,6 +736,11 @@ The shared Stryker preset's `json` reporter writes
   the entry point, and `lint-coverage.sh` stays a shell script. The
   gates run one at a time with their output passed straight through, so
   each report reads whole and in the table's order.
+- A gate selection is checked against the repository's contents rather
+  than trusted, so it cannot skip a gate that applies. ci-wiring does
+  that check, which is why a selection without it, or without another
+  gate that applies everywhere, is refused as `checks-lint` reads it:
+  nothing would check the selection otherwise.
 - `checks-ci-wiring` runs inside `lint`, not in a workflow of its own:
   deleting the step that runs a check is the violation it catches, so the
   local `lint` is where it has to fail.
