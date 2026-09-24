@@ -665,9 +665,10 @@ ci-wiring: 1 of 8 gate(s) do not run on pull requests to main:
     .github/workflows/release.yml job publish step 7: .github/workflows/release.yml does not trigger on pull_request
 ```
 
-It exits 2 when `package.json` declares no gates, a gate or scheduled
-command is not one plain command, or a workflow does not parse. Whether
-a workflow is well formed is actionlint's question, not this one's.
+It exits 2 when `package.json` declares no gates, `scheduled` is not an
+array, a gate or scheduled command is not one plain command, or a
+workflow does not parse. Whether a workflow is well formed is
+actionlint's question, not this one's.
 
 A command a schedule must run, such as the flake run, goes in
 `"scheduled"` beside `"gates"`:
