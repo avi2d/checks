@@ -168,7 +168,7 @@ test(
 );
 
 test(
-  "the README lint recipe runs the installed layout check, red on a colocated test and green once it moves",
+  "a lint script calling checks-test-layout runs the installed layout check, red on a colocated test and green once it moves",
   async () => {
     await writeConsumerFixture({
       scripts: {
@@ -207,7 +207,7 @@ test(
 );
 
 test(
-  "packed-tarball consumer installs the files-limited surface and runs the README lint recipe from it",
+  "packed-tarball consumer installs the files-limited surface and lints with the installed plugin and layout check",
   async () => {
     const tarball = await packTarball();
     await writeConsumerFixture(
@@ -277,7 +277,7 @@ test(
           backtest: "checks-backtest 5",
           compare: "checks-mutation-compare mutation.json mutation.json",
           wiring: "checks-ci-wiring",
-          kit: "checks-lint",
+          kit: "oxlint --type-aware && checks-lint",
         },
         ciWiring: { gates: ["bun run lint"] },
       },
