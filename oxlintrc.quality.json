@@ -1,0 +1,33 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "typescript",
+    "oxc",
+    "eslint",
+    "import"
+  ],
+  "overrides": [
+    {
+      "files": [
+        "scripts/**/*.ts"
+      ],
+      "plugins": [
+        "typescript",
+        "oxc",
+        "eslint",
+        "import",
+        "node",
+        "promise",
+        "unicorn"
+      ],
+      "rules": {
+        "node/no-sync": "error",
+        "oxc/no-async-await": "error",
+        "promise/avoid-new": "error",
+        "unicorn/no-process-exit": "error",
+        "effect-channel/no-throw": "error",
+        "effect-channel/no-try-catch": "error"
+      }
+    }
+  ]
+}

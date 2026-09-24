@@ -1,0 +1,20 @@
+{
+  "$schema": "./quality.schema.json",
+  "defaultBranch": "main",
+  "gates": {
+    "ci": [
+      "bun run build",
+      "git diff --exit-code dist/",
+      "bun run lint",
+      "bun run typecheck",
+      "bun run test",
+      "./node_modules/.bin/commitlint"
+    ],
+    "scheduled": ["bun scripts/flake.ts --runs 10 --report flake-report.json"]
+  },
+  "sources": {
+    "production": ["effect-channel/**/*.ts", "scripts/**/*.ts"],
+    "effect": { "paths": ["scripts/**/*.ts"] }
+  },
+  "agentRules": { "on": [], "off": [] }
+}

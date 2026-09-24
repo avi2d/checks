@@ -1,29 +1,19 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "extends": ["./oxlintrc.json"],
+  "extends": ["./oxlintrc.json", "./oxlintrc.quality.json"],
   "plugins": ["typescript", "oxc", "eslint", "import"],
   "ignorePatterns": ["node_modules/**", "dist/**"],
-  "overrides": [
-    {
-      "files": ["scripts/**"],
-      "plugins": ["typescript", "oxc", "eslint", "import", "node", "promise", "unicorn"],
-      "rules": {
-        "node/no-sync": "error",
-        "oxc/no-async-await": "error",
-        "promise/avoid-new": "error",
-        "unicorn/no-process-exit": "error",
-        "eslint/no-restricted-properties": [
-          "error",
-          {
-            "object": "process",
-            "property": "exit",
-            "message": "Return the exit status from the program that BunRuntime.runMain runs. unicorn/no-process-exit passes over a file with a shebang, so this rule stands in for it there."
-          }
-        ],
-        "effect-channel/no-throw": "error",
-        "effect-channel/no-try-catch": "error"
+  "rules": {
+    "eslint/no-restricted-properties": [
+      "error",
+      {
+        "object": "process",
+        "property": "exit",
+        "message": "Return the exit status instead: a bin returns it from the program runMain runs. unicorn/no-process-exit passes over a file with a shebang, so this rule stands in for it there."
       }
-    },
+    ]
+  },
+  "overrides": [
     {
       "files": ["scripts/comment-matchers.ts"],
       "rules": {
