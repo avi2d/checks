@@ -79,7 +79,7 @@ test(
     const withoutQuality = await check();
     expect(withoutQuality.text).toContain(
       [
-        "ci-wiring: gates.lint leaves out 1 gate(s) this repository's contents make applicable:",
+        "ci-wiring: quality.json gates.lint leaves out 1 gate(s) this repository's contents make applicable:",
         "  checks-quality: the repository tracks a quality.json (quality.json)",
       ].join("\n"),
     );
@@ -88,7 +88,7 @@ test(
     await writeFile(join(dir, "quality.json"), JSON.stringify({ gates: { ci: ["bun run lint"], lint: SOURCE_FREE_GATES } }));
     const sourceFree = await check();
     expect(sourceFree.text).toContain(
-      "ci-wiring: gates.lint leaves out checks-lint-coverage, checks-test-layout, none of which this repository's contents make applicable",
+      "ci-wiring: quality.json gates.lint leaves out checks-lint-coverage, checks-test-layout, none of which this repository's contents make applicable",
     );
     expect(sourceFree.exitCode).toBe(0);
 
@@ -100,7 +100,7 @@ test(
     const tracked = await check();
     expect(tracked.text).toContain(
       [
-        "ci-wiring: gates.lint leaves out 2 gate(s) this repository's contents make applicable:",
+        "ci-wiring: quality.json gates.lint leaves out 2 gate(s) this repository's contents make applicable:",
         "  checks-lint-coverage: the repository tracks TypeScript source (widget.tsx)",
         "  checks-test-layout: the repository tracks TypeScript source (widget.tsx)",
       ].join("\n"),

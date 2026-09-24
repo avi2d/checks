@@ -15,6 +15,7 @@
         "@oxlint/plugins": "1.83.0",
         "@swc/core": "1.16.2",
         "@types/bun": "^1.3.0",
+        "ajv": "8.20.0",
         "dependency-cruiser": "18.4.0",
         "effect": "4.0.0-rc.115",
         "oxlint": "1.83.0",

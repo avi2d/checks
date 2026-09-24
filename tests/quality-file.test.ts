@@ -1,4 +1,5 @@
 import { BunServices } from "@effect/platform-bun";
+import Ajv2020 from "ajv/dist/2020";
 import { afterEach, expect, test } from "bun:test";
 import { Effect } from "effect";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -128,4 +129,23 @@ test("quality.json at the root wins, package.json stands in while it is absent, 
 
 test("quality.schema.json is what the schema emits, so an editor and the decoder agree", async () => {
   expect(await readFile(join(CHECKOUT, SCHEMA_FILE), "utf8")).toBe(renderJson(qualityJsonSchema()));
+});
+
+test("an editor validating against quality.schema.json refuses a selection that leaves out a gate every repository runs", async () => {
+  const validate = new Ajv2020({ strict: false }).compile(JSON.parse(await readFile(join(CHECKOUT, SCHEMA_FILE), "utf8")));
+  const accepted = {
+    defaultBranch: "trunk",
+    gates: { ci: ["bun run lint"], lint: [...METADATA_GATES, "checks-quality"] },
+    commitIdentity: { authors: [AUTHOR] },
+    sources: { production: ["src/**/*.ts"], effect: { paths: ["src/**/*.ts"], exempt: ["src/host/*.ts"] } },
+    agentRules: { on: ["effect-error-channel"], off: ["right-size-the-work"] },
+  } satisfies Quality;
+  expect(validate(accepted)).toBe(true);
+  expect(decoded(accepted)).toEqual(accepted);
+
+  for (const lint of [["checks-quality"], METADATA_GATES.filter((bin) => bin !== "checks-ci-wiring")]) {
+    const selection = { gates: { lint } };
+    expect(validate(selection)).toBe(false);
+    expect(refusal(selection)).toContain("checks-lint must run");
+  }
 });

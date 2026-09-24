@@ -2,7 +2,7 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { git } from "./git.ts";
 import { runMain } from "./main.ts";
-import { DEFAULT_BRANCH, ENTRY_POINT, EVERY_REPOSITORY, KIT_GATES, selectedGates, type KitGate } from "./gates.ts";
+import { DEFAULT_BRANCH, ENTRY_POINT, EVERY_REPOSITORY, KIT_GATES, QUALITY_FILE, selectedGates, type KitGate } from "./gates.ts";
 import { readQuality, type Quality } from "./quality-file.ts";
 
 export type Command = readonly string[];
@@ -328,7 +328,7 @@ export const parseDeclaration = Effect.fnUntraced(function* (
   source: string,
 ): Effect.fn.Return<Declaration, WiringError> {
   if (declared?.ci === undefined) {
-    return yield* new WiringError({ message: `${source} declares no gates.ci, a non-empty array of commands` });
+    return yield* new WiringError({ message: `${QUALITY_FILE} declares no gates.ci, a non-empty array of commands` });
   }
   return {
     gates: yield* plainCommands(declared.ci, `${source} gate`),
@@ -363,10 +363,10 @@ export function formatOmissions(lintGates: readonly KitGate[], omissions: readon
   if (omitted.length === 0) return undefined;
   if (omissions.length === 0) {
     const bins = omitted.map((gate) => gate.bin).join(", ");
-    return `ci-wiring: gates.lint leaves out ${bins}, none of which this repository's contents make applicable`;
+    return `ci-wiring: ${QUALITY_FILE} gates.lint leaves out ${bins}, none of which this repository's contents make applicable`;
   }
   return [
-    `ci-wiring: gates.lint leaves out ${omissions.length} gate(s) this repository's contents make applicable:`,
+    `ci-wiring: ${QUALITY_FILE} gates.lint leaves out ${omissions.length} gate(s) this repository's contents make applicable:`,
     ...omissions.map(({ gate, content, files }) => `  ${gate}: the repository tracks ${content} (${sample(files)})`),
   ].join("\n");
 }

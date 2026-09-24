@@ -140,9 +140,10 @@ opted into. The kit's bins find it at the git root and read it there:
 Every key is optional. The bins decode the file with one Effect
 `Schema`, and the package ships `quality.schema.json` emitted from that
 schema, so the `$schema` line gives an editor the verdict the bins
-reach. A key the schema does not name is refused, not ignored, so a
-misspelt `sources` cannot switch the Effect rules off unnoticed, and so
-is a Rule switched both on and off. A glob in `sources`
+reach, save one: a Rule switched both on and off, which the bins refuse
+and no JSON Schema can express across two lists. A key the schema does
+not name is refused, not ignored, so a misspelt `sources` cannot switch
+the Effect rules off unnoticed. A glob in `sources`
 starts at the repository root, names a directory first, and uses `*`
 only within a segment and `**` only as a whole one, which are the
 globs oxlint, the language service and git all read alike. oxlint
@@ -859,7 +860,7 @@ selection leaves out a gate the repository's tracked files make
 applicable, and names the gate and the files:
 
 ```
-ci-wiring: gates.lint leaves out 2 gate(s) this repository's contents make applicable:
+ci-wiring: quality.json gates.lint leaves out 2 gate(s) this repository's contents make applicable:
   checks-lint-coverage: the repository tracks TypeScript source (src/widget.ts)
   checks-test-layout: the repository tracks TypeScript source (src/widget.ts)
 ```

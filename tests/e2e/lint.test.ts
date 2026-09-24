@@ -378,7 +378,7 @@ test(
     const withSource = await lint();
     expect(withSource.text).toContain(
       [
-        "ci-wiring: gates.lint leaves out 2 gate(s) this repository's contents make applicable:",
+        "ci-wiring: quality.json gates.lint leaves out 2 gate(s) this repository's contents make applicable:",
         "  checks-lint-coverage: the repository tracks TypeScript source (src/widget.ts)",
         "  checks-test-layout: the repository tracks TypeScript source (src/widget.ts)",
       ].join("\n"),

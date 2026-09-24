@@ -398,6 +398,7 @@ test("a selection names kit gates and keeps every gate that applies to every rep
 
 test("the declaration names one command per gate and may move the default branch", () => {
   expect(() => declared({})).toThrow("quality.json declares no gates.ci, a non-empty array of commands");
+  expect(() => declared({}, "package.json")).toThrow("quality.json declares no gates.ci, a non-empty array of commands");
   expect(() => declared({ gates: { ci: ["a && b"] } })).toThrow(WiringError);
   expect(() => declared({ gates: { ci: ["bun run lint || true"] } })).toThrow(WiringError);
   expect(() => declared({ gates: { ci: ["# nothing"] } })).toThrow(WiringError);

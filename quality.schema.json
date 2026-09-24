@@ -46,7 +46,29 @@
               "checks-ci-wiring",
               "checks-quality"
             ]
-          }
+          },
+          "allOf": [
+            {
+              "contains": {
+                "const": "checks-commit-identity"
+              }
+            },
+            {
+              "contains": {
+                "const": "checks-comment-gate"
+              }
+            },
+            {
+              "contains": {
+                "const": "checks-suppressions-ratchet"
+              }
+            },
+            {
+              "contains": {
+                "const": "checks-ci-wiring"
+              }
+            }
+          ]
         }
       },
       "additionalProperties": false
