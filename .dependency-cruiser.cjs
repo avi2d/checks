@@ -27,4 +27,8 @@ module.exports = {
       },
     },
   ],
+  options: {
+    // The bundle built from effect-channel, which the cruise reads as source.
+    exclude: { path: "^dist/" },
+  },
 };

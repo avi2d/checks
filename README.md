@@ -63,6 +63,8 @@ below. Three of them:
 `lint-coverage.sh` fails when oxlint silently skips a tracked `.ts` or
 `.tsx` file, for example through a stray `.gitignore` entry. It compares
 `git ls-files` against oxlint's own file walk and names the missing files.
+It exits 2 when oxlint cannot walk the tree, as when it is not on `PATH`
+or its config does not parse.
 
 `test-layout.ts` decides the test layout described below.
 
@@ -122,11 +124,26 @@ tip: commits the base branch gained after the head branched off would
 otherwise count against the head. When the head is the merge base, as
 on a push to the default branch or a local run on it, the range would be
 empty, so each range gate is handed that tip commit alone and checks it
-against its parent:
+against its parent, or against the empty tree when it is a repository's
+first commit:
 
 ```
 checks-lint: tip 10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD against origin/main
 ```
+
+A clone with no remote-tracking refs at all, such as a freshly
+initialised repository with no remote or one whose remote was never
+fetched, has no default branch to start from, so each range gate is
+handed `HEAD` alone the same way:
+
+```
+checks-lint: tip 10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD alone, as the clone has no remote-tracking refs
+```
+
+Once any ref sits under `refs/remotes/`, a missing
+`origin/<default branch>` exits 2 instead, since that is the shape of a
+shallow CI checkout, where `HEAD` alone would leave the commits before
+it unchecked.
 
 It prints the range, each gate's own report, then its verdict:
 
@@ -410,9 +427,11 @@ bun run checks-comment-gate <ref>
 ```
 
 With two arguments it diffs the base against the head. With one it diffs
-that commit against its parent, and exits 2 when that parent is not in
-the clone rather than widening to the whole tree, so a shallow checkout
-running the one-argument form needs `fetch-depth: 2`. Only added lines
+that commit against its parent, or against the empty tree for a
+repository's first commit, which has none. It exits 2 when the parent
+exists but is not in the clone rather than widening to the whole tree,
+so a shallow checkout running the one-argument form needs
+`fetch-depth: 2`. Only added lines
 are checked, so a violation in a file the diff never touches stays
 silent, and a refusal counts when any line of the comment carrying it was
 added. The check refuses a machine-read directive, a record or ticket
@@ -442,8 +461,9 @@ bun run checks-suppressions-ratchet <base-ref> <head-ref>
 bun run checks-suppressions-ratchet <ref>
 ```
 
-With one argument it compares that commit with its parent, and exits 2
-when the parent is not in the clone. With two it reads the base where
+With one argument it compares that commit with its parent, or with the
+empty tree for a repository's first commit, and exits 2 when the parent
+exists but is not in the clone. With two it reads the base where
 the head branched off, at their merge-base, so a count the base branch
 lowered since does not read as a rise at the head. A count that fell and
 an entry that went both pass. A commit without the file counts as empty,

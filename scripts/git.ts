@@ -25,3 +25,17 @@ export const git = Effect.fn("git")(
   },
   Effect.scoped,
 );
+
+function namesAParent(commitObject: string): boolean {
+  const [headers = ""] = commitObject.split("\n\n", 1);
+  return headers.split("\n").some((header) => header.startsWith("parent "));
+}
+
+// A shallow clone's boundary commit reads as parentless to rev-parse and log, and judged against
+// the empty tree it would carry the whole repository; only the commit object still names its parents.
+export const parentOrEmptyTree = Effect.fn("parentOrEmptyTree")(function* (rev: string, cwd?: string) {
+  if (!namesAParent(yield* git(["cat-file", "commit", rev], cwd))) {
+    return (yield* git(["hash-object", "-t", "tree", "/dev/null"], cwd)).trim();
+  }
+  return (yield* git(["rev-parse", "--verify", `${rev}^`], cwd)).trim();
+});

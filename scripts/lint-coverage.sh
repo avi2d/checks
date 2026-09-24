@@ -12,15 +12,21 @@ if ! [ -s "$tmp/expected" ]; then
 fi
 
 # Explicit paths bypass ignore files, so only an unscoped walk proves coverage.
-oxlint --debug=files 2>/dev/null | grep -E '\.tsx?$' | LC_ALL=C sort > "$tmp/walked" || true
+if ! oxlint --debug=files > "$tmp/walk" 2> "$tmp/walk-error"; then
+  echo "lint-coverage: oxlint could not walk the tree:"
+  cat "$tmp/walk" "$tmp/walk-error"
+  exit 2
+fi
+grep -E '\.tsx?$' "$tmp/walk" | LC_ALL=C sort > "$tmp/walked" || true
 
 expected_count="$(wc -l < "$tmp/expected" | tr -d ' ')"
 walked_count="$(grep -c . "$tmp/walked" || true)"
 
-missing="$(comm -23 "$tmp/expected" "$tmp/walked")"
-if [ -n "$missing" ]; then
-  echo "lint-coverage: oxlint skips ${walked_count}/${expected_count} tracked .ts/.tsx files; missing:"
-  printf '%s\n' "$missing"
+comm -23 "$tmp/expected" "$tmp/walked" > "$tmp/missing"
+if [ -s "$tmp/missing" ]; then
+  missing_count="$(wc -l < "$tmp/missing" | tr -d ' ')"
+  echo "lint-coverage: oxlint skips ${missing_count}/${expected_count} tracked .ts/.tsx files; missing:"
+  cat "$tmp/missing"
   exit 1
 fi
 
