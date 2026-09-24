@@ -918,7 +918,8 @@ a tag off `main` and reruns the build, `dist/` check, lint, typecheck
 and tests before it publishes:
 
 ```sh
-git tag v0.9.0 && git push origin v0.9.0
+tag="v$(bun -p 'require("./package.json").version')"
+git tag "$tag" && git push origin "$tag"
 ```
 
 The `release` workflow publishes the tagged version through npm
