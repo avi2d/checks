@@ -51,6 +51,7 @@ A template decides a file's structure, and the template file itself is the refer
 - A changelog lists its releases newest first, each opening with a `Released YYYY-MM-DD.` line.
 - A how-to or tutorial page numbers its steps.
 - `CLAUDE.md` is its template word for word.
+  It is a fixed agent pointer rather than a people doc, so the separator ban that people docs follow does not apply to it.
 
 ## What it reads
 

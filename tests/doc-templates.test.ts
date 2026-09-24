@@ -23,6 +23,10 @@ test("each committed template is what its spec renders, so the file a writer cop
   expect(committed).toEqual(KINDS.map((kind) => renderTemplate(TEMPLATES[kind])));
 });
 
+test("the CLAUDE.md template is the canonical agent pointer byte for byte, since every repository carries that one file", () => {
+  expect(renderTemplate(TEMPLATES.claude)).toBe("<!-- Points Claude at AGENTS.md via import; edit AGENTS.md, not this file. -->\n@AGENTS.md\n");
+});
+
 test("the template directory holds a template for each kind and nothing else", () => {
   expect(readdirSync(resolve(CHECKOUT, TEMPLATE_DIRECTORY)).toSorted()).toEqual(
     KINDS.map((kind) => templateFile(kind).slice(`${TEMPLATE_DIRECTORY}/`.length)).toSorted(),

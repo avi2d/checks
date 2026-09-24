@@ -125,7 +125,7 @@ export const TEMPLATES: Readonly<Record<Kind, Template>> = {
   },
   claude: {
     shape: "exact",
-    text: "<!-- Points Claude at AGENTS.md via import. Edit AGENTS.md, not this file. -->\n@AGENTS.md\n",
+    text: "<!-- Points Claude at AGENTS.md via import; edit AGENTS.md, not this file. -->\n@AGENTS.md\n",
   },
   tutorial: {
     shape: "outline",
