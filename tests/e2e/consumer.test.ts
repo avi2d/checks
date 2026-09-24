@@ -177,7 +177,7 @@ test(
   async () => {
     await writeConsumerFixture({
       scripts: {
-        test: "bun test --randomize",
+        test: "checks-test",
         lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout",
       },
     });
@@ -218,7 +218,7 @@ test(
     await writeConsumerFixture(
       {
         scripts: {
-          test: "bun test --randomize",
+          test: "checks-test",
           lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout",
         },
       },
@@ -273,7 +273,7 @@ test(
     await writeConsumerFixture(
       {
         scripts: {
-          test: "bun test --randomize",
+          test: "checks-test",
           lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout && checks-commit-identity HEAD",
           gate: "checks-comment-gate HEAD",
           ratchet: "checks-suppressions-ratchet HEAD",
@@ -341,6 +341,11 @@ test(
     const compare = await $`bun run compare`.cwd(dir).nothrow().quiet();
     expect(compare.stdout.toString()).toContain("no regression");
     expect(compare.exitCode).toBe(0);
+
+    const suite = await $`bun run test`.cwd(dir).nothrow().quiet();
+    expect(suite.stderr.toString()).toContain("(pass) widget");
+    expect(suite.stdout.toString()).toContain("checks-test: no test skipped");
+    expect(suite.exitCode).toBe(0);
 
     const wiring = await $`bun run wiring`.cwd(dir).nothrow().quiet();
     expect(wiring.stdout.toString()).toContain("1 gate(s) run on pull requests to main");

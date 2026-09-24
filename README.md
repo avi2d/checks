@@ -2,7 +2,8 @@
 
 Deterministic checks shared across my TypeScript repos. One package,
 `@avi2dg/checks`: the `checks-lint` entry point that runs every lint gate
-below over a range it resolves itself, the oxlint base config, the
+below over a range it resolves itself, the `checks-test` entry point
+that runs the suite and refuses an undeclared skip, the oxlint base config, the
 tsconfig fragment with the Effect language-service block, the shared
 commitlint config, the shared dependency-cruiser base, the test-layout
 check with its bunfig preset, the commit-identity check, the comment
@@ -54,8 +55,11 @@ cp node_modules/@avi2dg/checks/bunfig.toml bunfig.toml
 ```json
 "lint": "oxlint --type-aware && checks-lint",
 "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
-"test": "bun test --randomize"
+"test": "checks-test"
 ```
+
+`checks-test` runs `bun test --randomize` and fails on a skip the
+repository has not declared; see "Test entry point" below.
 
 `checks-lint` runs every kit gate a lint needs; see "Lint entry point"
 below. Three of them:
@@ -283,8 +287,9 @@ file and the path to move it to when it does not:
   them; `tests/fixtures/**` is data and is not parsed. Detection parses
   with swc and reads import specifiers and identifier use, so a test that
   only carries `"node:child_process"` as a string is not a violation.
-- `scripts.test` is exactly `bun test --randomize` and `scripts.lint` runs
-  this check, itself or through `checks-lint` called by its bare bin name.
+- `scripts.test` is exactly `checks-test`, which runs `bun test --randomize`
+  (see "Test entry point"), and `scripts.lint` runs this check, itself or
+  through `checks-lint` called by its bare bin name.
 - `bunfig.toml` carries every `[test]` key of the shipped preset with the
   same value, and `[test].pathIgnorePatterns` is always
   `["**/tests/quarantine/**"]`: the check pins it itself, so this repo,
@@ -302,6 +307,49 @@ still run on demand:
 ```sh
 bun test --path-ignore-patterns='' tests/quarantine
 ```
+
+## Test entry point
+
+`checks-test` runs the whole suite with `bun test --randomize`, passes
+bun's output through, and then reads bun's JUnit report of the same run.
+bun exits 0 with tests skipped, so a green run says nothing about the
+tests that never ran. `checks-test` fails when a test was skipped, by
+`test.skip`, `test.skipIf`, `test.if`, `describe.skip` or `test.todo`,
+without a declaration in `package.json`:
+
+```json
+"testSkips": [
+  {
+    "file": "tests/e2e/docker.test.ts",
+    "test": "images > builds the release image",
+    "reason": "the runner has no docker daemon",
+    "when": "ci"
+  }
+]
+```
+
+`file` is the path bun reports, relative to the package root, and `test`
+is the name bun's console prints: the describe blocks and the test name
+joined by ` > `. `reason` is required. `when` is `ci` or `local` for a
+test skipped only there, and a declaration without it holds in both;
+`checks-test` counts a run as `ci` when `CI` is set true, as GitHub
+Actions sets it. A declaration that holds for the run but matches no
+skipped test fails too, so a fixed or renamed test takes its
+declaration with it:
+
+```
+checks-test: 1 skipped test(s) undeclared and 1 declaration(s) matching no skipped test in this ci run:
+  tests/pricing.test.ts:12 pricing > rounds half to even: skipped with no declaration; run it, or declare it in package.json testSkips with its reason
+  tests/e2e/docker.test.ts > images > builds the release image: declared, but no such test skipped; delete the declaration
+```
+
+It exits 1 when a test failed or a skip is undeclared or a declaration
+stale, and 2 when `testSkips` does not parse or bun passed without
+writing its report. It takes no arguments: a `-t` filter reports every
+test it leaves out as skipped and a path filter drops files a
+declaration names, so a narrowed run is plain `bun test --randomize`
+with the arguments. Files under `tests/quarantine/` are never run and so
+never reported; see "Test layout".
 
 ## Dependency rules
 
@@ -733,6 +781,11 @@ The shared Stryker preset's `json` reporter writes
   that check, which is why a selection without it, or without another
   gate that applies everywhere, is refused as `checks-lint` reads it:
   nothing would check the selection otherwise.
+- `checks-test` runs bun itself rather than reading a report some other
+  run left: a skip taken only on CI is visible only in CI's own run, and
+  an earlier run's report may be stale or narrowed. It reads the JUnit
+  report bun writes to a temporary directory, since bun has no other
+  per-test output meant for a program.
 - `checks-ci-wiring` runs inside `lint`, not in a workflow of its own:
   deleting the step that runs a check is the violation it catches, so the
   local `lint` is where it has to fail.

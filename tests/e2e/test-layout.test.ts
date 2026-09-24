@@ -11,7 +11,7 @@ const PRESET = join(CHECKOUT, "bunfig.toml");
 const MANIFEST = {
   name: "consumer",
   scripts: {
-    test: "bun test --randomize",
+    test: "checks-test",
     lint: "oxlint && bun ./node_modules/@avi2dg/checks/scripts/test-layout.ts",
   },
 };
@@ -115,7 +115,7 @@ test(
       const result = await $`bun ${CHECK} ${bare}`.cwd(bare).nothrow().quiet();
       const text = result.stdout.toString() + result.stderr.toString();
       expect(result.exitCode).toBe(1);
-      expect(text).toContain('scripts.test must be exactly "bun test --randomize"');
+      expect(text).toContain('scripts.test must be exactly "checks-test"');
       expect(text).toContain("scripts.lint must run the layout check");
       expect(text).toContain("bunfig.toml is missing");
     } finally {
