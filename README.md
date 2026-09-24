@@ -945,7 +945,8 @@ A template decides a file's structure, and the template file itself is the refer
 - A file opens with one `# ` title on its first line and has text before its first section.
   It skips no heading level, and no heading is Overview, Introduction or How it works.
 - Its sections are the template's headings in the template's order.
-  A heading in angle brackets is one the writer names, and one marked verb first is refused unless its first word is on the closed list of imperative verbs the kit keeps.
+  A heading in angle brackets is one the writer names.
+  One marked verb first is left to review, since no program tells a verb from a noun there.
   A heading the template does not have, in that place, is refused.
 - A record in `docs/adr/` is named for its four-digit number, and its title opens with the same number.
   A `Date: YYYY-MM-DD` line follows the title, the first word under Status is Proposed, Accepted, Rejected, Deprecated, Superseded or Retired, and no other record holds its number.

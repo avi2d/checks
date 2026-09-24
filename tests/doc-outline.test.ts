@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { matchSections, outlineProblems, parseOutline, verbFirstProblem, type Slot } from "../scripts/doc-outline.ts";
+import { matchSections, outlineProblems, parseOutline, type Slot } from "../scripts/doc-outline.ts";
 
 const REQUIRED = { required: true } as const;
 const OPTIONAL = { required: false, omitWhen: "never" } as const;
@@ -31,7 +31,7 @@ test("the lead is what sits between the title and the first heading, and a secti
 });
 
 test("sections in the template's order pass, and each departure is named", () => {
-  const slots = [fixed("Before"), open("<task>", { rule: "verb-first" }), fixed("After"), fixed("Last", { presence: OPTIONAL })];
+  const slots = [fixed("Before"), open("<task>"), fixed("After"), fixed("Last", { presence: OPTIONAL })];
   expect(problems("# t\n\nx\n\n## Before\n\n## Run it\n\n## Build it\n\n## After\n", slots)).toEqual([]);
   expect(problems("# t\n\n## After\n\n## Before\n", slots)).toEqual([
     "5: `## Before` is out of order, as the template's order is Before, <task>, After, Last",
@@ -42,7 +42,6 @@ test("sections in the template's order pass, and each departure is named", () =>
     "11: `## Stray` is not a section the template has there, as the template's order is Before, <task>, After, Last",
   ]);
   expect(problems("# t\n\n## Before\n\n## Installing\n\n## After\n\n## After\n", slots)).toEqual([
-    "5: `## Installing` opens with `Installing`, which is not on the kit's list of imperative verbs",
     "9: `## After` appears twice",
   ]);
 });
@@ -76,23 +75,4 @@ test("a document opens with one title, skips no level and names no Overview", ()
     "11: `## Overview` names no topic; title it by what the reader does or looks up",
   ]);
   expect(found("# t\n## A\n")).toEqual(["1: has nothing between its title and its first section"]);
-});
-
-test("a verb-first heading opens with a verb on the kit's list, and any other first word is refused", () => {
-  expect(["Install it", "Bring a part", "Focus the view", "Run `widget`", "Develop", "Declare policy in the quality file"].map(verbFirstProblem)).toEqual([
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-  ]);
-  expect(["Quality file", "Size budget", "The commands", "Why it is shaped this way", "Installing into $HOME", "Spring"].map(verbFirstProblem)).toEqual([
-    "opens with `Quality`, which is not on the kit's list of imperative verbs",
-    "opens with `Size`, which is not on the kit's list of imperative verbs",
-    "opens with `The`, which is not on the kit's list of imperative verbs",
-    "opens with `Why`, which is not on the kit's list of imperative verbs",
-    "opens with `Installing`, which is not on the kit's list of imperative verbs",
-    "opens with `Spring`, which is not on the kit's list of imperative verbs",
-  ]);
 });

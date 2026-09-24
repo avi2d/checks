@@ -43,13 +43,10 @@ test("a filled-in document of every kind holds to its template", () => {
   );
 });
 
-test("a README missing a section or with a task heading that is a noun is refused", () => {
+test("a README missing a section is refused", () => {
   const readme = fixture("readme");
   expect(found("readme", readme.replace("## Before you begin\n\n- Bun 1.3.13 or later.\n\n", ""))).toEqual([
     "1: lacks `## Before you begin`",
-  ]);
-  expect(found("readme", readme.replace("## Build a bill", "## Bill"))).toEqual([
-    "20: `## Bill of materials` opens with `Bill`, which is not on the kit's list of imperative verbs",
   ]);
 });
 

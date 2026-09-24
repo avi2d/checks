@@ -3,7 +3,7 @@
 This file is the project's committed home for project-intrinsic agent knowledge: build, test, release, architecture, and sharp-edge notes that should travel with the code.
 
 - Add durable project-specific notes here as they are discovered through real work.
-- `dist/` is committed because no `prepack`/`prepublishOnly` builds it at publish time, so the tarball ships the committed bundle; rebuild with `bun run build` under the bun `.bun-version` pins, because CI rebuilds with that bun and another version emits different bytes. See docs/design.md.
+- `dist/` is committed because no `prepack`/`prepublishOnly` builds it at publish time, so the tarball ships the committed bundle. Rebuild with `bun run build` under the bun `.bun-version` pins, because CI rebuilds with that bun and another version emits different bytes. See docs/design.md.
 - Every oxlint config in an `extends` chain sets `plugins`, the consumer's and a generated fragment alike: one without them brings oxlint's default plugins, and their category rules, into the whole tree.
 - `scripts/test-layout.ts` decides this repo's own test layout too, so a new test goes under `tests/**/*.test.ts` and anything that spawns, shells out, or reaches the network goes under `tests/e2e/`. README "Lay out the tests" carries the standard.
 - `quality.json` `gates.ci` lists the commands CI must run on pull requests, and `bun run lint` fails when a workflow edit drops or disables one; a new CI gate step joins that list.

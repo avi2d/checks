@@ -74,7 +74,7 @@ export const TEMPLATES: Readonly<Record<Kind, Template>> = {
     sections: [
       BEFORE_YOU_BEGIN,
       fixed("Install", REQUIRED, ["To install <name>:", "", "1. <step>", "1. <step>", "", "<What you see when it worked.>"]),
-      open("<Everyday task, verb first>", "verb-first", REQUIRED, STEPS),
+      open("<Everyday task, verb first>", "any", REQUIRED, STEPS),
       fixed("Where things are", REQUIRED, ["| Path | What it holds |", "| --- | --- |"]),
       TROUBLESHOOTING,
       RELATED_TOPICS,
@@ -125,22 +125,22 @@ export const TEMPLATES: Readonly<Record<Kind, Template>> = {
   },
   tutorial: {
     shape: "outline",
-    title: { type: "open", prefix: "Tutorial: ", placeholder: "<Verb and what the reader builds>", rule: "verb-first" },
+    title: { type: "open", prefix: "Tutorial: ", placeholder: "<Verb and what the reader builds>", rule: "any" },
     lead: ["<What the reader builds, and what they learn on the way.>"],
     sections: [
       BEFORE_YOU_BEGIN,
-      open("<Step, verb first>", "verb-first", REQUIRED, [...STEPS, "", "<What the reader sees now.>"]),
+      open("<Step, verb first>", "any", REQUIRED, [...STEPS, "", "<What the reader sees now.>"]),
       TROUBLESHOOTING,
       RELATED_TOPICS,
     ],
   },
   "how-to": {
     shape: "outline",
-    title: { type: "open", placeholder: "<Task, verb first>", rule: "verb-first" },
+    title: { type: "open", placeholder: "<Task, verb first>", rule: "any" },
     lead: ["<Who does this, and when, in one or two sentences.>"],
     sections: [
       fixed("Before you begin", optional("the task needs nothing set up first"), BEFORE_YOU_BEGIN.body),
-      open("<Part of the task, verb first>", "verb-first", optional("the page is one task, whose steps then follow the lead"), STEPS),
+      open("<Part of the task, verb first>", "any", optional("the page is one task, whose steps then follow the lead"), STEPS),
       TROUBLESHOOTING,
       RELATED_TOPICS,
     ],

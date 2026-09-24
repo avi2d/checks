@@ -28,7 +28,7 @@ export type Violation = {
   readonly message: string;
 };
 
-export type HeadingRule = "any" | "verb-first" | "version";
+export type HeadingRule = "any" | "version";
 
 export type Presence = { readonly required: true } | { readonly required: false; readonly omitWhen: string };
 
@@ -127,45 +127,9 @@ export function marked(level: number, title: string): string {
   return `\`${"#".repeat(level)} ${title}\``;
 }
 
-// No program tells a verb from a noun by its spelling, so the list is closed and grows only through the kit.
-const IMPERATIVE_VERBS = new Set(
-  `
-add adjust adopt allow apply approve archive assign audit authenticate authorize automate avoid
-back backtest block bootstrap bring build bump bundle
-call cancel change check choose clean clear clone close collect combine commit compare compile complete configure confirm connect contribute convert copy correct create customize cut
-debug decide declare define delete deploy deprecate describe detect develop diagnose disable discover dismiss distribute document download drop
-edit emit enable encrypt enforce ensure enter estimate evaluate exclude expand explore export extend extract
-fetch fill filter find finish fix focus follow fork format forward
-generate get give grant
-handle hide hold
-identify ignore implement import improve include initialize inspect install integrate invite invoke
-join keep
-lay learn let limit lint list load locate log
-maintain make manage mark measure merge migrate mount move
-name navigate
-obtain open opt organize override
-pack pass patch pause pick pin plan point populate prepare preview print protect provide provision prune publish pull push put
-raise ratchet read rebase rebuild receive record recover reduce refactor refresh refuse register reject release reload remove rename render reorder repair replace reply report reproduce request require reset resolve restart restore restrict resume retry reuse revert review revoke rotate run
-save scale scan search secure select send serve set share ship show sign skip sort specify split start stop submit subscribe suppress switch sync
-take tell test track transfer translate trigger troubleshoot trust try tune turn
-undo uninstall unlock unpin update upgrade upload use
-validate verify view
-watch wire work wrap write
-`
-    .trim()
-    .split(/\s+/),
-);
-
-export function verbFirstProblem(title: string): string | undefined {
-  const first = title.split(/\s+/, 1)[0] ?? "";
-  const word = first.toLowerCase().replace(/[.,:!?]+$/, "");
-  return IMPERATIVE_VERBS.has(word) ? undefined : `opens with \`${first}\`, which is not on the kit's list of imperative verbs`;
-}
-
 export const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 
 export function ruleProblem(rule: HeadingRule, title: string): string | undefined {
-  if (rule === "verb-first") return verbFirstProblem(title);
   if (rule === "version") return VERSION.test(title) ? undefined : "is not a version such as 1.2.0";
   return undefined;
 }

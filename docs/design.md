@@ -61,8 +61,8 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   Whether a page teaches, walks a task, describes or explains is a judgment no program makes, so the repository states it once and the check holds the page to it.
 - `checks-docs` holds a doc file to its template when a change touches it, the way `checks-size-budget` holds a file to its budget.
   A repository adopts the templates as its files change, and an untouched file is listed as advisory rather than failing a change that never read it.
-- A heading the template marks verb first opens with a word from a closed list of imperative verbs the kit keeps.
-  No program tells a verb from a noun by its spelling, so a word missing from the list is refused, and the list grows only through a change to the kit.
+- A task heading is verb first, and review holds it there rather than the check.
+  No word list tells `Test layout` from `Test the layout`, and a check that passes the noun is worse than none.
 
 ## Related topics
 
