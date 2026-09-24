@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
-import { parseSync } from "@swc/core";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { parse } from "@swc/core";
+import { Console, Effect, FileSystem, Path, Schema } from "effect";
+import { git } from "./git.ts";
+import { runMain } from "./main.ts";
 
 export type Violation = {
   readonly file: string;
@@ -44,6 +44,10 @@ const REQUIRED_TEST_TABLE: Record<string, unknown> = {
 };
 export const LAYOUT_CHECK_MARK = "scripts/test-layout.ts";
 export const LAYOUT_CHECK_BIN = "checks-test-layout";
+
+export class LayoutError extends Schema.TaggedError<LayoutError>()("LayoutError", {
+  message: Schema.String,
+}) {}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -177,8 +181,11 @@ function outOfProcessUse(node: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
-export function isolationViolations(file: string, source: string): readonly Violation[] {
-  const module = parseSync(source, { syntax: "typescript", tsx: file.endsWith(".tsx"), target: "esnext" });
+export const isolationViolations = Effect.fn("isolationViolations")(function* (file: string, source: string) {
+  const module = yield* Effect.tryPromise({
+    try: () => parse(source, { syntax: "typescript", tsx: file.endsWith(".tsx"), target: "esnext" }),
+    catch: (error) => new LayoutError({ message: `cannot parse ${file}: ${String(error)}` }),
+  });
   const violations: Violation[] = [];
   const seen = new Set<unknown>();
 
@@ -204,7 +211,7 @@ export function isolationViolations(file: string, source: string): readonly Viol
 
   visit(module);
   return violations;
-}
+});
 
 export function scriptViolations(manifest: unknown): readonly Violation[] {
   const file = "package.json";
@@ -255,30 +262,38 @@ export function bunfigViolations(consumer: unknown, preset: unknown): readonly V
   return violations;
 }
 
-async function workingTreeFiles(root: string): Promise<readonly string[]> {
-  const listed = Bun.spawnSync(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], { cwd: root });
-  if (listed.exitCode !== 0) {
-    throw new Error(`test-layout: git ls-files failed in ${root}: ${listed.stderr.toString()}`);
-  }
-  const listedFiles = listed.stdout.toString().split("\0").filter(Boolean);
-  const present = await Promise.all(listedFiles.map((file) => Bun.file(join(root, file)).exists()));
-  return listedFiles.filter((_, index) => present[index]);
-}
+const workingTreeFiles = Effect.fn("workingTreeFiles")(function* (root: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const listed = yield* git(["ls-files", "-z", "--cached", "--others", "--exclude-standard"], root);
+  return yield* Effect.filter(listed.split("\0").filter(Boolean), (file) => fs.exists(path.join(root, file)), {
+    concurrency: "unbounded",
+  });
+});
 
-async function parsedToml(path: string): Promise<unknown> {
-  const imported: unknown = await import(path);
-  return isRecord(imported) ? (imported["default"] ?? imported) : imported;
-}
+const parsedToml = Effect.fn("parsedToml")(function* (file: string) {
+  const text = yield* (yield* FileSystem.FileSystem).readFileString(file);
+  return yield* Effect.try({
+    try: (): unknown => Bun.TOML.parse(text),
+    catch: (error) => new LayoutError({ message: `cannot parse ${file}: ${String(error)}` }),
+  });
+});
 
-async function readManifest(root: string): Promise<unknown> {
-  const text = await readFile(join(root, "package.json"), "utf8");
-  return JSON.parse(text) as unknown;
-}
+const parseJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
+
+const readManifest = Effect.fn("readManifest")(function* (file: string) {
+  const text = yield* (yield* FileSystem.FileSystem).readFileString(file);
+  return yield* parseJson(text).pipe(
+    Effect.mapError((cause) => new LayoutError({ message: `cannot read ${file} as JSON: ${cause.message}` })),
+  );
+});
 
 export type Result = { readonly files: number; readonly violations: readonly Violation[] };
 
-export async function run(root: string, presetPath: string): Promise<Result> {
-  const files = await workingTreeFiles(root);
+export const run = Effect.fn("run")(function* (root: string, presetPath: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const files = yield* workingTreeFiles(root);
   const violations: Violation[] = [...placementViolations(files)];
 
   const inProcess = files.filter(
@@ -289,19 +304,18 @@ export async function run(root: string, presetPath: string): Promise<Result> {
       !file.startsWith(DATA_DIR),
   );
   for (const file of inProcess) {
-    const source = await readFile(join(root, file), "utf8");
-    violations.push(...isolationViolations(file, source));
+    const source = yield* fs.readFileString(path.join(root, file));
+    violations.push(...(yield* isolationViolations(file, source)));
   }
 
-  violations.push(...scriptViolations(await readManifest(root)));
+  violations.push(...scriptViolations(yield* readManifest(path.join(root, "package.json"))));
 
-  const consumerBunfig = (await Bun.file(join(root, "bunfig.toml")).exists())
-    ? await parsedToml(join(root, "bunfig.toml"))
-    : undefined;
-  violations.push(...bunfigViolations(consumerBunfig, await parsedToml(presetPath)));
+  const bunfig = path.join(root, "bunfig.toml");
+  const consumerBunfig = (yield* fs.exists(bunfig)) ? yield* parsedToml(bunfig) : undefined;
+  violations.push(...bunfigViolations(consumerBunfig, yield* parsedToml(presetPath)));
 
   return { files: files.length, violations };
-}
+});
 
 export function report({ files, violations }: Result): string {
   if (violations.length === 0) return `test-layout: ${files} files satisfy the layout`;
@@ -312,10 +326,12 @@ export function report({ files, violations }: Result): string {
   return [`test-layout: ${violations.length} violation(s)`, ...lines].join("\n");
 }
 
-if (import.meta.main) {
+const layout = Effect.gen(function* () {
+  const path = yield* Path.Path;
   const root = process.argv[2] ?? process.cwd();
-  const preset = fileURLToPath(new URL("../bunfig.toml", import.meta.url));
-  const result = await run(root, preset);
-  console.log(report(result));
-  process.exit(result.violations.length === 0 ? 0 : 1);
-}
+  const result = yield* run(root, path.join(import.meta.dir, "..", "bunfig.toml"));
+  yield* Console.log(report(result));
+  return result.violations.length === 0;
+});
+
+if (import.meta.main) runMain("test-layout", layout);

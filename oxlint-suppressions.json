@@ -3,19 +3,5 @@
     "effect-channel/no-throw": {
       "count": 1
     }
-  },
-  "scripts/test-layout.ts": {
-    "effect-channel/no-throw": {
-      "count": 1
-    },
-    "no-restricted-properties": {
-      "count": 1
-    },
-    "node/no-sync": {
-      "count": 2
-    },
-    "oxc/no-async-await": {
-      "count": 4
-    }
   }
 }
