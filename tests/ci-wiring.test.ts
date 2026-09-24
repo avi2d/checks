@@ -58,7 +58,9 @@ function gapsIn(files: Readonly<Record<string, string>>, declaration: Declaratio
 function lintGap(workflow: string, others: Readonly<Record<string, string>> = {}) {
   const gaps = gapsIn({ [CI]: workflow, ...others });
   expect(gaps.map((gap) => gap.gate)).toEqual(["bun run lint"]);
-  return gaps[0]!;
+  const [gap] = gaps;
+  if (gap === undefined) throw new Error("expected a gap for bun run lint");
+  return gap;
 }
 
 test("the restored workflow runs every declared gate", () => {
@@ -109,7 +111,7 @@ test("a job set to continue-on-error: true or if: false takes every gate in it d
   ] as const) {
     const gaps = gapsIn({ [CI]: mutate(RESTORED, "    runs-on: ubuntu-latest\n", `    runs-on: ubuntu-latest\n${line}`) });
     expect(gaps.map((gap) => gap.gate)).toEqual(["bun run lint", "bun run test"]);
-    expect(gaps[0]!.blocked).toEqual([{ location: `${CI} job checks step 4`, blocker }]);
+    expect(gaps[0]?.blocked).toEqual([{ location: `${CI} job checks step 4`, blocker }]);
   }
 });
 
@@ -117,7 +119,7 @@ test("a workflow that no longer triggers on pull requests goes red", () => {
   const withoutPullRequest = mutate(RESTORED, "  pull_request:\n    types: [opened, edited, synchronize, reopened]\n", "");
   const gaps = gapsIn({ [CI]: withoutPullRequest });
   expect(gaps.map((gap) => gap.gate)).toEqual(["bun run lint", "bun run test"]);
-  expect(gaps[0]!.blocked).toEqual([
+  expect(gaps[0]?.blocked).toEqual([
     { location: `${CI} job checks step 4`, blocker: `${CI} does not trigger on pull_request` },
   ]);
 });
@@ -129,10 +131,10 @@ test("a pull_request trigger that skips the default branch or the pushed commits
     ["    branches-ignore: [ma*]\n", `${CI} ignores pull_request to main`],
   ] as const) {
     const workflow = mutate(RESTORED, "    types: [opened, edited, synchronize, reopened]\n", filter);
-    expect(gapsIn({ [CI]: workflow })[0]!.blocked[0]!.blocker).toBe(blocker);
+    expect(gapsIn({ [CI]: workflow })[0]?.blocked[0]?.blocker).toBe(blocker);
   }
   const closedOnly = mutate(RESTORED, "[opened, edited, synchronize, reopened]", "[closed]");
-  expect(gapsIn({ [CI]: closedOnly })[0]!.blocked[0]!.blocker).toBe(
+  expect(gapsIn({ [CI]: closedOnly })[0]?.blocked[0]?.blocker).toBe(
     `${CI} limits pull_request to types without opened, synchronize`,
   );
 });
@@ -142,7 +144,7 @@ test("a pull_request trigger filtered by paths goes red, since some pull request
     const workflow = mutate(RESTORED, "    types: [opened, edited, synchronize, reopened]\n", `    types: [opened, synchronize]\n${filter}`);
     const gaps = gapsIn({ [CI]: workflow });
     expect(gaps.map((gap) => gap.gate)).toEqual(["bun run lint", "bun run test"]);
-    expect(gaps[0]!.blocked).toEqual([
+    expect(gaps[0]?.blocked).toEqual([
       {
         location: `${CI} job checks step 4`,
         blocker: `${CI} filters pull_request by paths, so some pull requests skip the gate`,
@@ -156,22 +158,22 @@ test("a job that needs a job set to if: false, directly or through a chain, goes
     `on: pull_request\njobs:\n  setup:\n    if: false\n    steps:\n      - run: "true"\n${extra}  checks:\n${checks}    steps:\n      - run: bun run lint\n      - run: bun run test\n`;
   const direct = gapsIn({ [CI]: withNeeds("    needs: setup\n") });
   expect(direct.map((gap) => gap.gate)).toEqual(["bun run lint", "bun run test"]);
-  expect(direct[0]!.blocked).toEqual([
+  expect(direct[0]?.blocked).toEqual([
     { location: `${CI} job checks step 1`, blocker: "job checks needs a job that never runs: job setup sets if: false" },
   ]);
 
   const chained = gapsIn({ [CI]: withNeeds("    needs: [build]\n", "  build:\n    needs: setup\n") });
-  expect(chained[0]!.blocked).toEqual([
+  expect(chained[0]?.blocked).toEqual([
     { location: `${CI} job checks step 1`, blocker: "job checks needs a job that never runs: job setup sets if: false" },
   ]);
 
   for (const condition of ["github.event_name == 'pull_request'", "true", "${{ true }}", "success()"]) {
-    expect(gapsIn({ [CI]: withNeeds(`    needs: setup\n    if: ${condition}\n`) })[0]!.blocked).toEqual([
+    expect(gapsIn({ [CI]: withNeeds(`    needs: setup\n    if: ${condition}\n`) })[0]?.blocked).toEqual([
       { location: `${CI} job checks step 1`, blocker: "job checks needs a job that never runs: job setup sets if: false" },
     ]);
   }
   expect(
-    gapsIn({ [CI]: withNeeds("    needs: [build]\n", "  build:\n    needs: setup\n    if: true\n") })[0]!.blocked,
+    gapsIn({ [CI]: withNeeds("    needs: [build]\n", "  build:\n    needs: setup\n    if: true\n") })[0]?.blocked,
   ).toEqual([
     { location: `${CI} job checks step 1`, blocker: "job checks needs a job that never runs: job setup sets if: false" },
   ]);
@@ -220,7 +222,7 @@ test("a gate run through a local reusable workflow counts only while the calling
   expect(gapsIn(files, declaration)).toEqual([]);
 
   const disabled = { ...files, [CI]: mutate(caller, "if: github.event_name == 'pull_request'", "if: false") };
-  expect(gapsIn(disabled, declaration)[0]!.blocked).toEqual([
+  expect(gapsIn(disabled, declaration)[0]?.blocked).toEqual([
     {
       location: `${CI} job comment-gate > .github/workflows/comment-gate.yml job gate step 1`,
       blocker: "job comment-gate sets if: false",

@@ -4,9 +4,14 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { Schema } from "effect";
 import { withoutPullRequestEvent } from "../lib/env.ts";
 
 const CHECKOUT = resolve(import.meta.dir, "..", "..");
+
+const Manifest = Schema.fromJsonString(
+  Schema.Struct({ exports: Schema.Record(Schema.String, Schema.String), bin: Schema.Record(Schema.String, Schema.String) }),
+);
 
 let dir = "";
 let packDir = "";
@@ -221,9 +226,7 @@ test(
     );
 
     const installed = join(dir, "node_modules", "@avi2dg", "checks");
-    const manifest = JSON.parse(await readFile(join(CHECKOUT, "package.json"), "utf8")) as {
-      exports: Record<string, string>;
-    };
+    const manifest = Schema.decodeSync(Manifest)(await readFile(join(CHECKOUT, "package.json"), "utf8"));
     const targets = Object.values(manifest.exports);
     expect(targets.length).toBeGreaterThan(0);
     for (const target of targets) {
@@ -284,9 +287,7 @@ test(
       `file:${tarball}`,
     );
 
-    const manifest = JSON.parse(await readFile(join(CHECKOUT, "package.json"), "utf8")) as {
-      bin: Record<string, string>;
-    };
+    const manifest = Schema.decodeSync(Manifest)(await readFile(join(CHECKOUT, "package.json"), "utf8"));
     const bins = Object.keys(manifest.bin);
     expect(bins).toContain("checks-ci-wiring");
     for (const bin of bins) {
