@@ -69,10 +69,52 @@ var rule = {
 };
 var no_error_channel_escape_default = rule;
 
+// effect-channel/no-throw.ts
+var rule2 = {
+  meta: {
+    type: "problem",
+    docs: { description: "Disallow throw, which fails outside Effect's error channel" }
+  },
+  create(context) {
+    return {
+      ThrowStatement(node) {
+        context.report({
+          node,
+          message: "throw escapes the error channel: no type records the failure, so no caller has to answer for it. Define the failure with Schema.TaggedError and fail with it through Effect.fail, so it stays in E for Effect.catchTag to handle"
+        });
+      }
+    };
+  }
+};
+var no_throw_default = rule2;
+
+// effect-channel/no-try-catch.ts
+var rule3 = {
+  meta: {
+    type: "problem",
+    docs: { description: "Disallow a try statement with a catch clause, which recovers outside Effect's error channel" }
+  },
+  create(context) {
+    return {
+      CatchClause(node) {
+        context.report({
+          node,
+          message: "catch recovers outside the error channel: it takes whatever was thrown as unknown, bugs included. Wrap the throwing call in Effect.try or Effect.tryPromise, whose catch maps the cause to a Schema.TaggedError, and recover by tag with Effect.catchTag"
+        });
+      }
+    };
+  }
+};
+var no_try_catch_default = rule3;
+
 // effect-channel/index.ts
 var plugin = {
   meta: { name: "effect-channel" },
-  rules: { "no-error-channel-escape": no_error_channel_escape_default }
+  rules: {
+    "no-error-channel-escape": no_error_channel_escape_default,
+    "no-throw": no_throw_default,
+    "no-try-catch": no_try_catch_default
+  }
 };
 var effect_channel_default = plugin;
 export {

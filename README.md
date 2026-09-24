@@ -80,6 +80,48 @@ export default {
 The registry version is pinned by the consumer's lockfile; bump
 `@avi2dg/checks` to adopt a new release.
 
+## Effect rules
+
+The base config loads the `effect-channel` plugin and turns on
+`effect-channel/no-error-channel-escape`, which refuses `Effect.ignore`,
+`Effect.ignoreCause`, the `Effect.catchCause` family, and an
+`Effect.catch` whose handler takes no error or names it `_`.
+
+Two more rules ship off, because a repository writes only some of its
+paths in Effect: code a host loads without `node_modules`, such as a
+hook bundle or this oxlint plugin, cannot import it.
+
+- `effect-channel/no-throw` refuses a `throw` statement.
+- `effect-channel/no-try-catch` refuses a `try` statement with a
+  `catch` clause. `try`/`finally` stays allowed.
+
+Each refusal says what to write instead: a `Schema.TaggedError` failed
+through `Effect.fail`, a throwing call wrapped in `Effect.try` or
+`Effect.tryPromise`, and recovery by tag with `Effect.catchTag`.
+
+A repository turns them on for the paths it writes in Effect through an
+`overrides` entry in its root `.oxlintrc.json`:
+
+```json
+{
+  "extends": ["./node_modules/@avi2dg/checks/oxlintrc.json"],
+  "plugins": ["typescript", "oxc", "eslint", "import"],
+  "overrides": [
+    {
+      "files": ["src/**"],
+      "rules": {
+        "effect-channel/no-throw": "error",
+        "effect-channel/no-try-catch": "error"
+      }
+    }
+  ]
+}
+```
+
+oxlint resolves `files` against the directory of the config that holds
+the override, so a config passed with `-c` from outside the repository
+matches nothing and reports nothing.
+
 ## Test layout
 
 `checks-test-layout` fails unless the repo holds this shape, and names the
@@ -527,7 +569,7 @@ a tag off `main` and reruns the build, `dist/` check, lint, typecheck
 and tests before it publishes:
 
 ```sh
-git tag v0.4.0 && git push origin v0.4.0
+git tag v0.5.0 && git push origin v0.5.0
 ```
 
 The `release` workflow publishes the tagged version through npm
