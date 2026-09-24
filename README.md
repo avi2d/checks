@@ -621,8 +621,9 @@ The shared Stryker preset's `json` reporter writes
   `@effect/platform-node-shared` is a direct dependency at the same exact
   version only to pin it: `@effect/platform-bun` asks for it with a `^`
   range, and a newer rc peers on a newer `effect` than consumers install,
-  so all three move together. The reusable `comment-gate` and `commit-identity` workflows install the
-  kit before running a script from their `.checks/` checkout.
+  so all three move together. The reusable `comment-gate` and
+  `commit-identity` workflows install the kit before running a script
+  from their `.checks/` checkout.
 - Each runnable script ships a `checks-` bin entry, so consumer
   `package.json` scripts call the short name, which the package manager
   puts on `PATH` only there; a shell runs it through `bun run`, which
