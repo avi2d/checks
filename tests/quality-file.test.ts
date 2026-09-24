@@ -73,10 +73,10 @@ test("every field decodes, and a key the schema does not name is refused rather 
 });
 
 test("a glob reads the same to oxlint, the language service and git, or it is refused", () => {
-  const accepted = ["src/**/*.ts", "**/*.ts", "scripts/bin/*.ts", "a/b*c/**", "packages/@scope/x/**/*.ts"];
+  const accepted = ["src/**/*.ts", "**/*.ts", "scripts/bin/*.ts", "a/b*c/*.test.ts", "src/main.ts", "packages/@scope/x/**/*.ts"];
   for (const glob of accepted) expect(decoded({ sources: { effect: { paths: [glob] } } })).toBeDefined();
 
-  const refused = ["*.ts", "src", "src/{a,b}/*.ts", "src/?.ts", "src/[ab].ts", "./src/**/*.ts", "../src/*.ts", "src/../x/*.ts", "src/**.ts", "src/", "/src/*.ts", "!src/*.ts"];
+  const refused = ["*.ts", "src", "src/{a,b}/*.ts", "src/?.ts", "src/[ab].ts", "./src/**/*.ts", "../src/*.ts", "src/../x/*.ts", "src/**.ts", "src/", "/src/*.ts", "!src/*.ts", "src/**", "src/lib", "a/b*c/**", "src/**/*", "src/*.*"];
   for (const glob of refused) {
     expect(refusal({ sources: { effect: { paths: [glob] } } })).toContain("Expected a glob from the repository root");
   }

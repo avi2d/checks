@@ -144,11 +144,14 @@ reach, save one: a Rule switched both on and off, which the bins refuse
 and no JSON Schema can express across two lists. A key the schema does
 not name is refused, not ignored, so a misspelt `sources` cannot switch
 the Effect rules off unnoticed. A glob in `sources`
-starts at the repository root, names a directory first, and uses `*`
-only within a segment and `**` only as a whole one, which are the
-globs oxlint, the language service and git all read alike. oxlint
-matches `*.ts` at any depth where the other two match it at the root
-alone, so the schema refuses it; `**/*.ts` means every depth to all
+starts at the repository root, names a directory first, uses `*`
+only within a segment and `**` only as a whole one, and ends in a file
+name with an extension, which are the globs oxlint, the language
+service and git all read alike. oxlint matches `*.ts` at any depth
+where the other two match it at the root alone, so the schema refuses
+it; `**/*.ts` means every depth to all three. The language service
+matches nothing for `src/**` and oxlint nothing for `src/lib`, so the
+schema refuses both; `src/**/*.ts` and `src/lib/*.ts` say it to all
 three.
 
 Until a later minor release, a repository with no `quality.json` still

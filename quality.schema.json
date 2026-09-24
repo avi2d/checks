@@ -186,8 +186,8 @@
     },
     "PathGlob": {
       "type": "string",
-      "pattern": "^(?!\\.\\.?(?:\\/|$))(?:\\*\\*|(?:[\\w.@+-]|\\*(?!\\*))+)(?:\\/(?!\\.\\.?(?:\\/|$))(?:\\*\\*|(?:[\\w.@+-]|\\*(?!\\*))+))+$",
-      "description": "A glob from the repository root that oxlint, the Effect language service and git read alike: a directory first, * within a segment, ** as a whole one, and no braces, ?, [ or leading ./"
+      "pattern": "^(?!\\.\\.?(?:\\/|$))(?:\\*\\*|(?:[\\w.@+-]|\\*(?!\\*))+)(?:\\/(?!\\.\\.?(?:\\/|$))(?:\\*\\*|(?:[\\w.@+-]|\\*(?!\\*))+))*\\/(?:[\\w.@+-]|\\*(?!\\*))*\\.\\w+$",
+      "description": "A glob from the repository root that oxlint, the Effect language service and git read alike: a directory first, * within a segment, ** as a whole one, a file name with an extension last, and no braces, ?, [ or leading ./"
     },
     "RuleName": {
       "type": "string",

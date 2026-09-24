@@ -3,16 +3,21 @@ import { LintGates, QUALITY_FILE } from "./gates.ts";
 
 const SEGMENT = String.raw`(?!\.\.?(?:/|$))(?:\*\*|(?:[\w.@+-]|\*(?!\*))+)`;
 
+const FILE = String.raw`(?:[\w.@+-]|\*(?!\*))*\.\w+`;
+
 // oxlint matches a glob without a slash against a file's name at any depth, where tsc, the
 // language service and git match it at the root alone, so a glob names a directory first.
+// The language service drops an include ending in ** and oxlint reads a bare name as a file,
+// so a glob ends in a file name with an extension.
 const PathGlob = Schema.String.check(
-  Schema.isPattern(new RegExp(`^${SEGMENT}(?:/${SEGMENT})+$`), {
-    expected: "a glob from the repository root such as src/**/*.ts: a directory first, * within a segment, ** as a whole one",
+  Schema.isPattern(new RegExp(`^${SEGMENT}(?:/${SEGMENT})*/${FILE}$`), {
+    expected:
+      "a glob from the repository root such as src/**/*.ts: a directory first, * within a segment, ** as a whole one, a file name with an extension last",
   }),
 ).annotate({
   identifier: "PathGlob",
   description:
-    "A glob from the repository root that oxlint, the Effect language service and git read alike: a directory first, * within a segment, ** as a whole one, and no braces, ?, [ or leading ./",
+    "A glob from the repository root that oxlint, the Effect language service and git read alike: a directory first, * within a segment, ** as a whole one, a file name with an extension last, and no braces, ?, [ or leading ./",
 });
 
 const Command = Schema.NonEmptyString.annotate({ identifier: "Command" });
