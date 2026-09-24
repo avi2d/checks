@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { Effect } from "effect";
 import {
   compareSuppressions,
   parseSuppressions,
@@ -24,7 +25,7 @@ test("oxlint's file parses into a count per rule per file", () => {
     },
     "src/glob.ts": { "typescript/no-non-null-assertion": { count: 1 } },
   });
-  expect(parseSuppressions(text, "base")).toEqual(BASE);
+  expect(Effect.runSync(parseSuppressions(text, "base"))).toEqual(BASE);
 });
 
 test("a raised count goes red naming its file and rule", () => {
@@ -96,7 +97,7 @@ test("a file that is not oxlint's shape is refused with where it was read", () =
     ['{"a.ts": {"no-debugger": {"count": "1"}}}', "holds a.ts no-debugger without a whole count"],
   ];
   for (const [text, reason] of refusals) {
-    expect(() => parseSuppressions(text, "head")).toThrow(SuppressionsError);
-    expect(() => parseSuppressions(text, "head")).toThrow(`suppressions-ratchet: head ${reason}`);
+    expect(() => Effect.runSync(parseSuppressions(text, "head"))).toThrow(SuppressionsError);
+    expect(() => Effect.runSync(parseSuppressions(text, "head"))).toThrow(`head ${reason}`);
   }
 });

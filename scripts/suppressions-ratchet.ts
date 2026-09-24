@@ -1,4 +1,8 @@
 #!/usr/bin/env bun
+import { Console, Effect, Schema } from "effect";
+import { git } from "./git.ts";
+import { runMain, Usage } from "./main.ts";
+
 export const SUPPRESSIONS = "oxlint-suppressions.json";
 
 export type Suppressions = ReadonlyMap<string, ReadonlyMap<string, number>>;
@@ -13,44 +17,37 @@ export type Ratchet = {
   readonly rises: readonly Rise[];
 };
 
-export class SuppressionsError extends Error {}
+export class SuppressionsError extends Schema.TaggedError<SuppressionsError>()("SuppressionsError", {
+  message: Schema.String,
+}) {}
 
 const USAGE = "usage: suppressions-ratchet.ts <ref> | <base-ref> <head-ref>";
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+const parseJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
+const decodeObject = Schema.decodeUnknownEffect(Schema.Record(Schema.String, Schema.Unknown));
+const decodeEntry = Schema.decodeUnknownEffect(Schema.Struct({ count: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)) }));
 
-function isCount(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0;
-}
-
-export function parseSuppressions(text: string, where: string): Suppressions {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    throw new SuppressionsError(`suppressions-ratchet: ${where} is not valid JSON`);
-  }
-  if (!isRecord(parsed)) {
-    throw new SuppressionsError(`suppressions-ratchet: ${where} is not an object of files`);
-  }
-  const files = new Map<string, ReadonlyMap<string, number>>();
-  for (const [file, rules] of Object.entries(parsed)) {
-    if (!isRecord(rules)) {
-      throw new SuppressionsError(`suppressions-ratchet: ${where} holds ${file} without an object of rules`);
-    }
+export const parseSuppressions = Effect.fn("parseSuppressions")(function* (
+  text: string,
+  where: string,
+): Effect.fn.Return<Suppressions, SuppressionsError> {
+  const refuse = (reason: string) => () => new SuppressionsError({ message: `${where} ${reason}` });
+  const parsed = yield* parseJson(text).pipe(Effect.mapError(refuse("is not valid JSON")));
+  const files = yield* decodeObject(parsed).pipe(Effect.mapError(refuse("is not an object of files")));
+  const suppressions = new Map<string, ReadonlyMap<string, number>>();
+  for (const [file, rules] of Object.entries(files)) {
+    const entries = yield* decodeObject(rules).pipe(Effect.mapError(refuse(`holds ${file} without an object of rules`)));
     const counts = new Map<string, number>();
-    for (const [rule, entry] of Object.entries(rules)) {
-      if (!isRecord(entry) || !isCount(entry["count"])) {
-        throw new SuppressionsError(`suppressions-ratchet: ${where} holds ${file} ${rule} without a whole count`);
-      }
-      counts.set(rule, entry["count"]);
+    for (const [rule, entry] of Object.entries(entries)) {
+      const { count } = yield* decodeEntry(entry).pipe(
+        Effect.mapError(refuse(`holds ${file} ${rule} without a whole count`)),
+      );
+      counts.set(rule, count);
     }
-    files.set(file, counts);
+    suppressions.set(file, counts);
   }
-  return files;
-}
+  return suppressions;
+});
 
 export function compareSuppressions(base: Suppressions, head: Suppressions): Ratchet {
   const rises: Rise[] = [];
@@ -91,52 +88,38 @@ export function report({ counted, lowered, rises }: Ratchet): string {
   ].join("\n");
 }
 
-function die(message: string): never {
-  console.error(message);
-  process.exit(2);
-}
+const commitOf = Effect.fn("commitOf")(function* (rev: string) {
+  return (yield* git(["rev-parse", "--verify", `${rev}^{commit}`])).trim();
+});
 
-function git(...args: readonly string[]): string {
-  const result = Bun.spawnSync(["git", ...args], { stdout: "pipe", stderr: "pipe" });
-  if (!result.success) {
-    die(`suppressions-ratchet: git ${args.join(" ")}: ${result.stderr.toString().trim()}`);
-  }
-  return result.stdout.toString();
-}
+const mergeBase = Effect.fn("mergeBase")(function* (base: string, head: string) {
+  const commit = yield* git(["merge-base", base, head]).pipe(
+    Effect.mapError(() => new SuppressionsError({ message: `${base} and ${head} share no commit` })),
+  );
+  return commit.trim();
+});
 
-function commitOf(rev: string): string {
-  return git("rev-parse", "--verify", `${rev}^{commit}`).trim();
-}
+const suppressionsAt = Effect.fn("suppressionsAt")(function* (commit: string) {
+  const blob = (yield* git(["ls-tree", "--object-only", commit, "--", SUPPRESSIONS])).trim();
+  if (blob === "") return new Map() satisfies Suppressions;
+  return yield* parseSuppressions(yield* git(["cat-file", "blob", blob]), `${SUPPRESSIONS} at ${commit}`);
+});
 
-function mergeBase(base: string, head: string): string {
-  const result = Bun.spawnSync(["git", "merge-base", base, head], { stdout: "pipe", stderr: "pipe" });
-  if (!result.success) die(`suppressions-ratchet: ${base} and ${head} share no commit`);
-  return result.stdout.toString().trim();
-}
-
-function suppressionsAt(commit: string): Suppressions {
-  const blob = git("ls-tree", "--object-only", commit, "--", SUPPRESSIONS).trim();
-  if (blob === "") return new Map();
-  try {
-    return parseSuppressions(git("cat-file", "blob", blob), `${SUPPRESSIONS} at ${commit}`);
-  } catch (error) {
-    return die(error instanceof SuppressionsError ? error.message : `suppressions-ratchet: ${String(error)}`);
-  }
-}
-
-export function runRange(base: string, head: string): Ratchet {
-  const headCommit = commitOf(head);
+export const runRange = Effect.fn("runRange")(function* (base: string, head: string) {
+  const headCommit = yield* commitOf(head);
   // At the base tip, a count the base branch lowered after the head branched off would read as a rise at the head.
-  const branchPoint = mergeBase(commitOf(base), headCommit);
-  return compareSuppressions(suppressionsAt(branchPoint), suppressionsAt(headCommit));
-}
+  const branchPoint = yield* mergeBase(yield* commitOf(base), headCommit);
+  return compareSuppressions(yield* suppressionsAt(branchPoint), yield* suppressionsAt(headCommit));
+});
 
-if (import.meta.main) {
+const ratchet = Effect.gen(function* () {
   const [first, second, ...extra] = process.argv.slice(2);
-  if (first === undefined || extra.length > 0) die(USAGE);
+  if (first === undefined || extra.length > 0) return yield* new Usage({ message: USAGE });
 
-  const ratchet = second !== undefined ? runRange(first, second) : runRange(`${first}^`, first);
+  const result = second !== undefined ? yield* runRange(first, second) : yield* runRange(`${first}^`, first);
 
-  console.log(report(ratchet));
-  process.exit(ratchet.rises.length === 0 ? 0 : 1);
-}
+  yield* Console.log(report(result));
+  return result.rises.length === 0;
+});
+
+if (import.meta.main) runMain("suppressions-ratchet", ratchet);
