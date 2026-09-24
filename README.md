@@ -455,6 +455,14 @@ supported way to wire a gate: it is not read, so a gate must run as a
 `run:` step, such as `bunx checks-comment-gate`, in the repo's own
 workflows.
 
+A step running `checks-lint` also counts for a declared gate that calls
+one of the gates `checks-lint` runs, when the step calls `checks-lint`
+the same way: `bunx checks-lint` counts for
+`bunx checks-comment-gate "origin/$BASE_REF" "$HEAD_SHA"`. A step running `bun run lint` counts only for the `bun run lint` gate,
+since the check never reads what a package script runs. So once `lint`
+runs `checks-lint`, the per-gate entries can leave `ciWiring.gates`
+along with the workflows that ran them.
+
 The default branch is `main`; a repo with another one sets
 `"defaultBranch"` beside `"gates"`.
 
