@@ -91,10 +91,11 @@ function nameOf(result: TestResult): string {
 export function recordOf(runs: readonly Run[]): FlakeRecord {
   const failures = new Map<string, { file: string; test: string; line: number; seeds: number[] }>();
   for (const run of runs) {
-    for (const result of run.failed) {
-      const failure = failures.get(nameOf(result)) ?? { file: result.file, test: result.name, line: result.line, seeds: [] };
-      if (!failure.seeds.includes(run.seed)) failure.seeds.push(run.seed);
-      failures.set(nameOf(result), failure);
+    const failing = new Map(run.failed.map((result) => [nameOf(result), result]));
+    for (const [name, result] of failing) {
+      const failure = failures.get(name) ?? { file: result.file, test: result.name, line: result.line, seeds: [] };
+      failure.seeds.push(run.seed);
+      failures.set(name, failure);
     }
   }
   return {

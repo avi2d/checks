@@ -40,3 +40,12 @@ test("the summary is a markdown table a pipe in a test name cannot break", () =>
   );
   expect(summary(recordOf(RUNS.slice(1, 2)))).toBe("checks-flake: 1 run(s) passed, with seeds 9");
 });
+
+test("a seed replayed twice counts each run it failed in", () => {
+  const replayed: readonly Run[] = [
+    { seed: 7, passed: false, tests: 1, failed: [failed("tests/a.test.ts", 5, "a")] },
+    { seed: 7, passed: false, tests: 1, failed: [failed("tests/a.test.ts", 5, "a")] },
+  ];
+  expect(recordOf(replayed).failures).toEqual([{ file: "tests/a.test.ts", test: "a", line: 5, seeds: [7, 7] }]);
+  expect(summary(recordOf(replayed))).toContain("| tests/a.test.ts:5 a | 2 of 2 runs | 7, 7 |");
+});
