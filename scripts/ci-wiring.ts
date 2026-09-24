@@ -2,7 +2,15 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { git } from "./git.ts";
 import { runMain } from "./main.ts";
-import { DEFAULT_BRANCH, ENTRY_POINT, KIT_GATES } from "./gates.ts";
+import {
+  DEFAULT_BRANCH,
+  ENTRY_POINT,
+  EVERY_REPOSITORY,
+  KIT_GATES,
+  LintWiring,
+  selectedGates,
+  type KitGate,
+} from "./gates.ts";
 
 export type Command = readonly string[];
 
@@ -14,6 +22,7 @@ export type Gate = {
 export type Declaration = {
   readonly gates: readonly Gate[];
   readonly defaultBranch: string;
+  readonly lintGates: readonly KitGate[];
 };
 
 export type Workflow = {
@@ -24,6 +33,12 @@ export type Workflow = {
 export type BlockedInvocation = {
   readonly location: string;
   readonly blocker: string;
+};
+
+export type Omission = {
+  readonly gate: string;
+  readonly content: string;
+  readonly files: readonly [string, ...string[]];
 };
 
 export type Gap = {
@@ -230,15 +245,15 @@ function runSteps(workflows: readonly Workflow[], branch: string): readonly RunS
   return steps;
 }
 
-function entryPointCommand(gate: Command): Command | undefined {
-  const index = gate.findIndex((word) => KIT_GATES.some((kitGate) => kitGate.bin === word));
+function entryPointCommand(gate: Command, lintGates: readonly KitGate[]): Command | undefined {
+  const index = gate.findIndex((word) => lintGates.some((kitGate) => kitGate.bin === word));
   return index === -1 ? undefined : [...gate.slice(0, index), ENTRY_POINT.bin];
 }
 
 export function findGaps(declaration: Declaration, workflows: readonly Workflow[]): readonly Gap[] {
   const steps = runSteps(workflows, declaration.defaultBranch);
   return declaration.gates.flatMap((gate) => {
-    const entryPoint = entryPointCommand(gate.words);
+    const entryPoint = entryPointCommand(gate.words, declaration.lintGates);
     const commands = [
       { command: gate.command, words: gate.words },
       ...(entryPoint === undefined ? [] : [{ command: entryPoint.join(" "), words: entryPoint }]),
@@ -273,6 +288,8 @@ export function formatReport(declaration: Declaration, gaps: readonly Gap[]): st
   return lines.join("\n");
 }
 
+const decodeWiring = Schema.decodeUnknownEffect(LintWiring);
+
 export const parseDeclaration = Effect.fnUntraced(function* (
   manifest: unknown,
   source: string,
@@ -293,12 +310,48 @@ export const parseDeclaration = Effect.fnUntraced(function* (
     }
     gates.push({ command, words });
   }
-  const defaultBranch = configured["defaultBranch"] ?? DEFAULT_BRANCH;
-  if (typeof defaultBranch !== "string" || defaultBranch === "") {
-    return yield* new WiringError({ message: `${source} ciWiring.defaultBranch is not a branch name` });
-  }
-  return { gates, defaultBranch };
+  const { ciWiring } = yield* decodeWiring(manifest).pipe(
+    Effect.mapError((cause) => new WiringError({ message: `${source}: ${cause.message}` })),
+  );
+  return {
+    gates,
+    defaultBranch: ciWiring?.defaultBranch ?? DEFAULT_BRANCH,
+    lintGates: selectedGates(ciWiring?.lintGates),
+  };
 });
+
+function omittedFrom(lintGates: readonly KitGate[]): readonly KitGate[] {
+  return KIT_GATES.filter((gate) => !lintGates.includes(gate));
+}
+
+export const findOmissions = Effect.fn("findOmissions")(function* (root: string, lintGates: readonly KitGate[]) {
+  const omissions: Omission[] = [];
+  for (const gate of omittedFrom(lintGates)) {
+    // LintGates refuses a selection that leaves out a gate every repository runs.
+    if (gate.appliesTo === EVERY_REPOSITORY) continue;
+    const { pathspecs, content } = gate.appliesTo;
+    const [first, ...rest] = (yield* git(["ls-files", "-z", "--", ...pathspecs], root)).split("\0").filter(Boolean);
+    if (first !== undefined) omissions.push({ gate: gate.bin, content, files: [first, ...rest] });
+  }
+  return omissions;
+});
+
+function sample([first, ...rest]: Omission["files"]): string {
+  return rest.length === 0 ? first : `${first} and ${rest.length} more`;
+}
+
+export function formatOmissions(lintGates: readonly KitGate[], omissions: readonly Omission[]): string | undefined {
+  const omitted = omittedFrom(lintGates);
+  if (omitted.length === 0) return undefined;
+  if (omissions.length === 0) {
+    const bins = omitted.map((gate) => gate.bin).join(", ");
+    return `ci-wiring: ciWiring.lintGates leaves out ${bins}, none of which this repository's contents make applicable`;
+  }
+  return [
+    `ci-wiring: ciWiring.lintGates leaves out ${omissions.length} gate(s) this repository's contents make applicable:`,
+    ...omissions.map(({ gate, content, files }) => `  ${gate}: the repository tracks ${content} (${sample(files)})`),
+  ].join("\n");
+}
 
 export const parseWorkflow = (path: string, text: string): Effect.Effect<Workflow, WiringError> =>
   Effect.try({
@@ -337,12 +390,14 @@ const wiring = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const declaration = yield* readDeclaration(root);
   const gaps = findGaps(declaration, yield* readWorkflows(root));
-  if (gaps.length > 0) {
-    yield* Console.error(formatReport(declaration, gaps));
-    return false;
+  const omissions = yield* findOmissions(root, declaration.lintGates);
+  const gapReport = formatReport(declaration, gaps);
+  yield* gaps.length > 0 ? Console.error(gapReport) : Console.log(gapReport);
+  const omissionReport = formatOmissions(declaration.lintGates, omissions);
+  if (omissionReport !== undefined) {
+    yield* omissions.length > 0 ? Console.error(omissionReport) : Console.log(omissionReport);
   }
-  yield* Console.log(formatReport(declaration, gaps));
-  return true;
+  return gaps.length === 0 && omissions.length === 0;
 });
 
 if (import.meta.main) runMain("ci-wiring", wiring);
