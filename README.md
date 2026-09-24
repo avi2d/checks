@@ -228,7 +228,9 @@ which need the `node`, `promise` and `unicorn` plugins in the override's
 `plugins`. `unicorn/no-process-exit` passes over any file that opens with
 a shebang, so a bin also needs `no-restricted-properties` on
 `process.exit`. Sites standing when the override lands go in oxlint's own
-baseline, `oxlint --suppress-all`, so their count can only fall.
+baseline, `oxlint --suppress-all`, so their count can only fall. A later
+override lifts `effect-channel/no-throw` from `scripts/comment-matchers.ts`,
+the one file there a host loads without `node_modules`.
 
 The language service holds the same paths to Effect-native IO through
 `overrides` in the plugin block of `tsconfig.json`. effect-tsgo keeps the
@@ -438,8 +440,14 @@ are checked, so a violation in a file the diff never touches stays
 silent, and a refusal counts when any line of the comment carrying it was
 added. The check refuses a machine-read directive, a record or ticket
 pointer, a doc block, and a file opening with a rationale block over
-three lines, licence headers excepted; `scripts/comments.ts` holds the
-scanner the gate and the backtest share.
+three lines, licence headers excepted.
+
+`scripts/comment-matchers.ts` holds the scanner, the comment syntaxes
+and a synchronous `refused()`, and imports nothing, so a host such as a
+hook bundle can copy it alone into a directory with no `node_modules`
+and import it as `@avi2dg/checks/scripts/comment-matchers.ts`. The repo's
+cruise fails when it gains an import. `scripts/comments.ts` wraps the
+same matchers in Effect for the gate and the backtest.
 
 `checks-lint` runs it over each pull request's range; see "Lint entry point".
 
@@ -773,7 +781,7 @@ a tag off `main` and reruns the build, `dist/` check, lint, typecheck
 and tests before it publishes:
 
 ```sh
-git tag v0.8.0 && git push origin v0.8.0
+git tag v0.9.0 && git push origin v0.9.0
 ```
 
 The `release` workflow publishes the tagged version through npm

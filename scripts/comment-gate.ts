@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect, Option } from "effect";
-import { refused, SYNTAXES } from "./comments.ts";
+import { refused, syntaxOf } from "./comments.ts";
 import { git, parentOrEmptyTree } from "./git.ts";
 import { runMain, Usage } from "./main.ts";
 
@@ -13,7 +13,7 @@ export type GateResult = {
 const USAGE = "usage: comment-gate.ts <ref> | <base-ref> <head-ref>";
 
 function readable(path: string): boolean {
-  return path.slice(path.lastIndexOf(".") + 1) in SYNTAXES;
+  return syntaxOf(path) !== undefined;
 }
 
 function newPathOf(line: string): string | undefined {
