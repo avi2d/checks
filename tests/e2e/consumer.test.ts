@@ -280,6 +280,7 @@ test(
           backtest: "checks-backtest 5",
           compare: "checks-mutation-compare mutation.json mutation.json",
           wiring: "checks-ci-wiring",
+          flake: "checks-flake --runs 2",
           kit: "oxlint --type-aware && checks-lint",
         },
         ciWiring: { gates: ["bun run lint"] },
@@ -346,6 +347,11 @@ test(
     expect(suite.stderr.toString()).toContain("(pass) widget");
     expect(suite.stdout.toString()).toContain("checks-test: no test skipped");
     expect(suite.exitCode).toBe(0);
+
+    const { GITHUB_STEP_SUMMARY: _summary, ...withoutStepSummary } = process.env;
+    const flake = await $`bun run flake`.cwd(dir).env(withoutStepSummary).nothrow().quiet();
+    expect(flake.stdout.toString()).toContain("checks-flake: 2 run(s) passed, with seeds ");
+    expect(flake.exitCode).toBe(0);
 
     const wiring = await $`bun run wiring`.cwd(dir).nothrow().quiet();
     expect(wiring.stdout.toString()).toContain("1 gate(s) run on pull requests to main");

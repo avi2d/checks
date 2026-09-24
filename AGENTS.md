@@ -12,7 +12,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - Effect is required in `scripts/`, the bins and the modules they import: IO goes through Effect's `FileSystem` and `ChildProcess` (`scripts/git.ts`), a bin runs through `runMain` in `scripts/main.ts`, and failures are `Schema.TaggedError`s. `effect-channel/` is exempt because oxlint loads it without `node_modules`, and tests stay plain `bun:test`, running an effect with `Effect.runSync` or `Effect.runPromise` where they call it. The `scripts/**` overrides in `.oxlintrc.json` and `tsconfig.json` enforce it.
 - `oxlint-suppressions.json` is oxlint's generated baseline for the `scripts/**` override, and a test refuses any other rule or path in it. A fixed site fails lint until `oxlint --type-aware --prune-suppressions`; `--suppress-all` accepts a new site, so it is a review decision, never a repair.
 - CI runs the suite inside a pull request, so a test that spawns `checks-lint` passes it `withoutPullRequestEvent()` from `tests/lib/env.ts`; otherwise the real event decides the range, green locally and red on CI.
-- `bun run test` is `checks-test` (`scripts/test.ts`), which fails on a skip `package.json` `testSkips` does not declare; a test that spawns `checks-test` sets `CI` itself, or CI's own value decides which declarations hold.
+- `bun run test` is `checks-test` (`scripts/test.ts`), which fails on a skip `package.json` `testSkips` does not declare; a test that spawns `checks-test` sets `CI` itself, and one that spawns `checks-flake` sets or drops `GITHUB_STEP_SUMMARY`, or CI's own values decide which declarations hold and where the summary lands.
 
 ## Maintaining this file
 

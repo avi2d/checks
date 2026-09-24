@@ -6,6 +6,7 @@ import { ENTRY_POINT, KIT_GATES, TEST_ENTRY_POINT } from "../scripts/gates.ts";
 const OUTSIDE_LINT = {
   "checks-backtest": "scripts/backtest.ts",
   "checks-mutation-compare": "scripts/mutation-compare.ts",
+  "checks-flake": "scripts/flake.ts",
 };
 
 test("every bin is an entry point, a gate the lint entry point runs, or a tool outside lint", () => {

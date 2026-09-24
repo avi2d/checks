@@ -3,7 +3,8 @@
 Deterministic checks shared across my TypeScript repos. One package,
 `@avi2dg/checks`: the `checks-lint` entry point that runs every lint gate
 below over a range it resolves itself, the `checks-test` entry point
-that runs the suite and refuses an undeclared skip, the oxlint base config, the
+that runs the suite and refuses an undeclared skip, the `checks-flake`
+run that records the seeds a failing test fails with, the oxlint base config, the
 tsconfig fragment with the Effect language-service block, the shared
 commitlint config, the shared dependency-cruiser base, the test-layout
 check with its bunfig preset, the commit-identity check, the comment
@@ -350,6 +351,60 @@ test it leaves out as skipped and a path filter drops files a
 declaration names, so a narrowed run is plain `bun test --randomize`
 with the arguments. Files under `tests/quarantine/` are never run and so
 never reported; see "Test layout".
+
+## Flake run
+
+A green run proves nothing failed in that run, not that no test is
+flaky. `checks-flake` runs the whole suite several times, each with its
+own `--seed`, and records per failing test the seeds it failed with:
+
+```sh
+checks-flake [--runs <count> | --seed <seed>...] [--report <file>]
+```
+
+`--runs` defaults to 10 runs on random seeds, and `--seed`, given once
+per run, replays chosen seeds, such as the ones a report recorded.
+`bun test --randomize --seed=<seed>` puts the suite in the same order,
+so a seed reproduces a failure that hangs on order. `--report` writes the
+record as JSON, every run's seed and failing tests and every failing
+test's seeds, and under GitHub Actions the summary below is appended to
+the job summary:
+
+```
+checks-flake: 3 of 10 run(s) failed, 1 test(s) failing in them
+
+| Test | Failed | Seeds |
+| --- | --- | --- |
+| tests/cache.test.ts:6 reads the cache | 3 of 10 runs | 2170533150, 4046124386, 180394251 |
+
+Reproduce a failing run with bun test --randomize --seed=<seed>.
+```
+
+A run that fails with no failing test, such as a test file that throws
+while loading, is listed with its seed on its own line. It exits 1 when
+any run failed and 2 when bun passed without writing its report.
+
+A consumer runs it on a schedule and keeps the record as an artifact:
+
+```yaml
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+jobs:
+  flake:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bunx checks-flake --runs 10 --report flake-report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: flake-report
+          path: flake-report.json
+```
 
 ## Dependency rules
 
