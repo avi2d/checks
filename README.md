@@ -335,8 +335,10 @@ joined by ` > `. `reason` is required. `when` is `ci` or `local` for a
 test skipped only there, and a declaration without it holds in both;
 `checks-test` counts a run as `ci` when `CI` is set true, as GitHub
 Actions sets it. A declaration that holds for the run but matches no
-skipped test fails too, so a fixed or renamed test takes its
-declaration with it:
+skipped test fails a ci run too, so a fixed or renamed test takes its
+declaration with it. A local run only warns about it, because whether a
+test skips there can hang on the machine, such as a docker daemon being
+up:
 
 ```
 checks-test: 1 skipped test(s) undeclared and 1 declaration(s) matching no skipped test in this ci run:
@@ -344,8 +346,8 @@ checks-test: 1 skipped test(s) undeclared and 1 declaration(s) matching no skipp
   tests/e2e/docker.test.ts > images > builds the release image: declared, but no such test skipped; delete the declaration
 ```
 
-It exits 1 when a test failed or a skip is undeclared or a declaration
-stale, and 2 when `testSkips` does not parse or bun passed without
+It exits 1 when a test failed or a skip is undeclared or, in a ci run,
+a declaration stale, and 2 when `testSkips` does not parse or bun passed without
 writing its report. It takes no arguments: a `-t` filter reports every
 test it leaves out as skipped and a path filter drops files a
 declaration names, so a narrowed run is plain `bun test --randomize`

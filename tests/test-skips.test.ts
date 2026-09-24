@@ -31,3 +31,38 @@ test("a declaration for the other environment is neither required nor stale, and
     "checks-test: 1 skipped test(s), each declared in package.json testSkips; 1 declaration(s) for local not judged in this ci run",
   );
 });
+
+test("a stale declaration fails a ci run and names the declaration", () => {
+  const verdict = judgeSkips([], [{ file: "tests/a.test.ts", test: "gone", reason: "a reason" }], "ci");
+  expect(passes(verdict)).toBe(false);
+  expect(report(verdict)).toBe(
+    [
+      "checks-test: 0 skipped test(s) undeclared and 1 declaration(s) matching no skipped test in this ci run:",
+      "  tests/a.test.ts > gone: declared, but no such test skipped; delete the declaration",
+    ].join("\n"),
+  );
+});
+
+test("a stale declaration passes a local run with a warning, and an undeclared skip still fails it", () => {
+  const declarations = [{ file: "tests/a.test.ts", test: "gone", reason: "a reason" }];
+  const warned = judgeSkips([], declarations, "local");
+  expect(passes(warned)).toBe(true);
+  expect(report(warned)).toBe(
+    [
+      "checks-test: no test skipped",
+      "checks-test: warning: 1 declaration(s) matching no skipped test in this local run, refused only in a ci run:",
+      "  tests/a.test.ts > gone: declared, but no such test skipped; delete the declaration",
+    ].join("\n"),
+  );
+
+  const refused = judgeSkips([skipped("tests/a.test.ts", 2, "new")], declarations, "local");
+  expect(passes(refused)).toBe(false);
+  expect(report(refused)).toBe(
+    [
+      "checks-test: 1 skipped test(s) undeclared in this local run:",
+      "  tests/a.test.ts:2 new: skipped with no declaration; run it, or declare it in package.json testSkips with its reason",
+      "checks-test: warning: 1 declaration(s) matching no skipped test in this local run, refused only in a ci run:",
+      "  tests/a.test.ts > gone: declared, but no such test skipped; delete the declaration",
+    ].join("\n"),
+  );
+});

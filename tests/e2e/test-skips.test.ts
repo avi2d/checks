@@ -50,7 +50,7 @@ test("an undeclared skip is refused, and its declaration lets the same run pass"
   const refused = await checksTest(false);
   expect(refused.exitCode).toBe(1);
   expect(refused.text).toContain("1 pass");
-  expect(refused.text).toContain("checks-test: 1 skipped test(s) undeclared and 0 declaration(s) matching no skipped test in this local run:");
+  expect(refused.text).toContain("checks-test: 1 skipped test(s) undeclared in this local run:");
   expect(refused.text).toContain("  tests/suite.test.ts:5 pricing > rounds half to even: skipped with no declaration; run it, or declare it in package.json testSkips with its reason");
 
   await declare([{ file: "tests/suite.test.ts", test: "pricing > rounds half to even", reason: "waits on the rounding fix" }]);
@@ -59,19 +59,30 @@ test("an undeclared skip is refused, and its declaration lets the same run pass"
   expect(declared.text).toContain("checks-test: 1 skipped test(s), each declared in package.json testSkips");
 });
 
-test("a declaration that matches no skipped test is refused until it goes", async () => {
+test("a declaration that matches no skipped test is refused in a ci run until it goes", async () => {
+  await consumer(`test("rounds half to even", () => expect(1).toBe(1));\n`, [
+    { file: "tests/suite.test.ts", test: "rounds half to even", reason: "waits on the rounding fix" },
+  ]);
+  const stale = await checksTest(true);
+  expect(stale.exitCode).toBe(1);
+  expect(stale.text).toContain("checks-test: 0 skipped test(s) undeclared and 1 declaration(s) matching no skipped test in this ci run:");
+  expect(stale.text).toContain("  tests/suite.test.ts > rounds half to even: declared, but no such test skipped; delete the declaration");
+
+  await declare([]);
+  const clean = await checksTest(true);
+  expect(clean.exitCode).toBe(0);
+  expect(clean.text).toContain("checks-test: no test skipped");
+});
+
+test("a declaration that matches no skipped test only warns in a local run", async () => {
   await consumer(`test("rounds half to even", () => expect(1).toBe(1));\n`, [
     { file: "tests/suite.test.ts", test: "rounds half to even", reason: "waits on the rounding fix" },
   ]);
   const stale = await checksTest(false);
-  expect(stale.exitCode).toBe(1);
-  expect(stale.text).toContain("checks-test: 0 skipped test(s) undeclared and 1 declaration(s) matching no skipped test in this local run:");
+  expect(stale.exitCode).toBe(0);
+  expect(stale.text).toContain("checks-test: no test skipped");
+  expect(stale.text).toContain("checks-test: warning: 1 declaration(s) matching no skipped test in this local run, refused only in a ci run:");
   expect(stale.text).toContain("  tests/suite.test.ts > rounds half to even: declared, but no such test skipped; delete the declaration");
-
-  await declare([]);
-  const clean = await checksTest(false);
-  expect(clean.exitCode).toBe(0);
-  expect(clean.text).toContain("checks-test: no test skipped");
 });
 
 test("a skip only CI takes is declared for ci, and neither run holds the other's declaration against it", async () => {
@@ -84,7 +95,7 @@ test("a skip only CI takes is declared for ci, and neither run holds the other's
 
   await declare([{ file: "tests/suite.test.ts", test: "reaches the local daemon", reason: "CI has no daemon" }]);
   const everywhere = await checksTest(false);
-  expect(everywhere.exitCode).toBe(1);
+  expect(everywhere.exitCode).toBe(0);
   expect(everywhere.text).toContain("tests/suite.test.ts > reaches the local daemon: declared, but no such test skipped");
 
   await declare([{ file: "tests/suite.test.ts", test: "reaches the local daemon", reason: "CI has no daemon", when: "ci" }]);

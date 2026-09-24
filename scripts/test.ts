@@ -62,29 +62,48 @@ export function judgeSkips(
   };
 }
 
-export function passes(verdict: Verdict): boolean {
-  return verdict.undeclared.length === 0 && verdict.stale.length === 0;
+function refusedStale(verdict: Verdict): readonly SkipDeclaration[] {
+  return verdict.environment === "ci" ? verdict.stale : [];
 }
 
-export function report(verdict: Verdict): string {
-  const { environment, skipped, undeclared, stale, unjudged } = verdict;
+export function passes(verdict: Verdict): boolean {
+  return verdict.undeclared.length === 0 && refusedStale(verdict).length === 0;
+}
+
+function staleLine(declaration: SkipDeclaration): string {
+  return `  ${declaration.file}${NAME_SEPARATOR}${declaration.test}: declared, but no such test skipped; delete the declaration`;
+}
+
+function verdictLines(verdict: Verdict): readonly string[] {
+  const { environment, skipped, undeclared, unjudged } = verdict;
   const run = `this ${environment} run`;
   if (passes(verdict)) {
     const other = environment === "ci" ? "local" : "ci";
     const aside = unjudged === 0 ? "" : `; ${unjudged} declaration(s) for ${other} not judged in ${run}`;
-    return skipped === 0 ? `${NAME}: no test skipped${aside}` : `${NAME}: ${skipped} skipped test(s), each declared in ${DECLARATIONS}${aside}`;
+    return [skipped === 0 ? `${NAME}: no test skipped${aside}` : `${NAME}: ${skipped} skipped test(s), each declared in ${DECLARATIONS}${aside}`];
   }
+  const stale = refusedStale(verdict);
+  const counted = environment === "ci" ? ` and ${stale.length} declaration(s) matching no skipped test` : "";
   return [
-    `${NAME}: ${undeclared.length} skipped test(s) undeclared and ${stale.length} declaration(s) matching no skipped test in ${run}:`,
+    `${NAME}: ${undeclared.length} skipped test(s) undeclared${counted} in ${run}:`,
     ...undeclared.map((result) => {
       const kind = result.outcome === "todo" ? "a todo" : "skipped";
       return `  ${result.file}:${result.line} ${result.name}: ${kind} with no declaration; run it, or declare it in ${DECLARATIONS} with its reason`;
     }),
-    ...stale.map(
-      (declaration) =>
-        `  ${declaration.file}${NAME_SEPARATOR}${declaration.test}: declared, but no such test skipped; delete the declaration`,
-    ),
-  ].join("\n");
+    ...stale.map(staleLine),
+  ];
+}
+
+export function report(verdict: Verdict): string {
+  const warned = verdict.environment === "local" ? verdict.stale : [];
+  const warning =
+    warned.length === 0
+      ? []
+      : [
+          `${NAME}: warning: ${warned.length} declaration(s) matching no skipped test in this local run, refused only in a ci run:`,
+          ...warned.map(staleLine),
+        ];
+  return [...verdictLines(verdict), ...warning].join("\n");
 }
 
 const readDeclarations = Effect.fn("readDeclarations")(function* (root: string) {
