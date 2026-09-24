@@ -786,8 +786,9 @@ does not decode, a ref does not resolve or oxlint cannot run. A
 repository that declares no `size` passes. `quality.json` refuses a
 `size` without `sources.production`, which would hold nothing, and
 with `size` declared `checks-quality` refuses a `sources.production`
-glob that matches no file. Moving `applies` from `changed` to `all` tightens the budget to
-every production file, once the advisory list names none.
+glob that matches no file. Moving `applies` from `changed` to `all`
+tightens the budget to every production file, once the advisory list
+names none.
 
 `checks-lint` runs it over each pull request's range; see "Lint entry point".
 
