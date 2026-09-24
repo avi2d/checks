@@ -143,7 +143,7 @@ test(
 );
 
 test(
-  "commit-identity reads the allowlist from the consumer package.json",
+  "commit-identity reads the allowlist from package.json while quality.json is absent",
   async () => {
     await initRepo({
       name: "commit-identity-fixture",
@@ -158,6 +158,29 @@ test(
     const red = await check(`${base}~1`, "HEAD");
     expect(red.exitCode).toBe(2);
     expect(red.text).toContain("git log");
+  },
+  60_000,
+);
+
+test(
+  "commit-identity reads the allowlist from quality.json, which a malformed one leaves undecided",
+  async () => {
+    await initRepo();
+    await writeFile(join(dir, "quality.json"), JSON.stringify({ commitIdentity: { authors: [STRANGER] } }));
+    await commit({ message: "feat: theirs", author: STRANGER, committer: STRANGER });
+    const green = await check("HEAD");
+    expect(green.text).toContain("1 commit(s) in HEAD carry only allowed identities");
+    expect(green.exitCode).toBe(0);
+
+    await commit({ message: "feat: mine" });
+    const red = await check("HEAD");
+    expect(red.text).toContain("author avi2d <avi2dg@gmail.com>");
+    expect(red.exitCode).toBe(1);
+
+    await writeFile(join(dir, "quality.json"), JSON.stringify({ commitIdentity: { authors: [{ name: STRANGER.name }] } }));
+    const malformed = await check("HEAD");
+    expect(malformed.text).toContain('quality.json: Missing key\n  at ["commitIdentity"]["authors"][0]["email"]');
+    expect(malformed.exitCode).toBe(2);
   },
   60_000,
 );
@@ -188,7 +211,7 @@ test(
 
     const malformed = await check("HEAD");
     expect(malformed.exitCode).toBe(2);
-    expect(malformed.text).toContain("non-empty authors array");
+    expect(malformed.text).toContain('package.json: Missing key\n  at ["commitIdentity"]["authors"][0]');
 
     const usage = await check();
     expect(usage.exitCode).toBe(2);

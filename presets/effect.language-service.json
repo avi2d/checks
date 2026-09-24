@@ -1,0 +1,8 @@
+{
+  "diagnosticSeverity": {
+    "nodeBuiltinImport": "error",
+    "asyncFunction": "error",
+    "newPromise": "error",
+    "extendsNativeError": "error"
+  }
+}

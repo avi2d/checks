@@ -1,5 +1,5 @@
 {
-  "extends": "./tsconfig.effect.json",
+  "extends": ["./tsconfig.effect.json", "./tsconfig.quality.json"],
   "compilerOptions": {
     "target": "esnext",
     "lib": ["esnext"],
@@ -11,25 +11,7 @@
     "noEmit": true,
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
-    "plugins": [
-      {
-        "name": "@effect/language-service",
-        "overrides": [
-          {
-            "include": ["scripts/**/*.ts"],
-            "options": {
-              "diagnosticSeverity": {
-                "nodeBuiltinImport": "error",
-                "asyncFunction": "error",
-                "newPromise": "error",
-                "extendsNativeError": "error"
-              }
-            }
-          }
-        ]
-      }
-    ]
+    "verbatimModuleSyntax": true
   },
   "include": ["effect-channel/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts"]
 }

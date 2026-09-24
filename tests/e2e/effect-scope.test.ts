@@ -5,7 +5,15 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 const CHECKOUT = resolve(import.meta.dir, "..", "..");
-const CONFIGS = [".oxlintrc.json", "oxlintrc.json", "dist/index.js", "tsconfig.json", "tsconfig.effect.json"];
+const CONFIGS = [
+  ".oxlintrc.json",
+  "oxlintrc.json",
+  "oxlintrc.quality.json",
+  "dist/index.js",
+  "tsconfig.json",
+  "tsconfig.effect.json",
+  "tsconfig.quality.json",
+];
 
 const PLANT = `import { Effect } from "effect";
 import { readFileSync } from "node:fs";
@@ -37,10 +45,10 @@ const OXLINT_RULES = [
   "oxc(no-async-await)",
   "promise(avoid-new)",
   "unicorn(no-process-exit)",
-  "eslint(no-restricted-properties)",
   "effect-channel(no-throw)",
   "effect-channel(no-try-catch)",
 ];
+const PROCESS_EXIT = "eslint(no-restricted-properties)";
 const SERVICE_RULES = ["nodeBuiltinImport", "asyncFunction", "newPromise", "extendsNativeError"];
 
 let dir = "";
@@ -81,10 +89,11 @@ test(
       .nothrow()
       .quiet();
     const linted = findings(oxlint.stdout.toString(), /^(\S+?):\d+:\d+: .*\[Error\/([^\]]+)\]$/gm);
-    expect(linted.get("scripts/plant.ts")).toEqual(expect.arrayContaining(OXLINT_RULES));
-    expect(linted.get("scripts/bin.ts")).toContain("eslint(no-restricted-properties)");
+    expect(linted.get("scripts/plant.ts")).toEqual(expect.arrayContaining([...OXLINT_RULES, PROCESS_EXIT]));
+    expect(linted.get("scripts/bin.ts")).toContain(PROCESS_EXIT);
     expect(linted.get("scripts/bin.ts")).not.toContain("unicorn(no-process-exit)");
     for (const rule of OXLINT_RULES) expect(linted.get("tests/plant.ts") ?? []).not.toContain(rule);
+    expect(linted.get("tests/plant.ts")).toContain(PROCESS_EXIT);
 
     const diagnostics = await $`${join(dir, "node_modules", ".bin", "effect-tsgo")} diagnostics --project tsconfig.json --format text --strict`
       .cwd(dir)
@@ -93,7 +102,7 @@ test(
     const refused = findings(diagnostics.stdout.toString(), /((?:scripts|tests)\/\w+\.ts)\(\d+,\d+\): error effect\((\w+)\)/g);
     expect(refused.get("scripts/plant.ts")).toEqual(expect.arrayContaining([...SERVICE_RULES, "catchAllToMapError"]));
     for (const rule of SERVICE_RULES) expect(refused.get("tests/plant.ts") ?? []).not.toContain(rule);
-    // tsconfig.json restates the plugin to add its overrides; the kit's severities must survive that.
+    // The fragment restates the plugin to add its overrides; the kit's severities must survive that.
     expect(refused.get("tests/plant.ts")).toContain("catchAllToMapError");
   },
   120_000,

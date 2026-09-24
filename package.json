@@ -32,6 +32,11 @@
     "scripts/comment-gate.ts",
     "scripts/suppressions-ratchet.ts",
     "scripts/backtest.ts",
+    "scripts/quality-file.ts",
+    "scripts/quality.ts",
+    "presets/effect.oxlint.json",
+    "presets/effect.language-service.json",
+    "quality.schema.json",
     "oxlintrc.json",
     "stryker.preset.js",
     "tsconfig.effect.json",
@@ -54,6 +59,11 @@
     "./scripts/comment-gate.ts": "./scripts/comment-gate.ts",
     "./scripts/suppressions-ratchet.ts": "./scripts/suppressions-ratchet.ts",
     "./scripts/backtest.ts": "./scripts/backtest.ts",
+    "./scripts/quality-file.ts": "./scripts/quality-file.ts",
+    "./scripts/quality.ts": "./scripts/quality.ts",
+    "./presets/effect.oxlint.json": "./presets/effect.oxlint.json",
+    "./presets/effect.language-service.json": "./presets/effect.language-service.json",
+    "./quality.schema.json": "./quality.schema.json",
     "./oxlintrc.json": "./oxlintrc.json",
     "./stryker.preset.js": "./stryker.preset.js",
     "./tsconfig.effect.json": "./tsconfig.effect.json",
@@ -70,26 +80,14 @@
     "checks-ci-wiring": "scripts/ci-wiring.ts",
     "checks-comment-gate": "scripts/comment-gate.ts",
     "checks-suppressions-ratchet": "scripts/suppressions-ratchet.ts",
-    "checks-backtest": "scripts/backtest.ts"
+    "checks-backtest": "scripts/backtest.ts",
+    "checks-quality": "scripts/quality.ts"
   },
   "scripts": {
-    "build": "bun build effect-channel/index.ts --outdir dist --target node --format esm",
+    "build": "bun build effect-channel/index.ts --outdir dist --target node --format esm && bun scripts/quality-schema.ts",
     "lint": "oxlint --type-aware && bun scripts/lint.ts && depcruise --config .dependency-cruiser.cjs .",
     "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
     "test": "bun scripts/test.ts"
-  },
-  "ciWiring": {
-    "gates": [
-      "bun run build",
-      "git diff --exit-code dist/",
-      "bun run lint",
-      "bun run typecheck",
-      "bun run test",
-      "./node_modules/.bin/commitlint"
-    ],
-    "scheduled": [
-      "bun scripts/flake.ts --runs 10 --report flake-report.json"
-    ]
   },
   "peerDependencies": {
     "@swc/core": "1.16.2",
@@ -104,6 +102,7 @@
     "@oxlint/plugins": "1.83.0",
     "@swc/core": "1.16.2",
     "@types/bun": "^1.3.0",
+    "ajv": "8.20.0",
     "dependency-cruiser": "18.4.0",
     "effect": "4.0.0-rc.115",
     "oxlint": "1.83.0",

@@ -8,6 +8,7 @@ const CHECKOUT = resolve(import.meta.dir, "..", "..");
 const SCRIPT = join(CHECKOUT, "scripts", "ci-wiring.ts");
 const LINT_COVERAGE = join(CHECKOUT, "scripts", "lint-coverage.sh");
 const METADATA_GATES = ["checks-commit-identity", "checks-comment-gate", "checks-suppressions-ratchet", "checks-ci-wiring"];
+const SOURCE_FREE_GATES = [...METADATA_GATES, "checks-quality"];
 
 const WORKFLOW = `on:
   pull_request:
@@ -29,9 +30,9 @@ afterEach(async () => {
   }
 });
 
-async function initRepo(manifest: unknown, workflow: string): Promise<void> {
+async function initRepo(quality: unknown, workflow: string): Promise<void> {
   dir = await mkdtemp(join(tmpdir(), "checks-ci-wiring-"));
-  await writeFile(join(dir, "package.json"), JSON.stringify(manifest));
+  await writeFile(join(dir, "quality.json"), JSON.stringify(quality));
   await writeWorkflow(workflow);
   await $`git init -q -b main`.cwd(dir).quiet();
 }
@@ -49,7 +50,7 @@ async function check(cwd = dir): Promise<{ exitCode: number; text: string }> {
 test(
   "ci-wiring goes red when a declared gate's step is deleted and green once it is restored",
   async () => {
-    await initRepo({ name: "ci-wiring-fixture", ciWiring: { gates: ["bun run lint", "bun run test"] } }, WORKFLOW);
+    await initRepo({ gates: { ci: ["bun run lint", "bun run test"] } }, WORKFLOW);
 
     const green = await check();
     expect(green.text).toContain("ci-wiring: 2 gate(s) run on pull requests to main");
@@ -72,12 +73,22 @@ test(
 test(
   "a selection leaving out the source gates passes a source-free repository and is refused once it tracks source",
   async () => {
-    await initRepo({ name: "ci-wiring-fixture", ciWiring: { gates: ["bun run lint"], lintGates: METADATA_GATES } }, WORKFLOW);
+    await initRepo({ gates: { ci: ["bun run lint"], lint: METADATA_GATES } }, WORKFLOW);
     await $`git add -A`.cwd(dir).quiet();
 
+    const withoutQuality = await check();
+    expect(withoutQuality.text).toContain(
+      [
+        "ci-wiring: quality.json gates.lint leaves out 1 gate(s) this repository's contents make applicable:",
+        "  checks-quality: the repository tracks a quality.json (quality.json)",
+      ].join("\n"),
+    );
+    expect(withoutQuality.exitCode).toBe(1);
+
+    await writeFile(join(dir, "quality.json"), JSON.stringify({ gates: { ci: ["bun run lint"], lint: SOURCE_FREE_GATES } }));
     const sourceFree = await check();
     expect(sourceFree.text).toContain(
-      "ci-wiring: ciWiring.lintGates leaves out checks-lint-coverage, checks-test-layout, none of which this repository's contents make applicable",
+      "ci-wiring: quality.json gates.lint leaves out checks-lint-coverage, checks-test-layout, none of which this repository's contents make applicable",
     );
     expect(sourceFree.exitCode).toBe(0);
 
@@ -89,7 +100,7 @@ test(
     const tracked = await check();
     expect(tracked.text).toContain(
       [
-        "ci-wiring: ciWiring.lintGates leaves out 2 gate(s) this repository's contents make applicable:",
+        "ci-wiring: quality.json gates.lint leaves out 2 gate(s) this repository's contents make applicable:",
         "  checks-lint-coverage: the repository tracks TypeScript source (widget.tsx)",
         "  checks-test-layout: the repository tracks TypeScript source (widget.tsx)",
       ].join("\n"),
@@ -102,7 +113,7 @@ test(
 test(
   "ci-wiring counts as TypeScript source exactly the files lint-coverage checks",
   async () => {
-    await initRepo({ name: "ci-wiring-fixture", ciWiring: { gates: ["bun run lint"], lintGates: METADATA_GATES } }, WORKFLOW);
+    await initRepo({ gates: { ci: ["bun run lint"], lint: SOURCE_FREE_GATES } }, WORKFLOW);
     await mkdir(join(dir, "src"));
     for (const file of ["a.ts", "b.tsx", "c.mts", "d.cts", "e.js", "f.ts.md"]) {
       await writeFile(join(dir, "src", file), "export const value = 1;\n");
@@ -128,9 +139,9 @@ test(
 test(
   "ci-wiring refuses to pass a repository that declares no gates",
   async () => {
-    await initRepo({ name: "ci-wiring-fixture" }, WORKFLOW);
+    await initRepo({}, WORKFLOW);
     const result = await check();
-    expect(result.text).toContain("sets no ciWiring.gates");
+    expect(result.text).toContain("quality.json declares no gates.ci, a non-empty array of commands");
     expect(result.exitCode).toBe(2);
   },
   60_000,
@@ -139,8 +150,7 @@ test(
 test(
   "ci-wiring goes red while a declared scheduled command has no scheduled workflow, and green once one runs it",
   async () => {
-    const manifest = { name: "ci-wiring-fixture", ciWiring: { gates: ["bun run lint"], scheduled: ["bunx checks-flake --runs 20"] } };
-    await initRepo(manifest, WORKFLOW);
+    await initRepo({ gates: { ci: ["bun run lint"], scheduled: ["bunx checks-flake --runs 20"] } }, WORKFLOW);
     const red = await check();
     expect(red.text).toContain("ci-wiring: 1 gate(s) run on pull requests to main");
     expect(red.text).toContain("ci-wiring: 1 of 1 scheduled command(s) do not run on a schedule:\n  bunx checks-flake --runs 20\n    no run step invokes it");

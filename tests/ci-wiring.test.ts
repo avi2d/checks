@@ -16,9 +16,12 @@ import {
   type Declaration,
   type Workflow,
 } from "../scripts/ci-wiring.ts";
+import { decodeQuality, QualityUnreadable } from "../scripts/quality-file.ts";
 
-function declared(manifest: unknown, source: string): Declaration {
-  return Effect.runSync(parseDeclaration(manifest, source));
+function declared(quality: unknown, source = "quality.json"): Declaration {
+  return Effect.runSync(
+    decodeQuality(JSON.stringify(quality), source).pipe(Effect.flatMap((decoded) => parseDeclaration(decoded, source))),
+  );
 }
 
 function parsed(path: string, text: string): Workflow {
@@ -45,7 +48,7 @@ jobs:
       - run: bun run test
 `;
 
-const DECLARATION = declared({ ciWiring: { gates: ["bun run lint", "bun run test"] } }, "package.json");
+const DECLARATION = declared({ gates: { ci: ["bun run lint", "bun run test"] } });
 
 function mutate(workflow: string, from: string, to: string): string {
   if (!workflow.includes(from)) throw new Error(`fixture does not contain ${JSON.stringify(from)}`);
@@ -216,10 +219,7 @@ test("the release workflow that also runs the gate does not stand in for pull re
 test("a gate run through a local reusable workflow counts only while the calling job runs", () => {
   const called = `on:\n  workflow_call:\njobs:\n  gate:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun .checks/scripts/comment-gate.ts "origin/$BASE_REF" "$HEAD_SHA"\n`;
   const caller = `on: pull_request\njobs:\n  comment-gate:\n    if: github.event_name == 'pull_request'\n    uses: ./.github/workflows/comment-gate.yml\n`;
-  const declaration = declared(
-    { ciWiring: { gates: ["bun .checks/scripts/comment-gate.ts"] } },
-    "package.json",
-  );
+  const declaration = declared({ gates: { ci: ["bun .checks/scripts/comment-gate.ts"] } });
   const files = { [CI]: caller, ".github/workflows/comment-gate.yml": called };
   expect(gapsIn(files, declaration)).toEqual([]);
 
@@ -242,7 +242,7 @@ test("a workflow that calls itself is walked once", () => {
 });
 
 function stepGaps(script: string, gate = "bun run lint") {
-  const declaration = declared({ ciWiring: { gates: [gate] } }, "package.json");
+  const declaration = declared({ gates: { ci: [gate] } });
   const workflow = `on: pull_request\njobs:\n  j:\n    steps:\n      - run: ${JSON.stringify(script)}\n`;
   return gapsIn({ [CI]: workflow }, declaration);
 }
@@ -262,19 +262,16 @@ test("a gate step counts only as the gate alone on one line with plain arguments
 });
 
 test("a step running checks-lint covers each kit gate it runs by bare bin name, called the way the gate is declared", () => {
-  const kit = declared(
-    {
-      ciWiring: {
-        gates: [
-          `bunx checks-comment-gate "origin/$BASE_REF" "$HEAD_SHA"`,
-          "bunx checks-suppressions-ratchet",
-          "bun .checks/scripts/commit-identity.ts",
-          "bunx checks-mutation-compare",
-        ],
-      },
+  const kit = declared({
+    gates: {
+      ci: [
+        `bunx checks-comment-gate "origin/$BASE_REF" "$HEAD_SHA"`,
+        "bunx checks-suppressions-ratchet",
+        "bun .checks/scripts/commit-identity.ts",
+        "bunx checks-mutation-compare",
+      ],
     },
-    "package.json",
-  );
+  });
   const workflow = (steps: readonly string[]) =>
     `on: pull_request\njobs:\n  j:\n    steps:\n${steps.map((step) => `      - run: ${JSON.stringify(step)}\n`).join("")}`;
 
@@ -366,28 +363,28 @@ test("the report names each gap and why each invocation of it does not count", (
 
 test("a step running checks-lint covers no gate its declared selection leaves out", () => {
   const gates = ["bunx checks-test-layout", "bunx checks-comment-gate"];
-  const selecting = (lintGates: Readonly<Record<string, unknown>> = {}) =>
-    declared({ ciWiring: { gates, ...lintGates } }, "package.json");
+  const selecting = (lint: Readonly<Record<string, unknown>> = {}) => declared({ gates: { ci: gates, ...lint } });
   const workflow = `on: pull_request\njobs:\n  j:\n    steps:\n      - run: bunx checks-lint\n`;
 
   expect(gapsIn({ [CI]: workflow }, selecting())).toEqual([]);
   const metadataOnly = selecting({
-    lintGates: ["checks-commit-identity", "checks-comment-gate", "checks-suppressions-ratchet", "checks-ci-wiring"],
+    lint: ["checks-commit-identity", "checks-comment-gate", "checks-suppressions-ratchet", "checks-ci-wiring"],
   });
   expect(gapsIn({ [CI]: workflow }, metadataOnly)).toEqual([{ gate: "bunx checks-test-layout", blocked: [] }]);
 });
 
 test("a selection names kit gates and keeps every gate that applies to every repository", () => {
   const refusal = (lintGates: unknown) =>
-    Effect.runSync(Effect.flip(parseDeclaration({ ciWiring: { gates: ["x"], lintGates } }, "package.json"))).message;
+    Effect.runSync(Effect.flip(decodeQuality(JSON.stringify({ gates: { ci: ["x"], lint: lintGates } }), "quality.json")))
+      .message;
 
   const metadata = ["checks-commit-identity", "checks-comment-gate", "checks-suppressions-ratchet", "checks-ci-wiring"];
 
   expect(refusal(["checks-ci-wiring", "checks-comment-gate", "checks-suppressions-ratchet"])).toContain(
-    "package.json: checks-lint must run checks-commit-identity, which applies to every repository",
+    "quality.json: checks-lint must run checks-commit-identity, which applies to every repository",
   );
   expect(refusal(["checks-commit-identity", "checks-comment-gate", "checks-ci-wiring"])).toContain(
-    "package.json: checks-lint must run checks-suppressions-ratchet, which applies to every repository",
+    "quality.json: checks-lint must run checks-suppressions-ratchet, which applies to every repository",
   );
   expect(refusal(["checks-lint-coverage"])).toContain(
     "checks-lint must run checks-commit-identity, checks-comment-gate, checks-suppressions-ratchet, checks-ci-wiring, which apply to every repository",
@@ -395,28 +392,24 @@ test("a selection names kit gates and keeps every gate that applies to every rep
   expect(refusal([...metadata, "checks-backtest"])).toContain('Expected "checks-lint-coverage" |');
   expect(refusal("checks-ci-wiring")).toContain("Expected array");
 
-  const selected = declared(
-    { ciWiring: { gates: ["x"], lintGates: metadata.toReversed() } },
-    "package.json",
-  );
+  const selected = declared({ gates: { ci: ["x"], lint: metadata.toReversed() } });
   expect(selected.lintGates.map((gate) => gate.bin)).toEqual(metadata);
 });
 
 test("the declaration names one command per gate and may move the default branch", () => {
-  expect(() => declared({}, "package.json")).toThrow(WiringError);
-  expect(() => declared({ ciWiring: { gates: [] } }, "package.json")).toThrow(WiringError);
-  expect(() => declared({ ciWiring: { gates: ["a && b"] } }, "package.json")).toThrow(WiringError);
-  expect(() => declared({ ciWiring: { gates: ["bun run lint || true"] } }, "package.json")).toThrow(WiringError);
-  expect(() => declared({ ciWiring: { gates: ["# nothing"] } }, "package.json")).toThrow(WiringError);
-  expect(() => declared({ ciWiring: { gates: [1] } }, "package.json")).toThrow(WiringError);
-  expect(() => declared({ ciWiring: { gates: ["x"], defaultBranch: "" } }, "package.json")).toThrow(
-    WiringError,
-  );
+  expect(() => declared({})).toThrow("quality.json declares no gates.ci, a non-empty array of commands");
+  expect(() => declared({}, "package.json")).toThrow("quality.json declares no gates.ci, a non-empty array of commands");
+  expect(() => declared({ gates: { ci: ["a && b"] } })).toThrow(WiringError);
+  expect(() => declared({ gates: { ci: ["bun run lint || true"] } })).toThrow(WiringError);
+  expect(() => declared({ gates: { ci: ["# nothing"] } })).toThrow(WiringError);
+  expect(() => declared({ gates: { ci: [] } })).toThrow(QualityUnreadable);
+  expect(() => declared({ gates: { ci: [1] } })).toThrow(QualityUnreadable);
+  expect(() => declared({ gates: { ci: ["x"] }, defaultBranch: "" })).toThrow(QualityUnreadable);
 
-  const trunk = declared({ ciWiring: { gates: ["bun run lint"], defaultBranch: "trunk" } }, "package.json");
+  const trunk = declared({ gates: { ci: ["bun run lint"] }, defaultBranch: "trunk" });
   const onTrunk = `on:\n  pull_request:\n    branches: [trunk]\njobs:\n  j:\n    steps:\n      - run: bun run lint\n`;
   expect(gapsIn({ [CI]: onTrunk }, trunk)).toEqual([]);
-  expect(gapsIn({ [CI]: onTrunk }, declared({ ciWiring: { gates: ["bun run lint"] } }, "p"))).toHaveLength(1);
+  expect(gapsIn({ [CI]: onTrunk }, declared({ gates: { ci: ["bun run lint"] } }))).toHaveLength(1);
 });
 
 const FLAKE = ".github/workflows/flake.yml";
@@ -438,8 +431,7 @@ jobs:
 `;
 
 const FLAKE_DECLARATION = declared(
-  { ciWiring: { gates: ["bun run lint"], scheduled: ["bunx checks-flake --report flake-report.json"] } },
-  "package.json",
+  { gates: { ci: ["bun run lint"], scheduled: ["bunx checks-flake --report flake-report.json"] } },
 );
 
 function scheduledGapsIn(files: Readonly<Record<string, string>>) {
@@ -495,8 +487,8 @@ test("the scheduled report names each command no schedule runs, and the declarat
   );
 
   expect(DECLARATION.scheduled).toEqual([]);
-  expect(() => declared({ ciWiring: { gates: ["x"], scheduled: ["a && b"] } }, "package.json")).toThrow(WiringError);
-  expect(() => declared({ ciWiring: { gates: ["x"], scheduled: "bunx checks-flake" } }, "package.json")).toThrow(WiringError);
+  expect(() => declared({ gates: { ci: ["x"], scheduled: ["a && b"] } })).toThrow(WiringError);
+  expect(() => declared({ gates: { ci: ["x"], scheduled: "bunx checks-flake" } })).toThrow(QualityUnreadable);
 });
 
 test("a workflow that is not YAML is refused", () => {

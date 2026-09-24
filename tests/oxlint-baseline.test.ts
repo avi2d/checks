@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { Schema } from "effect";
+import { OXLINT_FRAGMENT } from "../scripts/quality.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 
@@ -25,7 +26,7 @@ function baselineName(rule: string): string {
 }
 
 test("the oxlint baseline counts only the Effect override's rules, in the files it covers", () => {
-  const { overrides } = Schema.decodeSync(Config)(read(".oxlintrc.json"));
+  const { overrides } = Schema.decodeSync(Config)(read(OXLINT_FRAGMENT));
   const effect = overrides.find((override) => "effect-channel/no-throw" in override.rules);
   expect(effect).toBeDefined();
   const rules = new Set(Object.keys(effect?.rules ?? {}).map(baselineName));

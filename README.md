@@ -6,8 +6,9 @@ below over a range it resolves itself, the `checks-test` entry point
 that runs the suite and refuses an undeclared skip, the `checks-flake`
 run that records the seeds a failing test fails with, the oxlint base
 config, the tsconfig fragment with the Effect language-service block,
-the shared commitlint config, the shared dependency-cruiser base, the
-test-layout check with its bunfig preset, the commit-identity check, the
+the `quality.json` schema with the generator that turns its Effect paths
+into oxlint and tsconfig fragments, the shared commitlint config, the
+shared dependency-cruiser base, the test-layout check with its bunfig preset, the commit-identity check, the
 comment gate with its backtest, the oxlint suppressions ratchet, the
 Stryker mutation-testing preset with its no-regression comparator, the
 CI-wiring check, and the Effect error-channel plugin compiled to
@@ -43,6 +44,17 @@ node_modules/
 ```json
 {
   "extends": "@avi2dg/checks/tsconfig.effect.json"
+}
+```
+
+`quality.json` at the repository root declares what the repository
+opts into, starting with the commands its CI runs; see "Quality file"
+below:
+
+```json
+{
+  "$schema": "./node_modules/@avi2dg/checks/quality.schema.json",
+  "gates": { "ci": ["bun run lint", "bun run typecheck", "bun run test"] }
 }
 ```
 
@@ -92,12 +104,148 @@ export default {
 The registry version is pinned by the consumer's lockfile; bump
 `@avi2dg/checks` to adopt a new release.
 
+## Quality file
+
+`quality.json` at the repository root says what the repository has
+opted into. The kit's bins find it at the git root and read it there:
+
+```json
+{
+  "$schema": "./node_modules/@avi2dg/checks/quality.schema.json",
+  "defaultBranch": "main",
+  "gates": {
+    "ci": ["bun run lint", "bun run typecheck", "bun run test"],
+    "scheduled": ["bunx checks-flake --runs 10 --report flake-report.json"]
+  },
+  "commitIdentity": { "authors": [{ "name": "avi2d", "email": "avi2dg@gmail.com" }] },
+  "sources": {
+    "production": ["src/**/*.ts"],
+    "effect": { "paths": ["src/**/*.ts"], "exempt": ["src/host/*.ts"] }
+  },
+  "agentRules": { "on": [], "off": [] }
+}
+```
+
+| Key | Read by | Holds |
+| --- | --- | --- |
+| `defaultBranch` | `checks-lint`, `checks-ci-wiring` | the branch pull requests merge into, `main` when absent |
+| `gates.ci` | `checks-ci-wiring` | the commands CI runs on every pull request; see "CI wiring" |
+| `gates.scheduled` | `checks-ci-wiring` | the commands a schedule runs |
+| `gates.lint` | `checks-lint`, `checks-ci-wiring` | the gates `checks-lint` runs when not all apply; see "Gate selection" |
+| `commitIdentity.authors` | `checks-commit-identity` | the identities allowed to author and commit; see "Commit identity" |
+| `sources.effect` | `checks-quality` | the paths held to the Effect rules, and the files under them that are not; see "Effect rules" |
+| `sources.production` | no kit gate yet | the source the repository ships |
+| `agentRules.on`, `agentRules.off` | agent Rule selection, not the kit | catalogued Rules switched on or off for this repository |
+
+Every key is optional. The bins decode the file with one Effect
+`Schema`, and the package ships `quality.schema.json` emitted from that
+schema, so the `$schema` line gives an editor the verdict the bins
+reach, save one: a Rule switched both on and off, which the bins refuse
+and no JSON Schema can express across two lists. A key the schema does
+not name is refused, not ignored, so a misspelt `sources` cannot switch
+the Effect rules off unnoticed. A glob in `sources`
+starts at the repository root, names a directory first, uses `*`
+only within a segment and `**` only as a whole one, and ends in a file
+name with an extension, which are the globs oxlint, the language
+service and git all read alike. oxlint matches `*.ts` at any depth
+where the other two match it at the root alone, so the schema refuses
+it; `**/*.ts` means every depth to all three. The language service
+matches nothing for `src/**` and oxlint nothing for `src/lib`, so the
+schema refuses both; `src/**/*.ts` and `src/lib/*.ts` say it to all
+three.
+
+Until a later minor release, a repository with no `quality.json` still
+has `ciWiring` and `commitIdentity` read from `package.json`, with a
+notice on each read. One with both exits 2 until `package.json` drops
+them. The keys map one for one:
+
+| `package.json` | `quality.json` |
+| --- | --- |
+| `ciWiring.gates` | `gates.ci` |
+| `ciWiring.scheduled` | `gates.scheduled` |
+| `ciWiring.lintGates` | `gates.lint` |
+| `ciWiring.defaultBranch` | `defaultBranch` |
+| `commitIdentity` | `commitIdentity` |
+
+### Generated fragments
+
+oxlint and tsc read their own JSON and nothing else, so
+`checks-quality generate` writes what `sources.effect` declares into two
+fragments at the repository root, and the hand-written configs extend
+them. Both fragments are committed:
+
+```sh
+checks-quality generate
+checks-quality --check
+```
+
+`.oxlintrc.json`:
+
+```json
+{
+  "extends": ["./node_modules/@avi2dg/checks/oxlintrc.json", "./oxlintrc.quality.json"],
+  "plugins": ["typescript", "oxc", "eslint", "import"]
+}
+```
+
+`tsconfig.json`:
+
+```json
+{
+  "extends": ["@avi2dg/checks/tsconfig.effect.json", "./tsconfig.quality.json"]
+}
+```
+
+`oxlintrc.quality.json` holds one override: the declared paths as
+`files`, the exempt ones as `excludeFiles`, and the kit's Effect rule
+block, `presets/effect.oxlint.json`. `tsconfig.quality.json` holds the
+language-service override: the same paths as `include`, the exempt ones
+as `exclude`, and `presets/effect.language-service.json`. A kit release
+that changes a preset reaches the repository through its next
+`generate`. A rule only this repository needs stays in its own
+`.oxlintrc.json`, whose overrides come after the fragment's and so win.
+
+`checks-lint` runs `checks-quality --check`, which exits 1 when:
+
+- a fragment is missing, or differs from what `generate` would write
+  from `quality.json` and the installed kit's presets;
+- a fragment is left over once `quality.json` stops declaring
+  `sources.effect`;
+- `.oxlintrc.json` or `tsconfig.json` does not list its fragment in
+  `extends`, so the tool never reads it;
+- a `sources.effect.paths` glob matches no tracked or untracked file,
+  so it holds nothing to the rules.
+
+It exits 2 when `quality.json` does not decode. `generate` writes the
+fragments, removes a left-over one, then runs the same check.
+
+```
+checks-quality: 2 problem(s) with what quality.json declares:
+  oxlintrc.quality.json is stale against quality.json and the kit's presets; run checks-quality generate
+  tsconfig.json does not extend ./tsconfig.quality.json, so the language service never reads it
+```
+
+Two details of the fragments are easy to get wrong, so the kit's tests
+pin both:
+
+- A fragment sits at the repository root. oxlint resolves an
+  override's `files`, and the language service an override's `include`,
+  against the directory of the config holding it. From `.quality/` the
+  language service reports no error at all on an `async function`
+  planted under a declared path.
+- The oxlint fragment always sets `plugins`, to the kit's. A config in
+  `extends` that sets none brings in oxlint's default plugins, whose
+  category rules then fire across the whole tree. The override names
+  the kit's plugins beside the preset's `node`, `promise` and `unicorn`,
+  because one that leaves any of the kit's out turns on the category
+  rules of the plugins it adds under every declared path.
+
 ## Lint entry point
 
 `checks-lint` runs each of the kit's lint gates in turn and names every
 one that fails, rather than stopping at the first. A repository whose
 tracked files give a gate nothing to check can leave it out through
-`ciWiring.lintGates`; see "Gate selection" under "CI wiring".
+`gates.lint`; see "Gate selection" under "CI wiring".
 
 | Gate | Reads |
 | --- | --- |
@@ -107,6 +255,7 @@ tracked files give a gate nothing to check can leave it out through
 | `checks-comment-gate` | the range |
 | `checks-suppressions-ratchet` | the range |
 | `checks-ci-wiring` | the working tree |
+| `checks-quality` | the working tree |
 
 ```sh
 checks-lint
@@ -117,8 +266,8 @@ It resolves the range once and hands the same one to every range gate.
 Locally, and on any event other than a pull request, the range ends at
 `HEAD` and starts where `HEAD` branched from the origin default branch:
 `origin/HEAD`, or when `origin/HEAD` is not set, as in an
-`actions/checkout` clone, `origin/<ciWiring.defaultBranch>` from the
-repository's `package.json` (see "CI wiring"), and `origin/main` when
+`actions/checkout` clone, `origin/<defaultBranch>` from the
+repository's `quality.json` (see "Quality file"), and `origin/main` when
 that is not declared. In a GitHub Actions pull request, where
 `GITHUB_EVENT_NAME` is `pull_request`, it ends
 at the event's head sha and starts where that branched from
@@ -159,12 +308,12 @@ gate's own report, then its verdict:
 ```
 checks-lint: range 2504acf098d120e73a8ece3c96f22b934f35c6a8..10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD against origin/main
 ...
-checks-lint: 3 of 6 gate(s) failed: checks-commit-identity, checks-comment-gate, checks-suppressions-ratchet
+checks-lint: 3 of 7 gate(s) failed: checks-commit-identity, checks-comment-gate, checks-suppressions-ratchet
 ```
 
 It exits 1 when any gate found a violation, and 2 when the range or the
 selection does not resolve, or no failing gate could decide. ci-wiring
-always runs, so a repository on `checks-lint` declares `ciWiring.gates`
+always runs, so a repository on `checks-lint` declares `gates.ci`
 (see "CI wiring"), and it holds the test layout unless its selection
 leaves out `checks-test-layout`.
 
@@ -205,69 +354,43 @@ Each refusal says what to write instead: a `Schema.TaggedError` failed
 through `Effect.fail`, a throwing call wrapped in `Effect.try` or
 `Effect.tryPromise`, and recovery by tag with `Effect.catchTag`.
 
-A repository turns them on for the paths it writes in Effect through an
-`overrides` entry in its root `.oxlintrc.json`:
+A repository turns them on for the paths it writes in Effect by
+declaring those paths in `quality.json` and extending the generated
+fragments; see "Generated fragments" under "Quality file":
 
 ```json
-{
-  "extends": ["./node_modules/@avi2dg/checks/oxlintrc.json"],
-  "plugins": ["typescript", "oxc", "eslint", "import"],
-  "overrides": [
-    {
-      "files": ["src/**"],
-      "rules": {
-        "effect-channel/no-throw": "error",
-        "effect-channel/no-try-catch": "error"
-      }
-    }
-  ]
+"sources": {
+  "effect": { "paths": ["src/**/*.ts"], "exempt": ["src/host/*.ts"] }
 }
 ```
+
+The fragment's override carries the kit's Effect rule block,
+`presets/effect.oxlint.json`: the two rules above, plus `node/no-sync`,
+`oxc/no-async-await`, `promise/avoid-new` and `unicorn/no-process-exit`.
+Files under `exempt` answer to none of them.
 
 oxlint resolves `files` against the directory of the config that holds
 the override, so a config passed with `-c` from outside the repository
 matches nothing and reports nothing.
 
-This repository's own override for `scripts/**` adds `node/no-sync`,
-`oxc/no-async-await`, `promise/avoid-new` and `unicorn/no-process-exit`,
-which need the `node`, `promise` and `unicorn` plugins in the override's
-`plugins`. `unicorn/no-process-exit` passes over any file that opens with
-a shebang, so a bin also needs `no-restricted-properties` on
-`process.exit`. Sites standing when the override lands go in oxlint's own
-baseline, `oxlint --suppress-all`, so their count can only fall. A later
-override lifts `effect-channel/no-throw` from `scripts/comment-matchers.ts`,
-the one file there a host loads without `node_modules`.
+`unicorn/no-process-exit` passes over any file that opens with a
+shebang, so a repository whose bins open with one bans `process.exit`
+itself with `no-restricted-properties` in its own `.oxlintrc.json`, as
+this one does. The preset leaves that rule out because
+a repository's own `no-restricted-properties` list for the same files
+would replace it, or be replaced by it. Sites standing when the
+declaration lands go in oxlint's own baseline, `oxlint --suppress-all`,
+so their count can only fall. This repository's own `.oxlintrc.json`
+also lifts `effect-channel/no-throw` from `scripts/comment-matchers.ts`,
+the one file under its Effect path that a host loads without
+`node_modules`.
 
 The language service holds the same paths to Effect-native IO through
-`overrides` in the plugin block of `tsconfig.json`. effect-tsgo keeps the
-severities `tsconfig.effect.json` sets when the child config restates the
-plugin with only its overrides:
-
-```json
-{
-  "extends": "@avi2dg/checks/tsconfig.effect.json",
-  "compilerOptions": {
-    "plugins": [
-      {
-        "name": "@effect/language-service",
-        "overrides": [
-          {
-            "include": ["src/**/*.ts"],
-            "options": {
-              "diagnosticSeverity": {
-                "nodeBuiltinImport": "error",
-                "asyncFunction": "error",
-                "newPromise": "error",
-                "extendsNativeError": "error"
-              }
-            }
-          }
-        ]
-      }
-    ]
-  }
-}
-```
+the tsconfig fragment's override, whose severities are
+`presets/effect.language-service.json`: `nodeBuiltinImport`,
+`asyncFunction`, `newPromise` and `extendsNativeError`, all errors.
+effect-tsgo keeps the severities `tsconfig.effect.json` sets when a later
+config in `extends` restates the plugin with only its overrides.
 
 ## Test layout
 
@@ -412,7 +535,7 @@ jobs:
           path: flake-report.json
 ```
 
-and declares the step in `ciWiring.scheduled`, so `checks-ci-wiring`
+and declares the step in `gates.scheduled`, so `checks-ci-wiring`
 fails once the schedule stops running it; see "CI wiring".
 
 ## Dependency rules
@@ -520,7 +643,7 @@ body are left alone. `GitHub <noreply@github.com>` is allowed as
 committer only, since that is who writes a squash merge.
 
 The allowlist defaults to `avi2d <avi2dg@gmail.com>`. A repo with other
-owners restates it in `package.json`:
+owners restates it in `quality.json`:
 
 ```json
 "commitIdentity": {
@@ -601,13 +724,17 @@ longer runs on pull requests to the default branch. No local check sees
 that: a workflow whose lint step became a no-op leaves `bun run lint`
 green.
 
-The repository declares its gates once, in `package.json`, and `lint`
-runs the check through `checks-lint`:
+The repository declares its gates once, in `quality.json`:
 
 ```json
-"ciWiring": {
-  "gates": ["bun run lint", "bun run typecheck", "bun run test"]
-},
+"gates": {
+  "ci": ["bun run lint", "bun run typecheck", "bun run test"]
+}
+```
+
+and `package.json` runs the check through `checks-lint`:
+
+```json
 "scripts": {
   "lint": "oxlint --type-aware && checks-lint"
 }
@@ -649,11 +776,11 @@ one of the gates `checks-lint` runs by its bare bin name, when the step
 calls `checks-lint` the same way: `bunx checks-lint` counts for
 `bunx checks-comment-gate "origin/$BASE_REF" "$HEAD_SHA"`. A step running `bun run lint` counts only for the `bun run lint` gate,
 since the check never reads what a package script runs. So once `lint`
-runs `checks-lint`, the per-gate entries can leave `ciWiring.gates`
+runs `checks-lint`, the per-gate entries can leave `gates.ci`
 along with the workflows that ran them.
 
 The default branch is `main`; a repo with another one sets
-`"defaultBranch"` beside `"gates"`, which `checks-lint` also reads when
+`"defaultBranch"` in `quality.json`, which `checks-lint` also reads when
 `origin/HEAD` is not set.
 
 It exits 1 naming each gap, with every step that runs the gate and why
@@ -665,17 +792,17 @@ ci-wiring: 1 of 8 gate(s) do not run on pull requests to main:
     .github/workflows/release.yml job publish step 7: .github/workflows/release.yml does not trigger on pull_request
 ```
 
-It exits 2 when `package.json` declares no gates, `scheduled` is not an
-array, a gate or scheduled command is not one plain command, or a
+It exits 2 when `quality.json` declares no `gates.ci` or does not
+decode, a gate or scheduled command is not one plain command, or a
 workflow does not parse. Whether a workflow is well formed is
 actionlint's question, not this one's.
 
 A command a schedule must run, such as the flake run, goes in
-`"scheduled"` beside `"gates"`:
+`gates.scheduled`:
 
 ```json
-"ciWiring": {
-  "gates": ["bun run lint", "bun run typecheck", "bun run test"],
+"gates": {
+  "ci": ["bun run lint", "bun run typecheck", "bun run test"],
   "scheduled": ["bunx checks-flake --runs 10 --report flake-report.json"]
 }
 ```
@@ -696,23 +823,26 @@ ci-wiring: 1 of 1 scheduled command(s) do not run on a schedule:
 A repository with no TypeScript source gives `checks-lint-coverage` and
 `checks-test-layout` nothing to check, and test-layout still refuses its
 missing `bun test` script and `bunfig.toml`. It declares the gates
-`checks-lint` runs as `lintGates`, beside `gates`:
+`checks-lint` runs as `gates.lint`:
 
 ```json
-"ciWiring": {
-  "gates": ["bun run lint"],
-  "lintGates": [
+"gates": {
+  "ci": ["bun run lint"],
+  "lint": [
     "checks-commit-identity",
     "checks-comment-gate",
     "checks-suppressions-ratchet",
-    "checks-ci-wiring"
+    "checks-ci-wiring",
+    "checks-quality"
   ]
 }
 ```
 
 `checks-lint` runs exactly those, in the "Lint entry point" table's
-order, and all six when `lintGates` is absent. A step running
-`checks-lint` then counts only for a declared gate that `lintGates`
+order, and all seven when `gates.lint` is absent. A selection in
+`quality.json` always keeps `checks-quality`, since the file it sits in
+is what makes that gate apply. A step running
+`checks-lint` then counts only for a declared gate that `gates.lint`
 keeps.
 
 A selection may leave out only a gate that does not apply:
@@ -725,14 +855,15 @@ A selection may leave out only a gate that does not apply:
 | `checks-comment-gate` | always |
 | `checks-suppressions-ratchet` | always |
 | `checks-ci-wiring` | always |
+| `checks-quality` | tracks a `quality.json` |
 
-Both bins exit 2 on a `lintGates` that names an unknown gate or leaves
+Both bins exit 2 on a `gates.lint` that names an unknown gate or leaves
 out one that always applies. ci-wiring exits 1 when the
 selection leaves out a gate the repository's tracked files make
 applicable, and names the gate and the files:
 
 ```
-ci-wiring: ciWiring.lintGates leaves out 2 gate(s) this repository's contents make applicable:
+ci-wiring: quality.json gates.lint leaves out 2 gate(s) this repository's contents make applicable:
   checks-lint-coverage: the repository tracks TypeScript source (src/widget.ts)
   checks-test-layout: the repository tracks TypeScript source (src/widget.ts)
 ```
@@ -819,9 +950,12 @@ The shared Stryker preset's `json` reporter writes
 
 ## Why it is shaped this way
 
-- `plugins` does not inherit through oxlint `extends`. `rules`,
-  `categories` and `jsPlugins` do. That is why the consumer snippet
-  restates `plugins` and nothing else.
+- Every config in an oxlint `extends` chain brings its own `plugins`,
+  and one that sets none brings oxlint's default plugins, whose
+  category rules the base's `categories` then turn on across the tree.
+  `rules`, `categories` and `jsPlugins` inherit as expected. That is why
+  the consumer snippet restates `plugins` and nothing else, and why the
+  generated fragment always sets them.
 - `node_modules/` is excluded through the consumer's `.gitignore`, not
   `ignorePatterns`: oxlint still walks the installed package when only
   `ignorePatterns` names it.
@@ -837,7 +971,19 @@ The shared Stryker preset's `json` reporter writes
 - `dist/` is committed. No `prepack` or `prepublishOnly` builds it, so a
   publish ships whatever bundle the publishing worktree holds. Rebuild it
   after pulling with `bun run build`; CI fails when the committed bundle
-  is stale.
+  is stale. `bun run build` also emits `quality.schema.json`, which is
+  committed the same way, and a test fails when it differs from what
+  the schema emits.
+- `quality.json` is JSON, not TOML or a TypeScript module: a bun bin, a
+  hook running without `node_modules`, a `.cjs` or `.mjs` config and
+  `jq` all parse it with nothing installed, and nobody runs a
+  repository's own code to learn its policy. It holds declarations
+  only. The kit's bins read it directly; oxlint and tsc read nothing but
+  their own JSON, so they extend generated fragments, which
+  `checks-quality --check` holds to the declarations.
+- `quality.json` refuses a key its schema does not name, so a kit that
+  cannot enforce a newer key refuses it rather than let the repository
+  believe it enforced.
 - The base parses with swc because typescript 7 (tsgo) has no compiler
   API for dependency-cruiser to use. Without `@swc/core` installed the
   cruise silently skips every `.ts` file, so this repo's test asserts its

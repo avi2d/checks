@@ -40,18 +40,13 @@ async function suppressions(count: number): Promise<void> {
   );
 }
 
-async function scaffold(manifest: Record<string, unknown> = {}): Promise<void> {
+async function scaffold(quality: Record<string, unknown> = {}): Promise<void> {
   dir = await mkdtemp(join(tmpdir(), "checks-lint-"));
   await writeFile(
     join(dir, "package.json"),
-    JSON.stringify({
-      name: "checks-lint-fixture",
-      type: "module",
-      scripts: { lint: "checks-lint", test: "checks-test" },
-      ciWiring: { gates: ["bun run lint"] },
-      ...manifest,
-    }),
+    JSON.stringify({ name: "checks-lint-fixture", type: "module", scripts: { lint: "checks-lint", test: "checks-test" } }),
   );
+  await writeFile(join(dir, "quality.json"), JSON.stringify({ gates: { ci: ["bun run lint"] }, ...quality }));
   await writeFile(join(dir, "bunfig.toml"), await readFile(join(CHECKOUT, "bunfig.toml"), "utf8"));
   await mkdir(join(dir, ".github", "workflows"), { recursive: true });
   await writeFile(
@@ -62,8 +57,8 @@ async function scaffold(manifest: Record<string, unknown> = {}): Promise<void> {
   await $`git init -q -b main`.cwd(dir).quiet();
 }
 
-async function initRepo(manifest: Record<string, unknown> = {}): Promise<string> {
-  await scaffold(manifest);
+async function initRepo(quality: Record<string, unknown> = {}): Promise<string> {
+  await scaffold(quality);
   await suppressions(2);
   const base = await commit("feat: base");
   await $`git update-ref refs/remotes/origin/main HEAD`.cwd(dir).quiet();
@@ -73,14 +68,10 @@ async function initRepo(manifest: Record<string, unknown> = {}): Promise<string>
 }
 
 async function writeSourceFreeManifest(lintGates?: readonly string[]): Promise<void> {
+  await writeFile(join(dir, "package.json"), JSON.stringify({ name: "source-free-fixture", scripts: { lint: "checks-lint" } }));
   await writeFile(
-    join(dir, "package.json"),
-    JSON.stringify({
-      name: "source-free-fixture",
-      scripts: { lint: "checks-lint" },
-      commitIdentity: { authors: [FIXTURE_AUTHOR] },
-      ciWiring: { gates: ["bun run lint"], lintGates },
-    }),
+    join(dir, "quality.json"),
+    JSON.stringify({ commitIdentity: { authors: [FIXTURE_AUTHOR] }, gates: { ci: ["bun run lint"], lint: lintGates } }),
   );
 }
 
@@ -127,7 +118,7 @@ test(
     const viaOriginHead = await lint();
     expect(viaOriginHead.text).toContain(`checks-lint: range ${base}..${head} from HEAD against origin/trunk\n`);
     expect(viaOriginHead.text).toContain("commit-identity: 1 commit(s)");
-    expect(viaOriginHead.text).toContain("checks-lint: 6 gate(s) pass");
+    expect(viaOriginHead.text).toContain("checks-lint: 7 gate(s) pass");
     expect(viaOriginHead.exitCode).toBe(0);
 
     await $`git symbolic-ref --delete refs/remotes/origin/HEAD`.cwd(dir).quiet();
@@ -153,9 +144,33 @@ test(
 );
 
 test(
-  "without origin/HEAD the range starts from the ciWiring.defaultBranch the repository declares",
+  "package.json ciWiring still decides while quality.json is absent, and declaring both at once is refused",
   async () => {
-    const base = await initRepo({ ciWiring: { gates: ["bun run lint"], defaultBranch: "trunk" } });
+    await initRepo();
+    await rm(join(dir, "quality.json"));
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({ scripts: { lint: "checks-lint", test: "checks-test" }, ciWiring: { gates: ["bun run lint"] } }),
+    );
+    await commit("chore: wire through package.json");
+    const legacy = await lint();
+    expect(legacy.text).toContain("package.json sets ciWiring, which a later minor release stops reading; move it into quality.json");
+    expect(legacy.text).toContain("ci-wiring: 1 gate(s) run on pull requests to main");
+    expect(legacy.text).toContain("checks-lint: 7 gate(s) pass");
+    expect(legacy.exitCode).toBe(0);
+
+    await writeFile(join(dir, "quality.json"), JSON.stringify({ gates: { ci: ["bun run lint"] } }));
+    const both = await lint();
+    expect(both.text).toContain("checks-lint: package.json still sets ciWiring, which quality.json replaces; move what it holds there");
+    expect(both.exitCode).toBe(2);
+  },
+  60_000,
+);
+
+test(
+  "without origin/HEAD the range starts from the defaultBranch quality.json declares",
+  async () => {
+    const base = await initRepo({ defaultBranch: "trunk" });
     await writeFile(join(dir, "clean.ts"), "export const answer = 42;\n");
     const head = await commit("feat: clean");
     await $`git update-ref refs/remotes/origin/trunk ${base}`.cwd(dir).quiet();
@@ -164,7 +179,7 @@ test(
 
     const declared = await lint();
     expect(declared.text).toContain(`checks-lint: range ${base}..${head} from HEAD against origin/trunk\n`);
-    expect(declared.text).toContain("checks-lint: 6 gate(s) pass");
+    expect(declared.text).toContain("checks-lint: 7 gate(s) pass");
     expect(declared.exitCode).toBe(0);
   },
   60_000,
@@ -183,7 +198,7 @@ test(
     const pushed = await lint();
     expect(pushed.text).toContain(`checks-lint: tip ${tip} from HEAD against origin/main\n`);
     expect(pushed.text).toContain(
-      "checks-lint: 3 of 6 gate(s) failed: checks-commit-identity, checks-comment-gate, checks-suppressions-ratchet\n",
+      "checks-lint: 3 of 7 gate(s) failed: checks-commit-identity, checks-comment-gate, checks-suppressions-ratchet\n",
     );
     expect(pushed.exitCode).toBe(1);
   },
@@ -200,7 +215,7 @@ test(
 
     const pushed = await lint();
     expect(pushed.text).toContain(`checks-lint: tip ${clean} from HEAD against origin/main\n`);
-    expect(pushed.text).toContain("checks-lint: 6 gate(s) pass");
+    expect(pushed.text).toContain("checks-lint: 7 gate(s) pass");
     expect(pushed.exitCode).toBe(0);
 
     await suppressions(1);
@@ -214,7 +229,7 @@ test(
     expect(violated.text).toContain("widget.ts:1 carries the machine-read directive `@ts-ignore`");
     expect(violated.text).toContain("widget.ts eslint/no-debugger appeared with 1");
     expect(violated.text).toContain(
-      "checks-lint: 2 of 6 gate(s) failed: checks-comment-gate, checks-suppressions-ratchet\n",
+      "checks-lint: 2 of 7 gate(s) failed: checks-comment-gate, checks-suppressions-ratchet\n",
     );
     expect(violated.exitCode).toBe(1);
   },
@@ -232,14 +247,14 @@ test(
     expect(passed.text).toContain(
       `checks-lint: tip ${clean} from HEAD alone, as the clone has no remote-tracking refs\n`,
     );
-    expect(passed.text).toContain("checks-lint: 6 gate(s) pass");
+    expect(passed.text).toContain("checks-lint: 7 gate(s) pass");
     expect(passed.exitCode).toBe(0);
 
     await writeFile(join(dir, "widget.ts"), "// @ts-ignore\nexport const widget = 42;\n");
     await $`git add -A && git ${founder} commit -q --no-gpg-sign --amend --no-edit`.cwd(dir).quiet();
     const violated = await lint();
     expect(violated.text).toContain("widget.ts:1 carries the machine-read directive `@ts-ignore`");
-    expect(violated.text).toContain("checks-lint: 1 of 6 gate(s) failed: checks-comment-gate\n");
+    expect(violated.text).toContain("checks-lint: 1 of 7 gate(s) failed: checks-comment-gate\n");
     expect(violated.exitCode).toBe(1);
   },
   60_000,
@@ -286,7 +301,7 @@ test(
 
     const pullRequest = await lint([], { GITHUB_EVENT_NAME: "pull_request", GITHUB_EVENT_PATH: event });
     expect(pullRequest.text).toContain(`checks-lint: range ${base}..${head} from pull request #7 into main\n`);
-    expect(pullRequest.text).toContain("checks-lint: 6 gate(s) pass");
+    expect(pullRequest.text).toContain("checks-lint: 7 gate(s) pass");
     expect(pullRequest.exitCode).toBe(0);
 
     await writeFile(event, JSON.stringify({ pull_request: { base: { ref: "main" } } }));
@@ -307,7 +322,7 @@ test(
     await commit("chore: raise");
     const raised = await lint();
     expect(raised.text).toContain("suppressions-ratchet: 1 count(s)");
-    expect(raised.text).toContain("checks-lint: 1 of 6 gate(s) failed: checks-suppressions-ratchet\n");
+    expect(raised.text).toContain("checks-lint: 1 of 7 gate(s) failed: checks-suppressions-ratchet\n");
     expect(raised.exitCode).toBe(1);
     await suppressions(2);
     await commit("chore: lower");
@@ -317,7 +332,7 @@ test(
     await commit("fix: widget");
     const directive = await lint();
     expect(directive.text).toContain("comment-gate: 1 violation(s)");
-    expect(directive.text).toContain("checks-lint: 1 of 6 gate(s) failed: checks-comment-gate\n");
+    expect(directive.text).toContain("checks-lint: 1 of 7 gate(s) failed: checks-comment-gate\n");
     expect(directive.exitCode).toBe(1);
     await writeFile(join(dir, "widget.ts"), "export const widget = 42;\n");
     await commit("fix: drop the directive");
@@ -327,11 +342,11 @@ test(
     await commit("feat: other", STRANGER);
     const foreign = await lint();
     expect(foreign.text).toContain("commit-identity: 1 of");
-    expect(foreign.text).toContain("checks-lint: 1 of 6 gate(s) failed: checks-commit-identity\n");
+    expect(foreign.text).toContain("checks-lint: 1 of 7 gate(s) failed: checks-commit-identity\n");
     expect(foreign.exitCode).toBe(1);
     await $`git ${OWNER} commit -q --no-gpg-sign --amend --no-edit --reset-author`.cwd(dir).quiet();
     const cleared = await lint();
-    expect(cleared.text).toContain("checks-lint: 6 gate(s) pass");
+    expect(cleared.text).toContain("checks-lint: 7 gate(s) pass");
     expect(cleared.exitCode).toBe(0);
   },
   60_000,
@@ -344,17 +359,17 @@ test(
     await writeFile(join(dir, "NOTES.md"), "More notes.\n");
     await commit("docs: notes", FIXTURE);
     const everyGate = await lint();
-    expect(everyGate.text).toContain("checks-lint: 1 of 6 gate(s) failed: checks-test-layout\n");
+    expect(everyGate.text).toContain("checks-lint: 1 of 7 gate(s) failed: checks-test-layout\n");
     expect(everyGate.exitCode).toBe(1);
 
-    await writeSourceFreeManifest(METADATA_GATES);
+    await writeSourceFreeManifest([...METADATA_GATES, "checks-quality"]);
     await commit("chore: select the metadata gates", FIXTURE);
     const selected = await lint();
-    expect(selected.text).toContain(`checks-lint: ciWiring.lintGates selects ${METADATA_GATES.join(", ")}\n`);
+    expect(selected.text).toContain(`checks-lint: quality.json selects ${[...METADATA_GATES, "checks-quality"].join(", ")}\n`);
     expect(selected.text).not.toContain("test-layout:");
     expect(selected.text).not.toContain("lint-coverage:");
     expect(selected.text).toContain("suppressions-ratchet:");
-    expect(selected.text).toContain("checks-lint: 4 gate(s) pass\n");
+    expect(selected.text).toContain("checks-lint: 5 gate(s) pass\n");
     expect(selected.exitCode).toBe(0);
 
     await mkdir(join(dir, "src"));
@@ -363,12 +378,12 @@ test(
     const withSource = await lint();
     expect(withSource.text).toContain(
       [
-        "ci-wiring: ciWiring.lintGates leaves out 2 gate(s) this repository's contents make applicable:",
+        "ci-wiring: quality.json gates.lint leaves out 2 gate(s) this repository's contents make applicable:",
         "  checks-lint-coverage: the repository tracks TypeScript source (src/widget.ts)",
         "  checks-test-layout: the repository tracks TypeScript source (src/widget.ts)",
       ].join("\n"),
     );
-    expect(withSource.text).toContain("checks-lint: 1 of 4 gate(s) failed: checks-ci-wiring\n");
+    expect(withSource.text).toContain("checks-lint: 1 of 5 gate(s) failed: checks-ci-wiring\n");
     expect(withSource.exitCode).toBe(1);
   },
   60_000,
@@ -407,16 +422,16 @@ test(
 
     const all = await lint();
     expect(all.text).toContain(
-      "checks-lint: 3 of 6 gate(s) failed: checks-commit-identity, checks-comment-gate, checks-suppressions-ratchet\n",
+      "checks-lint: 3 of 7 gate(s) failed: checks-commit-identity, checks-comment-gate, checks-suppressions-ratchet\n",
     );
     expect(all.exitCode).toBe(1);
 
     await $`git reset -q --hard origin/main`.cwd(dir).quiet();
-    await writeFile(join(dir, "package.json"), JSON.stringify({ scripts: { lint: "checks-lint", test: "checks-test" } }));
+    await writeFile(join(dir, "quality.json"), "{}");
     await commit("chore: drop the wiring");
     const undecided = await lint();
     expect(undecided.text).toContain("ci-wiring:");
-    expect(undecided.text).toContain("checks-lint: 1 of 6 gate(s) failed: checks-ci-wiring\n");
+    expect(undecided.text).toContain("checks-lint: 1 of 7 gate(s) failed: checks-ci-wiring\n");
     expect(undecided.exitCode).toBe(2);
   },
   60_000,
