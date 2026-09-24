@@ -26,9 +26,8 @@ To regenerate after an edit:
 
 1. After editing `sources.effect` in `quality.json` or a file in `presets/`, run `bun scripts/quality.ts generate`, which rewrites `oxlintrc.quality.json` and `tsconfig.quality.json`.
 1. After editing `effect-channel/`, `scripts/feature-rules.ts`, the schema in `scripts/quality-file.ts` or the templates in `scripts/doc-templates.ts`, run `bun run build`.
-   It rewrites `dist/index.js`, `dist/feature-rules.js`, `quality.schema.json`, `templates/` and the key tables of `docs/configs/quality-file.md`.
-1. After editing `peerDependencies` or the `typescript` version in `package.json`, `.bun-version`, or the gates in `scripts/gates.ts`, run `bun run build`.
-   It rewrites the generated blocks of `README.md` and of the pages under `docs/`.
+   It rewrites `dist/index.js`, `dist/feature-rules.js`, `quality.schema.json` and `templates/`.
+1. After editing anything a generated block names as its source in its opening marker, run `bun run build`, which rewrites every generated block.
 1. Commit what the command rewrote in the same commit as the edit.
 
 ## Release a version
