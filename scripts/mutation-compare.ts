@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
-import { readFile } from "node:fs/promises";
+import { Console, Effect, FileSystem, Schema } from "effect";
+import { runMain, Usage } from "./main.ts";
 
 export type Tally = {
   readonly killed: number;
@@ -25,42 +26,31 @@ export type Options = {
   readonly advisory: boolean;
 };
 
-export class ReportError extends Error {}
+export class ReportError extends Schema.TaggedError<ReportError>()("ReportError", {
+  message: Schema.String,
+}) {}
 
 const DETECTED = new Set(["Killed", "Timeout"]);
 const UNDETECTED = new Set(["Survived", "NoCoverage"]);
 const USAGE = "usage: mutation-compare.ts [--advisory] <base-report> <head-report>";
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
+const Report = Schema.fromJsonString(
+  Schema.Struct({
+    files: Schema.Record(
+      Schema.String,
+      Schema.Struct({ mutants: Schema.Array(Schema.Struct({ status: Schema.String })) }),
+    ),
+  }),
+);
+const decodeReport = Schema.decodeUnknownEffect(Report);
 
-export function parseReport(text: string): Map<string, readonly string[]> {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    throw new ReportError("mutation-compare: report is not valid JSON");
-  }
-  if (!isRecord(parsed) || !isRecord(parsed["files"])) {
-    throw new ReportError("mutation-compare: report has no files table");
-  }
-  const files = new Map<string, readonly string[]>();
-  for (const [path, entry] of Object.entries(parsed["files"])) {
-    if (!isRecord(entry) || !Array.isArray(entry["mutants"])) {
-      throw new ReportError(`mutation-compare: ${path} has no mutants list`);
-    }
-    const statuses: string[] = [];
-    for (const mutant of entry["mutants"]) {
-      if (!isRecord(mutant) || typeof mutant["status"] !== "string") {
-        throw new ReportError(`mutation-compare: ${path} carries a mutant without a status`);
-      }
-      statuses.push(mutant["status"]);
-    }
-    files.set(path, statuses);
-  }
-  return files;
-}
+export const parseReport = (source: string, text: string): Effect.Effect<Map<string, readonly string[]>, ReportError> =>
+  decodeReport(text).pipe(
+    Effect.map(
+      ({ files }) => new Map(Object.entries(files).map(([path, { mutants }]) => [path, mutants.map(({ status }) => status)])),
+    ),
+    Effect.mapError((cause) => new ReportError({ message: `${source} is not a Stryker mutation report: ${cause.message}` })),
+  );
 
 function tally(statuses: readonly string[]): Tally {
   let killed = 0;
@@ -136,38 +126,34 @@ export function formatComparison(comparison: Comparison, advisory: boolean): str
   return lines.join("\n");
 }
 
-export function parseArgs(argv: readonly string[]): Options {
+export const parseArgs = Effect.fnUntraced(function* (argv: readonly string[]): Effect.fn.Return<Options, Usage> {
   let advisory = false;
   const paths: string[] = [];
   for (const arg of argv) {
     if (arg === "--advisory") advisory = true;
-    else if (arg.startsWith("--")) throw new ReportError(`${USAGE}: unknown flag ${arg}`);
+    else if (arg.startsWith("--")) return yield* new Usage({ message: `${USAGE}: unknown flag ${arg}` });
     else paths.push(arg);
   }
-  if (paths.length !== 2 || paths[0] === undefined || paths[1] === undefined) throw new ReportError(USAGE);
-  return { basePath: paths[0], headPath: paths[1], advisory };
+  const [basePath, headPath, ...extra] = paths;
+  if (basePath === undefined || headPath === undefined || extra.length > 0) return yield* new Usage({ message: USAGE });
+  return { basePath, headPath, advisory };
+});
+
+export function passes(comparison: Comparison, advisory: boolean): boolean {
+  return advisory || !comparison.regression;
 }
 
-export function exitFor(comparison: Comparison, advisory: boolean): number {
-  return comparison.regression && !advisory ? 1 : 0;
-}
+const load = Effect.fn("load")(function* (path: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const text = yield* fs.readFileString(path).pipe(Effect.mapError(() => new ReportError({ message: `cannot read ${path}` })));
+  return yield* parseReport(path, text);
+});
 
-async function load(path: string): Promise<string> {
-  try {
-    return await readFile(path, "utf8");
-  } catch {
-    throw new ReportError(`mutation-compare: cannot read ${path}`);
-  }
-}
+const compare = Effect.gen(function* () {
+  const options = yield* parseArgs(process.argv.slice(2));
+  const comparison = compareReports(yield* load(options.basePath), yield* load(options.headPath));
+  yield* Console.log(formatComparison(comparison, options.advisory));
+  return passes(comparison, options.advisory);
+});
 
-if (import.meta.main) {
-  try {
-    const options = parseArgs(process.argv.slice(2));
-    const comparison = compareReports(parseReport(await load(options.basePath)), parseReport(await load(options.headPath)));
-    console.log(formatComparison(comparison, options.advisory));
-    process.exit(exitFor(comparison, options.advisory));
-  } catch (error) {
-    console.error(error instanceof ReportError ? error.message : `mutation-compare: ${String(error)}`);
-    process.exit(2);
-  }
-}
+if (import.meta.main) runMain("mutation-compare", compare);

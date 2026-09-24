@@ -18,20 +18,6 @@
       "count": 1
     }
   },
-  "scripts/mutation-compare.ts": {
-    "effect-channel/no-throw": {
-      "count": 7
-    },
-    "effect-channel/no-try-catch": {
-      "count": 3
-    },
-    "no-restricted-properties": {
-      "count": 2
-    },
-    "oxc/no-async-await": {
-      "count": 1
-    }
-  },
   "scripts/test-layout.ts": {
     "effect-channel/no-throw": {
       "count": 1
