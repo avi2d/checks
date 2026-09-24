@@ -7,8 +7,8 @@ that runs the suite and refuses an undeclared skip, the `checks-flake`
 run that records the seeds a failing test fails with, the oxlint base
 config, the tsconfig fragment with the Effect language-service block,
 the `quality.json` schema with the generator that turns its Effect paths
-into oxlint and tsconfig fragments, the shared commitlint config, the shared dependency-cruiser base, the
-test-layout check with its bunfig preset, the commit-identity check, the
+into oxlint and tsconfig fragments, the shared commitlint config, the
+shared dependency-cruiser base, the test-layout check with its bunfig preset, the commit-identity check, the
 comment gate with its backtest, the oxlint suppressions ratchet, the
 Stryker mutation-testing preset with its no-regression comparator, the
 CI-wiring check, and the Effect error-channel plugin compiled to
