@@ -1,18 +1,4 @@
 {
-  "scripts/ci-wiring.ts": {
-    "effect-channel/no-throw": {
-      "count": 6
-    },
-    "effect-channel/no-try-catch": {
-      "count": 3
-    },
-    "no-restricted-properties": {
-      "count": 2
-    },
-    "node/no-sync": {
-      "count": 5
-    }
-  },
   "scripts/comments.ts": {
     "effect-channel/no-throw": {
       "count": 1

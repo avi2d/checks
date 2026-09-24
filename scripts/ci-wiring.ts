@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { Console, Effect, FileSystem, Path, Schema } from "effect";
+import { git } from "./git.ts";
+import { runMain } from "./main.ts";
 
 export type Command = readonly string[];
 
@@ -35,7 +36,9 @@ type RunStep = {
   readonly script: string;
 };
 
-export class WiringError extends Error {}
+export class WiringError extends Schema.TaggedError<WiringError>()("WiringError", {
+  message: Schema.String,
+}) {}
 
 const WORKFLOWS = ".github/workflows";
 const DEFAULT_BRANCH = "main";
@@ -254,74 +257,76 @@ export function formatReport(declaration: Declaration, gaps: readonly Gap[]): st
   return lines.join("\n");
 }
 
-export function parseDeclaration(manifest: unknown, source: string): Declaration {
+export const parseDeclaration = Effect.fnUntraced(function* (
+  manifest: unknown,
+  source: string,
+): Effect.fn.Return<Declaration, WiringError> {
   const configured = isRecord(manifest) && isRecord(manifest["ciWiring"]) ? manifest["ciWiring"] : {};
-  const listed = configured["gates"];
+  const listed: unknown = configured["gates"];
   if (!Array.isArray(listed) || listed.length === 0) {
-    throw new WiringError(`ci-wiring: ${source} sets no ciWiring.gates, a non-empty array of commands`);
+    return yield* new WiringError({ message: `${source} sets no ciWiring.gates, a non-empty array of commands` });
   }
-  const gates = listed.map((command: unknown): Gate => {
+  const commands: readonly unknown[] = listed;
+  const gates: Gate[] = [];
+  for (const command of commands) {
     const words = typeof command === "string" ? plainCommand(command) : undefined;
     if (typeof command !== "string" || words === undefined) {
-      throw new WiringError(`ci-wiring: ${source} ciWiring gate ${JSON.stringify(command)} is not one plain command`);
+      return yield* new WiringError({
+        message: `${source} ciWiring gate ${JSON.stringify(command)} is not one plain command`,
+      });
     }
-    return { command, words };
-  });
+    gates.push({ command, words });
+  }
   const defaultBranch = configured["defaultBranch"] ?? DEFAULT_BRANCH;
   if (typeof defaultBranch !== "string" || defaultBranch === "") {
-    throw new WiringError(`ci-wiring: ${source} ciWiring.defaultBranch is not a branch name`);
+    return yield* new WiringError({ message: `${source} ciWiring.defaultBranch is not a branch name` });
   }
   return { gates, defaultBranch };
-}
+});
 
-export function parseWorkflow(path: string, text: string): Workflow {
-  try {
-    return { path, document: Bun.YAML.parse(text) };
-  } catch (error) {
-    throw new WiringError(`ci-wiring: cannot parse ${path}: ${String(error)}`);
-  }
-}
+export const parseWorkflow = (path: string, text: string): Effect.Effect<Workflow, WiringError> =>
+  Effect.try({
+    try: () => ({ path, document: Bun.YAML.parse(text) }),
+    catch: (error) => new WiringError({ message: `cannot parse ${path}: ${String(error)}` }),
+  });
 
-export function readDeclaration(root: string): Declaration {
-  const path = join(root, "package.json");
-  let manifest: unknown;
-  try {
-    manifest = JSON.parse(readFileSync(path, "utf8"));
-  } catch {
-    throw new WiringError(`ci-wiring: cannot read ${path} as JSON`);
-  }
-  return parseDeclaration(manifest, path);
-}
+const parseJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
 
-export function readWorkflows(root: string): readonly Workflow[] {
-  const directory = join(root, WORKFLOWS);
-  if (!existsSync(directory)) return [];
-  return readdirSync(directory)
+export const readDeclaration = Effect.fn("readDeclaration")(function* (root: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = (yield* Path.Path).join(root, "package.json");
+  const manifest = yield* fs.readFileString(path).pipe(
+    Effect.flatMap(parseJson),
+    Effect.mapError((cause) => new WiringError({ message: `cannot read ${path} as JSON: ${cause.message}` })),
+  );
+  return yield* parseDeclaration(manifest, path);
+});
+
+export const readWorkflows = Effect.fn("readWorkflows")(function* (root: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const directory = path.join(root, WORKFLOWS);
+  if (!(yield* fs.exists(directory))) return [];
+  const files = (yield* fs.readDirectory(directory))
     .filter((name) => name.endsWith(".yml") || name.endsWith(".yaml"))
-    .sort()
-    .map((name) => parseWorkflow(`${WORKFLOWS}/${name}`, readFileSync(join(directory, name), "utf8")));
-}
+    .sort();
+  return yield* Effect.forEach(files, (name) =>
+    fs
+      .readFileString(path.join(directory, name))
+      .pipe(Effect.flatMap((text) => parseWorkflow(`${WORKFLOWS}/${name}`, text))),
+  );
+});
 
-function repositoryRoot(): string {
-  const result = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], { stdout: "pipe", stderr: "pipe" });
-  if (!result.success) {
-    throw new WiringError(`ci-wiring: git rev-parse --show-toplevel: ${result.stderr.toString().trim()}`);
+const wiring = Effect.gen(function* () {
+  const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
+  const declaration = yield* readDeclaration(root);
+  const gaps = findGaps(declaration, yield* readWorkflows(root));
+  if (gaps.length > 0) {
+    yield* Console.error(formatReport(declaration, gaps));
+    return false;
   }
-  return result.stdout.toString().trim();
-}
+  yield* Console.log(formatReport(declaration, gaps));
+  return true;
+});
 
-if (import.meta.main) {
-  try {
-    const root = repositoryRoot();
-    const declaration = readDeclaration(root);
-    const gaps = findGaps(declaration, readWorkflows(root));
-    if (gaps.length > 0) {
-      console.error(formatReport(declaration, gaps));
-      process.exit(1);
-    }
-    console.log(formatReport(declaration, gaps));
-  } catch (error) {
-    console.error(error instanceof WiringError ? error.message : `ci-wiring: ${String(error)}`);
-    process.exit(2);
-  }
-}
+if (import.meta.main) runMain("ci-wiring", wiring);

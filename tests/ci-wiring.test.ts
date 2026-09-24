@@ -1,4 +1,6 @@
+import { BunServices } from "@effect/platform-bun";
 import { expect, test } from "bun:test";
+import { Effect } from "effect";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
@@ -12,6 +14,14 @@ import {
   type Declaration,
   type Workflow,
 } from "../scripts/ci-wiring.ts";
+
+function declared(manifest: unknown, source: string): Declaration {
+  return Effect.runSync(parseDeclaration(manifest, source));
+}
+
+function parsed(path: string, text: string): Workflow {
+  return Effect.runSync(parseWorkflow(path, text));
+}
 
 const CI = ".github/workflows/ci.yml";
 
@@ -33,7 +43,7 @@ jobs:
       - run: bun run test
 `;
 
-const DECLARATION = parseDeclaration({ ciWiring: { gates: ["bun run lint", "bun run test"] } }, "package.json");
+const DECLARATION = declared({ ciWiring: { gates: ["bun run lint", "bun run test"] } }, "package.json");
 
 function mutate(workflow: string, from: string, to: string): string {
   if (!workflow.includes(from)) throw new Error(`fixture does not contain ${JSON.stringify(from)}`);
@@ -41,7 +51,7 @@ function mutate(workflow: string, from: string, to: string): string {
 }
 
 function gapsIn(files: Readonly<Record<string, string>>, declaration: Declaration = DECLARATION) {
-  const workflows: Workflow[] = Object.entries(files).map(([path, text]) => parseWorkflow(path, text));
+  const workflows: Workflow[] = Object.entries(files).map(([path, text]) => parsed(path, text));
   return findGaps(declaration, workflows);
 }
 
@@ -202,7 +212,7 @@ test("the release workflow that also runs the gate does not stand in for pull re
 test("a gate run through a local reusable workflow counts only while the calling job runs", () => {
   const called = `on:\n  workflow_call:\njobs:\n  gate:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun .checks/scripts/comment-gate.ts "origin/$BASE_REF" "$HEAD_SHA"\n`;
   const caller = `on: pull_request\njobs:\n  comment-gate:\n    if: github.event_name == 'pull_request'\n    uses: ./.github/workflows/comment-gate.yml\n`;
-  const declaration = parseDeclaration(
+  const declaration = declared(
     { ciWiring: { gates: ["bun .checks/scripts/comment-gate.ts"] } },
     "package.json",
   );
@@ -228,7 +238,7 @@ test("a workflow that calls itself is walked once", () => {
 });
 
 function stepGaps(script: string, gate = "bun run lint") {
-  const declaration = parseDeclaration({ ciWiring: { gates: [gate] } }, "package.json");
+  const declaration = declared({ ciWiring: { gates: [gate] } }, "package.json");
   const workflow = `on: pull_request\njobs:\n  j:\n    steps:\n      - run: ${JSON.stringify(script)}\n`;
   return gapsIn({ [CI]: workflow }, declaration);
 }
@@ -302,35 +312,36 @@ test("the report names each gap and why each invocation of it does not count", (
 });
 
 test("the declaration names one command per gate and may move the default branch", () => {
-  expect(() => parseDeclaration({}, "package.json")).toThrow(WiringError);
-  expect(() => parseDeclaration({ ciWiring: { gates: [] } }, "package.json")).toThrow(WiringError);
-  expect(() => parseDeclaration({ ciWiring: { gates: ["a && b"] } }, "package.json")).toThrow(WiringError);
-  expect(() => parseDeclaration({ ciWiring: { gates: ["bun run lint || true"] } }, "package.json")).toThrow(WiringError);
-  expect(() => parseDeclaration({ ciWiring: { gates: ["# nothing"] } }, "package.json")).toThrow(WiringError);
-  expect(() => parseDeclaration({ ciWiring: { gates: [1] } }, "package.json")).toThrow(WiringError);
-  expect(() => parseDeclaration({ ciWiring: { gates: ["x"], defaultBranch: "" } }, "package.json")).toThrow(
+  expect(() => declared({}, "package.json")).toThrow(WiringError);
+  expect(() => declared({ ciWiring: { gates: [] } }, "package.json")).toThrow(WiringError);
+  expect(() => declared({ ciWiring: { gates: ["a && b"] } }, "package.json")).toThrow(WiringError);
+  expect(() => declared({ ciWiring: { gates: ["bun run lint || true"] } }, "package.json")).toThrow(WiringError);
+  expect(() => declared({ ciWiring: { gates: ["# nothing"] } }, "package.json")).toThrow(WiringError);
+  expect(() => declared({ ciWiring: { gates: [1] } }, "package.json")).toThrow(WiringError);
+  expect(() => declared({ ciWiring: { gates: ["x"], defaultBranch: "" } }, "package.json")).toThrow(
     WiringError,
   );
 
-  const trunk = parseDeclaration({ ciWiring: { gates: ["bun run lint"], defaultBranch: "trunk" } }, "package.json");
+  const trunk = declared({ ciWiring: { gates: ["bun run lint"], defaultBranch: "trunk" } }, "package.json");
   const onTrunk = `on:\n  pull_request:\n    branches: [trunk]\njobs:\n  j:\n    steps:\n      - run: bun run lint\n`;
   expect(gapsIn({ [CI]: onTrunk }, trunk)).toEqual([]);
-  expect(gapsIn({ [CI]: onTrunk }, parseDeclaration({ ciWiring: { gates: ["bun run lint"] } }, "p"))).toHaveLength(1);
+  expect(gapsIn({ [CI]: onTrunk }, declared({ ciWiring: { gates: ["bun run lint"] } }, "p"))).toHaveLength(1);
 });
 
 test("a workflow that is not YAML is refused", () => {
-  expect(() => parseWorkflow(CI, "jobs: [")).toThrow(WiringError);
+  expect(() => parsed(CI, "jobs: [")).toThrow(WiringError);
 });
 
-test("this repository's own CI runs its declared gates, and loses lint without the lint step", () => {
+test("this repository's own CI runs its declared gates, and loses lint without the lint step", async () => {
   const root = resolve(import.meta.dir, "..");
-  const declaration = readDeclaration(root);
-  const workflows = readWorkflows(root);
+  const [declaration, workflows] = await Effect.runPromise(
+    Effect.all([readDeclaration(root), readWorkflows(root)]).pipe(Effect.provide(BunServices.layer)),
+  );
   expect(findGaps(declaration, workflows)).toEqual([]);
 
   const ci = readFileSync(resolve(root, CI), "utf8");
   const withoutLint = workflows.map((workflow) =>
-    workflow.path === CI ? parseWorkflow(CI, mutate(ci, "      - run: bun run lint\n", "")) : workflow,
+    workflow.path === CI ? parsed(CI, mutate(ci, "      - run: bun run lint\n", "")) : workflow,
   );
   expect(findGaps(declaration, withoutLint).map((gap) => gap.gate)).toEqual(["bun run lint"]);
 });
