@@ -84,6 +84,9 @@
       "bun run typecheck",
       "bun run test",
       "./node_modules/.bin/commitlint"
+    ],
+    "scheduled": [
+      "bun scripts/flake.ts --runs 10 --report flake-report.json"
     ]
   },
   "peerDependencies": {

@@ -21,6 +21,7 @@ export type Gate = {
 
 export type Declaration = {
   readonly gates: readonly Gate[];
+  readonly scheduled: readonly Gate[];
   readonly defaultBranch: string;
   readonly lintGates: readonly KitGate[];
 };
@@ -52,6 +53,8 @@ type RunStep = {
   readonly blocker: string | undefined;
   readonly script: string;
 };
+
+type Trigger = (workflow: Workflow) => string | undefined;
 
 export class WiringError extends Schema.TaggedError<WiringError>()("WiringError", {
   message: Schema.String,
@@ -161,7 +164,7 @@ function selects(patterns: readonly string[], branch: string): boolean {
   return selected;
 }
 
-function triggerBlocker(workflow: Workflow, branch: string): string | undefined {
+const pullRequestTrigger = (branch: string): Trigger => (workflow) => {
   const on = isRecord(workflow.document) ? workflow.document["on"] : undefined;
   const events = isRecord(on) ? Object.keys(on) : (names(on) ?? []);
   if (!events.includes("pull_request")) return `${workflow.path} does not trigger on pull_request`;
@@ -183,7 +186,14 @@ function triggerBlocker(workflow: Workflow, branch: string): string | undefined 
   const missing = types === undefined ? [] : GATING_TYPES.filter((type) => !types.includes(type));
   if (missing.length > 0) return `${workflow.path} limits pull_request to types without ${missing.join(", ")}`;
   return undefined;
-}
+};
+
+const scheduleTrigger: Trigger = (workflow) => {
+  const on = isRecord(workflow.document) ? workflow.document["on"] : undefined;
+  const schedule = isRecord(on) ? on["schedule"] : undefined;
+  const crons = Array.isArray(schedule) ? schedule.filter((entry) => isRecord(entry) && typeof entry["cron"] === "string") : [];
+  return crons.length > 0 ? undefined : `${workflow.path} does not trigger on a schedule`;
+};
 
 // GitHub prefixes any other if: with success(), so only a status function overrides a needed job's skip.
 function skippedBy(jobs: Readonly<Record<string, unknown>>, id: string, seen: readonly string[]): string | undefined {
@@ -202,7 +212,7 @@ function localCall(uses: unknown): string | undefined {
   return typeof uses === "string" && uses.startsWith("./") ? uses.slice(2) : undefined;
 }
 
-function runSteps(workflows: readonly Workflow[], branch: string): readonly RunStep[] {
+function runSteps(workflows: readonly Workflow[], trigger: Trigger): readonly RunStep[] {
   const documents = new Map(workflows.map((workflow) => [workflow.path, workflow.document]));
   const steps: RunStep[] = [];
 
@@ -240,7 +250,7 @@ function runSteps(workflows: readonly Workflow[], branch: string): readonly RunS
   };
 
   for (const workflow of workflows) {
-    visit(workflow.document, workflow.path, triggerBlocker(workflow, branch), [workflow.path]);
+    visit(workflow.document, workflow.path, trigger(workflow), [workflow.path]);
   }
   return steps;
 }
@@ -250,10 +260,9 @@ function entryPointCommand(gate: Command, lintGates: readonly KitGate[]): Comman
   return index === -1 ? undefined : [...gate.slice(0, index), ENTRY_POINT.bin];
 }
 
-export function findGaps(declaration: Declaration, workflows: readonly Workflow[]): readonly Gap[] {
-  const steps = runSteps(workflows, declaration.defaultBranch);
-  return declaration.gates.flatMap((gate) => {
-    const entryPoint = entryPointCommand(gate.words, declaration.lintGates);
+function gapsAmong(gates: readonly Gate[], steps: readonly RunStep[], lintGates: readonly KitGate[]): readonly Gap[] {
+  return gates.flatMap((gate) => {
+    const entryPoint = entryPointCommand(gate.words, lintGates);
     const commands = [
       { command: gate.command, words: gate.words },
       ...(entryPoint === undefined ? [] : [{ command: entryPoint.join(" "), words: entryPoint }]),
@@ -274,10 +283,16 @@ export function findGaps(declaration: Declaration, workflows: readonly Workflow[
   });
 }
 
-export function formatReport(declaration: Declaration, gaps: readonly Gap[]): string {
-  const target = `pull requests to ${declaration.defaultBranch}`;
-  if (gaps.length === 0) return `ci-wiring: ${declaration.gates.length} gate(s) run on ${target}`;
-  const lines = [`ci-wiring: ${gaps.length} of ${declaration.gates.length} gate(s) do not run on ${target}:`];
+export function findGaps(declaration: Declaration, workflows: readonly Workflow[]): readonly Gap[] {
+  return gapsAmong(declaration.gates, runSteps(workflows, pullRequestTrigger(declaration.defaultBranch)), declaration.lintGates);
+}
+
+export function findScheduledGaps(declaration: Declaration, workflows: readonly Workflow[]): readonly Gap[] {
+  return gapsAmong(declaration.scheduled, runSteps(workflows, scheduleTrigger), declaration.lintGates);
+}
+
+function gapLines(gaps: readonly Gap[]): readonly string[] {
+  const lines: string[] = [];
   for (const gap of gaps) {
     lines.push(`  ${gap.gate}`);
     if (gap.blocked.length === 0) {
@@ -285,10 +300,37 @@ export function formatReport(declaration: Declaration, gaps: readonly Gap[]): st
     }
     for (const { location, blocker } of gap.blocked) lines.push(`    ${location}: ${blocker}`);
   }
-  return lines.join("\n");
+  return lines;
 }
 
 const decodeWiring = Schema.decodeUnknownEffect(LintWiring);
+
+export function formatReport(declaration: Declaration, gaps: readonly Gap[]): string {
+  const target = `pull requests to ${declaration.defaultBranch}`;
+  if (gaps.length === 0) return `ci-wiring: ${declaration.gates.length} gate(s) run on ${target}`;
+  return [`ci-wiring: ${gaps.length} of ${declaration.gates.length} gate(s) do not run on ${target}:`, ...gapLines(gaps)].join("\n");
+}
+
+export function formatScheduledReport(declaration: Declaration, gaps: readonly Gap[]): string {
+  const total = declaration.scheduled.length;
+  if (gaps.length === 0) return `ci-wiring: ${total} scheduled command(s) run on a schedule`;
+  return [`ci-wiring: ${gaps.length} of ${total} scheduled command(s) do not run on a schedule:`, ...gapLines(gaps)].join("\n");
+}
+
+const plainCommands = Effect.fnUntraced(function* (
+  listed: readonly unknown[],
+  subject: string,
+): Effect.fn.Return<readonly Gate[], WiringError> {
+  const gates: Gate[] = [];
+  for (const command of listed) {
+    const words = typeof command === "string" ? plainCommand(command) : undefined;
+    if (typeof command !== "string" || words === undefined) {
+      return yield* new WiringError({ message: `${subject} ${JSON.stringify(command)} is not one plain command` });
+    }
+    gates.push({ command, words });
+  }
+  return gates;
+});
 
 export const parseDeclaration = Effect.fnUntraced(function* (
   manifest: unknown,
@@ -299,22 +341,18 @@ export const parseDeclaration = Effect.fnUntraced(function* (
   if (!Array.isArray(listed) || listed.length === 0) {
     return yield* new WiringError({ message: `${source} sets no ciWiring.gates, a non-empty array of commands` });
   }
-  const commands: readonly unknown[] = listed;
-  const gates: Gate[] = [];
-  for (const command of commands) {
-    const words = typeof command === "string" ? plainCommand(command) : undefined;
-    if (typeof command !== "string" || words === undefined) {
-      return yield* new WiringError({
-        message: `${source} ciWiring gate ${JSON.stringify(command)} is not one plain command`,
-      });
-    }
-    gates.push({ command, words });
+  const gates = yield* plainCommands(listed, `${source} ciWiring gate`);
+  const scheduledListed = configured["scheduled"] ?? [];
+  if (!Array.isArray(scheduledListed)) {
+    return yield* new WiringError({ message: `${source} ciWiring.scheduled is not an array of commands` });
   }
+  const scheduled = yield* plainCommands(scheduledListed, `${source} ciWiring scheduled command`);
   const { ciWiring } = yield* decodeWiring(manifest).pipe(
     Effect.mapError((cause) => new WiringError({ message: `${source}: ${cause.message}` })),
   );
   return {
     gates,
+    scheduled,
     defaultBranch: ciWiring?.defaultBranch ?? DEFAULT_BRANCH,
     lintGates: selectedGates(ciWiring?.lintGates),
   };
@@ -389,7 +427,8 @@ export const readWorkflows = Effect.fn("readWorkflows")(function* (root: string)
 const wiring = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const declaration = yield* readDeclaration(root);
-  const gaps = findGaps(declaration, yield* readWorkflows(root));
+  const workflows = yield* readWorkflows(root);
+  const gaps = findGaps(declaration, workflows);
   const omissions = yield* findOmissions(root, declaration.lintGates);
   const gapReport = formatReport(declaration, gaps);
   yield* gaps.length > 0 ? Console.error(gapReport) : Console.log(gapReport);
@@ -397,7 +436,11 @@ const wiring = Effect.gen(function* () {
   if (omissionReport !== undefined) {
     yield* omissions.length > 0 ? Console.error(omissionReport) : Console.log(omissionReport);
   }
-  return gaps.length === 0 && omissions.length === 0;
+  if (declaration.scheduled.length === 0) return gaps.length === 0 && omissions.length === 0;
+  const scheduledGaps = findScheduledGaps(declaration, workflows);
+  const scheduledReport = formatScheduledReport(declaration, scheduledGaps);
+  yield* scheduledGaps.length > 0 ? Console.error(scheduledReport) : Console.log(scheduledReport);
+  return gaps.length === 0 && omissions.length === 0 && scheduledGaps.length === 0;
 });
 
 if (import.meta.main) runMain("ci-wiring", wiring);

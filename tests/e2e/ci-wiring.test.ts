@@ -135,3 +135,24 @@ test(
   },
   60_000,
 );
+
+test(
+  "ci-wiring goes red while a declared scheduled command has no scheduled workflow, and green once one runs it",
+  async () => {
+    const manifest = { name: "ci-wiring-fixture", ciWiring: { gates: ["bun run lint"], scheduled: ["bunx checks-flake --runs 20"] } };
+    await initRepo(manifest, WORKFLOW);
+    const red = await check();
+    expect(red.text).toContain("ci-wiring: 1 gate(s) run on pull requests to main");
+    expect(red.text).toContain("ci-wiring: 1 of 1 scheduled command(s) do not run on a schedule:\n  bunx checks-flake --runs 20\n    no run step invokes it");
+    expect(red.exitCode).toBe(1);
+
+    await writeFile(
+      join(dir, ".github", "workflows", "flake.yml"),
+      'on:\n  schedule:\n    - cron: "0 5 * * *"\njobs:\n  flake:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bunx checks-flake --runs 20\n',
+    );
+    const green = await check();
+    expect(green.text).toContain("ci-wiring: 1 scheduled command(s) run on a schedule");
+    expect(green.exitCode).toBe(0);
+  },
+  60_000,
+);

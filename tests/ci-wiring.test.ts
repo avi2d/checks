@@ -5,7 +5,9 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   findGaps,
+  findScheduledGaps,
   formatReport,
+  formatScheduledReport,
   parseDeclaration,
   parseWorkflow,
   readDeclaration,
@@ -417,16 +419,98 @@ test("the declaration names one command per gate and may move the default branch
   expect(gapsIn({ [CI]: onTrunk }, declared({ ciWiring: { gates: ["bun run lint"] } }, "p"))).toHaveLength(1);
 });
 
+const FLAKE = ".github/workflows/flake.yml";
+
+const SCHEDULED = `name: flake
+on:
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+
+jobs:
+  flake:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bunx checks-flake --report flake-report.json
+`;
+
+const FLAKE_DECLARATION = declared(
+  { ciWiring: { gates: ["bun run lint"], scheduled: ["bunx checks-flake --report flake-report.json"] } },
+  "package.json",
+);
+
+function scheduledGapsIn(files: Readonly<Record<string, string>>) {
+  const workflows: Workflow[] = Object.entries(files).map(([path, text]) => parsed(path, text));
+  return findScheduledGaps(FLAKE_DECLARATION, workflows);
+}
+
+test("a scheduled command counts only in a workflow a cron schedule triggers", () => {
+  expect(scheduledGapsIn({ [CI]: RESTORED, [FLAKE]: SCHEDULED })).toEqual([]);
+
+  const onPullRequests = mutate(RESTORED, "      - run: bun run test\n", "      - run: bunx checks-flake --report flake-report.json\n");
+  expect(scheduledGapsIn({ [CI]: onPullRequests })).toEqual([
+    {
+      gate: "bunx checks-flake --report flake-report.json",
+      entryPoint: undefined,
+      blocked: [{ location: `${CI} job checks step 5`, blocker: `${CI} does not trigger on a schedule` }],
+    },
+  ]);
+
+  const noCron = mutate(SCHEDULED, '  schedule:\n    - cron: "0 5 * * *"\n', "  schedule: []\n");
+  expect(scheduledGapsIn({ [FLAKE]: noCron })[0]?.blocked[0]?.blocker).toBe(`${FLAKE} does not trigger on a schedule`);
+});
+
+test("a scheduled command is switched off and hidden behind shell control the same ways a gate is", () => {
+  const command = "      - run: bunx checks-flake --report flake-report.json\n";
+  const blockers = [
+    [`${command}        if: false\n`, "the step sets if: false"],
+    [`${command}        continue-on-error: true\n`, "the step sets continue-on-error: true"],
+    [
+      "      - run: bunx checks-flake --report flake-report.json >> $GITHUB_STEP_SUMMARY\n",
+      "the step runs more than bunx checks-flake --report flake-report.json; give it its own step with nothing else in it",
+    ],
+  ] as const;
+  for (const [step, blocker] of blockers) {
+    const [gap, ...others] = scheduledGapsIn({ [FLAKE]: mutate(SCHEDULED, command, step) });
+    expect(others).toEqual([]);
+    expect(gap?.blocked).toEqual([{ location: `${FLAKE} job flake step 4`, blocker }]);
+  }
+  const skippedJob = mutate(SCHEDULED, "  flake:\n    runs-on: ubuntu-latest\n", "  flake:\n    if: false\n    runs-on: ubuntu-latest\n");
+  expect(scheduledGapsIn({ [FLAKE]: skippedJob })[0]?.blocked[0]?.blocker).toBe("job flake sets if: false");
+});
+
+test("the scheduled report names each command no schedule runs, and the declaration holds plain commands", () => {
+  expect(formatScheduledReport(FLAKE_DECLARATION, scheduledGapsIn({ [FLAKE]: SCHEDULED }))).toBe(
+    "ci-wiring: 1 scheduled command(s) run on a schedule",
+  );
+  expect(formatScheduledReport(FLAKE_DECLARATION, scheduledGapsIn({ [CI]: RESTORED }))).toBe(
+    [
+      "ci-wiring: 1 of 1 scheduled command(s) do not run on a schedule:",
+      "  bunx checks-flake --report flake-report.json",
+      "    no run step invokes it",
+    ].join("\n"),
+  );
+
+  expect(DECLARATION.scheduled).toEqual([]);
+  expect(() => declared({ ciWiring: { gates: ["x"], scheduled: ["a && b"] } }, "package.json")).toThrow(WiringError);
+  expect(() => declared({ ciWiring: { gates: ["x"], scheduled: "bunx checks-flake" } }, "package.json")).toThrow(WiringError);
+});
+
 test("a workflow that is not YAML is refused", () => {
   expect(() => parsed(CI, "jobs: [")).toThrow(WiringError);
 });
 
-test("this repository's own CI runs its declared gates, and loses lint without the lint step", async () => {
+test("this repository's own CI runs its declared gates and its flake run, and loses lint without the lint step", async () => {
   const root = resolve(import.meta.dir, "..");
   const [declaration, workflows] = await Effect.runPromise(
     Effect.all([readDeclaration(root), readWorkflows(root)]).pipe(Effect.provide(BunServices.layer)),
   );
   expect(findGaps(declaration, workflows)).toEqual([]);
+  expect(declaration.scheduled.map((command) => command.command)).toEqual(["bun scripts/flake.ts --runs 10 --report flake-report.json"]);
+  expect(findScheduledGaps(declaration, workflows)).toEqual([]);
 
   const ci = readFileSync(resolve(root, CI), "utf8");
   const withoutLint = workflows.map((workflow) =>

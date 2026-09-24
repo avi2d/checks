@@ -1,0 +1,19 @@
+name: flake
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+jobs:
+  flake:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun scripts/flake.ts --runs 10 --report flake-report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: flake-report
+          path: flake-report.json

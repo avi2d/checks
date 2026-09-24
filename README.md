@@ -406,6 +406,9 @@ jobs:
           path: flake-report.json
 ```
 
+and declares the step in `ciWiring.scheduled`, so `checks-ci-wiring`
+fails once the schedule stops running it; see "CI wiring".
+
 ## Dependency rules
 
 `.dependency-cruiser.cjs` extends the shared base, which carries
@@ -640,6 +643,27 @@ along with the workflows that ran them.
 The default branch is `main`; a repo with another one sets
 `"defaultBranch"` beside `"gates"`, which `checks-lint` also reads when
 `origin/HEAD` is not set.
+
+A command a schedule must run, such as the flake run, goes in
+`"scheduled"` beside `"gates"`:
+
+```json
+"ciWiring": {
+  "gates": ["bun run lint", "bun run typecheck", "bun run test"],
+  "scheduled": ["bunx checks-flake --runs 10 --report flake-report.json"]
+}
+```
+
+Each counts only as a step of the same plain shape in a workflow whose
+`on` carries `schedule` with at least one `cron`, under the same
+`if: false`, `continue-on-error: true` and `needs` rules as a gate. It
+exits 1 naming each one no schedule runs:
+
+```
+ci-wiring: 1 of 1 scheduled command(s) do not run on a schedule:
+  bunx checks-flake --runs 10 --report flake-report.json
+    .github/workflows/ci.yml job checks step 5: .github/workflows/ci.yml does not trigger on a schedule
+```
 
 It exits 1 naming each gap, with every step that runs the gate and why
 that step does not count:
