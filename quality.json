@@ -4,7 +4,7 @@
   "gates": {
     "ci": [
       "bun run build",
-      "git diff --exit-code dist/",
+      "git diff --exit-code",
       "bun run lint",
       "bun run typecheck",
       "bun run test",

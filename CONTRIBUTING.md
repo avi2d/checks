@@ -16,11 +16,11 @@ To check a change the way CI does:
 1. Run `bun run typecheck`.
 1. Run `bun run test`, which runs the suite through `scripts/test.ts`.
 
-CI runs the commands `gates.ci` lists in `quality.json`, which include `git diff --exit-code dist/` after the build and the commit lint on the pull request title.
+CI runs the commands `gates.ci` lists in `quality.json`, which include `git diff --exit-code` over the whole tree after the build and the commit lint on the pull request title.
 
 ## Regenerate what is committed
 
-Each generated file is committed, and lint, the suite or CI's `dist/` diff fails on one left stale.
+Each generated file is committed, and lint, the suite or CI's diff after the build fails on one left stale.
 
 To regenerate after an edit:
 
@@ -36,8 +36,12 @@ A release is a tag on `main`, which the `release` workflow publishes through npm
 
 To release a version:
 
-1. Bump `version` in `package.json` in a pull request, and merge it.
-1. Tag the merged commit on `main` with that version and push the tag:
+1. In a pull request that holds only the release, bump `version` in `package.json` and run `bun run build`.
+   The build writes the version's section into `CHANGELOG.md` from the conventional commits since the last release, so the changelog is never edited by hand.
+1. Commit both as `chore: release <version>` and title the pull request the same.
+   The squash merge lands the title as the commit's subject, and a `feat` or `fix` title would add an entry the committed changelog lacks.
+1. Rebase the pull request onto `main` right before it merges, since a commit merged in between belongs to the release and the committed section would lack it.
+1. Once it merges, tag that commit on `main` with the version and push the tag, since the version bump commit closes the release:
 
    ```sh
    tag="v$(bun -p 'require("./package.json").version')"
@@ -45,7 +49,7 @@ To release a version:
    ```
 
 1. Watch the `release` workflow.
-   It refuses a tag off `main` or one that disagrees with `package.json`, and reruns the build, the `dist/` diff, lint, typecheck and the suite before it publishes.
+   It refuses a tag off `main` or one that disagrees with `package.json`, and reruns the build, the check that the build changed no committed file, lint, typecheck and the suite before it publishes.
 
 `publishConfig.access` in `package.json` is what makes the scoped package public.
 npm attaches a trusted publisher only to a package that already exists, so a package's first version goes out by hand.
@@ -65,6 +69,7 @@ To place a change:
    | `dist/` | the committed bundles of the plugin and of `featureRules` |
    | `presets/` | the Effect presets `checks-quality` builds its fragments from |
    | `templates/` | one template per kind of doc file, which `bun run build` renders |
+   | `CHANGELOG.md` | every release, which `bun run build` writes from the conventional commits |
    | `tests/` | the suite, with the tests that spawn a process under `tests/e2e/` |
    | `docs/gates/` | one reference page per bin |
    | `docs/configs/` | one reference page per shipped config a bin does not own |

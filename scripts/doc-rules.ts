@@ -114,7 +114,7 @@ function adrProblems(path: string, outline: Outline, records: readonly string[])
   return violations;
 }
 
-const RELEASED = /^Released (\S+)\.$/;
+export const RELEASED = /^Released (\S+)\.$/;
 
 function changelogProblems({ sections }: Outline): readonly Violation[] {
   const releases = sections.filter(({ heading }) => VERSION.test(heading.title));

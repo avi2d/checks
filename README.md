@@ -144,7 +144,7 @@ To move a repository to a newer release of the kit:
 1. Run `bun run lint`, `bun run typecheck` and `bun run test`.
 
 The repository's lockfile pins the kit, so a repository moves only when it runs these steps.
-Each release is a `v<version>` tag on `main`, and the commits between two tags are what changed.
+[CHANGELOG.md](CHANGELOG.md), shipped in the package, lists what each release changed.
 A repository that still declares `ciWiring` or `commitIdentity` in `package.json` moves them into `quality.json`, as [Keys moved from package.json](docs/configs/quality-file.md#keys-moved-from-packagejson) maps.
 
 ## Where things are
@@ -164,6 +164,7 @@ Every path is relative to the installed package, `node_modules/@avi2dg/checks/`.
 | `templates/` | one template per kind of doc file, which a new doc file starts from |
 | `scripts/` | every bin, which a package script calls by its `checks-` name |
 | `dist/` | the compiled Effect error-channel plugin and `featureRules` |
+| `CHANGELOG.md` | every release, and what it changed |
 
 ## Related topics
 

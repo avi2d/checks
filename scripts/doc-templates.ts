@@ -64,7 +64,8 @@ const MAINTAINING = [
   "When updating this file, preserve this bar for all agents and keep entries concise.",
 ];
 
-const CHANGE_GROUPS = ["Breaking changes", "Features", "Fixes", "Performance", "Reverts"];
+export const CHANGE_GROUPS = ["Breaking changes", "Features", "Fixes", "Performance", "Reverts"] as const;
+export type ChangeGroup = (typeof CHANGE_GROUPS)[number];
 
 export const TEMPLATES: Readonly<Record<Kind, Template>> = {
   readme: {
@@ -91,7 +92,7 @@ export const TEMPLATES: Readonly<Record<Kind, Template>> = {
     sections: [
       open("<version>", "version", REQUIRED, ["Released <YYYY-MM-DD>."], {
         subsections: CHANGE_GROUPS.map((group) =>
-          fixed(group, optional("the release holds no such commit"), ["- <the commit's subject>"]),
+          fixed(group, optional("the release holds no such commit"), ["- **<the commit's scope, when it has one>:** <its description>"]),
         ),
       }),
     ],

@@ -17,8 +17,16 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
 - `dist/` is committed.
   No `prepack` or `prepublishOnly` builds it, so a publish ships whatever bundle the publishing worktree holds.
   Rebuild it after pulling with `bun run build`.
-  CI fails when the committed bundle is stale.
-  `bun run build` also emits `quality.schema.json`, which is committed the same way, and a test fails when it differs from what the schema emits.
+  `bun run build` also emits `quality.schema.json`, `templates/` and `CHANGELOG.md`, which are committed the same way.
+  CI runs `git diff --exit-code` over the whole tree after the build, because a test that compares a generated file with its source passes on the copy the build just rewrote.
+- `CHANGELOG.md` is generated, so a release commit carries it and the tarball ships it.
+  The commit that bumps package.json `version` closes its release, and the `v*` tag goes on that commit, so commits merged after it wait for the next release.
+  Releases come from the commits, over all of HEAD's ancestry, so a checkout without tags, a fork and a branch that merged `main` in write the same file.
+  A bump not newer than the release before it is a revert: it cancels every release above the version it returns to, and a tag only keeps a reverted release that was already published.
+  The committed changelog is the record of what was released: a version older than the newest it lists and absent from it was never published, and its commits go into the next release.
+  A section keeps the date it was written with, since the squash merge that lands the release commit may fall on another day.
+  Entries come from commit subjects, the squash-merged pull request titles commitlint holds to the conventional format; the bodies are the branch's own messages, which nothing lints.
+  The release path needs no `contents: write`: the changelog arrives in the release commit's pull request, not from a workflow that pushes.
 - `quality.json` is JSON, not TOML or a TypeScript module: a bun bin, a hook running without `node_modules`, a `.cjs` or `.mjs` config and `jq` all parse it with nothing installed, and nobody runs a repository's own code to learn its policy.
   It holds declarations only.
   The kit's bins read it directly.
