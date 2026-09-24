@@ -99,8 +99,8 @@ test(
     expect(viaOriginMain.exitCode).toBe(0);
 
     const explicit = await lint([head, head]);
-    expect(explicit.text).toContain(`checks-lint: range ${head}..${head} from ${head} against ${head}\n`);
-    expect(explicit.text).toContain("commit-identity: 0 commit(s)");
+    expect(explicit.text).toContain(`checks-lint: tip ${head} from ${head} against ${head}\n`);
+    expect(explicit.text).toContain(`commit-identity: 1 commit(s) in ${head} carry only allowed identities`);
     expect(explicit.exitCode).toBe(0);
 
     const usage = await lint([head]);
@@ -111,6 +111,44 @@ test(
     const unresolved = await lint();
     expect(unresolved.text).toContain("checks-lint: origin/main is not a commit in this clone");
     expect(unresolved.exitCode).toBe(2);
+  },
+  60_000,
+);
+
+test(
+  "without origin/HEAD the range starts from the ciWiring.defaultBranch the repository declares",
+  async () => {
+    const base = await initRepo({ ciWiring: { gates: ["bun run lint"], defaultBranch: "trunk" } });
+    await writeFile(join(dir, "clean.ts"), "export const answer = 42;\n");
+    const head = await commit("feat: clean");
+    await $`git update-ref refs/remotes/origin/trunk ${base}`.cwd(dir).quiet();
+    await $`git symbolic-ref --delete refs/remotes/origin/HEAD`.cwd(dir).quiet();
+    await $`git update-ref -d refs/remotes/origin/main`.cwd(dir).quiet();
+
+    const declared = await lint();
+    expect(declared.text).toContain(`checks-lint: range ${base}..${head} from HEAD against origin/trunk\n`);
+    expect(declared.text).toContain("checks-lint: 6 gate(s) pass");
+    expect(declared.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
+  "when the head is the base branch's tip, as on a push to it, every range gate checks that tip alone",
+  async () => {
+    await initRepo();
+    await $`git checkout -q main`.cwd(dir).quiet();
+    await suppressions(3);
+    await writeFile(join(dir, "widget.ts"), "// @ts-ignore\nexport const widget = 42;\n");
+    const tip = await commit("feat: pushed", STRANGER);
+    await $`git update-ref refs/remotes/origin/main HEAD`.cwd(dir).quiet();
+
+    const pushed = await lint();
+    expect(pushed.text).toContain(`checks-lint: tip ${tip} from HEAD against origin/main\n`);
+    expect(pushed.text).toContain(
+      "checks-lint: 3 of 6 gate(s) failed: checks-commit-identity, checks-comment-gate, checks-suppressions-ratchet\n",
+    );
+    expect(pushed.exitCode).toBe(1);
   },
   60_000,
 );

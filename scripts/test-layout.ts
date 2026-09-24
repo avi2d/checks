@@ -3,7 +3,7 @@ import { parse } from "@swc/core";
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { git } from "./git.ts";
 import { runMain } from "./main.ts";
-import { ENTRY_POINT, runsProgram } from "./gates.ts";
+import { ENTRY_POINT } from "./gates.ts";
 
 export type Violation = {
   readonly file: string;
@@ -45,6 +45,7 @@ const REQUIRED_TEST_TABLE: Record<string, unknown> = {
 };
 export const LAYOUT_CHECK_MARK = "scripts/test-layout.ts";
 export const LAYOUT_CHECK_BIN = "checks-test-layout";
+const OWN_ENTRY_POINT = `scripts/${ENTRY_POINT.script}`;
 
 export class LayoutError extends Schema.TaggedError<LayoutError>()("LayoutError", {
   message: Schema.String,
@@ -56,7 +57,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function runsLayoutCheck(lint: string): boolean {
   if (lint.includes(LAYOUT_CHECK_MARK) || lint.includes(LAYOUT_CHECK_BIN)) return true;
-  return lint.split(/[\s|&;()]+/).some((word) => runsProgram(word, ENTRY_POINT));
+  return lint.split(/[\s|&;()]+/).some((word) => word === ENTRY_POINT.bin || word === OWN_ENTRY_POINT);
 }
 
 function startsWithAny(file: string, prefixes: readonly string[]): boolean {

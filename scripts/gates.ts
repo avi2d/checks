@@ -9,6 +9,8 @@ export type KitGate = Program & {
 
 export const ENTRY_POINT: Program = { bin: "checks-lint", script: "lint.ts" };
 
+export const DEFAULT_BRANCH = "main";
+
 export const KIT_GATES: readonly KitGate[] = [
   { bin: "checks-lint-coverage", script: "lint-coverage.sh", reads: "tree" },
   { bin: "checks-test-layout", script: "test-layout.ts", reads: "tree" },
@@ -17,12 +19,3 @@ export const KIT_GATES: readonly KitGate[] = [
   { bin: "checks-suppressions-ratchet", script: "suppressions-ratchet.ts", reads: "range" },
   { bin: "checks-ci-wiring", script: "ci-wiring.ts", reads: "tree" },
 ];
-
-export function runsProgram(word: string, program: Program): boolean {
-  const path = `scripts/${program.script}`;
-  return word === program.bin || word === path || word.endsWith(`/${path}`);
-}
-
-export function entryPointWord(word: string, program: Program): string {
-  return word === program.bin ? ENTRY_POINT.bin : word.slice(0, word.length - program.script.length) + ENTRY_POINT.script;
-}

@@ -6,9 +6,8 @@ below over a range it resolves itself, the oxlint base config, the
 tsconfig fragment with the
 Effect language-service block, the shared commitlint config, the shared
 dependency-cruiser base, the test-layout check with its bunfig preset,
-the commit-identity check with its workflow, the comment gate with its
-workflow and backtest, the oxlint suppressions ratchet, the Stryker
-mutation-testing preset with its no-regression comparator, the
+the commit-identity check, the comment gate with its backtest, the
+oxlint suppressions ratchet, the Stryker mutation-testing preset with its no-regression comparator, the
 CI-wiring check, and the Effect error-channel plugin compiled to
 JavaScript.
 
@@ -106,10 +105,13 @@ checks-lint <base-ref> <head-ref>
 ```
 
 It resolves the range once and hands the same one to every range gate.
-Locally the range ends at `HEAD` and starts where `HEAD` branched from
-the origin default branch: `origin/HEAD`, or `origin/main` when
-`origin/HEAD` is not set. In a GitHub Actions pull request, where
-`GITHUB_EVENT_NAME` is `pull_request` or `pull_request_target`, it ends
+Locally, and on any event other than a pull request, the range ends at
+`HEAD` and starts where `HEAD` branched from the origin default branch:
+`origin/HEAD`, or when `origin/HEAD` is not set, as in an
+`actions/checkout` clone, `origin/<ciWiring.defaultBranch>` from the
+repository's `package.json` (see "CI wiring"), and `origin/main` when
+that is not declared. In a GitHub Actions pull request, where
+`GITHUB_EVENT_NAME` is `pull_request`, it ends
 at the event's head sha and starts where that branched from
 `origin/<base branch>`, so GitHub's merge commit is never in it. The
 base branch is read from the fetch, not from the event's recorded base
@@ -118,7 +120,14 @@ pull request opens. Explicit base and head arguments override both.
 
 The range always starts at the merge base, never at the base branch's
 tip: commits the base branch gained after the head branched off would
-otherwise count against the head.
+otherwise count against the head. When the head is the merge base, as
+on a push to the default branch or a local run on it, the range would be
+empty, so each range gate is handed that tip commit alone and checks it
+against its parent:
+
+```
+checks-lint: tip 10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD against origin/main
+```
 
 It prints the range, each gate's own report, then its verdict:
 
@@ -255,7 +264,7 @@ file and the path to move it to when it does not:
   with swc and reads import specifiers and identifier use, so a test that
   only carries `"node:child_process"` as a string is not a violation.
 - `scripts.test` is exactly `bun test --randomize` and `scripts.lint` runs
-  this check, itself or through `checks-lint`.
+  this check, itself or through `checks-lint` called by its bare bin name.
 - `bunfig.toml` carries every `[test]` key of the shipped preset with the
   same value, and `[test].pathIgnorePatterns` is always
   `["**/tests/quarantine/**"]`: the check pins it itself, so this repo,
@@ -495,15 +504,16 @@ supported way to wire a gate: it is not read, so a gate must run as a
 workflows.
 
 A step running `checks-lint` also counts for a declared gate that calls
-one of the gates `checks-lint` runs, when the step calls `checks-lint`
-the same way: `bunx checks-lint` counts for
+one of the gates `checks-lint` runs by its bare bin name, when the step
+calls `checks-lint` the same way: `bunx checks-lint` counts for
 `bunx checks-comment-gate "origin/$BASE_REF" "$HEAD_SHA"`. A step running `bun run lint` counts only for the `bun run lint` gate,
 since the check never reads what a package script runs. So once `lint`
 runs `checks-lint`, the per-gate entries can leave `ciWiring.gates`
 along with the workflows that ran them.
 
 The default branch is `main`; a repo with another one sets
-`"defaultBranch"` beside `"gates"`.
+`"defaultBranch"` beside `"gates"`, which `checks-lint` also reads when
+`origin/HEAD` is not set.
 
 It exits 1 naming each gap, with every step that runs the gate and why
 that step does not count:

@@ -257,7 +257,7 @@ test("a gate step counts only as the gate alone on one line with plain arguments
   expect(stepGaps("bun run lint:deps")).toEqual([{ gate: "bun run lint", blocked: [] }]);
 });
 
-test("a step running checks-lint covers each kit gate it runs, called the way the gate is declared", () => {
+test("a step running checks-lint covers each kit gate it runs by bare bin name, called the way the gate is declared", () => {
   const kit = declared(
     {
       ciWiring: {
@@ -275,7 +275,7 @@ test("a step running checks-lint covers each kit gate it runs, called the way th
     `on: pull_request\njobs:\n  j:\n    steps:\n${steps.map((step) => `      - run: ${JSON.stringify(step)}\n`).join("")}`;
 
   const covered = gapsIn({ [CI]: workflow(["bunx checks-lint", "bun .checks/scripts/lint.ts"]) }, kit);
-  expect(covered.map((gap) => gap.gate)).toEqual(["bunx checks-mutation-compare"]);
+  expect(covered.map((gap) => gap.gate)).toEqual(["bun .checks/scripts/commit-identity.ts", "bunx checks-mutation-compare"]);
 
   const uncovered = gapsIn({ [CI]: workflow(["bunx checks-lint-coverage", "bun run checks-lint"]) }, kit);
   expect(formatReport(kit, uncovered)).toBe(
@@ -286,7 +286,7 @@ test("a step running checks-lint covers each kit gate it runs, called the way th
       "  bunx checks-suppressions-ratchet",
       "    no run step invokes it or bunx checks-lint",
       "  bun .checks/scripts/commit-identity.ts",
-      "    no run step invokes it or bun .checks/scripts/lint.ts",
+      "    no run step invokes it",
       "  bunx checks-mutation-compare",
       "    no run step invokes it",
     ].join("\n"),
