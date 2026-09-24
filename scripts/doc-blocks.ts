@@ -36,7 +36,7 @@ export const kitFacts = (manifest: string, bunVersion: string): Effect.Effect<Ki
 
 export type Block = {
   readonly name: string;
-  readonly from: string;
+  readonly from: readonly string[];
   readonly render: (facts: KitFacts) => readonly string[];
 };
 
@@ -50,7 +50,7 @@ function peers({ peerDependencies }: KitFacts["manifest"]): readonly (readonly [
 
 const PREREQUISITES: Block = {
   name: "prerequisites",
-  from: `${MANIFEST} and ${BUN_VERSION}`,
+  from: [MANIFEST, BUN_VERSION],
   render: ({ manifest, bun }) => [
     "- A git repository, whose history the range gates read.",
     `- Bun ${bun}, which runs every bin.`,
@@ -63,7 +63,7 @@ const PREREQUISITES: Block = {
 // typescript is not a peer, since no bin imports it, yet the typecheck script the install adds runs its tsc.
 export const INSTALL: Block = {
   name: "install",
-  from: MANIFEST,
+  from: [MANIFEST],
   render: ({ manifest }) => [
     "```sh",
     [
@@ -80,7 +80,7 @@ const READS = { tree: "the working tree", range: "the range" } as const;
 
 const GATES: Block = {
   name: "gates",
-  from: "KIT_GATES in scripts/gates.ts",
+  from: ["KIT_GATES in scripts/gates.ts"],
   render: () => [
     "| Gate | Reads | Runs in |",
     "| --- | --- | --- |",
@@ -93,7 +93,7 @@ const GATES: Block = {
 
 const DOC_KINDS: Block = {
   name: "doc-kinds",
-  from: "scripts/doc-rules.ts",
+  from: ["scripts/doc-rules.ts", "scripts/quality-file.ts", "scripts/doc-templates.ts"],
   render: () => [
     "| File | Kind | Template |",
     "| --- | --- | --- |",
@@ -166,7 +166,7 @@ const QUALITY_ROWS: Described<QualityFields, KeyRow> = {
 
 const QUALITY_KEYS: Block = {
   name: "quality-keys",
-  from: "Quality in scripts/quality-file.ts",
+  from: ["Quality in scripts/quality-file.ts"],
   render: () => [
     "| Key | Read by | Holds |",
     "| --- | --- | --- |",
@@ -181,7 +181,7 @@ const MOVED_KEYS: Described<typeof LegacyManifest.fields, Dotted<QualityFields>>
 
 const LEGACY_KEYS: Block = {
   name: "legacy-keys",
-  from: "LegacyManifest in scripts/quality-file.ts",
+  from: ["LegacyManifest in scripts/quality-file.ts", "QUALITY_FILE in scripts/gates.ts"],
   render: () => [
     `| ${code(MANIFEST)} | ${code(QUALITY_FILE)} |`,
     "| --- | --- |",
@@ -198,7 +198,8 @@ export const TARGETS: readonly { readonly file: string; readonly blocks: readonl
 export type Spliced = { readonly type: "spliced"; readonly text: string } | { readonly type: "unmarked"; readonly blocks: readonly string[] };
 
 function opening(block: Block): string {
-  return `<!-- generated ${block.name}: bun run build writes it from ${block.from} -->`;
+  const sources = [...block.from, "scripts/doc-blocks.ts"];
+  return `<!-- generated ${block.name}: bun run build writes it from ${sources.slice(0, -1).join(", ")} and ${sources.at(-1) ?? ""} -->`;
 }
 
 function closing(block: Block): string {

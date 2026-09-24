@@ -28,7 +28,7 @@ test("a stale block is rewritten at its marker's indent, peers sorted by name, a
     text: [
       "1. Add the kit:",
       "",
-      "   <!-- generated install: bun run build writes it from package.json -->",
+      "   <!-- generated install: bun run build writes it from package.json and scripts/doc-blocks.ts -->",
       "",
       "   ```sh",
       "   bun add -d @acme/kit @acme/peer@1.2.3 zod@4.0.0 typescript@7.0.0",

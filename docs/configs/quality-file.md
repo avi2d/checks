@@ -35,7 +35,7 @@ The kit's bins find the file at the git root and read it there:
 }
 ```
 
-<!-- generated quality-keys: bun run build writes it from Quality in scripts/quality-file.ts -->
+<!-- generated quality-keys: bun run build writes it from Quality in scripts/quality-file.ts and scripts/doc-blocks.ts -->
 
 | Key | Read by | Holds |
 | --- | --- | --- |
@@ -81,7 +81,7 @@ A repository with no `quality.json` still has `ciWiring` and `commitIdentity` re
 One with both files exits 2 until `package.json` drops them.
 The keys map one for one:
 
-<!-- generated legacy-keys: bun run build writes it from LegacyManifest in scripts/quality-file.ts -->
+<!-- generated legacy-keys: bun run build writes it from LegacyManifest in scripts/quality-file.ts, QUALITY_FILE in scripts/gates.ts and scripts/doc-blocks.ts -->
 
 | `package.json` | `quality.json` |
 | --- | --- |
