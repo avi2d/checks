@@ -1,8 +1,8 @@
 import { Effect, Schema } from "effect";
 import { ADR_DIRECTORY, ADR_INDEX, ROOT_FILES } from "./doc-rules.ts";
 import { listed, templateFile } from "./doc-templates.ts";
-import { EVERY_REPOSITORY, KIT_GATES } from "./gates.ts";
-import { MODES } from "./quality-file.ts";
+import { EVERY_REPOSITORY, KIT_GATES, QUALITY_FILE } from "./gates.ts";
+import { LegacyManifest, MODES, Quality } from "./quality-file.ts";
 
 export const MANIFEST = "package.json";
 export const BUN_VERSION = ".bun-version";
@@ -103,9 +103,96 @@ const DOC_KINDS: Block = {
   ],
 };
 
+type Subkeys<Field> = Field extends { readonly schema: { readonly fields: infer Sub } } ? keyof Sub & string : never;
+
+type Described<Fields, Cell> = {
+  readonly [K in keyof Fields & string]-?: [Subkeys<Fields[K]>] extends [never] ? Cell : Cell | { readonly [S in Subkeys<Fields[K]>]-?: Cell };
+};
+
+type Dotted<Fields> = { readonly [K in keyof Fields & string]: K | `${K}.${Subkeys<Fields[K]>}` }[keyof Fields & string];
+
+type Nested<Cell> = { readonly [key: string]: Cell | { readonly [sub: string]: Cell } };
+
+function flatten<Cell>(described: Nested<Cell>, isCell: (entry: Nested<Cell>[string]) => entry is Cell): readonly (readonly [key: string, cell: Cell])[] {
+  return Object.entries(described).flatMap(([key, entry]) =>
+    isCell(entry) ? [[key, entry] as const] : Object.entries(entry).map(([sub, cell]) => [`${key}.${sub}`, cell] as const),
+  );
+}
+
+type QualityFields = Omit<typeof Quality.fields, "$schema">;
+
+type KeyRow = { readonly readBy: string; readonly holds: string };
+
+const QUALITY_ROWS: Described<QualityFields, KeyRow> = {
+  defaultBranch: { readBy: "`checks-lint`, `checks-ci-wiring`", holds: "the branch pull requests merge into, `main` when absent" },
+  gates: {
+    ci: { readBy: "`checks-ci-wiring`", holds: "the commands CI runs on every pull request, as [checks-ci-wiring](../gates/checks-ci-wiring.md) says" },
+    scheduled: { readBy: "`checks-ci-wiring`", holds: "the commands a schedule runs" },
+    lint: {
+      readBy: "`checks-lint`, `checks-ci-wiring`",
+      holds: "the gates `checks-lint` runs when not all apply, as [Gate selection](../gates/checks-lint.md#gate-selection) says",
+    },
+  },
+  commitIdentity: {
+    authors: {
+      readBy: "`checks-commit-identity`",
+      holds: "the identities allowed to author and commit, as [checks-commit-identity](../gates/checks-commit-identity.md) says",
+    },
+  },
+  sources: {
+    production: {
+      readBy: "`checks-size-budget`, `checks-quality`",
+      holds: "the source the repository ships, as [checks-size-budget](../gates/checks-size-budget.md) says",
+    },
+    effect: {
+      readBy: "`checks-quality`",
+      holds: "the paths held to the Effect rules, and the files under them that are not, as [The Effect rules](effect-rules.md) says",
+    },
+  },
+  size: { readBy: "`checks-size-budget`", holds: "the line budget, and which production files it holds" },
+  features: {
+    readBy: "`featureRules`, `checks-feature-owners`",
+    holds: "each feature's root, entries, exempt importers and proof, as [checks-feature-owners](../gates/checks-feature-owners.md) says",
+  },
+  changeSignal: { readBy: "`checks-feature-owners`", holds: "`advisory` to list the feature owners a change touches" },
+  agentRules: {
+    on: { readBy: "agent Rule selection, not the kit", holds: "catalogued Rules switched on for this repository" },
+    off: { readBy: "agent Rule selection, not the kit", holds: "catalogued Rules switched off for this repository" },
+  },
+  docs: {
+    pages: { readBy: "`checks-docs`", holds: "the Diátaxis mode of each page, by glob, as [checks-docs](../gates/checks-docs.md) says" },
+  },
+};
+
+const QUALITY_KEYS: Block = {
+  name: "quality-keys",
+  from: "Quality in scripts/quality-file.ts",
+  render: () => [
+    "| Key | Read by | Holds |",
+    "| --- | --- | --- |",
+    ...flatten<KeyRow>(QUALITY_ROWS, (entry): entry is KeyRow => "holds" in entry).map(([key, { readBy, holds }]) => `| ${code(key)} | ${readBy} | ${holds} |`),
+  ],
+};
+
+const MOVED_KEYS: Described<typeof LegacyManifest.fields, Dotted<QualityFields>> = {
+  ciWiring: { gates: "gates.ci", scheduled: "gates.scheduled", lintGates: "gates.lint", defaultBranch: "defaultBranch" },
+  commitIdentity: "commitIdentity",
+};
+
+const LEGACY_KEYS: Block = {
+  name: "legacy-keys",
+  from: "LegacyManifest in scripts/quality-file.ts",
+  render: () => [
+    `| ${code(MANIFEST)} | ${code(QUALITY_FILE)} |`,
+    "| --- | --- |",
+    ...flatten<Dotted<QualityFields>>(MOVED_KEYS, (entry) => typeof entry === "string").map(([legacy, key]) => `| ${code(legacy)} | ${code(key)} |`),
+  ],
+};
+
 export const TARGETS: readonly { readonly file: string; readonly blocks: readonly Block[] }[] = [
   { file: "README.md", blocks: [PREREQUISITES, INSTALL, GATES] },
   { file: `${GATE_PAGES}/checks-docs.md`, blocks: [DOC_KINDS] },
+  { file: "docs/configs/quality-file.md", blocks: [QUALITY_KEYS, LEGACY_KEYS] },
 ];
 
 export type Spliced = { readonly type: "spliced"; readonly text: string } | { readonly type: "unmarked"; readonly blocks: readonly string[] };

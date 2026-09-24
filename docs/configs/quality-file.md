@@ -35,6 +35,8 @@ The kit's bins find the file at the git root and read it there:
 }
 ```
 
+<!-- generated quality-keys: bun run build writes it from Quality in scripts/quality-file.ts -->
+
 | Key | Read by | Holds |
 | --- | --- | --- |
 | `defaultBranch` | `checks-lint`, `checks-ci-wiring` | the branch pull requests merge into, `main` when absent |
@@ -42,13 +44,16 @@ The kit's bins find the file at the git root and read it there:
 | `gates.scheduled` | `checks-ci-wiring` | the commands a schedule runs |
 | `gates.lint` | `checks-lint`, `checks-ci-wiring` | the gates `checks-lint` runs when not all apply, as [Gate selection](../gates/checks-lint.md#gate-selection) says |
 | `commitIdentity.authors` | `checks-commit-identity` | the identities allowed to author and commit, as [checks-commit-identity](../gates/checks-commit-identity.md) says |
-| `sources.effect` | `checks-quality` | the paths held to the Effect rules, and the files under them that are not, as [The Effect rules](effect-rules.md) says |
 | `sources.production` | `checks-size-budget`, `checks-quality` | the source the repository ships, as [checks-size-budget](../gates/checks-size-budget.md) says |
+| `sources.effect` | `checks-quality` | the paths held to the Effect rules, and the files under them that are not, as [The Effect rules](effect-rules.md) says |
 | `size` | `checks-size-budget` | the line budget, and which production files it holds |
 | `features` | `featureRules`, `checks-feature-owners` | each feature's root, entries, exempt importers and proof, as [checks-feature-owners](../gates/checks-feature-owners.md) says |
 | `changeSignal` | `checks-feature-owners` | `advisory` to list the feature owners a change touches |
-| `agentRules.on`, `agentRules.off` | agent Rule selection, not the kit | catalogued Rules switched on or off for this repository |
+| `agentRules.on` | agent Rule selection, not the kit | catalogued Rules switched on for this repository |
+| `agentRules.off` | agent Rule selection, not the kit | catalogued Rules switched off for this repository |
 | `docs.pages` | `checks-docs` | the Diátaxis mode of each page, by glob, as [checks-docs](../gates/checks-docs.md) says |
+
+<!-- end generated quality-keys -->
 
 Every key is optional.
 
@@ -76,6 +81,8 @@ A repository with no `quality.json` still has `ciWiring` and `commitIdentity` re
 One with both files exits 2 until `package.json` drops them.
 The keys map one for one:
 
+<!-- generated legacy-keys: bun run build writes it from LegacyManifest in scripts/quality-file.ts -->
+
 | `package.json` | `quality.json` |
 | --- | --- |
 | `ciWiring.gates` | `gates.ci` |
@@ -83,6 +90,8 @@ The keys map one for one:
 | `ciWiring.lintGates` | `gates.lint` |
 | `ciWiring.defaultBranch` | `defaultBranch` |
 | `commitIdentity` | `commitIdentity` |
+
+<!-- end generated legacy-keys -->
 
 ## Related topics
 

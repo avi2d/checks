@@ -221,7 +221,7 @@ export const Quality = Schema.Struct({
   );
 export type Quality = typeof Quality.Type;
 
-const LegacyManifest = Schema.Struct({
+export const LegacyManifest = Schema.Struct({
   ciWiring: Schema.optionalKey(
     Schema.Struct({
       gates: Schema.optionalKey(Schema.NonEmptyArray(Command)),
