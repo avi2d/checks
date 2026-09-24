@@ -25,7 +25,7 @@ jobs:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - run: bun run build
-      - run: git diff --exit-code dist/
+      - run: git diff --exit-code
       - run: bun run lint
       - run: bun run typecheck
       - run: bun run test

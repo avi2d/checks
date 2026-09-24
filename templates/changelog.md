@@ -10,28 +10,28 @@ Released <YYYY-MM-DD>.
 
 <Leave this section out when the release holds no such commit.>
 
-- <the commit's subject>
+- **<the commit's scope, when it has one>:** <its description>
 
 ### Features
 
 <Leave this section out when the release holds no such commit.>
 
-- <the commit's subject>
+- **<the commit's scope, when it has one>:** <its description>
 
 ### Fixes
 
 <Leave this section out when the release holds no such commit.>
 
-- <the commit's subject>
+- **<the commit's scope, when it has one>:** <its description>
 
 ### Performance
 
 <Leave this section out when the release holds no such commit.>
 
-- <the commit's subject>
+- **<the commit's scope, when it has one>:** <its description>
 
 ### Reverts
 
 <Leave this section out when the release holds no such commit.>
 
-- <the commit's subject>
+- **<the commit's scope, when it has one>:** <its description>

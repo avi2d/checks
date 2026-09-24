@@ -12,6 +12,7 @@
   },
   "type": "module",
   "files": [
+    "CHANGELOG.md",
     "bunfig.toml",
     "commitlint.config.js",
     "dependency-cruiser.config.js",
@@ -108,7 +109,7 @@
     "checks-docs": "scripts/docs.ts"
   },
   "scripts": {
-    "build": "bun build effect-channel/index.ts --outdir dist --target node --format esm && bun build scripts/feature-rules.ts --outdir dist --target node --format esm --packages external && bun scripts/quality-schema.ts && bun scripts/doc-templates-write.ts",
+    "build": "bun build effect-channel/index.ts --outdir dist --target node --format esm && bun build scripts/feature-rules.ts --outdir dist --target node --format esm --packages external && bun scripts/quality-schema.ts && bun scripts/doc-templates-write.ts && bun scripts/changelog-write.ts",
     "lint": "oxlint --type-aware && bun scripts/lint.ts && depcruise --config .dependency-cruiser.cjs .",
     "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
     "test": "bun scripts/test.ts"
