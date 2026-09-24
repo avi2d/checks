@@ -840,7 +840,7 @@ files `allowFrom` matches, such as a CLI or a harness, may import any
 file in it:
 
 ```
-error feature-billing-entries: src/main.ts → src/billing/charge.ts
+error feature-billing-entries: src/report.ts → src/billing/charge.ts
 ```
 
 `featureRules` decodes its argument with the schema the bins use and
