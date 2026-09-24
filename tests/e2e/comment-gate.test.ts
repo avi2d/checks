@@ -93,6 +93,26 @@ test(
 );
 
 test(
+  "the one-argument form judges a root commit against the empty tree",
+  async () => {
+    await initRepo();
+    await writeFile(join(dir, "widget.ts"), "export const widget = 1;\n");
+    const clean = await commit("clean root");
+    const green = await gate(clean);
+    expect(green.exitCode).toBe(0);
+    expect(green.text).toContain("comment-gate: 1 added line(s) across 1 file(s) carry no refused comment");
+
+    await $`git checkout -q --orphan dirty`.cwd(dir).quiet();
+    await writeFile(join(dir, "widget.ts"), "export const widget = 1;\n// @ts-expect-error silenced\n");
+    const dirty = await commit("root with a banned comment");
+    const red = await gate(dirty);
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain("widget.ts:2 carries the machine-read directive `@ts-expect-error`");
+  },
+  120_000,
+);
+
+test(
   "the one-argument form refuses to guess when the parent commit is not fetched",
   async () => {
     await initRepo();
