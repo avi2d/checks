@@ -3,6 +3,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { Schema } from "effect";
 
 const CHECKOUT = resolve(import.meta.dir, "..", "..");
 
@@ -20,12 +21,23 @@ const SEVERITIES = [
   "outdatedApi",
 ];
 
-interface TsconfigEffect {
-  compilerOptions?: {
-    erasableSyntaxOnly?: boolean;
-    plugins?: { name?: string; diagnosticSeverity?: Record<string, string> }[];
-  };
-}
+const TsconfigEffect = Schema.fromJsonString(
+  Schema.Struct({
+    compilerOptions: Schema.optionalKey(
+      Schema.Struct({
+        erasableSyntaxOnly: Schema.optionalKey(Schema.Boolean),
+        plugins: Schema.optionalKey(
+          Schema.Array(
+            Schema.Struct({
+              name: Schema.optionalKey(Schema.String),
+              diagnosticSeverity: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
+            }),
+          ),
+        ),
+      }),
+    ),
+  }),
+);
 
 let dir = "";
 
@@ -47,7 +59,7 @@ async function run(binary: string, args: string[]): Promise<{ exitCode: number; 
 test("tsconfig.effect.json carries the language-service block and erasableSyntaxOnly", async () => {
   // tsc --showConfig drops the plugins block, so the file itself is the contract under test.
   const raw = await readFile(join(CHECKOUT, "tsconfig.effect.json"), "utf8");
-  const fragment = JSON.parse(raw) as TsconfigEffect;
+  const fragment = Schema.decodeSync(TsconfigEffect)(raw);
 
   expect(fragment.compilerOptions?.erasableSyntaxOnly).toBe(true);
   const languageService = fragment.compilerOptions?.plugins?.find(

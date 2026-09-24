@@ -22,9 +22,9 @@ afterEach(async () => {
   }
 });
 
-function identityEnv(author: Identity, committer: Identity): Record<string, string> {
+function identityEnv(author: Identity, committer: Identity) {
   return {
-    ...(process.env as Record<string, string>),
+    ...process.env,
     GIT_AUTHOR_NAME: author.name,
     GIT_AUTHOR_EMAIL: author.email,
     GIT_COMMITTER_NAME: committer.name,

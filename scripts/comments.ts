@@ -121,7 +121,7 @@ const AFTER_A_VALUE = /[)\]}"'`]/;
 
 function opensRegex(previous: string): boolean {
   if (previous === "") return true;
-  if (WORD.test(previous[0]!)) return KEYWORDS.has(previous);
+  if (WORD.test(previous.charAt(0))) return KEYWORDS.has(previous);
   return !AFTER_A_VALUE.test(previous);
 }
 
@@ -141,7 +141,7 @@ function endOfRegex(source: string, start: number): number {
   let i = start + 1;
   let inClass = false;
   while (i < source.length) {
-    const char = source[i]!;
+    const char = source.charAt(i);
     if (char === "\\") i += 2;
     else if (char === "\n") return i;
     else {
@@ -167,7 +167,7 @@ export const comments = Effect.fn("comments")(function* (path: string, source: s
   };
 
   while (i < source.length) {
-    const char = source[i]!;
+    const char = source.charAt(i);
 
     const block = syntax.block.find(([open]) => source.startsWith(open, i));
     if (block) {
@@ -182,7 +182,7 @@ export const comments = Effect.fn("comments")(function* (path: string, source: s
 
     const marker = syntax.line.find(
       ({ token, afterAWordBreak }) =>
-        source.startsWith(token, i) && (!afterAWordBreak || i === 0 || WORD_BREAK.test(source[i - 1]!)),
+        source.startsWith(token, i) && (!afterAWordBreak || i === 0 || WORD_BREAK.test(source.charAt(i - 1))),
     );
     if (marker) {
       const newline = source.indexOf("\n", i);
@@ -195,7 +195,7 @@ export const comments = Effect.fn("comments")(function* (path: string, source: s
 
     const quote = syntax.quotes.find(
       ({ token, opensMidWord }) =>
-        source.startsWith(token, i) && (opensMidWord || i === 0 || !WORD.test(source[i - 1]!)),
+        source.startsWith(token, i) && (opensMidWord || i === 0 || !WORD.test(source.charAt(i - 1))),
     );
     if (quote) {
       advance(endOfQuoted(source, i, quote));
@@ -211,7 +211,7 @@ export const comments = Effect.fn("comments")(function* (path: string, source: s
 
     if (WORD.test(char)) {
       let end = i;
-      while (end < source.length && WORD.test(source[end]!)) end += 1;
+      while (end < source.length && WORD.test(source.charAt(end))) end += 1;
       previous = source.slice(i, end);
       advance(end);
       continue;
@@ -230,18 +230,24 @@ const LICENCE = /copyright|spdx-license-identifier|all rights reserved|licen[cs]
 // file's own opening is the shape of a paragraph rather than of one fact.
 const A_WRAPPED_SENTENCE_FITS_WITHIN = 3;
 
+function firstLine(text: string): string {
+  const newline = text.indexOf("\n");
+  return newline < 0 ? text : text.slice(0, newline);
+}
+
 function beginsItsLine(comment: Comment, lines: readonly string[]): boolean {
-  return lines[comment.line - 1]!.trimStart().startsWith(comment.text.split("\n")[0]!);
+  const line = lines[comment.line - 1];
+  return line !== undefined && line.trimStart().startsWith(firstLine(comment.text));
 }
 
 function openingBlock(found: readonly Comment[], source: string): Comment[] {
   const lines = source.split("\n");
-  if (found.length === 0 || found[0]!.line !== 1 || !beginsItsLine(found[0]!, lines)) return [];
-  const block = [found[0]!];
-  let next = found[0]!.line + found[0]!.text.split("\n").length;
-  for (let i = 1; i < found.length && found[i]!.line === next && beginsItsLine(found[i]!, lines); i++) {
-    block.push(found[i]!);
-    next = found[i]!.line + found[i]!.text.split("\n").length;
+  const block: Comment[] = [];
+  let next = 1;
+  for (const comment of found) {
+    if (comment.line !== next || !beginsItsLine(comment, lines)) break;
+    block.push(comment);
+    next = comment.line + comment.text.split("\n").length;
   }
   return block;
 }
