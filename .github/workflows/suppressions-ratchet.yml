@@ -1,0 +1,29 @@
+name: suppressions-ratchet
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Ref of avi2d/checks to check with
+        type: string
+        default: main
+
+jobs:
+  suppressions-ratchet:
+    runs-on: ubuntu-latest
+    steps:
+      # The whole history: the range starts at the fetched base branch tip,
+      # which a shallow fetch of the head cannot reach. The event's base sha
+      # goes stale once the base branch advances after the PR opens.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/checkout@v5
+        with:
+          repository: avi2d/checks
+          ref: ${{ inputs.ref }}
+          path: .checks
+      - uses: oven-sh/setup-bun@v2
+      - run: bun .checks/scripts/suppressions-ratchet.ts "origin/$BASE_REF" "$HEAD_SHA"
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
