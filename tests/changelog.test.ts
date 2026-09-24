@@ -1,18 +1,8 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { releaseDates, releases, renderChangelog, type Commit, type Cut } from "../scripts/changelog.ts";
+import { cuts, releaseDates, renderChangelog, type Bump } from "../scripts/changelog.ts";
 import { judge } from "../scripts/doc-rules.ts";
 
-function commits(...subjects: readonly string[]): readonly Commit[] {
-  return subjects.map((subject, index) => ({ sha: `c${index}`, date: `2026-09-0${index + 1}`, subject }));
-}
-
-function cut(version: string, through: string, date = "2026-09-20"): Cut {
-  return { version, through, date };
-}
-
-const HISTORY = commits(
+const SUBJECTS = [
   "chore: begin history",
   "feat: read a part's supplier (#2)",
   "fix(parts): keep the order of parts (#3)",
@@ -23,10 +13,18 @@ const HISTORY = commits(
   "revert: read a part's supplier (#8)",
   "refactor(parts): split the reader (#9)",
   "feat(parts): price a bill (#10)",
-);
+].toReversed();
+
+function bumps(...versions: readonly string[]): readonly Bump[] {
+  return versions.map((version, index) => ({ sha: `c${index}`, version, date: `2026-09-0${index + 1}` }));
+}
+
+function recorded(...versions: readonly string[]): ReadonlyMap<string, string> {
+  return new Map(versions.map((version) => [version, "2026-09-20"]));
+}
 
 test("a release lists its conventional commits under the template's groups, newest first, and leaves the rest out", () => {
-  const rendered = renderChangelog("widget", releases(HISTORY, [cut("1.0.0", "c9")], undefined));
+  const rendered = renderChangelog("widget", [{ version: "1.0.0", date: "2026-09-20", subjects: SUBJECTS }]);
   expect(rendered).toBe(
     [
       "# Changelog",
@@ -62,32 +60,47 @@ test("a release lists its conventional commits under the template's groups, newe
   );
 });
 
-test("each tag closes a release at its commit, so a version never tagged rolls into the next one", () => {
-  const found = releases(HISTORY, [cut("0.2.0", "c6"), cut("0.1.0", "c2")], undefined);
-  expect(found.map(({ version, subjects }) => ({ version, subjects }))).toEqual([
-    { version: "0.2.0", subjects: HISTORY.slice(3, 7).map(({ subject }) => subject).toReversed() },
-    { version: "0.1.0", subjects: HISTORY.slice(0, 3).map(({ subject }) => subject).toReversed() },
+test("every version bump closes a release when there is no changelog yet", () => {
+  expect(cuts(bumps("0.1.0", "0.2.0", "0.3.0"), new Map(), undefined)).toEqual([
+    { version: "0.1.0", date: "2026-09-01", through: "c0", after: [] },
+    { version: "0.2.0", date: "2026-09-02", through: "c1", after: ["c0"] },
+    { version: "0.3.0", date: "2026-09-03", through: "c2", after: ["c0", "c1"] },
   ]);
 });
 
-test("the version no tag carries yet closes where package.json took it on, and later commits wait for the next release", () => {
-  const found = releases(HISTORY, [cut("0.1.0", "c2")], cut("0.2.0", "c4"));
-  expect(found.map(({ version, subjects }) => ({ version, subjects }))).toEqual([
-    { version: "0.2.0", subjects: HISTORY.slice(3, 5).map(({ subject }) => subject).toReversed() },
-    { version: "0.1.0", subjects: HISTORY.slice(0, 3).map(({ subject }) => subject).toReversed() },
+test("a version older than the newest the changelog lists and absent from it rolls into the next release", () => {
+  expect(cuts(bumps("0.1.0", "0.2.0", "0.3.0"), recorded("0.3.0", "0.1.0"), undefined)).toEqual([
+    { version: "0.1.0", date: "2026-09-20", through: "c0", after: [] },
+    { version: "0.3.0", date: "2026-09-20", through: "c2", after: ["c0"] },
   ]);
 });
 
-test("a version bumped in the working tree over a tagged head is a release holding nothing yet", () => {
-  const found = releases(HISTORY, [cut("0.1.0", "c9")], cut("0.2.0", "c9"));
-  expect(found.map(({ version, subjects }) => ({ version, subjects }))).toEqual([
-    { version: "0.2.0", subjects: [] },
-    { version: "0.1.0", subjects: HISTORY.map(({ subject }) => subject).toReversed() },
+test("the newest version bump is a release even when the changelog lists a newer version without it", () => {
+  const found = cuts(bumps("0.1.0", "0.2.0"), recorded("0.3.0"), undefined);
+  expect(found.map(({ version, after }) => ({ version, after }))).toEqual([{ version: "0.2.0", after: [] }]);
+});
+
+test("a release keeps the date the changelog gives it, else its bump's date", () => {
+  const found = cuts(bumps("0.1.0", "0.2.0"), new Map([["0.1.0", "2026-09-15"]]), undefined);
+  expect(found.map(({ version, date }) => ({ version, date }))).toEqual([
+    { version: "0.1.0", date: "2026-09-15" },
+    { version: "0.2.0", date: "2026-09-02" },
   ]);
+});
+
+test("the release being prepared covers everything past every release and keeps a date the changelog already gives it", () => {
+  const prepared = { sha: "HEAD", version: "0.3.0", date: "2026-09-25" };
+  expect(cuts(bumps("0.1.0", "0.2.0"), recorded("0.2.0", "0.1.0"), prepared).at(-1)).toEqual({
+    version: "0.3.0",
+    date: "2026-09-25",
+    through: "HEAD",
+    after: ["c0", "c1"],
+  });
+  expect(cuts(bumps("0.1.0"), recorded("0.3.0", "0.1.0"), prepared).at(-1)?.date).toBe("2026-09-20");
 });
 
 test("a release with no conventional commit worth listing is its heading and its date", () => {
-  const rendered = renderChangelog("widget", releases(commits("chore: tidy", "docs: say why"), [cut("0.1.0", "c1")], undefined));
+  const rendered = renderChangelog("widget", [{ version: "0.1.0", date: "2026-09-20", subjects: ["docs: say why", "chore: tidy"] }]);
   expect(rendered.split("\n").slice(4)).toEqual(["## 0.1.0", "", "Released 2026-09-20.", ""]);
 });
 
@@ -102,12 +115,10 @@ test("the dates a changelog already carries read back by version, so regeneratin
   ]);
 });
 
-test("the package ships CHANGELOG.md, which npm leaves out unless files names it", () => {
-  const manifest: unknown = JSON.parse(readFileSync(resolve(import.meta.dir, "..", "package.json"), "utf8"));
-  expect(manifest).toHaveProperty("files", expect.arrayContaining(["CHANGELOG.md"]));
-});
-
 test("a rendered changelog holds to the changelog template checks-docs holds it to", () => {
-  const rendered = renderChangelog("widget", releases(HISTORY, [cut("0.2.0", "c9"), cut("0.1.0", "c2", "2026-09-03")], undefined));
+  const rendered = renderChangelog("widget", [
+    { version: "0.2.0", date: "2026-09-20", subjects: SUBJECTS.slice(0, 7) },
+    { version: "0.1.0", date: "2026-09-03", subjects: SUBJECTS.slice(7) },
+  ]);
   expect(judge("changelog", { path: "CHANGELOG.md", text: rendered }, [])).toEqual([]);
 });

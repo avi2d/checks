@@ -2,16 +2,17 @@ import { firstText, parseOutline, VERSION } from "./doc-outline.ts";
 import { RELEASED } from "./doc-rules.ts";
 import { CHANGE_GROUPS, type ChangeGroup } from "./doc-templates.ts";
 
-export type Commit = {
+export type Bump = {
   readonly sha: string;
+  readonly version: string;
   readonly date: string;
-  readonly subject: string;
 };
 
 export type Cut = {
   readonly version: string;
   readonly date: string;
   readonly through: string;
+  readonly after: readonly string[];
 };
 
 export type Release = {
@@ -43,17 +44,20 @@ function entryOf(subject: string): Entry | undefined {
   return { group, text: scope === "" ? description : `**${scope}:** ${description}` };
 }
 
-export function releases(history: readonly Commit[], tagged: readonly Cut[], pending: Cut | undefined): readonly Release[] {
-  const reach = ({ through }: Cut) => history.findIndex(({ sha }) => sha === through) + 1;
-  const cuts = [...tagged.toSorted((a, b) => reach(a) - reach(b)), ...(pending === undefined ? [] : [pending])];
-  let from = 0;
-  const found = cuts.map((cut) => {
-    const to = Math.max(from, reach(cut));
-    const subjects = history.slice(from, to).map(({ subject }) => subject);
-    from = to;
-    return { version: cut.version, date: cut.date, subjects: subjects.toReversed() };
-  });
-  return found.toReversed();
+// The changelog records what was released: a version older than the newest it lists and absent from it
+// was never published, so its commits roll into the next release.
+export function cuts(bumps: readonly Bump[], recorded: ReadonlyMap<string, string>, pending: Bump | undefined): readonly Cut[] {
+  const newest = [...recorded.keys()].toSorted(Bun.semver.order).at(-1);
+  const released = bumps.filter(
+    ({ version }, index) =>
+      index === bumps.length - 1 || newest === undefined || recorded.has(version) || Bun.semver.order(version, newest) !== -1,
+  );
+  return [...released, ...(pending === undefined ? [] : [pending])].map(({ sha, version, date }, index) => ({
+    version,
+    date: recorded.get(version) ?? date,
+    through: sha,
+    after: released.slice(0, index).map((earlier) => earlier.sha),
+  }));
 }
 
 function renderRelease({ version, date, subjects }: Release): readonly string[] {

@@ -1232,7 +1232,10 @@ section into `CHANGELOG.md` from the conventional commits since the
 last release. Commit both as `chore: release <version>` and title the
 pull request the same: the squash merge lands the title as the commit's
 subject, and a `feat` or `fix` title adds an entry the committed
-changelog lacks. Once it merges, tag that commit on `main`. The
+changelog lacks. Rebase the pull request onto `main` right before it
+merges, because a commit merged in between belongs to the release and
+the committed section would lack it. The version bump commit closes
+the release, so once it merges, tag that commit on `main`. The
 `release` workflow refuses a tag off `main` and reruns the build, the
 check that the build changed no committed file, lint, typecheck and
 tests before it publishes:
