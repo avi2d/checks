@@ -36,7 +36,8 @@ const runtimeSpecifiers = Effect.fn("runtimeSpecifiers")(function* (file: string
   });
   return module.body.flatMap((item) => {
     if (item.type === "ImportDeclaration" && !item.typeOnly) return [item.source.value];
-    if (item.type === "ExportNamedDeclaration" && !item.typeOnly && item.source !== undefined) return [item.source.value];
+    // swc types source as optional, but a local export such as `export { x }` carries null.
+    if (item.type === "ExportNamedDeclaration" && !item.typeOnly && item.source) return [item.source.value];
     if (item.type === "ExportAllDeclaration") return [item.source.value];
     return [];
   });

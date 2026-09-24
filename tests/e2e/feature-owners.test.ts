@@ -127,6 +127,25 @@ test(
 );
 
 test(
+  "a proof with a local export and no source is read, not crashed on",
+  async () => {
+    await repository({ features: [BILLING] });
+    await write({ "tests/e2e/billing.test.ts": "export {};\n" });
+    const empty = await owners(await commit("test: empty"));
+    expect(empty.text).toBe(
+      "feature-owners: 1 problem(s) with the features' runnable proofs:\n  billing: proof tests/e2e/billing.test.ts imports none of its entries, src/billing/index.ts\n",
+    );
+    expect(empty.exitCode).toBe(1);
+
+    await write({ "tests/e2e/billing.test.ts": `${proof("../../src/billing/index.ts")}export { charge };\n` });
+    const proven = await owners(await commit("test: entry"));
+    expect(proven.text).toBe("feature-owners: 1 feature(s) keep a proof under tests/e2e/ that imports an entry\n");
+    expect(proven.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
   "a proof outside tests/e2e/ is refused where quality.json is read, and a repository declaring no feature passes",
   async () => {
     await repository({ features: [{ ...BILLING, proof: "tests/billing.test.ts" }] });
