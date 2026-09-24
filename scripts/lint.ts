@@ -1,13 +1,12 @@
 #!/usr/bin/env bun
 import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
-import { KIT_GATES, type KitGate } from "./gates.ts";
+import { DEFAULT_BRANCH, KIT_GATES, type KitGate } from "./gates.ts";
 import { git } from "./git.ts";
 import { runMain, Usage } from "./main.ts";
 
 type Range = {
-  readonly base: string;
-  readonly head: string;
+  readonly refs: readonly [tip: string] | readonly [base: string, head: string];
   readonly source: string;
 };
 
@@ -23,8 +22,7 @@ class GatesUndecided extends Schema.TaggedError<GatesUndecided>()("GatesUndecide
 
 const NAME = "checks-lint";
 const USAGE = "usage: lint.ts [<base-ref> <head-ref>]";
-const FALLBACK_BASE = "origin/main";
-const PULL_REQUEST_EVENTS = new Set(["pull_request", "pull_request_target"]);
+const PULL_REQUEST_EVENT = "pull_request";
 const SHALLOW_HINT = "a CI checkout needs actions/checkout fetch-depth: 0";
 
 const decodePullRequestEvent = Schema.decodeUnknownEffect(
@@ -54,9 +52,26 @@ const pullRequestEnds = Effect.fn("pullRequestEnds")(function* (eventPath: strin
   };
 });
 
+const decodeManifest = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(
+    Schema.Struct({
+      ciWiring: Schema.optionalKey(Schema.Struct({ defaultBranch: Schema.optionalKey(Schema.NonEmptyString) })),
+    }),
+  ),
+);
+
+const declaredDefaultBranch = Effect.gen(function* () {
+  const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
+  const manifest = (yield* Path.Path).join(root, "package.json");
+  const { ciWiring } = yield* (yield* FileSystem.FileSystem).readFileString(manifest).pipe(Effect.flatMap(decodeManifest));
+  return ciWiring?.defaultBranch ?? DEFAULT_BRANCH;
+}).pipe(
+  Effect.mapError((cause) => new RangeUnresolved({ message: `cannot read ciWiring.defaultBranch: ${cause.message}` })),
+);
+
 const localEnds = git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]).pipe(
   Effect.map((ref) => ref.trim()),
-  Effect.orElseSucceed(() => FALLBACK_BASE),
+  Effect.catchTag("GitFailure", () => declaredDefaultBranch.pipe(Effect.map((branch) => `origin/${branch}`))),
   Effect.map((base) => ({ base, head: "HEAD", source: `HEAD against ${base}` })),
 );
 
@@ -71,9 +86,9 @@ const endsOf = Effect.fn("endsOf")(function* (args: readonly string[]) {
     name: Config.option(Config.String("GITHUB_EVENT_NAME")),
     path: Config.option(Config.String("GITHUB_EVENT_PATH")),
   }).pipe(Effect.mapError((cause) => new RangeUnresolved({ message: cause.message })));
-  if (Option.isSome(event.name) && PULL_REQUEST_EVENTS.has(event.name.value)) {
+  if (Option.isSome(event.name) && event.name.value === PULL_REQUEST_EVENT) {
     if (Option.isNone(event.path)) {
-      return yield* new RangeUnresolved({ message: `${event.name.value} sets no GITHUB_EVENT_PATH` });
+      return yield* new RangeUnresolved({ message: `${PULL_REQUEST_EVENT} sets no GITHUB_EVENT_PATH` });
     }
     return yield* pullRequestEnds(event.path.value);
   }
@@ -99,8 +114,12 @@ const resolveRange = Effect.fn("resolveRange")(function* (args: readonly string[
       () => new RangeUnresolved({ message: `${ends.base} and ${ends.head} share no commit in this clone; ${SHALLOW_HINT}` }),
     ),
   );
-  return { base, head, source: ends.source } satisfies Range;
+  return { refs: base === head ? [head] : [base, head], source: ends.source } satisfies Range;
 });
+
+function describe({ refs }: Range): string {
+  return refs.length === 1 ? `tip ${refs[0]}` : `range ${refs[0]}..${refs[1]}`;
+}
 
 function outcomeOf(exitCode: number): Outcome {
   if (exitCode === 0) return "passed";
@@ -111,7 +130,7 @@ const runGate = Effect.fn("runGate")(function* (gate: KitGate, range: Range) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const script = (yield* Path.Path).join(import.meta.dir, gate.script);
   const program = gate.script.endsWith(".sh") ? "sh" : process.execPath;
-  const args = gate.reads === "range" ? [script, range.base, range.head] : [script];
+  const args = gate.reads === "range" ? [script, ...range.refs] : [script];
   const exitCode = yield* spawner
     .exitCode(ChildProcess.make(program, args, { stdin: "ignore", stdout: "inherit", stderr: "inherit" }))
     .pipe(
@@ -124,7 +143,7 @@ const runGate = Effect.fn("runGate")(function* (gate: KitGate, range: Range) {
 
 const lint = Effect.gen(function* () {
   const range = yield* resolveRange(process.argv.slice(2));
-  yield* Console.log(`${NAME}: range ${range.base}..${range.head} from ${range.source}`);
+  yield* Console.log(`${NAME}: ${describe(range)} from ${range.source}`);
 
   const verdicts = yield* Effect.forEach(KIT_GATES, (gate) => runGate(gate, range));
   const failed = verdicts.filter((verdict) => verdict.outcome !== "passed");

@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { entryPointWord, KIT_GATES, runsProgram } from "./gates.ts";
+import { DEFAULT_BRANCH, ENTRY_POINT, KIT_GATES } from "./gates.ts";
 
 export type Command = readonly string[];
 
@@ -40,7 +40,6 @@ type RunStep = {
 export class WiringError extends Error {}
 
 const WORKFLOWS = ".github/workflows";
-const DEFAULT_BRANCH = "main";
 // Without these a pull_request workflow never sees the commits a pull request pushes.
 const GATING_TYPES = ["opened", "synchronize"];
 const CONSTANTS = new Map([
@@ -229,11 +228,8 @@ function runSteps(workflows: readonly Workflow[], branch: string): readonly RunS
 }
 
 function entryPointCommand(gate: Command): Command | undefined {
-  for (const [index, word] of gate.entries()) {
-    const kitGate = KIT_GATES.find((candidate) => runsProgram(word, candidate));
-    if (kitGate !== undefined) return [...gate.slice(0, index), entryPointWord(word, kitGate)];
-  }
-  return undefined;
+  const index = gate.findIndex((word) => KIT_GATES.some((kitGate) => kitGate.bin === word));
+  return index === -1 ? undefined : [...gate.slice(0, index), ENTRY_POINT.bin];
 }
 
 export function findGaps(declaration: Declaration, workflows: readonly Workflow[]): readonly Gap[] {
