@@ -122,7 +122,8 @@ tip: commits the base branch gained after the head branched off would
 otherwise count against the head. When the head is the merge base, as
 on a push to the default branch or a local run on it, the range would be
 empty, so each range gate is handed that tip commit alone and checks it
-against its parent:
+against its parent, or against the empty tree when it is a repository's
+first commit:
 
 ```
 checks-lint: tip 10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD against origin/main
@@ -408,9 +409,11 @@ bun run checks-comment-gate <ref>
 ```
 
 With two arguments it diffs the base against the head. With one it diffs
-that commit against its parent, and exits 2 when that parent is not in
-the clone rather than widening to the whole tree, so a shallow checkout
-running the one-argument form needs `fetch-depth: 2`. Only added lines
+that commit against its parent, or against the empty tree for a
+repository's first commit, which has none. It exits 2 when the parent
+exists but is not in the clone rather than widening to the whole tree,
+so a shallow checkout running the one-argument form needs
+`fetch-depth: 2`. Only added lines
 are checked, so a violation in a file the diff never touches stays
 silent, and a refusal counts when any line of the comment carrying it was
 added. The check refuses a machine-read directive, a record or ticket
@@ -434,8 +437,9 @@ bun run checks-suppressions-ratchet <base-ref> <head-ref>
 bun run checks-suppressions-ratchet <ref>
 ```
 
-With one argument it compares that commit with its parent, and exits 2
-when the parent is not in the clone. With two it reads the base where
+With one argument it compares that commit with its parent, or with the
+empty tree for a repository's first commit, and exits 2 when the parent
+exists but is not in the clone. With two it reads the base where
 the head branched off, at their merge-base, so a count the base branch
 lowered since does not read as a rise at the head. A count that fell and
 an entry that went both pass. A commit without the file counts as empty,

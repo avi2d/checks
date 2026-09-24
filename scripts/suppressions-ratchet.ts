@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect, Schema } from "effect";
-import { git } from "./git.ts";
+import { git, parentOrEmptyTree } from "./git.ts";
 import { runMain, Usage } from "./main.ts";
 
 export const SUPPRESSIONS = "oxlint-suppressions.json";
@@ -99,10 +99,10 @@ const mergeBase = Effect.fn("mergeBase")(function* (base: string, head: string) 
   return commit.trim();
 });
 
-const suppressionsAt = Effect.fn("suppressionsAt")(function* (commit: string) {
-  const blob = (yield* git(["ls-tree", "--object-only", commit, "--", SUPPRESSIONS])).trim();
+const suppressionsAt = Effect.fn("suppressionsAt")(function* (treeish: string) {
+  const blob = (yield* git(["ls-tree", "--object-only", treeish, "--", SUPPRESSIONS])).trim();
   if (blob === "") return new Map() satisfies Suppressions;
-  return yield* parseSuppressions(yield* git(["cat-file", "blob", blob]), `${SUPPRESSIONS} at ${commit}`);
+  return yield* parseSuppressions(yield* git(["cat-file", "blob", blob]), `${SUPPRESSIONS} at ${treeish}`);
 });
 
 export const runRange = Effect.fn("runRange")(function* (base: string, head: string) {
@@ -112,11 +112,16 @@ export const runRange = Effect.fn("runRange")(function* (base: string, head: str
   return compareSuppressions(yield* suppressionsAt(branchPoint), yield* suppressionsAt(headCommit));
 });
 
+export const runTip = Effect.fn("runTip")(function* (tip: string) {
+  const tipCommit = yield* commitOf(tip);
+  return compareSuppressions(yield* suppressionsAt(yield* parentOrEmptyTree(tipCommit)), yield* suppressionsAt(tipCommit));
+});
+
 const ratchet = Effect.gen(function* () {
   const [first, second, ...extra] = process.argv.slice(2);
   if (first === undefined || extra.length > 0) return yield* new Usage({ message: USAGE });
 
-  const result = second !== undefined ? yield* runRange(first, second) : yield* runRange(`${first}^`, first);
+  const result = second !== undefined ? yield* runRange(first, second) : yield* runTip(first);
 
   yield* Console.log(report(result));
   return result.rises.length === 0;
