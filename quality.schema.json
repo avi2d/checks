@@ -44,6 +44,7 @@
               "checks-comment-gate",
               "checks-suppressions-ratchet",
               "checks-ci-wiring",
+              "checks-docs",
               "checks-quality",
               "checks-size-budget",
               "checks-feature-owners"
@@ -68,6 +69,11 @@
             {
               "contains": {
                 "const": "checks-ci-wiring"
+              }
+            },
+            {
+              "contains": {
+                "const": "checks-docs"
               }
             }
           ]
@@ -241,6 +247,48 @@
         }
       },
       "additionalProperties": false
+    },
+    "docs": {
+      "type": "object",
+      "properties": {
+        "pages": {
+          "type": "object",
+          "properties": {
+            "tutorial": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PathGlob"
+              },
+              "description": "The pages written as a tutorial, which teaches by building one thing"
+            },
+            "how-to": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PathGlob"
+              },
+              "description": "The pages written as a how-to, which walks one task"
+            },
+            "reference": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PathGlob"
+              },
+              "description": "The pages written as reference, which describes a thing to be looked up"
+            },
+            "explanation": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PathGlob"
+              },
+              "description": "The pages written as an explanation, which says why"
+            }
+          },
+          "additionalProperties": false,
+          "description": "The Diátaxis mode of each page, whose template checks-docs holds the page to; a page under docs/ needs one"
+        }
+      },
+      "additionalProperties": false,
+      "description": "What checks-docs reads to map a doc file to its template"
     }
   },
   "additionalProperties": false,

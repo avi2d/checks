@@ -149,6 +149,26 @@ const AgentRules = Schema.Struct({
   }),
 );
 
+export const MODES = ["tutorial", "how-to", "reference", "explanation"] as const;
+export type Mode = (typeof MODES)[number];
+
+const pagesIn = (mode: string) =>
+  Schema.optionalKey(Schema.Array(PathGlob).annotate({ description: `The pages written as ${mode}` }));
+
+const Docs = Schema.Struct({
+  pages: Schema.optionalKey(
+    Schema.Struct({
+      tutorial: pagesIn("a tutorial, which teaches by building one thing"),
+      "how-to": pagesIn("a how-to, which walks one task"),
+      reference: pagesIn("reference, which describes a thing to be looked up"),
+      explanation: pagesIn("an explanation, which says why"),
+    } satisfies Record<Mode, unknown>).annotate({
+      description: "The Diátaxis mode of each page, whose template checks-docs holds the page to; a page under docs/ needs one",
+    }),
+  ),
+});
+export type Docs = typeof Docs.Type;
+
 export const Quality = Schema.Struct({
   $schema: Schema.optionalKey(Schema.String),
   defaultBranch: Schema.optionalKey(
@@ -171,6 +191,7 @@ export const Quality = Schema.Struct({
     }),
   ),
   agentRules: Schema.optionalKey(AgentRules),
+  docs: Schema.optionalKey(Docs.annotate({ description: "What checks-docs reads to map a doc file to its template" })),
 })
   .annotate({
     title: QUALITY_FILE,

@@ -18,7 +18,13 @@ import { SCHEMA_FILE } from "../scripts/quality-schema.ts";
 
 const CHECKOUT = resolve(import.meta.dir, "..");
 const AUTHOR = { name: "Wren Fixture", email: "wren@example.com" };
-const METADATA_GATES = ["checks-commit-identity", "checks-comment-gate", "checks-suppressions-ratchet", "checks-ci-wiring"] as const;
+const METADATA_GATES = [
+  "checks-commit-identity",
+  "checks-comment-gate",
+  "checks-suppressions-ratchet",
+  "checks-ci-wiring",
+  "checks-docs",
+] as const;
 const BILLING = {
   name: "billing",
   root: "src/billing",

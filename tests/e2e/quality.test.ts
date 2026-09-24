@@ -211,7 +211,7 @@ test(
     await commit("feat: exempt the host files");
     const red = await run("bun", [LINT]);
     expect(red.text).toContain(`${OXLINT_FRAGMENT} is stale against quality.json`);
-    expect(red.text).toContain("checks-lint: 1 of 9 gate(s) failed: checks-quality");
+    expect(red.text).toContain("checks-lint: 1 of 10 gate(s) failed: checks-quality");
     expect(red.exitCode).toBe(1);
 
     expect((await quality("generate")).exitCode).toBe(0);
@@ -219,7 +219,7 @@ test(
     const green = await run("bun", [LINT]);
     expect(green.text).toContain("carry only allowed identities");
     expect(green.text).toContain("ci-wiring: 1 gate(s) run on pull requests to trunk");
-    expect(green.text).toContain("checks-lint: 9 gate(s) pass");
+    expect(green.text).toContain("checks-lint: 10 gate(s) pass");
     expect(green.exitCode).toBe(0);
   },
   60_000,
