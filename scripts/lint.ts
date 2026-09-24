@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
-import { DEFAULT_BRANCH, KIT_GATES, type KitGate } from "./gates.ts";
+import { DEFAULT_BRANCH, LintWiring, selectedGates, type KitGate } from "./gates.ts";
 import { git } from "./git.ts";
 import { runMain, Usage } from "./main.ts";
 
@@ -17,6 +17,10 @@ class RangeUnresolved extends Schema.TaggedError<RangeUnresolved>()("RangeUnreso
 }) {}
 
 class GatesUndecided extends Schema.TaggedError<GatesUndecided>()("GatesUndecided", {
+  message: Schema.String,
+}) {}
+
+class WiringUnreadable extends Schema.TaggedError<WiringUnreadable>()("WiringUnreadable", {
   message: Schema.String,
 }) {}
 
@@ -52,42 +56,38 @@ const pullRequestEnds = Effect.fn("pullRequestEnds")(function* (eventPath: strin
   };
 });
 
-const decodeManifest = Schema.decodeUnknownEffect(
-  Schema.fromJsonString(
-    Schema.Struct({
-      ciWiring: Schema.optionalKey(Schema.Struct({ defaultBranch: Schema.optionalKey(Schema.NonEmptyString) })),
-    }),
-  ),
-);
+const decodeWiring = Schema.decodeUnknownEffect(Schema.fromJsonString(LintWiring));
 
-const declaredDefaultBranch = Effect.gen(function* () {
+const readWiring = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const manifest = (yield* Path.Path).join(root, "package.json");
-  const { ciWiring } = yield* (yield* FileSystem.FileSystem).readFileString(manifest).pipe(Effect.flatMap(decodeManifest));
-  return ciWiring?.defaultBranch ?? DEFAULT_BRANCH;
-}).pipe(
-  Effect.mapError((cause) => new RangeUnresolved({ message: `cannot read ciWiring.defaultBranch: ${cause.message}` })),
-);
+  const { ciWiring } = yield* (yield* FileSystem.FileSystem).readFileString(manifest).pipe(
+    Effect.flatMap(decodeWiring),
+    Effect.mapError((cause) => new WiringUnreadable({ message: `cannot read ciWiring from ${manifest}: ${cause.message}` })),
+  );
+  return { defaultBranch: ciWiring?.defaultBranch ?? DEFAULT_BRANCH, lintGates: ciWiring?.lintGates };
+});
 
-const originEnds = git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]).pipe(
-  Effect.map((ref) => ref.trim()),
-  Effect.catchTag("GitFailure", () => declaredDefaultBranch.pipe(Effect.map((branch) => `origin/${branch}`))),
-  Effect.map((base) => ({ base, head: "HEAD", source: `HEAD against ${base}` })),
-);
+const originEnds = (defaultBranch: string) =>
+  git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]).pipe(
+    Effect.map((ref) => ref.trim()),
+    Effect.catchTag("GitFailure", () => Effect.succeed(`origin/${defaultBranch}`)),
+    Effect.map((base) => ({ base, head: "HEAD", source: `HEAD against ${base}` })),
+  );
 
 // A clone holding any remote-tracking ref but not the default branch is a shallow CI checkout,
 // where judging HEAD alone would pass every commit before it unchecked.
-const localEnds = Effect.gen(function* () {
+const localEnds = Effect.fn("localEnds")(function* (defaultBranch: string) {
   const remoteTracking = yield* git(["for-each-ref", "--count=1", "refs/remotes/"]).pipe(
     Effect.mapError((cause) => new RangeUnresolved({ message: cause.message })),
   );
   if (remoteTracking.trim() === "") {
     return { base: "HEAD", head: "HEAD", source: "HEAD alone, as the clone has no remote-tracking refs" };
   }
-  return yield* originEnds;
+  return yield* originEnds(defaultBranch);
 });
 
-const endsOf = Effect.fn("endsOf")(function* (args: readonly string[]) {
+const endsOf = Effect.fn("endsOf")(function* (args: readonly string[], defaultBranch: string) {
   const [base, head, ...extra] = args;
   if (base !== undefined && head !== undefined && extra.length === 0) {
     return { base, head, source: `${head} against ${base}` };
@@ -104,7 +104,7 @@ const endsOf = Effect.fn("endsOf")(function* (args: readonly string[]) {
     }
     return yield* pullRequestEnds(event.path.value);
   }
-  return yield* localEnds;
+  return yield* localEnds(defaultBranch);
 });
 
 const commitOf = (ref: string) =>
@@ -117,8 +117,8 @@ const commitOf = (ref: string) =>
 
 // From the base branch's tip, every range gate would charge the head with the commits the base
 // branch gained after the head branched off.
-const resolveRange = Effect.fn("resolveRange")(function* (args: readonly string[]) {
-  const ends = yield* endsOf(args);
+const resolveRange = Effect.fn("resolveRange")(function* (args: readonly string[], defaultBranch: string) {
+  const ends = yield* endsOf(args, defaultBranch);
   const head = yield* commitOf(ends.head);
   const base = yield* git(["merge-base", yield* commitOf(ends.base), head]).pipe(
     Effect.map((sha) => sha.trim()),
@@ -154,16 +154,21 @@ const runGate = Effect.fn("runGate")(function* (gate: KitGate, range: Range) {
 });
 
 const lint = Effect.gen(function* () {
-  const range = yield* resolveRange(process.argv.slice(2));
+  const { defaultBranch, lintGates } = yield* readWiring;
+  const range = yield* resolveRange(process.argv.slice(2), defaultBranch);
   yield* Console.log(`${NAME}: ${describe(range)} from ${range.source}`);
+  const gates = selectedGates(lintGates);
+  if (lintGates !== undefined) {
+    yield* Console.log(`${NAME}: ciWiring.lintGates selects ${gates.map((gate) => gate.bin).join(", ")}`);
+  }
 
-  const verdicts = yield* Effect.forEach(KIT_GATES, (gate) => runGate(gate, range));
+  const verdicts = yield* Effect.forEach(gates, (gate) => runGate(gate, range));
   const failed = verdicts.filter((verdict) => verdict.outcome !== "passed");
   if (failed.length === 0) {
-    yield* Console.log(`${NAME}: ${KIT_GATES.length} gate(s) pass`);
+    yield* Console.log(`${NAME}: ${gates.length} gate(s) pass`);
     return true;
   }
-  const summary = `${failed.length} of ${KIT_GATES.length} gate(s) failed: ${failed.map((verdict) => verdict.gate.bin).join(", ")}`;
+  const summary = `${failed.length} of ${gates.length} gate(s) failed: ${failed.map((verdict) => verdict.gate.bin).join(", ")}`;
   if (failed.every((verdict) => verdict.outcome === "undecided")) {
     return yield* new GatesUndecided({ message: summary });
   }
