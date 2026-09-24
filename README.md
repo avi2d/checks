@@ -8,8 +8,10 @@ run that records the seeds a failing test fails with, the oxlint base
 config, the tsconfig fragment with the Effect language-service block,
 the `quality.json` schema with the generator that turns its Effect paths
 into oxlint and tsconfig fragments, the shared commitlint config, the
-shared dependency-cruiser base, the test-layout check with its bunfig preset, the commit-identity check, the
+shared dependency-cruiser base with the feature-owner rules `quality.json`
+compiles into it, the test-layout check with its bunfig preset, the commit-identity check, the
 comment gate with its backtest, the oxlint suppressions ratchet, the
+size budget, the feature-owner change signal and proof check, the
 Stryker mutation-testing preset with its no-regression comparator, the
 CI-wiring check, and the Effect error-channel plugin compiled to
 JavaScript.
@@ -122,6 +124,17 @@ opted into. The kit's bins find it at the git root and read it there:
     "production": ["src/**/*.ts"],
     "effect": { "paths": ["src/**/*.ts"], "exempt": ["src/host/*.ts"] }
   },
+  "size": { "fileLines": 400, "functionLines": 100, "applies": "changed" },
+  "features": [
+    {
+      "name": "billing",
+      "root": "src/billing",
+      "entries": ["src/billing/index.ts"],
+      "allowFrom": ["src/main.ts"],
+      "proof": "tests/e2e/billing.test.ts"
+    }
+  ],
+  "changeSignal": "advisory",
   "agentRules": { "on": [], "off": [] }
 }
 ```
@@ -134,14 +147,18 @@ opted into. The kit's bins find it at the git root and read it there:
 | `gates.lint` | `checks-lint`, `checks-ci-wiring` | the gates `checks-lint` runs when not all apply; see "Gate selection" |
 | `commitIdentity.authors` | `checks-commit-identity` | the identities allowed to author and commit; see "Commit identity" |
 | `sources.effect` | `checks-quality` | the paths held to the Effect rules, and the files under them that are not; see "Effect rules" |
-| `sources.production` | no kit gate yet | the source the repository ships |
+| `sources.production` | `checks-size-budget`, `checks-quality` | the source the repository ships; see "Size budget" |
+| `size` | `checks-size-budget` | the line budget, and which production files it holds; see "Size budget" |
+| `features` | `featureRules`, `checks-feature-owners` | each feature's root, entries, exempt importers and proof; see "Feature owners" |
+| `changeSignal` | `checks-feature-owners` | `advisory` to list the feature owners a change touches; see "Feature owners" |
 | `agentRules.on`, `agentRules.off` | agent Rule selection, not the kit | catalogued Rules switched on or off for this repository |
 
 Every key is optional. The bins decode the file with one Effect
 `Schema`, and the package ships `quality.schema.json` emitted from that
 schema, so the `$schema` line gives an editor the verdict the bins
-reach, save one: a Rule switched both on and off, which the bins refuse
-and no JSON Schema can express across two lists. A key the schema does
+reach, save what no JSON Schema can express across two values, which
+the bins refuse: a Rule switched both on and off, a feature entry
+outside its root, and two features with one name or sharing a root. A key the schema does
 not name is refused, not ignored, so a misspelt `sources` cannot switch
 the Effect rules off unnoticed. A glob in `sources`
 starts at the repository root, names a directory first, uses `*`
@@ -213,8 +230,9 @@ that changes a preset reaches the repository through its next
   `sources.effect`;
 - `.oxlintrc.json` or `tsconfig.json` does not list its fragment in
   `extends`, so the tool never reads it;
-- a `sources.effect.paths` glob matches no tracked or untracked file,
-  so it holds nothing to the rules.
+- a `sources.effect.paths` glob, or a `sources.production` glob while
+  `size` is declared, matches no tracked or untracked file, so it holds
+  nothing.
 
 It exits 2 when `quality.json` does not decode. `generate` writes the
 fragments, removes a left-over one, then runs the same check.
@@ -256,6 +274,8 @@ tracked files give a gate nothing to check can leave it out through
 | `checks-suppressions-ratchet` | the range |
 | `checks-ci-wiring` | the working tree |
 | `checks-quality` | the working tree |
+| `checks-size-budget` | the range |
+| `checks-feature-owners` | the range |
 
 ```sh
 checks-lint
@@ -308,7 +328,7 @@ gate's own report, then its verdict:
 ```
 checks-lint: range 2504acf098d120e73a8ece3c96f22b934f35c6a8..10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD against origin/main
 ...
-checks-lint: 3 of 7 gate(s) failed: checks-commit-identity, checks-comment-gate, checks-suppressions-ratchet
+checks-lint: 3 of 9 gate(s) failed: checks-commit-identity, checks-comment-gate, checks-suppressions-ratchet
 ```
 
 It exits 1 when any gate found a violation, and 2 when the range or the
@@ -566,7 +586,9 @@ boundary you own. A rule that restates a base name overrides it field
 by field, which is how an entry point stops being an orphan:
 redeclare `no-orphans` with your entry added to its `pathNot`.
 This repo's own `.dependency-cruiser.cjs` does that for the plugin
-entry.
+entry. A repository that declares feature owners spreads the rules
+`quality.json` compiles to into the same `forbidden`; see "Feature
+owners".
 
 `package.json` gains the script:
 
@@ -717,6 +739,160 @@ suppressions-ratchet: 2 count(s) in oxlint-suppressions.json rose or appeared; f
 
 `checks-lint` runs it over each pull request's range; see "Lint entry point".
 
+## Size budget
+
+`checks-size-budget` holds production files to the line budget
+`quality.json` declares, and lists every other file over it without
+failing:
+
+```json
+"sources": { "production": ["src/**/*.ts"] },
+"size": { "fileLines": 400, "functionLines": 100, "applies": "changed" }
+```
+
+```sh
+checks-size-budget <base-ref> <head-ref>
+checks-size-budget <ref>
+```
+
+It runs oxlint with a configuration of two rules and nothing else:
+`max-lines` at `fileLines` and `max-lines-per-function` at
+`functionLines`, both counting blank and comment lines. With `applies`
+set to `changed` it holds the files under `sources.production` that the
+range adds or changes, a rename that edits the file included. With
+`all` it holds every file under `sources.production`. A file the range
+deletes or only renames is not held. Every other tracked `.ts` or
+`.tsx` file over the budget, tests and unchanged production files alike,
+is listed as advisory and never fails the gate; `.d.ts` files are not
+measured.
+
+It reads each file from the head commit rather than the working tree,
+so an uncommitted edit neither fails nor passes a range, and a pull
+request's merge checkout measures what the pull request holds. With two
+arguments the range starts where the head branched from the base, at
+their merge-base. With one it is that commit against its parent, or
+against the empty tree for a repository's first commit. oxlint must be
+on `PATH`, as it is under a package script.
+
+```
+size-budget: 1 overrun(s) of 400 lines per file and 100 per function in the production files the range adds or changes:
+  src/billing/ledger.ts:12: The function `settle` has too many lines (131). Maximum allowed is 100.
+size-budget: advisory, 1 overrun(s) where the budget does not hold yet:
+  tests/e2e/billing.test.ts: File has too many lines (512).
+```
+
+It exits 1 on an overrun in a file it holds, and 2 when `quality.json`
+does not decode, a ref does not resolve or oxlint cannot run. A
+repository that declares no `size` passes. `quality.json` refuses a
+`size` without `sources.production`, which would hold nothing, and
+with `size` declared `checks-quality` refuses a `sources.production`
+glob that matches no file. Moving `applies` from `changed` to `all`
+tightens the budget to every production file, once the advisory list
+names none.
+
+`checks-lint` runs it over each pull request's range; see "Lint entry point".
+
+## Feature owners
+
+A repository opts a feature in by declaring, in `quality.json`, the
+directory it owns, the files code outside it imports it through, the
+files that may reach past those, and the end-to-end test that proves it
+runs:
+
+```json
+"features": [
+  {
+    "name": "billing",
+    "root": "src/billing",
+    "entries": ["src/billing/index.ts"],
+    "allowFrom": ["src/main.ts", "src/cli/*.ts"],
+    "proof": "tests/e2e/billing.test.ts"
+  }
+],
+"changeSignal": "advisory"
+```
+
+`root` is a directory and `entries` are files under it, both without
+globs. `allowFrom` holds globs of the same shape as `sources`. `proof`
+is a `.test.ts` or `.test.tsx` file under `tests/e2e/`. Nothing moves:
+a root is wherever the feature already lives. `quality.json` refuses an
+entry outside its root, a name used twice, and two features sharing a
+root or one root inside another, so a file has at most one owner.
+
+### Import boundary
+
+`dist/feature-rules.js` compiles `features` into one dependency-cruiser
+rule per feature, which `.dependency-cruiser.cjs` spreads beside its
+own:
+
+```js
+const { featureRules } = require("@avi2dg/checks/dist/feature-rules.js");
+
+module.exports = {
+  extends: "./node_modules/@avi2dg/checks/dependency-cruiser.config.js",
+  forbidden: [...featureRules(require("./quality.json"))],
+};
+```
+
+A module outside a feature's root that imports a file inside it must
+import one of the feature's `entries`. Modules under `tests/` and the
+files `allowFrom` matches, such as a CLI or a harness, may import any
+file in it:
+
+```
+error feature-billing-entries: src/report.ts → src/billing/charge.ts
+```
+
+`featureRules` decodes its argument with the schema the bins use and
+throws the schema's refusal when it does not decode, which stops the
+cruise. It is an ES module, as `effect` is, so a `.cjs` config loads it
+through `require`, which needs node 20.19, 22.12 or later.
+
+### Change signal and proof
+
+`checks-feature-owners` reads the same declaration over a range:
+
+```sh
+checks-feature-owners <base-ref> <head-ref>
+checks-feature-owners <ref>
+```
+
+It exits 1 when a feature's proof cannot prove it: the proof or an
+entry is not in the head commit, the proof does not parse, or it
+imports none of the feature's entries. An import counts when it is a
+runtime `import`, `export ... from` or `export * from` of a relative
+path that names an entry: by its own name, by the `.js`, `.jsx`, `.mjs`
+or `.cjs` spelling of it, `.js` naming a `.tsx` entry as well as a
+`.ts` one, or without an extension, the way a directory `index` is
+imported. `import type` does not count, and neither does a
+path alias. The proof runs in `bun run test` like any end-to-end test,
+which is what shows it passes.
+
+```
+feature-owners: 1 problem(s) with the features' runnable proofs:
+  billing: proof tests/e2e/billing.test.ts imports none of its entries, src/billing/index.ts
+```
+
+With `changeSignal` set to `advisory` it also lists each owner the
+range touches, with the paths it touched under the owner's root or at
+its proof, and still exits 0. Whether a change that spans owners is one
+coherent slice is for a reviewer to judge. A rename counts at both of
+its paths:
+
+```
+feature-owners: advisory, the range touches 2 feature owner(s); a reviewer judges whether they make one slice:
+  billing: src/billing/charge.ts, src/billing/tax.ts
+  invoices: src/invoices/tax.ts, tests/e2e/invoices.test.ts
+```
+
+It exits 2 when `quality.json` does not decode, which is where a proof
+outside `tests/e2e/` is refused, or a ref does not resolve. A
+repository that declares no feature passes, and `quality.json` refuses
+a `changeSignal` without features, which would map a change to no
+owner.
+
+`checks-lint` runs it over each pull request's range; see "Lint entry point".
+
 ## CI wiring
 
 `checks-ci-wiring` fails when a command the repository's CI must run no
@@ -820,8 +996,9 @@ ci-wiring: 1 of 1 scheduled command(s) do not run on a schedule:
 
 ### Gate selection
 
-A repository with no TypeScript source gives `checks-lint-coverage` and
-`checks-test-layout` nothing to check, and test-layout still refuses its
+A repository with no TypeScript source gives `checks-lint-coverage`,
+`checks-test-layout`, `checks-size-budget` and `checks-feature-owners`
+nothing to check, and test-layout still refuses its
 missing `bun test` script and `bunfig.toml`. It declares the gates
 `checks-lint` runs as `gates.lint`:
 
@@ -839,7 +1016,7 @@ missing `bun test` script and `bunfig.toml`. It declares the gates
 ```
 
 `checks-lint` runs exactly those, in the "Lint entry point" table's
-order, and all seven when `gates.lint` is absent. A selection in
+order, and all nine when `gates.lint` is absent. A selection in
 `quality.json` always keeps `checks-quality`, since the file it sits in
 is what makes that gate apply. A step running
 `checks-lint` then counts only for a declared gate that `gates.lint`
@@ -856,6 +1033,8 @@ A selection may leave out only a gate that does not apply:
 | `checks-suppressions-ratchet` | always |
 | `checks-ci-wiring` | always |
 | `checks-quality` | tracks a `quality.json` |
+| `checks-size-budget` | tracks a `.ts` or `.tsx` file |
+| `checks-feature-owners` | tracks a `.ts` or `.tsx` file |
 
 Both bins exit 2 on a `gates.lint` that names an unknown gate or leaves
 out one that always applies. ci-wiring exits 1 when the
@@ -863,9 +1042,11 @@ selection leaves out a gate the repository's tracked files make
 applicable, and names the gate and the files:
 
 ```
-ci-wiring: quality.json gates.lint leaves out 2 gate(s) this repository's contents make applicable:
+ci-wiring: quality.json gates.lint leaves out 4 gate(s) this repository's contents make applicable:
   checks-lint-coverage: the repository tracks TypeScript source (src/widget.ts)
   checks-test-layout: the repository tracks TypeScript source (src/widget.ts)
+  checks-size-budget: the repository tracks TypeScript source (src/widget.ts)
+  checks-feature-owners: the repository tracks TypeScript source (src/widget.ts)
 ```
 
 It reads the files tracked at the checkout, so the pull request that
@@ -968,6 +1149,16 @@ The shared Stryker preset's `json` reporter writes
   `bun build effect-channel/index.ts --outdir dist --target node --format esm`.
   Node refuses to type-strip a `.ts` plugin under `node_modules`, so the
   `.ts` source would fail to load from an installed package.
+- `featureRules` ships compiled as `dist/feature-rules.js` for the same
+  reason, with `effect` left out of the bundle so it resolves the
+  consumer's own copy. dependency-cruiser uses a config's export as it
+  is and never awaits it, so the declaration decodes synchronously, and
+  `quality.json` exempts that one file from the Effect rules.
+- `checks-size-budget` writes the head commit's files to a temporary
+  directory and runs oxlint there, with a configuration that sets no
+  plugin and turns every category off, so the consumer's own
+  `.oxlintrc.json`, its ignore files and its other rules never reach the
+  count.
 - `dist/` is committed. No `prepack` or `prepublishOnly` builds it, so a
   publish ships whatever bundle the publishing worktree holds. Rebuild it
   after pulling with `bun run build`; CI fails when the committed bundle

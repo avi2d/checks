@@ -1,6 +1,9 @@
+const { featureRules } = require("./dist/feature-rules.js");
+
 module.exports = {
   extends: "./dependency-cruiser.config.js",
   forbidden: [
+    ...featureRules(require("./quality.json")),
     {
       name: "host-loaded-imports-nothing",
       severity: "error",

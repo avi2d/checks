@@ -11,6 +11,9 @@
       "files": [
         "scripts/**/*.ts"
       ],
+      "excludeFiles": [
+        "scripts/feature-rules.ts"
+      ],
       "plugins": [
         "typescript",
         "oxc",

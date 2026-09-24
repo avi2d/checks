@@ -34,13 +34,16 @@
     "scripts/backtest.ts",
     "scripts/quality-file.ts",
     "scripts/quality.ts",
+    "scripts/size-budget.ts",
+    "scripts/feature-owners.ts",
     "presets/effect.oxlint.json",
     "presets/effect.language-service.json",
     "quality.schema.json",
     "oxlintrc.json",
     "stryker.preset.js",
     "tsconfig.effect.json",
-    "dist/index.js"
+    "dist/index.js",
+    "dist/feature-rules.js"
   ],
   "exports": {
     "./bunfig.toml": "./bunfig.toml",
@@ -61,13 +64,16 @@
     "./scripts/backtest.ts": "./scripts/backtest.ts",
     "./scripts/quality-file.ts": "./scripts/quality-file.ts",
     "./scripts/quality.ts": "./scripts/quality.ts",
+    "./scripts/size-budget.ts": "./scripts/size-budget.ts",
+    "./scripts/feature-owners.ts": "./scripts/feature-owners.ts",
     "./presets/effect.oxlint.json": "./presets/effect.oxlint.json",
     "./presets/effect.language-service.json": "./presets/effect.language-service.json",
     "./quality.schema.json": "./quality.schema.json",
     "./oxlintrc.json": "./oxlintrc.json",
     "./stryker.preset.js": "./stryker.preset.js",
     "./tsconfig.effect.json": "./tsconfig.effect.json",
-    "./dist/index.js": "./dist/index.js"
+    "./dist/index.js": "./dist/index.js",
+    "./dist/feature-rules.js": "./dist/feature-rules.js"
   },
   "bin": {
     "checks-lint": "scripts/lint.ts",
@@ -81,10 +87,12 @@
     "checks-comment-gate": "scripts/comment-gate.ts",
     "checks-suppressions-ratchet": "scripts/suppressions-ratchet.ts",
     "checks-backtest": "scripts/backtest.ts",
-    "checks-quality": "scripts/quality.ts"
+    "checks-quality": "scripts/quality.ts",
+    "checks-size-budget": "scripts/size-budget.ts",
+    "checks-feature-owners": "scripts/feature-owners.ts"
   },
   "scripts": {
-    "build": "bun build effect-channel/index.ts --outdir dist --target node --format esm && bun scripts/quality-schema.ts",
+    "build": "bun build effect-channel/index.ts --outdir dist --target node --format esm && bun build scripts/feature-rules.ts --outdir dist --target node --format esm --packages external && bun scripts/quality-schema.ts",
     "lint": "oxlint --type-aware && bun scripts/lint.ts && depcruise --config .dependency-cruiser.cjs .",
     "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
     "test": "bun scripts/test.ts"

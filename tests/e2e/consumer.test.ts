@@ -282,6 +282,8 @@ test(
           wiring: "checks-ci-wiring",
           flake: "checks-flake --runs 2",
           quality: "checks-quality --check",
+          size: "checks-size-budget HEAD",
+          owners: "checks-feature-owners HEAD",
           kit: "oxlint --type-aware && checks-lint",
         },
       },
@@ -362,6 +364,15 @@ test(
     expect(quality.stdout.toString()).toContain("checks-quality: no sources.effect is declared, so nothing is generated");
     expect(quality.exitCode).toBe(0);
 
+    for (const [script, report] of [
+      ["size", "size-budget: quality.json declares no size budget"],
+      ["owners", "feature-owners: quality.json declares no feature"],
+    ] as const) {
+      const guardrail = await $`bun run ${script}`.cwd(dir).nothrow().quiet();
+      expect(guardrail.stdout.toString()).toContain(report);
+      expect(guardrail.exitCode).toBe(0);
+    }
+
     const ratchet = await $`bun run ratchet`.cwd(dir).nothrow().quiet();
     expect(ratchet.stdout.toString()).toContain("no count in oxlint-suppressions.json rose or appeared");
     expect(ratchet.exitCode).toBe(0);
@@ -371,7 +382,7 @@ test(
     const kitText = kit.stdout.toString() + kit.stderr.toString();
     expect(kitText).toContain("from HEAD against origin/main");
     expect(kitText).toContain("commit-identity: 1 commit(s)");
-    expect(kitText).toContain("checks-lint: 7 gate(s) pass");
+    expect(kitText).toContain("checks-lint: 9 gate(s) pass");
     expect(kit.exitCode).toBe(0);
   },
   180_000,

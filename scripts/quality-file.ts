@@ -20,6 +20,28 @@ const PathGlob = Schema.String.check(
     "A glob from the repository root that oxlint, the Effect language service and git read alike: a directory first, * within a segment, ** as a whole one, a file name with an extension last, and no braces, ?, [ or leading ./",
 });
 
+const LITERAL_SEGMENT = String.raw`(?!\.\.?(?:/|$))[\w.@+-]+`;
+
+const DirectoryPath = Schema.String.check(
+  Schema.isPattern(new RegExp(`^${LITERAL_SEGMENT}(?:/${LITERAL_SEGMENT})*$`), {
+    expected: "a directory from the repository root such as src/billing, with no glob and no trailing slash",
+  }),
+).annotate({ identifier: "DirectoryPath" });
+
+const FilePath = Schema.String.check(
+  Schema.isPattern(new RegExp(`^(?:${LITERAL_SEGMENT}/)*[\\w.@+-]*\\.\\w+$`), {
+    expected: "a file from the repository root such as src/billing/index.ts, with no glob",
+  }),
+).annotate({ identifier: "FilePath" });
+
+export const PROOF_DIRECTORY = "tests/e2e/";
+
+const ProofPath = Schema.String.check(
+  Schema.isPattern(new RegExp(`^${PROOF_DIRECTORY}(?:${LITERAL_SEGMENT}/)*[\\w.@+-]+\\.test\\.tsx?$`), {
+    expected: `a test file under ${PROOF_DIRECTORY} such as ${PROOF_DIRECTORY}billing.test.ts`,
+  }),
+).annotate({ identifier: "ProofPath" });
+
 const Command = Schema.NonEmptyString.annotate({ identifier: "Command" });
 
 const RuleName = Schema.String.check(
@@ -65,6 +87,58 @@ const Sources = Schema.Struct({
   effect: Schema.optionalKey(EffectSources),
 });
 
+const LineBudget = Schema.Int.check(Schema.isGreaterThan(0));
+
+const Size = Schema.Struct({
+  fileLines: LineBudget.annotate({ description: "The most lines a file may hold, blank and comment lines counted" }),
+  functionLines: LineBudget.annotate({
+    description: "The most lines a function may span, blank and comment lines counted",
+  }),
+  applies: Schema.Literals(["changed", "all"]).annotate({
+    description:
+      "Which production files the budget holds: changed, the ones a range adds or changes; all, every one. The rest are reported as advisory",
+  }),
+});
+
+const Feature = Schema.Struct({
+  name: Schema.String.check(
+    Schema.isPattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { expected: "a feature name in kebab case" }),
+  ).annotate({ description: "The owner the dependency rule and the change signal name" }),
+  root: DirectoryPath.annotate({ description: "The directory the feature owns" }),
+  entries: Schema.NonEmptyArray(FilePath).annotate({
+    description: "The files under root that code outside it imports the feature through",
+  }),
+  allowFrom: Schema.optionalKey(
+    Schema.Array(PathGlob).annotate({
+      description: "Files outside root that may import past its entries, such as a CLI or a harness; tests/ always may",
+    }),
+  ),
+  proof: ProofPath.annotate({ description: "The end-to-end test that imports one of entries" }),
+}).check(
+  Schema.makeFilter(({ root, entries }) => {
+    const outside = entries.filter((entry) => !entry.startsWith(`${root}/`));
+    return outside.length === 0 || `lists ${outside.join(", ")} among its entries, outside its root ${root}`;
+  }),
+);
+export type Feature = typeof Feature.Type;
+
+function nests(outer: string, inner: string): boolean {
+  return outer === inner || inner.startsWith(`${outer}/`);
+}
+
+const Features = Schema.Array(Feature).check(
+  Schema.makeFilter((features) => {
+    const names = features.map((feature) => feature.name);
+    const repeated = names.filter((name, index) => names.indexOf(name) !== index);
+    if (repeated.length > 0) return `names ${[...new Set(repeated)].join(", ")} more than once`;
+    for (const outer of features) {
+      const inner = features.find((other) => other !== outer && nests(outer.root, other.root));
+      if (inner !== undefined) return `gives ${inner.root} to both ${outer.name} and ${inner.name}`;
+    }
+    return true;
+  }),
+);
+
 const AgentRules = Schema.Struct({
   on: Schema.optionalKey(Schema.Array(RuleName).annotate({ description: "Catalogued Rules switched on here" })),
   off: Schema.optionalKey(Schema.Array(RuleName).annotate({ description: "Catalogued Rules switched off here" })),
@@ -83,11 +157,47 @@ export const Quality = Schema.Struct({
   gates: Schema.optionalKey(Gates),
   commitIdentity: Schema.optionalKey(CommitIdentity),
   sources: Schema.optionalKey(Sources),
+  size: Schema.optionalKey(
+    Size.annotate({ description: "The line budget oxlint holds production files to, read by checks-size-budget" }),
+  ),
+  features: Schema.optionalKey(
+    Features.annotate({
+      description: "The feature owners dependency-cruiser holds to their entries and checks-feature-owners maps a change to",
+    }),
+  ),
+  changeSignal: Schema.optionalKey(
+    Schema.Literal("advisory").annotate({
+      description: "Report which feature owners a change touches, without failing on it",
+    }),
+  ),
   agentRules: Schema.optionalKey(AgentRules),
-}).annotate({
-  title: QUALITY_FILE,
-  description: "What a repository has opted into from @avi2dg/checks, read by its bins and agent Rule selection",
-});
+})
+  .annotate({
+    title: QUALITY_FILE,
+    description: "What a repository has opted into from @avi2dg/checks, read by its bins and agent Rule selection",
+  })
+  .check(
+    Schema.makeFilter(
+      ({ size, sources }) =>
+        size === undefined || (sources?.production ?? []).length > 0 || "declares size, which holds nothing without sources.production",
+      {
+        toJsonSchema: () => ({
+          if: { required: ["size"] },
+          then: { required: ["sources"], properties: { sources: { required: ["production"], properties: { production: { minItems: 1 } } } } },
+        }),
+      },
+    ),
+    Schema.makeFilter(
+      ({ changeSignal, features = [] }) =>
+        changeSignal === undefined || features.length > 0 || "declares changeSignal, which maps a change to no owner without features",
+      {
+        toJsonSchema: () => ({
+          if: { required: ["changeSignal"] },
+          then: { required: ["features"], properties: { features: { minItems: 1 } } },
+        }),
+      },
+    ),
+  );
 export type Quality = typeof Quality.Type;
 
 const LegacyManifest = Schema.Struct({
