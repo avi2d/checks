@@ -1,6 +1,6 @@
 # <name>
 
-<Concept. Two to four sentences: what this is, who it is for, why you would use it.>
+<The concept in two to four sentences: what this is, who it is for, why you would use it.>
 
 ## Before you begin
 
@@ -33,7 +33,8 @@ To <do the task>:
 
 ### <The symptom, or the error text>
 
-<Cause. Resolution.>
+<The cause.>
+<The resolution.>
 
 ## Related topics
 

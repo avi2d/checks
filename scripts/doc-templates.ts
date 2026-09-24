@@ -45,7 +45,7 @@ function listed(words: readonly string[]): string {
 }
 
 const TROUBLESHOOTING = fixed("Troubleshooting", optional("no reader has met a failure worth naming yet"), [], {
-  subsections: [open("<The symptom, or the error text>", "any", REQUIRED, ["<Cause. Resolution.>"])],
+  subsections: [open("<The symptom, or the error text>", "any", REQUIRED, ["<The cause.>", "<The resolution.>"])],
 });
 
 const RELATED_TOPICS = fixed("Related topics", optional("there is no other page to send the reader to"), [
@@ -58,7 +58,8 @@ const STEPS = ["To <do the task>:", "", "1. <step>", "1. <step>"];
 
 const MAINTAINING = [
   "Keep this file for knowledge useful to almost every future agent session in this project.",
-  "Do not repeat what the codebase already shows; point to the authoritative file or command instead.",
+  "Do not repeat what the codebase already shows.",
+  "Point to the authoritative file or command instead.",
   "Prefer rewriting or pruning existing entries over appending new ones.",
   "When updating this file, preserve this bar for all agents and keep entries concise.",
 ];
@@ -69,7 +70,7 @@ export const TEMPLATES: Readonly<Record<Kind, Template>> = {
   readme: {
     shape: "outline",
     title: { type: "open", placeholder: "<name>", rule: "any" },
-    lead: ["<Concept. Two to four sentences: what this is, who it is for, why you would use it.>"],
+    lead: ["<The concept in two to four sentences: what this is, who it is for, why you would use it.>"],
     sections: [
       BEFORE_YOU_BEGIN,
       fixed("Install", REQUIRED, ["To install <name>:", "", "1. <step>", "1. <step>", "", "<What you see when it worked.>"]),
@@ -120,7 +121,7 @@ export const TEMPLATES: Readonly<Record<Kind, Template>> = {
   },
   claude: {
     shape: "exact",
-    text: "<!-- Points Claude at AGENTS.md via import; edit AGENTS.md, not this file. -->\n@AGENTS.md\n",
+    text: "<!-- Points Claude at AGENTS.md via import. Edit AGENTS.md, not this file. -->\n@AGENTS.md\n",
   },
   tutorial: {
     shape: "outline",

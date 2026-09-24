@@ -23,7 +23,8 @@ To <do the task>:
 
 ### <The symptom, or the error text>
 
-<Cause. Resolution.>
+<The cause.>
+<The resolution.>
 
 ## Related topics
 

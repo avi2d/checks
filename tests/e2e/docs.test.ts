@@ -21,7 +21,7 @@ const PLANTS: readonly Plant[] = [
     kind: "readme",
     path: "README.md",
     defect: (text) => text.replace("## Where things are", "## Layout"),
-    refusal: "README.md:27: `## Layout` opens with `Layout`, which is not a verb",
+    refusal: "README.md:27: `## Layout` opens with `Layout`, which is not on the kit's list of imperative verbs",
   },
   {
     kind: "changelog",
@@ -51,7 +51,7 @@ const PLANTS: readonly Plant[] = [
     kind: "tutorial",
     path: "docs/first-bill.md",
     defect: (text) => text.replace("## Before you begin", "## What you need"),
-    refusal: "docs/first-bill.md:5: `## What you need` opens with `What`, which is not a verb",
+    refusal: "docs/first-bill.md:5: `## What you need` opens with `What`, which is not on the kit's list of imperative verbs",
   },
   {
     kind: "how-to",

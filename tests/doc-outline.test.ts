@@ -42,7 +42,7 @@ test("sections in the template's order pass, and each departure is named", () =>
     "11: `## Stray` is not a section the template has there, as the template's order is Before, <task>, After, Last",
   ]);
   expect(problems("# t\n\n## Before\n\n## Installing\n\n## After\n\n## After\n", slots)).toEqual([
-    "5: `## Installing` opens with the gerund `Installing` where the verb itself goes",
+    "5: `## Installing` opens with `Installing`, which is not on the kit's list of imperative verbs",
     "9: `## After` appears twice",
   ]);
 });
@@ -78,19 +78,21 @@ test("a document opens with one title, skips no level and names no Overview", ()
   expect(found("# t\n## A\n")).toEqual(["1: has nothing between its title and its first section"]);
 });
 
-test("a heading that opens with an article, a question word, a gerund or a plural is not verb first", () => {
-  expect(["Install it", "Bring a part", "Focus the view", "Run `widget`", "Develop"].map(verbFirstProblem)).toEqual([
+test("a verb-first heading opens with a verb on the kit's list, and any other first word is refused", () => {
+  expect(["Install it", "Bring a part", "Focus the view", "Run `widget`", "Develop", "Declare policy in the quality file"].map(verbFirstProblem)).toEqual([
+    undefined,
     undefined,
     undefined,
     undefined,
     undefined,
     undefined,
   ]);
-  expect(["The commands", "Why it is shaped this way", "Installing into $HOME", "Features", "Usage"].map(verbFirstProblem)).toEqual([
-    "opens with `The`, which is not a verb",
-    "opens with `Why`, which is not a verb",
-    "opens with the gerund `Installing` where the verb itself goes",
-    "opens with `Features`, a plural rather than a verb",
-    "opens with `Usage`, which is not a verb",
+  expect(["Quality file", "Size budget", "The commands", "Why it is shaped this way", "Installing into $HOME", "Spring"].map(verbFirstProblem)).toEqual([
+    "opens with `Quality`, which is not on the kit's list of imperative verbs",
+    "opens with `Size`, which is not on the kit's list of imperative verbs",
+    "opens with `The`, which is not on the kit's list of imperative verbs",
+    "opens with `Why`, which is not on the kit's list of imperative verbs",
+    "opens with `Installing`, which is not on the kit's list of imperative verbs",
+    "opens with `Spring`, which is not on the kit's list of imperative verbs",
   ]);
 });

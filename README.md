@@ -58,7 +58,7 @@ node_modules/
 ```
 
 `quality.json` at the repository root declares what the repository
-opts into, starting with the commands its CI runs; see "Quality file"
+opts into, starting with the commands its CI runs. See "Declare policy in the quality file"
 below:
 
 ```json
@@ -83,9 +83,9 @@ cp node_modules/@avi2dg/checks/bunfig.toml bunfig.toml
 ```
 
 `checks-test` runs `bun test --randomize` and fails on a skip the
-repository has not declared; see "Test entry point" below.
+repository has not declared. See "Run the suite" below.
 
-`checks-lint` runs every kit gate a lint needs; see "Lint entry point"
+`checks-lint` runs every kit gate a lint needs. See "Run every lint gate"
 below. Three of them:
 
 `lint-coverage.sh` fails when oxlint silently skips a tracked `.ts` or
@@ -97,7 +97,7 @@ or its config does not parse.
 `test-layout.ts` decides the test layout described below.
 
 `commit-identity.ts` refuses a commit with an author other than the
-repository owner; see "Commit identity" below.
+repository owner. See "Check commit identities" below.
 
 A repo that runs mutation testing installs `@stryker-mutator/core` and
 `@hughescr/stryker-bun-runner`, then spreads the shipped preset in
@@ -114,7 +114,7 @@ export default {
 The registry version is pinned by the consumer's lockfile; bump
 `@avi2dg/checks` to adopt a new release.
 
-## Quality file
+## Declare policy in the quality file
 
 `quality.json` at the repository root says what the repository has
 opted into. The kit's bins find it at the git root and read it there:
@@ -151,17 +151,17 @@ opted into. The kit's bins find it at the git root and read it there:
 | Key | Read by | Holds |
 | --- | --- | --- |
 | `defaultBranch` | `checks-lint`, `checks-ci-wiring` | the branch pull requests merge into, `main` when absent |
-| `gates.ci` | `checks-ci-wiring` | the commands CI runs on every pull request; see "CI wiring" |
+| `gates.ci` | `checks-ci-wiring` | the commands CI runs on every pull request. See "Check the CI wiring" |
 | `gates.scheduled` | `checks-ci-wiring` | the commands a schedule runs |
-| `gates.lint` | `checks-lint`, `checks-ci-wiring` | the gates `checks-lint` runs when not all apply; see "Gate selection" |
-| `commitIdentity.authors` | `checks-commit-identity` | the identities allowed to author and commit; see "Commit identity" |
-| `sources.effect` | `checks-quality` | the paths held to the Effect rules, and the files under them that are not; see "Effect rules" |
-| `sources.production` | `checks-size-budget`, `checks-quality` | the source the repository ships; see "Size budget" |
-| `size` | `checks-size-budget` | the line budget, and which production files it holds; see "Size budget" |
-| `features` | `featureRules`, `checks-feature-owners` | each feature's root, entries, exempt importers and proof; see "Feature owners" |
-| `changeSignal` | `checks-feature-owners` | `advisory` to list the feature owners a change touches; see "Feature owners" |
+| `gates.lint` | `checks-lint`, `checks-ci-wiring` | the gates `checks-lint` runs when not all apply. See "Gate selection" |
+| `commitIdentity.authors` | `checks-commit-identity` | the identities allowed to author and commit. See "Check commit identities" |
+| `sources.effect` | `checks-quality` | the paths held to the Effect rules, and the files under them that are not. See "Enforce the Effect rules" |
+| `sources.production` | `checks-size-budget`, `checks-quality` | the source the repository ships. See "Hold files to a size budget" |
+| `size` | `checks-size-budget` | the line budget, and which production files it holds. See "Hold files to a size budget" |
+| `features` | `featureRules`, `checks-feature-owners` | each feature's root, entries, exempt importers and proof. See "Declare feature owners" |
+| `changeSignal` | `checks-feature-owners` | `advisory` to list the feature owners a change touches. See "Declare feature owners" |
 | `agentRules.on`, `agentRules.off` | agent Rule selection, not the kit | catalogued Rules switched on or off for this repository |
-| `docs.pages` | `checks-docs` | the Diátaxis mode of each page, by glob; see "Hold docs to their templates" |
+| `docs.pages` | `checks-docs` | the Diátaxis mode of each page, by glob. See "Hold docs to their templates" |
 
 Every key is optional. The bins decode the file with one Effect
 `Schema`, and the package ships `quality.schema.json` emitted from that
@@ -268,12 +268,12 @@ pin both:
   because one that leaves any of the kit's out turns on the category
   rules of the plugins it adds under every declared path.
 
-## Lint entry point
+## Run every lint gate
 
 `checks-lint` runs each of the kit's lint gates in turn and names every
 one that fails, rather than stopping at the first. A repository whose
 tracked files give a gate nothing to check can leave it out through
-`gates.lint`; see "Gate selection" under "CI wiring".
+`gates.lint`. See "Gate selection" under "Check the CI wiring".
 
 | Gate | Reads |
 | --- | --- |
@@ -298,7 +298,7 @@ Locally, and on any event other than a pull request, the range ends at
 `HEAD` and starts where `HEAD` branched from the origin default branch:
 `origin/HEAD`, or when `origin/HEAD` is not set, as in an
 `actions/checkout` clone, `origin/<defaultBranch>` from the
-repository's `quality.json` (see "Quality file"), and `origin/main` when
+repository's `quality.json`, as "Declare policy in the quality file" says, and `origin/main` when
 that is not declared. In a GitHub Actions pull request, where
 `GITHUB_EVENT_NAME` is `pull_request`, it ends
 at the event's head sha and starts where that branched from
@@ -344,8 +344,8 @@ checks-lint: 3 of 9 gate(s) failed: checks-commit-identity, checks-comment-gate,
 
 It exits 1 when any gate found a violation, and 2 when the range or the
 selection does not resolve, or no failing gate could decide. ci-wiring
-always runs, so a repository on `checks-lint` declares `gates.ci`
-(see "CI wiring"), and it holds the test layout unless its selection
+always runs, so a repository on `checks-lint` declares `gates.ci`,
+as "Check the CI wiring" says, and it holds the test layout unless its selection
 leaves out `checks-test-layout`.
 
 CI runs it through `lint`. The checkout fetches the whole history, which
@@ -366,7 +366,7 @@ jobs:
       - run: bun run lint
 ```
 
-## Effect rules
+## Enforce the Effect rules
 
 The base config loads the `effect-channel` plugin and turns on
 `effect-channel/no-error-channel-escape`, which refuses `Effect.ignore`,
@@ -387,7 +387,7 @@ through `Effect.fail`, a throwing call wrapped in `Effect.try` or
 
 A repository turns them on for the paths it writes in Effect by
 declaring those paths in `quality.json` and extending the generated
-fragments; see "Generated fragments" under "Quality file":
+fragments. See "Generated fragments" under "Declare policy in the quality file":
 
 ```json
 "sources": {
@@ -423,7 +423,7 @@ the tsconfig fragment's override, whose severities are
 effect-tsgo keeps the severities `tsconfig.effect.json` sets when a later
 config in `extends` restates the plugin with only its overrides.
 
-## Test layout
+## Lay out the tests
 
 `checks-test-layout` fails unless the repo holds this shape, and names the
 file and the path to move it to when it does not:
@@ -446,7 +446,7 @@ file and the path to move it to when it does not:
   with swc and reads import specifiers and identifier use, so a test that
   only carries `"node:child_process"` as a string is not a violation.
 - `scripts.test` is exactly `checks-test`, which runs `bun test --randomize`
-  (see "Test entry point"), and `scripts.lint` runs this check, itself or
+  as "Run the suite" says, and `scripts.lint` runs this check, itself or
   through `checks-lint` called by its bare bin name.
 - `bunfig.toml` carries every `[test]` key of the shipped preset with the
   same value, and `[test].pathIgnorePatterns` is always
@@ -466,7 +466,7 @@ still run on demand:
 bun test --path-ignore-patterns='' tests/quarantine
 ```
 
-## Test entry point
+## Run the suite
 
 `checks-test` runs the whole suite with `bun test --randomize`, passes
 bun's output through, and then reads bun's JUnit report of the same run.
@@ -509,10 +509,10 @@ passed without writing its report. It takes no arguments: a `-t`
 filter reports every test it leaves out as skipped and a path filter
 drops files a declaration names, so a narrowed run is plain
 `bun test --randomize` with the arguments. Files under
-`tests/quarantine/` are never run and so never reported; see "Test
+`tests/quarantine/` are never run and so never reported. See "Test
 layout".
 
-## Flake run
+## Find flaky tests
 
 A green run proves nothing failed in that run, not that no test is
 flaky. `checks-flake` runs the whole suite several times, each with its
@@ -567,9 +567,9 @@ jobs:
 ```
 
 and declares the step in `gates.scheduled`, so `checks-ci-wiring`
-fails once the schedule stops running it; see "CI wiring".
+fails once the schedule stops running it. See "Check the CI wiring".
 
-## Dependency rules
+## Enforce dependency rules
 
 `.dependency-cruiser.cjs` extends the shared base, which carries
 `no-circular`, `no-orphans`, `not-to-dev-dep` (shipped source importing
@@ -598,7 +598,7 @@ by field, which is how an entry point stops being an orphan:
 redeclare `no-orphans` with your entry added to its `pathNot`.
 This repo's own `.dependency-cruiser.cjs` does that for the plugin
 entry. A repository that declares feature owners spreads the rules
-`quality.json` compiles to into the same `forbidden`; see "Feature
+`quality.json` compiles to into the same `forbidden`. See "Feature
 owners".
 
 `package.json` gains the script:
@@ -619,7 +619,7 @@ jobs:
       - run: bun run lint:deps
 ```
 
-## Commit lint
+## Lint commit messages
 
 Commits follow `@commitlint/config-conventional` plus the house
 prefixes listed in `commitlint.config.js`, shared from
@@ -658,7 +658,7 @@ It never sees a commit's author or committer fields, nor the
 squashes, so it cannot enforce who a commit belongs to. The
 commit-identity check below is the enforcement.
 
-## Commit identity
+## Check commit identities
 
 `scripts/commit-identity.ts` walks every commit in a range and fails when
 one carries an identity other than the repository owner's:
@@ -684,9 +684,10 @@ owners restates it in `quality.json`:
 }
 ```
 
-`checks-lint` runs it over each pull request's range; see "Lint entry point".
+`checks-lint` runs it over each pull request's range.
+See "Run every lint gate".
 
-## Comment gate
+## Refuse banned comments
 
 `scripts/comment-gate.ts` runs the comment check over a diff and fails
 when an added line carries a banned comment:
@@ -715,7 +716,8 @@ and import it as `@avi2dg/checks/scripts/comment-matchers.ts`. The repo's
 cruise fails when it gains an import. `scripts/comments.ts` wraps the
 same matchers in Effect for the gate and the backtest.
 
-`checks-lint` runs it over each pull request's range; see "Lint entry point".
+`checks-lint` runs it over each pull request's range.
+See "Run every lint gate".
 
 ## Ratchet the suppressions
 
@@ -748,9 +750,10 @@ suppressions-ratchet: 2 count(s) in oxlint-suppressions.json rose or appeared; f
   src/dispatch.ts typescript/no-non-null-assertion rose from 12 to 13
 ```
 
-`checks-lint` runs it over each pull request's range; see "Lint entry point".
+`checks-lint` runs it over each pull request's range.
+See "Run every lint gate".
 
-## Size budget
+## Hold files to a size budget
 
 `checks-size-budget` holds production files to the line budget
 `quality.json` declares, and lists every other file over it without
@@ -801,9 +804,10 @@ glob that matches no file. Moving `applies` from `changed` to `all`
 tightens the budget to every production file, once the advisory list
 names none.
 
-`checks-lint` runs it over each pull request's range; see "Lint entry point".
+`checks-lint` runs it over each pull request's range.
+See "Run every lint gate".
 
-## Feature owners
+## Declare feature owners
 
 A repository opts a feature in by declaring, in `quality.json`, the
 directory it owns, the files code outside it imports it through, the
@@ -902,7 +906,8 @@ repository that declares no feature passes, and `quality.json` refuses
 a `changeSignal` without features, which would map a change to no
 owner.
 
-`checks-lint` runs it over each pull request's range; see "Lint entry point".
+`checks-lint` runs it over each pull request's range.
+See "Run every lint gate".
 
 ## Hold docs to their templates
 
@@ -940,7 +945,7 @@ A template decides a file's structure, and the template file itself is the refer
 - A file opens with one `# ` title on its first line and has text before its first section.
   It skips no heading level, and no heading is Overview, Introduction or How it works.
 - Its sections are the template's headings in the template's order.
-  A heading in angle brackets is one the writer names, and one marked verb first is refused when it opens with an article, a question word, a gerund or a plural.
+  A heading in angle brackets is one the writer names, and one marked verb first is refused unless its first word is on the closed list of imperative verbs the kit keeps.
   A heading the template does not have, in that place, is refused.
 - A record in `docs/adr/` is named for its four-digit number, and its title opens with the same number.
   A `Date: YYYY-MM-DD` line follows the title, the first word under Status is Proposed, Accepted, Rejected, Deprecated, Superseded or Retired, and no other record holds its number.
@@ -968,9 +973,10 @@ docs: advisory, 1 doc file(s) the range leaves alone do not hold to their templa
 
 It exits 1 on a violation in a file the range touches, and 2 when `quality.json` does not decode or a ref does not resolve.
 
-`checks-lint` runs it over each pull request's range; see "Lint entry point".
+`checks-lint` runs it over each pull request's range.
+See "Run every lint gate".
 
-## CI wiring
+## Check the CI wiring
 
 `checks-ci-wiring` fails when a command the repository's CI must run no
 longer runs on pull requests to the default branch. No local check sees
@@ -1093,7 +1099,7 @@ missing `bun test` script and `bunfig.toml`. It declares the gates
 }
 ```
 
-`checks-lint` runs exactly those, in the "Lint entry point" table's
+`checks-lint` runs exactly those, in the "Run every lint gate" table's
 order, and all ten when `gates.lint` is absent. A selection in
 `quality.json` always keeps `checks-quality`, since the file it sits in
 is what makes that gate apply. A step running
@@ -1146,7 +1152,7 @@ does not evaluate:
   command itself does, the shell's options, and a step or job that
   fails or times out before the gate step.
 
-## Backtest
+## Backtest the comment check
 
 `scripts/backtest.ts` reports what the comment check would have refused
 at each recent commit, so a repository can measure its own history:
@@ -1162,7 +1168,7 @@ comment text as a share of added lines.
 `generated/`, `vendor/`, `repos/`, `node_modules/` and `dist/` are out
 of reach, so the figures are authored code.
 
-## Mutation compare
+## Compare mutation scores
 
 `checks-mutation-compare` gates a pull request on no-regression rather
 than an absolute threshold: the head mutation score may not fall below

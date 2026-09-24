@@ -5,7 +5,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - Add durable project-specific notes here as they are discovered through real work.
 - `dist/` is committed because no `prepack`/`prepublishOnly` builds it at publish time, so the tarball ships the committed bundle; rebuild with `bun run build` under the bun `.bun-version` pins, because CI rebuilds with that bun and another version emits different bytes. See docs/design.md.
 - Every oxlint config in an `extends` chain sets `plugins`, the consumer's and a generated fragment alike: one without them brings oxlint's default plugins, and their category rules, into the whole tree.
-- `scripts/test-layout.ts` decides this repo's own test layout too, so a new test goes under `tests/**/*.test.ts` and anything that spawns, shells out, or reaches the network goes under `tests/e2e/`. README "Test layout" carries the standard.
+- `scripts/test-layout.ts` decides this repo's own test layout too, so a new test goes under `tests/**/*.test.ts` and anything that spawns, shells out, or reaches the network goes under `tests/e2e/`. README "Lay out the tests" carries the standard.
 - `quality.json` `gates.ci` lists the commands CI must run on pull requests, and `bun run lint` fails when a workflow edit drops or disables one; a new CI gate step joins that list.
 - `quality.json` `sources.effect` is the one statement of the Effect-required paths. After editing it or a file in `presets/`, `bun scripts/quality.ts generate` rewrites the committed root fragments `.oxlintrc.json` and `tsconfig.json` extend; after editing the schema in `scripts/quality-file.ts`, `bun run build` rewrites `quality.schema.json` and `dist/feature-rules.js`, which bundles the schema. Lint, the suite and CI's `dist/` diff fail on any of them left stale.
 - `@oxlint/plugins` ships no RuleTester, so each `effect-channel` rule is proven red and green against an installed consumer in `tests/e2e/consumer.test.ts`.
@@ -20,6 +20,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 ## Maintaining this file
 
 Keep this file for knowledge useful to almost every future agent session in this project.
-Do not repeat what the codebase already shows; point to the authoritative file or command instead.
+Do not repeat what the codebase already shows.
+Point to the authoritative file or command instead.
 Prefer rewriting or pruning existing entries over appending new ones.
 When updating this file, preserve this bar for all agents and keep entries concise.
