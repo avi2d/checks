@@ -18,5 +18,6 @@
   },
   "size": { "fileLines": 400, "functionLines": 100, "applies": "changed" },
   "features": [],
-  "agentRules": { "on": [], "off": [] }
+  "agentRules": { "on": [], "off": [] },
+  "docs": { "pages": { "explanation": ["docs/design.md"] } }
 }
