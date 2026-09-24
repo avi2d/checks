@@ -375,7 +375,7 @@ test("a step running checks-lint covers no gate its declared selection leaves ou
   expect(gapsIn({ [CI]: workflow }, metadataOnly)).toEqual([{ gate: "bunx checks-test-layout", blocked: [] }]);
 });
 
-test("a selection names each kit gate once and keeps every gate that applies to every repository", () => {
+test("a selection names kit gates and keeps every gate that applies to every repository", () => {
   const refusal = (lintGates: unknown) =>
     Effect.runSync(Effect.flip(parseDeclaration({ ciWiring: { gates: ["x"], lintGates } }, "package.json"))).message;
 
@@ -390,7 +390,6 @@ test("a selection names each kit gate once and keeps every gate that applies to 
   expect(refusal(["checks-lint-coverage"])).toContain(
     "checks-lint must run checks-commit-identity, checks-comment-gate, checks-suppressions-ratchet, checks-ci-wiring, which apply to every repository",
   );
-  expect(refusal([...metadata, "checks-ci-wiring"])).toContain("Expected an array with unique items");
   expect(refusal([...metadata, "checks-backtest"])).toContain('Expected "checks-lint-coverage" |');
   expect(refusal("checks-ci-wiring")).toContain("Expected array");
 

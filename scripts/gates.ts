@@ -37,7 +37,6 @@ const UNCONDITIONAL = KIT_GATES.filter((gate) => gate.appliesTo === EVERY_REPOSI
 // A selection without ci-wiring would go unchecked under checks-lint, so a gate every repository runs
 // is refused where checks-lint decodes the selection, not by ci-wiring.
 export const LintGates = Schema.Array(Schema.Literals(KIT_GATES.map((gate) => gate.bin))).check(
-  Schema.isUnique(),
   Schema.makeFilter((selected) => {
     const missing = UNCONDITIONAL.filter((bin) => !selected.includes(bin));
     if (missing.length === 0) return true;

@@ -586,8 +586,8 @@ A selection may leave out only a gate that does not apply:
 | `checks-suppressions-ratchet` | always |
 | `checks-ci-wiring` | always |
 
-Both bins exit 2 on a `lintGates` that names an unknown or repeated gate
-or leaves out one that always applies. ci-wiring exits 1 when the
+Both bins exit 2 on a `lintGates` that names an unknown gate or leaves
+out one that always applies. ci-wiring exits 1 when the
 selection leaves out a gate the repository's tracked files make
 applicable, and names the gate and the files:
 
