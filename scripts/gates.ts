@@ -22,3 +22,7 @@ export function runsProgram(word: string, program: Program): boolean {
   const path = `scripts/${program.script}`;
   return word === program.bin || word === path || word.endsWith(`/${path}`);
 }
+
+export function entryPointWord(word: string, program: Program): string {
+  return word === program.bin ? ENTRY_POINT.bin : word.slice(0, word.length - program.script.length) + ENTRY_POINT.script;
+}
