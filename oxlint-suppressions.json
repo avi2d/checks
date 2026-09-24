@@ -1,0 +1,76 @@
+{
+  "scripts/backtest.ts": {
+    "no-restricted-properties": {
+      "count": 1
+    },
+    "node/no-sync": {
+      "count": 2
+    },
+    "oxc/no-async-await": {
+      "count": 2
+    }
+  },
+  "scripts/ci-wiring.ts": {
+    "effect-channel/no-throw": {
+      "count": 6
+    },
+    "effect-channel/no-try-catch": {
+      "count": 3
+    },
+    "no-restricted-properties": {
+      "count": 2
+    },
+    "node/no-sync": {
+      "count": 5
+    }
+  },
+  "scripts/comment-gate.ts": {
+    "no-restricted-properties": {
+      "count": 2
+    },
+    "node/no-sync": {
+      "count": 2
+    }
+  },
+  "scripts/comments.ts": {
+    "effect-channel/no-throw": {
+      "count": 1
+    }
+  },
+  "scripts/commit-identity.ts": {
+    "no-restricted-properties": {
+      "count": 2
+    },
+    "node/no-sync": {
+      "count": 3
+    }
+  },
+  "scripts/mutation-compare.ts": {
+    "effect-channel/no-throw": {
+      "count": 7
+    },
+    "effect-channel/no-try-catch": {
+      "count": 3
+    },
+    "no-restricted-properties": {
+      "count": 2
+    },
+    "oxc/no-async-await": {
+      "count": 1
+    }
+  },
+  "scripts/test-layout.ts": {
+    "effect-channel/no-throw": {
+      "count": 1
+    },
+    "no-restricted-properties": {
+      "count": 1
+    },
+    "node/no-sync": {
+      "count": 2
+    },
+    "oxc/no-async-await": {
+      "count": 4
+    }
+  }
+}
