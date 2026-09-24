@@ -61,7 +61,7 @@
   },
   "scripts": {
     "build": "bun build effect-channel/index.ts --outdir dist --target node --format esm",
-    "lint": "oxlint --type-aware && ./scripts/lint-coverage.sh && bun scripts/test-layout.ts && bun scripts/commit-identity.ts HEAD && bun scripts/comment-gate.ts HEAD && bun scripts/ci-wiring.ts && depcruise --config .dependency-cruiser.cjs effect-channel scripts tests commitlint.config.js dependency-cruiser.config.js stryker.preset.js .dependency-cruiser.cjs",
+    "lint": "oxlint --type-aware && ./scripts/lint-coverage.sh && bun scripts/test-layout.ts && bun scripts/commit-identity.ts HEAD && bun scripts/comment-gate.ts HEAD && bun scripts/suppressions-ratchet.ts HEAD && bun scripts/ci-wiring.ts && depcruise --config .dependency-cruiser.cjs effect-channel scripts tests commitlint.config.js dependency-cruiser.config.js stryker.preset.js .dependency-cruiser.cjs",
     "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
     "test": "bun test --randomize"
   },
@@ -74,7 +74,8 @@
       "bun run test",
       "./node_modules/.bin/commitlint",
       "bun .checks/scripts/commit-identity.ts",
-      "bun .checks/scripts/comment-gate.ts"
+      "bun .checks/scripts/comment-gate.ts",
+      "bun .checks/scripts/suppressions-ratchet.ts"
     ]
   },
   "peerDependencies": {
