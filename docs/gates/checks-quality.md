@@ -1,0 +1,94 @@
+# checks-quality
+
+`checks-quality` is the bin that writes what `quality.json` declares for oxlint and tsc into generated fragments and checks them, and a reader looks it up when a fragment is stale.
+
+## What it checks
+
+oxlint and tsc read their own JSON and nothing else, so `checks-quality generate` writes what `sources.effect` declares into two fragments at the repository root, and the hand-written configs extend them.
+Both fragments are committed.
+
+`oxlintrc.quality.json` holds one override: the declared paths as `files`, the exempt ones as `excludeFiles`, and the kit's Effect rule block, `presets/effect.oxlint.json`.
+`tsconfig.quality.json` holds the language-service override: the same paths as `include`, the exempt ones as `exclude`, and `presets/effect.language-service.json`.
+A kit release that changes a preset reaches the repository through its next `generate`.
+A rule only this repository needs stays in its own `.oxlintrc.json`, whose overrides come after the fragment's and so win.
+
+`.oxlintrc.json` extends its fragment:
+
+```json
+{
+  "extends": ["./node_modules/@avi2dg/checks/oxlintrc.json", "./oxlintrc.quality.json"],
+  "plugins": ["typescript", "oxc", "eslint", "import"]
+}
+```
+
+`tsconfig.json` extends its fragment:
+
+```json
+{
+  "extends": ["@avi2dg/checks/tsconfig.effect.json", "./tsconfig.quality.json"]
+}
+```
+
+`checks-quality --check` fails when any of these holds:
+
+- A fragment is missing, or differs from what `generate` would write from `quality.json` and the installed kit's presets.
+- A fragment is left over once `quality.json` stops declaring `sources.effect`.
+- `.oxlintrc.json` or `tsconfig.json` does not list its fragment in `extends`, so the tool never reads it.
+- A `sources.effect.paths` glob, or a `sources.production` glob while `size` is declared, matches no tracked or untracked file, so it holds nothing.
+
+Two details of the fragments are easy to get wrong, so the kit's tests pin both:
+
+- A fragment sits at the repository root.
+  oxlint resolves an override's `files`, and the language service an override's `include`, against the directory of the config holding it.
+  From `.quality/` the language service reports no error at all on an `async function` planted under a declared path.
+- The oxlint fragment always sets `plugins`, to the kit's.
+  A config in `extends` that sets none brings in oxlint's default plugins, whose category rules then fire across the whole tree.
+  The override names the kit's plugins beside the preset's `node`, `promise` and `unicorn`, because one that leaves any of the kit's out turns on the category rules of the plugins it adds under every declared path.
+
+## What it reads
+
+It reads the working tree: `quality.json`, the presets of the installed kit, `.oxlintrc.json`, `tsconfig.json` and the two fragments.
+It lists the tracked and untracked files to see what each declared glob matches.
+
+## Arguments
+
+```sh
+checks-quality generate
+checks-quality --check
+```
+
+`generate` writes the fragments, removes a left-over one, then runs the same check as `--check`.
+`--check` writes nothing.
+
+## Exit codes
+
+| Code | When |
+| --- | --- |
+| 0 | the fragments hold what `quality.json` declares |
+| 1 | a fragment is stale, missing, left over or not extended, or a declared glob matches no file |
+| 2 | `quality.json` does not decode, or the arguments are neither `generate` nor `--check` |
+
+## Sample output
+
+```
+checks-quality: 2 problem(s) with what quality.json declares:
+  oxlintrc.quality.json is stale against quality.json and the kit's presets; run checks-quality generate
+  tsconfig.json does not extend ./tsconfig.quality.json, so the language service never reads it
+```
+
+A passing run says what the fragments hold:
+
+```
+checks-quality: oxlintrc.quality.json and tsconfig.quality.json hold what quality.json declares
+```
+
+## Opting out
+
+It runs only in a repository that tracks `quality.json`, and a selection in `quality.json` always keeps it, since the file it sits in is what makes it apply.
+A repository that declares no `sources.effect` gets no fragment, and the check then only refuses a left-over one.
+
+## Related topics
+
+- [The quality file](../configs/quality-file.md)
+- [The Effect rules](../configs/effect-rules.md)
+- [checks-lint](checks-lint.md)

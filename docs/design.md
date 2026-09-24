@@ -54,7 +54,7 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   A bare import always passes whatever file its entry lives in.
   Setting your own `options.enhancedResolveOptions` replaces the base's, so restate `exportsFields` and `conditionNames` if you do.
 - dependency-cruiser `extends` merges same-name `forbidden` rules with the child's fields winning.
-  That is the entry-point and layer recipe under "Enforce dependency rules" in the README.
+  That is the entry-point and layer recipe under Boundaries in [The dependency rules](configs/dependency-rules.md).
 - The templates in `templates/` are rendered from `scripts/doc-templates.ts`, the spec `checks-docs` reads.
   A template written by hand beside the check agrees with it only until someone edits one of them.
 - A page's Diátaxis mode is declared in `quality.json` rather than read from the page.
