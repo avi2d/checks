@@ -1,6 +1,6 @@
 {
   "name": "@avi2dg/checks",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Deterministic checks shared across the captain's TypeScript repos",
   "license": "MIT",
   "repository": {
@@ -22,6 +22,7 @@
     "scripts/ci-wiring.ts",
     "scripts/comments.ts",
     "scripts/comment-gate.ts",
+    "scripts/suppressions-ratchet.ts",
     "scripts/backtest.ts",
     "oxlintrc.json",
     "stryker.preset.js",
@@ -39,6 +40,7 @@
     "./scripts/ci-wiring.ts": "./scripts/ci-wiring.ts",
     "./scripts/comments.ts": "./scripts/comments.ts",
     "./scripts/comment-gate.ts": "./scripts/comment-gate.ts",
+    "./scripts/suppressions-ratchet.ts": "./scripts/suppressions-ratchet.ts",
     "./scripts/backtest.ts": "./scripts/backtest.ts",
     "./oxlintrc.json": "./oxlintrc.json",
     "./stryker.preset.js": "./stryker.preset.js",
@@ -52,6 +54,7 @@
     "checks-mutation-compare": "scripts/mutation-compare.ts",
     "checks-ci-wiring": "scripts/ci-wiring.ts",
     "checks-comment-gate": "scripts/comment-gate.ts",
+    "checks-suppressions-ratchet": "scripts/suppressions-ratchet.ts",
     "checks-backtest": "scripts/backtest.ts"
   },
   "scripts": {

@@ -5,9 +5,10 @@ Deterministic checks shared across my TypeScript repos. One package,
 Effect language-service block, the shared commitlint config, the shared
 dependency-cruiser base, the test-layout check with its bunfig preset,
 the commit-identity check with its workflow, the comment gate with its
-workflow and backtest, the Stryker mutation-testing preset with its
-no-regression comparator, the CI-wiring check, and the Effect
-error-channel plugin compiled to JavaScript.
+workflow and backtest, the oxlint suppressions ratchet, the Stryker
+mutation-testing preset with its no-regression comparator, the
+CI-wiring check, and the Effect error-channel plugin compiled to
+JavaScript.
 
 Published as `@avi2dg/checks` on the public npm registry.
 
@@ -347,6 +348,58 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
 ```
 
+## Suppressions ratchet
+
+`scripts/suppressions-ratchet.ts` holds oxlint's bulk-suppression
+baseline, `oxlint-suppressions.json`, to counts that only fall. oxlint
+accepts whatever `oxlint --suppress-all` writes, so raising a count to
+let a new site through passes the lint. The ratchet reads the file at a
+base and a head and fails naming each file and rule whose count rose or
+that appeared:
+
+```sh
+bun run checks-suppressions-ratchet <base-ref> <head-ref>
+bun run checks-suppressions-ratchet <ref>
+```
+
+With one argument it compares that commit with its parent, and exits 2
+when the parent is not in the clone. With two it reads the base where
+the head branched off, at their merge-base, so a count the base branch
+lowered since does not read as a rise at the head. A count that fell and
+an entry that went both pass. A commit without the file counts as empty,
+so the commit that first adds a baseline fails with every entry
+appearing. The file is read from the directory the command runs in,
+which is where oxlint writes it. It exits 2 when a ref does not resolve
+or the file is not oxlint's count per rule per file:
+
+```
+suppressions-ratchet: 2 count(s) in oxlint-suppressions.json rose or appeared; fix the site instead of suppressing it:
+  src/added.ts typescript/no-unsafe-type-assertion appeared with 1
+  src/dispatch.ts typescript/no-non-null-assertion rose from 12 to 13
+```
+
+Enforcement runs on pull requests, where the range from the base branch's
+current tip to the head is visible:
+
+```yaml
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+jobs:
+  suppressions-ratchet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bunx checks-suppressions-ratchet "origin/$BASE_REF" "$HEAD_SHA"
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+```
+
 ## CI wiring
 
 `checks-ci-wiring` fails when a command the repository's CI must run no
@@ -569,7 +622,7 @@ a tag off `main` and reruns the build, `dist/` check, lint, typecheck
 and tests before it publishes:
 
 ```sh
-git tag v0.5.0 && git push origin v0.5.0
+git tag v0.6.0 && git push origin v0.6.0
 ```
 
 The `release` workflow publishes the tagged version through npm
