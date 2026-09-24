@@ -23,10 +23,10 @@ const NAME = "feature-owners";
 const USAGE = "usage: feature-owners.ts <ref> | <base-ref> <head-ref>";
 const RELATIVE = /^\.\.?\//;
 const SCRIPT_EXTENSIONS = new Map([
-  [".js", ".ts"],
-  [".jsx", ".tsx"],
-  [".mjs", ".mts"],
-  [".cjs", ".cts"],
+  [".js", [".ts", ".tsx"]],
+  [".jsx", [".tsx"]],
+  [".mjs", [".mts"]],
+  [".cjs", [".cts"]],
 ]);
 
 const runtimeSpecifiers = Effect.fn("runtimeSpecifiers")(function* (file: string, source: string) {
@@ -47,8 +47,8 @@ const candidatesFor = Effect.fn("candidatesFor")(function* (importer: string, sp
   const path = yield* Path.Path;
   const target = path.join(path.dirname(importer), specifier);
   const extension = path.extname(target);
-  const source = SCRIPT_EXTENSIONS.get(extension);
-  if (source !== undefined) return [target, `${target.slice(0, -extension.length)}${source}`];
+  const sources = SCRIPT_EXTENSIONS.get(extension);
+  if (sources !== undefined) return [target, ...sources.map((source) => `${target.slice(0, -extension.length)}${source}`)];
   if (extension !== "") return [target];
   return [`${target}.ts`, `${target}.tsx`, `${target}/index.ts`, `${target}/index.tsx`];
 });

@@ -8,11 +8,17 @@ export class GitFailure extends Schema.TaggedError<GitFailure>()("GitFailure", {
 const text = <E>(bytes: Stream.Stream<Uint8Array, E>): Effect.Effect<string, E> =>
   bytes.pipe(Stream.decodeText(), Stream.mkString);
 
+export type Feed = {
+  readonly env?: Readonly<Record<string, string>>;
+  readonly input?: string;
+};
+
 // Both pipes drain while the program runs: one left unread fills its buffer and stalls it.
 export const collect = Effect.fn("collect")(
-  function* (program: string, args: readonly string[], cwd?: string) {
+  function* (program: string, args: readonly string[], cwd?: string, { env, input }: Feed = {}) {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-    const handle = yield* spawner.spawn(ChildProcess.make(program, args, { cwd }));
+    const stdin = input === undefined ? undefined : Stream.make(new TextEncoder().encode(input));
+    const handle = yield* spawner.spawn(ChildProcess.make(program, args, { cwd, env, extendEnv: true, stdin }));
     const [stdout, stderr, exitCode] = yield* Effect.all([text(handle.stdout), text(handle.stderr), handle.exitCode], {
       concurrency: "unbounded",
     });
@@ -21,9 +27,9 @@ export const collect = Effect.fn("collect")(
   Effect.scoped,
 );
 
-export const git = Effect.fn("git")(function* (args: readonly string[], cwd?: string) {
+export const git = Effect.fn("git")(function* (args: readonly string[], cwd?: string, feed?: Feed) {
   const failed = (reason: string): GitFailure => new GitFailure({ message: `git ${args.join(" ")}: ${reason.trim()}` });
-  const { stdout, stderr, exitCode } = yield* collect("git", args, cwd).pipe(
+  const { stdout, stderr, exitCode } = yield* collect("git", args, cwd, feed).pipe(
     Effect.mapError((cause) => failed(cause.message)),
   );
   if (exitCode !== ChildProcessSpawner.ExitCode(0)) return yield* failed(stderr);

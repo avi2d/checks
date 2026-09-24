@@ -230,8 +230,9 @@ that changes a preset reaches the repository through its next
   `sources.effect`;
 - `.oxlintrc.json` or `tsconfig.json` does not list its fragment in
   `extends`, so the tool never reads it;
-- a `sources.production` or `sources.effect.paths` glob matches no
-  tracked or untracked file, so it holds nothing.
+- a `sources.effect.paths` glob, or a `sources.production` glob while
+  `size` is declared, matches no tracked or untracked file, so it holds
+  nothing.
 
 It exits 2 when `quality.json` does not decode. `generate` writes the
 fragments, removes a left-over one, then runs the same check.

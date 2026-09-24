@@ -112,6 +112,21 @@ test(
 );
 
 test(
+  "a proof importing a .tsx entry through its .js specifier imports that entry",
+  async () => {
+    await repository({ features: [{ ...BILLING, entries: ["src/billing/view.tsx"] }] });
+    await write({
+      "src/billing/view.tsx": "export const charge = <b>1</b>;\n",
+      "tests/e2e/billing.test.ts": proof("../../src/billing/view.js"),
+    });
+    const result = await owners(await commit("feat: view"));
+    expect(result.text).toBe("feature-owners: 1 feature(s) keep a proof under tests/e2e/ that imports an entry\n");
+    expect(result.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
   "a proof outside tests/e2e/ is refused where quality.json is read, and a repository declaring no feature passes",
   async () => {
     await repository({ features: [{ ...BILLING, proof: "tests/billing.test.ts" }] });

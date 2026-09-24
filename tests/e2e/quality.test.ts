@@ -146,9 +146,15 @@ test(
     await put("lib/b.ts", "export const b = 1;\n");
     expect((await quality("--check")).exitCode).toBe(0);
 
-    await put("quality.json", { sources: { production: ["src/**/*.ts", "app/**/*.ts"], effect: { paths: ["src/**/*.ts", "lib/**/*.ts"] } } });
+    const sources = { production: ["src/**/*.ts", "app/**/*.ts"], effect: { paths: ["src/**/*.ts", "lib/**/*.ts"] } };
+    await put("quality.json", { sources });
+    const unsized = await quality("--check");
+    expect(unsized.text).not.toContain("matches no file");
+    expect(unsized.exitCode).toBe(0);
+
+    await put("quality.json", { sources, size: { fileLines: 400, functionLines: 100, applies: "changed" } });
     const unmatchedProduction = await quality("--check");
-    expect(unmatchedProduction.text).toContain("sources.production app/**/*.ts matches no file, so it holds no source as production");
+    expect(unmatchedProduction.text).toContain("sources.production app/**/*.ts matches no file, so it holds no source to the size budget");
     expect(unmatchedProduction.text).not.toContain("src/**/*.ts matches no file");
     expect(unmatchedProduction.exitCode).toBe(1);
     await put("app/c.ts", "export const c = 1;\n");

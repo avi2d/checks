@@ -66,19 +66,13 @@ function heldByChange(changes: readonly Change[]): readonly string[] {
   });
 }
 
-const materialize = Effect.fn("materialize")(function* (root: string, head: string, files: readonly string[], tree: string) {
-  const fs = yield* FileSystem.FileSystem;
+const materialize = Effect.fn("materialize")(function* (root: string, head: string, files: readonly string[], scratch: string) {
   const path = yield* Path.Path;
-  yield* Effect.forEach(
-    files,
-    (file) =>
-      Effect.gen(function* () {
-        const target = path.join(tree, file);
-        yield* fs.makeDirectory(path.dirname(target), { recursive: true });
-        yield* fs.writeFileString(target, yield* git(["cat-file", "blob", `${head}:${file}`], root));
-      }),
-    { concurrency: 8, discard: true },
-  );
+  const env = { GIT_INDEX_FILE: path.join(scratch, "index") };
+  yield* git(["read-tree", head], root, { env });
+  const tree = `${path.join(scratch, "tree")}${path.sep}`;
+  yield* git(["checkout-index", "-z", "--stdin", `--prefix=${tree}`], root, { env, input: files.map((file) => `${file}\0`).join("") });
+  return tree;
 });
 
 // oxlint reads files from disk, and the working tree need not hold the head: a merge checkout or an uncommitted edit.
@@ -88,13 +82,11 @@ const measure = Effect.fn("measure")(
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const scratch = yield* fs.makeTempDirectoryScoped({ prefix: "checks-size-budget-" });
-    const tree = path.join(scratch, "tree");
     const config = path.join(scratch, "size.oxlintrc.json");
     yield* fs.writeFileString(config, renderJson(sizeConfig(size)));
-    yield* materialize(root, head, files, tree);
+    const tree = yield* materialize(root, head, files, scratch);
 
-    const args = ["-c", config, "-f", "json", ...files.map((file) => `./${file}`)];
-    const { stdout, stderr, exitCode } = yield* collect("oxlint", args, tree).pipe(
+    const { stdout, stderr, exitCode } = yield* collect("oxlint", ["-c", config, "-f", "json", "."], tree).pipe(
       Effect.mapError((cause) => new OxlintUnreadable({ message: `cannot run oxlint: ${cause.message}` })),
     );
     if (exitCode !== OXLINT_FOUND_NOTHING && exitCode !== OXLINT_FOUND_ERRORS) {
