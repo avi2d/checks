@@ -272,6 +272,7 @@ test(
           test: "bun test --randomize",
           lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout && checks-commit-identity HEAD",
           gate: "checks-comment-gate HEAD",
+          ratchet: "checks-suppressions-ratchet HEAD",
           backtest: "checks-backtest 5",
           compare: "checks-mutation-compare mutation.json mutation.json",
           wiring: "checks-ci-wiring",
@@ -341,6 +342,10 @@ test(
     const wiring = await $`bun run wiring`.cwd(dir).nothrow().quiet();
     expect(wiring.stdout.toString()).toContain("1 gate(s) run on pull requests to main");
     expect(wiring.exitCode).toBe(0);
+
+    const ratchet = await $`bun run ratchet`.cwd(dir).nothrow().quiet();
+    expect(ratchet.stdout.toString()).toContain("no count in oxlint-suppressions.json rose or appeared");
+    expect(ratchet.exitCode).toBe(0);
   },
   180_000,
 );
