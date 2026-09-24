@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "defaultBranch": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The branch pull requests merge into; main when absent"
+    },
+    "gates": {
+      "type": "object",
+      "properties": {
+        "ci": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/Command"
+            }
+          ],
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/Command"
+          },
+          "description": "The commands CI runs on every pull request to the default branch, each one plain command"
+        },
+        "scheduled": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Command"
+          },
+          "description": "The commands a cron-scheduled workflow runs"
+        },
+        "lint": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "checks-lint-coverage",
+              "checks-test-layout",
+              "checks-commit-identity",
+              "checks-comment-gate",
+              "checks-suppressions-ratchet",
+              "checks-ci-wiring",
+              "checks-quality"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "commitIdentity": {
+      "type": "object",
+      "properties": {
+        "authors": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/Identity"
+            }
+          ],
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/Identity"
+          },
+          "description": "The identities allowed to author and commit, in place of the kit's default owner"
+        }
+      },
+      "required": [
+        "authors"
+      ],
+      "additionalProperties": false
+    },
+    "sources": {
+      "type": "object",
+      "properties": {
+        "production": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PathGlob"
+          },
+          "description": "The source the repository ships, as against tests and tooling"
+        },
+        "effect": {
+          "type": "object",
+          "properties": {
+            "paths": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "$ref": "#/$defs/PathGlob"
+                }
+              ],
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/PathGlob"
+              },
+              "description": "Where source is written in Effect, held to the Effect rules of oxlint and the language service"
+            },
+            "exempt": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PathGlob"
+              },
+              "description": "Files under paths the Effect rules pass over"
+            }
+          },
+          "required": [
+            "paths"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "agentRules": {
+      "type": "object",
+      "properties": {
+        "on": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RuleName"
+          },
+          "description": "Catalogued Rules switched on here"
+        },
+        "off": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RuleName"
+          },
+          "description": "Catalogued Rules switched off here"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "title": "quality.json",
+  "description": "What a repository has opted into from @avi2dg/checks, read by its bins and agent Rule selection",
+  "$defs": {
+    "Command": {
+      "type": "string",
+      "minLength": 1
+    },
+    "Identity": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "email": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "name",
+        "email"
+      ],
+      "additionalProperties": false
+    },
+    "PathGlob": {
+      "type": "string",
+      "pattern": "^(?!\\.\\.?(?:\\/|$))(?:\\*\\*|(?:[\\w.@+-]|\\*(?!\\*))+)(?:\\/(?!\\.\\.?(?:\\/|$))(?:\\*\\*|(?:[\\w.@+-]|\\*(?!\\*))+))+$",
+      "description": "A glob from the repository root that oxlint, the Effect language service and git read alike: a directory first, * within a segment, ** as a whole one, and no braces, ?, [ or leading ./"
+    },
+    "RuleName": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    }
+  }
+}

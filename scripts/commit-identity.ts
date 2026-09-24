@@ -1,10 +1,8 @@
 #!/usr/bin/env bun
-import { Console, Effect, FileSystem, Path, Schema } from "effect";
+import { Console, Effect, Schema } from "effect";
 import { git } from "./git.ts";
 import { runMain, Usage } from "./main.ts";
-
-const Identity = Schema.Struct({ name: Schema.String, email: Schema.String });
-type Identity = typeof Identity.Type;
+import { readQuality, type Identity } from "./quality-file.ts";
 
 type Commit = {
   readonly sha: string;
@@ -32,16 +30,6 @@ const RECORD = "\u001e";
 
 const USAGE = "usage: commit-identity.ts <ref> | <base-ref> <head-ref>";
 
-const Manifest = Schema.Struct({
-  commitIdentity: Schema.optional(Schema.Struct({ authors: Schema.NonEmptyArray(Identity) })),
-});
-const parseJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
-const decodeManifest = Schema.decodeUnknownEffect(Manifest);
-
-class InvalidAllowlist extends Schema.TaggedError<InvalidAllowlist>()("InvalidAllowlist", {
-  message: Schema.String,
-}) {}
-
 class UnreadableLog extends Schema.TaggedError<UnreadableLog>()("UnreadableLog", {
   message: Schema.String,
 }) {}
@@ -51,25 +39,8 @@ function render(identity: Identity): string {
 }
 
 const allowedAuthors = Effect.gen(function* () {
-  const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
-  const manifestPath = path.join(root, "package.json");
-  if (!(yield* fs.exists(manifestPath))) return DEFAULT_AUTHORS;
-
-  const parsed = yield* fs.readFileString(manifestPath).pipe(
-    Effect.flatMap(parseJson),
-    Effect.mapError((cause) => new InvalidAllowlist({ message: `cannot read ${manifestPath} as JSON: ${cause.message}` })),
-  );
-  const manifest = yield* decodeManifest(parsed).pipe(
-    Effect.mapError(
-      () =>
-        new InvalidAllowlist({
-          message: `${manifestPath} sets commitIdentity without a non-empty authors array of {name, email}`,
-        }),
-    ),
-  );
-  return manifest.commitIdentity?.authors ?? DEFAULT_AUTHORS;
+  const { quality } = yield* readQuality((yield* git(["rev-parse", "--show-toplevel"])).trim());
+  return quality.commitIdentity?.authors ?? DEFAULT_AUTHORS;
 });
 
 const readCommits = Effect.fn("readCommits")(function* (revisions: readonly string[]) {

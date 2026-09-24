@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
 import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
-import { DEFAULT_BRANCH, LintWiring, selectedGates, type KitGate } from "./gates.ts";
+import { DEFAULT_BRANCH, selectedGates, type KitGate } from "./gates.ts";
 import { git } from "./git.ts";
 import { runMain, Usage } from "./main.ts";
+import { readQuality } from "./quality-file.ts";
 
 type Range = {
   readonly refs: readonly [tip: string] | readonly [base: string, head: string];
@@ -17,10 +18,6 @@ class RangeUnresolved extends Schema.TaggedError<RangeUnresolved>()("RangeUnreso
 }) {}
 
 class GatesUndecided extends Schema.TaggedError<GatesUndecided>()("GatesUndecided", {
-  message: Schema.String,
-}) {}
-
-class WiringUnreadable extends Schema.TaggedError<WiringUnreadable>()("WiringUnreadable", {
   message: Schema.String,
 }) {}
 
@@ -56,16 +53,9 @@ const pullRequestEnds = Effect.fn("pullRequestEnds")(function* (eventPath: strin
   };
 });
 
-const decodeWiring = Schema.decodeUnknownEffect(Schema.fromJsonString(LintWiring));
-
 const readWiring = Effect.gen(function* () {
-  const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
-  const manifest = (yield* Path.Path).join(root, "package.json");
-  const { ciWiring } = yield* (yield* FileSystem.FileSystem).readFileString(manifest).pipe(
-    Effect.flatMap(decodeWiring),
-    Effect.mapError((cause) => new WiringUnreadable({ message: `cannot read ciWiring from ${manifest}: ${cause.message}` })),
-  );
-  return { defaultBranch: ciWiring?.defaultBranch ?? DEFAULT_BRANCH, lintGates: ciWiring?.lintGates };
+  const { source, quality } = yield* readQuality((yield* git(["rev-parse", "--show-toplevel"])).trim());
+  return { source, defaultBranch: quality.defaultBranch ?? DEFAULT_BRANCH, lintGates: quality.gates?.lint };
 });
 
 const originEnds = (defaultBranch: string) =>
@@ -142,7 +132,7 @@ const runGate = Effect.fn("runGate")(function* (gate: KitGate, range: Range) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const script = (yield* Path.Path).join(import.meta.dir, gate.script);
   const program = gate.script.endsWith(".sh") ? "sh" : process.execPath;
-  const args = gate.reads === "range" ? [script, ...range.refs] : [script];
+  const args = gate.reads === "range" ? [script, ...range.refs] : [script, ...(gate.args ?? [])];
   const exitCode = yield* spawner
     .exitCode(ChildProcess.make(program, args, { stdin: "ignore", stdout: "inherit", stderr: "inherit" }))
     .pipe(
@@ -154,12 +144,12 @@ const runGate = Effect.fn("runGate")(function* (gate: KitGate, range: Range) {
 });
 
 const lint = Effect.gen(function* () {
-  const { defaultBranch, lintGates } = yield* readWiring;
+  const { source, defaultBranch, lintGates } = yield* readWiring;
   const range = yield* resolveRange(process.argv.slice(2), defaultBranch);
   yield* Console.log(`${NAME}: ${describe(range)} from ${range.source}`);
   const gates = selectedGates(lintGates);
   if (lintGates !== undefined) {
-    yield* Console.log(`${NAME}: ciWiring.lintGates selects ${gates.map((gate) => gate.bin).join(", ")}`);
+    yield* Console.log(`${NAME}: ${source} selects ${gates.map((gate) => gate.bin).join(", ")}`);
   }
 
   const verdicts = yield* Effect.forEach(gates, (gate) => runGate(gate, range));

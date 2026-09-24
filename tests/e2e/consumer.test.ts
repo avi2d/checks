@@ -281,12 +281,13 @@ test(
           compare: "checks-mutation-compare mutation.json mutation.json",
           wiring: "checks-ci-wiring",
           flake: "checks-flake --runs 2",
+          quality: "checks-quality --check",
           kit: "oxlint --type-aware && checks-lint",
         },
-        ciWiring: { gates: ["bun run lint"] },
       },
       `file:${tarball}`,
     );
+    await writeFile(join(dir, "quality.json"), JSON.stringify({ gates: { ci: ["bun run lint"] } }));
 
     const manifest = Schema.decodeSync(Manifest)(await readFile(join(CHECKOUT, "package.json"), "utf8"));
     const bins = Object.keys(manifest.bin);
@@ -357,6 +358,10 @@ test(
     expect(wiring.stdout.toString()).toContain("1 gate(s) run on pull requests to main");
     expect(wiring.exitCode).toBe(0);
 
+    const quality = await $`bun run quality`.cwd(dir).nothrow().quiet();
+    expect(quality.stdout.toString()).toContain("checks-quality: no sources.effect is declared, so nothing is generated");
+    expect(quality.exitCode).toBe(0);
+
     const ratchet = await $`bun run ratchet`.cwd(dir).nothrow().quiet();
     expect(ratchet.stdout.toString()).toContain("no count in oxlint-suppressions.json rose or appeared");
     expect(ratchet.exitCode).toBe(0);
@@ -366,8 +371,51 @@ test(
     const kitText = kit.stdout.toString() + kit.stderr.toString();
     expect(kitText).toContain("from HEAD against origin/main");
     expect(kitText).toContain("commit-identity: 1 commit(s)");
-    expect(kitText).toContain("checks-lint: 6 gate(s) pass");
+    expect(kitText).toContain("checks-lint: 7 gate(s) pass");
     expect(kit.exitCode).toBe(0);
+  },
+  180_000,
+);
+
+test(
+  "packed-tarball consumer generates the quality fragments with the installed bin, and they hold its Effect paths",
+  async () => {
+    const tarball = await packTarball();
+    await writeConsumerFixture({ scripts: { generate: "checks-quality generate" } }, `file:${tarball}`);
+    await writeFile(
+      join(dir, "quality.json"),
+      JSON.stringify({
+        $schema: "./node_modules/@avi2dg/checks/quality.schema.json",
+        sources: { effect: { paths: ["src/**/*.ts"] } },
+      }),
+    );
+    await writeFile(
+      join(dir, ".oxlintrc.json"),
+      JSON.stringify({
+        extends: ["./node_modules/@avi2dg/checks/oxlintrc.json", "./oxlintrc.quality.json"],
+        plugins: ["typescript", "oxc", "eslint", "import"],
+      }),
+    );
+    await writeFile(
+      join(dir, "tsconfig.json"),
+      JSON.stringify({ extends: ["@avi2dg/checks/tsconfig.effect.json", "./tsconfig.quality.json"], include: ["src/**/*.ts"] }),
+    );
+    await mkdir(join(dir, "src"));
+    await writeFile(join(dir, "src", "load.ts"), "export const load = (text: string): string => text;\n");
+    await writeFile(join(dir, "edge.ts"), `export function edge(): never {\n  throw new Error("outside the declared paths");\n}\n`);
+    await $`git init -q`.cwd(dir).quiet();
+
+    const generated = await $`bun run generate`.cwd(dir).nothrow().quiet();
+    expect(generated.stdout.toString()).toContain("checks-quality: oxlintrc.quality.json and tsconfig.quality.json hold what quality.json declares");
+    expect(generated.exitCode).toBe(0);
+    expect((await oxlint()).exitCode).toBe(0);
+
+    await writeFile(join(dir, "src", "load.ts"), `export function load(): never {\n  throw new Error("inside them");\n}\n`);
+    const red = await oxlint();
+    expect(red.text).toContain("effect-channel(no-throw)");
+    expect(red.text).toContain("src/load.ts");
+    expect(red.text).not.toContain("edge.ts");
+    expect(red.exitCode).not.toBe(0);
   },
   180_000,
 );

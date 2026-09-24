@@ -2,15 +2,8 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { git } from "./git.ts";
 import { runMain } from "./main.ts";
-import {
-  DEFAULT_BRANCH,
-  ENTRY_POINT,
-  EVERY_REPOSITORY,
-  KIT_GATES,
-  LintWiring,
-  selectedGates,
-  type KitGate,
-} from "./gates.ts";
+import { DEFAULT_BRANCH, ENTRY_POINT, EVERY_REPOSITORY, KIT_GATES, selectedGates, type KitGate } from "./gates.ts";
+import { readQuality, type Quality } from "./quality-file.ts";
 
 export type Command = readonly string[];
 
@@ -303,8 +296,6 @@ function gapLines(gaps: readonly Gap[]): readonly string[] {
   return lines;
 }
 
-const decodeWiring = Schema.decodeUnknownEffect(LintWiring);
-
 export function formatReport(declaration: Declaration, gaps: readonly Gap[]): string {
   const target = `pull requests to ${declaration.defaultBranch}`;
   if (gaps.length === 0) return `ci-wiring: ${declaration.gates.length} gate(s) run on ${target}`;
@@ -318,13 +309,13 @@ export function formatScheduledReport(declaration: Declaration, gaps: readonly G
 }
 
 const plainCommands = Effect.fnUntraced(function* (
-  listed: readonly unknown[],
+  listed: readonly string[],
   subject: string,
 ): Effect.fn.Return<readonly Gate[], WiringError> {
   const gates: Gate[] = [];
   for (const command of listed) {
-    const words = typeof command === "string" ? plainCommand(command) : undefined;
-    if (typeof command !== "string" || words === undefined) {
+    const words = plainCommand(command);
+    if (words === undefined) {
       return yield* new WiringError({ message: `${subject} ${JSON.stringify(command)} is not one plain command` });
     }
     gates.push({ command, words });
@@ -333,28 +324,17 @@ const plainCommands = Effect.fnUntraced(function* (
 });
 
 export const parseDeclaration = Effect.fnUntraced(function* (
-  manifest: unknown,
+  { defaultBranch, gates: declared }: Quality,
   source: string,
 ): Effect.fn.Return<Declaration, WiringError> {
-  const configured = isRecord(manifest) && isRecord(manifest["ciWiring"]) ? manifest["ciWiring"] : {};
-  const listed: unknown = configured["gates"];
-  if (!Array.isArray(listed) || listed.length === 0) {
-    return yield* new WiringError({ message: `${source} sets no ciWiring.gates, a non-empty array of commands` });
+  if (declared?.ci === undefined) {
+    return yield* new WiringError({ message: `${source} declares no gates.ci, a non-empty array of commands` });
   }
-  const gates = yield* plainCommands(listed, `${source} ciWiring gate`);
-  const scheduledListed = configured["scheduled"] ?? [];
-  if (!Array.isArray(scheduledListed)) {
-    return yield* new WiringError({ message: `${source} ciWiring.scheduled is not an array of commands` });
-  }
-  const scheduled = yield* plainCommands(scheduledListed, `${source} ciWiring scheduled command`);
-  const { ciWiring } = yield* decodeWiring(manifest).pipe(
-    Effect.mapError((cause) => new WiringError({ message: `${source}: ${cause.message}` })),
-  );
   return {
-    gates,
-    scheduled,
-    defaultBranch: ciWiring?.defaultBranch ?? DEFAULT_BRANCH,
-    lintGates: selectedGates(ciWiring?.lintGates),
+    gates: yield* plainCommands(declared.ci, `${source} gate`),
+    scheduled: yield* plainCommands(declared.scheduled ?? [], `${source} scheduled command`),
+    defaultBranch: defaultBranch ?? DEFAULT_BRANCH,
+    lintGates: selectedGates(declared.lint),
   };
 });
 
@@ -383,10 +363,10 @@ export function formatOmissions(lintGates: readonly KitGate[], omissions: readon
   if (omitted.length === 0) return undefined;
   if (omissions.length === 0) {
     const bins = omitted.map((gate) => gate.bin).join(", ");
-    return `ci-wiring: ciWiring.lintGates leaves out ${bins}, none of which this repository's contents make applicable`;
+    return `ci-wiring: gates.lint leaves out ${bins}, none of which this repository's contents make applicable`;
   }
   return [
-    `ci-wiring: ciWiring.lintGates leaves out ${omissions.length} gate(s) this repository's contents make applicable:`,
+    `ci-wiring: gates.lint leaves out ${omissions.length} gate(s) this repository's contents make applicable:`,
     ...omissions.map(({ gate, content, files }) => `  ${gate}: the repository tracks ${content} (${sample(files)})`),
   ].join("\n");
 }
@@ -397,16 +377,9 @@ export const parseWorkflow = (path: string, text: string): Effect.Effect<Workflo
     catch: (error) => new WiringError({ message: `cannot parse ${path}: ${String(error)}` }),
   });
 
-const parseJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
-
 export const readDeclaration = Effect.fn("readDeclaration")(function* (root: string) {
-  const fs = yield* FileSystem.FileSystem;
-  const path = (yield* Path.Path).join(root, "package.json");
-  const manifest = yield* fs.readFileString(path).pipe(
-    Effect.flatMap(parseJson),
-    Effect.mapError((cause) => new WiringError({ message: `cannot read ${path} as JSON: ${cause.message}` })),
-  );
-  return yield* parseDeclaration(manifest, path);
+  const { source, quality } = yield* readQuality(root);
+  return yield* parseDeclaration(quality, source);
 });
 
 export const readWorkflows = Effect.fn("readWorkflows")(function* (root: string) {
