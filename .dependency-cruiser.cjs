@@ -2,6 +2,14 @@ module.exports = {
   extends: "./dependency-cruiser.config.js",
   forbidden: [
     {
+      name: "host-loaded-imports-nothing",
+      severity: "error",
+      comment:
+        "A host copies scripts/comment-matchers.ts alone into a directory with no node_modules and loads it, so it imports nothing: not effect, not node:, not another file here. Effect wrappers go in scripts/comments.ts.",
+      from: { path: "^scripts/comment-matchers[.]ts$" },
+      to: {},
+    },
+    {
       name: "no-orphans",
       from: {
         orphan: true,

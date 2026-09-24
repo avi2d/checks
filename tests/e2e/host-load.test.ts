@@ -1,10 +1,11 @@
 import { $ } from "bun";
 import { afterEach, expect, test } from "bun:test";
-import { copyFile, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-const HOST_LOADED = resolve(import.meta.dir, "..", "..", "scripts", "comments.ts");
+const CHECKOUT = resolve(import.meta.dir, "..", "..");
+const HOST_LOADED = "scripts/comment-matchers.ts";
 
 const ENTRY = `import { SYNTAXES, refused } from "./comments";
 
@@ -23,7 +24,7 @@ afterEach(async () => {
 
 test("the comment matchers run synchronously alone in a directory with no node_modules, as a host links them", async () => {
   dir = await mkdtemp(join(tmpdir(), "checks-host-load-"));
-  await copyFile(HOST_LOADED, join(dir, "comments.ts"));
+  await copyFile(join(CHECKOUT, HOST_LOADED), join(dir, "comments.ts"));
   await writeFile(join(dir, "index.ts"), ENTRY);
 
   const ran = await $`${process.execPath} --no-install index.ts`.cwd(dir).nothrow().quiet();
@@ -37,3 +38,30 @@ test("the comment matchers run synchronously alone in a directory with no node_m
   });
   expect(ran.exitCode).toBe(0);
 });
+
+test(
+  "the repo cruise refuses the host-loaded comment matchers an import of effect",
+  async () => {
+    dir = await mkdtemp(join(tmpdir(), "checks-host-cruise-"));
+    for (const config of [".dependency-cruiser.cjs", "dependency-cruiser.config.js"]) {
+      await copyFile(join(CHECKOUT, config), join(dir, config));
+    }
+    await symlink(join(CHECKOUT, "node_modules"), join(dir, "node_modules"));
+    await mkdir(join(dir, "scripts"));
+    const source = await readFile(join(CHECKOUT, HOST_LOADED), "utf8");
+    const cruise = async (text: string): Promise<string> => {
+      await writeFile(join(dir, HOST_LOADED), text);
+      const cruised = await $`${join(dir, "node_modules", ".bin", "depcruise")} --config .dependency-cruiser.cjs scripts`
+        .cwd(dir)
+        .nothrow()
+        .quiet();
+      return cruised.stdout.toString();
+    };
+
+    expect(await cruise(source)).not.toContain("host-loaded-imports-nothing");
+    expect(await cruise(`import { Effect } from "effect";\nexport const planted = Effect.void;\n${source}`)).toMatch(
+      /error host-loaded-imports-nothing: scripts\/comment-matchers\.ts → \S*node_modules\/effect\//,
+    );
+  },
+  60_000,
+);

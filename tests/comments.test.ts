@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
+import * as Matchers from "../scripts/comment-matchers.ts";
 import { comments, refused, UnreadableCode } from "../scripts/comments.ts";
 
 test("code that is not a comment is not read as one", () => {
@@ -199,9 +200,21 @@ test("a prefixed char literal still opens where its prefix ends", () => {
 });
 
 test("code the checks cannot read is named rather than passed over", () => {
+  const named = "src/main.pl is code the comment checks cannot read: add a comment syntax for .pl to scripts/comment-matchers.ts";
   const failure = Effect.runSync(Effect.flip(comments("src/main.pl", "# a comment")));
   expect(failure).toBeInstanceOf(UnreadableCode);
-  expect(failure.message).toBe(
-    "src/main.pl is code the comment checks cannot read: add a comment syntax for .pl to scripts/comments.ts",
+  expect(failure.message).toBe(named);
+  expect(() => Matchers.refused("src/main.pl", "# a comment")).toThrow(named);
+
+  const inherited = Effect.runSync(Effect.flip(refused("src/main.constructor", "x")));
+  expect(inherited).toBeInstanceOf(UnreadableCode);
+});
+
+test("the synchronous refused() a host loads refuses what the Effect one refuses", () => {
+  const source = ["// ADR-0007 decided this", "/** Docs. */", "const a = 1; // eslint-disable-line"].join("\n");
+  const within = new Set([1, 3]);
+  expect(Matchers.refused("src/probe.ts", source, within)).toEqual(
+    Effect.runSync(refused("src/probe.ts", source, within)),
   );
+  expect(Matchers.refused("src/probe.ts", source, within)).toHaveLength(2);
 });
