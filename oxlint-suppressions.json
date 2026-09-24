@@ -24,14 +24,6 @@
       "count": 5
     }
   },
-  "scripts/comment-gate.ts": {
-    "no-restricted-properties": {
-      "count": 2
-    },
-    "node/no-sync": {
-      "count": 2
-    }
-  },
   "scripts/comments.ts": {
     "effect-channel/no-throw": {
       "count": 1

@@ -16,6 +16,8 @@
     "commitlint.config.js",
     "dependency-cruiser.config.js",
     "scripts/lint-coverage.sh",
+    "scripts/main.ts",
+    "scripts/git.ts",
     "scripts/test-layout.ts",
     "scripts/commit-identity.ts",
     "scripts/mutation-compare.ts",
@@ -79,6 +81,7 @@
     "@swc/core": "1.16.2",
     "dependency-cruiser": "18.4.0",
     "@effect/tsgo": "0.45.0",
+    "effect": "4.0.0-rc.115",
     "oxlint": "1.83.0",
     "oxlint-tsgolint": "7.0.2002"
   },
@@ -95,6 +98,7 @@
   },
   "dependencies": {
     "@commitlint/cli": "21.2.3",
-    "@commitlint/config-conventional": "21.2.3"
+    "@commitlint/config-conventional": "21.2.3",
+    "@effect/platform-bun": "4.0.0-rc.115"
   }
 }

@@ -1,5 +1,8 @@
 #!/usr/bin/env bun
+import { Console, Effect, Option } from "effect";
 import { refused, SYNTAXES } from "./comments.ts";
+import { git } from "./git.ts";
+import { runMain, Usage } from "./main.ts";
 
 export type GateResult = {
   readonly files: number;
@@ -8,19 +11,6 @@ export type GateResult = {
 };
 
 const USAGE = "usage: comment-gate.ts <ref> | <base-ref> <head-ref>";
-
-function die(message: string): never {
-  console.error(message);
-  process.exit(2);
-}
-
-function git(root: string, ...args: readonly string[]): string {
-  const result = Bun.spawnSync(["git", ...args], { cwd: root, stdout: "pipe", stderr: "pipe" });
-  if (!result.success) {
-    die(`comment-gate: git ${args.join(" ")}: ${result.stderr.toString().trim()}`);
-  }
-  return result.stdout.toString();
-}
 
 function readable(path: string): boolean {
   return path.slice(path.lastIndexOf(".") + 1) in SYNTAXES;
@@ -68,29 +58,23 @@ export function parseAddedLines(diff: string): Map<string, Set<number>> {
   return added;
 }
 
-function show(rev: string, path: string, root: string): string | undefined {
-  const result = Bun.spawnSync(["git", "show", `${rev}:${path}`], {
-    cwd: root,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  return result.success ? result.stdout.toString() : undefined;
-}
+const show = (rev: string, path: string, root: string) =>
+  git(["show", `${rev}:${path}`], root).pipe(Effect.option);
 
-export function runRange(root: string, base: string, head: string): GateResult {
-  const diff = git(root, "-c", "core.quotePath=false", "diff", "-U0", "--no-color", "--no-prefix", base, head);
+export const runRange = Effect.fn("runRange")(function* (root: string, base: string, head: string) {
+  const diff = yield* git(["-c", "core.quotePath=false", "diff", "-U0", "--no-color", "--no-prefix", base, head], root);
   const added = parseAddedLines(diff);
   const violations: string[] = [];
   let addedLines = 0;
   for (const [path, lines] of added) {
     addedLines += lines.size;
     if (!readable(path)) continue;
-    const source = show(head, path, root);
-    if (source === undefined) continue;
-    violations.push(...refused(path, source, lines));
+    const source = yield* show(head, path, root);
+    if (Option.isNone(source)) continue;
+    violations.push(...refused(path, source.value, lines));
   }
   return { files: added.size, addedLines, violations };
-}
+});
 
 export function report({ files, addedLines, violations }: GateResult): string {
   if (violations.length === 0) {
@@ -99,18 +83,19 @@ export function report({ files, addedLines, violations }: GateResult): string {
   return [`comment-gate: ${violations.length} violation(s):`, ...violations.map((one) => `  ${one}`)].join("\n");
 }
 
-function parentOf(root: string, rev: string): string {
-  return git(root, "rev-parse", "--verify", `${rev}^`).trim();
-}
+const parentOf = (root: string, rev: string) =>
+  git(["rev-parse", "--verify", `${rev}^`], root).pipe(Effect.map((parent) => parent.trim()));
 
-if (import.meta.main) {
+const gate = Effect.gen(function* () {
   const [first, second, ...extra] = process.argv.slice(2);
-  if (first === undefined || extra.length > 0) die(USAGE);
+  if (first === undefined || extra.length > 0) return yield* new Usage({ message: USAGE });
 
-  const root = git(process.cwd(), "rev-parse", "--show-toplevel").trim();
-  const result =
-    second !== undefined ? runRange(root, first, second) : runRange(root, parentOf(root, first), first);
+  const root = (yield* git(["rev-parse", "--show-toplevel"], process.cwd())).trim();
+  const base = second === undefined ? yield* parentOf(root, first) : first;
+  const result = yield* runRange(root, base, second ?? first);
 
-  console.log(report(result));
-  process.exit(result.violations.length === 0 ? 0 : 1);
-}
+  yield* Console.log(report(result));
+  return result.violations.length === 0 ? 0 : 1;
+});
+
+if (import.meta.main) runMain("comment-gate", gate);
