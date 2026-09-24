@@ -40,7 +40,7 @@ function open(placeholder: string, rule: HeadingRule, presence: Presence, body: 
   return { type: "open", placeholder, rule, presence, body, ...more };
 }
 
-function listed(words: readonly string[]): string {
+export function listed(words: readonly string[]): string {
   return words.length < 2 ? words.join("") : `${words.slice(0, -1).join(", ")} or ${words.at(-1) ?? ""}`;
 }
 

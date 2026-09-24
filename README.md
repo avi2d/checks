@@ -6,6 +6,8 @@ A repository declares what it opts into once, in `quality.json`, and each check 
 
 ## Before you begin
 
+<!-- generated prerequisites: bun run build writes it from package.json and .bun-version -->
+
 - A git repository, whose history the range gates read.
 - Bun 1.3.13, which runs every bin.
 - TypeScript 7.0.2, whose `tsc` the `typecheck` script runs.
@@ -17,15 +19,21 @@ A repository declares what it opts into once, in `quality.json`, and each check 
   - `oxlint` 1.83.0
   - `oxlint-tsgolint` 7.0.2002
 
+<!-- end generated prerequisites -->
+
 ## Install
 
 To consume the kit from a repository:
 
 1. Add the kit and its peers:
 
+   <!-- generated install: bun run build writes it from package.json -->
+
    ```sh
    bun add -d @avi2dg/checks @effect/tsgo@0.45.0 @swc/core@1.16.2 dependency-cruiser@18.4.0 effect@4.0.0-rc.115 oxlint@1.83.0 oxlint-tsgolint@7.0.2002 typescript@7.0.2
    ```
+
+   <!-- end generated install -->
 
 1. Extend the oxlint base in `.oxlintrc.json`, restating `plugins`:
 
@@ -99,6 +107,8 @@ To consume the kit from a repository:
 `checks-lint` runs these gates in this order, each over the working tree or over the range it resolves, and names every one that fails.
 A repository leaves out a gate that does not apply to it through `gates.lint`, as [Gate selection](docs/gates/checks-lint.md#gate-selection) says.
 
+<!-- generated gates: bun run build writes it from KIT_GATES in scripts/gates.ts -->
+
 | Gate | Reads | Runs in |
 | --- | --- | --- |
 | [`checks-lint-coverage`](docs/gates/checks-lint-coverage.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
@@ -111,6 +121,8 @@ A repository leaves out a gate that does not apply to it through `gates.lint`, a
 | [`checks-quality`](docs/gates/checks-quality.md) | the working tree | a repository tracking `quality.json` |
 | [`checks-size-budget`](docs/gates/checks-size-budget.md) | the range | a repository tracking `*.ts` or `*.tsx` |
 | [`checks-feature-owners`](docs/gates/checks-feature-owners.md) | the range | a repository tracking `*.ts` or `*.tsx` |
+
+<!-- end generated gates -->
 
 Four more bins run on their own:
 

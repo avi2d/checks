@@ -11,6 +11,8 @@ The package ships one template per kind under `templates/`, and a repository sta
 cp node_modules/@avi2dg/checks/templates/how-to.md docs/add-a-supplier.md
 ```
 
+<!-- generated doc-kinds: bun run build writes it from scripts/doc-rules.ts -->
+
 | File | Kind | Template |
 | --- | --- | --- |
 | `README.md` | readme | `templates/readme.md` |
@@ -21,7 +23,9 @@ cp node_modules/@avi2dg/checks/templates/how-to.md docs/add-a-supplier.md
 | each file in `docs/adr/` but its generated index, `README.md` | adr | `templates/adr.md` |
 | a page `docs.pages` declares | tutorial, how-to, reference or explanation | `templates/<mode>.md` |
 
-The first five are the files at the repository root.
+<!-- end generated doc-kinds -->
+
+A file the table names on its own, such as `README.md`, sits at the repository root.
 No other Markdown file is judged, save a page under `docs/`, which needs a mode.
 Which Diátaxis mode a page is written in is a judgment, so `quality.json` declares it:
 
