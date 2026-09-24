@@ -62,13 +62,13 @@ export const backtest = Effect.fn("backtest")(function* (count: string) {
       if (Option.isNone(after)) continue;
       const before = Option.getOrElse(yield* at(parent, path), () => "");
 
-      const wasRefused = new Set(refused(path, before).map(withoutLine));
-      for (const refusal of refused(path, after.value)) {
+      const wasRefused = new Set((yield* refused(path, before)).map(withoutLine));
+      for (const refusal of yield* refused(path, after.value)) {
         if (!wasRefused.has(withoutLine(refusal))) refusals.push(refusal);
       }
 
-      const wasComment = new Set(comments(path, before).map((one) => one.text));
-      for (const one of comments(path, after.value)) {
+      const wasComment = new Set((yield* comments(path, before)).map((one) => one.text));
+      for (const one of yield* comments(path, after.value)) {
         if (!wasComment.has(one.text)) commentLines += one.text.split("\n").length;
       }
     }

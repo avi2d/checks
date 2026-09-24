@@ -71,7 +71,7 @@ export const runRange = Effect.fn("runRange")(function* (root: string, base: str
     if (!readable(path)) continue;
     const source = yield* show(head, path, root);
     if (Option.isNone(source)) continue;
-    violations.push(...refused(path, source.value, lines));
+    violations.push(...(yield* refused(path, source.value, lines)));
   }
   return { files: added.size, addedLines, violations };
 });
