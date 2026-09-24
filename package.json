@@ -16,6 +16,10 @@
     "commitlint.config.js",
     "dependency-cruiser.config.js",
     "scripts/lint-coverage.sh",
+    "scripts/main.ts",
+    "scripts/git.ts",
+    "scripts/gates.ts",
+    "scripts/lint.ts",
     "scripts/test-layout.ts",
     "scripts/commit-identity.ts",
     "scripts/mutation-compare.ts",
@@ -34,6 +38,7 @@
     "./commitlint.config.js": "./commitlint.config.js",
     "./dependency-cruiser.config.js": "./dependency-cruiser.config.js",
     "./scripts/lint-coverage.sh": "./scripts/lint-coverage.sh",
+    "./scripts/lint.ts": "./scripts/lint.ts",
     "./scripts/test-layout.ts": "./scripts/test-layout.ts",
     "./scripts/commit-identity.ts": "./scripts/commit-identity.ts",
     "./scripts/mutation-compare.ts": "./scripts/mutation-compare.ts",
@@ -48,6 +53,7 @@
     "./dist/index.js": "./dist/index.js"
   },
   "bin": {
+    "checks-lint": "scripts/lint.ts",
     "checks-lint-coverage": "scripts/lint-coverage.sh",
     "checks-test-layout": "scripts/test-layout.ts",
     "checks-commit-identity": "scripts/commit-identity.ts",
@@ -80,6 +86,7 @@
     "@swc/core": "1.16.2",
     "dependency-cruiser": "18.4.0",
     "@effect/tsgo": "0.45.0",
+    "effect": "4.0.0-rc.115",
     "oxlint": "1.83.0",
     "oxlint-tsgolint": "7.0.2002"
   },
@@ -96,6 +103,8 @@
   },
   "dependencies": {
     "@commitlint/cli": "21.2.3",
-    "@commitlint/config-conventional": "21.2.3"
+    "@commitlint/config-conventional": "21.2.3",
+    "@effect/platform-bun": "4.0.0-rc.115",
+    "@effect/platform-node-shared": "4.0.0-rc.115"
   }
 }
