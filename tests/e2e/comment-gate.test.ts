@@ -93,6 +93,23 @@ test(
 );
 
 test(
+  "an extension that names an Object prototype key is skipped, not read as code",
+  async () => {
+    await initRepo();
+    await writeFile(join(dir, "widget.ts"), "export const widget = 1;\n");
+    const base = await commit("clean start");
+
+    await writeFile(join(dir, "constructor"), "// @ts-expect-error not code\n");
+    await writeFile(join(dir, "notes.toString"), "// @ts-expect-error not code\n");
+    const odd = await commit("files whose extension is a prototype key");
+    const green = await gate(base, odd);
+    expect(green.text).toContain("carry no refused comment");
+    expect(green.exitCode).toBe(0);
+  },
+  120_000,
+);
+
+test(
   "the one-argument form judges a root commit against the empty tree",
   async () => {
     await initRepo();

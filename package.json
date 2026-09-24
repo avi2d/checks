@@ -1,6 +1,6 @@
 {
   "name": "@avi2dg/checks",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Deterministic checks shared across the captain's TypeScript repos",
   "license": "MIT",
   "repository": {
@@ -27,6 +27,7 @@
     "scripts/commit-identity.ts",
     "scripts/mutation-compare.ts",
     "scripts/ci-wiring.ts",
+    "scripts/comment-matchers.ts",
     "scripts/comments.ts",
     "scripts/comment-gate.ts",
     "scripts/suppressions-ratchet.ts",
@@ -48,6 +49,7 @@
     "./scripts/commit-identity.ts": "./scripts/commit-identity.ts",
     "./scripts/mutation-compare.ts": "./scripts/mutation-compare.ts",
     "./scripts/ci-wiring.ts": "./scripts/ci-wiring.ts",
+    "./scripts/comment-matchers.ts": "./scripts/comment-matchers.ts",
     "./scripts/comments.ts": "./scripts/comments.ts",
     "./scripts/comment-gate.ts": "./scripts/comment-gate.ts",
     "./scripts/suppressions-ratchet.ts": "./scripts/suppressions-ratchet.ts",

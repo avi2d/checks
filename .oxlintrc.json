@@ -23,6 +23,12 @@
         "effect-channel/no-throw": "error",
         "effect-channel/no-try-catch": "error"
       }
+    },
+    {
+      "files": ["scripts/comment-matchers.ts"],
+      "rules": {
+        "effect-channel/no-throw": "off"
+      }
     }
   ]
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect, Option } from "effect";
-import { comments, refused, SYNTAXES } from "./comments.ts";
+import { comments, refused, syntaxOf } from "./comments.ts";
 import { git } from "./git.ts";
 import { runMain, Usage } from "./main.ts";
 
@@ -18,8 +18,7 @@ const EXCLUDED = ["generated/", "vendor/", "repos/", "node_modules/", "dist/"];
 
 function readable(path: string): boolean {
   if (EXCLUDED.some((prefix) => path.startsWith(prefix))) return false;
-  const extension = path.slice(path.lastIndexOf(".") + 1);
-  return extension in SYNTAXES;
+  return syntaxOf(path) !== undefined;
 }
 
 const at = (sha: string, path: string) => git(["show", `${sha}:${path}`]).pipe(Effect.option);
