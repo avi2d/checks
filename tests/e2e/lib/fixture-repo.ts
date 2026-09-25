@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
+import { COMMITLINT_WORKFLOW, commitlintWorkflow, SUITE_WORKFLOW, suiteWorkflow } from "../../../scripts/quality.ts";
 
 export const CHECKOUT = resolve(import.meta.dir, "..", "..", "..");
 
@@ -80,10 +81,12 @@ export function scratchDirs(): (prefix: string) => Promise<string> {
 export const UNVENDORED_BUNFIG = '[test]\npathIgnorePatterns = ["**/tests/quarantine/**"]\n';
 
 export async function lintWiring(quality: Readonly<Record<string, unknown>>): Promise<Readonly<Record<string, string>>> {
+  const ci = ["bun run lint"];
   return {
     "package.json": JSON.stringify({ name: "lint-fixture", type: "module", scripts: { lint: "checks-lint", test: "checks-test" } }),
     "bunfig.toml": UNVENDORED_BUNFIG,
-    ".github/workflows/ci.yml": "on: pull_request\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n",
-    "quality.json": JSON.stringify({ gates: { ci: ["bun run lint"] }, commitIdentity: { authors: [AUTHOR] }, ...quality }),
+    [SUITE_WORKFLOW]: suiteWorkflow("main", ci, false),
+    [COMMITLINT_WORKFLOW]: commitlintWorkflow("./node_modules/@avi2dg/checks/commitlint.config.js"),
+    "quality.json": JSON.stringify({ gates: { ci }, commitIdentity: { authors: [AUTHOR] }, ...quality }),
   };
 }

@@ -359,6 +359,7 @@ test(
           compare: "checks-mutation-compare mutation.json mutation.json",
           wiring: "checks-ci-wiring",
           flake: "checks-flake --runs 2",
+          generate: "checks-quality generate",
           quality: "checks-quality --check",
           size: "checks-size-budget HEAD",
           repetition: "checks-repetition HEAD",
@@ -382,16 +383,16 @@ test(
       join(dir, "mutation.json"),
       await readFile(join(CHECKOUT, "tests", "fixtures", "mutation-compare", "base.json"), "utf8"),
     );
-    await mkdir(join(dir, ".github", "workflows"), { recursive: true });
-    await writeFile(
-      join(dir, ".github", "workflows", "ci.yml"),
-      "on: pull_request\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n",
-    );
 
     await writeWidgetRepo("tests/widget.test.ts", "../widget.ts");
     await commitAll("feat: base");
     await writeFile(join(dir, "clean.ts"), `export const answer = 42;\n`);
     await commitAll("feat: second");
+
+    const generated = await runScript("generate");
+    expect(generated.stdout).toContain("checks-quality: wrote .github/workflows/ci.yml");
+    expect(generated.stdout).toContain("checks-quality: wrote .github/workflows/commitlint.yml");
+    expect(generated.exitCode).toBe(0);
 
     const lint = await runScript("lint");
     expect(lint.text).toContain("tracked .ts/.tsx files");
@@ -423,7 +424,7 @@ test(
 
     for (const [script, report] of [
       ["wiring", "1 gate(s) run on pull requests to main"],
-      ["quality", "checks-quality: no sources.effect is declared, so nothing is generated"],
+      ["quality", "checks-quality: no sources.effect is declared, so no fragment is generated; .github/workflows/ci.yml and .github/workflows/commitlint.yml hold the kit recipe"],
       ["size", "size-budget: quality.json declares no size budget"],
       ["repetition", "repetition: quality.json declares no sources.production"],
       ["owners", "feature-owners: quality.json declares no feature"],
@@ -474,7 +475,7 @@ test(
     await $`git init -q`.cwd(dir).quiet();
 
     const generated = await $`bun run generate`.cwd(dir).nothrow().quiet();
-    expect(generated.stdout.toString()).toContain("checks-quality: oxlintrc.quality.json and tsconfig.quality.json hold what quality.json declares");
+    expect(generated.stdout.toString()).toContain("checks-quality: oxlintrc.quality.json and tsconfig.quality.json and .github/workflows/commitlint.yml hold what quality.json declares");
     expect(generated.exitCode).toBe(0);
     expect((await oxlint()).exitCode).toBe(0);
 

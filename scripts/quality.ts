@@ -1,16 +1,21 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import kitOxlint from "../oxlintrc.json" with { type: "json" };
+import kitManifest from "../package.json" with { type: "json" };
 import effectLanguageService from "../presets/effect.language-service.json" with { type: "json" };
 import effectOxlint from "../presets/effect.oxlint.json" with { type: "json" };
 import { git } from "./git.ts";
+import { DEFAULT_BRANCH } from "./gates.ts";
 import { runMain, Usage } from "./main.ts";
-import { readQuality, renderJson, type Quality } from "./quality-file.ts";
+import { QualityUnreadable, readQuality, renderJson, type Quality } from "./quality-file.ts";
+import { invokes, plainCommand } from "./shell-command.ts";
 
 // oxlint resolves an override's files, and the language service an override's include, against the
 // directory of the config that holds it, so a fragment anywhere but the root matches nothing there.
 export const OXLINT_FRAGMENT = "oxlintrc.quality.json";
 export const TSCONFIG_FRAGMENT = "tsconfig.quality.json";
+export const SUITE_WORKFLOW = ".github/workflows/ci.yml";
+export const COMMITLINT_WORKFLOW = ".github/workflows/commitlint.yml";
 
 const NAME = "checks-quality";
 const USAGE = `usage: ${NAME} --check | generate`;
@@ -23,6 +28,16 @@ export type Fragment = {
   readonly extendedBy: string;
   readonly reader: string;
   readonly content: unknown;
+};
+
+export type GeneratedWorkflow = {
+  readonly file: typeof SUITE_WORKFLOW | typeof COMMITLINT_WORKFLOW;
+  readonly content: string;
+};
+
+export type WorkflowRecipe = {
+  readonly commitlintConfig: string;
+  readonly bunVersionFile: boolean;
 };
 
 class NativeConfigUnreadable extends Schema.TaggedError<NativeConfigUnreadable>()("NativeConfigUnreadable", {
@@ -51,14 +66,86 @@ function tsconfigFragment({ paths, exempt = [] }: EffectSources): unknown {
 }
 
 const FRAGMENTS = [
-  { file: OXLINT_FRAGMENT, extendedBy: ".oxlintrc.json", reader: "oxlint", build: oxlintFragment },
-  { file: TSCONFIG_FRAGMENT, extendedBy: "tsconfig.json", reader: "the language service", build: tsconfigFragment },
+  {
+    file: OXLINT_FRAGMENT,
+    extendedBy: ".oxlintrc.json",
+    reader: "oxlint",
+    kitConfig: "./node_modules/@avi2dg/checks/oxlintrc.json",
+    kitRepositoryConfig: "./oxlintrc.json",
+    kitConfigReason: "so the kit's oxlint rules are not loaded",
+    build: oxlintFragment,
+  },
+  {
+    file: TSCONFIG_FRAGMENT,
+    extendedBy: "tsconfig.json",
+    reader: "the language service",
+    kitConfig: "@avi2dg/checks/tsconfig.effect.json",
+    kitRepositoryConfig: "./tsconfig.effect.json",
+    kitConfigReason: "the one accepted spelling of the kit's Effect config",
+    build: tsconfigFragment,
+  },
 ] as const;
 
 export function fragmentsFor(quality: Quality): readonly Fragment[] {
   const effect = quality.sources?.effect;
   if (effect === undefined) return [];
-  return FRAGMENTS.map(({ build, ...fragment }) => ({ ...fragment, content: build(effect) }));
+  return FRAGMENTS.map(({ file, extendedBy, reader, build }) => ({ file, extendedBy, reader, content: build(effect) }));
+}
+
+const OWN_COMMITLINT_CONFIG = "./commitlint.config.js";
+const KIT_COMMITLINT_CONFIG = "./node_modules/@avi2dg/checks/commitlint.config.js";
+
+function titleLint(commitlintConfig: string): string {
+  return `./node_modules/.bin/commitlint --config ${commitlintConfig} --edit "$RUNNER_TEMP/pr-title"`;
+}
+
+function runsInTitleLint(gate: string, commitlintConfig: string): boolean {
+  const words = plainCommand(gate);
+  return words !== undefined && invokes(plainCommand(titleLint(commitlintConfig)), words);
+}
+
+function runScalar(command: string): string {
+  return /(^[\s#&*!|>@`'"%{[-])|:\s|\s#|:$|[\n\\]/.test(command) ? JSON.stringify(command) : command;
+}
+
+export function commitlintWorkflow(commitlintConfig: string): string {
+  return `on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+jobs:
+  commitlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      # Only the title is linted: it is what a squash merge lands, with GitHub appending " (#N)" to it.
+      - run: printf '%s' "$PR_TITLE (#0000)" > "$RUNNER_TEMP/pr-title"
+        env:
+          PR_TITLE: \${{ github.event.pull_request.title }}
+      - run: ${titleLint(commitlintConfig)}
+`;
+}
+
+export function suiteWorkflow(defaultBranch: string, gates: readonly string[], bunVersionFile: boolean): string {
+  const setup = bunVersionFile
+    ? "      - uses: oven-sh/setup-bun@v2\n        with:\n          bun-version-file: .bun-version\n"
+    : "      - uses: oven-sh/setup-bun@v2\n";
+  const steps = gates.map((gate) => `      - run: ${runScalar(gate)}\n`).join("");
+  return `name: ci\non:\n  push:\n    branches: [${defaultBranch}]\n  pull_request:\n    types: [opened, edited, synchronize, reopened]\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      # The head, not GitHub's merge ref, so the tree the gates read is the commit the range ends at.\n      # The whole history, since the range starts where the head branched from the base branch.\n      - uses: actions/checkout@v5\n        with:\n          ref: \${{ github.event.pull_request.head.sha || github.sha }}\n          fetch-depth: 0\n${setup}      - run: bun install --frozen-lockfile\n${steps}`;
+}
+
+export function workflowsFor(quality: Quality, recipe: WorkflowRecipe): readonly GeneratedWorkflow[] {
+  const commitlint: GeneratedWorkflow = {
+    file: COMMITLINT_WORKFLOW,
+    content: commitlintWorkflow(recipe.commitlintConfig),
+  };
+  if (quality.gates?.ci === undefined) return [commitlint];
+  const suite = quality.gates.ci.filter((gate) => !runsInTitleLint(gate, recipe.commitlintConfig));
+  return [
+    { file: SUITE_WORKFLOW, content: suiteWorkflow(quality.defaultBranch ?? DEFAULT_BRANCH, suite, recipe.bunVersionFile) },
+    commitlint,
+  ];
 }
 
 const NativeConfig = Schema.Struct({
@@ -94,11 +181,24 @@ const sameJson = (text: string, content: unknown): Effect.Effect<boolean> =>
     Effect.orElseSucceed(() => false),
   );
 
+const decodePackageName = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ name: Schema.optionalKey(Schema.String) })));
+
+const isKit = Effect.fn("isKit")(function* (root: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const manifest = (yield* Path.Path).join(root, "package.json");
+  if (!(yield* fs.exists(manifest))) return false;
+  const { name } = yield* decodePackageName(yield* fs.readFileString(manifest)).pipe(
+    Effect.mapError((cause) => new QualityUnreadable({ message: `package.json: ${cause.message}` })),
+  );
+  return name === kitManifest.name;
+});
+
 const fragmentProblems = Effect.fn("fragmentProblems")(function* (root: string, source: string, expected: readonly Fragment[]) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const problems: string[] = [];
-  for (const { file } of FRAGMENTS) {
+  const kitRepository = yield* isKit(root);
+  for (const { file, extendedBy, reader, kitConfig, kitRepositoryConfig, kitConfigReason } of FRAGMENTS) {
     const target = path.join(root, file);
     const fragment = expected.find((candidate) => candidate.file === file);
     const present = yield* fs.exists(target);
@@ -111,8 +211,13 @@ const fragmentProblems = Effect.fn("fragmentProblems")(function* (root: string, 
     } else if (!(yield* sameJson(yield* fs.readFileString(target), fragment.content))) {
       problems.push(`${file} is stale against ${source} and the kit's presets; run ${GENERATE}`);
     }
-    if (!(yield* extendsOf(root, fragment.extendedBy)).includes(file)) {
-      problems.push(`${fragment.extendedBy} does not extend ./${file}, so ${fragment.reader} never reads it`);
+    const configured = yield* extendsOf(root, extendedBy);
+    if (!configured.includes(file)) {
+      problems.push(`${extendedBy} does not extend ./${file}, so ${reader} never reads it`);
+    }
+    const requiredKitConfig = kitRepository ? kitRepositoryConfig : kitConfig;
+    if (!configured.includes(path.normalize(requiredKitConfig))) {
+      problems.push(`${extendedBy} does not extend ${requiredKitConfig}, ${kitConfigReason}`);
     }
   }
   return problems;
@@ -135,18 +240,54 @@ const unmatchedPaths = Effect.fn("unmatchedPaths")(function* (root: string, qual
   return problems;
 });
 
+const recipeOf = Effect.fn("recipeOf")(function* (root: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  return {
+    // The kit never installs itself, so its own tree lints with its root config.
+    commitlintConfig: (yield* isKit(root)) ? OWN_COMMITLINT_CONFIG : KIT_COMMITLINT_CONFIG,
+    bunVersionFile: yield* fs.exists(path.join(root, ".bun-version")),
+  } satisfies WorkflowRecipe;
+});
+
+const workflowProblems = Effect.fn("workflowProblems")(function* (
+  root: string,
+  source: string,
+  expected: readonly GeneratedWorkflow[],
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const problems: string[] = [];
+  for (const { file, content } of expected) {
+    const target = path.join(root, file);
+    if (!(yield* fs.exists(target))) {
+      problems.push(`${file} is missing; run ${GENERATE}`);
+    } else if ((yield* fs.readFileString(target)) !== content) {
+      problems.push(`${file} is stale against ${source} and the kit recipe; run ${GENERATE}`);
+    }
+  }
+  return problems;
+});
+
 const check = Effect.fn("check")(function* (root: string) {
   const { source, quality } = yield* readQuality(root);
   const expected = fragmentsFor(quality);
-  const problems = [...(yield* fragmentProblems(root, source, expected)), ...(yield* unmatchedPaths(root, quality))];
+  const workflows = workflowsFor(quality, yield* recipeOf(root));
+  const problems = [
+    ...(yield* fragmentProblems(root, source, expected)),
+    ...(yield* workflowProblems(root, source, workflows)),
+    ...(yield* unmatchedPaths(root, quality)),
+  ];
   if (problems.length > 0) {
     yield* Console.error([`${NAME}: ${problems.length} problem(s) with what ${source} declares:`, ...problems.map((line) => `  ${line}`)].join("\n"));
     return false;
   }
+  const held = [...expected.map((fragment) => fragment.file), ...workflows.map((workflow) => workflow.file)];
+  const verb = held.length === 1 ? "holds" : "hold";
   yield* Console.log(
     expected.length === 0
-      ? `${NAME}: no sources.effect is declared, so nothing is generated`
-      : `${NAME}: ${expected.map((fragment) => fragment.file).join(" and ")} hold what ${source} declares`,
+      ? `${NAME}: no sources.effect is declared, so no fragment is generated; ${held.join(" and ")} ${verb} the kit recipe`
+      : `${NAME}: ${held.join(" and ")} ${verb} what ${source} declares`,
   );
   return true;
 });
@@ -166,6 +307,12 @@ const generate = Effect.fn("generate")(function* (root: string) {
       yield* fs.remove(target);
       yield* Console.log(`${NAME}: removed ${file}`);
     }
+  }
+  const workflows = workflowsFor(quality, yield* recipeOf(root));
+  yield* fs.makeDirectory(path.join(root, ".github", "workflows"), { recursive: true });
+  for (const { file, content } of workflows) {
+    yield* fs.writeFileString(path.join(root, file), content);
+    yield* Console.log(`${NAME}: wrote ${file}`);
   }
   return yield* check(root);
 });

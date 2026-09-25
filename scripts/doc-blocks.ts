@@ -197,9 +197,9 @@ type QualityFields = Omit<typeof Quality.fields, "$schema">;
 type KeyRow = { readonly readBy: string; readonly holds: string };
 
 const QUALITY_ROWS: Described<QualityFields, KeyRow> = {
-  defaultBranch: { readBy: "`checks-lint`, `checks-ci-wiring`", holds: "the branch pull requests merge into, `main` when absent" },
+  defaultBranch: { readBy: "`checks-lint`, `checks-ci-wiring`, `checks-quality`", holds: "the branch pull requests merge into, `main` when absent" },
   gates: {
-    ci: { readBy: "`checks-ci-wiring`", holds: "the commands CI runs on every pull request, as [checks-ci-wiring](../gates/checks-ci-wiring.md) says" },
+    ci: { readBy: "`checks-ci-wiring`, `checks-quality`", holds: "the commands CI runs on every pull request, as [checks-ci-wiring](../gates/checks-ci-wiring.md) says" },
     scheduled: { readBy: "`checks-ci-wiring`", holds: "the commands a schedule runs" },
     lint: {
       readBy: "`checks-lint`, `checks-ci-wiring`",

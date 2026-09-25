@@ -87,7 +87,7 @@ test(
 
     expect((await quality("generate")).exitCode).toBe(0);
     const fresh = await quality("--check");
-    expect(fresh.text).toContain(`checks-quality: ${OXLINT_FRAGMENT} and ${TSCONFIG_FRAGMENT} hold what quality.json declares`);
+    expect(fresh.text).toContain(`checks-quality: ${OXLINT_FRAGMENT} and ${TSCONFIG_FRAGMENT} and .github/workflows/commitlint.yml hold what quality.json declares`);
     expect(fresh.exitCode).toBe(0);
 
     await tree.put("quality.json", { sources: { effect: { paths: ["src/**/*.ts", "lib/**/*.ts"] } } });
@@ -127,7 +127,7 @@ test(
     expect(leftOver.exitCode).toBe(1);
     const cleared = await quality("generate");
     expect(cleared.text).toContain(`removed ${TSCONFIG_FRAGMENT}`);
-    expect(cleared.text).toContain("no sources.effect is declared, so nothing is generated");
+    expect(cleared.text).toContain("no sources.effect is declared, so no fragment is generated");
     expect(cleared.exitCode).toBe(0);
 
     await tree.put("quality.json", { sources: { effect: { paths: ["*.ts"] } } });
@@ -135,6 +135,46 @@ test(
     expect(malformed.text).toContain("Expected a glob from the repository root");
     expect(malformed.exitCode).toBe(2);
     expect((await quality()).exitCode).toBe(2);
+  },
+  60_000,
+);
+
+test(
+  "checks-quality requires the kit configs that apply the Effect rules",
+  async () => {
+    await consumer({ sources: { effect: EFFECT } });
+    await tree.put("src/a.ts", "export const a = 1;\n");
+    expect((await quality("generate")).exitCode).toBe(0);
+
+    const oxlintrc = await readFile(join(tree.dir, ".oxlintrc.json"), "utf8");
+    await tree.put(
+      ".oxlintrc.json",
+      oxlintrc.replace('"./node_modules/@avi2dg/checks/oxlintrc.json",', ""),
+    );
+    const missingOxlintConfig = await quality("--check");
+    expect(missingOxlintConfig.text).toContain(
+      ".oxlintrc.json does not extend ./node_modules/@avi2dg/checks/oxlintrc.json, so the kit's oxlint rules are not loaded",
+    );
+    expect(missingOxlintConfig.exitCode).toBe(1);
+    await tree.put(".oxlintrc.json", oxlintrc);
+    expect((await quality("--check")).exitCode).toBe(0);
+
+    const tsconfig = await readFile(join(tree.dir, "tsconfig.json"), "utf8");
+    const tsconfigRefusal =
+      "tsconfig.json does not extend @avi2dg/checks/tsconfig.effect.json, the one accepted spelling of the kit's Effect config";
+    await tree.put("tsconfig.json", tsconfig.replace('"@avi2dg/checks/tsconfig.effect.json",', ""));
+    const missingTsconfig = await quality("--check");
+    expect(missingTsconfig.text).toContain(tsconfigRefusal);
+    expect(missingTsconfig.exitCode).toBe(1);
+    await tree.put(
+      "tsconfig.json",
+      tsconfig.replace('"@avi2dg/checks/tsconfig.effect.json"', '"./node_modules/@avi2dg/checks/tsconfig.effect.json"'),
+    );
+    const nodeModulesTsconfig = await quality("--check");
+    expect(nodeModulesTsconfig.text).toContain(tsconfigRefusal);
+    expect(nodeModulesTsconfig.exitCode).toBe(1);
+    await tree.put("tsconfig.json", tsconfig);
+    expect((await quality("--check")).exitCode).toBe(0);
   },
   60_000,
 );

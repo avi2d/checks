@@ -1,6 +1,6 @@
 # checks-quality
 
-`checks-quality` is the bin that writes what `quality.json` declares for oxlint and tsc into generated fragments and checks them, and a reader looks it up when a fragment is stale.
+`checks-quality` is the bin that writes what `quality.json` declares into generated fragments and workflows and checks them, and a reader looks it up when generated text is stale.
 
 ## What it checks
 
@@ -29,11 +29,20 @@ A rule only this repository needs stays in its own `.oxlintrc.json`, whose overr
 }
 ```
 
+GitHub Actions reads its own YAML and nothing else, so `checks-quality generate` also writes the kit recipe workflows whole.
+`.github/workflows/ci.yml` runs every `gates.ci` command but the title lint as its own step after a frozen install.
+`.github/workflows/commitlint.yml` lints the pull request title with the installed kit config.
+A step one repository alone needs lives in another workflow file, never in the recipe.
+All generated workflows are committed.
+
 `checks-quality --check` fails when any of these holds:
 
 - A fragment is missing, or differs from what `generate` would write from `quality.json` and the installed kit's presets.
 - A fragment is left over once `quality.json` stops declaring `sources.effect`.
+- A generated workflow is missing, or differs from what `generate` would write from `quality.json` and the kit recipe.
 - `.oxlintrc.json` or `tsconfig.json` does not list its fragment in `extends`, so the tool never reads it.
+- `.oxlintrc.json` does not extend `./node_modules/@avi2dg/checks/oxlintrc.json`, so the kit's oxlint rules are not loaded.
+- `tsconfig.json` does not extend `@avi2dg/checks/tsconfig.effect.json`, the one accepted spelling of the kit's Effect config.
 - A `sources.effect.paths` or `sources.production` glob matches no tracked or untracked file, so it holds nothing.
 
 Two details of the fragments are easy to get wrong, so the kit's tests pin both:
@@ -47,7 +56,10 @@ Two details of the fragments are easy to get wrong, so the kit's tests pin both:
 
 ## What it reads
 
-It reads the working tree: `quality.json`, the presets of the installed kit, `.oxlintrc.json`, `tsconfig.json` and the two fragments.
+It reads the working tree: `quality.json`, the presets of the installed kit, `.oxlintrc.json`, `tsconfig.json`, the two fragments and the generated workflows.
+It reads the root `package.json` name, since only the kit's own tree lints titles with its root `commitlint.config.js`.
+The name also decides which kit configs `extends` must list, since the kit's own tree extends its root `oxlintrc.json` and `tsconfig.effect.json`.
+It looks for `.bun-version`, and the suite pins its bun to that file when the file exists.
 It lists the tracked and untracked files to see what each declared glob matches.
 
 ## Arguments
@@ -57,15 +69,15 @@ checks-quality generate
 checks-quality --check
 ```
 
-`generate` writes the fragments, removes a left-over one, then runs the same check as `--check`.
+`generate` writes the fragments and the workflows, removes a left-over one, then runs the same check as `--check`.
 `--check` writes nothing.
 
 ## Exit codes
 
 | Code | When |
 | --- | --- |
-| 0 | the fragments hold what `quality.json` declares |
-| 1 | a fragment is stale, missing, left over or not extended, or a declared glob matches no file |
+| 0 | the generated files hold what `quality.json` declares |
+| 1 | a generated file is stale, missing or left over, a fragment is not extended, the kit's config is not extended, or a declared glob matches no file |
 | 2 | `quality.json` does not decode, or the arguments are neither `generate` nor `--check` |
 
 ## Sample output
@@ -76,16 +88,19 @@ checks-quality: 2 problem(s) with what quality.json declares:
   tsconfig.json does not extend ./tsconfig.quality.json, so the language service never reads it
 ```
 
-A passing run says what the fragments hold:
+A passing run says what the generated files hold:
 
 ```
-checks-quality: oxlintrc.quality.json and tsconfig.quality.json hold what quality.json declares
+checks-quality: oxlintrc.quality.json and tsconfig.quality.json and .github/workflows/ci.yml and .github/workflows/commitlint.yml hold what quality.json declares
 ```
+
+A stale workflow is reported the same way as a stale fragment.
 
 ## Opting out
 
 It runs only in a repository that tracks `quality.json`, and a selection in `quality.json` always keeps it, since the file it sits in is what makes it apply.
-A repository that declares no `sources.effect` gets no fragment, and the check then only refuses a left-over one.
+A repository that declares no `sources.effect` gets no fragment, and the check then refuses a left-over one.
+Every repository gets the title lint workflow, and one with `gates.ci` gets the suite with it.
 
 ## Related topics
 
