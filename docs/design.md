@@ -18,6 +18,9 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   A suppression file stores a count of sites per file and rule, and `max-lines` reports a file once however long it grows, so the count stays at one while the file doubles.
   The gate sums how far each site runs over its limit instead, which grows with the file.
   The base commit already holds that sum, so nothing is generated, committed or pruned.
+- `checks-repetition` writes the production files of both ends of the range to temporary directories and runs jscpd in each, so the consumer's `.jscpd.json` and ignore files never reach the count.
+  It compares each file's count of repeated lines rather than using jscpd's `--baseline-from-ref`.
+  That flag reports a repeated block as new once its text changes, so a change that shortens a grandfathered block would fail.
 - `dist/` is committed.
   No `prepack` or `prepublishOnly` builds it, so a publish ships whatever bundle the publishing worktree holds.
   Rebuild it after pulling with `bun run build`.

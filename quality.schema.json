@@ -47,6 +47,7 @@
               "checks-docs",
               "checks-quality",
               "checks-size-budget",
+              "checks-repetition",
               "checks-feature-owners"
             ]
           },

@@ -34,7 +34,7 @@ A rule only this repository needs stays in its own `.oxlintrc.json`, whose overr
 - A fragment is missing, or differs from what `generate` would write from `quality.json` and the installed kit's presets.
 - A fragment is left over once `quality.json` stops declaring `sources.effect`.
 - `.oxlintrc.json` or `tsconfig.json` does not list its fragment in `extends`, so the tool never reads it.
-- A `sources.effect.paths` glob, or a `sources.production` glob while `size` is declared, matches no tracked or untracked file, so it holds nothing.
+- A `sources.effect.paths` or `sources.production` glob matches no tracked or untracked file, so it holds nothing.
 
 Two details of the fragments are easy to get wrong, so the kit's tests pin both:
 

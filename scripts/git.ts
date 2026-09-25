@@ -1,5 +1,6 @@
-import { Effect, Schema, Stream } from "effect";
+import { Effect, Path, Schema, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import { Usage } from "./main.ts";
 
 export class GitFailure extends Schema.TaggedError<GitFailure>()("GitFailure", {
   message: Schema.String,
@@ -158,4 +159,21 @@ export const parentOrEmptyTree = Effect.fn("parentOrEmptyTree")(function* (rev: 
 export const rangeEnds = Effect.fn("rangeEnds")(function* (first: string, second: string | undefined, cwd?: string) {
   if (second === undefined) return { base: yield* parentOrEmptyTree(first, cwd), head: first };
   return { base: (yield* git(["merge-base", first, second], cwd)).trim(), head: second };
+});
+
+export const rangeFromArgs = Effect.fn("rangeFromArgs")(function* (args: readonly string[], usage: string, cwd?: string) {
+  const [first, second, ...extra] = args;
+  if (first === undefined || extra.length > 0) return yield* new Usage({ message: usage });
+  return yield* rangeEnds(first, second, cwd);
+});
+
+// A scratch index leaves the repository's own index and working tree untouched.
+export const checkoutFiles = Effect.fn("checkoutFiles")(function* (rev: string, files: readonly string[], scratch: string, cwd?: string) {
+  const path = yield* Path.Path;
+  const env = { GIT_INDEX_FILE: path.join(scratch, "index") };
+  const tree = path.join(scratch, "tree");
+  yield* git(["read-tree", rev], cwd, { env });
+  const listed = files.map((file) => `${file}\0`).join("");
+  yield* git(["checkout-index", "-z", "--stdin", `--prefix=${tree}${path.sep}`], cwd, { env, input: listed });
+  return tree;
 });

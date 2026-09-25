@@ -214,8 +214,9 @@ const QUALITY_ROWS: Described<QualityFields, KeyRow> = {
   },
   sources: {
     production: {
-      readBy: "`checks-size-budget`, `checks-quality`",
-      holds: "the source the repository ships, as [checks-size-budget](../gates/checks-size-budget.md) says",
+      readBy: "`checks-size-budget`, `checks-repetition`, `checks-quality`",
+      holds:
+        "the source the repository ships, as [checks-size-budget](../gates/checks-size-budget.md) and [checks-repetition](../gates/checks-repetition.md) say",
     },
     effect: {
       readBy: "`checks-quality`",

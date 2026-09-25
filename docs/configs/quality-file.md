@@ -44,7 +44,7 @@ The kit's bins find the file at the git root and read it there:
 | `gates.scheduled` | `checks-ci-wiring` | the commands a schedule runs |
 | `gates.lint` | `checks-lint`, `checks-ci-wiring` | the gates `checks-lint` runs when not all apply, as [Gate selection](../gates/checks-lint.md#gate-selection) says |
 | `commitIdentity.authors` | `checks-commit-identity` | the identities allowed to author and commit, as [checks-commit-identity](../gates/checks-commit-identity.md) says |
-| `sources.production` | `checks-size-budget`, `checks-quality` | the source the repository ships, as [checks-size-budget](../gates/checks-size-budget.md) says |
+| `sources.production` | `checks-size-budget`, `checks-repetition`, `checks-quality` | the source the repository ships, as [checks-size-budget](../gates/checks-size-budget.md) and [checks-repetition](../gates/checks-repetition.md) say |
 | `sources.effect` | `checks-quality` | the paths held to the Effect rules, and the files under them that are not, as [The Effect rules](effect-rules.md) says |
 | `size` | `checks-size-budget` | the size budget of production and test files, and how a change is held to it, as [checks-size-budget](../gates/checks-size-budget.md) says |
 | `features` | `featureRules`, `checks-feature-owners` | each feature's root, entries, exempt importers and proof, as [checks-feature-owners](../gates/checks-feature-owners.md) says |
