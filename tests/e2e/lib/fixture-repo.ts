@@ -1,4 +1,5 @@
 import { $ } from "bun";
+import { afterEach } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -21,7 +22,7 @@ export type FixtureRepo = {
   readonly dispose: () => Promise<void>;
 };
 
-async function ran(pending: $.ShellPromise): Promise<Ran> {
+export async function ran(pending: $.ShellPromise): Promise<Ran> {
   const result = await pending.nothrow().quiet();
   return { exitCode: result.exitCode, text: result.stdout.toString() + result.stderr.toString() };
 }
@@ -46,6 +47,19 @@ export async function fixtureRepo(prefix: string, files: Readonly<Record<string,
     script: (name, ...args) => ran($`bun ${join(CHECKOUT, "scripts", name)} ${args}`.cwd(dir).env({ ...process.env, PATH: KIT_PATH })),
     lint: () => ran($`bun ${join(CHECKOUT, "scripts", "lint.ts")}`.cwd(dir).env({ ...withoutPullRequestEvent(), PATH: KIT_PATH })),
     dispose: () => rm(dir, { recursive: true, force: true }),
+  };
+}
+
+// Called at a test file's top level, so afterEach disposes of each repository for every test in the file.
+export function fixtureRepos(prefix: string): (files?: Readonly<Record<string, string>>) => Promise<FixtureRepo> {
+  const opened: FixtureRepo[] = [];
+  afterEach(async () => {
+    for (const repo of opened.splice(0)) await repo.dispose();
+  });
+  return async (files = {}) => {
+    const repo = await fixtureRepo(prefix, files);
+    opened.push(repo);
+    return repo;
   };
 }
 

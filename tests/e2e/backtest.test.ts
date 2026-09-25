@@ -1,37 +1,21 @@
 import { $ } from "bun";
-import { afterEach, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { expect, test } from "bun:test";
+import { join } from "node:path";
+import { CHECKOUT, fixtureRepos } from "./lib/fixture-repo.ts";
 
-const CHECKOUT = resolve(import.meta.dir, "..", "..");
 const SCRIPT = join(CHECKOUT, "scripts", "backtest.ts");
-
-let dir = "";
-
-afterEach(async () => {
-  if (dir !== "") {
-    await rm(dir, { recursive: true, force: true });
-    dir = "";
-  }
-});
-
-async function commit(message: string): Promise<void> {
-  await $`git add -A && git commit -q --no-gpg-sign -m ${message}`.cwd(dir).quiet();
-}
+const repository = fixtureRepos("checks-backtest-");
 
 test(
   "the backtest attributes each refusal to the commit that introduced it",
   async () => {
-    dir = await mkdtemp(join(tmpdir(), "checks-backtest-"));
-    await $`git init -q -b main`.cwd(dir).quiet();
-    await $`git config user.name tester && git config user.email tester@example.com`.cwd(dir).quiet();
+    const { dir, write, commit } = await repository();
 
-    await writeFile(join(dir, "a.ts"), "export const one = 1;\n");
+    await write({ "a.ts": "export const one = 1;\n" });
     await commit("clean start");
-    await writeFile(join(dir, "a.ts"), "export const one = 1;\n// @ts-expect-error silenced\n");
+    await write({ "a.ts": "export const one = 1;\n// @ts-expect-error silenced\n" });
     await commit("plant a violation");
-    await writeFile(join(dir, "b.ts"), "export const two = 2;\n");
+    await write({ "b.ts": "export const two = 2;\n" });
     await commit("unrelated change");
 
     const result = await $`bun ${SCRIPT} 10`.cwd(dir).nothrow().quiet();
