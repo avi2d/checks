@@ -280,9 +280,9 @@ function countRuns(node, parentOperator) {
 }
 function isSelfCall(state, callee) {
   if (callee.type === "Identifier")
-    return state.names.includes(callee.name);
+    return state.names.identifiers.includes(callee.name);
   if (callee.type === "MemberExpression" && callee.object.type === "ThisExpression" && callee.property.type === "Identifier") {
-    return state.names.includes(callee.property.name);
+    return state.names.members.includes(callee.property.name);
   }
   return false;
 }
@@ -377,35 +377,44 @@ function keyName(holder) {
     return holder.key.value;
   return;
 }
-function assignedName(target) {
+function assignedBinding(target) {
   if (target.type === "Identifier")
-    return target.name;
+    return { kind: "identifiers", name: target.name };
   if (target.type === "MemberExpression" && target.object.type === "ThisExpression" && target.property.type === "Identifier") {
-    return target.property.name;
+    return { kind: "members", name: target.property.name };
   }
   return;
 }
-function boundName(node) {
+function memberBinding(holder) {
+  const name = keyName(holder);
+  return name === undefined ? undefined : { kind: "members", name };
+}
+function binding(node) {
   const parent = node.parent;
-  if (parent.type === "VariableDeclarator" && parent.init === node && parent.id.type === "Identifier")
-    return parent.id.name;
+  if (parent.type === "VariableDeclarator" && parent.init === node && parent.id.type === "Identifier") {
+    return { kind: "identifiers", name: parent.id.name };
+  }
   if ((parent.type === "Property" || parent.type === "MethodDefinition" || parent.type === "PropertyDefinition" || parent.type === "AccessorProperty") && parent.value === node) {
-    return keyName(parent);
+    return memberBinding(parent);
   }
   if (parent.type === "AssignmentExpression" && parent.right === node)
-    return assignedName(parent.left);
+    return assignedBinding(parent.left);
   return;
 }
 function displayName(node) {
   if (node.type !== "ArrowFunctionExpression" && node.id !== null)
     return node.id.name;
-  return boundName(node) ?? "anonymous";
+  return binding(node)?.name ?? "anonymous";
 }
-function recursionNames(node) {
-  const own = node.type === "ArrowFunctionExpression" ? undefined : node.id?.name;
-  const names = [own, boundName(node)];
-  return names.filter((name) => name !== undefined);
+function selfNames(node) {
+  const own = node.type === "ArrowFunctionExpression" || node.id === null ? [] : [node.id.name];
+  const bound = binding(node);
+  return {
+    identifiers: bound?.kind === "identifiers" ? [...own, bound.name] : own,
+    members: bound?.kind === "members" ? [bound.name] : []
+  };
 }
+var NO_NAMES = { identifiers: [], members: [] };
 var rule = {
   meta: {
     type: "problem",
@@ -416,7 +425,7 @@ var rule = {
   create(context) {
     const max = maxOf(context.options);
     const check = (node) => {
-      const score2 = node.type === "StaticBlock" ? cognitiveComplexity(node, []) : cognitiveComplexity(node, recursionNames(node));
+      const score2 = node.type === "StaticBlock" ? cognitiveComplexity(node, NO_NAMES) : cognitiveComplexity(node, selfNames(node));
       if (score2 <= max)
         return;
       const name = node.type === "StaticBlock" ? "static block" : `function \`${displayName(node)}\``;

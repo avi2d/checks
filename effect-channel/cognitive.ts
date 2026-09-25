@@ -23,7 +23,9 @@ import {
 } from "./cognitive-plain.ts";
 
 
-type State = { total: number; recursive: boolean; names: readonly string[] };
+export type SelfNames = { readonly identifiers: readonly string[]; readonly members: readonly string[] };
+
+type State = { total: number; recursive: boolean; names: SelfNames };
 
 function unreachable(_value: never): void {}
 
@@ -152,9 +154,9 @@ function countRuns(node: SyntaxNode, parentOperator: string | null): number {
 }
 
 function isSelfCall(state: State, callee: SyntaxNode): boolean {
-  if (callee.type === "Identifier") return state.names.includes(callee.name);
+  if (callee.type === "Identifier") return state.names.identifiers.includes(callee.name);
   if (callee.type === "MemberExpression" && callee.object.type === "ThisExpression" && callee.property.type === "Identifier") {
-    return state.names.includes(callee.property.name);
+    return state.names.members.includes(callee.property.name);
   }
   return false;
 }
@@ -215,7 +217,7 @@ function scoreFunction(state: State, node: FunctionKind, nesting: number): void 
   }
 }
 
-export function cognitiveComplexity(root: NamedFunction | Arrow | Static, names: readonly string[]): number {
+export function cognitiveComplexity(root: NamedFunction | Arrow | Static, names: SelfNames): number {
   const state: State = { total: 0, recursive: false, names };
   if (root.type === "StaticBlock") {
     scoreList(state, root.body, 0, root, false);

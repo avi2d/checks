@@ -1,5 +1,5 @@
 import type { Context, CreateRule, ESTree } from "@oxlint/plugins";
-import { cognitiveComplexity } from "./cognitive.ts";
+import { cognitiveComplexity, type SelfNames } from "./cognitive.ts";
 
 const DEFAULT_MAX = 15;
 
@@ -18,17 +18,26 @@ function keyName(holder: { readonly key: ESTree.PropertyKey; readonly computed: 
   return undefined;
 }
 
-function assignedName(target: ESTree.Node): string | undefined {
-  if (target.type === "Identifier") return target.name;
+type Binding = { readonly kind: keyof SelfNames; readonly name: string };
+
+function assignedBinding(target: ESTree.Node): Binding | undefined {
+  if (target.type === "Identifier") return { kind: "identifiers", name: target.name };
   if (target.type === "MemberExpression" && target.object.type === "ThisExpression" && target.property.type === "Identifier") {
-    return target.property.name;
+    return { kind: "members", name: target.property.name };
   }
   return undefined;
 }
 
-function boundName(node: ESTree.Function | ESTree.ArrowFunctionExpression): string | undefined {
+function memberBinding(holder: { readonly key: ESTree.PropertyKey; readonly computed: boolean }): Binding | undefined {
+  const name = keyName(holder);
+  return name === undefined ? undefined : { kind: "members", name };
+}
+
+function binding(node: ESTree.Function | ESTree.ArrowFunctionExpression): Binding | undefined {
   const parent = node.parent;
-  if (parent.type === "VariableDeclarator" && parent.init === node && parent.id.type === "Identifier") return parent.id.name;
+  if (parent.type === "VariableDeclarator" && parent.init === node && parent.id.type === "Identifier") {
+    return { kind: "identifiers", name: parent.id.name };
+  }
   if (
     (parent.type === "Property" ||
       parent.type === "MethodDefinition" ||
@@ -36,22 +45,27 @@ function boundName(node: ESTree.Function | ESTree.ArrowFunctionExpression): stri
       parent.type === "AccessorProperty") &&
     parent.value === node
   ) {
-    return keyName(parent);
+    return memberBinding(parent);
   }
-  if (parent.type === "AssignmentExpression" && parent.right === node) return assignedName(parent.left);
+  if (parent.type === "AssignmentExpression" && parent.right === node) return assignedBinding(parent.left);
   return undefined;
 }
 
 function displayName(node: ESTree.Function | ESTree.ArrowFunctionExpression): string {
   if (node.type !== "ArrowFunctionExpression" && node.id !== null) return node.id.name;
-  return boundName(node) ?? "anonymous";
+  return binding(node)?.name ?? "anonymous";
 }
 
-function recursionNames(node: ESTree.Function | ESTree.ArrowFunctionExpression): readonly string[] {
-  const own = node.type === "ArrowFunctionExpression" ? undefined : node.id?.name;
-  const names: readonly (string | undefined)[] = [own, boundName(node)];
-  return names.filter((name): name is string => name !== undefined);
+function selfNames(node: ESTree.Function | ESTree.ArrowFunctionExpression): SelfNames {
+  const own = node.type === "ArrowFunctionExpression" || node.id === null ? [] : [node.id.name];
+  const bound = binding(node);
+  return {
+    identifiers: bound?.kind === "identifiers" ? [...own, bound.name] : own,
+    members: bound?.kind === "members" ? [bound.name] : [],
+  };
 }
+
+const NO_NAMES: SelfNames = { identifiers: [], members: [] };
 
 const rule: CreateRule = {
   meta: {
@@ -64,7 +78,7 @@ const rule: CreateRule = {
     const max = maxOf(context.options);
 
     const check = (node: ESTree.Function | ESTree.ArrowFunctionExpression | ESTree.StaticBlock): void => {
-      const score = node.type === "StaticBlock" ? cognitiveComplexity(node, []) : cognitiveComplexity(node, recursionNames(node));
+      const score = node.type === "StaticBlock" ? cognitiveComplexity(node, NO_NAMES) : cognitiveComplexity(node, selfNames(node));
       if (score <= max) return;
       const name = node.type === "StaticBlock" ? "static block" : `function \`${displayName(node)}\``;
       context.report({ node, message: `${name} has a cognitive complexity of ${score}. Maximum allowed is ${max}.` });

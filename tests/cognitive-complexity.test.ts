@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { cognitiveComplexity } from "../effect-channel/cognitive.ts";
+import { cognitiveComplexity, type SelfNames } from "../effect-channel/cognitive.ts";
 import {
   CALL_TYPES,
   CONTROL_TYPES,
@@ -47,9 +47,10 @@ const fn = (...body: SyntaxNode[]): NamedFunction => ({
 });
 const arrow = (...body: SyntaxNode[]): Arrow => ({ type: "ArrowFunctionExpression", params: [], body: block(...body) });
 const staticBlock = (...body: SyntaxNode[]): Static => ({ type: "StaticBlock", body });
+const NO_NAMES: SelfNames = { identifiers: [], members: [] };
 
 function scoreOf(...body: SyntaxNode[]): number {
-  return cognitiveComplexity(fn(...body), []);
+  return cognitiveComplexity(fn(...body), NO_NAMES);
 }
 
 test("every node type routes to exactly one category", () => {
@@ -153,9 +154,14 @@ test("a plain jump costs nothing, and a labelled one costs one", () => {
 
 test("a direct self call costs one, and a call through a nested function does not", () => {
   const body: SyntaxNode = ret(cond(call("f", id("n")), lit(), lit()));
-  expect(cognitiveComplexity({ ...fn(), body: block(expr(body)) }, ["f"])).toBe(2);
+  expect(cognitiveComplexity({ ...fn(), body: block(expr(body)) }, { identifiers: ["f"], members: [] })).toBe(2);
   const nested: SyntaxNode = arrow(expr(call("f", id("n"))));
-  expect(cognitiveComplexity(fn(expr(nested)), ["f"])).toBe(0);
+  expect(cognitiveComplexity(fn(expr(nested)), { identifiers: ["f"], members: [] })).toBe(0);
+});
+
+test("a bare call to a member's own name is not recursion", () => {
+  const body: SyntaxNode = ret(cond(call("parse", id("s")), lit(), lit()));
+  expect(cognitiveComplexity(fn(expr(body)), { identifiers: [], members: ["parse"] })).toBe(1);
 });
 
 test("a method calling itself through this costs one", () => {
@@ -165,7 +171,8 @@ test("a method calling itself through this costs one", () => {
     property: id("run"),
   };
   const body: SyntaxNode = ret(cond({ type: "CallExpression", callee, arguments: [] }, lit(), lit()));
-  expect(cognitiveComplexity(fn(expr(body)), ["run"])).toBe(2);
+  expect(cognitiveComplexity(fn(expr(body)), { identifiers: [], members: ["run"] })).toBe(2);
+  expect(cognitiveComplexity(fn(expr(body)), { identifiers: ["run"], members: [] })).toBe(1);
 });
 
 test("nesting adds one per level around each break in the flow", () => {
@@ -182,7 +189,7 @@ test("an else-if under nesting keeps its hybrid increment while the inner if pay
 test("a nested function raises the nesting without costing a structural increment", () => {
   const inner = arrow(expr(ifs(id("c"), block(ret(lit())))));
   expect(scoreOf(expr(inner))).toBe(2);
-  expect(cognitiveComplexity(inner, [])).toBe(1);
+  expect(cognitiveComplexity(inner, NO_NAMES)).toBe(1);
 });
 
 test("an object method and a class field raise the nesting the same way", () => {
@@ -216,7 +223,7 @@ test("a class of plain methods costs nothing to enter", () => {
 });
 
 test("a static block scores its own body", () => {
-  expect(cognitiveComplexity(staticBlock(expr(ifs(id("c"), block(ret(lit()))))), [])).toBe(1);
+  expect(cognitiveComplexity(staticBlock(expr(ifs(id("c"), block(ret(lit()))))), NO_NAMES)).toBe(1);
 });
 
 test("assignments, defaults and destructuring pass their expressions through", () => {
@@ -224,7 +231,7 @@ test("assignments, defaults and destructuring pass their expressions through", (
   expect(scoreOf(expr({ type: "AssignmentExpression", left: id("x"), right: seq("||", id("a"), id("b")) }))).toBe(1);
   const param: SyntaxNode = { type: "AssignmentPattern", left: id("a"), right: seq("||", id("x"), id("y")) };
   const withDefault: NamedFunction = { ...fn(ret(lit())), params: [param] };
-  expect(cognitiveComplexity(withDefault, [])).toBe(1);
+  expect(cognitiveComplexity(withDefault, NO_NAMES)).toBe(1);
   const destructured: NamedFunction = {
     ...fn(ret(lit())),
     params: [
@@ -232,7 +239,7 @@ test("assignments, defaults and destructuring pass their expressions through", (
       { type: "ArrayPattern", elements: [id("b"), { type: "RestElement", argument: id("c") }] },
     ],
   };
-  expect(cognitiveComplexity(destructured, [])).toBe(1);
+  expect(cognitiveComplexity(destructured, NO_NAMES)).toBe(1);
 });
 
 test("declarations, arrays, templates and sequences pass their expressions through", () => {
@@ -295,5 +302,5 @@ test("the paper's word list scores one", () => {
     params: [id("number")],
     body: block({ type: "SwitchStatement", discriminant: id("number"), cases }),
   };
-  expect(cognitiveComplexity(named, ["getWords"])).toBe(1);
+  expect(cognitiveComplexity(named, { identifiers: ["getWords"], members: [] })).toBe(1);
 });

@@ -298,9 +298,21 @@ export const table = {
     }
   },
 };
+export const api = {
+  parse(text) {
+    if (text) {
+      return parse(text, options);
+    }
+  },
+};
+export function visit(node) {
+  if (node) {
+    this.visit(node.next);
+  }
+}
 `;
 
-test("a function takes its name only from its direct parent", async () => {
+test("a function takes its name only from its direct parent, and recursion only through its own binding", async () => {
   const { text } = await lint({ "naming.js": NAMING }, 1);
   expect(diagnostics(text)).toEqual([
     { line: 1, message: "function `anonymous` has a cognitive complexity of 2. Maximum allowed is 1." },
