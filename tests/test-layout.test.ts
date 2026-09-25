@@ -167,6 +167,7 @@ test("repos/** is pinned only where quality.json declares libraries", () => {
   expect(bunfigViolations(unvendored, PRESET, false)).toBeEmpty();
   expect(bunfigViolations(unvendored, PRESET, true)[0]?.message).toContain('must be ["**/tests/quarantine/**","repos/**"]');
   expect(bunfigViolations(PRESET, PRESET, false)[0]?.message).toContain('must be ["**/tests/quarantine/**"]');
+  expect(bunfigViolations(undefined, PRESET, false)[0]?.message).toContain('with [test].pathIgnorePatterns set to ["**/tests/quarantine/**"]');
 });
 
 test("the kit fails its own check when consumer and preset read the same drifted file", () => {

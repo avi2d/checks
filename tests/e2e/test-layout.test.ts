@@ -3,7 +3,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CHECKOUT, ran, type Ran } from "./lib/fixture-repo.ts";
+import { CHECKOUT, ran, UNVENDORED_BUNFIG, type Ran } from "./lib/fixture-repo.ts";
 
 const CHECK = join(CHECKOUT, "scripts", "test-layout.ts");
 const PRESET = join(CHECKOUT, "bunfig.toml");
@@ -15,7 +15,6 @@ const MANIFEST = {
     lint: "oxlint && bun ./node_modules/@avi2dg/checks/scripts/test-layout.ts",
   },
 };
-const UNVENDORED_BUNFIG = '[test]\npathIgnorePatterns = ["**/tests/quarantine/**"]\n';
 const LIBRARIES = {
   sources: { libraries: [{ name: "fake-lib", package: "fake-lib", repository: "https://example.com/o/fake-lib.git", tag: "v{version}" }] },
 };

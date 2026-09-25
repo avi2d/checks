@@ -40,6 +40,7 @@ It scans the tracked and untracked files that `git ls-files --exclude-standard` 
 It parses each test and helper with swc and reads import specifiers and identifier use, so a test that only carries `"node:child_process"` as a string is not a violation.
 `tests/fixtures/**` is data and is not parsed.
 It reads `package.json` for `scripts.test` and `scripts.lint`, and compares `bunfig.toml` with the preset the installed kit ships.
+It reads `quality.json` for `sources.libraries`, which decides whether `repos/**` is pinned.
 
 ## Arguments
 
@@ -64,7 +65,7 @@ test-layout: 4 violation(s)
   src/a.test.ts: a test file must live at tests/**/*.test.ts; move it to tests/a.test.ts
   package.json: scripts.test must be exactly "checks-test", which runs bun test --randomize and judges its skips, found "bun test"
   package.json: scripts.lint must run the layout check: add "checks-lint"
-  bunfig.toml: bunfig.toml is missing; bun has no bunfig extends, so copy node_modules/@avi2dg/checks/bunfig.toml
+  bunfig.toml: bunfig.toml is missing; bun has no bunfig extends, so copy node_modules/@avi2dg/checks/bunfig.toml with [test].pathIgnorePatterns set to ["**/tests/quarantine/**"]
 ```
 
 ## Opting out

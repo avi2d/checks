@@ -43,7 +43,7 @@ const BANNED_GLOBAL_CALLS: readonly string[] = ["fetch"];
 const QUARANTINE = "**/tests/quarantine/**";
 const VENDORED = "repos/**";
 
-function pinnedTestTable(vendors: boolean): Record<string, unknown> {
+function pinnedTestTable(vendors: boolean): { readonly pathIgnorePatterns: readonly string[] } {
   return { pathIgnorePatterns: vendors ? [QUARANTINE, VENDORED] : [QUARANTINE] };
 }
 export const LAYOUT_CHECK_MARK = "scripts/test-layout.ts";
@@ -251,7 +251,8 @@ export function scriptViolations(manifest: unknown): readonly Violation[] {
 
 export function bunfigViolations(consumer: unknown, preset: unknown, vendors: boolean): readonly Violation[] {
   const file = "bunfig.toml";
-  const copy = "bun has no bunfig extends, so copy node_modules/@avi2dg/checks/bunfig.toml";
+  const pinned = pinnedTestTable(vendors);
+  const copy = `bun has no bunfig extends, so copy node_modules/@avi2dg/checks/bunfig.toml with [test].pathIgnorePatterns set to ${JSON.stringify(pinned.pathIgnorePatterns)}`;
   const pin = `the check pins it, adding ${VENDORED} only where ${QUALITY_FILE} declares sources.libraries`;
   if (consumer === undefined) {
     return [{ file, line: undefined, message: `bunfig.toml is missing; ${copy}` }];
@@ -260,7 +261,6 @@ export function bunfigViolations(consumer: unknown, preset: unknown, vendors: bo
   if (!isRecord(presetTest)) {
     return [{ file, line: undefined, message: "the shipped bunfig preset has no [test] table" }];
   }
-  const pinned = pinnedTestTable(vendors);
   const expected = { ...presetTest, ...pinned };
   const consumerTest = isRecord(consumer) ? consumer["test"] : undefined;
   const violations: Violation[] = [];

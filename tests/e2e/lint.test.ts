@@ -1,9 +1,9 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { withoutPullRequestEvent } from "../lib/env.ts";
-import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
+import { CHECKOUT, ran, scratchDirs, UNVENDORED_BUNFIG, type Ran } from "./lib/fixture-repo.ts";
 
 const SCRIPT = join(CHECKOUT, "scripts", "lint.ts");
 const OWNER = ["-c", "user.name=avi2d", "-c", "user.email=avi2dg@gmail.com"];
@@ -42,7 +42,7 @@ async function scaffold(quality: Record<string, unknown> = {}): Promise<void> {
     JSON.stringify({ name: "checks-lint-fixture", type: "module", scripts: { lint: "checks-lint", test: "checks-test" } }),
   );
   await writeFile(join(dir, "quality.json"), JSON.stringify({ gates: { ci: ["bun run lint"] }, ...quality }));
-  await writeFile(join(dir, "bunfig.toml"), await readFile(join(CHECKOUT, "bunfig.toml"), "utf8"));
+  await writeFile(join(dir, "bunfig.toml"), UNVENDORED_BUNFIG);
   await mkdir(join(dir, ".github", "workflows"), { recursive: true });
   await writeFile(
     join(dir, ".github", "workflows", "ci.yml"),
