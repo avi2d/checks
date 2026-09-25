@@ -2,21 +2,45 @@
 import { Console, Effect, FileSystem, Schema } from "effect";
 import { runMain, Usage } from "./main.ts";
 
-export type Tally = {
-  readonly killed: number;
-  readonly total: number;
+export type Location = {
+  readonly start: { readonly line: number; readonly column: number };
+  readonly end: { readonly line: number; readonly column: number };
 };
 
-export type FileComparison = {
+export type Mutant = {
+  readonly status: string;
+  readonly mutatorName: string;
+  readonly replacement: string;
+  readonly location: Location;
+};
+
+export type ReportFile = {
+  readonly source: string;
+  readonly mutants: readonly Mutant[];
+};
+
+export type MutantChange = {
   readonly path: string;
-  readonly base: Tally;
-  readonly head: Tally;
+  readonly location: Location;
+  readonly mutatorName: string;
+  readonly replacement: string;
+  readonly from: string;
+  readonly to: string;
+};
+
+export type UnmatchedMutant = {
+  readonly path: string;
+  readonly location: Location;
+  readonly mutatorName: string;
+  readonly replacement: string;
+  readonly status: string;
 };
 
 export type Comparison = {
-  readonly base: Tally;
-  readonly head: Tally;
-  readonly files: readonly FileComparison[];
+  readonly regressions: readonly MutantChange[];
+  readonly moves: readonly MutantChange[];
+  readonly baseOnly: readonly UnmatchedMutant[];
+  readonly headOnly: readonly UnmatchedMutant[];
   readonly regression: boolean;
 };
 
@@ -32,98 +56,183 @@ export class ReportError extends Schema.TaggedError<ReportError>()("ReportError"
 
 const DETECTED = new Set(["Killed", "Timeout"]);
 const UNDETECTED = new Set(["Survived", "NoCoverage"]);
+const LEAVES_SCORE = new Set(["CompileError", "RuntimeError", "Ignored", "Pending"]);
 const USAGE = "usage: mutation-compare.ts [--advisory] <base-report> <head-report>";
 
 const Report = Schema.fromJsonString(
   Schema.Struct({
     files: Schema.Record(
       Schema.String,
-      Schema.Struct({ mutants: Schema.Array(Schema.Struct({ status: Schema.String })) }),
+      Schema.Struct({
+        source: Schema.String,
+        mutants: Schema.Array(
+          Schema.Struct({
+            status: Schema.String,
+            mutatorName: Schema.String,
+            replacement: Schema.String,
+            location: Schema.Struct({
+              start: Schema.Struct({ line: Schema.Finite, column: Schema.Finite }),
+              end: Schema.Struct({ line: Schema.Finite, column: Schema.Finite }),
+            }),
+          }),
+        ),
+      }),
     ),
   }),
 );
 const decodeReport = Schema.decodeUnknownEffect(Report);
 
-export const parseReport = (source: string, text: string): Effect.Effect<Map<string, readonly string[]>, ReportError> =>
+export const parseReport = (source: string, text: string): Effect.Effect<Map<string, ReportFile>, ReportError> =>
   decodeReport(text).pipe(
-    Effect.map(
-      ({ files }) => new Map(Object.entries(files).map(([path, { mutants }]) => [path, mutants.map(({ status }) => status)])),
-    ),
+    Effect.map(({ files }) => new Map(Object.entries(files))),
     Effect.mapError((cause) => new ReportError({ message: `${source} is not a Stryker mutation report: ${cause.message}` })),
   );
 
-function tally(statuses: readonly string[]): Tally {
-  let killed = 0;
-  let total = 0;
-  for (const status of statuses) {
-    if (DETECTED.has(status)) killed += 1;
-    if (DETECTED.has(status) || UNDETECTED.has(status)) total += 1;
+function byPosition(a: { readonly path: string; readonly location: Location }, b: { readonly path: string; readonly location: Location }): number {
+  if (a.path !== b.path) return a.path < b.path ? -1 : 1;
+  return a.location.start.line - b.location.start.line || a.location.start.column - b.location.start.column;
+}
+
+function sharedEnds(base: readonly string[], head: readonly string[]): { readonly prefix: number; readonly suffix: number } {
+  let prefix = 0;
+  while (prefix < base.length && prefix < head.length && base[prefix] === head[prefix]) prefix++;
+  let suffix = 0;
+  while (suffix < base.length - prefix && suffix < head.length - prefix && base[base.length - 1 - suffix] === head[head.length - 1 - suffix]) suffix++;
+  return { prefix, suffix };
+}
+
+function commonAfterTable(base: readonly string[], head: readonly string[], prefix: number, rows: number, width: number): (row: number, column: number) => number {
+  const common = new Uint32Array((rows + 1) * width);
+  const commonAfter = (row: number, column: number) => common[row * width + column] ?? 0;
+  for (let row = rows - 1; row >= 0; row--) {
+    for (let column = width - 2; column >= 0; column--) {
+      common[row * width + column] =
+        base[prefix + row] === head[prefix + column] ? commonAfter(row + 1, column + 1) + 1 : Math.max(commonAfter(row + 1, column), commonAfter(row, column + 1));
+    }
   }
-  return { killed, total };
+  return commonAfter;
 }
 
-const EMPTY: Tally = { killed: 0, total: 0 };
-
-export function compareReports(
-  baseFiles: ReadonlyMap<string, readonly string[]>,
-  headFiles: ReadonlyMap<string, readonly string[]>,
-): Comparison {
-  const paths = [...new Set([...baseFiles.keys(), ...headFiles.keys()])].sort();
-  const files = paths.map((path) => {
-    const baseStatuses = baseFiles.get(path);
-    const headStatuses = headFiles.get(path);
-    return {
-      path,
-      base: baseStatuses === undefined ? EMPTY : tally(baseStatuses),
-      head: headStatuses === undefined ? EMPTY : tally(headStatuses),
-    };
-  });
-  const base = tally([...baseFiles.values()].flat());
-  const head = tally([...headFiles.values()].flat());
-  return { base, head, files, regression: regressed(base, head) };
+function unchangedLines(baseSource: string, headSource: string): Map<number, number> {
+  const base = baseSource.split("\n");
+  const head = headSource.split("\n");
+  const { prefix, suffix } = sharedEnds(base, head);
+  const rows = base.length - prefix - suffix;
+  const width = head.length - prefix - suffix + 1;
+  const commonAfter = commonAfterTable(base, head, prefix, rows, width);
+  const lines = new Map<number, number>();
+  for (let line = 1; line <= prefix; line++) lines.set(line, line);
+  for (let row = 0, column = 0; row < rows && column < width - 1; ) {
+    if (base[prefix + row] === head[prefix + column]) lines.set(prefix + ++row, prefix + ++column);
+    else if (commonAfter(row + 1, column) >= commonAfter(row, column + 1)) row++;
+    else column++;
+  }
+  for (let line = 1; line <= suffix; line++) lines.set(base.length - suffix + line, head.length - suffix + line);
+  return lines;
 }
 
-export function regressed(base: Tally, head: Tally): boolean {
-  if (base.total === 0) return head.total > 0 && head.killed < head.total;
-  if (head.total === 0) return false;
-  return head.killed * base.total < base.killed * head.total;
+function mapLocation(location: Location, lines: ReadonlyMap<number, number>): Location | undefined {
+  for (let line = location.start.line; line <= location.end.line; line++) if (!lines.has(line)) return undefined;
+  const start = lines.get(location.start.line);
+  const end = lines.get(location.end.line);
+  if (start === undefined || end === undefined || end - start !== location.end.line - location.start.line) return undefined;
+  return { start: { line: start, column: location.start.column }, end: { line: end, column: location.end.column } };
 }
 
-function points(count: Tally): number {
-  return count.total === 0 ? 100 : (100 * count.killed) / count.total;
+function keyMutants(
+  path: string,
+  mutants: readonly Mutant[],
+  place: (location: Location) => Location | undefined,
+): { readonly keyed: Map<string, UnmatchedMutant>; readonly unplaced: readonly UnmatchedMutant[] } {
+  const keyed = new Map<string, UnmatchedMutant>();
+  const unplaced: UnmatchedMutant[] = [];
+  const seen = new Map<string, number>();
+  for (const mutant of mutants) {
+    const location = place(mutant.location);
+    if (location === undefined) {
+      unplaced.push({ path, ...mutant });
+      continue;
+    }
+    const signature = JSON.stringify([location.start, location.end, mutant.mutatorName, mutant.replacement]);
+    const occurrence = seen.get(signature) ?? 0;
+    seen.set(signature, occurrence + 1);
+    keyed.set(`${signature}#${occurrence}`, { path, ...mutant });
+  }
+  return { keyed, unplaced };
 }
 
-function percent(count: Tally): string {
-  return count.total === 0 ? "n/a" : `${points(count).toFixed(2)}%`;
+type Findings = {
+  readonly regressions: MutantChange[];
+  readonly moves: MutantChange[];
+  readonly baseOnly: UnmatchedMutant[];
+  readonly headOnly: UnmatchedMutant[];
+};
+
+function judgeMatch(path: string, mutant: UnmatchedMutant, counterpart: UnmatchedMutant, findings: Findings): void {
+  const change: MutantChange = {
+    path,
+    location: counterpart.location,
+    mutatorName: mutant.mutatorName,
+    replacement: mutant.replacement,
+    from: mutant.status,
+    to: counterpart.status,
+  };
+  if (mutant.status !== counterpart.status && (LEAVES_SCORE.has(mutant.status) || LEAVES_SCORE.has(counterpart.status))) {
+    findings.moves.push(change);
+  } else if (DETECTED.has(mutant.status) && UNDETECTED.has(counterpart.status)) {
+    findings.regressions.push(change);
+  }
 }
 
-function describe(count: Tally): string {
-  return `${percent(count)} (${count.killed}/${count.total})`;
+function compareFile(path: string, baseFile: ReportFile | undefined, headFile: ReportFile | undefined, findings: Findings): void {
+  const lines = baseFile !== undefined && headFile !== undefined ? unchangedLines(baseFile.source, headFile.source) : new Map<number, number>();
+  const base = keyMutants(path, baseFile?.mutants ?? [], (location) => mapLocation(location, lines));
+  const head = keyMutants(path, headFile?.mutants ?? [], (location) => location);
+  findings.baseOnly.push(...base.unplaced);
+  for (const [key, mutant] of base.keyed) {
+    const counterpart = head.keyed.get(key);
+    if (counterpart === undefined) findings.baseOnly.push(mutant);
+    else judgeMatch(path, mutant, counterpart, findings);
+  }
+  for (const [key, mutant] of head.keyed) {
+    if (!base.keyed.has(key)) findings.headOnly.push(mutant);
+  }
 }
 
-function deltaPoints(base: Tally, head: Tally): string {
-  const delta = points(head) - points(base);
-  return `${delta < 0 ? "-" : "+"}${Math.abs(delta).toFixed(2)}pp`;
+export function compareReports(baseFiles: ReadonlyMap<string, ReportFile>, headFiles: ReadonlyMap<string, ReportFile>): Comparison {
+  const findings: Findings = { regressions: [], moves: [], baseOnly: [], headOnly: [] };
+  for (const path of new Set([...baseFiles.keys(), ...headFiles.keys()])) compareFile(path, baseFiles.get(path), headFiles.get(path), findings);
+
+  findings.regressions.sort(byPosition);
+  findings.moves.sort(byPosition);
+  findings.baseOnly.sort(byPosition);
+  findings.headOnly.sort(byPosition);
+
+  return { ...findings, regression: findings.regressions.length > 0 };
+}
+
+function locate(mutant: { readonly path: string; readonly location: Location }): string {
+  return `${mutant.path}:${mutant.location.start.line}:${mutant.location.start.column}`;
+}
+
+function describeChange(change: MutantChange): string {
+  return `${locate(change)} ${change.mutatorName} ${JSON.stringify(change.replacement)}: ${change.from} -> ${change.to}`;
+}
+
+function describeUnmatched(mutant: UnmatchedMutant): string {
+  return `${locate(mutant)} ${mutant.mutatorName} ${JSON.stringify(mutant.replacement)}: ${mutant.status}`;
 }
 
 export function formatComparison(comparison: Comparison, advisory: boolean): string {
-  const changed = comparison.files.filter(
-    (file) => file.base.killed !== file.head.killed || file.base.total !== file.head.total,
-  );
-  const unchanged = comparison.files.length - changed.length;
-  const lines = [
-    `mutation-compare: base ${describe(comparison.base)} head ${describe(comparison.head)} delta ${deltaPoints(comparison.base, comparison.head)}`,
-  ];
-  for (const file of changed) {
-    lines.push(`  ${file.path}: ${describe(file.base)} -> ${describe(file.head)}`);
-  }
-  if (unchanged > 0) lines.push(`  ${unchanged} unchanged file(s)`);
-  if (comparison.regression) {
-    lines.push(`mutation-compare: REGRESSION (${deltaPoints(comparison.base, comparison.head)})${advisory ? " in advisory mode, exit 0" : ""}`);
-  } else {
-    lines.push(`mutation-compare: no regression${advisory ? " (advisory mode, exit 0)" : ""}`);
-  }
-  return lines.join("\n");
+  const lines: string[] = [];
+  for (const change of comparison.regressions) lines.push(`  regression ${describeChange(change)}`);
+  for (const change of comparison.moves) lines.push(`  moved ${describeChange(change)}`);
+  for (const mutant of comparison.baseOnly) lines.push(`  base only ${describeUnmatched(mutant)}`);
+  for (const mutant of comparison.headOnly) lines.push(`  head only ${describeUnmatched(mutant)}`);
+  const verdict = comparison.regression
+    ? `mutation-compare: REGRESSION (${comparison.regressions.length} mutant(s))${advisory ? " in advisory mode, exit 0" : ""}`
+    : `mutation-compare: no regression${advisory ? " (advisory mode, exit 0)" : ""}`;
+  return [verdict, ...lines].join("\n");
 }
 
 export const parseArgs = Effect.fnUntraced(function* (argv: readonly string[]): Effect.fn.Return<Options, Usage> {

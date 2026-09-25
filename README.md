@@ -131,7 +131,7 @@ These bins run on their own:
 
 - [`checks-test`](docs/gates/checks-test.md) runs the suite as `scripts.test` and refuses a skip the repository has not declared.
 - [`checks-flake`](docs/gates/checks-flake.md) runs the suite on a schedule and records the seeds a flaky test fails with.
-- [`checks-mutation-compare`](docs/gates/checks-mutation-compare.md) holds a pull request's mutation score to no regression.
+- [`checks-mutation-compare`](docs/gates/checks-mutation-compare.md) holds every mutant in a pull request to no regression.
 - [`checks-backtest`](docs/gates/checks-backtest.md) reports what the comment check would have refused in recent history.
 - [`checks-vendor`](docs/gates/checks-vendor.md) pins each library `quality.json` declares to a shared read-only clone and links it under `repos/`.
 

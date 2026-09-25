@@ -1,12 +1,22 @@
 # checks-mutation-compare
 
-`checks-mutation-compare` is the gate that holds a pull request's mutation score to no regression rather than an absolute threshold, and a reader looks it up to wire mutation testing into CI.
+`checks-mutation-compare` is the gate that holds every mutant in a pull request to no regression rather than an absolute score, and a reader looks it up to wire mutation testing into CI.
 
 ## What it checks
 
-The head mutation score may not fall below the score at the merge-base.
-The score is Stryker's, `Killed` and `Timeout` over those plus `Survived` and `NoCoverage`, so `CompileError`, `RuntimeError`, `Ignored` and `Pending` mutants leave it.
-Every file in a report counts toward that report's score, including files present in only one of the two.
+A mutant regresses when it is `Killed` or `Timeout` at the base and `Survived` or `NoCoverage` at the head.
+The gate matches mutants between the two reports and judges each match, so a lost kill cannot hide behind mutants that move into the score and a mutant leaving the score cannot manufacture a false regression.
+A matched mutant that moves into or out of `RuntimeError`, `CompileError`, `Ignored` or `Pending` is reported apart from a regression, because that move only changes which mutants leave the score.
+A mutant present in only one report is listed and never fails the comparison.
+
+## How it matches mutants
+
+The gate aligns each file's base and head source, which it reads from the report's copy of the file, by a line diff.
+It maps each base mutant to the place its lines moved to in the head, so a line added or removed above a mutant leaves it matched.
+It then matches a mutant in the base report to a mutant in the head report by its file, that mapped location, its mutator and its replacement.
+Two mutants in the same report can share all four, so the gate also counts the position of each mutant among others with the same four, in the order the report lists them, and adds that position to the key.
+A mutant on a line the pull request added, removed or changed has no counterpart in the other report and lands in the unmatched list.
+Each list prints in order of file, then line, then column, and a matched mutant prints at its place in the head.
 
 ## What it reads
 
@@ -37,19 +47,18 @@ checks-mutation-compare [--advisory] <base-report> <head-report>
 
 | Code | When |
 | --- | --- |
-| 0 | the head score is not below the base score, or `--advisory` is given |
-| 1 | the head score is below the base score |
+| 0 | no mutant regressed, or `--advisory` is given |
+| 1 | a mutant regressed |
 | 2 | a report is not a Stryker mutation report, or the arguments do not parse |
 
 ## Sample output
 
-It prints the overall score of each report and the per-file scores that differ:
+It prints the verdict first, then each regression, each move into or out of a status that leaves the score, and each unmatched mutant:
 
 ```
-mutation-compare: base 83.33% (5/6) head 66.67% (4/6) delta -16.67pp
-  src/billing.ts: 75.00% (3/4) -> 50.00% (2/4)
-  1 unchanged file(s)
-mutation-compare: REGRESSION (-16.67pp)
+mutation-compare: REGRESSION (1 mutant(s))
+  regression src/billing.ts:12:5 ConditionalExpression "true": Killed -> Survived
+  moved src/loader.ts:4:1 ClassDeclaration "class {}": Killed -> RuntimeError
 ```
 
 ## Opting out
