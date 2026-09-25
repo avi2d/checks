@@ -4,22 +4,22 @@ import { changedPaths, checkoutFiles, collect, git, pathsAt, rangeFromArgs } fro
 import { runMain } from "./main.ts";
 import { readQuality } from "./quality-file.ts";
 
-type Fragment = {
+export type Fragment = {
   readonly file: string;
   readonly start: number;
   readonly end: number;
 };
 
-type Clone = readonly [Fragment, Fragment];
+export type Clone = readonly [Fragment, Fragment];
 
-type Rise = {
+export type Rise = {
   readonly file: string;
   readonly before: number;
   readonly after: number;
   readonly clones: readonly Clone[];
 };
 
-type Held = {
+export type Held = {
   readonly measured: number;
   readonly rises: readonly Rise[];
   readonly advisory: ReadonlyMap<string, number>;
@@ -86,13 +86,43 @@ const scan = Effect.fn("scan")(
   Effect.scoped,
 );
 
-function clonesOf(file: string, clones: readonly Clone[]): readonly Clone[] {
+export function clonesOf(file: string, clones: readonly Clone[]): readonly Clone[] {
   return clones
     .flatMap(([first, second]): Clone[] => {
       if (first.file === file) return [[first, second]];
       return second.file === file ? [[second, first]] : [];
     })
     .toSorted(([a], [b]) => a.start - b.start);
+}
+
+// Decides which held file repeats more lines than the same path, or the path it was renamed
+// from, repeated at the base.
+export function risesOf(
+  held: readonly string[],
+  before: ReadonlyMap<string, number>,
+  after: ReadonlyMap<string, number>,
+  formerPath: ReadonlyMap<string, string>,
+  clones: readonly Clone[],
+): readonly Rise[] {
+  return held
+    .flatMap((file): Rise[] => {
+      const was = before.get(formerPath.get(file) ?? file) ?? 0;
+      const is = after.get(file) ?? 0;
+      return is > was ? [{ file, before: was, after: is, clones: clonesOf(file, clones) }] : [];
+    })
+    .toSorted((a, b) => a.file.localeCompare(b.file));
+}
+
+// Tallies every held file that did not rise, plus every file outside the held set, as advisory.
+export function heldOf(
+  measured: number,
+  rises: readonly Rise[],
+  after: ReadonlyMap<string, number>,
+  othersRepeated: ReadonlyMap<string, number>,
+): Held {
+  const risen = new Set(rises.map((rise) => rise.file));
+  const advisory = [...after].filter(([file]) => !risen.has(file)).concat([...othersRepeated]);
+  return { measured, rises, advisory: new Map(advisory.toSorted(([a], [b]) => a.localeCompare(b))) };
 }
 
 const runHold = Effect.fn("runHold")(function* (root: string, production: readonly string[], base: string, head: string) {
@@ -107,28 +137,19 @@ const runHold = Effect.fn("runHold")(function* (root: string, production: readon
   const before = repeatedLines(yield* scan(root, base, yield* pathsAt(base, pathspecs, root)));
   const clones = yield* scan(root, head, held);
   const after = repeatedLines(clones);
-  const rises = held.flatMap((file): Rise[] => {
-    const was = before.get(formerPath.get(file) ?? file) ?? 0;
-    const is = after.get(file) ?? 0;
-    return is > was ? [{ file, before: was, after: is, clones: clonesOf(file, clones) }] : [];
-  });
-  const risen = new Set(rises.map((rise) => rise.file));
-  const advisory = [...after].filter(([file]) => !risen.has(file)).concat([...repeatedLines(yield* scan(root, head, others))]);
-  return {
-    measured: held.length,
-    rises: rises.toSorted((a, b) => a.file.localeCompare(b.file)),
-    advisory: new Map(advisory.toSorted(([a], [b]) => a.localeCompare(b))),
-  } satisfies Held;
+  const rises = risesOf(held, before, after, formerPath, clones);
+  const othersRepeated = repeatedLines(yield* scan(root, head, others));
+  return heldOf(held.length, rises, after, othersRepeated) satisfies Held;
 });
 
-function describe({ file, before, after, clones }: Rise): readonly string[] {
+export function describe({ file, before, after, clones }: Rise): readonly string[] {
   return [
     `  ${file}: ${after} repeated line(s), up from ${before}`,
     ...clones.map(([own, other]) => `    ${own.file}:${own.start}-${own.end} repeats ${other.file}:${other.start}-${other.end}`),
   ];
 }
 
-function report({ measured, rises, advisory }: Held): string {
+export function report({ measured, rises, advisory }: Held): string {
   const verdict =
     rises.length === 0
       ? [`${NAME}: ${measured} production file(s) repeat no more lines than where the range starts, ${MEASURE}`]

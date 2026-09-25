@@ -1,11 +1,12 @@
 import { $ } from "bun";
-import { expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { Schema } from "effect";
 import { withoutPullRequestEvent } from "../lib/env.ts";
-import { CHECKOUT, ran, scratchDirs, UNVENDORED_BUNFIG, type Ran } from "./lib/fixture-repo.ts";
+import { CHECKOUT, ran, UNVENDORED_BUNFIG, type Ran } from "./lib/fixture-repo.ts";
 
 const WIDGET = "export const widget = 42;\n";
 
@@ -20,45 +21,73 @@ type Output = {
   readonly text: string;
 };
 
-const scratch = scratchDirs();
+type Kind = "file" | "tarball";
+
+// Every dependency and its version are the same across every fixture, so one
+// `bun install` per kind serves every test that uses it.
+const KEPT_ACROSS_TESTS = new Set(["node_modules", "bun.lock"]);
 
 let dir = "";
+let fileDir = "";
+let tarballDir = "";
+let tarballPath = "";
+let packDir = "";
 
 function widgetTest(widget: string): string {
   return `import { expect, test } from "bun:test";\nimport { widget } from "${widget}";\ntest("widget", () => {\n  expect(widget).toBe(42);\n});\n`;
 }
 
-async function packTarball(): Promise<string> {
-  const packDir = await scratch("checks-pack-");
-  const packed = await $`bun pm pack --destination ${packDir} --quiet --ignore-scripts`.cwd(CHECKOUT).quiet();
-  return packed.stdout.toString().trim();
+function manifestFor(checks: string): Record<string, unknown> {
+  return {
+    name: "checks-consumer-fixture",
+    type: "module",
+    devDependencies: {
+      "@avi2dg/checks": checks,
+      effect: "4.0.0-rc.115",
+      oxlint: "1.83.0",
+      "@swc/core": "1.16.2",
+    },
+  };
 }
+
+async function installConsumer(installDir: string, checks: string): Promise<void> {
+  await writeFile(join(installDir, "package.json"), JSON.stringify(manifestFor(checks)));
+  await $`bun install`.cwd(installDir).quiet();
+}
+
+async function resetWorkspace(workDir: string): Promise<void> {
+  for (const entry of await readdir(workDir)) {
+    if (KEPT_ACROSS_TESTS.has(entry)) continue;
+    await rm(join(workDir, entry), { recursive: true, force: true });
+  }
+}
+
+beforeAll(async () => {
+  fileDir = await mkdtemp(join(tmpdir(), "checks-consumer-file-"));
+  await installConsumer(fileDir, `file:${CHECKOUT}`);
+
+  packDir = await mkdtemp(join(tmpdir(), "checks-pack-"));
+  const packed = await $`bun pm pack --destination ${packDir} --quiet --ignore-scripts`.cwd(CHECKOUT).quiet();
+  tarballPath = packed.stdout.toString().trim();
+
+  tarballDir = await mkdtemp(join(tmpdir(), "checks-consumer-tarball-"));
+  await installConsumer(tarballDir, `file:${tarballPath}`);
+}, 360_000);
+
+afterAll(async () => {
+  for (const one of [fileDir, tarballDir, packDir]) if (one) await rm(one, { recursive: true, force: true });
+}, 60_000);
 
 function oxlint(): Promise<Ran> {
   const binary = join(dir, "node_modules", ".bin", "oxlint");
   return ran($`${binary} --type-aware`.cwd(dir));
 }
 
-async function writeConsumerFixture(
-  manifest: Record<string, unknown> = {},
-  checks = `file:${CHECKOUT}`,
-): Promise<void> {
-  dir = await scratch("checks-consumer-");
-
-  await writeFile(
-    join(dir, "package.json"),
-    JSON.stringify({
-      name: "checks-consumer-fixture",
-      type: "module",
-      devDependencies: {
-        "@avi2dg/checks": checks,
-        effect: "4.0.0-rc.115",
-        oxlint: "1.83.0",
-        "@swc/core": "1.16.2",
-      },
-      ...manifest,
-    }),
-  );
+async function useConsumer(kind: Kind, manifest: Record<string, unknown> = {}): Promise<void> {
+  dir = kind === "file" ? fileDir : tarballDir;
+  await resetWorkspace(dir);
+  const checks = kind === "file" ? `file:${CHECKOUT}` : `file:${tarballPath}`;
+  await writeFile(join(dir, "package.json"), JSON.stringify({ ...manifestFor(checks), ...manifest }));
   await writeFile(
     join(dir, ".oxlintrc.json"),
     JSON.stringify({
@@ -70,8 +99,6 @@ async function writeConsumerFixture(
   // oxlint honours .gitignore but not ignorePatterns for node_modules,
   // so the fixture carries the same node_modules/ entry a real consumer has.
   await writeFile(join(dir, ".gitignore"), "node_modules/\n");
-
-  await $`bun install`.cwd(dir).quiet();
 }
 
 async function writeWidgetRepo(testFile: string, widget: string): Promise<void> {
@@ -97,7 +124,7 @@ async function runScript(script: string, env?: Readonly<Record<string, string | 
 test(
   "file: consumer goes red on a planted Effect.ignore, green once it is removed",
   async () => {
-    await writeConsumerFixture();
+    await useConsumer("file");
     await writeFile(
       join(dir, "plant.ts"),
       `import { Effect } from "effect";\n\nexport const program = Effect.ignore(Effect.fail("boom"));\n\nEffect.succeed(1);\n`,
@@ -120,7 +147,7 @@ test(
 test(
   "file: consumer that turns on no-throw and no-try-catch for src/ goes red on each, green once removed",
   async () => {
-    await writeConsumerFixture();
+    await useConsumer("file");
     await writeFile(
       join(dir, ".oxlintrc.json"),
       JSON.stringify({
@@ -207,7 +234,7 @@ const FLAT_SETTLE = `export function settle(order) {
 test(
   "file: consumer goes red on a tangled function under cognitive-complexity, green once it is flattened",
   async () => {
-    await writeConsumerFixture();
+    await useConsumer("file");
     await writeFile(
       join(dir, ".oxlintrc.json"),
       JSON.stringify({
@@ -234,7 +261,7 @@ test(
 test(
   "file: consumer lint stays green with a lint-dirty file inside the installed package",
   async () => {
-    await writeConsumerFixture();
+    await useConsumer("file");
     await writeFile(join(dir, "clean.ts"), `export const answer = 42;\n`);
     await writeFile(
       join(dir, "node_modules", "@avi2dg", "checks", "effect-channel", "planted.ts"),
@@ -250,7 +277,7 @@ test(
 test(
   "file: consumer goes red on a call to a function tagged @deprecated, green once it calls the replacement",
   async () => {
-    await writeConsumerFixture();
+    await useConsumer("file");
     await writeFile(
       join(dir, "legacy.ts"),
       `/** @deprecated Call fresh instead. */\nexport const stale = (): number => 1;\n\nexport const fresh = (): number => 2;\n`,
@@ -272,7 +299,7 @@ test(
 test(
   "a lint script calling checks-test-layout runs the installed layout check, red on a colocated test and green once it moves",
   async () => {
-    await writeConsumerFixture({
+    await useConsumer("file", {
       scripts: {
         test: "checks-test",
         lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout",
@@ -300,16 +327,12 @@ test(
 test(
   "packed-tarball consumer installs the files-limited surface and lints with the installed plugin and layout check",
   async () => {
-    const tarball = await packTarball();
-    await writeConsumerFixture(
-      {
-        scripts: {
-          test: "checks-test",
-          lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout",
-        },
+    await useConsumer("tarball", {
+      scripts: {
+        test: "checks-test",
+        lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout",
       },
-      `file:${tarball}`,
-    );
+    });
 
     const installed = join(dir, "node_modules", "@avi2dg", "checks");
     const manifest = Schema.decodeSync(Manifest)(await readFile(join(CHECKOUT, "package.json"), "utf8"));
@@ -347,30 +370,26 @@ test(
 test(
   "packed-tarball consumer runs every bin by its short name from a package script",
   async () => {
-    const tarball = await packTarball();
-    await writeConsumerFixture(
-      {
-        scripts: {
-          test: "checks-test",
-          lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout && checks-commit-identity HEAD",
-          gate: "checks-comment-gate HEAD",
-          ratchet: "checks-suppressions-ratchet HEAD",
-          clock: "checks-quarantine-clock HEAD",
-          backtest: "checks-backtest 5",
-          compare: "checks-mutation-compare mutation.json mutation.json",
-          wiring: "checks-ci-wiring",
-          flake: "checks-flake --runs 2",
-          generate: "checks-quality generate",
-          quality: "checks-quality --check",
-          size: "checks-size-budget HEAD",
-          repetition: "checks-repetition HEAD",
-          owners: "checks-feature-owners HEAD",
-          docs: "checks-docs HEAD",
-          kit: "oxlint --type-aware && checks-lint",
-        },
+    await useConsumer("tarball", {
+      scripts: {
+        test: "checks-test",
+        lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout && checks-commit-identity HEAD",
+        gate: "checks-comment-gate HEAD",
+        ratchet: "checks-suppressions-ratchet HEAD",
+        clock: "checks-quarantine-clock HEAD",
+        backtest: "checks-backtest 5",
+        compare: "checks-mutation-compare mutation.json mutation.json",
+        wiring: "checks-ci-wiring",
+        flake: "checks-flake --runs 2",
+        generate: "checks-quality generate",
+        quality: "checks-quality --check",
+        size: "checks-size-budget HEAD",
+        repetition: "checks-repetition HEAD",
+        owners: "checks-feature-owners HEAD",
+        docs: "checks-docs HEAD",
+        kit: "oxlint --type-aware && checks-lint",
       },
-      `file:${tarball}`,
-    );
+    });
     await writeFile(join(dir, "quality.json"), JSON.stringify({ gates: { ci: ["bun run lint"] } }));
 
     const manifest = Schema.decodeSync(Manifest)(await readFile(join(CHECKOUT, "package.json"), "utf8"));
@@ -451,8 +470,7 @@ test(
 test(
   "packed-tarball consumer generates the quality fragments with the installed bin, and they hold its Effect paths",
   async () => {
-    const tarball = await packTarball();
-    await writeConsumerFixture({ scripts: { generate: "checks-quality generate" } }, `file:${tarball}`);
+    await useConsumer("tarball", { scripts: { generate: "checks-quality generate" } });
     await writeFile(
       join(dir, "quality.json"),
       JSON.stringify({
