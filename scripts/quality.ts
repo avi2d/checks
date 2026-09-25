@@ -57,7 +57,7 @@ const FRAGMENTS = [
     reader: "oxlint",
     kitConfig: "./node_modules/@avi2dg/checks/oxlintrc.json",
     kitRepositoryConfig: "./oxlintrc.json",
-    kitConfigReason: "the kit's oxlint rules are not loaded",
+    kitConfigReason: "so the kit's oxlint rules are not loaded",
     build: oxlintFragment,
   },
   {
@@ -66,7 +66,7 @@ const FRAGMENTS = [
     reader: "the language service",
     kitConfig: "@avi2dg/checks/tsconfig.effect.json",
     kitRepositoryConfig: "./tsconfig.effect.json",
-    kitConfigReason: "the kit's Effect checks are not loaded",
+    kitConfigReason: "the one accepted spelling of the kit's Effect config",
     build: tsconfigFragment,
   },
 ] as const;
@@ -134,7 +134,7 @@ const fragmentProblems = Effect.fn("fragmentProblems")(function* (root: string, 
     }
     const requiredKitConfig = kitRepository ? kitRepositoryConfig : kitConfig;
     if (!configured.includes(path.normalize(requiredKitConfig))) {
-      problems.push(`${extendedBy} does not extend ${requiredKitConfig}, so ${kitConfigReason}`);
+      problems.push(`${extendedBy} does not extend ${requiredKitConfig}, ${kitConfigReason}`);
     }
   }
   return problems;

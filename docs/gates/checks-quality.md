@@ -35,7 +35,7 @@ A rule only this repository needs stays in its own `.oxlintrc.json`, whose overr
 - A fragment is left over once `quality.json` stops declaring `sources.effect`.
 - `.oxlintrc.json` or `tsconfig.json` does not list its fragment in `extends`, so the tool never reads it.
 - `.oxlintrc.json` does not extend `./node_modules/@avi2dg/checks/oxlintrc.json`, so the kit's oxlint rules are not loaded.
-- `tsconfig.json` does not extend `@avi2dg/checks/tsconfig.effect.json`, so the kit's Effect checks are not loaded.
+- `tsconfig.json` does not extend `@avi2dg/checks/tsconfig.effect.json`, the one accepted spelling of the kit's Effect config.
 - A `sources.effect.paths` or `sources.production` glob matches no tracked or untracked file, so it holds nothing.
 
 Two details of the fragments are easy to get wrong, so the kit's tests pin both:

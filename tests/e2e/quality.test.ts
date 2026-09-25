@@ -160,12 +160,19 @@ test(
     expect((await quality("--check")).exitCode).toBe(0);
 
     const tsconfig = await readFile(join(tree.dir, "tsconfig.json"), "utf8");
+    const tsconfigRefusal =
+      "tsconfig.json does not extend @avi2dg/checks/tsconfig.effect.json, the one accepted spelling of the kit's Effect config";
     await tree.put("tsconfig.json", tsconfig.replace('"@avi2dg/checks/tsconfig.effect.json",', ""));
     const missingTsconfig = await quality("--check");
-    expect(missingTsconfig.text).toContain(
-      "tsconfig.json does not extend @avi2dg/checks/tsconfig.effect.json, so the kit's Effect checks are not loaded",
-    );
+    expect(missingTsconfig.text).toContain(tsconfigRefusal);
     expect(missingTsconfig.exitCode).toBe(1);
+    await tree.put(
+      "tsconfig.json",
+      tsconfig.replace('"@avi2dg/checks/tsconfig.effect.json"', '"./node_modules/@avi2dg/checks/tsconfig.effect.json"'),
+    );
+    const nodeModulesTsconfig = await quality("--check");
+    expect(nodeModulesTsconfig.text).toContain(tsconfigRefusal);
+    expect(nodeModulesTsconfig.exitCode).toBe(1);
     await tree.put("tsconfig.json", tsconfig);
     expect((await quality("--check")).exitCode).toBe(0);
   },
