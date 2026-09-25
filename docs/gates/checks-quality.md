@@ -86,7 +86,7 @@ checks-quality: 2 problem(s) with what quality.json declares:
 A passing run says what the generated files hold:
 
 ```
-checks-quality: oxlintrc.quality.json and tsconfig.quality.json hold what quality.json declares
+checks-quality: oxlintrc.quality.json and tsconfig.quality.json and .github/workflows/ci.yml and .github/workflows/commitlint.yml hold what quality.json declares
 ```
 
 A stale workflow is reported the same way as a stale fragment.
@@ -94,7 +94,7 @@ A stale workflow is reported the same way as a stale fragment.
 ## Opting out
 
 It runs only in a repository that tracks `quality.json`, and a selection in `quality.json` always keeps it, since the file it sits in is what makes it apply.
-A repository that declares no `sources.effect` gets no fragment, and the check then only refuses a left-over one.
+A repository that declares no `sources.effect` gets no fragment, and the check then refuses a left-over one.
 Every repository gets the title lint workflow, and one with `gates.ci` gets the suite with it.
 
 ## Related topics
