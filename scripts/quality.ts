@@ -109,7 +109,9 @@ function runScalar(command: string): string {
 }
 
 export function commitlintWorkflow(commitlintConfig: string): string {
-  return `on:
+  return `permissions:
+  contents: read
+on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
 jobs:
@@ -123,7 +125,12 @@ jobs:
       - run: printf '%s' "$PR_TITLE (#0000)" > "$RUNNER_TEMP/pr-title"
         env:
           PR_TITLE: \${{ github.event.pull_request.title }}
+      # A title starting with git's comment character lints as empty without this: commentChar moves off '#'.
       - run: ${titleLint(commitlintConfig)}
+        env:
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: core.commentChar
+          GIT_CONFIG_VALUE_0: "\\x01"
 `;
 }
 
@@ -132,7 +139,7 @@ export function suiteWorkflow(defaultBranch: string, gates: readonly string[], b
     ? "      - uses: oven-sh/setup-bun@v2\n        with:\n          bun-version-file: .bun-version\n"
     : "      - uses: oven-sh/setup-bun@v2\n";
   const steps = gates.map((gate) => `      - run: ${runScalar(gate)}\n`).join("");
-  return `name: ci\non:\n  push:\n    branches: [${defaultBranch}]\n  pull_request:\n    types: [opened, edited, synchronize, reopened]\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      # The head, not GitHub's merge ref, so the tree the gates read is the commit the range ends at.\n      # The whole history, since the range starts where the head branched from the base branch.\n      - uses: actions/checkout@v5\n        with:\n          ref: \${{ github.event.pull_request.head.sha || github.sha }}\n          fetch-depth: 0\n${setup}      - run: bun install --frozen-lockfile\n${steps}`;
+  return `name: ci\non:\n  push:\n    branches: [${defaultBranch}]\n  pull_request:\n    types: [opened, edited, synchronize, reopened]\npermissions:\n  contents: read\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      # The head, not GitHub's merge ref, so the tree the gates read is the commit the range ends at.\n      # The whole history, since the range starts where the head branched from the base branch.\n      - uses: actions/checkout@v5\n        with:\n          ref: \${{ github.event.pull_request.head.sha || github.sha }}\n          fetch-depth: 0\n${setup}      - run: bun install --frozen-lockfile\n${steps}`;
 }
 
 export function workflowsFor(quality: Quality, recipe: WorkflowRecipe): readonly GeneratedWorkflow[] {

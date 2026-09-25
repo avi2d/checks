@@ -1,6 +1,10 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { commitlintWorkflow } from "../../scripts/quality.ts";
+import { lastStep, parseWorkflow } from "../lib/workflow.ts";
 import { CHECKOUT, ran, type Ran } from "./lib/fixture-repo.ts";
 
 function lint(message: string): Promise<Ran> {
@@ -53,4 +57,17 @@ test(
     expect(long.exitCode).not.toBe(0);
   },
   120_000,
+);
+
+test(
+  "the generated title-lint step rejects a title that starts with git's comment character",
+  async () => {
+    const step = lastStep(parseWorkflow(commitlintWorkflow("./commitlint.config.js")));
+    const runnerTemp = await mkdtemp(join(tmpdir(), "checks-commitlint-hash-guard-"));
+    await writeFile(join(runnerTemp, "pr-title"), "# not a conventional title at all (#0000)");
+
+    const red = await ran($`${{ raw: step.run }}`.cwd(CHECKOUT).env({ ...process.env, ...step.env, RUNNER_TEMP: runnerTemp }));
+    expect(red.exitCode).not.toBe(0);
+  },
+  60_000,
 );
