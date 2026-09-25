@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect";
 import { commentsIn, refusalsIn, syntaxOf, unreadable, type Syntax } from "./comment-matchers.ts";
 
-export { REFUSED_DIRECTIVES, SYNTAXES, syntaxOf, type Comment } from "./comment-matchers.ts";
+export { SYNTAXES, syntaxOf, type Comment } from "./comment-matchers.ts";
 
 export class UnreadableCode extends Schema.TaggedError<UnreadableCode>()("UnreadableCode", {
   message: Schema.String,

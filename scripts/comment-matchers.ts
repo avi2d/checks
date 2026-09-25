@@ -244,13 +244,13 @@ function openingBlock(found: readonly Comment[], source: string): Comment[] {
   return block;
 }
 
-export const REFUSED_DIRECTIVES: readonly string[] = [
+export const REFUSED_DIRECTIVES = [
   "@ts-expect-error",
   "@ts-ignore",
   "biome-ignore",
   "eslint-disable",
   "prettier-ignore",
-];
+] as const satisfies readonly string[];
 
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
