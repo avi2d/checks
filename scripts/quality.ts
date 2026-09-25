@@ -287,7 +287,7 @@ const generate = Effect.fn("generate")(function* (root: string) {
     }
   }
   const workflows = workflowsFor(quality, yield* recipeOf(root));
-  if (workflows.length > 0) yield* fs.makeDirectory(path.join(root, ".github", "workflows"), { recursive: true });
+  yield* fs.makeDirectory(path.join(root, ".github", "workflows"), { recursive: true });
   for (const { file, content } of workflows) {
     yield* fs.writeFileString(path.join(root, file), content);
     yield* Console.log(`${NAME}: wrote ${file}`);
