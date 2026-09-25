@@ -1,8 +1,7 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { join, resolve } from "node:path";
-
-const CHECKOUT = resolve(import.meta.dir, "..", "..");
+import { join } from "node:path";
+import { CHECKOUT } from "./lib/fixture-repo.ts";
 
 test(
   "the repo cruise parses its own TypeScript under effect-channel, scripts and tests",

@@ -1,4 +1,5 @@
 import { $ } from "bun";
+import { afterEach } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -21,7 +22,7 @@ export type FixtureRepo = {
   readonly dispose: () => Promise<void>;
 };
 
-async function ran(pending: $.ShellPromise): Promise<Ran> {
+export async function ran(pending: $.ShellPromise): Promise<Ran> {
   const result = await pending.nothrow().quiet();
   return { exitCode: result.exitCode, text: result.stdout.toString() + result.stderr.toString() };
 }
@@ -47,6 +48,33 @@ export async function fixtureRepo(prefix: string, files: Readonly<Record<string,
     lint: () => ran($`bun ${join(CHECKOUT, "scripts", "lint.ts")}`.cwd(dir).env({ ...withoutPullRequestEvent(), PATH: KIT_PATH })),
     dispose: () => rm(dir, { recursive: true, force: true }),
   };
+}
+
+// Called at a test file's top level, so afterEach releases what each test in the file opened.
+export function releasedAfterEach<A extends readonly unknown[], T>(
+  open: (...args: A) => Promise<T>,
+  release: (opened: T) => Promise<void>,
+): (...args: A) => Promise<T> {
+  const opened: T[] = [];
+  afterEach(async () => {
+    for (const one of opened.splice(0)) await release(one);
+  });
+  return async (...args) => {
+    const one = await open(...args);
+    opened.push(one);
+    return one;
+  };
+}
+
+export function fixtureRepos(prefix: string): (files?: Readonly<Record<string, string>>) => Promise<FixtureRepo> {
+  return releasedAfterEach((files: Readonly<Record<string, string>> = {}) => fixtureRepo(prefix, files), (repo) => repo.dispose());
+}
+
+export function scratchDirs(): (prefix: string) => Promise<string> {
+  return releasedAfterEach(
+    (prefix: string) => mkdtemp(join(tmpdir(), prefix)),
+    (dir) => rm(dir, { recursive: true, force: true }),
+  );
 }
 
 export async function lintWiring(quality: Readonly<Record<string, unknown>>): Promise<Readonly<Record<string, string>>> {

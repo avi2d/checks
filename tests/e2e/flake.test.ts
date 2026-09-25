@@ -1,11 +1,11 @@
 import { $ } from "bun";
-import { afterEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { expect, test } from "bun:test";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { Schema } from "effect";
+import { CHECKOUT, scratchDirs } from "./lib/fixture-repo.ts";
 
-const SCRIPT = resolve(import.meta.dir, "..", "..", "scripts", "flake.ts");
+const SCRIPT = join(CHECKOUT, "scripts", "flake.ts");
 const SEEDS = Array.from({ length: 12 }, (_, index) => index + 1);
 
 const ORDER_DEPENDENT = `import { expect, test } from "bun:test";
@@ -36,17 +36,12 @@ const FlakeRecord = Schema.fromJsonString(
   }),
 );
 
+const scratch = scratchDirs();
+
 let dir = "";
 
-afterEach(async () => {
-  if (dir !== "") {
-    await rm(dir, { recursive: true, force: true });
-    dir = "";
-  }
-});
-
 async function consumer(cache: string): Promise<void> {
-  dir = await mkdtemp(join(tmpdir(), "checks-flake-"));
+  dir = await scratch("checks-flake-");
   await mkdir(join(dir, "tests"));
   await writeFile(join(dir, "package.json"), JSON.stringify({ name: "consumer" }));
   await writeFile(join(dir, "tests", "cache.test.ts"), cache);

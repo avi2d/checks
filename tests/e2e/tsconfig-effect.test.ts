@@ -1,11 +1,9 @@
 import { $ } from "bun";
-import { afterEach, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { expect, test } from "bun:test";
+import { readFile, symlink, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { Schema } from "effect";
-
-const CHECKOUT = resolve(import.meta.dir, "..", "..");
+import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
 
 const SEVERITIES = [
   "anyUnknownInErrorContext",
@@ -39,21 +37,12 @@ const TsconfigEffect = Schema.fromJsonString(
   }),
 );
 
+const scratch = scratchDirs();
+
 let dir = "";
 
-afterEach(async () => {
-  if (dir !== "") {
-    await rm(dir, { recursive: true, force: true });
-    dir = "";
-  }
-});
-
-async function run(binary: string, args: string[]): Promise<{ exitCode: number; text: string }> {
-  const result = await $`${binary} ${args}`.cwd(dir).nothrow().quiet();
-  return {
-    exitCode: result.exitCode,
-    text: result.stdout.toString() + result.stderr.toString(),
-  };
+function run(binary: string, args: string[]): Promise<Ran> {
+  return ran($`${binary} ${args}`.cwd(dir));
 }
 
 test("tsconfig.effect.json carries the language-service block and erasableSyntaxOnly", async () => {
@@ -71,7 +60,7 @@ test("tsconfig.effect.json carries the language-service block and erasableSyntax
   }
 
   // The fragment must also work through extends, not just read correctly.
-  dir = await mkdtemp(join(tmpdir(), "checks-tsconfig-"));
+  dir = await scratch("checks-tsconfig-");
   await writeFile(
     join(dir, "tsconfig.json"),
     JSON.stringify({

@@ -2,8 +2,9 @@
 import { parse } from "@swc/core";
 import { Console, Effect, Path, Schema } from "effect";
 import { changedPaths, git, pathsAt, rangeEnds, type Change } from "./git.ts";
-import { runMain, Usage } from "./main.ts";
-import { PROOF_DIRECTORY, readQuality, type Feature } from "./quality-file.ts";
+import { runMain } from "./main.ts";
+import { PROOF_DIRECTORY, type Feature } from "./quality-file.ts";
+import { rangeGateInputs } from "./range-gate.ts";
 
 type Unproven = {
   readonly feature: string;
@@ -120,17 +121,13 @@ function signalReport(touched: readonly Touch[]): string {
 }
 
 const owners = Effect.gen(function* () {
-  const [first, second, ...extra] = process.argv.slice(2);
-  if (first === undefined || extra.length > 0) return yield* new Usage({ message: USAGE });
-
-  const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
-  const { source, quality } = yield* readQuality(root);
+  const { refs, root, source, quality } = yield* rangeGateInputs(USAGE);
   const features = quality.features ?? [];
   if (features.length === 0) {
     yield* Console.log(`${NAME}: ${source} declares no feature`);
     return true;
   }
-  const { base, head } = yield* rangeEnds(first, second, root);
+  const { base, head } = yield* rangeEnds(refs.first, refs.second, root);
   const found = yield* unproven(root, head, features);
   yield* Console.log(proofReport(features, found));
   if (quality.changeSignal === "advisory") {

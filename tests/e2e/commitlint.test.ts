@@ -1,19 +1,12 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
+import { CHECKOUT, ran, type Ran } from "./lib/fixture-repo.ts";
 
-const CHECKOUT = resolve(import.meta.dir, "..", "..");
-
-async function lint(message: string): Promise<{ exitCode: number; text: string }> {
+function lint(message: string): Promise<Ran> {
   const binary = join(CHECKOUT, "node_modules", ".bin", "commitlint");
   const config = join(CHECKOUT, "commitlint.config.js");
-  const result = await $`printf '%s' ${message} | ${binary} --config ${config}`
-    .nothrow()
-    .quiet();
-  return {
-    exitCode: result.exitCode,
-    text: result.stdout.toString() + result.stderr.toString(),
-  };
+  return ran($`printf '%s' ${message} | ${binary} --config ${config}`);
 }
 
 test(

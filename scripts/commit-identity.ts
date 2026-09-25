@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect, Schema } from "effect";
-import { git } from "./git.ts";
-import { runMain, Usage } from "./main.ts";
+import { git, refArgs } from "./git.ts";
+import { runMain } from "./main.ts";
 import { readQuality, type Identity } from "./quality-file.ts";
 
 type Commit = {
@@ -98,8 +98,7 @@ function inspect(commit: Commit, allowed: readonly Identity[]): Offence | undefi
 }
 
 const check = Effect.gen(function* () {
-  const [first, second, ...extra] = process.argv.slice(2);
-  if (first === undefined || extra.length > 0) return yield* new Usage({ message: USAGE });
+  const { first, second } = yield* refArgs(process.argv.slice(2), USAGE);
   const range = second === undefined ? first : `${first}..${second}`;
   const revisions = second === undefined ? ["-1", range] : [range];
 

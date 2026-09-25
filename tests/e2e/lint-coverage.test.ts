@@ -2,9 +2,9 @@ import { $ } from "bun";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
+import { CHECKOUT, ran, type Ran } from "./lib/fixture-repo.ts";
 
-const CHECKOUT = resolve(import.meta.dir, "..", "..");
 const SCRIPT = join(CHECKOUT, "scripts", "lint-coverage.sh");
 const BIN = join(CHECKOUT, "node_modules", ".bin");
 const SYSTEM_PATH = "/usr/bin:/bin";
@@ -12,16 +12,8 @@ const PLANT = "src/skipped.ts";
 
 let dir = "";
 
-async function coverage(path = `${BIN}:${process.env.PATH ?? ""}`): Promise<{ exitCode: number; text: string }> {
-  const result = await $`${SCRIPT}`
-    .cwd(dir)
-    .env({ ...process.env, PATH: path })
-    .nothrow()
-    .quiet();
-  return {
-    exitCode: result.exitCode,
-    text: result.stdout.toString() + result.stderr.toString(),
-  };
+function coverage(path = `${BIN}:${process.env.PATH ?? ""}`): Promise<Ran> {
+  return ran($`${SCRIPT}`.cwd(dir).env({ ...process.env, PATH: path }));
 }
 
 beforeAll(async () => {

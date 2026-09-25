@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect, Schema } from "effect";
-import { git, parentOrEmptyTree } from "./git.ts";
-import { runMain, Usage } from "./main.ts";
+import { git, parentOrEmptyTree, refArgs } from "./git.ts";
+import { runMain } from "./main.ts";
 
 export const SUPPRESSIONS = "oxlint-suppressions.json";
 
@@ -49,28 +49,27 @@ export const parseSuppressions = Effect.fn("parseSuppressions")(function* (
   return suppressions;
 });
 
+type Count = {
+  readonly file: string;
+  readonly rule: string;
+  readonly count: number;
+};
+
+function countsOf(suppressions: Suppressions): readonly Count[] {
+  return [...suppressions].flatMap(([file, rules]) => [...rules].map(([rule, count]) => ({ file, rule, count })));
+}
+
+function riseOf({ file, rule, count }: Count, before: number | undefined): readonly Rise[] {
+  if (before === undefined) return count > 0 ? [{ kind: "appeared", file, rule, head: count }] : [];
+  return count > before ? [{ kind: "rose", file, rule, base: before, head: count }] : [];
+}
+
 export function compareSuppressions(base: Suppressions, head: Suppressions): Ratchet {
-  const rises: Rise[] = [];
-  let counted = 0;
-  for (const [file, rules] of head) {
-    for (const [rule, count] of rules) {
-      counted += 1;
-      const before = base.get(file)?.get(rule);
-      if (before === undefined) {
-        if (count > 0) rises.push({ kind: "appeared", file, rule, head: count });
-      } else if (count > before) {
-        rises.push({ kind: "rose", file, rule, base: before, head: count });
-      }
-    }
-  }
-  let lowered = 0;
-  for (const [file, rules] of base) {
-    for (const [rule, count] of rules) {
-      if ((head.get(file)?.get(rule) ?? 0) < count) lowered += 1;
-    }
-  }
+  const counts = countsOf(head);
+  const rises = counts.flatMap((counted) => riseOf(counted, base.get(counted.file)?.get(counted.rule)));
+  const lowered = countsOf(base).filter(({ file, rule, count }) => (head.get(file)?.get(rule) ?? 0) < count).length;
   rises.sort((a, b) => a.file.localeCompare(b.file) || a.rule.localeCompare(b.rule));
-  return { counted, lowered, rises };
+  return { counted: counts.length, lowered, rises };
 }
 
 function describeRise(rise: Rise): string {
@@ -118,8 +117,7 @@ export const runTip = Effect.fn("runTip")(function* (tip: string) {
 });
 
 const ratchet = Effect.gen(function* () {
-  const [first, second, ...extra] = process.argv.slice(2);
-  if (first === undefined || extra.length > 0) return yield* new Usage({ message: USAGE });
+  const { first, second } = yield* refArgs(process.argv.slice(2), USAGE);
 
   const result = second !== undefined ? yield* runRange(first, second) : yield* runTip(first);
 

@@ -1,26 +1,20 @@
 import { $ } from "bun";
-import { afterEach, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { expect, test } from "bun:test";
+import { readFile, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { CHECKOUT, fixtureRepos, ran, type Ran } from "./lib/fixture-repo.ts";
 
-const SCRIPT = resolve(import.meta.dir, "..", "..", "scripts", "changelog-write.ts");
+const SCRIPT = join(CHECKOUT, "scripts", "changelog-write.ts");
 const DATED = { GIT_AUTHOR_DATE: "2026-09-01T12:00:00+00:00", GIT_COMMITTER_DATE: "2026-09-01T12:00:00+00:00" };
 // bun test pins its own zone to UTC, so the writer and the expected date both take this one instead.
 const ZONE = "Pacific/Kiritimati";
+const repository = fixtureRepos("checks-changelog-");
 
 let dir = "";
 
-afterEach(async () => {
-  if (dir !== "") {
-    await rm(dir, { recursive: true, force: true });
-    dir = "";
-  }
-});
-
 async function initRepo(): Promise<void> {
-  dir = await mkdtemp(join(tmpdir(), "checks-changelog-"));
-  await $`git init -q -b main`.cwd(dir).quiet();
+  ({ dir } = await repository());
+  // A merge or a revert commits outside commit(), so the repository carries an identity of its own.
   await $`git config user.name tester && git config user.email tester@example.com`.cwd(dir).quiet();
 }
 
@@ -32,9 +26,8 @@ async function commit(message: string): Promise<void> {
   await $`git add -A && git commit -q --no-gpg-sign --allow-empty -m ${message}`.cwd(dir).env({ ...process.env, ...DATED }).quiet();
 }
 
-async function changelog(cwd = dir): Promise<{ exitCode: number; text: string }> {
-  const result = await $`bun ${SCRIPT}`.cwd(cwd).env({ ...process.env, TZ: ZONE }).nothrow().quiet();
-  return { exitCode: result.exitCode, text: result.stdout.toString() + result.stderr.toString() };
+function changelog(cwd = dir): Promise<Ran> {
+  return ran($`bun ${SCRIPT}`.cwd(cwd).env({ ...process.env, TZ: ZONE }));
 }
 
 async function rewritten(releases: number, cwd = dir): Promise<string> {

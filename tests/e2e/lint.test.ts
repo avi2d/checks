@@ -1,11 +1,10 @@
 import { $ } from "bun";
-import { afterEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { expect, test } from "bun:test";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { withoutPullRequestEvent } from "../lib/env.ts";
+import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
 
-const CHECKOUT = resolve(import.meta.dir, "..", "..");
 const SCRIPT = join(CHECKOUT, "scripts", "lint.ts");
 const OWNER = ["-c", "user.name=avi2d", "-c", "user.email=avi2dg@gmail.com"];
 const STRANGER = ["-c", "user.name=stranger", "-c", "user.email=stranger@example.com"];
@@ -13,20 +12,16 @@ const FIXTURE_AUTHOR = { name: "Wren Fixture", email: "wren@example.com" };
 const FIXTURE = ["-c", `user.name=${FIXTURE_AUTHOR.name}`, "-c", `user.email=${FIXTURE_AUTHOR.email}`];
 const METADATA_GATES = ["checks-commit-identity", "checks-comment-gate", "checks-suppressions-ratchet", "checks-ci-wiring", "checks-docs"];
 const FOUNDER = { name: "founder", email: "founder@example.com" };
+const FOUNDER_IDENTITY = ["-c", `user.name=${FOUNDER.name}`, "-c", `user.email=${FOUNDER.email}`];
 
 const LOCAL_ENV = {
   ...withoutPullRequestEvent(),
   PATH: `${join(CHECKOUT, "node_modules", ".bin")}:${process.env["PATH"] ?? ""}`,
 };
 
-let dir = "";
+const scratch = scratchDirs();
 
-afterEach(async () => {
-  if (dir !== "") {
-    await rm(dir, { recursive: true, force: true });
-    dir = "";
-  }
-});
+let dir = "";
 
 async function commit(message: string, identity: readonly string[] = OWNER): Promise<string> {
   await $`git add -A && git ${identity} commit -q --no-gpg-sign -m ${message}`.cwd(dir).quiet();
@@ -41,7 +36,7 @@ async function suppressions(count: number): Promise<void> {
 }
 
 async function scaffold(quality: Record<string, unknown> = {}): Promise<void> {
-  dir = await mkdtemp(join(tmpdir(), "checks-lint-"));
+  dir = await scratch("checks-lint-");
   await writeFile(
     join(dir, "package.json"),
     JSON.stringify({ name: "checks-lint-fixture", type: "module", scripts: { lint: "checks-lint", test: "checks-test" } }),
@@ -75,8 +70,13 @@ async function writeSourceFreeManifest(lintGates?: readonly string[]): Promise<v
   );
 }
 
+async function foundRepo(): Promise<string> {
+  await scaffold({ commitIdentity: { authors: [FOUNDER] } });
+  return commit("feat: first commit", FOUNDER_IDENTITY);
+}
+
 async function initSourceFreeRepo(lintGates?: readonly string[]): Promise<void> {
-  dir = await mkdtemp(join(tmpdir(), "checks-lint-source-free-"));
+  dir = await scratch("checks-lint-source-free-");
   await writeSourceFreeManifest(lintGates);
   await mkdir(join(dir, ".github", "workflows"), { recursive: true });
   await writeFile(
@@ -91,17 +91,8 @@ async function initSourceFreeRepo(lintGates?: readonly string[]): Promise<void> 
   await $`git checkout -q -b feature`.cwd(dir).quiet();
 }
 
-async function lint(
-  args: readonly string[] = [],
-  env: Readonly<Record<string, string>> = {},
-  cwd: string = dir,
-): Promise<{ exitCode: number; text: string }> {
-  const result = await $`bun ${SCRIPT} ${args}`
-    .cwd(cwd)
-    .env({ ...LOCAL_ENV, ...env })
-    .nothrow()
-    .quiet();
-  return { exitCode: result.exitCode, text: result.stdout.toString() + result.stderr.toString() };
+function lint(args: readonly string[] = [], env: Readonly<Record<string, string>> = {}, cwd: string = dir): Promise<Ran> {
+  return ran($`bun ${SCRIPT} ${args}`.cwd(cwd).env({ ...LOCAL_ENV, ...env }));
 }
 
 test(
@@ -208,9 +199,7 @@ test(
 test(
   "a new repository's root commit, pushed to main, gets a verdict from every range gate",
   async () => {
-    await scaffold({ commitIdentity: { authors: [FOUNDER] } });
-    const founder = ["-c", `user.name=${FOUNDER.name}`, "-c", `user.email=${FOUNDER.email}`];
-    const clean = await commit("feat: first commit", founder);
+    const clean = await foundRepo();
     await $`git update-ref refs/remotes/origin/main HEAD`.cwd(dir).quiet();
 
     const pushed = await lint();
@@ -220,7 +209,7 @@ test(
 
     await suppressions(1);
     await writeFile(join(dir, "widget.ts"), "// @ts-ignore\nexport const widget = 42;\n");
-    await $`git add -A && git ${founder} commit -q --no-gpg-sign --amend --no-edit`.cwd(dir).quiet();
+    await $`git add -A && git ${FOUNDER_IDENTITY} commit -q --no-gpg-sign --amend --no-edit`.cwd(dir).quiet();
     const dirty = (await $`git rev-parse HEAD`.cwd(dir).quiet()).stdout.toString().trim();
     await $`git update-ref refs/remotes/origin/main HEAD`.cwd(dir).quiet();
 
@@ -239,9 +228,7 @@ test(
 test(
   "a freshly initialised repository with no remote gets HEAD judged alone, its root commit against the empty tree",
   async () => {
-    await scaffold({ commitIdentity: { authors: [FOUNDER] } });
-    const founder = ["-c", `user.name=${FOUNDER.name}`, "-c", `user.email=${FOUNDER.email}`];
-    const clean = await commit("feat: first commit", founder);
+    const clean = await foundRepo();
 
     const passed = await lint();
     expect(passed.text).toContain(
@@ -251,7 +238,7 @@ test(
     expect(passed.exitCode).toBe(0);
 
     await writeFile(join(dir, "widget.ts"), "// @ts-ignore\nexport const widget = 42;\n");
-    await $`git add -A && git ${founder} commit -q --no-gpg-sign --amend --no-edit`.cwd(dir).quiet();
+    await $`git add -A && git ${FOUNDER_IDENTITY} commit -q --no-gpg-sign --amend --no-edit`.cwd(dir).quiet();
     const violated = await lint();
     expect(violated.text).toContain("widget.ts:1 carries the machine-read directive `@ts-ignore`");
     expect(violated.text).toContain("checks-lint: 1 of 11 gate(s) failed: checks-comment-gate\n");
@@ -263,12 +250,10 @@ test(
 test(
   "a clone with remote-tracking refs but no origin/main still refuses to resolve the range",
   async () => {
-    await scaffold({ commitIdentity: { authors: [FOUNDER] } });
-    const founder = ["-c", `user.name=${FOUNDER.name}`, "-c", `user.email=${FOUNDER.email}`];
-    await commit("feat: first commit", founder);
+    await foundRepo();
     await $`git checkout -q -b feature`.cwd(dir).quiet();
     await writeFile(join(dir, "clean.ts"), "export const answer = 42;\n");
-    await commit("feat: clean", founder);
+    await commit("feat: clean", FOUNDER_IDENTITY);
     await $`git checkout -q main`.cwd(dir).quiet();
     const clone = join(dir, "clone");
     await $`git clone -q --single-branch --branch feature ${dir} ${clone}`.quiet();

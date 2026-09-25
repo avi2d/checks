@@ -1,10 +1,9 @@
 import { $ } from "bun";
-import { afterEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { expect, test } from "bun:test";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { CHECKOUT, fixtureRepos, ran, type Ran } from "./lib/fixture-repo.ts";
 
-const CHECKOUT = resolve(import.meta.dir, "..", "..");
 const SCRIPT = join(CHECKOUT, "scripts", "ci-wiring.ts");
 const LINT_COVERAGE = join(CHECKOUT, "scripts", "lint-coverage.sh");
 const METADATA_GATES = ["checks-commit-identity", "checks-comment-gate", "checks-suppressions-ratchet", "checks-ci-wiring", "checks-docs"];
@@ -21,20 +20,12 @@ jobs:
       - run: bun run test
 `;
 
+const repository = fixtureRepos("checks-ci-wiring-");
+
 let dir = "";
 
-afterEach(async () => {
-  if (dir !== "") {
-    await rm(dir, { recursive: true, force: true });
-    dir = "";
-  }
-});
-
 async function initRepo(quality: unknown, workflow: string): Promise<void> {
-  dir = await mkdtemp(join(tmpdir(), "checks-ci-wiring-"));
-  await writeFile(join(dir, "quality.json"), JSON.stringify(quality));
-  await writeWorkflow(workflow);
-  await $`git init -q -b main`.cwd(dir).quiet();
+  ({ dir } = await repository({ "quality.json": JSON.stringify(quality), ".github/workflows/ci.yml": workflow }));
 }
 
 async function writeWorkflow(workflow: string): Promise<void> {
@@ -42,9 +33,8 @@ async function writeWorkflow(workflow: string): Promise<void> {
   await writeFile(join(dir, ".github", "workflows", "ci.yml"), workflow);
 }
 
-async function check(cwd = dir): Promise<{ exitCode: number; text: string }> {
-  const result = await $`bun ${SCRIPT}`.cwd(cwd).nothrow().quiet();
-  return { exitCode: result.exitCode, text: result.stdout.toString() + result.stderr.toString() };
+function check(cwd = dir): Promise<Ran> {
+  return ran($`bun ${SCRIPT}`.cwd(cwd));
 }
 
 test(

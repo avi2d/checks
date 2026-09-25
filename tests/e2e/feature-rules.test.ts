@@ -1,11 +1,10 @@
 import { $ } from "bun";
-import { afterEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { expect, test } from "bun:test";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { globPattern } from "../../scripts/feature-rules.ts";
+import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
 
-const CHECKOUT = resolve(import.meta.dir, "..", "..");
 const BILLING = {
   name: "billing",
   root: "src/billing",
@@ -14,16 +13,9 @@ const BILLING = {
   proof: "tests/e2e/billing.test.ts",
 };
 
-let dir = "";
-let packDir = "";
+const scratch = scratchDirs();
 
-afterEach(async () => {
-  for (const path of [dir, packDir]) {
-    if (path !== "") await rm(path, { recursive: true, force: true });
-  }
-  dir = "";
-  packDir = "";
-});
+let dir = "";
 
 async function write(files: Readonly<Record<string, string>>): Promise<void> {
   for (const [name, content] of Object.entries(files)) {
@@ -56,15 +48,21 @@ async function billingProject(kit: string): Promise<void> {
   });
 }
 
-async function depcruise(binary: string): Promise<{ exitCode: number; text: string }> {
-  const result = await $`${binary} --config .dependency-cruiser.cjs src tests`.cwd(dir).nothrow().quiet();
-  return { exitCode: result.exitCode, text: result.stdout.toString() + result.stderr.toString() };
+function depcruise(binary: string): Promise<Ran> {
+  return ran($`${binary} --config .dependency-cruiser.cjs src tests`.cwd(dir));
+}
+
+async function importTheEntry(binary: string): Promise<void> {
+  await write({ "src/main.ts": `import { charge } from "./billing/index.ts";\n\nexport const main = charge;\n` });
+  const green = await depcruise(binary);
+  expect(green.text).toContain("no dependency violations found");
+  expect(green.exitCode).toBe(0);
 }
 
 test(
   "a deep import into a feature from outside it goes red naming the rule, green once it imports the entry",
   async () => {
-    dir = await mkdtemp(join(tmpdir(), "checks-feature-rules-"));
+    dir = await scratch("checks-feature-rules-");
     await write({ "package.json": JSON.stringify({ name: "checks-feature-rules-fixture", type: "module" }) });
     await billingProject(CHECKOUT);
     const binary = join(CHECKOUT, "node_modules", ".bin", "depcruise");
@@ -74,10 +72,7 @@ test(
     expect(red.text).toContain("1 dependency violations (1 errors, 0 warnings)");
     expect(red.exitCode).not.toBe(0);
 
-    await write({ "src/main.ts": `import { charge } from "./billing/index.ts";\n\nexport const main = charge;\n` });
-    const green = await depcruise(binary);
-    expect(green.text).toContain("no dependency violations found");
-    expect(green.exitCode).toBe(0);
+    await importTheEntry(binary);
 
     await write({ "quality.json": JSON.stringify({ features: [{ ...BILLING, root: "src/billing/" }] }) });
     const malformed = await depcruise(binary);
@@ -88,7 +83,7 @@ test(
 );
 
 test("an allowFrom glob admits the files git's glob pathspec matches, and no other", async () => {
-  dir = await mkdtemp(join(tmpdir(), "checks-feature-globs-"));
+  dir = await scratch("checks-feature-globs-");
   const files = [
     "a.ts",
     "src/a.ts",
@@ -114,9 +109,9 @@ test("an allowFrom glob admits the files git's glob pathspec matches, and no oth
 test(
   "a packed-tarball consumer spreads the installed helper into its own config and goes red, then green",
   async () => {
-    packDir = await mkdtemp(join(tmpdir(), "checks-pack-"));
+    const packDir = await scratch("checks-pack-");
     const tarball = (await $`bun pm pack --destination ${packDir} --quiet`.cwd(CHECKOUT).quiet()).stdout.toString().trim();
-    dir = await mkdtemp(join(tmpdir(), "checks-feature-consumer-"));
+    dir = await scratch("checks-feature-consumer-");
     await write({
       "package.json": JSON.stringify({
         name: "checks-feature-consumer",
@@ -147,10 +142,7 @@ test(
     expect(red.text).toContain("error feature-billing-entries: src/main.ts → src/billing/charge.ts");
     expect(red.exitCode).not.toBe(0);
 
-    await write({ "src/main.ts": `import { charge } from "./billing/index.ts";\n\nexport const main = charge;\n` });
-    const green = await depcruise(binary);
-    expect(green.text).toContain("no dependency violations found");
-    expect(green.exitCode).toBe(0);
+    await importTheEntry(binary);
   },
   180_000,
 );

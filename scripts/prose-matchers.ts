@@ -97,59 +97,70 @@ function targetOf(destination: string): string {
   return trimmed.split(/\s/, 1)[0] ?? "";
 }
 
-function mask(raw: string, startsInComment: boolean): Masked {
-  const out = raw.split("");
-  const code: string[] = [];
-  const links: string[] = [];
-  const hide = (from: number, to: number, fill: string): void => {
-    for (let at = from; at < to; at += 1) out[at] = fill;
-  };
-  let inComment = startsInComment;
-  let at = 0;
-  while (at < raw.length) {
-    if (inComment) {
-      const close = raw.indexOf("-->", at);
-      const end = close < 0 ? raw.length : close + 3;
-      hide(at, end, BLANK);
-      inComment = close < 0;
-      at = end;
-      continue;
-    }
-    const rest = raw.slice(at);
-    if (rest.startsWith("<!--")) {
-      hide(at, at + 4, BLANK);
-      inComment = true;
-      at += 4;
-      continue;
-    }
-    if (rest.startsWith("`")) {
-      const run = runOf(raw, at, "`");
-      const close = closingRun(raw, at + run, run);
-      if (close >= 0) {
-        code.push(raw.slice(at + run, close).trim());
-        hide(at, close + run, HIDDEN);
-        at = close + run;
-      } else at += run;
-      continue;
-    }
-    if (rest.startsWith("](")) {
-      const end = destinationEnd(raw, at + 1);
-      if (end >= 0) {
-        links.push(targetOf(raw.slice(at + 2, end)));
-        hide(at + 1, end + 1, HIDDEN);
-        at = end + 1;
-        continue;
-      }
-    }
-    const hidden = hiddenAt(raw, at, rest);
-    if (hidden !== undefined) {
-      hide(at, at + hidden.length, hidden.fill);
-      at += hidden.length;
-      continue;
-    }
-    at += 1;
+type Masking = { readonly raw: string; readonly out: string[]; readonly code: string[]; readonly links: string[]; inComment: boolean };
+
+function hide(masking: Masking, from: number, to: number, fill: string): void {
+  for (let at = from; at < to; at += 1) masking.out[at] = fill;
+}
+
+// A step returns an index past `at`, or undefined when its token does not start there.
+function commentStep(masking: Masking, at: number): number | undefined {
+  const { raw } = masking;
+  if (!masking.inComment) {
+    if (!raw.startsWith("<!--", at)) return undefined;
+    hide(masking, at, at + 4, BLANK);
+    masking.inComment = true;
+    return at + 4;
   }
-  return { prose: out.join(""), code, links, inComment };
+  const close = raw.indexOf("-->", at);
+  const end = close < 0 ? raw.length : close + 3;
+  hide(masking, at, end, BLANK);
+  masking.inComment = close < 0;
+  return end;
+}
+
+function codeSpanStep(masking: Masking, at: number): number | undefined {
+  const { raw } = masking;
+  if (raw.charAt(at) !== "`") return undefined;
+  const run = runOf(raw, at, "`");
+  const close = closingRun(raw, at + run, run);
+  if (close < 0) return at + run;
+  masking.code.push(raw.slice(at + run, close).trim());
+  hide(masking, at, close + run, HIDDEN);
+  return close + run;
+}
+
+function linkStep(masking: Masking, at: number): number | undefined {
+  const { raw } = masking;
+  const end = raw.startsWith("](", at) ? destinationEnd(raw, at + 1) : -1;
+  if (end < 0) return undefined;
+  masking.links.push(targetOf(raw.slice(at + 2, end)));
+  hide(masking, at + 1, end + 1, HIDDEN);
+  return end + 1;
+}
+
+function hiddenStep(masking: Masking, at: number): number | undefined {
+  const hidden = hiddenAt(masking.raw, at, masking.raw.slice(at));
+  if (hidden === undefined) return undefined;
+  hide(masking, at, at + hidden.length, hidden.fill);
+  return at + hidden.length;
+}
+
+const MASK_STEPS = [commentStep, codeSpanStep, linkStep, hiddenStep];
+
+function maskStep(masking: Masking, at: number): number {
+  for (const step of MASK_STEPS) {
+    const next = step(masking, at);
+    if (next !== undefined) return next;
+  }
+  return at + 1;
+}
+
+function mask(raw: string, startsInComment: boolean): Masked {
+  const masking: Masking = { raw, out: raw.split(""), code: [], links: [], inComment: startsInComment };
+  let at = 0;
+  while (at < raw.length) at = maskStep(masking, at);
+  return { prose: masking.out.join(""), code: masking.code, links: masking.links, inComment: masking.inComment };
 }
 
 const FENCE = /^\s*(`{3,}|~{3,})(.*)$/;
@@ -191,42 +202,41 @@ function settext(lines: MarkdownLine[]): MarkdownLine[] {
   });
 }
 
+function frontMatterLength(raws: readonly string[]): number {
+  if (raws[0] !== "---") return 0;
+  const close = raws.findIndex((raw, index) => index > 0 && (raw === "---" || raw === "..."));
+  return close < 0 ? raws.length : close + 1;
+}
+
+type Scanning = { fence: string | undefined; inComment: boolean; inHtmlBlock: boolean };
+
+function scanLine(line: number, raw: string, scanning: Scanning): MarkdownLine {
+  if (scanning.fence !== undefined) {
+    if (fenceCloses(raw, scanning.fence)) scanning.fence = undefined;
+    return unread(line, raw, "code");
+  }
+  const opener = scanning.inComment ? undefined : fenceOpener(raw);
+  if (opener !== undefined) {
+    scanning.fence = opener;
+    return unread(line, raw, "code");
+  }
+  const definition = scanning.inComment ? null : DEFINITION.exec(raw);
+  if (definition !== null) return { ...unread(line, raw, "definition"), links: [targetOf(definition[1] ?? "")] };
+  const masked = mask(raw, scanning.inComment);
+  scanning.inComment = masked.inComment;
+  const kind = kindOf(raw, masked.prose);
+  // An HTML block runs to the next blank line, whatever its later lines open with.
+  scanning.inHtmlBlock = kind === "html" || (scanning.inHtmlBlock && kind !== "blank");
+  return { line, kind: scanning.inHtmlBlock ? "html" : kind, raw, prose: masked.prose, code: masked.code, links: masked.links };
+}
+
 export function scanMarkdown(text: string): readonly MarkdownLine[] {
   const raws = text.split("\n").map((raw) => raw.replace(/\r$/, ""));
+  const frontMatter = frontMatterLength(raws);
+  const scanning: Scanning = { fence: undefined, inComment: false, inHtmlBlock: false };
   const lines: MarkdownLine[] = [];
-  let fence: string | undefined;
-  let inComment = false;
-  let inHtmlBlock = false;
-  let frontMatter = raws[0] === "---";
   for (const [index, raw] of raws.entries()) {
-    const line = index + 1;
-    if (frontMatter) {
-      frontMatter = index === 0 || (raw !== "---" && raw !== "...");
-      lines.push(unread(line, raw, "front-matter"));
-      continue;
-    }
-    if (fence !== undefined) {
-      if (fenceCloses(raw, fence)) fence = undefined;
-      lines.push(unread(line, raw, "code"));
-      continue;
-    }
-    const opener = inComment ? undefined : fenceOpener(raw);
-    if (opener !== undefined) {
-      fence = opener;
-      lines.push(unread(line, raw, "code"));
-      continue;
-    }
-    const definition = inComment ? null : DEFINITION.exec(raw);
-    if (definition !== null) {
-      lines.push({ ...unread(line, raw, "definition"), links: [targetOf(definition[1] ?? "")] });
-      continue;
-    }
-    const masked = mask(raw, inComment);
-    inComment = masked.inComment;
-    const kind = kindOf(raw, masked.prose);
-    // An HTML block runs to the next blank line, whatever its later lines open with.
-    inHtmlBlock = kind === "html" || (inHtmlBlock && kind !== "blank");
-    lines.push({ line, kind: inHtmlBlock ? "html" : kind, raw, prose: masked.prose, code: masked.code, links: masked.links });
+    lines.push(index < frontMatter ? unread(index + 1, raw, "front-matter") : scanLine(index + 1, raw, scanning));
   }
   return settext(lines);
 }

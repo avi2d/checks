@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 import { Console, Effect, Option } from "effect";
 import { refused, syntaxOf } from "./comments.ts";
-import { changedLines, git, parentOrEmptyTree } from "./git.ts";
-import { runMain, Usage } from "./main.ts";
+import { changedLines, git, parentOrEmptyTree, refArgs } from "./git.ts";
+import { runMain } from "./main.ts";
 
 export type GateResult = {
   readonly files: number;
@@ -41,8 +41,7 @@ export function report({ files, addedLines, violations }: GateResult): string {
 }
 
 const gate = Effect.gen(function* () {
-  const [first, second, ...extra] = process.argv.slice(2);
-  if (first === undefined || extra.length > 0) return yield* new Usage({ message: USAGE });
+  const { first, second } = yield* refArgs(process.argv.slice(2), USAGE);
 
   const root = (yield* git(["rev-parse", "--show-toplevel"], process.cwd())).trim();
   const base = second === undefined ? yield* parentOrEmptyTree(first, root) : first;

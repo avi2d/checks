@@ -1,51 +1,49 @@
 import { $ } from "bun";
-import { afterEach, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { Schema } from "effect";
 import { withoutPullRequestEvent } from "../lib/env.ts";
+import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
 
-const CHECKOUT = resolve(import.meta.dir, "..", "..");
+const WIDGET = "export const widget = 42;\n";
 
 const Manifest = Schema.fromJsonString(
   Schema.Struct({ exports: Schema.Record(Schema.String, Schema.String), bin: Schema.Record(Schema.String, Schema.String) }),
 );
 
-let dir = "";
-let packDir = "";
+type Output = {
+  readonly exitCode: number;
+  readonly stdout: string;
+  readonly stderr: string;
+  readonly text: string;
+};
 
-afterEach(async () => {
-  for (const path of [dir, packDir]) {
-    if (path !== "") {
-      await rm(path, { recursive: true, force: true });
-    }
-  }
-  dir = "";
-  packDir = "";
-});
+const scratch = scratchDirs();
+
+let dir = "";
+
+function widgetTest(widget: string): string {
+  return `import { expect, test } from "bun:test";\nimport { widget } from "${widget}";\ntest("widget", () => {\n  expect(widget).toBe(42);\n});\n`;
+}
 
 async function packTarball(): Promise<string> {
-  packDir = await mkdtemp(join(tmpdir(), "checks-pack-"));
+  const packDir = await scratch("checks-pack-");
   const packed = await $`bun pm pack --destination ${packDir} --quiet`.cwd(CHECKOUT).quiet();
   return packed.stdout.toString().trim();
 }
 
-async function oxlint(): Promise<{ exitCode: number; text: string }> {
+function oxlint(): Promise<Ran> {
   const binary = join(dir, "node_modules", ".bin", "oxlint");
-  const result = await $`${binary} --type-aware`.cwd(dir).nothrow().quiet();
-  return {
-    exitCode: result.exitCode,
-    text: result.stdout.toString() + result.stderr.toString(),
-  };
+  return ran($`${binary} --type-aware`.cwd(dir));
 }
 
 async function writeConsumerFixture(
   manifest: Record<string, unknown> = {},
   checks = `file:${CHECKOUT}`,
 ): Promise<void> {
-  dir = await mkdtemp(join(tmpdir(), "checks-consumer-"));
+  dir = await scratch("checks-consumer-");
 
   await writeFile(
     join(dir, "package.json"),
@@ -74,6 +72,26 @@ async function writeConsumerFixture(
   await writeFile(join(dir, ".gitignore"), "node_modules/\n");
 
   await $`bun install`.cwd(dir).quiet();
+}
+
+async function writeWidgetRepo(testFile: string, widget: string): Promise<void> {
+  await writeFile(join(dir, "bunfig.toml"), await readFile(join(CHECKOUT, "bunfig.toml"), "utf8"));
+  await writeFile(join(dir, "widget.ts"), WIDGET);
+  await mkdir(dirname(join(dir, testFile)), { recursive: true });
+  await writeFile(join(dir, testFile), widgetTest(widget));
+  await $`git init -q && git add -A`.cwd(dir).quiet();
+}
+
+async function commitAll(message: string): Promise<void> {
+  await $`git add -A && git -c user.name=avi2d -c user.email=avi2dg@gmail.com commit -qm ${message}`.cwd(dir).quiet();
+}
+
+async function runScript(script: string, env?: Readonly<Record<string, string | undefined>>): Promise<Output> {
+  const shell = $`bun run ${script}`.cwd(dir);
+  const result = await (env === undefined ? shell : shell.env(env)).nothrow().quiet();
+  const stdout = result.stdout.toString();
+  const stderr = result.stderr.toString();
+  return { exitCode: result.exitCode, stdout, stderr, text: stdout + stderr };
 }
 
 test(
@@ -260,31 +278,20 @@ test(
         lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout",
       },
     });
-    await writeFile(join(dir, "bunfig.toml"), await readFile(join(CHECKOUT, "bunfig.toml"), "utf8"));
-    await writeFile(join(dir, "widget.ts"), "export const widget = 42;\n");
-    await writeFile(
-      join(dir, "widget.test.ts"),
-      `import { expect, test } from "bun:test";\nimport { widget } from "./widget.ts";\ntest("widget", () => {\n  expect(widget).toBe(42);\n});\n`,
-    );
-    await $`git init -q && git add -A`.cwd(dir).quiet();
+    await writeWidgetRepo("widget.test.ts", "./widget.ts");
 
-    const red = await $`bun run lint`.cwd(dir).nothrow().quiet();
-    const redText = red.stdout.toString() + red.stderr.toString();
+    const red = await runScript("lint");
     expect(red.exitCode).not.toBe(0);
-    expect(redText).toContain("widget.test.ts: a test file must live at tests/**/*.test.ts");
-    expect(redText).toContain("move it to tests/widget.test.ts");
+    expect(red.text).toContain("widget.test.ts: a test file must live at tests/**/*.test.ts");
+    expect(red.text).toContain("move it to tests/widget.test.ts");
 
     await mkdir(join(dir, "tests"));
     await rename(join(dir, "widget.test.ts"), join(dir, "tests", "widget.test.ts"));
-    await writeFile(
-      join(dir, "tests", "widget.test.ts"),
-      `import { expect, test } from "bun:test";\nimport { widget } from "../widget.ts";\ntest("widget", () => {\n  expect(widget).toBe(42);\n});\n`,
-    );
+    await writeFile(join(dir, "tests", "widget.test.ts"), widgetTest("../widget.ts"));
     await $`git add -A`.cwd(dir).quiet();
 
-    const green = await $`bun run lint`.cwd(dir).nothrow().quiet();
-    const greenText = green.stdout.toString() + green.stderr.toString();
-    expect(greenText).toContain("satisfy the layout");
+    const green = await runScript("lint");
+    expect(green.text).toContain("satisfy the layout");
     expect(green.exitCode).toBe(0);
   },
   180_000,
@@ -317,18 +324,10 @@ test(
     expect(existsSync(join(installed, "tests"))).toBe(false);
     expect(existsSync(join(installed, "AGENTS.md"))).toBe(false);
 
-    await writeFile(join(dir, "bunfig.toml"), await readFile(join(CHECKOUT, "bunfig.toml"), "utf8"));
-    await writeFile(join(dir, "widget.ts"), "export const widget = 42;\n");
-    await mkdir(join(dir, "tests"));
-    await writeFile(
-      join(dir, "tests", "widget.test.ts"),
-      `import { expect, test } from "bun:test";\nimport { widget } from "../widget.ts";\ntest("widget", () => {\n  expect(widget).toBe(42);\n});\n`,
-    );
-    await $`git init -q && git add -A`.cwd(dir).quiet();
+    await writeWidgetRepo("tests/widget.test.ts", "../widget.ts");
 
-    const green = await $`bun run lint`.cwd(dir).nothrow().quiet();
-    const greenText = green.stdout.toString() + green.stderr.toString();
-    expect(greenText).toContain("satisfy the layout");
+    const green = await runScript("lint");
+    expect(green.text).toContain("satisfy the layout");
     expect(green.exitCode).toBe(0);
 
     await writeFile(
@@ -337,11 +336,10 @@ test(
     );
     await $`git add -A`.cwd(dir).quiet();
 
-    const red = await $`bun run lint`.cwd(dir).nothrow().quiet();
-    const redText = red.stdout.toString() + red.stderr.toString();
+    const red = await runScript("lint");
     expect(red.exitCode).not.toBe(0);
-    expect(redText).toContain("plant.ts");
-    expect(redText).toContain("effect-channel(no-error-channel-escape)");
+    expect(red.text).toContain("plant.ts");
+    expect(red.text).toContain("effect-channel(no-error-channel-escape)");
   },
   180_000,
 );
@@ -390,83 +388,58 @@ test(
       "on: pull_request\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n",
     );
 
-    await writeFile(join(dir, "bunfig.toml"), await readFile(join(CHECKOUT, "bunfig.toml"), "utf8"));
-    await writeFile(join(dir, "widget.ts"), "export const widget = 42;\n");
-    await mkdir(join(dir, "tests"));
-    await writeFile(
-      join(dir, "tests", "widget.test.ts"),
-      `import { expect, test } from "bun:test";\nimport { widget } from "../widget.ts";\ntest("widget", () => {\n  expect(widget).toBe(42);\n});\n`,
-    );
-    await $`git init -q && git add -A`.cwd(dir).quiet();
-    await $`git -c user.name=avi2d -c user.email=avi2dg@gmail.com commit -qm "feat: base"`
-      .cwd(dir)
-      .quiet();
+    await writeWidgetRepo("tests/widget.test.ts", "../widget.ts");
+    await commitAll("feat: base");
     await writeFile(join(dir, "clean.ts"), `export const answer = 42;\n`);
-    await $`git add -A`.cwd(dir).quiet();
-    await $`git -c user.name=avi2d -c user.email=avi2dg@gmail.com commit -qm "feat: second"`
-      .cwd(dir)
-      .quiet();
+    await commitAll("feat: second");
 
-    const lint = await $`bun run lint`.cwd(dir).nothrow().quiet();
-    const lintText = lint.stdout.toString() + lint.stderr.toString();
-    expect(lintText).toContain("tracked .ts/.tsx files");
-    expect(lintText).toContain("satisfy the layout");
-    expect(lintText).toContain("carry only allowed identities");
+    const lint = await runScript("lint");
+    expect(lint.text).toContain("tracked .ts/.tsx files");
+    expect(lint.text).toContain("satisfy the layout");
+    expect(lint.text).toContain("carry only allowed identities");
     expect(lint.exitCode).toBe(0);
 
-    const gate = await $`bun run gate`.cwd(dir).nothrow().quiet();
-    const gateText = gate.stdout.toString() + gate.stderr.toString();
-    expect(gateText).toContain("carry no refused comment");
+    const gate = await runScript("gate");
+    expect(gate.text).toContain("carry no refused comment");
     expect(gate.exitCode).toBe(0);
 
-    const backtest = await $`bun run backtest`.cwd(dir).nothrow().quiet();
-    const backtestText = backtest.stdout.toString() + backtest.stderr.toString();
-    expect(backtestText).toContain("commits touching code");
+    const backtest = await runScript("backtest");
+    expect(backtest.text).toContain("commits touching code");
     expect(backtest.exitCode).toBe(0);
 
-    const compare = await $`bun run compare`.cwd(dir).nothrow().quiet();
-    expect(compare.stdout.toString()).toContain("no regression");
+    const compare = await runScript("compare");
+    expect(compare.stdout).toContain("no regression");
     expect(compare.exitCode).toBe(0);
 
-    const suite = await $`bun run test`.cwd(dir).nothrow().quiet();
-    expect(suite.stderr.toString()).toContain(" 1 pass");
-    expect(suite.stdout.toString()).toContain("checks-test: no test skipped");
+    const suite = await runScript("test");
+    expect(suite.stderr).toContain(" 1 pass");
+    expect(suite.stdout).toContain("checks-test: no test skipped");
     expect(suite.exitCode).toBe(0);
 
     const { GITHUB_STEP_SUMMARY: _summary, ...withoutStepSummary } = process.env;
-    const flake = await $`bun run flake`.cwd(dir).env(withoutStepSummary).nothrow().quiet();
-    expect(flake.stdout.toString()).toContain("checks-flake: 2 run(s) passed, with seeds ");
+    const flake = await runScript("flake", withoutStepSummary);
+    expect(flake.stdout).toContain("checks-flake: 2 run(s) passed, with seeds ");
     expect(flake.exitCode).toBe(0);
 
-    const wiring = await $`bun run wiring`.cwd(dir).nothrow().quiet();
-    expect(wiring.stdout.toString()).toContain("1 gate(s) run on pull requests to main");
-    expect(wiring.exitCode).toBe(0);
-
-    const quality = await $`bun run quality`.cwd(dir).nothrow().quiet();
-    expect(quality.stdout.toString()).toContain("checks-quality: no sources.effect is declared, so nothing is generated");
-    expect(quality.exitCode).toBe(0);
-
     for (const [script, report] of [
+      ["wiring", "1 gate(s) run on pull requests to main"],
+      ["quality", "checks-quality: no sources.effect is declared, so nothing is generated"],
       ["size", "size-budget: quality.json declares no size budget"],
       ["repetition", "repetition: quality.json declares no sources.production"],
       ["owners", "feature-owners: quality.json declares no feature"],
       ["docs", "docs: 0 doc file(s) the range touches hold to their templates"],
+      ["ratchet", "no count in oxlint-suppressions.json rose or appeared"],
     ] as const) {
-      const guardrail = await $`bun run ${script}`.cwd(dir).nothrow().quiet();
-      expect(guardrail.stdout.toString()).toContain(report);
+      const guardrail = await runScript(script);
+      expect(guardrail.stdout).toContain(report);
       expect(guardrail.exitCode).toBe(0);
     }
 
-    const ratchet = await $`bun run ratchet`.cwd(dir).nothrow().quiet();
-    expect(ratchet.stdout.toString()).toContain("no count in oxlint-suppressions.json rose or appeared");
-    expect(ratchet.exitCode).toBe(0);
-
     await $`git update-ref refs/remotes/origin/main HEAD~1`.cwd(dir).quiet();
-    const kit = await $`bun run kit`.cwd(dir).env(withoutPullRequestEvent()).nothrow().quiet();
-    const kitText = kit.stdout.toString() + kit.stderr.toString();
-    expect(kitText).toContain("from HEAD against origin/main");
-    expect(kitText).toContain("commit-identity: 1 commit(s)");
-    expect(kitText).toContain("checks-lint: 11 gate(s) pass");
+    const kit = await runScript("kit", withoutPullRequestEvent());
+    expect(kit.text).toContain("from HEAD against origin/main");
+    expect(kit.text).toContain("commit-identity: 1 commit(s)");
+    expect(kit.text).toContain("checks-lint: 11 gate(s) pass");
     expect(kit.exitCode).toBe(0);
   },
   180_000,

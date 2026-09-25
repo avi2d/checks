@@ -156,32 +156,50 @@ function missing(slot: Slot, level: number): string {
   return slot.type === "fixed" ? `lacks ${marked(level, slot.text)}` : `lacks a ${marked(level, slot.placeholder)} section`;
 }
 
+type Placement =
+  | { readonly kind: "behind"; readonly index: number }
+  | { readonly kind: "unplaced" }
+  | { readonly kind: "placed"; readonly index: number; readonly slot: Slot; readonly at: number };
+
+function placementOf(slots: readonly Slot[], title: string, at: number): Placement {
+  const fixed = fixedIndexOf(slots, title);
+  if (fixed !== -1 && fixed <= at) return { kind: "behind", index: fixed };
+  const open = openIndexFrom(slots, at);
+  const index = fixed !== -1 ? fixed : open.index;
+  const slot = slots[index];
+  if (slot === undefined) return { kind: "unplaced" };
+  return { kind: "placed", index, slot, at: fixed !== -1 || open.advances ? index : at };
+}
+
+function placedProblems(slot: Slot, { heading, subsections }: Section, level: number): Violation[] {
+  const problem = slot.type === "open" ? ruleProblem(slot.rule, heading.title) : undefined;
+  return [
+    ...(problem === undefined ? [] : [{ line: heading.line, message: `${marked(level, heading.title)} ${problem}` }]),
+    ...(slot.subsections === undefined ? [] : matchSections(subsections, slot.subsections, level + 1, heading.line)),
+  ];
+}
+
 export function matchSections(sections: readonly Section[], slots: readonly Slot[], level: number, parentLine: number): Violation[] {
   const order = `the template's order is ${slots.map(slotLabel).join(", ")}`;
   const violations: Violation[] = [];
   const found = slots.map(() => false);
   let at = -1;
-  for (const { heading, subsections } of sections) {
+  for (const section of sections) {
+    const { heading } = section;
     const named = marked(level, heading.title);
-    const fixed = fixedIndexOf(slots, heading.title);
-    if (fixed !== -1 && fixed <= at) {
-      found[fixed] = true;
-      const problem = fixed === at ? "appears twice" : `is out of order, as ${order}`;
-      violations.push({ line: heading.line, message: `${named} ${problem}` });
-      continue;
-    }
-    const open = openIndexFrom(slots, at);
-    const index = fixed !== -1 ? fixed : open.index;
-    const slot = slots[index];
-    if (slot === undefined) {
+    const placement = placementOf(slots, heading.title, at);
+    if (placement.kind === "unplaced") {
       violations.push({ line: heading.line, message: `${named} is not a section the template has there, as ${order}` });
       continue;
     }
-    if (fixed !== -1 || open.advances) at = index;
-    found[index] = true;
-    const problem = slot.type === "open" ? ruleProblem(slot.rule, heading.title) : undefined;
-    if (problem !== undefined) violations.push({ line: heading.line, message: `${named} ${problem}` });
-    if (slot.subsections !== undefined) violations.push(...matchSections(subsections, slot.subsections, level + 1, heading.line));
+    found[placement.index] = true;
+    if (placement.kind === "behind") {
+      const problem = placement.index === at ? "appears twice" : `is out of order, as ${order}`;
+      violations.push({ line: heading.line, message: `${named} ${problem}` });
+      continue;
+    }
+    at = placement.at;
+    violations.push(...placedProblems(placement.slot, section, level));
   }
   slots.forEach((slot, index) => {
     if (slot.presence.required && found[index] !== true) violations.push({ line: parentLine, message: missing(slot, level) });
