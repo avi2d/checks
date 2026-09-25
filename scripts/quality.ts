@@ -4,13 +4,17 @@ import kitOxlint from "../oxlintrc.json" with { type: "json" };
 import effectLanguageService from "../presets/effect.language-service.json" with { type: "json" };
 import effectOxlint from "../presets/effect.oxlint.json" with { type: "json" };
 import { git } from "./git.ts";
+import { DEFAULT_BRANCH } from "./gates.ts";
 import { runMain, Usage } from "./main.ts";
 import { readQuality, renderJson, type Quality } from "./quality-file.ts";
+import { plainCommand } from "./shell-command.ts";
 
 // oxlint resolves an override's files, and the language service an override's include, against the
 // directory of the config that holds it, so a fragment anywhere but the root matches nothing there.
 export const OXLINT_FRAGMENT = "oxlintrc.quality.json";
 export const TSCONFIG_FRAGMENT = "tsconfig.quality.json";
+export const SUITE_WORKFLOW = ".github/workflows/ci.yml";
+export const COMMITLINT_WORKFLOW = ".github/workflows/commitlint.yml";
 
 const NAME = "checks-quality";
 const USAGE = `usage: ${NAME} --check | generate`;
@@ -23,6 +27,16 @@ export type Fragment = {
   readonly extendedBy: string;
   readonly reader: string;
   readonly content: unknown;
+};
+
+export type GeneratedWorkflow = {
+  readonly file: typeof SUITE_WORKFLOW | typeof COMMITLINT_WORKFLOW;
+  readonly content: string;
+};
+
+export type WorkflowRecipe = {
+  readonly commitlintConfig: string;
+  readonly bunVersionFile: boolean;
 };
 
 class NativeConfigUnreadable extends Schema.TaggedError<NativeConfigUnreadable>()("NativeConfigUnreadable", {
@@ -59,6 +73,65 @@ export function fragmentsFor(quality: Quality): readonly Fragment[] {
   const effect = quality.sources?.effect;
   if (effect === undefined) return [];
   return FRAGMENTS.map(({ build, ...fragment }) => ({ ...fragment, content: build(effect) }));
+}
+
+const OWN_COMMITLINT_CONFIG = "./commitlint.config.js";
+const KIT_COMMITLINT_CONFIG = "./node_modules/@avi2dg/checks/commitlint.config.js";
+
+export function isCommitlintGate(command: string): boolean {
+  const first = plainCommand(command)?.[0];
+  return first !== undefined && (first.split("/").at(-1) ?? first) === "commitlint";
+}
+
+function runScalar(command: string): string {
+  return /(^[\s#&*!|>@`'"%{[-])|:\s|\s#|:$|[\n\\]/.test(command) ? JSON.stringify(command) : command;
+}
+
+export function commitlintWorkflow(commitlintConfig: string): string {
+  return `on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+permissions:
+  contents: read
+jobs:
+  commitlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      # Only the title is linted: it is what a squash merge lands, with GitHub appending " (#N)" to it.
+      - run: printf '%s' "$PR_TITLE (#0000)" > "$RUNNER_TEMP/pr-title"
+        env:
+          PR_TITLE: \${{ github.event.pull_request.title }}
+      # --edit drops lines starting with core.commentChar, "#" by default, so a title starting with "#" would lint as empty and pass.
+      - run: ./node_modules/.bin/commitlint --config ${commitlintConfig} --edit "$RUNNER_TEMP/pr-title"
+        env:
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: core.commentChar
+          GIT_CONFIG_VALUE_0: "\\x01"
+`;
+}
+
+export function suiteWorkflow(defaultBranch: string, gates: readonly string[], bunVersionFile: boolean): string {
+  const setup = bunVersionFile
+    ? "      - uses: oven-sh/setup-bun@v2\n        with:\n          bun-version-file: .bun-version\n"
+    : "      - uses: oven-sh/setup-bun@v2\n";
+  const steps = gates.map((gate) => `      - run: ${runScalar(gate)}\n`).join("");
+  return `name: ci\non:\n  push:\n    branches: [${defaultBranch}]\n  pull_request:\n    types: [opened, edited, synchronize, reopened]\npermissions:\n  contents: read\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      # The head, not GitHub's merge ref, so the tree the gates read is the commit the range ends at.\n      # The whole history, since the range starts where the head branched from the base branch.\n      - uses: actions/checkout@v5\n        with:\n          ref: \${{ github.event.pull_request.head.sha || github.sha }}\n          fetch-depth: 0\n${setup}      - run: bun install --frozen-lockfile\n${steps}`;
+}
+
+export function workflowsFor(quality: Quality, recipe: WorkflowRecipe): readonly GeneratedWorkflow[] {
+  const commitlint: GeneratedWorkflow = {
+    file: COMMITLINT_WORKFLOW,
+    content: commitlintWorkflow(recipe.commitlintConfig),
+  };
+  if (quality.gates?.ci === undefined) return [commitlint];
+  const suite = quality.gates.ci.filter((gate) => !isCommitlintGate(gate));
+  return [
+    { file: SUITE_WORKFLOW, content: suiteWorkflow(quality.defaultBranch ?? DEFAULT_BRANCH, suite, recipe.bunVersionFile) },
+    commitlint,
+  ];
 }
 
 const NativeConfig = Schema.Struct({
@@ -135,18 +208,60 @@ const unmatchedPaths = Effect.fn("unmatchedPaths")(function* (root: string, qual
   return problems;
 });
 
+const recipeOf = Effect.fn("recipeOf")(function* (root: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  // The kit never installs itself, so where its own config lives the workflow reads that file.
+  const ownConfig = yield* fs.exists(path.join(root, "commitlint.config.js"));
+  return {
+    commitlintConfig: ownConfig ? OWN_COMMITLINT_CONFIG : KIT_COMMITLINT_CONFIG,
+    bunVersionFile: yield* fs.exists(path.join(root, ".bun-version")),
+  } satisfies WorkflowRecipe;
+});
+
+const workflowProblems = Effect.fn("workflowProblems")(function* (
+  root: string,
+  source: string,
+  quality: Quality,
+  expected: readonly GeneratedWorkflow[],
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const problems: string[] = [];
+  for (const { file, content } of expected) {
+    const target = path.join(root, file);
+    if (!(yield* fs.exists(target))) {
+      problems.push(`${file} is missing; run ${GENERATE}`);
+    } else if ((yield* fs.readFileString(target)) !== content) {
+      problems.push(`${file} is stale against ${source} and the kit recipe; run ${GENERATE}`);
+    }
+  }
+  if (quality.gates?.ci === undefined) {
+    const target = path.join(root, SUITE_WORKFLOW);
+    if (yield* fs.exists(target)) problems.push(`${SUITE_WORKFLOW} is left over, since no gates.ci is declared; run ${GENERATE}`);
+  }
+  return problems;
+});
+
 const check = Effect.fn("check")(function* (root: string) {
   const { source, quality } = yield* readQuality(root);
   const expected = fragmentsFor(quality);
-  const problems = [...(yield* fragmentProblems(root, source, expected)), ...(yield* unmatchedPaths(root, quality))];
+  const workflows = workflowsFor(quality, yield* recipeOf(root));
+  const problems = [
+    ...(yield* fragmentProblems(root, source, expected)),
+    ...(yield* workflowProblems(root, source, quality, workflows)),
+    ...(yield* unmatchedPaths(root, quality)),
+  ];
   if (problems.length > 0) {
     yield* Console.error([`${NAME}: ${problems.length} problem(s) with what ${source} declares:`, ...problems.map((line) => `  ${line}`)].join("\n"));
     return false;
   }
+  const held = [...expected.map((fragment) => fragment.file), ...workflows.map((workflow) => workflow.file)];
+  const verb = held.length === 1 ? "holds" : "hold";
   yield* Console.log(
     expected.length === 0
-      ? `${NAME}: no sources.effect is declared, so nothing is generated`
-      : `${NAME}: ${expected.map((fragment) => fragment.file).join(" and ")} hold what ${source} declares`,
+      ? `${NAME}: no sources.effect is declared, so no fragment is generated; ${held.join(" and ")} ${verb} the kit recipe`
+      : `${NAME}: ${held.join(" and ")} ${verb} what ${source} declares`,
   );
   return true;
 });
@@ -165,6 +280,19 @@ const generate = Effect.fn("generate")(function* (root: string) {
     } else if (yield* fs.exists(target)) {
       yield* fs.remove(target);
       yield* Console.log(`${NAME}: removed ${file}`);
+    }
+  }
+  const workflows = workflowsFor(quality, yield* recipeOf(root));
+  if (workflows.length > 0) yield* fs.makeDirectory(path.join(root, ".github", "workflows"), { recursive: true });
+  for (const { file, content } of workflows) {
+    yield* fs.writeFileString(path.join(root, file), content);
+    yield* Console.log(`${NAME}: wrote ${file}`);
+  }
+  if (quality.gates?.ci === undefined) {
+    const target = path.join(root, SUITE_WORKFLOW);
+    if (yield* fs.exists(target)) {
+      yield* fs.remove(target);
+      yield* Console.log(`${NAME}: removed ${SUITE_WORKFLOW}`);
     }
   }
   return yield* check(root);

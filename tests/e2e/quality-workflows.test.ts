@@ -1,0 +1,69 @@
+import { expect, test } from "bun:test";
+import { readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { COMMITLINT_WORKFLOW, SUITE_WORKFLOW } from "../../scripts/quality.ts";
+import { fixtureRepos } from "./lib/fixture-repo.ts";
+
+const repository = fixtureRepos("checks-quality-workflows-");
+
+const QUALITY = {
+  $schema: "./node_modules/@avi2dg/checks/quality.schema.json",
+  gates: { ci: ["bun run lint", "bun run typecheck", "./node_modules/.bin/commitlint"] },
+};
+
+test(
+  "generate writes the kit-recipe workflows, --check holds them, and ci-wiring keeps checking them",
+  async () => {
+    const repo = await repository({
+      "quality.json": JSON.stringify(QUALITY),
+      "package.json": JSON.stringify({ name: "workflow-fixture", type: "module" }),
+    });
+
+    const generated = await repo.script("quality.ts", "generate");
+    expect(generated.text).toContain(`wrote ${SUITE_WORKFLOW}`);
+    expect(generated.text).toContain(`wrote ${COMMITLINT_WORKFLOW}`);
+    expect(generated.exitCode).toBe(0);
+
+    const suite = await readFile(join(repo.dir, SUITE_WORKFLOW), "utf8");
+    expect(suite).toContain("      - run: bun install --frozen-lockfile\n");
+    expect(suite).toContain("      - run: bun run lint\n");
+    expect(suite).toContain("      - run: bun run typecheck\n");
+    expect(suite).not.toContain("commitlint");
+    expect(suite).not.toContain("bun-version-file");
+    const commitlint = await readFile(join(repo.dir, COMMITLINT_WORKFLOW), "utf8");
+    expect(commitlint).toContain("--config ./node_modules/@avi2dg/checks/commitlint.config.js");
+    expect(commitlint).toContain("types: [opened, edited, synchronize, reopened]");
+
+    const wiring = await repo.script("ci-wiring.ts");
+    expect(wiring.text).toContain("3 gate(s) run on pull requests to main");
+    expect(wiring.exitCode).toBe(0);
+
+    await writeFile(join(repo.dir, SUITE_WORKFLOW), `${suite}      - run: echo drift\n`);
+    const red = await repo.script("quality.ts", "--check");
+    expect(red.text).toContain(`${SUITE_WORKFLOW} is stale against quality.json and the kit recipe`);
+    expect(red.exitCode).toBe(1);
+
+    const green = await repo.script("quality.ts", "generate");
+    expect(green.exitCode).toBe(0);
+    expect(await readFile(join(repo.dir, SUITE_WORKFLOW), "utf8")).toBe(suite);
+  },
+  60_000,
+);
+
+test(
+  "the kit's own tree selects its local commitlint config and its pinned bun",
+  async () => {
+    const repo = await repository({
+      "quality.json": JSON.stringify(QUALITY),
+      "package.json": JSON.stringify({ name: "workflow-fixture", type: "module" }),
+      "commitlint.config.js": "export default {};\n",
+      ".bun-version": "1.3.13\n",
+    });
+
+    const generated = await repo.script("quality.ts", "generate");
+    expect(generated.exitCode).toBe(0);
+    expect(await readFile(join(repo.dir, COMMITLINT_WORKFLOW), "utf8")).toContain("--config ./commitlint.config.js");
+    expect(await readFile(join(repo.dir, SUITE_WORKFLOW), "utf8")).toContain("bun-version-file: .bun-version");
+  },
+  60_000,
+);

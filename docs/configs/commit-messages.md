@@ -10,12 +10,14 @@ It arrives with the kit, since `@commitlint/cli` and `@commitlint/config-convent
 ## Workflow
 
 The lint runs in CI on pull requests, because `jj` never fires a git hook.
-A repository adds this workflow:
+The kit writes this workflow whole when `checks-quality generate` runs:
 
 ```yaml
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
+permissions:
+  contents: read
 jobs:
   commitlint:
     runs-on: ubuntu-latest
@@ -23,10 +25,16 @@ jobs:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
+      # Only the title is linted: it is what a squash merge lands, with GitHub appending " (#N)" to it.
       - run: printf '%s' "$PR_TITLE (#0000)" > "$RUNNER_TEMP/pr-title"
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
+      # --edit drops lines starting with core.commentChar, "#" by default, so a title starting with "#" would lint as empty and pass.
       - run: ./node_modules/.bin/commitlint --config ./node_modules/@avi2dg/checks/commitlint.config.js --edit "$RUNNER_TEMP/pr-title"
+        env:
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: core.commentChar
+          GIT_CONFIG_VALUE_0: "\x01"
 ```
 
 ## What it lints

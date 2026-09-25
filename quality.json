@@ -10,7 +10,7 @@
       "bun run test",
       "./node_modules/.bin/commitlint"
     ],
-    "scheduled": ["bun scripts/flake.ts --runs 10 --report flake-report.json"]
+    "scheduled": ["bunx checks-flake --runs 10 --report flake-report.json"]
   },
   "sources": {
     "production": ["effect-channel/**/*.ts", "scripts/**/*.ts"],
