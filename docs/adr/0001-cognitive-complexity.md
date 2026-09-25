@@ -26,21 +26,21 @@ Structurally it counts `if`, ternary operators, `switch`, `for`, `while`, `do wh
 Sequences of `&&` and `||` cost one per run of like operators, as the Sequences of logical operators section says, with parenthesised runs counted apart.
 Labelled `break` and `continue` cost one each, as the Jumps to labels section says, while plain jumps and early returns cost nothing.
 Direct self calls cost one, as the Recursion section says.
-Functions, methods and lambdas cost nothing themselves and raise the nesting for what they hold, as the Increment for nested flow-break structures section says.
 Nullish coalescing, optional chaining and logical assignment cost nothing, as the Ignore shorthand section says.
 
-Three paper points are deliberately narrowed.
+Four paper points are deliberately narrowed.
 Recursion is detected only for a direct self call, by name for a function or variable and through `this` for a method or field, since indirect cycles need whole program analysis beyond a lint rule.
 Top level statements are not scored, matching the cyclomatic rule the new one replaces, with the file lines limit covering them.
 The compensating usages of Appendix A target COBOL, pre module JavaScript and Python decorators, so none of them applies to the TypeScript the kit holds.
-
-A nested function body counts toward its enclosing function's score with one more nesting level, as the paper's method nesting example shows, and it also scores on its own from zero nesting.
-A static block scores as its own unit.
+Every function, method, lambda and static block scores on its own from zero nesting, and a nested one adds nothing to the function that encloses it.
+The evaluation measured each function apart, as the cyclomatic rule the new one replaces scores them, so a `describe` callback holding flat tests or a component holding handlers is not charged for its callbacks.
+The paper's Increment for nested flow-break structures section instead sums a nested function into its parent one level deeper.
 
 ## Consequences
 
 `effect-channel/cognitive-complexity` replaces oxlint's `complexity` in the size budget configuration, which now loads the kit's own plugin bundle to reach it.
 The quality schema and the size budget docs name the new rule and its limit.
-The paper's worked examples for the word list, the prime sieve, the nested method, the pattern compiler, the model save and the symbol lookup are unit and end to end tests with the exact scores the paper's Appendix C prints.
+The paper's worked examples for the word list, the prime sieve, the nested method, the pattern compiler, the model save and the symbol lookup are unit and end to end tests.
+Each scores what the paper's Appendix C prints, except that the nested method and the model save score their nested functions apart.
 Checks' own code passes under the new rule.
 Consumer repositories get the tighter limit on their next pull request with no configuration change.

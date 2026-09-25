@@ -186,15 +186,32 @@ test("an else-if under nesting keeps its hybrid increment while the inner if pay
   expect(scoreOf({ type: "WhileStatement", test: id("a"), body: block(expr(chain)) })).toBe(9);
 });
 
-test("a nested function raises the nesting without costing a structural increment", () => {
+test("a nested function adds nothing to its enclosing function and scores on its own from zero", () => {
   const inner = arrow(expr(ifs(id("c"), block(ret(lit())))));
-  expect(scoreOf(expr(inner))).toBe(2);
+  expect(scoreOf(expr(inner))).toBe(0);
   expect(cognitiveComplexity(inner, NO_NAMES)).toBe(1);
 });
 
-test("an object method and a class field raise the nesting the same way", () => {
+test("a describe callback of eight flat tests with one if each scores nothing, and each test scores one", () => {
+  const testCallback = (): Arrow => arrow(expr(ifs(id("c"), block(ret(lit())))));
+  const tests = Array.from({ length: 8 }, testCallback);
+  const describe = arrow(...tests.map((callback) => expr({ type: "CallExpression", callee: id("test"), arguments: [lit(), callback] })));
+  expect(cognitiveComplexity(describe, NO_NAMES)).toBe(0);
+  for (const callback of tests) expect(cognitiveComplexity(callback, NO_NAMES)).toBe(1);
+});
+
+test("an outer function whose map callback holds an if scores only its own branches", () => {
+  const mapped: SyntaxNode = {
+    type: "CallExpression",
+    callee: { type: "MemberExpression", object: id("items"), property: id("map") },
+    arguments: [arrow(expr(ifs(id("c"), block(ret(lit())), block(ret(lit())))))],
+  };
+  expect(scoreOf(expr(ifs(id("a"), block(ret(lit())))), ret(mapped))).toBe(1);
+});
+
+test("an object method and a class field add nothing to the enclosing function", () => {
   const method: SyntaxNode = { type: "Property", key: id("run"), value: arrow(expr(ifs(id("c"), block(ret(lit()))))) };
-  expect(scoreOf(expr(method))).toBe(2);
+  expect(scoreOf(expr(method))).toBe(0);
   const field: SyntaxNode = { type: "PropertyDefinition", key: id("run"), value: arrow(expr(ifs(id("c"), block(ret(lit()))))) };
   const klass: SyntaxNode = {
     type: "ClassDeclaration",
@@ -203,7 +220,7 @@ test("an object method and a class field raise the nesting the same way", () => 
     superClass: null,
     body: { type: "ClassBody", body: [field] },
   };
-  expect(scoreOf(klass)).toBe(2);
+  expect(scoreOf(klass)).toBe(0);
 });
 
 test("a class of plain methods costs nothing to enter", () => {
@@ -262,7 +279,7 @@ test("wrappers, members, calls and awaits pass their expressions through", () =>
   expect(scoreOf({ type: "WithStatement", object: id("o"), body: block(expr(ifs(id("c"), block(ret(lit()))))) })).toBe(1);
 });
 
-test("a handler arrow inside JSX scores through its nesting", () => {
+test("a handler arrow inside JSX adds nothing to the component", () => {
   const handler: SyntaxNode = {
     type: "JSXExpressionContainer",
     expression: arrow(expr(ifs(id("c"), block(ret(lit()))))),
@@ -272,7 +289,7 @@ test("a handler arrow inside JSX scores through its nesting", () => {
     openingElement: { type: "JSXOpeningElement", attributes: [{ type: "JSXAttribute", value: handler }] },
     children: [{ type: "JSXFragment", children: [] }],
   };
-  expect(scoreOf(ret(element))).toBe(2);
+  expect(scoreOf(ret(element))).toBe(0);
 });
 
 test("an enum member with a logical initializer costs one", () => {

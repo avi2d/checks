@@ -144,80 +144,80 @@ function plainChildrenC(node) {
 
 // effect-channel/cognitive.ts
 function unreachable2(_value) {}
-function scoreList(state, nodes, nesting, parent, nested) {
+function scoreList(state, nodes, nesting, parent) {
   for (const node of nodes) {
     if (node !== null)
-      score(state, node, nesting, parent, nested);
+      score(state, node, nesting, parent);
   }
 }
-function score(state, node, nesting, parent, nested) {
+function score(state, node, nesting, parent) {
   if (isControl(node))
-    return scoreControl(state, node, nesting, nested);
+    return scoreControl(state, node, nesting);
   if (isLoop(node))
-    return scoreLoop(state, node, nesting, nested);
+    return scoreLoop(state, node, nesting);
   if (isCall(node))
-    return scoreCall(state, node, nesting, parent, nested);
+    return scoreCall(state, node, nesting, parent);
   if (isFunction(node))
-    return scoreFunction(state, node, nesting);
+    return;
   if (isPlainA(node))
-    return scoreList(state, plainChildrenA(node), nesting, node, nested);
+    return scoreList(state, plainChildrenA(node), nesting, node);
   if (isPlainB(node))
-    return scoreList(state, plainChildrenB(node), nesting, node, nested);
+    return scoreList(state, plainChildrenB(node), nesting, node);
   if (isPlainC(node))
-    return scoreList(state, plainChildrenC(node), nesting, node, nested);
+    return scoreList(state, plainChildrenC(node), nesting, node);
 }
-function scoreBranch(state, node, nesting, nested) {
-  score(state, node.test, nesting, node, nested);
-  score(state, node.consequent, nesting + 1, node, nested);
+function scoreBranch(state, node, nesting) {
+  score(state, node.test, nesting, node);
+  score(state, node.consequent, nesting + 1, node);
   const alternate = node.alternate;
   if (alternate === null)
     return;
   state.total += 1;
   if (alternate.type === "IfStatement")
-    return scoreBranch(state, alternate, nesting, nested);
-  score(state, alternate, nesting + 1, node, nested);
+    return scoreBranch(state, alternate, nesting);
+  score(state, alternate, nesting + 1, node);
 }
-function scoreIf(state, node, nesting, nested) {
+function scoreIf(state, node, nesting) {
   state.total += 1 + nesting;
-  scoreBranch(state, node, nesting, nested);
+  scoreBranch(state, node, nesting);
 }
-function scoreControl(state, node, nesting, nested) {
+function scoreControl(state, node, nesting) {
   switch (node.type) {
     case "IfStatement": {
-      return scoreIf(state, node, nesting, nested);
+      return scoreIf(state, node, nesting);
     }
     case "ConditionalExpression": {
       state.total += 1 + nesting;
-      score(state, node.test, nesting, node, nested);
-      score(state, node.consequent, nesting + 1, node, nested);
-      score(state, node.alternate, nesting + 1, node, nested);
+      score(state, node.test, nesting, node);
+      score(state, node.consequent, nesting + 1, node);
+      score(state, node.alternate, nesting + 1, node);
       return;
     }
     case "SwitchStatement": {
       state.total += 1 + nesting;
-      score(state, node.discriminant, nesting, node, nested);
-      scoreList(state, node.cases, nesting + 1, node, nested);
+      score(state, node.discriminant, nesting, node);
+      scoreList(state, node.cases, nesting + 1, node);
       return;
     }
     case "SwitchCase": {
       if (node.test !== null)
-        score(state, node.test, nesting, node, nested);
-      scoreList(state, node.consequent, nesting, node, nested);
+        score(state, node.test, nesting, node);
+      scoreList(state, node.consequent, nesting, node);
       return;
     }
     case "TryStatement": {
-      score(state, node.block, nesting, node, nested);
+      score(state, node.block, nesting, node);
       if (node.handler !== null)
-        score(state, node.handler, nesting, node, nested);
+        score(state, node.handler, nesting, node);
       if (node.finalizer !== null)
-        score(state, node.finalizer, nesting, node, nested);
+        score(state, node.finalizer, nesting, node);
       return;
     }
     case "CatchClause": {
       state.total += 1 + nesting;
       if (node.param !== null)
-        score(state, node.param, nesting, node, nested);
-      score(state, node.body, nesting + 1, node, nested);
+        score(state, node.param, nesting, node);
+      score(state, node.body, nesting + 1, node);
       return;
     }
     default: {
@@ -225,41 +225,41 @@ function scoreControl(state, node, nesting, nested) {
     }
   }
 }
-function scoreLoop(state, node, nesting, nested) {
+function scoreLoop(state, node, nesting) {
   switch (node.type) {
     case "ForStatement": {
       state.total += 1 + nesting;
       if (node.init !== null)
-        score(state, node.init, nesting, node, nested);
+        score(state, node.init, nesting, node);
       if (node.test !== null)
-        score(state, node.test, nesting, node, nested);
+        score(state, node.test, nesting, node);
       if (node.update !== null)
-        score(state, node.update, nesting, node, nested);
-      score(state, node.body, nesting + 1, node, nested);
+        score(state, node.update, nesting, node);
+      score(state, node.body, nesting + 1, node);
       return;
     }
     case "ForInStatement":
     case "ForOfStatement": {
       state.total += 1 + nesting;
-      score(state, node.left, nesting, node, nested);
-      score(state, node.right, nesting, node, nested);
-      score(state, node.body, nesting + 1, node, nested);
+      score(state, node.left, nesting, node);
+      score(state, node.right, nesting, node);
+      score(state, node.body, nesting + 1, node);
       return;
     }
     case "WhileStatement": {
       state.total += 1 + nesting;
-      score(state, node.test, nesting, node, nested);
-      score(state, node.body, nesting + 1, node, nested);
+      score(state, node.test, nesting, node);
+      score(state, node.body, nesting + 1, node);
       return;
     }
     case "DoWhileStatement": {
       state.total += 1 + nesting;
-      score(state, node.body, nesting + 1, node, nested);
-      score(state, node.test, nesting, node, nested);
+      score(state, node.body, nesting + 1, node);
+      score(state, node.test, nesting, node);
       return;
     }
     case "LabeledStatement": {
-      score(state, node.body, nesting, node, nested);
+      score(state, node.body, nesting, node);
       return;
     }
     default: {
@@ -286,13 +286,13 @@ function isSelfCall(state, callee) {
   }
   return false;
 }
-function scoreCall(state, node, nesting, parent, nested) {
+function scoreCall(state, node, nesting, parent) {
   switch (node.type) {
     case "LogicalExpression": {
       if (!insideRun(parent) && (node.operator === "&&" || node.operator === "||"))
         state.total += countRuns(node, null);
-      score(state, node.left, nesting, node, nested);
-      score(state, node.right, nesting, node, nested);
+      score(state, node.left, nesting, node);
+      score(state, node.right, nesting, node);
       return;
     }
     case "BreakStatement":
@@ -303,41 +303,16 @@ function scoreCall(state, node, nesting, parent, nested) {
     }
     case "CallExpression":
     case "NewExpression": {
-      if (!nested && isSelfCall(state, node.callee))
+      if (isSelfCall(state, node.callee))
         state.recursive = true;
-      score(state, node.callee, nesting, node, nested);
-      scoreList(state, node.arguments, nesting, node, nested);
+      score(state, node.callee, nesting, node);
+      scoreList(state, node.arguments, nesting, node);
       return;
     }
     case "ImportExpression": {
-      score(state, node.source, nesting, node, nested);
+      score(state, node.source, nesting, node);
       if (node.options !== null)
-        score(state, node.options, nesting, node, nested);
-      return;
-    }
-    default: {
-      return unreachable2(node);
-    }
-  }
-}
-function scoreFunction(state, node, nesting) {
-  switch (node.type) {
-    case "ArrowFunctionExpression": {
-      scoreList(state, node.params, nesting + 1, node, true);
-      score(state, node.body, nesting + 1, node, true);
-      return;
-    }
-    case "StaticBlock": {
-      scoreList(state, node.body, nesting + 1, node, true);
-      return;
-    }
-    case "FunctionDeclaration":
-    case "FunctionExpression":
-    case "TSDeclareFunction":
-    case "TSEmptyBodyFunctionExpression": {
-      scoreList(state, node.params, nesting + 1, node, true);
-      if (node.body !== null)
-        score(state, node.body, nesting + 1, node, true);
+        score(state, node.options, nesting, node);
       return;
     }
     default: {
@@ -348,14 +323,14 @@ function scoreFunction(state, node, nesting) {
 function cognitiveComplexity(root, names) {
   const state = { total: 0, recursive: false, names };
   if (root.type === "StaticBlock") {
-    scoreList(state, root.body, 0, root, false);
+    scoreList(state, root.body, 0, root);
     return state.total;
   }
-  scoreList(state, root.params, 0, root, false);
+  scoreList(state, root.params, 0, root);
   if (root.type === "ArrowFunctionExpression")
-    score(state, root.body, 0, root, false);
+    score(state, root.body, 0, root);
   else if (root.body !== null)
-    score(state, root.body, 0, root, false);
+    score(state, root.body, 0, root);
   return state.recursive ? state.total + 1 : state.total;
 }
 

@@ -236,7 +236,7 @@ const RETRY_LOOP = `export function retryLoop(store, txn) {
 }
 `;
 
-test("the paper's worked examples score what the paper prints", async () => {
+test("the paper's worked examples score what the paper prints, with each nested function scored apart", async () => {
   const { text } = await lint(
     {
       "get-words.js": GET_WORDS,
@@ -252,15 +252,14 @@ test("the paper's worked examples score what the paper prints", async () => {
   );
   const found = diagnostics(text);
   expect(found).toEqual([
-    { line: 8, message: "function `anonymous` has a cognitive complexity of 13. Maximum allowed is 1." },
+    { line: 8, message: "function `anonymous` has a cognitive complexity of 3. Maximum allowed is 1." },
     { line: 13, message: "function `anonymous` has a cognitive complexity of 7. Maximum allowed is 1." },
     { line: 1, message: "function `javaLike` has a cognitive complexity of 19. Maximum allowed is 1." },
     { line: 1, message: "function `mixed` has a cognitive complexity of 4. Maximum allowed is 1." },
-    { line: 17, message: "function `myMethod2` has a cognitive complexity of 2. Maximum allowed is 1." },
     { line: 1, message: "function `myMethod` has a cognitive complexity of 9. Maximum allowed is 1." },
     { line: 7, message: "function `negated` has a cognitive complexity of 3. Maximum allowed is 1." },
     { line: 1, message: "function `retryLoop` has a cognitive complexity of 10. Maximum allowed is 1." },
-    { line: 1, message: "function `save` has a cognitive complexity of 20. Maximum allowed is 1." },
+    { line: 1, message: "function `save` has a cognitive complexity of 2. Maximum allowed is 1." },
     { line: 1, message: "function `sumOfPrimes` has a cognitive complexity of 7. Maximum allowed is 1." },
     { line: 5, message: "function `toRegexp` has a cognitive complexity of 20. Maximum allowed is 1." },
   ]);
@@ -319,8 +318,17 @@ test("a function takes its name only from its direct parent, and recursion only 
     { line: 27, message: "function `anonymous` has a cognitive complexity of 3. Maximum allowed is 1." },
     { line: 20, message: "function `handleSubmit` has a cognitive complexity of 3. Maximum allowed is 1." },
     { line: 8, message: "function `run` has a cognitive complexity of 2. Maximum allowed is 1." },
-    { line: 14, message: "function `walk` has a cognitive complexity of 2. Maximum allowed is 1." },
   ]);
+}, 60_000);
+
+const DESCRIBE = `describe("totals", () => {
+${Array.from({ length: 8 }, (_, index) => `  test("case ${index}", () => {\n    if (total(${index}) > 0) {\n      expect(total(${index})).toBe(${index});\n    }\n  });\n`).join("")}});
+`;
+
+test("a describe callback holding eight flat tests passes, since each test scores apart", async () => {
+  const { exitCode, text } = await lint({ "totals.test.js": DESCRIBE }, 15);
+  expect(diagnostics(text)).toEqual([]);
+  expect(exitCode).toBe(0);
 }, 60_000);
 
 test("flat guards, switches and shorthand pass while a tangled nest fails", async () => {
