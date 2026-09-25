@@ -67,7 +67,7 @@ checks-quality --check
 | Code | When |
 | --- | --- |
 | 0 | the fragments hold what `quality.json` declares |
-| 1 | a fragment is stale, missing, left over or not extended, or a declared glob matches no file |
+| 1 | a fragment is stale, missing, left over or not extended, the kit's config is not extended, or a declared glob matches no file |
 | 2 | `quality.json` does not decode, or the arguments are neither `generate` nor `--check` |
 
 ## Sample output
