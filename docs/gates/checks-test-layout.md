@@ -56,7 +56,7 @@ It checks the directory it runs in, or the directory it is given.
 | --- | --- |
 | 0 | the repository holds the layout |
 | 1 | a file breaks the layout |
-| 2 | a test, a helper or `package.json` does not parse |
+| 2 | a test, a helper, `package.json` or `quality.json` does not parse |
 
 ## Sample output
 

@@ -77,6 +77,13 @@ It ignores the links in `.gitignore` with `repos/*`, because `repos/*/` does not
 repos/*
 ```
 
+TypeScript does not read `.gitignore`, and its default `include` follows the links into each library tree.
+A consumer whose `tsconfig.json` has no explicit `include` keeps the trees out with an `exclude` entry.
+
+```json
+{ "exclude": ["node_modules", "repos"] }
+```
+
 ## Opting out
 
 It runs only in a repository that declares `sources.libraries`.

@@ -52,15 +52,8 @@ export function remoteSegments(remote: string): readonly string[] {
   return ["local", escaped];
 }
 
-export function resolveTag(output: string, tag: string): string | undefined {
-  let plain: string | undefined;
-  for (const line of output.split("\n")) {
-    const [sha, ref] = line.split("\t");
-    if (sha === undefined || ref === undefined) continue;
-    if (ref === `refs/tags/${tag}^{}`) return sha;
-    if (ref === `refs/tags/${tag}`) plain = sha;
-  }
-  return plain;
+export function listsTag(output: string, tag: string): boolean {
+  return output.split("\n").some((line) => line.split("\t")[1] === `refs/tags/${tag}`);
 }
 
 const PackageManifest = Schema.Struct({ version: Schema.NonEmptyString });
@@ -82,13 +75,13 @@ const headOf = Effect.fn("headOf")(function* (dir: string) {
   )).trim();
 });
 
-const remoteTag = Effect.fn("remoteTag")(function* (remote: string, tag: string) {
+const confirmTag = Effect.fn("confirmTag")(function* (remote: string, tag: string) {
   const output = yield* git(["ls-remote", remote, `refs/tags/${tag}*`]).pipe(
     Effect.mapError((cause) => new Unreachable({ message: `cannot list ${tag} on ${remote}: ${cause.message}` })),
   );
-  const sha = resolveTag(output, tag);
-  if (sha === undefined) return yield* new VendorError({ message: `${remote} holds no tag ${tag}, so the installed version points nowhere` });
-  return sha;
+  if (!listsTag(output, tag)) {
+    return yield* new VendorError({ message: `${remote} holds no tag ${tag}, so the installed version points nowhere` });
+  }
 });
 
 const isLink = Effect.fn("isLink")(function* (entry: string) {
@@ -262,7 +255,7 @@ const land = Effect.fn("land")(function* (library: Library, installed: string, t
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const parent = path.dirname(dir);
-  yield* remoteTag(library.repository, tag);
+  yield* confirmTag(library.repository, tag);
   yield* fs.makeDirectory(parent, { recursive: true }).pipe(
     Effect.mapError((cause) => new VendorError({ message: `cannot hold ${dir}: ${cause.message}` })),
   );
