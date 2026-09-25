@@ -81,7 +81,14 @@ describe("what a reader does not read as prose passes", () => {
     expect(refusals(text)).toEqual([]);
   });
 
-  test("an abbreviation before a capital, and a self-reference that does not open the sentence", () => {
+  test("a bold label that opens a line heads its sentence, and a second sentence after it still counts", () => {
+  expect(refusals("**Status.** Tested by `tests/x.test.ts`.\n- __Reclaim.__ On tmux it refuses.")).toEqual([]);
+  expect(refusals("**Status.** Tested by `x`. It ships.")).toEqual([
+    "1: carries a second sentence on one line, which opens with `It ships`. Start it on its own line",
+  ]);
+});
+
+test("an abbreviation before a capital, and a self-reference that does not open the sentence", () => {
     expect(refusals("It reads the lockfile, e.g. Bun writes one.\nRead the guide this page names.")).toEqual([]);
   });
 

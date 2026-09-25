@@ -91,6 +91,7 @@ These are records or agent files, and never living docs:
 <!-- end generated prose-rules -->
 
 A line holds one sentence, so a changed line is a changed sentence.
+A bold label that opens a line, as in `**Status.**`, heads the sentence after it rather than counting as one.
 Fenced code, inline code, link destinations, URLs, HTML comments and front matter are not prose, so no rule reads them.
 Readability scores and word choice, such as easy, are not checked.
 

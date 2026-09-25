@@ -60,14 +60,14 @@ function exists(snapshot: Snapshot, path: string): boolean {
   return snapshot.files.has(path) || snapshot.directories.has(path);
 }
 
-const RELATIVE = /^\.{1,2}\//;
+const PARENT = /^\.\.\//;
 const PATH = /^((?:\.{1,2}\/)*(?:[\w.@-]+\/)+[\w.@-]+\.(?:ts|tsx|mts|cts|js|jsx|cjs|mjs|md|mdx|json|jsonc|sh|bash|zsh|toml|nix|lua|ya?ml|txt|py|rs|go|css|html))(?::\d+(?::\d+)?)?$/;
 
 function unresolvedPath(doc: string, line: number, span: string, snapshot: Snapshot): Unresolved | undefined {
   const named = PATH.exec(span)?.[1];
   if (named === undefined) return undefined;
   const fromDoc = within(directoryOf(doc), named);
-  const fromRoot = RELATIVE.test(named) ? undefined : normalize(named);
+  const fromRoot = PARENT.test(named) ? undefined : normalize(named);
   if ([fromRoot, fromDoc].some((path) => path !== undefined && exists(snapshot, path))) return undefined;
   const checked = fromRoot ?? fromDoc;
   // A path whose top directory this repository lacks names a file in another one, such as a consumer's.

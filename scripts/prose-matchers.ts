@@ -300,10 +300,14 @@ const SENTENCE_END = /[.!?:]["'”’)\]*_]*\s*$/;
 const LIST_ITEM = /^(?:\s*>)*\s*(?:[-*+]|\d{1,9}[.)])(?:\s|$)/;
 const QUOTE_DEPTH = /^(?:\s*>)*/;
 
+// A bold label that opens a line, as in **Status.**, heads the sentence after it rather than being one.
+const RUN_IN_LABEL = /^\s*(\*\*|__)(?:(?!\1).)+?[.!?:]\1\s/;
+
 function secondSentence(line: MarkdownLine): ProseFinding | undefined {
   const body = bodyOf(line);
+  const label = RUN_IN_LABEL.exec(body)?.[0].length ?? 0;
   for (const match of body.matchAll(SENTENCE_BREAK)) {
-    if (ABBREVIATION.test(body.slice(0, match.index))) continue;
+    if (match.index < label || ABBREVIATION.test(body.slice(0, match.index))) continue;
     const opening = line.raw.slice(match.index + match[0].length).split(/\s+/, 3).join(" ").replace(/[.!?,:]+$/, "");
     return { line: line.line, message: `carries ${SECOND_SENTENCE.refuses}, which opens with \`${opening}\`. ${SECOND_SENTENCE.instead}` };
   }

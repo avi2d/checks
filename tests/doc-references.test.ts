@@ -28,7 +28,7 @@ function messages(doc: string, text: string, commands = true): readonly string[]
 
 test("a path in code resolves from the root or from the doc, and one that resolves nowhere is named", () => {
   const text = [
-    "Lint lives in `scripts/lint.ts`, and `scripts/lint.ts:12` is its entry.",
+    "Lint lives in `scripts/lint.ts`, and `scripts/lint.ts:12` is its entry, as a shell at the root reads `./scripts/lint.ts`.",
     "The guard is `.pi/extensions/guard.ts`, and the gate page is `gates/checks-lint.md` and `../README.md`.",
     "The old entry was `scripts/old-lint.ts`.",
   ].join("\n");
