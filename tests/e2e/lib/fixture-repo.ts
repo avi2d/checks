@@ -50,17 +50,31 @@ export async function fixtureRepo(prefix: string, files: Readonly<Record<string,
   };
 }
 
-// Called at a test file's top level, so afterEach disposes of each repository for every test in the file.
-export function fixtureRepos(prefix: string): (files?: Readonly<Record<string, string>>) => Promise<FixtureRepo> {
-  const opened: FixtureRepo[] = [];
+// Called at a test file's top level, so afterEach releases what each test in the file opened.
+function releasedAfterEach<A extends readonly unknown[], T>(
+  open: (...args: A) => Promise<T>,
+  release: (opened: T) => Promise<void>,
+): (...args: A) => Promise<T> {
+  const opened: T[] = [];
   afterEach(async () => {
-    for (const repo of opened.splice(0)) await repo.dispose();
+    for (const one of opened.splice(0)) await release(one);
   });
-  return async (files = {}) => {
-    const repo = await fixtureRepo(prefix, files);
-    opened.push(repo);
-    return repo;
+  return async (...args) => {
+    const one = await open(...args);
+    opened.push(one);
+    return one;
   };
+}
+
+export function fixtureRepos(prefix: string): (files?: Readonly<Record<string, string>>) => Promise<FixtureRepo> {
+  return releasedAfterEach((files: Readonly<Record<string, string>> = {}) => fixtureRepo(prefix, files), (repo) => repo.dispose());
+}
+
+export function scratchDirs(): (prefix: string) => Promise<string> {
+  return releasedAfterEach(
+    (prefix: string) => mkdtemp(join(tmpdir(), prefix)),
+    (dir) => rm(dir, { recursive: true, force: true }),
+  );
 }
 
 export async function lintWiring(quality: Readonly<Record<string, unknown>>): Promise<Readonly<Record<string, string>>> {

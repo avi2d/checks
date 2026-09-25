@@ -1,12 +1,12 @@
 import { $ } from "bun";
-import { afterEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { expect, test } from "bun:test";
+import { mkdir, readdir, readFile, symlink, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { OXLINT_FRAGMENT, TSCONFIG_FRAGMENT } from "../../scripts/quality.ts";
 import { withoutPullRequestEvent } from "../lib/env.ts";
+import { findings } from "./lib/findings.ts";
+import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
 
-const CHECKOUT = resolve(import.meta.dir, "..", "..");
 const QUALITY = join(CHECKOUT, "scripts", "quality.ts");
 const LINT = join(CHECKOUT, "scripts", "lint.ts");
 const BIN = join(CHECKOUT, "node_modules", ".bin");
@@ -24,14 +24,9 @@ export function outer(): () => number {
 const THROWS = `export function fail(): never {\n  throw new Error("no channel");\n}\n`;
 const ASYNC = `export async function later(): Promise<number> {\n  return 1;\n}\n`;
 
-let dir = "";
+const scratch = scratchDirs();
 
-afterEach(async () => {
-  if (dir !== "") {
-    await rm(dir, { recursive: true, force: true });
-    dir = "";
-  }
-});
+let dir = "";
 
 async function put(file: string, content: string | Readonly<Record<string, unknown>>): Promise<void> {
   await mkdir(dirname(join(dir, file)), { recursive: true });
@@ -39,7 +34,7 @@ async function put(file: string, content: string | Readonly<Record<string, unkno
 }
 
 async function consumer(quality: Readonly<Record<string, unknown>>): Promise<void> {
-  dir = await mkdtemp(join(tmpdir(), "checks-quality-"));
+  dir = await scratch("checks-quality-");
   await mkdir(join(dir, "node_modules", "@avi2dg"), { recursive: true });
   for (const entry of await readdir(join(CHECKOUT, "node_modules"))) {
     await symlink(join(CHECKOUT, "node_modules", entry), join(dir, "node_modules", entry));
@@ -59,22 +54,11 @@ async function consumer(quality: Readonly<Record<string, unknown>>): Promise<voi
   await $`git init -q -b main`.cwd(dir).quiet();
 }
 
-async function run(program: string, args: readonly string[]): Promise<{ exitCode: number; text: string }> {
-  const result = await $`${program} ${args}`
-    .cwd(dir)
-    .env({ ...withoutPullRequestEvent(), PATH: `${BIN}:${process.env["PATH"] ?? ""}` })
-    .nothrow()
-    .quiet();
-  return { exitCode: result.exitCode, text: result.stdout.toString() + result.stderr.toString() };
+function run(program: string, args: readonly string[]): Promise<Ran> {
+  return ran($`${program} ${args}`.cwd(dir).env({ ...withoutPullRequestEvent(), PATH: `${BIN}:${process.env["PATH"] ?? ""}` }));
 }
 
 const quality = (...args: readonly string[]) => run("bun", [QUALITY, ...args]);
-
-function findings(output: string, pattern: RegExp): ReadonlyMap<string, readonly string[]> {
-  const found = new Map<string, string[]>();
-  for (const [, file = "", rule = ""] of output.matchAll(pattern)) found.set(file, [...(found.get(file) ?? []), rule]);
-  return found;
-}
 
 async function oxlint(): Promise<ReadonlyMap<string, readonly string[]>> {
   const { text } = await run(join(BIN, "oxlint"), ["--type-aware", "-f", "unix"]);

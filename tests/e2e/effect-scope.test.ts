@@ -1,10 +1,10 @@
 import { $ } from "bun";
-import { afterEach, expect, test } from "bun:test";
-import { copyFile, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { expect, test } from "bun:test";
+import { copyFile, mkdir, symlink, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { CHECKOUT, scratchDirs } from "./lib/fixture-repo.ts";
+import { findings } from "./lib/findings.ts";
 
-const CHECKOUT = resolve(import.meta.dir, "..", "..");
 const CONFIGS = [
   ".oxlintrc.json",
   "oxlintrc.json",
@@ -51,30 +51,19 @@ const OXLINT_RULES = [
 const PROCESS_EXIT = "eslint(no-restricted-properties)";
 const SERVICE_RULES = ["nodeBuiltinImport", "asyncFunction", "newPromise", "extendsNativeError"];
 
-let dir = "";
+const scratch = scratchDirs();
 
-afterEach(async () => {
-  if (dir !== "") {
-    await rm(dir, { recursive: true, force: true });
-    dir = "";
-  }
-});
+let dir = "";
 
 async function plant(file: string, source: string): Promise<void> {
   await mkdir(dirname(join(dir, file)), { recursive: true });
   await writeFile(join(dir, file), source);
 }
 
-function findings(output: string, pattern: RegExp): ReadonlyMap<string, readonly string[]> {
-  const found = new Map<string, string[]>();
-  for (const [, file = "", rule = ""] of output.matchAll(pattern)) found.set(file, [...(found.get(file) ?? []), rule]);
-  return found;
-}
-
 test(
   "scripts/ answers to the Effect rules of oxlint and the language service, and tests/ does not",
   async () => {
-    dir = await mkdtemp(join(tmpdir(), "checks-effect-scope-"));
+    dir = await scratch("checks-effect-scope-");
     for (const config of CONFIGS) {
       await mkdir(dirname(join(dir, config)), { recursive: true });
       await copyFile(join(CHECKOUT, config), join(dir, config));

@@ -2,9 +2,9 @@ import { $ } from "bun";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
+import { CHECKOUT } from "./lib/fixture-repo.ts";
 
-const CHECKOUT = resolve(import.meta.dir, "..", "..");
 const SCRIPT = join(CHECKOUT, "scripts", "lint-coverage.sh");
 const BIN = join(CHECKOUT, "node_modules", ".bin");
 const SYSTEM_PATH = "/usr/bin:/bin";
