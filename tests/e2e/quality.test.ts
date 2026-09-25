@@ -140,6 +140,39 @@ test(
 );
 
 test(
+  "checks-quality requires the kit configs that apply the Effect rules",
+  async () => {
+    await consumer({ sources: { effect: EFFECT } });
+    await tree.put("src/a.ts", "export const a = 1;\n");
+    expect((await quality("generate")).exitCode).toBe(0);
+
+    const oxlintrc = await readFile(join(tree.dir, ".oxlintrc.json"), "utf8");
+    await tree.put(
+      ".oxlintrc.json",
+      oxlintrc.replace('"./node_modules/@avi2dg/checks/oxlintrc.json",', ""),
+    );
+    const missingOxlintConfig = await quality("--check");
+    expect(missingOxlintConfig.text).toContain(
+      ".oxlintrc.json does not extend ./node_modules/@avi2dg/checks/oxlintrc.json, so the kit's oxlint rules are not loaded",
+    );
+    expect(missingOxlintConfig.exitCode).toBe(1);
+    await tree.put(".oxlintrc.json", oxlintrc);
+    expect((await quality("--check")).exitCode).toBe(0);
+
+    const tsconfig = await readFile(join(tree.dir, "tsconfig.json"), "utf8");
+    await tree.put("tsconfig.json", tsconfig.replace('"@avi2dg/checks/tsconfig.effect.json",', ""));
+    const missingTsconfig = await quality("--check");
+    expect(missingTsconfig.text).toContain(
+      "tsconfig.json does not extend @avi2dg/checks/tsconfig.effect.json, so the kit's Effect checks are not loaded",
+    );
+    expect(missingTsconfig.exitCode).toBe(1);
+    await tree.put("tsconfig.json", tsconfig);
+    expect((await quality("--check")).exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
   "checks-lint runs checks-quality and reads the default branch and commit identity from quality.json",
   async () => {
     await consumer({

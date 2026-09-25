@@ -51,14 +51,30 @@ function tsconfigFragment({ paths, exempt = [] }: EffectSources): unknown {
 }
 
 const FRAGMENTS = [
-  { file: OXLINT_FRAGMENT, extendedBy: ".oxlintrc.json", reader: "oxlint", build: oxlintFragment },
-  { file: TSCONFIG_FRAGMENT, extendedBy: "tsconfig.json", reader: "the language service", build: tsconfigFragment },
+  {
+    file: OXLINT_FRAGMENT,
+    extendedBy: ".oxlintrc.json",
+    reader: "oxlint",
+    kitConfig: "./node_modules/@avi2dg/checks/oxlintrc.json",
+    kitRepositoryConfig: "./oxlintrc.json",
+    kitConfigReason: "the kit's oxlint rules are not loaded",
+    build: oxlintFragment,
+  },
+  {
+    file: TSCONFIG_FRAGMENT,
+    extendedBy: "tsconfig.json",
+    reader: "the language service",
+    kitConfig: "@avi2dg/checks/tsconfig.effect.json",
+    kitRepositoryConfig: "./tsconfig.effect.json",
+    kitConfigReason: "the kit's Effect checks are not loaded",
+    build: tsconfigFragment,
+  },
 ] as const;
 
 export function fragmentsFor(quality: Quality): readonly Fragment[] {
   const effect = quality.sources?.effect;
   if (effect === undefined) return [];
-  return FRAGMENTS.map(({ build, ...fragment }) => ({ ...fragment, content: build(effect) }));
+  return FRAGMENTS.map(({ file, extendedBy, reader, build }) => ({ file, extendedBy, reader, content: build(effect) }));
 }
 
 const NativeConfig = Schema.Struct({
@@ -98,7 +114,8 @@ const fragmentProblems = Effect.fn("fragmentProblems")(function* (root: string, 
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const problems: string[] = [];
-  for (const { file } of FRAGMENTS) {
+  const kitRepository = root === path.dirname(import.meta.dir);
+  for (const { file, extendedBy, reader, kitConfig, kitRepositoryConfig, kitConfigReason } of FRAGMENTS) {
     const target = path.join(root, file);
     const fragment = expected.find((candidate) => candidate.file === file);
     const present = yield* fs.exists(target);
@@ -111,8 +128,13 @@ const fragmentProblems = Effect.fn("fragmentProblems")(function* (root: string, 
     } else if (!(yield* sameJson(yield* fs.readFileString(target), fragment.content))) {
       problems.push(`${file} is stale against ${source} and the kit's presets; run ${GENERATE}`);
     }
-    if (!(yield* extendsOf(root, fragment.extendedBy)).includes(file)) {
-      problems.push(`${fragment.extendedBy} does not extend ./${file}, so ${fragment.reader} never reads it`);
+    const configured = yield* extendsOf(root, extendedBy);
+    if (!configured.includes(file)) {
+      problems.push(`${extendedBy} does not extend ./${file}, so ${reader} never reads it`);
+    }
+    const requiredKitConfig = kitRepository ? kitRepositoryConfig : kitConfig;
+    if (!configured.includes(path.normalize(requiredKitConfig))) {
+      problems.push(`${extendedBy} does not extend ${requiredKitConfig}, so ${kitConfigReason}`);
     }
   }
   return problems;
