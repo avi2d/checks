@@ -39,6 +39,7 @@ async function seedRemote(parent: string, version: string, tag: string): Promise
   await $`git init -q -b main`.cwd(work).quiet();
   await writeFile(join(work, "package.json"), manifest(version));
   await writeFile(join(work, "index.ts"), "export const value = 1;\n");
+  await writeFile(join(work, ".gitignore"), "node_modules/\n");
   await $`git add -A && git ${IDENTITY} commit -q --no-gpg-sign -m seed`.cwd(work).quiet();
   await $`git ${IDENTITY} tag -a -m seed ${tag}`.cwd(work).quiet();
   await $`git init -q --bare ${remote}`.cwd(parent).quiet();
@@ -288,6 +289,32 @@ test(
     const hidden = await vendor(consumer, home);
     expect(hidden.exitCode).toBe(1);
     expect(hidden.text).toContain("outside the recorded commit");
+  },
+  60_000,
+);
+
+test(
+  "a read-only file the library's own .gitignore hides fails the run and drops the link",
+  async () => {
+    const home = await scratchHome();
+    const parent = await scratch("checks-vendor-remote-");
+    const consumer = await scratch("checks-vendor-consumer-");
+    const { remote } = await seedRemote(parent, "1.0.0", "fake-lib@1.0.0");
+    await seedConsumer(consumer, remote, "1.0.0");
+    expect((await vendor(consumer, home)).exitCode).toBe(0);
+
+    const dir = cachedDir(home, remote, "1.0.0");
+    const planted = join(dir, "node_modules", "pkg");
+    await chmod(dir, 0o755);
+    await mkdir(planted, { recursive: true });
+    await writeFile(join(planted, "index.js"), "export {};\n");
+    await $`chmod -R a-w ${join(dir, "node_modules")}`.quiet();
+    await chmod(dir, 0o555);
+
+    const run = await vendor(consumer, home);
+    expect(run.exitCode).toBe(1);
+    expect(run.text).toContain("outside the recorded commit");
+    expect(await linked(consumer)).toBe(false);
   },
   60_000,
 );

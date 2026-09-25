@@ -183,7 +183,7 @@ const verify = Effect.fn("verify")(function* (dir: string, library: Library, ins
       message: `${dir} leaves ${tampered.length} paths writable, starting with ${first}; ${clearing(dir)}`,
     });
   }
-  const status = yield* git(["status", "--porcelain"], dir).pipe(
+  const status = yield* git(["status", "--porcelain", "--ignored"], dir).pipe(
     Effect.mapError((cause) => new VendorError({ message: `${dir} reports no status: ${cause.message}` })),
   );
   if (status.trim() !== "") {
