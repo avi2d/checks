@@ -71,8 +71,8 @@ const Report = Schema.fromJsonString(
             mutatorName: Schema.String,
             replacement: Schema.String,
             location: Schema.Struct({
-              start: Schema.Struct({ line: Schema.Number, column: Schema.Number }),
-              end: Schema.Struct({ line: Schema.Number, column: Schema.Number }),
+              start: Schema.Struct({ line: Schema.Finite, column: Schema.Finite }),
+              end: Schema.Struct({ line: Schema.Finite, column: Schema.Finite }),
             }),
           }),
         ),
