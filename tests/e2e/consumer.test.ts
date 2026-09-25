@@ -52,9 +52,6 @@ function manifestFor(checks: string): Record<string, unknown> {
 
 async function installConsumer(installDir: string, checks: string): Promise<void> {
   await writeFile(join(installDir, "package.json"), JSON.stringify(manifestFor(checks)));
-  // oxlint honours .gitignore but not ignorePatterns for node_modules,
-  // so the fixture carries the same node_modules/ entry a real consumer has.
-  await writeFile(join(installDir, ".gitignore"), "node_modules/\n");
   await $`bun install`.cwd(installDir).quiet();
 }
 
@@ -99,6 +96,8 @@ async function useConsumer(kind: Kind, manifest: Record<string, unknown> = {}): 
       plugins: ["typescript", "oxc", "eslint", "import"],
     }),
   );
+  // oxlint honours .gitignore but not ignorePatterns for node_modules,
+  // so the fixture carries the same node_modules/ entry a real consumer has.
   await writeFile(join(dir, ".gitignore"), "node_modules/\n");
 }
 

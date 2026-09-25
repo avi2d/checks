@@ -26,22 +26,18 @@ const USAGE = "usage: lint.ts [<base-ref> <head-ref>]";
 const PULL_REQUEST_EVENT = "pull_request";
 const SHALLOW_HINT = "a CI checkout needs actions/checkout fetch-depth: 0";
 
+const PullRequest = Schema.Struct({
+  number: Schema.Int,
+  base: Schema.Struct({ ref: Schema.String }),
+  head: Schema.Struct({ sha: Schema.String }),
+});
+
 export const decodePullRequestEvent = Schema.decodeUnknownEffect(
-  Schema.fromJsonString(
-    Schema.Struct({
-      pull_request: Schema.Struct({
-        number: Schema.Int,
-        base: Schema.Struct({ ref: Schema.String }),
-        head: Schema.Struct({ sha: Schema.String }),
-      }),
-    }),
-  ),
+  Schema.fromJsonString(Schema.Struct({ pull_request: PullRequest })),
 );
 
-type PullRequest = { readonly number: number; readonly base: { readonly ref: string }; readonly head: { readonly sha: string } };
-
 // Decides the range ends an already-decoded pull request event describes.
-export function pullRequestEndsOf(pullRequest: PullRequest): { base: string; head: string; source: string } {
+export function pullRequestEndsOf(pullRequest: typeof PullRequest.Type): { base: string; head: string; source: string } {
   return {
     base: `origin/${pullRequest.base.ref}`,
     head: pullRequest.head.sha,
