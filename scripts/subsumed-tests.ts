@@ -118,8 +118,13 @@ export function greedyCover(sets: KillSets): Cover {
 
 function testNames(run: KillRun): ReadonlyMap<string, string> {
   const names = new Map<string, string>();
-  for (const [path, file] of run.testFiles) for (const test of file.tests) names.set(test.id, path === "" ? test.name : `${path} > ${test.name}`);
+  for (const [path, file] of run.testFiles) for (const test of file.tests) names.set(test.id, qualified(path, test.name));
   return names;
+}
+
+// The bun runner writes names that already open with their file.
+function qualified(path: string, name: string): string {
+  return path === "" || name.startsWith(`${path} > `) ? name : `${path} > ${name}`;
 }
 
 const byName = (a: string, b: string) => (a < b ? -1 : 1);

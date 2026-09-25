@@ -37,6 +37,7 @@ test("a subsumed pair names the test and its subsumer by file and name with both
 test("an identical pair is grouped apart from subsumption", async () => {
   const report = await fixture("report.json");
   expect(report.identical).toEqual([{ tests: [TWIN_A, TWIN_B], kills: 2 }]);
+  expect(formatReport(report)).not.toContain("tests/mul.test.ts > tests/mul.test.ts");
   expect(report.subsumed.map((one) => one.test)).not.toContain(TWIN_A);
   expect(report.subsumed.map((one) => one.test)).not.toContain(TWIN_B);
   expect(formatReport(report)).toContain(`${JSON.stringify(TWIN_A)} (2 kills) = ${JSON.stringify(TWIN_B)} (2 kills)`);
