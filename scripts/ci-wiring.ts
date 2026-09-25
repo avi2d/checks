@@ -4,8 +4,9 @@ import { git } from "./git.ts";
 import { runMain } from "./main.ts";
 import { DEFAULT_BRANCH, ENTRY_POINT, EVERY_REPOSITORY, KIT_GATES, QUALITY_FILE, selectedGates, type KitGate } from "./gates.ts";
 import { readQuality, type Quality } from "./quality-file.ts";
+import { invokes, mentions, plainCommand, type Command } from "./shell-command.ts";
 
-export type Command = readonly string[];
+export type { Command };
 
 export type Gate = {
   readonly command: string;
@@ -61,8 +62,6 @@ const CONSTANTS = new Map([
   ["false", false],
 ]);
 const STATUS_OVERRIDE = /\b(?:always|failure|cancelled)\s*\(/;
-const VARIABLE = /^\$(?:[A-Za-z_][A-Za-z0-9_]*|\{[A-Za-z_][A-Za-z0-9_]*\})/;
-const UNPLAIN = new Set(["|", "&", ";", "<", ">", "(", ")", "`", "\\", "#", "\n"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -72,66 +71,6 @@ function names(value: unknown): readonly string[] | undefined {
   if (typeof value === "string") return [value];
   if (!Array.isArray(value)) return undefined;
   return value.filter((entry): entry is string => typeof entry === "string");
-}
-
-function expansion(text: string, from: number): number | undefined {
-  const match = VARIABLE.exec(text.slice(from));
-  return match === null ? undefined : from + match[0].length;
-}
-
-// A script counts only when it is one line of plain words: any shell control, redirection or
-// substitution can run the gate without its failure failing the step.
-function plainCommand(script: string): Command | undefined {
-  const line = script.trim();
-  const words: string[] = [];
-  let word: string | undefined;
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line.charAt(index);
-    if (char === " " || char === "\t") {
-      if (word !== undefined) words.push(word);
-      word = undefined;
-    } else if (char === "'") {
-      const close = line.indexOf("'", index + 1);
-      if (close === -1) return undefined;
-      word = (word ?? "") + line.slice(index + 1, close);
-      index = close;
-    } else if (char === '"') {
-      let quoted = "";
-      for (index += 1; line.charAt(index) !== '"'; index += 1) {
-        const inner = line.charAt(index);
-        if (inner === "" || inner === "\\" || inner === "`") return undefined;
-        if (inner === "$") {
-          const end = expansion(line, index);
-          if (end === undefined) return undefined;
-          quoted += line.slice(index, end);
-          index = end - 1;
-        } else {
-          quoted += inner;
-        }
-      }
-      word = (word ?? "") + quoted;
-    } else if (char === "$") {
-      const end = expansion(line, index);
-      if (end === undefined) return undefined;
-      word = (word ?? "") + line.slice(index, end);
-      index = end - 1;
-    } else if (UNPLAIN.has(char)) {
-      return undefined;
-    } else {
-      word = (word ?? "") + char;
-    }
-  }
-  if (word !== undefined) words.push(word);
-  return words.length === 0 ? undefined : words;
-}
-
-function invokes(command: Command | undefined, gate: Command): boolean {
-  return command !== undefined && gate.length <= command.length && gate.every((word, index) => command[index] === word);
-}
-
-function mentions(script: string, gate: Command): boolean {
-  const tokens = script.split(/[\s|&;<>()`]+/);
-  return tokens.some((_, start) => invokes(tokens.slice(start), gate));
 }
 
 function constant(value: unknown): boolean | undefined {
