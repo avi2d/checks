@@ -5,7 +5,7 @@ import { ADR_DIRECTORY, judge, placementOf, placementProblem, type Placement } f
 import { readTexts, snapshotAt, stillMissing } from "./doc-snapshot.ts";
 import { changedLines, changedPaths, git, pathsAt, rangeEnds } from "./git.ts";
 import { runMain, Usage } from "./main.ts";
-import { isLivingDoc, proseFindings } from "./prose-matchers.ts";
+import { isLivingDoc, proseFindings, readerOf } from "./prose-matchers.ts";
 import { readQuality } from "./quality-file.ts";
 
 type Finding = {
@@ -91,12 +91,18 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   const records = present.filter((path) => path.startsWith(ADR_DIRECTORY));
   const judged = present.map((path) => ({ path, placement: placementOf(path, quality.docs) })).filter(({ placement }) => placement.type !== "unjudged");
   const living = present.filter(isLivingDoc);
-  const texts = yield* readTexts(root, head, [...new Set([...judged.map(({ path }) => path), ...living])]);
+  const proseDocs = present.flatMap((path) => {
+    const reader = readerOf(path);
+    return reader === undefined ? [] : [{ path, reader }];
+  });
+  const texts = yield* readTexts(root, head, [...new Set([...judged.map(({ path }) => path), ...proseDocs.map(({ path }) => path)])]);
   const text = (path: string): string => texts.get(path) ?? "";
 
   const templated = judged.flatMap(({ path, placement }) => templateFindings(path, text(path), placement, records));
-  const edited = living.filter((path) => changed.has(path));
-  const prose = edited.flatMap((path) => proseFindings(text(path), changed.get(path)).map(({ line, message }) => ({ path, line, message })));
+  const edited = proseDocs.filter(({ path }) => changed.has(path));
+  const prose = edited.flatMap(({ path, reader }) =>
+    proseFindings(text(path), reader, changed.get(path)).map(({ line, message }) => ({ path, line, message })),
+  );
   const forConsumers = (quality.docs?.forConsumers ?? []).map((glob) => new Bun.Glob(glob));
   const judging = (path: string): Judging => ({ commands: !forConsumers.some((glob) => glob.match(path)) });
   // A directory the range deletes still belongs to this repository, so a path under it is stale rather than another repository's.
@@ -110,7 +116,7 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   for (const { path } of templated.filter((finding) => !touched.has(finding.path))) advisory.set(path, (advisory.get(path) ?? 0) + 1);
   return {
     held: judged.map(({ path }) => path).filter((path) => touched.has(path)),
-    edited: { docs: edited.length, lines: edited.reduce((sum, path) => sum + (changed.get(path)?.size ?? 0), 0) },
+    edited: { docs: edited.length, lines: edited.reduce((sum, { path }) => sum + (changed.get(path)?.size ?? 0), 0) },
     living: living.length,
     findings: [...templated.filter((finding) => touched.has(finding.path)), ...prose, ...references.failing].toSorted(inPathOrder),
     advisory,
@@ -127,7 +133,7 @@ export function report({ held, edited, living, findings, advisory, brokenBefore 
     findings.length === 0
       ? [
           `${NAME}: ${held.length} doc file(s) the range touches hold to their templates`,
-          `${NAME}: ${edited.lines} line(s) the range adds or edits in ${edited.docs} living doc(s) hold to the prose rules`,
+          `${NAME}: ${edited.lines} line(s) the range adds or edits in ${edited.docs} living doc(s) or agent file(s) hold to the prose rules`,
           `${NAME}: the range breaks no path, link or command the ${living} living doc(s) name`,
         ]
       : [`${NAME}: ${findings.length} violation(s):`, ...findings.map(describe)];

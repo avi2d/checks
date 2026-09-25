@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { isLivingDoc, PROSE_RULES, proseFindings, proseRefused, scanMarkdown } from "../scripts/prose-matchers.ts";
+import { isLivingDoc, PROSE_RULES, proseFindings, proseRefused, readerOf, scanMarkdown } from "../scripts/prose-matchers.ts";
 
 function refusals(text: string, within?: ReadonlySet<number>): readonly string[] {
-  return proseFindings(text, within).map(({ line, message }) => `${line}: ${message}`);
+  return proseFindings(text, "people", within).map(({ line, message }) => `${line}: ${message}`);
 }
 
 describe("each rule goes red on a planted line and green on its rewrite", () => {
@@ -106,7 +106,7 @@ test("each example the checks-docs page shows is refused by its own rule", () =>
   const unrefused = PROSE_RULES.flatMap(({ refuses, example }) => {
     const spans = [...example.matchAll(/`([^`]+)`/g)].map(([, span = ""]) => span);
     const texts = refuses.includes("runs across lines") ? [spans.join("\n")] : spans;
-    return texts.filter((text) => !proseFindings(text).some(({ message }) => message.includes(refuses))).map((text) => `${refuses}: ${text}`);
+    return texts.filter((text) => !proseFindings(text, "people").some(({ message }) => message.includes(refuses))).map((text) => `${refuses}: ${text}`);
   });
   expect(unrefused).toEqual([]);
 });
@@ -145,4 +145,20 @@ test("living docs are READMEs, CONTRIBUTING.md and pages under docs/, but not re
 test("the host entry names each refusal by path and line, and refuses nothing in a doc that is not living", () => {
   expect(proseRefused("docs/guide.md", "It builds; it ships.\n")).toEqual(["docs/guide.md:1 carries `;`, a semicolon. Use two sentences"]);
   expect(proseRefused("docs/adr/0001-a-record.md", "It builds; it ships.\n")).toEqual([]);
+});
+
+test("an agent file takes the separator rules and no other, and a changelog takes none", () => {
+  expect(["AGENTS.md", "CLAUDE.md", "tools/AGENTS.md"].map(readerOf)).toEqual(["agents", "agents", "agents"]);
+  expect(["CHANGELOG.md", "docs/adr/0001-a-record.md"].map(readerOf)).toEqual([undefined, undefined]);
+  const separators = PROSE_RULES.filter(({ readers }) => readers.includes("agents")).map(({ refuses }) => refuses);
+  expect(separators).toEqual(["an em dash", "an en dash", "a parenthesis other than the plural `(s)`", "a hyphen used as a dash", "a semicolon"]);
+
+  const text = "It builds — fast; it ships (twice) - once.\nIt builds. It ships.\nThis page explains it, and support is planned\nand ships.\n";
+  expect(proseRefused("AGENTS.md", text).map((refusal) => refusal.split(",")[0])).toEqual([
+    "AGENTS.md:1 carries `—`",
+    "AGENTS.md:1 carries `(`",
+    "AGENTS.md:1 carries `-`",
+    "AGENTS.md:1 carries `;`",
+  ]);
+  expect(proseRefused("CHANGELOG.md", text)).toEqual([]);
 });

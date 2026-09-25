@@ -2,7 +2,7 @@ import { Effect, Schema } from "effect";
 import { ADR_DIRECTORY, ADR_INDEX, ROOT_FILES } from "./doc-rules.ts";
 import { listed, templateFile } from "./doc-templates.ts";
 import { EVERY_REPOSITORY, KIT_GATES, QUALITY_FILE } from "./gates.ts";
-import { DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, LIVING_NAMES, NEVER_LIVING, PROSE_RULES } from "./prose-matchers.ts";
+import { AGENT_NAMES, DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, HISTORY_NAMES, LIVING_NAMES, PROSE_RULES } from "./prose-matchers.ts";
 import { LegacyManifest, MODES, Quality } from "./quality-file.ts";
 
 export const MANIFEST = "package.json";
@@ -155,11 +155,13 @@ const LIVING_DOCS: Block = {
     `- a ${listed(LIVING_NAMES.map(code))} in any directory`,
     `- a Markdown page under ${code(DOCS_DIRECTORY)}`,
     "",
-    "These are records or agent files, and never living docs:",
+    `An agent file is a ${listed(AGENT_NAMES.map(code))} in any directory, and takes only the rules the table below marks for agent files.`,
+    "",
+    "These are records, and take no prose rule:",
     "",
     `- a file in ${code(ADR_DIRECTORY)}`,
     `- a file whose name opens with four digits, as in ${listed(DATED_RECORD_EXAMPLES.map(code))}`,
-    `- a ${listed(NEVER_LIVING.map(code))}`,
+    `- a ${listed(HISTORY_NAMES.map(code))}`,
   ],
 };
 
@@ -167,9 +169,9 @@ const PROSE: Block = {
   name: "prose-rules",
   from: ["PROSE_RULES in scripts/prose-matchers.ts"],
   render: () => [
-    "| Refused | For example | Write instead |",
-    "| --- | --- | --- |",
-    ...PROSE_RULES.map(({ refuses, example, instead }) => `| ${refuses} | ${example} | ${instead} |`),
+    "| Refused | For example | Write instead | In agent files |",
+    "| --- | --- | --- | --- |",
+    ...PROSE_RULES.map(({ readers, refuses, example, instead }) => `| ${refuses} | ${example} | ${instead} | ${readers.includes("agents") ? "yes" : "no"} |`),
   ],
 };
 

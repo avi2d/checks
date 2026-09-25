@@ -1,11 +1,11 @@
 # checks-docs
 
-`checks-docs` is the gate that holds each doc file a change touches to the template for its kind, each line a change adds to a living doc to the prose rules, and each path, link and command a living doc names to what the repository holds, and a reader looks it up to learn what a doc file answers to.
+`checks-docs` is the gate that holds each doc file a change touches to the template for its kind, each line a change adds to a living doc or an agent file to the prose rules, and each path, link and command a living doc names to what the repository holds, and a reader looks it up to learn what a doc file answers to.
 
 ## What it checks
 
 It holds each doc file a change touches to the template for its kind, and lists every other doc file that does not conform yet without failing.
-It holds each line a change adds or edits in a living doc to the prose rules, as [The prose rules](#the-prose-rules) says.
+It holds each line a change adds or edits in a living doc or an agent file to the prose rules, as [The prose rules](#the-prose-rules) says.
 It fails when a living doc names a path, link or command that does not resolve, and the range added it or broke it, as [Paths, links and commands](#paths-links-and-commands) says.
 The package ships one template per kind under `templates/`, and a repository starts a new doc file by copying one:
 
@@ -53,11 +53,11 @@ A template decides a file's structure, and the template file itself is the refer
 - A changelog lists its releases newest first, each opening with a `Released YYYY-MM-DD.` line.
 - A how-to or tutorial page numbers its steps.
 - `CLAUDE.md` is its template word for word.
-  It is a fixed agent pointer rather than a living doc, so the prose rules do not apply to it.
+  It is a fixed agent pointer rather than a living doc, so it takes only the prose rules for agent files.
 
 ## The prose rules
 
-A line a change adds or edits in a living doc is held to the prose rules, and a line the change leaves alone is not, so a repository needs no cleanup pass before it runs them.
+A line a change adds or edits in a living doc or an agent file is held to the prose rules, and a line the change leaves alone is not, so a repository needs no cleanup pass before it runs them.
 
 <!-- generated living-docs: bun run build writes it from scripts/prose-matchers.ts and scripts/doc-blocks.ts -->
 
@@ -66,27 +66,29 @@ A living doc is one of these:
 - a `README.md` or `CONTRIBUTING.md` in any directory
 - a Markdown page under `docs/`
 
-These are records or agent files, and never living docs:
+An agent file is a `AGENTS.md` or `CLAUDE.md` in any directory, and takes only the rules the table below marks for agent files.
+
+These are records, and take no prose rule:
 
 - a file in `docs/adr/`
 - a file whose name opens with four digits, as in `0001-` or `2026-05-08-`
-- a `CHANGELOG.md`, `AGENTS.md` or `CLAUDE.md`
+- a `CHANGELOG.md`
 
 <!-- end generated living-docs -->
 
 <!-- generated prose-rules: bun run build writes it from PROSE_RULES in scripts/prose-matchers.ts and scripts/doc-blocks.ts -->
 
-| Refused | For example | Write instead |
-| --- | --- | --- |
-| an em dash | `—` | End the sentence, or use a comma |
-| an en dash | `–` | End the sentence, or use a comma |
-| a parenthesis other than the plural `(s)` | `(` | Make the aside its own sentence, or set it off with commas |
-| a hyphen used as a dash | `a - b` or `a -- b` | End the sentence, or use a comma |
-| a semicolon | `;` | Use two sentences |
-| a promise about the future | `until #11`, `is planned`, `will soon`, `coming soon`, `in a future release` | Say what is true now |
-| a sentence that opens by talking about the page | `This page explains` | Talk directly about the subject |
-| a second sentence on one line | `It builds. It ships.` | Start it on its own line |
-| a sentence that runs across lines | `It builds` with `and ships.` on the next line | Join the sentence onto one line |
+| Refused | For example | Write instead | In agent files |
+| --- | --- | --- | --- |
+| an em dash | `—` | End the sentence, or use a comma | yes |
+| an en dash | `–` | End the sentence, or use a comma | yes |
+| a parenthesis other than the plural `(s)` | `(` | Make the aside its own sentence, or set it off with commas | yes |
+| a hyphen used as a dash | `a - b` or `a -- b` | End the sentence, or use a comma | yes |
+| a semicolon | `;` | Use two sentences | yes |
+| a promise about the future | `until #11`, `is planned`, `will soon`, `coming soon`, `in a future release` | Say what is true now | no |
+| a sentence that opens by talking about the page | `This page explains` | Talk directly about the subject | no |
+| a second sentence on one line | `It builds. It ships.` | Start it on its own line | no |
+| a sentence that runs across lines | `It builds` with `and ships.` on the next line | Join the sentence onto one line | no |
 
 <!-- end generated prose-rules -->
 
@@ -141,8 +143,8 @@ With one it is that commit against its parent, or against the empty tree for a r
 
 | Code | When |
 | --- | --- |
-| 0 | every doc file the range touches holds to its template, every line it adds to a living doc holds to the prose rules, and it adds or breaks no reference that does not resolve |
-| 1 | a doc file the range touches does not hold to its template, a line the range adds to a living doc breaks a prose rule, or the range adds or breaks a reference that does not resolve |
+| 0 | every doc file the range touches holds to its template, every line it adds to a living doc or an agent file holds to the prose rules, and it adds or breaks no reference that does not resolve |
+| 1 | a doc file the range touches does not hold to its template, a line the range adds to a living doc or an agent file breaks a prose rule, or the range adds or breaks a reference that does not resolve |
 | 2 | `quality.json` or a `package.json` does not decode, or a ref does not resolve |
 
 ## Sample output

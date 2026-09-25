@@ -71,43 +71,52 @@ export const changedPaths = Effect.fn("changedPaths")(function* (
   return parseNameStatus(yield* git(["diff", "--name-status", "-z", "-M", base, head, "--", ...pathspecs], cwd));
 });
 
+const ESCAPES: Readonly<Record<string, string>> = { a: "\x07", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t", v: "\v" };
+
+// Git quotes a path holding a quote, a backslash or a control character, and ends one holding a space with a tab.
 function newPathOf(line: string): string | undefined {
-  const path = line.startsWith("+++ b/") ? line.slice("+++ b/".length) : line.slice("+++ ".length);
+  const named = line.slice("+++ ".length);
+  const path = named.startsWith('"')
+    ? named.slice(1, -1).replace(/\\(?:([0-7]{3})|(.))/g, (_, octal: string | undefined, char: string) =>
+        octal === undefined ? (ESCAPES[char] ?? char) : String.fromCharCode(Number.parseInt(octal, 8)),
+      )
+    : named.replace(/\t$/, "");
   return path === "/dev/null" ? undefined : path;
 }
 
-const HUNK = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/;
+const HUNK = /^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 
+// A hunk's header counts its lines, so an added line reading `++ x` is not taken for the next file's `+++` header.
 export function parseAddedLines(diff: string): Map<string, Set<number>> {
   const added = new Map<string, Set<number>>();
   let path: string | undefined;
   let line = 0;
-  let inHunk = false;
+  let oldLeft = 0;
+  let newLeft = 0;
   for (const row of diff.split("\n")) {
+    if (oldLeft > 0 || newLeft > 0) {
+      if (row.startsWith("+")) {
+        if (path !== undefined) added.set(path, (added.get(path) ?? new Set<number>()).add(line));
+        line += 1;
+        newLeft -= 1;
+      } else if (row.startsWith("-")) {
+        oldLeft -= 1;
+      } else if (row.startsWith(" ")) {
+        line += 1;
+        oldLeft -= 1;
+        newLeft -= 1;
+      }
+      continue;
+    }
     if (row.startsWith("+++ ")) {
       path = newPathOf(row);
-      inHunk = false;
       continue;
     }
     const hunk = HUNK.exec(row);
     if (hunk !== null) {
-      line = Number(hunk[1]);
-      inHunk = true;
-      continue;
-    }
-    if (!inHunk || path === undefined) continue;
-    if (row.startsWith("+")) {
-      let lines = added.get(path);
-      if (lines === undefined) {
-        lines = new Set<number>();
-        added.set(path, lines);
-      }
-      lines.add(line);
-      line += 1;
-    } else if (row.startsWith("-")) {
-      continue;
-    } else {
-      line += 1;
+      oldLeft = Number(hunk[1] ?? 1);
+      line = Number(hunk[2]);
+      newLeft = Number(hunk[3] ?? 1);
     }
   }
   return added;

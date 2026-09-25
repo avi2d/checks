@@ -76,6 +76,8 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   Text nobody touched never turns a change red, a record keeps the words it was written in, and a repository needs no cleanup pass before the gate runs.
 - A living doc takes one sentence per line, so a changed line is a changed sentence.
   Under a hard wrap a one-word edit reflows a paragraph, and the gate would then demand fixes to sentences the edit never touched.
+- An agent file such as `AGENTS.md` takes the separator rules and no other prose rule.
+  One sentence per line serves the people who review a doc's diffs, and an agent file keeps each entry to one line however many sentences it holds.
 - `scripts/prose-matchers.ts` imports nothing, so the gate and a write-time hook run one matcher and refuse in the same words.
   A hook bundle ships without `node_modules`, so a matcher that needed Vale or a package could not refuse at write time.
 - Readability grades and words such as easy stay out of the prose rules.

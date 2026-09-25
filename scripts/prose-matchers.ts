@@ -11,7 +11,10 @@ export type MarkdownLine = {
   readonly links: readonly string[];
 };
 
+export type Reader = "people" | "agents";
+
 export type ProseRule = {
+  readonly readers: readonly Reader[];
   readonly refuses: string;
   readonly example: string;
   readonly instead: string;
@@ -22,14 +25,20 @@ type MatchedRule = ProseRule & { readonly find: RegExp };
 export const ADR_DIRECTORY = "docs/adr/";
 export const DOCS_DIRECTORY = "docs/";
 export const LIVING_NAMES: readonly string[] = ["README.md", "CONTRIBUTING.md"];
-export const NEVER_LIVING: readonly string[] = ["CHANGELOG.md", "AGENTS.md", "CLAUDE.md"];
+export const AGENT_NAMES: readonly string[] = ["AGENTS.md", "CLAUDE.md"];
+export const HISTORY_NAMES: readonly string[] = ["CHANGELOG.md"];
 export const DATED_RECORD_EXAMPLES: readonly string[] = ["0001-", "2026-05-08-"];
 const DATED_RECORD = /^\d{4}-/;
 
 export function isLivingDoc(repositoryPath: string): boolean {
   const name = repositoryPath.slice(repositoryPath.lastIndexOf("/") + 1);
-  if (NEVER_LIVING.includes(name) || DATED_RECORD.test(name) || repositoryPath.startsWith(ADR_DIRECTORY)) return false;
+  if (HISTORY_NAMES.includes(name) || AGENT_NAMES.includes(name) || DATED_RECORD.test(name) || repositoryPath.startsWith(ADR_DIRECTORY)) return false;
   return LIVING_NAMES.includes(name) || (repositoryPath.startsWith(DOCS_DIRECTORY) && name.endsWith(".md"));
+}
+
+export function readerOf(repositoryPath: string): Reader | undefined {
+  if (isLivingDoc(repositoryPath)) return "people";
+  return AGENT_NAMES.includes(repositoryPath.slice(repositoryPath.lastIndexOf("/") + 1)) ? "agents" : undefined;
 }
 
 // Masking keeps each line's length, so a column in the masked prose is the same column in the raw line.
@@ -240,30 +249,36 @@ const PROMISES: readonly (readonly [shows: string, pattern: string])[] = [
 ];
 
 const code = (text: string): string => `\`${text}\``;
+const EVERY_READER: readonly Reader[] = ["people", "agents"];
+const PEOPLE: readonly Reader[] = ["people"];
 
 const RULES: readonly MatchedRule[] = [
-  { refuses: "an em dash", example: code("—"), instead: SEPARATOR_INSTEAD, find: /—/g },
-  { refuses: "an en dash", example: code("–"), instead: SEPARATOR_INSTEAD, find: /–/g },
+  { readers: EVERY_READER, refuses: "an em dash", example: code("—"), instead: SEPARATOR_INSTEAD, find: /—/g },
+  { readers: EVERY_READER, refuses: "an en dash", example: code("–"), instead: SEPARATOR_INSTEAD, find: /–/g },
   {
+    readers: EVERY_READER,
     refuses: "a parenthesis other than the plural `(s)`",
     example: code("("),
     instead: "Make the aside its own sentence, or set it off with commas",
     find: /\((?!s\))/g,
   },
   {
+    readers: EVERY_READER,
     refuses: "a hyphen used as a dash",
     example: `${code("a - b")} or ${code("a -- b")}`,
     instead: SEPARATOR_INSTEAD,
     find: /(?<=[^\s|]) -{1,3} (?=[^\s|])/g,
   },
-  { refuses: "a semicolon", example: code(";"), instead: "Use two sentences", find: /;/g },
+  { readers: EVERY_READER, refuses: "a semicolon", example: code(";"), instead: "Use two sentences", find: /;/g },
   {
+    readers: PEOPLE,
     refuses: "a promise about the future",
     example: PROMISES.map(([shows]) => code(shows)).join(", "),
     instead: "Say what is true now",
     find: new RegExp(PROMISES.map(([, pattern]) => String.raw`\b${pattern}\b`).join("|"), "gi"),
   },
   {
+    readers: PEOPLE,
     refuses: "a sentence that opens by talking about the page",
     example: code("This page explains"),
     instead: "Talk directly about the subject",
@@ -272,24 +287,30 @@ const RULES: readonly MatchedRule[] = [
 ];
 
 const SECOND_SENTENCE: ProseRule = {
+  readers: PEOPLE,
   refuses: "a second sentence on one line",
   example: code("It builds. It ships."),
   instead: "Start it on its own line",
 };
 
 const RUN_ON: ProseRule = {
+  readers: PEOPLE,
   refuses: "a sentence that runs across lines",
   example: `${code("It builds")} with ${code("and ships.")} on the next line`,
   instead: "Join the sentence onto one line",
 };
 
-export const PROSE_RULES: readonly ProseRule[] = [...RULES.map(({ refuses, example, instead }) => ({ refuses, example, instead })), SECOND_SENTENCE, RUN_ON];
+export const PROSE_RULES: readonly ProseRule[] = [
+  ...RULES.map(({ readers, refuses, example, instead }) => ({ readers, refuses, example, instead })),
+  SECOND_SENTENCE,
+  RUN_ON,
+];
 
 const JUDGED_KINDS: ReadonlySet<LineKind> = new Set(["prose", "heading", "table", "html"]);
 
-function ruleFindings(line: MarkdownLine): ProseFinding[] {
+function ruleFindings(line: MarkdownLine, reader: Reader): ProseFinding[] {
   const body = bodyOf(line);
-  return RULES.flatMap(({ refuses, instead, find }) =>
+  return RULES.filter(({ readers }) => readers.includes(reader)).flatMap(({ refuses, instead, find }) =>
     [...body.matchAll(find)].map(([match]) => ({ line: line.line, message: `carries \`${match.trim()}\`, ${refuses}. ${instead}` })),
   );
 }
@@ -339,16 +360,21 @@ function spansLines(lines: readonly MarkdownLine[], index: number): ProseFinding
   return { line: line.line, message: `carries ${RUN_ON.refuses}. ${RUN_ON.instead}` };
 }
 
-export function proseFindings(text: string, within?: ReadonlySet<number>): readonly ProseFinding[] {
+export function proseFindings(text: string, reader: Reader, within?: ReadonlySet<number>): readonly ProseFinding[] {
   const lines = scanMarkdown(text);
   return lines.flatMap((line, index) => {
     if ((within !== undefined && !within.has(line.line)) || !JUDGED_KINDS.has(line.kind)) return [];
-    const sentences = line.kind === "prose" ? [secondSentence(line), spansLines(lines, index)] : [];
-    return [...ruleFindings(line), ...sentences.filter((finding) => finding !== undefined)];
+    const prose = line.kind === "prose";
+    const sentences = [
+      prose && SECOND_SENTENCE.readers.includes(reader) ? secondSentence(line) : undefined,
+      prose && RUN_ON.readers.includes(reader) ? spansLines(lines, index) : undefined,
+    ];
+    return [...ruleFindings(line, reader), ...sentences.filter((finding) => finding !== undefined)];
   });
 }
 
 export function proseRefused(repositoryPath: string, text: string, within?: ReadonlySet<number>): string[] {
-  if (!isLivingDoc(repositoryPath)) return [];
-  return proseFindings(text, within).map(({ line, message }) => `${repositoryPath}:${line} ${message}`);
+  const reader = readerOf(repositoryPath);
+  if (reader === undefined) return [];
+  return proseFindings(text, reader, within).map(({ line, message }) => `${repositoryPath}:${line} ${message}`);
 }
