@@ -103,9 +103,14 @@ test("each added line is keyed by the path git names, as --no-prefix prints it",
     '+++ "docs/say \\"hi\\"\\t.md"',
     "@@ -0,0 +1 @@",
     "+It builds.",
+    'diff --git "docs/my \\"q\\".md" "docs/my \\"q\\".md"',
+    '--- "docs/my \\"q\\".md"\t',
+    '+++ "docs/my \\"q\\".md"\t',
+    "@@ -1,0 +2 @@",
+    "+It builds.",
   ].join("\n");
   const added = parseAddedLines(diff);
-  expect([...added.keys()]).toEqual(["b/README.md", "docs/my page.md", 'docs/say "hi"\t.md']);
+  expect([...added.keys()]).toEqual(["b/README.md", "docs/my page.md", 'docs/say "hi"\t.md', 'docs/my "q".md']);
   expect([...added.get("b/README.md") ?? []]).toEqual([2]);
   expect([...added.get("docs/my page.md") ?? []]).toEqual([3]);
 });

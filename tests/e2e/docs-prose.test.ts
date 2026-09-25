@@ -153,13 +153,16 @@ test(
     await put("README.md", "# Widget\n\nIt builds; it ships.\n");
     await put("b/README.md", "# B\n\nIt builds.\n");
     await put("my tools/README.md", "# My tools\n\nIt builds.\n");
+    await put('say "hi"/README.md', "# Say hi\n\nIt builds.\n");
     const base = await commit("start");
     await put("b/README.md", "# B\n\nIt builds; it ships.\n");
     await put("my tools/README.md", "# My tools\n\nIt builds; it ships.\n");
-    const head = await commit("semicolons under b/ and under a path with a space");
+    await put('say "hi"/README.md', "# Say hi\n\nIt builds; it ships.\n");
+    const head = await commit("semicolons under b/, under a path with a space and under one git quotes");
 
     const refused = await docs(base, head);
-    expect(refused.text).toContain("docs: 2 violation(s):");
+    expect(refused.text).toContain("docs: 3 violation(s):");
+    expect(refused.text).toContain('  say "hi"/README.md:3: carries `;`, a semicolon');
     expect(refused.text).toContain("  b/README.md:3: carries `;`, a semicolon");
     expect(refused.text).toContain("  my tools/README.md:3: carries `;`, a semicolon");
     expect(refused.exitCode).toBe(1);

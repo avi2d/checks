@@ -75,12 +75,12 @@ const ESCAPES: Readonly<Record<string, string>> = { a: "\x07", b: "\b", f: "\f",
 
 // Git quotes a path holding a quote, a backslash or a control character, and ends one holding a space with a tab.
 function newPathOf(line: string): string | undefined {
-  const named = line.slice("+++ ".length);
+  const named = line.slice("+++ ".length).replace(/\t$/, "");
   const path = named.startsWith('"')
     ? named.slice(1, -1).replace(/\\(?:([0-7]{3})|(.))/g, (_, octal: string | undefined, char: string) =>
         octal === undefined ? (ESCAPES[char] ?? char) : String.fromCharCode(Number.parseInt(octal, 8)),
       )
-    : named.replace(/\t$/, "");
+    : named;
   return path === "/dev/null" ? undefined : path;
 }
 
