@@ -97,7 +97,7 @@ size-budget: advisory, 1 overrun(s) where the budget does not hold yet:
 ## Opting out
 
 A repository that declares no `size` passes.
-`quality.json` refuses a `size` without `sources.production`, and with `size` declared `checks-quality` refuses a `sources.production` glob that matches no file.
+`quality.json` refuses a `size` without `sources.production`, and `checks-quality` refuses a `sources.production` glob that matches no file.
 A repository that tracks no `.ts` or `.tsx` file leaves it out of `gates.lint`, as [Gate selection](checks-lint.md#gate-selection) says.
 Moving `applies` from `ratchet` to `all` tightens the budget to every production and test file, once the advisory list names none.
 
