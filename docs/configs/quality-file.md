@@ -19,7 +19,7 @@ The kit's bins find the file at the git root and read it there:
     "production": ["src/**/*.ts"],
     "effect": { "paths": ["src/**/*.ts"], "exempt": ["src/host/*.ts"] }
   },
-  "size": { "fileLines": 400, "functionLines": 100, "applies": "changed" },
+  "size": { "applies": "ratchet", "tests": { "fileLines": 800 } },
   "features": [
     {
       "name": "billing",
@@ -46,7 +46,7 @@ The kit's bins find the file at the git root and read it there:
 | `commitIdentity.authors` | `checks-commit-identity` | the identities allowed to author and commit, as [checks-commit-identity](../gates/checks-commit-identity.md) says |
 | `sources.production` | `checks-size-budget`, `checks-quality` | the source the repository ships, as [checks-size-budget](../gates/checks-size-budget.md) says |
 | `sources.effect` | `checks-quality` | the paths held to the Effect rules, and the files under them that are not, as [The Effect rules](effect-rules.md) says |
-| `size` | `checks-size-budget` | the line budget, and which production files it holds |
+| `size` | `checks-size-budget` | the size budget of production and test files, and how a change is held to it, as [checks-size-budget](../gates/checks-size-budget.md) says |
 | `features` | `featureRules`, `checks-feature-owners` | each feature's root, entries, exempt importers and proof, as [checks-feature-owners](../gates/checks-feature-owners.md) says |
 | `changeSignal` | `checks-feature-owners` | `advisory` to list the feature owners a change touches |
 | `agentRules.on` | agent Rule selection, not the kit | catalogued Rules switched on for this repository |

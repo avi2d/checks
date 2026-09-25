@@ -152,7 +152,7 @@ test(
     expect(unsized.text).not.toContain("matches no file");
     expect(unsized.exitCode).toBe(0);
 
-    await put("quality.json", { sources, size: { fileLines: 400, functionLines: 100, applies: "changed" } });
+    await put("quality.json", { sources, size: { production: { fileLines: 400, functionLines: 100 } } });
     const unmatchedProduction = await quality("--check");
     expect(unmatchedProduction.text).toContain("sources.production app/**/*.ts matches no file, so it holds no source to the size budget");
     expect(unmatchedProduction.text).not.toContain("src/**/*.ts matches no file");

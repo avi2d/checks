@@ -1,5 +1,6 @@
 import { Console, Effect, FileSystem, JsonSchema, Path, Schema } from "effect";
 import { LintGates, QUALITY_FILE } from "./gates.ts";
+import { Size } from "./size-rules.ts";
 
 const SEGMENT = String.raw`(?!\.\.?(?:/|$))(?:\*\*|(?:[\w.@+-]|\*(?!\*))+)`;
 
@@ -97,19 +98,6 @@ const Sources = Schema.Struct({
   effect: Schema.optionalKey(EffectSources),
 });
 
-const LineBudget = Schema.Int.check(Schema.isGreaterThan(0));
-
-const Size = Schema.Struct({
-  fileLines: LineBudget.annotate({ description: "The most lines a file may hold, blank and comment lines counted" }),
-  functionLines: LineBudget.annotate({
-    description: "The most lines a function may span, blank and comment lines counted",
-  }),
-  applies: Schema.Literals(["changed", "all"]).annotate({
-    description:
-      "Which production files the budget holds: changed, the ones a range adds or changes; all, every one. The rest are reported as advisory",
-  }),
-});
-
 const Feature = Schema.Struct({
   name: Schema.String.check(
     Schema.isPattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { expected: "a feature name in kebab case" }),
@@ -192,9 +180,7 @@ export const Quality = Schema.Struct({
   gates: Schema.optionalKey(Gates),
   commitIdentity: Schema.optionalKey(CommitIdentity),
   sources: Schema.optionalKey(Sources),
-  size: Schema.optionalKey(
-    Size.annotate({ description: "The line budget oxlint holds production files to, read by checks-size-budget" }),
-  ),
+  size: Schema.optionalKey(Size),
   features: Schema.optionalKey(
     Features.annotate({
       description: "The feature owners dependency-cruiser holds to their entries and checks-feature-owners maps a change to",
@@ -215,7 +201,7 @@ export const Quality = Schema.Struct({
   .check(
     Schema.makeFilter(
       ({ size, sources }) =>
-        size === undefined || (sources?.production ?? []).length > 0 || "declares size, which holds nothing without sources.production",
+        size === undefined || (sources?.production ?? []).length > 0 || "declares size, which holds no production file without sources.production",
       {
         toJsonSchema: () => ({
           if: { required: ["size"] },

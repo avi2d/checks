@@ -4,6 +4,7 @@ import { listed, templateFile } from "./doc-templates.ts";
 import { EVERY_REPOSITORY, KIT_GATES, QUALITY_FILE } from "./gates.ts";
 import { AGENT_NAMES, DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, HISTORY_NAMES, LIVING_NAMES, PROSE_RULES } from "./prose-matchers.ts";
 import { LegacyManifest, MODES, Quality } from "./quality-file.ts";
+import { SIZE_DEFAULTS, SIZE_RULES, type Budget } from "./size-rules.ts";
 
 export const MANIFEST = "package.json";
 export const BUN_VERSION = ".bun-version";
@@ -221,7 +222,10 @@ const QUALITY_ROWS: Described<QualityFields, KeyRow> = {
       holds: "the paths held to the Effect rules, and the files under them that are not, as [The Effect rules](effect-rules.md) says",
     },
   },
-  size: { readBy: "`checks-size-budget`", holds: "the line budget, and which production files it holds" },
+  size: {
+    readBy: "`checks-size-budget`",
+    holds: "the size budget of production and test files, and how a change is held to it, as [checks-size-budget](../gates/checks-size-budget.md) says",
+  },
   features: {
     readBy: "`featureRules`, `checks-feature-owners`",
     holds: "each feature's root, entries, exempt importers and proof, as [checks-feature-owners](../gates/checks-feature-owners.md) says",
@@ -265,6 +269,22 @@ const LEGACY_KEYS: Block = {
   ],
 };
 
+function limitOf(budget: Budget, key: keyof Budget): string {
+  return String(budget[key] ?? "none");
+}
+
+const SIZE_LIMITS: Block = {
+  name: "size-limits",
+  from: ["SIZE_RULES and SIZE_DEFAULTS in scripts/size-rules.ts"],
+  render: () => [
+    "| Key | Limits | oxlint rule | Production | Tests |",
+    "| --- | --- | --- | --- | --- |",
+    ...SIZE_RULES.map(
+      ({ key, limits, rule }) => `| ${code(key)} | ${limits} | ${code(rule)} | ${limitOf(SIZE_DEFAULTS.production, key)} | ${limitOf(SIZE_DEFAULTS.tests, key)} |`,
+    ),
+  ],
+};
+
 const WHERE: Block = {
   name: "shipped",
   from: [MANIFEST],
@@ -274,6 +294,7 @@ const WHERE: Block = {
 export const TARGETS: readonly { readonly file: string; readonly blocks: readonly Block[] }[] = [
   { file: "README.md", blocks: [PREREQUISITES, INSTALL, GATES, WHERE] },
   { file: `${GATE_PAGES}/checks-docs.md`, blocks: [DOC_KINDS, LIVING_DOCS, PROSE] },
+  { file: `${GATE_PAGES}/checks-size-budget.md`, blocks: [SIZE_LIMITS] },
   { file: "docs/configs/quality-file.md", blocks: [QUALITY_KEYS, LEGACY_KEYS] },
 ];
 
