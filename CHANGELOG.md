@@ -11,10 +11,6 @@ Released 2026-09-25.
 - **scripts:** add checks-repetition to hold new repetition in production code (#46)
 - **scripts:** add the recommended size limits, a tests budget and an overrun ratchet (#45)
 
-### Breaking changes
-
-- Set `size` with the nested limits shape, which defaults to `ratchet` and supports `all` for measuring; remove `changed`, `fileLines` and `functionLines`, which are refused.
-
 ## 0.15.0
 
 Released 2026-09-25.
