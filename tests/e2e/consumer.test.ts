@@ -25,7 +25,7 @@ type Kind = "file" | "tarball";
 
 // Every dependency and its version are the same across every fixture, so one
 // `bun install` per kind serves every test that uses it.
-const KEPT_ACROSS_TESTS = new Set(["node_modules", "bun.lock", "bun.lockb"]);
+const KEPT_ACROSS_TESTS = new Set(["node_modules", "bun.lock"]);
 
 let dir = "";
 let fileDir = "";
