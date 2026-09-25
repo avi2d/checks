@@ -40,11 +40,13 @@ const BANNED_BUN_NAMES: readonly string[] = [
 ];
 const BANNED_GLOBAL_CALLS: readonly string[] = ["fetch"];
 
+const IGNORES_KEY = "pathIgnorePatterns";
 const QUARANTINE = "**/tests/quarantine/**";
 const VENDORED = "repos/**";
+const PRESET_IGNORES: readonly string[] = [QUARANTINE, VENDORED];
 
-function pinnedTestTable(vendors: boolean): { readonly pathIgnorePatterns: readonly string[] } {
-  return { pathIgnorePatterns: vendors ? [QUARANTINE, VENDORED] : [QUARANTINE] };
+function acceptedIgnores(vendors: boolean): readonly (readonly string[])[] {
+  return vendors ? [PRESET_IGNORES] : [PRESET_IGNORES, [QUARANTINE]];
 }
 export const LAYOUT_CHECK_MARK = "scripts/test-layout.ts";
 export const LAYOUT_CHECK_BIN = "checks-test-layout";
@@ -251,9 +253,7 @@ export function scriptViolations(manifest: unknown): readonly Violation[] {
 
 export function bunfigViolations(consumer: unknown, preset: unknown, vendors: boolean): readonly Violation[] {
   const file = "bunfig.toml";
-  const pinned = pinnedTestTable(vendors);
-  const copy = `bun has no bunfig extends, so copy node_modules/@avi2dg/checks/bunfig.toml with [test].pathIgnorePatterns set to ${JSON.stringify(pinned.pathIgnorePatterns)}`;
-  const pin = `the check pins it, adding ${VENDORED} only where ${QUALITY_FILE} declares sources.libraries`;
+  const copy = "bun has no bunfig extends, so copy node_modules/@avi2dg/checks/bunfig.toml";
   if (consumer === undefined) {
     return [{ file, line: undefined, message: `bunfig.toml is missing; ${copy}` }];
   }
@@ -261,18 +261,21 @@ export function bunfigViolations(consumer: unknown, preset: unknown, vendors: bo
   if (!isRecord(presetTest)) {
     return [{ file, line: undefined, message: "the shipped bunfig preset has no [test] table" }];
   }
-  const expected = { ...presetTest, ...pinned };
   const consumerTest = isRecord(consumer) ? consumer["test"] : undefined;
+  const found = (key: string): unknown => (isRecord(consumerTest) ? consumerTest[key] : undefined);
+  const drifted = (key: string, wanted: string, fix: string): Violation => ({
+    file,
+    line: undefined,
+    message: `[test].${key} must be ${wanted}, found ${JSON.stringify(found(key) ?? null)}; ${fix}`,
+  });
   const violations: Violation[] = [];
-  for (const [key, value] of Object.entries(expected)) {
-    const found = isRecord(consumerTest) ? consumerTest[key] : undefined;
-    if (!Bun.deepEquals(found, value)) {
-      violations.push({
-        file,
-        line: undefined,
-        message: `[test].${key} must be ${JSON.stringify(value)}, found ${JSON.stringify(found ?? null)}; ${key in pinned ? pin : copy}`,
-      });
-    }
+  for (const [key, value] of Object.entries(presetTest)) {
+    if (key !== IGNORES_KEY && !Bun.deepEquals(found(key), value)) violations.push(drifted(key, JSON.stringify(value), copy));
+  }
+  const accepted = acceptedIgnores(vendors);
+  if (!accepted.some((ignores) => Bun.deepEquals(found(IGNORES_KEY), ignores))) {
+    const wanted = accepted.map((ignores) => JSON.stringify(ignores)).join(" or ");
+    violations.push(drifted(IGNORES_KEY, wanted, `the check pins it, requiring ${VENDORED} where ${QUALITY_FILE} declares sources.libraries`));
   }
   return violations;
 }

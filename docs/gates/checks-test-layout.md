@@ -18,8 +18,8 @@ It fails unless the repository holds this shape, and names the file and the path
 - `scripts.test` is exactly `checks-test`, which runs `bun test --randomize` as [checks-test](checks-test.md) says.
 - `scripts.lint` runs this check, itself or through `checks-lint` called by its bare bin name.
 - `bunfig.toml` carries every `[test]` key of the shipped preset with the same value.
-  `[test].pathIgnorePatterns` is always `["**/tests/quarantine/**"]`, which the check pins itself, so the kit's own repository, whose bunfig is the preset, cannot drift it either.
-  A repository whose `quality.json` declares `sources.libraries` pins `["**/tests/quarantine/**", "repos/**"]` instead, as the preset does.
+  `[test].pathIgnorePatterns` is the preset's `["**/tests/quarantine/**", "repos/**"]`, which the check pins itself, so the kit's own repository, whose bunfig is the preset, cannot drift it either.
+  A repository whose `quality.json` declares no `sources.libraries` may hold `["**/tests/quarantine/**"]` instead, and one that declares them must keep `repos/**`.
   Other tables, and extra `[test]` keys, are the repository's own.
 
 The in-process half is what a mutation run can mutate.
@@ -65,7 +65,7 @@ test-layout: 4 violation(s)
   src/a.test.ts: a test file must live at tests/**/*.test.ts; move it to tests/a.test.ts
   package.json: scripts.test must be exactly "checks-test", which runs bun test --randomize and judges its skips, found "bun test"
   package.json: scripts.lint must run the layout check: add "checks-lint"
-  bunfig.toml: bunfig.toml is missing; bun has no bunfig extends, so copy node_modules/@avi2dg/checks/bunfig.toml with [test].pathIgnorePatterns set to ["**/tests/quarantine/**"]
+  bunfig.toml: bunfig.toml is missing; bun has no bunfig extends, so copy node_modules/@avi2dg/checks/bunfig.toml
 ```
 
 ## Opting out

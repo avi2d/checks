@@ -74,7 +74,7 @@ test(
     await writeFile(join(dir, "bunfig.toml"), "[test]\npathIgnorePatterns = []\n");
     const drifted = await layout();
     expect(drifted.exitCode).toBe(1);
-    expect(drifted.text).toContain('[test].pathIgnorePatterns must be ["**/tests/quarantine/**"]');
+    expect(drifted.text).toContain('[test].pathIgnorePatterns must be ["**/tests/quarantine/**","repos/**"] or ["**/tests/quarantine/**"]');
     expect(drifted.text).toContain("the check pins it");
 
     await writeFile(join(dir, "bunfig.toml"), UNVENDORED_BUNFIG);
@@ -82,6 +82,10 @@ test(
     expect(green.exitCode).toBe(0);
     expect(green.text).toContain("satisfy the layout");
 
+    await writeFile(join(dir, "bunfig.toml"), await readFile(PRESET, "utf8"));
+    expect((await layout()).exitCode).toBe(0);
+
+    await writeFile(join(dir, "bunfig.toml"), UNVENDORED_BUNFIG);
     await writeFile(join(dir, "quality.json"), JSON.stringify(LIBRARIES));
     const vendoring = await layout();
     expect(vendoring.exitCode).toBe(1);
