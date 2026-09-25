@@ -70,7 +70,7 @@ var DEPTH = {
   measured: /nested too deeply \((\d+)\)/,
   limits: "The deepest a block may nest inside a function"
 };
-var APPLIES = ["ratchet", "changed", "all"];
+var APPLIES = ["ratchet", "all"];
 var SIZE_DEFAULTS = {
   applies: "ratchet",
   production: { fileLines: 400, functionLines: 100, statements: 30, complexity: 15, depth: 4 },
@@ -93,29 +93,19 @@ var TestBudget = Schema2.Struct({
   complexity: limit(COMPLEXITY, SIZE_DEFAULTS.tests.complexity),
   depth: limit(DEPTH, SIZE_DEFAULTS.tests.depth)
 });
-var FLAT_KEYS = ["fileLines", "functionLines"];
-function flatKeys(size) {
-  return FLAT_KEYS.filter((key) => size[key] !== undefined);
-}
-function them(keys) {
-  return keys.length === 1 ? "it" : "them";
-}
 var Size = Schema2.Struct({
   applies: Schema2.optionalKey(Schema2.Literals(APPLIES).annotate({
-    description: `Which production and test files the budget holds: ratchet, the ones a range adds or changes, to no more overrun per rule than at the range's base; changed, the same ones, to the whole budget; all, every one. ${SIZE_DEFAULTS.applies} when absent. The rest are listed as advisory`
+    description: `Which production and test files the budget holds: ratchet, the ones a range adds or changes, to no more overrun per rule than at the range's base; all, every one. ${SIZE_DEFAULTS.applies} when absent. The rest are listed as advisory`,
+    message: "Expected ratchet or all, and ratchet replaces changed"
   })),
   production: Schema2.optionalKey(ProductionBudget.annotate({
     description: `The budget of the files under sources.production, and of the files listed as advisory outside ${TESTS_DIRECTORY}/`
   })),
-  tests: Schema2.optionalKey(TestBudget.annotate({ description: `The budget of the files under ${TESTS_DIRECTORY}/, which sets no limit on a function's lines` })),
-  fileLines: Schema2.optionalKey(Limit.annotate({ description: "production.fileLines as first spelled, which a later minor release stops reading" })),
-  functionLines: Schema2.optionalKey(Limit.annotate({ description: "production.functionLines as first spelled, which a later minor release stops reading" }))
-}).annotate({ description: "The size budget oxlint holds production and test files to, read by checks-size-budget" }).check(Schema2.makeFilter((size) => {
-  const beside = flatKeys(size);
-  if (size.production === undefined || beside.length === 0)
-    return true;
-  return `sets ${beside.join(" and ")} beside production, which holds the same budget; move ${them(beside)} into production`;
-}, { toJsonSchema: () => ({ not: { required: ["production"], anyOf: FLAT_KEYS.map((key) => ({ required: [key] })) } }) }));
+  tests: Schema2.optionalKey(TestBudget.annotate({ description: `The budget of the files under ${TESTS_DIRECTORY}/, which sets no limit on a function's lines` }))
+}).annotate({
+  description: "The size budget oxlint holds production and test files to, read by checks-size-budget",
+  messageUnexpectedKey: "Expected only applies, production and tests, since each limit is set inside production or tests"
+});
 
 // scripts/quality-file.ts
 var SEGMENT = String.raw`(?!\.\.?(?:/|$))(?:\*\*|(?:[\w.@+-]|\*(?!\*))+)`;
@@ -300,8 +290,8 @@ var readQuality = Effect.fn("readQuality")(function* (root) {
     return { source: QUALITY_FILE, quality: yield* decodeQuality(yield* read(QUALITY_FILE), QUALITY_FILE) };
   }
   if (legacy.keys.length > 0) {
-    const them2 = legacy.keys.length === 1 ? "it" : "them";
-    yield* Console.error(`${MANIFEST} sets ${keys}, which a later minor release stops reading; move ${them2} into ${QUALITY_FILE}`);
+    const them = legacy.keys.length === 1 ? "it" : "them";
+    yield* Console.error(`${MANIFEST} sets ${keys}, which a later minor release stops reading; move ${them} into ${QUALITY_FILE}`);
   }
   return { source: MANIFEST, quality: legacy.quality };
 });

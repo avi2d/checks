@@ -54,7 +54,7 @@ export type Budget = { readonly [K in LimitKey]?: number };
 
 export type Budgets = { readonly production: Budget; readonly tests: Budget };
 
-const APPLIES = ["ratchet", "changed", "all"] as const;
+const APPLIES = ["ratchet", "all"] as const;
 export type Applies = (typeof APPLIES)[number];
 
 export const SIZE_DEFAULTS = {
@@ -84,20 +84,11 @@ const TestBudget = Schema.Struct({
   depth: limit(DEPTH, SIZE_DEFAULTS.tests.depth),
 });
 
-const FLAT_KEYS = ["fileLines", "functionLines"] as const;
-
-function flatKeys(size: { readonly [K in (typeof FLAT_KEYS)[number]]?: number }): readonly string[] {
-  return FLAT_KEYS.filter((key) => size[key] !== undefined);
-}
-
-function them(keys: readonly string[]): string {
-  return keys.length === 1 ? "it" : "them";
-}
-
 export const Size = Schema.Struct({
   applies: Schema.optionalKey(
     Schema.Literals(APPLIES).annotate({
-      description: `Which production and test files the budget holds: ratchet, the ones a range adds or changes, to no more overrun per rule than at the range's base; changed, the same ones, to the whole budget; all, every one. ${SIZE_DEFAULTS.applies} when absent. The rest are listed as advisory`,
+      description: `Which production and test files the budget holds: ratchet, the ones a range adds or changes, to no more overrun per rule than at the range's base; all, every one. ${SIZE_DEFAULTS.applies} when absent. The rest are listed as advisory`,
+      message: "Expected ratchet or all, and ratchet replaces changed",
     }),
   ),
   production: Schema.optionalKey(
@@ -108,42 +99,15 @@ export const Size = Schema.Struct({
   tests: Schema.optionalKey(
     TestBudget.annotate({ description: `The budget of the files under ${TESTS_DIRECTORY}/, which sets no limit on a function's lines` }),
   ),
-  fileLines: Schema.optionalKey(
-    Limit.annotate({ description: "production.fileLines as first spelled, which a later minor release stops reading" }),
-  ),
-  functionLines: Schema.optionalKey(
-    Limit.annotate({ description: "production.functionLines as first spelled, which a later minor release stops reading" }),
-  ),
-})
-  .annotate({ description: "The size budget oxlint holds production and test files to, read by checks-size-budget" })
-  .check(
-    Schema.makeFilter(
-      (size) => {
-        const beside = flatKeys(size);
-        if (size.production === undefined || beside.length === 0) return true;
-        return `sets ${beside.join(" and ")} beside production, which holds the same budget; move ${them(beside)} into production`;
-      },
-      { toJsonSchema: () => ({ not: { required: ["production"], anyOf: FLAT_KEYS.map((key) => ({ required: [key] })) } }) },
-    ),
-  );
+}).annotate({
+  description: "The size budget oxlint holds production and test files to, read by checks-size-budget",
+  messageUnexpectedKey: "Expected only applies, production and tests, since each limit is set inside production or tests",
+});
 export type Size = typeof Size.Type;
 
-export function flatKeysNotice(source: string, size: Size): readonly string[] {
-  const flat = flatKeys(size);
-  if (flat.length === 0) return [];
-  const keys = flat.map((key) => `size.${key}`).join(" and ");
-  return [`${source} sets ${keys}, which a later minor release stops reading; move ${them(flat)} into size.production`];
-}
-
 export function budgetsOf(size: Size): Budgets {
-  const { fileLines, functionLines } = size;
   return {
-    production: {
-      ...SIZE_DEFAULTS.production,
-      ...(fileLines === undefined ? {} : { fileLines }),
-      ...(functionLines === undefined ? {} : { functionLines }),
-      ...size.production,
-    },
+    production: { ...SIZE_DEFAULTS.production, ...size.production },
     tests: { ...SIZE_DEFAULTS.tests, ...size.tests },
   };
 }

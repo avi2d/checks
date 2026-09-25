@@ -6,7 +6,6 @@ import { readQuality, renderJson } from "./quality-file.ts";
 import {
   budgetOf,
   budgetsOf,
-  flatKeysNotice,
   SIZE_DEFAULTS,
   SIZE_RULES,
   TESTS_DIRECTORY,
@@ -37,7 +36,7 @@ type Growth = {
 };
 
 type Verdict =
-  | { readonly applies: "changed" | "all"; readonly held: number; readonly overruns: readonly Site[]; readonly advisory: readonly Site[] }
+  | { readonly applies: "all"; readonly held: number; readonly overruns: readonly Site[]; readonly advisory: readonly Site[] }
   | { readonly applies: "ratchet"; readonly held: number; readonly growths: readonly Growth[]; readonly advisory: readonly Site[] };
 
 class OxlintUnreadable extends Schema.TaggedError<OxlintUnreadable>()("OxlintUnreadable", {
@@ -55,7 +54,6 @@ const OXLINT_FOUND_NOTHING = 0;
 const OXLINT_FOUND_ERRORS = 1;
 const SCOPE = {
   ratchet: "the production and test files the range adds or changes",
-  changed: "the production and test files the range adds or changes",
   all: "every production and test file",
 } satisfies Record<Applies, string>;
 
@@ -250,7 +248,6 @@ const budget = Effect.gen(function* () {
     yield* Console.log(`${NAME}: ${source} declares no size budget`);
     return true;
   }
-  for (const notice of flatKeysNotice(source, quality.size)) yield* Console.error(`${NAME}: ${notice}`);
   const { base, head } = yield* rangeEnds(first, second, root);
   const verdict = yield* runBudget(root, quality.size, quality.sources?.production ?? [], base, head);
 

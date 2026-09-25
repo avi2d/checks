@@ -152,10 +152,9 @@
           "type": "string",
           "enum": [
             "ratchet",
-            "changed",
             "all"
           ],
-          "description": "Which production and test files the budget holds: ratchet, the ones a range adds or changes, to no more overrun per rule than at the range's base; changed, the same ones, to the whole budget; all, every one. ratchet when absent. The rest are listed as advisory"
+          "description": "Which production and test files the budget holds: ratchet, the ones a range adds or changes, to no more overrun per rule than at the range's base; all, every one. ratchet when absent. The rest are listed as advisory"
         },
         "production": {
           "type": "object",
@@ -215,41 +214,10 @@
           },
           "additionalProperties": false,
           "description": "The budget of the files under tests/, which sets no limit on a function's lines"
-        },
-        "fileLines": {
-          "type": "integer",
-          "exclusiveMinimum": 0,
-          "description": "production.fileLines as first spelled, which a later minor release stops reading"
-        },
-        "functionLines": {
-          "type": "integer",
-          "exclusiveMinimum": 0,
-          "description": "production.functionLines as first spelled, which a later minor release stops reading"
         }
       },
       "additionalProperties": false,
-      "description": "The size budget oxlint holds production and test files to, read by checks-size-budget",
-      "allOf": [
-        {
-          "not": {
-            "required": [
-              "production"
-            ],
-            "anyOf": [
-              {
-                "required": [
-                  "fileLines"
-                ]
-              },
-              {
-                "required": [
-                  "functionLines"
-                ]
-              }
-            ]
-          }
-        }
-      ]
+      "description": "The size budget oxlint holds production and test files to, read by checks-size-budget"
     },
     "features": {
       "type": "array",

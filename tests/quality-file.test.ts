@@ -113,20 +113,28 @@ test("a Rule switched both on and off is refused, and a Rule name is kebab case"
 
 test("a size budget states only where it differs from the kit's, in whole numbers, and is refused without production files", () => {
   const stated = { applies: "all", production: { complexity: 12 }, tests: { fileLines: 800 } } as const;
-  const flat = { fileLines: 400, functionLines: 100, applies: "changed" } as const;
-  for (const size of [stated, flat, {}]) expect(decoded({ sources: PRODUCTION, size })).toEqual({ sources: PRODUCTION, size });
-  expect(refusal({ sources: PRODUCTION, size: { ...flat, production: { depth: 3 } } })).toContain(
-    "sets fileLines and functionLines beside production, which holds the same budget; move them into production",
-  );
-  expect(refusal({ sources: PRODUCTION, size: { functionLines: 80, production: {} } })).toContain("sets functionLines beside production");
+  for (const size of [stated, { applies: "ratchet" } as const, {}]) expect(decoded({ sources: PRODUCTION, size })).toEqual({ sources: PRODUCTION, size });
 
   expect(refusal({ size: stated })).toContain("declares size, which holds no production file without sources.production");
   expect(refusal({ sources: { production: [] }, size: {} })).toContain("declares size, which holds no production file without sources.production");
   expect(refusal({ sources: PRODUCTION, size: { production: { statements: 0 } } })).toContain('at ["size"]["production"]["statements"]');
   expect(refusal({ sources: PRODUCTION, size: { tests: { complexity: 1.5 } } })).toContain('at ["size"]["tests"]["complexity"]');
   expect(refusal({ sources: PRODUCTION, size: { tests: { functionLines: 100 } } })).toContain('at ["size"]["tests"]["functionLines"]');
-  expect(refusal({ sources: PRODUCTION, size: { ...flat, fileLines: 0 } })).toContain('at ["size"]["fileLines"]');
   expect(refusal({ sources: PRODUCTION, size: { applies: "touched" } })).toContain('at ["size"]["applies"]');
+});
+
+test("a size budget that still says changed is refused, naming ratchet", () => {
+  expect(refusal({ sources: PRODUCTION, size: { applies: "changed" } })).toContain(
+    'Expected ratchet or all, and ratchet replaces changed\n  at ["size"]["applies"]',
+  );
+});
+
+test("a size limit set outside production and tests is refused, naming the nested shape", () => {
+  for (const key of ["fileLines", "functionLines"]) {
+    expect(refusal({ sources: PRODUCTION, size: { [key]: 400, production: {} } })).toContain(
+      `Expected only applies, production and tests, since each limit is set inside production or tests\n  at ["size"]["${key}"]`,
+    );
+  }
 });
 
 test("a feature owns one root no other feature shares, lists entries under it, and proves itself under tests/e2e/", () => {
@@ -226,14 +234,17 @@ test("an editor validating against quality.schema.json refuses a selection that 
   }
 });
 
-test("an editor validating against quality.schema.json refuses a size without production files, a budget spelled both ways and a signal without owners", async () => {
+test("an editor validating against quality.schema.json refuses a size without production files, a flat limit, changed and a signal without owners", async () => {
   const validate = new Ajv2020({ strict: false }).compile(JSON.parse(await readFile(join(CHECKOUT, SCHEMA_FILE), "utf8")));
-  const size = { fileLines: 400, functionLines: 100, applies: "changed" };
+  const size = { applies: "ratchet", production: { fileLines: 400, functionLines: 100 } };
   expect(validate({ sources: PRODUCTION, size, features: [BILLING], changeSignal: "advisory" })).toBe(true);
-  expect(validate({ sources: PRODUCTION, size: { applies: "ratchet", production: { depth: 3 }, tests: { fileLines: 800 } } })).toBe(true);
-  const both = { sources: PRODUCTION, size: { fileLines: 400, production: { depth: 3 } } };
-  for (const quality of [{ size }, { sources: {}, size }, { sources: { production: [] }, size }, both, { changeSignal: "advisory" }, { features: [], changeSignal: "advisory" }]) {
+  expect(validate({ sources: PRODUCTION, size: { applies: "all", production: { depth: 3 }, tests: { fileLines: 800 } } })).toBe(true);
+  for (const quality of [{ size }, { sources: {}, size }, { sources: { production: [] }, size }, { changeSignal: "advisory" }, { features: [], changeSignal: "advisory" }]) {
     expect(validate(quality)).toBe(false);
     expect(refusal(quality)).toContain("which ");
+  }
+  for (const stale of [{ fileLines: 400 }, { functionLines: 100 }, { applies: "changed" }]) {
+    expect(validate({ sources: PRODUCTION, size: stale })).toBe(false);
+    expect(refusal({ sources: PRODUCTION, size: stale })).toContain("Expected ");
   }
 });

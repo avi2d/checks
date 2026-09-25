@@ -46,7 +46,6 @@ The kit sets each limit:
   A file already over the budget passes while its overrun does not grow, and an edit that shrinks the overrun passes.
   An edited rename is compared with the file it was renamed from.
   Nothing is committed as a baseline, because the base of the range holds it.
-- `changed` holds the same files, and fails on any overrun in them.
 - `all` holds every production and test file, and fails on any overrun in them.
 
 `applies` is `ratchet` when `size` leaves it out.
@@ -54,8 +53,8 @@ A file the range deletes or only renames is not held.
 Every other tracked `.ts` or `.tsx` file over the budget, tooling and unchanged files alike, is listed as advisory and never fails the gate.
 `.d.ts` files are not measured.
 
-`size.fileLines` and `size.functionLines` are read as `size.production.fileLines` and `size.production.functionLines`, and the gate prints a notice to move them there.
-`quality.json` refuses either one beside `size.production`.
+`quality.json` refuses `applies: "changed"`, which `ratchet` replaces.
+It refuses a limit set directly under `size`, since each limit goes in `size.production` or `size.tests`.
 
 ## What it reads
 

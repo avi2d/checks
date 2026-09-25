@@ -9,8 +9,7 @@ const CHECKOUT = resolve(import.meta.dir, "..", "..");
 const SCRIPT = join(CHECKOUT, "scripts", "size-budget.ts");
 const FIXTURE = ["-c", "user.name=Wren Fixture", "-c", "user.email=wren@example.com"];
 const ENV = { ...process.env, PATH: `${join(CHECKOUT, "node_modules", ".bin")}:${process.env["PATH"] ?? ""}` };
-const SIZE = { fileLines: 20, functionLines: 5, applies: "changed" };
-const RATCHET = { applies: "ratchet", production: { fileLines: 20, functionLines: 5 } };
+const SIZE = { applies: "ratchet", production: { fileLines: 20, functionLines: 5 } };
 
 let dir = "";
 
@@ -81,22 +80,20 @@ test(
 
     const red = await budget(base, head);
     expect(red.text).toContain(
-      "size-budget: 1 overrun(s) of the budget in the production and test files the range adds or changes:\n" +
-        "  src/fresh.ts:1: The function `count` has too many lines (12). Maximum allowed is 5.\n",
+      "size-budget: 1 overrun(s) grew past the base in the production and test files the range adds or changes:\n" +
+        "  src/fresh.ts: max-lines-per-function over by 7 in total, up from 0\n" +
+        "    src/fresh.ts:1: The function `count` has too many lines (12). Maximum allowed is 5.\n",
     );
     expect(red.text).toContain("size-budget: advisory, 2 overrun(s) where the budget does not hold yet:\n");
     expect(red.text).toContain("  src/legacy.ts: File has too many lines (30). Maximum allowed is 20.\n");
     expect(red.text).toContain("  tools/long.ts: File has too many lines (30). Maximum allowed is 20.\n");
     expect(red.text).not.toContain("types.d.ts");
-    expect(red.text).toContain(
-      "size-budget: quality.json sets size.fileLines and size.functionLines, which a later minor release stops reading; move them into size.production\n",
-    );
     expect(red.exitCode).toBe(1);
 
     await write({ "src/fresh.ts": counter(1) });
     const fixed = await commit("fix: shorter");
     const green = await budget(base, fixed);
-    expect(green.text).toContain("size-budget: 2 file(s), the production and test files the range adds or changes, keep within the budget\n");
+    expect(green.text).toContain("size-budget: 2 file(s), the production and test files the range adds or changes, raise no overrun past the base\n");
     expect(green.text).toContain("  src/legacy.ts: File has too many lines (30). Maximum allowed is 20.\n");
     expect(green.exitCode).toBe(0);
   },
@@ -117,7 +114,9 @@ test(
 
     const red = await budget(base, head);
     expect(red.text).toContain(
-      "in the production and test files the range adds or changes:\n  src/lib/edited.ts: File has too many lines (31). Maximum allowed is 20.\n",
+      "in the production and test files the range adds or changes:\n" +
+        "  src/lib/edited.ts: max-lines over by 11 in total, up from 10\n" +
+        "    src/lib/edited.ts: File has too many lines (31). Maximum allowed is 20.\n",
     );
     expect(red.text).toContain("size-budget: advisory, 1 overrun(s) where the budget does not hold yet:\n  src/lib/moved.ts: File has too many lines (30).");
     expect(red.text).not.toContain("gone.ts");
@@ -126,7 +125,7 @@ test(
     await $`git rm -q src/lib/edited.ts`.cwd(dir).quiet();
     const removed = await commit("refactor: drop");
     const green = await budget(base, removed);
-    expect(green.text).toContain("size-budget: 0 file(s), the production and test files the range adds or changes, keep within");
+    expect(green.text).toContain("size-budget: 0 file(s), the production and test files the range adds or changes, raise no overrun past the base");
     expect(green.exitCode).toBe(0);
   },
   60_000,
@@ -146,7 +145,7 @@ test(
     await commit("feat: grow on main");
 
     const result = await budget("main", head);
-    expect(result.text).toContain("size-budget: 1 file(s), the production and test files the range adds or changes, keep within");
+    expect(result.text).toContain("size-budget: 1 file(s), the production and test files the range adds or changes, raise no overrun past the base");
     expect(result.exitCode).toBe(0);
   },
   60_000,
@@ -175,7 +174,6 @@ test(
     );
     expect(red.text).toContain("size-budget: advisory, 1 overrun(s) where the budget does not hold yet:\n  tools/long.ts: File has too many lines (30).");
     expect(red.text).not.toContain("short.test.ts");
-    expect(red.text).not.toContain("stops reading");
     expect(red.exitCode).toBe(1);
   },
   60_000,
@@ -184,7 +182,7 @@ test(
 test(
   "applies ratchet fails a change that raises a file's overrun, passes one that keeps or lowers it, and holds a new file to the budget",
   async () => {
-    await repository(RATCHET);
+    await repository();
     await write({ "src/legacy.ts": constants(30), "src/small.ts": constants(2) });
     const base = await commit("feat: base");
     await write({ "src/legacy.ts": constants(32) });
@@ -220,7 +218,7 @@ test(
 test(
   "applies ratchet sums each rule per file, so a shrink in another rule or another file does not pay for a growth",
   async () => {
-    await repository(RATCHET);
+    await repository();
     await write({ "src/wide.ts": `${counter(8)}${constants(22)}`, "src/other.ts": constants(30) });
     const base = await commit("feat: base");
     await write({ "src/wide.ts": `${counter(1)}${constants(40)}`, "src/other.ts": constants(21) });
@@ -239,7 +237,7 @@ test(
 test(
   "applies ratchet measures an edited rename against the file it was renamed from",
   async () => {
-    await repository(RATCHET);
+    await repository();
     await write({ "src/legacy.ts": constants(30) });
     const base = await commit("feat: base");
     await mkdir(join(dir, "src/lib"));
@@ -263,7 +261,7 @@ test(
 test(
   "tests under tests/ keep to their own budget, which has no limit on a function's lines",
   async () => {
-    await repository({ applies: "changed", production: { fileLines: 20, functionLines: 5, statements: 4 }, tests: { fileLines: 30, statements: 6 } });
+    await repository({ applies: "ratchet", production: { fileLines: 20, functionLines: 5, statements: 4 }, tests: { fileLines: 30, statements: 6 } });
     await write({ "src/small.ts": constants(2) });
     const base = await commit("feat: base");
     await write({ "tests/wide.test.ts": constants(25), "tests/busy.test.ts": counter(8), "tests/long.test.ts": constants(31) });
@@ -271,9 +269,11 @@ test(
 
     const red = await budget(base, head);
     expect(red.text).toContain(
-      "size-budget: 2 overrun(s) of the budget in the production and test files the range adds or changes:\n" +
-        "  tests/busy.test.ts:1: function `count` has too many statements (10). Maximum allowed is 6.\n" +
-        "  tests/long.test.ts: File has too many lines (31). Maximum allowed is 30.\n",
+      "size-budget: 2 overrun(s) grew past the base in the production and test files the range adds or changes:\n" +
+        "  tests/busy.test.ts: max-statements over by 4 in total, up from 0\n" +
+        "    tests/busy.test.ts:1: function `count` has too many statements (10). Maximum allowed is 6.\n" +
+        "  tests/long.test.ts: max-lines over by 1 in total, up from 0\n" +
+        "    tests/long.test.ts: File has too many lines (31). Maximum allowed is 30.\n",
     );
     expect(red.text).not.toContain("wide.test.ts");
     expect(red.text).not.toContain("too many lines (12)");
