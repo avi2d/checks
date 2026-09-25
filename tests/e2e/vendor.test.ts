@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { afterEach, expect, test } from "bun:test";
-import { appendFile, chmod, lstat, mkdir, readdir, readlink, stat, symlink, writeFile } from "node:fs/promises";
+import { appendFile, chmod, lstat, mkdir, readdir, readFile, readlink, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { remoteSegments, tagFor } from "../../scripts/vendor.ts";
 import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
@@ -139,7 +139,7 @@ test(
 );
 
 test(
-  "a tag moved after the first fetch fails the run",
+  "a cached tree stays on its recorded commit after the tag moves, and a rewritten record fails the run",
   async () => {
     const home = await scratchHome();
     const parent = await scratch("checks-vendor-remote-");
@@ -147,12 +147,63 @@ test(
     const seed = await seedRemote(parent, "1.0.0", "fake-lib@1.0.0");
     await seedConsumer(consumer, seed.remote, "1.0.0");
     expect((await vendor(consumer, home)).exitCode).toBe(0);
+    const dir = cachedDir(home, seed.remote, "1.0.0");
+    const recorded = (await readFile(join(dir, ".checks-vendor-commit"), "utf8")).trim();
 
     await moveTag(seed, "1.0.0", "fake-lib@1.0.0");
+    expect((await vendor(consumer, home)).exitCode).toBe(0);
+    expect((await $`git rev-parse HEAD`.cwd(dir).quiet()).stdout.toString().trim()).toBe(recorded);
+
+    const moved = (await $`git rev-parse fake-lib@1.0.0^{commit}`.cwd(seed.work).quiet()).stdout.toString().trim();
+    const record = join(dir, ".checks-vendor-commit");
+    await chmod(record, 0o644);
+    await writeFile(record, `${moved}\n`);
+    await chmod(record, 0o444);
     const result = await vendor(consumer, home);
     expect(result.exitCode).toBe(1);
-    expect(result.text).toContain("not the recorded");
+    expect(result.text).toContain(`not the recorded ${moved}`);
     expect(await linked(consumer)).toBe(false);
+  },
+  60_000,
+);
+
+test(
+  "a warm cache verifies without the remote and keeps the link",
+  async () => {
+    const home = await scratchHome();
+    const parent = await scratch("checks-vendor-remote-");
+    const consumer = await scratch("checks-vendor-consumer-");
+    const { remote } = await seedRemote(parent, "1.0.0", "fake-lib@1.0.0");
+    await seedConsumer(consumer, remote, "1.0.0");
+    expect((await vendor(consumer, home)).exitCode).toBe(0);
+
+    await rm(remote, { recursive: true, force: true });
+    const offline = await vendor(consumer, home);
+    expect(offline.exitCode).toBe(0);
+    expect(offline.text).toContain("still holds fake-lib@1.0.0");
+    expect(await readlink(join(consumer, "repos", "fake-lib"))).toBe(cachedDir(home, remote, "1.0.0"));
+  },
+  60_000,
+);
+
+test(
+  "a cold cache with an unreachable remote warns, leaves no link and passes",
+  async () => {
+    const home = await scratchHome();
+    const parent = await scratch("checks-vendor-remote-");
+    const consumer = await scratch("checks-vendor-consumer-");
+    const { remote } = await seedRemote(parent, "1.0.0", "fake-lib@1.0.0");
+    await seedConsumer(consumer, remote, "1.0.0");
+    expect((await vendor(consumer, home)).exitCode).toBe(0);
+
+    await rm(remote, { recursive: true, force: true });
+    await writeFile(join(consumer, "node_modules", "fake-lib", "package.json"), manifest("2.0.0"));
+    const offline = await vendor(consumer, home);
+    expect(offline.exitCode).toBe(0);
+    expect(offline.text).toContain("cannot list fake-lib@2.0.0");
+    expect(offline.text).toContain("stays unlinked");
+    expect(await linked(consumer)).toBe(false);
+    expect(await readdir(dirname(cachedDir(home, remote, "2.0.0")))).toEqual(["fake-lib@1.0.0"]);
   },
   60_000,
 );

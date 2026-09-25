@@ -16,6 +16,10 @@ export class VendorError extends Schema.TaggedError<VendorError>()("VendorError"
   message: Schema.String,
 }) {}
 
+export class Unreachable extends Schema.TaggedError<Unreachable>()("Unreachable", {
+  message: Schema.String,
+}) {}
+
 export function tagFor(template: string, version: string): string {
   return template.replaceAll(VERSION_TOKEN, version);
 }
@@ -80,7 +84,7 @@ const headOf = Effect.fn("headOf")(function* (dir: string) {
 
 const remoteTag = Effect.fn("remoteTag")(function* (remote: string, tag: string) {
   const output = yield* git(["ls-remote", remote, `refs/tags/${tag}*`]).pipe(
-    Effect.mapError((cause) => new VendorError({ message: `cannot list ${tag} on ${remote}: ${cause.message}` })),
+    Effect.mapError((cause) => new Unreachable({ message: `cannot list ${tag} on ${remote}: ${cause.message}` })),
   );
   const sha = resolveTag(output, tag);
   if (sha === undefined) return yield* new VendorError({ message: `${remote} holds no tag ${tag}, so the installed version points nowhere` });
@@ -157,12 +161,6 @@ const verify = Effect.fn("verify")(function* (dir: string, library: Library, ins
   const record = (yield* fs.readFileString(path.join(dir, RECORD)).pipe(
     Effect.mapError(() => new VendorError({ message: `${dir} holds no fetch record; ${clearing(dir)}` })),
   )).trim();
-  const remote = yield* remoteTag(library.repository, tag);
-  if (remote !== record) {
-    return yield* new VendorError({
-      message: `${tag} on ${library.repository} lands on ${remote}, not the recorded ${record}; ${clearing(dir)} to pin the move deliberately`,
-    });
-  }
   const head = yield* headOf(dir);
   if (head !== record) {
     return yield* new VendorError({ message: `${dir} sits on ${head}, not the recorded ${record}; ${clearing(dir)}` });
@@ -221,7 +219,7 @@ const stage = Effect.fn("stage")(function* (staging: string, library: Library, i
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   yield* git(["clone", "--no-local", "--branch", tag, "--depth", "1", "--", library.repository, staging]).pipe(
-    Effect.mapError((cause) => new VendorError({ message: `cannot clone ${tag} from ${library.repository}: ${cause.message}` })),
+    Effect.mapError((cause) => new Unreachable({ message: `cannot clone ${tag} from ${library.repository}: ${cause.message}` })),
   );
   const head = yield* headOf(staging);
   yield* fs.writeFileString(path.join(staging, RECORD), `${head}\n`).pipe(
@@ -243,6 +241,7 @@ const land = Effect.fn("land")(function* (library: Library, installed: string, t
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const parent = path.dirname(dir);
+  yield* remoteTag(library.repository, tag);
   yield* fs.makeDirectory(parent, { recursive: true }).pipe(
     Effect.mapError((cause) => new VendorError({ message: `cannot hold ${dir}: ${cause.message}` })),
   );
@@ -265,7 +264,7 @@ const vend = Effect.fn("vend")(function* (root: string, cache: string, library: 
     yield* Console.log(`${NAME}: cloned ${tag} from ${library.repository} and linked ${LINKS}/${library.name}`);
   } else {
     yield* verify(dir, library, installed, tag);
-    yield* Console.log(`${NAME}: ${LINKS}/${library.name} still holds ${tag}, verified against ${library.repository}`);
+    yield* Console.log(`${NAME}: ${LINKS}/${library.name} still holds ${tag}, verified against its recorded commit`);
   }
   yield* ensureLink(root, library, dir);
 });
@@ -294,9 +293,15 @@ const main = Effect.gen(function* () {
   for (const library of libraries) {
     const vended = yield* vend(root, cache, library).pipe(
       Effect.as(true),
-      Effect.catchTag("VendorError", (failure) =>
-        Console.error(`${NAME}: ${failure.message}`).pipe(Effect.andThen(unlink(root, library)), Effect.as(false)),
-      ),
+      Effect.catchTags({
+        VendorError: (failure) =>
+          Console.error(`${NAME}: ${failure.message}`).pipe(Effect.andThen(unlink(root, library)), Effect.as(false)),
+        Unreachable: (failure) =>
+          Console.error(`${NAME}: ${failure.message}, so ${LINKS}/${library.name} stays unlinked until a run can fetch it`).pipe(
+            Effect.andThen(unlink(root, library)),
+            Effect.as(true),
+          ),
+      }),
     );
     passed = passed && vended;
   }
