@@ -52,6 +52,24 @@ test(
 );
 
 test(
+  "a rebased head whose author date predates the entry is judged by its later committer date, so the test still goes red",
+  async () => {
+    const repo = await open();
+    await add(repo, "tests/quarantine/billing.test.ts", 40);
+    await repo.write({ "notes.md": "# notes\n" });
+    await $`git add -A && git ${IDENTITY} commit -q --no-gpg-sign --date ${daysAgo(50)} -m ${"chore: rebased head"}`
+      .cwd(repo.dir)
+      .quiet();
+
+    const red = await repo.script("quarantine-clock.ts", "HEAD");
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain("  tests/quarantine/billing.test.ts entered quarantine on");
+    expect(red.text).toContain("(40 days ago)");
+  },
+  120_000,
+);
+
+test(
   "a test quarantined less than 30 days before HEAD goes green, even when the test itself is older",
   async () => {
     const repo = await open();

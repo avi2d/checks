@@ -126,10 +126,12 @@ const entryAt = Effect.fn("entryAt")(function* (head: string, file: string) {
 });
 
 const headAt = Effect.fn("headAt")(function* (head: string) {
-  const shown = yield* git(["show", "-s", "--format=%at", head]);
-  const at = Number(shown.trim());
-  if (!Number.isInteger(at)) return yield* new QuarantineError({ message: `cannot read when ${head} was written` });
-  return at;
+  const shown = yield* git(["show", "-s", "--format=%at %ct", head]);
+  const dates = shown.trim().split(" ").map(Number);
+  if (dates.length !== 2 || !dates.every(Number.isInteger)) {
+    return yield* new QuarantineError({ message: `cannot read when ${head} was written` });
+  }
+  return Math.max(...dates);
 });
 
 export const runHead = Effect.fn("runHead")(function* (head: string) {

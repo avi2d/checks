@@ -14,8 +14,8 @@ GitLab quarantines fast for 3 days and long term for at most 3 months, then open
 
 It lists the test files under `tests/quarantine/` at the head, by the name pattern `checks-test-layout` uses, so a helper or fixture there never ages out.
 It walks each file's history with `git log --follow`, so a move or a copy into quarantine starts the clock there rather than at the test's creation.
-It measures the age from the author date of the commit that put the file there to the author date of the head, so the same commit always gets the same verdict.
-A rebase keeps the author date, so the clock cannot be restarted that way.
+It measures the age from the author date of the commit that put the file there to the later of the head's author and committer dates, so the same commit always gets the same verdict.
+A rebase keeps the entry's author date and moves the head's committer date forward, so rebasing neither restarts the clock nor stops it.
 
 ## Arguments
 
