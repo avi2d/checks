@@ -507,7 +507,7 @@ test("this repository's own CI runs its declared gates and its flake run, and lo
     Effect.all([readDeclaration(root), readWorkflows(root)]).pipe(Effect.provide(BunServices.layer)),
   );
   expect(findGaps(declaration, workflows)).toEqual([]);
-  expect(declaration.scheduled.map((command) => command.command)).toEqual(["bunx checks-flake --runs 10 --report flake-report.json"]);
+  expect(declaration.scheduled.map((command) => command.command)).toEqual(["bun scripts/flake.ts --runs 10 --report flake-report.json"]);
   expect(findScheduledGaps(declaration, workflows)).toEqual([]);
 
   const ci = readFileSync(resolve(root, CI), "utf8");

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { COMMITLINT_WORKFLOW, SUITE_WORKFLOW } from "../../scripts/quality.ts";
+import { parseWorkflow, runs, setupBun } from "../lib/workflow.ts";
 import { fixtureRepos } from "./lib/fixture-repo.ts";
 
 const repository = fixtureRepos("checks-quality-workflows-");
@@ -25,14 +26,14 @@ test(
     expect(generated.exitCode).toBe(0);
 
     const suite = await readFile(join(repo.dir, SUITE_WORKFLOW), "utf8");
-    expect(suite).toContain("      - run: bun install --frozen-lockfile\n");
-    expect(suite).toContain("      - run: bun run lint\n");
-    expect(suite).toContain("      - run: bun run typecheck\n");
-    expect(suite).not.toContain("commitlint");
-    expect(suite).not.toContain("bun-version-file");
-    const commitlint = await readFile(join(repo.dir, COMMITLINT_WORKFLOW), "utf8");
-    expect(commitlint).toContain("--config ./node_modules/@avi2dg/checks/commitlint.config.js");
-    expect(commitlint).toContain("types: [opened, edited, synchronize, reopened]");
+    const parsedSuite = parseWorkflow(suite);
+    expect(runs(parsedSuite)).toEqual(["bun install --frozen-lockfile", "bun run lint", "bun run typecheck"]);
+    expect(setupBun(parsedSuite)).toBeUndefined();
+    const commitlint = parseWorkflow(await readFile(join(repo.dir, COMMITLINT_WORKFLOW), "utf8"));
+    expect(runs(commitlint).at(-1)).toBe(
+      './node_modules/.bin/commitlint --config ./node_modules/@avi2dg/checks/commitlint.config.js --edit "$RUNNER_TEMP/pr-title"',
+    );
+    expect(commitlint.on.pull_request.types).toEqual(["opened", "edited", "synchronize", "reopened"]);
 
     const wiring = await repo.script("ci-wiring.ts");
     expect(wiring.text).toContain("3 gate(s) run on pull requests to main");
@@ -62,8 +63,9 @@ test(
 
     const generated = await repo.script("quality.ts", "generate");
     expect(generated.exitCode).toBe(0);
-    expect(await readFile(join(repo.dir, COMMITLINT_WORKFLOW), "utf8")).toContain("--config ./commitlint.config.js");
-    expect(await readFile(join(repo.dir, SUITE_WORKFLOW), "utf8")).toContain("bun-version-file: .bun-version");
+    const commitlint = parseWorkflow(await readFile(join(repo.dir, COMMITLINT_WORKFLOW), "utf8"));
+    expect(runs(commitlint).at(-1)).toBe('./node_modules/.bin/commitlint --config ./commitlint.config.js --edit "$RUNNER_TEMP/pr-title"');
+    expect(setupBun(parseWorkflow(await readFile(join(repo.dir, SUITE_WORKFLOW), "utf8")))).toEqual({ "bun-version-file": ".bun-version" });
   },
   60_000,
 );

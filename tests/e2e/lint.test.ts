@@ -417,14 +417,8 @@ test(
     await commit("chore: drop the wiring");
     const undecided = await lint();
     expect(undecided.text).toContain("ci-wiring:");
-    expect(undecided.text).toContain("checks-lint: 2 of 11 gate(s) failed: checks-ci-wiring, checks-quality\n");
-    expect(undecided.exitCode).toBe(1);
-
-    await rm(join(dir, ".github", "workflows", "ci.yml"));
-    await commit("chore: drop the suite");
-    const bare = await lint();
-    expect(bare.text).toContain("checks-lint: 1 of 11 gate(s) failed: checks-ci-wiring\n");
-    expect(bare.exitCode).toBe(2);
+    expect(undecided.text).toContain("checks-lint: 1 of 11 gate(s) failed: checks-ci-wiring\n");
+    expect(undecided.exitCode).toBe(2);
   },
   60_000,
 );

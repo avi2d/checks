@@ -7,7 +7,7 @@ import { git } from "./git.ts";
 import { DEFAULT_BRANCH } from "./gates.ts";
 import { runMain, Usage } from "./main.ts";
 import { readQuality, renderJson, type Quality } from "./quality-file.ts";
-import { plainCommand } from "./shell-command.ts";
+import { invokes, plainCommand } from "./shell-command.ts";
 
 // oxlint resolves an override's files, and the language service an override's include, against the
 // directory of the config that holds it, so a fragment anywhere but the root matches nothing there.
@@ -78,9 +78,13 @@ export function fragmentsFor(quality: Quality): readonly Fragment[] {
 const OWN_COMMITLINT_CONFIG = "./commitlint.config.js";
 const KIT_COMMITLINT_CONFIG = "./node_modules/@avi2dg/checks/commitlint.config.js";
 
-export function isCommitlintGate(command: string): boolean {
-  const first = plainCommand(command)?.[0];
-  return first !== undefined && (first.split("/").at(-1) ?? first) === "commitlint";
+function titleLint(commitlintConfig: string): string {
+  return `./node_modules/.bin/commitlint --config ${commitlintConfig} --edit "$RUNNER_TEMP/pr-title"`;
+}
+
+function runsInTitleLint(gate: string, commitlintConfig: string): boolean {
+  const words = plainCommand(gate);
+  return words !== undefined && invokes(plainCommand(titleLint(commitlintConfig)), words);
 }
 
 function runScalar(command: string): string {
@@ -102,7 +106,7 @@ jobs:
       - run: printf '%s' "$PR_TITLE (#0000)" > "$RUNNER_TEMP/pr-title"
         env:
           PR_TITLE: \${{ github.event.pull_request.title }}
-      - run: ./node_modules/.bin/commitlint --config ${commitlintConfig} --edit "$RUNNER_TEMP/pr-title"
+      - run: ${titleLint(commitlintConfig)}
 `;
 }
 
@@ -120,7 +124,7 @@ export function workflowsFor(quality: Quality, recipe: WorkflowRecipe): readonly
     content: commitlintWorkflow(recipe.commitlintConfig),
   };
   if (quality.gates?.ci === undefined) return [commitlint];
-  const suite = quality.gates.ci.filter((gate) => !isCommitlintGate(gate));
+  const suite = quality.gates.ci.filter((gate) => !runsInTitleLint(gate, recipe.commitlintConfig));
   return [
     { file: SUITE_WORKFLOW, content: suiteWorkflow(quality.defaultBranch ?? DEFAULT_BRANCH, suite, recipe.bunVersionFile) },
     commitlint,
