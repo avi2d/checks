@@ -1,11 +1,12 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { mkdtemp, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { commitlintWorkflow } from "../../scripts/quality.ts";
 import { lastStep, parseWorkflow } from "../lib/workflow.ts";
-import { CHECKOUT, ran, type Ran } from "./lib/fixture-repo.ts";
+import { CHECKOUT, ran, type Ran, scratchDirs } from "./lib/fixture-repo.ts";
+
+const scratch = scratchDirs();
 
 function lint(message: string): Promise<Ran> {
   const binary = join(CHECKOUT, "node_modules", ".bin", "commitlint");
@@ -63,11 +64,19 @@ test(
   "the generated title-lint step rejects a title that starts with git's comment character",
   async () => {
     const step = lastStep(parseWorkflow(commitlintWorkflow("./commitlint.config.js")));
-    const runnerTemp = await mkdtemp(join(tmpdir(), "checks-commitlint-hash-guard-"));
-    await writeFile(join(runnerTemp, "pr-title"), "# not a conventional title at all (#0000)");
+    const runnerTemp = await scratch("checks-commitlint-hash-guard-");
+    const lintTitle = async (title: string): Promise<Ran> => {
+      await writeFile(join(runnerTemp, "pr-title"), title);
+      return ran($`${{ raw: step.run }}`.cwd(CHECKOUT).env({ ...process.env, ...step.env, RUNNER_TEMP: runnerTemp }));
+    };
 
-    const red = await ran($`${{ raw: step.run }}`.cwd(CHECKOUT).env({ ...process.env, ...step.env, RUNNER_TEMP: runnerTemp }));
+    const red = await lintTitle("# feat(lint): add x (#0000)");
     expect(red.exitCode).not.toBe(0);
+    expect(red.text).toContain("[type-empty]");
+    expect(red.text).toContain("[subject-empty]");
+
+    const green = await lintTitle("feat(lint): add x (#0000)");
+    expect(green.exitCode).toBe(0);
   },
   60_000,
 );
