@@ -64,7 +64,7 @@ It prints the range, the declared selection if there is one, each gate's own rep
 ```
 checks-lint: range 2504acf098d120e73a8ece3c96f22b934f35c6a8..10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD against origin/main
 ...
-checks-lint: 3 of 10 gate(s) failed: checks-commit-identity, checks-comment-gate, checks-suppressions-ratchet
+checks-lint: 3 of 11 gate(s) failed: checks-commit-identity, checks-comment-gate, checks-suppressions-ratchet
 ```
 
 ## Opting out

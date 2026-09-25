@@ -1,8 +1,8 @@
 // scripts/feature-rules.ts
-import { Schema as Schema3 } from "effect";
+import { Schema as Schema4 } from "effect";
 
 // scripts/quality-file.ts
-import { Console, Effect, FileSystem, JsonSchema, Path, Schema as Schema2 } from "effect";
+import { Console, Effect, FileSystem, JsonSchema, Path, Schema as Schema3 } from "effect";
 
 // scripts/gates.ts
 import { Schema } from "effect";
@@ -32,87 +32,153 @@ var LintGates = Schema.Array(Schema.Literals(KIT_GATES.map((gate) => gate.bin)))
   return `checks-lint must run ${missing.join(", ")}, which ${verb} to ${EVERY_REPOSITORY}`;
 }, { toJsonSchema: () => ({ allOf: UNCONDITIONAL.map((bin) => ({ contains: { const: bin } })) }) }));
 
+// scripts/size-rules.ts
+import { Schema as Schema2 } from "effect";
+var TESTS_DIRECTORY = "tests";
+var COUNTED = { skipBlankLines: false, skipComments: false };
+var FILE_LINES = {
+  key: "fileLines",
+  rule: "max-lines",
+  options: COUNTED,
+  measured: /has too many lines \((\d+)\)/,
+  limits: "The most lines a file may hold, blank and comment lines counted"
+};
+var FUNCTION_LINES = {
+  key: "functionLines",
+  rule: "max-lines-per-function",
+  options: COUNTED,
+  measured: /has too many lines \((\d+)\)/,
+  limits: "The most lines a function may span, blank and comment lines counted"
+};
+var STATEMENTS = {
+  key: "statements",
+  rule: "max-statements",
+  options: {},
+  measured: /has too many statements \((\d+)\)/,
+  limits: "The most statements a function may hold"
+};
+var COMPLEXITY = {
+  key: "complexity",
+  rule: "complexity",
+  options: { variant: "modified" },
+  measured: /has a complexity of (\d+)/,
+  limits: "The highest cyclomatic complexity a function may reach, a switch counted once"
+};
+var DEPTH = {
+  key: "depth",
+  rule: "max-depth",
+  options: {},
+  measured: /nested too deeply \((\d+)\)/,
+  limits: "The deepest a block may nest inside a function"
+};
+var APPLIES = ["ratchet", "all"];
+var SIZE_DEFAULTS = {
+  applies: "ratchet",
+  production: { fileLines: 400, functionLines: 100, statements: 30, complexity: 15, depth: 4 },
+  tests: { fileLines: 600, statements: 50, complexity: 15, depth: 4 }
+};
+var Limit = Schema2.Int.check(Schema2.isGreaterThan(0));
+function limit({ limits }, fallback) {
+  return Schema2.optionalKey(Limit.annotate({ description: `${limits}; ${fallback} when absent` }));
+}
+var ProductionBudget = Schema2.Struct({
+  fileLines: limit(FILE_LINES, SIZE_DEFAULTS.production.fileLines),
+  functionLines: limit(FUNCTION_LINES, SIZE_DEFAULTS.production.functionLines),
+  statements: limit(STATEMENTS, SIZE_DEFAULTS.production.statements),
+  complexity: limit(COMPLEXITY, SIZE_DEFAULTS.production.complexity),
+  depth: limit(DEPTH, SIZE_DEFAULTS.production.depth)
+});
+var TestBudget = Schema2.Struct({
+  fileLines: limit(FILE_LINES, SIZE_DEFAULTS.tests.fileLines),
+  statements: limit(STATEMENTS, SIZE_DEFAULTS.tests.statements),
+  complexity: limit(COMPLEXITY, SIZE_DEFAULTS.tests.complexity),
+  depth: limit(DEPTH, SIZE_DEFAULTS.tests.depth)
+});
+var Size = Schema2.Struct({
+  applies: Schema2.optionalKey(Schema2.Literals(APPLIES).annotate({
+    description: `Which production and test files the budget holds: ratchet, the ones a range adds or changes, to no more overrun per rule than at the range's base; all, every one. ${SIZE_DEFAULTS.applies} when absent. The rest are listed as advisory`,
+    message: "Expected ratchet or all, and ratchet replaces changed"
+  })),
+  production: Schema2.optionalKey(ProductionBudget.annotate({
+    description: `The budget of the files under sources.production, and of the files listed as advisory outside ${TESTS_DIRECTORY}/`
+  })),
+  tests: Schema2.optionalKey(TestBudget.annotate({ description: `The budget of the files under ${TESTS_DIRECTORY}/, which sets no limit on a function's lines` }))
+}).annotate({
+  description: "The size budget oxlint holds production and test files to, read by checks-size-budget",
+  messageUnexpectedKey: "Expected only applies, production and tests, since each limit is set inside production or tests"
+});
+
 // scripts/quality-file.ts
 var SEGMENT = String.raw`(?!\.\.?(?:/|$))(?:\*\*|(?:[\w.@+-]|\*(?!\*))+)`;
 var FILE = String.raw`(?:[\w.@+-]|\*(?!\*))*\.\w+`;
-var PathGlob = Schema2.String.check(Schema2.isPattern(new RegExp(`^${SEGMENT}(?:/${SEGMENT})*/${FILE}$`), {
+var PathGlob = Schema3.String.check(Schema3.isPattern(new RegExp(`^${SEGMENT}(?:/${SEGMENT})*/${FILE}$`), {
   expected: "a glob from the repository root such as src/**/*.ts: a directory first, * within a segment, ** as a whole one, a file name with an extension last"
 })).annotate({
   identifier: "PathGlob",
   description: "A glob from the repository root that oxlint, the Effect language service and git read alike: a directory first, * within a segment, ** as a whole one, a file name with an extension last, and no braces, ?, [ or leading ./"
 });
-var DocGlob = Schema2.String.check(Schema2.isPattern(new RegExp(`^(?:${SEGMENT}/)*${FILE}$`), {
+var DocGlob = Schema3.String.check(Schema3.isPattern(new RegExp(`^(?:${SEGMENT}/)*${FILE}$`), {
   expected: "a glob from the repository root such as README.md or docs/**/*.md: * within a segment, ** as a whole one, a file name with an extension last"
 })).annotate({
   identifier: "DocGlob",
   description: "A glob from the repository root that checks-docs reads: * within a segment, ** as a whole one, a file name with an extension last"
 });
 var LITERAL_SEGMENT = String.raw`(?!\.\.?(?:/|$))[\w.@+-]+`;
-var DirectoryPath = Schema2.String.check(Schema2.isPattern(new RegExp(`^${LITERAL_SEGMENT}(?:/${LITERAL_SEGMENT})*$`), {
+var DirectoryPath = Schema3.String.check(Schema3.isPattern(new RegExp(`^${LITERAL_SEGMENT}(?:/${LITERAL_SEGMENT})*$`), {
   expected: "a directory from the repository root such as src/billing, with no glob and no trailing slash"
 })).annotate({ identifier: "DirectoryPath" });
-var FilePath = Schema2.String.check(Schema2.isPattern(new RegExp(`^(?:${LITERAL_SEGMENT}/)*[\\w.@+-]*\\.\\w+$`), {
+var FilePath = Schema3.String.check(Schema3.isPattern(new RegExp(`^(?:${LITERAL_SEGMENT}/)*[\\w.@+-]*\\.\\w+$`), {
   expected: "a file from the repository root such as src/billing/index.ts, with no glob"
 })).annotate({ identifier: "FilePath" });
 var PROOF_DIRECTORY = "tests/e2e/";
-var ProofPath = Schema2.String.check(Schema2.isPattern(new RegExp(`^${PROOF_DIRECTORY}(?:${LITERAL_SEGMENT}/)*[\\w.@+-]+\\.test\\.tsx?$`), {
+var ProofPath = Schema3.String.check(Schema3.isPattern(new RegExp(`^${PROOF_DIRECTORY}(?:${LITERAL_SEGMENT}/)*[\\w.@+-]+\\.test\\.tsx?$`), {
   expected: `a test file under ${PROOF_DIRECTORY} such as ${PROOF_DIRECTORY}billing.test.ts`
 })).annotate({ identifier: "ProofPath" });
-var Command = Schema2.NonEmptyString.annotate({ identifier: "Command" });
-var RuleName = Schema2.String.check(Schema2.isPattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { expected: "a Rule name in kebab case" })).annotate({ identifier: "RuleName" });
-var Identity = Schema2.Struct({ name: Schema2.NonEmptyString, email: Schema2.NonEmptyString }).annotate({
+var Command = Schema3.NonEmptyString.annotate({ identifier: "Command" });
+var RuleName = Schema3.String.check(Schema3.isPattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { expected: "a Rule name in kebab case" })).annotate({ identifier: "RuleName" });
+var Identity = Schema3.Struct({ name: Schema3.NonEmptyString, email: Schema3.NonEmptyString }).annotate({
   identifier: "Identity"
 });
-var CommitIdentity = Schema2.Struct({
-  authors: Schema2.NonEmptyArray(Identity).annotate({
+var CommitIdentity = Schema3.Struct({
+  authors: Schema3.NonEmptyArray(Identity).annotate({
     description: "The identities allowed to author and commit, in place of the kit's default owner"
   })
 });
-var Gates = Schema2.Struct({
-  ci: Schema2.optionalKey(Schema2.NonEmptyArray(Command).annotate({
+var Gates = Schema3.Struct({
+  ci: Schema3.optionalKey(Schema3.NonEmptyArray(Command).annotate({
     description: "The commands CI runs on every pull request to the default branch, each one plain command"
   })),
-  scheduled: Schema2.optionalKey(Schema2.Array(Command).annotate({ description: "The commands a cron-scheduled workflow runs" })),
-  lint: Schema2.optionalKey(LintGates)
+  scheduled: Schema3.optionalKey(Schema3.Array(Command).annotate({ description: "The commands a cron-scheduled workflow runs" })),
+  lint: Schema3.optionalKey(LintGates)
 });
-var EffectSources = Schema2.Struct({
-  paths: Schema2.NonEmptyArray(PathGlob).annotate({
+var EffectSources = Schema3.Struct({
+  paths: Schema3.NonEmptyArray(PathGlob).annotate({
     description: "Where source is written in Effect, held to the Effect rules of oxlint and the language service"
   }),
-  exempt: Schema2.optionalKey(Schema2.Array(PathGlob).annotate({ description: "Files under paths the Effect rules pass over" }))
+  exempt: Schema3.optionalKey(Schema3.Array(PathGlob).annotate({ description: "Files under paths the Effect rules pass over" }))
 });
-var Sources = Schema2.Struct({
-  production: Schema2.optionalKey(Schema2.Array(PathGlob).annotate({ description: "The source the repository ships, as against tests and tooling" })),
-  effect: Schema2.optionalKey(EffectSources)
+var Sources = Schema3.Struct({
+  production: Schema3.optionalKey(Schema3.Array(PathGlob).annotate({ description: "The source the repository ships, as against tests and tooling" })),
+  effect: Schema3.optionalKey(EffectSources)
 });
-var LineBudget = Schema2.Int.check(Schema2.isGreaterThan(0));
-var Size = Schema2.Struct({
-  fileLines: LineBudget.annotate({ description: "The most lines a file may hold, blank and comment lines counted" }),
-  functionLines: LineBudget.annotate({
-    description: "The most lines a function may span, blank and comment lines counted"
-  }),
-  applies: Schema2.Literals(["changed", "all"]).annotate({
-    description: "Which production files the budget holds: changed, the ones a range adds or changes; all, every one. The rest are reported as advisory"
-  })
-});
-var Feature = Schema2.Struct({
-  name: Schema2.String.check(Schema2.isPattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { expected: "a feature name in kebab case" })).annotate({ description: "The owner the dependency rule and the change signal name" }),
+var Feature = Schema3.Struct({
+  name: Schema3.String.check(Schema3.isPattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { expected: "a feature name in kebab case" })).annotate({ description: "The owner the dependency rule and the change signal name" }),
   root: DirectoryPath.annotate({ description: "The directory the feature owns" }),
-  entries: Schema2.NonEmptyArray(FilePath).annotate({
+  entries: Schema3.NonEmptyArray(FilePath).annotate({
     description: "The files under root that code outside it imports the feature through"
   }),
-  allowFrom: Schema2.optionalKey(Schema2.Array(PathGlob).annotate({
+  allowFrom: Schema3.optionalKey(Schema3.Array(PathGlob).annotate({
     description: "Files outside root that may import past its entries, such as a CLI or a harness; tests/ always may"
   })),
   proof: ProofPath.annotate({ description: "The end-to-end test that imports one of entries" })
-}).check(Schema2.makeFilter(({ root, entries }) => {
+}).check(Schema3.makeFilter(({ root, entries }) => {
   const outside = entries.filter((entry) => !entry.startsWith(`${root}/`));
   return outside.length === 0 || `lists ${outside.join(", ")} among its entries, outside its root ${root}`;
 }));
 function nests(outer, inner) {
   return outer === inner || inner.startsWith(`${outer}/`);
 }
-var Features = Schema2.Array(Feature).check(Schema2.makeFilter((features) => {
+var Features = Schema3.Array(Feature).check(Schema3.makeFilter((features) => {
   const names = features.map((feature) => feature.name);
   const repeated = names.filter((name, index) => names.indexOf(name) !== index);
   if (repeated.length > 0)
@@ -124,16 +190,16 @@ var Features = Schema2.Array(Feature).check(Schema2.makeFilter((features) => {
   }
   return true;
 }));
-var AgentRules = Schema2.Struct({
-  on: Schema2.optionalKey(Schema2.Array(RuleName).annotate({ description: "Catalogued Rules switched on here" })),
-  off: Schema2.optionalKey(Schema2.Array(RuleName).annotate({ description: "Catalogued Rules switched off here" }))
-}).check(Schema2.makeFilter(({ on = [], off = [] }) => {
+var AgentRules = Schema3.Struct({
+  on: Schema3.optionalKey(Schema3.Array(RuleName).annotate({ description: "Catalogued Rules switched on here" })),
+  off: Schema3.optionalKey(Schema3.Array(RuleName).annotate({ description: "Catalogued Rules switched off here" }))
+}).check(Schema3.makeFilter(({ on = [], off = [] }) => {
   const both = on.filter((rule) => off.includes(rule));
   return both.length === 0 || `switches ${both.join(", ")} both on and off`;
 }));
-var pagesIn = (mode) => Schema2.optionalKey(Schema2.Array(PathGlob).annotate({ description: `The pages written as ${mode}` }));
-var Docs = Schema2.Struct({
-  pages: Schema2.optionalKey(Schema2.Struct({
+var pagesIn = (mode) => Schema3.optionalKey(Schema3.Array(PathGlob).annotate({ description: `The pages written as ${mode}` }));
+var Docs = Schema3.Struct({
+  pages: Schema3.optionalKey(Schema3.Struct({
     tutorial: pagesIn("a tutorial, which teaches by building one thing"),
     "how-to": pagesIn("a how-to, which walks one task"),
     reference: pagesIn("reference, which describes a thing to be looked up"),
@@ -141,57 +207,57 @@ var Docs = Schema2.Struct({
   }).annotate({
     description: "The Diátaxis mode of each page, whose template checks-docs holds the page to; a page under docs/ needs one"
   })),
-  forConsumers: Schema2.optionalKey(Schema2.Array(DocGlob).annotate({
+  forConsumers: Schema3.optionalKey(Schema3.Array(DocGlob).annotate({
     description: "The living docs that speak to a repository installing this one, whose bun run commands checks-docs does not hold to this package.json"
   }))
 });
-var Quality = Schema2.Struct({
-  $schema: Schema2.optionalKey(Schema2.String),
-  defaultBranch: Schema2.optionalKey(Schema2.NonEmptyString.annotate({ description: "The branch pull requests merge into; main when absent" })),
-  gates: Schema2.optionalKey(Gates),
-  commitIdentity: Schema2.optionalKey(CommitIdentity),
-  sources: Schema2.optionalKey(Sources),
-  size: Schema2.optionalKey(Size.annotate({ description: "The line budget oxlint holds production files to, read by checks-size-budget" })),
-  features: Schema2.optionalKey(Features.annotate({
+var Quality = Schema3.Struct({
+  $schema: Schema3.optionalKey(Schema3.String),
+  defaultBranch: Schema3.optionalKey(Schema3.NonEmptyString.annotate({ description: "The branch pull requests merge into; main when absent" })),
+  gates: Schema3.optionalKey(Gates),
+  commitIdentity: Schema3.optionalKey(CommitIdentity),
+  sources: Schema3.optionalKey(Sources),
+  size: Schema3.optionalKey(Size),
+  features: Schema3.optionalKey(Features.annotate({
     description: "The feature owners dependency-cruiser holds to their entries and checks-feature-owners maps a change to"
   })),
-  changeSignal: Schema2.optionalKey(Schema2.Literal("advisory").annotate({
+  changeSignal: Schema3.optionalKey(Schema3.Literal("advisory").annotate({
     description: "Report which feature owners a change touches, without failing on it"
   })),
-  agentRules: Schema2.optionalKey(AgentRules),
-  docs: Schema2.optionalKey(Docs.annotate({ description: "What checks-docs reads to map a doc file to its template" }))
+  agentRules: Schema3.optionalKey(AgentRules),
+  docs: Schema3.optionalKey(Docs.annotate({ description: "What checks-docs reads to map a doc file to its template" }))
 }).annotate({
   title: QUALITY_FILE,
   description: "What a repository has opted into from @avi2dg/checks, read by its bins and agent Rule selection"
-}).check(Schema2.makeFilter(({ size, sources }) => size === undefined || (sources?.production ?? []).length > 0 || "declares size, which holds nothing without sources.production", {
+}).check(Schema3.makeFilter(({ size, sources }) => size === undefined || (sources?.production ?? []).length > 0 || "declares size, which holds no production file without sources.production", {
   toJsonSchema: () => ({
     if: { required: ["size"] },
     then: { required: ["sources"], properties: { sources: { required: ["production"], properties: { production: { minItems: 1 } } } } }
   })
-}), Schema2.makeFilter(({ changeSignal, features = [] }) => changeSignal === undefined || features.length > 0 || "declares changeSignal, which maps a change to no owner without features", {
+}), Schema3.makeFilter(({ changeSignal, features = [] }) => changeSignal === undefined || features.length > 0 || "declares changeSignal, which maps a change to no owner without features", {
   toJsonSchema: () => ({
     if: { required: ["changeSignal"] },
     then: { required: ["features"], properties: { features: { minItems: 1 } } }
   })
 }));
-var LegacyManifest = Schema2.Struct({
-  ciWiring: Schema2.optionalKey(Schema2.Struct({
-    gates: Schema2.optionalKey(Schema2.NonEmptyArray(Command)),
-    scheduled: Schema2.optionalKey(Schema2.Array(Command)),
-    lintGates: Schema2.optionalKey(LintGates),
-    defaultBranch: Schema2.optionalKey(Schema2.NonEmptyString)
+var LegacyManifest = Schema3.Struct({
+  ciWiring: Schema3.optionalKey(Schema3.Struct({
+    gates: Schema3.optionalKey(Schema3.NonEmptyArray(Command)),
+    scheduled: Schema3.optionalKey(Schema3.Array(Command)),
+    lintGates: Schema3.optionalKey(LintGates),
+    defaultBranch: Schema3.optionalKey(Schema3.NonEmptyString)
   })),
-  commitIdentity: Schema2.optionalKey(CommitIdentity)
+  commitIdentity: Schema3.optionalKey(CommitIdentity)
 });
 var LEGACY_KEYS = ["ciWiring", "commitIdentity"];
 
-class QualityUnreadable extends Schema2.TaggedError()("QualityUnreadable", {
-  message: Schema2.String
+class QualityUnreadable extends Schema3.TaggedError()("QualityUnreadable", {
+  message: Schema3.String
 }) {
 }
 var MANIFEST = "package.json";
-var decodeQualityJson = Schema2.decodeUnknownEffect(Schema2.fromJsonString(Quality), { onExcessProperty: "error" });
-var decodeManifestJson = Schema2.decodeUnknownEffect(Schema2.fromJsonString(LegacyManifest));
+var decodeQualityJson = Schema3.decodeUnknownEffect(Schema3.fromJsonString(Quality), { onExcessProperty: "error" });
+var decodeManifestJson = Schema3.decodeUnknownEffect(Schema3.fromJsonString(LegacyManifest));
 var decodeQuality = (text, source) => decodeQualityJson(text).pipe(Effect.mapError((cause) => new QualityUnreadable({ message: `${source}: ${cause.message}` })));
 function fromLegacy({ ciWiring, commitIdentity }) {
   const gates = {
@@ -255,7 +321,7 @@ function rulesFor(features) {
     to: { path: `^${escaped(root)}/`, pathNot: entries.map((entry) => `^${escaped(entry)}$`) }
   }));
 }
-var decode = Schema3.decodeUnknownSync(Quality);
+var decode = Schema4.decodeUnknownSync(Quality);
 function featureRules(quality) {
   return rulesFor(decode(quality, { onExcessProperty: "error" }).features ?? []);
 }
