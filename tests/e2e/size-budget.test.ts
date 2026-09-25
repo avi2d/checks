@@ -228,7 +228,7 @@ test(
     const red = await lint();
     expect(red.text).toContain("  src/billing/ledger.ts: File has too many lines (30).");
     expect(red.text).toContain("  billing: proof tests/e2e/billing.test.ts is not in the head commit");
-    expect(red.text).toContain("checks-lint: 2 of 10 gate(s) failed: checks-size-budget, checks-feature-owners\n");
+    expect(red.text).toContain("checks-lint: 2 of 11 gate(s) failed: checks-size-budget, checks-feature-owners\n");
     expect(red.exitCode).toBe(1);
 
     await write({
@@ -237,7 +237,7 @@ test(
     });
     await commit("fix: guardrails");
     const green = await lint();
-    expect(green.text).toContain("checks-lint: 10 gate(s) pass\n");
+    expect(green.text).toContain("checks-lint: 11 gate(s) pass\n");
     expect(green.exitCode).toBe(0);
   },
   60_000,

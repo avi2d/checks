@@ -148,13 +148,10 @@ test(
 
     const sources = { production: ["src/**/*.ts", "app/**/*.ts"], effect: { paths: ["src/**/*.ts", "lib/**/*.ts"] } };
     await put("quality.json", { sources });
-    const unsized = await quality("--check");
-    expect(unsized.text).not.toContain("matches no file");
-    expect(unsized.exitCode).toBe(0);
-
-    await put("quality.json", { sources, size: { fileLines: 400, functionLines: 100, applies: "changed" } });
     const unmatchedProduction = await quality("--check");
-    expect(unmatchedProduction.text).toContain("sources.production app/**/*.ts matches no file, so it holds no source to the size budget");
+    expect(unmatchedProduction.text).toContain(
+      "sources.production app/**/*.ts matches no file, so it holds no source to checks-size-budget or checks-repetition",
+    );
     expect(unmatchedProduction.text).not.toContain("src/**/*.ts matches no file");
     expect(unmatchedProduction.exitCode).toBe(1);
     await put("app/c.ts", "export const c = 1;\n");
@@ -211,7 +208,7 @@ test(
     await commit("feat: exempt the host files");
     const red = await run("bun", [LINT]);
     expect(red.text).toContain(`${OXLINT_FRAGMENT} is stale against quality.json`);
-    expect(red.text).toContain("checks-lint: 1 of 10 gate(s) failed: checks-quality");
+    expect(red.text).toContain("checks-lint: 1 of 11 gate(s) failed: checks-quality");
     expect(red.exitCode).toBe(1);
 
     expect((await quality("generate")).exitCode).toBe(0);
@@ -219,7 +216,7 @@ test(
     const green = await run("bun", [LINT]);
     expect(green.text).toContain("carry only allowed identities");
     expect(green.text).toContain("ci-wiring: 1 gate(s) run on pull requests to trunk");
-    expect(green.text).toContain("checks-lint: 10 gate(s) pass");
+    expect(green.text).toContain("checks-lint: 11 gate(s) pass");
     expect(green.exitCode).toBe(0);
   },
   60_000,

@@ -88,7 +88,7 @@ test(
     await writeFile(join(dir, "quality.json"), JSON.stringify({ gates: { ci: ["bun run lint"], lint: SOURCE_FREE_GATES } }));
     const sourceFree = await check();
     expect(sourceFree.text).toContain(
-      "ci-wiring: quality.json gates.lint leaves out checks-lint-coverage, checks-test-layout, checks-size-budget, checks-feature-owners, none of which this repository's contents make applicable",
+      "ci-wiring: quality.json gates.lint leaves out checks-lint-coverage, checks-test-layout, checks-size-budget, checks-repetition, checks-feature-owners, none of which this repository's contents make applicable",
     );
     expect(sourceFree.exitCode).toBe(0);
 
@@ -100,10 +100,11 @@ test(
     const tracked = await check();
     expect(tracked.text).toContain(
       [
-        "ci-wiring: quality.json gates.lint leaves out 4 gate(s) this repository's contents make applicable:",
+        "ci-wiring: quality.json gates.lint leaves out 5 gate(s) this repository's contents make applicable:",
         "  checks-lint-coverage: the repository tracks TypeScript source (widget.tsx)",
         "  checks-test-layout: the repository tracks TypeScript source (widget.tsx)",
         "  checks-size-budget: the repository tracks TypeScript source (widget.tsx)",
+        "  checks-repetition: the repository tracks TypeScript source (widget.tsx)",
         "  checks-feature-owners: the repository tracks TypeScript source (widget.tsx)",
       ].join("\n"),
     );
