@@ -52,26 +52,31 @@ function attributesOf(source: string): Readonly<Record<string, string>> {
   return attributes;
 }
 
+const malformed = (reason: string) => new ReportError({ message: `the junit report is malformed: ${reason}` });
+
+const takeTag = Effect.fnUntraced(function* (open: Element[], match: RegExpExecArray): Effect.fn.Return<void, ReportError> {
+  const [, closing, tag, attributes, selfClosing] = match;
+  if (tag === undefined) return;
+  const parent = open.at(-1);
+  if (parent === undefined) return yield* malformed(`<${tag}> after the root closed`);
+  if (closing === "/") {
+    if (parent.tag !== tag) return yield* malformed(`</${tag}> closes <${parent.tag}>`);
+    open.pop();
+    return;
+  }
+  const element: Element = { tag, attributes: attributesOf(attributes ?? ""), children: [] };
+  parent.children.push(element);
+  if (selfClosing !== "/") open.push(element);
+});
+
 const parseElements = Effect.fnUntraced(function* (xml: string): Effect.fn.Return<Element, ReportError> {
-  const malformed = (reason: string) => new ReportError({ message: `the junit report is malformed: ${reason}` });
   const document: Element = { tag: "", attributes: {}, children: [] };
   const open: Element[] = [document];
   let consumed = 0;
   for (const match of xml.matchAll(MARKUP)) {
     if (xml.slice(consumed, match.index).includes("<")) return yield* malformed(`stray < before offset ${match.index}`);
     consumed = match.index + match[0].length;
-    const [, closing, tag, attributes, selfClosing] = match;
-    if (tag === undefined) continue;
-    const parent = open.at(-1);
-    if (parent === undefined) return yield* malformed(`<${tag}> after the root closed`);
-    if (closing === "/") {
-      if (parent.tag !== tag) return yield* malformed(`</${tag}> closes <${parent.tag}>`);
-      open.pop();
-      continue;
-    }
-    const element: Element = { tag, attributes: attributesOf(attributes ?? ""), children: [] };
-    parent.children.push(element);
-    if (selfClosing !== "/") open.push(element);
+    yield* takeTag(open, match);
   }
   if (xml.slice(consumed).includes("<")) return yield* malformed("stray < after the last element");
   if (open.length !== 1) return yield* malformed(`<${open.at(-1)?.tag}> never closes`);
