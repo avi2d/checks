@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
-import { parseAddedLines } from "../scripts/comment-gate.ts";
+import { parseAddedLines } from "../scripts/git.ts";
 import { refused } from "../scripts/comments.ts";
 
 const DIFF = [
@@ -83,4 +83,39 @@ test("a directive added inside a block comment is refused, not dropped with its 
     "src/a.ts:5 carries the machine-read directive `eslint-disable-next-line`. Fix what the tool is reporting, or stop running the tool on this file",
   ]);
   expect(Effect.runSync(refused("src/a.ts", source, new Set([1])))).toEqual([]);
+});
+
+test("each added line is keyed by the path git names, as --no-prefix prints it", () => {
+  const diff = [
+    "diff --git b/README.md b/README.md",
+    "--- b/README.md",
+    "+++ b/README.md",
+    "@@ -1,0 +2 @@",
+    "+It builds.",
+    "diff --git docs/my page.md docs/my page.md",
+    "--- docs/my page.md\t",
+    "+++ docs/my page.md\t",
+    "@@ -3 +3 @@",
+    "-It built.",
+    "+It builds.",
+    'diff --git "docs/say \\"hi\\"\\t.md" "docs/say \\"hi\\"\\t.md"',
+    '--- "docs/say \\"hi\\"\\t.md"',
+    '+++ "docs/say \\"hi\\"\\t.md"',
+    "@@ -0,0 +1 @@",
+    "+It builds.",
+    'diff --git "docs/my \\"q\\".md" "docs/my \\"q\\".md"',
+    '--- "docs/my \\"q\\".md"\t',
+    '+++ "docs/my \\"q\\".md"\t',
+    "@@ -1,0 +2 @@",
+    "+It builds.",
+  ].join("\n");
+  const added = parseAddedLines(diff);
+  expect([...added.keys()]).toEqual(["b/README.md", "docs/my page.md", 'docs/say "hi"\t.md', 'docs/my "q".md']);
+  expect([...added.get("b/README.md") ?? []]).toEqual([2]);
+  expect([...added.get("docs/my page.md") ?? []]).toEqual([3]);
+});
+
+test("an added line that reads like a file header stays a line of the file it was added to", () => {
+  const diff = ["diff --git notes.md notes.md", "--- notes.md", "+++ notes.md", "@@ -1 +1,2 @@", "--- a rule", "+++ bold", "+It builds."].join("\n");
+  expect([...parseAddedLines(diff)]).toEqual([["notes.md", new Set([1, 2])]]);
 });

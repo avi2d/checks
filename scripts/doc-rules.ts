@@ -11,6 +11,7 @@ import {
   VERSION,
 } from "./doc-outline.ts";
 import { ADR_STATUSES, TEMPLATES, templateFile, type Kind, type Title } from "./doc-templates.ts";
+import { ADR_DIRECTORY, DOCS_DIRECTORY } from "./prose-matchers.ts";
 import { MODES, type Docs, type Mode } from "./quality-file.ts";
 
 export type Placement =
@@ -24,10 +25,9 @@ export type Doc = {
   readonly text: string;
 };
 
-export const ADR_DIRECTORY = "docs/adr/";
+export { ADR_DIRECTORY };
 // A generated index takes its shape from its generator.
 export const ADR_INDEX = `${ADR_DIRECTORY}README.md`;
-const DOCS_DIRECTORY = "docs/";
 
 export const ROOT_FILES: ReadonlyMap<string, Kind> = new Map<string, Kind>([
   ["README.md", "readme"],

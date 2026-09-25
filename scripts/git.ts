@@ -71,6 +71,70 @@ export const changedPaths = Effect.fn("changedPaths")(function* (
   return parseNameStatus(yield* git(["diff", "--name-status", "-z", "-M", base, head, "--", ...pathspecs], cwd));
 });
 
+const ESCAPES: Readonly<Record<string, string>> = { a: "\x07", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t", v: "\v" };
+
+// Git quotes a path holding a quote, a backslash or a control character, and ends one holding a space with a tab.
+function newPathOf(line: string): string | undefined {
+  const named = line.slice("+++ ".length).replace(/\t$/, "");
+  const path = named.startsWith('"')
+    ? named.slice(1, -1).replace(/\\(?:([0-7]{3})|(.))/g, (_, octal: string | undefined, char: string) =>
+        octal === undefined ? (ESCAPES[char] ?? char) : String.fromCharCode(Number.parseInt(octal, 8)),
+      )
+    : named;
+  return path === "/dev/null" ? undefined : path;
+}
+
+const HUNK = /^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
+
+// A hunk's header counts its lines, so an added line reading `++ x` is not taken for the next file's `+++` header.
+export function parseAddedLines(diff: string): Map<string, Set<number>> {
+  const added = new Map<string, Set<number>>();
+  let path: string | undefined;
+  let line = 0;
+  let oldLeft = 0;
+  let newLeft = 0;
+  for (const row of diff.split("\n")) {
+    if (oldLeft > 0 || newLeft > 0) {
+      if (row.startsWith("+")) {
+        if (path !== undefined) added.set(path, (added.get(path) ?? new Set<number>()).add(line));
+        line += 1;
+        newLeft -= 1;
+      } else if (row.startsWith("-")) {
+        oldLeft -= 1;
+      } else if (row.startsWith(" ")) {
+        line += 1;
+        oldLeft -= 1;
+        newLeft -= 1;
+      }
+      continue;
+    }
+    if (row.startsWith("+++ ")) {
+      path = newPathOf(row);
+      continue;
+    }
+    const hunk = HUNK.exec(row);
+    if (hunk !== null) {
+      oldLeft = Number(hunk[1] ?? 1);
+      line = Number(hunk[2]);
+      newLeft = Number(hunk[3] ?? 1);
+    }
+  }
+  return added;
+}
+
+export const changedLines = Effect.fn("changedLines")(function* (
+  base: string,
+  head: string,
+  pathspecs: readonly string[],
+  cwd?: string,
+) {
+  const diff = yield* git(
+    ["-c", "core.quotePath=false", "diff", "-U0", "--no-color", "--no-prefix", "-M", base, head, "--", ...pathspecs],
+    cwd,
+  );
+  return parseAddedLines(diff);
+});
+
 const emptyTree = (cwd?: string) => git(["hash-object", "-t", "tree", "/dev/null"], cwd).pipe(Effect.map((sha) => sha.trim()));
 
 export const pathsAt = Effect.fn("pathsAt")(function* (rev: string, pathspecs: readonly string[], cwd?: string) {

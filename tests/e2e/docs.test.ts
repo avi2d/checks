@@ -1,13 +1,10 @@
-import { $ } from "bun";
 import { afterEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import type { Kind } from "../../scripts/doc-templates.ts";
+import { docsRepo, type DocsRepo } from "./lib/docs-repo.ts";
 
-const CHECKOUT = resolve(import.meta.dir, "..", "..");
-const SCRIPT = join(CHECKOUT, "scripts", "docs.ts");
-const FIXTURES = join(CHECKOUT, "tests", "fixtures", "docs");
+const FIXTURES = join(resolve(import.meta.dir, "..", ".."), "tests", "fixtures", "docs");
 
 type Plant = {
   readonly kind: Kind;
@@ -84,36 +81,16 @@ const QUALITY = {
   },
 };
 
-let dir = "";
+let repo: DocsRepo | undefined;
 
 afterEach(async () => {
-  if (dir !== "") {
-    await rm(dir, { recursive: true, force: true });
-    dir = "";
-  }
+  await repo?.dispose();
+  repo = undefined;
 });
 
-async function initRepo(quality: unknown): Promise<void> {
-  dir = await mkdtemp(join(tmpdir(), "checks-docs-"));
-  await $`git init -q -b main`.cwd(dir).quiet();
-  await $`git config user.name tester && git config user.email tester@example.com`.cwd(dir).quiet();
-  await writeFile(join(dir, "quality.json"), JSON.stringify(quality));
-  await writeFile(join(dir, "widget.ts"), "export const widget = 1;\n");
-}
-
-async function put(path: string, text: string): Promise<void> {
-  await mkdir(dirname(join(dir, path)), { recursive: true });
-  await writeFile(join(dir, path), text);
-}
-
-async function commit(message: string): Promise<string> {
-  await $`git add -A && git commit -q --no-gpg-sign -m ${message}`.cwd(dir).quiet();
-  return (await $`git rev-parse HEAD`.cwd(dir).quiet()).stdout.toString().trim();
-}
-
-async function docs(...args: readonly string[]): Promise<{ exitCode: number; text: string }> {
-  const result = await $`bun ${SCRIPT} ${args}`.cwd(dir).nothrow().quiet();
-  return { exitCode: result.exitCode, text: result.stdout.toString() + result.stderr.toString() };
+async function initRepo(quality: unknown): Promise<DocsRepo> {
+  repo = await docsRepo(quality);
+  return repo;
 }
 
 function fixture(kind: Kind): Promise<string> {
@@ -123,7 +100,7 @@ function fixture(kind: Kind): Promise<string> {
 test(
   "a planted non-conforming file of each kind goes red, and green once it holds to its template",
   async () => {
-    await initRepo(QUALITY);
+    const { put, commit, docs } = await initRepo(QUALITY);
     let previous = await commit("start");
     for (const { kind, path, defect, refusal } of PLANTS) {
       const conforming = await fixture(kind);
@@ -147,7 +124,7 @@ test(
 test(
   "a file the range leaves alone is advisory, and the range that touches it is held to the template",
   async () => {
-    await initRepo({});
+    const { put, commit, docs } = await initRepo({});
     await put("README.md", "# widget\n\nIt builds bills.\n");
     const base = await commit("a README before the template");
     await put("notes.md", "anything\n");
@@ -161,7 +138,7 @@ test(
     await put("README.md", "# widget\n\nIt builds bills, fast.\n");
     const touched = await commit("touch the README");
     const held = await docs(touched);
-    expect(held.text).toContain("docs: 4 violation(s) in the doc files the range touches:\n  README.md:1: lacks `## Before you begin`");
+    expect(held.text).toContain("docs: 4 violation(s):\n  README.md:1: lacks `## Before you begin`");
     expect(held.exitCode).toBe(1);
   },
   120_000,
@@ -170,7 +147,7 @@ test(
 test(
   "a page under docs/ needs a declared mode, and a record may not take a number another holds",
   async () => {
-    await initRepo({});
+    const { put, remove, commit, docs } = await initRepo({});
     await put("docs/adr/0001-a-part-names-its-supplier.md", await fixture("adr"));
     const base = await commit("one record");
     await put("docs/parts.md", await fixture("reference"));
@@ -182,8 +159,8 @@ test(
     expect(red.text).toContain("  docs/parts.md: is a page under docs/ with no mode; declare it under docs.pages in quality.json");
     expect(red.exitCode).toBe(1);
 
-    await writeFile(join(dir, "quality.json"), JSON.stringify({ docs: { pages: { reference: ["docs/*.md"] } } }));
-    await rm(join(dir, "docs/adr/0001-a-second-record.md"));
+    await put("quality.json", JSON.stringify({ docs: { pages: { reference: ["docs/*.md"] } } }));
+    await remove("docs/adr/0001-a-second-record.md");
     const fixed = await commit("declare the page and drop the second record");
     const green = await docs(base, fixed);
     expect(green.text).toContain("docs: 1 doc file(s) the range touches hold to their templates");
@@ -195,7 +172,7 @@ test(
 test(
   "a quality.json that declares a mode no template has is undecided, not a pass",
   async () => {
-    await initRepo({ docs: { pages: { guide: ["docs/*.md"] } } });
+    const { commit, docs } = await initRepo({ docs: { pages: { guide: ["docs/*.md"] } } });
     const head = await commit("an unknown mode");
     const undecided = await docs(head);
     expect(undecided.text).toContain("docs: quality.json:");
