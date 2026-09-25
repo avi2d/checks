@@ -89,29 +89,42 @@ function statusProblem(outline: Outline): Violation | undefined {
   return { line: opening?.line ?? status.heading.line, message: `\`## Status\` opens with ${found} where one of ${ADR_STATUSES.join(", ")} goes` };
 }
 
-function adrProblems(path: string, outline: Outline, records: readonly string[]): readonly Violation[] {
-  const violations: Violation[] = [];
-  const filed = recordNumber(path);
-  if (filed === undefined) {
-    violations.push({ line: 1, message: `is not named as a record, a four-digit number and a kebab-case name directly in ${ADR_DIRECTORY}` });
-  }
+function recordTitleProblem(outline: Outline, filed: number | undefined): Violation | undefined {
   const title = titleOf(outline);
-  const titled = title === undefined ? undefined : RECORD_TITLE.exec(title.title)?.[1];
-  if (title !== undefined && titled === undefined) {
-    violations.push({ line: title.line, message: `${marked(1, title.title)} does not open with the record's number, as in \`# 7. The decision\`` });
+  if (title === undefined) return undefined;
+  const titled = RECORD_TITLE.exec(title.title)?.[1];
+  if (titled === undefined) {
+    return { line: title.line, message: `${marked(1, title.title)} does not open with the record's number, as in \`# 7. The decision\`` };
   }
-  if (title !== undefined && titled !== undefined && filed !== undefined && Number(titled) !== filed) {
-    violations.push({ line: title.line, message: `${marked(1, title.title)} carries number ${titled}, and the file name ${filed}` });
-  }
-  const dated = firstText(outline.lead);
-  if (!isDate(DATE_LINE.exec(dated?.text.trim() ?? "")?.[1])) {
-    violations.push({ line: dated?.line ?? 1, message: "does not follow its title with a `Date: YYYY-MM-DD` line" });
-  }
-  const status = statusProblem(outline);
-  if (status !== undefined) violations.push(status);
-  const sharing = records.filter((other) => other !== path && filed !== undefined && recordNumber(other) === filed);
-  if (sharing.length > 0) violations.push({ line: 1, message: `shares number ${filed} with ${sharing.join(", ")}` });
-  return violations;
+  if (filed === undefined || Number(titled) === filed) return undefined;
+  return { line: title.line, message: `${marked(1, title.title)} carries number ${titled}, and the file name ${filed}` };
+}
+
+function recordDateProblem({ lead }: Outline): Violation | undefined {
+  const dated = firstText(lead);
+  if (isDate(DATE_LINE.exec(dated?.text.trim() ?? "")?.[1])) return undefined;
+  return { line: dated?.line ?? 1, message: "does not follow its title with a `Date: YYYY-MM-DD` line" };
+}
+
+function sharedNumberProblem(path: string, filed: number | undefined, records: readonly string[]): Violation | undefined {
+  if (filed === undefined) return undefined;
+  const sharing = records.filter((other) => other !== path && recordNumber(other) === filed);
+  return sharing.length === 0 ? undefined : { line: 1, message: `shares number ${filed} with ${sharing.join(", ")}` };
+}
+
+function adrProblems(path: string, outline: Outline, records: readonly string[]): readonly Violation[] {
+  const filed = recordNumber(path);
+  const misnamed: Violation | undefined =
+    filed === undefined
+      ? { line: 1, message: `is not named as a record, a four-digit number and a kebab-case name directly in ${ADR_DIRECTORY}` }
+      : undefined;
+  return [
+    misnamed,
+    recordTitleProblem(outline, filed),
+    recordDateProblem(outline),
+    statusProblem(outline),
+    sharedNumberProblem(path, filed, records),
+  ].filter((violation) => violation !== undefined);
 }
 
 export const RELEASED = /^Released (\S+)\.$/;
