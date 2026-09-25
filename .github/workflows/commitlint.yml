@@ -1,29 +1,15 @@
-name: commitlint
 on:
-  workflow_call:
-    inputs:
-      ref:
-        description: Ref of avi2d/checks to lint with
-        type: string
-        default: main
-
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
 jobs:
   commitlint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-        with:
-          repository: avi2d/checks
-          ref: ${{ inputs.ref }}
-          path: checks
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-        working-directory: checks
-      # Only the title is linted: per-commit messages are never conventional,
-      # and the title is what a squash merge lands, with GitHub appending
-      # " (#N)" to it. Lint the landed string, not the bare title.
+      # Only the title is linted: it is what a squash merge lands, with GitHub appending " (#N)" to it.
       - run: printf '%s' "$PR_TITLE (#0000)" > "$RUNNER_TEMP/pr-title"
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
       - run: ./node_modules/.bin/commitlint --config ./commitlint.config.js --edit "$RUNNER_TEMP/pr-title"
-        working-directory: checks
