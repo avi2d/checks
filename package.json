@@ -46,6 +46,7 @@
     "scripts/size-rules.ts",
     "scripts/repetition.ts",
     "scripts/feature-owners.ts",
+    "scripts/quarantine-clock.ts",
     "scripts/docs.ts",
     "scripts/vendor.ts",
     "scripts/doc-outline.ts",
@@ -86,6 +87,7 @@
     "./scripts/size-budget.ts": "./scripts/size-budget.ts",
     "./scripts/repetition.ts": "./scripts/repetition.ts",
     "./scripts/feature-owners.ts": "./scripts/feature-owners.ts",
+    "./scripts/quarantine-clock.ts": "./scripts/quarantine-clock.ts",
     "./scripts/docs.ts": "./scripts/docs.ts",
     "./scripts/vendor.ts": "./scripts/vendor.ts",
     "./templates/readme.md": "./templates/readme.md",
@@ -122,6 +124,7 @@
     "checks-size-budget": "scripts/size-budget.ts",
     "checks-repetition": "scripts/repetition.ts",
     "checks-feature-owners": "scripts/feature-owners.ts",
+    "checks-quarantine-clock": "scripts/quarantine-clock.ts",
     "checks-docs": "scripts/docs.ts",
     "checks-vendor": "scripts/vendor.ts"
   },

@@ -24,6 +24,7 @@ const METADATA_GATES = [
   "checks-suppressions-ratchet",
   "checks-ci-wiring",
   "checks-docs",
+  "checks-quarantine-clock",
 ] as const;
 const BILLING = {
   name: "billing",

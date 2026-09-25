@@ -21,7 +21,8 @@ var KIT_GATES = [
   { bin: "checks-quality", script: "quality.ts", reads: "tree", args: ["--check"], appliesTo: QUALITY_DECLARATION },
   { bin: "checks-size-budget", script: "size-budget.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE },
   { bin: "checks-repetition", script: "repetition.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE },
-  { bin: "checks-feature-owners", script: "feature-owners.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE }
+  { bin: "checks-feature-owners", script: "feature-owners.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE },
+  { bin: "checks-quarantine-clock", script: "quarantine-clock.ts", reads: "range", appliesTo: EVERY_REPOSITORY }
 ];
 var UNCONDITIONAL = KIT_GATES.filter((gate) => gate.appliesTo === EVERY_REPOSITORY).map((gate) => gate.bin);
 var LintGates = Schema.Array(Schema.Literals(KIT_GATES.map((gate) => gate.bin))).check(Schema.makeFilter((selected) => {
