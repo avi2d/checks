@@ -2,21 +2,40 @@
 import { Console, Effect, FileSystem, Schema } from "effect";
 import { runMain, Usage } from "./main.ts";
 
-export type Tally = {
-  readonly killed: number;
-  readonly total: number;
+export type Location = {
+  readonly start: { readonly line: number; readonly column: number };
+  readonly end: { readonly line: number; readonly column: number };
 };
 
-export type FileComparison = {
+export type Mutant = {
+  readonly status: string;
+  readonly mutatorName: string;
+  readonly replacement: string;
+  readonly location: Location;
+};
+
+export type MutantChange = {
   readonly path: string;
-  readonly base: Tally;
-  readonly head: Tally;
+  readonly location: Location;
+  readonly mutatorName: string;
+  readonly replacement: string;
+  readonly from: string;
+  readonly to: string;
+};
+
+export type UnmatchedMutant = {
+  readonly path: string;
+  readonly location: Location;
+  readonly mutatorName: string;
+  readonly replacement: string;
+  readonly status: string;
 };
 
 export type Comparison = {
-  readonly base: Tally;
-  readonly head: Tally;
-  readonly files: readonly FileComparison[];
+  readonly regressions: readonly MutantChange[];
+  readonly runtimeMoves: readonly MutantChange[];
+  readonly baseOnly: readonly UnmatchedMutant[];
+  readonly headOnly: readonly UnmatchedMutant[];
   readonly regression: boolean;
 };
 
@@ -32,98 +51,122 @@ export class ReportError extends Schema.TaggedError<ReportError>()("ReportError"
 
 const DETECTED = new Set(["Killed", "Timeout"]);
 const UNDETECTED = new Set(["Survived", "NoCoverage"]);
+const RUNTIME_LEAVES = new Set(["CompileError", "RuntimeError"]);
 const USAGE = "usage: mutation-compare.ts [--advisory] <base-report> <head-report>";
 
 const Report = Schema.fromJsonString(
   Schema.Struct({
     files: Schema.Record(
       Schema.String,
-      Schema.Struct({ mutants: Schema.Array(Schema.Struct({ status: Schema.String })) }),
+      Schema.Struct({
+        mutants: Schema.Array(
+          Schema.Struct({
+            status: Schema.String,
+            mutatorName: Schema.String,
+            replacement: Schema.String,
+            location: Schema.Struct({
+              start: Schema.Struct({ line: Schema.Number, column: Schema.Number }),
+              end: Schema.Struct({ line: Schema.Number, column: Schema.Number }),
+            }),
+          }),
+        ),
+      }),
     ),
   }),
 );
 const decodeReport = Schema.decodeUnknownEffect(Report);
 
-export const parseReport = (source: string, text: string): Effect.Effect<Map<string, readonly string[]>, ReportError> =>
+export const parseReport = (source: string, text: string): Effect.Effect<Map<string, readonly Mutant[]>, ReportError> =>
   decodeReport(text).pipe(
-    Effect.map(
-      ({ files }) => new Map(Object.entries(files).map(([path, { mutants }]) => [path, mutants.map(({ status }) => status)])),
-    ),
+    Effect.map(({ files }) => new Map(Object.entries(files).map(([path, { mutants }]) => [path, mutants]))),
     Effect.mapError((cause) => new ReportError({ message: `${source} is not a Stryker mutation report: ${cause.message}` })),
   );
 
-function tally(statuses: readonly string[]): Tally {
-  let killed = 0;
-  let total = 0;
-  for (const status of statuses) {
-    if (DETECTED.has(status)) killed += 1;
-    if (DETECTED.has(status) || UNDETECTED.has(status)) total += 1;
+// The key adds the position among same-signature mutants: location, mutator and replacement collide within a report.
+function keyMutants(files: ReadonlyMap<string, readonly Mutant[]>): Map<string, { readonly path: string; readonly mutant: Mutant }> {
+  const keyed = new Map<string, { readonly path: string; readonly mutant: Mutant }>();
+  for (const [path, mutants] of files) {
+    const seen = new Map<string, number>();
+    for (const mutant of mutants) {
+      const { location } = mutant;
+      const signature = `${path}|${location.start.line}:${location.start.column}-${location.end.line}:${location.end.column}|${mutant.mutatorName}|${mutant.replacement}`;
+      const occurrence = seen.get(signature) ?? 0;
+      seen.set(signature, occurrence + 1);
+      keyed.set(`${signature}#${occurrence}`, { path, mutant });
+    }
   }
-  return { killed, total };
+  return keyed;
 }
 
-const EMPTY: Tally = { killed: 0, total: 0 };
+function sortKey(mutant: { readonly path: string; readonly location: Location }): string {
+  return `${mutant.path}:${mutant.location.start.line}:${mutant.location.start.column}`;
+}
 
 export function compareReports(
-  baseFiles: ReadonlyMap<string, readonly string[]>,
-  headFiles: ReadonlyMap<string, readonly string[]>,
+  baseFiles: ReadonlyMap<string, readonly Mutant[]>,
+  headFiles: ReadonlyMap<string, readonly Mutant[]>,
 ): Comparison {
-  const paths = [...new Set([...baseFiles.keys(), ...headFiles.keys()])].sort();
-  const files = paths.map((path) => {
-    const baseStatuses = baseFiles.get(path);
-    const headStatuses = headFiles.get(path);
-    return {
+  const base = keyMutants(baseFiles);
+  const head = keyMutants(headFiles);
+  const regressions: MutantChange[] = [];
+  const runtimeMoves: MutantChange[] = [];
+  const baseOnly: UnmatchedMutant[] = [];
+  const headOnly: UnmatchedMutant[] = [];
+
+  for (const [key, { path, mutant }] of base) {
+    const counterpart = head.get(key);
+    if (counterpart === undefined) {
+      baseOnly.push({ path, location: mutant.location, mutatorName: mutant.mutatorName, replacement: mutant.replacement, status: mutant.status });
+      continue;
+    }
+    const change: MutantChange = {
       path,
-      base: baseStatuses === undefined ? EMPTY : tally(baseStatuses),
-      head: headStatuses === undefined ? EMPTY : tally(headStatuses),
+      location: mutant.location,
+      mutatorName: mutant.mutatorName,
+      replacement: mutant.replacement,
+      from: mutant.status,
+      to: counterpart.mutant.status,
     };
-  });
-  const base = tally([...baseFiles.values()].flat());
-  const head = tally([...headFiles.values()].flat());
-  return { base, head, files, regression: regressed(base, head) };
+    if (mutant.status !== counterpart.mutant.status && (RUNTIME_LEAVES.has(mutant.status) || RUNTIME_LEAVES.has(counterpart.mutant.status))) {
+      runtimeMoves.push(change);
+    } else if (DETECTED.has(mutant.status) && UNDETECTED.has(counterpart.mutant.status)) {
+      regressions.push(change);
+    }
+  }
+  for (const [key, { path, mutant }] of head) {
+    if (!base.has(key)) headOnly.push({ path, location: mutant.location, mutatorName: mutant.mutatorName, replacement: mutant.replacement, status: mutant.status });
+  }
+
+  regressions.sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+  runtimeMoves.sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+  baseOnly.sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+  headOnly.sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+
+  return { regressions, runtimeMoves, baseOnly, headOnly, regression: regressions.length > 0 };
 }
 
-export function regressed(base: Tally, head: Tally): boolean {
-  if (base.total === 0) return head.total > 0 && head.killed < head.total;
-  if (head.total === 0) return false;
-  return head.killed * base.total < base.killed * head.total;
+function locate(mutant: { readonly path: string; readonly location: Location }): string {
+  return `${mutant.path}:${mutant.location.start.line}:${mutant.location.start.column}`;
 }
 
-function points(count: Tally): number {
-  return count.total === 0 ? 100 : (100 * count.killed) / count.total;
+function describeChange(change: MutantChange): string {
+  return `${locate(change)} ${change.mutatorName} ${JSON.stringify(change.replacement)}: ${change.from} -> ${change.to}`;
 }
 
-function percent(count: Tally): string {
-  return count.total === 0 ? "n/a" : `${points(count).toFixed(2)}%`;
-}
-
-function describe(count: Tally): string {
-  return `${percent(count)} (${count.killed}/${count.total})`;
-}
-
-function deltaPoints(base: Tally, head: Tally): string {
-  const delta = points(head) - points(base);
-  return `${delta < 0 ? "-" : "+"}${Math.abs(delta).toFixed(2)}pp`;
+function describeUnmatched(mutant: UnmatchedMutant): string {
+  return `${locate(mutant)} ${mutant.mutatorName} ${JSON.stringify(mutant.replacement)}: ${mutant.status}`;
 }
 
 export function formatComparison(comparison: Comparison, advisory: boolean): string {
-  const changed = comparison.files.filter(
-    (file) => file.base.killed !== file.head.killed || file.base.total !== file.head.total,
-  );
-  const unchanged = comparison.files.length - changed.length;
-  const lines = [
-    `mutation-compare: base ${describe(comparison.base)} head ${describe(comparison.head)} delta ${deltaPoints(comparison.base, comparison.head)}`,
-  ];
-  for (const file of changed) {
-    lines.push(`  ${file.path}: ${describe(file.base)} -> ${describe(file.head)}`);
-  }
-  if (unchanged > 0) lines.push(`  ${unchanged} unchanged file(s)`);
-  if (comparison.regression) {
-    lines.push(`mutation-compare: REGRESSION (${deltaPoints(comparison.base, comparison.head)})${advisory ? " in advisory mode, exit 0" : ""}`);
-  } else {
-    lines.push(`mutation-compare: no regression${advisory ? " (advisory mode, exit 0)" : ""}`);
-  }
-  return lines.join("\n");
+  const lines: string[] = [];
+  for (const change of comparison.regressions) lines.push(`  regression ${describeChange(change)}`);
+  for (const change of comparison.runtimeMoves) lines.push(`  moved ${describeChange(change)}`);
+  for (const mutant of comparison.baseOnly) lines.push(`  base only ${describeUnmatched(mutant)}`);
+  for (const mutant of comparison.headOnly) lines.push(`  head only ${describeUnmatched(mutant)}`);
+  const verdict = comparison.regression
+    ? `mutation-compare: REGRESSION (${comparison.regressions.length} mutant(s))${advisory ? " in advisory mode, exit 0" : ""}`
+    : `mutation-compare: no regression${advisory ? " (advisory mode, exit 0)" : ""}`;
+  return [verdict, ...lines].join("\n");
 }
 
 export const parseArgs = Effect.fnUntraced(function* (argv: readonly string[]): Effect.fn.Return<Options, Usage> {
