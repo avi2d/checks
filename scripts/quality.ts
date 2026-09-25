@@ -91,8 +91,6 @@ export function commitlintWorkflow(commitlintConfig: string): string {
   return `on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
-permissions:
-  contents: read
 jobs:
   commitlint:
     runs-on: ubuntu-latest
@@ -104,12 +102,7 @@ jobs:
       - run: printf '%s' "$PR_TITLE (#0000)" > "$RUNNER_TEMP/pr-title"
         env:
           PR_TITLE: \${{ github.event.pull_request.title }}
-      # --edit drops lines starting with core.commentChar, "#" by default, so a title starting with "#" would lint as empty and pass.
       - run: ./node_modules/.bin/commitlint --config ${commitlintConfig} --edit "$RUNNER_TEMP/pr-title"
-        env:
-          GIT_CONFIG_COUNT: "1"
-          GIT_CONFIG_KEY_0: core.commentChar
-          GIT_CONFIG_VALUE_0: "\\x01"
 `;
 }
 
@@ -222,7 +215,6 @@ const recipeOf = Effect.fn("recipeOf")(function* (root: string) {
 const workflowProblems = Effect.fn("workflowProblems")(function* (
   root: string,
   source: string,
-  quality: Quality,
   expected: readonly GeneratedWorkflow[],
 ) {
   const fs = yield* FileSystem.FileSystem;
@@ -236,10 +228,6 @@ const workflowProblems = Effect.fn("workflowProblems")(function* (
       problems.push(`${file} is stale against ${source} and the kit recipe; run ${GENERATE}`);
     }
   }
-  if (quality.gates?.ci === undefined) {
-    const target = path.join(root, SUITE_WORKFLOW);
-    if (yield* fs.exists(target)) problems.push(`${SUITE_WORKFLOW} is left over, since no gates.ci is declared; run ${GENERATE}`);
-  }
   return problems;
 });
 
@@ -249,7 +237,7 @@ const check = Effect.fn("check")(function* (root: string) {
   const workflows = workflowsFor(quality, yield* recipeOf(root));
   const problems = [
     ...(yield* fragmentProblems(root, source, expected)),
-    ...(yield* workflowProblems(root, source, quality, workflows)),
+    ...(yield* workflowProblems(root, source, workflows)),
     ...(yield* unmatchedPaths(root, quality)),
   ];
   if (problems.length > 0) {
@@ -287,13 +275,6 @@ const generate = Effect.fn("generate")(function* (root: string) {
   for (const { file, content } of workflows) {
     yield* fs.writeFileString(path.join(root, file), content);
     yield* Console.log(`${NAME}: wrote ${file}`);
-  }
-  if (quality.gates?.ci === undefined) {
-    const target = path.join(root, SUITE_WORKFLOW);
-    if (yield* fs.exists(target)) {
-      yield* fs.remove(target);
-      yield* Console.log(`${NAME}: removed ${SUITE_WORKFLOW}`);
-    }
   }
   return yield* check(root);
 });

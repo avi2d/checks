@@ -67,3 +67,26 @@ test(
   },
   60_000,
 );
+
+test(
+  "with no gates.ci declared, neither generate nor --check touches the repository's own ci.yml",
+  async () => {
+    const own = "on: push\njobs:\n  own:\n    runs-on: ubuntu-latest\n    steps:\n      - run: make\n";
+    const repo = await repository({
+      "quality.json": JSON.stringify({ $schema: QUALITY.$schema }),
+      "package.json": JSON.stringify({ name: "workflow-fixture", type: "module" }),
+      [SUITE_WORKFLOW]: own,
+    });
+
+    const generated = await repo.script("quality.ts", "generate");
+    expect(generated.text).not.toContain(SUITE_WORKFLOW);
+    expect(generated.exitCode).toBe(0);
+    expect(await readFile(join(repo.dir, SUITE_WORKFLOW), "utf8")).toBe(own);
+
+    const checked = await repo.script("quality.ts", "--check");
+    expect(checked.text).not.toContain(SUITE_WORKFLOW);
+    expect(checked.exitCode).toBe(0);
+    expect(await readFile(join(repo.dir, SUITE_WORKFLOW), "utf8")).toBe(own);
+  },
+  60_000,
+);
