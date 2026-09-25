@@ -161,9 +161,14 @@ export const rangeEnds = Effect.fn("rangeEnds")(function* (first: string, second
   return { base: (yield* git(["merge-base", first, second], cwd)).trim(), head: second };
 });
 
-export const rangeFromArgs = Effect.fn("rangeFromArgs")(function* (args: readonly string[], usage: string, cwd?: string) {
+export const refArgs = Effect.fn("refArgs")(function* (args: readonly string[], usage: string) {
   const [first, second, ...extra] = args;
   if (first === undefined || extra.length > 0) return yield* new Usage({ message: usage });
+  return { first, second };
+});
+
+export const rangeFromArgs = Effect.fn("rangeFromArgs")(function* (args: readonly string[], usage: string, cwd?: string) {
+  const { first, second } = yield* refArgs(args, usage);
   return yield* rangeEnds(first, second, cwd);
 });
 

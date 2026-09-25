@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { changedPaths, collect, git, pathsAt, rangeEnds, type Change } from "./git.ts";
-import { runMain, Usage } from "./main.ts";
-import { readQuality, renderJson } from "./quality-file.ts";
+import { runMain } from "./main.ts";
+import { renderJson } from "./quality-file.ts";
+import { rangeGateInputs } from "./range-gate.ts";
 import {
   budgetOf,
   budgetsOf,
@@ -239,16 +240,12 @@ function passes(verdict: Verdict): boolean {
 }
 
 const budget = Effect.gen(function* () {
-  const [first, second, ...extra] = process.argv.slice(2);
-  if (first === undefined || extra.length > 0) return yield* new Usage({ message: USAGE });
-
-  const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
-  const { source, quality } = yield* readQuality(root);
+  const { refs, root, source, quality } = yield* rangeGateInputs(USAGE);
   if (quality.size === undefined) {
     yield* Console.log(`${NAME}: ${source} declares no size budget`);
     return true;
   }
-  const { base, head } = yield* rangeEnds(first, second, root);
+  const { base, head } = yield* rangeEnds(refs.first, refs.second, root);
   const verdict = yield* runBudget(root, quality.size, quality.sources?.production ?? [], base, head);
 
   yield* Console.log(report(verdict));

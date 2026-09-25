@@ -3,8 +3,8 @@ import { Console, Effect } from "effect";
 import { rootsOf, unresolvedIn, type Judging, type Unresolved } from "./doc-references.ts";
 import { ADR_DIRECTORY, judge, placementOf, placementProblem, type Placement } from "./doc-rules.ts";
 import { readTexts, snapshotAt, stillMissing } from "./doc-snapshot.ts";
-import { changedLines, changedPaths, git, pathsAt, rangeEnds } from "./git.ts";
-import { runMain, Usage } from "./main.ts";
+import { changedLines, changedPaths, git, pathsAt, rangeEnds, refArgs } from "./git.ts";
+import { runMain } from "./main.ts";
 import { isLivingDoc, proseFindings, readerOf } from "./prose-matchers.ts";
 import { readQuality } from "./quality-file.ts";
 
@@ -152,8 +152,7 @@ export function report({ held, edited, living, findings, advisory, brokenBefore 
 }
 
 const docs = Effect.gen(function* () {
-  const [first, second, ...extra] = process.argv.slice(2);
-  if (first === undefined || extra.length > 0) return yield* new Usage({ message: USAGE });
+  const { first, second } = yield* refArgs(process.argv.slice(2), USAGE);
 
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const { base, head } = yield* rangeEnds(first, second, root);
