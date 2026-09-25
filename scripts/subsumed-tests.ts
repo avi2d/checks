@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem } from "effect";
 import { runMain, Usage } from "./main.ts";
-import { parseReport, ReportError, type ReportFile } from "./mutation-compare.ts";
+import { type KillRun, parseKillRun, ReportError } from "./mutation-compare.ts";
 
 export type KillSets = ReadonlyMap<string, ReadonlySet<string>>;
 
@@ -36,11 +36,12 @@ export type Options = {
 
 const USAGE = "usage: subsumed-tests.ts <mutation-report>";
 
-export function killSetsOf(files: ReadonlyMap<string, ReportFile>): KillSets {
+export function killSetsOf(run: KillRun): KillSets {
   const kills = new Map<string, Set<string>>();
-  for (const [path, file] of files) {
+  for (const file of run.testFiles.values()) for (const test of file.tests) kills.set(test.id, new Set<string>());
+  for (const [path, file] of run.files) {
     file.mutants.forEach((mutant, index) => {
-      for (const test of mutant.killedBy) {
+      for (const test of mutant.killedBy ?? []) {
         let set = kills.get(test);
         if (set === undefined) {
           set = new Set<string>();
@@ -74,7 +75,7 @@ export function findSubsumed(sets: KillSets): readonly Subsumed[] {
     const subsumer = subsumerOf(test, kills, sets);
     if (subsumer !== undefined) subsumed.push({ test, kills: kills.size, subsumedBy: subsumer.name, subsumerKills: subsumer.size });
   }
-  return subsumed.toSorted((a, b) => (a.test < b.test ? -1 : 1));
+  return subsumed;
 }
 
 export function findIdentical(sets: KillSets): readonly IdenticalGroup[] {
@@ -86,10 +87,7 @@ export function findIdentical(sets: KillSets): readonly IdenticalGroup[] {
     if (group === undefined) groups.set(key, [test]);
     else group.push(test);
   }
-  return [...groups.values()]
-    .filter((tests) => tests.length > 1)
-    .map((tests) => ({ tests: tests.toSorted(), kills: sets.get(tests[0] ?? "")?.size ?? 0 }))
-    .toSorted((a, b) => ((a.tests[0] ?? "") < (b.tests[0] ?? "") ? -1 : 1));
+  return [...groups.values()].filter((tests) => tests.length > 1).map((tests) => ({ tests, kills: sets.get(tests[0] ?? "")?.size ?? 0 }));
 }
 
 export function greedyCover(sets: KillSets): Cover {
@@ -118,13 +116,28 @@ export function greedyCover(sets: KillSets): Cover {
   return { members, tests: sets.size, kills: total };
 }
 
-export function analyze(files: ReadonlyMap<string, ReportFile>): Report {
-  const sets = killSetsOf(files);
+function testNames(run: KillRun): ReadonlyMap<string, string> {
+  const names = new Map<string, string>();
+  for (const [path, file] of run.testFiles) for (const test of file.tests) names.set(test.id, path === "" ? test.name : `${path} > ${test.name}`);
+  return names;
+}
+
+const byName = (a: string, b: string) => (a < b ? -1 : 1);
+
+export function analyze(run: KillRun): Report {
+  const sets = killSetsOf(run);
+  const names = testNames(run);
+  const name = (id: string) => names.get(id) ?? id;
+  const cover = greedyCover(sets);
   return {
-    files: [...files.keys()].toSorted(),
-    subsumed: findSubsumed(sets),
-    identical: findIdentical(sets),
-    cover: greedyCover(sets),
+    files: [...run.files.keys()].toSorted(),
+    subsumed: findSubsumed(sets)
+      .map((one) => ({ ...one, test: name(one.test), subsumedBy: name(one.subsumedBy) }))
+      .toSorted((a, b) => byName(a.test, b.test)),
+    identical: findIdentical(sets)
+      .map((group) => ({ ...group, tests: group.tests.map(name).toSorted(byName) }))
+      .toSorted((a, b) => byName(a.tests[0] ?? "", b.tests[0] ?? "")),
+    cover: { ...cover, members: cover.members.map(name) },
   };
 }
 
@@ -155,7 +168,7 @@ export const parseArgs = Effect.fnUntraced(function* (argv: readonly string[]): 
 const load = Effect.fn("load")(function* (path: string) {
   const fs = yield* FileSystem.FileSystem;
   const text = yield* fs.readFileString(path).pipe(Effect.mapError(() => new ReportError({ message: `cannot read ${path}` })));
-  return yield* parseReport(path, text);
+  return yield* parseKillRun(path, text);
 });
 
 const report = Effect.gen(function* () {

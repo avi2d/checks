@@ -11,13 +11,22 @@ export type Mutant = {
   readonly status: string;
   readonly mutatorName: string;
   readonly replacement: string;
-  readonly killedBy: readonly string[];
+  readonly killedBy?: readonly string[];
   readonly location: Location;
 };
 
 export type ReportFile = {
   readonly source: string;
   readonly mutants: readonly Mutant[];
+};
+
+export type TestFile = {
+  readonly tests: readonly { readonly id: string; readonly name: string }[];
+};
+
+export type KillRun = {
+  readonly files: ReadonlyMap<string, ReportFile>;
+  readonly testFiles: ReadonlyMap<string, TestFile>;
 };
 
 export type MutantChange = {
@@ -60,34 +69,46 @@ const UNDETECTED = new Set(["Survived", "NoCoverage"]);
 const LEAVES_SCORE = new Set(["CompileError", "RuntimeError", "Ignored", "Pending"]);
 const USAGE = "usage: mutation-compare.ts [--advisory] <base-report> <head-report>";
 
-const Report = Schema.fromJsonString(
+const Files = Schema.Record(
+  Schema.String,
   Schema.Struct({
-    files: Schema.Record(
-      Schema.String,
+    source: Schema.String,
+    mutants: Schema.Array(
       Schema.Struct({
-        source: Schema.String,
-        mutants: Schema.Array(
-          Schema.Struct({
-            status: Schema.String,
-            mutatorName: Schema.String,
-            replacement: Schema.String,
-            killedBy: Schema.Array(Schema.String),
-            location: Schema.Struct({
-              start: Schema.Struct({ line: Schema.Finite, column: Schema.Finite }),
-              end: Schema.Struct({ line: Schema.Finite, column: Schema.Finite }),
-            }),
-          }),
-        ),
+        status: Schema.String,
+        mutatorName: Schema.String,
+        replacement: Schema.String,
+        killedBy: Schema.optionalKey(Schema.Array(Schema.String)),
+        location: Schema.Struct({
+          start: Schema.Struct({ line: Schema.Finite, column: Schema.Finite }),
+          end: Schema.Struct({ line: Schema.Finite, column: Schema.Finite }),
+        }),
       }),
     ),
   }),
 );
-const decodeReport = Schema.decodeUnknownEffect(Report);
+const decodeReport = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ files: Files })));
+const decodeKillRun = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(
+    Schema.Struct({
+      files: Files,
+      testFiles: Schema.Record(Schema.String, Schema.Struct({ tests: Schema.Array(Schema.Struct({ id: Schema.String, name: Schema.String })) })),
+    }),
+  ),
+);
+
+const notAReport = (source: string) => (cause: { readonly message: string }) => new ReportError({ message: `${source} is not a Stryker mutation report: ${cause.message}` });
 
 export const parseReport = (source: string, text: string): Effect.Effect<Map<string, ReportFile>, ReportError> =>
   decodeReport(text).pipe(
     Effect.map(({ files }) => new Map(Object.entries(files))),
-    Effect.mapError((cause) => new ReportError({ message: `${source} is not a Stryker mutation report: ${cause.message}` })),
+    Effect.mapError(notAReport(source)),
+  );
+
+export const parseKillRun = (source: string, text: string): Effect.Effect<KillRun, ReportError> =>
+  decodeKillRun(text).pipe(
+    Effect.map(({ files, testFiles }) => ({ files: new Map(Object.entries(files)), testFiles: new Map(Object.entries(testFiles)) })),
+    Effect.mapError(notAReport(source)),
   );
 
 function byPosition(a: { readonly path: string; readonly location: Location }, b: { readonly path: string; readonly location: Location }): number {
