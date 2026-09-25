@@ -2,6 +2,18 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.18.0
+
+Released 2026-09-26.
+
+### Features
+
+- **scripts:** generate commitlint and CI workflows with checks-quality (#54)
+
+### Fixes
+
+- **scripts:** make checks-quality refuse a config that drops the kit's extends (#55)
+
 ## 0.17.0
 
 Released 2026-09-25.
