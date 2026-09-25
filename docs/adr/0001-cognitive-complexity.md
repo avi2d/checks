@@ -30,7 +30,7 @@ Functions, methods and lambdas cost nothing themselves and raise the nesting for
 Nullish coalescing, optional chaining and logical assignment cost nothing, as the Ignore shorthand section says.
 
 Three paper points are deliberately narrowed.
-Recursion is detected only for direct self reference by name or through `this`, since indirect cycles need whole program analysis beyond a lint rule.
+Recursion is detected only for a direct self call, by name for a function or variable and through `this` for a method or field, since indirect cycles need whole program analysis beyond a lint rule.
 Top level statements are not scored, matching the cyclomatic rule the new one replaces, with the file lines limit covering them.
 The compensating usages of Appendix A target COBOL, pre module JavaScript and Python decorators, so none of them applies to the TypeScript the kit holds.
 
