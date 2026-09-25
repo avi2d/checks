@@ -2,7 +2,7 @@ import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { CHECKOUT, scratchDirs } from "./lib/fixture-repo.ts";
+import { CHECKOUT, fixtureRepos, ran, type Ran } from "./lib/fixture-repo.ts";
 
 const SCRIPT = join(CHECKOUT, "scripts", "ci-wiring.ts");
 const LINT_COVERAGE = join(CHECKOUT, "scripts", "lint-coverage.sh");
@@ -20,15 +20,12 @@ jobs:
       - run: bun run test
 `;
 
-const scratch = scratchDirs();
+const repository = fixtureRepos("checks-ci-wiring-");
 
 let dir = "";
 
 async function initRepo(quality: unknown, workflow: string): Promise<void> {
-  dir = await scratch("checks-ci-wiring-");
-  await writeFile(join(dir, "quality.json"), JSON.stringify(quality));
-  await writeWorkflow(workflow);
-  await $`git init -q -b main`.cwd(dir).quiet();
+  ({ dir } = await repository({ "quality.json": JSON.stringify(quality), ".github/workflows/ci.yml": workflow }));
 }
 
 async function writeWorkflow(workflow: string): Promise<void> {
@@ -36,9 +33,8 @@ async function writeWorkflow(workflow: string): Promise<void> {
   await writeFile(join(dir, ".github", "workflows", "ci.yml"), workflow);
 }
 
-async function check(cwd = dir): Promise<{ exitCode: number; text: string }> {
-  const result = await $`bun ${SCRIPT}`.cwd(cwd).nothrow().quiet();
-  return { exitCode: result.exitCode, text: result.stdout.toString() + result.stderr.toString() };
+function check(cwd = dir): Promise<Ran> {
+  return ran($`bun ${SCRIPT}`.cwd(cwd));
 }
 
 test(

@@ -51,7 +51,7 @@ export async function fixtureRepo(prefix: string, files: Readonly<Record<string,
 }
 
 // Called at a test file's top level, so afterEach releases what each test in the file opened.
-function releasedAfterEach<A extends readonly unknown[], T>(
+export function releasedAfterEach<A extends readonly unknown[], T>(
   open: (...args: A) => Promise<T>,
   release: (opened: T) => Promise<void>,
 ): (...args: A) => Promise<T> {

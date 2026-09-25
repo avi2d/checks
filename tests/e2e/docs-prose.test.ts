@@ -1,9 +1,11 @@
-import { afterEach, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { docsRepo, GUIDE, OPENING, plantRedThenGreen, type DocsRepo, type Plant } from "./lib/docs-repo.ts";
+import { join } from "node:path";
+import { docsRepos, GUIDE, OPENING, plantRedThenGreen, type Plant } from "./lib/docs-repo.ts";
+import { CHECKOUT } from "./lib/fixture-repo.ts";
 
-const FIXTURES = join(resolve(import.meta.dir, "..", ".."), "tests", "fixtures", "docs");
+const FIXTURES = join(CHECKOUT, "tests", "fixtures", "docs");
+
 const PLANTS: readonly (Plant & { readonly rule: string })[] = [
   { rule: "an em dash", red: "It builds — and ships.", refusal: "4: carries `—`, an em dash", green: "It builds and ships." },
   { rule: "an en dash", red: "Pages 1–5 hold it.", refusal: "4: carries `–`, an en dash", green: "Pages 1 to 5 hold it." },
@@ -36,19 +38,13 @@ const PLANTS: readonly (Plant & { readonly rule: string })[] = [
   },
 ];
 
-let repo: DocsRepo | undefined;
-
-afterEach(async () => {
-  await repo?.dispose();
-  repo = undefined;
-});
+const repository = docsRepos();
 
 test(
   "each prose rule goes red on a line a change adds to a living doc, and green once the line is rewritten",
   async () => {
-    repo = await docsRepo({});
     await plantRedThenGreen(
-      repo,
+      await repository({}),
       PLANTS,
       ({ rule }) => [`plant ${rule}`, `rewrite ${rule}`],
       "living doc(s) or agent file(s) hold to the prose rules",
@@ -60,8 +56,7 @@ test(
 test(
   "a violation on a line the range leaves alone does not fail it, and editing that line does",
   async () => {
-    repo = await docsRepo({});
-    const { put, commit, docs } = repo;
+    const { put, commit, docs } = await repository({});
     await put(GUIDE, `${OPENING}It builds; it ships.\n`);
     const base = await commit("a semicolon before the gate");
     await put(GUIDE, `${OPENING}It builds; it ships.\nIt reads the parts.\n`);
@@ -83,8 +78,7 @@ test(
 test(
   "a record, a changelog and fenced code take no prose rule",
   async () => {
-    repo = await docsRepo({});
-    const { put, commit, docs } = repo;
+    const { put, commit, docs } = await repository({});
     const base = await commit("start");
     const record = await readFile(join(FIXTURES, "adr.md"), "utf8");
     await put("docs/adr/0001-a-part-names-its-supplier.md", `${record}\nIt builds; it ships (fast) — twice.\n`);
@@ -102,8 +96,7 @@ test(
 test(
   "an agent file takes the separator rules and no sentence or people-doc rule",
   async () => {
-    repo = await docsRepo({});
-    const { put, commit, docs } = repo;
+    const { put, commit, docs } = await repository({});
     await put("tools/AGENTS.md", "# Tools\n");
     const base = await commit("start");
     await put("tools/AGENTS.md", "# Tools\n\nIt builds. It ships.\nThis page explains the tools, and Windows support is planned\nfor them.\n");
@@ -127,8 +120,7 @@ test(
 test(
   "a changed line is judged in the doc it was changed in, whatever its path holds",
   async () => {
-    repo = await docsRepo({});
-    const { put, commit, docs } = repo;
+    const { put, commit, docs } = await repository({});
     await put("README.md", "# Widget\n\nIt builds; it ships.\n");
     await put("b/README.md", "# B\n\nIt builds.\n");
     await put("my tools/README.md", "# My tools\n\nIt builds.\n");

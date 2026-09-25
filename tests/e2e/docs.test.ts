@@ -1,10 +1,11 @@
-import { afterEach, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import type { Kind } from "../../scripts/doc-templates.ts";
-import { docsRepo, type DocsRepo } from "./lib/docs-repo.ts";
+import { docsRepos, type DocsRepo } from "./lib/docs-repo.ts";
+import { CHECKOUT } from "./lib/fixture-repo.ts";
 
-const FIXTURES = join(resolve(import.meta.dir, "..", ".."), "tests", "fixtures", "docs");
+const FIXTURES = join(CHECKOUT, "tests", "fixtures", "docs");
 
 type Plant = {
   readonly kind: Kind;
@@ -81,16 +82,10 @@ const QUALITY = {
   },
 };
 
-let repo: DocsRepo | undefined;
+const repository = docsRepos();
 
-afterEach(async () => {
-  await repo?.dispose();
-  repo = undefined;
-});
-
-async function initRepo(quality: unknown): Promise<DocsRepo> {
-  repo = await docsRepo(quality);
-  return repo;
+function initRepo(quality: unknown): Promise<DocsRepo> {
+  return repository(quality);
 }
 
 function fixture(kind: Kind): Promise<string> {

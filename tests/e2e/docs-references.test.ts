@@ -1,5 +1,5 @@
-import { afterEach, expect, test } from "bun:test";
-import { docsRepo, GUIDE, OPENING, plantRedThenGreen, type DocsRepo, type Plant } from "./lib/docs-repo.ts";
+import { expect, test } from "bun:test";
+import { docsRepos, GUIDE, OPENING, plantRedThenGreen, type DocsRepo, type Plant } from "./lib/docs-repo.ts";
 
 const MANIFEST = JSON.stringify({ name: "widget", scripts: { build: "bun scripts/build.ts" } });
 
@@ -30,15 +30,10 @@ const PLANTS: readonly (Plant & { readonly reference: string })[] = [
   },
 ];
 
-let repo: DocsRepo | undefined;
-
-afterEach(async () => {
-  await repo?.dispose();
-  repo = undefined;
-});
+const repository = docsRepos();
 
 async function start(quality: unknown = {}): Promise<DocsRepo> {
-  repo = await docsRepo(quality);
+  const repo = await repository(quality);
   await repo.put("package.json", MANIFEST);
   await repo.put("scripts/build.ts", "export const build = 1;\n");
   return repo;

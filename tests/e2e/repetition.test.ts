@@ -1,20 +1,15 @@
 import { $ } from "bun";
-import { afterEach, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { CHECKOUT, fixtureRepo, lintWiring, type FixtureRepo } from "./lib/fixture-repo.ts";
+import { CHECKOUT, fixtureRepos, lintWiring, type FixtureRepo } from "./lib/fixture-repo.ts";
 
 const QUALITY = { sources: { production: ["src/**/*.ts"] } };
 const MEASURE = "at 50 tokens and 5 lines";
 const HELD = `production file(s) repeat no more lines than where the range starts, ${MEASURE}\n`;
 const ROSE = `production file(s) repeat more lines than where the range starts, ${MEASURE}:\n`;
 
-let repo: FixtureRepo | undefined;
-
-afterEach(async () => {
-  await repo?.dispose();
-  repo = undefined;
-});
+const open = fixtureRepos("checks-repetition-");
 
 // Ten lines and some 70 tokens, over jscpd's 50 and 5, and no two seeds share a token sequence that long.
 function block(seed: string): string {
@@ -37,9 +32,8 @@ function lines(count: number, prefix: string): string {
   return Array.from({ length: count }, (_, index) => `export const ${prefix}${index} = ${index};\n`).join("");
 }
 
-async function repository(files: Readonly<Record<string, string>>, quality: unknown = QUALITY): Promise<FixtureRepo> {
-  repo = await fixtureRepo("checks-repetition-", { "quality.json": JSON.stringify(quality), ...files });
-  return repo;
+function repository(files: Readonly<Record<string, string>>, quality: unknown = QUALITY): Promise<FixtureRepo> {
+  return open({ "quality.json": JSON.stringify(quality), ...files });
 }
 
 test(

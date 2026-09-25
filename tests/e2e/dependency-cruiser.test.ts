@@ -1,28 +1,18 @@
 import { $ } from "bun";
-import { afterEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, unlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { expect, test } from "bun:test";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
 
-const CHECKOUT = resolve(import.meta.dir, "..", "..");
 const BASE = join(CHECKOUT, "dependency-cruiser.config.js");
+
+const scratch = scratchDirs();
 
 let dir = "";
 
-afterEach(async () => {
-  if (dir !== "") {
-    await rm(dir, { recursive: true, force: true });
-    dir = "";
-  }
-});
-
-async function depcruise(config: string, ...targets: string[]): Promise<{ exitCode: number; text: string }> {
+function depcruise(config: string, ...targets: string[]): Promise<Ran> {
   const binary = join(CHECKOUT, "node_modules", ".bin", "depcruise");
-  const result = await $`${binary} --config ${config} ${targets}`.cwd(dir).nothrow().quiet();
-  return {
-    exitCode: result.exitCode,
-    text: result.stdout.toString() + result.stderr.toString(),
-  };
+  return ran($`${binary} --config ${config} ${targets}`.cwd(dir));
 }
 
 async function writeConfig(extraForbidden: unknown[] = []): Promise<string> {
@@ -50,7 +40,7 @@ async function writeProject(files: Record<string, string>): Promise<void> {
 test(
   "no-circular goes red naming the cycle, green once the back edge is gone",
   async () => {
-    dir = await mkdtemp(join(tmpdir(), "checks-depcruiser-circular-"));
+    dir = await scratch("checks-depcruiser-circular-");
     await writeProject({
       "src/entry.test.ts": `import "./entry.ts";\n`,
       "src/entry.ts": `import "./helper.ts";\nexport const entry: number = 1;\n`,
@@ -72,7 +62,7 @@ test(
 test(
   "no-orphans goes red naming the unreachable module, green once it is used",
   async () => {
-    dir = await mkdtemp(join(tmpdir(), "checks-depcruiser-orphans-"));
+    dir = await scratch("checks-depcruiser-orphans-");
     await writeProject({
       "src/entry.test.js": `import "./entry.js";\n`,
       "src/entry.js": `export const entry = 1;\n`,
@@ -95,7 +85,7 @@ test(
 test(
   "not-to-dev-dep goes red on a runtime dev import, green once the package is also a peer, green once it is local",
   async () => {
-    dir = await mkdtemp(join(tmpdir(), "checks-depcruiser-devdep-"));
+    dir = await scratch("checks-depcruiser-devdep-");
     await writeProject({
       "src/entry.test.js": `import "./entry.js";\n`,
       "src/entry.js": `import { dev } from "fake-dev";\nexport const entry = dev;\n`,
@@ -140,7 +130,7 @@ async function writePackage(name: string, manifest: Record<string, unknown>, fil
 test(
   "not-to-dev-dep goes red on a runtime dev import, green on a bare bun import that only @types/bun answers",
   async () => {
-    dir = await mkdtemp(join(tmpdir(), "checks-depcruiser-bun-"));
+    dir = await scratch("checks-depcruiser-bun-");
     await writeProject({
       "src/entry.test.js": `import "./entry.js";\n`,
       "src/entry.js": `import { dev } from "fake-dev";\nexport const entry = dev;\n`,
@@ -164,7 +154,7 @@ test(
 test(
   "not-to-unresolvable goes red on a missing package, green once it is installed",
   async () => {
-    dir = await mkdtemp(join(tmpdir(), "checks-depcruiser-unresolvable-"));
+    dir = await scratch("checks-depcruiser-unresolvable-");
     await writeProject({
       "src/entry.test.js": `import "./entry.js";\n`,
       "src/entry.js": `import { gone } from "missing-pkg";\nexport const entry = gone;\n`,
@@ -188,7 +178,7 @@ test(
 test(
   "no-non-package-json goes red on an installed package the manifest omits, green once it is declared",
   async () => {
-    dir = await mkdtemp(join(tmpdir(), "checks-depcruiser-undeclared-"));
+    dir = await scratch("checks-depcruiser-undeclared-");
     await writeProject({
       "src/entry.test.js": `import "./entry.js";\n`,
       "src/entry.js": `import { hoisted } from "hoisted-pkg";\nexport const entry = hoisted;\n`,
@@ -212,7 +202,7 @@ test(
 test(
   "no-deep-imports goes red on a subpath the exports map omits, green on a published subpath and on bare entries",
   async () => {
-    dir = await mkdtemp(join(tmpdir(), "checks-depcruiser-deep-"));
+    dir = await scratch("checks-depcruiser-deep-");
     await writeProject({
       "src/entry.test.js": `import "./entry.js";\n`,
       "src/entry.js": `import { deep } from "fake-pkg/lib/internal.js";\nexport const entry = deep;\n`,
@@ -265,7 +255,7 @@ test(
 test(
   "a consumer layer rule rides along through extends, red then green",
   async () => {
-    dir = await mkdtemp(join(tmpdir(), "checks-depcruiser-layers-"));
+    dir = await scratch("checks-depcruiser-layers-");
     await writeProject({
       "src/api.test.js": `import "./api/handler.js";\n`,
       "src/api/handler.js": `import "../ui/page.js";\nexport const handler = 1;\n`,

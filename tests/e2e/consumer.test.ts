@@ -5,7 +5,7 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { Schema } from "effect";
 import { withoutPullRequestEvent } from "../lib/env.ts";
-import { CHECKOUT, scratchDirs } from "./lib/fixture-repo.ts";
+import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
 
 const WIDGET = "export const widget = 42;\n";
 
@@ -34,13 +34,9 @@ async function packTarball(): Promise<string> {
   return packed.stdout.toString().trim();
 }
 
-async function oxlint(): Promise<{ exitCode: number; text: string }> {
+function oxlint(): Promise<Ran> {
   const binary = join(dir, "node_modules", ".bin", "oxlint");
-  const result = await $`${binary} --type-aware`.cwd(dir).nothrow().quiet();
-  return {
-    exitCode: result.exitCode,
-    text: result.stdout.toString() + result.stderr.toString(),
-  };
+  return ran($`${binary} --type-aware`.cwd(dir));
 }
 
 async function writeConsumerFixture(

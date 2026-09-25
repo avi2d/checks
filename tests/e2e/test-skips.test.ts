@@ -1,24 +1,19 @@
 import { $ } from "bun";
-import { afterEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { expect, test } from "bun:test";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
 
-const SCRIPT = resolve(import.meta.dir, "..", "..", "scripts", "test.ts");
+const SCRIPT = join(CHECKOUT, "scripts", "test.ts");
 
 type Declaration = { readonly file: string; readonly test: string; readonly reason?: string; readonly when?: string };
 
+const scratch = scratchDirs();
+
 let dir = "";
 
-afterEach(async () => {
-  if (dir !== "") {
-    await rm(dir, { recursive: true, force: true });
-    dir = "";
-  }
-});
-
 async function consumer(suite: string, testSkips?: readonly Declaration[]): Promise<void> {
-  dir = await mkdtemp(join(tmpdir(), "checks-test-skips-"));
+  dir = await scratch("checks-test-skips-");
   await mkdir(join(dir, "tests"));
   await writeFile(join(dir, "tests", "suite.test.ts"), `import { describe, expect, test } from "bun:test";\n${suite}`);
   await declare(testSkips);
@@ -28,14 +23,9 @@ async function declare(testSkips: readonly Declaration[] | undefined): Promise<v
   await writeFile(join(dir, "package.json"), JSON.stringify({ name: "consumer", scripts: { test: "checks-test" }, testSkips }));
 }
 
-async function checksTest(ci: boolean, args: readonly string[] = []): Promise<{ exitCode: number; text: string }> {
+function checksTest(ci: boolean, args: readonly string[] = []): Promise<Ran> {
   const { CI: _ci, ...env } = process.env;
-  const result = await $`bun ${SCRIPT} ${args}`
-    .cwd(dir)
-    .env(ci ? { ...env, CI: "true" } : env)
-    .nothrow()
-    .quiet();
-  return { exitCode: result.exitCode, text: result.stdout.toString() + result.stderr.toString() };
+  return ran($`bun ${SCRIPT} ${args}`.cwd(dir).env(ci ? { ...env, CI: "true" } : env));
 }
 
 const SKIPPED = `

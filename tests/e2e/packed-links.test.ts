@@ -1,10 +1,9 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { dirname, join, normalize, resolve } from "node:path/posix";
+import { dirname, join, normalize } from "node:path/posix";
 import { Schema } from "effect";
-
-const CHECKOUT = resolve(import.meta.dir, "..", "..");
+import { CHECKOUT } from "./lib/fixture-repo.ts";
 
 const Packed = Schema.fromJsonString(Schema.Tuple([Schema.Struct({ files: Schema.Array(Schema.Struct({ path: Schema.String })) })]));
 

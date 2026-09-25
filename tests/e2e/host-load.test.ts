@@ -1,10 +1,8 @@
 import { $ } from "bun";
-import { afterEach, expect, test } from "bun:test";
-import { copyFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-
-const CHECKOUT = resolve(import.meta.dir, "..", "..");
+import { expect, test } from "bun:test";
+import { copyFile, mkdir, readFile, symlink, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { CHECKOUT, scratchDirs } from "./lib/fixture-repo.ts";
 
 type HostLoaded = {
   readonly path: string;
@@ -38,18 +36,13 @@ console.log(JSON.stringify({ reads: isLivingDoc("README.md"), refusals }));
   },
 ];
 
-let dir = "";
+const scratch = scratchDirs();
 
-afterEach(async () => {
-  if (dir !== "") {
-    await rm(dir, { recursive: true, force: true });
-    dir = "";
-  }
-});
+let dir = "";
 
 for (const { path, entry, output } of HOST_LOADED) {
   test(`${path} runs synchronously alone in a directory with no node_modules, as a host links it`, async () => {
-    dir = await mkdtemp(join(tmpdir(), "checks-host-load-"));
+    dir = await scratch("checks-host-load-");
     await copyFile(join(CHECKOUT, path), join(dir, "matchers.ts"));
     await writeFile(join(dir, "index.ts"), entry);
 
@@ -63,7 +56,7 @@ for (const { path, entry, output } of HOST_LOADED) {
   test(
     `the repo cruise refuses ${path} an import of effect`,
     async () => {
-      dir = await mkdtemp(join(tmpdir(), "checks-host-cruise-"));
+      dir = await scratch("checks-host-cruise-");
       for (const config of [".dependency-cruiser.cjs", "dependency-cruiser.config.js", "quality.json"]) {
         await copyFile(join(CHECKOUT, config), join(dir, config));
       }
