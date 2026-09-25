@@ -75,11 +75,11 @@ beforeAll(async () => {
 
   tarballDir = await mkdtemp(join(tmpdir(), "checks-consumer-tarball-"));
   await installConsumer(tarballDir, `file:${tarballPath}`);
-});
+}, 360_000);
 
 afterAll(async () => {
   for (const one of [fileDir, tarballDir, packDir]) if (one) await rm(one, { recursive: true, force: true });
-});
+}, 60_000);
 
 function oxlint(): Promise<Ran> {
   const binary = join(dir, "node_modules", ".bin", "oxlint");

@@ -22,17 +22,16 @@ test("describe formats a lone tip and a base..head range", () => {
 
 test("originRefOf picks the ref git symbolic-ref resolved, or falls back to origin/<defaultBranch>", () => {
   expect(originRefOf("origin/trunk", "main")).toBe("origin/trunk");
-  expect(originRefOf(undefined, "main")).toBe("origin/main");
-  expect(originRefOf("", "trunk")).toBe("origin/trunk");
+  expect(originRefOf(undefined, "trunk")).toBe("origin/trunk");
 });
 
 test("localEndsOf judges HEAD alone with no remote-tracking refs, otherwise HEAD against the origin ref", () => {
-  expect(localEndsOf(false, "origin/main")).toEqual({
+  expect(localEndsOf(undefined)).toEqual({
     base: "HEAD",
     head: "HEAD",
     source: "HEAD alone, as the clone has no remote-tracking refs",
   });
-  expect(localEndsOf(true, "origin/trunk")).toEqual({
+  expect(localEndsOf("origin/trunk")).toEqual({
     base: "origin/trunk",
     head: "HEAD",
     source: "HEAD against origin/trunk",

@@ -68,29 +68,28 @@ const readWiring = Effect.gen(function* () {
 // Decides the base ref `git symbolic-ref` already resolved, or the repository's declared
 // default branch when that ref is absent, such as a checkout with no remote HEAD symlink.
 export function originRefOf(symbolicRef: string | undefined, defaultBranch: string): string {
-  return symbolicRef !== undefined && symbolicRef !== "" ? symbolicRef : `origin/${defaultBranch}`;
+  return symbolicRef ?? `origin/${defaultBranch}`;
 }
 
 // A clone holding any remote-tracking ref but not the default branch is a shallow CI checkout,
-// where judging HEAD alone would pass every commit before it unchecked.
-export function localEndsOf(hasRemoteTracking: boolean, originRef: string): { base: string; head: string; source: string } {
-  if (!hasRemoteTracking) return { base: "HEAD", head: "HEAD", source: "HEAD alone, as the clone has no remote-tracking refs" };
+// where judging HEAD alone would pass every commit before it unchecked. No origin ref means no remote-tracking ref at all.
+export function localEndsOf(originRef: string | undefined): { base: string; head: string; source: string } {
+  if (originRef === undefined) return { base: "HEAD", head: "HEAD", source: "HEAD alone, as the clone has no remote-tracking refs" };
   return { base: originRef, head: "HEAD", source: `HEAD against ${originRef}` };
 }
 
-const originEnds = (defaultBranch: string) =>
+const originRef = (defaultBranch: string) =>
   git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]).pipe(
     Effect.map((ref) => ref.trim()),
     Effect.catchTag("GitFailure", () => Effect.succeed(undefined)),
-    Effect.map((symbolicRef) => localEndsOf(true, originRefOf(symbolicRef, defaultBranch))),
+    Effect.map((symbolicRef) => originRefOf(symbolicRef, defaultBranch)),
   );
 
 const localEnds = Effect.fn("localEnds")(function* (defaultBranch: string) {
   const remoteTracking = yield* git(["for-each-ref", "--count=1", "refs/remotes/"]).pipe(
     Effect.mapError((cause) => new RangeUnresolved({ message: cause.message })),
   );
-  if (remoteTracking.trim() === "") return localEndsOf(false, "");
-  return yield* originEnds(defaultBranch);
+  return localEndsOf(remoteTracking.trim() === "" ? undefined : yield* originRef(defaultBranch));
 });
 
 // Decides which source of range ends the arguments and the pull request env vars select,

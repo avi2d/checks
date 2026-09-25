@@ -16,6 +16,15 @@ test("repeatedLines counts each line a clone's fragments cover once, across ever
   expect(lines.has("src/other.ts")).toBe(false);
 });
 
+test("a file's repeated lines are the union of its fragments, so overlapping clones count a line once", () => {
+  const counted = repeatedLines([
+    [fragment("src/a.ts", 1, 10), fragment("src/b.ts", 21, 30)],
+    [fragment("src/a.ts", 6, 15), fragment("src/c.ts", 1, 10)],
+    [fragment("src/c.ts", 20, 24), fragment("src/c.ts", 30, 34)],
+  ]);
+  expect(Object.fromEntries(counted)).toEqual({ "src/a.ts": 15, "src/b.ts": 10, "src/c.ts": 20 });
+});
+
 test("clonesOf finds a file on either side of a clone, its own fragment first, sorted by where it starts", () => {
   expect(clonesOf("src/fresh.ts", [LEDGER_FRESH])).toEqual([[fragment("src/fresh.ts", 1, 10), fragment("src/ledger.ts", 4, 13)]]);
   expect(clonesOf("src/ledger.ts", [LEDGER_FRESH])).toEqual([[fragment("src/ledger.ts", 4, 13), fragment("src/fresh.ts", 1, 10)]]);

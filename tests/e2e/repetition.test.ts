@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { CHECKOUT, fixtureRepos, lintWiring, type FixtureRepo } from "./lib/fixture-repo.ts";
 
 const QUALITY = { sources: { production: ["src/**/*.ts"] } };
+const ROSE = "production file(s) repeat more lines than where the range starts, at 50 tokens and 5 lines:\n";
 const open = fixtureRepos("checks-repetition-");
 
 // Ten lines and some 70 tokens, over jscpd's 50 and 5, and no two seeds share a token sequence that long.
@@ -23,6 +24,10 @@ function block(seed: string): string {
   ].join("\n");
 }
 
+function lines(count: number, prefix: string): string {
+  return Array.from({ length: count }, (_, index) => `export const ${prefix}${index} = ${index};\n`).join("");
+}
+
 function repository(files: Readonly<Record<string, string>>, quality: unknown = QUALITY): Promise<FixtureRepo> {
   return open({ "quality.json": JSON.stringify(quality), ...files });
 }
@@ -36,6 +41,34 @@ test(
     const result = await $`${process.execPath} ${join(CHECKOUT, "scripts", "repetition.ts")} ${first}`.cwd(dir).env(gitOnly).nothrow().quiet();
     expect(result.stderr.toString()).toContain("repetition: cannot run jscpd");
     expect(result.exitCode).toBe(2);
+  },
+  60_000,
+);
+
+test(
+  "the range runs from the merge base, or the empty tree, to the head commit, following a rename and ignoring the working tree",
+  async () => {
+    const { dir, write, commit, script } = await repository({ "src/ledger.ts": block("ledger"), "src/invoice.ts": block("ledger") });
+    const first = await commit("feat: base");
+    const rootRange = await script("repetition.ts", first);
+    expect(rootRange.text).toContain(
+      `repetition: 2 ${ROSE}  src/invoice.ts: 10 repeated line(s), up from 0\n    src/invoice.ts:1-10 repeats src/ledger.ts:1-10\n  src/ledger.ts: 10 repeated line(s), up from 0\n`,
+    );
+    expect(rootRange.exitCode).toBe(1);
+
+    await $`git checkout -q -b feature && mkdir src/billing && git mv src/invoice.ts src/billing/invoice.ts`.cwd(dir).quiet();
+    await write({ "src/billing/invoice.ts": `${block("ledger")}${lines(2, "moved")}`, "src/copy.ts": `${lines(10, "copy")}${block("ledger")}` });
+    const head = await commit("feat: copy");
+    await $`git checkout -q main`.cwd(dir).quiet();
+    await write({ "src/invoice.ts": lines(2, "invoice") });
+    await commit("refactor: drop the copy on main");
+    await $`git checkout -q feature`.cwd(dir).quiet();
+    await write({ "src/copy.ts": lines(2, "copy"), "src/other.ts": block("ledger") });
+
+    const red = await script("repetition.ts", "main", head);
+    expect(red.text).toContain(`repetition: 1 ${ROSE}  src/copy.ts: 10 repeated line(s), up from 0\n`);
+    expect(red.text).not.toContain("other.ts");
+    expect(red.exitCode).toBe(1);
   },
   60_000,
 );

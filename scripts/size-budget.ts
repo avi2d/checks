@@ -69,7 +69,17 @@ const Diagnostic = Schema.Struct({
 
 const decodeReport = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ diagnostics: Schema.Array(Diagnostic) })));
 
-function rulesOf(budget: Budget): Record<string, unknown> {
+type Rules = Readonly<Record<string, unknown>>;
+
+export type SizeConfig = {
+  readonly plugins: readonly string[];
+  readonly jsPlugins: readonly string[];
+  readonly categories: Readonly<Record<string, string>>;
+  readonly rules: Rules;
+  readonly overrides: readonly { readonly files: readonly string[]; readonly rules: Rules }[];
+};
+
+function rulesOf(budget: Budget): Rules {
   return Object.fromEntries(
     SIZE_RULES.map((entry) => {
       const max = budget[entry.key];
@@ -78,7 +88,7 @@ function rulesOf(budget: Budget): Record<string, unknown> {
   );
 }
 
-function sizeConfig({ production, tests }: Budgets, plugin: string): unknown {
+export function sizeConfig({ production, tests }: Budgets, plugin: string): SizeConfig {
   return {
     plugins: [],
     jsPlugins: [plugin],

@@ -94,9 +94,9 @@ function lint(args: readonly string[] = [], env: Readonly<Record<string, string>
 }
 
 test(
-  "the range starts where HEAD branched from origin/HEAD",
+  "the range starts where HEAD branched from origin/HEAD, then the declared default branch, unless arguments name it",
   async () => {
-    const base = await initRepo();
+    const base = await initRepo({ defaultBranch: "trunk" });
     await writeFile(join(dir, "clean.ts"), "export const answer = 42;\n");
     const head = await commit("feat: clean");
     await $`git update-ref refs/remotes/origin/trunk ${base}`.cwd(dir).quiet();
@@ -109,6 +109,19 @@ test(
     expect(viaOriginHead.text).toContain("commit-identity: 1 commit(s)");
     expect(viaOriginHead.text).toContain("checks-lint: 11 gate(s) pass");
     expect(viaOriginHead.exitCode).toBe(0);
+
+    const explicit = await lint([base, "missing"]);
+    expect(explicit.text).toContain("checks-lint: missing is not a commit in this clone");
+    expect(explicit.exitCode).toBe(2);
+
+    const usage = await lint([head]);
+    expect(usage.text).toContain("checks-lint: usage: lint.ts [<base-ref> <head-ref>]");
+    expect(usage.exitCode).toBe(2);
+
+    await $`git symbolic-ref --delete refs/remotes/origin/HEAD && git update-ref -d refs/remotes/origin/trunk`.cwd(dir).quiet();
+    const declared = await lint();
+    expect(declared.text).toContain("checks-lint: origin/trunk is not a commit in this clone");
+    expect(declared.exitCode).toBe(2);
   },
   60_000,
 );
@@ -250,6 +263,10 @@ test(
     expect(pullRequest.text).toContain("checks-lint: 11 gate(s) pass");
     expect(pullRequest.exitCode).toBe(0);
 
+    await writeFile(event, JSON.stringify({ pull_request: { base: { ref: "main" } } }));
+    const malformed = await lint([], { GITHUB_EVENT_NAME: "pull_request", GITHUB_EVENT_PATH: event });
+    expect(malformed.text).toContain(`checks-lint: cannot read the pull request from ${event}`);
+    expect(malformed.exitCode).toBe(2);
     await rm(event);
   },
   60_000,

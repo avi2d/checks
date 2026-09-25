@@ -8,6 +8,7 @@ import {
   passes,
   report,
   siteOf,
+  sizeConfig,
   verdictLines,
   verdictOf,
   type Growth,
@@ -153,5 +154,30 @@ test("verdictLines reports success by scope, and the all-mode overrun listing", 
   expect(verdictLines({ applies: "all", held: 1, overruns: [overrun], advisory: [] })).toEqual([
     "size-budget: 1 overrun(s) of the budget in every production and test file:",
     "  src/legacy.ts: File has too many lines (30). Maximum allowed is 20.",
+  ]);
+});
+
+test("sizeConfig turns the kit's default budget into oxlint rules, the plugin's by its qualified name, and tests/ into their own", () => {
+  const counted = { skipBlankLines: false, skipComments: false };
+  const config = sizeConfig(budgetsOf({}), "/kit/dist/index.js");
+  expect(config.jsPlugins).toEqual(["/kit/dist/index.js"]);
+  expect(config.rules).toEqual({
+    "max-lines": ["error", { max: 400, ...counted }],
+    "max-lines-per-function": ["error", { max: 100, ...counted }],
+    "max-statements": ["error", { max: 30 }],
+    "effect-channel/cognitive-complexity": ["error", { max: 15 }],
+    "max-depth": ["error", { max: 4 }],
+  });
+  expect(config.overrides).toEqual([
+    {
+      files: ["tests/**"],
+      rules: {
+        "max-lines": ["error", { max: 600, ...counted }],
+        "max-lines-per-function": "off",
+        "max-statements": ["error", { max: 50 }],
+        "effect-channel/cognitive-complexity": ["error", { max: 15 }],
+        "max-depth": ["error", { max: 4 }],
+      },
+    },
   ]);
 });
