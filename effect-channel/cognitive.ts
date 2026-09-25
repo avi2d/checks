@@ -44,18 +44,22 @@ function score(state: State, node: SyntaxNode, nesting: number, parent: SyntaxNo
 }
 
 
+function scoreOtherwise(state: State, node: If, alternate: SyntaxNode, nested: boolean, level: number, chain: number): void {
+  if (alternate.type === "IfStatement") {
+    state.total += 1;
+    return scoreElseIf(state, alternate, chain, nested);
+  }
+  state.total += 1;
+  score(state, alternate, level, node, nested);
+}
+
 function scoreIf(state: State, node: If, nesting: number, nested: boolean): void {
   score(state, node.test, nesting, node, nested);
   state.total += 1 + nesting;
   score(state, node.consequent, nesting + 1, node, nested);
   const alternate = node.alternate;
   if (alternate === null) return;
-  if (alternate.type === "IfStatement") {
-    state.total += 1;
-    return scoreElseIf(state, alternate, nesting + 1, nested);
-  }
-  state.total += 1;
-  score(state, alternate, nesting + 1, node, nested);
+  scoreOtherwise(state, node, alternate, nested, nesting + 1, nesting + 1);
 }
 
 function scoreElseIf(state: State, node: If, nesting: number, nested: boolean): void {
@@ -63,12 +67,7 @@ function scoreElseIf(state: State, node: If, nesting: number, nested: boolean): 
   score(state, node.consequent, nesting, node, nested);
   const alternate = node.alternate;
   if (alternate === null) return;
-  if (alternate.type === "IfStatement") {
-    state.total += 1;
-    return scoreElseIf(state, alternate, nesting + 1, nested);
-  }
-  state.total += 1;
-  score(state, alternate, nesting, node, nested);
+  scoreOtherwise(state, node, alternate, nested, nesting, nesting + 1);
 }
 
 function scoreControl(state: State, node: Control, nesting: number, nested: boolean): void {

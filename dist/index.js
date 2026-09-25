@@ -166,6 +166,14 @@ function score(state, node, nesting, parent, nested) {
   if (isPlainC(node))
     return scoreList(state, plainChildrenC(node), nesting, node, nested);
 }
+function scoreOtherwise(state, node, alternate, nested, level, chain) {
+  if (alternate.type === "IfStatement") {
+    state.total += 1;
+    return scoreElseIf(state, alternate, chain, nested);
+  }
+  state.total += 1;
+  score(state, alternate, level, node, nested);
+}
 function scoreIf(state, node, nesting, nested) {
   score(state, node.test, nesting, node, nested);
   state.total += 1 + nesting;
@@ -173,12 +181,7 @@ function scoreIf(state, node, nesting, nested) {
   const alternate = node.alternate;
   if (alternate === null)
     return;
-  if (alternate.type === "IfStatement") {
-    state.total += 1;
-    return scoreElseIf(state, alternate, nesting + 1, nested);
-  }
-  state.total += 1;
-  score(state, alternate, nesting + 1, node, nested);
+  scoreOtherwise(state, node, alternate, nested, nesting + 1, nesting + 1);
 }
 function scoreElseIf(state, node, nesting, nested) {
   score(state, node.test, nesting, node, nested);
@@ -186,12 +189,7 @@ function scoreElseIf(state, node, nesting, nested) {
   const alternate = node.alternate;
   if (alternate === null)
     return;
-  if (alternate.type === "IfStatement") {
-    state.total += 1;
-    return scoreElseIf(state, alternate, nesting + 1, nested);
-  }
-  state.total += 1;
-  score(state, alternate, nesting, node, nested);
+  scoreOtherwise(state, node, alternate, nested, nesting, nesting + 1);
 }
 function scoreControl(state, node, nesting, nested) {
   switch (node.type) {
