@@ -278,10 +278,10 @@ const vend = Effect.fn("vend")(function* (root: string, cache: string, library: 
   const tag = tagFor(library.tag, installed);
   const dir = path.join(cache, LINKS, ...remoteSegments(library.repository), tag);
   if (!(yield* fs.exists(dir)) && (yield* land(library, installed, tag, dir))) {
-    yield* Console.log(`${NAME}: cloned ${tag} from ${library.repository} and linked ${LINKS}/${library.name}`);
+    yield* Console.error(`${NAME}: cloned ${tag} from ${library.repository} and linked ${LINKS}/${library.name}`);
   } else {
     yield* verify(dir, library, installed, tag);
-    yield* Console.log(`${NAME}: ${LINKS}/${library.name} still holds ${tag}, verified against its recorded commit`);
+    yield* Console.error(`${NAME}: ${LINKS}/${library.name} still holds ${tag}, verified against its recorded commit`);
   }
   yield* ensureLink(root, library, dir);
 });
@@ -302,7 +302,7 @@ const main = Effect.gen(function* () {
   const { quality } = yield* readQuality(root);
   const libraries = quality.sources?.libraries ?? [];
   if (libraries.length === 0) {
-    yield* Console.log(`${NAME}: ${QUALITY_FILE} declares no libraries, so nothing is pinned`);
+    yield* Console.error(`${NAME}: ${QUALITY_FILE} declares no libraries, so nothing is pinned`);
     return true;
   }
   const cache = yield* cacheRoot();
