@@ -147,70 +147,67 @@ function endOfRegex(source: string, start: number): number {
   return source.length;
 }
 
+type Token = { readonly stop: number; readonly previous: string };
+
+function endOfBlockComment(source: string, i: number, syntax: Syntax): number | undefined {
+  const block = syntax.block.find(([open]) => source.startsWith(open, i));
+  if (block === undefined) return undefined;
+  const [open, close] = block;
+  const closed = source.indexOf(close, i + open.length);
+  return closed < 0 ? source.length : closed + close.length;
+}
+
+function endOfLineComment(source: string, i: number, syntax: Syntax): number | undefined {
+  const marker = syntax.line.find(
+    ({ token, afterAWordBreak }) =>
+      source.startsWith(token, i) && (!afterAWordBreak || i === 0 || WORD_BREAK.test(source.charAt(i - 1))),
+  );
+  if (marker === undefined) return undefined;
+  const newline = source.indexOf("\n", i);
+  return newline < 0 ? source.length : newline;
+}
+
+function endOfWord(source: string, i: number): number {
+  let end = i;
+  while (end < source.length && WORD.test(source.charAt(end))) end += 1;
+  return end;
+}
+
+function codeToken(source: string, i: number, syntax: Syntax, previous: string): Token {
+  const quote = syntax.quotes.find(
+    ({ token, opensMidWord }) =>
+      source.startsWith(token, i) && (opensMidWord || i === 0 || !WORD.test(source.charAt(i - 1))),
+  );
+  if (quote) return { stop: endOfQuoted(source, i, quote), previous: quote.token };
+
+  const char = source.charAt(i);
+  if (syntax.regexLiterals && char === "/" && opensRegex(previous)) return { stop: endOfRegex(source, i), previous: "/" };
+  if (WORD.test(char)) {
+    const end = endOfWord(source, i);
+    return { stop: end, previous: source.slice(i, end) };
+  }
+  return { stop: i + 1, previous: /\s/.test(char) ? previous : char };
+}
+
+function newlinesIn(source: string, from: number, to: number): number {
+  let count = 0;
+  for (let k = from; k < to; k++) if (source[k] === "\n") count += 1;
+  return count;
+}
+
 export function commentsIn(source: string, syntax: Syntax): Comment[] {
   const found: Comment[] = [];
   let i = 0;
   let line = 1;
   let previous = "";
 
-  const advance = (to: number): void => {
-    for (let k = i; k < to; k++) if (source[k] === "\n") line += 1;
-    i = to;
-  };
-
   while (i < source.length) {
-    const char = source.charAt(i);
-
-    const block = syntax.block.find(([open]) => source.startsWith(open, i));
-    if (block) {
-      const [open, close] = block;
-      const closed = source.indexOf(close, i + open.length);
-      const stop = closed < 0 ? source.length : closed + close.length;
-      found.push({ line, text: source.slice(i, stop) });
-      advance(stop);
-      previous = "";
-      continue;
-    }
-
-    const marker = syntax.line.find(
-      ({ token, afterAWordBreak }) =>
-        source.startsWith(token, i) && (!afterAWordBreak || i === 0 || WORD_BREAK.test(source.charAt(i - 1))),
-    );
-    if (marker) {
-      const newline = source.indexOf("\n", i);
-      const stop = newline < 0 ? source.length : newline;
-      found.push({ line, text: source.slice(i, stop) });
-      advance(stop);
-      previous = "";
-      continue;
-    }
-
-    const quote = syntax.quotes.find(
-      ({ token, opensMidWord }) =>
-        source.startsWith(token, i) && (opensMidWord || i === 0 || !WORD.test(source.charAt(i - 1))),
-    );
-    if (quote) {
-      advance(endOfQuoted(source, i, quote));
-      previous = quote.token;
-      continue;
-    }
-
-    if (syntax.regexLiterals && char === "/" && opensRegex(previous)) {
-      advance(endOfRegex(source, i));
-      previous = "/";
-      continue;
-    }
-
-    if (WORD.test(char)) {
-      let end = i;
-      while (end < source.length && WORD.test(source.charAt(end))) end += 1;
-      previous = source.slice(i, end);
-      advance(end);
-      continue;
-    }
-
-    if (!/\s/.test(char)) previous = char;
-    advance(i + 1);
+    const commentStop = endOfBlockComment(source, i, syntax) ?? endOfLineComment(source, i, syntax);
+    if (commentStop !== undefined) found.push({ line, text: source.slice(i, commentStop) });
+    const token = commentStop === undefined ? codeToken(source, i, syntax, previous) : { stop: commentStop, previous: "" };
+    line += newlinesIn(source, i, token.stop);
+    i = token.stop;
+    previous = token.previous;
   }
 
   return found;
