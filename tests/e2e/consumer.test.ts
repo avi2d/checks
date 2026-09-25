@@ -173,6 +173,28 @@ test(
 );
 
 test(
+  "file: consumer goes red on a call to a function tagged @deprecated, green once it calls the replacement",
+  async () => {
+    await writeConsumerFixture();
+    await writeFile(
+      join(dir, "legacy.ts"),
+      `/** @deprecated Call fresh instead. */\nexport const stale = (): number => 1;\n\nexport const fresh = (): number => 2;\n`,
+    );
+    await writeFile(join(dir, "caller.ts"), `import { stale } from "./legacy";\n\nexport const value = stale();\n`);
+
+    const red = await oxlint();
+    expect(red.exitCode).not.toBe(0);
+    expect(red.text).toContain("typescript(no-deprecated)");
+    expect(red.text).toContain("caller.ts");
+
+    await writeFile(join(dir, "caller.ts"), `import { fresh } from "./legacy";\n\nexport const value = fresh();\n`);
+    const green = await oxlint();
+    expect(green.exitCode).toBe(0);
+  },
+  180_000,
+);
+
+test(
   "a lint script calling checks-test-layout runs the installed layout check, red on a colocated test and green once it moves",
   async () => {
     await writeConsumerFixture({

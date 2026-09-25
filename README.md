@@ -178,6 +178,7 @@ Every path is relative to the installed package, `node_modules/@avi2dg/checks/`.
 
 - [The quality file](docs/configs/quality-file.md)
 - [The Effect rules](docs/configs/effect-rules.md)
+- [The TypeScript rules](docs/configs/typescript-rules.md)
 - [The dependency rules](docs/configs/dependency-rules.md)
 - [The commit message lint](docs/configs/commit-messages.md)
 - [Why it is shaped this way](docs/design.md)

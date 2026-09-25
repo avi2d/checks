@@ -43,6 +43,7 @@ effect-tsgo keeps the severities `tsconfig.effect.json` sets when a later config
 
 ## Related topics
 
+- [The TypeScript rules](typescript-rules.md)
 - [checks-quality](../gates/checks-quality.md)
 - [The quality file](quality-file.md)
 - [Why it is shaped this way](../design.md)

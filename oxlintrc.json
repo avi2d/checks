@@ -16,6 +16,7 @@
     "eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_", "ignoreRestSiblings": true }],
     "typescript/no-unsafe-type-assertion": "error",
     "typescript/no-non-null-assertion": "error",
+    "typescript/no-deprecated": "error",
     "typescript/consistent-return": "off"
   }
 }

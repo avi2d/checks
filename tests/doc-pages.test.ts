@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Schema } from "effect";
+import kitOxlint from "../oxlintrc.json" with { type: "json" };
 import { GATE_PAGES, MANIFEST } from "../scripts/doc-blocks.ts";
 import { parseOutline } from "../scripts/doc-outline.ts";
 
@@ -37,6 +38,11 @@ function unnamedOn(page: string, names: readonly string[]): string[] {
   const text = read(page);
   return names.filter((name) => !text.includes(`\`${name}\``));
 }
+
+test("the TypeScript rules page names each category and rule the oxlint base sets", () => {
+  const names = [...Object.keys(kitOxlint.categories), ...Object.keys(kitOxlint.rules)];
+  expect(unnamedOn("docs/configs/typescript-rules.md", names)).toEqual([]);
+});
 
 const DependencyBase = Schema.Struct({ forbidden: Schema.Array(Schema.Struct({ name: Schema.String })) });
 
