@@ -2,6 +2,16 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.19.0
+
+Released 2026-09-26.
+
+### Features
+
+- **scripts:** judge checks-mutation-compare mutant by mutant instead of by score (#58)
+- **scripts:** fail a test left in tests/quarantine past 30 days (#59)
+- **scripts:** pin shared read-only library clones with checks-vendor (#57)
+
 ## 0.18.0
 
 Released 2026-09-26.
