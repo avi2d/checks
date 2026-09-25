@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.15.0
+
+Released 2026-09-25.
+
+### Features
+
+- **scripts:** hold living docs to prose rules and resolvable references in checks-docs (#42)
+
 ## 0.14.0
 
 Released 2026-09-25.
