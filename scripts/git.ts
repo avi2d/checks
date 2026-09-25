@@ -87,37 +87,37 @@ function newPathOf(line: string): string | undefined {
 
 const HUNK = /^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 
+type HunkPosition = {
+  readonly line: number;
+  readonly oldLeft: number;
+  readonly newLeft: number;
+};
+
+function hunkStart(row: string): HunkPosition | undefined {
+  const hunk = HUNK.exec(row);
+  return hunk === null ? undefined : { oldLeft: Number(hunk[1] ?? 1), line: Number(hunk[2]), newLeft: Number(hunk[3] ?? 1) };
+}
+
+function pastHunkRow(row: string, { line, oldLeft, newLeft }: HunkPosition): HunkPosition {
+  if (row.startsWith("+")) return { line: line + 1, oldLeft, newLeft: newLeft - 1 };
+  if (row.startsWith("-")) return { line, oldLeft: oldLeft - 1, newLeft };
+  if (row.startsWith(" ")) return { line: line + 1, oldLeft: oldLeft - 1, newLeft: newLeft - 1 };
+  return { line, oldLeft, newLeft };
+}
+
 // A hunk's header counts its lines, so an added line reading `++ x` is not taken for the next file's `+++` header.
 export function parseAddedLines(diff: string): Map<string, Set<number>> {
   const added = new Map<string, Set<number>>();
   let path: string | undefined;
-  let line = 0;
-  let oldLeft = 0;
-  let newLeft = 0;
+  let at: HunkPosition = { line: 0, oldLeft: 0, newLeft: 0 };
   for (const row of diff.split("\n")) {
-    if (oldLeft > 0 || newLeft > 0) {
-      if (row.startsWith("+")) {
-        if (path !== undefined) added.set(path, (added.get(path) ?? new Set<number>()).add(line));
-        line += 1;
-        newLeft -= 1;
-      } else if (row.startsWith("-")) {
-        oldLeft -= 1;
-      } else if (row.startsWith(" ")) {
-        line += 1;
-        oldLeft -= 1;
-        newLeft -= 1;
-      }
-      continue;
-    }
-    if (row.startsWith("+++ ")) {
+    if (at.oldLeft > 0 || at.newLeft > 0) {
+      if (row.startsWith("+") && path !== undefined) added.set(path, (added.get(path) ?? new Set<number>()).add(at.line));
+      at = pastHunkRow(row, at);
+    } else if (row.startsWith("+++ ")) {
       path = newPathOf(row);
-      continue;
-    }
-    const hunk = HUNK.exec(row);
-    if (hunk !== null) {
-      oldLeft = Number(hunk[1] ?? 1);
-      line = Number(hunk[2]);
-      newLeft = Number(hunk[3] ?? 1);
+    } else {
+      at = hunkStart(row) ?? at;
     }
   }
   return added;
