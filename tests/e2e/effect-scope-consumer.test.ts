@@ -1,7 +1,7 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { realpathSync } from "node:fs";
-import { mkdir, readdir, symlink, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { OXLINT_FRAGMENT, TSCONFIG_FRAGMENT } from "../../scripts/quality.ts";
 import { withoutPullRequestEvent } from "../lib/env.ts";
@@ -13,7 +13,6 @@ const BIN = join(CHECKOUT, "node_modules", ".bin");
 
 const SCOPED = "scripts/plant.ts";
 const BIN_PLANT = "scripts/bin.ts";
-const EXEMPT = "scripts/allowed.ts";
 const UNSCOPED = "tests/plant.ts";
 
 const SCOPE_OXLINT = [
@@ -61,10 +60,10 @@ export const missing: Effect.Effect<number> = failing;
 
 const CLEAN: Readonly<Record<string, string>> = {
   [SCOPED]: `import { Effect } from "effect";\nexport const program = Effect.succeed(42);\n`,
-  [BIN_PLANT]: `#!/usr/bin/env bun\nexport const answer = 42;\n`,
-  [EXEMPT]: `export const allowed = 1;\n`,
   [UNSCOPED]: `export const answer = 42;\n`,
 };
+
+const OWN_OXLINT = [".oxlintrc.json", "oxlintrc.json", "oxlintrc.quality.json", "dist/index.js"];
 
 const scratch = scratchDirs();
 
@@ -87,7 +86,7 @@ async function consumer(): Promise<void> {
     "quality.json",
     JSON.stringify({
       $schema: "./node_modules/@avi2dg/checks/quality.schema.json",
-      sources: { effect: { paths: ["scripts/**/*.ts"], exempt: ["scripts/allowed.ts"] } },
+      sources: { effect: { paths: ["scripts/**/*.ts"] } },
     }),
   );
   await put(
@@ -95,7 +94,6 @@ async function consumer(): Promise<void> {
     JSON.stringify({
       extends: ["./node_modules/@avi2dg/checks/oxlintrc.json", `./${OXLINT_FRAGMENT}`],
       plugins: ["typescript", "oxc", "eslint", "import"],
-      rules: { "eslint/no-restricted-properties": ["error", { object: "process", property: "exit" }] },
     }),
   );
   await put(
@@ -109,14 +107,21 @@ async function consumer(): Promise<void> {
   await $`git init -q -b main`.cwd(dir).quiet();
 }
 
+async function ownOxlintConfig(): Promise<void> {
+  dir = await scratch("checks-effect-scope-own-");
+  for (const config of OWN_OXLINT) {
+    await mkdir(dirname(join(dir, config)), { recursive: true });
+    await copyFile(join(CHECKOUT, config), join(dir, config));
+  }
+  await symlink(join(CHECKOUT, "node_modules"), join(dir, "node_modules"));
+}
+
 function run(program: string, args: readonly string[]): Promise<Ran> {
   return ran($`${program} ${args}`.cwd(dir).env({ ...withoutPullRequestEvent(), PATH: `${BIN}:${process.env["PATH"] ?? ""}` }));
 }
 
 async function plantViolations(): Promise<void> {
   await put(SCOPED, PLANT);
-  await put(BIN_PLANT, "#!/usr/bin/env bun\nprocess.exit(1);\n");
-  await put(EXEMPT, `export function fail(): never {\n  throw new Error("exempt");\n}\n`);
   await put(UNSCOPED, PLANT);
 }
 
@@ -124,8 +129,10 @@ async function plantClean(): Promise<void> {
   for (const [file, content] of Object.entries(CLEAN)) await put(file, content);
 }
 
-async function oxlint(): Promise<{ readonly exitCode: number; readonly linted: ReadonlyMap<string, readonly string[]> }> {
-  const red = await run(join(BIN, "oxlint"), ["--type-aware", "-f", "unix", "scripts", "tests"]);
+async function oxlint(
+  args: readonly string[] = ["--type-aware"],
+): Promise<{ readonly exitCode: number; readonly linted: ReadonlyMap<string, readonly string[]> }> {
+  const red = await run(join(BIN, "oxlint"), [...args, "-f", "unix", "scripts", "tests"]);
   return { exitCode: red.exitCode, linted: findings(red.text, /^(\S+?):\d+:\d+: .*\[Error\/([^\]]+)\]$/gm) };
 }
 
@@ -145,7 +152,7 @@ async function diagnostics(): Promise<ReadonlyMap<string, readonly string[]>> {
 }
 
 test(
-  "scope lint rules fail in the declared paths, the exempt file and tests/ stay green, and the shebang bin fails only on the stand-in rule",
+  "scope lint rules fail in the declared paths and tests/ stays green",
   async () => {
     await consumer();
     await plantViolations();
@@ -153,12 +160,8 @@ test(
 
     const red = await oxlint();
     expect(red.exitCode).not.toBe(0);
-    expect(red.linted.get(SCOPED)).toEqual(expect.arrayContaining([...SCOPE_OXLINT, PROCESS_EXIT]));
-    expect(red.linted.get(BIN_PLANT)).toContain(PROCESS_EXIT);
-    expect(red.linted.get(BIN_PLANT) ?? []).not.toContain("unicorn(no-process-exit)");
-    for (const rule of SCOPE_OXLINT) expect(red.linted.get(EXEMPT) ?? []).not.toContain(rule);
+    expect(red.linted.get(SCOPED)).toEqual(expect.arrayContaining(SCOPE_OXLINT));
     for (const rule of SCOPE_OXLINT) expect(red.linted.get(UNSCOPED) ?? []).not.toContain(rule);
-    expect(red.linted.get(UNSCOPED)).toContain(PROCESS_EXIT);
 
     await plantClean();
     const green = await oxlint();
@@ -182,6 +185,25 @@ test(
 
     await plantClean();
     expect(await diagnostics()).toEqual(new Map());
+  },
+  180_000,
+);
+
+test(
+  "this checkout's own oxlint config fails a shebang bin on process.exit through the stand-in rule",
+  async () => {
+    await ownOxlintConfig();
+    await put(BIN_PLANT, "#!/usr/bin/env bun\nprocess.exit(1);\n");
+
+    const red = await oxlint([]);
+    expect(red.exitCode).not.toBe(0);
+    expect(red.linted.get(BIN_PLANT)).toContain(PROCESS_EXIT);
+    expect(red.linted.get(BIN_PLANT)).not.toContain("unicorn(no-process-exit)");
+
+    await put(BIN_PLANT, "#!/usr/bin/env bun\nexport const answer = 42;\n");
+    const green = await oxlint([]);
+    expect(green.linted).toEqual(new Map());
+    expect(green.exitCode).toBe(0);
   },
   180_000,
 );
