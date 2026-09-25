@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect, Schema } from "effect";
-import { commitOf, git, refArgs } from "./git.ts";
+import { commitOf, git, isShallowBoundary, refArgs } from "./git.ts";
 import { runMain } from "./main.ts";
 import { TEST_FILE } from "./test-layout.ts";
 
@@ -117,7 +117,7 @@ const filesAt = Effect.fn("filesAt")(function* (head: string) {
 const entryAt = Effect.fn("entryAt")(function* (head: string, file: string) {
   const output = yield* git(["log", "--follow", "--root", "--name-status", "-z", "--format=commit %H %at %aI", head, "--", file]);
   const entry = findEntry(output, file);
-  if (entry.kind === "truncated") {
+  if (entry.kind === "truncated" || (yield* isShallowBoundary(entry.sha))) {
     return yield* new QuarantineError({
       message: `cannot see ${file} entering ${QUARANTINE}; fetch the whole history, since a shallow clone ends before it`,
     });

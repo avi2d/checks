@@ -2,9 +2,10 @@ import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { fixtureRepos, type FixtureRepo } from "./lib/fixture-repo.ts";
+import { CHECKOUT, fixtureRepos, ran, scratchDirs, type FixtureRepo } from "./lib/fixture-repo.ts";
 
 const open = fixtureRepos("checks-quarantine-clock-");
+const scratch = scratchDirs();
 const IDENTITY = ["-c", "user.name=Wren Fixture", "-c", "user.email=wren@example.com"];
 const DAY = 86400 * 1000;
 
@@ -118,6 +119,25 @@ test(
     const usage = await repo.script("quarantine-clock.ts");
     expect(usage.exitCode).toBe(2);
     expect(usage.text).toContain("usage: quarantine-clock.ts");
+  },
+  120_000,
+);
+
+test(
+  "a shallow clone that ends after a test entered quarantine exits 2 rather than dating it at the boundary",
+  async () => {
+    const repo = await open();
+    await add(repo, "tests/quarantine/billing.test.ts", 40);
+    await repo.write({ "notes.md": "# notes\n" });
+    await repo.commit("chore: head");
+    const shallow = join(await scratch("checks-quarantine-clock-shallow-"), "clone");
+    await $`git clone -q --depth 1 ${`file://${repo.dir}`} ${shallow}`.quiet();
+
+    const truncated = await ran($`bun ${join(CHECKOUT, "scripts", "quarantine-clock.ts")} HEAD`.cwd(shallow));
+    expect(truncated.exitCode).toBe(2);
+    expect(truncated.text).toContain(
+      "quarantine-clock: cannot see tests/quarantine/billing.test.ts entering tests/quarantine/; fetch the whole history",
+    );
   },
   120_000,
 );
