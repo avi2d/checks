@@ -1,20 +1,10 @@
 import { afterEach, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { docsRepo, type DocsRepo } from "./lib/docs-repo.ts";
+import { docsRepo, GUIDE, OPENING, plantRedThenGreen, type DocsRepo, type Plant } from "./lib/docs-repo.ts";
 
 const FIXTURES = join(resolve(import.meta.dir, "..", ".."), "tests", "fixtures", "docs");
-const GUIDE = "tools/README.md";
-const OPENING = "# Tools\n\nThe tools build bills.\n";
-
-type Plant = {
-  readonly rule: string;
-  readonly red: string;
-  readonly refusal: string;
-  readonly green: string;
-};
-
-const PLANTS: readonly Plant[] = [
+const PLANTS: readonly (Plant & { readonly rule: string })[] = [
   { rule: "an em dash", red: "It builds — and ships.", refusal: "4: carries `—`, an em dash", green: "It builds and ships." },
   { rule: "an en dash", red: "Pages 1–5 hold it.", refusal: "4: carries `–`, an en dash", green: "Pages 1 to 5 hold it." },
   { rule: "a parenthesis", red: "It builds (fast).", refusal: "4: carries `(`, a parenthesis", green: "It builds fast." },
@@ -57,23 +47,12 @@ test(
   "each prose rule goes red on a line a change adds to a living doc, and green once the line is rewritten",
   async () => {
     repo = await docsRepo({});
-    const { put, commit, docs } = repo;
-    await put(GUIDE, OPENING);
-    let previous = await commit("start");
-    for (const { rule, red, refusal, green } of PLANTS) {
-      await put(GUIDE, `${OPENING}${red}\n`);
-      const planted = await commit(`plant ${rule}`);
-      const refused = await docs(previous, planted);
-      expect(refused.text).toContain(`  ${GUIDE}:${refusal}`);
-      expect(refused.exitCode).toBe(1);
-
-      await put(GUIDE, `${OPENING}${green}\n`);
-      const rewritten = await commit(`rewrite ${rule}`);
-      const held = await docs(planted, rewritten);
-      expect(held.text).toContain("living doc(s) or agent file(s) hold to the prose rules");
-      expect(held.exitCode).toBe(0);
-      previous = rewritten;
-    }
+    await plantRedThenGreen(
+      repo,
+      PLANTS,
+      ({ rule }) => [`plant ${rule}`, `rewrite ${rule}`],
+      "living doc(s) or agent file(s) hold to the prose rules",
+    );
   },
   120_000,
 );

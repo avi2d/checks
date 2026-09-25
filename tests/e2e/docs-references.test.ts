@@ -1,18 +1,9 @@
 import { afterEach, expect, test } from "bun:test";
-import { docsRepo, type DocsRepo } from "./lib/docs-repo.ts";
+import { docsRepo, GUIDE, OPENING, plantRedThenGreen, type DocsRepo, type Plant } from "./lib/docs-repo.ts";
 
-const GUIDE = "tools/README.md";
-const OPENING = "# Tools\n\nThe tools build bills.\n";
 const MANIFEST = JSON.stringify({ name: "widget", scripts: { build: "bun scripts/build.ts" } });
 
-type Plant = {
-  readonly reference: string;
-  readonly red: string;
-  readonly refusal: string;
-  readonly green: string;
-};
-
-const PLANTS: readonly Plant[] = [
+const PLANTS: readonly (Plant & { readonly reference: string })[] = [
   {
     reference: "a path",
     red: "It runs `scripts/bild.ts`.",
@@ -56,23 +47,12 @@ async function start(quality: unknown = {}): Promise<DocsRepo> {
 test(
   "each reference goes red on a line a change adds to a living doc, and green once it resolves",
   async () => {
-    const { put, commit, docs } = await start();
-    await put(GUIDE, OPENING);
-    let previous = await commit("start");
-    for (const { reference, red, refusal, green } of PLANTS) {
-      await put(GUIDE, `${OPENING}${red}\n`);
-      const planted = await commit(`plant ${reference} that resolves nowhere`);
-      const refused = await docs(previous, planted);
-      expect(refused.text).toContain(`  ${GUIDE}:${refusal}`);
-      expect(refused.exitCode).toBe(1);
-
-      await put(GUIDE, `${OPENING}${green}\n`);
-      const fixed = await commit(`point ${reference} at what exists`);
-      const held = await docs(planted, fixed);
-      expect(held.text).toContain("docs: the range breaks no path, link or command the 1 living doc(s) name");
-      expect(held.exitCode).toBe(0);
-      previous = fixed;
-    }
+    await plantRedThenGreen(
+      await start(),
+      PLANTS,
+      ({ reference }) => [`plant ${reference} that resolves nowhere`, `point ${reference} at what exists`],
+      "docs: the range breaks no path, link or command the 1 living doc(s) name",
+    );
   },
   120_000,
 );

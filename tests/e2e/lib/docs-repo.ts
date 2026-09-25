@@ -1,9 +1,19 @@
 import { $ } from "bun";
+import { expect } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 const SCRIPT = resolve(import.meta.dir, "..", "..", "..", "scripts", "docs.ts");
+
+export const GUIDE = "tools/README.md";
+export const OPENING = "# Tools\n\nThe tools build bills.\n";
+
+export type Plant = {
+  readonly red: string;
+  readonly refusal: string;
+  readonly green: string;
+};
 
 export type DocsRepo = {
   readonly dir: string;
@@ -38,4 +48,29 @@ export async function docsRepo(quality: unknown): Promise<DocsRepo> {
     },
     dispose: () => rm(dir, { recursive: true, force: true }),
   };
+}
+
+export async function plantRedThenGreen<P extends Plant>(
+  { put, commit, docs }: DocsRepo,
+  plants: readonly P[],
+  messages: (plant: P) => readonly [planted: string, fixed: string],
+  held: string,
+): Promise<void> {
+  await put(GUIDE, OPENING);
+  let previous = await commit("start");
+  for (const plant of plants) {
+    const [plantMessage, fixMessage] = messages(plant);
+    await put(GUIDE, `${OPENING}${plant.red}\n`);
+    const planted = await commit(plantMessage);
+    const refused = await docs(previous, planted);
+    expect(refused.text).toContain(`  ${GUIDE}:${plant.refusal}`);
+    expect(refused.exitCode).toBe(1);
+
+    await put(GUIDE, `${OPENING}${plant.green}\n`);
+    const fixed = await commit(fixMessage);
+    const kept = await docs(planted, fixed);
+    expect(kept.text).toContain(held);
+    expect(kept.exitCode).toBe(0);
+    previous = fixed;
+  }
 }
