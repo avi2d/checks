@@ -58,6 +58,7 @@ Two details of the fragments are easy to get wrong, so the kit's tests pin both:
 
 It reads the working tree: `quality.json`, the presets of the installed kit, `.oxlintrc.json`, `tsconfig.json`, the two fragments and the generated workflows.
 It reads the root `package.json` name, since only the kit's own tree lints titles with its root `commitlint.config.js`.
+The name also decides which kit configs `extends` must list, since the kit's own tree extends its root `oxlintrc.json` and `tsconfig.effect.json`.
 It looks for `.bun-version`, and the suite pins its bun to that file when the file exists.
 It lists the tracked and untracked files to see what each declared glob matches.
 
