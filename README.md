@@ -123,6 +123,7 @@ A repository leaves out a gate that does not apply to it through `gates.lint`, a
 | [`checks-size-budget`](docs/gates/checks-size-budget.md) | the range | a repository tracking `*.ts` or `*.tsx` |
 | [`checks-repetition`](docs/gates/checks-repetition.md) | the range | a repository tracking `*.ts` or `*.tsx` |
 | [`checks-feature-owners`](docs/gates/checks-feature-owners.md) | the range | a repository tracking `*.ts` or `*.tsx` |
+| [`checks-quarantine-clock`](docs/gates/checks-quarantine-clock.md) | the range | every repository |
 
 <!-- end generated gates -->
 

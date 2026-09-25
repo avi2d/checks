@@ -48,7 +48,8 @@
               "checks-quality",
               "checks-size-budget",
               "checks-repetition",
-              "checks-feature-owners"
+              "checks-feature-owners",
+              "checks-quarantine-clock"
             ]
           },
           "allOf": [
@@ -75,6 +76,11 @@
             {
               "contains": {
                 "const": "checks-docs"
+              }
+            },
+            {
+              "contains": {
+                "const": "checks-quarantine-clock"
               }
             }
           ]

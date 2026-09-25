@@ -355,6 +355,7 @@ test(
           lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout && checks-commit-identity HEAD",
           gate: "checks-comment-gate HEAD",
           ratchet: "checks-suppressions-ratchet HEAD",
+          clock: "checks-quarantine-clock HEAD",
           backtest: "checks-backtest 5",
           compare: "checks-mutation-compare mutation.json mutation.json",
           wiring: "checks-ci-wiring",
@@ -430,6 +431,7 @@ test(
       ["owners", "feature-owners: quality.json declares no feature"],
       ["docs", "docs: 0 doc file(s) the range touches hold to their templates"],
       ["ratchet", "no count in oxlint-suppressions.json rose or appeared"],
+      ["clock", "no test in tests/quarantine/ is past 30 days"],
     ] as const) {
       const guardrail = await runScript(script);
       expect(guardrail.stdout).toContain(report);
@@ -440,7 +442,7 @@ test(
     const kit = await runScript("kit", withoutPullRequestEvent());
     expect(kit.text).toContain("from HEAD against origin/main");
     expect(kit.text).toContain("commit-identity: 1 commit(s)");
-    expect(kit.text).toContain("checks-lint: 11 gate(s) pass");
+    expect(kit.text).toContain("checks-lint: 12 gate(s) pass");
     expect(kit.exitCode).toBe(0);
   },
   180_000,
