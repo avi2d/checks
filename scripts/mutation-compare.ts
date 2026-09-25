@@ -11,6 +11,7 @@ export type Mutant = {
   readonly status: string;
   readonly mutatorName: string;
   readonly replacement: string;
+  readonly killedBy: readonly string[];
   readonly location: Location;
 };
 
@@ -70,6 +71,7 @@ const Report = Schema.fromJsonString(
             status: Schema.String,
             mutatorName: Schema.String,
             replacement: Schema.String,
+            killedBy: Schema.Array(Schema.String),
             location: Schema.Struct({
               start: Schema.Struct({ line: Schema.Finite, column: Schema.Finite }),
               end: Schema.Struct({ line: Schema.Finite, column: Schema.Finite }),
