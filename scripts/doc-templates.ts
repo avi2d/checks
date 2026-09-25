@@ -40,7 +40,7 @@ function open(placeholder: string, rule: HeadingRule, presence: Presence, body: 
   return { type: "open", placeholder, rule, presence, body, ...more };
 }
 
-function listed(words: readonly string[]): string {
+export function listed(words: readonly string[]): string {
   return words.length < 2 ? words.join("") : `${words.slice(0, -1).join(", ")} or ${words.at(-1) ?? ""}`;
 }
 
@@ -75,7 +75,11 @@ export const TEMPLATES: Readonly<Record<Kind, Template>> = {
     sections: [
       BEFORE_YOU_BEGIN,
       fixed("Install", REQUIRED, ["To install <name>:", "", "1. <step>", "1. <step>", "", "<What you see when it worked.>"]),
-      open("<Everyday task, verb first>", "any", REQUIRED, STEPS),
+      open("<Everyday task, verb first, or what the reader looks up>", "any", REQUIRED, [
+        ...STEPS,
+        "",
+        "<Or, for what the reader looks up, a table or a list with no steps.>",
+      ]),
       fixed("Where things are", REQUIRED, ["| Path | What it holds |", "| --- | --- |"]),
       TROUBLESHOOTING,
       RELATED_TOPICS,
@@ -122,7 +126,7 @@ export const TEMPLATES: Readonly<Record<Kind, Template>> = {
   },
   claude: {
     shape: "exact",
-    text: "<!-- Points Claude at AGENTS.md via import. Edit AGENTS.md, not this file. -->\n@AGENTS.md\n",
+    text: "<!-- Points Claude at AGENTS.md via import; edit AGENTS.md, not this file. -->\n@AGENTS.md\n",
   },
   tutorial: {
     shape: "outline",

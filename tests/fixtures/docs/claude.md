@@ -1,2 +1,2 @@
-<!-- Points Claude at AGENTS.md via import. Edit AGENTS.md, not this file. -->
+<!-- Points Claude at AGENTS.md via import; edit AGENTS.md, not this file. -->
 @AGENTS.md

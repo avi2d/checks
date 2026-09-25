@@ -26,14 +26,15 @@ export type Doc = {
 
 export const ADR_DIRECTORY = "docs/adr/";
 // A generated index takes its shape from its generator.
-const ADR_INDEX = `${ADR_DIRECTORY}README.md`;
+export const ADR_INDEX = `${ADR_DIRECTORY}README.md`;
 const DOCS_DIRECTORY = "docs/";
 
-const ROOT_FILES = new Map<string, Kind>([
+export const ROOT_FILES: ReadonlyMap<string, Kind> = new Map<string, Kind>([
   ["README.md", "readme"],
   ["CHANGELOG.md", "changelog"],
   ["AGENTS.md", "agents"],
   ["CLAUDE.md", "claude"],
+  ["CONTRIBUTING.md", "how-to"],
 ]);
 
 export function placementOf(path: string, docs: Docs | undefined): Placement {

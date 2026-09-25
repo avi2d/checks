@@ -17,11 +17,11 @@ function found(kind: Kind, text: string, path = kind === "adr" ? RECORD : `docs/
 
 test("a root file, a record and a declared page each map to their kind, and other Markdown is left alone", () => {
   const docs = { pages: { reference: ["docs/gates/*.md", "docs/design.md"], explanation: ["docs/design.md"] } };
-  const kinds = ["README.md", "CHANGELOG.md", "AGENTS.md", "CLAUDE.md", "docs/adr/0001-x.md", "docs/gates/lint.md"].map((path) =>
-    placementOf(path, docs),
+  const kinds = ["README.md", "CHANGELOG.md", "AGENTS.md", "CLAUDE.md", "CONTRIBUTING.md", "docs/adr/0001-x.md", "docs/gates/lint.md"].map(
+    (path) => placementOf(path, docs),
   );
   expect(kinds).toEqual(
-    (["readme", "changelog", "agents", "claude", "adr", "reference"] as const).map((kind) => ({ type: "judged", kind })),
+    (["readme", "changelog", "agents", "claude", "how-to", "adr", "reference"] as const).map((kind) => ({ type: "judged", kind })),
   );
   expect(["docs/adr/README.md", "src/README.md", "notes.md", "docs/image.png"].map((path) => placementOf(path, docs).type)).toEqual([
     "unjudged",
