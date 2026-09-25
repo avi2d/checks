@@ -2,6 +2,15 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.14.0
+
+Released 2026-09-25.
+
+### Features
+
+- **scripts:** generate README blocks, check CONTRIBUTING.md, and give each bin a page (#39)
+- **scripts:** generate CHANGELOG.md from conventional commits and ship it in the package (#40)
+
 ## 0.13.0
 
 Released 2026-09-25.
