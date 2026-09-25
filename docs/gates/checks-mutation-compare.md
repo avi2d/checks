@@ -6,14 +6,16 @@
 
 A mutant regresses when it is `Killed` or `Timeout` at the base and `Survived` or `NoCoverage` at the head.
 The gate matches mutants between the two reports and judges each match, so a lost kill cannot hide behind mutants that move into the score and a mutant leaving the score cannot manufacture a false regression.
-A matched mutant that moves into or out of `RuntimeError` or `CompileError` is reported apart from a regression, because that move only changes which mutants leave the score.
+A matched mutant that moves into or out of `RuntimeError`, `CompileError`, `Ignored` or `Pending` is reported apart from a regression, because that move only changes which mutants leave the score.
 A mutant present in only one report is listed and never fails the comparison.
 
 ## How it matches mutants
 
-The gate matches a mutant in the base report to a mutant in the head report by its file, its location, its mutator and its replacement.
-Two mutants in the same report can share all four, so the gate also counts the position of each mutant among others with the same file, location, mutator and replacement, in the order the report lists them, and adds that position to the key.
-A mutant whose position in that count shifts, because a mutant above it with the same signature was added or removed, has no counterpart in the other report and lands in the unmatched list.
+The gate matches a mutant in the base report to a mutant in the head report by its file, its mutator, its replacement and the source text it mutates, which it reads from the report's copy of the file.
+The key holds no line or column, so a line added or removed above a mutant leaves it matched.
+Two mutants in the same file can share all four, so the gate also counts the position of each mutant among others with the same four, in source order, and adds that position to the key.
+A mutant whose position in that count shifts, because a mutant above it with the same four was added or removed, has no counterpart in the other report and lands in the unmatched list.
+Each list prints in order of file, then line, then column, and a matched mutant prints at its place in the head.
 
 ## What it reads
 
@@ -50,7 +52,7 @@ checks-mutation-compare [--advisory] <base-report> <head-report>
 
 ## Sample output
 
-It prints the verdict first, then each regression, each move into or out of `RuntimeError` or `CompileError`, and each unmatched mutant:
+It prints the verdict first, then each regression, each move into or out of a status that leaves the score, and each unmatched mutant:
 
 ```
 mutation-compare: REGRESSION (1 mutant(s))
