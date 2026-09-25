@@ -66,14 +66,30 @@ function tsconfigFragment({ paths, exempt = [] }: EffectSources): unknown {
 }
 
 const FRAGMENTS = [
-  { file: OXLINT_FRAGMENT, extendedBy: ".oxlintrc.json", reader: "oxlint", build: oxlintFragment },
-  { file: TSCONFIG_FRAGMENT, extendedBy: "tsconfig.json", reader: "the language service", build: tsconfigFragment },
+  {
+    file: OXLINT_FRAGMENT,
+    extendedBy: ".oxlintrc.json",
+    reader: "oxlint",
+    kitConfig: "./node_modules/@avi2dg/checks/oxlintrc.json",
+    kitRepositoryConfig: "./oxlintrc.json",
+    kitConfigReason: "so the kit's oxlint rules are not loaded",
+    build: oxlintFragment,
+  },
+  {
+    file: TSCONFIG_FRAGMENT,
+    extendedBy: "tsconfig.json",
+    reader: "the language service",
+    kitConfig: "@avi2dg/checks/tsconfig.effect.json",
+    kitRepositoryConfig: "./tsconfig.effect.json",
+    kitConfigReason: "the one accepted spelling of the kit's Effect config",
+    build: tsconfigFragment,
+  },
 ] as const;
 
 export function fragmentsFor(quality: Quality): readonly Fragment[] {
   const effect = quality.sources?.effect;
   if (effect === undefined) return [];
-  return FRAGMENTS.map(({ build, ...fragment }) => ({ ...fragment, content: build(effect) }));
+  return FRAGMENTS.map(({ file, extendedBy, reader, build }) => ({ file, extendedBy, reader, content: build(effect) }));
 }
 
 const OWN_COMMITLINT_CONFIG = "./commitlint.config.js";
@@ -165,11 +181,24 @@ const sameJson = (text: string, content: unknown): Effect.Effect<boolean> =>
     Effect.orElseSucceed(() => false),
   );
 
+const decodePackageName = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ name: Schema.optionalKey(Schema.String) })));
+
+const isKit = Effect.fn("isKit")(function* (root: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const manifest = (yield* Path.Path).join(root, "package.json");
+  if (!(yield* fs.exists(manifest))) return false;
+  const { name } = yield* decodePackageName(yield* fs.readFileString(manifest)).pipe(
+    Effect.mapError((cause) => new QualityUnreadable({ message: `package.json: ${cause.message}` })),
+  );
+  return name === kitManifest.name;
+});
+
 const fragmentProblems = Effect.fn("fragmentProblems")(function* (root: string, source: string, expected: readonly Fragment[]) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const problems: string[] = [];
-  for (const { file } of FRAGMENTS) {
+  const kitRepository = yield* isKit(root);
+  for (const { file, extendedBy, reader, kitConfig, kitRepositoryConfig, kitConfigReason } of FRAGMENTS) {
     const target = path.join(root, file);
     const fragment = expected.find((candidate) => candidate.file === file);
     const present = yield* fs.exists(target);
@@ -182,8 +211,13 @@ const fragmentProblems = Effect.fn("fragmentProblems")(function* (root: string, 
     } else if (!(yield* sameJson(yield* fs.readFileString(target), fragment.content))) {
       problems.push(`${file} is stale against ${source} and the kit's presets; run ${GENERATE}`);
     }
-    if (!(yield* extendsOf(root, fragment.extendedBy)).includes(file)) {
-      problems.push(`${fragment.extendedBy} does not extend ./${file}, so ${fragment.reader} never reads it`);
+    const configured = yield* extendsOf(root, extendedBy);
+    if (!configured.includes(file)) {
+      problems.push(`${extendedBy} does not extend ./${file}, so ${reader} never reads it`);
+    }
+    const requiredKitConfig = kitRepository ? kitRepositoryConfig : kitConfig;
+    if (!configured.includes(path.normalize(requiredKitConfig))) {
+      problems.push(`${extendedBy} does not extend ${requiredKitConfig}, ${kitConfigReason}`);
     }
   }
   return problems;
@@ -204,18 +238,6 @@ const unmatchedPaths = Effect.fn("unmatchedPaths")(function* (root: string, qual
     if (matched.trim() === "") problems.push(`${key} ${glob} matches no file, so it holds ${holds}`);
   }
   return problems;
-});
-
-const decodePackageName = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ name: Schema.optionalKey(Schema.String) })));
-
-const isKit = Effect.fn("isKit")(function* (root: string) {
-  const fs = yield* FileSystem.FileSystem;
-  const manifest = (yield* Path.Path).join(root, "package.json");
-  if (!(yield* fs.exists(manifest))) return false;
-  const { name } = yield* decodePackageName(yield* fs.readFileString(manifest)).pipe(
-    Effect.mapError((cause) => new QualityUnreadable({ message: `package.json: ${cause.message}` })),
-  );
-  return name === kitManifest.name;
 });
 
 const recipeOf = Effect.fn("recipeOf")(function* (root: string) {

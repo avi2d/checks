@@ -41,6 +41,8 @@ All generated workflows are committed.
 - A fragment is left over once `quality.json` stops declaring `sources.effect`.
 - A generated workflow is missing, or differs from what `generate` would write from `quality.json` and the kit recipe.
 - `.oxlintrc.json` or `tsconfig.json` does not list its fragment in `extends`, so the tool never reads it.
+- `.oxlintrc.json` does not extend `./node_modules/@avi2dg/checks/oxlintrc.json`, so the kit's oxlint rules are not loaded.
+- `tsconfig.json` does not extend `@avi2dg/checks/tsconfig.effect.json`, the one accepted spelling of the kit's Effect config.
 - A `sources.effect.paths` or `sources.production` glob matches no tracked or untracked file, so it holds nothing.
 
 Two details of the fragments are easy to get wrong, so the kit's tests pin both:
@@ -56,6 +58,7 @@ Two details of the fragments are easy to get wrong, so the kit's tests pin both:
 
 It reads the working tree: `quality.json`, the presets of the installed kit, `.oxlintrc.json`, `tsconfig.json`, the two fragments and the generated workflows.
 It reads the root `package.json` name, since only the kit's own tree lints titles with its root `commitlint.config.js`.
+The name also decides which kit configs `extends` must list, since the kit's own tree extends its root `oxlintrc.json` and `tsconfig.effect.json`.
 It looks for `.bun-version`, and the suite pins its bun to that file when the file exists.
 It lists the tracked and untracked files to see what each declared glob matches.
 
@@ -74,7 +77,7 @@ checks-quality --check
 | Code | When |
 | --- | --- |
 | 0 | the generated files hold what `quality.json` declares |
-| 1 | a generated file is stale, missing or left over, a fragment is not extended, or a declared glob matches no file |
+| 1 | a generated file is stale, missing or left over, a fragment is not extended, the kit's config is not extended, or a declared glob matches no file |
 | 2 | `quality.json` does not decode, or the arguments are neither `generate` nor `--check` |
 
 ## Sample output
