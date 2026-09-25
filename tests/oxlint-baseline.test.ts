@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { Schema } from "effect";
 import { OXLINT_FRAGMENT } from "../scripts/quality.ts";
@@ -32,7 +32,10 @@ test("the oxlint baseline counts only the Effect override's rules, in the files 
   const rules = new Set(Object.keys(effect?.rules ?? {}).map(baselineName));
   const globs = (effect?.files ?? []).map((pattern) => new Bun.Glob(pattern));
 
+  if (!existsSync(join(ROOT, "oxlint-suppressions.json"))) return;
+
   const baseline = Schema.decodeSync(Baseline)(read("oxlint-suppressions.json"));
+  expect(baseline).toEqual({});
   const outside = Object.entries(baseline).flatMap(([file, counted]) => [
     ...(globs.some((glob) => glob.match(file)) ? [] : [`${file} is outside ${effect?.files.join(", ")}`]),
     ...Object.keys(counted)
