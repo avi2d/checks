@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect, Schema } from "effect";
-import { git, refArgs } from "./git.ts";
+import { commitOf, git, refArgs } from "./git.ts";
 import { runMain } from "./main.ts";
 
 export const QUARANTINE = "tests/quarantine/";
@@ -30,28 +30,51 @@ export type ClockResult = {
 
 const HEADER = /^commit ([0-9a-f]{40}) (\d+) (\S+)$/;
 
-function enteredOf(block: { readonly sha: string; readonly at: number; readonly day: string }): Entry {
-  return { kind: "entered", sha: block.sha, at: block.at, day: block.day };
-}
+type Status = readonly [status: string, from: string, to: string];
 
-export function findEntry(output: string, file: string): Entry {
-  let current = file;
-  let block: { readonly sha: string; readonly at: number; readonly day: string } | undefined;
+type CommitBlock = {
+  readonly sha: string;
+  readonly at: number;
+  readonly day: string;
+  readonly statuses: readonly Status[];
+};
+
+function parseBlocks(output: string): readonly CommitBlock[] {
+  const blocks: { readonly sha: string; readonly at: number; readonly day: string; readonly statuses: Status[] }[] = [];
   for (const line of output.split("\n")) {
     if (line.includes("\t")) {
-      if (block === undefined) continue;
       const [status = "", from = "", to = ""] = line.split("\t");
-      if (status === "A" && from === current) return enteredOf(block);
-      if (status.startsWith("R") && to === current) {
-        if (!from.startsWith(QUARANTINE)) return enteredOf(block);
-        current = from;
-      }
+      const open = blocks.at(-1);
+      if (open !== undefined) open.statuses.push([status, from, to]);
       continue;
     }
     const header = HEADER.exec(line);
     if (header !== null) {
-      block = { sha: header[1] ?? "", at: Number(header[2] ?? "0"), day: (header[3] ?? "").slice(0, "YYYY-MM-DD".length) };
+      blocks.push({ sha: header[1] ?? "", at: Number(header[2] ?? "0"), day: (header[3] ?? "").slice(0, "YYYY-MM-DD".length), statuses: [] });
     }
+  }
+  return blocks;
+}
+
+function entryIn({ sha, at, day, statuses }: CommitBlock, path: string): Entry | undefined {
+  const entered = statuses.some(
+    ([status, from, to]) =>
+      (status === "A" && from === path) || (status.startsWith("R") && to === path && !from.startsWith(QUARANTINE)),
+  );
+  return entered ? { kind: "entered", sha, at, day } : undefined;
+}
+
+function followedPath({ statuses }: CommitBlock, path: string): string {
+  const rename = statuses.find(([status, , to]) => status.startsWith("R") && to === path);
+  return rename?.[1] ?? path;
+}
+
+export function findEntry(output: string, file: string): Entry {
+  let current = file;
+  for (const block of parseBlocks(output)) {
+    const entry = entryIn(block, current);
+    if (entry !== undefined) return entry;
+    current = followedPath(block, current);
   }
   return { kind: "truncated" };
 }
@@ -80,10 +103,6 @@ export function report({ checked, overdue }: ClockResult): string {
     ...overdue.map((file) => `  ${file.file} entered quarantine on ${file.day} (${file.days} days ago)`),
   ].join("\n");
 }
-
-const commitOf = Effect.fn("commitOf")(function* (rev: string) {
-  return (yield* git(["rev-parse", "--verify", `${rev}^{commit}`])).trim();
-});
 
 const filesAt = Effect.fn("filesAt")(function* (head: string) {
   const listed = yield* git(["ls-tree", "-r", "--name-only", head, "--", QUARANTINE]);

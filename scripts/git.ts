@@ -172,6 +172,10 @@ export const rangeFromArgs = Effect.fn("rangeFromArgs")(function* (args: readonl
   return yield* rangeEnds(first, second, cwd);
 });
 
+export const commitOf = Effect.fn("commitOf")(function* (rev: string, cwd?: string) {
+  return (yield* git(["rev-parse", "--verify", `${rev}^{commit}`], cwd)).trim();
+});
+
 // A scratch index leaves the repository's own index and working tree untouched.
 export const checkoutFiles = Effect.fn("checkoutFiles")(function* (rev: string, files: readonly string[], scratch: string, cwd?: string) {
   const path = yield* Path.Path;
