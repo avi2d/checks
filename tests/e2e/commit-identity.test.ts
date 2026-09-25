@@ -1,10 +1,9 @@
 import { $ } from "bun";
-import { afterEach, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { expect, test } from "bun:test";
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { CHECKOUT, fixtureRepos, ran, type Ran } from "./lib/fixture-repo.ts";
 
-const CHECKOUT = resolve(import.meta.dir, "..", "..");
 const SCRIPT = join(CHECKOUT, "scripts", "commit-identity.ts");
 
 const OWNER = { name: "avi2d", email: "avi2dg@gmail.com" };
@@ -14,14 +13,15 @@ const INTRUDER = { name: "Ivy Intruder", email: "intruder@example.com" };
 
 type Identity = { name: string; email: string };
 
-let dir = "";
+type Landing = {
+  readonly message: string;
+  readonly author?: Identity;
+  readonly committer?: Identity;
+};
 
-afterEach(async () => {
-  if (dir !== "") {
-    await rm(dir, { recursive: true, force: true });
-    dir = "";
-  }
-});
+const repository = fixtureRepos("checks-commit-identity-");
+
+let dir = "";
 
 function identityEnv(author: Identity, committer: Identity) {
   return {
@@ -34,19 +34,10 @@ function identityEnv(author: Identity, committer: Identity) {
 }
 
 async function initRepo(manifest?: unknown): Promise<void> {
-  dir = await mkdtemp(join(tmpdir(), "checks-commit-identity-"));
-  await writeFile(
-    join(dir, "package.json"),
-    JSON.stringify(manifest ?? { name: "commit-identity-fixture" }),
-  );
-  await $`git init -q -b main`.cwd(dir).quiet();
+  ({ dir } = await repository({ "package.json": JSON.stringify(manifest ?? { name: "commit-identity-fixture" }) }));
 }
 
-async function commit(options: {
-  readonly message: string;
-  readonly author?: Identity;
-  readonly committer?: Identity;
-}): Promise<string> {
+async function commit(options: Landing): Promise<string> {
   const env = identityEnv(options.author ?? OWNER, options.committer ?? OWNER);
   await writeFile(join(dir, "file.txt"), `${Math.random()}\n`);
   await $`git add -A && git commit -q --no-gpg-sign -m ${options.message}`.cwd(dir).env(env).quiet();
@@ -54,24 +45,25 @@ async function commit(options: {
   return sha.stdout.toString().trim();
 }
 
-async function check(...args: readonly string[]): Promise<{ exitCode: number; text: string }> {
-  const result = await $`bun ${SCRIPT} ${args}`.cwd(dir).nothrow().quiet();
-  return {
-    exitCode: result.exitCode,
-    text: result.stdout.toString() + result.stderr.toString(),
-  };
+function check(...args: readonly string[]): Promise<Ran> {
+  return ran($`bun ${SCRIPT} ${args}`.cwd(dir));
+}
+
+async function redOnForeign(foreign: Landing): Promise<Ran> {
+  await initRepo();
+  const base = await commit({ message: "feat: base" });
+  const landed = await commit(foreign);
+
+  const red = await check(base, "HEAD");
+  expect(red.exitCode).toBe(1);
+  expect(red.text).toContain(landed.slice(0, 12));
+  return red;
 }
 
 test(
   "commit-identity goes red on a foreign author and names the commit",
   async () => {
-    await initRepo();
-    const base = await commit({ message: "feat: base" });
-    const foreign = await commit({ message: "feat: stolen", author: STRANGER });
-
-    const red = await check(base, "HEAD");
-    expect(red.exitCode).toBe(1);
-    expect(red.text).toContain(foreign.slice(0, 12));
+    const red = await redOnForeign({ message: "feat: stolen", author: STRANGER });
     expect(red.text).toContain("feat: stolen");
     expect(red.text).toContain("author Pat Stranger <stranger@example.com>");
     expect(red.text).toContain("allowed: avi2d <avi2dg@gmail.com>");
@@ -82,13 +74,7 @@ test(
 test(
   "commit-identity goes red on a foreign committer",
   async () => {
-    await initRepo();
-    const base = await commit({ message: "feat: base" });
-    const foreign = await commit({ message: "feat: relayed", committer: STRANGER });
-
-    const red = await check(base, "HEAD");
-    expect(red.exitCode).toBe(1);
-    expect(red.text).toContain(foreign.slice(0, 12));
+    const red = await redOnForeign({ message: "feat: relayed", committer: STRANGER });
     expect(red.text).toContain("committer Pat Stranger <stranger@example.com>");
   },
   60_000,
