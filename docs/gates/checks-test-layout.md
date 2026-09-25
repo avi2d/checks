@@ -18,7 +18,8 @@ It fails unless the repository holds this shape, and names the file and the path
 - `scripts.test` is exactly `checks-test`, which runs `bun test --randomize` as [checks-test](checks-test.md) says.
 - `scripts.lint` runs this check, itself or through `checks-lint` called by its bare bin name.
 - `bunfig.toml` carries every `[test]` key of the shipped preset with the same value.
-  `[test].pathIgnorePatterns` is always `["**/tests/quarantine/**", "repos/**"]`, which the check pins itself, so the kit's own repository, whose bunfig is the preset, cannot drift it either.
+  `[test].pathIgnorePatterns` is always `["**/tests/quarantine/**"]`, which the check pins itself, so the kit's own repository, whose bunfig is the preset, cannot drift it either.
+  A repository whose `quality.json` declares `sources.libraries` pins `["**/tests/quarantine/**", "repos/**"]` instead, as the preset does.
   Other tables, and extra `[test]` keys, are the repository's own.
 
 The in-process half is what a mutation run can mutate.

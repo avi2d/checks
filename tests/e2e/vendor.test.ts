@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { afterEach, expect, test } from "bun:test";
-import { appendFile, chmod, mkdir, readdir, readlink, stat, writeFile } from "node:fs/promises";
+import { appendFile, chmod, lstat, mkdir, readdir, readlink, stat, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { remoteSegments, tagFor } from "../../scripts/vendor.ts";
 import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
@@ -67,6 +67,13 @@ async function seedConsumer(dir: string, remote: string, installed: string): Pro
 function vendor(dir: string, home: string): Promise<Ran> {
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("XDG_")));
   return ran($`bun ${VENDOR}`.cwd(dir).env({ ...env, HOME: home }));
+}
+
+function linked(consumer: string): Promise<boolean> {
+  return lstat(join(consumer, "repos", "fake-lib")).then(
+    () => true,
+    () => false,
+  );
 }
 
 function cachedDir(home: string, remote: string, version: string): string {
@@ -145,6 +152,7 @@ test(
     const result = await vendor(consumer, home);
     expect(result.exitCode).toBe(1);
     expect(result.text).toContain("not the recorded");
+    expect(await linked(consumer)).toBe(false);
   },
   60_000,
 );
@@ -177,6 +185,46 @@ test(
     const hidden = await vendor(consumer, home);
     expect(hidden.exitCode).toBe(1);
     expect(hidden.text).toContain("outside the recorded commit");
+  },
+  60_000,
+);
+
+test(
+  "a failed run drops the link to the tree it can no longer vouch for",
+  async () => {
+    const home = await scratchHome();
+    const parent = await scratch("checks-vendor-remote-");
+    const consumer = await scratch("checks-vendor-consumer-");
+    const { remote } = await seedRemote(parent, "1.0.0", "fake-lib@1.0.0");
+    await seedConsumer(consumer, remote, "1.0.0");
+    expect((await vendor(consumer, home)).exitCode).toBe(0);
+
+    await writeFile(join(consumer, "node_modules", "fake-lib", "package.json"), manifest("2.0.0"));
+    const bumped = await vendor(consumer, home);
+    expect(bumped.exitCode).toBe(1);
+    expect(bumped.text).toContain("dropped repos/fake-lib");
+    expect(await linked(consumer)).toBe(false);
+  },
+  60_000,
+);
+
+test(
+  "a directory link inside the library leaves the modes outside the cache alone",
+  async () => {
+    const home = await scratchHome();
+    const parent = await scratch("checks-vendor-remote-");
+    const consumer = await scratch("checks-vendor-consumer-");
+    const outside = await scratch("checks-vendor-outside-");
+    await writeFile(join(outside, "kept.txt"), "writable\n");
+    const seed = await seedRemote(parent, "1.0.0", "fake-lib@1.0.0");
+    await symlink(outside, join(seed.work, "outside"));
+    await moveTag(seed, "1.0.0", "fake-lib@1.0.0");
+    await seedConsumer(consumer, seed.remote, "1.0.0");
+
+    expect((await vendor(consumer, home)).exitCode).toBe(0);
+    expect((await stat(join(outside, "kept.txt"))).mode & 0o200).toBe(0o200);
+    expect((await stat(outside)).mode & 0o200).toBe(0o200);
+    expect((await vendor(consumer, home)).exitCode).toBe(0);
   },
   60_000,
 );

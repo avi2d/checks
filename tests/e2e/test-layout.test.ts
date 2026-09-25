@@ -15,6 +15,10 @@ const MANIFEST = {
     lint: "oxlint && bun ./node_modules/@avi2dg/checks/scripts/test-layout.ts",
   },
 };
+const UNVENDORED_BUNFIG = '[test]\npathIgnorePatterns = ["**/tests/quarantine/**"]\n';
+const LIBRARIES = {
+  sources: { libraries: [{ name: "fake-lib", package: "fake-lib", repository: "https://example.com/o/fake-lib.git", tag: "v{version}" }] },
+};
 const CLEAN_TEST = 'import { expect, test } from "bun:test";\ntest("adds", () => {\n  expect(1 + 1).toBe(2);\n});\n';
 
 let dir = "";
@@ -29,7 +33,7 @@ beforeAll(async () => {
   await mkdir(join(dir, "src"), { recursive: true });
   await mkdir(join(dir, "tests", "e2e"), { recursive: true });
   await writeFile(join(dir, "package.json"), `${JSON.stringify(MANIFEST, null, 2)}\n`);
-  await writeFile(join(dir, "bunfig.toml"), await readFile(PRESET, "utf8"));
+  await writeFile(join(dir, "bunfig.toml"), UNVENDORED_BUNFIG);
   await writeFile(join(dir, "src", "widget.ts"), "export const widget = 1;\n");
   await writeFile(join(dir, "tests", "widget.test.ts"), CLEAN_TEST);
   await writeFile(join(dir, ".gitignore"), "node_modules/\n");
@@ -71,13 +75,21 @@ test(
     await writeFile(join(dir, "bunfig.toml"), "[test]\npathIgnorePatterns = []\n");
     const drifted = await layout();
     expect(drifted.exitCode).toBe(1);
-    expect(drifted.text).toContain('[test].pathIgnorePatterns must be ["**/tests/quarantine/**","repos/**"]');
-    expect(drifted.text).toContain("bun has no bunfig extends");
+    expect(drifted.text).toContain('[test].pathIgnorePatterns must be ["**/tests/quarantine/**"]');
+    expect(drifted.text).toContain("the check pins it");
 
-    await writeFile(join(dir, "bunfig.toml"), await readFile(PRESET, "utf8"));
+    await writeFile(join(dir, "bunfig.toml"), UNVENDORED_BUNFIG);
     const green = await layout();
     expect(green.exitCode).toBe(0);
     expect(green.text).toContain("satisfy the layout");
+
+    await writeFile(join(dir, "quality.json"), JSON.stringify(LIBRARIES));
+    const vendoring = await layout();
+    expect(vendoring.exitCode).toBe(1);
+    expect(vendoring.text).toContain('[test].pathIgnorePatterns must be ["**/tests/quarantine/**","repos/**"]');
+
+    await writeFile(join(dir, "bunfig.toml"), await readFile(PRESET, "utf8"));
+    expect((await layout()).exitCode).toBe(0);
   },
   60_000,
 );

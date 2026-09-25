@@ -87,15 +87,6 @@ const remoteTag = Effect.fn("remoteTag")(function* (remote: string, tag: string)
   return sha;
 });
 
-const listed = Effect.fn("listed")(function* (dir: string) {
-  const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  const entries = yield* fs.readDirectory(dir, { recursive: true }).pipe(
-    Effect.mapError((cause) => new VendorError({ message: `cannot list ${dir}: ${cause.message}` })),
-  );
-  return entries.map((entry) => (path.isAbsolute(entry) ? entry : path.join(dir, entry)));
-});
-
 const isLink = Effect.fn("isLink")(function* (entry: string) {
   const fs = yield* FileSystem.FileSystem;
   return Option.isSome(yield* fs.readLink(entry).pipe(Effect.option));
@@ -108,13 +99,20 @@ type EntryMode = {
 
 const modes = Effect.fn("modes")(function* (dir: string) {
   const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
   const found: EntryMode[] = [];
-  for (const entry of [dir, ...(yield* listed(dir))]) {
+  const pending = [dir];
+  for (const entry of pending) {
     if (yield* isLink(entry)) continue;
     const info = yield* fs.stat(entry).pipe(
       Effect.mapError((cause) => new VendorError({ message: `cannot stat ${entry}: ${cause.message}` })),
     );
     found.push({ entry, mode: info.mode });
+    if (info.type !== "Directory") continue;
+    const children = yield* fs.readDirectory(entry).pipe(
+      Effect.mapError((cause) => new VendorError({ message: `cannot list ${entry}: ${cause.message}` })),
+    );
+    pending.push(...children.map((child) => path.join(entry, child)));
   }
   return found;
 });
@@ -208,6 +206,17 @@ const ensureLink = Effect.fn("ensureLink")(function* (root: string, library: Lib
   );
 });
 
+const unlink = Effect.fn("unlink")(function* (root: string, library: Library) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const at = path.join(root, LINKS, library.name);
+  if (Option.isNone(yield* fs.readLink(at).pipe(Effect.option))) return;
+  yield* fs.remove(at).pipe(
+    Effect.mapError((cause) => new VendorError({ message: `cannot drop ${at}: ${cause.message}` })),
+  );
+  yield* Console.error(`${NAME}: dropped ${LINKS}/${library.name}, so readers fall back to node_modules/${library.package}`);
+});
+
 const stage = Effect.fn("stage")(function* (staging: string, library: Library, installed: string, tag: string, dir: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -285,7 +294,9 @@ const main = Effect.gen(function* () {
   for (const library of libraries) {
     const vended = yield* vend(root, cache, library).pipe(
       Effect.as(true),
-      Effect.catchTag("VendorError", (failure) => Console.error(`${NAME}: ${failure.message}`).pipe(Effect.as(false))),
+      Effect.catchTag("VendorError", (failure) =>
+        Console.error(`${NAME}: ${failure.message}`).pipe(Effect.andThen(unlink(root, library)), Effect.as(false)),
+      ),
     );
     passed = passed && vended;
   }

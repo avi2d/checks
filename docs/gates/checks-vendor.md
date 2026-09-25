@@ -13,7 +13,9 @@ It confirms the remote tag still lands on the recorded commit.
 It confirms the tree sits on that commit.
 It confirms the manifest inside the tree still names the installed version.
 It confirms no write bit came back and no write landed outside the recorded commit.
+It never follows a link inside the tree, so no mode outside the cache is touched.
 Any failed confirmation fails the run.
+A failed library drops its `repos/<name>` link, so a reader falls back to `node_modules/<package>` rather than a tree the run could not vouch for.
 A missing tag, an unknown installed version or a manifest naming another version fails it too.
 A moved tag fails it rather than following the move.
 A deliberate move clears the cached directory with `chmod -R u+w <dir> && rm -rf <dir>` and runs `checks-vendor` again.

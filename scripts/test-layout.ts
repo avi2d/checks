@@ -3,7 +3,8 @@ import { parse } from "@swc/core";
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { git } from "./git.ts";
 import { runMain } from "./main.ts";
-import { ENTRY_POINT, TEST_ENTRY_POINT } from "./gates.ts";
+import { ENTRY_POINT, QUALITY_FILE, TEST_ENTRY_POINT } from "./gates.ts";
+import { readQuality } from "./quality-file.ts";
 
 export type Violation = {
   readonly file: string;
@@ -39,9 +40,12 @@ const BANNED_BUN_NAMES: readonly string[] = [
 ];
 const BANNED_GLOBAL_CALLS: readonly string[] = ["fetch"];
 
-const REQUIRED_TEST_TABLE: Record<string, unknown> = {
-  pathIgnorePatterns: ["**/tests/quarantine/**", "repos/**"],
-};
+const QUARANTINE = "**/tests/quarantine/**";
+const VENDORED = "repos/**";
+
+function pinnedTestTable(vendors: boolean): Record<string, unknown> {
+  return { pathIgnorePatterns: vendors ? [QUARANTINE, VENDORED] : [QUARANTINE] };
+}
 export const LAYOUT_CHECK_MARK = "scripts/test-layout.ts";
 export const LAYOUT_CHECK_BIN = "checks-test-layout";
 const OWN_ENTRY_POINT = `scripts/${ENTRY_POINT.script}`;
@@ -245,9 +249,10 @@ export function scriptViolations(manifest: unknown): readonly Violation[] {
   return violations;
 }
 
-export function bunfigViolations(consumer: unknown, preset: unknown): readonly Violation[] {
+export function bunfigViolations(consumer: unknown, preset: unknown, vendors: boolean): readonly Violation[] {
   const file = "bunfig.toml";
   const copy = "bun has no bunfig extends, so copy node_modules/@avi2dg/checks/bunfig.toml";
+  const pin = `the check pins it, adding ${VENDORED} only where ${QUALITY_FILE} declares sources.libraries`;
   if (consumer === undefined) {
     return [{ file, line: undefined, message: `bunfig.toml is missing; ${copy}` }];
   }
@@ -255,7 +260,8 @@ export function bunfigViolations(consumer: unknown, preset: unknown): readonly V
   if (!isRecord(presetTest)) {
     return [{ file, line: undefined, message: "the shipped bunfig preset has no [test] table" }];
   }
-  const expected = { ...presetTest, ...REQUIRED_TEST_TABLE };
+  const pinned = pinnedTestTable(vendors);
+  const expected = { ...presetTest, ...pinned };
   const consumerTest = isRecord(consumer) ? consumer["test"] : undefined;
   const violations: Violation[] = [];
   for (const [key, value] of Object.entries(expected)) {
@@ -264,7 +270,7 @@ export function bunfigViolations(consumer: unknown, preset: unknown): readonly V
       violations.push({
         file,
         line: undefined,
-        message: `[test].${key} must be ${JSON.stringify(value)}, found ${JSON.stringify(found ?? null)}; ${copy}`,
+        message: `[test].${key} must be ${JSON.stringify(value)}, found ${JSON.stringify(found ?? null)}; ${key in pinned ? pin : copy}`,
       });
     }
   }
@@ -321,7 +327,9 @@ export const run = Effect.fn("run")(function* (root: string, presetPath: string)
 
   const bunfig = path.join(root, "bunfig.toml");
   const consumerBunfig = (yield* fs.exists(bunfig)) ? yield* parsedToml(bunfig) : undefined;
-  violations.push(...bunfigViolations(consumerBunfig, yield* parsedToml(presetPath)));
+  const { quality } = yield* readQuality(root);
+  const vendors = (quality.sources?.libraries ?? []).length > 0;
+  violations.push(...bunfigViolations(consumerBunfig, yield* parsedToml(presetPath), vendors));
 
   return { files: files.length, violations };
 });

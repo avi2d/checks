@@ -152,19 +152,26 @@ test("scripts.test must be the test entry point and scripts.lint must run the ch
 });
 
 test("the consumer bunfig must carry every [test] key of the shipped preset", () => {
-  expect(bunfigViolations(PRESET, PRESET)).toBeEmpty();
-  expect(bunfigViolations({ test: { ...PRESET.test }, install: { exact: true } }, PRESET)).toBeEmpty();
+  expect(bunfigViolations(PRESET, PRESET, true)).toBeEmpty();
+  expect(bunfigViolations({ test: { ...PRESET.test }, install: { exact: true } }, PRESET, true)).toBeEmpty();
 
-  expect(bunfigViolations(undefined, PRESET)[0]?.message).toContain("bunfig.toml is missing");
+  expect(bunfigViolations(undefined, PRESET, true)[0]?.message).toContain("bunfig.toml is missing");
 
-  const drifted = bunfigViolations({ test: { randomize: false, pathIgnorePatterns: [] } }, PRESET);
+  const drifted = bunfigViolations({ test: { randomize: false, pathIgnorePatterns: [] } }, PRESET, true);
   expect(drifted.map((violation) => violation.message.split(" must be ")[0])).toEqual(["[test].pathIgnorePatterns"]);
-  expect(drifted[0]?.message).toContain("bun has no bunfig extends");
+  expect(drifted[0]?.message).toContain("the check pins it");
+});
+
+test("repos/** is pinned only where quality.json declares libraries", () => {
+  const unvendored = { test: { pathIgnorePatterns: ["**/tests/quarantine/**"] } };
+  expect(bunfigViolations(unvendored, PRESET, false)).toBeEmpty();
+  expect(bunfigViolations(unvendored, PRESET, true)[0]?.message).toContain('must be ["**/tests/quarantine/**","repos/**"]');
+  expect(bunfigViolations(PRESET, PRESET, false)[0]?.message).toContain('must be ["**/tests/quarantine/**"]');
 });
 
 test("the kit fails its own check when consumer and preset read the same drifted file", () => {
   const drifted = { test: { pathIgnorePatterns: [] as readonly string[] } };
-  const violations = bunfigViolations(drifted, drifted);
+  const violations = bunfigViolations(drifted, drifted, true);
   expect(violations.map((violation) => violation.message.split(" must be ")[0])).toEqual([
     "[test].pathIgnorePatterns",
   ]);
