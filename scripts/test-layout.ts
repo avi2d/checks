@@ -147,45 +147,47 @@ function importedNames(node: Record<string, unknown>): readonly string[] {
   return names;
 }
 
+type UseCheck = (node: Record<string, unknown>) => string | undefined;
+
+function moduleUse(node: Record<string, unknown>): string | undefined {
+  const source = stringValue(node["source"]);
+  if (source === undefined) return undefined;
+  const banned = bannedModule(source);
+  if (banned !== undefined) return `imports node:${banned}`;
+  if (source !== "bun") return undefined;
+  const name = importedNames(node).find((candidate) => BANNED_BUN_NAMES.includes(candidate));
+  return name === undefined ? undefined : `imports ${name} from bun`;
+}
+
+function bunMemberUse(node: Record<string, unknown>): string | undefined {
+  if (identifierName(node["object"]) !== "Bun") return undefined;
+  const property = identifierName(node["property"]);
+  return property !== undefined && BANNED_BUN_NAMES.includes(property) ? `uses Bun.${property}` : undefined;
+}
+
+function callUse(node: Record<string, unknown>): string | undefined {
+  const callee = node["callee"];
+  const calleeName = identifierName(callee);
+  if (calleeName !== undefined && BANNED_GLOBAL_CALLS.includes(calleeName)) return `calls ${calleeName}`;
+  const argument = Array.isArray(node["arguments"]) ? node["arguments"][0] : undefined;
+  const specifier = isRecord(argument) ? stringValue(argument["expression"]) : undefined;
+  const banned = specifier === undefined ? undefined : bannedModule(specifier);
+  if (banned === undefined) return undefined;
+  if (isRecord(callee) && callee["type"] === "Import") return `imports node:${banned}`;
+  return calleeName === "require" ? `requires node:${banned}` : undefined;
+}
+
+const USE_CHECKS = new Map<string, UseCheck>([
+  ["ImportDeclaration", moduleUse],
+  ["ExportNamedDeclaration", moduleUse],
+  ["ExportAllDeclaration", moduleUse],
+  ["MemberExpression", bunMemberUse],
+  ["CallExpression", callUse],
+]);
+
 function outOfProcessUse(node: Record<string, unknown>): string | undefined {
   const type = node["type"];
-
-  if (type === "ImportDeclaration" || type === "ExportNamedDeclaration" || type === "ExportAllDeclaration") {
-    const source = stringValue(node["source"]);
-    if (source === undefined) return undefined;
-    const banned = bannedModule(source);
-    if (banned !== undefined) return `imports node:${banned}`;
-    if (source === "bun") {
-      const name = importedNames(node).find((candidate) => BANNED_BUN_NAMES.includes(candidate));
-      if (name !== undefined) return `imports ${name} from bun`;
-    }
-    return undefined;
-  }
-
-  if (type === "MemberExpression") {
-    if (identifierName(node["object"]) !== "Bun") return undefined;
-    const property = identifierName(node["property"]);
-    if (property !== undefined && BANNED_BUN_NAMES.includes(property)) return `uses Bun.${property}`;
-    return undefined;
-  }
-
-  if (type === "CallExpression") {
-    const callee = node["callee"];
-    const calleeName = identifierName(callee);
-    if (calleeName !== undefined && BANNED_GLOBAL_CALLS.includes(calleeName)) {
-      return `calls ${calleeName}`;
-    }
-    const argument = Array.isArray(node["arguments"]) ? node["arguments"][0] : undefined;
-    const specifier = isRecord(argument) ? stringValue(argument["expression"]) : undefined;
-    if (specifier === undefined) return undefined;
-    const banned = bannedModule(specifier);
-    if (banned === undefined) return undefined;
-    if (isRecord(callee) && callee["type"] === "Import") return `imports node:${banned}`;
-    if (calleeName === "require") return `requires node:${banned}`;
-    return undefined;
-  }
-
-  return undefined;
+  return typeof type === "string" ? USE_CHECKS.get(type)?.(node) : undefined;
 }
 
 export const isolationViolations = Effect.fn("isolationViolations")(function* (file: string, source: string) {
