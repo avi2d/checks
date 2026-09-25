@@ -14,6 +14,9 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
 - `featureRules` ships compiled as `dist/feature-rules.js` for the same reason, with `effect` left out of the bundle so it resolves the consumer's own copy.
   dependency-cruiser uses a config's export as it is and never awaits it, so the declaration decodes synchronously, and `quality.json` exempts that one file from the Effect rules.
 - `checks-size-budget` writes the head commit's files to a temporary directory and runs oxlint there, with a configuration that sets no plugin and turns every category off, so the consumer's own `.oxlintrc.json`, its ignore files and its other rules never reach the count.
+- `checks-repetition` writes the production files of both ends of the range to temporary directories and runs jscpd in each, so the consumer's `.jscpd.json` and ignore files never reach the count.
+  It compares each file's count of repeated lines rather than using jscpd's `--baseline-from-ref`.
+  That flag reports a repeated block as new once its text changes, so a change that shortens a grandfathered block would fail.
 - `dist/` is committed.
   No `prepack` or `prepublishOnly` builds it, so a publish ships whatever bundle the publishing worktree holds.
   Rebuild it after pulling with `bun run build`.

@@ -74,7 +74,7 @@ A repository that runs its gates without `checks-lint` calls each gate's bin in 
 
 ## Gate selection
 
-A repository with no TypeScript source gives `checks-lint-coverage`, `checks-test-layout`, `checks-size-budget` and `checks-feature-owners` nothing to check, and test-layout would still refuse its missing `bun test` script and `bunfig.toml`.
+A repository with no TypeScript source gives `checks-lint-coverage`, `checks-test-layout`, `checks-size-budget`, `checks-repetition` and `checks-feature-owners` nothing to check, and test-layout would still refuse its missing `bun test` script and `bunfig.toml`.
 It declares the gates `checks-lint` runs as `gates.lint`:
 
 ```json
@@ -100,10 +100,11 @@ Both `checks-lint` and `checks-ci-wiring` exit 2 on a `gates.lint` that names an
 `checks-ci-wiring` exits 1 when the selection leaves out a gate the repository's tracked files make applicable, and names the gate and the files:
 
 ```
-ci-wiring: quality.json gates.lint leaves out 4 gate(s) this repository's contents make applicable:
+ci-wiring: quality.json gates.lint leaves out 5 gate(s) this repository's contents make applicable:
   checks-lint-coverage: the repository tracks TypeScript source (src/widget.ts)
   checks-test-layout: the repository tracks TypeScript source (src/widget.ts)
   checks-size-budget: the repository tracks TypeScript source (src/widget.ts)
+  checks-repetition: the repository tracks TypeScript source (src/widget.ts)
   checks-feature-owners: the repository tracks TypeScript source (src/widget.ts)
 ```
 

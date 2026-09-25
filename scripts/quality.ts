@@ -120,10 +120,10 @@ const fragmentProblems = Effect.fn("fragmentProblems")(function* (root: string, 
 
 const unmatchedPaths = Effect.fn("unmatchedPaths")(function* (root: string, quality: Quality) {
   const declared = [
-    ...(quality.size === undefined ? [] : (quality.sources?.production ?? [])).map((glob) => ({
+    ...(quality.sources?.production ?? []).map((glob) => ({
       glob,
       key: "sources.production",
-      holds: "no source to the size budget",
+      holds: "no source to checks-size-budget or checks-repetition",
     })),
     ...(quality.sources?.effect?.paths ?? []).map((glob) => ({ glob, key: "sources.effect.paths", holds: "nothing to the Effect rules" })),
   ];

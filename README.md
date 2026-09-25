@@ -16,6 +16,7 @@ A repository declares what it opts into once, in `quality.json`, and each check 
   - `@swc/core` 1.16.2
   - `dependency-cruiser` 18.4.0
   - `effect` 4.0.0-rc.115
+  - `jscpd` 5.3.2
   - `oxlint` 1.83.0
   - `oxlint-tsgolint` 7.0.2002
 
@@ -30,7 +31,7 @@ To consume the kit from a repository:
    <!-- generated install: bun run build writes it from package.json and scripts/doc-blocks.ts -->
 
    ```sh
-   bun add -d @avi2dg/checks @effect/tsgo@0.45.0 @swc/core@1.16.2 dependency-cruiser@18.4.0 effect@4.0.0-rc.115 oxlint@1.83.0 oxlint-tsgolint@7.0.2002 typescript@7.0.2
+   bun add -d @avi2dg/checks @effect/tsgo@0.45.0 @swc/core@1.16.2 dependency-cruiser@18.4.0 effect@4.0.0-rc.115 jscpd@5.3.2 oxlint@1.83.0 oxlint-tsgolint@7.0.2002 typescript@7.0.2
    ```
 
    <!-- end generated install -->
@@ -120,6 +121,7 @@ A repository leaves out a gate that does not apply to it through `gates.lint`, a
 | [`checks-docs`](docs/gates/checks-docs.md) | the range | every repository |
 | [`checks-quality`](docs/gates/checks-quality.md) | the working tree | a repository tracking `quality.json` |
 | [`checks-size-budget`](docs/gates/checks-size-budget.md) | the range | a repository tracking `*.ts` or `*.tsx` |
+| [`checks-repetition`](docs/gates/checks-repetition.md) | the range | a repository tracking `*.ts` or `*.tsx` |
 | [`checks-feature-owners`](docs/gates/checks-feature-owners.md) | the range | a repository tracking `*.ts` or `*.tsx` |
 
 <!-- end generated gates -->

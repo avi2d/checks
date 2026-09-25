@@ -41,6 +41,7 @@
     "scripts/quality-file.ts",
     "scripts/quality.ts",
     "scripts/size-budget.ts",
+    "scripts/repetition.ts",
     "scripts/feature-owners.ts",
     "scripts/docs.ts",
     "scripts/doc-outline.ts",
@@ -79,6 +80,7 @@
     "./scripts/quality-file.ts": "./scripts/quality-file.ts",
     "./scripts/quality.ts": "./scripts/quality.ts",
     "./scripts/size-budget.ts": "./scripts/size-budget.ts",
+    "./scripts/repetition.ts": "./scripts/repetition.ts",
     "./scripts/feature-owners.ts": "./scripts/feature-owners.ts",
     "./scripts/docs.ts": "./scripts/docs.ts",
     "./templates/readme.md": "./templates/readme.md",
@@ -113,6 +115,7 @@
     "checks-backtest": "scripts/backtest.ts",
     "checks-quality": "scripts/quality.ts",
     "checks-size-budget": "scripts/size-budget.ts",
+    "checks-repetition": "scripts/repetition.ts",
     "checks-feature-owners": "scripts/feature-owners.ts",
     "checks-docs": "scripts/docs.ts"
   },
@@ -127,6 +130,7 @@
     "dependency-cruiser": "18.4.0",
     "@effect/tsgo": "0.45.0",
     "effect": "4.0.0-rc.115",
+    "jscpd": "5.3.2",
     "oxlint": "1.83.0",
     "oxlint-tsgolint": "7.0.2002"
   },
@@ -138,6 +142,7 @@
     "ajv": "8.20.0",
     "dependency-cruiser": "18.4.0",
     "effect": "4.0.0-rc.115",
+    "jscpd": "5.3.2",
     "oxlint": "1.83.0",
     "oxlint-tsgolint": "7.0.2002",
     "typescript": "7.0.2"
