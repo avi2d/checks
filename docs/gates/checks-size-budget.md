@@ -13,7 +13,7 @@ It holds production and test files to the size budget, and lists every other fil
 
 A production file is one under `sources.production`, and a test file is a tracked `.ts` or `.tsx` file under `tests/`.
 A test file keeps to the tests budget, and every other file keeps to the production budget.
-It runs oxlint with a configuration of five rules and nothing else, one for each limit.
+It runs oxlint with a configuration of five rules, one for each limit, and the kit's own plugin bundle, which holds the complexity rule.
 The kit sets each limit:
 
 <!-- generated size-limits: bun run build writes it from SIZE_RULES and SIZE_DEFAULTS in scripts/size-rules.ts and scripts/doc-blocks.ts -->
@@ -23,7 +23,7 @@ The kit sets each limit:
 | `fileLines` | The most lines a file may hold, blank and comment lines counted | `max-lines` | 400 | 600 |
 | `functionLines` | The most lines a function may span, blank and comment lines counted | `max-lines-per-function` | 100 | none |
 | `statements` | The most statements a function may hold | `max-statements` | 30 | 50 |
-| `complexity` | The highest cyclomatic complexity a function may reach, a switch counted once | `complexity` | 15 | 15 |
+| `complexity` | The highest cognitive complexity a function may reach, a switch counted once | `effect-channel/cognitive-complexity` | 15 | 15 |
 | `depth` | The deepest a block may nest inside a function | `max-depth` | 4 | 4 |
 
 <!-- end generated size-limits -->
@@ -88,8 +88,8 @@ With one it is that commit against its parent, or against the empty tree for a r
 size-budget: 2 overrun(s) grew past the base in the production and test files the range adds or changes:
   src/billing/invoice.ts: max-lines over by 31 in total, up from 19
     src/billing/invoice.ts: File has too many lines (431). Maximum allowed is 400.
-  src/billing/ledger.ts: complexity over by 3 in total, up from 0
-    src/billing/ledger.ts:12: function `settle` has a complexity of 18. Maximum allowed is 15.
+  src/billing/ledger.ts: cognitive-complexity over by 3 in total, up from 0
+    src/billing/ledger.ts:12: function `settle` has a cognitive complexity of 18. Maximum allowed is 15.
 size-budget: advisory, 1 overrun(s) where the budget does not hold yet:
   tests/e2e/billing.test.ts: File has too many lines (612). Maximum allowed is 600.
 ```

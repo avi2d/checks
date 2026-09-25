@@ -178,7 +178,7 @@
             "complexity": {
               "type": "integer",
               "exclusiveMinimum": 0,
-              "description": "The highest cyclomatic complexity a function may reach, a switch counted once; 15 when absent"
+              "description": "The highest cognitive complexity a function may reach, a switch counted once; 15 when absent"
             },
             "depth": {
               "type": "integer",
@@ -205,7 +205,7 @@
             "complexity": {
               "type": "integer",
               "exclusiveMinimum": 0,
-              "description": "The highest cyclomatic complexity a function may reach, a switch counted once; 15 when absent"
+              "description": "The highest cognitive complexity a function may reach, a switch counted once; 15 when absent"
             },
             "depth": {
               "type": "integer",

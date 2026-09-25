@@ -4,7 +4,7 @@ import { listed, templateFile } from "./doc-templates.ts";
 import { EVERY_REPOSITORY, KIT_GATES, QUALITY_FILE } from "./gates.ts";
 import { AGENT_NAMES, DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, HISTORY_NAMES, LIVING_NAMES, PROSE_RULES } from "./prose-matchers.ts";
 import { LegacyManifest, MODES, Quality } from "./quality-file.ts";
-import { SIZE_DEFAULTS, SIZE_RULES, type Budget } from "./size-rules.ts";
+import { SIZE_DEFAULTS, SIZE_RULES, qualifiedName, type Budget } from "./size-rules.ts";
 
 export const MANIFEST = "package.json";
 export const BUN_VERSION = ".bun-version";
@@ -281,7 +281,8 @@ const SIZE_LIMITS: Block = {
     "| Key | Limits | oxlint rule | Production | Tests |",
     "| --- | --- | --- | --- | --- |",
     ...SIZE_RULES.map(
-      ({ key, limits, rule }) => `| ${code(key)} | ${limits} | ${code(rule)} | ${limitOf(SIZE_DEFAULTS.production, key)} | ${limitOf(SIZE_DEFAULTS.tests, key)} |`,
+      (entry) =>
+        `| ${code(entry.key)} | ${entry.limits} | ${code(qualifiedName(entry))} | ${limitOf(SIZE_DEFAULTS.production, entry.key)} | ${limitOf(SIZE_DEFAULTS.tests, entry.key)} |`,
     ),
   ],
 };

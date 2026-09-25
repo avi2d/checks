@@ -46,6 +46,27 @@ function nested(depth: number): string {
   return `export function deep(x: number): number {\n${opening}${indent(depth + 1)}return x;\n${closing}  return 0;\n}\n`;
 }
 
+function tangled(): string {
+  return `export function tangled(x: number): number {\n\
+    if (x > 0) {\n\
+      if (x > 1 || x < -1) {\n\
+        for (let i = 0; i < x; i++) {\n\
+          if (i > 1 && x > 3 || x === 7) {\n\
+            return i;\n\
+          } else if (i < 0 || x < 0) {\n\
+            return -i;\n\
+          } else {\n\
+            return 0;\n\
+          }\n\
+        }\n\
+        return 3;\n\
+      }\n\
+      return 2;\n\
+    }\n\
+    return 1;\n\
+  }\n`;
+}
+
 async function write(files: Readonly<Record<string, string>>): Promise<void> {
   for (const [name, content] of Object.entries(files)) {
     await mkdir(dirname(join(dir, name)), { recursive: true });
@@ -283,12 +304,14 @@ test(
 );
 
 test(
-  "the kit's recommended budget holds where quality.json states none, counting a switch once toward complexity",
+  "the kit's recommended budget holds where quality.json states none, flagging tangled nests and passing flat guards",
   async () => {
     await repository({});
     await write({
       "src/branchy.ts": branches("branchy", 15),
+      "src/guards.ts": branches("guards", 16),
       "src/switchy.ts": cases(20),
+      "src/tangled.ts": tangled(),
       "src/deep.ts": nested(5),
       "src/busy.ts": counter(29),
       "src/long.ts": constants(401),
@@ -299,12 +322,15 @@ test(
     const first = await commit("feat: first");
 
     const red = await budget(first);
-    expect(red.text).toContain("size-budget: 4 overrun(s) grew past the base in the production and test files the range adds or changes:\n");
-    expect(red.text).toContain("    src/branchy.ts:1: function `branchy` has a complexity of 16. Maximum allowed is 15.\n");
+    expect(red.text).toContain("size-budget: 5 overrun(s) grew past the base in the production and test files the range adds or changes:\n");
+    expect(red.text).toContain("  src/guards.ts: cognitive-complexity over by 1 in total, up from 0\n");
+    expect(red.text).toContain("    src/guards.ts:1: function `guards` has a cognitive complexity of 16. Maximum allowed is 15.\n");
+    expect(red.text).toContain("  src/tangled.ts: cognitive-complexity over by 1 in total, up from 0\n");
+    expect(red.text).toContain("    src/tangled.ts:1: function `tangled` has a cognitive complexity of 16. Maximum allowed is 15.\n");
     expect(red.text).toContain("    src/busy.ts:1: function `count` has too many statements (31). Maximum allowed is 30.\n");
     expect(red.text).toContain("    src/deep.ts:6: Blocks are nested too deeply (5). Maximum allowed is 4.\n");
     expect(red.text).toContain("    src/long.ts: File has too many lines (401). Maximum allowed is 400.\n");
-    for (const fits of ["switchy.ts", "fits.ts", "tests/"]) expect(red.text).not.toContain(fits);
+    for (const fits of ["branchy.ts", "switchy.ts", "fits.ts", "tests/"]) expect(red.text).not.toContain(fits);
     expect(red.exitCode).toBe(1);
   },
   60_000,
