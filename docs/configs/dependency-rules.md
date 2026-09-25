@@ -9,6 +9,7 @@ The shared dependency-cruiser base holds a repository's imports to a set of rule
 - `no-circular`
 - `no-orphans`
 - `not-to-dev-dep`, which refuses shipped source importing a dev-only package, and a package listed in `peerDependencies` too is not dev-only
+- `no-non-package-json`, which refuses an import of an installed package that the nearest `package.json` does not declare
 - `not-to-unresolvable`, which refuses a specifier nothing installed answers
 - `no-deep-imports`, which refuses a subpath the package's exports map does not publish
 

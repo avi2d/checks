@@ -34,8 +34,12 @@ async function writeConfig(extraForbidden: unknown[] = []): Promise<string> {
   return path;
 }
 
+async function writeManifest(fields: Record<string, unknown> = {}): Promise<void> {
+  await writeFile(join(dir, "package.json"), JSON.stringify({ name: "checks-depcruiser-fixture", type: "module", ...fields }));
+}
+
 async function writeProject(files: Record<string, string>): Promise<void> {
-  await writeFile(join(dir, "package.json"), JSON.stringify({ name: "checks-depcruiser-fixture", type: "module" }));
+  await writeManifest();
   for (const [name, content] of Object.entries(files)) {
     const path = join(dir, name);
     await mkdir(join(path, ".."), { recursive: true });
@@ -96,17 +100,8 @@ test(
       "src/entry.test.js": `import "./entry.js";\n`,
       "src/entry.js": `import { dev } from "fake-dev";\nexport const entry = dev;\n`,
     });
-    const manifest = async (extra: Record<string, unknown>): Promise<void> => {
-      await writeFile(
-        join(dir, "package.json"),
-        JSON.stringify({
-          name: "checks-depcruiser-fixture",
-          type: "module",
-          devDependencies: { "fake-dev": "1.0.0" },
-          ...extra,
-        }),
-      );
-    };
+    const manifest = (extra: Record<string, unknown>): Promise<void> =>
+      writeManifest({ devDependencies: { "fake-dev": "1.0.0" }, ...extra });
     await manifest({});
     await mkdir(join(dir, "node_modules", "fake-dev"), { recursive: true });
     await writeFile(join(dir, "node_modules", "fake-dev", "package.json"), JSON.stringify({ name: "fake-dev", version: "1.0.0" }));
@@ -150,14 +145,7 @@ test(
       "src/entry.test.js": `import "./entry.js";\n`,
       "src/entry.js": `import { dev } from "fake-dev";\nexport const entry = dev;\n`,
     });
-    await writeFile(
-      join(dir, "package.json"),
-      JSON.stringify({
-        name: "checks-depcruiser-fixture",
-        type: "module",
-        devDependencies: { "@types/bun": "1.0.0", "fake-dev": "1.0.0" },
-      }),
-    );
+    await writeManifest({ devDependencies: { "@types/bun": "1.0.0", "fake-dev": "1.0.0" } });
     await writePackage("fake-dev", {}, { "index.js": `export const dev = 1;\n` });
     await writePackage("@types/bun", { types: "index.d.ts" }, { "index.d.ts": `declare module "bun" { export const $: unknown; }\n` });
     const config = await writeConfig();
@@ -187,8 +175,34 @@ test(
     expect(red.exitCode).not.toBe(0);
     expect(red.text).toContain("not-to-unresolvable");
     expect(red.text).not.toContain("no-deep-imports");
+    expect(red.text).not.toContain("no-non-package-json");
 
     await writePackage("missing-pkg", {}, { "index.js": `export const gone = 1;\n` });
+    await writeManifest({ dependencies: { "missing-pkg": "1.0.0" } });
+    const green = await depcruise(config, "src");
+    expect(green.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
+  "no-non-package-json goes red on an installed package the manifest omits, green once it is declared",
+  async () => {
+    dir = await mkdtemp(join(tmpdir(), "checks-depcruiser-undeclared-"));
+    await writeProject({
+      "src/entry.test.js": `import "./entry.js";\n`,
+      "src/entry.js": `import { hoisted } from "hoisted-pkg";\nexport const entry = hoisted;\n`,
+    });
+    await writePackage("hoisted-pkg", {}, { "index.js": `export const hoisted = 1;\n` });
+    const config = await writeConfig();
+
+    const red = await depcruise(config, "src");
+    expect(red.exitCode).not.toBe(0);
+    expect(red.text).toContain("no-non-package-json");
+    expect(red.text).toContain("hoisted-pkg");
+    expect(red.text).not.toContain("not-to-unresolvable");
+
+    await writeManifest({ dependencies: { "hoisted-pkg": "1.0.0" } });
     const green = await depcruise(config, "src");
     expect(green.exitCode).toBe(0);
   },
@@ -203,14 +217,7 @@ test(
       "src/entry.test.js": `import "./entry.js";\n`,
       "src/entry.js": `import { deep } from "fake-pkg/lib/internal.js";\nexport const entry = deep;\n`,
     });
-    await writeFile(
-      join(dir, "package.json"),
-      JSON.stringify({
-        name: "checks-depcruiser-fixture",
-        type: "module",
-        dependencies: { "fake-pkg": "1.0.0", mainpkg: "1.0.0", "@scope/pkg": "1.0.0" },
-      }),
-    );
+    await writeManifest({ dependencies: { "fake-pkg": "1.0.0", mainpkg: "1.0.0", "@scope/pkg": "1.0.0" } });
     await writePackage(
       "fake-pkg",
       { exports: { ".": "./index.js", "./published": "./lib/published.js" } },

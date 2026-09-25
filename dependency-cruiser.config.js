@@ -42,6 +42,14 @@ export default {
       },
     },
     {
+      name: "no-non-package-json",
+      severity: "error",
+      comment:
+        "The import resolves to an installed package the nearest package.json does not declare, so it holds only while something else keeps it hoisted. Declare it in dependencies, devDependencies or peerDependencies.",
+      from: {},
+      to: { dependencyTypes: ["npm-no-pkg", "npm-unknown"] },
+    },
+    {
       name: "not-to-unresolvable",
       severity: "error",
       comment: "Nothing installed answers to this specifier. Install the package or fix the path.",
