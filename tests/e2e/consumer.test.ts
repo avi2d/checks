@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { Schema } from "effect";
 import { withoutPullRequestEvent } from "../lib/env.ts";
-import { CHECKOUT, ran, type Ran } from "./lib/fixture-repo.ts";
+import { CHECKOUT, ran, UNVENDORED_BUNFIG, type Ran } from "./lib/fixture-repo.ts";
 
 const WIDGET = "export const widget = 42;\n";
 
@@ -67,7 +67,7 @@ beforeAll(async () => {
   await installConsumer(fileDir, `file:${CHECKOUT}`);
 
   packDir = await mkdtemp(join(tmpdir(), "checks-pack-"));
-  const packed = await $`bun pm pack --destination ${packDir} --quiet`.cwd(CHECKOUT).quiet();
+  const packed = await $`bun pm pack --destination ${packDir} --quiet --ignore-scripts`.cwd(CHECKOUT).quiet();
   tarballPath = packed.stdout.toString().trim();
 
   tarballDir = await mkdtemp(join(tmpdir(), "checks-consumer-tarball-"));
@@ -102,7 +102,7 @@ async function useConsumer(kind: Kind, manifest: Record<string, unknown> = {}): 
 }
 
 async function writeWidgetRepo(testFile: string, widget: string): Promise<void> {
-  await writeFile(join(dir, "bunfig.toml"), await readFile(join(CHECKOUT, "bunfig.toml"), "utf8"));
+  await writeFile(join(dir, "bunfig.toml"), UNVENDORED_BUNFIG);
   await writeFile(join(dir, "widget.ts"), WIDGET);
   await mkdir(dirname(join(dir, testFile)), { recursive: true });
   await writeFile(join(dir, testFile), widgetTest(widget));
@@ -376,6 +376,7 @@ test(
         lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout && checks-commit-identity HEAD",
         gate: "checks-comment-gate HEAD",
         ratchet: "checks-suppressions-ratchet HEAD",
+        clock: "checks-quarantine-clock HEAD",
         backtest: "checks-backtest 5",
         compare: "checks-mutation-compare mutation.json mutation.json",
         wiring: "checks-ci-wiring",
@@ -449,6 +450,7 @@ test(
       ["owners", "feature-owners: quality.json declares no feature"],
       ["docs", "docs: 0 doc file(s) the range touches hold to their templates"],
       ["ratchet", "no count in oxlint-suppressions.json rose or appeared"],
+      ["clock", "no test in tests/quarantine/ is past 30 days"],
     ] as const) {
       const guardrail = await runScript(script);
       expect(guardrail.stdout).toContain(report);
@@ -459,7 +461,7 @@ test(
     const kit = await runScript("kit", withoutPullRequestEvent());
     expect(kit.text).toContain("from HEAD against origin/main");
     expect(kit.text).toContain("commit-identity: 1 commit(s)");
-    expect(kit.text).toContain("checks-lint: 11 gate(s) pass");
+    expect(kit.text).toContain("checks-lint: 12 gate(s) pass");
     expect(kit.exitCode).toBe(0);
   },
   180_000,

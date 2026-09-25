@@ -21,7 +21,8 @@ var KIT_GATES = [
   { bin: "checks-quality", script: "quality.ts", reads: "tree", args: ["--check"], appliesTo: QUALITY_DECLARATION },
   { bin: "checks-size-budget", script: "size-budget.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE },
   { bin: "checks-repetition", script: "repetition.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE },
-  { bin: "checks-feature-owners", script: "feature-owners.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE }
+  { bin: "checks-feature-owners", script: "feature-owners.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE },
+  { bin: "checks-quarantine-clock", script: "quarantine-clock.ts", reads: "range", appliesTo: EVERY_REPOSITORY }
 ];
 var UNCONDITIONAL = KIT_GATES.filter((gate) => gate.appliesTo === EVERY_REPOSITORY).map((gate) => gate.bin);
 var LintGates = Schema.Array(Schema.Literals(KIT_GATES.map((gate) => gate.bin))).check(Schema.makeFilter((selected) => {
@@ -158,8 +159,21 @@ var EffectSources = Schema3.Struct({
   }),
   exempt: Schema3.optionalKey(Schema3.Array(PathGlob).annotate({ description: "Files under paths the Effect rules pass over" }))
 });
+var Library = Schema3.Struct({
+  name: Schema3.String.check(Schema3.isPattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { expected: "a library name in kebab case" })).annotate({ description: "The link checks-vendor manages under repos/" }),
+  package: Schema3.NonEmptyString.annotate({ description: "The npm package whose installed version picks the tag" }),
+  repository: Schema3.NonEmptyString.annotate({ description: "The git remote checks-vendor clones the tag from" }),
+  tag: Schema3.String.check(Schema3.isPattern(/\{version\}/, { expected: "a tag template holding {version}" })).annotate({
+    description: "The tag template, with {version} for the installed version"
+  }),
+  path: Schema3.optionalKey(FilePath.annotate({ description: "The manifest inside the clone holding the version; package.json when absent" }))
+}).annotate({ identifier: "Library" });
 var Sources = Schema3.Struct({
   production: Schema3.optionalKey(Schema3.Array(PathGlob).annotate({ description: "The source the repository ships, as against tests and tooling" })),
+  libraries: Schema3.optionalKey(Schema3.Array(Library).check(Schema3.makeFilter((libraries) => {
+    const repeated = duplicates(libraries.map((library) => library.name));
+    return repeated === undefined || `names ${repeated} more than once`;
+  })).annotate({ description: "The libraries checks-vendor pins to a shared read-only clone" })),
   effect: Schema3.optionalKey(EffectSources)
 });
 var Feature = Schema3.Struct({
@@ -179,11 +193,14 @@ var Feature = Schema3.Struct({
 function nests(outer, inner) {
   return outer === inner || inner.startsWith(`${outer}/`);
 }
-var Features = Schema3.Array(Feature).check(Schema3.makeFilter((features) => {
-  const names = features.map((feature) => feature.name);
+function duplicates(names) {
   const repeated = names.filter((name, index) => names.indexOf(name) !== index);
-  if (repeated.length > 0)
-    return `names ${[...new Set(repeated)].join(", ")} more than once`;
+  return repeated.length === 0 ? undefined : [...new Set(repeated)].join(", ");
+}
+var Features = Schema3.Array(Feature).check(Schema3.makeFilter((features) => {
+  const repeated = duplicates(features.map((feature) => feature.name));
+  if (repeated !== undefined)
+    return `names ${repeated} more than once`;
   for (const outer of features) {
     const inner = features.find((other) => other !== outer && nests(outer.root, other.root));
     if (inner !== undefined)

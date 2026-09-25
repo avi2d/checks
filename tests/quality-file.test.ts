@@ -24,6 +24,7 @@ const METADATA_GATES = [
   "checks-suppressions-ratchet",
   "checks-ci-wiring",
   "checks-docs",
+  "checks-quarantine-clock",
 ] as const;
 const BILLING = {
   name: "billing",
@@ -102,6 +103,15 @@ test("a glob reads the same to oxlint, the language service and git, or it is re
   for (const glob of refused) {
     expect(refusal({ sources: { effect: { paths: [glob] } } })).toContain("Expected a glob from the repository root");
   }
+});
+
+test("a library names its link, package, remote and versioned tag, and a repeated name is refused", () => {
+  const library = { name: "effect", package: "effect", repository: "https://github.com/Effect-TS/effect.git", tag: "effect@{version}" };
+  expect(decoded({ sources: { libraries: [library] } })).toEqual({ sources: { libraries: [library] } });
+  expect(decoded({ sources: { libraries: [{ ...library, path: "packages/effect/package.json" }] } })).toBeDefined();
+  expect(refusal({ sources: { libraries: [library, library] } })).toContain("names effect more than once");
+  expect(refusal({ sources: { libraries: [{ ...library, tag: "effect@1.0.0" }] } })).toContain("a tag template holding {version}");
+  expect(refusal({ sources: { libraries: [{ ...library, name: "Effect" }] } })).toContain("a library name in kebab case");
 });
 
 test("a Rule switched both on and off is refused, and a Rule name is kebab case", () => {

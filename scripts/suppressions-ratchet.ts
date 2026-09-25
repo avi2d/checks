@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect, Schema } from "effect";
-import { git, parentOrEmptyTree, refArgs } from "./git.ts";
+import { git, commitOf, parentOrEmptyTree, refArgs } from "./git.ts";
 import { runMain } from "./main.ts";
 
 export const SUPPRESSIONS = "oxlint-suppressions.json";
@@ -86,10 +86,6 @@ export function report({ counted, lowered, rises }: Ratchet): string {
     ...rises.map((rise) => `  ${describeRise(rise)}`),
   ].join("\n");
 }
-
-const commitOf = Effect.fn("commitOf")(function* (rev: string) {
-  return (yield* git(["rev-parse", "--verify", `${rev}^{commit}`])).trim();
-});
 
 const mergeBase = Effect.fn("mergeBase")(function* (base: string, head: string) {
   const commit = yield* git(["merge-base", base, head]).pipe(

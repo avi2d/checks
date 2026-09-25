@@ -18,18 +18,22 @@ It fails unless the repository holds this shape, and names the file and the path
 - `scripts.test` is exactly `checks-test`, which runs `bun test --randomize` as [checks-test](checks-test.md) says.
 - `scripts.lint` runs this check, itself or through `checks-lint` called by its bare bin name.
 - `bunfig.toml` carries every `[test]` key of the shipped preset with the same value.
-  `[test].pathIgnorePatterns` is always `["**/tests/quarantine/**"]`, which the check pins itself, so the kit's own repository, whose bunfig is the preset, cannot drift it either.
+  `[test].pathIgnorePatterns` is the preset's `["**/tests/quarantine/**", "repos/**"]`, which the check pins itself, so the kit's own repository, whose bunfig is the preset, cannot drift it either.
+  A repository whose `quality.json` declares no `sources.libraries` may hold `["**/tests/quarantine/**"]` instead, and one that declares them must keep `repos/**`.
   Other tables, and extra `[test]` keys, are the repository's own.
 
 The in-process half is what a mutation run can mutate.
 `tests/e2e/**` is left out of a mutate scope by construction, because a subprocess kills both the speed and the coverage signal a mutant needs.
 
-The preset also skips `tests/quarantine/**` on a default run.
+The preset also skips `tests/quarantine/**` and `repos/**` on a default run.
+The `repos/**` entry keeps the suite from following the library links `checks-vendor` manages into trees whose tests are not this repository's.
 A test that turns flaky moves there, so the suite stays trustworthy, and the flake still runs on demand:
 
 ```sh
 bun test --path-ignore-patterns='' tests/quarantine
 ```
+
+A test left there past 30 days fails [checks-quarantine-clock](checks-quarantine-clock.md).
 
 ## What it reads
 
@@ -38,6 +42,7 @@ It scans the tracked and untracked files that `git ls-files --exclude-standard` 
 It parses each test and helper with swc and reads import specifiers and identifier use, so a test that only carries `"node:child_process"` as a string is not a violation.
 `tests/fixtures/**` is data and is not parsed.
 It reads `package.json` for `scripts.test` and `scripts.lint`, and compares `bunfig.toml` with the preset the installed kit ships.
+It reads `quality.json` for `sources.libraries`, which decides whether `repos/**` is pinned.
 
 ## Arguments
 
@@ -53,7 +58,7 @@ It checks the directory it runs in, or the directory it is given.
 | --- | --- |
 | 0 | the repository holds the layout |
 | 1 | a file breaks the layout |
-| 2 | a test, a helper or `package.json` does not parse |
+| 2 | a test, a helper, `package.json` or `quality.json` does not parse |
 
 ## Sample output
 
@@ -75,3 +80,4 @@ A repository that tracks one keeps it.
 - [checks-test](checks-test.md)
 - [checks-flake](checks-flake.md)
 - [checks-mutation-compare](checks-mutation-compare.md)
+- [checks-quarantine-clock](checks-quarantine-clock.md)
