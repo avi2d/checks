@@ -1,12 +1,13 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import kitOxlint from "../oxlintrc.json" with { type: "json" };
+import kitManifest from "../package.json" with { type: "json" };
 import effectLanguageService from "../presets/effect.language-service.json" with { type: "json" };
 import effectOxlint from "../presets/effect.oxlint.json" with { type: "json" };
 import { git } from "./git.ts";
 import { DEFAULT_BRANCH } from "./gates.ts";
 import { runMain, Usage } from "./main.ts";
-import { readQuality, renderJson, type Quality } from "./quality-file.ts";
+import { QualityUnreadable, readQuality, renderJson, type Quality } from "./quality-file.ts";
 import { invokes, plainCommand } from "./shell-command.ts";
 
 // oxlint resolves an override's files, and the language service an override's include, against the
@@ -115,7 +116,7 @@ export function suiteWorkflow(defaultBranch: string, gates: readonly string[], b
     ? "      - uses: oven-sh/setup-bun@v2\n        with:\n          bun-version-file: .bun-version\n"
     : "      - uses: oven-sh/setup-bun@v2\n";
   const steps = gates.map((gate) => `      - run: ${runScalar(gate)}\n`).join("");
-  return `name: ci\non:\n  push:\n    branches: [${defaultBranch}]\n  pull_request:\n    types: [opened, edited, synchronize, reopened]\npermissions:\n  contents: read\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      # The head, not GitHub's merge ref, so the tree the gates read is the commit the range ends at.\n      # The whole history, since the range starts where the head branched from the base branch.\n      - uses: actions/checkout@v5\n        with:\n          ref: \${{ github.event.pull_request.head.sha || github.sha }}\n          fetch-depth: 0\n${setup}      - run: bun install --frozen-lockfile\n${steps}`;
+  return `name: ci\non:\n  push:\n    branches: [${defaultBranch}]\n  pull_request:\n    types: [opened, edited, synchronize, reopened]\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      # The head, not GitHub's merge ref, so the tree the gates read is the commit the range ends at.\n      # The whole history, since the range starts where the head branched from the base branch.\n      - uses: actions/checkout@v5\n        with:\n          ref: \${{ github.event.pull_request.head.sha || github.sha }}\n          fetch-depth: 0\n${setup}      - run: bun install --frozen-lockfile\n${steps}`;
 }
 
 export function workflowsFor(quality: Quality, recipe: WorkflowRecipe): readonly GeneratedWorkflow[] {
@@ -205,13 +206,24 @@ const unmatchedPaths = Effect.fn("unmatchedPaths")(function* (root: string, qual
   return problems;
 });
 
+const decodePackageName = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ name: Schema.optionalKey(Schema.String) })));
+
+const isKit = Effect.fn("isKit")(function* (root: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const manifest = (yield* Path.Path).join(root, "package.json");
+  if (!(yield* fs.exists(manifest))) return false;
+  const { name } = yield* decodePackageName(yield* fs.readFileString(manifest)).pipe(
+    Effect.mapError((cause) => new QualityUnreadable({ message: `package.json: ${cause.message}` })),
+  );
+  return name === kitManifest.name;
+});
+
 const recipeOf = Effect.fn("recipeOf")(function* (root: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  // The kit never installs itself, so where its own config lives the workflow reads that file.
-  const ownConfig = yield* fs.exists(path.join(root, "commitlint.config.js"));
   return {
-    commitlintConfig: ownConfig ? OWN_COMMITLINT_CONFIG : KIT_COMMITLINT_CONFIG,
+    // The kit never installs itself, so its own tree lints with its root config.
+    commitlintConfig: (yield* isKit(root)) ? OWN_COMMITLINT_CONFIG : KIT_COMMITLINT_CONFIG,
     bunVersionFile: yield* fs.exists(path.join(root, ".bun-version")),
   } satisfies WorkflowRecipe;
 });

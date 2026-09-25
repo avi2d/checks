@@ -82,6 +82,7 @@ test("workflowsFor routes a gate the title lint runs to its own workflow and kee
   const titleLint = parseWorkflow(commitlint?.content ?? "");
   expect(titleLint.on.pull_request.types).toEqual(["opened", "edited", "synchronize", "reopened"]);
   expect(runs(titleLint).at(-1)).toBe(TITLE_LINT);
+  for (const workflow of [suite, commitlint]) expect(Bun.YAML.parse(workflow?.content ?? "")).not.toHaveProperty("permissions");
 
   const unrun = ["commitlint", "node_modules/.bin/commitlint", "./node_modules/.bin/commitlint --from origin/main --to HEAD"] as const;
   const [kept] = workflowsFor({ gates: { ci: unrun } }, recipe);
