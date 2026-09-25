@@ -20,9 +20,9 @@ import {
   type SizeRule,
 } from "./size-rules.ts";
 
-type Held = { readonly path: string; readonly from: string };
+export type Held = { readonly path: string; readonly from: string };
 
-type Site = {
+export type Site = {
   readonly file: string;
   readonly line: number | undefined;
   readonly rule: SizeRule["rule"];
@@ -30,7 +30,7 @@ type Site = {
   readonly message: string;
 };
 
-type Growth = {
+export type Growth = {
   readonly file: string;
   readonly rule: SizeRule["rule"];
   readonly base: number;
@@ -38,7 +38,7 @@ type Growth = {
   readonly sites: readonly Site[];
 };
 
-type Verdict =
+export type Verdict =
   | { readonly applies: "all"; readonly held: number; readonly overruns: readonly Site[]; readonly advisory: readonly Site[] }
   | { readonly applies: "ratchet"; readonly held: number; readonly growths: readonly Growth[]; readonly advisory: readonly Site[] };
 
@@ -69,7 +69,17 @@ const Diagnostic = Schema.Struct({
 
 const decodeReport = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ diagnostics: Schema.Array(Diagnostic) })));
 
-function rulesOf(budget: Budget): Record<string, unknown> {
+type Rules = Readonly<Record<string, unknown>>;
+
+export type SizeConfig = {
+  readonly plugins: readonly string[];
+  readonly jsPlugins: readonly string[];
+  readonly categories: Readonly<Record<string, string>>;
+  readonly rules: Rules;
+  readonly overrides: readonly { readonly files: readonly string[]; readonly rules: Rules }[];
+};
+
+function rulesOf(budget: Budget): Rules {
   return Object.fromEntries(
     SIZE_RULES.map((entry) => {
       const max = budget[entry.key];
@@ -78,7 +88,7 @@ function rulesOf(budget: Budget): Record<string, unknown> {
   );
 }
 
-function sizeConfig({ production, tests }: Budgets, plugin: string): unknown {
+export function sizeConfig({ production, tests }: Budgets, plugin: string): SizeConfig {
   return {
     plugins: [],
     jsPlugins: [plugin],
@@ -88,7 +98,7 @@ function sizeConfig({ production, tests }: Budgets, plugin: string): unknown {
   };
 }
 
-function heldByChange(changes: readonly Change[]): readonly Held[] {
+export function heldByChange(changes: readonly Change[]): readonly Held[] {
   return changes.flatMap((change) => {
     if (change.kind === "written") return [{ path: change.path, from: change.path }];
     if (change.kind === "renamed" && change.edited) return [{ path: change.path, from: change.from }];
@@ -118,7 +128,9 @@ const materializeBase = Effect.fn("materializeBase")(function* (root: string, ba
   yield* git(["checkout-index", "--all", `--prefix=${tree}/`], root, { env });
 });
 
-const siteOf = (budgets: Budgets) =>
+export const siteOf = (
+  budgets: Budgets,
+): ((diagnostic: typeof Diagnostic.Type) => Effect.Effect<readonly Site[], OxlintUnreadable>) =>
   Effect.fn("siteOf")(function* ({ code, message, filename, labels }: typeof Diagnostic.Type) {
     const rule = SIZE_RULES.find((candidate) => code === diagnosticCode(candidate));
     if (rule === undefined) return [];
@@ -166,13 +178,32 @@ function total(sites: readonly Site[]): number {
   return sites.reduce((sum, { overrun }) => sum + overrun, 0);
 }
 
-function growthsOf(head: readonly Site[], base: readonly Site[]): readonly Growth[] {
+// Sums each rule per file separately, so a shrink in one rule or file never offsets a growth in another.
+export function growthsOf(head: readonly Site[], base: readonly Site[]): readonly Growth[] {
   const before = byFileAndRule(base);
   return [...byFileAndRule(head).entries()].flatMap(([group, sites]) => {
     const [first] = sites;
     const growth = { base: total(before.get(group) ?? []), head: total(sites), sites };
     return first !== undefined && growth.head > growth.base ? [{ file: first.file, rule: first.rule, ...growth }] : [];
   });
+}
+
+// Decides the verdict from sites oxlint already measured: which are held to the range or the
+// whole tree, and, under ratchet, which grew past what the base measured for the same file and rule.
+export function verdictOf(
+  applies: Applies,
+  held: number,
+  holds: ReadonlySet<string>,
+  sites: readonly Site[],
+  baseSites: readonly Site[],
+): Verdict {
+  const heldSites = sites.filter((site) => holds.has(site.file));
+  if (applies !== "ratchet") {
+    return { applies, held, overruns: heldSites, advisory: sites.filter((site) => !holds.has(site.file)) };
+  }
+  const growths = growthsOf(heldSites, baseSites);
+  const failing = new Set(growths.flatMap((growth) => growth.sites));
+  return { applies, held, growths, advisory: sites.filter((site) => !failing.has(site)) };
 }
 
 const heldFiles = Effect.fn("heldFiles")(function* (root: string, applies: Applies, pathspecs: readonly string[], base: string, head: string) {
@@ -196,25 +227,20 @@ const runBudget = Effect.fn("runBudget")(
     if (held.length + others.length > 0) yield* materializeHead(root, head, [...holds, ...others], headTree);
     const plugin = path.join(import.meta.dir, "..", "dist", "index.js");
     const sites = yield* measure(headTree, budgets, plugin);
-    const heldSites = sites.filter((site) => holds.has(site.file));
-    if (applies !== "ratchet") {
-      return { applies, held: held.length, overruns: heldSites, advisory: sites.filter((site) => !holds.has(site.file)) } satisfies Verdict;
-    }
+    if (applies !== "ratchet") return verdictOf(applies, held.length, holds, sites, []);
 
     const baseTree = path.join(scratch, "base");
     if (held.length > 0) yield* materializeBase(root, base, held, baseTree);
-    const growths = growthsOf(heldSites, yield* measure(baseTree, budgets, plugin));
-    const failing = new Set(growths.flatMap((growth) => growth.sites));
-    return { applies, held: held.length, growths, advisory: sites.filter((site) => !failing.has(site)) } satisfies Verdict;
+    return verdictOf(applies, held.length, holds, sites, yield* measure(baseTree, budgets, plugin));
   },
   Effect.scoped,
 );
 
-function describe({ file, line, message }: Site, indent = "  "): string {
+export function describe({ file, line, message }: Site, indent = "  "): string {
   return `${indent}${file}${line === undefined ? "" : `:${line}`}: ${message}`;
 }
 
-function verdictLines(verdict: Verdict): readonly string[] {
+export function verdictLines(verdict: Verdict): readonly string[] {
   const scope = SCOPE[verdict.applies];
   if (verdict.applies === "ratchet") {
     if (verdict.growths.length === 0) return [`${NAME}: ${verdict.held} file(s), ${scope}, raise no overrun past the base`];
@@ -230,7 +256,7 @@ function verdictLines(verdict: Verdict): readonly string[] {
   return [`${NAME}: ${verdict.overruns.length} overrun(s) of the budget in ${scope}:`, ...verdict.overruns.map((site) => describe(site))];
 }
 
-function report(verdict: Verdict): string {
+export function report(verdict: Verdict): string {
   const { advisory } = verdict;
   const notice =
     advisory.length === 0
@@ -239,7 +265,7 @@ function report(verdict: Verdict): string {
   return [...verdictLines(verdict), ...notice].join("\n");
 }
 
-function passes(verdict: Verdict): boolean {
+export function passes(verdict: Verdict): boolean {
   return verdict.applies === "ratchet" ? verdict.growths.length === 0 : verdict.overruns.length === 0;
 }
 

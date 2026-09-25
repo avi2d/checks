@@ -94,9 +94,9 @@ function lint(args: readonly string[] = [], env: Readonly<Record<string, string>
 }
 
 test(
-  "the range starts where HEAD branched from origin/HEAD, then origin/main, unless arguments name it",
+  "the range starts where HEAD branched from origin/HEAD, then the declared default branch, unless arguments name it",
   async () => {
-    const base = await initRepo();
+    const base = await initRepo({ defaultBranch: "trunk" });
     await writeFile(join(dir, "clean.ts"), "export const answer = 42;\n");
     const head = await commit("feat: clean");
     await $`git update-ref refs/remotes/origin/trunk ${base}`.cwd(dir).quiet();
@@ -110,24 +110,18 @@ test(
     expect(viaOriginHead.text).toContain("checks-lint: 12 gate(s) pass");
     expect(viaOriginHead.exitCode).toBe(0);
 
-    await $`git symbolic-ref --delete refs/remotes/origin/HEAD`.cwd(dir).quiet();
-    const viaOriginMain = await lint();
-    expect(viaOriginMain.text).toContain(`checks-lint: range ${base}..${head} from HEAD against origin/main\n`);
-    expect(viaOriginMain.exitCode).toBe(0);
-
-    const explicit = await lint([head, head]);
-    expect(explicit.text).toContain(`checks-lint: tip ${head} from ${head} against ${head}\n`);
-    expect(explicit.text).toContain(`commit-identity: 1 commit(s) in ${head} carry only allowed identities`);
-    expect(explicit.exitCode).toBe(0);
+    const explicit = await lint([base, "missing"]);
+    expect(explicit.text).toContain("checks-lint: missing is not a commit in this clone");
+    expect(explicit.exitCode).toBe(2);
 
     const usage = await lint([head]);
     expect(usage.text).toContain("checks-lint: usage: lint.ts [<base-ref> <head-ref>]");
     expect(usage.exitCode).toBe(2);
 
-    await $`git update-ref -d refs/remotes/origin/main`.cwd(dir).quiet();
-    const unresolved = await lint();
-    expect(unresolved.text).toContain("checks-lint: origin/main is not a commit in this clone");
-    expect(unresolved.exitCode).toBe(2);
+    await $`git symbolic-ref --delete refs/remotes/origin/HEAD && git update-ref -d refs/remotes/origin/trunk`.cwd(dir).quiet();
+    const declared = await lint();
+    expect(declared.text).toContain("checks-lint: origin/trunk is not a commit in this clone");
+    expect(declared.exitCode).toBe(2);
   },
   60_000,
 );
@@ -152,24 +146,6 @@ test(
     const both = await lint();
     expect(both.text).toContain("checks-lint: package.json still sets ciWiring, which quality.json replaces; move what it holds there");
     expect(both.exitCode).toBe(2);
-  },
-  60_000,
-);
-
-test(
-  "without origin/HEAD the range starts from the defaultBranch quality.json declares",
-  async () => {
-    const base = await initRepo({ defaultBranch: "trunk" });
-    await writeFile(join(dir, "clean.ts"), "export const answer = 42;\n");
-    const head = await commit("feat: clean");
-    await $`git update-ref refs/remotes/origin/trunk ${base}`.cwd(dir).quiet();
-    await $`git symbolic-ref --delete refs/remotes/origin/HEAD`.cwd(dir).quiet();
-    await $`git update-ref -d refs/remotes/origin/main`.cwd(dir).quiet();
-
-    const declared = await lint();
-    expect(declared.text).toContain(`checks-lint: range ${base}..${head} from HEAD against origin/trunk\n`);
-    expect(declared.text).toContain("checks-lint: 12 gate(s) pass");
-    expect(declared.exitCode).toBe(0);
   },
   60_000,
 );
