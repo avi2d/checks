@@ -1,6 +1,6 @@
 # checks-quality
 
-`checks-quality` is the bin that writes what `quality.json` declares for oxlint and tsc into generated fragments and checks them, and a reader looks it up when generated text is stale.
+`checks-quality` is the bin that writes what `quality.json` declares into generated fragments and workflows and checks them, and a reader looks it up when generated text is stale.
 
 ## What it checks
 

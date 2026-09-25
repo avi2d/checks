@@ -10,25 +10,8 @@ It arrives with the kit, since `@commitlint/cli` and `@commitlint/config-convent
 ## Workflow
 
 The lint runs in CI on pull requests, because `jj` never fires a git hook.
-The kit writes this workflow whole when `checks-quality generate` runs:
-
-```yaml
-on:
-  pull_request:
-    types: [opened, edited, synchronize, reopened]
-jobs:
-  commitlint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: oven-sh/setup-bun@v2
-      - run: bun install --frozen-lockfile
-      # Only the title is linted: it is what a squash merge lands, with GitHub appending " (#N)" to it.
-      - run: printf '%s' "$PR_TITLE (#0000)" > "$RUNNER_TEMP/pr-title"
-        env:
-          PR_TITLE: ${{ github.event.pull_request.title }}
-      - run: ./node_modules/.bin/commitlint --config ./node_modules/@avi2dg/checks/commitlint.config.js --edit "$RUNNER_TEMP/pr-title"
-```
+`checks-quality generate` writes the workflow whole into `.github/workflows/commitlint.yml`, as [checks-quality](../gates/checks-quality.md) says.
+The workflow lints with the installed kit's `commitlint.config.js`, so every repository holds titles to the same rules.
 
 ## What it lints
 
