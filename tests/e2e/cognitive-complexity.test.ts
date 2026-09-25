@@ -284,12 +284,28 @@ export const walk = (node) => {
     (kid) => (kid.leaf ? 0 : walk(kid)),
   );
 };
+export class Form {
+  handleSubmit = () => {
+    if (this.ready && this.armed) {
+      this.handleSubmit();
+    }
+  };
+}
+export const table = {
+  [kind]: () => {
+    if (ready && armed || live) {
+      kind();
+    }
+  },
+};
 `;
 
 test("a function takes its name only from its direct parent", async () => {
   const { text } = await lint({ "naming.js": NAMING }, 1);
   expect(diagnostics(text)).toEqual([
     { line: 1, message: "function `anonymous` has a cognitive complexity of 2. Maximum allowed is 1." },
+    { line: 27, message: "function `anonymous` has a cognitive complexity of 3. Maximum allowed is 1." },
+    { line: 20, message: "function `handleSubmit` has a cognitive complexity of 3. Maximum allowed is 1." },
     { line: 8, message: "function `run` has a cognitive complexity of 2. Maximum allowed is 1." },
     { line: 14, message: "function `walk` has a cognitive complexity of 2. Maximum allowed is 1." },
   ]);

@@ -368,11 +368,13 @@ function maxOf(options) {
   }
   return DEFAULT_MAX;
 }
-function keyName(key) {
-  if (key.type === "Identifier")
-    return key.name;
-  if (key.type === "Literal" && typeof key.value === "string")
-    return key.value;
+function keyName(holder) {
+  if (holder.computed)
+    return;
+  if (holder.key.type === "Identifier")
+    return holder.key.name;
+  if (holder.key.type === "Literal" && typeof holder.key.value === "string")
+    return holder.key.value;
   return;
 }
 function assignedName(target) {
@@ -387,8 +389,9 @@ function boundName(node) {
   const parent = node.parent;
   if (parent.type === "VariableDeclarator" && parent.init === node && parent.id.type === "Identifier")
     return parent.id.name;
-  if ((parent.type === "Property" || parent.type === "MethodDefinition") && parent.value === node)
-    return keyName(parent.key);
+  if ((parent.type === "Property" || parent.type === "MethodDefinition" || parent.type === "PropertyDefinition" || parent.type === "AccessorProperty") && parent.value === node) {
+    return keyName(parent);
+  }
   if (parent.type === "AssignmentExpression" && parent.right === node)
     return assignedName(parent.left);
   return;

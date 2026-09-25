@@ -11,9 +11,10 @@ function maxOf(options: Context["options"]): number {
   return DEFAULT_MAX;
 }
 
-function keyName(key: ESTree.PropertyKey): string | undefined {
-  if (key.type === "Identifier") return key.name;
-  if (key.type === "Literal" && typeof key.value === "string") return key.value;
+function keyName(holder: { readonly key: ESTree.PropertyKey; readonly computed: boolean }): string | undefined {
+  if (holder.computed) return undefined;
+  if (holder.key.type === "Identifier") return holder.key.name;
+  if (holder.key.type === "Literal" && typeof holder.key.value === "string") return holder.key.value;
   return undefined;
 }
 
@@ -28,7 +29,15 @@ function assignedName(target: ESTree.Node): string | undefined {
 function boundName(node: ESTree.Function | ESTree.ArrowFunctionExpression): string | undefined {
   const parent = node.parent;
   if (parent.type === "VariableDeclarator" && parent.init === node && parent.id.type === "Identifier") return parent.id.name;
-  if ((parent.type === "Property" || parent.type === "MethodDefinition") && parent.value === node) return keyName(parent.key);
+  if (
+    (parent.type === "Property" ||
+      parent.type === "MethodDefinition" ||
+      parent.type === "PropertyDefinition" ||
+      parent.type === "AccessorProperty") &&
+    parent.value === node
+  ) {
+    return keyName(parent);
+  }
   if (parent.type === "AssignmentExpression" && parent.right === node) return assignedName(parent.left);
   return undefined;
 }
