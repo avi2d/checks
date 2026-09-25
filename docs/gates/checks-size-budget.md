@@ -51,6 +51,7 @@ The kit sets each limit:
 `applies` is `ratchet` when `size` leaves it out.
 A file the range deletes or only renames is not held.
 Every other tracked `.ts` or `.tsx` file over the budget, tooling and unchanged files alike, is listed as advisory and never fails the gate.
+Under `ratchet` the advisory list also names each site in a held file whose overrun did not grow.
 `.d.ts` files are not measured.
 
 `quality.json` refuses `applies: "changed"`, which `ratchet` replaces.
