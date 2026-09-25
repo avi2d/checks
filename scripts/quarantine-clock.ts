@@ -109,15 +109,15 @@ export function report({ checked, overdue }: ClockResult): string {
   ].join("\n");
 }
 
-const filesAt = Effect.fn("filesAt")(function* (head: string) {
-  const listed = yield* git(["ls-tree", "-r", "-z", "--name-only", head, "--", QUARANTINE]);
+const filesAt = Effect.fn("filesAt")(function* (root: string, head: string) {
+  const listed = yield* git(["ls-tree", "-r", "-z", "--name-only", head, "--", QUARANTINE], root);
   return listed.split("\0").filter((file) => TEST_FILE.test(file));
 });
 
-const entryAt = Effect.fn("entryAt")(function* (head: string, file: string) {
-  const output = yield* git(["log", "--follow", "--root", "--name-status", "-z", "--format=commit %H %at %aI", head, "--", file]);
+const entryAt = Effect.fn("entryAt")(function* (root: string, head: string, file: string) {
+  const output = yield* git(["log", "--follow", "--root", "--name-status", "-z", "--format=commit %H %at %aI", head, "--", file], root);
   const entry = findEntry(output, file);
-  if (entry.kind === "truncated" || (yield* isShallowBoundary(entry.sha))) {
+  if (entry.kind === "truncated" || (yield* isShallowBoundary(entry.sha, root))) {
     return yield* new QuarantineError({
       message: `cannot see ${file} entering ${QUARANTINE}; fetch the whole history, since a shallow clone ends before it`,
     });
@@ -125,8 +125,8 @@ const entryAt = Effect.fn("entryAt")(function* (head: string, file: string) {
   return { file, at: entry.at, day: entry.day };
 });
 
-const headAt = Effect.fn("headAt")(function* (head: string) {
-  const shown = yield* git(["show", "-s", "--format=%at %ct", head]);
+const headAt = Effect.fn("headAt")(function* (root: string, head: string) {
+  const shown = yield* git(["show", "-s", "--format=%at %ct", head], root);
   const dates = shown.trim().split(" ").map(Number);
   if (dates.length !== 2 || !dates.every(Number.isInteger)) {
     return yield* new QuarantineError({ message: `cannot read when ${head} was written` });
@@ -134,17 +134,18 @@ const headAt = Effect.fn("headAt")(function* (head: string) {
   return Math.max(...dates);
 });
 
-export const runHead = Effect.fn("runHead")(function* (head: string) {
-  const files = yield* filesAt(head);
-  const entries = yield* Effect.forEach(files, (file) => entryAt(head, file));
-  return { checked: files.length, overdue: overdueOf(entries, yield* headAt(head)) } satisfies ClockResult;
+export const runHead = Effect.fn("runHead")(function* (root: string, head: string) {
+  const files = yield* filesAt(root, head);
+  const entries = yield* Effect.forEach(files, (file) => entryAt(root, head, file));
+  return { checked: files.length, overdue: overdueOf(entries, yield* headAt(root, head)) } satisfies ClockResult;
 });
 
 const clock = Effect.gen(function* () {
   const { first, second } = yield* refArgs(process.argv.slice(2), USAGE);
   if (second !== undefined) yield* commitOf(first);
   const head = yield* commitOf(second ?? first);
-  const result = yield* runHead(head);
+  const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
+  const result = yield* runHead(root, head);
   yield* Console.log(report(result));
   return result.overdue.length === 0;
 });

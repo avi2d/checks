@@ -29,7 +29,7 @@ async function move(repo: FixtureRepo, from: string, to: string, days: number): 
 }
 
 test(
-  "a test quarantined more than 30 days before HEAD goes red naming it, its entry day and what to do",
+  "a test quarantined more than 30 days before HEAD goes red naming it, its entry day and what to do, from any directory",
   async () => {
     const repo = await open();
     await add(repo, "tests/quarantine/billing.test.ts", 40);
@@ -47,6 +47,11 @@ test(
     const ranged = await repo.script("quarantine-clock.ts", `${head}~1`, head);
     expect(ranged.exitCode).toBe(1);
     expect(ranged.text).toContain("tests/quarantine/billing.test.ts entered quarantine on");
+
+    await mkdir(join(repo.dir, "src"), { recursive: true });
+    const nested = await ran($`bun ${join(CHECKOUT, "scripts", "quarantine-clock.ts")} ${head}`.cwd(join(repo.dir, "src")));
+    expect(nested.exitCode).toBe(1);
+    expect(nested.text).toContain(`  tests/quarantine/billing.test.ts entered quarantine on ${entryDay} (`);
   },
   120_000,
 );
