@@ -18,7 +18,14 @@ A test whose subject no mutant can touch, such as frontmatter or links, looks re
 It reads one Stryker `mutation.json` report built with bail off, which the shared Stryker preset's `json` reporter writes to `reports/mutation/mutation.json`.
 With `disableBail` Stryker runs every covering test for each mutant and records every test that fails as a killer, so each test gets a kill set.
 A report built with bail on records one killer per mutant, which makes every test look unique.
-The report records no flag that says whether bail was on, so build it with `disableBail` set.
+Stryker writes its options into the report's `config`, so `checks-subsumed-tests` refuses a report whose `config.disableBail` is not `true`.
+A report with no `config` shows nothing about bail, so `checks-subsumed-tests` prints one warning and reads it anyway.
+Build a bail-off report with this command:
+
+```sh
+bunx stryker run --disableBail
+```
+
 The report records each killer as a test index, so it names each test by its file and its name from the report's `testFiles` table.
 
 ## Arguments
@@ -32,7 +39,7 @@ checks-subsumed-tests <mutation-report>
 | Code | When |
 | --- | --- |
 | 0 | the report printed |
-| 2 | the report is not a Stryker mutation report, or the arguments do not parse |
+| 2 | the report is not a Stryker mutation report, it was built with bail on, or the arguments do not parse |
 
 ## Sample output
 

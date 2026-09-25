@@ -157,6 +157,17 @@ export function formatReport(report: Report): string {
   return lines.join("\n");
 }
 
+export const bailWarning = (source: string, run: KillRun): Effect.Effect<string | undefined, ReportError> => {
+  if (run.bail === "on")
+    return Effect.fail(
+      new ReportError({
+        message: `${source} was built with bail on, since its config.disableBail is not true, so each mutant records only its first killer: rerun Stryker with \`bunx stryker run --disableBail\` and pass the report it writes`,
+      }),
+    );
+  if (run.bail === "unrecorded") return Effect.succeed(`${source} records no config, so nothing shows whether bail was off: build it with \`bunx stryker run --disableBail\``);
+  return Effect.succeed(undefined);
+};
+
 export const parseArgs = Effect.fnUntraced(function* (argv: readonly string[]): Effect.fn.Return<Options, Usage> {
   const [reportPath, ...extra] = argv.filter((arg) => !arg.startsWith("--"));
   const flag = argv.find((arg) => arg.startsWith("--"));
@@ -168,7 +179,10 @@ export const parseArgs = Effect.fnUntraced(function* (argv: readonly string[]): 
 const load = Effect.fn("load")(function* (path: string) {
   const fs = yield* FileSystem.FileSystem;
   const text = yield* fs.readFileString(path).pipe(Effect.mapError(() => new ReportError({ message: `cannot read ${path}` })));
-  return yield* parseKillRun(path, text);
+  const run = yield* parseKillRun(path, text);
+  const warning = yield* bailWarning(path, run);
+  if (warning !== undefined) yield* Console.error(`subsumed-tests: warning: ${warning}`);
+  return run;
 });
 
 const report = Effect.gen(function* () {

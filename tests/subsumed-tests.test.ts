@@ -3,7 +3,7 @@ import { Effect } from "effect";
 import { readFile } from "node:fs/promises";
 import { Usage } from "../scripts/main.ts";
 import { parseKillRun, ReportError } from "../scripts/mutation-compare.ts";
-import { analyze, formatReport, parseArgs, type Report } from "../scripts/subsumed-tests.ts";
+import { analyze, bailWarning, formatReport, parseArgs, type Report } from "../scripts/subsumed-tests.ts";
 
 const FIXTURES = new URL("./fixtures/subsumed-tests/", import.meta.url);
 const WIDE = "tests/add.test.ts > add covers every operator";
@@ -16,6 +16,15 @@ const IDLE = "tests/mul.test.ts > mul names its label";
 async function fixture(name: string): Promise<Report> {
   const text = await readFile(new URL(name, FIXTURES), "utf8");
   return analyze(Effect.runSync(parseKillRun(name, text)));
+}
+
+async function withConfig(config: object | undefined): Promise<string> {
+  const { config: _recorded, ...report } = JSON.parse(await readFile(new URL("report.json", FIXTURES), "utf8"));
+  return JSON.stringify(config === undefined ? report : { ...report, config });
+}
+
+function bailOf(text: string): string | undefined {
+  return Effect.runSync(parseKillRun("report.json", text).pipe(Effect.flatMap((run) => bailWarning("report.json", run))));
 }
 
 test("a subsumed pair names the test and its subsumer by file and name with both kill counts", async () => {
@@ -65,4 +74,22 @@ test("only the report path parses", () => {
 test("a report without a files or a testFiles table is refused", () => {
   expect(() => Effect.runSync(parseKillRun("report", "{}"))).toThrow(ReportError);
   expect(() => Effect.runSync(parseKillRun("report", '{"files": {}}'))).toThrow(ReportError);
+});
+
+test("a bail-off report reads without a warning", async () => {
+  expect(bailOf(await withConfig({ disableBail: true }))).toBeUndefined();
+});
+
+test("a report built with bail on is refused with the flag that rebuilds it", async () => {
+  for (const config of [{ disableBail: false }, {}]) {
+    const text = await withConfig(config);
+    expect(() => bailOf(text)).toThrow(ReportError);
+    expect(() => bailOf(text)).toThrow(/config\.disableBail is not true.*bunx stryker run --disableBail/);
+  }
+});
+
+test("a report without a config warns once and still reads", async () => {
+  const text = await withConfig(undefined);
+  expect(bailOf(text)).toBe("report.json records no config, so nothing shows whether bail was off: build it with `bunx stryker run --disableBail`");
+  expect(analyze(Effect.runSync(parseKillRun("report.json", text))).subsumed).toHaveLength(1);
 });

@@ -27,6 +27,7 @@ export type TestFile = {
 export type KillRun = {
   readonly files: ReadonlyMap<string, ReportFile>;
   readonly testFiles: ReadonlyMap<string, TestFile>;
+  readonly bail: "off" | "on" | "unrecorded";
 };
 
 export type MutantChange = {
@@ -93,6 +94,7 @@ const decodeKillRun = Schema.decodeUnknownEffect(
     Schema.Struct({
       files: Files,
       testFiles: Schema.Record(Schema.String, Schema.Struct({ tests: Schema.Array(Schema.Struct({ id: Schema.String, name: Schema.String })) })),
+      config: Schema.optionalKey(Schema.Struct({ disableBail: Schema.optionalKey(Schema.Boolean) })),
     }),
   ),
 );
@@ -105,9 +107,18 @@ export const parseReport = (source: string, text: string): Effect.Effect<Map<str
     Effect.mapError(notAReport(source)),
   );
 
+function bailOf(config: { readonly disableBail?: boolean } | undefined): KillRun["bail"] {
+  if (config === undefined) return "unrecorded";
+  return config.disableBail === true ? "off" : "on";
+}
+
 export const parseKillRun = (source: string, text: string): Effect.Effect<KillRun, ReportError> =>
   decodeKillRun(text).pipe(
-    Effect.map(({ files, testFiles }) => ({ files: new Map(Object.entries(files)), testFiles: new Map(Object.entries(testFiles)) })),
+    Effect.map(({ files, testFiles, config }) => ({
+      files: new Map(Object.entries(files)),
+      testFiles: new Map(Object.entries(testFiles)),
+      bail: bailOf(config),
+    })),
     Effect.mapError(notAReport(source)),
   );
 
