@@ -26,7 +26,7 @@ const USAGE = "usage: lint.ts [<base-ref> <head-ref>]";
 const PULL_REQUEST_EVENT = "pull_request";
 const SHALLOW_HINT = "a CI checkout needs actions/checkout fetch-depth: 0";
 
-const decodePullRequestEvent = Schema.decodeUnknownEffect(
+export const decodePullRequestEvent = Schema.decodeUnknownEffect(
   Schema.fromJsonString(
     Schema.Struct({
       pull_request: Schema.Struct({
@@ -38,6 +38,17 @@ const decodePullRequestEvent = Schema.decodeUnknownEffect(
   ),
 );
 
+type PullRequest = { readonly number: number; readonly base: { readonly ref: string }; readonly head: { readonly sha: string } };
+
+// Decides the range ends an already-decoded pull request event describes.
+export function pullRequestEndsOf(pullRequest: PullRequest): { base: string; head: string; source: string } {
+  return {
+    base: `origin/${pullRequest.base.ref}`,
+    head: pullRequest.head.sha,
+    source: `pull request #${pullRequest.number} into ${pullRequest.base.ref}`,
+  };
+}
+
 const pullRequestEnds = Effect.fn("pullRequestEnds")(function* (eventPath: string) {
   const fs = yield* FileSystem.FileSystem;
   const { pull_request: pullRequest } = yield* fs.readFileString(eventPath).pipe(
@@ -46,11 +57,7 @@ const pullRequestEnds = Effect.fn("pullRequestEnds")(function* (eventPath: strin
       (cause) => new RangeUnresolved({ message: `cannot read the pull request from ${eventPath}: ${cause.message}` }),
     ),
   );
-  return {
-    base: `origin/${pullRequest.base.ref}`,
-    head: pullRequest.head.sha,
-    source: `pull request #${pullRequest.number} into ${pullRequest.base.ref}`,
-  };
+  return pullRequestEndsOf(pullRequest);
 });
 
 const readWiring = Effect.gen(function* () {
@@ -58,43 +65,75 @@ const readWiring = Effect.gen(function* () {
   return { source, defaultBranch: quality.defaultBranch ?? DEFAULT_BRANCH, lintGates: quality.gates?.lint };
 });
 
-const originEnds = (defaultBranch: string) =>
-  git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]).pipe(
-    Effect.map((ref) => ref.trim()),
-    Effect.catchTag("GitFailure", () => Effect.succeed(`origin/${defaultBranch}`)),
-    Effect.map((base) => ({ base, head: "HEAD", source: `HEAD against ${base}` })),
-  );
+// Decides the base ref `git symbolic-ref` already resolved, or the repository's declared
+// default branch when that ref is absent, such as a checkout with no remote HEAD symlink.
+export function originRefOf(symbolicRef: string | undefined, defaultBranch: string): string {
+  return symbolicRef !== undefined && symbolicRef !== "" ? symbolicRef : `origin/${defaultBranch}`;
+}
 
 // A clone holding any remote-tracking ref but not the default branch is a shallow CI checkout,
 // where judging HEAD alone would pass every commit before it unchecked.
+export function localEndsOf(hasRemoteTracking: boolean, originRef: string): { base: string; head: string; source: string } {
+  if (!hasRemoteTracking) return { base: "HEAD", head: "HEAD", source: "HEAD alone, as the clone has no remote-tracking refs" };
+  return { base: originRef, head: "HEAD", source: `HEAD against ${originRef}` };
+}
+
+const originEnds = (defaultBranch: string) =>
+  git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]).pipe(
+    Effect.map((ref) => ref.trim()),
+    Effect.catchTag("GitFailure", () => Effect.succeed(undefined)),
+    Effect.map((symbolicRef) => localEndsOf(true, originRefOf(symbolicRef, defaultBranch))),
+  );
+
 const localEnds = Effect.fn("localEnds")(function* (defaultBranch: string) {
   const remoteTracking = yield* git(["for-each-ref", "--count=1", "refs/remotes/"]).pipe(
     Effect.mapError((cause) => new RangeUnresolved({ message: cause.message })),
   );
-  if (remoteTracking.trim() === "") {
-    return { base: "HEAD", head: "HEAD", source: "HEAD alone, as the clone has no remote-tracking refs" };
-  }
+  if (remoteTracking.trim() === "") return localEndsOf(false, "");
   return yield* originEnds(defaultBranch);
 });
 
-const endsOf = Effect.fn("endsOf")(function* (args: readonly string[], defaultBranch: string) {
-  const [base, head, ...extra] = args;
-  if (base !== undefined && head !== undefined && extra.length === 0) {
-    return { base, head, source: `${head} against ${base}` };
-  }
-  if (base !== undefined) return yield* new Usage({ message: USAGE });
+// Decides which source of range ends the arguments and the pull request env vars select,
+// with no I/O: a caller resolves the selected kind against git or the event file.
+export type EndsSelection =
+  | { readonly kind: "explicit"; readonly base: string; readonly head: string }
+  | { readonly kind: "usage" }
+  | { readonly kind: "pull-request"; readonly path: string }
+  | { readonly kind: "pull-request-unresolved" }
+  | { readonly kind: "local" };
 
+export function selectEnds(args: readonly string[], eventName: string | undefined, eventPath: string | undefined): EndsSelection {
+  const [base, head, ...extra] = args;
+  if (base !== undefined && head !== undefined && extra.length === 0) return { kind: "explicit", base, head };
+  if (base !== undefined) return { kind: "usage" };
+  if (eventName === PULL_REQUEST_EVENT) {
+    return eventPath === undefined ? { kind: "pull-request-unresolved" } : { kind: "pull-request", path: eventPath };
+  }
+  return { kind: "local" };
+}
+
+const endsOf = Effect.fn("endsOf")(function* (args: readonly string[], defaultBranch: string) {
   const event = yield* Config.all({
     name: Config.option(Config.String("GITHUB_EVENT_NAME")),
     path: Config.option(Config.String("GITHUB_EVENT_PATH")),
   }).pipe(Effect.mapError((cause) => new RangeUnresolved({ message: cause.message })));
-  if (Option.isSome(event.name) && event.name.value === PULL_REQUEST_EVENT) {
-    if (Option.isNone(event.path)) {
+  const selection = selectEnds(
+    args,
+    Option.getOrUndefined(event.name),
+    Option.getOrUndefined(event.path),
+  );
+  switch (selection.kind) {
+    case "explicit":
+      return { base: selection.base, head: selection.head, source: `${selection.head} against ${selection.base}` };
+    case "usage":
+      return yield* new Usage({ message: USAGE });
+    case "pull-request":
+      return yield* pullRequestEnds(selection.path);
+    case "pull-request-unresolved":
       return yield* new RangeUnresolved({ message: `${PULL_REQUEST_EVENT} sets no GITHUB_EVENT_PATH` });
-    }
-    return yield* pullRequestEnds(event.path.value);
+    case "local":
+      return yield* localEnds(defaultBranch);
   }
-  return yield* localEnds(defaultBranch);
 });
 
 const commitOf = (ref: string) =>
@@ -104,6 +143,12 @@ const commitOf = (ref: string) =>
       (cause) => new RangeUnresolved({ message: `${ref} is not a commit in this clone; ${SHALLOW_HINT}: ${cause.message}` }),
     ),
   );
+
+// Decides the range git merge-base already resolved: the commits between base and head, or a
+// lone tip when they coincide, as every range gate would otherwise charge the head with nothing.
+export function rangeOf(base: string, head: string): Range["refs"] {
+  return base === head ? [head] : [base, head];
+}
 
 // From the base branch's tip, every range gate would charge the head with the commits the base
 // branch gained after the head branched off.
@@ -116,10 +161,10 @@ const resolveRange = Effect.fn("resolveRange")(function* (args: readonly string[
       () => new RangeUnresolved({ message: `${ends.base} and ${ends.head} share no commit in this clone; ${SHALLOW_HINT}` }),
     ),
   );
-  return { refs: base === head ? [head] : [base, head], source: ends.source } satisfies Range;
+  return { refs: rangeOf(base, head), source: ends.source } satisfies Range;
 });
 
-function describe({ refs }: Range): string {
+export function describe({ refs }: Range): string {
   return refs.length === 1 ? `tip ${refs[0]}` : `range ${refs[0]}..${refs[1]}`;
 }
 
