@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import effectLanguageService from "../presets/effect.language-service.json" with { type: "json" };
 import effectOxlint from "../presets/effect.oxlint.json" with { type: "json" };
-import { fragmentsFor, OXLINT_FRAGMENT, suiteWorkflow, TSCONFIG_FRAGMENT, workflowsFor } from "../scripts/quality.ts";
-import { parseWorkflow, runs, setupBun } from "./lib/workflow.ts";
+import { commitlintWorkflow, fragmentsFor, OXLINT_FRAGMENT, suiteWorkflow, TSCONFIG_FRAGMENT, workflowsFor } from "../scripts/quality.ts";
+import { lastStep, parseWorkflow, runs, setupBun } from "./lib/workflow.ts";
 
 test("without sources.effect there is nothing to generate", () => {
   expect(fragmentsFor({})).toEqual([]);
@@ -82,11 +82,21 @@ test("workflowsFor routes a gate the title lint runs to its own workflow and kee
   const titleLint = parseWorkflow(commitlint?.content ?? "");
   expect(titleLint.on.pull_request.types).toEqual(["opened", "edited", "synchronize", "reopened"]);
   expect(runs(titleLint).at(-1)).toBe(TITLE_LINT);
-  for (const workflow of [suite, commitlint]) expect(Bun.YAML.parse(workflow?.content ?? "")).not.toHaveProperty("permissions");
+  expect(Bun.YAML.parse(suite?.content ?? "")).not.toHaveProperty("permissions");
+  expect(Bun.YAML.parse(commitlint?.content ?? "")).toHaveProperty("permissions", { contents: "read" });
 
   const unrun = ["commitlint", "node_modules/.bin/commitlint", "./node_modules/.bin/commitlint --from origin/main --to HEAD"] as const;
   const [kept] = workflowsFor({ gates: { ci: unrun } }, recipe);
   expect(runs(parseWorkflow(kept?.content ?? ""))).toEqual([INSTALL, ...unrun]);
+});
+
+test("the title lint step moves git's comment character off '#' so a title starting with it still lints", () => {
+  const commitlint = parseWorkflow(commitlintWorkflow(KIT_CONFIG));
+  expect(lastStep(commitlint).env).toEqual({
+    GIT_CONFIG_COUNT: "1",
+    GIT_CONFIG_KEY_0: "core.commentChar",
+    GIT_CONFIG_VALUE_0: "\x01",
+  });
 });
 
 test("without gates.ci only the title lint is generated", () => {

@@ -109,7 +109,9 @@ function runScalar(command: string): string {
 }
 
 export function commitlintWorkflow(commitlintConfig: string): string {
-  return `on:
+  return `permissions:
+  contents: read
+on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
 jobs:
@@ -123,7 +125,12 @@ jobs:
       - run: printf '%s' "$PR_TITLE (#0000)" > "$RUNNER_TEMP/pr-title"
         env:
           PR_TITLE: \${{ github.event.pull_request.title }}
+      # A title starting with git's comment character lints as empty without this: commentChar moves off '#'.
       - run: ${titleLint(commitlintConfig)}
+        env:
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: core.commentChar
+          GIT_CONFIG_VALUE_0: "\\x01"
 `;
 }
 
