@@ -13,7 +13,9 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   Node refuses to type-strip a `.ts` plugin under `node_modules`, so the `.ts` source would fail to load from an installed package.
 - `featureRules` ships compiled as `dist/feature-rules.js` for the same reason, with `effect` left out of the bundle so it resolves the consumer's own copy.
   dependency-cruiser uses a config's export as it is and never awaits it, so the declaration decodes synchronously, and `quality.json` exempts that one file from the Effect rules.
-- `checks-size-budget` writes the head commit's files to a temporary directory and runs oxlint there, with a configuration that sets no plugin and turns every category off, so the consumer's own `.oxlintrc.json`, its ignore files and its other rules never reach the count.
+- `checks-size-budget` writes the head commit's files to a temporary directory and runs oxlint there.
+  Its configuration loads the kit's own plugin bundle for the complexity rule and turns every category off.
+  The consumer's own `.oxlintrc.json`, its ignore files and its other rules never reach the count.
 - `checks-size-budget` ratchets against the base of the range rather than a committed baseline such as `oxlint-suppressions.json`.
   A suppression file stores a count of sites per file and rule, and `max-lines` reports a file once however long it grows, so the count stays at one while the file doubles.
   The gate sums how far each site runs over its limit instead, which grows with the file.

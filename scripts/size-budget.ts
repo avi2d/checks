@@ -7,6 +7,8 @@ import { rangeGateInputs } from "./range-gate.ts";
 import {
   budgetOf,
   budgetsOf,
+  diagnosticCode,
+  qualifiedName,
   SIZE_DEFAULTS,
   SIZE_RULES,
   TESTS_DIRECTORY,
@@ -69,16 +71,17 @@ const decodeReport = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Str
 
 function rulesOf(budget: Budget): Record<string, unknown> {
   return Object.fromEntries(
-    SIZE_RULES.map(({ key, rule, options }) => {
-      const max = budget[key];
-      return [rule, max === undefined ? "off" : ["error", { max, ...options }]];
+    SIZE_RULES.map((entry) => {
+      const max = budget[entry.key];
+      return [qualifiedName(entry), max === undefined ? "off" : ["error", { max, ...entry.options }]];
     }),
   );
 }
 
-function sizeConfig({ production, tests }: Budgets): unknown {
+function sizeConfig({ production, tests }: Budgets, plugin: string): unknown {
   return {
     plugins: [],
+    jsPlugins: [plugin],
     categories: { correctness: "off" },
     rules: rulesOf(production),
     overrides: [{ files: [`${TESTS_DIRECTORY}/**`], rules: rulesOf(tests) }],
@@ -117,7 +120,7 @@ const materializeBase = Effect.fn("materializeBase")(function* (root: string, ba
 
 const siteOf = (budgets: Budgets) =>
   Effect.fn("siteOf")(function* ({ code, message, filename, labels }: typeof Diagnostic.Type) {
-    const rule = SIZE_RULES.find((candidate) => code === `eslint(${candidate.rule})`);
+    const rule = SIZE_RULES.find((candidate) => code === diagnosticCode(candidate));
     if (rule === undefined) return [];
     const measured = rule.measured.exec(message)?.[1];
     const max = budgetOf(budgets, filename)[rule.key];
@@ -136,11 +139,11 @@ const siteOf = (budgets: Budgets) =>
     ];
   });
 
-const measure = Effect.fn("measure")(function* (tree: string, budgets: Budgets) {
+const measure = Effect.fn("measure")(function* (tree: string, budgets: Budgets, plugin: string) {
   const fs = yield* FileSystem.FileSystem;
   if (!(yield* fs.exists(tree))) return [];
   // oxlint reads an override's glob from the directory of the config that holds it, so the config sits in the tree.
-  yield* fs.writeFileString((yield* Path.Path).join(tree, CONFIG), renderJson(sizeConfig(budgets)));
+  yield* fs.writeFileString((yield* Path.Path).join(tree, CONFIG), renderJson(sizeConfig(budgets, plugin)));
 
   const { stdout, stderr, exitCode } = yield* collect("oxlint", ["-c", CONFIG, "-f", "json", "."], tree).pipe(
     Effect.mapError((cause) => new OxlintUnreadable({ message: `cannot run oxlint: ${cause.message}` })),
@@ -191,7 +194,8 @@ const runBudget = Effect.fn("runBudget")(
 
     const headTree = path.join(scratch, "head");
     if (held.length + others.length > 0) yield* materializeHead(root, head, [...holds, ...others], headTree);
-    const sites = yield* measure(headTree, budgets);
+    const plugin = path.join(import.meta.dir, "..", "dist", "index.js");
+    const sites = yield* measure(headTree, budgets, plugin);
     const heldSites = sites.filter((site) => holds.has(site.file));
     if (applies !== "ratchet") {
       return { applies, held: held.length, overruns: heldSites, advisory: sites.filter((site) => !holds.has(site.file)) } satisfies Verdict;
@@ -199,7 +203,7 @@ const runBudget = Effect.fn("runBudget")(
 
     const baseTree = path.join(scratch, "base");
     if (held.length > 0) yield* materializeBase(root, base, held, baseTree);
-    const growths = growthsOf(heldSites, yield* measure(baseTree, budgets));
+    const growths = growthsOf(heldSites, yield* measure(baseTree, budgets, plugin));
     const failing = new Set(growths.flatMap((growth) => growth.sites));
     return { applies, held: held.length, growths, advisory: sites.filter((site) => !failing.has(site)) } satisfies Verdict;
   },

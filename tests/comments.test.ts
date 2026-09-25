@@ -63,6 +63,13 @@ test("a machine-read directive is refused wherever it sits", () => {
   expect(Effect.runSync(refused("run.sh", "# eslint-disable\n")), "a directive in a hash comment").not.toEqual([]);
 });
 
+test("every refused directive name is refused, and a name outside the list is not", () => {
+  for (const name of Matchers.REFUSED_DIRECTIVES) {
+    expect(Effect.runSync(refused("src/probe.ts", `// ${name}\n`)), name).not.toEqual([]);
+  }
+  expect(Effect.runSync(refused("src/probe.ts", "// stylelint-disable\n"))).toEqual([]);
+});
+
 test("a record or a ticket in a comment is refused, and the pointer is named", () => {
   expect(Effect.runSync(refused("src/probe.ts", "// The bundle guard reads runtime imports (ADR-0013)."))).toEqual([
     'src/probe.ts:1 points at a record or a ticket ("ADR-0013"). Drop the pointer: a record is reached by searching docs/adr, and the story of the change goes in the commit message',

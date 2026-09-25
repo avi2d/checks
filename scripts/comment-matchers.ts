@@ -241,6 +241,24 @@ function openingBlock(found: readonly Comment[], source: string): Comment[] {
   return block;
 }
 
+export const REFUSED_DIRECTIVES = [
+  "@ts-expect-error",
+  "@ts-ignore",
+  "biome-ignore",
+  "eslint-disable",
+  "prettier-ignore",
+] as const satisfies readonly string[];
+
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const directiveSource = (name: string): string => {
+  const escaped = escapeRegExp(name);
+  if (name === "eslint-disable") return `\\b${escaped}[\\w-]*`;
+  return /^[\w]/.test(name) ? `\\b${escaped}\\b` : escaped;
+};
+
+const DIRECTIVE = new RegExp(REFUSED_DIRECTIVES.map(directiveSource).join("|"));
+
 type Check = {
   readonly find: RegExp;
   readonly refusal: (match: string) => string;
@@ -248,7 +266,7 @@ type Check = {
 
 const CHECKS: readonly Check[] = [
   {
-    find: /@ts-expect-error|@ts-ignore|\bprettier-ignore\b|\beslint-disable[\w-]*|\bbiome-ignore\b/,
+    find: DIRECTIVE,
     refusal: (match) =>
       `carries the machine-read directive \`${match}\`. Fix what the tool is reporting, or stop running the tool on this file`,
   },
