@@ -33,7 +33,7 @@ oxlint resolves `files` against the directory of the config that holds the overr
 `unicorn/no-process-exit` passes over any file that opens with a shebang.
 A repository whose bins open with one bans `process.exit` itself with `no-restricted-properties` in its own `.oxlintrc.json`, as the kit's own repository does.
 The preset leaves that rule out because a repository's own `no-restricted-properties` list for the same files would replace it, or be replaced by it.
-The [checks-suppressions-ratchet](../gates/checks-suppressions-ratchet.md) gate refuses new suppressions.
+Sites standing when the declaration lands go in oxlint's own baseline, `oxlint --suppress-all`, so their count can only fall, as [checks-suppressions-ratchet](../gates/checks-suppressions-ratchet.md) holds.
 
 ## Language service
 
