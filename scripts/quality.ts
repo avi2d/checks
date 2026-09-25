@@ -181,11 +181,23 @@ const sameJson = (text: string, content: unknown): Effect.Effect<boolean> =>
     Effect.orElseSucceed(() => false),
   );
 
+const decodePackageName = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ name: Schema.optionalKey(Schema.String) })));
+
+const isKit = Effect.fn("isKit")(function* (root: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const manifest = (yield* Path.Path).join(root, "package.json");
+  if (!(yield* fs.exists(manifest))) return false;
+  const { name } = yield* decodePackageName(yield* fs.readFileString(manifest)).pipe(
+    Effect.mapError((cause) => new QualityUnreadable({ message: `package.json: ${cause.message}` })),
+  );
+  return name === kitManifest.name;
+});
+
 const fragmentProblems = Effect.fn("fragmentProblems")(function* (root: string, source: string, expected: readonly Fragment[]) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const problems: string[] = [];
-  const kitRepository = root === path.dirname(import.meta.dir);
+  const kitRepository = yield* isKit(root);
   for (const { file, extendedBy, reader, kitConfig, kitRepositoryConfig, kitConfigReason } of FRAGMENTS) {
     const target = path.join(root, file);
     const fragment = expected.find((candidate) => candidate.file === file);
@@ -226,18 +238,6 @@ const unmatchedPaths = Effect.fn("unmatchedPaths")(function* (root: string, qual
     if (matched.trim() === "") problems.push(`${key} ${glob} matches no file, so it holds ${holds}`);
   }
   return problems;
-});
-
-const decodePackageName = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ name: Schema.optionalKey(Schema.String) })));
-
-const isKit = Effect.fn("isKit")(function* (root: string) {
-  const fs = yield* FileSystem.FileSystem;
-  const manifest = (yield* Path.Path).join(root, "package.json");
-  if (!(yield* fs.exists(manifest))) return false;
-  const { name } = yield* decodePackageName(yield* fs.readFileString(manifest)).pipe(
-    Effect.mapError((cause) => new QualityUnreadable({ message: `package.json: ${cause.message}` })),
-  );
-  return name === kitManifest.name;
 });
 
 const recipeOf = Effect.fn("recipeOf")(function* (root: string) {
