@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { OXLINT_FRAGMENT, TSCONFIG_FRAGMENT } from "../../scripts/quality.ts";
 import { consumerTrees, KIT_BIN, type KitTree } from "./lib/consumer-tree.ts";
 import { findings } from "./lib/findings.ts";
-import { CHECKOUT } from "./lib/fixture-repo.ts";
+import { CHECKOUT, UNVENDORED_BUNFIG } from "./lib/fixture-repo.ts";
 
 const QUALITY = join(CHECKOUT, "scripts", "quality.ts");
 const LINT = join(CHECKOUT, "scripts", "lint.ts");
@@ -189,7 +189,7 @@ test(
       sources: { effect: { paths: ["src/**/*.ts"] } },
     });
     await tree.put("package.json", { name: "checks-quality-fixture", type: "module", scripts: { lint: "checks-lint", test: "checks-test" } });
-    await tree.put("bunfig.toml", await readFile(join(CHECKOUT, "bunfig.toml"), "utf8"));
+    await tree.put("bunfig.toml", UNVENDORED_BUNFIG);
     await tree.put(".github/workflows/ci.yml", "on:\n  pull_request:\n    branches: [trunk]\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n");
     await tree.put("src/a.ts", "export const a = 1;\n");
     await tree.put("src/host/b.ts", "export const b = 1;\n");

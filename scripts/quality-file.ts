@@ -91,9 +91,32 @@ const EffectSources = Schema.Struct({
   ),
 });
 
+const Library = Schema.Struct({
+  name: Schema.String.check(
+    Schema.isPattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, { expected: "a library name in kebab case" }),
+  ).annotate({ description: "The link checks-vendor manages under repos/" }),
+  package: Schema.NonEmptyString.annotate({ description: "The npm package whose installed version picks the tag" }),
+  repository: Schema.NonEmptyString.annotate({ description: "The git remote checks-vendor clones the tag from" }),
+  tag: Schema.String.check(Schema.isPattern(/\{version\}/, { expected: "a tag template holding {version}" })).annotate({
+    description: "The tag template, with {version} for the installed version",
+  }),
+  path: Schema.optionalKey(
+    FilePath.annotate({ description: "The manifest inside the clone holding the version; package.json when absent" }),
+  ),
+}).annotate({ identifier: "Library" });
+export type Library = typeof Library.Type;
+
 const Sources = Schema.Struct({
   production: Schema.optionalKey(
     Schema.Array(PathGlob).annotate({ description: "The source the repository ships, as against tests and tooling" }),
+  ),
+  libraries: Schema.optionalKey(
+    Schema.Array(Library).check(
+      Schema.makeFilter((libraries) => {
+        const repeated = duplicates(libraries.map((library) => library.name));
+        return repeated === undefined || `names ${repeated} more than once`;
+      }),
+    ).annotate({ description: "The libraries checks-vendor pins to a shared read-only clone" }),
   ),
   effect: Schema.optionalKey(EffectSources),
 });
@@ -124,11 +147,15 @@ function nests(outer: string, inner: string): boolean {
   return outer === inner || inner.startsWith(`${outer}/`);
 }
 
+function duplicates(names: readonly string[]): string | undefined {
+  const repeated = names.filter((name, index) => names.indexOf(name) !== index);
+  return repeated.length === 0 ? undefined : [...new Set(repeated)].join(", ");
+}
+
 const Features = Schema.Array(Feature).check(
   Schema.makeFilter((features) => {
-    const names = features.map((feature) => feature.name);
-    const repeated = names.filter((name, index) => names.indexOf(name) !== index);
-    if (repeated.length > 0) return `names ${[...new Set(repeated)].join(", ")} more than once`;
+    const repeated = duplicates(features.map((feature) => feature.name));
+    if (repeated !== undefined) return `names ${repeated} more than once`;
     for (const outer of features) {
       const inner = features.find((other) => other !== outer && nests(outer.root, other.root));
       if (inner !== undefined) return `gives ${inner.root} to both ${outer.name} and ${inner.name}`;

@@ -59,7 +59,7 @@ export function releasedAfterEach<A extends readonly unknown[], T>(
   const opened: T[] = [];
   afterEach(async () => {
     for (const one of opened.splice(0)) await release(one);
-  });
+  }, 60_000);
   return async (...args) => {
     const one = await open(...args);
     opened.push(one);
@@ -78,11 +78,13 @@ export function scratchDirs(): (prefix: string) => Promise<string> {
   );
 }
 
+export const UNVENDORED_BUNFIG = '[test]\npathIgnorePatterns = ["**/tests/quarantine/**"]\n';
+
 export async function lintWiring(quality: Readonly<Record<string, unknown>>): Promise<Readonly<Record<string, string>>> {
   const ci = ["bun run lint"];
   return {
     "package.json": JSON.stringify({ name: "lint-fixture", type: "module", scripts: { lint: "checks-lint", test: "checks-test" } }),
-    "bunfig.toml": await Bun.file(join(CHECKOUT, "bunfig.toml")).text(),
+    "bunfig.toml": UNVENDORED_BUNFIG,
     [SUITE_WORKFLOW]: suiteWorkflow("main", ci, false),
     [COMMITLINT_WORKFLOW]: commitlintWorkflow("./node_modules/@avi2dg/checks/commitlint.config.js"),
     "quality.json": JSON.stringify({ gates: { ci }, commitIdentity: { authors: [AUTHOR] }, ...quality }),
