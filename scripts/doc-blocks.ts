@@ -33,7 +33,7 @@ const SHIPPED = {
   "oxlintrc.json": "the oxlint base config `.oxlintrc.json` extends",
   "stryker.preset.js": "the Stryker mutation-testing preset",
   "tsconfig.effect.json": "the tsconfig fragment with the Effect language-service block",
-  "dist/": "the compiled Effect error-channel plugin and `featureRules`",
+  "dist/": "the compiled oxlint plugin with the Effect error-channel and cognitive complexity rules, and `featureRules`",
 } as const;
 
 type ShippedPath = keyof typeof SHIPPED;
