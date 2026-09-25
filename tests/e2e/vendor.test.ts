@@ -64,9 +64,9 @@ async function seedConsumer(dir: string, remote: string, installed: string): Pro
   );
 }
 
-function vendor(dir: string, home: string): Promise<Ran> {
+function vendor(dir: string, home: string, umask = "022"): Promise<Ran> {
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("XDG_")));
-  return ran($`bun ${VENDOR}`.cwd(dir).env({ ...env, HOME: home }));
+  return ran($`sh -c ${`umask ${umask} && exec bun "$0"`} ${VENDOR}`.cwd(dir).env({ ...env, HOME: home }));
 }
 
 function linked(consumer: string): Promise<boolean> {
@@ -99,6 +99,28 @@ test(
     const second = await vendor(consumer, home);
     expect(second.exitCode).toBe(0);
     expect(second.text).toContain("still holds fake-lib@1.0.0");
+  },
+  60_000,
+);
+
+test(
+  "under the umask 0 bun gives prepare, nothing the run creates is writable by another user",
+  async () => {
+    const home = await scratchHome();
+    const parent = await scratch("checks-vendor-remote-");
+    const consumer = await scratch("checks-vendor-consumer-");
+    const { remote } = await seedRemote(parent, "1.0.0", "fake-lib@1.0.0");
+    await seedConsumer(consumer, remote, "1.0.0");
+
+    expect((await vendor(consumer, home, "0")).exitCode).toBe(0);
+    const cache = join(home, ".cache");
+    const created = [cache, ...(await readdir(cache, { recursive: true })).map((entry) => join(cache, entry)), join(consumer, "repos")];
+    const shared = [];
+    for (const entry of created) {
+      const info = await lstat(entry);
+      if (!info.isSymbolicLink() && (info.mode & 0o022) !== 0) shared.push(entry);
+    }
+    expect(shared).toEqual([]);
   },
   60_000,
 );

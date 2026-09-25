@@ -11,6 +11,9 @@ const CACHE_HOME = ".cache/avi2dg-checks";
 const RECORD_SUFFIX = ".commit";
 const LINKS = "repos";
 const VERSION_TOKEN = "{version}";
+// bun runs prepare under umask 0, so a mode left to the umask lets any local user swap the shared tree.
+const DIRECTORY_MODE = 0o755;
+const RECORD_MODE = 0o644;
 
 export class VendorError extends Schema.TaggedError<VendorError>()("VendorError", {
   message: Schema.String,
@@ -193,7 +196,7 @@ const ensureLink = Effect.fn("ensureLink")(function* (root: string, library: Lib
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const parent = path.join(root, LINKS);
-  yield* fs.makeDirectory(parent, { recursive: true }).pipe(
+  yield* fs.makeDirectory(parent, { recursive: true, mode: DIRECTORY_MODE }).pipe(
     Effect.mapError((cause) => new VendorError({ message: `cannot hold ${parent}: ${cause.message}` })),
   );
   const at = path.join(parent, library.name);
@@ -236,7 +239,7 @@ const stage = Effect.fn("stage")(function* (staging: string, library: Library, i
   }
   yield* checkVersion(staging, library, installed, tag);
   if (Option.isNone(held)) {
-    yield* fs.writeFileString(recordOf(dir), `${head}\n`).pipe(
+    yield* fs.writeFileString(recordOf(dir), `${head}\n`, { mode: RECORD_MODE }).pipe(
       Effect.mapError((cause) => new VendorError({ message: `cannot record the fetch beside ${dir}: ${cause.message}` })),
     );
   }
@@ -256,7 +259,7 @@ const land = Effect.fn("land")(function* (library: Library, installed: string, t
   const path = yield* Path.Path;
   const parent = path.dirname(dir);
   yield* confirmTag(library.repository, tag);
-  yield* fs.makeDirectory(parent, { recursive: true }).pipe(
+  yield* fs.makeDirectory(parent, { recursive: true, mode: DIRECTORY_MODE }).pipe(
     Effect.mapError((cause) => new VendorError({ message: `cannot hold ${dir}: ${cause.message}` })),
   );
   const staging = yield* fs.makeTempDirectory({ directory: parent, prefix: `.${path.basename(dir)}-` }).pipe(
