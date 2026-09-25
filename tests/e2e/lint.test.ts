@@ -6,6 +6,7 @@ import { withoutPullRequestEvent } from "../lib/env.ts";
 import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
 
 const SCRIPT = join(CHECKOUT, "scripts", "lint.ts");
+const QUALITY_SCRIPT = join(CHECKOUT, "scripts", "quality.ts");
 const OWNER = ["-c", "user.name=avi2d", "-c", "user.email=avi2dg@gmail.com"];
 const STRANGER = ["-c", "user.name=stranger", "-c", "user.email=stranger@example.com"];
 const FIXTURE_AUTHOR = { name: "Wren Fixture", email: "wren@example.com" };
@@ -43,13 +44,9 @@ async function scaffold(quality: Record<string, unknown> = {}): Promise<void> {
   );
   await writeFile(join(dir, "quality.json"), JSON.stringify({ gates: { ci: ["bun run lint"] }, ...quality }));
   await writeFile(join(dir, "bunfig.toml"), await readFile(join(CHECKOUT, "bunfig.toml"), "utf8"));
-  await mkdir(join(dir, ".github", "workflows"), { recursive: true });
-  await writeFile(
-    join(dir, ".github", "workflows", "ci.yml"),
-    "on: pull_request\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n",
-  );
   await writeFile(join(dir, "widget.ts"), "export const widget = 42;\n");
   await $`git init -q -b main`.cwd(dir).quiet();
+  await $`bun ${QUALITY_SCRIPT} generate`.cwd(dir).env(LOCAL_ENV).quiet();
 }
 
 async function initRepo(quality: Record<string, unknown> = {}): Promise<string> {
@@ -85,6 +82,7 @@ async function initSourceFreeRepo(lintGates?: readonly string[]): Promise<void> 
   );
   await writeFile(join(dir, "README.md"), "# Notes\n");
   await $`git init -q -b main`.cwd(dir).quiet();
+  if (lintGates === undefined) await $`bun ${QUALITY_SCRIPT} generate`.cwd(dir).env(LOCAL_ENV).quiet();
   await commit("docs: base", FIXTURE);
   await $`git update-ref refs/remotes/origin/main HEAD`.cwd(dir).quiet();
   await $`git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main`.cwd(dir).quiet();

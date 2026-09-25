@@ -39,8 +39,8 @@ The kit's bins find the file at the git root and read it there:
 
 | Key | Read by | Holds |
 | --- | --- | --- |
-| `defaultBranch` | `checks-lint`, `checks-ci-wiring` | the branch pull requests merge into, `main` when absent |
-| `gates.ci` | `checks-ci-wiring` | the commands CI runs on every pull request, as [checks-ci-wiring](../gates/checks-ci-wiring.md) says |
+| `defaultBranch` | `checks-lint`, `checks-ci-wiring`, `checks-quality` | the branch pull requests merge into, `main` when absent |
+| `gates.ci` | `checks-ci-wiring`, `checks-quality` | the commands CI runs on every pull request, as [checks-ci-wiring](../gates/checks-ci-wiring.md) says |
 | `gates.scheduled` | `checks-ci-wiring` | the commands a schedule runs |
 | `gates.lint` | `checks-lint`, `checks-ci-wiring` | the gates `checks-lint` runs when not all apply, as [Gate selection](../gates/checks-lint.md#gate-selection) says |
 | `commitIdentity.authors` | `checks-commit-identity` | the identities allowed to author and commit, as [checks-commit-identity](../gates/checks-commit-identity.md) says |

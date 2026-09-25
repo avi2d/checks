@@ -87,7 +87,7 @@ test(
 
     expect((await quality("generate")).exitCode).toBe(0);
     const fresh = await quality("--check");
-    expect(fresh.text).toContain(`checks-quality: ${OXLINT_FRAGMENT} and ${TSCONFIG_FRAGMENT} hold what quality.json declares`);
+    expect(fresh.text).toContain(`checks-quality: ${OXLINT_FRAGMENT} and ${TSCONFIG_FRAGMENT} and .github/workflows/commitlint.yml hold what quality.json declares`);
     expect(fresh.exitCode).toBe(0);
 
     await tree.put("quality.json", { sources: { effect: { paths: ["src/**/*.ts", "lib/**/*.ts"] } } });
@@ -127,7 +127,7 @@ test(
     expect(leftOver.exitCode).toBe(1);
     const cleared = await quality("generate");
     expect(cleared.text).toContain(`removed ${TSCONFIG_FRAGMENT}`);
-    expect(cleared.text).toContain("no sources.effect is declared, so nothing is generated");
+    expect(cleared.text).toContain("no sources.effect is declared, so no fragment is generated");
     expect(cleared.exitCode).toBe(0);
 
     await tree.put("quality.json", { sources: { effect: { paths: ["*.ts"] } } });
