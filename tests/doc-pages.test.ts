@@ -32,3 +32,15 @@ test("the README links every bin's page, so a new bin reaches the front door", (
   const readme = read("README.md");
   expect(bins.filter((bin) => !readme.includes(`](${GATE_PAGES}/${bin}.md)`))).toEqual([]);
 });
+
+function unnamedOn(page: string, names: readonly string[]): string[] {
+  const text = read(page);
+  return names.filter((name) => !text.includes(`\`${name}\``));
+}
+
+const DependencyBase = Schema.Struct({ forbidden: Schema.Array(Schema.Struct({ name: Schema.String })) });
+
+test("the dependency rules page names each rule the dependency-cruiser base carries", async () => {
+  const base = Schema.decodeUnknownSync(DependencyBase)((await import(resolve(CHECKOUT, "dependency-cruiser.config.js"))).default);
+  expect(unnamedOn("docs/configs/dependency-rules.md", base.forbidden.map(({ name }) => name))).toEqual([]);
+});
