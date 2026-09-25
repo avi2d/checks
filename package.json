@@ -47,6 +47,7 @@
     "scripts/repetition.ts",
     "scripts/feature-owners.ts",
     "scripts/docs.ts",
+    "scripts/vendor.ts",
     "scripts/doc-outline.ts",
     "scripts/doc-rules.ts",
     "scripts/doc-references.ts",
@@ -86,6 +87,7 @@
     "./scripts/repetition.ts": "./scripts/repetition.ts",
     "./scripts/feature-owners.ts": "./scripts/feature-owners.ts",
     "./scripts/docs.ts": "./scripts/docs.ts",
+    "./scripts/vendor.ts": "./scripts/vendor.ts",
     "./templates/readme.md": "./templates/readme.md",
     "./templates/changelog.md": "./templates/changelog.md",
     "./templates/adr.md": "./templates/adr.md",
@@ -120,9 +122,11 @@
     "checks-size-budget": "scripts/size-budget.ts",
     "checks-repetition": "scripts/repetition.ts",
     "checks-feature-owners": "scripts/feature-owners.ts",
-    "checks-docs": "scripts/docs.ts"
+    "checks-docs": "scripts/docs.ts",
+    "checks-vendor": "scripts/vendor.ts"
   },
   "scripts": {
+    "prepare": "bun scripts/vendor.ts",
     "build": "bun build effect-channel/index.ts --outdir dist --target node --format esm && bun build scripts/feature-rules.ts --outdir dist --target node --format esm --packages external && bun scripts/quality-schema.ts && bun scripts/doc-templates-write.ts && bun scripts/changelog-write.ts && bun scripts/doc-blocks-write.ts",
     "lint": "oxlint --type-aware && bun scripts/lint.ts && depcruise --config .dependency-cruiser.cjs .",
     "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",

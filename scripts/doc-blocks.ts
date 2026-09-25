@@ -222,6 +222,10 @@ const QUALITY_ROWS: Described<QualityFields, KeyRow> = {
       readBy: "`checks-quality`",
       holds: "the paths held to the Effect rules, and the files under them that are not, as [The Effect rules](effect-rules.md) says",
     },
+    libraries: {
+      readBy: "`checks-vendor`",
+      holds: "the libraries pinned to a shared read-only clone, as [checks-vendor](../gates/checks-vendor.md) says",
+    },
   },
   size: {
     readBy: "`checks-size-budget`",

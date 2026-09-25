@@ -12,7 +12,7 @@ function isolation(file: string, source: string): Promise<readonly Violation[]> 
   return Effect.runPromise(isolationViolations(file, source));
 }
 
-const PRESET = { test: { pathIgnorePatterns: ["**/tests/quarantine/**"] } };
+const PRESET = { test: { pathIgnorePatterns: ["**/tests/quarantine/**", "repos/**"] } };
 
 test("placement names every test file outside tests/**/*.test.ts and its target", () => {
   const violations = placementViolations([
@@ -168,5 +168,5 @@ test("the kit fails its own check when consumer and preset read the same drifted
   expect(violations.map((violation) => violation.message.split(" must be ")[0])).toEqual([
     "[test].pathIgnorePatterns",
   ]);
-  expect(violations[0]?.message).toContain('["**/tests/quarantine/**"]');
+  expect(violations[0]?.message).toContain('["**/tests/quarantine/**","repos/**"]');
 });

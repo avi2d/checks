@@ -71,7 +71,7 @@ test(
     await writeFile(join(dir, "bunfig.toml"), "[test]\npathIgnorePatterns = []\n");
     const drifted = await layout();
     expect(drifted.exitCode).toBe(1);
-    expect(drifted.text).toContain('[test].pathIgnorePatterns must be ["**/tests/quarantine/**"]');
+    expect(drifted.text).toContain('[test].pathIgnorePatterns must be ["**/tests/quarantine/**","repos/**"]');
     expect(drifted.text).toContain("bun has no bunfig extends");
 
     await writeFile(join(dir, "bunfig.toml"), await readFile(PRESET, "utf8"));

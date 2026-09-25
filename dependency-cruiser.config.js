@@ -72,6 +72,8 @@ export default {
     parser: "swc",
     builtInModules: { add: ["bun"] },
     doNotFollow: { path: ["node_modules"] },
+    // The cruise follows the repos/ links without this.
+    exclude: { path: "^repos/" },
     enhancedResolveOptions: {
       exportsFields: ["exports"],
       conditionNames: ["types", "import", "require", "node", "default"],

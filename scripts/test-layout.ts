@@ -40,7 +40,7 @@ const BANNED_BUN_NAMES: readonly string[] = [
 const BANNED_GLOBAL_CALLS: readonly string[] = ["fetch"];
 
 const REQUIRED_TEST_TABLE: Record<string, unknown> = {
-  pathIgnorePatterns: ["**/tests/quarantine/**"],
+  pathIgnorePatterns: ["**/tests/quarantine/**", "repos/**"],
 };
 export const LAYOUT_CHECK_MARK = "scripts/test-layout.ts";
 export const LAYOUT_CHECK_BIN = "checks-test-layout";

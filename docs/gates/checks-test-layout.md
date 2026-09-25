@@ -18,13 +18,14 @@ It fails unless the repository holds this shape, and names the file and the path
 - `scripts.test` is exactly `checks-test`, which runs `bun test --randomize` as [checks-test](checks-test.md) says.
 - `scripts.lint` runs this check, itself or through `checks-lint` called by its bare bin name.
 - `bunfig.toml` carries every `[test]` key of the shipped preset with the same value.
-  `[test].pathIgnorePatterns` is always `["**/tests/quarantine/**"]`, which the check pins itself, so the kit's own repository, whose bunfig is the preset, cannot drift it either.
+  `[test].pathIgnorePatterns` is always `["**/tests/quarantine/**", "repos/**"]`, which the check pins itself, so the kit's own repository, whose bunfig is the preset, cannot drift it either.
   Other tables, and extra `[test]` keys, are the repository's own.
 
 The in-process half is what a mutation run can mutate.
 `tests/e2e/**` is left out of a mutate scope by construction, because a subprocess kills both the speed and the coverage signal a mutant needs.
 
-The preset also skips `tests/quarantine/**` on a default run.
+The preset also skips `tests/quarantine/**` and `repos/**` on a default run.
+The `repos/**` entry keeps the suite from following the library links `checks-vendor` manages into trees whose tests are not this repository's.
 A test that turns flaky moves there, so the suite stays trustworthy, and the flake still runs on demand:
 
 ```sh

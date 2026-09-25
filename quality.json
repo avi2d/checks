@@ -14,7 +14,16 @@
   },
   "sources": {
     "production": ["effect-channel/**/*.ts", "scripts/**/*.ts"],
-    "effect": { "paths": ["scripts/**/*.ts"], "exempt": ["scripts/feature-rules.ts"] }
+    "effect": { "paths": ["scripts/**/*.ts"], "exempt": ["scripts/feature-rules.ts"] },
+    "libraries": [
+      {
+        "name": "effect",
+        "package": "effect",
+        "repository": "https://github.com/Effect-TS/effect.git",
+        "tag": "effect@{version}",
+        "path": "packages/effect/package.json"
+      }
+    ]
   },
   "size": { "applies": "all" },
   "features": [],

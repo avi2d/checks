@@ -104,6 +104,15 @@ test("a glob reads the same to oxlint, the language service and git, or it is re
   }
 });
 
+test("a library names its link, package, remote and versioned tag, and a repeated name is refused", () => {
+  const library = { name: "effect", package: "effect", repository: "https://github.com/Effect-TS/effect.git", tag: "effect@{version}" };
+  expect(decoded({ sources: { libraries: [library] } })).toEqual({ sources: { libraries: [library] } });
+  expect(decoded({ sources: { libraries: [{ ...library, path: "packages/effect/package.json" }] } })).toBeDefined();
+  expect(refusal({ sources: { libraries: [library, library] } })).toContain("names effect more than once");
+  expect(refusal({ sources: { libraries: [{ ...library, tag: "effect@1.0.0" }] } })).toContain("a tag template holding {version}");
+  expect(refusal({ sources: { libraries: [{ ...library, name: "Effect" }] } })).toContain("a library name in kebab case");
+});
+
 test("a Rule switched both on and off is refused, and a Rule name is kebab case", () => {
   expect(refusal({ agentRules: { on: ["prove-it-works", "fix-what-you-see"], off: ["fix-what-you-see"] } })).toContain(
     "switches fix-what-you-see both on and off",
