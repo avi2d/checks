@@ -90,28 +90,37 @@ export function findIdentical(sets: KillSets): readonly IdenticalGroup[] {
   return [...groups.values()].filter((tests) => tests.length > 1).map((tests) => ({ tests, kills: sets.get(tests[0] ?? "")?.size ?? 0 }));
 }
 
+function uncoveredCount(kills: ReadonlySet<string>, uncovered: ReadonlySet<string>): number {
+  let count = 0;
+  for (const kill of kills) if (uncovered.has(kill)) count++;
+  return count;
+}
+
+function bestAddition(candidates: readonly (readonly [string, ReadonlySet<string>])[], members: readonly string[], uncovered: ReadonlySet<string>): readonly [string, ReadonlySet<string>] | undefined {
+  let best: readonly [string, ReadonlySet<string>] | undefined;
+  let bestCount = 0;
+  for (const candidate of candidates) {
+    if (members.includes(candidate[0])) continue;
+    const count = uncoveredCount(candidate[1], uncovered);
+    if (count > bestCount) {
+      best = candidate;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
 export function greedyCover(sets: KillSets): Cover {
   const uncovered = new Set<string>();
   for (const kills of sets.values()) for (const kill of kills) uncovered.add(kill);
   const total = uncovered.size;
   const members: string[] = [];
-  const names = [...sets.keys()].toSorted();
+  const candidates = [...sets].toSorted(([a], [b]) => (a < b ? -1 : 1));
   while (uncovered.size > 0) {
-    let best: string | undefined;
-    let bestCount = 0;
-    for (const name of names) {
-      const kills = sets.get(name);
-      if (kills === undefined || members.includes(name)) continue;
-      let count = 0;
-      for (const kill of kills) if (uncovered.has(kill)) count++;
-      if (count > bestCount) {
-        best = name;
-        bestCount = count;
-      }
-    }
+    const best = bestAddition(candidates, members, uncovered);
     if (best === undefined) break;
-    members.push(best);
-    for (const kill of sets.get(best) ?? []) uncovered.delete(kill);
+    members.push(best[0]);
+    for (const kill of best[1]) uncovered.delete(kill);
   }
   return { members, tests: sets.size, kills: total };
 }
