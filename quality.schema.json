@@ -114,6 +114,12 @@
           },
           "description": "The source the repository ships, as against tests and tooling"
         },
+        "libraries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Library"
+          }
+        },
         "effect": {
           "type": "object",
           "properties": {
@@ -237,12 +243,12 @@
             "type": "array",
             "prefixItems": [
               {
-                "$ref": "#/$defs/FilePath"
+                "$ref": "#/$defs/FilePath_1"
               }
             ],
             "minItems": 1,
             "items": {
-              "$ref": "#/$defs/FilePath"
+              "$ref": "#/$defs/FilePath_1"
             },
             "description": "The files under root that code outside it imports the feature through"
           },
@@ -417,12 +423,52 @@
       "pattern": "^(?!\\.\\.?(?:\\/|$))(?:\\*\\*|(?:[\\w.@+-]|\\*(?!\\*))+)(?:\\/(?!\\.\\.?(?:\\/|$))(?:\\*\\*|(?:[\\w.@+-]|\\*(?!\\*))+))*\\/(?:[\\w.@+-]|\\*(?!\\*))*\\.\\w+$",
       "description": "A glob from the repository root that oxlint, the Effect language service and git read alike: a directory first, * within a segment, ** as a whole one, a file name with an extension last, and no braces, ?, [ or leading ./"
     },
+    "FilePath": {
+      "type": "string",
+      "pattern": "^(?:(?!\\.\\.?(?:\\/|$))[\\w.@+-]+\\/)*[\\w.@+-]*\\.\\w+$",
+      "description": "The manifest inside the clone holding the version; package.json when absent"
+    },
+    "Library": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "description": "The link checks-vendor manages under repos/"
+        },
+        "package": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The npm package whose installed version picks the tag"
+        },
+        "repository": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The git remote checks-vendor clones the tag from"
+        },
+        "tag": {
+          "type": "string",
+          "pattern": "\\{version\\}",
+          "description": "The tag template, with {version} for the installed version"
+        },
+        "path": {
+          "$ref": "#/$defs/FilePath"
+        }
+      },
+      "required": [
+        "name",
+        "package",
+        "repository",
+        "tag"
+      ],
+      "additionalProperties": false
+    },
     "DirectoryPath": {
       "type": "string",
       "pattern": "^(?!\\.\\.?(?:\\/|$))[\\w.@+-]+(?:\\/(?!\\.\\.?(?:\\/|$))[\\w.@+-]+)*$",
       "description": "The directory the feature owns"
     },
-    "FilePath": {
+    "FilePath_1": {
       "type": "string",
       "pattern": "^(?:(?!\\.\\.?(?:\\/|$))[\\w.@+-]+\\/)*[\\w.@+-]*\\.\\w+$"
     },

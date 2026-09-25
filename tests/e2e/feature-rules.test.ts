@@ -110,7 +110,7 @@ test(
   "a packed-tarball consumer spreads the installed helper into its own config and goes red, then green",
   async () => {
     const packDir = await scratch("checks-pack-");
-    const tarball = (await $`bun pm pack --destination ${packDir} --quiet`.cwd(CHECKOUT).quiet()).stdout.toString().trim();
+    const tarball = (await $`bun pm pack --destination ${packDir} --quiet --ignore-scripts`.cwd(CHECKOUT).quiet()).stdout.toString().trim();
     dir = await scratch("checks-feature-consumer-");
     await write({
       "package.json": JSON.stringify({

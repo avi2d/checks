@@ -32,6 +32,7 @@ module.exports = {
   ],
   options: {
     // The bundle built from effect-channel, which the cruise reads as source.
-    exclude: { path: "^dist/" },
+    // The cruise follows the repos/ links without the second branch.
+    exclude: { path: "^(dist|repos)/" },
   },
 };
