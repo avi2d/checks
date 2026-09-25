@@ -71,6 +71,61 @@ export const changedPaths = Effect.fn("changedPaths")(function* (
   return parseNameStatus(yield* git(["diff", "--name-status", "-z", "-M", base, head, "--", ...pathspecs], cwd));
 });
 
+function newPathOf(line: string): string | undefined {
+  const path = line.startsWith("+++ b/") ? line.slice("+++ b/".length) : line.slice("+++ ".length);
+  return path === "/dev/null" ? undefined : path;
+}
+
+const HUNK = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/;
+
+export function parseAddedLines(diff: string): Map<string, Set<number>> {
+  const added = new Map<string, Set<number>>();
+  let path: string | undefined;
+  let line = 0;
+  let inHunk = false;
+  for (const row of diff.split("\n")) {
+    if (row.startsWith("+++ ")) {
+      path = newPathOf(row);
+      inHunk = false;
+      continue;
+    }
+    const hunk = HUNK.exec(row);
+    if (hunk !== null) {
+      line = Number(hunk[1]);
+      inHunk = true;
+      continue;
+    }
+    if (!inHunk || path === undefined) continue;
+    if (row.startsWith("+")) {
+      let lines = added.get(path);
+      if (lines === undefined) {
+        lines = new Set<number>();
+        added.set(path, lines);
+      }
+      lines.add(line);
+      line += 1;
+    } else if (row.startsWith("-")) {
+      continue;
+    } else {
+      line += 1;
+    }
+  }
+  return added;
+}
+
+export const changedLines = Effect.fn("changedLines")(function* (
+  base: string,
+  head: string,
+  pathspecs: readonly string[],
+  cwd?: string,
+) {
+  const diff = yield* git(
+    ["-c", "core.quotePath=false", "diff", "-U0", "--no-color", "--no-prefix", "-M", base, head, "--", ...pathspecs],
+    cwd,
+  );
+  return parseAddedLines(diff);
+});
+
 const emptyTree = (cwd?: string) => git(["hash-object", "-t", "tree", "/dev/null"], cwd).pipe(Effect.map((sha) => sha.trim()));
 
 export const pathsAt = Effect.fn("pathsAt")(function* (rev: string, pathspecs: readonly string[], cwd?: string) {

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
-import { parseAddedLines } from "../scripts/comment-gate.ts";
+import { parseAddedLines } from "../scripts/git.ts";
 import { refused } from "../scripts/comments.ts";
 
 const DIFF = [
