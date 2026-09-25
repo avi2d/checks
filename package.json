@@ -41,6 +41,7 @@
     "scripts/quality-file.ts",
     "scripts/quality.ts",
     "scripts/size-budget.ts",
+    "scripts/size-rules.ts",
     "scripts/feature-owners.ts",
     "scripts/docs.ts",
     "scripts/doc-outline.ts",

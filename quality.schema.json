@@ -148,32 +148,108 @@
     "size": {
       "type": "object",
       "properties": {
+        "applies": {
+          "type": "string",
+          "enum": [
+            "ratchet",
+            "changed",
+            "all"
+          ],
+          "description": "Which production and test files the budget holds: ratchet, the ones a range adds or changes, to no more overrun per rule than at the range's base; changed, the same ones, to the whole budget; all, every one. ratchet when absent. The rest are listed as advisory"
+        },
+        "production": {
+          "type": "object",
+          "properties": {
+            "fileLines": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "description": "The most lines a file may hold, blank and comment lines counted; 400 when absent"
+            },
+            "functionLines": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "description": "The most lines a function may span, blank and comment lines counted; 100 when absent"
+            },
+            "statements": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "description": "The most statements a function may hold; 30 when absent"
+            },
+            "complexity": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "description": "The highest cyclomatic complexity a function may reach, a switch counted once; 15 when absent"
+            },
+            "depth": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "description": "The deepest a block may nest inside a function; 4 when absent"
+            }
+          },
+          "additionalProperties": false,
+          "description": "The budget of the files under sources.production, and of the files listed as advisory outside tests/"
+        },
+        "tests": {
+          "type": "object",
+          "properties": {
+            "fileLines": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "description": "The most lines a file may hold, blank and comment lines counted; 600 when absent"
+            },
+            "statements": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "description": "The most statements a function may hold; 50 when absent"
+            },
+            "complexity": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "description": "The highest cyclomatic complexity a function may reach, a switch counted once; 15 when absent"
+            },
+            "depth": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "description": "The deepest a block may nest inside a function; 4 when absent"
+            }
+          },
+          "additionalProperties": false,
+          "description": "The budget of the files under tests/, which sets no limit on a function's lines"
+        },
         "fileLines": {
           "type": "integer",
           "exclusiveMinimum": 0,
-          "description": "The most lines a file may hold, blank and comment lines counted"
+          "description": "production.fileLines as first spelled, which a later minor release stops reading"
         },
         "functionLines": {
           "type": "integer",
           "exclusiveMinimum": 0,
-          "description": "The most lines a function may span, blank and comment lines counted"
-        },
-        "applies": {
-          "type": "string",
-          "enum": [
-            "changed",
-            "all"
-          ],
-          "description": "Which production files the budget holds: changed, the ones a range adds or changes; all, every one. The rest are reported as advisory"
+          "description": "production.functionLines as first spelled, which a later minor release stops reading"
         }
       },
-      "required": [
-        "fileLines",
-        "functionLines",
-        "applies"
-      ],
       "additionalProperties": false,
-      "description": "The line budget oxlint holds production files to, read by checks-size-budget"
+      "description": "The size budget oxlint holds production and test files to, read by checks-size-budget",
+      "allOf": [
+        {
+          "not": {
+            "required": [
+              "production"
+            ],
+            "anyOf": [
+              {
+                "required": [
+                  "fileLines"
+                ]
+              },
+              {
+                "required": [
+                  "functionLines"
+                ]
+              }
+            ]
+          }
+        }
+      ]
     },
     "features": {
       "type": "array",

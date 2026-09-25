@@ -116,7 +116,7 @@ test("a size budget states only where it differs from the kit's, in whole number
   const flat = { fileLines: 400, functionLines: 100, applies: "changed" } as const;
   for (const size of [stated, flat, {}]) expect(decoded({ sources: PRODUCTION, size })).toEqual({ sources: PRODUCTION, size });
   expect(refusal({ sources: PRODUCTION, size: { ...flat, production: { depth: 3 } } })).toContain(
-    "sets fileLines and functionLines beside production, which holds the same budget; move them into it",
+    "sets fileLines and functionLines beside production, which holds the same budget; move them into production",
   );
   expect(refusal({ sources: PRODUCTION, size: { functionLines: 80, production: {} } })).toContain("sets functionLines beside production");
 

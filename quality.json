@@ -16,7 +16,7 @@
     "production": ["effect-channel/**/*.ts", "scripts/**/*.ts"],
     "effect": { "paths": ["scripts/**/*.ts"], "exempt": ["scripts/feature-rules.ts"] }
   },
-  "size": { "fileLines": 400, "functionLines": 100, "applies": "changed" },
+  "size": {},
   "features": [],
   "agentRules": { "on": [], "off": [] },
   "docs": {
