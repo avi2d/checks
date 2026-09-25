@@ -25,7 +25,8 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   A bump not newer than the release before it is a revert: it cancels every release above the version it returns to, and a tag only keeps a reverted release that was already published.
   The committed changelog is the record of what was released: a version older than the newest it lists and absent from it was never published, and its commits go into the next release.
   A section keeps the date it was written with, since the squash merge that lands the release commit may fall on another day.
-  Entries come from commit subjects, the squash-merged pull request titles commitlint holds to the conventional format; the bodies are the branch's own messages, which nothing lints.
+  Entries come from commit subjects, the squash-merged pull request titles commitlint holds to the conventional format.
+  The bodies are the branch's own messages, which nothing lints.
   The release path needs no `contents: write`: the changelog arrives in the release commit's pull request, not from a workflow that pushes.
 - `quality.json` is JSON, not TOML or a TypeScript module: a bun bin, a hook running without `node_modules`, a `.cjs` or `.mjs` config and `jq` all parse it with nothing installed, and nobody runs a repository's own code to learn its policy.
   It holds declarations only.
@@ -71,6 +72,14 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   A repository adopts the templates as its files change, and an untouched file is listed as advisory rather than failing a change that never read it.
 - A task heading is verb first, and review holds it there rather than the check.
   No word list tells `Test layout` from `Test the layout`, and a check that passes the noun is worse than none.
+- The prose rules judge only the lines a change adds or edits, the way `checks-comment-gate` judges comments.
+  Text nobody touched never turns a change red, a record keeps the words it was written in, and a repository needs no cleanup pass before the gate runs.
+- A living doc takes one sentence per line, so a changed line is a changed sentence.
+  Under a hard wrap a one-word edit reflows a paragraph, and the gate would then demand fixes to sentences the edit never touched.
+- `scripts/prose-matchers.ts` imports nothing, so the gate and a write-time hook run one matcher and refuse in the same words.
+  A hook bundle ships without `node_modules`, so a matcher that needed Vale or a package could not refuse at write time.
+- Readability grades and words such as easy stay out of the prose rules.
+  A score cannot fail a change without failing correct prose, and a suggestion nobody runs an editor for is never seen.
 
 ## Related topics
 

@@ -8,8 +8,8 @@ module.exports = {
       name: "host-loaded-imports-nothing",
       severity: "error",
       comment:
-        "A host copies scripts/comment-matchers.ts alone into a directory with no node_modules and loads it, so it imports nothing: not effect, not node:, not another file here. Effect wrappers go in scripts/comments.ts.",
-      from: { path: "^scripts/comment-matchers[.]ts$" },
+        "A host copies scripts/comment-matchers.ts or scripts/prose-matchers.ts alone into a directory with no node_modules and loads it, so each imports nothing: not effect, not node:, not another file here. Effect wrappers go in scripts/comments.ts and scripts/docs.ts.",
+      from: { path: "^scripts/(?:comment|prose)-matchers[.]ts$" },
       to: {},
     },
     {

@@ -81,7 +81,7 @@ To place a change:
 
 This repository holds itself to the kit, with two exceptions of its own.
 Its `.dependency-cruiser.cjs` redeclares `no-orphans` with the plugin entry added to its `pathNot`.
-Its `.oxlintrc.json` lifts `effect-channel/no-throw` from `scripts/comment-matchers.ts`, the one file under its Effect path that a host loads without `node_modules`.
+Its `.oxlintrc.json` lifts `effect-channel/no-throw` from `scripts/comment-matchers.ts`, whose synchronous `refused()` a host loads without `node_modules`.
 
 ## Related topics
 

@@ -2,6 +2,7 @@ import { Effect, Schema } from "effect";
 import { ADR_DIRECTORY, ADR_INDEX, ROOT_FILES } from "./doc-rules.ts";
 import { listed, templateFile } from "./doc-templates.ts";
 import { EVERY_REPOSITORY, KIT_GATES, QUALITY_FILE } from "./gates.ts";
+import { DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, LIVING_NAMES, NEVER_LIVING, PROSE_RULES } from "./prose-matchers.ts";
 import { LegacyManifest, MODES, Quality } from "./quality-file.ts";
 
 export const MANIFEST = "package.json";
@@ -145,6 +146,33 @@ const DOC_KINDS: Block = {
   ],
 };
 
+const LIVING_DOCS: Block = {
+  name: "living-docs",
+  from: ["scripts/prose-matchers.ts"],
+  render: () => [
+    "A living doc is one of these:",
+    "",
+    `- a ${listed(LIVING_NAMES.map(code))} in any directory`,
+    `- a Markdown page under ${code(DOCS_DIRECTORY)}`,
+    "",
+    "These are records or agent files, and never living docs:",
+    "",
+    `- a file in ${code(ADR_DIRECTORY)}`,
+    `- a file whose name opens with four digits, as in ${listed(DATED_RECORD_EXAMPLES.map(code))}`,
+    `- a ${listed(NEVER_LIVING.map(code))}`,
+  ],
+};
+
+const PROSE: Block = {
+  name: "prose-rules",
+  from: ["PROSE_RULES in scripts/prose-matchers.ts"],
+  render: () => [
+    "| Refused | For example | Write instead |",
+    "| --- | --- | --- |",
+    ...PROSE_RULES.map(({ refuses, example, instead }) => `| ${refuses} | ${example} | ${instead} |`),
+  ],
+};
+
 type Subkeys<Field> = Field extends { readonly schema: { readonly fields: infer Sub } } ? keyof Sub & string : never;
 
 type Described<Fields, Cell> = {
@@ -239,7 +267,7 @@ const WHERE: Block = {
 
 export const TARGETS: readonly { readonly file: string; readonly blocks: readonly Block[] }[] = [
   { file: "README.md", blocks: [PREREQUISITES, INSTALL, GATES, WHERE] },
-  { file: `${GATE_PAGES}/checks-docs.md`, blocks: [DOC_KINDS] },
+  { file: `${GATE_PAGES}/checks-docs.md`, blocks: [DOC_KINDS, LIVING_DOCS, PROSE] },
   { file: "docs/configs/quality-file.md", blocks: [QUALITY_KEYS, LEGACY_KEYS] },
 ];
 
