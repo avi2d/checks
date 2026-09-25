@@ -138,7 +138,7 @@ test(
     const runs = await Promise.all(consumers.map((consumer) => vendor(consumer, home)));
     expect(runs.map((run) => run.exitCode)).toEqual([0, 0]);
     const dir = cachedDir(home, remote, "1.0.0");
-    expect(await readdir(dirname(dir))).toEqual(["fake-lib@1.0.0", "fake-lib@1.0.0.commit"]);
+    expect((await readdir(dirname(dir))).sort()).toEqual(["fake-lib@1.0.0", "fake-lib@1.0.0.commit"]);
     for (const consumer of consumers) expect(await readlink(join(consumer, "repos", "fake-lib"))).toBe(dir);
   },
   60_000,
@@ -256,7 +256,7 @@ test(
     expect(offline.text).toContain("cannot list fake-lib@2.0.0");
     expect(offline.text).toContain("stays unlinked");
     expect(await linked(consumer)).toBe(false);
-    expect(await readdir(dirname(cachedDir(home, remote, "2.0.0")))).toEqual(["fake-lib@1.0.0", "fake-lib@1.0.0.commit"]);
+    expect((await readdir(dirname(cachedDir(home, remote, "2.0.0")))).sort()).toEqual(["fake-lib@1.0.0", "fake-lib@1.0.0.commit"]);
   },
   60_000,
 );
