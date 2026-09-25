@@ -7,6 +7,7 @@
 Each entry under `sources.libraries` names an npm package, a git remote and a tag template holding `{version}`.
 `checks-vendor` reads the installed version from `node_modules/<package>/package.json` and resolves the template to one tag.
 It clones that tag once into a cache shared across repositories, records the landed commit beside the tree, strips every write bit and links `repos/<name>` to the tree.
+The clone is staged beside its cache entry and moves into place only once it is recorded, checked and read only, so a concurrent or killed first run never leaves a half built tree there.
 Every later run verifies the link rather than trusting it.
 It confirms the remote tag still lands on the recorded commit.
 It confirms the tree sits on that commit.
@@ -15,9 +16,8 @@ It confirms no write bit came back and no write landed outside the recorded comm
 Any failed confirmation fails the run.
 A missing tag, an unknown installed version or a manifest naming another version fails it too.
 A moved tag fails it rather than following the move.
-A deliberate move removes the cached directory and runs `checks-vendor` again.
+A deliberate move clears the cached directory with `chmod -R u+w <dir> && rm -rf <dir>` and runs `checks-vendor` again.
 The cache lives at `~/.cache/avi2dg-checks/repos/<host>/<owner>/<repo>/<tag>/`.
-It lives at `CHECKS_VENDOR_CACHE/repos/...` instead when that variable holds a directory.
 A read through the link resolves outside the checkout, so a reader that must stay inside the tree falls back to `node_modules/<package>`.
 
 ## What it reads
@@ -41,7 +41,7 @@ It takes no arguments, since `quality.json` names the libraries.
 | Code | When |
 | --- | --- |
 | 0 | every declared library links a verified tree |
-| 1 | a tag moved, a tree was written to, a version disagrees or a link is blocked |
+| 1 | a tag moved, a tree was written to, a version disagrees, a clone failed or a link is blocked |
 | 2 | `quality.json` does not decode, or arguments were passed |
 
 ## Sample output
@@ -57,6 +57,20 @@ checks-vendor: repos/effect still holds effect@4.0.0-rc.115, verified against ht
 ```
 
 A later run reports the link it kept.
+
+## Wiring
+
+A consuming repository runs it from its `prepare` script, so every install pins and verifies the trees.
+
+```json
+{ "scripts": { "prepare": "checks-vendor" } }
+```
+
+It ignores the links in `.gitignore` with `repos/*`, because `repos/*/` does not match a link.
+
+```gitignore
+repos/*
+```
 
 ## Opting out
 

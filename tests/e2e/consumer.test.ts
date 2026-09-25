@@ -30,9 +30,8 @@ function widgetTest(widget: string): string {
 
 async function packTarball(): Promise<string> {
   const packDir = await scratch("checks-pack-");
-  const packed = await $`bun pm pack --destination ${packDir} --quiet`.cwd(CHECKOUT).quiet();
-  const lines = packed.stdout.toString().trim().split("\n");
-  return lines[lines.length - 1] ?? "";
+  const packed = await $`bun pm pack --destination ${packDir} --quiet --ignore-scripts`.cwd(CHECKOUT).quiet();
+  return packed.stdout.toString().trim();
 }
 
 function oxlint(): Promise<Ran> {

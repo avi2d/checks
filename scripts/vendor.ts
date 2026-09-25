@@ -7,7 +7,6 @@ import { readQuality, type Library } from "./quality-file.ts";
 
 const NAME = "checks-vendor";
 const USAGE = `usage: ${NAME} takes no arguments, since quality.json names the libraries`;
-const CACHE_ENV = "CHECKS_VENDOR_CACHE";
 const CACHE_HOME = ".cache/avi2dg-checks";
 const RECORD = ".checks-vendor-commit";
 const LINKS = "repos";
@@ -88,17 +87,6 @@ const remoteTag = Effect.fn("remoteTag")(function* (remote: string, tag: string)
   return sha;
 });
 
-const fetch = Effect.fn("fetch")(function* (remote: string, tag: string, dir: string) {
-  const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  yield* fs.makeDirectory(path.dirname(dir), { recursive: true }).pipe(
-    Effect.mapError((cause) => new VendorError({ message: `cannot hold ${dir}: ${cause.message}` })),
-  );
-  yield* git(["clone", "--branch", tag, "--depth", "1", "--", remote, dir]).pipe(
-    Effect.mapError((cause) => new VendorError({ message: `cannot clone ${tag} from ${remote}: ${cause.message}` })),
-  );
-});
-
 const listed = Effect.fn("listed")(function* (dir: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -121,7 +109,7 @@ type EntryMode = {
 const modes = Effect.fn("modes")(function* (dir: string) {
   const fs = yield* FileSystem.FileSystem;
   const found: EntryMode[] = [];
-  for (const entry of yield* listed(dir)) {
+  for (const entry of [dir, ...(yield* listed(dir))]) {
     if (yield* isLink(entry)) continue;
     const info = yield* fs.stat(entry).pipe(
       Effect.mapError((cause) => new VendorError({ message: `cannot stat ${entry}: ${cause.message}` })),
@@ -132,6 +120,11 @@ const modes = Effect.fn("modes")(function* (dir: string) {
 });
 
 const WRITE_BITS = 0o222;
+const OWNER_WRITE = 0o200;
+
+function clearing(dir: string): string {
+  return `clear it with \`chmod -R u+w ${dir} && rm -rf ${dir}\` and rerun ${NAME}`;
+}
 
 const freeze = Effect.fn("freeze")(function* (dir: string) {
   const fs = yield* FileSystem.FileSystem;
@@ -140,13 +133,16 @@ const freeze = Effect.fn("freeze")(function* (dir: string) {
       Effect.mapError((cause) => new VendorError({ message: `cannot freeze ${entry}: ${cause.message}` })),
     );
   }
-  const root = yield* fs.stat(dir).pipe(
-    Effect.mapError((cause) => new VendorError({ message: `cannot stat ${dir}: ${cause.message}` })),
-  );
-  yield* fs.chmod(dir, root.mode & ~WRITE_BITS).pipe(
-    Effect.mapError((cause) => new VendorError({ message: `cannot freeze ${dir}: ${cause.message}` })),
-  );
 });
+
+function discard(dir: string) {
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    if (!(yield* fs.exists(dir))) return;
+    for (const { entry, mode } of yield* modes(dir)) yield* fs.chmod(entry, mode | OWNER_WRITE);
+    yield* fs.remove(dir, { recursive: true });
+  }).pipe(Effect.catch((cause) => Console.error(`${NAME}: cannot clear the staging tree ${dir}: ${cause.message}`)));
+}
 
 const checkVersion = Effect.fn("checkVersion")(function* (dir: string, library: Library, installed: string, tag: string) {
   const path = yield* Path.Path;
@@ -161,24 +157,24 @@ const verify = Effect.fn("verify")(function* (dir: string, library: Library, ins
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const record = (yield* fs.readFileString(path.join(dir, RECORD)).pipe(
-    Effect.mapError(() => new VendorError({ message: `${dir} holds no fetch record; remove it and rerun ${NAME}` })),
+    Effect.mapError(() => new VendorError({ message: `${dir} holds no fetch record; ${clearing(dir)}` })),
   )).trim();
   const remote = yield* remoteTag(library.repository, tag);
   if (remote !== record) {
     return yield* new VendorError({
-      message: `${tag} on ${library.repository} lands on ${remote}, not the recorded ${record}; remove ${dir} and rerun ${NAME} to pin the move deliberately`,
+      message: `${tag} on ${library.repository} lands on ${remote}, not the recorded ${record}; ${clearing(dir)} to pin the move deliberately`,
     });
   }
   const head = yield* headOf(dir);
   if (head !== record) {
-    return yield* new VendorError({ message: `${dir} sits on ${head}, not the recorded ${record}; remove it and rerun ${NAME}` });
+    return yield* new VendorError({ message: `${dir} sits on ${head}, not the recorded ${record}; ${clearing(dir)}` });
   }
   yield* checkVersion(dir, library, installed, tag);
   const tampered = (yield* modes(dir)).filter(({ mode }) => (mode & WRITE_BITS) !== 0).map(({ entry }) => entry);
   if (tampered.length > 0) {
     const [first = dir] = tampered;
     return yield* new VendorError({
-      message: `${dir} leaves ${tampered.length} paths writable, starting with ${first}; remove it and rerun ${NAME}`,
+      message: `${dir} leaves ${tampered.length} paths writable, starting with ${first}; ${clearing(dir)}`,
     });
   }
   const status = yield* git(["status", "--porcelain", "--", ".", `:!${RECORD}`], dir).pipe(
@@ -186,7 +182,7 @@ const verify = Effect.fn("verify")(function* (dir: string, library: Library, ins
   );
   if (status.trim() !== "") {
     const [first = ""] = status.trim().split("\n");
-    return yield* new VendorError({ message: `${dir} holds writes outside the recorded commit, starting with ${first}; remove it and rerun ${NAME}` });
+    return yield* new VendorError({ message: `${dir} holds writes outside the recorded commit, starting with ${first}; ${clearing(dir)}` });
   }
 });
 
@@ -212,6 +208,41 @@ const ensureLink = Effect.fn("ensureLink")(function* (root: string, library: Lib
   );
 });
 
+const stage = Effect.fn("stage")(function* (staging: string, library: Library, installed: string, tag: string, dir: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  yield* git(["clone", "--no-local", "--branch", tag, "--depth", "1", "--", library.repository, staging]).pipe(
+    Effect.mapError((cause) => new VendorError({ message: `cannot clone ${tag} from ${library.repository}: ${cause.message}` })),
+  );
+  const head = yield* headOf(staging);
+  yield* fs.writeFileString(path.join(staging, RECORD), `${head}\n`).pipe(
+    Effect.mapError((cause) => new VendorError({ message: `cannot record the fetch in ${staging}: ${cause.message}` })),
+  );
+  yield* checkVersion(staging, library, installed, tag);
+  yield* freeze(staging);
+  return yield* fs.rename(staging, dir).pipe(
+    Effect.as(true),
+    Effect.catchTag("PlatformError", (cause) =>
+      Effect.flatMap(fs.exists(dir), (raced) =>
+        raced ? Effect.succeed(false) : Effect.fail(new VendorError({ message: `cannot move ${staging} into ${dir}: ${cause.message}` })),
+      ),
+    ),
+  );
+});
+
+const land = Effect.fn("land")(function* (library: Library, installed: string, tag: string, dir: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const parent = path.dirname(dir);
+  yield* fs.makeDirectory(parent, { recursive: true }).pipe(
+    Effect.mapError((cause) => new VendorError({ message: `cannot hold ${dir}: ${cause.message}` })),
+  );
+  const staging = yield* fs.makeTempDirectory({ directory: parent, prefix: `.${path.basename(dir)}-` }).pipe(
+    Effect.mapError((cause) => new VendorError({ message: `cannot stage ${dir}: ${cause.message}` })),
+  );
+  return yield* stage(staging, library, installed, tag, dir).pipe(Effect.ensuring(discard(staging)));
+});
+
 const vend = Effect.fn("vend")(function* (root: string, cache: string, library: Library) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -221,14 +252,7 @@ const vend = Effect.fn("vend")(function* (root: string, cache: string, library: 
   );
   const tag = tagFor(library.tag, installed);
   const dir = path.join(cache, LINKS, ...remoteSegments(library.repository), tag);
-  if (!(yield* fs.exists(dir))) {
-    yield* fetch(library.repository, tag, dir);
-    const head = yield* headOf(dir);
-    yield* fs.writeFileString(path.join(dir, RECORD), `${head}\n`).pipe(
-      Effect.mapError((cause) => new VendorError({ message: `cannot record the fetch in ${dir}: ${cause.message}` })),
-    );
-    yield* checkVersion(dir, library, installed, tag);
-    yield* freeze(dir);
+  if (!(yield* fs.exists(dir)) && (yield* land(library, installed, tag, dir))) {
     yield* Console.log(`${NAME}: cloned ${tag} from ${library.repository} and linked ${LINKS}/${library.name}`);
   } else {
     yield* verify(dir, library, installed, tag);
@@ -239,11 +263,9 @@ const vend = Effect.fn("vend")(function* (root: string, cache: string, library: 
 
 const cacheRoot = Effect.fn("cacheRoot")(function* () {
   const path = yield* Path.Path;
-  const override = process.env[CACHE_ENV];
-  if (override !== undefined && override !== "") return override;
   const home = process.env.HOME;
   if (home === undefined || home === "") {
-    return yield* new VendorError({ message: `${CACHE_ENV} is unset and HOME is missing, so the shared cache has no root` });
+    return yield* new VendorError({ message: "HOME is missing, so the shared cache has no root" });
   }
   return path.join(home, CACHE_HOME);
 });
@@ -259,8 +281,15 @@ const main = Effect.gen(function* () {
     return true;
   }
   const cache = yield* cacheRoot();
-  for (const library of libraries) yield* vend(root, cache, library);
-  return true;
+  let passed = true;
+  for (const library of libraries) {
+    const vended = yield* vend(root, cache, library).pipe(
+      Effect.as(true),
+      Effect.catchTag("VendorError", (failure) => Console.error(`${NAME}: ${failure.message}`).pipe(Effect.as(false))),
+    );
+    passed = passed && vended;
+  }
+  return passed;
 });
 
 if (import.meta.main) runMain(NAME, main);
