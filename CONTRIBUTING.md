@@ -65,7 +65,7 @@ To place a change:
    | Path | What it holds |
    | --- | --- |
    | `scripts/` | every bin, and the modules they share |
-   | `effect-channel/` | the Effect error-channel oxlint plugin |
+   | `effect-channel/` | the oxlint plugin with the Effect error-channel and cognitive complexity rules |
    | `dist/` | the committed bundles of the plugin and of `featureRules` |
    | `presets/` | the Effect presets `checks-quality` builds its fragments from |
    | `templates/` | one template per kind of doc file, which `bun run build` renders |

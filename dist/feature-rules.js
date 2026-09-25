@@ -59,10 +59,11 @@ var STATEMENTS = {
 };
 var COMPLEXITY = {
   key: "complexity",
-  rule: "complexity",
-  options: { variant: "modified" },
-  measured: /has a complexity of (\d+)/,
-  limits: "The highest cyclomatic complexity a function may reach, a switch counted once"
+  rule: "cognitive-complexity",
+  plugin: "effect-channel",
+  options: {},
+  measured: /has a cognitive complexity of (\d+)/,
+  limits: "The highest cognitive complexity a function may reach, a switch counted once"
 };
 var DEPTH = {
   key: "depth",

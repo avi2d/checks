@@ -30,10 +30,11 @@ const STATEMENTS = {
 
 const COMPLEXITY = {
   key: "complexity",
-  rule: "complexity",
-  options: { variant: "modified" },
-  measured: /has a complexity of (\d+)/,
-  limits: "The highest cyclomatic complexity a function may reach, a switch counted once",
+  rule: "cognitive-complexity",
+  plugin: "effect-channel",
+  options: {},
+  measured: /has a cognitive complexity of (\d+)/,
+  limits: "The highest cognitive complexity a function may reach, a switch counted once",
 } as const;
 
 const DEPTH = {
@@ -48,6 +49,14 @@ export const SIZE_RULES = [FILE_LINES, FUNCTION_LINES, STATEMENTS, COMPLEXITY, D
 
 export type SizeRule = (typeof SIZE_RULES)[number];
 export type LimitKey = SizeRule["key"];
+
+export function qualifiedName(rule: SizeRule): string {
+  return "plugin" in rule ? `${rule.plugin}/${rule.rule}` : rule.rule;
+}
+
+export function diagnosticCode(rule: SizeRule): string {
+  return "plugin" in rule ? `${rule.plugin}(${rule.rule})` : `eslint(${rule.rule})`;
+}
 
 // An absent limit turns its rule off.
 export type Budget = { readonly [K in LimitKey]?: number };

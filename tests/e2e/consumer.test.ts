@@ -156,6 +156,63 @@ test(
   180_000,
 );
 
+const TANGLED_SETTLE = `export function settle(order) {
+  if (order !== null) {
+    if (order.paid || order.credit) {
+      for (const line of order.lines) {
+        if (line.taxable && line.shipped || line.gift) {
+          charge(line);
+        } else if (line.refunded || line.voided) {
+          refund(line);
+        } else {
+          skip(line);
+        }
+      }
+      return "settled";
+    }
+    return "unpaid";
+  }
+  return "missing";
+}
+`;
+
+const FLAT_SETTLE = `export function settle(order) {
+  if (order === null) return "missing";
+  if (!order.paid) return "unpaid";
+  for (const line of order.lines) {
+    if (line.taxable) charge(line);
+  }
+  return "settled";
+}
+`;
+
+test(
+  "file: consumer goes red on a tangled function under cognitive-complexity, green once it is flattened",
+  async () => {
+    await writeConsumerFixture();
+    await writeFile(
+      join(dir, ".oxlintrc.json"),
+      JSON.stringify({
+        extends: ["./node_modules/@avi2dg/checks/oxlintrc.json"],
+        plugins: ["typescript", "oxc", "eslint", "import"],
+        rules: { "effect-channel/cognitive-complexity": ["error", { max: 15 }] },
+      }),
+    );
+    await writeFile(join(dir, "settle.js"), TANGLED_SETTLE);
+
+    const red = await oxlint();
+    expect(red.exitCode).not.toBe(0);
+    expect(red.text).toContain("settle.js");
+    expect(red.text).toContain("effect-channel(cognitive-complexity)");
+    expect(red.text).toContain("has a cognitive complexity of 16. Maximum allowed is 15.");
+
+    await writeFile(join(dir, "settle.js"), FLAT_SETTLE);
+    const green = await oxlint();
+    expect(green.exitCode).toBe(0);
+  },
+  180_000,
+);
+
 test(
   "file: consumer lint stays green with a lint-dirty file inside the installed package",
   async () => {
