@@ -2,6 +2,15 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.16.0
+
+Released 2026-09-25.
+
+### Features
+
+- **scripts:** add checks-repetition to hold new repetition in production code (#46)
+- **scripts:** add the recommended size limits, a tests budget and an overrun ratchet (#45)
+
 ## 0.15.0
 
 Released 2026-09-25.
