@@ -1,11 +1,9 @@
 import { expect, test } from "bun:test";
 import { cognitiveComplexity } from "../effect-channel/cognitive.ts";
-import { categoryOf } from "../effect-channel/cognitive-plain.ts";
 import {
   CALL_TYPES,
   CONTROL_TYPES,
   FUNCTION_TYPES,
-  IGNORED_TYPES,
   LOOP_TYPES,
   PLAIN_A_TYPES,
   PLAIN_B_TYPES,
@@ -55,21 +53,12 @@ function scoreOf(...body: SyntaxNode[]): number {
 }
 
 test("every node type routes to exactly one category", () => {
-  const groups = [CONTROL_TYPES, LOOP_TYPES, CALL_TYPES, FUNCTION_TYPES, PLAIN_A_TYPES, PLAIN_B_TYPES, PLAIN_C_TYPES, IGNORED_TYPES];
+  const groups = [CONTROL_TYPES, LOOP_TYPES, CALL_TYPES, FUNCTION_TYPES, PLAIN_A_TYPES, PLAIN_B_TYPES, PLAIN_C_TYPES];
   const seen = new Map<string, number>();
   for (const group of groups) {
     for (const type of group) seen.set(type, (seen.get(type) ?? 0) + 1);
   }
   for (const [, count] of seen) expect(count).toBe(1);
-  expect(categoryOf("IfStatement")).toBe("control");
-  expect(categoryOf("WhileStatement")).toBe("loop");
-  expect(categoryOf("CallExpression")).toBe("call");
-  expect(categoryOf("ArrowFunctionExpression")).toBe("function");
-  expect(categoryOf("Property")).toBe("plainA");
-  expect(categoryOf("ClassBody")).toBe("plainB");
-  expect(categoryOf("BinaryExpression")).toBe("plainC");
-  expect(categoryOf("Literal")).toBe("ignored");
-  expect(categoryOf("NoSuchType")).toBe("ignored");
 });
 
 test("a flat guard costs one, and an else costs one more", () => {
@@ -80,6 +69,21 @@ test("a flat guard costs one, and an else costs one more", () => {
 test("an else-if chain pays the initial if and one per else and else-if", () => {
   const chain = ifs(id("a"), block(ret(lit())), ifs(id("b"), block(ret(lit())), ifs(id("c"), block(ret(lit())), block(ret(lit())))));
   expect(scoreOf(expr(chain))).toBe(4);
+});
+
+test("every branch of an else-if chain sits one level below the if", () => {
+  const nestedInThird = ifs(id("a"), block(), ifs(id("b"), block(), ifs(id("c"), block(expr(ifs(id("x"), block()))))));
+  expect(scoreOf(expr(nestedInThird))).toBe(5);
+  const nestedInElse = ifs(id("a"), block(), ifs(id("b"), block(), ifs(id("c"), block(), ifs(id("d"), block(), block(expr(ifs(id("x"), block())))))));
+  expect(scoreOf(expr(nestedInElse))).toBe(7);
+  const loop: SyntaxNode = { type: "ForStatement", init: null, test: id("t"), update: null, body: block(expr(ifs(id("x"), block()))) };
+  const deepLink = ifs(id("a"), block(), ifs(id("b"), block(), ifs(id("c"), block(), ifs(id("d"), block(), ifs(id("e"), block(loop))))));
+  expect(scoreOf(expr(deepLink))).toBe(10);
+});
+
+test("an else-if condition scores at the level of the if's condition", () => {
+  expect(scoreOf(expr(ifs(cond(id("a"), id("b"), id("c")), block())))).toBe(2);
+  expect(scoreOf(expr(ifs(id("a"), block(), ifs(cond(id("b"), id("c"), id("d")), block()))))).toBe(3);
 });
 
 test("an explicit else holding an if pays the else and the nested if", () => {

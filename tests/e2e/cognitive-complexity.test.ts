@@ -266,6 +266,35 @@ test("the paper's worked examples score what the paper prints", async () => {
   ]);
 }, 60_000);
 
+const NAMING = `export const result = items.map((item) => {
+  if (item.a && item.b) {
+    return 1;
+  }
+  return 0;
+});
+export const handlers = {
+  run: () => {
+    if (ready && armed) {
+      fire();
+    }
+  },
+};
+export const walk = (node) => {
+  node.kids.forEach(
+    (kid) => (kid.leaf ? 0 : walk(kid)),
+  );
+};
+`;
+
+test("a function takes its name only from its direct parent", async () => {
+  const { text } = await lint({ "naming.js": NAMING }, 1);
+  expect(diagnostics(text)).toEqual([
+    { line: 1, message: "function `anonymous` has a cognitive complexity of 2. Maximum allowed is 1." },
+    { line: 8, message: "function `run` has a cognitive complexity of 2. Maximum allowed is 1." },
+    { line: 14, message: "function `walk` has a cognitive complexity of 2. Maximum allowed is 1." },
+  ]);
+}, 60_000);
+
 test("flat guards, switches and shorthand pass while a tangled nest fails", async () => {
   const guards = Array.from({ length: 15 }, (_, index) => `  if (x === ${index}) return ${index};\n`).join("");
   const green = await lint({ "guards.js": `export function guards(x) {\n${guards}  return -1;\n}\n` }, 15);

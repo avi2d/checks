@@ -166,30 +166,20 @@ function score(state, node, nesting, parent, nested) {
   if (isPlainC(node))
     return scoreList(state, plainChildrenC(node), nesting, node, nested);
 }
-function scoreOtherwise(state, node, alternate, nested, level, chain) {
-  if (alternate.type === "IfStatement") {
-    state.total += 1;
-    return scoreElseIf(state, alternate, chain, nested);
-  }
-  state.total += 1;
-  score(state, alternate, level, node, nested);
-}
-function scoreIf(state, node, nesting, nested) {
+function scoreBranch(state, node, nesting, nested) {
   score(state, node.test, nesting, node, nested);
-  state.total += 1 + nesting;
   score(state, node.consequent, nesting + 1, node, nested);
   const alternate = node.alternate;
   if (alternate === null)
     return;
-  scoreOtherwise(state, node, alternate, nested, nesting + 1, nesting + 1);
+  state.total += 1;
+  if (alternate.type === "IfStatement")
+    return scoreBranch(state, alternate, nesting, nested);
+  score(state, alternate, nesting + 1, node, nested);
 }
-function scoreElseIf(state, node, nesting, nested) {
-  score(state, node.test, nesting, node, nested);
-  score(state, node.consequent, nesting, node, nested);
-  const alternate = node.alternate;
-  if (alternate === null)
-    return;
-  scoreOtherwise(state, node, alternate, nested, nesting, nesting + 1);
+function scoreIf(state, node, nesting, nested) {
+  state.total += 1 + nesting;
+  scoreBranch(state, node, nesting, nested);
 }
 function scoreControl(state, node, nesting, nested) {
   switch (node.type) {
@@ -371,12 +361,6 @@ function cognitiveComplexity(root, names) {
 
 // effect-channel/cognitive-complexity.ts
 var DEFAULT_MAX = 15;
-function isNode(value) {
-  return typeof value === "object" && value !== null && "type" in value && typeof value.type === "string";
-}
-function ancestorsOf(context, node) {
-  return context.sourceCode.getAncestors(node).filter(isNode);
-}
 function maxOf(options) {
   const [first] = options;
   if (typeof first === "object" && first !== null && "max" in first && typeof first.max === "number" && first.max > 0) {
@@ -391,39 +375,32 @@ function keyName(key) {
     return key.value;
   return;
 }
-function declaratorName(ancestors) {
-  const declarator = ancestors.findLast((ancestor) => ancestor.type === "VariableDeclarator");
-  if (declarator !== undefined && declarator.id.type === "Identifier") {
-    return declarator.id.name;
+function assignedName(target) {
+  if (target.type === "Identifier")
+    return target.name;
+  if (target.type === "MemberExpression" && target.object.type === "ThisExpression" && target.property.type === "Identifier") {
+    return target.property.name;
   }
   return;
 }
-function memberName(ancestors) {
-  const holder = ancestors.findLast((ancestor) => ancestor.type === "Property" || ancestor.type === "MethodDefinition");
-  if (holder !== undefined && (holder.type === "Property" || holder.type === "MethodDefinition"))
-    return keyName(holder.key);
+function boundName(node) {
+  const parent = node.parent;
+  if (parent.type === "VariableDeclarator" && parent.init === node && parent.id.type === "Identifier")
+    return parent.id.name;
+  if ((parent.type === "Property" || parent.type === "MethodDefinition") && parent.value === node)
+    return keyName(parent.key);
+  if (parent.type === "AssignmentExpression" && parent.right === node)
+    return assignedName(parent.left);
   return;
 }
-function assignmentName(ancestors) {
-  const assignment = ancestors.findLast((ancestor) => ancestor.type === "AssignmentExpression");
-  if (assignment === undefined)
-    return;
-  if (assignment.left.type === "Identifier")
-    return assignment.left.name;
-  if (assignment.left.type === "MemberExpression" && assignment.left.object.type === "ThisExpression" && assignment.left.property.type === "Identifier") {
-    return assignment.left.property.name;
-  }
-  return;
-}
-function displayName(node, ancestors) {
+function displayName(node) {
   if (node.type !== "ArrowFunctionExpression" && node.id !== null)
     return node.id.name;
-  return declaratorName(ancestors) ?? memberName(ancestors) ?? assignmentName(ancestors) ?? "anonymous";
+  return boundName(node) ?? "anonymous";
 }
-function recursionNames(node, ancestors) {
+function recursionNames(node) {
   const own = node.type === "ArrowFunctionExpression" ? undefined : node.id?.name;
-  const bound = declaratorName(ancestors) ?? memberName(ancestors) ?? assignmentName(ancestors);
-  const names = [own, bound];
+  const names = [own, boundName(node)];
   return names.filter((name) => name !== undefined);
 }
 var rule = {
@@ -436,11 +413,10 @@ var rule = {
   create(context) {
     const max = maxOf(context.options);
     const check = (node) => {
-      const ancestors = ancestorsOf(context, node);
-      const score2 = node.type === "StaticBlock" ? cognitiveComplexity(node, []) : cognitiveComplexity(node, recursionNames(node, ancestors));
+      const score2 = node.type === "StaticBlock" ? cognitiveComplexity(node, []) : cognitiveComplexity(node, recursionNames(node));
       if (score2 <= max)
         return;
-      const name = node.type === "StaticBlock" ? "static block" : `function \`${displayName(node, ancestors)}\``;
+      const name = node.type === "StaticBlock" ? "static block" : `function \`${displayName(node)}\``;
       context.report({ node, message: `${name} has a cognitive complexity of ${score2}. Maximum allowed is ${max}.` });
     };
     return {

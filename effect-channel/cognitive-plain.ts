@@ -18,17 +18,6 @@ import type {
   SyntaxNode,
 } from "./cognitive-nodes.ts";
 
-export function categoryOf(type: string): string {
-  if (CONTROL_TYPES.includes(type)) return "control";
-  if (LOOP_TYPES.includes(type)) return "loop";
-  if (CALL_TYPES.includes(type)) return "call";
-  if (FUNCTION_TYPES.includes(type)) return "function";
-  if (PLAIN_A_TYPES.includes(type)) return "plainA";
-  if (PLAIN_B_TYPES.includes(type)) return "plainB";
-  if (PLAIN_C_TYPES.includes(type)) return "plainC";
-  return "ignored";
-}
-
 export function isControl(node: SyntaxNode): node is Control {
   return CONTROL_TYPES.includes(node.type);
 }
