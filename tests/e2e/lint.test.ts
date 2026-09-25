@@ -1,9 +1,9 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { withoutPullRequestEvent } from "../lib/env.ts";
-import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
+import { CHECKOUT, ran, scratchDirs, UNVENDORED_BUNFIG, type Ran } from "./lib/fixture-repo.ts";
 
 const SCRIPT = join(CHECKOUT, "scripts", "lint.ts");
 const QUALITY_SCRIPT = join(CHECKOUT, "scripts", "quality.ts");
@@ -43,7 +43,7 @@ async function scaffold(quality: Record<string, unknown> = {}): Promise<void> {
     JSON.stringify({ name: "checks-lint-fixture", type: "module", scripts: { lint: "checks-lint", test: "checks-test" } }),
   );
   await writeFile(join(dir, "quality.json"), JSON.stringify({ gates: { ci: ["bun run lint"] }, ...quality }));
-  await writeFile(join(dir, "bunfig.toml"), await readFile(join(CHECKOUT, "bunfig.toml"), "utf8"));
+  await writeFile(join(dir, "bunfig.toml"), UNVENDORED_BUNFIG);
   await writeFile(join(dir, "widget.ts"), "export const widget = 42;\n");
   await $`git init -q -b main`.cwd(dir).quiet();
   await $`bun ${QUALITY_SCRIPT} generate`.cwd(dir).env(LOCAL_ENV).quiet();

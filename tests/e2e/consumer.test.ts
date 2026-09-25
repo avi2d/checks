@@ -5,7 +5,7 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { Schema } from "effect";
 import { withoutPullRequestEvent } from "../lib/env.ts";
-import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
+import { CHECKOUT, ran, scratchDirs, UNVENDORED_BUNFIG, type Ran } from "./lib/fixture-repo.ts";
 
 const WIDGET = "export const widget = 42;\n";
 
@@ -30,7 +30,7 @@ function widgetTest(widget: string): string {
 
 async function packTarball(): Promise<string> {
   const packDir = await scratch("checks-pack-");
-  const packed = await $`bun pm pack --destination ${packDir} --quiet`.cwd(CHECKOUT).quiet();
+  const packed = await $`bun pm pack --destination ${packDir} --quiet --ignore-scripts`.cwd(CHECKOUT).quiet();
   return packed.stdout.toString().trim();
 }
 
@@ -75,7 +75,7 @@ async function writeConsumerFixture(
 }
 
 async function writeWidgetRepo(testFile: string, widget: string): Promise<void> {
-  await writeFile(join(dir, "bunfig.toml"), await readFile(join(CHECKOUT, "bunfig.toml"), "utf8"));
+  await writeFile(join(dir, "bunfig.toml"), UNVENDORED_BUNFIG);
   await writeFile(join(dir, "widget.ts"), WIDGET);
   await mkdir(dirname(join(dir, testFile)), { recursive: true });
   await writeFile(join(dir, testFile), widgetTest(widget));
