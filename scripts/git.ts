@@ -148,6 +148,12 @@ function namesAParent(commitObject: string): boolean {
   return headers.split("\n").some((header) => header.startsWith("parent "));
 }
 
+export const isShallowBoundary = Effect.fn("isShallowBoundary")(function* (rev: string, cwd?: string) {
+  if (!namesAParent(yield* git(["cat-file", "commit", rev], cwd))) return false;
+  const [, ...parents] = (yield* git(["rev-list", "--parents", "-n", "1", rev], cwd)).trim().split(" ");
+  return parents.length === 0;
+});
+
 // A shallow clone's boundary commit reads as parentless to rev-parse and log, and judged against
 // the empty tree it would carry the whole repository; only the commit object still names its parents.
 export const parentOrEmptyTree = Effect.fn("parentOrEmptyTree")(function* (rev: string, cwd?: string) {
@@ -170,6 +176,10 @@ export const refArgs = Effect.fn("refArgs")(function* (args: readonly string[], 
 export const rangeFromArgs = Effect.fn("rangeFromArgs")(function* (args: readonly string[], usage: string, cwd?: string) {
   const { first, second } = yield* refArgs(args, usage);
   return yield* rangeEnds(first, second, cwd);
+});
+
+export const commitOf = Effect.fn("commitOf")(function* (rev: string, cwd?: string) {
+  return (yield* git(["rev-parse", "--verify", `${rev}^{commit}`], cwd)).trim();
 });
 
 // A scratch index leaves the repository's own index and working tree untouched.

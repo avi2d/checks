@@ -33,6 +33,8 @@ A test that turns flaky moves there, so the suite stays trustworthy, and the fla
 bun test --path-ignore-patterns='' tests/quarantine
 ```
 
+A test left there past 30 days fails [checks-quarantine-clock](checks-quarantine-clock.md).
+
 ## What it reads
 
 It reads the working tree.
@@ -78,3 +80,4 @@ A repository that tracks one keeps it.
 - [checks-test](checks-test.md)
 - [checks-flake](checks-flake.md)
 - [checks-mutation-compare](checks-mutation-compare.md)
+- [checks-quarantine-clock](checks-quarantine-clock.md)

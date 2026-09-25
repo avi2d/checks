@@ -368,7 +368,7 @@ test("a step running checks-lint covers no gate its declared selection leaves ou
 
   expect(gapsIn({ [CI]: workflow }, selecting())).toEqual([]);
   const metadataOnly = selecting({
-    lint: ["checks-commit-identity", "checks-comment-gate", "checks-suppressions-ratchet", "checks-ci-wiring", "checks-docs"],
+    lint: ["checks-commit-identity", "checks-comment-gate", "checks-suppressions-ratchet", "checks-ci-wiring", "checks-docs", "checks-quarantine-clock"],
   });
   expect(gapsIn({ [CI]: workflow }, metadataOnly)).toEqual([{ gate: "bunx checks-test-layout", blocked: [] }]);
 });
@@ -384,16 +384,17 @@ test("a selection names kit gates and keeps every gate that applies to every rep
     "checks-suppressions-ratchet",
     "checks-ci-wiring",
     "checks-docs",
+    "checks-quarantine-clock",
   ];
 
   expect(refusal(["checks-ci-wiring", "checks-comment-gate", "checks-suppressions-ratchet", "checks-docs"])).toContain(
-    "quality.json: checks-lint must run checks-commit-identity, which applies to every repository",
+    "quality.json: checks-lint must run checks-commit-identity, checks-quarantine-clock, which apply to every repository",
   );
   expect(refusal(["checks-commit-identity", "checks-comment-gate", "checks-ci-wiring", "checks-docs"])).toContain(
-    "quality.json: checks-lint must run checks-suppressions-ratchet, which applies to every repository",
+    "quality.json: checks-lint must run checks-suppressions-ratchet, checks-quarantine-clock, which apply to every repository",
   );
   expect(refusal(["checks-lint-coverage"])).toContain(
-    "checks-lint must run checks-commit-identity, checks-comment-gate, checks-suppressions-ratchet, checks-ci-wiring, checks-docs, which apply to every repository",
+    "checks-lint must run checks-commit-identity, checks-comment-gate, checks-suppressions-ratchet, checks-ci-wiring, checks-docs, checks-quarantine-clock, which apply to every repository",
   );
   expect(refusal([...metadata, "checks-backtest"])).toContain('Expected "checks-lint-coverage" |');
   expect(refusal("checks-ci-wiring")).toContain("Expected array");
