@@ -80,6 +80,12 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   A hook bundle ships without `node_modules`, so a matcher that needed Vale or a package could not refuse at write time.
 - Readability grades and words such as easy stay out of the prose rules.
   A score cannot fail a change without failing correct prose, and a suggestion nobody runs an editor for is never seen.
+- A path, link or command on a line the range leaves alone fails when the range broke it, as by deleting the file it names.
+  A reference goes stale when the code it names moves far more often than when its own line is edited, so a gate on edited lines alone would miss the usual break.
+- A path under a top directory the repository lacks names a file in another repository, such as a consumer's, and no program tells that from a typo.
+  A directory the range deletes still counts as this repository's, so a path under it reads as stale rather than foreign.
+- The command check passes over the docs a repository declares under `docs.forConsumers`.
+  This kit's README and reference pages speak to a consuming repository, whose scripts are not this one's, and no program tells an example for a consumer from an instruction for a contributor.
 
 ## Related topics
 

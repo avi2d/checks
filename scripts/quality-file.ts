@@ -20,6 +20,16 @@ const PathGlob = Schema.String.check(
     "A glob from the repository root that oxlint, the Effect language service and git read alike: a directory first, * within a segment, ** as a whole one, a file name with an extension last, and no braces, ?, [ or leading ./",
 });
 
+// Only checks-docs reads a doc glob, matching it from the root, so a file at the root names itself.
+const DocGlob = Schema.String.check(
+  Schema.isPattern(new RegExp(`^(?:${SEGMENT}/)*${FILE}$`), {
+    expected: "a glob from the repository root such as README.md or docs/**/*.md: * within a segment, ** as a whole one, a file name with an extension last",
+  }),
+).annotate({
+  identifier: "DocGlob",
+  description: "A glob from the repository root that checks-docs reads: * within a segment, ** as a whole one, a file name with an extension last",
+});
+
 const LITERAL_SEGMENT = String.raw`(?!\.\.?(?:/|$))[\w.@+-]+`;
 
 const DirectoryPath = Schema.String.check(
@@ -164,6 +174,11 @@ const Docs = Schema.Struct({
       explanation: pagesIn("an explanation, which says why"),
     } satisfies Record<Mode, unknown>).annotate({
       description: "The Diátaxis mode of each page, whose template checks-docs holds the page to; a page under docs/ needs one",
+    }),
+  ),
+  forConsumers: Schema.optionalKey(
+    Schema.Array(DocGlob).annotate({
+      description: "The living docs that speak to a repository installing this one, whose bun run commands checks-docs does not hold to this package.json",
     }),
   ),
 });

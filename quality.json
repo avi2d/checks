@@ -19,5 +19,8 @@
   "size": { "fileLines": 400, "functionLines": 100, "applies": "changed" },
   "features": [],
   "agentRules": { "on": [], "off": [] },
-  "docs": { "pages": { "reference": ["docs/gates/*.md", "docs/configs/*.md"], "explanation": ["docs/design.md"] } }
+  "docs": {
+    "pages": { "reference": ["docs/gates/*.md", "docs/configs/*.md"], "explanation": ["docs/design.md"] },
+    "forConsumers": ["README.md", "docs/gates/*.md", "docs/configs/*.md"]
+  }
 }

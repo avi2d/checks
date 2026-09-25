@@ -138,7 +138,7 @@ test(
     await put("README.md", "# widget\n\nIt builds bills, fast.\n");
     const touched = await commit("touch the README");
     const held = await docs(touched);
-    expect(held.text).toContain("docs: 4 violation(s) in the doc files the range touches:\n  README.md:1: lacks `## Before you begin`");
+    expect(held.text).toContain("docs: 4 violation(s):\n  README.md:1: lacks `## Before you begin`");
     expect(held.exitCode).toBe(1);
   },
   120_000,

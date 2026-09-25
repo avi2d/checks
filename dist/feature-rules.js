@@ -40,6 +40,12 @@ var PathGlob = Schema2.String.check(Schema2.isPattern(new RegExp(`^${SEGMENT}(?:
   identifier: "PathGlob",
   description: "A glob from the repository root that oxlint, the Effect language service and git read alike: a directory first, * within a segment, ** as a whole one, a file name with an extension last, and no braces, ?, [ or leading ./"
 });
+var DocGlob = Schema2.String.check(Schema2.isPattern(new RegExp(`^(?:${SEGMENT}/)*${FILE}$`), {
+  expected: "a glob from the repository root such as README.md or docs/**/*.md: * within a segment, ** as a whole one, a file name with an extension last"
+})).annotate({
+  identifier: "DocGlob",
+  description: "A glob from the repository root that checks-docs reads: * within a segment, ** as a whole one, a file name with an extension last"
+});
 var LITERAL_SEGMENT = String.raw`(?!\.\.?(?:/|$))[\w.@+-]+`;
 var DirectoryPath = Schema2.String.check(Schema2.isPattern(new RegExp(`^${LITERAL_SEGMENT}(?:/${LITERAL_SEGMENT})*$`), {
   expected: "a directory from the repository root such as src/billing, with no glob and no trailing slash"
@@ -133,6 +139,9 @@ var Docs = Schema2.Struct({
     explanation: pagesIn("an explanation, which says why")
   }).annotate({
     description: "The Diátaxis mode of each page, whose template checks-docs holds the page to; a page under docs/ needs one"
+  })),
+  forConsumers: Schema2.optionalKey(Schema2.Array(DocGlob).annotate({
+    description: "The living docs that speak to a repository installing this one, whose bun run commands checks-docs does not hold to this package.json"
   }))
 });
 var Quality = Schema2.Struct({

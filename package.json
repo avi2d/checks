@@ -45,6 +45,8 @@
     "scripts/docs.ts",
     "scripts/doc-outline.ts",
     "scripts/doc-rules.ts",
+    "scripts/doc-references.ts",
+    "scripts/doc-snapshot.ts",
     "scripts/doc-templates.ts",
     "templates/",
     "presets/effect.oxlint.json",

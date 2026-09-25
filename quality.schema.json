@@ -285,6 +285,13 @@
           },
           "additionalProperties": false,
           "description": "The Diátaxis mode of each page, whose template checks-docs holds the page to; a page under docs/ needs one"
+        },
+        "forConsumers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DocGlob"
+          },
+          "description": "The living docs that speak to a repository installing this one, whose bun run commands checks-docs does not hold to this package.json"
         }
       },
       "additionalProperties": false,
@@ -382,6 +389,11 @@
     "RuleName": {
       "type": "string",
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "DocGlob": {
+      "type": "string",
+      "pattern": "^(?:(?!\\.\\.?(?:\\/|$))(?:\\*\\*|(?:[\\w.@+-]|\\*(?!\\*))+)\\/)*(?:[\\w.@+-]|\\*(?!\\*))*\\.\\w+$",
+      "description": "A glob from the repository root that checks-docs reads: * within a segment, ** as a whole one, a file name with an extension last"
     }
   }
 }

@@ -231,6 +231,10 @@ const QUALITY_ROWS: Described<QualityFields, KeyRow> = {
   },
   docs: {
     pages: { readBy: "`checks-docs`", holds: "the Diátaxis mode of each page, by glob, as [checks-docs](../gates/checks-docs.md) says" },
+    forConsumers: {
+      readBy: "`checks-docs`",
+      holds: "the living docs that speak to a repository installing this one, by glob, whose `bun run` commands name that repository's scripts",
+    },
   },
 };
 

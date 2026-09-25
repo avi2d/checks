@@ -52,6 +52,7 @@ The kit's bins find the file at the git root and read it there:
 | `agentRules.on` | agent Rule selection, not the kit | catalogued Rules switched on for this repository |
 | `agentRules.off` | agent Rule selection, not the kit | catalogued Rules switched off for this repository |
 | `docs.pages` | `checks-docs` | the Diátaxis mode of each page, by glob, as [checks-docs](../gates/checks-docs.md) says |
+| `docs.forConsumers` | `checks-docs` | the living docs that speak to a repository installing this one, by glob, whose `bun run` commands name that repository's scripts |
 
 <!-- end generated quality-keys -->
 
