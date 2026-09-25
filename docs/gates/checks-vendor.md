@@ -5,6 +5,7 @@
 ## What it checks
 
 Each entry under `sources.libraries` names an npm package, a git remote and a tag template holding `{version}`.
+Its `name` is the link under `repos/`, and its optional `path` is the manifest inside the clone that holds the version, `package.json` when absent.
 `checks-vendor` reads the installed version from `node_modules/<package>/package.json` and resolves the template to one tag.
 It clones that tag once into a cache shared across repositories, records the landed commit in `<tag>.commit` beside the tree, strips every write bit and links `repos/<name>` to the tree.
 The clone is staged beside its cache entry and moves into place only once it is recorded, checked and read only, so a concurrent or killed first run never leaves a half built tree there.
@@ -43,8 +44,8 @@ It takes no arguments, since `quality.json` names the libraries.
 | Code | When |
 | --- | --- |
 | 0 | every declared library links a verified tree, or its remote could not be reached for a first fetch |
-| 1 | a tag is missing or lands elsewhere than its record, a tree was written to, a record disagrees with its tree, a version disagrees or a link is blocked |
-| 2 | `quality.json` does not decode, or arguments were passed |
+| 1 | a tag is missing or lands elsewhere than its record, an installed version is unknown, a tree was written to, a record disagrees with its tree, a version disagrees or a link is blocked |
+| 2 | `quality.json` does not decode, `HOME` is unset, or arguments were passed |
 
 ## Sample output
 
