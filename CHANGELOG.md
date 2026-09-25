@@ -2,6 +2,16 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.17.0
+
+Released 2026-09-25.
+
+### Features
+
+- **effect-channel:** add a cognitive complexity rule and make it the size budget's (#50)
+- **scripts:** export the refused directive names from comment-matchers (#49)
+- refuse undeclared package imports and deprecated symbol use (#48)
+
 ## 0.16.0
 
 Released 2026-09-25.
