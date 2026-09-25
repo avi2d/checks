@@ -93,57 +93,100 @@ function byPosition(a: { readonly path: string; readonly location: Location }, b
   return a.location.start.line - b.location.start.line || a.location.start.column - b.location.start.column;
 }
 
-function spanText(source: string, lineStarts: readonly number[], location: Location): string {
-  const offset = (position: Location["start"]) => (lineStarts[position.line - 1] ?? source.length) + position.column - 1;
-  return source.slice(offset(location.start), offset(location.end));
-}
-
-// The key holds no line or column, so an edit above a mutant leaves it matched.
-function keyMutants(files: ReadonlyMap<string, ReportFile>): Map<string, UnmatchedMutant> {
-  const keyed = new Map<string, UnmatchedMutant>();
-  for (const [path, { source, mutants }] of files) {
-    const lineStarts = [0, ...Array.from(source.matchAll(/\n/g), (newline) => newline.index + 1)];
-    const seen = new Map<string, number>();
-    for (const mutant of mutants.map((m) => ({ path, ...m })).sort(byPosition)) {
-      const signature = JSON.stringify([path, mutant.mutatorName, mutant.replacement, spanText(source, lineStarts, mutant.location)]);
-      const occurrence = seen.get(signature) ?? 0;
-      seen.set(signature, occurrence + 1);
-      keyed.set(`${signature}#${occurrence}`, mutant);
+function unchangedLines(baseSource: string, headSource: string): Map<number, number> {
+  const base = baseSource.split("\n");
+  const head = headSource.split("\n");
+  let prefix = 0;
+  while (prefix < base.length && prefix < head.length && base[prefix] === head[prefix]) prefix++;
+  let suffix = 0;
+  while (suffix < base.length - prefix && suffix < head.length - prefix && base[base.length - 1 - suffix] === head[head.length - 1 - suffix]) suffix++;
+  const rows = base.length - prefix - suffix;
+  const width = head.length - prefix - suffix + 1;
+  const common = new Uint32Array((rows + 1) * width);
+  const commonAfter = (row: number, column: number) => common[row * width + column] ?? 0;
+  for (let row = rows - 1; row >= 0; row--) {
+    for (let column = width - 2; column >= 0; column--) {
+      common[row * width + column] =
+        base[prefix + row] === head[prefix + column] ? commonAfter(row + 1, column + 1) + 1 : Math.max(commonAfter(row + 1, column), commonAfter(row, column + 1));
     }
   }
-  return keyed;
+  const lines = new Map<number, number>();
+  for (let line = 1; line <= prefix; line++) lines.set(line, line);
+  for (let row = 0, column = 0; row < rows && column < width - 1; ) {
+    if (base[prefix + row] === head[prefix + column]) lines.set(prefix + ++row, prefix + ++column);
+    else if (commonAfter(row + 1, column) >= commonAfter(row, column + 1)) row++;
+    else column++;
+  }
+  for (let line = 1; line <= suffix; line++) lines.set(base.length - suffix + line, head.length - suffix + line);
+  return lines;
+}
+
+function mapLocation(location: Location, lines: ReadonlyMap<number, number>): Location | undefined {
+  for (let line = location.start.line; line <= location.end.line; line++) if (!lines.has(line)) return undefined;
+  const start = lines.get(location.start.line);
+  const end = lines.get(location.end.line);
+  if (start === undefined || end === undefined || end - start !== location.end.line - location.start.line) return undefined;
+  return { start: { line: start, column: location.start.column }, end: { line: end, column: location.end.column } };
+}
+
+function keyMutants(
+  path: string,
+  mutants: readonly Mutant[],
+  place: (location: Location) => Location | undefined,
+): { readonly keyed: Map<string, UnmatchedMutant>; readonly unplaced: readonly UnmatchedMutant[] } {
+  const keyed = new Map<string, UnmatchedMutant>();
+  const unplaced: UnmatchedMutant[] = [];
+  const seen = new Map<string, number>();
+  for (const mutant of mutants) {
+    const location = place(mutant.location);
+    if (location === undefined) {
+      unplaced.push({ path, ...mutant });
+      continue;
+    }
+    const signature = JSON.stringify([location.start, location.end, mutant.mutatorName, mutant.replacement]);
+    const occurrence = seen.get(signature) ?? 0;
+    seen.set(signature, occurrence + 1);
+    keyed.set(`${signature}#${occurrence}`, { path, ...mutant });
+  }
+  return { keyed, unplaced };
 }
 
 export function compareReports(baseFiles: ReadonlyMap<string, ReportFile>, headFiles: ReadonlyMap<string, ReportFile>): Comparison {
-  const base = keyMutants(baseFiles);
-  const head = keyMutants(headFiles);
   const regressions: MutantChange[] = [];
   const moves: MutantChange[] = [];
   const baseOnly: UnmatchedMutant[] = [];
   const headOnly: UnmatchedMutant[] = [];
 
-  for (const [key, mutant] of base) {
-    const counterpart = head.get(key);
-    if (counterpart === undefined) {
-      baseOnly.push(mutant);
-      continue;
+  for (const path of new Set([...baseFiles.keys(), ...headFiles.keys()])) {
+    const baseFile = baseFiles.get(path);
+    const headFile = headFiles.get(path);
+    const lines = baseFile !== undefined && headFile !== undefined ? unchangedLines(baseFile.source, headFile.source) : new Map<number, number>();
+    const base = keyMutants(path, baseFile?.mutants ?? [], (location) => mapLocation(location, lines));
+    const head = keyMutants(path, headFile?.mutants ?? [], (location) => location);
+    baseOnly.push(...base.unplaced);
+    for (const [key, mutant] of base.keyed) {
+      const counterpart = head.keyed.get(key);
+      if (counterpart === undefined) {
+        baseOnly.push(mutant);
+        continue;
+      }
+      const change: MutantChange = {
+        path,
+        location: counterpart.location,
+        mutatorName: mutant.mutatorName,
+        replacement: mutant.replacement,
+        from: mutant.status,
+        to: counterpart.status,
+      };
+      if (mutant.status !== counterpart.status && (LEAVES_SCORE.has(mutant.status) || LEAVES_SCORE.has(counterpart.status))) {
+        moves.push(change);
+      } else if (DETECTED.has(mutant.status) && UNDETECTED.has(counterpart.status)) {
+        regressions.push(change);
+      }
     }
-    const change: MutantChange = {
-      path: mutant.path,
-      location: counterpart.location,
-      mutatorName: mutant.mutatorName,
-      replacement: mutant.replacement,
-      from: mutant.status,
-      to: counterpart.status,
-    };
-    if (mutant.status !== counterpart.status && (LEAVES_SCORE.has(mutant.status) || LEAVES_SCORE.has(counterpart.status))) {
-      moves.push(change);
-    } else if (DETECTED.has(mutant.status) && UNDETECTED.has(counterpart.status)) {
-      regressions.push(change);
+    for (const [key, mutant] of head.keyed) {
+      if (!base.keyed.has(key)) headOnly.push(mutant);
     }
-  }
-  for (const [key, mutant] of head) {
-    if (!base.has(key)) headOnly.push(mutant);
   }
 
   regressions.sort(byPosition);

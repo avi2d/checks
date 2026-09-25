@@ -126,19 +126,38 @@ test("run B's shape, kills moving to RuntimeError under bail, holds no regressio
   expect(formatComparison(comparison, false)).toContain("no regression");
 });
 
-test("duplicate mutator, replacement and source text within a file match by occurrence order", () => {
-  const source = "a + b;\na + b;\n";
-  const base = new Map([["src/dup.ts", { source, mutants: [mutant({ status: "Killed", location: at(1, 1, 6) }), mutant({ status: "Killed", location: at(2, 1, 6) })] }]]);
-  const head = new Map([["src/dup.ts", { source, mutants: [mutant({ status: "Killed", location: at(1, 1, 6) }), mutant({ status: "Survived", location: at(2, 1, 6) })] }]]);
+test("mutants sharing a location, mutator and replacement match by occurrence order", () => {
+  const source = "a + b;\n";
+  const base = new Map([["src/dup.ts", { source, mutants: [mutant({ status: "Killed", location: at(1, 1, 6) }), mutant({ status: "Killed", location: at(1, 1, 6) })] }]]);
+  const head = new Map([["src/dup.ts", { source, mutants: [mutant({ status: "Killed", location: at(1, 1, 6) }), mutant({ status: "Survived", location: at(1, 1, 6) })] }]]);
   const comparison = compareReports(base, head);
   expect(comparison.regressions).toHaveLength(1);
-  expect(comparison.regressions[0]?.location.start.line).toBe(2);
 });
 
-test("mutants with no counterpart are listed and never fail the comparison", () => {
-  const source = "a\nb\n";
-  const base = new Map([["src/a.ts", { source, mutants: [mutant({ status: "Killed", location: at(1, 1, 2) })] }]]);
-  const head = new Map([["src/a.ts", { source, mutants: [mutant({ status: "Survived", location: at(2, 1, 2) })] }]]);
+test("an untested duplicate added above a killed mutant is listed, not a regression", () => {
+  const flip = (status: string, line: number) => mutant({ status, mutatorName: "BooleanLiteral", replacement: "false", location: at(line, 3, 7) });
+  const base = new Map([["src/a.ts", { source: "f(true);\n", mutants: [flip("Killed", 1)] }]]);
+  const head = new Map([["src/a.ts", { source: "g(true);\nf(true);\n", mutants: [flip("NoCoverage", 1), flip("Killed", 2)] }]]);
+  const comparison = compareReports(base, head);
+  expect(comparison.regression).toBe(false);
+  expect(comparison.baseOnly).toHaveLength(0);
+  expect(comparison.headOnly).toMatchObject([{ path: "src/a.ts", status: "NoCoverage", location: at(1, 3, 7) }]);
+});
+
+test("a lost kill below a removed duplicate still fails", () => {
+  const flip = (status: string, line: number) => mutant({ status, mutatorName: "BooleanLiteral", replacement: "false", location: at(line, 3, 7) });
+  const base = new Map([["src/a.ts", { source: "g(true);\nf(true);\n", mutants: [flip("NoCoverage", 1), flip("Killed", 2)] }]]);
+  const head = new Map([["src/a.ts", { source: "f(true);\n", mutants: [flip("Survived", 1)] }]]);
+  const comparison = compareReports(base, head);
+  expect(comparison.regression).toBe(true);
+  expect(comparison.regressions).toMatchObject([{ path: "src/a.ts", from: "Killed", to: "Survived", location: at(1, 3, 7) }]);
+  expect(comparison.baseOnly).toMatchObject([{ path: "src/a.ts", status: "NoCoverage", location: at(1, 3, 7) }]);
+  expect(comparison.headOnly).toHaveLength(0);
+});
+
+test("mutants on a changed line have no counterpart, are listed and never fail the comparison", () => {
+  const base = new Map([["src/a.ts", { source: "a + b;\n", mutants: [mutant({ status: "Killed", location: at(1, 1, 6) })] }]]);
+  const head = new Map([["src/a.ts", { source: "a + c;\n", mutants: [mutant({ status: "Survived", location: at(1, 1, 6) })] }]]);
   const comparison = compareReports(base, head);
   expect(comparison.baseOnly).toHaveLength(1);
   expect(comparison.headOnly).toHaveLength(1);
