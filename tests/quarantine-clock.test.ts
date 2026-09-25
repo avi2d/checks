@@ -5,11 +5,12 @@ const DAY = 86400;
 const FILE = "tests/quarantine/billing.test.ts";
 
 function log(blocks: readonly string[]): string {
-  return blocks.join("\n");
+  return blocks.join("");
 }
 
 function commit(sha: string, at: number, day: string, statuses: readonly string[]): string {
-  return [`commit ${sha} ${at} ${day}T10:00:00+00:00`, "", ...statuses].join("\n");
+  const fields = statuses.flatMap((status) => status.split("\t"));
+  return `commit ${sha} ${at} ${day}T10:00:00+00:00\0\n${fields.map((field) => `${field}\0`).join("")}`;
 }
 
 const HEAD_SHA = "d".repeat(40);

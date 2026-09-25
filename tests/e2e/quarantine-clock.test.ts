@@ -12,14 +12,7 @@ function daysAgo(days: number): string {
   return new Date(Date.now() - days * DAY).toISOString();
 }
 
-async function quarantine(repo: FixtureRepo, file: string, days: number): Promise<void> {
-  await repo.write({ [file]: "import { expect, test } from \"bun:test\";\ntest(\"held\", () => {});\n" });
-  await $`git add -A && git ${IDENTITY} commit -q --no-gpg-sign --date ${daysAgo(days)} -m ${`test: quarantine ${file}`}`
-    .cwd(repo.dir)
-    .quiet();
-}
-
-async function create(repo: FixtureRepo, file: string, days: number): Promise<void> {
+async function add(repo: FixtureRepo, file: string, days: number): Promise<void> {
   await repo.write({ [file]: "import { expect, test } from \"bun:test\";\ntest(\"held\", () => {});\n" });
   await $`git add -A && git ${IDENTITY} commit -q --no-gpg-sign --date ${daysAgo(days)} -m ${`test: add ${file}`}`
     .cwd(repo.dir)
@@ -38,7 +31,7 @@ test(
   "a test quarantined more than 30 days before HEAD goes red naming it, its entry day and what to do",
   async () => {
     const repo = await open();
-    await quarantine(repo, "tests/quarantine/billing.test.ts", 40);
+    await add(repo, "tests/quarantine/billing.test.ts", 40);
     await repo.write({ "notes.md": "# notes\n" });
     const head = await repo.commit("chore: head");
     const entryDay = daysAgo(40).slice(0, "YYYY-MM-DD".length);
@@ -61,8 +54,8 @@ test(
   "a test quarantined less than 30 days before HEAD goes green, even when the test itself is older",
   async () => {
     const repo = await open();
-    await quarantine(repo, "tests/quarantine/fresh.test.ts", 5);
-    await create(repo, "tests/ledger.test.ts", 40);
+    await add(repo, "tests/quarantine/fresh.test.ts", 5);
+    await add(repo, "tests/ledger.test.ts", 40);
     await move(repo, "tests/ledger.test.ts", "tests/quarantine/ledger.test.ts", 5);
     await repo.write({ "notes.md": "# notes\n" });
     const head = await repo.commit("chore: head");
@@ -75,10 +68,26 @@ test(
 );
 
 test(
+  "a helper or fixture in quarantine never ages out, so one older than 30 days stays green",
+  async () => {
+    const repo = await open();
+    await add(repo, "tests/quarantine/lib/ledger-fixture.ts", 40);
+    await add(repo, "tests/quarantine/ledger.test.ts", 5);
+    await repo.write({ "notes.md": "# notes\n" });
+    const head = await repo.commit("chore: head");
+
+    const green = await repo.script("quarantine-clock.ts", head);
+    expect(green.exitCode).toBe(0);
+    expect(green.text).toContain("quarantine-clock: no test in tests/quarantine/ is past 30 days (1 checked)");
+  },
+  120_000,
+);
+
+test(
   "a move into quarantine starts the clock at the move, so an old move still goes red on its move day",
   async () => {
     const repo = await open();
-    await create(repo, "tests/billing.test.ts", 50);
+    await add(repo, "tests/billing.test.ts", 50);
     await move(repo, "tests/billing.test.ts", "tests/quarantine/billing.test.ts", 40);
     await repo.write({ "notes.md": "# notes\n" });
     const head = await repo.commit("chore: head");

@@ -16,7 +16,7 @@ const E2E = "tests/e2e/";
 const HELPER_DIRS = ["tests/lib/", "tests/fixtures/"] as const;
 const DATA_DIR = "tests/fixtures/";
 
-const TEST_FILE = /(?:[.](?:test|spec)|_test)[.](tsx?)$/;
+export const TEST_FILE = /(?:[.](?:test|spec)|_test)[.](tsx?)$/;
 const TARGET_FILE = /^tests\/(?:[^/]+\/)*[^/]+[.]test[.]tsx?$/;
 const TYPESCRIPT = /[.]tsx?$/;
 

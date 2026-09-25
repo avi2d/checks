@@ -7,13 +7,13 @@
 It fails naming each test that entered `tests/quarantine/` more than 30 days before the head.
 `checks-test-layout` pins `tests/quarantine/` out of every default run, so a test there protects nothing until it moves back.
 Each failure names the file, the day it entered quarantine, and what to do, which is to fix it and move it back, or delete it.
-The limit is 30 days for every file, with no setting to raise it.
+The limit is 30 days for every test, with no setting to raise it.
 GitLab quarantines fast for 3 days and long term for at most 3 months, then opens a deletion merge request automatically.
 
 ## What it reads
 
-It lists the files under `tests/quarantine/` at the head.
-It walks each file's history with `git log --follow`, so a move into quarantine starts the clock at the move rather than at the test's creation.
+It lists the test files under `tests/quarantine/` at the head, by the name pattern `checks-test-layout` uses, so a helper or fixture there never ages out.
+It walks each file's history with `git log --follow`, so a move or a copy into quarantine starts the clock there rather than at the test's creation.
 It measures the age from the author date of the commit that put the file there to the author date of the head, so the same commit always gets the same verdict.
 A rebase keeps the author date, so the clock cannot be restarted that way.
 
@@ -45,7 +45,7 @@ quarantine-clock: 1 test(s) in tests/quarantine/ is past 30 days; fix each and m
 ## Opting out
 
 It applies to every repository, so no selection leaves it out.
-A repository with no file under `tests/quarantine/` passes with nothing checked.
+A repository with no test file under `tests/quarantine/` passes with nothing checked.
 `checks-lint` runs it over each pull request's range, as [checks-lint](checks-lint.md) says.
 
 ## Related topics

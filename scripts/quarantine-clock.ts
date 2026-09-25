@@ -2,6 +2,7 @@
 import { Console, Effect, Schema } from "effect";
 import { commitOf, git, refArgs } from "./git.ts";
 import { runMain } from "./main.ts";
+import { TEST_FILE } from "./test-layout.ts";
 
 export const QUARANTINE = "tests/quarantine/";
 export const QUARANTINE_DAYS = 30;
@@ -28,7 +29,8 @@ export type ClockResult = {
   readonly overdue: readonly Overdue[];
 };
 
-const HEADER = /^commit ([0-9a-f]{40}) (\d+) (\S+)$/;
+const HEADER = /^commit ([0-9a-f]{40}|[0-9a-f]{64}) (\d+) (\S+)$/;
+const TWO_PATHS = /^[RC]/;
 
 type Status = readonly [status: string, from: string, to: string];
 
@@ -41,17 +43,20 @@ type CommitBlock = {
 
 function parseBlocks(output: string): readonly CommitBlock[] {
   const blocks: { readonly sha: string; readonly at: number; readonly day: string; readonly statuses: Status[] }[] = [];
-  for (const line of output.split("\n")) {
-    if (line.includes("\t")) {
-      const [status = "", from = "", to = ""] = line.split("\t");
-      const open = blocks.at(-1);
-      if (open !== undefined) open.statuses.push([status, from, to]);
-      continue;
-    }
-    const header = HEADER.exec(line);
+  const fields = output.split("\0");
+  let index = 0;
+  while (index < fields.length) {
+    const field = (fields[index] ?? "").replace(/^\n/, "");
+    index += 1;
+    const header = HEADER.exec(field);
     if (header !== null) {
       blocks.push({ sha: header[1] ?? "", at: Number(header[2] ?? "0"), day: (header[3] ?? "").slice(0, "YYYY-MM-DD".length), statuses: [] });
+      continue;
     }
+    if (field === "") continue;
+    const paths = TWO_PATHS.test(field) ? 2 : 1;
+    blocks.at(-1)?.statuses.push([field, fields[index] ?? "", fields[index + paths - 1] ?? ""]);
+    index += paths;
   }
   return blocks;
 }
@@ -59,7 +64,7 @@ function parseBlocks(output: string): readonly CommitBlock[] {
 function entryIn({ sha, at, day, statuses }: CommitBlock, path: string): Entry | undefined {
   const entered = statuses.some(
     ([status, from, to]) =>
-      (status === "A" && from === path) || (status.startsWith("R") && to === path && !from.startsWith(QUARANTINE)),
+      to === path && (status === "A" || status.startsWith("C") || (status.startsWith("R") && !from.startsWith(QUARANTINE))),
   );
   return entered ? { kind: "entered", sha, at, day } : undefined;
 }
@@ -105,14 +110,12 @@ export function report({ checked, overdue }: ClockResult): string {
 }
 
 const filesAt = Effect.fn("filesAt")(function* (head: string) {
-  const listed = yield* git(["ls-tree", "-r", "--name-only", head, "--", QUARANTINE]);
-  return listed.split("\n").map((line) => line.trim()).filter((line) => line !== "");
+  const listed = yield* git(["ls-tree", "-r", "-z", "--name-only", head, "--", QUARANTINE]);
+  return listed.split("\0").filter((file) => TEST_FILE.test(file));
 });
 
 const entryAt = Effect.fn("entryAt")(function* (head: string, file: string) {
-  const output = yield* git(
-    ["-c", "core.quotePath=false", "log", "--follow", "--name-status", "--format=commit %H %at %aI", head, "--", file],
-  );
+  const output = yield* git(["log", "--follow", "--root", "--name-status", "-z", "--format=commit %H %at %aI", head, "--", file]);
   const entry = findEntry(output, file);
   if (entry.kind === "truncated") {
     return yield* new QuarantineError({
