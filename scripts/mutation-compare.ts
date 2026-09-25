@@ -93,15 +93,15 @@ function byPosition(a: { readonly path: string; readonly location: Location }, b
   return a.location.start.line - b.location.start.line || a.location.start.column - b.location.start.column;
 }
 
-function unchangedLines(baseSource: string, headSource: string): Map<number, number> {
-  const base = baseSource.split("\n");
-  const head = headSource.split("\n");
+function sharedEnds(base: readonly string[], head: readonly string[]): { readonly prefix: number; readonly suffix: number } {
   let prefix = 0;
   while (prefix < base.length && prefix < head.length && base[prefix] === head[prefix]) prefix++;
   let suffix = 0;
   while (suffix < base.length - prefix && suffix < head.length - prefix && base[base.length - 1 - suffix] === head[head.length - 1 - suffix]) suffix++;
-  const rows = base.length - prefix - suffix;
-  const width = head.length - prefix - suffix + 1;
+  return { prefix, suffix };
+}
+
+function commonAfterTable(base: readonly string[], head: readonly string[], prefix: number, rows: number, width: number): (row: number, column: number) => number {
   const common = new Uint32Array((rows + 1) * width);
   const commonAfter = (row: number, column: number) => common[row * width + column] ?? 0;
   for (let row = rows - 1; row >= 0; row--) {
@@ -110,6 +110,16 @@ function unchangedLines(baseSource: string, headSource: string): Map<number, num
         base[prefix + row] === head[prefix + column] ? commonAfter(row + 1, column + 1) + 1 : Math.max(commonAfter(row + 1, column), commonAfter(row, column + 1));
     }
   }
+  return commonAfter;
+}
+
+function unchangedLines(baseSource: string, headSource: string): Map<number, number> {
+  const base = baseSource.split("\n");
+  const head = headSource.split("\n");
+  const { prefix, suffix } = sharedEnds(base, head);
+  const rows = base.length - prefix - suffix;
+  const width = head.length - prefix - suffix + 1;
+  const commonAfter = commonAfterTable(base, head, prefix, rows, width);
   const lines = new Map<number, number>();
   for (let line = 1; line <= prefix; line++) lines.set(line, line);
   for (let row = 0, column = 0; row < rows && column < width - 1; ) {
@@ -151,50 +161,54 @@ function keyMutants(
   return { keyed, unplaced };
 }
 
-export function compareReports(baseFiles: ReadonlyMap<string, ReportFile>, headFiles: ReadonlyMap<string, ReportFile>): Comparison {
-  const regressions: MutantChange[] = [];
-  const moves: MutantChange[] = [];
-  const baseOnly: UnmatchedMutant[] = [];
-  const headOnly: UnmatchedMutant[] = [];
+type Findings = {
+  readonly regressions: MutantChange[];
+  readonly moves: MutantChange[];
+  readonly baseOnly: UnmatchedMutant[];
+  readonly headOnly: UnmatchedMutant[];
+};
 
-  for (const path of new Set([...baseFiles.keys(), ...headFiles.keys()])) {
-    const baseFile = baseFiles.get(path);
-    const headFile = headFiles.get(path);
-    const lines = baseFile !== undefined && headFile !== undefined ? unchangedLines(baseFile.source, headFile.source) : new Map<number, number>();
-    const base = keyMutants(path, baseFile?.mutants ?? [], (location) => mapLocation(location, lines));
-    const head = keyMutants(path, headFile?.mutants ?? [], (location) => location);
-    baseOnly.push(...base.unplaced);
-    for (const [key, mutant] of base.keyed) {
-      const counterpart = head.keyed.get(key);
-      if (counterpart === undefined) {
-        baseOnly.push(mutant);
-        continue;
-      }
-      const change: MutantChange = {
-        path,
-        location: counterpart.location,
-        mutatorName: mutant.mutatorName,
-        replacement: mutant.replacement,
-        from: mutant.status,
-        to: counterpart.status,
-      };
-      if (mutant.status !== counterpart.status && (LEAVES_SCORE.has(mutant.status) || LEAVES_SCORE.has(counterpart.status))) {
-        moves.push(change);
-      } else if (DETECTED.has(mutant.status) && UNDETECTED.has(counterpart.status)) {
-        regressions.push(change);
-      }
-    }
-    for (const [key, mutant] of head.keyed) {
-      if (!base.keyed.has(key)) headOnly.push(mutant);
-    }
+function judgeMatch(path: string, mutant: UnmatchedMutant, counterpart: UnmatchedMutant, findings: Findings): void {
+  const change: MutantChange = {
+    path,
+    location: counterpart.location,
+    mutatorName: mutant.mutatorName,
+    replacement: mutant.replacement,
+    from: mutant.status,
+    to: counterpart.status,
+  };
+  if (mutant.status !== counterpart.status && (LEAVES_SCORE.has(mutant.status) || LEAVES_SCORE.has(counterpart.status))) {
+    findings.moves.push(change);
+  } else if (DETECTED.has(mutant.status) && UNDETECTED.has(counterpart.status)) {
+    findings.regressions.push(change);
   }
+}
 
-  regressions.sort(byPosition);
-  moves.sort(byPosition);
-  baseOnly.sort(byPosition);
-  headOnly.sort(byPosition);
+function compareFile(path: string, baseFile: ReportFile | undefined, headFile: ReportFile | undefined, findings: Findings): void {
+  const lines = baseFile !== undefined && headFile !== undefined ? unchangedLines(baseFile.source, headFile.source) : new Map<number, number>();
+  const base = keyMutants(path, baseFile?.mutants ?? [], (location) => mapLocation(location, lines));
+  const head = keyMutants(path, headFile?.mutants ?? [], (location) => location);
+  findings.baseOnly.push(...base.unplaced);
+  for (const [key, mutant] of base.keyed) {
+    const counterpart = head.keyed.get(key);
+    if (counterpart === undefined) findings.baseOnly.push(mutant);
+    else judgeMatch(path, mutant, counterpart, findings);
+  }
+  for (const [key, mutant] of head.keyed) {
+    if (!base.keyed.has(key)) findings.headOnly.push(mutant);
+  }
+}
 
-  return { regressions, moves, baseOnly, headOnly, regression: regressions.length > 0 };
+export function compareReports(baseFiles: ReadonlyMap<string, ReportFile>, headFiles: ReadonlyMap<string, ReportFile>): Comparison {
+  const findings: Findings = { regressions: [], moves: [], baseOnly: [], headOnly: [] };
+  for (const path of new Set([...baseFiles.keys(), ...headFiles.keys()])) compareFile(path, baseFiles.get(path), headFiles.get(path), findings);
+
+  findings.regressions.sort(byPosition);
+  findings.moves.sort(byPosition);
+  findings.baseOnly.sort(byPosition);
+  findings.headOnly.sort(byPosition);
+
+  return { ...findings, regression: findings.regressions.length > 0 };
 }
 
 function locate(mutant: { readonly path: string; readonly location: Location }): string {
