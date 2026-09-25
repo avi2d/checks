@@ -298,7 +298,16 @@ const cacheRoot = Effect.fn("cacheRoot")(function* () {
 const main = Effect.gen(function* () {
   const [extra] = process.argv.slice(2);
   if (extra !== undefined) return yield* new Usage({ message: USAGE });
-  const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
+  const toplevel = yield* git(["rev-parse", "--show-toplevel"]).pipe(
+    Effect.map((output) => Option.some(output.trim())),
+    Effect.catchTag("GitFailure", (failure) =>
+      Console.error(`${NAME}: ${failure.message}, so no checkout holds ${LINKS}/ and readers stay on node_modules`).pipe(
+        Effect.as(Option.none<string>()),
+      ),
+    ),
+  );
+  if (Option.isNone(toplevel)) return true;
+  const root = toplevel.value;
   const { quality } = yield* readQuality(root);
   const libraries = quality.sources?.libraries ?? [];
   if (libraries.length === 0) {

@@ -358,3 +358,23 @@ test(
   },
   60_000,
 );
+
+test(
+  "a copied tree with no .git warns once, links nothing and passes",
+  async () => {
+    const home = await scratchHome();
+    const parent = await scratch("checks-vendor-remote-");
+    const consumer = await scratch("checks-vendor-consumer-");
+    const { remote } = await seedRemote(parent, "1.0.0", "fake-lib@1.0.0");
+    await seedConsumer(consumer, remote, "1.0.0");
+    await rm(join(consumer, ".git"), { recursive: true, force: true });
+
+    const copied = await vendor(consumer, home);
+    expect(copied.exitCode).toBe(0);
+    expect(copied.text.match(/checks-vendor:/g)).toHaveLength(1);
+    expect(copied.text).toContain("no checkout holds repos/");
+    expect(await linked(consumer)).toBe(false);
+    expect(await readdir(consumer)).not.toContain("repos");
+  },
+  60_000,
+);

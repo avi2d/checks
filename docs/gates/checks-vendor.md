@@ -43,7 +43,7 @@ It takes no arguments, since `quality.json` names the libraries.
 
 | Code | When |
 | --- | --- |
-| 0 | every declared library links a verified tree, or its remote could not be reached for a first fetch |
+| 0 | every declared library links a verified tree, its remote could not be reached for a first fetch, or no git checkout holds the run |
 | 1 | a tag is missing or lands elsewhere than its record, an installed version is unknown, a tree was written to, a record disagrees with its tree, a version disagrees or a link is blocked |
 | 2 | `quality.json` does not decode, `HOME` is unset, or arguments were passed |
 
@@ -71,6 +71,7 @@ A consuming repository runs it from its `prepare` script, so every install pins 
 
 An install offline still passes.
 A cached tree verifies with no network, and a tag that is not cached yet warns, stays unlinked and leaves readers on `node_modules/<package>` until a later install can fetch it.
+An install outside a git checkout, or with no `git` on the path, warns once, links nothing and passes too.
 
 It ignores the links in `.gitignore` with `repos/*`, because `repos/*/` does not match a link.
 
