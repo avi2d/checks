@@ -6,7 +6,7 @@
 
 Each entry under `sources.libraries` names an npm package, a git remote and a tag template holding `{version}`.
 `checks-vendor` reads the installed version from `node_modules/<package>/package.json` and resolves the template to one tag.
-It clones that tag once into a cache shared across repositories, records the landed commit beside the tree, strips every write bit and links `repos/<name>` to the tree.
+It clones that tag once into a cache shared across repositories, records the landed commit in `<tag>.commit` beside the tree, strips every write bit and links `repos/<name>` to the tree.
 The clone is staged beside its cache entry and moves into place only once it is recorded, checked and read only, so a concurrent or killed first run never leaves a half built tree there.
 Every later run verifies the link rather than trusting it, and does so without contacting the remote.
 It confirms the tree sits on the recorded commit.
@@ -17,7 +17,8 @@ Any failed confirmation fails the run.
 A failed library drops its `repos/<name>` link, so a reader falls back to `node_modules/<package>` rather than a tree the run could not vouch for.
 A missing tag, an unknown installed version or a manifest naming another version fails it too.
 A tag moved upstream after the first fetch is not followed, since a cached tree stays on its recorded commit.
-A deliberate move clears the cached directory with `chmod -R u+w <dir> && rm -rf <dir>` and runs `checks-vendor` again.
+Clearing the tree with `chmod -R u+w <dir> && rm -rf <dir>` keeps the record, so the next fetch fails when the tag now lands elsewhere.
+A deliberate move also deletes `<tag>.commit` by hand before `checks-vendor` runs again.
 The cache lives at `~/.cache/avi2dg-checks/repos/<host>/<owner>/<repo>/<tag>/`.
 A read through the link resolves outside the checkout, so a reader that must stay inside the tree falls back to `node_modules/<package>`.
 
@@ -27,7 +28,7 @@ It reads the working tree.
 That is `quality.json`, `node_modules/<package>/package.json` for each declared library and the `repos/` links.
 It reads the shared cache outside the checkout.
 That is each tag tree, its recorded commit and its manifest.
-It asks a remote which commit its tag lands on only when that tag is not cached yet.
+It contacts a remote only when a tag is not cached yet, to confirm the tag exists and to clone it.
 
 ## Arguments
 
@@ -42,7 +43,7 @@ It takes no arguments, since `quality.json` names the libraries.
 | Code | When |
 | --- | --- |
 | 0 | every declared library links a verified tree, or its remote could not be reached for a first fetch |
-| 1 | a tag is missing, a tree was written to, a record disagrees with its tree, a version disagrees or a link is blocked |
+| 1 | a tag is missing or lands elsewhere than its record, a tree was written to, a record disagrees with its tree, a version disagrees or a link is blocked |
 | 2 | `quality.json` does not decode, or arguments were passed |
 
 ## Sample output

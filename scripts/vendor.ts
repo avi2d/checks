@@ -8,7 +8,7 @@ import { readQuality, type Library } from "./quality-file.ts";
 const NAME = "checks-vendor";
 const USAGE = `usage: ${NAME} takes no arguments, since quality.json names the libraries`;
 const CACHE_HOME = ".cache/avi2dg-checks";
-const RECORD = ".checks-vendor-commit";
+const RECORD_SUFFIX = ".commit";
 const LINKS = "repos";
 const VERSION_TOKEN = "{version}";
 
@@ -155,12 +155,26 @@ const checkVersion = Effect.fn("checkVersion")(function* (dir: string, library: 
   }
 });
 
-const verify = Effect.fn("verify")(function* (dir: string, library: Library, installed: string, tag: string) {
+function recordOf(dir: string): string {
+  return `${dir}${RECORD_SUFFIX}`;
+}
+
+const recorded = Effect.fn("recorded")(function* (dir: string) {
   const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  const record = (yield* fs.readFileString(path.join(dir, RECORD)).pipe(
-    Effect.mapError(() => new VendorError({ message: `${dir} holds no fetch record; ${clearing(dir)}` })),
-  )).trim();
+  const record = recordOf(dir);
+  if (!(yield* fs.exists(record))) return Option.none<string>();
+  const text = yield* fs.readFileString(record).pipe(
+    Effect.mapError((cause) => new VendorError({ message: `cannot read ${record}: ${cause.message}` })),
+  );
+  return Option.some(text.trim());
+});
+
+const verify = Effect.fn("verify")(function* (dir: string, library: Library, installed: string, tag: string) {
+  const held = yield* recorded(dir);
+  if (Option.isNone(held)) {
+    return yield* new VendorError({ message: `${recordOf(dir)} is missing, so ${dir} has no commit to hold to; ${clearing(dir)}` });
+  }
+  const record = held.value;
   const head = yield* headOf(dir);
   if (head !== record) {
     return yield* new VendorError({ message: `${dir} sits on ${head}, not the recorded ${record}; ${clearing(dir)}` });
@@ -173,7 +187,7 @@ const verify = Effect.fn("verify")(function* (dir: string, library: Library, ins
       message: `${dir} leaves ${tampered.length} paths writable, starting with ${first}; ${clearing(dir)}`,
     });
   }
-  const status = yield* git(["status", "--porcelain", "--", ".", `:!${RECORD}`], dir).pipe(
+  const status = yield* git(["status", "--porcelain"], dir).pipe(
     Effect.mapError((cause) => new VendorError({ message: `${dir} reports no status: ${cause.message}` })),
   );
   if (status.trim() !== "") {
@@ -217,15 +231,22 @@ const unlink = Effect.fn("unlink")(function* (root: string, library: Library) {
 
 const stage = Effect.fn("stage")(function* (staging: string, library: Library, installed: string, tag: string, dir: string) {
   const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
   yield* git(["clone", "--no-local", "--branch", tag, "--depth", "1", "--", library.repository, staging]).pipe(
     Effect.mapError((cause) => new Unreachable({ message: `cannot clone ${tag} from ${library.repository}: ${cause.message}` })),
   );
   const head = yield* headOf(staging);
-  yield* fs.writeFileString(path.join(staging, RECORD), `${head}\n`).pipe(
-    Effect.mapError((cause) => new VendorError({ message: `cannot record the fetch in ${staging}: ${cause.message}` })),
-  );
+  const held = yield* recorded(dir);
+  if (Option.isSome(held) && held.value !== head) {
+    return yield* new VendorError({
+      message: `${tag} on ${library.repository} lands on ${head}, not the recorded ${held.value}; delete ${recordOf(dir)} to accept the move`,
+    });
+  }
   yield* checkVersion(staging, library, installed, tag);
+  if (Option.isNone(held)) {
+    yield* fs.writeFileString(recordOf(dir), `${head}\n`).pipe(
+      Effect.mapError((cause) => new VendorError({ message: `cannot record the fetch beside ${dir}: ${cause.message}` })),
+    );
+  }
   yield* freeze(staging);
   return yield* fs.rename(staging, dir).pipe(
     Effect.as(true),

@@ -115,7 +115,7 @@ test(
     const runs = await Promise.all(consumers.map((consumer) => vendor(consumer, home)));
     expect(runs.map((run) => run.exitCode)).toEqual([0, 0]);
     const dir = cachedDir(home, remote, "1.0.0");
-    expect(await readdir(dirname(dir))).toEqual(["fake-lib@1.0.0"]);
+    expect(await readdir(dirname(dir))).toEqual(["fake-lib@1.0.0", "fake-lib@1.0.0.commit"]);
     for (const consumer of consumers) expect(await readlink(join(consumer, "repos", "fake-lib"))).toBe(dir);
   },
   60_000,
@@ -138,8 +138,43 @@ test(
   60_000,
 );
 
+async function clearTree(dir: string): Promise<void> {
+  await $`chmod -R u+w ${dir}`.quiet();
+  await rm(dir, { recursive: true, force: true });
+}
+
+async function tagCommit(work: string, tag: string): Promise<string> {
+  return (await $`git rev-parse ${tag}^{commit}`.cwd(work).quiet()).stdout.toString().trim();
+}
+
 test(
-  "a cached tree stays on its recorded commit after the tag moves, and a rewritten record fails the run",
+  "a tag moved upstream fails the fetch that follows a cleared tree, and links nothing",
+  async () => {
+    const home = await scratchHome();
+    const parent = await scratch("checks-vendor-remote-");
+    const consumer = await scratch("checks-vendor-consumer-");
+    const seed = await seedRemote(parent, "1.0.0", "fake-lib@1.0.0");
+    await seedConsumer(consumer, seed.remote, "1.0.0");
+    const first = await tagCommit(seed.work, "fake-lib@1.0.0");
+    expect((await vendor(consumer, home)).exitCode).toBe(0);
+    const dir = cachedDir(home, seed.remote, "1.0.0");
+
+    await moveTag(seed, "1.0.0", "fake-lib@1.0.0");
+    expect((await vendor(consumer, home)).exitCode).toBe(0);
+    expect((await $`git rev-parse HEAD`.cwd(dir).quiet()).stdout.toString().trim()).toBe(first);
+
+    await clearTree(dir);
+    const moved = await vendor(consumer, home);
+    expect(moved.exitCode).toBe(1);
+    expect(moved.text).toContain(`lands on ${await tagCommit(seed.work, "fake-lib@1.0.0")}, not the recorded ${first}`);
+    expect(await linked(consumer)).toBe(false);
+    expect(await readdir(dirname(dir))).toEqual(["fake-lib@1.0.0.commit"]);
+  },
+  60_000,
+);
+
+test(
+  "deleting the record beside the tree accepts a deliberate move",
   async () => {
     const home = await scratchHome();
     const parent = await scratch("checks-vendor-remote-");
@@ -148,21 +183,16 @@ test(
     await seedConsumer(consumer, seed.remote, "1.0.0");
     expect((await vendor(consumer, home)).exitCode).toBe(0);
     const dir = cachedDir(home, seed.remote, "1.0.0");
-    const recorded = (await readFile(join(dir, ".checks-vendor-commit"), "utf8")).trim();
 
     await moveTag(seed, "1.0.0", "fake-lib@1.0.0");
-    expect((await vendor(consumer, home)).exitCode).toBe(0);
-    expect((await $`git rev-parse HEAD`.cwd(dir).quiet()).stdout.toString().trim()).toBe(recorded);
-
-    const moved = (await $`git rev-parse fake-lib@1.0.0^{commit}`.cwd(seed.work).quiet()).stdout.toString().trim();
-    const record = join(dir, ".checks-vendor-commit");
-    await chmod(record, 0o644);
-    await writeFile(record, `${moved}\n`);
-    await chmod(record, 0o444);
-    const result = await vendor(consumer, home);
-    expect(result.exitCode).toBe(1);
-    expect(result.text).toContain(`not the recorded ${moved}`);
-    expect(await linked(consumer)).toBe(false);
+    await clearTree(dir);
+    await rm(`${dir}.commit`);
+    const accepted = await vendor(consumer, home);
+    expect(accepted.exitCode).toBe(0);
+    const moved = await tagCommit(seed.work, "fake-lib@1.0.0");
+    expect((await $`git rev-parse HEAD`.cwd(dir).quiet()).stdout.toString().trim()).toBe(moved);
+    expect((await readFile(`${dir}.commit`, "utf8")).trim()).toBe(moved);
+    expect(await readlink(join(consumer, "repos", "fake-lib"))).toBe(dir);
   },
   60_000,
 );
@@ -203,7 +233,7 @@ test(
     expect(offline.text).toContain("cannot list fake-lib@2.0.0");
     expect(offline.text).toContain("stays unlinked");
     expect(await linked(consumer)).toBe(false);
-    expect(await readdir(dirname(cachedDir(home, remote, "2.0.0")))).toEqual(["fake-lib@1.0.0"]);
+    expect(await readdir(dirname(cachedDir(home, remote, "2.0.0")))).toEqual(["fake-lib@1.0.0", "fake-lib@1.0.0.commit"]);
   },
   60_000,
 );
