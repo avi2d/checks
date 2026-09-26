@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.21.0
+
+Released 2026-09-26.
+
+### Features
+
+- **scripts:** let quality.json set the runs-on of generated workflows (#66)
+
 ## 0.20.0
 
 Released 2026-09-26.
