@@ -64,8 +64,14 @@ export function plainCommand(script: string): Command | undefined {
   return words.length === 0 ? undefined : words;
 }
 
+// bun run resolves any other word, even one holding a slash, to a package.json script of that name first.
+const FILE_PATH = /^\.{0,2}\//;
+
 export function invokes(command: Command | undefined, gate: Command): boolean {
-  return command !== undefined && gate.length <= command.length && gate.every((word, index) => command[index] === word);
+  if (command === undefined) return false;
+  const begins = (words: Command) => gate.length <= words.length && gate.every((word, index) => words[index] === word);
+  const bunRunsFile = command[0] === "bun" && command[1] === "run" && FILE_PATH.test(gate[0] ?? "");
+  return begins(command) || (bunRunsFile && begins(command.slice(2)));
 }
 
 export function mentions(script: string, gate: Command): boolean {

@@ -15,7 +15,7 @@ jobs:
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
       # A title starting with git's comment character lints as empty without this: commentChar moves off '#'.
-      - run: ./node_modules/.bin/commitlint --config ./commitlint.config.js --edit "$RUNNER_TEMP/pr-title"
+      - run: bun run ./node_modules/.bin/commitlint --config ./commitlint.config.js --edit "$RUNNER_TEMP/pr-title"
         env:
           GIT_CONFIG_COUNT: "1"
           GIT_CONFIG_KEY_0: core.commentChar
