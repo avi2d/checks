@@ -118,6 +118,7 @@ test("a release with no conventional commit worth listing writes no section", ()
   expect(rendered).toBe(
     ["# Changelog", "", "Every release of `widget`, newest first, written by the release from its conventional commits."].join("\n") + "\n",
   );
+  expect(judge("changelog", { path: "CHANGELOG.md", text: rendered }, [])).toEqual([]);
 });
 
 test("an empty release drops out and its commits join the next release with entries", () => {
