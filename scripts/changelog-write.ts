@@ -69,17 +69,20 @@ const readPublished = Effect.fn("readPublished")(function* (root: string) {
   return new Set(tags.split("\n").flatMap((tag) => (tag.startsWith(TAG_PREFIX) ? [tag.slice(TAG_PREFIX.length)] : [])));
 });
 
-// Every earlier main tip reaches the newest one, while an unlanded sibling merged earlier stays out of the release.
 const mergedTips = Effect.fn("mergedTips")(function* (root: string, through: string) {
-  const [, ...parents] = (yield* git(["log", "--first-parent", "--merges", "-n", "1", "--format=%P", "HEAD"], root)).trim().split(" ");
+  // A bump off the first-parent chain came in with main, so the squash merge releases nothing more under it.
+  if (!(yield* git(["rev-list", "--first-parent", "HEAD"], root)).split("\n").includes(through)) return [];
+  const merges = yield* git(["log", "--merges", "--format=%P", `${through}..HEAD`], root);
   const tips: string[] = [];
-  for (const parent of parents) {
-    // A parent past the bump belongs to a later release, so only a parent beside it joins this one.
-    const past = yield* git(["merge-base", "--is-ancestor", through, parent], root).pipe(
-      Effect.as(true),
-      Effect.catchTag("GitFailure", () => Effect.succeed(false)),
-    );
-    if (!past) tips.push(parent);
+  for (const [, ...parents] of merges.split("\n").filter((line) => line !== "").map((line) => line.split(" "))) {
+    for (const parent of parents) {
+      // A parent past the bump belongs to a later release, so only a parent beside it joins this one.
+      const past = yield* git(["merge-base", "--is-ancestor", through, parent], root).pipe(
+        Effect.as(true),
+        Effect.catchTag("GitFailure", () => Effect.succeed(false)),
+      );
+      if (!past) tips.push(parent);
+    }
   }
   return tips;
 });
