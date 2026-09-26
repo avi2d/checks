@@ -1,14 +1,14 @@
 import { Effect, Schema } from "effect";
 import { ADR_DIRECTORY, ADR_INDEX, ROOT_FILES } from "./doc-rules.ts";
-import { listed, templateFile } from "./doc-templates.ts";
-import { EVERY_REPOSITORY, KIT_GATES, QUALITY_FILE } from "./gates.ts";
+import { listed, MODES, templateFile } from "./doc-templates.ts";
+import { EVERY_REPOSITORY, KIT_GATES } from "./gates.ts";
 import { AGENT_NAMES, DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, HISTORY_NAMES, LIVING_NAMES, PROSE_RULES } from "./prose-matchers.ts";
-import { LegacyManifest, MODES, Quality } from "./quality-file.ts";
-import { SIZE_DEFAULTS, SIZE_RULES, qualifiedName, type Budget } from "./size-rules.ts";
+import { SIZE_RULES, qualifiedName } from "./size-rules.ts";
 
 export const MANIFEST = "package.json";
 export const BUN_VERSION = ".bun-version";
 export const GATE_PAGES = "docs/gates";
+export const OXLINTRC = ".oxlintrc.json";
 
 const Manifest = Schema.Struct({
   name: Schema.String,
@@ -16,6 +16,15 @@ const Manifest = Schema.Struct({
   devDependencies: Schema.Struct({ typescript: Schema.String }),
   files: Schema.Array(Schema.String),
 });
+
+const Oxlintrc = Schema.Struct({
+  overrides: Schema.Array(Schema.Struct({ files: Schema.Array(Schema.String), rules: Schema.optionalKey(Schema.Record(Schema.String, Schema.Unknown)) })),
+});
+
+const SizeSetting = Schema.Union([
+  Schema.Literals(["off", "warn", "error"]),
+  Schema.Tuple([Schema.Literals(["warn", "error"]), Schema.Struct({ max: Schema.Int })]),
+]);
 
 const Version = Schema.String.check(Schema.isPattern(/^\d+\.\d+\.\d+$/, { message: "is not a version such as 1.2.3" }));
 
@@ -28,12 +37,11 @@ const SHIPPED = {
   "dependency-cruiser.config.js": "the shared dependency-cruiser base",
   "scripts/": "every bin, which a package script calls by its `checks-` name",
   "templates/": "one template per kind of doc file, which a new doc file starts from",
-  "presets/": "the Effect rule blocks `checks-quality generate` writes into the fragments",
-  "quality.schema.json": "the schema of `quality.json`, which its `$schema` line names",
+  "presets/": "the Effect rule blocks a repository copies into its native config",
   "oxlintrc.json": "the oxlint base config `.oxlintrc.json` extends",
   "stryker.preset.js": "the Stryker mutation-testing preset",
   "tsconfig.effect.json": "the tsconfig fragment with the Effect language-service block",
-  "dist/": "the compiled oxlint plugin with the Effect error-channel and cognitive complexity rules, and `featureRules`",
+  "dist/": "the compiled oxlint plugin with the Effect error-channel and cognitive complexity rules",
 } as const;
 
 type ShippedPath = keyof typeof SHIPPED;
@@ -42,10 +50,13 @@ function isShipped(path: string): path is ShippedPath {
   return Object.hasOwn(SHIPPED, path);
 }
 
+export type SizeScope = { readonly files: readonly string[]; readonly limits: ReadonlyMap<string, string> };
+
 export type KitFacts = {
   readonly manifest: typeof Manifest.Type;
   readonly bun: string;
   readonly shipped: readonly ShippedPath[];
+  readonly sizeScopes: readonly SizeScope[];
 };
 
 export class DocBlocksUnwritable extends Schema.TaggedError<DocBlocksUnwritable>()("DocBlocksUnwritable", {
@@ -54,6 +65,8 @@ export class DocBlocksUnwritable extends Schema.TaggedError<DocBlocksUnwritable>
 
 const decodeManifest = Schema.decodeUnknownEffect(Schema.fromJsonString(Manifest));
 const decodeVersion = Schema.decodeUnknownEffect(Version);
+const decodeOxlintrc = Schema.decodeUnknownEffect(Schema.fromJsonString(Oxlintrc));
+const decodeSizeSetting = Schema.decodeUnknownEffect(SizeSetting);
 
 function topLevel(file: string): string {
   return file.includes("/") ? file.slice(0, file.indexOf("/") + 1) : file;
@@ -71,11 +84,28 @@ function shippedPaths({ files }: typeof Manifest.Type): Effect.Effect<readonly S
   return Effect.fail(new DocBlocksUnwritable({ message: `${MANIFEST}: ${problems.join("; ")}` }));
 }
 
-export const kitFacts = (manifest: string, bunVersion: string): Effect.Effect<KitFacts, DocBlocksUnwritable> =>
+const sizeLimit = Effect.fn("sizeLimit")(function* (name: string, setting: unknown) {
+  const decoded = yield* decodeSizeSetting(setting).pipe(
+    Effect.mapError(({ message }) => new DocBlocksUnwritable({ message: `${OXLINTRC}: ${name}: ${message}` })),
+  );
+  return [name, typeof decoded === "string" ? decoded : String(decoded[1].max)] as const;
+});
+
+const readSizeScopes = Effect.fn("readSizeScopes")(function* (oxlintrc: string) {
+  const { overrides } = yield* decodeOxlintrc(oxlintrc).pipe(Effect.mapError(({ message }) => new DocBlocksUnwritable({ message: `${OXLINTRC}: ${message}` })));
+  return yield* Effect.forEach(overrides, ({ files, rules = {} }) =>
+    Effect.forEach(
+      SIZE_RULES.map(qualifiedName).filter((name) => name in rules),
+      (name) => sizeLimit(name, rules[name]),
+    ).pipe(Effect.map((limits): readonly SizeScope[] => (limits.length === 0 ? [] : [{ files, limits: new Map(limits) }]))),
+  ).pipe(Effect.map((scopes) => scopes.flat()));
+});
+
+export const kitFacts = (manifest: string, bunVersion: string, oxlintrc: string): Effect.Effect<KitFacts, DocBlocksUnwritable> =>
   Effect.gen(function* () {
     const decoded = yield* decodeManifest(manifest).pipe(Effect.mapError(({ message }) => new DocBlocksUnwritable({ message: `${MANIFEST}: ${message}` })));
     const bun = yield* decodeVersion(bunVersion.trim()).pipe(Effect.mapError(({ message }) => new DocBlocksUnwritable({ message: `${BUN_VERSION}: ${message}` })));
-    return { manifest: decoded, bun, shipped: yield* shippedPaths(decoded) };
+    return { manifest: decoded, bun, shipped: yield* shippedPaths(decoded), sizeScopes: yield* readSizeScopes(oxlintrc) };
   });
 
 export type Block = {
@@ -104,18 +134,12 @@ const PREREQUISITES: Block = {
   ],
 };
 
-// typescript is not a peer, since no bin imports it, yet the typecheck script the install adds runs its tsc.
 export const INSTALL: Block = {
   name: "install",
   from: [MANIFEST],
   render: ({ manifest }) => [
     "```sh",
-    [
-      "bun add -d",
-      manifest.name,
-      ...peers(manifest).map(([name, version]) => `${name}@${version}`),
-      `typescript@${manifest.devDependencies.typescript}`,
-    ].join(" "),
+    ["bun add -d", manifest.name, ...peers(manifest).map(([name, version]) => `${name}@${version}`), `typescript@${manifest.devDependencies.typescript}`].join(" "),
     "```",
   ],
 };
@@ -137,13 +161,13 @@ const GATES: Block = {
 
 const DOC_KINDS: Block = {
   name: "doc-kinds",
-  from: ["scripts/doc-rules.ts", "scripts/quality-file.ts", "scripts/doc-templates.ts"],
+  from: ["scripts/doc-rules.ts", "scripts/doc-templates.ts"],
   render: () => [
     "| File | Kind | Template |",
     "| --- | --- | --- |",
     ...[...ROOT_FILES].map(([path, kind]) => `| ${code(path)} | ${kind} | ${code(templateFile(kind))} |`),
     `| each file in ${code(ADR_DIRECTORY)} but its generated index, ${code(ADR_INDEX.slice(ADR_DIRECTORY.length))} | adr | ${code(templateFile("adr"))} |`,
-    `| a page ${code("docs.pages")} declares | ${listed(MODES)} | ${code("templates/<mode>.md")} |`,
+    `| a page with ${code("kind")} in front matter | ${listed(MODES)} | ${code("templates/<mode>.md")} |`,
   ],
 };
 
@@ -176,122 +200,16 @@ const PROSE: Block = {
   ],
 };
 
-type Subkeys<Field> = Field extends { readonly schema: { readonly fields: infer Sub } } ? keyof Sub & string : never;
-
-type Described<Fields, Cell> = {
-  readonly [K in keyof Fields & string]-?: [Subkeys<Fields[K]>] extends [never] ? Cell : Cell | { readonly [S in Subkeys<Fields[K]>]-?: Cell };
-};
-
-type Dotted<Fields> = { readonly [K in keyof Fields & string]: K | `${K}.${Subkeys<Fields[K]>}` }[keyof Fields & string];
-
-type Nested<Cell> = { readonly [key: string]: Cell | { readonly [sub: string]: Cell } };
-
-function flatten<Cell>(described: Nested<Cell>, isCell: (entry: Nested<Cell>[string]) => entry is Cell): readonly (readonly [key: string, cell: Cell])[] {
-  return Object.entries(described).flatMap(([key, entry]) =>
-    isCell(entry) ? [[key, entry] as const] : Object.entries(entry).map(([sub, cell]) => [`${key}.${sub}`, cell] as const),
-  );
-}
-
-type QualityFields = Omit<typeof Quality.fields, "$schema">;
-
-type KeyRow = { readonly readBy: string; readonly holds: string };
-
-const QUALITY_ROWS: Described<QualityFields, KeyRow> = {
-  defaultBranch: { readBy: "`checks-lint`, `checks-ci-wiring`, `checks-quality`", holds: "the branch pull requests merge into, `main` when absent" },
-  gates: {
-    ci: { readBy: "`checks-ci-wiring`, `checks-quality`", holds: "the commands CI runs on every pull request, as [checks-ci-wiring](../gates/checks-ci-wiring.md) says" },
-    scheduled: { readBy: "`checks-ci-wiring`", holds: "the commands a schedule runs" },
-    lint: {
-      readBy: "`checks-lint`, `checks-ci-wiring`",
-      holds: "the gates `checks-lint` runs when not all apply, as [Gate selection](../gates/checks-lint.md#gate-selection) says",
-    },
-  },
-  runsOn: {
-    readBy: "`checks-quality`",
-    holds: "the runner labels every job the ci and commitlint workflows run on, `ubuntu-latest` when absent",
-  },
-  commitIdentity: {
-    authors: {
-      readBy: "`checks-commit-identity`",
-      holds: "the identities allowed to author and commit, as [checks-commit-identity](../gates/checks-commit-identity.md) says",
-    },
-  },
-  sources: {
-    production: {
-      readBy: "`checks-size-budget`, `checks-repetition`, `checks-quality`",
-      holds:
-        "the source the repository ships, as [checks-size-budget](../gates/checks-size-budget.md) and [checks-repetition](../gates/checks-repetition.md) say",
-    },
-    effect: {
-      readBy: "`checks-quality`",
-      holds: "the paths held to the Effect rules, and the files under them that are not, as [The Effect rules](effect-rules.md) says",
-    },
-    libraries: {
-      readBy: "`checks-vendor`, `checks-test-layout`",
-      holds: "the libraries pinned to a shared read-only clone, as [checks-vendor](../gates/checks-vendor.md) says",
-    },
-  },
-  size: {
-    readBy: "`checks-size-budget`",
-    holds: "the size budget of production and test files, and how a change is held to it, as [checks-size-budget](../gates/checks-size-budget.md) says",
-  },
-  features: {
-    readBy: "`featureRules`, `checks-feature-owners`",
-    holds: "each feature's root, entries, exempt importers and proof, as [checks-feature-owners](../gates/checks-feature-owners.md) says",
-  },
-  changeSignal: { readBy: "`checks-feature-owners`", holds: "`advisory` to list the feature owners a change touches" },
-  agentRules: {
-    on: { readBy: "agent Rule selection, not the kit", holds: "catalogued Rules switched on for this repository" },
-    off: { readBy: "agent Rule selection, not the kit", holds: "catalogued Rules switched off for this repository" },
-  },
-  docs: {
-    pages: { readBy: "`checks-docs`", holds: "the Diátaxis mode of each page, by glob, as [checks-docs](../gates/checks-docs.md) says" },
-    forConsumers: {
-      readBy: "`checks-docs`",
-      holds: "the living docs that speak to a repository installing this one, by glob, whose `bun run` commands name that repository's scripts",
-    },
-  },
-};
-
-const QUALITY_KEYS: Block = {
-  name: "quality-keys",
-  from: ["Quality in scripts/quality-file.ts"],
-  render: () => [
-    "| Key | Read by | Holds |",
-    "| --- | --- | --- |",
-    ...flatten<KeyRow>(QUALITY_ROWS, (entry): entry is KeyRow => "holds" in entry).map(([key, { readBy, holds }]) => `| ${code(key)} | ${readBy} | ${holds} |`),
-  ],
-};
-
-const MOVED_KEYS: Described<typeof LegacyManifest.fields, Dotted<QualityFields>> = {
-  ciWiring: { gates: "gates.ci", scheduled: "gates.scheduled", lintGates: "gates.lint", defaultBranch: "defaultBranch" },
-  commitIdentity: "commitIdentity",
-};
-
-const LEGACY_KEYS: Block = {
-  name: "legacy-keys",
-  from: ["LegacyManifest in scripts/quality-file.ts", "QUALITY_FILE in scripts/gates.ts"],
-  render: () => [
-    `| ${code(MANIFEST)} | ${code(QUALITY_FILE)} |`,
-    "| --- | --- |",
-    ...flatten<Dotted<QualityFields>>(MOVED_KEYS, (entry) => typeof entry === "string").map(([legacy, key]) => `| ${code(legacy)} | ${code(key)} |`),
-  ],
-};
-
-function limitOf(budget: Budget, key: keyof Budget): string {
-  return String(budget[key] ?? "none");
-}
-
 const SIZE_LIMITS: Block = {
   name: "size-limits",
-  from: ["SIZE_RULES and SIZE_DEFAULTS in scripts/size-rules.ts"],
-  render: () => [
-    "| Key | Limits | oxlint rule | Production | Tests |",
-    "| --- | --- | --- | --- | --- |",
-    ...SIZE_RULES.map(
-      (entry) =>
-        `| ${code(entry.key)} | ${entry.limits} | ${code(qualifiedName(entry))} | ${limitOf(SIZE_DEFAULTS.production, entry.key)} | ${limitOf(SIZE_DEFAULTS.tests, entry.key)} |`,
-    ),
+  from: [OXLINTRC, "SIZE_RULES in scripts/size-rules.ts"],
+  render: ({ sizeScopes }) => [
+    `| Limits | oxlint rule | ${sizeScopes.map(({ files }) => files.map(code).join(", ")).join(" | ")} |`,
+    `| --- | --- | ${sizeScopes.map(() => "---").join(" | ")} |`,
+    ...SIZE_RULES.map((entry) => {
+      const name = qualifiedName(entry);
+      return `| ${entry.limits} | ${code(name)} | ${sizeScopes.map(({ limits }) => limits.get(name) ?? "none").join(" | ")} |`;
+    }),
   ],
 };
 
@@ -304,8 +222,7 @@ const WHERE: Block = {
 export const TARGETS: readonly { readonly file: string; readonly blocks: readonly Block[] }[] = [
   { file: "README.md", blocks: [PREREQUISITES, INSTALL, GATES, WHERE] },
   { file: `${GATE_PAGES}/checks-docs.md`, blocks: [DOC_KINDS, LIVING_DOCS, PROSE] },
-  { file: `${GATE_PAGES}/checks-size-budget.md`, blocks: [SIZE_LIMITS] },
-  { file: "docs/configs/quality-file.md", blocks: [QUALITY_KEYS, LEGACY_KEYS] },
+  { file: "docs/configs/native-settings.md", blocks: [SIZE_LIMITS] },
 ];
 
 export type Spliced = { readonly type: "spliced"; readonly text: string } | { readonly type: "unmarked"; readonly blocks: readonly string[] };

@@ -1,3 +1,4 @@
+import { Option, Result, Schema } from "effect";
 import {
   firstText,
   marked,
@@ -10,14 +11,12 @@ import {
   type Violation,
   VERSION,
 } from "./doc-outline.ts";
-import { ADR_STATUSES, TEMPLATES, templateFile, type Kind, type Title } from "./doc-templates.ts";
+import { ADR_STATUSES, MODES, TEMPLATES, templateFile, type Kind, type Title } from "./doc-templates.ts";
 import { ADR_DIRECTORY, DOCS_DIRECTORY } from "./prose-matchers.ts";
-import { MODES, type Docs, type Mode } from "./quality-file.ts";
 
 export type Placement =
   | { readonly type: "judged"; readonly kind: Kind }
   | { readonly type: "undeclared" }
-  | { readonly type: "ambiguous"; readonly modes: readonly Mode[] }
   | { readonly type: "unjudged" };
 
 export type Doc = {
@@ -37,14 +36,29 @@ export const ROOT_FILES: ReadonlyMap<string, Kind> = new Map<string, Kind>([
   ["CONTRIBUTING.md", "how-to"],
 ]);
 
-export function placementOf(path: string, docs: Docs | undefined): Placement {
+const FRONT_MATTER = /^---\r?\n(?:([\s\S]*?)\r?\n)?(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/;
+const Fields = Schema.Struct({ kind: Schema.optionalKey(Schema.String), audience: Schema.optionalKey(Schema.String) });
+const decodeFields = Schema.decodeUnknownOption(Fields);
+
+function frontMatterOf(text: string): { readonly text: string; readonly fields: typeof Fields.Type } {
+  const match = FRONT_MATTER.exec(text);
+  if (match === null) return { text: "", fields: {} };
+  const parsed = Result.getOrUndefined(Result.try(() => Bun.YAML.parse(match[1] ?? "")));
+  return { text: match[0], fields: Option.getOrElse(decodeFields(parsed), () => ({})) };
+}
+
+export function speaksToConsumers(text: string): boolean {
+  return frontMatterOf(text).fields.audience === "consumers";
+}
+
+export function placementOf(path: string, text = ""): Placement {
   const root = ROOT_FILES.get(path);
   if (root !== undefined) return { type: "judged", kind: root };
   if (!path.endsWith(".md") || path === ADR_INDEX) return { type: "unjudged" };
   if (path.startsWith(ADR_DIRECTORY)) return { type: "judged", kind: "adr" };
-  const modes = MODES.filter((mode) => (docs?.pages?.[mode] ?? []).some((glob) => new Bun.Glob(glob).match(path)));
-  const [mode, ...others] = modes;
-  if (mode !== undefined) return others.length === 0 ? { type: "judged", kind: mode } : { type: "ambiguous", modes };
+  const named = frontMatterOf(text).fields.kind;
+  const mode = MODES.find((known) => known === named);
+  if (mode !== undefined) return { type: "judged", kind: mode };
   return path.startsWith(DOCS_DIRECTORY) ? { type: "undeclared" } : { type: "unjudged" };
 }
 
@@ -171,20 +185,21 @@ function exactProblems(kind: Kind, expected: string, actual: string): readonly V
 export function judge(kind: Kind, doc: Doc, records: readonly string[]): readonly Violation[] {
   const template = TEMPLATES[kind];
   if (template.shape === "exact") return exactProblems(kind, template.text, doc.text);
-  const outline = parseOutline(doc.text);
+  const frontMatter = frontMatterOf(doc.text).text;
+  const outline = parseOutline(doc.text.slice(frontMatter.length));
+  const lineOffset = frontMatter === "" ? 0 : frontMatter.split("\n").length - 1;
   const title = titleOf(outline);
   return [
     ...outlineProblems(outline),
     ...(title === undefined ? [] : titleProblems(template.title, title)),
     ...matchSections(outline.sections, template.sections, 2, title?.line ?? 1),
     ...kindProblems(kind, doc, outline, records),
-  ].toSorted((a, b) => a.line - b.line);
+  ].map(({ line, message }) => ({ line: line + lineOffset, message })).toSorted((a, b) => a.line - b.line);
 }
 
 export function placementProblem(placement: Placement): string | undefined {
   if (placement.type === "undeclared") {
-    return `is a page under ${DOCS_DIRECTORY} with no mode; declare it under docs.pages in quality.json as ${MODES.join(", ")}`;
+    return `is a page under ${DOCS_DIRECTORY} with no mode; add kind: ${MODES.join(", ")} in YAML front matter`;
   }
-  if (placement.type === "ambiguous") return `is declared under docs.pages as ${placement.modes.join(" and ")}, and a page has one mode`;
   return undefined;
 }

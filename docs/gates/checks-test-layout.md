@@ -1,3 +1,7 @@
+---
+kind: reference
+audience: consumers
+---
 # checks-test-layout
 
 `checks-test-layout` is the gate that holds a repository's tests to one layout, and a reader looks it up to learn where a test file goes and what it may import.
@@ -23,7 +27,7 @@ It fails unless the repository holds this shape, and names the file and the path
 - `scripts.lint` runs this check, itself or through `checks-lint` called by its bare bin name.
 - `bunfig.toml` carries every `[test]` key of the shipped preset with the same value.
   `[test].pathIgnorePatterns` is the preset's `["**/tests/quarantine/**", "**/tests/live/**", "**/tests/pixel/**", "repos/**"]`, which the check pins itself, so the kit's own repository, whose bunfig is the preset, cannot drift it either.
-  A repository whose `quality.json` declares no `sources.libraries` may omit `repos/**`, and one that declares them must keep it.
+  The check also accepts the list without `repos/**`, so a repository that links no library under `repos/` may drop it.
   Other tables, and extra `[test]` keys, are the repository's own.
 
 The in-process half is what a mutation run can mutate.
@@ -47,7 +51,6 @@ It parses each test and helper with swc and reads import specifiers and identifi
 `tests/fixtures/**` is data and is not parsed.
 It reads `package.json` for `scripts.test` and `scripts.lint`.
 It also checks `test:live` and `test:pixel` when their directories contain test files, and compares `bunfig.toml` with the preset the installed kit ships.
-It reads `quality.json` for `sources.libraries`, which decides whether `repos/**` is pinned.
 
 ## Arguments
 
@@ -63,7 +66,7 @@ It checks the directory it runs in, or the directory it is given.
 | --- | --- |
 | 0 | the repository holds the layout |
 | 1 | a file breaks the layout |
-| 2 | a test, a helper, `package.json` or `quality.json` does not parse |
+| 2 | a test, a helper or `package.json` does not parse |
 
 ## Sample output
 
@@ -77,7 +80,7 @@ test-layout: 4 violation(s)
 
 ## Opting out
 
-A repository that tracks no `.ts` or `.tsx` file leaves it out of `gates.lint`, as [Gate selection](checks-lint.md#gate-selection) says, and then needs no `checks-test` script and no `bunfig.toml`.
+`checks-lint` runs this gate when the repository tracks TypeScript, so a repository without TypeScript needs neither the test script nor bunfig.
 A repository that tracks one keeps it.
 
 ## Related topics

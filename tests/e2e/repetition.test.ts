@@ -3,9 +3,9 @@ import { expect, test } from "bun:test";
 import { dirname, join } from "node:path";
 import { CHECKOUT, fixtureRepos, lintWiring, type FixtureRepo } from "./lib/fixture-repo.ts";
 
-const QUALITY = { sources: { production: ["src/**/*.ts"] } };
-const ROSE = "production file(s) repeat more lines than where the range starts, at 50 tokens and 5 lines:\n";
+const ROSE = "file(s) .jscpd.json holds repeat more lines than where the range starts, at 50 tokens and 5 lines:\n";
 const open = fixtureRepos("checks-repetition-");
+const JSCPD = JSON.stringify({ path: ["src"], ignore: ["**/*.d.ts"] });
 
 // Ten lines and some 70 tokens, over jscpd's 50 and 5, and no two seeds share a token sequence that long.
 function block(seed: string): string {
@@ -28,8 +28,8 @@ function lines(count: number, prefix: string): string {
   return Array.from({ length: count }, (_, index) => `export const ${prefix}${index} = ${index};\n`).join("");
 }
 
-function repository(files: Readonly<Record<string, string>>, quality: unknown = QUALITY): Promise<FixtureRepo> {
-  return open({ "quality.json": JSON.stringify(quality), ...files });
+function repository(files: Readonly<Record<string, string>>): Promise<FixtureRepo> {
+  return open({ ".jscpd.json": JSCPD, ...files });
 }
 
 test(
@@ -76,7 +76,7 @@ test(
 test(
   "checks-lint runs the repetition hold over its range, red on an added copy and green once it is gone",
   async () => {
-    const { dir, write, commit, lint } = await repository({ ...(await lintWiring(QUALITY)), "src/ledger.ts": block("ledger") });
+    const { dir, write, commit, lint } = await repository({ ...lintWiring(), "src/ledger.ts": block("ledger") });
     await commit("feat: base");
     await $`git update-ref refs/remotes/origin/main HEAD && git checkout -q -b feature`.cwd(dir).quiet();
     await write({ "src/copy.ts": block("ledger") });
@@ -84,14 +84,59 @@ test(
 
     const red = await lint();
     expect(red.text).toContain("  src/copy.ts: 10 repeated line(s), up from 0\n");
-    expect(red.text).toContain("checks-lint: 1 of 12 gate(s) failed: checks-repetition\n");
+    expect(red.text).toContain("checks-lint: 1 of 9 gate(s) failed: checks-repetition\n");
     expect(red.exitCode).toBe(1);
 
     await write({ "src/copy.ts": "export const copy = 1;\n" });
     await commit("fix: no copy");
     const green = await lint();
-    expect(green.text).toContain("checks-lint: 12 gate(s) pass\n");
+    expect(green.text).toContain("checks-lint: 9 gate(s) pass\n");
     expect(green.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
+  "the path and ignore keys of the head's .jscpd.json decide which files the hold measures",
+  async () => {
+    const { write, commit, script } = await repository({ "src/ledger.ts": block("ledger") });
+    const base = await commit("feat: base");
+    await write({ "src/copy.ts": block("ledger"), "tools/copy.ts": block("ledger") });
+    const head = await commit("feat: copies");
+    const red = await script("repetition.ts", base, head);
+    expect(red.text).toContain(`repetition: 2 ${ROSE}  src/copy.ts: 10 repeated line(s), up from 0\n`);
+    expect(red.text).not.toContain("tools/copy.ts");
+    expect(red.exitCode).toBe(1);
+
+    await write({ ".jscpd.json": JSON.stringify({ path: ["src"], ignore: ["**/copy.ts"] }) });
+    const ignored = await commit("chore: ignore the copy");
+    const green = await script("repetition.ts", base, ignored);
+    expect(green.text).toContain("repetition: 1 file(s) .jscpd.json holds repeat no more lines than where the range starts");
+    expect(green.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
+  "a threshold in .jscpd.json the tree already crosses leaves the hold to judge the range",
+  async () => {
+    const { write, commit, script } = await repository({
+      ".jscpd.json": JSON.stringify({ path: ["src"], threshold: 1 }),
+      "src/ledger.ts": block("ledger"),
+      "src/invoice.ts": block("ledger"),
+    });
+    const base = await commit("feat: base over the threshold");
+    await write({ "src/small.ts": lines(2, "small") });
+    const kept = await commit("feat: no new copy");
+    const green = await script("repetition.ts", base, kept);
+    expect(green.text).toContain("repeat no more lines than where the range starts");
+    expect(green.exitCode).toBe(0);
+
+    await write({ "src/copy.ts": block("ledger") });
+    const copied = await commit("feat: another copy");
+    const red = await script("repetition.ts", base, copied);
+    expect(red.text).toContain("  src/copy.ts: 10 repeated line(s), up from 0\n");
+    expect(red.exitCode).toBe(1);
   },
   60_000,
 );

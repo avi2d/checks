@@ -1,32 +1,30 @@
+---
+kind: explanation
+---
 # Why it is shaped this way
 
 Each entry below is a choice in the kit's shape and the constraint that forced it.
 
 - Every config in an oxlint `extends` chain brings its own `plugins`, and one that sets none brings oxlint's default plugins, whose category rules the base's `categories` then turn on across the tree.
   `rules`, `categories` and `jsPlugins` inherit as expected.
-  That is why the consumer snippet restates `plugins` and nothing else, and why the generated fragment always sets them.
+  That is why the consumer config and each override restate `plugins`.
 - `node_modules/` is excluded through the consumer's `.gitignore`, not `ignorePatterns`: oxlint still walks the installed package when only `ignorePatterns` names it.
 - `files` in package.json is the published surface: `tests/`, `AGENTS.md` and the `.ts` plugin source never reach an install.
   npm adds `package.json`, `README` and `LICENSE` to the tarball whatever `files` says.
   `bun pm pack` builds the same tarball the registry serves, which is what the packed-tarball consumer e2e test installs.
 - The plugin ships compiled as `dist/index.js`, built with `bun build effect-channel/index.ts --outdir dist --target node --format esm`.
   Node refuses to type-strip a `.ts` plugin under `node_modules`, so the `.ts` source would fail to load from an installed package.
-- `featureRules` ships compiled as `dist/feature-rules.js` for the same reason, with `effect` left out of the bundle so it resolves the consumer's own copy.
-  dependency-cruiser uses a config's export as it is and never awaits it, so the declaration decodes synchronously, and `quality.json` exempts that one file from the Effect rules.
-- `checks-size-budget` writes the head commit's files to a temporary directory and runs oxlint there.
-  Its configuration loads the kit's own plugin bundle for the complexity rule and turns every category off.
-  The consumer's own `.oxlintrc.json`, its ignore files and its other rules never reach the count.
-- `checks-size-budget` ratchets against the base of the range rather than a committed baseline such as `oxlint-suppressions.json`.
-  A suppression file stores a count of sites per file and rule, and `max-lines` reports a file once however long it grows, so the count stays at one while the file doubles.
-  The gate sums how far each site runs over its limit instead, which grows with the file.
-  The base commit already holds that sum, so nothing is generated, committed or pruned.
-- `checks-repetition` writes the production files of both ends of the range to temporary directories and runs jscpd in each, so the consumer's `.jscpd.json` and ignore files never reach the count.
+- The size rules are plain oxlint rules at `error` in `.oxlintrc.json`, and `bun run lint` enforces them on the whole tree.
+  A repository records its existing violations with `oxlint --suppress-all`, and `checks-suppressions-ratchet` refuses any count that rises.
+  The kit runs no size script of its own, since restating how oxlint reads its config and compares sites left corners the native rules never had.
+  The suppression count lets a file or function already over its limit grow without a new site, which was accepted in exchange for dropping that script, and each repository is to work its counts down to zero.
+- `checks-repetition` writes both ends of the range to temporary directories and runs jscpd in each with the head's `.jscpd.json`, so its `path` and `ignore` globs decide the files at both ends.
   It compares each file's count of repeated lines rather than using jscpd's `--baseline-from-ref`.
   That flag reports a repeated block as new once its text changes, so a change that shortens a grandfathered block would fail.
 - `dist/` is committed.
   No `prepack` or `prepublishOnly` builds it, so a publish ships whatever bundle the publishing worktree holds.
   Rebuild it after pulling with `bun run build`.
-  `bun run build` also emits `quality.schema.json`, `templates/` and `CHANGELOG.md`, which are committed the same way.
+  `bun run build` also emits `templates/` and `CHANGELOG.md`, which are committed the same way.
   CI runs `git diff --exit-code` over the whole tree after the build, because a test that compares a generated file with its source passes on the copy the build just rewrote.
 - `CHANGELOG.md` is generated, so a release commit carries it and the tarball ships it.
   The commit that bumps package.json `version` closes its release, and the `v*` tag goes on that commit, so commits merged after it wait for the next release.
@@ -38,11 +36,11 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   The bodies are the branch's own messages, which nothing lints.
   The changelog still arrives in the release commit's pull request, not from a workflow that pushes.
   The release path writes to the repository only through the `github-release` job's `contents: write`, which creates or updates the GitHub release from the tag's `CHANGELOG.md` section.
-- `quality.json` is JSON, not TOML or a TypeScript module: a bun bin, a hook running without `node_modules`, a `.cjs` or `.mjs` config and `jq` all parse it with nothing installed, and nobody runs a repository's own code to learn its policy.
-  It holds declarations only.
-  The kit's bins read it directly.
-  oxlint and tsc read nothing but their own JSON, so they extend generated fragments, which `checks-quality --check` holds to the declarations.
-- `quality.json` refuses a key its schema does not name, so a kit that cannot enforce a newer key refuses it rather than let the repository believe it enforced.
+- Workflow YAML owns CI execution, and the kit owns the required commands, but a repository is held only to the commands its own `package.json` can run.
+  `checks-ci-wiring` requires `bun run` with each of `lint`, `build`, `typecheck` and `test` that `package.json` defines as a script, `git diff --exit-code` when a `build` script exists, and commitlint always.
+  The target branch comes from git's own record in `refs/remotes/origin/HEAD`, or in CI from the pull request base or the default branch GitHub's event names, and never from a guess at the workflow files, and `checks-lint` starts its local range from the same branch.
+  Oxlint and TypeScript read their own overrides directly, so the consumer can change a rule where its tool reads it.
+  The Effect scopes occur in two native files, and the installed consumer test checks both independently.
 - The base parses with swc because typescript 7, which is tsgo, has no compiler API for dependency-cruiser to use.
   Without `@swc/core` installed the cruise silently skips every `.ts` file, so this repo's test asserts its own TypeScript is cruised.
 - `bunfig.toml` has no `extends` and no include: bun ignores an unknown top-level key in silence, so a preset cannot be inherited and the consumer's copy is compared key by key against the installed one instead.
@@ -56,8 +54,8 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   The `.ts` checks keep a `bun` shebang, which needs no build step and no `dist/` entry, unlike the oxlint plugin that node loads.
 - `checks-lint` runs each gate as its own bin in a child process rather than importing it, so a gate behaves the same called alone or through the entry point, and `lint-coverage.sh` stays a shell script.
   The gates run one at a time with their output passed straight through, so each report reads whole and in the table's order.
-- A gate selection is checked against the repository's contents rather than trusted, so it cannot skip a gate that applies.
-  ci-wiring does that check, which is why a selection without it, or without another gate that applies everywhere, is refused as `checks-lint` reads it: nothing would check the selection otherwise.
+- `checks-lint` determines applicable gates from tracked files instead of accepting a repository selection.
+  A TypeScript gate starts running as soon as TypeScript source is tracked.
 - `checks-test` runs bun itself rather than reading a report some other run left: a skip taken only on CI is visible only in CI's own run, and an earlier run's report may be stale or narrowed.
   It reads the JUnit report bun writes to a temporary directory, since bun has no other per-test output meant for a program.
 - `checks-ci-wiring` runs inside `lint`, not in a workflow of its own: deleting the step that runs a check is the violation it catches, so the local `lint` is where it has to fail.
@@ -76,9 +74,9 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   That is the entry-point and layer recipe under Boundaries in [The dependency rules](configs/dependency-rules.md).
 - The templates in `templates/` are rendered from `scripts/doc-templates.ts`, the spec `checks-docs` reads.
   A template written by hand beside the check agrees with it only until someone edits one of them.
-- A page's Diátaxis mode is declared in `quality.json` rather than read from the page.
-  Whether a page teaches, walks a task, describes or explains is a judgment no program makes, so the repository states it once and the check holds the page to it.
-- `checks-docs` holds a doc file to its template when a change touches it, the way `checks-size-budget` holds a file to its budget.
+- A page's Diátaxis mode comes from `kind` front matter on the page, whatever directory holds it.
+  The repository makes the judgment beside the page, and the check holds it to that template.
+- `checks-docs` holds a doc file to its template when a change touches it, the way `checks-comment-gate` judges the comments a change adds.
   A repository adopts the templates as its files change, and an untouched file is listed as advisory rather than failing a change that never read it.
 - A task heading is verb first, and review holds it there rather than the check.
   No word list tells `Test layout` from `Test the layout`, and a check that passes the noun is worse than none.
@@ -96,8 +94,8 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   A reference goes stale when the code it names moves far more often than when its own line is edited, so a gate on edited lines alone would miss the usual break.
 - A path under a top directory the repository lacks names a file in another repository, such as a consumer's, and no program tells that from a typo.
   A directory the range deletes still counts as this repository's, so a path under it reads as stale rather than foreign.
-- The command check passes over the docs a repository declares under `docs.forConsumers`.
-  This kit's README and reference pages speak to a consuming repository, whose scripts are not this one's, and no program tells an example for a consumer from an instruction for a contributor.
+- The command check passes over a page whose front matter sets `audience: consumers`.
+  Such a page speaks to a consuming repository, whose scripts are not this one's.
 
 ## Related topics
 

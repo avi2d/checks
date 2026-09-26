@@ -1,12 +1,11 @@
 #!/usr/bin/env bun
 import { Console, Effect } from "effect";
 import { rootsOf, unresolvedIn, type Judging, type Unresolved } from "./doc-references.ts";
-import { ADR_DIRECTORY, judge, placementOf, placementProblem, type Placement } from "./doc-rules.ts";
+import { ADR_DIRECTORY, judge, placementOf, placementProblem, speaksToConsumers, type Placement } from "./doc-rules.ts";
 import { readTexts, snapshotAt, stillMissing } from "./doc-snapshot.ts";
 import { changedLines, changedPaths, git, pathsAt, rangeEnds, refArgs } from "./git.ts";
 import { runMain } from "./main.ts";
 import { isLivingDoc, proseFindings, readerOf } from "./prose-matchers.ts";
-import { readQuality } from "./quality-file.ts";
 
 type Finding = {
   readonly path: string;
@@ -82,29 +81,27 @@ const referenceFindings = Effect.fn("referenceFindings")(function* (range: Range
 });
 
 const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head: string) {
-  const { quality } = yield* readQuality(root);
   const changes = yield* changedPaths(base, head, MARKDOWN, root);
   const touched = new Set(changes.flatMap((change) => (change.kind === "deleted" ? [] : [change.path])));
   const renamedFrom = new Map(changes.flatMap((change) => (change.kind === "renamed" ? [[change.path, change.from] as const] : [])));
   const changed = yield* changedLines(base, head, MARKDOWN, root);
   const present = yield* pathsAt(head, MARKDOWN, root);
   const records = present.filter((path) => path.startsWith(ADR_DIRECTORY));
-  const judged = present.map((path) => ({ path, placement: placementOf(path, quality.docs) })).filter(({ placement }) => placement.type !== "unjudged");
   const living = present.filter(isLivingDoc);
   const proseDocs = present.flatMap((path) => {
     const reader = readerOf(path);
     return reader === undefined ? [] : [{ path, reader }];
   });
-  const texts = yield* readTexts(root, head, [...new Set([...judged.map(({ path }) => path), ...proseDocs.map(({ path }) => path)])]);
+  const texts = yield* readTexts(root, head, [...new Set([...present.filter((path) => path.endsWith(".md")), ...proseDocs.map(({ path }) => path)])]);
   const text = (path: string): string => texts.get(path) ?? "";
+  const judged = present.map((path) => ({ path, placement: placementOf(path, text(path)) })).filter(({ placement }) => placement.type !== "unjudged");
 
   const templated = judged.flatMap(({ path, placement }) => templateFindings(path, text(path), placement, records));
   const edited = proseDocs.filter(({ path }) => changed.has(path));
   const prose = edited.flatMap(({ path, reader }) =>
     proseFindings(text(path), reader, changed.get(path)).map(({ line, message }) => ({ path, line, message })),
   );
-  const forConsumers = (quality.docs?.forConsumers ?? []).map((glob) => new Bun.Glob(glob));
-  const judging = (path: string): Judging => ({ commands: !forConsumers.some((glob) => glob.match(path)) });
+  const judging = (path: string): Judging => ({ commands: !speaksToConsumers(text(path)) });
   // A directory the range deletes still belongs to this repository, so a path under it is stale rather than another repository's.
   const roots = rootsOf(yield* pathsAt(base, [], root));
   const references = yield* referenceFindings(

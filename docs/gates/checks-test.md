@@ -1,3 +1,7 @@
+---
+kind: reference
+audience: consumers
+---
 # checks-test
 
 `checks-test` runs the test suite and rejects skips without a reason at the test site.
@@ -46,14 +50,11 @@ A tier run clears Bun's ignored paths, runs only `./tests/live` or `./tests/pixe
 
 Files under `tests/quarantine/` are not run or judged, as [checks-test-layout](checks-test-layout.md) says.
 
-## Move testSkips entries to test sites
+## Test tiers
 
-Delete each `testSkips` entry from `package.json` after you add its reason beside the native test call.
-Keep its `when` value as the third argument to `skipReason`.
-
-Move tests that need a live machine into `tests/live/` and tests that need a screen into `tests/pixel/`.
+Tests that need a live machine go in `tests/live/`, and tests that need a screen go in `tests/pixel/`.
 For example, a test under `tests/e2e/stack/` that skips when Nix is missing moves to the same path under `tests/live/stack/`.
-Its `testSkips` entry becomes `skipReason("Nix is unavailable", name)` inside its `test.skipIf` call.
+Its skip declares `skipReason("Nix is unavailable", name)` inside its `test.skipIf` call.
 Add the matching package scripts when either directory contains tests:
 
 ```json

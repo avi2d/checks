@@ -4,7 +4,6 @@ import {
   decodePullRequestEvent,
   describe,
   localEndsOf,
-  originRefOf,
   pullRequestEndsOf,
   rangeOf,
   selectEnds,
@@ -18,11 +17,6 @@ test("rangeOf collapses to a lone tip when merge-base found the head itself, or 
 test("describe formats a lone tip and a base..head range", () => {
   expect(describe({ refs: ["abc"], source: "" })).toBe("tip abc");
   expect(describe({ refs: ["abc", "def"], source: "" })).toBe("range abc..def");
-});
-
-test("originRefOf picks the ref git symbolic-ref resolved, or falls back to origin/<defaultBranch>", () => {
-  expect(originRefOf("origin/trunk", "main")).toBe("origin/trunk");
-  expect(originRefOf(undefined, "trunk")).toBe("origin/trunk");
 });
 
 test("localEndsOf judges HEAD alone with no remote-tracking refs, otherwise HEAD against the origin ref", () => {

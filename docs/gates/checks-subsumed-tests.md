@@ -1,3 +1,7 @@
+---
+kind: reference
+audience: consumers
+---
 # checks-subsumed-tests
 
 `checks-subsumed-tests` is the report that lists each test another test subsumes in a Stryker mutation run, and a reader looks it up to judge whether the suite carries tests it no longer needs.

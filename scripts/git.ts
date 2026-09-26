@@ -1,5 +1,6 @@
-import { Effect, Path, Schema, Stream } from "effect";
+import { Config, Effect, FileSystem, Path, Schema, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import { DEFAULT_BRANCH } from "./gates.ts";
 import { Usage } from "./main.ts";
 
 export class GitFailure extends Schema.TaggedError<GitFailure>()("GitFailure", {
@@ -35,6 +36,28 @@ export const git = Effect.fn("git")(function* (args: readonly string[], cwd?: st
   );
   if (exitCode !== ChildProcessSpawner.ExitCode(0)) return yield* failed(stderr);
   return stdout;
+});
+
+const decodeEventRepository = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(Schema.Struct({ repository: Schema.Struct({ default_branch: Schema.NonEmptyString }) })),
+);
+
+// actions/checkout records no remote HEAD, so a push run in CI reads the branch from GitHub's event instead.
+export const defaultBranch = Effect.fn("defaultBranch")(function* (cwd?: string) {
+  const base = yield* Config.String("GITHUB_BASE_REF").pipe(Config.withDefault(""));
+  if (base !== "") return base;
+  const recorded = yield* git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], cwd).pipe(
+    Effect.map((ref) => ref.trim().replace(/^origin\//, "")),
+    Effect.catchTag("GitFailure", () => Effect.succeed("")),
+  );
+  if (recorded !== "") return recorded;
+  const eventPath = yield* Config.String("GITHUB_EVENT_PATH").pipe(Config.withDefault(""));
+  if (eventPath === "") return DEFAULT_BRANCH;
+  return yield* (yield* FileSystem.FileSystem).readFileString(eventPath).pipe(
+    Effect.flatMap(decodeEventRepository),
+    Effect.map(({ repository }) => repository.default_branch),
+    Effect.orElseSucceed(() => DEFAULT_BRANCH),
+  );
 });
 
 export type Change =

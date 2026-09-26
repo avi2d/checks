@@ -1,9 +1,8 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
-import { git } from "./git.ts";
+import { defaultBranch, git } from "./git.ts";
 import { runMain } from "./main.ts";
-import { DEFAULT_BRANCH, ENTRY_POINT, EVERY_REPOSITORY, KIT_GATES, QUALITY_FILE, selectedGates, type KitGate } from "./gates.ts";
-import { readQuality, type Quality } from "./quality-file.ts";
+import { ENTRY_POINT, KIT_GATES, type KitGate } from "./gates.ts";
 import { invokes, mentions, plainCommand, type Command } from "./shell-command.ts";
 
 export type { Command };
@@ -15,7 +14,6 @@ export type Gate = {
 
 export type Declaration = {
   readonly gates: readonly Gate[];
-  readonly scheduled: readonly Gate[];
   readonly defaultBranch: string;
   readonly lintGates: readonly KitGate[];
 };
@@ -28,12 +26,6 @@ export type Workflow = {
 export type BlockedInvocation = {
   readonly location: string;
   readonly blocker: string;
-};
-
-export type Omission = {
-  readonly gate: string;
-  readonly content: string;
-  readonly files: readonly [string, ...string[]];
 };
 
 export type Gap = {
@@ -55,6 +47,10 @@ export class WiringError extends Schema.TaggedError<WiringError>()("WiringError"
 }) {}
 
 const WORKFLOWS = ".github/workflows";
+const SCRIPTED = ["lint", "build", "typecheck", "test"];
+const BUILT_TREE = "git diff --exit-code";
+const TITLE_LINT = "./node_modules/.bin/commitlint";
+const Manifest = Schema.Struct({ scripts: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)) });
 // Without these a pull_request workflow never sees the commits a pull request pushes.
 const GATING_TYPES = ["opened", "synchronize"];
 const CONSTANTS = new Map([
@@ -118,13 +114,6 @@ const pullRequestTrigger = (branch: string): Trigger => (workflow) => {
   const missing = types === undefined ? [] : GATING_TYPES.filter((type) => !types.includes(type));
   if (missing.length > 0) return `${workflow.path} limits pull_request to types without ${missing.join(", ")}`;
   return undefined;
-};
-
-const scheduleTrigger: Trigger = (workflow) => {
-  const on = isRecord(workflow.document) ? workflow.document["on"] : undefined;
-  const schedule = isRecord(on) ? on["schedule"] : undefined;
-  const crons = Array.isArray(schedule) ? schedule.filter((entry) => isRecord(entry) && typeof entry["cron"] === "string") : [];
-  return crons.length > 0 ? undefined : `${workflow.path} does not trigger on a schedule`;
 };
 
 // GitHub prefixes any other if: with success(), so only a status function overrides a needed job's skip.
@@ -219,10 +208,6 @@ export function findGaps(declaration: Declaration, workflows: readonly Workflow[
   return gapsAmong(declaration.gates, runSteps(workflows, pullRequestTrigger(declaration.defaultBranch)), declaration.lintGates);
 }
 
-export function findScheduledGaps(declaration: Declaration, workflows: readonly Workflow[]): readonly Gap[] {
-  return gapsAmong(declaration.scheduled, runSteps(workflows, scheduleTrigger), declaration.lintGates);
-}
-
 function gapLines(gaps: readonly Gap[]): readonly string[] {
   const lines: string[] = [];
   for (const gap of gaps) {
@@ -241,73 +226,21 @@ export function formatReport(declaration: Declaration, gaps: readonly Gap[]): st
   return [`ci-wiring: ${gaps.length} of ${declaration.gates.length} gate(s) do not run on ${target}:`, ...gapLines(gaps)].join("\n");
 }
 
-export function formatScheduledReport(declaration: Declaration, gaps: readonly Gap[]): string {
-  const total = declaration.scheduled.length;
-  if (gaps.length === 0) return `ci-wiring: ${total} scheduled command(s) run on a schedule`;
-  return [`ci-wiring: ${gaps.length} of ${total} scheduled command(s) do not run on a schedule:`, ...gapLines(gaps)].join("\n");
-}
-
-const plainCommands = Effect.fnUntraced(function* (
-  listed: readonly string[],
-  subject: string,
-): Effect.fn.Return<readonly Gate[], WiringError> {
-  const gates: Gate[] = [];
-  for (const command of listed) {
-    const words = plainCommand(command);
-    if (words === undefined) {
-      return yield* new WiringError({ message: `${subject} ${JSON.stringify(command)} is not one plain command` });
-    }
-    gates.push({ command, words });
-  }
-  return gates;
-});
-
-export const parseDeclaration = Effect.fnUntraced(function* (
-  { defaultBranch, gates: declared }: Quality,
-  source: string,
-): Effect.fn.Return<Declaration, WiringError> {
-  if (declared?.ci === undefined) {
-    return yield* new WiringError({ message: `${QUALITY_FILE} declares no gates.ci, a non-empty array of commands` });
-  }
-  return {
-    gates: yield* plainCommands(declared.ci, `${source} gate`),
-    scheduled: yield* plainCommands(declared.scheduled ?? [], `${source} scheduled command`),
-    defaultBranch: defaultBranch ?? DEFAULT_BRANCH,
-    lintGates: selectedGates(declared.lint),
-  };
-});
-
-function omittedFrom(lintGates: readonly KitGate[]): readonly KitGate[] {
-  return KIT_GATES.filter((gate) => !lintGates.includes(gate));
-}
-
-export const findOmissions = Effect.fn("findOmissions")(function* (root: string, lintGates: readonly KitGate[]) {
-  const omissions: Omission[] = [];
-  for (const gate of omittedFrom(lintGates)) {
-    // LintGates refuses a selection that leaves out a gate every repository runs.
-    if (gate.appliesTo === EVERY_REPOSITORY) continue;
-    const { pathspecs, content } = gate.appliesTo;
-    const [first, ...rest] = (yield* git(["ls-files", "-z", "--", ...pathspecs], root)).split("\0").filter(Boolean);
-    if (first !== undefined) omissions.push({ gate: gate.bin, content, files: [first, ...rest] });
-  }
-  return omissions;
-});
-
-function sample([first, ...rest]: Omission["files"]): string {
-  return rest.length === 0 ? first : `${first} and ${rest.length} more`;
-}
-
-export function formatOmissions(lintGates: readonly KitGate[], omissions: readonly Omission[]): string | undefined {
-  const omitted = omittedFrom(lintGates);
-  if (omitted.length === 0) return undefined;
-  if (omissions.length === 0) {
-    const bins = omitted.map((gate) => gate.bin).join(", ");
-    return `ci-wiring: ${QUALITY_FILE} gates.lint leaves out ${bins}, none of which this repository's contents make applicable`;
-  }
+export function requiredCommands(scripts: readonly string[]): readonly string[] {
   return [
-    `ci-wiring: ${QUALITY_FILE} gates.lint leaves out ${omissions.length} gate(s) this repository's contents make applicable:`,
-    ...omissions.map(({ gate, content, files }) => `  ${gate}: the repository tracks ${content} (${sample(files)})`),
-  ].join("\n");
+    ...SCRIPTED.filter((name) => scripts.includes(name)).flatMap((name) =>
+      name === "build" ? [`bun run ${name}`, BUILT_TREE] : [`bun run ${name}`],
+    ),
+    TITLE_LINT,
+  ];
+}
+
+export function declarationFor(scripts: readonly string[], branch: string): Declaration {
+  return {
+    gates: requiredCommands(scripts).map((command) => ({ command, words: command.split(" ") })),
+    defaultBranch: branch,
+    lintGates: KIT_GATES,
+  };
 }
 
 export const parseWorkflow = (path: string, text: string): Effect.Effect<Workflow, WiringError> =>
@@ -317,8 +250,15 @@ export const parseWorkflow = (path: string, text: string): Effect.Effect<Workflo
   });
 
 export const readDeclaration = Effect.fn("readDeclaration")(function* (root: string) {
-  const { source, quality } = yield* readQuality(root);
-  return yield* parseDeclaration(quality, source);
+  const fs = yield* FileSystem.FileSystem;
+  const file = (yield* Path.Path).join(root, "package.json");
+  const { scripts = {} } = (yield* fs.exists(file))
+    ? yield* fs.readFileString(file).pipe(
+        Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Manifest))),
+        Effect.mapError((cause) => new WiringError({ message: `cannot read ${file}: ${cause.message}` })),
+      )
+    : Manifest.make({});
+  return declarationFor(Object.keys(scripts), yield* defaultBranch(root));
 });
 
 export const readWorkflows = Effect.fn("readWorkflows")(function* (root: string) {
@@ -338,21 +278,12 @@ export const readWorkflows = Effect.fn("readWorkflows")(function* (root: string)
 
 const wiring = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
-  const declaration = yield* readDeclaration(root);
   const workflows = yield* readWorkflows(root);
+  const declaration = yield* readDeclaration(root);
   const gaps = findGaps(declaration, workflows);
-  const omissions = yield* findOmissions(root, declaration.lintGates);
   const gapReport = formatReport(declaration, gaps);
   yield* gaps.length > 0 ? Console.error(gapReport) : Console.log(gapReport);
-  const omissionReport = formatOmissions(declaration.lintGates, omissions);
-  if (omissionReport !== undefined) {
-    yield* omissions.length > 0 ? Console.error(omissionReport) : Console.log(omissionReport);
-  }
-  if (declaration.scheduled.length === 0) return gaps.length === 0 && omissions.length === 0;
-  const scheduledGaps = findScheduledGaps(declaration, workflows);
-  const scheduledReport = formatScheduledReport(declaration, scheduledGaps);
-  yield* scheduledGaps.length > 0 ? Console.error(scheduledReport) : Console.log(scheduledReport);
-  return gaps.length === 0 && omissions.length === 0 && scheduledGaps.length === 0;
+  return gaps.length === 0;
 });
 
 if (import.meta.main) runMain("ci-wiring", wiring);

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { judge, placementOf, placementProblem } from "../scripts/doc-rules.ts";
+import { judge, placementOf, placementProblem, speaksToConsumers } from "../scripts/doc-rules.ts";
 import { KINDS, type Kind } from "../scripts/doc-templates.ts";
 
 const FIXTURES = resolve(import.meta.dir, "fixtures", "docs");
@@ -15,32 +15,41 @@ function found(kind: Kind, text: string, path = kind === "adr" ? RECORD : `docs/
   return judge(kind, { path, text }, records).map(({ line, message }) => `${line}: ${message}`);
 }
 
-test("a root file, a record and a declared page each map to their kind, and other Markdown is left alone", () => {
-  const docs = { pages: { reference: ["docs/gates/*.md", "docs/design.md"], explanation: ["docs/design.md"] } };
-  const kinds = ["README.md", "CHANGELOG.md", "AGENTS.md", "CLAUDE.md", "CONTRIBUTING.md", "docs/adr/0001-x.md", "docs/gates/lint.md"].map(
-    (path) => placementOf(path, docs),
-  );
-  expect(kinds).toEqual(
-    (["readme", "changelog", "agents", "claude", "how-to", "adr", "reference"] as const).map((kind) => ({ type: "judged", kind })),
-  );
-  expect(["docs/adr/README.md", "src/README.md", "notes.md", "docs/image.png"].map((path) => placementOf(path, docs).type)).toEqual([
+test("a root file, a record and a page map to their kind, and other Markdown is left alone", () => {
+  const kinds = ["README.md", "CHANGELOG.md", "AGENTS.md", "CLAUDE.md", "CONTRIBUTING.md", "docs/adr/0001-x.md"].map((path) => placementOf(path));
+  expect(kinds).toEqual((["readme", "changelog", "agents", "claude", "how-to", "adr"] as const).map((kind) => ({ type: "judged", kind })));
+  expect(["docs/adr/README.md", "src/README.md", "notes.md", "docs/image.png"].map((path) => placementOf(path).type)).toEqual([
     "unjudged",
     "unjudged",
     "unjudged",
     "unjudged",
   ]);
-  expect(placementProblem(placementOf("docs/stack/cross.md", docs))).toBe(
-    "is a page under docs/ with no mode; declare it under docs.pages in quality.json as tutorial, how-to, reference, explanation",
+  expect(placementProblem(placementOf("docs/stack/cross.md"))).toBe(
+    "is a page under docs/ with no mode; add kind: tutorial, how-to, reference, explanation in YAML front matter",
   );
-  expect(placementProblem(placementOf("docs/design.md", docs))).toBe(
-    "is declared under docs.pages as reference and explanation, and a page has one mode",
-  );
+  expect(placementOf("docs/stack/cross.md", "---\nkind: tutorial\n---\n# Build a stack\n")).toEqual({ type: "judged", kind: "tutorial" });
+  expect(placementOf("docs/gates/lint.md", "---\nkind: reference\naudience: consumers\n---\n# lint\n")).toEqual({ type: "judged", kind: "reference" });
+  expect(["docs/gates/lint.md", "docs/configs/rules.md", "docs/design.md"].map((path) => placementOf(path).type)).toEqual([
+    "undeclared",
+    "undeclared",
+    "undeclared",
+  ]);
 });
 
 test("a filled-in document of every kind holds to its template", () => {
   expect(Object.fromEntries(KINDS.map((kind) => [kind, found(kind, fixture(kind))]))).toEqual(
     Object.fromEntries(KINDS.map((kind) => [kind, []])),
   );
+});
+
+test("front matter carrying the audience beside the kind is read past, and lines count from the file's top", () => {
+  const marked = (text: string): string => `---\nkind: reference\naudience: consumers\n---\n${text}`;
+  expect(found("reference", marked(fixture("reference")))).toEqual([]);
+  expect(found("readme", `---\naudience: consumers\n---\n${fixture("readme")}`)).toEqual([]);
+  expect(found("reference", marked("# Parts\n\n## Overview\n\nThe parts.\n"))).toEqual([
+    "5: has nothing between its title and its first section",
+    "7: `## Overview` names no topic; title it by what the reader does or looks up",
+  ]);
 });
 
 test("a README missing a section is refused", () => {
@@ -104,4 +113,16 @@ test("each mode's page is held to its own shape", () => {
   expect(found("agents", fixture("agents").replace("# Project agent memory", "# widget"))).toEqual([
     "1: `# widget` is not the template's title, `# Project agent memory`",
   ]);
+});
+
+test("front matter is read as YAML, so a list, quoted values and CRLF still declare kind and audience", () => {
+  const listed = "---\nkind: reference\ntags:\n  - a\naudience: consumers\n---\n# lint\n";
+  const quoted = '---\nkind: "reference"\naudience: "consumers"\n---\n# lint\n';
+  const crlf = "---\r\nkind: reference\r\naudience: consumers\r\n---\r\n# lint\r\n";
+  for (const text of [listed, quoted, crlf]) {
+    expect(placementOf("docs/gates/lint.md", text)).toEqual({ type: "judged", kind: "reference" });
+    expect(speaksToConsumers(text)).toBe(true);
+  }
+  expect(speaksToConsumers("---\nkind: reference\n---\n# lint\n")).toBe(false);
+  expect(placementOf("docs/gates/lint.md", "---\nkind: [reference\n---\n# lint\n").type).toBe("undeclared");
 });

@@ -15,9 +15,6 @@ const MANIFEST = {
     lint: "oxlint && bun ./node_modules/@avi2dg/checks/scripts/test-layout.ts",
   },
 };
-const LIBRARIES = {
-  sources: { libraries: [{ name: "fake-lib", package: "fake-lib", repository: "https://example.com/o/fake-lib.git", tag: "v{version}" }] },
-};
 const CLEAN_TEST = 'import { expect, test } from "bun:test";\ntest("adds", () => {\n  expect(1 + 1).toBe(2);\n});\n';
 
 let dir = "";
@@ -81,15 +78,6 @@ test(
     const green = await layout();
     expect(green.exitCode).toBe(0);
     expect(green.text).toContain("satisfy the layout");
-
-    await writeFile(join(dir, "bunfig.toml"), await readFile(PRESET, "utf8"));
-    expect((await layout()).exitCode).toBe(0);
-
-    await writeFile(join(dir, "bunfig.toml"), UNVENDORED_BUNFIG);
-    await writeFile(join(dir, "quality.json"), JSON.stringify(LIBRARIES));
-    const vendoring = await layout();
-    expect(vendoring.exitCode).toBe(1);
-    expect(vendoring.text).toContain('[test].pathIgnorePatterns must be ["**/tests/quarantine/**","**/tests/live/**","**/tests/pixel/**","repos/**"]');
 
     await writeFile(join(dir, "bunfig.toml"), await readFile(PRESET, "utf8"));
     expect((await layout()).exitCode).toBe(0);

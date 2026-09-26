@@ -21,9 +21,8 @@ export type DocsRepo = {
   readonly dispose: () => Promise<void>;
 };
 
-export async function docsRepo(quality: unknown): Promise<DocsRepo> {
+export async function docsRepo(): Promise<DocsRepo> {
   const { dir, write, commit, script, dispose } = await fixtureRepo("checks-docs-", {
-    "quality.json": JSON.stringify(quality),
     "widget.ts": "export const widget = 1;\n",
   });
   return {
@@ -36,7 +35,7 @@ export async function docsRepo(quality: unknown): Promise<DocsRepo> {
   };
 }
 
-export function docsRepos(): (quality: unknown) => Promise<DocsRepo> {
+export function docsRepos(): () => Promise<DocsRepo> {
   return releasedAfterEach(docsRepo, (repo) => repo.dispose());
 }
 

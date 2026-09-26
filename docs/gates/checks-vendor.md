@@ -1,11 +1,15 @@
+---
+kind: reference
+audience: consumers
+---
 # checks-vendor
 
-`checks-vendor` pins each library `quality.json` declares to one shared read-only clone on the machine and links it under `repos/`.
+`checks-vendor` pins each library its arguments name to one shared read-only clone and links it under `repos/`.
 
 ## What it checks
 
-Each entry under `sources.libraries` names an npm package, a git remote and a tag template holding `{version}`.
-Its `name` is the link under `repos/`, and its optional `path` is the manifest inside the clone that holds the version, `package.json` when absent.
+Each `--library` names an npm package, a git remote and a tag template holding `{version}`.
+Its name is the link under `repos/`, and its optional `--path` is the manifest inside the clone that holds the version, `package.json` when absent.
 `checks-vendor` reads the installed version from `node_modules/<package>/package.json` and resolves the template to one tag.
 It clones that tag once into a cache shared across repositories, records the landed commit in `<tag>.commit` beside the tree, strips every write bit and links `repos/<name>` to the tree.
 The clone is staged beside its cache entry and moves into place only once it is recorded, checked and read only, so a concurrent or killed first run never leaves a half built tree there.
@@ -26,7 +30,7 @@ A read through the link resolves outside the checkout, so a reader that must sta
 ## What it reads
 
 It reads the working tree.
-That is `quality.json`, `node_modules/<package>/package.json` for each declared library and the `repos/` links.
+That is `node_modules/<package>/package.json` for each named library and the `repos/` links.
 It reads the shared cache outside the checkout.
 That is each tag tree, its recorded commit and its manifest.
 It contacts a remote only when a tag is not cached yet, to confirm the tag exists and to clone it.
@@ -34,18 +38,21 @@ It contacts a remote only when a tag is not cached yet, to confirm the tag exist
 ## Arguments
 
 ```sh
-checks-vendor
+checks-vendor [--library <name> --package <package> --repository <remote> --tag <template> [--path <manifest>]]...
 ```
 
-It takes no arguments, since `quality.json` names the libraries.
+Each `--library` opens one library, and the flags after it up to the next `--library` describe it.
+`--package`, `--repository` and `--tag` are required, and `--path` is optional.
+A name is lowercase words joined by hyphens, and no two libraries share one.
+With no arguments it pins nothing.
 
 ## Exit codes
 
 | Code | When |
 | --- | --- |
-| 0 | every declared library links a verified tree, its remote could not be reached for a first fetch, or no git checkout holds the run |
+| 0 | every named library links a verified tree, its remote could not be reached for a first fetch, or no git checkout holds the run |
 | 1 | a tag is missing or lands elsewhere than its record, an installed version is unknown, a tree was written to, a record disagrees with its tree, a version disagrees or a link is blocked |
-| 2 | `quality.json` does not decode, `HOME` is unset, or arguments were passed |
+| 2 | an argument is unknown, missing, repeated or malformed, or `HOME` is unset |
 
 ## Sample output
 
@@ -66,7 +73,7 @@ A later run reports the link it kept.
 A consuming repository runs it from its `prepare` script, so every install pins and verifies the trees.
 
 ```json
-{ "scripts": { "prepare": "checks-vendor" } }
+{ "scripts": { "prepare": "checks-vendor --library effect --package effect --repository https://github.com/Effect-TS/effect.git --tag 'effect@{version}' --path packages/effect/package.json" } }
 ```
 
 An install offline still passes.
@@ -88,10 +95,10 @@ A consumer whose `tsconfig.json` has no explicit `include` keeps the trees out w
 
 ## Opting out
 
-It runs only in a repository that declares `sources.libraries`.
-A repository without that key reports nothing to pin and changes nothing.
-A repository that declares no library needs no `prepare` entry for it.
+It pins sources only for the libraries its arguments name.
+A run with no arguments reports nothing to pin and changes nothing.
+A repository that pins no library needs no `prepare` entry for it.
 
 ## Related topics
 
-- [The quality file](../configs/quality-file.md)
+- [Native settings](../configs/native-settings.md)

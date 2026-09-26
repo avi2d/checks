@@ -46,14 +46,14 @@ test("risesOf sorts by file, and a file the base never repeated rises from zero"
   expect(rises[0]).toEqual({ file: "src/a.ts", before: 0, after: 10, clones: [] });
 });
 
-test("heldOf tallies a held file that did not rise, and every file outside the held set, as advisory", () => {
+test("heldOf tallies every repeating file that did not rise as advisory", () => {
   const rise = { file: "src/fresh.ts", before: 0, after: 10, clones: [] };
-  const after = new Map([["src/fresh.ts", 10], ["src/kept.ts", 5]]);
-  const held = heldOf(2, [rise], after, new Map([["tests/one.test.ts", 10]]));
+  const after = new Map([["src/kept.ts", 5], ["src/fresh.ts", 10], ["src/also.ts", 7]]);
+  const held = heldOf(3, [rise], after);
   expect(held).toEqual({
-    measured: 2,
+    measured: 3,
     rises: [rise],
-    advisory: new Map([["src/kept.ts", 5], ["tests/one.test.ts", 10]]),
+    advisory: new Map([["src/also.ts", 7], ["src/kept.ts", 5]]),
   });
 });
 
@@ -62,7 +62,7 @@ test("report renders a rise with its clones, and the advisory notice beneath it"
   const held = { measured: 3, rises: [rise], advisory: new Map([["tests/one.test.ts", 10]]) };
   expect(report(held)).toBe(
     [
-      "repetition: 1 production file(s) repeat more lines than where the range starts, at 50 tokens and 5 lines:",
+      "repetition: 1 file(s) .jscpd.json holds repeat more lines than where the range starts, at 50 tokens and 5 lines:",
       "  src/fresh.ts: 10 repeated line(s), up from 0",
       "    src/fresh.ts:1-10 repeats src/ledger.ts:4-13",
       "repetition: advisory, 1 file(s) repeat lines the hold does not fail:",
@@ -73,7 +73,7 @@ test("report renders a rise with its clones, and the advisory notice beneath it"
 
 test("report renders success by count, with no advisory line when nothing repeats outside the hold", () => {
   expect(report({ measured: 3, rises: [], advisory: new Map() })).toBe(
-    "repetition: 3 production file(s) repeat no more lines than where the range starts, at 50 tokens and 5 lines",
+    "repetition: 3 file(s) .jscpd.json holds repeat no more lines than where the range starts, at 50 tokens and 5 lines",
   );
 });
 

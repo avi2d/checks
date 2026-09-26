@@ -57,7 +57,7 @@ for (const { path, entry, output } of HOST_LOADED) {
     `the repo cruise refuses ${path} an import of effect`,
     async () => {
       dir = await scratch("checks-host-cruise-");
-      for (const config of [".dependency-cruiser.cjs", "dependency-cruiser.config.js", "quality.json"]) {
+      for (const config of [".dependency-cruiser.cjs", "dependency-cruiser.config.js"]) {
         await copyFile(join(CHECKOUT, config), join(dir, config));
       }
       for (const linked of ["node_modules", "dist"]) await symlink(join(CHECKOUT, linked), join(dir, linked));

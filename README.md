@@ -2,7 +2,7 @@
 
 `@avi2dg/checks` is the kit of deterministic checks a TypeScript repository installs to hold its code, tests, commits, CI wiring and docs to one shared standard.
 It ships the lint gates `checks-lint` runs over each pull request, the test runners, and the configs a repository extends for oxlint, tsc, dependency-cruiser, commitlint, bun and Stryker.
-A repository declares what it opts into once, in `quality.json`, and each check decides its constraint the same way on every run.
+Each repository owns its workflows and native tool configs, as [Native settings](docs/configs/native-settings.md) maps.
 
 ## Before you begin
 
@@ -59,30 +59,22 @@ To consume the kit from a repository:
    }
    ```
 
-1. Declare the commands CI runs in `quality.json` at the repository root:
-
-   ```json
-   {
-     "$schema": "./node_modules/@avi2dg/checks/quality.schema.json",
-     "gates": { "ci": ["bun run lint", "bun run typecheck", "bun run test"] }
-   }
-   ```
-
 1. Copy the bunfig preset:
 
    ```sh
    cp node_modules/@avi2dg/checks/bunfig.toml bunfig.toml
    ```
 
-1. Add three scripts to `package.json`:
+1. Add scripts to `package.json`, replacing the build entry with the repository's own build command:
 
    ```json
+   "build": "bun build src/index.ts --outdir dist --target node",
    "lint": "oxlint --type-aware && checks-lint",
    "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
    "test": "checks-test"
    ```
 
-1. Run the three on every pull request in `.github/workflows/ci.yml`, fetching the whole history the range needs:
+1. Run the scripts on every pull request in `.github/workflows/ci.yml`, fetching the whole history the range needs:
 
    ```yaml
    on:
@@ -96,17 +88,20 @@ To consume the kit from a repository:
              fetch-depth: 0
          - uses: oven-sh/setup-bun@v2
          - run: bun install --frozen-lockfile
+         - run: bun run build
+         - run: git diff --exit-code
          - run: bun run lint
          - run: bun run typecheck
          - run: bun run test
    ```
 
+Add a pull request title lint step in another workflow using `./node_modules/.bin/commitlint`.
 `bun run lint` then ends with `checks-lint: <count> gate(s) pass`.
 
 ## What runs
 
 `checks-lint` runs these gates in this order, each over the working tree or over the range it resolves, and names every one that fails.
-A repository leaves out a gate that does not apply to it through `gates.lint`, as [Gate selection](docs/gates/checks-lint.md#gate-selection) says.
+`checks-lint` runs every applicable gate, including the TypeScript gates once the repository tracks TypeScript.
 
 <!-- generated gates: bun run build writes it from KIT_GATES in scripts/gates.ts and scripts/doc-blocks.ts -->
 
@@ -119,10 +114,7 @@ A repository leaves out a gate that does not apply to it through `gates.lint`, a
 | [`checks-suppressions-ratchet`](docs/gates/checks-suppressions-ratchet.md) | the range | every repository |
 | [`checks-ci-wiring`](docs/gates/checks-ci-wiring.md) | the working tree | every repository |
 | [`checks-docs`](docs/gates/checks-docs.md) | the range | every repository |
-| [`checks-quality`](docs/gates/checks-quality.md) | the working tree | a repository tracking `quality.json` |
-| [`checks-size-budget`](docs/gates/checks-size-budget.md) | the range | a repository tracking `*.ts` or `*.tsx` |
 | [`checks-repetition`](docs/gates/checks-repetition.md) | the range | a repository tracking `*.ts` or `*.tsx` |
-| [`checks-feature-owners`](docs/gates/checks-feature-owners.md) | the range | a repository tracking `*.ts` or `*.tsx` |
 | [`checks-quarantine-clock`](docs/gates/checks-quarantine-clock.md) | the range | every repository |
 
 <!-- end generated gates -->
@@ -134,7 +126,7 @@ These bins run on their own:
 - [`checks-mutation-compare`](docs/gates/checks-mutation-compare.md) holds every mutant in a pull request to no regression.
 - [`checks-subsumed-tests`](docs/gates/checks-subsumed-tests.md) lists each test another test subsumes in a mutation run.
 - [`checks-backtest`](docs/gates/checks-backtest.md) reports what the comment check would have refused in recent history.
-- [`checks-vendor`](docs/gates/checks-vendor.md) pins each library `quality.json` declares to a shared read-only clone and links it under `repos/`.
+- [`checks-vendor`](docs/gates/checks-vendor.md) pins each library its `prepare` arguments name to a shared read-only clone and links it under `repos/`.
 
 `checks-lint` has [its own page](docs/gates/checks-lint.md), which says which range it resolves.
 The oxlint base, the dependency-cruiser base and the commitlint config run through their own tools, as the pages under Related topics say.
@@ -144,13 +136,13 @@ The oxlint base, the dependency-cruiser base and the commitlint config run throu
 To move a repository to a newer release of the kit:
 
 1. Run the install line again, which moves the kit to its newest release and the peers to the versions it pins.
-1. Run `bun run checks-quality generate` when `quality.json` declares `sources.effect`, since a release that changes a preset reaches the fragments only through it.
+1. Review the Effect overrides in `.oxlintrc.json` and `tsconfig.json` when a release changes their presets.
 1. Copy `node_modules/@avi2dg/checks/bunfig.toml` over `bunfig.toml` again, since `checks-test-layout` compares the copy with the installed preset.
 1. Run `bun run lint`, `bun run typecheck` and `bun run test`.
 
 The repository's lockfile pins the kit, so a repository moves only when it runs these steps.
 [CHANGELOG.md](CHANGELOG.md), shipped in the package, lists what each release changed.
-A repository that still declares `ciWiring` or `commitIdentity` in `package.json` moves them into `quality.json`, as [Keys moved from package.json](docs/configs/quality-file.md#keys-moved-from-packagejson) maps.
+A repository that tracks `quality.json` moves its settings as [Native settings](docs/configs/native-settings.md#consumer-migration) maps.
 
 ## Where things are
 
@@ -168,18 +160,17 @@ Every path is relative to the installed package, `node_modules/@avi2dg/checks/`.
 | `dependency-cruiser.config.js` | the shared dependency-cruiser base |
 | `scripts/` | every bin, which a package script calls by its `checks-` name |
 | `templates/` | one template per kind of doc file, which a new doc file starts from |
-| `presets/` | the Effect rule blocks `checks-quality generate` writes into the fragments |
-| `quality.schema.json` | the schema of `quality.json`, which its `$schema` line names |
+| `presets/` | the Effect rule blocks a repository copies into its native config |
 | `oxlintrc.json` | the oxlint base config `.oxlintrc.json` extends |
 | `stryker.preset.js` | the Stryker mutation-testing preset |
 | `tsconfig.effect.json` | the tsconfig fragment with the Effect language-service block |
-| `dist/` | the compiled oxlint plugin with the Effect error-channel and cognitive complexity rules, and `featureRules` |
+| `dist/` | the compiled oxlint plugin with the Effect error-channel and cognitive complexity rules |
 
 <!-- end generated shipped -->
 
 ## Related topics
 
-- [The quality file](docs/configs/quality-file.md)
+- [Native settings](docs/configs/native-settings.md)
 - [The Effect rules](docs/configs/effect-rules.md)
 - [The TypeScript rules](docs/configs/typescript-rules.md)
 - [The dependency rules](docs/configs/dependency-rules.md)

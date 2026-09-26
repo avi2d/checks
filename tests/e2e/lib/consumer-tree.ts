@@ -1,7 +1,7 @@
 import { $ } from "bun";
-import { mkdir, readdir, symlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { OXLINT_FRAGMENT, TSCONFIG_FRAGMENT } from "../../../scripts/quality.ts";
+import { Schema } from "effect";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
 import { CHECKOUT, ran, scratchDirs, type Ran } from "./fixture-repo.ts";
 
@@ -14,7 +14,7 @@ export type KitTree = {
 };
 
 export type ConsumerShape = {
-  readonly quality: Readonly<Record<string, unknown>>;
+  readonly paths: readonly string[];
   readonly include: readonly string[];
   readonly types: readonly string[];
 };
@@ -31,25 +31,34 @@ export function kitTree(dir: string): KitTree {
   };
 }
 
-// Called at a test file's top level, so each tree opened is removed after its test.
 export function consumerTrees(prefix: string): (shape: ConsumerShape) => Promise<KitTree> {
   const scratch = scratchDirs();
-  return async ({ quality, include, types }) => {
+  return async ({ paths, include, types }) => {
     const tree = kitTree(await scratch(prefix));
     await mkdir(join(tree.dir, "node_modules", "@avi2dg"), { recursive: true });
     for (const entry of await readdir(join(CHECKOUT, "node_modules"))) {
       await symlink(join(CHECKOUT, "node_modules", entry), join(tree.dir, "node_modules", entry));
     }
     await symlink(CHECKOUT, join(tree.dir, "node_modules", "@avi2dg", "checks"));
+    const oxlint = Schema.decodeSync(Schema.fromJsonString(Schema.Struct({
+      plugins: Schema.Array(Schema.String),
+      rules: Schema.Record(Schema.String, Schema.String),
+    })))(await readFile(join(CHECKOUT, "presets/effect.oxlint.json"), "utf8"));
+    const service = Schema.decodeSync(Schema.fromJsonString(Schema.Struct({
+      diagnosticSeverity: Schema.Record(Schema.String, Schema.String),
+    })))(await readFile(join(CHECKOUT, "presets/effect.language-service.json"), "utf8"));
     await tree.put(".gitignore", "node_modules/\n");
-    await tree.put("quality.json", { $schema: "./node_modules/@avi2dg/checks/quality.schema.json", ...quality });
     await tree.put(".oxlintrc.json", {
-      extends: ["./node_modules/@avi2dg/checks/oxlintrc.json", `./${OXLINT_FRAGMENT}`],
+      extends: ["./node_modules/@avi2dg/checks/oxlintrc.json"],
       plugins: ["typescript", "oxc", "eslint", "import"],
+      overrides: [{ files: paths, plugins: ["typescript", "oxc", "eslint", "import", ...oxlint.plugins], rules: oxlint.rules }],
     });
     await tree.put("tsconfig.json", {
-      extends: ["@avi2dg/checks/tsconfig.effect.json", `./${TSCONFIG_FRAGMENT}`],
-      compilerOptions: { target: "esnext", module: "preserve", moduleResolution: "bundler", strict: true, noEmit: true, types },
+      extends: ["@avi2dg/checks/tsconfig.effect.json"],
+      compilerOptions: {
+        target: "esnext", module: "preserve", moduleResolution: "bundler", strict: true, noEmit: true, types,
+        plugins: [{ name: "@effect/language-service", overrides: [{ include: paths, options: service }] }],
+      },
       include,
     });
     await $`git init -q -b main`.cwd(tree.dir).quiet();

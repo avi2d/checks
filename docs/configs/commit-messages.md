@@ -1,3 +1,7 @@
+---
+kind: reference
+audience: consumers
+---
 # The commit message lint
 
 The shared commitlint config holds each pull request title to conventional commits, and a reader looks it up to wire the lint into a repository's CI.
@@ -10,7 +14,7 @@ It arrives with the kit, since `@commitlint/cli` and `@commitlint/config-convent
 ## Workflow
 
 The lint runs in CI on pull requests, because `jj` never fires a git hook.
-`checks-quality generate` writes the workflow whole into `.github/workflows/commitlint.yml`, as [checks-quality](../gates/checks-quality.md) says.
+Each repository owns `.github/workflows/commitlint.yml` and runs the installed `commitlint` binary in a pull request step.
 The workflow lints with the installed kit's `commitlint.config.js`, so every repository holds titles to the same rules.
 
 ## What it lints

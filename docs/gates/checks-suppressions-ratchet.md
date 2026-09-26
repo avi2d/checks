@@ -1,3 +1,7 @@
+---
+kind: reference
+audience: consumers
+---
 # checks-suppressions-ratchet
 
 `checks-suppressions-ratchet` is the gate that holds oxlint's bulk-suppression baseline to counts that only fall, and a reader looks it up when a change raised a count.

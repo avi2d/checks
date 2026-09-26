@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { docsRepos, GUIDE, OPENING, plantRedThenGreen, type DocsRepo, type Plant } from "./lib/docs-repo.ts";
 
 const MANIFEST = JSON.stringify({ name: "widget", scripts: { build: "bun scripts/build.ts" } });
@@ -32,8 +34,8 @@ const PLANTS: readonly (Plant & { readonly reference: string })[] = [
 
 const repository = docsRepos();
 
-async function start(quality: unknown = {}): Promise<DocsRepo> {
-  const repo = await repository(quality);
+async function start(): Promise<DocsRepo> {
+  const repo = await repository();
   await repo.put("package.json", MANIFEST);
   await repo.put("scripts/build.ts", "export const build = 1;\n");
   return repo;
@@ -82,9 +84,9 @@ test(
 );
 
 test(
-  "a path git ignores, a bin a dependency installs and a command in a doc for consumers are not held to the repository",
+  "a path git ignores or a bin a dependency installs is not held to the repository",
   async () => {
-    const { put, commit, docs } = await start({ docs: { forConsumers: ["docs/consumers.md"] } });
+    const { put, commit, docs } = await start();
     await put("generated/keep.txt", "kept\n");
     await put(GUIDE, OPENING);
     const base = await commit("start");
@@ -99,6 +101,31 @@ test(
     await put(".gitignore", "generated/*.json\nnode_modules/\n");
     await put("node_modules/.bin/checks-lint", "#!/bin/sh\n");
     const green = await docs(base, head);
+    expect(green.text).toContain("docs: the range breaks no path, link or command the 1 living doc(s) name");
+    expect(green.exitCode).toBe(0);
+  },
+  120_000,
+);
+
+test(
+  "a README's command that names no script goes red, and green once front matter marks the page as speaking to consumers",
+  async () => {
+    const { put, commit, docs } = await repository();
+    const readme = await readFile(join(import.meta.dir, "..", "fixtures", "docs", "readme.md"), "utf8");
+    const shipped = readme.replace("prints the version.\n", "prints the version.\nRun `bun run deploy` to ship it.\n");
+    await put("package.json", JSON.stringify({ name: "widget", scripts: { widget: "bun widget.ts" } }));
+    await put("README.md", readme);
+    const base = await commit("a README that holds to its template");
+    await put("README.md", shipped);
+    const named = await commit("name a deploy script the package lacks");
+
+    const red = await docs(base, named);
+    expect(red.text).toContain("  README.md:19: runs `bun run deploy`, and `deploy` is not a script in `package.json`");
+    expect(red.exitCode).toBe(1);
+
+    await put("README.md", `---\naudience: consumers\n---\n${shipped}`);
+    const marked = await commit("mark the README as speaking to consumers");
+    const green = await docs(base, marked);
     expect(green.text).toContain("docs: the range breaks no path, link or command the 1 living doc(s) name");
     expect(green.exitCode).toBe(0);
   },

@@ -4,7 +4,8 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
-import { COMMITLINT_WORKFLOW, commitlintWorkflow, SUITE_WORKFLOW, suiteWorkflow } from "../../../scripts/quality.ts";
+const SUITE_WORKFLOW = ".github/workflows/ci.yml";
+const COMMITLINT_WORKFLOW = ".github/workflows/commitlint.yml";
 
 export const CHECKOUT = resolve(import.meta.dir, "..", "..", "..");
 
@@ -80,13 +81,11 @@ export function scratchDirs(): (prefix: string) => Promise<string> {
 
 export const UNVENDORED_BUNFIG = '[test]\npathIgnorePatterns = ["**/tests/quarantine/**", "**/tests/live/**", "**/tests/pixel/**"]\n';
 
-export async function lintWiring(quality: Readonly<Record<string, unknown>>): Promise<Readonly<Record<string, string>>> {
-  const ci = ["bun run lint"];
+export function lintWiring(): Readonly<Record<string, string>> {
   return {
-    "package.json": JSON.stringify({ name: "lint-fixture", type: "module", scripts: { lint: "checks-lint", test: "checks-test" } }),
+    "package.json": JSON.stringify({ name: "lint-fixture", type: "module", author: AUTHOR, scripts: { lint: "checks-lint", test: "checks-test" } }),
     "bunfig.toml": UNVENDORED_BUNFIG,
-    [SUITE_WORKFLOW]: suiteWorkflow("main", ci, false, false, undefined),
-    [COMMITLINT_WORKFLOW]: commitlintWorkflow("./node_modules/@avi2dg/checks/commitlint.config.js", undefined),
-    "quality.json": JSON.stringify({ gates: { ci }, commitIdentity: { authors: [AUTHOR] }, ...quality }),
+    [SUITE_WORKFLOW]: "on:\n  pull_request:\n    types: [opened, synchronize]\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n      - run: bun run build\n      - run: git diff --exit-code\n      - run: bun run typecheck\n      - run: bun run test\n",
+    [COMMITLINT_WORKFLOW]: "on:\n  pull_request:\n    types: [opened, synchronize]\njobs:\n  title:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ./node_modules/.bin/commitlint\n",
   };
 }

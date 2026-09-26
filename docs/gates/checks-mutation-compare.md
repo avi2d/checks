@@ -1,3 +1,7 @@
+---
+kind: reference
+audience: consumers
+---
 # checks-mutation-compare
 
 `checks-mutation-compare` is the gate that holds every mutant in a pull request to no regression rather than an absolute score, and a reader looks it up to wire mutation testing into CI.

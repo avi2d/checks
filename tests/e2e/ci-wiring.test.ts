@@ -1,161 +1,74 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { CHECKOUT, fixtureRepos, ran, type Ran } from "./lib/fixture-repo.ts";
+import { withoutPullRequestEvent } from "../lib/env.ts";
+import { CHECKOUT, fixtureRepos, ran, type FixtureRepo, type Ran } from "./lib/fixture-repo.ts";
 
+const open = fixtureRepos("checks-ci-wiring-");
 const SCRIPT = join(CHECKOUT, "scripts", "ci-wiring.ts");
-const LINT_COVERAGE = join(CHECKOUT, "scripts", "lint-coverage.sh");
-const METADATA_GATES = ["checks-commit-identity", "checks-comment-gate", "checks-suppressions-ratchet", "checks-ci-wiring", "checks-docs", "checks-quarantine-clock"];
-const SOURCE_FREE_GATES = [...METADATA_GATES, "checks-quality"];
+const workflow = `on:\n  pull_request:\n    types: [opened, synchronize]\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n      - run: bun run build\n      - run: git diff --exit-code\n      - run: bun run typecheck\n      - run: bun run test\n      - run: ./node_modules/.bin/commitlint\n`;
+const scripts = (names: readonly string[]): string => JSON.stringify({ name: "consumer", scripts: Object.fromEntries(names.map((name) => [name, name])) });
 
-const WORKFLOW = `on:
-  pull_request:
-jobs:
-  checks:
-    runs-on: ubuntu-latest
-    steps:
-      - run: bun install --frozen-lockfile
-      - run: bun run lint
-      - run: bun run test
-`;
-
-const repository = fixtureRepos("checks-ci-wiring-");
-
-let dir = "";
-
-async function initRepo(quality: unknown, workflow: string): Promise<void> {
-  ({ dir } = await repository({ "quality.json": JSON.stringify(quality), ".github/workflows/ci.yml": workflow }));
+function wiring(repo: FixtureRepo, ci: Readonly<Record<string, string>> = {}): Promise<Ran> {
+  return ran($`bun ${SCRIPT}`.cwd(repo.dir).env({ ...withoutPullRequestEvent(), ...ci }));
 }
 
-async function writeWorkflow(workflow: string): Promise<void> {
-  await mkdir(join(dir, ".github", "workflows"), { recursive: true });
-  await writeFile(join(dir, ".github", "workflows", "ci.yml"), workflow);
-}
+test("the installed bin refuses an omitted gate and accepts its restored step", async () => {
+  const repo = await open({
+    "package.json": scripts(["lint", "test"]),
+    "src/index.ts": "export const answer = 42;\n",
+    ".github/workflows/ci.yml": workflow.replace("      - run: bun run test\n", ""),
+  });
+  await repo.commit("start");
+  const red = await wiring(repo);
+  expect(red.exitCode).toBe(1);
+  expect(red.text).toContain("bun run test");
+  await repo.write({ ".github/workflows/ci.yml": workflow });
+  const green = await wiring(repo);
+  expect(green.exitCode).toBe(0);
+  expect(green.text).toContain("3 gate(s) run");
+});
 
-function check(cwd = dir): Promise<Ran> {
-  return ran($`bun ${SCRIPT}`.cwd(cwd));
-}
+test("a build script requires its step and a clean git diff after it", async () => {
+  const repo = await open({ "package.json": scripts(["lint"]), ".github/workflows/ci.yml": workflow.replace(/ {6}- run: (bun run build|git diff --exit-code)\n/g, "") });
+  await repo.commit("start");
+  expect((await wiring(repo)).text).toContain("2 gate(s) run");
+  await repo.write({ "package.json": scripts(["lint", "build"]) });
+  const red = await wiring(repo);
+  expect(red.exitCode).toBe(1);
+  expect(red.text).toContain("2 of 4 gate(s) do not run");
+  expect(red.text).toContain("git diff --exit-code");
+});
 
-test(
-  "ci-wiring goes red when a declared gate's step is deleted and green once it is restored",
-  async () => {
-    await initRepo({ gates: { ci: ["bun run lint", "bun run test"] } }, WORKFLOW);
-
-    const green = await check();
-    expect(green.text).toContain("ci-wiring: 2 gate(s) run on pull requests to main");
-    expect(green.exitCode).toBe(0);
-
-    await writeWorkflow(WORKFLOW.replace("      - run: bun run lint\n", ""));
-    const red = await check();
-    expect(red.text).toContain("ci-wiring: 1 of 2 gate(s) do not run on pull requests to main:");
-    expect(red.text).toContain("  bun run lint\n    no run step invokes it");
+test("false if and continue-on-error cannot make a required step green", async () => {
+  const repo = await open({ "package.json": scripts(["lint", "test"]), "src/index.ts": "export const answer = 42;\n", ".github/workflows/ci.yml": workflow });
+  await repo.commit("start");
+  for (const disabled of ["if: false", "continue-on-error: true"]) {
+    await repo.write({ ".github/workflows/ci.yml": workflow.replace("      - run: bun run lint", `      - run: bun run lint\n        ${disabled}`) });
+    const red = await wiring(repo);
     expect(red.exitCode).toBe(1);
+    expect(red.text).toContain(disabled);
+  }
+  await repo.write({ ".github/workflows/ci.yml": workflow });
+  expect((await wiring(repo)).exitCode).toBe(0);
+});
 
-    await writeWorkflow(WORKFLOW);
-    await mkdir(join(dir, "packages", "nested"), { recursive: true });
-    const fromSubdirectory = await check(join(dir, "packages", "nested"));
-    expect(fromSubdirectory.exitCode).toBe(0);
-  },
-  60_000,
-);
-
-test(
-  "a selection leaving out the source gates passes a source-free repository and is refused once it tracks source",
-  async () => {
-    await initRepo({ gates: { ci: ["bun run lint"], lint: METADATA_GATES } }, WORKFLOW);
-    await $`git add -A`.cwd(dir).quiet();
-
-    const withoutQuality = await check();
-    expect(withoutQuality.text).toContain(
-      [
-        "ci-wiring: quality.json gates.lint leaves out 1 gate(s) this repository's contents make applicable:",
-        "  checks-quality: the repository tracks a quality.json (quality.json)",
-      ].join("\n"),
-    );
-    expect(withoutQuality.exitCode).toBe(1);
-
-    await writeFile(join(dir, "quality.json"), JSON.stringify({ gates: { ci: ["bun run lint"], lint: SOURCE_FREE_GATES } }));
-    const sourceFree = await check();
-    expect(sourceFree.text).toContain(
-      "ci-wiring: quality.json gates.lint leaves out checks-lint-coverage, checks-test-layout, checks-size-budget, checks-repetition, checks-feature-owners, none of which this repository's contents make applicable",
-    );
-    expect(sourceFree.exitCode).toBe(0);
-
-    await writeFile(join(dir, "widget.tsx"), "export const widget = 42;\n");
-    const untracked = await check();
-    expect(untracked.exitCode).toBe(0);
-
-    await $`git add -A`.cwd(dir).quiet();
-    const tracked = await check();
-    expect(tracked.text).toContain(
-      [
-        "ci-wiring: quality.json gates.lint leaves out 5 gate(s) this repository's contents make applicable:",
-        "  checks-lint-coverage: the repository tracks TypeScript source (widget.tsx)",
-        "  checks-test-layout: the repository tracks TypeScript source (widget.tsx)",
-        "  checks-size-budget: the repository tracks TypeScript source (widget.tsx)",
-        "  checks-repetition: the repository tracks TypeScript source (widget.tsx)",
-        "  checks-feature-owners: the repository tracks TypeScript source (widget.tsx)",
-      ].join("\n"),
-    );
-    expect(tracked.exitCode).toBe(1);
-  },
-  60_000,
-);
-
-test(
-  "ci-wiring counts as TypeScript source exactly the files lint-coverage checks",
-  async () => {
-    await initRepo({ gates: { ci: ["bun run lint"], lint: SOURCE_FREE_GATES } }, WORKFLOW);
-    await mkdir(join(dir, "src"));
-    for (const file of ["a.ts", "b.tsx", "c.mts", "d.cts", "e.js", "f.ts.md"]) {
-      await writeFile(join(dir, "src", file), "export const value = 1;\n");
-    }
-    await $`git add -A`.cwd(dir).quiet();
-
-    const coverage = await $`${LINT_COVERAGE}`
-      .cwd(dir)
-      .env({ ...process.env, PATH: `${join(CHECKOUT, "node_modules", ".bin")}:${process.env["PATH"] ?? ""}` })
-      .nothrow()
-      .quiet();
-    const checked = /^lint-coverage: (?:oxlint skips )?\d+\/(\d+) tracked/m.exec(coverage.stdout.toString());
-    const refused = /^ {2}checks-lint-coverage: the repository tracks TypeScript source \(\S+ and (\d+) more\)$/m.exec(
-      (await check()).text,
-    );
-    expect(checked).not.toBeNull();
-    expect(refused).not.toBeNull();
-    expect(Number(refused?.[1]) + 1).toBe(Number(checked?.[1]));
-  },
-  60_000,
-);
-
-test(
-  "ci-wiring refuses to pass a repository that declares no gates",
-  async () => {
-    await initRepo({}, WORKFLOW);
-    const result = await check();
-    expect(result.text).toContain("quality.json declares no gates.ci, a non-empty array of commands");
-    expect(result.exitCode).toBe(2);
-  },
-  60_000,
-);
-
-test(
-  "ci-wiring goes red while a declared scheduled command has no scheduled workflow, and green once one runs it",
-  async () => {
-    await initRepo({ gates: { ci: ["bun run lint"], scheduled: ["bunx checks-flake --runs 20"] } }, WORKFLOW);
-    const red = await check();
-    expect(red.text).toContain("ci-wiring: 1 gate(s) run on pull requests to main");
-    expect(red.text).toContain("ci-wiring: 1 of 1 scheduled command(s) do not run on a schedule:\n  bunx checks-flake --runs 20\n    no run step invokes it");
-    expect(red.exitCode).toBe(1);
-
-    await writeFile(
-      join(dir, ".github", "workflows", "flake.yml"),
-      'on:\n  schedule:\n    - cron: "0 5 * * *"\njobs:\n  flake:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bunx checks-flake --runs 20\n',
-    );
-    const green = await check();
-    expect(green.text).toContain("ci-wiring: 1 scheduled command(s) run on a schedule");
-    expect(green.exitCode).toBe(0);
-  },
-  60_000,
-);
+test("the default branch comes from origin HEAD, the pull request base or GitHub's event, never the workflow", async () => {
+  const master = workflow.replace("    types: [opened, synchronize]\n", "    branches: [master]\n");
+  const repo = await open({ "package.json": scripts(["lint", "test"]), ".github/workflows/ci.yml": master });
+  await repo.commit("start");
+  const unrecorded = await wiring(repo);
+  expect(unrecorded.exitCode).toBe(1);
+  expect(unrecorded.text).toContain("limits pull_request to branches other than main");
+  await repo.write({ "push-event.json": JSON.stringify({ repository: { default_branch: "master" } }) });
+  const pushed = await wiring(repo, { GITHUB_EVENT_PATH: join(repo.dir, "push-event.json") });
+  expect(pushed.exitCode).toBe(0);
+  expect(pushed.text).toContain("3 gate(s) run on pull requests to master");
+  await $`git update-ref refs/remotes/origin/master HEAD && git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/master`.cwd(repo.dir).quiet();
+  const green = await wiring(repo);
+  expect(green.exitCode).toBe(0);
+  expect(green.text).toContain("3 gate(s) run on pull requests to master");
+  const release = await wiring(repo, { GITHUB_BASE_REF: "release" });
+  expect(release.exitCode).toBe(1);
+  expect(release.text).toContain("limits pull_request to branches other than release");
+});
