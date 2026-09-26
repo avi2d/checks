@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import effectLanguageService from "../presets/effect.language-service.json" with { type: "json" };
 import effectOxlint from "../presets/effect.oxlint.json" with { type: "json" };
 import { commitlintWorkflow, fragmentsFor, OXLINT_FRAGMENT, suiteWorkflow, TSCONFIG_FRAGMENT, workflowsFor } from "../scripts/quality.ts";
-import { lastStep, parseWorkflow, runs, setupBun } from "./lib/workflow.ts";
+import { lastStep, parseWorkflow, runs, setupBun, setupNode } from "./lib/workflow.ts";
 
 test("without sources.effect there is nothing to generate", () => {
   expect(fragmentsFor({})).toEqual([]);
@@ -55,18 +55,28 @@ const INSTALL = "bun install --frozen-lockfile";
 const TITLE_LINT = `./node_modules/.bin/commitlint --config ${KIT_CONFIG} --edit "$RUNNER_TEMP/pr-title"`;
 
 test("the suite workflow runs the declared gates in order after a frozen install, on pushes to the default branch", () => {
-  const workflow = parseWorkflow(suiteWorkflow("main", ["bun run build", "git diff --exit-code", "bun run lint"], true));
+  const workflow = parseWorkflow(suiteWorkflow("main", ["bun run build", "git diff --exit-code", "bun run lint"], true, false));
   expect(workflow.on.push?.branches).toEqual(["main"]);
   expect(setupBun(workflow)).toEqual({ "bun-version-file": ".bun-version" });
+  expect(setupNode(workflow)).toBeUndefined();
   expect(runs(workflow)).toEqual([INSTALL, "bun run build", "git diff --exit-code", "bun run lint"]);
 
-  const unpinned = parseWorkflow(suiteWorkflow("next", ["bun run lint"], false));
+  const unpinned = parseWorkflow(suiteWorkflow("next", ["bun run lint"], false, false));
   expect(unpinned.on.push?.branches).toEqual(["next"]);
   expect(setupBun(unpinned)).toBeUndefined();
 });
 
+test("a .node-version at the repository root pins the suite's node before bun install", () => {
+  const workflow = parseWorkflow(suiteWorkflow("main", ["bun run test"], false, true));
+  expect(setupNode(workflow)).toEqual({ "node-version-file": ".node-version" });
+  expect(runs(workflow)).toEqual([INSTALL, "bun run test"]);
+
+  const unpinned = parseWorkflow(suiteWorkflow("main", ["bun run test"], false, false));
+  expect(setupNode(unpinned)).toBeUndefined();
+});
+
 test("a gate no plain step can carry still reaches the runner as the exact command", () => {
-  expect(runs(parseWorkflow(suiteWorkflow("main", ["echo a: b", "# not a comment"], false)))).toEqual([
+  expect(runs(parseWorkflow(suiteWorkflow("main", ["echo a: b", "# not a comment"], false, false)))).toEqual([
     INSTALL,
     "echo a: b",
     "# not a comment",
@@ -74,7 +84,7 @@ test("a gate no plain step can carry still reaches the runner as the exact comma
 });
 
 test("workflowsFor routes a gate the title lint runs to its own workflow and keeps every other gate in the suite", () => {
-  const recipe = { commitlintConfig: KIT_CONFIG, bunVersionFile: false };
+  const recipe = { commitlintConfig: KIT_CONFIG, bunVersionFile: false, nodeVersionFile: false };
   const [suite, commitlint] = workflowsFor({ gates: { ci: ["bun run lint", "./node_modules/.bin/commitlint"] } }, recipe);
   expect(suite?.file).toBe(".github/workflows/ci.yml");
   expect(runs(parseWorkflow(suite?.content ?? ""))).toEqual([INSTALL, "bun run lint"]);
@@ -100,7 +110,7 @@ test("the title lint step moves git's comment character off '#' so a title start
 });
 
 test("without gates.ci only the title lint is generated", () => {
-  const generated = workflowsFor({}, { commitlintConfig: "./commitlint.config.js", bunVersionFile: true });
+  const generated = workflowsFor({}, { commitlintConfig: "./commitlint.config.js", bunVersionFile: true, nodeVersionFile: false });
   expect(generated.map((workflow) => workflow.file)).toEqual([".github/workflows/commitlint.yml"]);
   expect(runs(parseWorkflow(generated[0]?.content ?? "")).at(-1)).toBe(
     './node_modules/.bin/commitlint --config ./commitlint.config.js --edit "$RUNNER_TEMP/pr-title"',

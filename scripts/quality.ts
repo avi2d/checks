@@ -38,6 +38,7 @@ export type GeneratedWorkflow = {
 export type WorkflowRecipe = {
   readonly commitlintConfig: string;
   readonly bunVersionFile: boolean;
+  readonly nodeVersionFile: boolean;
 };
 
 class NativeConfigUnreadable extends Schema.TaggedError<NativeConfigUnreadable>()("NativeConfigUnreadable", {
@@ -134,12 +135,15 @@ jobs:
 `;
 }
 
-export function suiteWorkflow(defaultBranch: string, gates: readonly string[], bunVersionFile: boolean): string {
+export function suiteWorkflow(defaultBranch: string, gates: readonly string[], bunVersionFile: boolean, nodeVersionFile: boolean): string {
+  const node = nodeVersionFile
+    ? "      - uses: actions/setup-node@v5\n        with:\n          node-version-file: .node-version\n"
+    : "";
   const setup = bunVersionFile
     ? "      - uses: oven-sh/setup-bun@v2\n        with:\n          bun-version-file: .bun-version\n"
     : "      - uses: oven-sh/setup-bun@v2\n";
   const steps = gates.map((gate) => `      - run: ${runScalar(gate)}\n`).join("");
-  return `name: ci\non:\n  push:\n    branches: [${defaultBranch}]\n  pull_request:\n    types: [opened, edited, synchronize, reopened]\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      # The head, not GitHub's merge ref, so the tree the gates read is the commit the range ends at.\n      # The whole history, since the range starts where the head branched from the base branch.\n      - uses: actions/checkout@v5\n        with:\n          ref: \${{ github.event.pull_request.head.sha || github.sha }}\n          fetch-depth: 0\n${setup}      - run: bun install --frozen-lockfile\n${steps}`;
+  return `name: ci\non:\n  push:\n    branches: [${defaultBranch}]\n  pull_request:\n    types: [opened, edited, synchronize, reopened]\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      # The head, not GitHub's merge ref, so the tree the gates read is the commit the range ends at.\n      # The whole history, since the range starts where the head branched from the base branch.\n      - uses: actions/checkout@v5\n        with:\n          ref: \${{ github.event.pull_request.head.sha || github.sha }}\n          fetch-depth: 0\n${node}${setup}      - run: bun install --frozen-lockfile\n${steps}`;
 }
 
 export function workflowsFor(quality: Quality, recipe: WorkflowRecipe): readonly GeneratedWorkflow[] {
@@ -150,7 +154,10 @@ export function workflowsFor(quality: Quality, recipe: WorkflowRecipe): readonly
   if (quality.gates?.ci === undefined) return [commitlint];
   const suite = quality.gates.ci.filter((gate) => !runsInTitleLint(gate, recipe.commitlintConfig));
   return [
-    { file: SUITE_WORKFLOW, content: suiteWorkflow(quality.defaultBranch ?? DEFAULT_BRANCH, suite, recipe.bunVersionFile) },
+    {
+      file: SUITE_WORKFLOW,
+      content: suiteWorkflow(quality.defaultBranch ?? DEFAULT_BRANCH, suite, recipe.bunVersionFile, recipe.nodeVersionFile),
+    },
     commitlint,
   ];
 }
@@ -254,6 +261,7 @@ const recipeOf = Effect.fn("recipeOf")(function* (root: string) {
     // The kit never installs itself, so its own tree lints with its root config.
     commitlintConfig: (yield* isKit(root)) ? OWN_COMMITLINT_CONFIG : KIT_COMMITLINT_CONFIG,
     bunVersionFile: yield* fs.exists(path.join(root, ".bun-version")),
+    nodeVersionFile: yield* fs.exists(path.join(root, ".node-version")),
   } satisfies WorkflowRecipe;
 });
 

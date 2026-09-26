@@ -36,3 +36,8 @@ export function setupBun(workflow: ParsedWorkflow): Readonly<Record<string, unkn
   const steps = Object.values(workflow.jobs).flatMap((job) => job.steps);
   return steps.find((step) => step.uses?.startsWith("oven-sh/setup-bun@") === true)?.with;
 }
+
+export function setupNode(workflow: ParsedWorkflow): Readonly<Record<string, unknown>> | undefined {
+  const steps = Object.values(workflow.jobs).flatMap((job) => job.steps);
+  return steps.find((step) => step.uses?.startsWith("actions/setup-node@") === true)?.with;
+}
