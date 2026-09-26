@@ -50,11 +50,11 @@ test(
     const red = await script(BUDGET, first);
     expect(red.text).toContain("size-budget: 2 overrun(s) grew past the base in the files the range adds or changes:\n");
     expect(red.text).toContain(
-      "  src/busy.ts: max-statements over by 1 in total, up from 0\n" +
+      "  src/busy.ts: max-statements over at 1 site(s), up from 0\n" +
         "    src/busy.ts:1: function `count` has too many statements (31). Maximum allowed is 30.\n",
     );
     expect(red.text).toContain(
-      "  src/guards.ts: cognitive-complexity over by 1 in total, up from 0\n" +
+      "  src/guards.ts: cognitive-complexity over at 1 site(s), up from 0\n" +
         "    src/guards.ts:1: function `guards` has a cognitive complexity of 16. Maximum allowed is 15.\n",
     );
     expect(red.text).not.toContain("tests/");
@@ -81,7 +81,7 @@ test(
     const red = await script(BUDGET, "main", head);
     expect(red.text).toContain(
       "size-budget: 1 overrun(s) grew past the base in the files the range adds or changes:\n" +
-        "  src/grown.ts: max-lines over by 10 in total, up from 0\n" +
+        "  src/grown.ts: max-lines over at 1 site(s), up from 0\n" +
         "    src/grown.ts: File has too many lines (30). Maximum allowed is 20.\n",
     );
     expect(red.text).toContain("size-budget: advisory, 1 overrun(s) where the budget does not hold yet:\n  src/lib/legacy.ts: File has too many lines (30).");
@@ -144,7 +144,7 @@ for (const severity of ["warn", 1] as const) {
       await write({ "src/legacy.ts": constants(31) });
       const grown = await commit("feat: grow the debt");
       const red = await script(BUDGET, base, grown);
-      expect(red.text).toContain("  src/legacy.ts: max-lines over by 11 in total, up from 10\n");
+      expect(red.text).toContain("  src/legacy.ts: max-lines over by 11, up from 10\n");
       expect(red.exitCode).toBe(1);
     },
     60_000,
@@ -160,13 +160,38 @@ test(
     await write({ "src/index.ts": constants(3), "scripts/tool.ts": constants(2, "tool") });
     const head = await commit("feat: grow both");
     const red = await script(BUDGET, base, head);
-    expect(red.text).toContain("  scripts/tool.ts: max-lines over by 1 in total, up from 0\n");
+    expect(red.text).toContain("  scripts/tool.ts: max-lines over at 1 site(s), up from 0\n");
     expect(red.text).not.toContain("src/index.ts");
     expect(red.exitCode).toBe(1);
 
     await write({ ".oxlintrc.json": config(2) });
     const raised = await commit("chore: raise the scripts limit");
     const green = await script(BUDGET, base, raised);
+    expect(green.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
+  "trimming one function over its limit never pays for a new function over it",
+  async () => {
+    const config = JSON.stringify({
+      plugins: ["eslint"],
+      categories: { correctness: "off" },
+      rules: { "max-lines-per-function": ["warn", { max: 5, skipBlankLines: false, skipComments: false }] },
+    });
+    const { write, commit, script } = await open({ ".oxlintrc.json": config, "src/a.ts": counter(33) });
+    const base = await commit("feat: f is 30 over");
+    await write({ "src/a.ts": `${counter(13)}${counter(18).replace("count", "tally")}` });
+    const head = await commit("feat: trim f to 10 over and add g 20 over");
+    const red = await script(BUDGET, base, head);
+    expect(red.text).toContain("  src/a.ts: max-lines-per-function over at 2 site(s), up from 1\n");
+    expect(red.exitCode).toBe(1);
+
+    await write({ "src/a.ts": counter(13) });
+    const trimmed = await commit("refactor: only trim f");
+    const green = await script(BUDGET, base, trimmed);
+    expect(green.text).toContain("raise no overrun past the base");
     expect(green.exitCode).toBe(0);
   },
   60_000,

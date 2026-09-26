@@ -15,9 +15,11 @@ export type Site = {
   readonly message: string;
 };
 
+// Sites counts the overrun sites of one rule in a file, and overrun how far one named site runs over.
 export type Growth = {
   readonly file: string;
   readonly rule: SizeRule["rule"];
+  readonly counts: "sites" | "overrun";
   readonly base: number;
   readonly head: number;
   readonly sites: readonly Site[];
@@ -123,22 +125,45 @@ function byFileAndRule(sites: readonly Site[]): ReadonlyMap<string, readonly Sit
   return Map.groupBy(sites, ({ file, rule }) => `${file}\0${rule}`);
 }
 
-function total(sites: readonly Site[]): number {
-  return sites.reduce((sum, { overrun }) => sum + overrun, 0);
+const NAMED = /`([^`]*)`/;
+
+// A whole-file site, and a site whose message names no function, match under the empty name.
+function nameOf({ line, message }: Site): string {
+  return line === undefined ? "" : (NAMED.exec(message)?.[1] ?? "");
 }
 
-// Sums each rule per file separately, so a shrink in one rule or file never offsets a growth in another.
+function byOverrun(sites: readonly Site[]): readonly Site[] {
+  return sites.toSorted((a, b) => b.overrun - a.overrun);
+}
+
+// Sites of one name pair with the base's by rank, the largest overrun with the largest.
+function grownSites(head: readonly Site[], base: readonly Site[]): readonly Growth[] {
+  const before = Map.groupBy(base, nameOf);
+  return [...Map.groupBy(head, nameOf)].flatMap(([name, named]) => {
+    const prior = byOverrun(before.get(name) ?? []);
+    return byOverrun(named).flatMap((site, rank) => {
+      const was = prior[rank]?.overrun;
+      return was !== undefined && site.overrun > was
+        ? [{ file: site.file, rule: site.rule, counts: "overrun" as const, base: was, head: site.overrun, sites: [site] }]
+        : [];
+    });
+  });
+}
+
+// Judges each rule per file separately and never sums sites, so a shrink in one site never offsets another.
 export function growthsOf(head: readonly Site[], base: readonly Site[]): readonly Growth[] {
   const before = byFileAndRule(base);
-  return [...byFileAndRule(head).entries()].flatMap(([group, sites]) => {
+  return [...byFileAndRule(head).entries()].flatMap(([group, sites]): readonly Growth[] => {
     const [first] = sites;
-    const growth = { base: total(before.get(group) ?? []), head: total(sites), sites };
-    return first !== undefined && growth.head > growth.base ? [{ file: first.file, rule: first.rule, ...growth }] : [];
+    const was = before.get(group) ?? [];
+    if (first === undefined) return [];
+    if (sites.length > was.length) return [{ file: first.file, rule: first.rule, counts: "sites", base: was.length, head: sites.length, sites }];
+    return grownSites(sites, was);
   });
 }
 
 // Decides the verdict from sites oxlint already measured: which the range holds, and which of
-// those grew past what the base measured for the same file and rule.
+// those grew past what the base measured for the same file, rule and function.
 export function verdictOf(held: number, holds: ReadonlySet<string>, sites: readonly Site[], baseSites: readonly Site[]): Verdict {
   const growths = growthsOf(sites.filter((site) => holds.has(site.file)), baseSites);
   const failing = new Set(growths.flatMap((growth) => growth.sites));
@@ -176,8 +201,8 @@ export function verdictLines({ held, growths }: Verdict): readonly string[] {
   if (growths.length === 0) return [`${NAME}: ${held} file(s), ${SCOPE}, raise no overrun past the base`];
   return [
     `${NAME}: ${growths.length} overrun(s) grew past the base in ${SCOPE}:`,
-    ...growths.flatMap(({ file, rule, base, head, sites }) => [
-      `  ${file}: ${rule} over by ${head} in total, up from ${base}`,
+    ...growths.flatMap(({ file, rule, counts, base, head, sites }) => [
+      counts === "sites" ? `  ${file}: ${rule} over at ${head} site(s), up from ${base}` : `  ${file}: ${rule} over by ${head}, up from ${base}`,
       ...sites.map((site) => describe(site, "    ")),
     ]),
   ];

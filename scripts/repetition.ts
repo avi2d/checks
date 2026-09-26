@@ -82,10 +82,12 @@ const scan = Effect.fn("scan")(
     const run = yield* collect("jscpd", [...flags, ...thresholds], tree).pipe(
       Effect.mapError((cause) => new JscpdUnreadable({ message: `cannot run jscpd: ${cause.message}` })),
     );
-    if (run.exitCode !== JSCPD_FINISHED) {
+    const reportPath = path.join(output, REPORT);
+    // A threshold, exitCode or failOnEmpty in the repository's config fails jscpd after the report is written.
+    if (run.exitCode !== JSCPD_FINISHED && !(yield* fs.exists(reportPath))) {
       return yield* new JscpdUnreadable({ message: `jscpd exited ${run.exitCode}: ${run.stderr.trim() || run.stdout.trim()}` });
     }
-    const { duplicates, statistics } = yield* fs.readFileString(path.join(output, REPORT)).pipe(
+    const { duplicates, statistics } = yield* fs.readFileString(reportPath).pipe(
       Effect.flatMap(decodeReport),
       Effect.mapError((cause) => new JscpdUnreadable({ message: `cannot read jscpd's report: ${cause.message}` })),
     );

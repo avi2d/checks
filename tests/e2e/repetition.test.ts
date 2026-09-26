@@ -116,3 +116,27 @@ test(
   },
   60_000,
 );
+
+test(
+  "a threshold in .jscpd.json the tree already crosses leaves the hold to judge the range",
+  async () => {
+    const { write, commit, script } = await repository({
+      ".jscpd.json": JSON.stringify({ path: ["src"], threshold: 1 }),
+      "src/ledger.ts": block("ledger"),
+      "src/invoice.ts": block("ledger"),
+    });
+    const base = await commit("feat: base over the threshold");
+    await write({ "src/small.ts": lines(2, "small") });
+    const kept = await commit("feat: no new copy");
+    const green = await script("repetition.ts", base, kept);
+    expect(green.text).toContain("repeat no more lines than where the range starts");
+    expect(green.exitCode).toBe(0);
+
+    await write({ "src/copy.ts": block("ledger") });
+    const copied = await commit("feat: another copy");
+    const red = await script("repetition.ts", base, copied);
+    expect(red.text).toContain("  src/copy.ts: 10 repeated line(s), up from 0\n");
+    expect(red.exitCode).toBe(1);
+  },
+  60_000,
+);

@@ -38,7 +38,10 @@ The kit's recommended limits are below:
 
 <!-- end generated size-limits -->
 
-The gate sums how far each changed file runs over each size rule at the head and compares it with the same file at the base commit.
+The gate compares each changed file with the same file at the base commit, one size rule at a time, and never sums sites.
+It fails when the head holds more sites over a rule than the base.
+It also fails when a site runs further over than the site of the same function name at the base.
+A whole file is one site, and sites of one name pair with the base in order of overrun.
 Both ends are measured under the head's `.oxlintrc.json`, so a changed limit never reads as growth.
 A new file starts from zero.
 An unchanged overrun appears as advisory rather than failing the range.
@@ -68,7 +71,7 @@ checks-size-budget <ref>
 
 ```
 size-budget: 1 overrun(s) grew past the base in the files the range adds or changes:
-  src/ledger.ts: max-lines over by 10 in total, up from 0
+  src/ledger.ts: max-lines over at 1 site(s), up from 0
 ```
 
 ## Opting out

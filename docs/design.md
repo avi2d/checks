@@ -19,8 +19,9 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   The base versions of the changed files are measured under the head's config, so a changed limit never reads as a change in size.
 - `checks-size-budget` ratchets against the base of the range rather than a committed baseline such as `oxlint-suppressions.json`.
   A suppression file stores a count of sites per file and rule, and `max-lines` reports a file once however long it grows, so the count stays at one while the file doubles.
-  The gate sums how far each site runs over its limit instead, which grows with the file.
-  The base commit already holds that sum, so nothing is generated, committed or pruned.
+  The gate compares how far each site runs over its limit instead, which grows with the file.
+  It never sums sites, since a trimmed function would then pay for a new one.
+  The base commit already holds each overrun, so nothing is generated, committed or pruned.
 - `checks-repetition` writes both ends of the range to temporary directories and runs jscpd in each with the head's `.jscpd.json`, so its `path` and `ignore` globs decide the files at both ends.
   It compares each file's count of repeated lines rather than using jscpd's `--baseline-from-ref`.
   That flag reports a repeated block as new once its text changes, so a change that shortens a grandfathered block would fail.

@@ -21,7 +21,8 @@ jscpd reads the head's `.jscpd.json` at both ends, so its `path` and `ignore` gl
 { "path": ["src"], "format": ["typescript"], "ignore": ["**/*.d.ts"] }
 ```
 
-The gate sets the 50 tokens and 5 lines itself, over any threshold the file names.
+The gate sets the 50 tokens and 5 lines itself, over any the file names.
+A `threshold` the file names never fails the gate, which reads jscpd's report once the scan finishes.
 The bin reads the base and head commits rather than the working tree's file contents.
 
 ## Arguments
