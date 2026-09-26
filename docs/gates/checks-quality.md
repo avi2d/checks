@@ -32,6 +32,7 @@ A rule only this repository needs stays in its own `.oxlintrc.json`, whose overr
 GitHub Actions reads its own YAML and nothing else, so `checks-quality generate` also writes the kit recipe workflows whole.
 `.github/workflows/ci.yml` runs every `gates.ci` command but the title lint as its own step after a frozen install.
 `.github/workflows/commitlint.yml` lints the pull request title with the installed kit config.
+It runs commitlint under the bun it sets up, so its runner needs no node of its own.
 Both jobs run on the runner labels `quality.json` `runsOn` lists, or on `ubuntu-latest` when the key is absent.
 A self-hosted runner in a public repository runs the code of any pull request from a fork.
 A step one repository alone needs lives in another workflow file, never in the recipe.
