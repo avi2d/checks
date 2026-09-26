@@ -2,6 +2,24 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.22.0
+
+Released 2026-09-26.
+
+### Breaking changes
+
+- replace quality.json with native configs and workflow gates [#72](https://github.com/avi2d/checks/pull/72)
+- declare test skips inline and add live and pixel test tiers [#71](https://github.com/avi2d/checks/pull/71)
+
+### Features
+
+- create GitHub releases with linked changelogs [#70](https://github.com/avi2d/checks/pull/70)
+
+### Fixes
+
+- **scripts:** run generated commitlint through bun so the runner needs no node [#69](https://github.com/avi2d/checks/pull/69)
+- **test:** allow npm pack enough time on release runners [#68](https://github.com/avi2d/checks/pull/68)
+
 ## 0.21.0
 
 Released 2026-09-26.
