@@ -105,8 +105,14 @@ function runsInTitleLint(gate: string, commitlintConfig: string): boolean {
   return words !== undefined && invokes(plainCommand(titleLint(commitlintConfig)), words);
 }
 
+// YAML 1.2's core schema resolves these plain scalars to a null, a boolean or a number, and YAML 1.1 parsers also read yes, no, on and off as booleans.
+const NON_STRING_SCALAR =
+  /^(?:~|null|Null|NULL|true|True|TRUE|false|False|FALSE|y|Y|yes|Yes|YES|n|N|no|No|NO|on|On|ON|off|Off|OFF|[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)(?:[eE][-+]?[0-9]+)?|0o[0-7]+|0x[0-9a-fA-F]+|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$/;
+
 function runScalar(command: string): string {
-  return /(^[\s#&*!|>@`'"%{[-])|:\s|\s#|:$|[\n\\]/.test(command) ? JSON.stringify(command) : command;
+  return /(^[\s#&*!|>@`'"%{[-])|:\s|\s#|:$|[\n\\]/.test(command) || NON_STRING_SCALAR.test(command)
+    ? JSON.stringify(command)
+    : command;
 }
 
 function flowScalar(label: string): string {
