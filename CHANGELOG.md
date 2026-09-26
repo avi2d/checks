@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.23.0
+
+Released 2026-09-26.
+
+### Breaking changes
+
+- move cognitive-complexity into its own readability oxlint plugin [#74](https://github.com/avi2d/checks/pull/74)
+
 ## 0.22.0
 
 Released 2026-09-26.
