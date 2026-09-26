@@ -8,7 +8,7 @@ audience: consumers
 
 ## What it checks
 
-It lists the conventional commits after the last tag reachable from `HEAD`.
+It lists the conventional commits after the last tag reachable from `HEAD` that opens with `v`.
 It counts a commit when its subject falls in Features, Fixes, Performance, Reverts or Breaking changes, the groups `checks-changelog` writes.
 It prints each unreleased subject on its own line under a count.
 A repository with no tag yet reports every conventional commit in its history.
@@ -18,7 +18,7 @@ A history with no conventional release-worthy commit reports no unreleased chang
 
 It reads the tags and the commit subjects from the git history.
 It refuses a shallow checkout, since the tag it sees may not be the last one.
-It refuses a last tag that opens with no `v`, since a release tag opens with one.
+It passes over any tag that opens with no `v`, since a release tag opens with one.
 
 ## Arguments
 

@@ -43,9 +43,9 @@ export function groupOf(subject: string): ChangeGroup | undefined {
 }
 
 function entryOf(subject: string, repositoryUrl: string): Entry | undefined {
-  const [, type = "", scope = "", breaking, description = ""] = CONVENTIONAL.exec(subject) ?? [];
-  const group = breaking === "!" ? "Breaking changes" : GROUP_OF_TYPE.get(type);
+  const group = groupOf(subject);
   if (group === undefined) return undefined;
+  const [, , scope = "", , description = ""] = CONVENTIONAL.exec(subject) ?? [];
   const linkedDescription = description.replace(/ \(#(\d+)\)$/, (_, number: string) => ` [#${number}](${repositoryUrl}/pull/${number})`);
   return { group, text: scope === "" ? linkedDescription : `**${scope}:** ${linkedDescription}` };
 }

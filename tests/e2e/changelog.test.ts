@@ -211,3 +211,30 @@ test(
   },
   { timeout: 30_000 },
 );
+
+test(
+  "a repository address that is no https address once git+ and .git are dropped is refused, since it links no pull request",
+  async () => {
+    await initRepo();
+    await commit("feat: build a bill (#1)");
+    for (const address of ["git+ssh://git@github.com/acme/widget.git", { url: "git@github.com:acme/widget.git" }, "github:acme/widget"]) {
+      await writeFile(join(dir, "package.json"), JSON.stringify({ name: "widget", version: "0.1.0", repository: address }, null, 2));
+      const refused = await changelog();
+      expect(refused.exitCode).toBe(2);
+      expect(refused.text).toContain("checks-changelog: package.json repository ");
+      expect(refused.text).toContain(" is no https address");
+    }
+  },
+  { timeout: 30_000 },
+);
+
+test(
+  "a repository given as a bare https string links each pull request under it",
+  async () => {
+    await initRepo();
+    await writeFile(join(dir, "package.json"), JSON.stringify({ name: "widget", version: "0.1.0", repository: "https://github.com/acme/widget" }, null, 2));
+    await commit("feat: build a bill (#1)");
+    expect(await rewritten(1)).toContain("- build a bill [#1](https://github.com/acme/widget/pull/1)");
+  },
+  { timeout: 30_000 },
+);

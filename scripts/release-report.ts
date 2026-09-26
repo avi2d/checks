@@ -22,7 +22,7 @@ export function formatReport(unreleased: readonly string[], since: string | unde
 }
 
 const lastTag = Effect.fn("lastTag")(function* (root: string) {
-  const described = yield* git(["describe", "--tags", "--abbrev=0", "HEAD"], root).pipe(
+  const described = yield* git(["describe", "--tags", "--abbrev=0", `--match=${TAG_PREFIX}*`, "HEAD"], root).pipe(
     Effect.map((tag) => tag.trim()),
     Effect.catchTag("GitFailure", () => Effect.succeed("")),
   );
@@ -42,9 +42,6 @@ const report = Effect.gen(function* () {
     return yield* new ReleaseReportUnreadable({ message: "the checkout is shallow, so the tag it sees may not be the last one; fetch all of it" });
   }
   const since = yield* lastTag(root);
-  if (since !== undefined && !since.startsWith(TAG_PREFIX)) {
-    return yield* new ReleaseReportUnreadable({ message: `${since} is the last tag, and a release tag opens with ${TAG_PREFIX}` });
-  }
   const unreleased = unreleasedOf(yield* subjectsSince(root, since));
   yield* Console.log(formatReport(unreleased, since));
   return unreleased.length === 0;

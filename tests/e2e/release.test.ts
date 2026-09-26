@@ -48,6 +48,23 @@ test(
 );
 
 test(
+  "a tag that opens with no v is passed over for the last v tag behind it",
+  async () => {
+    await initRepo();
+    await commit("feat: build a bill (#1)");
+    await $`git tag v0.1.0`.cwd(dir).quiet();
+    await commit("fix(parts): keep the order of parts (#3)");
+    await $`git tag no-mistakes-abandoned/fm/parts`.cwd(dir).quiet();
+    await commit("docs: say why");
+    expect(await report()).toEqual({
+      exitCode: 1,
+      text: "release-report: 1 unreleased change(s) since v0.1.0:\n  fix(parts): keep the order of parts (#3)\n",
+    });
+  },
+  { timeout: 30_000 },
+);
+
+test(
   "with no tag yet, every conventional commit in the history is unreleased",
   async () => {
     await initRepo();

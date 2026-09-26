@@ -71,7 +71,7 @@ jobs:
       - run: bun run build
       - run: git diff --exit-code
       - name: tag matches package version
-        run: test "v$(bun -p \"require('./package.json').version\")" = "$GITHUB_REF_NAME"
+        run: test "v$(bun -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -119,7 +119,7 @@ jobs:
       - run: bun run build
       - run: git diff --exit-code
       - name: tag matches package version
-        run: test "v$(bun -p \"require('./package.json').version\")" = "$GITHUB_REF_NAME"
+        run: test "v$(bun -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
       - name: extract release notes
         run: ./node_modules/.bin/checks-release-notes "${GITHUB_REF_NAME#v}" "$RUNNER_TEMP/release-notes.md"
       - name: create the GitHub release
