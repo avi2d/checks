@@ -156,6 +156,42 @@ test(
   60_000,
 );
 
+async function writablePaths(dir: string): Promise<readonly string[]> {
+  const found = [];
+  for (const entry of [dir, ...(await readdir(dir, { recursive: true })).map((child) => join(dir, child))]) {
+    const info = await lstat(entry);
+    if (!info.isSymbolicLink() && (info.mode & 0o222) !== 0) found.push(entry);
+  }
+  return found;
+}
+
+async function clearReadOnlyThrough(link: string): Promise<void> {
+  await chmod(link, (await stat(link)).mode | 0o200);
+  await rm(link);
+}
+
+test(
+  "a cleanup that makes a link writable before deleting it leaves the next run a frozen tree",
+  async () => {
+    const home = await scratchHome();
+    const parent = await scratch("checks-vendor-remote-");
+    const consumers = [await scratch("checks-vendor-consumer-"), await scratch("checks-vendor-consumer-")];
+    const { remote } = await seedRemote(parent, "1.0.0", "fake-lib@1.0.0");
+    for (const consumer of consumers) await seedConsumer(consumer, remote, "1.0.0");
+    const [scratchCheckout = "", ci = ""] = consumers;
+    expect((await vendor(scratchCheckout, home)).exitCode).toBe(0);
+    const dir = cachedDir(home, remote, "1.0.0");
+
+    await clearReadOnlyThrough(join(scratchCheckout, "repos", "fake-lib"));
+    expect(await writablePaths(dir)).toEqual([dir]);
+    const next = await vendor(ci, home);
+    expect(next).toMatchObject({ exitCode: 0 });
+    expect(await writablePaths(dir)).toEqual([]);
+    expect(await readlink(join(ci, "repos", "fake-lib"))).toBe(dir);
+  },
+  60_000,
+);
+
 test(
   "a landed manifest naming another version fails the run",
   async () => {
@@ -274,7 +310,7 @@ test(
 );
 
 test(
-  "a write into the cached tree fails the run",
+  "a write into the cached tree fails every run, and the first leaves the tree frozen",
   async () => {
     const home = await scratchHome();
     const parent = await scratch("checks-vendor-remote-");
@@ -284,23 +320,93 @@ test(
     expect((await vendor(consumer, home)).exitCode).toBe(0);
 
     const dir = cachedDir(home, remote, "1.0.0");
-    await chmod(dir, 0o755);
-    const root = await vendor(consumer, home);
-    expect(root.exitCode).toBe(1);
-    expect(root.text).toContain(`writable, starting with ${dir};`);
-    await chmod(dir, 0o555);
-
     const file = join(dir, "index.ts");
     await chmod(file, 0o644);
     await appendFile(file, "// tampered\n");
     const exposed = await vendor(consumer, home);
     expect(exposed.exitCode).toBe(1);
-    expect(exposed.text).toContain("writable");
+    expect(exposed.text).toContain("outside the recorded commit, starting with M index.ts;");
+    expect(await writablePaths(dir)).toEqual([]);
+    expect(await linked(consumer)).toBe(false);
 
-    await chmod(file, 0o444);
     const hidden = await vendor(consumer, home);
     expect(hidden.exitCode).toBe(1);
     expect(hidden.text).toContain("outside the recorded commit");
+  },
+  60_000,
+);
+
+test(
+  "a group-writable path fails the run before git reads the tree, and keeps its mode",
+  async () => {
+    const home = await scratchHome();
+    const parent = await scratch("checks-vendor-remote-");
+    const consumer = await scratch("checks-vendor-consumer-");
+    const { remote } = await seedRemote(parent, "1.0.0", "fake-lib@1.0.0");
+    await seedConsumer(consumer, remote, "1.0.0");
+    expect((await vendor(consumer, home)).exitCode).toBe(0);
+    const dir = cachedDir(home, remote, "1.0.0");
+    const config = join(dir, ".git", "config");
+    const marker = join(parent, "fsmonitor-ran");
+    const hook = join(parent, "fsmonitor.sh");
+    await writeFile(hook, `#!/bin/sh\ntouch '${marker}'\n`, { mode: 0o755 });
+
+    await chmod(config, 0o664);
+    await appendFile(config, `[core]\n\tfsmonitor = ${hook}\n`);
+    const refused = await vendor(consumer, home);
+    expect(refused.exitCode).toBe(1);
+    expect(refused.text).toContain(`1 path writable by group or others, starting with ${config};`);
+    expect((await stat(config)).mode & 0o777).toBe(0o664);
+    expect(await Bun.file(marker).exists()).toBe(false);
+    expect(await linked(consumer)).toBe(false);
+  },
+  60_000,
+);
+
+test(
+  "a record rewritten to another commit is refused even once the tree is writable",
+  async () => {
+    const home = await scratchHome();
+    const parent = await scratch("checks-vendor-remote-");
+    const consumer = await scratch("checks-vendor-consumer-");
+    const seed = await seedRemote(parent, "1.0.0", "fake-lib@1.0.0");
+    await seedConsumer(consumer, seed.remote, "1.0.0");
+    expect((await vendor(consumer, home)).exitCode).toBe(0);
+    const dir = cachedDir(home, seed.remote, "1.0.0");
+    const landed = (await readFile(`${dir}.commit`, "utf8")).trim();
+    await $`git ${IDENTITY} commit -q --no-gpg-sign --allow-empty -m other`.cwd(seed.work).quiet();
+    const forged = (await $`git rev-parse HEAD`.cwd(seed.work).quiet()).stdout.toString().trim();
+    expect(forged).not.toBe(landed);
+
+    await writeFile(`${dir}.commit`, `${forged}\n`);
+    await clearReadOnlyThrough(join(consumer, "repos", "fake-lib"));
+    const refused = await vendor(consumer, home);
+    expect(refused.exitCode).toBe(1);
+    expect(refused.text).toContain(`sits on ${landed}, not the recorded ${forged}`);
+    expect(await linked(consumer)).toBe(false);
+  },
+  60_000,
+);
+
+test(
+  "runs that find the tree writable at once all pass, and leave it frozen",
+  async () => {
+    const home = await scratchHome();
+    const parent = await scratch("checks-vendor-remote-");
+    const consumers = [];
+    for (let index = 0; index < 4; index += 1) consumers.push(await scratch("checks-vendor-consumer-"));
+    const { remote } = await seedRemote(parent, "1.0.0", "fake-lib@1.0.0");
+    for (const consumer of consumers) await seedConsumer(consumer, remote, "1.0.0");
+    const [first = ""] = consumers;
+    expect((await vendor(first, home)).exitCode).toBe(0);
+    const dir = cachedDir(home, remote, "1.0.0");
+
+    await $`chmod -R u+w ${dir}`.quiet();
+    const runs = await Promise.all(consumers.map((consumer) => vendor(consumer, home)));
+    expect(runs.map((run) => run.exitCode)).toEqual([0, 0, 0, 0]);
+    expect(runs.filter((run) => run.text.includes("froze")).length).toBeGreaterThan(0);
+    expect(await writablePaths(dir)).toEqual([]);
+    expect((await readdir(dirname(dir))).sort()).toEqual(["fake-lib@1.0.0", "fake-lib@1.0.0.commit"]);
   },
   60_000,
 );
