@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.24.1
+
+Released 2026-09-27.
+
+### Fixes
+
+- **scripts:** let checks-changelog release a repository that gains its version late [#79](https://github.com/avi2d/checks/pull/79)
+
 ## 0.24.0
 
 Released 2026-09-27.
