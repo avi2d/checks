@@ -3,7 +3,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CHECKOUT, ran, UNVENDORED_BUNFIG, type Ran } from "./lib/fixture-repo.ts";
+import { CHECKOUT, fixtureRepos, ran, UNVENDORED_BUNFIG, type Ran } from "./lib/fixture-repo.ts";
 
 const CHECK = join(CHECKOUT, "scripts", "test-layout.ts");
 const PRESET = join(CHECKOUT, "bunfig.toml");
@@ -74,7 +74,7 @@ test(
     await writeFile(join(dir, "bunfig.toml"), "[test]\npathIgnorePatterns = []\n");
     const drifted = await layout();
     expect(drifted.exitCode).toBe(1);
-    expect(drifted.text).toContain('[test].pathIgnorePatterns must be ["**/tests/quarantine/**","repos/**"] or ["**/tests/quarantine/**"]');
+    expect(drifted.text).toContain('[test].pathIgnorePatterns must be ["**/tests/quarantine/**","**/tests/live/**","**/tests/pixel/**","repos/**"] or ["**/tests/quarantine/**","**/tests/live/**","**/tests/pixel/**"]');
     expect(drifted.text).toContain("the check pins it");
 
     await writeFile(join(dir, "bunfig.toml"), UNVENDORED_BUNFIG);
@@ -89,7 +89,7 @@ test(
     await writeFile(join(dir, "quality.json"), JSON.stringify(LIBRARIES));
     const vendoring = await layout();
     expect(vendoring.exitCode).toBe(1);
-    expect(vendoring.text).toContain('[test].pathIgnorePatterns must be ["**/tests/quarantine/**","repos/**"]');
+    expect(vendoring.text).toContain('[test].pathIgnorePatterns must be ["**/tests/quarantine/**","**/tests/live/**","**/tests/pixel/**","repos/**"]');
 
     await writeFile(join(dir, "bunfig.toml"), await readFile(PRESET, "utf8"));
     expect((await layout()).exitCode).toBe(0);
@@ -115,6 +115,37 @@ test(
 
     await writeFile(join(dir, "tests", "widget.test.ts"), CLEAN_TEST);
     expect((await layout()).exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
+  "test tier directories require matching package scripts and may spawn processes",
+  async () => {
+    const repos = fixtureRepos("checks-test-layout-tiers-");
+    const spawning = `import { $ } from "bun";\nimport { spawnSync } from "node:child_process";\n${CLEAN_TEST}`;
+    const repo = await repos({
+      "package.json": `${JSON.stringify(MANIFEST, null, 2)}\n`,
+      "bunfig.toml": UNVENDORED_BUNFIG,
+      "tests/live/machine.test.ts": spawning,
+      "tests/pixel/display.test.ts": spawning,
+    });
+
+    const missing = await repo.script("test-layout.ts", repo.dir);
+    expect(missing.exitCode).toBe(1);
+    expect(missing.text).toContain('test:live must be "checks-test --tier=live"');
+    expect(missing.text).toContain('test:pixel must be "checks-test --tier=pixel"');
+
+    await repo.write({
+      "package.json": `${JSON.stringify(
+        { ...MANIFEST, scripts: { ...MANIFEST.scripts, "test:live": "checks-test --tier=live", "test:pixel": "checks-test --tier=pixel" } },
+        null,
+        2,
+      )}\n`,
+    });
+    const fixed = await repo.script("test-layout.ts", repo.dir);
+    expect(fixed.exitCode).toBe(0);
+    expect(fixed.text).toContain("satisfy the layout");
   },
   60_000,
 );

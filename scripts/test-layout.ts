@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
-import { parse } from "@swc/core";
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { git } from "./git.ts";
 import { runMain } from "./main.ts";
 import { ENTRY_POINT, QUALITY_FILE, TEST_ENTRY_POINT } from "./gates.ts";
 import { readQuality } from "./quality-file.ts";
+import { identifierName, isRecord, lineOf, parseTypeScript, spanStart, stringValue } from "./swc.ts";
 
 export type Violation = {
   readonly file: string;
@@ -42,11 +42,16 @@ const BANNED_GLOBAL_CALLS: readonly string[] = ["fetch"];
 
 const IGNORES_KEY = "pathIgnorePatterns";
 const QUARANTINE = "**/tests/quarantine/**";
+const LIVE_TESTS = "**/tests/live/**";
+const PIXEL_TESTS = "**/tests/pixel/**";
 const VENDORED = "repos/**";
-const PRESET_IGNORES: readonly string[] = [QUARANTINE, VENDORED];
+const TEST_TIERS = ["live", "pixel"] as const;
+const OUT_OF_PROCESS: readonly string[] = [E2E, ...TEST_TIERS.map((tier) => `${TESTS}${tier}/`)];
+const PRESET_IGNORES: readonly string[] = [QUARANTINE, LIVE_TESTS, PIXEL_TESTS, VENDORED];
+const BASE_IGNORES: readonly string[] = [QUARANTINE, LIVE_TESTS, PIXEL_TESTS];
 
 function acceptedIgnores(vendors: boolean): readonly (readonly string[])[] {
-  return vendors ? [PRESET_IGNORES] : [PRESET_IGNORES, [QUARANTINE]];
+  return vendors ? [PRESET_IGNORES] : [PRESET_IGNORES, BASE_IGNORES];
 }
 export const LAYOUT_CHECK_MARK = "scripts/test-layout.ts";
 export const LAYOUT_CHECK_BIN = "checks-test-layout";
@@ -56,10 +61,6 @@ const TEST_SCRIPTS: readonly string[] = [TEST_ENTRY_POINT.bin, `bun scripts/${TE
 export class LayoutError extends Schema.TaggedError<LayoutError>()("LayoutError", {
   message: Schema.String,
 }) {}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 function runsLayoutCheck(lint: string): boolean {
   if (lint.includes(LAYOUT_CHECK_MARK) || lint.includes(LAYOUT_CHECK_BIN)) return true;
@@ -104,38 +105,9 @@ export function placementViolations(files: readonly string[]): readonly Violatio
   return violations;
 }
 
-function lineOf(source: string, start: number): number {
-  const bytes = Buffer.from(source, "utf8");
-  const offset = Math.max(0, Math.min(bytes.length, start - 1));
-  let line = 1;
-  for (let index = 0; index < offset; index += 1) {
-    if (bytes[index] === 0x0a) line += 1;
-  }
-  return line;
-}
-
 function bannedModule(specifier: string): string | undefined {
   const bare = specifier.startsWith("node:") ? specifier.slice("node:".length) : specifier;
   return BANNED_MODULES.includes(bare) ? bare : undefined;
-}
-
-function identifierName(node: unknown): string | undefined {
-  if (!isRecord(node) || node["type"] !== "Identifier") return undefined;
-  const value = node["value"];
-  return typeof value === "string" ? value : undefined;
-}
-
-function stringValue(node: unknown): string | undefined {
-  if (!isRecord(node) || node["type"] !== "StringLiteral") return undefined;
-  const value = node["value"];
-  return typeof value === "string" ? value : undefined;
-}
-
-function spanStart(node: Record<string, unknown>): number {
-  const span = node["span"];
-  if (!isRecord(span)) return 0;
-  const start = span["start"];
-  return typeof start === "number" ? start : 0;
 }
 
 function importedNames(node: Record<string, unknown>): readonly string[] {
@@ -197,10 +169,9 @@ function outOfProcessUse(node: Record<string, unknown>): string | undefined {
 }
 
 export const isolationViolations = Effect.fn("isolationViolations")(function* (file: string, source: string) {
-  const module = yield* Effect.tryPromise({
-    try: () => parse(source, { syntax: "typescript", tsx: file.endsWith(".tsx"), target: "esnext" }),
-    catch: (error) => new LayoutError({ message: `cannot parse ${file}: ${String(error)}` }),
-  });
+  const module = yield* parseTypeScript(file, source).pipe(
+    Effect.mapError((error) => new LayoutError({ message: error.message })),
+  );
   const violations: Violation[] = [];
   const seen = new Set<unknown>();
 
@@ -228,7 +199,22 @@ export const isolationViolations = Effect.fn("isolationViolations")(function* (f
   return violations;
 });
 
-export function scriptViolations(manifest: unknown): readonly Violation[] {
+function tierScriptViolation(scripts: unknown, files: readonly string[], tier: (typeof TEST_TIERS)[number]): Violation | undefined {
+  const file = "package.json";
+  const key = `test:${tier}`;
+  const found = isRecord(scripts) ? scripts[key] : undefined;
+  const expected = `${TEST_ENTRY_POINT.bin} --tier=${tier}`;
+  const hasTests = files.some((candidate) => candidate.startsWith(`tests/${tier}/`) && TEST_FILE.test(candidate));
+  if (!hasTests && found === undefined) return undefined;
+  if (found === expected) return undefined;
+  return {
+    file,
+    line: undefined,
+    message: `${key} must be "${expected}"${hasTests ? " when its test tier has files" : " when declared"}, found ${JSON.stringify(found ?? null)}`,
+  };
+}
+
+export function scriptViolations(manifest: unknown, files: readonly string[] = []): readonly Violation[] {
   const file = "package.json";
   const scripts = isRecord(manifest) ? manifest["scripts"] : undefined;
   const test = isRecord(scripts) ? scripts["test"] : undefined;
@@ -247,6 +233,10 @@ export function scriptViolations(manifest: unknown): readonly Violation[] {
       line: undefined,
       message: `scripts.lint must run the layout check: add "${ENTRY_POINT.bin}"`,
     });
+  }
+  for (const tier of TEST_TIERS) {
+    const violation = tierScriptViolation(scripts, files, tier);
+    if (violation !== undefined) violations.push(violation);
   }
   return violations;
 }
@@ -318,7 +308,7 @@ export const run = Effect.fn("run")(function* (root: string, presetPath: string)
     (file) =>
       file.startsWith(TESTS) &&
       TYPESCRIPT.test(file) &&
-      !file.startsWith(E2E) &&
+      !startsWithAny(file, OUT_OF_PROCESS) &&
       !file.startsWith(DATA_DIR),
   );
   for (const file of inProcess) {
@@ -326,7 +316,7 @@ export const run = Effect.fn("run")(function* (root: string, presetPath: string)
     violations.push(...(yield* isolationViolations(file, source)));
   }
 
-  violations.push(...scriptViolations(yield* readManifest(path.join(root, "package.json"))));
+  violations.push(...scriptViolations(yield* readManifest(path.join(root, "package.json")), files));
 
   const bunfig = path.join(root, "bunfig.toml");
   const consumerBunfig = (yield* fs.exists(bunfig)) ? yield* parsedToml(bunfig) : undefined;

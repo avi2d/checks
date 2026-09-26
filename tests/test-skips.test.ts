@@ -1,68 +1,81 @@
 import { expect, test } from "bun:test";
 import { judgeSkips, passes, report } from "../scripts/test.ts";
+import { skipReason, type SkipDeclaration } from "../scripts/test-skips.ts";
 import type { TestResult } from "../scripts/test-report.ts";
 
-function skipped(file: string, line: number, name: string): TestResult {
-  return { file, line, name, outcome: "skipped" };
+function declaration(file: string, line: number, reason: string, when?: "ci" | "local"): SkipDeclaration {
+  return { file, line, name: "rounds half to even", reason, ...(when === undefined ? {} : { when }) };
 }
 
-test("undeclared skips read in file and line order whatever order the randomized run took", () => {
-  const results = [skipped("tests/b.test.ts", 3, "b3"), skipped("tests/a.test.ts", 9, "a9"), skipped("tests/a.test.ts", 2, "a2")];
-  const verdict = judgeSkips(results, [], "local");
-  expect(verdict.undeclared.map((result) => result.name)).toEqual(["a2", "a9", "b3"]);
-  expect(passes(verdict)).toBe(false);
+function result(file: string, line: number, name: string, outcome: TestResult["outcome"]): TestResult {
+  return { file, line, name, outcome };
+}
+
+const SKIPPED = result("tests/pricing.test.ts", 12, "rounds half to even", "skipped");
+
+test("skipReason leaves the test name unchanged", () => {
+  expect(skipReason("waits for the rounding fix", "rounds half to even")).toBe("rounds half to even");
 });
 
-test("one declaration covers every skipped test sharing its file and name, and nothing in another file", () => {
-  const results = [skipped("tests/a.test.ts", 2, "each"), skipped("tests/a.test.ts", 2, "each"), skipped("tests/b.test.ts", 2, "each")];
-  const verdict = judgeSkips(results, [{ file: "tests/a.test.ts", test: "each", reason: "a reason" }], "ci");
-  expect(verdict.undeclared).toEqual([skipped("tests/b.test.ts", 2, "each")]);
-  expect(verdict.stale).toEqual([]);
+test("a skipped test passes only when the same source line declares its reason under its name", () => {
+  const declared = judgeSkips([SKIPPED], [declaration("tests/pricing.test.ts", 12, "waits for the rounding fix")], "ci");
+  expect(passes(declared)).toBe(true);
+  expect(report(declared)).toBe("checks-test: 1 skipped test(s), each declared at its test site");
+
+  const wrongLine = judgeSkips([SKIPPED], [declaration("tests/pricing.test.ts", 13, "waits for the rounding fix")], "ci");
+  expect(passes(wrongLine)).toBe(false);
+  expect(wrongLine.undeclared).toEqual([SKIPPED]);
+
+  const renamed = result("tests/pricing.test.ts", 12, "rounds half up", "skipped");
+  const wrongName = judgeSkips([renamed], [declaration("tests/pricing.test.ts", 12, "waits for the rounding fix")], "ci");
+  expect(wrongName.undeclared).toEqual([renamed]);
 });
 
-test("a declaration for the other environment is neither required nor stale, and the pass line counts it", () => {
-  const declarations = [
-    { file: "tests/a.test.ts", test: "needs a secret", reason: "only CI holds it", when: "local" as const },
-    { file: "tests/a.test.ts", test: "needs a daemon", reason: "CI has none", when: "ci" as const },
-  ];
-  const verdict = judgeSkips([skipped("tests/a.test.ts", 4, "needs a daemon")], declarations, "ci");
+test("a declared test inside a describe keeps the describe path in its name", () => {
+  const nested = result("tests/pricing.test.ts", 12, "totals > rounds half to even", "skipped");
+  const verdict = judgeSkips([nested], [declaration("tests/pricing.test.ts", 12, "waits for the rounding fix")], "ci");
   expect(passes(verdict)).toBe(true);
-  expect(report(verdict)).toBe(
-    "checks-test: 1 skipped test(s), each declared in package.json testSkips; 1 declaration(s) for local not judged in this ci run",
-  );
 });
 
-test("a stale declaration fails a ci run and names the declaration", () => {
-  const verdict = judgeSkips([], [{ file: "tests/a.test.ts", test: "gone", reason: "a reason" }], "ci");
+test("a declared todo passes and an undeclared skip or todo fails", () => {
+  const todo = result("tests/pricing.test.ts", 12, "rounds half to even", "todo");
+  expect(passes(judgeSkips([todo], [declaration("tests/pricing.test.ts", 12, "needs the tax table")], "ci"))).toBe(true);
+
+  const native = result("tests/pricing.test.ts", 12, "rounds half to even", "skipped");
+  const undeclaredTodo = result("tests/pricing.test.ts", 13, "refunds a partial order", "todo");
+  const verdict = judgeSkips([native, undeclaredTodo], [], "local");
   expect(passes(verdict)).toBe(false);
-  expect(report(verdict)).toBe(
-    [
-      "checks-test: 0 skipped test(s) undeclared and 1 declaration(s) matching no skipped test in this ci run:",
-      "  tests/a.test.ts > gone: declared, but no such test skipped; delete the declaration",
-    ].join("\n"),
+  expect(report(verdict)).toContain("rounds half to even: skipped with no reason at its test site");
+  expect(report(verdict)).toContain(
+    "refunds a partial order: a todo with no reason at its test site; use test.todo(skipReason(reason, name))",
   );
 });
 
-test("a stale declaration passes a local run with a warning, and an undeclared skip still fails it", () => {
-  const declarations = [{ file: "tests/a.test.ts", test: "gone", reason: "a reason" }];
-  const warned = judgeSkips([], declarations, "local");
-  expect(passes(warned)).toBe(true);
-  expect(report(warned)).toBe(
-    [
-      "checks-test: no test skipped",
-      "checks-test: warning: 1 declaration(s) matching no skipped test in this local run, refused only in a ci run:",
-      "  tests/a.test.ts > gone: declared, but no such test skipped; delete the declaration",
-    ].join("\n"),
-  );
+test("a declaration without a skipped test fails in CI and warns locally", () => {
+  const declarations = [declaration("tests/pricing.test.ts", 12, "waits for the rounding fix")];
+  const ci = judgeSkips([], declarations, "ci");
+  expect(passes(ci)).toBe(false);
+  expect(report(ci)).toContain("tests/pricing.test.ts:12: no test skipped with this declaration");
 
-  const refused = judgeSkips([skipped("tests/a.test.ts", 2, "new")], declarations, "local");
-  expect(passes(refused)).toBe(false);
-  expect(report(refused)).toBe(
-    [
-      "checks-test: 1 skipped test(s) undeclared in this local run:",
-      "  tests/a.test.ts:2 new: skipped with no declaration; run it, or declare it in package.json testSkips with its reason",
-      "checks-test: warning: 1 declaration(s) matching no skipped test in this local run, refused only in a ci run:",
-      "  tests/a.test.ts > gone: declared, but no such test skipped; delete the declaration",
-    ].join("\n"),
-  );
+  const local = judgeSkips([], declarations, "local");
+  expect(passes(local)).toBe(true);
+  expect(report(local)).toContain("warning: 1 declaration(s) matching no skipped test");
+});
+
+test("a test that stopped skipping leaves a stale declaration", () => {
+  const passed = result("tests/pricing.test.ts", 12, "rounds half to even", "passed");
+  const declarations = [declaration("tests/pricing.test.ts", 12, "waits for the rounding fix")];
+  expect(passes(judgeSkips([passed], declarations, "ci"))).toBe(false);
+  expect(passes(judgeSkips([passed], declarations, "local"))).toBe(true);
+});
+
+test("a declaration for one environment is not stale in the other", () => {
+  const ciOnly = declaration("tests/pricing.test.ts", 12, "CI has no daemon", "ci");
+  const ci = judgeSkips([SKIPPED], [ciOnly], "ci");
+  expect(passes(ci)).toBe(true);
+  expect(report(ci)).toContain("checks-test: 1 skipped test(s), each declared at its test site");
+
+  const local = judgeSkips([], [ciOnly], "local");
+  expect(passes(local)).toBe(true);
+  expect(report(local)).toContain("1 declaration(s) for ci not judged in this local run");
 });
