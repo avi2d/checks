@@ -13,7 +13,7 @@ module.exports = {
       name: "no-orphans",
       from: {
         orphan: true,
-        // Consumers load these entries, the plugin through its dist bundle, so no source file here imports them.
+        // Consumers load these entries, each plugin through its dist bundle, so no source file here imports them.
         pathNot: [
           "(^|/)effect-channel/index[.]ts$",
           "(^|/)readability/index[.]ts$",
@@ -29,7 +29,7 @@ module.exports = {
     },
   ],
   options: {
-    // The bundle built from effect-channel, which the cruise reads as source.
+    // The bundles built from effect-channel and readability, which the cruise reads as source.
     // The cruise follows the repos/ links without the second branch.
     exclude: { path: "^(dist|repos)/" },
   },
