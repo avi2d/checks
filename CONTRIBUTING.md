@@ -84,7 +84,7 @@ To place a change:
    A new bin gets its page under `docs/gates/`, and the suite fails until it has one.
 
 This repository holds itself to the kit, with two exceptions of its own.
-Its `.dependency-cruiser.cjs` redeclares `no-orphans` with the plugin entry added to its `pathNot`.
+Its `.dependency-cruiser.cjs` redeclares `no-orphans` with each plugin entry added to its `pathNot`.
 Its `.oxlintrc.json` lifts `effect-channel/no-throw` from `scripts/comment-matchers.ts`, whose synchronous `refused()` a host loads without `node_modules`.
 
 ## Related topics
