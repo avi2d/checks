@@ -20,9 +20,10 @@ test.skipIf(!hasNix)(
 ```
 
 `skipReason` requires a literal reason and a literal test name.
-It adds the reason in a marker to the test name, and `checks-test` reads the reason and source line from the test file.
-The Bun call stays at the test site so the JUnit report points to the same line.
-Use `test.skip(skipReason(reason, name), fn)` for an unconditional skip.
+It returns the test name unchanged, and `checks-test` reads the reason, the name and the source line from the test file.
+The Bun call stays at the test site so the JUnit report points to the line where its first argument starts.
+Use `test.skip(skipReason(reason, name), fn)` for an unconditional skip and `test.todo(skipReason(reason, name))` for a todo.
+A declaration on `describe.skip` or `describe.skipIf` covers every test inside that describe.
 
 Add `"ci"` or `"local"` as the third `skipReason` argument when a declaration applies to one environment.
 Omit the third argument when it applies in both environments.
@@ -30,8 +31,7 @@ A declaration for the other environment is not judged in the current run.
 
 A declaration whose test passes or does not register fails a CI run.
 A local run warns about the same declaration because a condition can depend on the machine.
-A skipped test without `skipReason` fails in every environment.
-A `test.todo` fails in every environment.
+A skipped test or a todo without `skipReason` fails in every environment.
 
 ## What it reads
 
@@ -41,7 +41,7 @@ It counts a run as `ci` when `CI` is true and as `local` otherwise.
 
 The command takes no arguments for the default suite.
 Use `checks-test --tier=live` or `checks-test --tier=pixel` for a named test tier.
-A tier run replaces Bun's ignored paths with the selected directory and still checks each skip.
+A tier run clears Bun's ignored paths, runs only `./tests/live` or `./tests/pixel`, and still checks each skip.
 
 Files under `tests/quarantine/` are not run or judged, as [checks-test-layout](checks-test-layout.md) says.
 
@@ -50,16 +50,9 @@ Files under `tests/quarantine/` are not run or judged, as [checks-test-layout](c
 Delete each `testSkips` entry from `package.json` after you add its reason beside the native test call.
 Keep its `when` value as the third argument to `skipReason`.
 
-The five listed dotfiles test files contain 57 entries:
-
-- 17 entries in `tests`/`e2e`/`stack`/`x3-theme.test.ts`.
-- 12 entries in `visual`/`x3-cell-pi.test.ts`.
-- 11 entries in `visual`/`x3-cell-herdr.test.ts`.
-- 9 entries in `visual`/`x3-pixel-window.test.ts`.
-- 8 entries in `visual`/`x3-cell-shell.test.ts`.
-
-Most of these skips depend on Herdr, Nix or a live display.
 Move tests that need a live machine into `tests/live/` and tests that need a screen into `tests/pixel/`.
+For example, a test in `tests/e2e/stack/x3-theme.test.ts` that skips when Nix is missing moves to `tests/live/stack/x3-theme.test.ts`.
+Its `testSkips` entry becomes `skipReason("Nix is unavailable", name)` inside its `test.skipIf` call.
 Add the matching package scripts when either directory contains tests:
 
 ```json

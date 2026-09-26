@@ -120,14 +120,15 @@ test(
 );
 
 test(
-  "test tier directories require matching package scripts",
+  "test tier directories require matching package scripts and may spawn processes",
   async () => {
     const repos = fixtureRepos("checks-test-layout-tiers-");
+    const spawning = `import { $ } from "bun";\nimport { spawnSync } from "node:child_process";\n${CLEAN_TEST}`;
     const repo = await repos({
       "package.json": `${JSON.stringify(MANIFEST, null, 2)}\n`,
       "bunfig.toml": UNVENDORED_BUNFIG,
-      "tests/live/machine.test.ts": CLEAN_TEST,
-      "tests/pixel/display.test.ts": CLEAN_TEST,
+      "tests/live/machine.test.ts": spawning,
+      "tests/pixel/display.test.ts": spawning,
     });
 
     const missing = await repo.script("test-layout.ts", repo.dir);

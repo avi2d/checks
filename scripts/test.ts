@@ -3,14 +3,8 @@ import { Config, Console, Effect, FileSystem, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import { TEST_ENTRY_POINT } from "./gates.ts";
 import { runMain, Usage } from "./main.ts";
-import {
-  readSkipDeclarations,
-  stripInlineSkip,
-  type Environment,
-  type SkipDeclaration,
-  type TestTier,
-} from "./test-skips.ts";
-import { parseReport, ReportError, reporterArgs, type TestResult } from "./test-report.ts";
+import { readSkipDeclarations, type Environment, type SkipDeclaration, type TestTier } from "./test-skips.ts";
+import { NAME_SEPARATOR, parseReport, ReportError, reporterArgs, type TestResult } from "./test-report.ts";
 
 export type { Environment, SkipDeclaration } from "./test-skips.ts";
 
@@ -34,11 +28,20 @@ const TIERS = new Map<string, TestTier>([
 ]);
 
 function matches(declaration: SkipDeclaration, result: TestResult): boolean {
-  return declaration.file === result.file && declaration.line === result.line;
+  if (declaration.file !== result.file) return false;
+  const { name } = declaration;
+  if (declaration.scope === "test") {
+    return declaration.line === result.line && (result.name === name || result.name.endsWith(`${NAME_SEPARATOR}${name}`));
+  }
+  const inside = declaration.line <= result.line && result.line <= declaration.lastLine;
+  return (
+    inside &&
+    (result.name.startsWith(`${name}${NAME_SEPARATOR}`) || result.name.includes(`${NAME_SEPARATOR}${name}${NAME_SEPARATOR}`))
+  );
 }
 
-function declaredAtSite(declaration: SkipDeclaration, result: TestResult): boolean {
-  return matches(declaration, result) && stripInlineSkip(result.name) !== undefined;
+function skippedOutcome(result: TestResult): boolean {
+  return result.outcome === "skipped" || result.outcome === "todo";
 }
 
 function byPlace(a: TestResult, b: TestResult): number {
@@ -50,17 +53,13 @@ export function judgeSkips(
   declarations: readonly SkipDeclaration[],
   environment: Environment,
 ): Verdict {
-  const skipped = results.filter((result) => result.outcome === "skipped" || result.outcome === "todo");
+  const skipped = results.filter(skippedOutcome);
   const applying = declarations.filter((declaration) => (declaration.when ?? environment) === environment);
   return {
     environment,
     skipped: skipped.length,
-    undeclared: skipped
-      .filter((result) => !applying.some((declaration) => declaredAtSite(declaration, result)) || result.outcome === "todo")
-      .sort(byPlace),
-    stale: applying.filter(
-      (declaration) => !results.some((result) => declaredAtSite(declaration, result) && result.outcome === "skipped"),
-    ),
+    undeclared: skipped.filter((result) => !applying.some((declaration) => matches(declaration, result))).sort(byPlace),
+    stale: applying.filter((declaration) => !skipped.some((result) => matches(declaration, result))),
     unjudged: declarations.length - applying.length,
   };
 }
@@ -90,11 +89,11 @@ function verdictLines(verdict: Verdict): readonly string[] {
   return [
     `${NAME}: ${undeclared.length} skipped test(s) undeclared${counted} in ${run}:`,
     ...undeclared.map((result) => {
-      const name = stripInlineSkip(result.name) ?? result.name;
-      if (result.outcome === "todo") {
-        return `  ${result.file}:${result.line} ${name}: a todo is not allowed; implement it or remove test.todo`;
-      }
-      return `  ${result.file}:${result.line} ${name}: skipped with no reason at its test site; use test.skipIf(condition)(skipReason(reason, name), fn)`;
+      const [kind, usage] =
+        result.outcome === "todo"
+          ? ["a todo", "test.todo(skipReason(reason, name))"]
+          : ["skipped", "test.skipIf(condition)(skipReason(reason, name), fn)"];
+      return `  ${result.file}:${result.line} ${result.name}: ${kind} with no reason at its test site; use ${usage}`;
     }),
     ...stale.map(staleLine),
   ];
@@ -120,7 +119,7 @@ const environmentOf = Config.Boolean("CI").pipe(
 
 const runSuite = Effect.fn("runSuite")(function* (outfile: string, tier: TestTier | undefined) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const tierArgs = tier === undefined ? [] : ["--path-ignore-patterns", "", `tests/${tier}`];
+  const tierArgs = tier === undefined ? [] : ["--path-ignore-patterns", "", `./tests/${tier}`];
   const args = ["test", "--randomize", ...tierArgs, ...reporterArgs(outfile)];
   return yield* spawner.exitCode(
     ChildProcess.make(process.execPath, args, { stdin: "ignore", stdout: "inherit", stderr: "inherit" }),

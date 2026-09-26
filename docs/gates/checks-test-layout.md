@@ -15,9 +15,9 @@ It fails unless the repository holds this shape, and names the file and the path
   A live tier with test files requires `test:live` set to `checks-test --tier=live`.
   A pixel tier with test files requires `test:pixel` set to `checks-test --tier=pixel`.
 - A test runs at one of two levels.
-  A test outside `tests/e2e/` runs in-process, so it may not import `node:child_process`, `net`, `http`, `https`, `http2`, `tls` or `dgram`.
+  A test outside `tests/e2e/`, `tests/live/` and `tests/pixel/` runs in-process, so it may not import `node:child_process`, `net`, `http`, `https`, `http2`, `tls` or `dgram`.
   It may not import `$`, `spawn`, `spawnSync`, `connect`, `serve` or `listen` from `bun`, may not touch `Bun.$` or `Bun.spawn`, and may not call `fetch`.
-  A test inside `tests/e2e/` may do all of it.
+  A test inside `tests/e2e/`, `tests/live/` or `tests/pixel/` may do all of it.
   Helpers in `tests/lib/**` answer to the same rule, since an in-process test reaches them.
 - `scripts.test` is exactly `checks-test`, which runs `bun test --randomize` as [checks-test](checks-test.md) says.
 - `scripts.lint` runs this check, itself or through `checks-lint` called by its bare bin name.

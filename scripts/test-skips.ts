@@ -1,11 +1,13 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
-import { identifierName, isRecord, lineOf, parseTypeScript, spanStart, stringValue } from "./swc.ts";
+import { identifierName, isRecord, lineOf, parseTypeScript, spanEnd, spanStart, stringValue } from "./swc.ts";
 
 export type Environment = "ci" | "local";
 export type TestTier = "live" | "pixel";
-export type SkipDeclaration = {
+type SkipSite = { readonly scope: "test" } | { readonly scope: "describe"; readonly lastLine: number };
+export type SkipDeclaration = SkipSite & {
   readonly file: string;
   readonly line: number;
+  readonly name: string;
   readonly reason: string;
   readonly when?: Environment;
 };
@@ -14,18 +16,12 @@ export class SkipDeclarationError extends Schema.TaggedError<SkipDeclarationErro
   message: Schema.String,
 }) {}
 
-const INLINE_SKIP_MARKER = " [checks skip: ";
 const TEST_FILES = ["tests/**/*.test.ts", "tests/**/*.test.tsx"] as const;
 const SKIP_HELPER_MODULE = "test-skips.ts";
 const whenSchema = Schema.Literals(["ci", "local"]);
 
-export function skipReason(reason: string, label: string, _when?: Environment): string {
-  return `${label}${INLINE_SKIP_MARKER}${JSON.stringify(reason)}]`;
-}
-
-export function stripInlineSkip(name: string): string | undefined {
-  const marker = name.indexOf(INLINE_SKIP_MARKER);
-  return marker !== -1 && name.endsWith("]") ? name.slice(0, marker) : undefined;
+export function skipReason(_reason: string, label: string, _when?: Environment): string {
+  return label;
 }
 
 function expressionOf(argument: unknown): unknown {
@@ -55,10 +51,11 @@ function importedSkipReasonNames(module: unknown): ReadonlySet<string> {
   return new Set(module["body"].flatMap(skipReasonAliases));
 }
 
-function memberName(node: unknown): string | undefined {
+type Member = { readonly object: string | undefined; readonly property: string | undefined };
+
+function memberOf(node: unknown): Member | undefined {
   if (!isRecord(node) || node["type"] !== "MemberExpression") return undefined;
-  const property = identifierName(node["property"]);
-  return property;
+  return { object: identifierName(node["object"]), property: identifierName(node["property"]) };
 }
 
 type DeclarationScan =
@@ -69,7 +66,7 @@ type DeclarationScan =
 type SkipReasonScan =
   | { readonly kind: "none" }
   | { readonly kind: "invalid"; readonly message: string }
-  | { readonly kind: "valid"; readonly reason: string; readonly when?: Environment };
+  | { readonly kind: "valid"; readonly name: string; readonly reason: string; readonly when?: Environment };
 
 function skipReasonCall(node: unknown, aliases: ReadonlySet<string>): SkipReasonScan {
   if (!isRecord(node) || node["type"] !== "CallExpression") return { kind: "none" };
@@ -77,13 +74,7 @@ function skipReasonCall(node: unknown, aliases: ReadonlySet<string>): SkipReason
   const [reasonArgument, labelArgument, whenArgument] = argumentsOf(node);
   const reason = stringValue(expressionOf(reasonArgument));
   const label = stringValue(expressionOf(labelArgument));
-  if (
-    reason === undefined ||
-    reason.trim() === "" ||
-    label === undefined ||
-    label.trim() === "" ||
-    label.includes(INLINE_SKIP_MARKER)
-  ) {
+  if (reason === undefined || reason.trim() === "" || label === undefined || label.trim() === "") {
     return { kind: "invalid", message: "skipReason needs a non-empty literal reason and a literal test name" };
   }
   const when = whenArgument === undefined ? undefined : stringValue(expressionOf(whenArgument));
@@ -96,19 +87,18 @@ function skipReasonCall(node: unknown, aliases: ReadonlySet<string>): SkipReason
       message: `skipReason's when value must be "ci" or "local", found ${JSON.stringify(when)}`,
     };
   }
-  return { kind: "valid", reason, ...(when === undefined ? {} : { when }) };
+  return { kind: "valid", name: label, reason, ...(when === undefined ? {} : { when }) };
 }
 
-function registeredSkip(node: Record<string, unknown>): unknown {
+type RegisteredSkip = { readonly scope: SkipDeclaration["scope"]; readonly first: unknown };
+
+function registeredSkip(node: Record<string, unknown>): RegisteredSkip | undefined {
   const callee = node["callee"];
-  if (isRecord(callee) && callee["type"] === "CallExpression") {
-    const method = memberName(callee["callee"]);
-    if (method !== "skipIf" && method !== "if") return undefined;
-    return expressionOf(argumentsOf(node)[0]);
-  }
-  const method = memberName(callee);
-  if (method !== "skip") return undefined;
-  return expressionOf(argumentsOf(node)[0]);
+  const curried = isRecord(callee) && callee["type"] === "CallExpression";
+  const member = memberOf(curried ? callee["callee"] : callee);
+  const methods = curried ? ["skipIf", "if"] : ["skip", "todo"];
+  if (member === undefined || !methods.includes(member.property ?? "")) return undefined;
+  return { scope: member.object === "describe" ? "describe" : "test", first: expressionOf(argumentsOf(node)[0]) };
 }
 
 function declarationAt(
@@ -118,12 +108,23 @@ function declarationAt(
   source: string,
 ): DeclarationScan {
   if (node["type"] !== "CallExpression") return { kind: "none" };
-  const metadata = skipReasonCall(registeredSkip(node), aliases);
+  const registered = registeredSkip(node);
+  if (registered === undefined || !isRecord(registered.first)) return { kind: "none" };
+  const metadata = skipReasonCall(registered.first, aliases);
   if (metadata.kind !== "valid") return metadata;
-  const { reason, when } = metadata;
+  const { name, reason, when } = metadata;
+  const site: SkipSite =
+    registered.scope === "describe" ? { scope: "describe", lastLine: lineOf(source, spanEnd(node)) } : { scope: "test" };
   return {
     kind: "valid",
-    declaration: { file, line: lineOf(source, spanStart(node)), reason, ...(when === undefined ? {} : { when }) },
+    declaration: {
+      ...site,
+      file,
+      line: lineOf(source, spanStart(registered.first)),
+      name,
+      reason,
+      ...(when === undefined ? {} : { when }),
+    },
   };
 }
 

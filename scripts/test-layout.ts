@@ -46,6 +46,7 @@ const LIVE_TESTS = "**/tests/live/**";
 const PIXEL_TESTS = "**/tests/pixel/**";
 const VENDORED = "repos/**";
 const TEST_TIERS = ["live", "pixel"] as const;
+const OUT_OF_PROCESS: readonly string[] = [E2E, ...TEST_TIERS.map((tier) => `${TESTS}${tier}/`)];
 const PRESET_IGNORES: readonly string[] = [QUARANTINE, LIVE_TESTS, PIXEL_TESTS, VENDORED];
 const BASE_IGNORES: readonly string[] = [QUARANTINE, LIVE_TESTS, PIXEL_TESTS];
 
@@ -307,7 +308,7 @@ export const run = Effect.fn("run")(function* (root: string, presetPath: string)
     (file) =>
       file.startsWith(TESTS) &&
       TYPESCRIPT.test(file) &&
-      !file.startsWith(E2E) &&
+      !startsWithAny(file, OUT_OF_PROCESS) &&
       !file.startsWith(DATA_DIR),
   );
   for (const file of inProcess) {

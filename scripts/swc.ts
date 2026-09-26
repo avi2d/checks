@@ -28,11 +28,19 @@ export function stringValue(node: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-export function spanStart(node: Record<string, unknown>): number {
+function spanAt(node: Record<string, unknown>, edge: "start" | "end"): number {
   const span = node["span"];
   if (!isRecord(span)) return 0;
-  const start = span["start"];
-  return typeof start === "number" ? start : 0;
+  const offset = span[edge];
+  return typeof offset === "number" ? offset : 0;
+}
+
+export function spanStart(node: Record<string, unknown>): number {
+  return spanAt(node, "start");
+}
+
+export function spanEnd(node: Record<string, unknown>): number {
+  return spanAt(node, "end");
 }
 
 export function lineOf(source: string, start: number): number {

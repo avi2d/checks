@@ -46,7 +46,6 @@ test("a reason at the test site passes without a package declaration", async () 
 
   const declared = await checksTest(false);
   expect(declared.exitCode).toBe(0);
-  expect(declared.text).toContain("rounds half to even [checks skip: \"waits for the rounding fix\"]");
   expect(declared.text).toContain("checks-test: 1 skipped test(s), each declared at its test site");
 });
 
@@ -70,7 +69,66 @@ test("test.skip can declare its reason at the test site", async () => {
   expect(declared.text).toContain("checks-test: 1 skipped test(s), each declared at its test site");
 });
 
-test("a native skip without a reason and a todo fail", async () => {
+test("a skip wrapped across lines is declared at the line Bun reports", async () => {
+  await consumer(
+    [
+      'import { expect, test } from "bun:test";',
+      'import { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";',
+      "test.skipIf(true)(",
+      '  skipReason("waits for the rounding fix", "wraps its arguments"),',
+      "  () => expect(1).toBe(1),",
+      ");",
+      "test.skip(",
+      '  skipReason("needs the external fixture", "wraps an unconditional skip"),',
+      "  () => expect(1).toBe(1),",
+      ");",
+      "test.skipIf(",
+      "  true,",
+      ')(skipReason("CI has no daemon", "wraps its condition"), () => expect(1).toBe(1));',
+      "",
+    ].join("\n"),
+  );
+
+  const declared = await checksTest(true);
+  expect(declared.exitCode).toBe(0);
+  expect(declared.text).toContain("checks-test: 3 skipped test(s), each declared at its test site");
+});
+
+test("a declaration on a skipped describe covers every test inside it", async () => {
+  await consumer(
+    [
+      'import { describe, expect, test } from "bun:test";',
+      'import { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";',
+      'describe.skip(skipReason("needs the external fixture", "fixture group"), () => {',
+      '  test("loads the fixture", () => expect(1).toBe(1));',
+      '  test("reads the fixture", () => expect(1).toBe(1));',
+      "});",
+      'describe.skipIf(true)(skipReason("CI has no daemon", "daemon group"), () => {',
+      '  describe("nested", () => {',
+      '    test("reaches the daemon", () => expect(1).toBe(1));',
+      "  });",
+      "});",
+      'test("still runs", () => expect(1).toBe(1));',
+      "",
+    ].join("\n"),
+  );
+
+  const declared = await checksTest(true);
+  expect(declared.exitCode).toBe(0);
+  expect(declared.text).toContain("checks-test: 3 skipped test(s), each declared at its test site");
+});
+
+test("a declared todo passes", async () => {
+  await consumer(
+    'import { test } from "bun:test";\nimport { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";\ntest.todo(skipReason("needs the tax table", "applies tax"));\n',
+  );
+
+  const declared = await checksTest(true);
+  expect(declared.exitCode).toBe(0);
+  expect(declared.text).toContain("checks-test: 1 skipped test(s), each declared at its test site");
+});
+
+test("a native skip without a reason and an undeclared todo fail", async () => {
   await consumer(
     'import { expect, test } from "bun:test";\ntest.skip("uses the unavailable daemon", () => expect(1).toBe(1));\ntest.todo("refunds a partial order");\n',
   );
@@ -78,7 +136,7 @@ test("a native skip without a reason and a todo fail", async () => {
   const refused = await checksTest(false);
   expect(refused.exitCode).toBe(1);
   expect(refused.text).toContain("uses the unavailable daemon: skipped with no reason at its test site");
-  expect(refused.text).toContain("refunds a partial order: a todo is not allowed; implement it or remove test.todo");
+  expect(refused.text).toContain("refunds a partial order: a todo with no reason at its test site");
 });
 
 test("a declaration whose test stopped skipping fails in CI and warns locally", async () => {
@@ -120,15 +178,16 @@ test("a declaration applies only to its selected environment", async () => {
   expect(local.text).toContain("1 declaration(s) for ci not judged in this local run");
 });
 
-test("the default run excludes live tests and the live and pixel tiers judge them", async () => {
+test("the default run excludes live tests and the live and pixel tiers judge only their own directory", async () => {
   await consumer('import { expect, test } from "bun:test";\ntest("default test", () => expect(1).toBe(1));\n', {
+    "tests/live-reload.test.ts": 'import { expect, test } from "bun:test";\nimport { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";\ntest.skipIf(true)(skipReason("waits for the reload fix", "reloads the page"), () => expect(1).toBe(1));\n',
     "tests/live/machine.test.ts": 'import { expect, test } from "bun:test";\nimport { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";\ntest.skipIf(true)(skipReason("requires a local daemon", "connects to the daemon"), () => expect(1).toBe(1));\n',
     "tests/pixel/screen.test.ts": 'import { expect, test } from "bun:test";\nimport { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";\ntest.skipIf(true)(skipReason("requires a live display", "renders the screen"), () => expect(1).toBe(1));\n',
   });
 
   const defaultRun = await checksTest(false);
   expect(defaultRun.exitCode).toBe(0);
-  expect(defaultRun.text).toContain("checks-test: no test skipped");
+  expect(defaultRun.text).toContain("checks-test: 1 skipped test(s), each declared at its test site");
 
   const liveRun = await checksTest(false, ["--tier=live"]);
   expect(liveRun.exitCode).toBe(0);
