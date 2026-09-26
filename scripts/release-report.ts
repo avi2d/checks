@@ -9,7 +9,7 @@ export class ReleaseReportUnreadable extends Schema.TaggedError<ReleaseReportUnr
 }) {}
 
 const USAGE = "usage: release-report.ts";
-const TAG_PREFIX = "v";
+const RELEASE_TAG = "v[0-9]*.[0-9]*.[0-9]*";
 
 export function unreleasedOf(subjects: readonly string[]): readonly string[] {
   return subjects.filter((subject) => groupOf(subject) !== undefined);
@@ -22,7 +22,7 @@ export function formatReport(unreleased: readonly string[], since: string | unde
 }
 
 const lastTag = Effect.fn("lastTag")(function* (root: string) {
-  const described = yield* git(["describe", "--tags", "--abbrev=0", `--match=${TAG_PREFIX}*`, "HEAD"], root).pipe(
+  const described = yield* git(["describe", "--tags", "--abbrev=0", `--match=${RELEASE_TAG}`, "HEAD"], root).pipe(
     Effect.map((tag) => tag.trim()),
     Effect.catchTag("GitFailure", () => Effect.succeed("")),
   );

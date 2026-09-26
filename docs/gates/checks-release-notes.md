@@ -4,13 +4,12 @@ audience: consumers
 ---
 # checks-release-notes
 
-`checks-release-notes` prints the `CHANGELOG.md` section of one version for a GitHub release.
+`checks-release-notes` writes the `CHANGELOG.md` section of one version to a file for a GitHub release.
 
 ## What it checks
 
 It reads the section the version heads and trims the blank lines around it.
-It accepts the version with or without its leading `v`.
-It prints to standard output without an output path and writes the file with one.
+It writes the notes to the output path.
 It fails when the changelog holds no section for the version or the section is empty.
 
 ## What it reads
@@ -21,17 +20,17 @@ It reads the version from its arguments, not from `package.json`.
 ## Arguments
 
 ```sh
-checks-release-notes <version> [<output>]
+checks-release-notes <version> <output>
 ```
 
-The version names the `CHANGELOG.md` section to print, as `0.22.0` or `v0.22.0`.
-The output names the file to write, and the notes go to standard output without it.
+The version names the `CHANGELOG.md` section to write, as `0.22.0` with no leading `v`.
+The output names the file to write.
 
 ## Exit codes
 
 | Code | Result |
 | --- | --- |
-| 0 | The notes printed or were written. |
+| 0 | The notes were written. |
 | 2 | The arguments do not parse, or `CHANGELOG.md` holds no notes for the version. |
 
 ## Sample output

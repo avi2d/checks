@@ -127,7 +127,7 @@ These bins run on their own:
 - [`checks-subsumed-tests`](docs/gates/checks-subsumed-tests.md) lists each test another test subsumes in a mutation run.
 - [`checks-backtest`](docs/gates/checks-backtest.md) reports what the comment check would have refused in recent history.
 - [`checks-changelog`](docs/gates/checks-changelog.md) writes the pending release into `CHANGELOG.md` from the conventional commits since the last release.
-- [`checks-release-notes`](docs/gates/checks-release-notes.md) prints one `CHANGELOG.md` section for a GitHub release.
+- [`checks-release-notes`](docs/gates/checks-release-notes.md) writes one `CHANGELOG.md` section to a file for a GitHub release.
 - [`checks-release-report`](docs/gates/checks-release-report.md) tells whether the history holds unreleased features or fixes since the last tag.
 - [`checks-vendor`](docs/gates/checks-vendor.md) pins each library its `prepare` arguments name to a shared read-only clone and links it under `repos/`.
 

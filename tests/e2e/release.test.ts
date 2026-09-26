@@ -48,13 +48,14 @@ test(
 );
 
 test(
-  "a tag that opens with no v is passed over for the last v tag behind it",
+  "a tag that reads as no version is passed over for the last release tag behind it",
   async () => {
     await initRepo();
     await commit("feat: build a bill (#1)");
     await $`git tag v0.1.0`.cwd(dir).quiet();
     await commit("fix(parts): keep the order of parts (#3)");
     await $`git tag no-mistakes-abandoned/fm/parts`.cwd(dir).quiet();
+    await $`git tag vendor-snapshot`.cwd(dir).quiet();
     await commit("docs: say why");
     expect(await report()).toEqual({
       exitCode: 1,
@@ -81,21 +82,26 @@ test(
 );
 
 test(
-  "release notes print the section to standard output, take a v-prefixed version and write a file",
+  "release notes write the section of the exact version to the output path",
   async () => {
     await initRepo();
     const changelog = ["# Changelog", "", "## 0.2.0", "", "Released 2026-09-27.", "", "### Features", "", "- Price a bill", "", "## 0.1.0", "", "older"].join("\n");
     await writeFile(join(dir, "CHANGELOG.md"), changelog);
     await commit("chore: add a changelog");
 
-    expect(await notes("0.2.0")).toEqual({ exitCode: 0, text: "Released 2026-09-27.\n\n### Features\n\n- Price a bill\n" });
-    expect(await notes("v0.2.0")).toEqual({ exitCode: 0, text: "Released 2026-09-27.\n\n### Features\n\n- Price a bill\n" });
-
     const output = join(dir, "notes.md");
     expect(await notes("0.2.0", output)).toEqual({ exitCode: 0, text: "" });
     expect(await readFile(output, "utf8")).toBe("Released 2026-09-27.\n\n### Features\n\n- Price a bill");
 
-    const missing = await notes("0.3.0");
+    const usage = await notes("0.2.0");
+    expect(usage.exitCode).toBe(2);
+    expect(usage.text).toContain("usage: release-notes.ts <version> <output>");
+
+    const prefixed = await notes("v0.2.0", output);
+    expect(prefixed.exitCode).toBe(2);
+    expect(prefixed.text).toContain("checks-release-notes: CHANGELOG.md has no section for v0.2.0");
+
+    const missing = await notes("0.3.0", output);
     expect(missing.exitCode).toBe(2);
     expect(missing.text).toContain("checks-release-notes: CHANGELOG.md has no section for 0.3.0");
   },
