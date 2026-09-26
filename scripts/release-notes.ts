@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
-import { Effect, FileSystem, Schema } from "effect";
+import { Console, Effect, FileSystem, Path, Schema } from "effect";
+import { git } from "./git.ts";
 import { runMain, Usage } from "./main.ts";
 
 export class ReleaseSectionUnavailable extends Schema.TaggedError<ReleaseSectionUnavailable>()("ReleaseSectionUnavailable", {
@@ -23,13 +24,19 @@ export function extractReleaseNotes(changelog: string, version: string): Effect.
     : Effect.succeed(notes);
 }
 
+const USAGE = "usage: release-notes.ts <version> [<output>]";
+
 const releaseNotes = Effect.gen(function* () {
-  const [version, output] = process.argv.slice(2);
-  if (version === undefined || output === undefined) return yield* new Usage({ message: "usage: release-notes.ts <version> <output>" });
+  const [raw, output, ...extra] = process.argv.slice(2);
+  if (raw === undefined || extra.length > 0) return yield* new Usage({ message: USAGE });
+  const version = raw.startsWith("v") ? raw.slice(1) : raw;
   const fs = yield* FileSystem.FileSystem;
-  const notes = yield* extractReleaseNotes(yield* fs.readFileString("CHANGELOG.md"), version);
-  yield* fs.writeFileString(output, notes);
+  const path = yield* Path.Path;
+  const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
+  const notes = yield* extractReleaseNotes(yield* fs.readFileString(path.join(root, "CHANGELOG.md")), version);
+  if (output === undefined) yield* Console.log(notes);
+  else yield* fs.writeFileString(output, notes);
   return true;
 });
 
-if (import.meta.main) runMain("release-notes", releaseNotes);
+if (import.meta.main) runMain("checks-release-notes", releaseNotes);

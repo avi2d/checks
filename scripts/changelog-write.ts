@@ -4,7 +4,7 @@ import { cuts, releaseDates, renderChangelog, type Bump, type Cut, type Release 
 import { git } from "./git.ts";
 import { runMain } from "./main.ts";
 
-const NAME = "changelog";
+const NAME = "checks-changelog";
 const CHANGELOG = "CHANGELOG.md";
 const MANIFEST = "package.json";
 const FIELD = "\x1f";

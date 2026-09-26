@@ -37,6 +37,11 @@ const GROUP_OF_TYPE = new Map<string, ChangeGroup>([
 
 // Only the subject is linted, and a squash merge's body is its branch's commit messages,
 // so a breaking change is read from the subject's `!` and never from a footer.
+export function groupOf(subject: string): ChangeGroup | undefined {
+  const [, type = "", , breaking] = CONVENTIONAL.exec(subject) ?? [];
+  return breaking === "!" ? "Breaking changes" : GROUP_OF_TYPE.get(type);
+}
+
 function entryOf(subject: string, repositoryUrl: string): Entry | undefined {
   const [, type = "", scope = "", breaking, description = ""] = CONVENTIONAL.exec(subject) ?? [];
   const group = breaking === "!" ? "Breaking changes" : GROUP_OF_TYPE.get(type);

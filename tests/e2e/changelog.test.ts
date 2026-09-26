@@ -34,7 +34,7 @@ function changelog(cwd = dir): Promise<Ran> {
 }
 
 async function rewritten(releases: number, cwd = dir): Promise<string> {
-  expect(await changelog(cwd)).toEqual({ exitCode: 0, text: `changelog: wrote ${releases} release(s) to CHANGELOG.md\n` });
+  expect(await changelog(cwd)).toEqual({ exitCode: 0, text: `checks-changelog: wrote ${releases} release(s) to CHANGELOG.md\n` });
   return readFile(join(cwd, "CHANGELOG.md"), "utf8");
 }
 
@@ -191,7 +191,7 @@ test(
     try {
       const refused = await changelog(shallow);
       expect(refused.exitCode).toBe(2);
-      expect(refused.text).toContain("changelog: the checkout is shallow");
+      expect(refused.text).toContain("checks-changelog: the checkout is shallow");
     } finally {
       await rm(shallow, { recursive: true, force: true });
     }
@@ -207,7 +207,7 @@ test(
     await commit("feat: build a bill (#1)");
     const refused = await changelog();
     expect(refused.exitCode).toBe(2);
-    expect(refused.text).toContain("changelog: package.json has no repository.url");
+    expect(refused.text).toContain("checks-changelog: package.json has no repository.url");
   },
   { timeout: 30_000 },
 );
