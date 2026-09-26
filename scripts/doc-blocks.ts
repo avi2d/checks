@@ -206,6 +206,10 @@ const QUALITY_ROWS: Described<QualityFields, KeyRow> = {
       holds: "the gates `checks-lint` runs when not all apply, as [Gate selection](../gates/checks-lint.md#gate-selection) says",
     },
   },
+  runsOn: {
+    readBy: "`checks-quality`",
+    holds: "the runner labels every job the ci and commitlint workflows run on, `ubuntu-latest` when absent",
+  },
   commitIdentity: {
     authors: {
       readBy: "`checks-commit-identity`",

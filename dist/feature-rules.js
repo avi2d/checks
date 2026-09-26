@@ -153,6 +153,10 @@ var Gates = Schema3.Struct({
   scheduled: Schema3.optionalKey(Schema3.Array(Command).annotate({ description: "The commands a cron-scheduled workflow runs" })),
   lint: Schema3.optionalKey(LintGates)
 });
+var RunsOn = Schema3.NonEmptyArray(Schema3.NonEmptyString).annotate({
+  identifier: "RunsOn",
+  description: "The runner labels every job the kit generates runs on; ubuntu-latest when absent"
+});
 var EffectSources = Schema3.Struct({
   paths: Schema3.NonEmptyArray(PathGlob).annotate({
     description: "Where source is written in Effect, held to the Effect rules of oxlint and the language service"
@@ -233,6 +237,7 @@ var Quality = Schema3.Struct({
   $schema: Schema3.optionalKey(Schema3.String),
   defaultBranch: Schema3.optionalKey(Schema3.NonEmptyString.annotate({ description: "The branch pull requests merge into; main when absent" })),
   gates: Schema3.optionalKey(Gates),
+  runsOn: Schema3.optionalKey(RunsOn),
   commitIdentity: Schema3.optionalKey(CommitIdentity),
   sources: Schema3.optionalKey(Sources),
   size: Schema3.optionalKey(Size),

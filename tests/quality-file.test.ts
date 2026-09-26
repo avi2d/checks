@@ -73,6 +73,7 @@ test("every field decodes, and a key the schema does not name is refused rather 
     $schema: "./node_modules/@avi2dg/checks/quality.schema.json",
     defaultBranch: "trunk",
     gates: { ci: ["bun run lint"], scheduled: ["bunx checks-flake"], lint: METADATA_GATES },
+    runsOn: ["self-hosted", "Linux", "X64", "winbox"],
     commitIdentity: { authors: [AUTHOR] },
     sources: { production: ["src/**/*.ts"], effect: { paths: ["src/**/*.ts"], exempt: ["src/host/*.ts"] } },
     size: {
@@ -92,6 +93,8 @@ test("every field decodes, and a key the schema does not name is refused rather 
   expect(refusal({ gates: { ci: [] } })).toContain('at ["gates"]["ci"]');
   expect(refusal({ sources: { effect: { paths: [] } } })).toContain('at ["sources"]["effect"]["paths"]');
   expect(refusal({ commitIdentity: { authors: [] } })).toContain('at ["commitIdentity"]["authors"]');
+  expect(refusal({ runsOn: "self-hosted" })).toContain('at ["runsOn"]');
+  expect(refusal({ runsOn: [] })).toContain('at ["runsOn"]');
   expect(Effect.runSync(Effect.flip(decodeQuality("{", "quality.json"))).message).toStartWith("quality.json: ");
 });
 

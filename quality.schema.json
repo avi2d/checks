@@ -88,6 +88,9 @@
       },
       "additionalProperties": false
     },
+    "runsOn": {
+      "$ref": "#/$defs/RunsOn"
+    },
     "commitIdentity": {
       "type": "object",
       "properties": {
@@ -405,6 +408,21 @@
     "Command": {
       "type": "string",
       "minLength": 1
+    },
+    "RunsOn": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "string",
+          "minLength": 1
+        }
+      ],
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "The runner labels every job the kit generates runs on; ubuntu-latest when absent"
     },
     "Identity": {
       "type": "object",

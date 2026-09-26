@@ -63,7 +63,7 @@ test(
 test(
   "the generated title-lint step rejects a title that starts with git's comment character",
   async () => {
-    const step = lastStep(parseWorkflow(commitlintWorkflow("./commitlint.config.js")));
+    const step = lastStep(parseWorkflow(commitlintWorkflow("./commitlint.config.js", undefined)));
     const runnerTemp = await scratch("checks-commitlint-hash-guard-");
     const lintTitle = async (title: string): Promise<Ran> => {
       await writeFile(join(runnerTemp, "pr-title"), title);
