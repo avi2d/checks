@@ -156,6 +156,42 @@ test(
   60_000,
 );
 
+async function writablePaths(dir: string): Promise<readonly string[]> {
+  const found = [];
+  for (const entry of [dir, ...(await readdir(dir, { recursive: true })).map((child) => join(dir, child))]) {
+    const info = await lstat(entry);
+    if (!info.isSymbolicLink() && (info.mode & 0o222) !== 0) found.push(entry);
+  }
+  return found;
+}
+
+async function clearReadOnlyThrough(link: string): Promise<void> {
+  await chmod(link, (await stat(link)).mode | 0o200);
+  await rm(link);
+}
+
+test(
+  "a cleanup that makes a link writable before deleting it leaves the next run a frozen tree",
+  async () => {
+    const home = await scratchHome();
+    const parent = await scratch("checks-vendor-remote-");
+    const consumers = [await scratch("checks-vendor-consumer-"), await scratch("checks-vendor-consumer-")];
+    const { remote } = await seedRemote(parent, "1.0.0", "fake-lib@1.0.0");
+    for (const consumer of consumers) await seedConsumer(consumer, remote, "1.0.0");
+    const [scratchCheckout = "", ci = ""] = consumers;
+    expect((await vendor(scratchCheckout, home)).exitCode).toBe(0);
+    const dir = cachedDir(home, remote, "1.0.0");
+
+    await clearReadOnlyThrough(join(scratchCheckout, "repos", "fake-lib"));
+    expect(await writablePaths(dir)).toEqual([dir]);
+    const next = await vendor(ci, home);
+    expect(next).toMatchObject({ exitCode: 0 });
+    expect(await writablePaths(dir)).toEqual([]);
+    expect(await readlink(join(ci, "repos", "fake-lib"))).toBe(dir);
+  },
+  60_000,
+);
+
 test(
   "a landed manifest naming another version fails the run",
   async () => {
