@@ -2,7 +2,8 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { git, refArgs } from "./git.ts";
 import { runMain } from "./main.ts";
-import { Identity as IdentitySchema, type Identity } from "./native-config.ts";
+
+type Identity = { readonly name: string; readonly email: string };
 
 type Commit = {
   readonly sha: string;
@@ -38,16 +39,23 @@ function render(identity: Identity): string {
   return `${identity.name} <${identity.email}>`;
 }
 
-const Author = Schema.Union([IdentitySchema, Schema.String.check(Schema.isPattern(/^[^<>]+ <[^<>]+>(?: \([^)]+\))?$/))]);
+const Person = Schema.Union([
+  Schema.String,
+  Schema.Struct({
+    name: Schema.String,
+    email: Schema.optionalKey(Schema.String),
+    url: Schema.optionalKey(Schema.String),
+  }),
+]);
 const Authors = Schema.Struct({
-  author: Schema.optionalKey(Author),
-  contributors: Schema.optionalKey(Schema.Array(Author)),
+  author: Schema.optionalKey(Person),
+  contributors: Schema.optionalKey(Schema.Array(Person)),
 });
 
-function identityOf(author: typeof Author.Type): Identity | undefined {
-  if (typeof author !== "string") return author;
-  const matched = /^(.+?) <([^<>]+)>(?: \([^)]+\))?$/.exec(author);
-  return matched === null ? undefined : { name: matched[1] ?? "", email: matched[2] ?? "" };
+function identityOf(person: typeof Person.Type): Identity | undefined {
+  const name = typeof person === "string" ? (/^[^(<]*/.exec(person)?.[0] ?? "").trim() : person.name;
+  const email = typeof person === "string" ? /<([^<>]+)>/.exec(person)?.[1] : person.email;
+  return name === "" || email === undefined || email === "" ? undefined : { name, email };
 }
 
 const allowedAuthors = Effect.gen(function* () {
@@ -56,8 +64,11 @@ const allowedAuthors = Effect.gen(function* () {
   const manifest = yield* (yield* FileSystem.FileSystem).readFileString(file).pipe(
     Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Authors))),
   );
-  const listed = [manifest.author, ...(manifest.contributors ?? [])].filter((entry) => entry !== undefined).map(identityOf);
-  return listed.length === 0 ? DEFAULT_AUTHORS : listed.filter((entry) => entry !== undefined);
+  const listed = [manifest.author, ...(manifest.contributors ?? [])]
+    .filter((entry) => entry !== undefined)
+    .map(identityOf)
+    .filter((entry) => entry !== undefined);
+  return listed.length === 0 ? DEFAULT_AUTHORS : listed;
 });
 
 const readCommits = Effect.fn("readCommits")(function* (revisions: readonly string[]) {

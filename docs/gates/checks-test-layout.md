@@ -1,3 +1,7 @@
+---
+kind: reference
+audience: consumers
+---
 # checks-test-layout
 
 `checks-test-layout` is the gate that holds a repository's tests to one layout, and a reader looks it up to learn where a test file goes and what it may import.
@@ -19,7 +23,7 @@ It fails unless the repository holds this shape, and names the file and the path
 - `scripts.lint` runs this check, itself or through `checks-lint` called by its bare bin name.
 - `bunfig.toml` carries every `[test]` key of the shipped preset with the same value.
   `[test].pathIgnorePatterns` is the preset's `["**/tests/quarantine/**", "repos/**"]`, which the check pins itself, so the kit's own repository, whose bunfig is the preset, cannot drift it either.
-  A repository whose `package.json` declares no `vendorSources` may hold `["**/tests/quarantine/**"]` instead, and one that declares them must keep `repos/**`.
+  The check also accepts `["**/tests/quarantine/**"]`, so a repository that links no library under `repos/` may drop `repos/**`.
   Other tables, and extra `[test]` keys, are the repository's own.
 
 The in-process half is what a mutation run can mutate.
@@ -42,7 +46,6 @@ It scans the tracked and untracked files that `git ls-files --exclude-standard` 
 It parses each test and helper with swc and reads import specifiers and identifier use, so a test that only carries `"node:child_process"` as a string is not a violation.
 `tests/fixtures/**` is data and is not parsed.
 It reads `package.json` for `scripts.test` and `scripts.lint`, and compares `bunfig.toml` with the preset the installed kit ships.
-It reads `package.json` for `vendorSources`, which decides whether `repos/**` is pinned.
 
 ## Arguments
 

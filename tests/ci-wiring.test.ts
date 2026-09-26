@@ -1,20 +1,23 @@
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
-import { declarationFor, findGaps, formatReport, parseWorkflow, requiredCommands, workflowBranch } from "../scripts/ci-wiring.ts";
+import { declarationFor, findGaps, formatReport, parseWorkflow, requiredCommands } from "../scripts/ci-wiring.ts";
 
-const declaration = declarationFor(true);
+const scripts = ["lint", "build", "typecheck", "test"];
+const declaration = declarationFor(scripts, "main");
 
 function workflow(text: string) {
   return [Effect.runSync(parseWorkflow(".github/workflows/ci.yml", text))];
 }
 
 const prefix = `on:\n  pull_request:\n    types: [opened, synchronize]\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n`;
-const steps = ["bun run build", "git diff --exit-code", "bun run lint", "bun run typecheck", "bun run test", "./node_modules/.bin/commitlint"];
+const steps = ["bun run lint", "bun run build", "git diff --exit-code", "bun run typecheck", "bun run test", "./node_modules/.bin/commitlint"];
 const full = `${prefix}${steps.map((command) => `      - run: ${command}\n`).join("")}`;
 
-test("the kit requires two gates everywhere and the full suite when TypeScript is tracked", () => {
-  expect(requiredCommands(false)).toEqual(["bun run lint", "./node_modules/.bin/commitlint"]);
-  expect(requiredCommands(true)).toEqual(["bun run lint", "bun run build", "git diff --exit-code", "bun run typecheck", "bun run test", "./node_modules/.bin/commitlint"]);
+test("the kit requires title lint always and each command package.json can run", () => {
+  expect(requiredCommands([])).toEqual(["./node_modules/.bin/commitlint"]);
+  expect(requiredCommands(["lint", "test", "start"])).toEqual(["bun run lint", "bun run test", "./node_modules/.bin/commitlint"]);
+  expect(requiredCommands(["build"])).toEqual(["bun run build", "git diff --exit-code", "./node_modules/.bin/commitlint"]);
+  expect(requiredCommands(scripts)).toEqual(steps);
 });
 
 test("the workflow runs every kit gate on opened and synchronized pull requests", () => {
@@ -45,10 +48,17 @@ test("a branch filter that excludes the target does not count", () => {
   expect(findGaps(declaration, workflow(red)).length).toBe(steps.length);
 });
 
-test("the workflow push branch owns the target branch", () => {
-  const master = workflow(full.replace("on:\n", "on:\n  push:\n    branches: [master]\n"));
-  expect(workflowBranch(master)).toBe("master");
-  expect(findGaps(declarationFor(true, workflowBranch(master)), master)).toEqual([]);
+test("a pull_request branch filter gates pull requests to the default branch it names", () => {
+  const master = workflow(full.replace("    types: [opened, synchronize]\n", "    branches: [master]\n"));
+  expect(findGaps(declarationFor(scripts, "master"), master)).toEqual([]);
+  expect(findGaps(declaration, master).length).toBe(steps.length);
+});
+
+test("a pull_request trigger with no branch filter gates every default branch", () => {
+  for (const on of ["on:\n  pull_request:\n", "on: pull_request\n", "on: [push, pull_request]\n"]) {
+    const unfiltered = workflow(full.replace("on:\n  pull_request:\n    types: [opened, synchronize]\n", on));
+    expect(findGaps(declarationFor(scripts, "master"), unfiltered)).toEqual([]);
+  }
 });
 
 test("a second active workflow can satisfy a missing title gate", () => {

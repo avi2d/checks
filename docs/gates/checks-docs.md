@@ -1,3 +1,7 @@
+---
+kind: reference
+audience: consumers
+---
 # checks-docs
 
 `checks-docs` is the gate that holds each doc file a change touches to the template for its kind, each line a change adds to a living doc or an agent file to the prose rules, and each path, link and command a living doc names to what the repository holds, and a reader looks it up to learn what a doc file answers to.
@@ -29,8 +33,7 @@ cp node_modules/@avi2dg/checks/templates/how-to.md docs/add-a-supplier.md
 
 A file the table names on its own, such as `README.md`, sits at the repository root.
 No other Markdown file is judged, save a page under `docs/`, which needs a mode.
-Pages under `docs/gates/` and `docs/configs/` are reference pages, and `docs/design.md` is an explanation page.
-A page elsewhere under `docs/` declares its mode in front matter:
+A page under `docs/` declares its mode in front matter:
 
 ```yaml
 ---
@@ -111,8 +114,14 @@ It fails on any other line when the range broke it, as by deleting the file it n
 A path under a top directory the repository lacks at both ends of the range names another repository's file, such as a consumer's, and is passed over.
 So is a path git ignores, since a clean checkout lacks a generated file by design.
 
-`README.md` and the pages under `docs/gates/` and `docs/configs/` speak to consumers.
-Their commands are not held to this repository's `package.json`.
+A living doc that speaks to a consuming repository sets `audience: consumers` in its front matter, so no `bun run` command it names is held to a `package.json`:
+
+```yaml
+---
+kind: reference
+audience: consumers
+---
+```
 
 ## What it reads
 
@@ -159,7 +168,7 @@ docs: advisory, 1 path(s), link(s) or command(s) the living docs name were broke
 It applies to every repository, so no selection leaves it out.
 A file the range leaves alone is only listed as advisory, so a repository adopts the templates as its files change.
 A line the range leaves alone takes no prose rule, so a repository adopts the prose rules as its lines change.
-A consumer doc holds no `bun run` command to this repository's `package.json`.
+A living doc with `audience: consumers` in its front matter holds no `bun run` command to a `package.json`.
 `checks-lint` runs it over each pull request's range, as [checks-lint](checks-lint.md) says.
 
 ## Related topics

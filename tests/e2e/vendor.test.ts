@@ -55,19 +55,31 @@ async function moveTag(remote: Remote, version: string, tag: string): Promise<vo
   await $`git push -q -f origin main --tags`.cwd(remote.work).quiet();
 }
 
+const remotes = new Map<string, string>();
+
+function libraryArgs(remote: string): readonly string[] {
+  return ["--library", "fake-lib", "--package", "fake-lib", "--repository", remote, "--tag", TEMPLATE];
+}
+
 async function seedConsumer(dir: string, remote: string, installed: string): Promise<void> {
+  remotes.set(dir, remote);
   await $`git init -q -b main`.cwd(dir).quiet();
   await mkdir(join(dir, "node_modules", "fake-lib"), { recursive: true });
   await writeFile(join(dir, "node_modules", "fake-lib", "package.json"), manifest(installed));
-  await writeFile(
-    join(dir, "package.json"),
-    JSON.stringify({ vendorSources: [{ name: "fake-lib", package: "fake-lib", repository: remote, tag: TEMPLATE }] }),
-  );
+  const prepare = `bun '${VENDOR}' ${libraryArgs(remote).map((arg) => `'${arg}'`).join(" ")}`;
+  await writeFile(join(dir, "package.json"), JSON.stringify({ name: "consumer", scripts: { prepare } }));
+}
+
+function homeEnv(home: string): Record<string, string | undefined> {
+  return { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("XDG_"))), HOME: home };
+}
+
+function vendorWith(dir: string, home: string, args: readonly string[], umask = "022"): Promise<Ran> {
+  return ran($`sh -c ${`umask ${umask} && exec bun "$0" "$@"`} ${VENDOR} ${args}`.cwd(dir).env(homeEnv(home)));
 }
 
 function vendor(dir: string, home: string, umask = "022"): Promise<Ran> {
-  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("XDG_")));
-  return ran($`sh -c ${`umask ${umask} && exec bun "$0"`} ${VENDOR}`.cwd(dir).env({ ...env, HOME: home }));
+  return vendorWith(dir, home, libraryArgs(remotes.get(dir) ?? ""), umask);
 }
 
 function linked(consumer: string): Promise<boolean> {
@@ -90,7 +102,7 @@ test(
     const { remote } = await seedRemote(parent, "1.0.0", "fake-lib@1.0.0");
     await seedConsumer(consumer, remote, "1.0.0");
 
-    const first = await vendor(consumer, home);
+    const first = await ran($`bun run prepare`.cwd(consumer).env(homeEnv(home)));
     expect(first.exitCode).toBe(0);
     expect(first.text).toContain("cloned fake-lib@1.0.0");
     const dir = cachedDir(home, remote, "1.0.0");
@@ -375,6 +387,41 @@ test(
     expect(copied.text).toContain("no checkout holds repos/");
     expect(await linked(consumer)).toBe(false);
     expect(await readdir(consumer)).not.toContain("repos");
+  },
+  60_000,
+);
+
+test(
+  "bad arguments fail before a fetch, and no arguments pin nothing",
+  async () => {
+    const home = await scratchHome();
+    const consumer = await scratch("checks-vendor-consumer-");
+    await seedConsumer(consumer, "https://example.com/fake-lib.git", "1.0.0");
+    const library = libraryArgs("https://example.com/fake-lib.git");
+
+    const repeated = await vendorWith(consumer, home, [...library, ...library]);
+    expect(repeated.exitCode).toBe(2);
+    expect(repeated.text).toContain("--library fake-lib appears more than once");
+
+    for (const [args, message] of [
+      [["--package", "fake-lib"], "--package comes before any --library"],
+      [[...library, "--tag"], "--tag takes a value"],
+      [[...library, "--branch", "main"], "--branch is not an argument"],
+      [[...library, "--tag", "v2"], "--tag appears twice for --library fake-lib"],
+      [["--library", "fake-lib", "--package", "fake-lib", "--tag", TEMPLATE], "repository"],
+      [[...library.slice(0, -1), "fake-lib@1.0.0"], "version"],
+    ] as const) {
+      const bad = await vendorWith(consumer, home, args);
+      expect(bad.exitCode).toBe(2);
+      expect(bad.text).toContain(message);
+      expect(bad.text).toContain("usage: checks-vendor");
+    }
+    expect(await readdir(home)).not.toContain(".cache");
+
+    const none = await vendorWith(consumer, home, []);
+    expect(none.exitCode).toBe(0);
+    expect(none.text).toContain("no --library argument names a library, so nothing is pinned");
+    expect(await linked(consumer)).toBe(false);
   },
   60_000,
 );

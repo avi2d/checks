@@ -1,3 +1,7 @@
+---
+kind: reference
+audience: consumers
+---
 # checks-repetition
 
 `checks-repetition` refuses an increase in repeated production lines across a commit range.
@@ -11,7 +15,7 @@ Files outside production are advisory.
 
 ## What it reads
 
-The production `files` globs in the oxlint size override select the files to measure.
+The `files` globs of the production size overrides in `.oxlintrc.json` select the files to measure.
 The bin reads the base and head commits rather than the working tree's file contents.
 
 ## Arguments

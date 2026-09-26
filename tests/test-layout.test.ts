@@ -152,32 +152,27 @@ test("scripts.test must be the test entry point and scripts.lint must run the ch
 });
 
 test("the consumer bunfig must carry every [test] key of the shipped preset", () => {
-  expect(bunfigViolations(PRESET, PRESET, true)).toBeEmpty();
-  expect(bunfigViolations({ test: { ...PRESET.test }, install: { exact: true } }, PRESET, true)).toBeEmpty();
+  expect(bunfigViolations(PRESET, PRESET)).toBeEmpty();
+  expect(bunfigViolations({ test: { ...PRESET.test }, install: { exact: true } }, PRESET)).toBeEmpty();
 
-  expect(bunfigViolations(undefined, PRESET, true)[0]?.message).toContain("bunfig.toml is missing");
+  expect(bunfigViolations(undefined, PRESET)[0]?.message).toContain("bunfig.toml is missing");
 
-  const drifted = bunfigViolations({ test: { randomize: false, pathIgnorePatterns: [] } }, PRESET, true);
+  const drifted = bunfigViolations({ test: { randomize: false, pathIgnorePatterns: [] } }, PRESET);
   expect(drifted.map((violation) => violation.message.split(" must be ")[0])).toEqual(["[test].pathIgnorePatterns"]);
   expect(drifted[0]?.message).toContain("the check pins it");
 });
 
-test("the preset's ignores pass everywhere, and the base list alone only where no library is declared", () => {
-  const base = { test: { pathIgnorePatterns: ["**/tests/quarantine/**"] } };
-  expect(bunfigViolations(PRESET, PRESET, false)).toBeEmpty();
-  expect(bunfigViolations(base, PRESET, false)).toBeEmpty();
-  const vendored = bunfigViolations(base, PRESET, true);
-  expect(vendored.map((violation) => violation.message.split(", found ")[0])).toEqual([
-    '[test].pathIgnorePatterns must be ["**/tests/quarantine/**","repos/**"]',
+test("the preset's ignores and the base list alone both pass, and nothing else does", () => {
+  expect(bunfigViolations({ test: { pathIgnorePatterns: ["**/tests/quarantine/**"] } }, PRESET)).toBeEmpty();
+  const reposOnly = bunfigViolations({ test: { pathIgnorePatterns: ["repos/**"] } }, PRESET);
+  expect(reposOnly.map((violation) => violation.message.split(", found ")[0])).toEqual([
+    '[test].pathIgnorePatterns must be ["**/tests/quarantine/**","repos/**"] or ["**/tests/quarantine/**"]',
   ]);
-  expect(bunfigViolations({ test: { pathIgnorePatterns: [] } }, PRESET, false)[0]?.message).toContain(
-    'must be ["**/tests/quarantine/**","repos/**"] or ["**/tests/quarantine/**"]',
-  );
 });
 
 test("the kit fails its own check when consumer and preset read the same drifted file", () => {
   const drifted = { test: { pathIgnorePatterns: [] as readonly string[] } };
-  const violations = bunfigViolations(drifted, drifted, true);
+  const violations = bunfigViolations(drifted, drifted);
   expect(violations.map((violation) => violation.message.split(" must be ")[0])).toEqual([
     "[test].pathIgnorePatterns",
   ]);

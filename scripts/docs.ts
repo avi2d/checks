@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect } from "effect";
 import { rootsOf, unresolvedIn, type Judging, type Unresolved } from "./doc-references.ts";
-import { ADR_DIRECTORY, judge, placementOf, placementProblem, type Placement } from "./doc-rules.ts";
+import { ADR_DIRECTORY, judge, placementOf, placementProblem, speaksToConsumers, type Placement } from "./doc-rules.ts";
 import { readTexts, snapshotAt, stillMissing } from "./doc-snapshot.ts";
 import { changedLines, changedPaths, git, pathsAt, rangeEnds, refArgs } from "./git.ts";
 import { runMain } from "./main.ts";
@@ -101,7 +101,7 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   const prose = edited.flatMap(({ path, reader }) =>
     proseFindings(text(path), reader, changed.get(path)).map(({ line, message }) => ({ path, line, message })),
   );
-  const judging = (path: string): Judging => ({ commands: path !== "README.md" && !path.startsWith("docs/gates/") && !path.startsWith("docs/configs/") });
+  const judging = (path: string): Judging => ({ commands: !speaksToConsumers(text(path)) });
   // A directory the range deletes still belongs to this repository, so a path under it is stale rather than another repository's.
   const roots = rootsOf(yield* pathsAt(base, [], root));
   const references = yield* referenceFindings(

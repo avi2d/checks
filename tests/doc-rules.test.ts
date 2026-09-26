@@ -16,12 +16,8 @@ function found(kind: Kind, text: string, path = kind === "adr" ? RECORD : `docs/
 }
 
 test("a root file, a record and a page map to their kind, and other Markdown is left alone", () => {
-  const kinds = ["README.md", "CHANGELOG.md", "AGENTS.md", "CLAUDE.md", "CONTRIBUTING.md", "docs/adr/0001-x.md", "docs/gates/lint.md"].map(
-    (path) => placementOf(path),
-  );
-  expect(kinds).toEqual(
-    (["readme", "changelog", "agents", "claude", "how-to", "adr", "reference"] as const).map((kind) => ({ type: "judged", kind })),
-  );
+  const kinds = ["README.md", "CHANGELOG.md", "AGENTS.md", "CLAUDE.md", "CONTRIBUTING.md", "docs/adr/0001-x.md"].map((path) => placementOf(path));
+  expect(kinds).toEqual((["readme", "changelog", "agents", "claude", "how-to", "adr"] as const).map((kind) => ({ type: "judged", kind })));
   expect(["docs/adr/README.md", "src/README.md", "notes.md", "docs/image.png"].map((path) => placementOf(path).type)).toEqual([
     "unjudged",
     "unjudged",
@@ -32,13 +28,28 @@ test("a root file, a record and a page map to their kind, and other Markdown is 
     "is a page under docs/ with no mode; add kind: tutorial, how-to, reference, explanation in YAML front matter",
   );
   expect(placementOf("docs/stack/cross.md", "---\nkind: tutorial\n---\n# Build a stack\n")).toEqual({ type: "judged", kind: "tutorial" });
-  expect(placementOf("docs/design.md")).toEqual({ type: "judged", kind: "explanation" });
+  expect(placementOf("docs/gates/lint.md", "---\nkind: reference\naudience: consumers\n---\n# lint\n")).toEqual({ type: "judged", kind: "reference" });
+  expect(["docs/gates/lint.md", "docs/configs/rules.md", "docs/design.md"].map((path) => placementOf(path).type)).toEqual([
+    "undeclared",
+    "undeclared",
+    "undeclared",
+  ]);
 });
 
 test("a filled-in document of every kind holds to its template", () => {
   expect(Object.fromEntries(KINDS.map((kind) => [kind, found(kind, fixture(kind))]))).toEqual(
     Object.fromEntries(KINDS.map((kind) => [kind, []])),
   );
+});
+
+test("front matter carrying the audience beside the kind is read past, and lines count from the file's top", () => {
+  const marked = (text: string): string => `---\nkind: reference\naudience: consumers\n---\n${text}`;
+  expect(found("reference", marked(fixture("reference")))).toEqual([]);
+  expect(found("readme", `---\naudience: consumers\n---\n${fixture("readme")}`)).toEqual([]);
+  expect(found("reference", marked("# Parts\n\n## Overview\n\nThe parts.\n"))).toEqual([
+    "5: has nothing between its title and its first section",
+    "7: `## Overview` names no topic; title it by what the reader does or looks up",
+  ]);
 });
 
 test("a README missing a section is refused", () => {

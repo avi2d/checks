@@ -1,3 +1,7 @@
+---
+kind: reference
+audience: consumers
+---
 # The Effect rules
 
 The oxlint base and Effect language service check paths a repository writes with Effect.

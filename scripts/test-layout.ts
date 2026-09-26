@@ -4,7 +4,6 @@ import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { git } from "./git.ts";
 import { runMain } from "./main.ts";
 import { ENTRY_POINT, TEST_ENTRY_POINT } from "./gates.ts";
-import { readVendorSources } from "./native-config.ts";
 
 export type Violation = {
   readonly file: string;
@@ -43,11 +42,7 @@ const BANNED_GLOBAL_CALLS: readonly string[] = ["fetch"];
 const IGNORES_KEY = "pathIgnorePatterns";
 const QUARANTINE = "**/tests/quarantine/**";
 const VENDORED = "repos/**";
-const PRESET_IGNORES: readonly string[] = [QUARANTINE, VENDORED];
-
-function acceptedIgnores(vendors: boolean): readonly (readonly string[])[] {
-  return vendors ? [PRESET_IGNORES] : [PRESET_IGNORES, [QUARANTINE]];
-}
+const ACCEPTED_IGNORES: readonly (readonly string[])[] = [[QUARANTINE, VENDORED], [QUARANTINE]];
 export const LAYOUT_CHECK_MARK = "scripts/test-layout.ts";
 export const LAYOUT_CHECK_BIN = "checks-test-layout";
 const OWN_ENTRY_POINT = `scripts/${ENTRY_POINT.script}`;
@@ -251,7 +246,7 @@ export function scriptViolations(manifest: unknown): readonly Violation[] {
   return violations;
 }
 
-export function bunfigViolations(consumer: unknown, preset: unknown, vendors: boolean): readonly Violation[] {
+export function bunfigViolations(consumer: unknown, preset: unknown): readonly Violation[] {
   const file = "bunfig.toml";
   const copy = "bun has no bunfig extends, so copy node_modules/@avi2dg/checks/bunfig.toml";
   if (consumer === undefined) {
@@ -272,10 +267,9 @@ export function bunfigViolations(consumer: unknown, preset: unknown, vendors: bo
   for (const [key, value] of Object.entries(presetTest)) {
     if (key !== IGNORES_KEY && !Bun.deepEquals(found(key), value)) violations.push(drifted(key, JSON.stringify(value), copy));
   }
-  const accepted = acceptedIgnores(vendors);
-  if (!accepted.some((ignores) => Bun.deepEquals(found(IGNORES_KEY), ignores))) {
-    const wanted = accepted.map((ignores) => JSON.stringify(ignores)).join(" or ");
-    violations.push(drifted(IGNORES_KEY, wanted, `the check pins it, requiring ${VENDORED} where package.json declares vendorSources`));
+  if (!ACCEPTED_IGNORES.some((ignores) => Bun.deepEquals(found(IGNORES_KEY), ignores))) {
+    const wanted = ACCEPTED_IGNORES.map((ignores) => JSON.stringify(ignores)).join(" or ");
+    violations.push(drifted(IGNORES_KEY, wanted, `the check pins it, and a repository that links libraries under repos/ keeps ${VENDORED}`));
   }
   return violations;
 }
@@ -330,8 +324,7 @@ export const run = Effect.fn("run")(function* (root: string, presetPath: string)
 
   const bunfig = path.join(root, "bunfig.toml");
   const consumerBunfig = (yield* fs.exists(bunfig)) ? yield* parsedToml(bunfig) : undefined;
-  const vendors = (yield* readVendorSources(root)).length > 0;
-  violations.push(...bunfigViolations(consumerBunfig, yield* parsedToml(presetPath), vendors));
+  violations.push(...bunfigViolations(consumerBunfig, yield* parsedToml(presetPath)));
 
   return { files: files.length, violations };
 });

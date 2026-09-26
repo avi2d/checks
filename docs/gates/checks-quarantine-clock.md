@@ -1,3 +1,7 @@
+---
+kind: reference
+audience: consumers
+---
 # checks-quarantine-clock
 
 `checks-quarantine-clock` is the gate that fails a test left in `tests/quarantine/` past 30 days, and a reader looks it up when a quarantined test went red.

@@ -1,3 +1,6 @@
+---
+kind: explanation
+---
 # Why it is shaped this way
 
 Each entry below is a choice in the kit's shape and the constraint that forced it.
@@ -36,7 +39,9 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   The bodies are the branch's own messages, which nothing lints.
   The changelog still arrives in the release commit's pull request, not from a workflow that pushes.
   The release path writes to the repository only through the `github-release` job's `contents: write`, which creates or updates the GitHub release from the tag's `CHANGELOG.md` section.
-- Workflow YAML owns CI execution, and `checks-ci-wiring` derives required steps from kit rules and the package scripts.
+- Workflow YAML owns CI execution, and the kit owns the required commands, but a repository is held only to the commands its own `package.json` can run.
+  `checks-ci-wiring` requires `bun run` with each of `lint`, `build`, `typecheck` and `test` that `package.json` defines as a script, `git diff --exit-code` when a `build` script exists, and commitlint always.
+  The target branch comes from git's own record in `refs/remotes/origin/HEAD`, or in CI from the pull request base or the default branch GitHub's event names, and never from a guess at the workflow files, and `checks-lint` starts its local range from the same branch.
   Oxlint and TypeScript read their own overrides directly, so the consumer can change a rule where its tool reads it.
   The Effect scopes occur in two native files, and the installed consumer test checks both independently.
 - The base parses with swc because typescript 7, which is tsgo, has no compiler API for dependency-cruiser to use.

@@ -1,3 +1,7 @@
+---
+kind: reference
+audience: consumers
+---
 # checks-lint
 
 `checks-lint` runs every applicable kit lint gate over one range and reports each failure.
@@ -11,7 +15,8 @@ All other gates run for every repository.
 ## What it reads
 
 The range ends at `HEAD` and starts at the merge base with `origin/HEAD` for a local run.
-If remote HEAD is absent, the push branch in `.github/workflows/*.yml` supplies the default branch, or `main` when the workflow declares none.
+If remote HEAD is absent, the range starts at the default branch GitHub's event names in CI, or at `origin/main`.
+A local run with `GITHUB_BASE_REF` set starts at that branch on `origin` instead.
 A clone with no remote tracking refs checks `HEAD` alone.
 On a pull request the range ends at the event's head commit and starts at its merge base with the event's base branch.
 Tree gates read the working tree rather than the range.

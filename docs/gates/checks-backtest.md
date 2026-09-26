@@ -1,3 +1,7 @@
+---
+kind: reference
+audience: consumers
+---
 # checks-backtest
 
 `checks-backtest` is the report of what the comment check would have refused at each recent commit, and a reader looks it up to measure a repository's own history before adopting the check.

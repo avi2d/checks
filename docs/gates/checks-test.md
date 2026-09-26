@@ -1,3 +1,7 @@
+---
+kind: reference
+audience: consumers
+---
 # checks-test
 
 `checks-test` is the entry point that runs the whole suite and refuses a skip the repository has not declared, and a reader looks it up to declare a skip.

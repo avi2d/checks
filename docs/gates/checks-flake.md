@@ -1,3 +1,7 @@
+---
+kind: reference
+audience: consumers
+---
 # checks-flake
 
 `checks-flake` is the scheduled run that finds flaky tests and records the seeds each one fails with, and a reader looks it up to reproduce a flaky failure.

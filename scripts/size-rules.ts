@@ -1,5 +1,3 @@
-export const TESTS_DIRECTORY = "tests";
-
 const COUNTED = { skipBlankLines: false, skipComments: false };
 
 const FILE_LINES = {
@@ -61,28 +59,36 @@ export type Budget = { readonly [K in LimitKey]?: number };
 
 export type Budgets = { readonly production: Budget; readonly tests: Budget };
 
-const APPLIES = ["ratchet", "all"] as const;
-export type Applies = (typeof APPLIES)[number];
-
 export const SIZE_DEFAULTS = {
-  applies: "ratchet",
   production: { fileLines: 400, functionLines: 100, statements: 30, complexity: 15, depth: 4 },
   tests: { fileLines: 600, statements: 50, complexity: 15, depth: 4 },
-} as const satisfies Budgets & { readonly applies: Applies };
+} as const satisfies Budgets;
 
-export type Size = {
-  readonly applies?: Applies;
-  readonly production?: Budget;
-  readonly tests?: Budget;
-};
+// An absent limit leaves the one set before it in place, as oxlint merges its overrides.
+export type Limits = { readonly [K in LimitKey]?: number | "off" };
 
-export function budgetsOf(size: Size): Budgets {
-  return {
-    production: { ...SIZE_DEFAULTS.production, ...size.production },
-    tests: { ...SIZE_DEFAULTS.tests, ...size.tests },
-  };
+export type Scope = { readonly files: readonly string[]; readonly excludeFiles: readonly string[]; readonly limits: Limits };
+
+export type Size = { readonly limits: Limits; readonly scopes: readonly Scope[] };
+
+const TEST_GLOB = /(?:^|\/)tests\/|(?:[.](?:test|spec)|_test)[.][^/]*$/;
+
+export function isTestGlob(glob: string): boolean {
+  return TEST_GLOB.test(glob);
 }
 
-export function budgetOf({ production, tests }: Budgets, file: string): Budget {
-  return file.startsWith(`${TESTS_DIRECTORY}/`) ? tests : production;
+// oxlint matches a glob without a slash at any depth.
+export function anyDepth(glob: string): string {
+  return glob.includes("/") ? glob : `**/${glob}`;
+}
+
+function matches(globs: readonly string[], file: string): boolean {
+  return globs.some((glob) => new Bun.Glob(glob).match(file));
+}
+
+export function budgetOf({ limits, scopes }: Size, file: string): Budget {
+  const merged = scopes
+    .filter((scope) => matches(scope.files, file) && !matches(scope.excludeFiles, file))
+    .reduce<Limits>((all, scope) => ({ ...all, ...scope.limits }), limits);
+  return Object.fromEntries(Object.entries(merged).flatMap(([key, limit]) => (typeof limit === "number" ? [[key, limit]] : []))) satisfies Budget;
 }

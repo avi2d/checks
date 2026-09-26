@@ -36,7 +36,6 @@
     },
     {
       "files": ["scripts/**/*.ts"],
-      "excludeFiles": ["scripts/feature-rules.ts"],
       "plugins": ["typescript", "oxc", "eslint", "import", "node", "promise", "unicorn"],
       "rules": {
         "node/no-sync": "error",

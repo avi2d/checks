@@ -127,7 +127,7 @@ These bins run on their own:
 - [`checks-mutation-compare`](docs/gates/checks-mutation-compare.md) holds every mutant in a pull request to no regression.
 - [`checks-subsumed-tests`](docs/gates/checks-subsumed-tests.md) lists each test another test subsumes in a mutation run.
 - [`checks-backtest`](docs/gates/checks-backtest.md) reports what the comment check would have refused in recent history.
-- [`checks-vendor`](docs/gates/checks-vendor.md) pins each library `package.json` declares under `vendorSources` to a shared read-only clone and links it under `repos/`.
+- [`checks-vendor`](docs/gates/checks-vendor.md) pins each library its `prepare` arguments name to a shared read-only clone and links it under `repos/`.
 
 `checks-lint` has [its own page](docs/gates/checks-lint.md), which says which range it resolves.
 The oxlint base, the dependency-cruiser base and the commitlint config run through their own tools, as the pages under Related topics say.

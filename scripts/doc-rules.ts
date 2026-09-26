@@ -36,14 +36,24 @@ export const ROOT_FILES: ReadonlyMap<string, Kind> = new Map<string, Kind>([
   ["CONTRIBUTING.md", "how-to"],
 ]);
 
+const FRONT_MATTER = /^---\n((?:[\w-]+: .*\n)*)---\n/;
+const FIELD = /^([\w-]+): (.*)$/gm;
+
+function frontMatterOf(text: string): { readonly text: string; readonly fields: ReadonlyMap<string, string> } {
+  const match = FRONT_MATTER.exec(text);
+  return { text: match?.[0] ?? "", fields: new Map([...(match?.[1] ?? "").matchAll(FIELD)].map(([, key = "", value = ""]) => [key, value])) };
+}
+
+export function speaksToConsumers(text: string): boolean {
+  return frontMatterOf(text).fields.get("audience") === "consumers";
+}
+
 export function placementOf(path: string, text = ""): Placement {
   const root = ROOT_FILES.get(path);
   if (root !== undefined) return { type: "judged", kind: root };
   if (!path.endsWith(".md") || path === ADR_INDEX) return { type: "unjudged" };
   if (path.startsWith(ADR_DIRECTORY)) return { type: "judged", kind: "adr" };
-  if (path.startsWith("docs/gates/") || path.startsWith("docs/configs/")) return { type: "judged", kind: "reference" };
-  if (path === "docs/design.md") return { type: "judged", kind: "explanation" };
-  const named = /^---\nkind: (tutorial|how-to|reference|explanation)\n---\n/.exec(text)?.[1];
+  const named = frontMatterOf(text).fields.get("kind");
   const mode = MODES.find((known) => known === named);
   if (mode !== undefined) return { type: "judged", kind: mode };
   return path.startsWith(DOCS_DIRECTORY) ? { type: "undeclared" } : { type: "unjudged" };
@@ -172,7 +182,7 @@ function exactProblems(kind: Kind, expected: string, actual: string): readonly V
 export function judge(kind: Kind, doc: Doc, records: readonly string[]): readonly Violation[] {
   const template = TEMPLATES[kind];
   if (template.shape === "exact") return exactProblems(kind, template.text, doc.text);
-  const frontMatter = /^---\nkind: (?:tutorial|how-to|reference|explanation)\n---\n/.exec(doc.text)?.[0] ?? "";
+  const frontMatter = frontMatterOf(doc.text).text;
   const outline = parseOutline(doc.text.slice(frontMatter.length));
   const lineOffset = frontMatter === "" ? 0 : frontMatter.split("\n").length - 1;
   const title = titleOf(outline);

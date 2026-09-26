@@ -149,17 +149,41 @@ test(
 );
 
 test(
-  "commit-identity accepts an npm author string with a URL", async () => {
+  "commit-identity accepts the npm person shorthand with and without a URL",
+  async () => {
     await initRepo({ author: "Pat Stranger <stranger@example.com> (https://example.com/pat)" });
     await commit({ message: "feat: theirs", author: STRANGER, committer: STRANGER });
+    expect((await check("HEAD")).exitCode).toBe(0);
+
+    await writeFile(join(dir, "package.json"), JSON.stringify({ contributors: ["Pat Stranger <stranger@example.com>"] }));
     const green = await check("HEAD");
+    expect(green.text).toContain("1 commit(s) in HEAD carry only allowed identities");
     expect(green.exitCode).toBe(0);
   },
   60_000,
 );
 
 test(
-  "commit-identity reads contributors from package.json and refuses malformed identities",
+  "commit-identity falls back to the kit default for a bare author string without an email",
+  async () => {
+    await initRepo({ author: "Pat Stranger" });
+    await commit({ message: "feat: mine" });
+    expect((await check("HEAD")).exitCode).toBe(0);
+
+    await commit({ message: "feat: theirs", author: STRANGER, committer: STRANGER });
+    const red = await check("HEAD");
+    expect(red.text).toContain("author Pat Stranger <stranger@example.com>");
+    expect(red.text).toContain("allowed: avi2d <avi2dg@gmail.com>\n");
+    expect(red.exitCode).toBe(1);
+
+    await writeFile(join(dir, "package.json"), JSON.stringify({ author: "Pat Stranger (https://example.com/pat)" }));
+    expect((await check("HEAD")).exitCode).toBe(1);
+  },
+  60_000,
+);
+
+test(
+  "commit-identity reads contributors from package.json and ignores persons without an email",
   async () => {
     await initRepo();
     await writeFile(join(dir, "package.json"), JSON.stringify({ contributors: [STRANGER] }));
@@ -173,10 +197,18 @@ test(
     expect(red.text).toContain("author avi2d <avi2dg@gmail.com>");
     expect(red.exitCode).toBe(1);
 
-    await writeFile(join(dir, "package.json"), JSON.stringify({ contributors: [{ name: STRANGER.name }] }));
-    const malformed = await check("HEAD");
-    expect(malformed.text).toContain('Missing key\n  at ["contributors"][0]["email"]');
-    expect(malformed.exitCode).toBe(2);
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({ author: { name: "Pat Stranger", url: "https://example.com/pat" }, contributors: [{ name: STRANGER.name }] }),
+    );
+    const fallback = await check("HEAD");
+    expect(fallback.text).toContain("1 commit(s) in HEAD carry only allowed identities");
+    expect(fallback.exitCode).toBe(0);
+
+    await writeFile(join(dir, "package.json"), JSON.stringify({ author: { name: OWNER.name }, contributors: [STRANGER] }));
+    const ignored = await check("HEAD");
+    expect(ignored.text).toContain("allowed: Pat Stranger <stranger@example.com>\n");
+    expect(ignored.exitCode).toBe(1);
   },
   60_000,
 );
@@ -202,7 +234,7 @@ test(
 test(
   "commit-identity refuses a malformed allowlist and a missing argument",
   async () => {
-    await initRepo({ name: "commit-identity-fixture", author: "not an identity" });
+    await initRepo({ name: "commit-identity-fixture", author: 42 });
     await commit({ message: "feat: base" });
 
     const malformed = await check("HEAD");

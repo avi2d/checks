@@ -1,3 +1,7 @@
+---
+kind: reference
+audience: consumers
+---
 # checks-lint-coverage
 
 `checks-lint-coverage` is the gate that fails when oxlint silently skips a tracked TypeScript file, and a reader looks it up when a file seems never to be linted.

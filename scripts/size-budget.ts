@@ -4,19 +4,7 @@ import { changedPaths, collect, git, pathsAt, rangeEnds, type Change } from "./g
 import { runMain } from "./main.ts";
 import { readSizeRules } from "./native-config.ts";
 import { rangeGateInputs } from "./range-gate.ts";
-import {
-  budgetOf,
-  diagnosticCode,
-  qualifiedName,
-  SIZE_RULES,
-  TESTS_DIRECTORY,
-  type Applies,
-  type Budget,
-  type Budgets,
-  type LimitKey,
-  type Size,
-  type SizeRule,
-} from "./size-rules.ts";
+import { budgetOf, diagnosticCode, qualifiedName, SIZE_RULES, type LimitKey, type Limits, type Size, type SizeRule } from "./size-rules.ts";
 
 export type Held = { readonly path: string; readonly from: string };
 
@@ -36,9 +24,7 @@ export type Growth = {
   readonly sites: readonly Site[];
 };
 
-export type Verdict =
-  | { readonly applies: "all"; readonly held: number; readonly overruns: readonly Site[]; readonly advisory: readonly Site[] }
-  | { readonly applies: "ratchet"; readonly held: number; readonly growths: readonly Growth[]; readonly advisory: readonly Site[] };
+export type Verdict = { readonly held: number; readonly growths: readonly Growth[]; readonly advisory: readonly Site[] };
 
 class OxlintUnreadable extends Schema.TaggedError<OxlintUnreadable>()("OxlintUnreadable", {
   message: Schema.String,
@@ -48,15 +34,11 @@ const NAME = "size-budget";
 const USAGE = "usage: size-budget.ts <ref> | <base-ref> <head-ref>";
 const DECLARATIONS = ":(exclude,glob)**/*.d.ts";
 const TYPESCRIPT = [":(glob)**/*.ts", ":(glob)**/*.tsx", DECLARATIONS];
-const TESTS = [`:(glob)${TESTS_DIRECTORY}/**/*.ts`, `:(glob)${TESTS_DIRECTORY}/**/*.tsx`];
 const CONFIG = ".size-budget.oxlintrc.json";
 const WHOLE_FILE: LimitKey = "fileLines";
 const OXLINT_FOUND_NOTHING = 0;
 const OXLINT_FOUND_ERRORS = 1;
-const SCOPE = {
-  ratchet: "the production and test files the range adds or changes",
-  all: "every production and test file",
-} satisfies Record<Applies, string>;
+const SCOPE = "the production and test files the range adds or changes";
 
 const Diagnostic = Schema.Struct({
   code: Schema.String,
@@ -74,25 +56,29 @@ export type SizeConfig = {
   readonly jsPlugins: readonly string[];
   readonly categories: Readonly<Record<string, string>>;
   readonly rules: Rules;
-  readonly overrides: readonly { readonly files: readonly string[]; readonly rules: Rules }[];
+  readonly overrides: readonly { readonly files: readonly string[]; readonly excludeFiles: readonly string[]; readonly rules: Rules }[];
 };
 
-function rulesOf(budget: Budget): Rules {
+function rulesOf(limits: Limits, rules: readonly SizeRule[]): Rules {
   return Object.fromEntries(
-    SIZE_RULES.map((entry) => {
-      const max = budget[entry.key];
-      return [qualifiedName(entry), max === undefined ? "off" : ["error", { max, ...entry.options }]];
+    rules.map((entry) => {
+      const max = limits[entry.key];
+      return [qualifiedName(entry), max === undefined || max === "off" ? "off" : ["error", { max, ...entry.options }]];
     }),
   );
 }
 
-export function sizeConfig({ production, tests }: Budgets, plugin: string): SizeConfig {
+export function sizeConfig({ limits, scopes }: Size, plugin: string): SizeConfig {
   return {
     plugins: [],
     jsPlugins: [plugin],
     categories: { correctness: "off" },
-    rules: rulesOf(production),
-    overrides: [{ files: [`${TESTS_DIRECTORY}/**`], rules: rulesOf(tests) }],
+    rules: rulesOf(limits, SIZE_RULES),
+    overrides: scopes.map(({ files, excludeFiles, limits: set }) => ({
+      files,
+      excludeFiles,
+      rules: rulesOf(set, SIZE_RULES.filter(({ key }) => key in set)),
+    })),
   };
 }
 
@@ -127,13 +113,13 @@ const materializeBase = Effect.fn("materializeBase")(function* (root: string, ba
 });
 
 export const siteOf = (
-  budgets: Budgets,
+  size: Size,
 ): ((diagnostic: typeof Diagnostic.Type) => Effect.Effect<readonly Site[], OxlintUnreadable>) =>
   Effect.fn("siteOf")(function* ({ code, message, filename, labels }: typeof Diagnostic.Type) {
     const rule = SIZE_RULES.find((candidate) => code === diagnosticCode(candidate));
     if (rule === undefined) return [];
     const measured = rule.measured.exec(message)?.[1];
-    const max = budgetOf(budgets, filename)[rule.key];
+    const max = budgetOf(size, filename)[rule.key];
     if (measured === undefined || max === undefined) {
       return yield* new OxlintUnreadable({ message: `cannot read ${rule.rule} for ${filename} from oxlint: ${message}` });
     }
@@ -149,11 +135,11 @@ export const siteOf = (
     ];
   });
 
-const measure = Effect.fn("measure")(function* (tree: string, budgets: Budgets, plugin: string) {
+const measure = Effect.fn("measure")(function* (tree: string, size: Size, plugin: string) {
   const fs = yield* FileSystem.FileSystem;
   if (!(yield* fs.exists(tree))) return [];
   // oxlint reads an override's glob from the directory of the config that holds it, so the config sits in the tree.
-  yield* fs.writeFileString((yield* Path.Path).join(tree, CONFIG), `${JSON.stringify(sizeConfig(budgets, plugin), null, 2)}\n`);
+  yield* fs.writeFileString((yield* Path.Path).join(tree, CONFIG), `${JSON.stringify(sizeConfig(size, plugin), null, 2)}\n`);
 
   const { stdout, stderr, exitCode } = yield* collect("oxlint", ["-c", CONFIG, "-f", "json", "."], tree).pipe(
     Effect.mapError((cause) => new OxlintUnreadable({ message: `cannot run oxlint: ${cause.message}` })),
@@ -164,7 +150,7 @@ const measure = Effect.fn("measure")(function* (tree: string, budgets: Budgets, 
   const { diagnostics } = yield* decodeReport(stdout).pipe(
     Effect.mapError((cause) => new OxlintUnreadable({ message: `cannot read oxlint's report: ${cause.message}` })),
   );
-  const sites = (yield* Effect.forEach(diagnostics, siteOf(budgets))).flat();
+  const sites = (yield* Effect.forEach(diagnostics, siteOf(size))).flat();
   return sites.toSorted((a, b) => a.file.localeCompare(b.file) || (a.line ?? 0) - (b.line ?? 0));
 });
 
@@ -186,37 +172,20 @@ export function growthsOf(head: readonly Site[], base: readonly Site[]): readonl
   });
 }
 
-// Decides the verdict from sites oxlint already measured: which are held to the range or the
-// whole tree, and, under ratchet, which grew past what the base measured for the same file and rule.
-export function verdictOf(
-  applies: Applies,
-  held: number,
-  holds: ReadonlySet<string>,
-  sites: readonly Site[],
-  baseSites: readonly Site[],
-): Verdict {
-  const heldSites = sites.filter((site) => holds.has(site.file));
-  if (applies !== "ratchet") {
-    return { applies, held, overruns: heldSites, advisory: sites.filter((site) => !holds.has(site.file)) };
-  }
-  const growths = growthsOf(heldSites, baseSites);
+// Decides the verdict from sites oxlint already measured: which the range holds, and which of
+// those grew past what the base measured for the same file and rule.
+export function verdictOf(held: number, holds: ReadonlySet<string>, sites: readonly Site[], baseSites: readonly Site[]): Verdict {
+  const growths = growthsOf(sites.filter((site) => holds.has(site.file)), baseSites);
   const failing = new Set(growths.flatMap((growth) => growth.sites));
-  return { applies, held, growths, advisory: sites.filter((site) => !failing.has(site)) };
+  return { held, growths, advisory: sites.filter((site) => !failing.has(site)) };
 }
 
-const heldFiles = Effect.fn("heldFiles")(function* (root: string, applies: Applies, pathspecs: readonly string[], base: string, head: string) {
-  if (applies === "all") return (yield* pathsAt(head, pathspecs, root)).map((path): Held => ({ path, from: path }));
-  return heldByChange(yield* changedPaths(base, head, pathspecs, root));
-});
-
 const runBudget = Effect.fn("runBudget")(
-  function* (root: string, size: Size, production: readonly string[], base: string, head: string) {
+  function* (root: string, size: Size, base: string, head: string) {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const applies = size.applies ?? "ratchet";
-    const budgets: Budgets = { production: size.production ?? {}, tests: size.tests ?? {} };
-    const pathspecs = [...production.map((glob) => `:(glob)${glob}`), ...TESTS, DECLARATIONS];
-    const held = yield* heldFiles(root, applies, pathspecs, base, head);
+    const pathspecs = [...size.scopes.flatMap(({ files }) => files.map((glob) => `:(glob)${glob}`)), DECLARATIONS];
+    const held = heldByChange(yield* changedPaths(base, head, pathspecs, root));
     const holds = new Set(held.map((file) => file.path));
     const others = (yield* pathsAt(head, TYPESCRIPT, root)).filter((file) => !holds.has(file));
     const scratch = yield* fs.makeTempDirectoryScoped({ prefix: "checks-size-budget-" });
@@ -224,12 +193,11 @@ const runBudget = Effect.fn("runBudget")(
     const headTree = path.join(scratch, "head");
     if (held.length + others.length > 0) yield* materializeHead(root, head, [...holds, ...others], headTree);
     const plugin = path.join(import.meta.dir, "..", "dist", "index.js");
-    const sites = yield* measure(headTree, budgets, plugin);
-    if (applies !== "ratchet") return verdictOf(applies, held.length, holds, sites, []);
+    const sites = yield* measure(headTree, size, plugin);
 
     const baseTree = path.join(scratch, "base");
     if (held.length > 0) yield* materializeBase(root, base, held, baseTree);
-    return verdictOf(applies, held.length, holds, sites, yield* measure(baseTree, budgets, plugin));
+    return verdictOf(held.length, holds, sites, yield* measure(baseTree, size, plugin));
   },
   Effect.scoped,
 );
@@ -238,20 +206,15 @@ export function describe({ file, line, message }: Site, indent = "  "): string {
   return `${indent}${file}${line === undefined ? "" : `:${line}`}: ${message}`;
 }
 
-export function verdictLines(verdict: Verdict): readonly string[] {
-  const scope = SCOPE[verdict.applies];
-  if (verdict.applies === "ratchet") {
-    if (verdict.growths.length === 0) return [`${NAME}: ${verdict.held} file(s), ${scope}, raise no overrun past the base`];
-    return [
-      `${NAME}: ${verdict.growths.length} overrun(s) grew past the base in ${scope}:`,
-      ...verdict.growths.flatMap(({ file, rule, base, head, sites }) => [
-        `  ${file}: ${rule} over by ${head} in total, up from ${base}`,
-        ...sites.map((site) => describe(site, "    ")),
-      ]),
-    ];
-  }
-  if (verdict.overruns.length === 0) return [`${NAME}: ${verdict.held} file(s), ${scope}, keep within the budget`];
-  return [`${NAME}: ${verdict.overruns.length} overrun(s) of the budget in ${scope}:`, ...verdict.overruns.map((site) => describe(site))];
+export function verdictLines({ held, growths }: Verdict): readonly string[] {
+  if (growths.length === 0) return [`${NAME}: ${held} file(s), ${SCOPE}, raise no overrun past the base`];
+  return [
+    `${NAME}: ${growths.length} overrun(s) grew past the base in ${SCOPE}:`,
+    ...growths.flatMap(({ file, rule, base, head, sites }) => [
+      `  ${file}: ${rule} over by ${head} in total, up from ${base}`,
+      ...sites.map((site) => describe(site, "    ")),
+    ]),
+  ];
 }
 
 export function report(verdict: Verdict): string {
@@ -264,7 +227,7 @@ export function report(verdict: Verdict): string {
 }
 
 export function passes(verdict: Verdict): boolean {
-  return verdict.applies === "ratchet" ? verdict.growths.length === 0 : verdict.overruns.length === 0;
+  return verdict.growths.length === 0;
 }
 
 const budget = Effect.gen(function* () {
@@ -275,7 +238,7 @@ const budget = Effect.gen(function* () {
     return true;
   }
   const { base, head } = yield* rangeEnds(refs.first, refs.second, root);
-  const verdict = yield* runBudget(root, configured.size, configured.production, base, head);
+  const verdict = yield* runBudget(root, configured.size, base, head);
 
   yield* Console.log(report(verdict));
   return passes(verdict);

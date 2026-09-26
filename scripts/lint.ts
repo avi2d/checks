@@ -2,8 +2,7 @@
 import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import { EVERY_REPOSITORY, KIT_GATES, type KitGate } from "./gates.ts";
-import { readWorkflows, workflowBranch } from "./ci-wiring.ts";
-import { git } from "./git.ts";
+import { defaultBranch, git } from "./git.ts";
 import { runMain, Usage } from "./main.ts";
 
 type Range = {
@@ -56,12 +55,6 @@ const pullRequestEnds = Effect.fn("pullRequestEnds")(function* (eventPath: strin
   return pullRequestEndsOf(pullRequest);
 });
 
-// Decides the base ref `git symbolic-ref` already resolved, or the repository's declared
-// default branch when that ref is absent, such as a checkout with no remote HEAD symlink.
-export function originRefOf(symbolicRef: string | undefined, defaultBranch: string): string {
-  return symbolicRef ?? `origin/${defaultBranch}`;
-}
-
 // A clone holding any remote-tracking ref but not the default branch is a shallow CI checkout,
 // where judging HEAD alone would pass every commit before it unchecked. No origin ref means no remote-tracking ref at all.
 export function localEndsOf(originRef: string | undefined): { base: string; head: string; source: string } {
@@ -69,18 +62,11 @@ export function localEndsOf(originRef: string | undefined): { base: string; head
   return { base: originRef, head: "HEAD", source: `HEAD against ${originRef}` };
 }
 
-const originRef = (defaultBranch: string) =>
-  git(["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]).pipe(
-    Effect.map((ref) => ref.trim()),
-    Effect.catchTag("GitFailure", () => Effect.succeed(undefined)),
-    Effect.map((symbolicRef) => originRefOf(symbolicRef, defaultBranch)),
-  );
-
-const localEnds = Effect.fn("localEnds")(function* (defaultBranch: string) {
+const localEnds = Effect.gen(function* () {
   const remoteTracking = yield* git(["for-each-ref", "--count=1", "refs/remotes/"]).pipe(
     Effect.mapError((cause) => new RangeUnresolved({ message: cause.message })),
   );
-  return localEndsOf(remoteTracking.trim() === "" ? undefined : yield* originRef(defaultBranch));
+  return localEndsOf(remoteTracking.trim() === "" ? undefined : `origin/${yield* defaultBranch()}`);
 });
 
 // Decides which source of range ends the arguments and the pull request env vars select,
@@ -102,7 +88,7 @@ export function selectEnds(args: readonly string[], eventName: string | undefine
   return { kind: "local" };
 }
 
-const endsOf = Effect.fn("endsOf")(function* (args: readonly string[], defaultBranch: string) {
+const endsOf = Effect.fn("endsOf")(function* (args: readonly string[]) {
   const event = yield* Config.all({
     name: Config.option(Config.String("GITHUB_EVENT_NAME")),
     path: Config.option(Config.String("GITHUB_EVENT_PATH")),
@@ -122,7 +108,7 @@ const endsOf = Effect.fn("endsOf")(function* (args: readonly string[], defaultBr
     case "pull-request-unresolved":
       return yield* new RangeUnresolved({ message: `${PULL_REQUEST_EVENT} sets no GITHUB_EVENT_PATH` });
     case "local":
-      return yield* localEnds(defaultBranch);
+      return yield* localEnds;
   }
 });
 
@@ -142,8 +128,8 @@ export function rangeOf(base: string, head: string): Range["refs"] {
 
 // From the base branch's tip, every range gate would charge the head with the commits the base
 // branch gained after the head branched off.
-const resolveRange = Effect.fn("resolveRange")(function* (args: readonly string[], defaultBranch: string) {
-  const ends = yield* endsOf(args, defaultBranch);
+const resolveRange = Effect.fn("resolveRange")(function* (args: readonly string[]) {
+  const ends = yield* endsOf(args);
   const head = yield* commitOf(ends.head);
   const base = yield* git(["merge-base", yield* commitOf(ends.base), head]).pipe(
     Effect.map((sha) => sha.trim()),
@@ -180,7 +166,7 @@ const runGate = Effect.fn("runGate")(function* (gate: KitGate, range: Range) {
 
 const lint = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
-  const range = yield* resolveRange(process.argv.slice(2), workflowBranch(yield* readWorkflows(root)));
+  const range = yield* resolveRange(process.argv.slice(2));
   yield* Console.log(`${NAME}: ${describe(range)} from ${range.source}`);
   const gates = yield* Effect.filter(KIT_GATES, (gate) =>
     gate.appliesTo === EVERY_REPOSITORY

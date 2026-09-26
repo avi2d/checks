@@ -11,15 +11,6 @@
     "access": "public"
   },
   "type": "module",
-  "vendorSources": [
-    {
-      "name": "effect",
-      "package": "effect",
-      "repository": "https://github.com/Effect-TS/effect.git",
-      "tag": "effect@{version}",
-      "path": "packages/effect/package.json"
-    }
-  ],
   "files": [
     "CHANGELOG.md",
     "CONTRIBUTING.md",
@@ -131,7 +122,7 @@
     "checks-vendor": "scripts/vendor.ts"
   },
   "scripts": {
-    "prepare": "bun scripts/vendor.ts",
+    "prepare": "bun scripts/vendor.ts --library effect --package effect --repository https://github.com/Effect-TS/effect.git --tag 'effect@{version}' --path packages/effect/package.json",
     "build": "bun build effect-channel/index.ts --outdir dist --target node --format esm && bun scripts/doc-templates-write.ts && bun scripts/changelog-write.ts && bun scripts/doc-blocks-write.ts",
     "lint": "oxlint --type-aware && bun scripts/lint.ts && depcruise --config .dependency-cruiser.cjs .",
     "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",

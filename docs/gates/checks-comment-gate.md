@@ -1,3 +1,7 @@
+---
+kind: reference
+audience: consumers
+---
 # checks-comment-gate
 
 `checks-comment-gate` is the gate that refuses a banned comment on a line a change adds, and a reader looks it up to learn which comments it refuses.

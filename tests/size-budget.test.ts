@@ -15,9 +15,15 @@ import {
   type Site,
   type Verdict,
 } from "../scripts/size-budget.ts";
-import { budgetsOf } from "../scripts/size-rules.ts";
+import { budgetOf, type Size } from "../scripts/size-rules.ts";
 
-const BUDGETS = budgetsOf({ production: { fileLines: 20, functionLines: 5 } });
+const SIZE: Size = {
+  limits: {},
+  scopes: [
+    { files: ["src/**/*.ts"], excludeFiles: [], limits: { fileLines: 20, functionLines: 5 } },
+    { files: ["tests/**/*.ts"], excludeFiles: [], limits: { fileLines: 600, functionLines: "off" } },
+  ],
+};
 
 function site(file: string, rule: Site["rule"], overrun: number, message = `${file} is over`): Site {
   const line = rule === "max-lines" ? undefined : 1;
@@ -61,12 +67,12 @@ test("siteOf reads a matching diagnostic's overrun against the file's budget, te
     filename: "src/legacy.ts",
     labels: [],
   };
-  expect(Effect.runSync(siteOf(BUDGETS)(diagnostic))).toEqual([
+  expect(Effect.runSync(siteOf(SIZE)(diagnostic))).toEqual([
     { file: "src/legacy.ts", line: undefined, rule: "max-lines", overrun: 10, message: "File has too many lines (30). Maximum allowed is 20." },
   ]);
 
   const testDiagnostic = { ...diagnostic, filename: "tests/wide.test.ts", message: "File has too many lines (25)." };
-  expect(Effect.runSync(siteOf(BUDGETS)(testDiagnostic))).toEqual([
+  expect(Effect.runSync(siteOf(SIZE)(testDiagnostic))).toEqual([
     { file: "tests/wide.test.ts", line: undefined, rule: "max-lines", overrun: -575, message: "File has too many lines (25). Maximum allowed is 600." },
   ]);
 });
@@ -78,43 +84,34 @@ test("siteOf keeps a function's line and unadorned message, and drops a diagnost
     filename: "src/fresh.ts",
     labels: [{ span: { line: 1 } }],
   };
-  expect(Effect.runSync(siteOf(BUDGETS)(diagnostic))).toEqual([
+  expect(Effect.runSync(siteOf(SIZE)(diagnostic))).toEqual([
     { file: "src/fresh.ts", line: 1, rule: "max-lines-per-function", overrun: 7, message: diagnostic.message },
   ]);
 
   const foreign = { ...diagnostic, code: "eslint(no-debugger)" };
-  expect(Effect.runSync(siteOf(BUDGETS)(foreign))).toEqual([]);
+  expect(Effect.runSync(siteOf(SIZE)(foreign))).toEqual([]);
 });
 
 test("siteOf refuses a diagnostic whose message it cannot read a count from", () => {
   const diagnostic = { code: "eslint(max-lines)", message: "File has too many lines.", filename: "src/legacy.ts", labels: [] };
-  expect(() => Effect.runSync(siteOf(BUDGETS)(diagnostic))).toThrow("cannot read max-lines for src/legacy.ts from oxlint");
+  expect(() => Effect.runSync(siteOf(SIZE)(diagnostic))).toThrow("cannot read max-lines for src/legacy.ts from oxlint");
 });
 
-test("verdictOf under ratchet holds only what the range held, judged against the same file and rule at the base", () => {
+test("verdictOf holds only what the range held, judged against the same file and rule at the base", () => {
   const heldSite = site("src/fresh.ts", "max-lines-per-function", 7);
   const advisorySite = site("tools/long.ts", "max-lines", 10);
-  const verdict = verdictOf("ratchet", 1, new Set(["src/fresh.ts"]), [heldSite, advisorySite], []);
+  const verdict = verdictOf(1, new Set(["src/fresh.ts"]), [heldSite, advisorySite], []);
   expect(verdict).toEqual({
-    applies: "ratchet",
     held: 1,
     growths: [{ file: "src/fresh.ts", rule: "max-lines-per-function", base: 0, head: 7, sites: [heldSite] }],
     advisory: [advisorySite],
   });
 });
 
-test("verdictOf under all holds every site, tallying the ones outside the held set as advisory", () => {
-  const heldSite = site("src/legacy.ts", "max-lines", 10);
-  const advisorySite = site("tools/long.ts", "max-lines", 10);
-  const verdict = verdictOf("all", 2, new Set(["src/legacy.ts", "src/small.ts"]), [heldSite, advisorySite], []);
-  expect(verdict).toEqual({ applies: "all", held: 2, overruns: [heldSite], advisory: [advisorySite] });
-});
-
-test("passes holds on an empty ratchet growth list or an empty all overrun list, and fails otherwise", () => {
-  expect(passes({ applies: "ratchet", held: 0, growths: [], advisory: [] })).toBe(true);
-  expect(passes({ applies: "all", held: 0, overruns: [], advisory: [] })).toBe(true);
+test("passes holds on an empty growth list and fails otherwise", () => {
+  expect(passes({ held: 0, growths: [], advisory: [] })).toBe(true);
   const growth: Growth = { file: "a.ts", rule: "max-lines", base: 0, head: 1, sites: [] };
-  expect(passes({ applies: "ratchet", held: 1, growths: [growth], advisory: [] })).toBe(false);
+  expect(passes({ held: 1, growths: [growth], advisory: [] })).toBe(false);
 });
 
 test("describe renders a whole-file site without a line, and a per-function site with one", () => {
@@ -130,7 +127,6 @@ test("report renders a ratchet growth, its sites, and the advisory notice beneat
   const growthSite = site("src/fresh.ts", "max-lines-per-function", 7, "The function `count` has too many lines (12). Maximum allowed is 5.");
   const advisorySite = site("src/legacy.ts", "max-lines", 10, "File has too many lines (30). Maximum allowed is 20.");
   const verdict: Verdict = {
-    applies: "ratchet",
     held: 1,
     growths: [{ file: "src/fresh.ts", rule: "max-lines-per-function", base: 0, head: 7, sites: [growthSite] }],
     advisory: [advisorySite],
@@ -146,38 +142,47 @@ test("report renders a ratchet growth, its sites, and the advisory notice beneat
   );
 });
 
-test("verdictLines reports success by scope, and the all-mode overrun listing", () => {
-  expect(verdictLines({ applies: "ratchet", held: 2, growths: [], advisory: [] })).toEqual([
+test("verdictLines reports success with the count of held files", () => {
+  expect(verdictLines({ held: 2, growths: [], advisory: [] })).toEqual([
     "size-budget: 2 file(s), the production and test files the range adds or changes, raise no overrun past the base",
-  ]);
-  const overrun = site("src/legacy.ts", "max-lines", 10, "File has too many lines (30). Maximum allowed is 20.");
-  expect(verdictLines({ applies: "all", held: 1, overruns: [overrun], advisory: [] })).toEqual([
-    "size-budget: 1 overrun(s) of the budget in every production and test file:",
-    "  src/legacy.ts: File has too many lines (30). Maximum allowed is 20.",
   ]);
 });
 
-test("sizeConfig turns the kit's default budget into oxlint rules, the plugin's by its qualified name, and tests/ into their own", () => {
+test("sizeConfig keeps the root limits and gives each override only the size rules it sets", () => {
   const counted = { skipBlankLines: false, skipComments: false };
-  const config = sizeConfig(budgetsOf({}), "/kit/dist/index.js");
+  const config = sizeConfig(
+    { limits: { statements: 30 }, scopes: [{ files: ["**/*.test.ts"], excludeFiles: ["**/slow.test.ts"], limits: { fileLines: 600, functionLines: "off" } }] },
+    "/kit/dist/index.js",
+  );
   expect(config.jsPlugins).toEqual(["/kit/dist/index.js"]);
   expect(config.rules).toEqual({
-    "max-lines": ["error", { max: 400, ...counted }],
-    "max-lines-per-function": ["error", { max: 100, ...counted }],
+    "max-lines": "off",
+    "max-lines-per-function": "off",
     "max-statements": ["error", { max: 30 }],
-    "effect-channel/cognitive-complexity": ["error", { max: 15 }],
-    "max-depth": ["error", { max: 4 }],
+    "effect-channel/cognitive-complexity": "off",
+    "max-depth": "off",
   });
   expect(config.overrides).toEqual([
     {
-      files: ["tests/**"],
-      rules: {
-        "max-lines": ["error", { max: 600, ...counted }],
-        "max-lines-per-function": "off",
-        "max-statements": ["error", { max: 50 }],
-        "effect-channel/cognitive-complexity": ["error", { max: 15 }],
-        "max-depth": ["error", { max: 4 }],
-      },
+      files: ["**/*.test.ts"],
+      excludeFiles: ["**/slow.test.ts"],
+      rules: { "max-lines": ["error", { max: 600, ...counted }], "max-lines-per-function": "off" },
     },
   ]);
+});
+
+test("budgetOf holds each file to the overrides matching it, later ones winning as oxlint merges them", () => {
+  const size: Size = {
+    limits: { statements: 40 },
+    scopes: [
+      { files: ["src/**/*.ts"], excludeFiles: [], limits: { fileLines: 400 } },
+      { files: ["scripts/**/*.ts"], excludeFiles: [], limits: { fileLines: 200 } },
+      { files: ["**/*.test.ts"], excludeFiles: ["**/slow.test.ts"], limits: { fileLines: 600, statements: "off" } },
+    ],
+  };
+  expect(budgetOf(size, "src/index.ts")).toEqual({ fileLines: 400, statements: 40 });
+  expect(budgetOf(size, "scripts/tool.ts")).toEqual({ fileLines: 200, statements: 40 });
+  expect(budgetOf(size, "src/index.test.ts")).toEqual({ fileLines: 600 });
+  expect(budgetOf(size, "src/slow.test.ts")).toEqual({ fileLines: 400, statements: 40 });
+  expect(budgetOf(size, "tools/other.ts")).toEqual({ statements: 40 });
 });

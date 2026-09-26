@@ -5,7 +5,7 @@ import { CHECKOUT, fixtureRepos, lintWiring, sizeOverride, type FixtureRepo } fr
 
 const BUDGET = "size-budget.ts";
 const SCRIPT = join(CHECKOUT, "scripts", BUDGET);
-const SIZE = { applies: "ratchet", production: { fileLines: 20, functionLines: 5 } };
+const SIZE = { production: { fileLines: 20, functionLines: 5 } };
 const open = fixtureRepos("checks-size-budget-");
 const guardrails = fixtureRepos("checks-lint-guardrails-");
 

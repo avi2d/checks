@@ -1,18 +1,24 @@
+---
+kind: reference
+audience: consumers
+---
 # checks-commit-identity
 
-`checks-commit-identity` checks a commit's author, committer and coauthor trailers against the owners in `package.json`.
+`checks-commit-identity` checks a commit's author and committer against the owners in `package.json` and refuses coauthor trailers.
 
 ## What it checks
 
 The author and committer of each commit must be allowed.
-Each `Co-authored-by` trailer must also name an allowed author.
+A commit whose trailer block carries a `Co-authored-by` trailer, as git parses it, is refused.
 `GitHub <noreply@github.com>` is allowed as committer only.
 
 ## What it reads
 
 `package.json` uses its standard `author` and `contributors` fields for allowed authors.
-Each identity can be an object with `name` and `email`, or a string such as `Avi <avi@example.com>`.
-Without either field, the kit allows `avi2d <avi2dg@gmail.com>`.
+Each person can be any form npm allows, an object with `name` and optional `email` and `url`, or a string such as `Avi <avi@example.com> (https://example.com)`.
+A person with both a name and an email is an allowed author.
+A person without an email is ignored.
+When no person carries an email, the kit allows `avi2d <avi2dg@gmail.com>`.
 The bin reads commits from git and parses their trailer blocks.
 
 ## Arguments
@@ -31,7 +37,7 @@ With one argument, it checks that commit alone.
 | --- | --- |
 | 0 | Every commit carries an allowed identity. |
 | 1 | A commit carries a foreign identity. |
-| 2 | A ref, argument or package identity cannot be decoded. |
+| 2 | A ref, argument or `package.json` cannot be decoded. |
 
 ## Sample output
 

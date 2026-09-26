@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
-import { git } from "./git.ts";
+import { defaultBranch, git } from "./git.ts";
 import { runMain } from "./main.ts";
-import { DEFAULT_BRANCH, ENTRY_POINT, KIT_GATES, type KitGate } from "./gates.ts";
+import { ENTRY_POINT, KIT_GATES, type KitGate } from "./gates.ts";
 import { invokes, mentions, plainCommand, type Command } from "./shell-command.ts";
 
 export type { Command };
@@ -47,6 +47,10 @@ export class WiringError extends Schema.TaggedError<WiringError>()("WiringError"
 }) {}
 
 const WORKFLOWS = ".github/workflows";
+const SCRIPTED = ["lint", "build", "typecheck", "test"];
+const BUILT_TREE = "git diff --exit-code";
+const TITLE_LINT = "./node_modules/.bin/commitlint";
+const Manifest = Schema.Struct({ scripts: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)) });
 // Without these a pull_request workflow never sees the commits a pull request pushes.
 const GATING_TYPES = ["opened", "synchronize"];
 const CONSTANTS = new Map([
@@ -222,19 +226,19 @@ export function formatReport(declaration: Declaration, gaps: readonly Gap[]): st
   return [`ci-wiring: ${gaps.length} of ${declaration.gates.length} gate(s) do not run on ${target}:`, ...gapLines(gaps)].join("\n");
 }
 
-export function requiredCommands(hasTypeScript: boolean): readonly string[] {
+export function requiredCommands(scripts: readonly string[]): readonly string[] {
   return [
-    "bun run lint",
-    ...(hasTypeScript ? ["bun run build", "git diff --exit-code", "bun run typecheck", "bun run test"] : []),
-    "./node_modules/.bin/commitlint",
+    ...SCRIPTED.filter((name) => scripts.includes(name)).flatMap((name) =>
+      name === "build" ? [`bun run ${name}`, BUILT_TREE] : [`bun run ${name}`],
+    ),
+    TITLE_LINT,
   ];
 }
 
-export function declarationFor(hasTypeScript: boolean, defaultBranch = DEFAULT_BRANCH): Declaration {
-  const commands = requiredCommands(hasTypeScript);
+export function declarationFor(scripts: readonly string[], branch: string): Declaration {
   return {
-    gates: commands.map((command) => ({ command, words: command.split(" ") })),
-    defaultBranch,
+    gates: requiredCommands(scripts).map((command) => ({ command, words: command.split(" ") })),
+    defaultBranch: branch,
     lintGates: KIT_GATES,
   };
 }
@@ -245,18 +249,16 @@ export const parseWorkflow = (path: string, text: string): Effect.Effect<Workflo
     catch: (error) => new WiringError({ message: `cannot parse ${path}: ${String(error)}` }),
   });
 
-export function workflowBranch(workflows: readonly Workflow[]): string {
-  const branches = workflows.flatMap(({ document }) => {
-    const on = isRecord(document) ? document["on"] : undefined;
-    const push = isRecord(on) ? on["push"] : undefined;
-    return isRecord(push) ? names(push["branches"]) ?? [] : [];
-  }).filter((branch) => !branch.includes("*") && !branch.startsWith("!"));
-  return [...new Set(branches)][0] ?? DEFAULT_BRANCH;
-}
-
-export const readDeclaration = Effect.fn("readDeclaration")(function* (root: string, workflows: readonly Workflow[]) {
-  const files = yield* git(["ls-files", "--", "*.ts", "*.tsx"], root);
-  return declarationFor(files.trim() !== "", workflowBranch(workflows));
+export const readDeclaration = Effect.fn("readDeclaration")(function* (root: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const file = (yield* Path.Path).join(root, "package.json");
+  const { scripts = {} } = (yield* fs.exists(file))
+    ? yield* fs.readFileString(file).pipe(
+        Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Manifest))),
+        Effect.mapError((cause) => new WiringError({ message: `cannot read ${file}: ${cause.message}` })),
+      )
+    : Manifest.make({});
+  return declarationFor(Object.keys(scripts), yield* defaultBranch(root));
 });
 
 export const readWorkflows = Effect.fn("readWorkflows")(function* (root: string) {
@@ -277,7 +279,7 @@ export const readWorkflows = Effect.fn("readWorkflows")(function* (root: string)
 const wiring = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const workflows = yield* readWorkflows(root);
-  const declaration = yield* readDeclaration(root, workflows);
+  const declaration = yield* readDeclaration(root);
   const gaps = findGaps(declaration, workflows);
   const gapReport = formatReport(declaration, gaps);
   yield* gaps.length > 0 ? Console.error(gapReport) : Console.log(gapReport);
