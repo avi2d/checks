@@ -15,7 +15,6 @@ It keeps the date a released section already carries and dates a new section tod
 It writes the whole file newest first, so the changelog is never edited by hand.
 A repository with no tag yet releases from its first commit.
 A version with no conventional commit worth listing writes no section.
-Its commits join the next version that has entries.
 
 ## What it reads
 

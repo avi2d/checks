@@ -189,7 +189,7 @@ test(
 );
 
 test(
-  "a version with no conventional commit worth listing writes no section and its commits join the next release",
+  "a version with no conventional commit worth listing writes no section",
   async () => {
     await initRepo();
     await bump("0.1.0");

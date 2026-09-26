@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { compactReleases, cuts, hasEntries, releaseDates, renderChangelog, type Bump } from "../scripts/changelog.ts";
+import { cuts, hasEntries, releaseDates, renderChangelog, type Bump } from "../scripts/changelog.ts";
 import { judge } from "../scripts/doc-rules.ts";
 
 const SUBJECTS = [
@@ -113,31 +113,17 @@ test("the release being prepared covers everything past every release and keeps 
   expect(cuts(bumps("0.1.0"), recorded("0.3.0", "0.1.0"), new Set(), prepared).at(-1)?.date).toBe("2026-09-20");
 });
 
-test("a release with no conventional commit worth listing writes no section", () => {
-  const rendered = renderChangelog("widget", [{ version: "0.1.0", date: "2026-09-20", subjects: ["docs: say why", "chore: tidy"] }], "https://github.com/acme/widget");
+test("a release with no conventional commit worth listing has no entries to write", () => {
+  expect(hasEntries(["docs: say why", "chore: tidy", "ci: run the suite"])).toBe(false);
+  expect(hasEntries(["chore: tidy", "fix: keep the order"])).toBe(true);
+});
+
+test("a changelog with no release to write holds only its title and lead, which its template allows", () => {
+  const rendered = renderChangelog("widget", [], "https://github.com/acme/widget");
   expect(rendered).toBe(
     ["# Changelog", "", "Every release of `widget`, newest first, written by the release from its conventional commits."].join("\n") + "\n",
   );
   expect(judge("changelog", { path: "CHANGELOG.md", text: rendered }, [])).toEqual([]);
-});
-
-test("an empty release drops out and its commits join the next release with entries", () => {
-  const kept = compactReleases([
-    { version: "0.1.0", date: "2026-09-01", subjects: ["chore: tidy"] },
-    { version: "0.2.0", date: "2026-09-02", subjects: ["feat: price a bill"] },
-  ]);
-  expect(kept.map(({ version }) => version)).toEqual(["0.2.0"]);
-  expect(kept[0]?.subjects).toEqual(["feat: price a bill", "chore: tidy"]);
-  expect(hasEntries(kept[0]?.subjects ?? [])).toBe(true);
-});
-
-test("an empty newest release drops out with nowhere to carry", () => {
-  expect(
-    compactReleases([
-      { version: "0.1.0", date: "2026-09-01", subjects: ["feat: build a bill"] },
-      { version: "0.2.0", date: "2026-09-02", subjects: ["chore: tidy"] },
-    ]).map(({ version }) => version),
-  ).toEqual(["0.1.0"]);
 });
 
 test("the dates a changelog already carries read back by version, so regenerating it keeps them", () => {
