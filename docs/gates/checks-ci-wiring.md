@@ -17,6 +17,9 @@ It looks, for each gate, for a `run:` step that is the gate command alone on one
 Plain arguments are words, quoted strings, and `$VAR` or `${VAR}` expansions.
 `bun run lint --quiet` and `bunx checks-comment-gate "origin/$BASE_REF" "$HEAD_SHA"` count.
 `bun run lint:deps`, `echo bun run lint` and a step `name:` do not.
+A gate whose first word is a path starting with `./`, `../` or `/` also counts when `bun run` comes before it, since bun runs that path as a file.
+`bun run ./node_modules/.bin/commitlint --edit "$RUNNER_TEMP/pr-title"` counts for `./node_modules/.bin/commitlint`.
+`bun run tsc --noEmit` does not count for `tsc --noEmit`, since bun runs a package script named `tsc` when there is one.
 
 A step never counts when its script has a second line or any of these, because each can run the gate without its failure failing the step:
 
