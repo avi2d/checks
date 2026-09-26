@@ -32,8 +32,8 @@ const today = DateTime.nowInCurrentZone.pipe(DateTime.withCurrentZoneLocal, Effe
 function repositoryWebUrl(repository: string): string | undefined {
   const url = repository
     .replace(/^git\+/, "")
-    .replace(/\.git$/, "")
-    .replace(/\/$/, "");
+    .replace(/\/$/, "")
+    .replace(/\.git$/, "");
   return url.startsWith("https://") ? url : undefined;
 }
 

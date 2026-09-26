@@ -231,10 +231,12 @@ test(
 test(
   "a repository given as a bare https string links each pull request under it",
   async () => {
-    await initRepo();
-    await writeFile(join(dir, "package.json"), JSON.stringify({ name: "widget", version: "0.1.0", repository: "https://github.com/acme/widget" }, null, 2));
-    await commit("feat: build a bill (#1)");
-    expect(await rewritten(1)).toContain("- build a bill [#1](https://github.com/acme/widget/pull/1)");
+    for (const address of ["https://github.com/acme/widget", "https://github.com/acme/widget.git/"]) {
+      await initRepo();
+      await writeFile(join(dir, "package.json"), JSON.stringify({ name: "widget", version: "0.1.0", repository: address }, null, 2));
+      await commit("feat: build a bill (#1)");
+      expect(await rewritten(1)).toContain("- build a bill [#1](https://github.com/acme/widget/pull/1)");
+    }
   },
   { timeout: 30_000 },
 );
