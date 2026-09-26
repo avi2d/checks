@@ -48,6 +48,10 @@ const decodeReport = Schema.decodeUnknownEffect(
   ),
 );
 
+const decodeConfigPaths = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(Schema.Struct({ path: Schema.optional(Schema.Array(Schema.String)) })),
+);
+
 type Scan = { readonly sources: number; readonly clones: readonly Clone[] };
 
 function fragmentOf(file: (name: string) => string, { name, start, end }: typeof Location.Type): Fragment {
@@ -66,8 +70,9 @@ export function repeatedLines(clones: readonly Clone[]): ReadonlyMap<string, num
 
 // jscpd reads files from disk, and the working tree need not hold the revision: a merge checkout or an uncommitted edit.
 // Both ends scan under the head's config, so a changed file set never reads as a change in repetition.
+// jscpd refuses a missing path, so a path in `emptied` the revision lacks is created empty.
 const scan = Effect.fn("scan")(
-  function* (root: string, rev: string, config: string) {
+  function* (root: string, rev: string, config: string, emptied: readonly string[]) {
     const files = yield* pathsAt(rev, [], root);
     if (files.length === 0) return { sources: 0, clones: [] } satisfies Scan;
     const fs = yield* FileSystem.FileSystem;
@@ -75,6 +80,9 @@ const scan = Effect.fn("scan")(
     const scratch = yield* fs.makeTempDirectoryScoped({ prefix: "checks-repetition-" });
     const tree = yield* checkoutFiles(rev, files, scratch, root);
     yield* fs.writeFileString(path.join(tree, CONFIG), config);
+    for (const absent of emptied.map((entry) => path.join(tree, entry))) {
+      if (!(yield* fs.exists(absent))) yield* fs.makeDirectory(absent, { recursive: true });
+    }
     const output = path.join(scratch, "report");
     const flags = ["--silent", "--no-tips", "--no-gitignore", "--absolute", "--reporters", "json", "--output", output];
     const thresholds = ["--min-tokens", `${MIN_TOKENS}`, "--min-lines", `${MIN_LINES}`];
@@ -137,8 +145,11 @@ const runHold = Effect.fn("runHold")(function* (root: string, config: string, ba
   const formerPath = new Map(
     (yield* changedPaths(base, head, [], root)).flatMap((change) => (change.kind === "renamed" ? [[change.path, change.from]] : [])),
   );
-  const before = repeatedLines((yield* scan(root, base, config)).clones);
-  const { sources, clones } = yield* scan(root, head, config);
+  const { path: configPaths = [] } = yield* decodeConfigPaths(config).pipe(
+    Effect.mapError((cause) => new JscpdUnreadable({ message: `cannot read ${CONFIG}: ${cause.message}` })),
+  );
+  const before = repeatedLines((yield* scan(root, base, config, configPaths)).clones);
+  const { sources, clones } = yield* scan(root, head, config, []);
   const after = repeatedLines(clones);
   const rises = risesOf([...after.keys()], before, after, formerPath, clones);
   return heldOf(sources, rises, after) satisfies Held;
