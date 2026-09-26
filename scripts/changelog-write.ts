@@ -4,7 +4,7 @@ import { cuts, releaseDates, renderChangelog, type Bump, type Cut, type Release 
 import { git } from "./git.ts";
 import { runMain } from "./main.ts";
 
-const NAME = "changelog";
+const NAME = "checks-changelog";
 const CHANGELOG = "CHANGELOG.md";
 const MANIFEST = "package.json";
 const FIELD = "\x1f";
@@ -19,7 +19,7 @@ const decodeManifestJson = Schema.decodeUnknownEffect(
     Schema.Struct({
       name: Schema.String,
       version: Schema.String,
-      repository: Schema.optional(Schema.Struct({ url: Schema.optional(Schema.String) })),
+      repository: Schema.optional(Schema.Union([Schema.String, Schema.Struct({ url: Schema.optional(Schema.String) })])),
     }),
   ),
 );
@@ -29,11 +29,12 @@ const decodeManifest = (text: string, source: string) =>
 
 const today = DateTime.nowInCurrentZone.pipe(DateTime.withCurrentZoneLocal, Effect.map(DateTime.formatIsoDate));
 
-function repositoryWebUrl(repository: string): string {
-  return repository
+function repositoryWebUrl(repository: string): string | undefined {
+  const url = repository
     .replace(/^git\+/, "")
-    .replace(/\.git$/, "")
-    .replace(/\/$/, "");
+    .replace(/\/$/, "")
+    .replace(/\.git$/, "");
+  return url.startsWith("https://") ? url : undefined;
 }
 
 const versionAt = Effect.fn("versionAt")(function* (root: string, sha: string) {
@@ -74,10 +75,14 @@ const write = Effect.gen(function* () {
   }
   const target = path.join(root, CHANGELOG);
   const { name, version, repository } = yield* decodeManifest(yield* fs.readFileString(path.join(root, MANIFEST)), MANIFEST);
-  if (repository?.url === undefined) {
+  const url = typeof repository === "string" ? repository : repository?.url;
+  if (url === undefined) {
     return yield* new ChangelogUnreadable({ message: `${MANIFEST} has no repository.url, which the changelog links each pull request under` });
   }
-  const repositoryUrl = repositoryWebUrl(repository.url);
+  const repositoryUrl = repositoryWebUrl(url);
+  if (repositoryUrl === undefined) {
+    return yield* new ChangelogUnreadable({ message: `${MANIFEST} repository ${url} is no https address, which the changelog links each pull request under` });
+  }
   const recorded = (yield* fs.exists(target)) ? releaseDates(yield* fs.readFileString(target)) : new Map<string, string>();
   const pending = version === (yield* versionAt(root, "HEAD")) ? undefined : { sha: "HEAD", version, date: yield* today };
   const released = cuts(yield* readBumps(root), recorded, yield* readPublished(root), pending);

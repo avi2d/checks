@@ -4,6 +4,9 @@ import { resolve } from "node:path";
 import { ENTRY_POINT, KIT_GATES, TEST_ENTRY_POINT } from "../scripts/gates.ts";
 
 const OUTSIDE_LINT = {
+  "checks-changelog": "scripts/changelog-write.ts",
+  "checks-release-notes": "scripts/release-notes.ts",
+  "checks-release-report": "scripts/release-report.ts",
   "checks-backtest": "scripts/backtest.ts",
   "checks-mutation-compare": "scripts/mutation-compare.ts",
   "checks-subsumed-tests": "scripts/subsumed-tests.ts",

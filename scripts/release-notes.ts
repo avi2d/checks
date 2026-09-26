@@ -23,13 +23,15 @@ export function extractReleaseNotes(changelog: string, version: string): Effect.
     : Effect.succeed(notes);
 }
 
+const USAGE = "usage: release-notes.ts <version> <output>";
+
 const releaseNotes = Effect.gen(function* () {
-  const [version, output] = process.argv.slice(2);
-  if (version === undefined || output === undefined) return yield* new Usage({ message: "usage: release-notes.ts <version> <output>" });
+  const [version, output, ...extra] = process.argv.slice(2);
+  if (version === undefined || output === undefined || extra.length > 0) return yield* new Usage({ message: USAGE });
   const fs = yield* FileSystem.FileSystem;
   const notes = yield* extractReleaseNotes(yield* fs.readFileString("CHANGELOG.md"), version);
   yield* fs.writeFileString(output, notes);
   return true;
 });
 
-if (import.meta.main) runMain("release-notes", releaseNotes);
+if (import.meta.main) runMain("checks-release-notes", releaseNotes);

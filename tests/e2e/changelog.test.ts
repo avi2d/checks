@@ -34,7 +34,7 @@ function changelog(cwd = dir): Promise<Ran> {
 }
 
 async function rewritten(releases: number, cwd = dir): Promise<string> {
-  expect(await changelog(cwd)).toEqual({ exitCode: 0, text: `changelog: wrote ${releases} release(s) to CHANGELOG.md\n` });
+  expect(await changelog(cwd)).toEqual({ exitCode: 0, text: `checks-changelog: wrote ${releases} release(s) to CHANGELOG.md\n` });
   return readFile(join(cwd, "CHANGELOG.md"), "utf8");
 }
 
@@ -191,7 +191,7 @@ test(
     try {
       const refused = await changelog(shallow);
       expect(refused.exitCode).toBe(2);
-      expect(refused.text).toContain("changelog: the checkout is shallow");
+      expect(refused.text).toContain("checks-changelog: the checkout is shallow");
     } finally {
       await rm(shallow, { recursive: true, force: true });
     }
@@ -207,7 +207,36 @@ test(
     await commit("feat: build a bill (#1)");
     const refused = await changelog();
     expect(refused.exitCode).toBe(2);
-    expect(refused.text).toContain("changelog: package.json has no repository.url");
+    expect(refused.text).toContain("checks-changelog: package.json has no repository.url");
+  },
+  { timeout: 30_000 },
+);
+
+test(
+  "a repository address that is no https address once git+ and .git are dropped is refused, since it links no pull request",
+  async () => {
+    await initRepo();
+    await commit("feat: build a bill (#1)");
+    for (const address of ["git+ssh://git@github.com/acme/widget.git", { url: "git@github.com:acme/widget.git" }, "github:acme/widget"]) {
+      await writeFile(join(dir, "package.json"), JSON.stringify({ name: "widget", version: "0.1.0", repository: address }, null, 2));
+      const refused = await changelog();
+      expect(refused.exitCode).toBe(2);
+      expect(refused.text).toContain("checks-changelog: package.json repository ");
+      expect(refused.text).toContain(" is no https address");
+    }
+  },
+  { timeout: 30_000 },
+);
+
+test(
+  "a repository given as a bare https string links each pull request under it",
+  async () => {
+    for (const address of ["https://github.com/acme/widget", "https://github.com/acme/widget.git/"]) {
+      await initRepo();
+      await writeFile(join(dir, "package.json"), JSON.stringify({ name: "widget", version: "0.1.0", repository: address }, null, 2));
+      await commit("feat: build a bill (#1)");
+      expect(await rewritten(1)).toContain("- build a bill [#1](https://github.com/acme/widget/pull/1)");
+    }
   },
   { timeout: 30_000 },
 );
