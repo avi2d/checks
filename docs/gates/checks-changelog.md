@@ -10,6 +10,8 @@ audience: consumers
 
 It reads the version from `package.json` and treats that version as the release being prepared.
 It lists every conventional commit the release closes, grouped as Features, Fixes, Performance, Reverts and Breaking changes.
+It lists the commits a branch merged in after its bump under that bump, since the squash merge releases them there.
+What the branch added past its bump waits for a later release, since the squash merge drops it.
 It links each entry to its pull request under the repository address `package.json` names.
 It keeps the date a released section already carries and dates a new section today.
 It writes the whole file newest first, so the changelog is never edited by hand.

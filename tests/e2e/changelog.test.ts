@@ -145,6 +145,68 @@ test(
 );
 
 test(
+  "a branch that merges main in after its bump releases what the squash merge releases",
+  async () => {
+    await initRepo();
+    await bump("0.1.0");
+    await commit("feat: build a bill (#1)");
+    await $`git switch -q -c topic`.cwd(dir).quiet();
+    await bump("0.2.0");
+    await commit("chore: bump to 0.2.0");
+    await $`git switch -q main`.cwd(dir).quiet();
+    await commit("feat: price a bill (#180)");
+    await $`git switch -q topic && git merge -q --no-ff --no-gpg-sign --no-edit main`.cwd(dir).env({ ...process.env, ...DATED }).quiet();
+    const branch = await rewritten(2);
+    expect(branch).toContain("- price a bill [#180](https://github.com/acme/widget/pull/180)");
+    await commit("chore: update changelog");
+
+    await $`git switch -q main`.cwd(dir).quiet();
+    await $`git merge -q --squash topic`.cwd(dir).quiet();
+    await $`git commit -q --no-gpg-sign -m ${"chore: release 0.2.0 (#181)"}`.cwd(dir).env({ ...process.env, ...DATED }).quiet();
+    expect(await rewritten(2)).toBe(branch);
+  },
+  { timeout: 30_000 },
+);
+
+test(
+  "a commit the branch adds past its bump waits for a later release",
+  async () => {
+    await initRepo();
+    await bump("0.1.0");
+    await commit("feat: build a bill (#1)");
+    await $`git switch -q -c topic`.cwd(dir).quiet();
+    await bump("0.2.0");
+    await commit("chore: bump to 0.2.0");
+    await commit("feat: on the topic (#2)");
+    await $`git switch -q main`.cwd(dir).quiet();
+    await commit("feat: on main (#3)");
+    await $`git switch -q topic && git merge -q --no-ff --no-gpg-sign --no-edit main`.cwd(dir).env({ ...process.env, ...DATED }).quiet();
+
+    const branch = await rewritten(2);
+    expect(branch).toContain("- on main [#3](https://github.com/acme/widget/pull/3)");
+    expect(branch).not.toContain("[#2](https://github.com/acme/widget/pull/2)");
+  },
+  { timeout: 30_000 },
+);
+
+test(
+  "a branch off a merged release keeps its own commits out of that release",
+  async () => {
+    await initRepo();
+    await bump("0.1.0");
+    await commit("feat: build a bill (#1)");
+    await bump("0.2.0");
+    await commit("fix: keep the order of parts (#2)");
+    const main = await rewritten(2);
+    await $`git switch -q -c feature`.cwd(dir).quiet();
+    await commit("feat: on the feature (#4)");
+
+    expect(await rewritten(2)).toBe(main);
+  },
+  { timeout: 30_000 },
+);
+
+test(
   "a branch that merged main in after main gained a release keeps main's changelog",
   async () => {
     await initRepo();
