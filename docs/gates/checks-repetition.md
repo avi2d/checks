@@ -16,6 +16,7 @@ A file that repeats lines without a rise is advisory.
 ## What it reads
 
 jscpd reads the head's `.jscpd.json` at both ends, so its `path` and `ignore` globs select the files to measure.
+A `path` entry the base revision lacks reads as empty there, so a newly measured folder never fails the scan.
 
 ```json
 { "path": ["src"], "format": ["typescript"], "ignore": ["**/*.d.ts"] }

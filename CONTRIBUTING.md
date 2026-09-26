@@ -26,8 +26,8 @@ Each generated file is committed, and lint, the suite or CI's diff after the bui
 
 To regenerate after an edit:
 
-1. After editing `effect-channel/` or the templates in `scripts/doc-templates.ts`, run `bun run build`.
-   It rewrites `dist/index.js` and `templates/`.
+1. After editing `effect-channel/`, `readability/` or the templates in `scripts/doc-templates.ts`, run `bun run build`.
+   It rewrites `dist/` and `templates/`.
 1. After editing anything a generated block names as its source in its opening marker, run `bun run build`, which rewrites every generated block.
 1. Commit what the command rewrote in the same commit as the edit.
 
@@ -68,8 +68,9 @@ To place a change:
    | Path | What it holds |
    | --- | --- |
    | `scripts/` | every bin, and the modules they share |
-   | `effect-channel/` | the oxlint plugin with the Effect error-channel and cognitive complexity rules |
-   | `dist/` | the committed oxlint plugin bundle |
+   | `effect-channel/` | the oxlint plugin with the Effect error-channel rules |
+   | `readability/` | the oxlint plugin with the readability rules |
+   | `dist/` | the committed oxlint plugin bundles |
    | `presets/` | the Effect rule blocks consumers copy into native configs |
    | `templates/` | one template per kind of doc file, which `bun run build` renders |
    | `CHANGELOG.md` | every release, which `bun run build` writes from the conventional commits |
@@ -83,7 +84,7 @@ To place a change:
    A new bin gets its page under `docs/gates/`, and the suite fails until it has one.
 
 This repository holds itself to the kit, with two exceptions of its own.
-Its `.dependency-cruiser.cjs` redeclares `no-orphans` with the plugin entry added to its `pathNot`.
+Its `.dependency-cruiser.cjs` redeclares `no-orphans` with each plugin entry added to its `pathNot`.
 Its `.oxlintrc.json` lifts `effect-channel/no-throw` from `scripts/comment-matchers.ts`, whose synchronous `refused()` a host loads without `node_modules`.
 
 ## Related topics

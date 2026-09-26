@@ -12,7 +12,7 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
 - `files` in package.json is the published surface: `tests/`, `AGENTS.md` and the `.ts` plugin source never reach an install.
   npm adds `package.json`, `README` and `LICENSE` to the tarball whatever `files` says.
   `bun pm pack` builds the same tarball the registry serves, which is what the packed-tarball consumer e2e test installs.
-- The plugin ships compiled as `dist/index.js`, built with `bun build effect-channel/index.ts --outdir dist --target node --format esm`.
+- Each plugin ships compiled under `dist/`, built with `bun build <name>/index.ts --outdir dist/<name> --target node --format esm`.
   Node refuses to type-strip a `.ts` plugin under `node_modules`, so the `.ts` source would fail to load from an installed package.
 - The size rules are plain oxlint rules at `error` in `.oxlintrc.json`, and `bun run lint` enforces them on the whole tree.
   A repository records its existing violations with `oxlint --suppress-all`, and `checks-suppressions-ratchet` refuses any count that rises.
@@ -51,7 +51,7 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   `@effect/platform-node-shared` is a direct dependency at the same exact version only to pin it: `@effect/platform-bun` asks for it with a `^` range, and a newer rc peers on a newer `effect` than consumers install, so all three move together.
 - Each runnable script ships a `checks-` bin entry, so consumer `package.json` scripts call the short name, which the package manager puts on `PATH` only there.
   A shell runs it through `bun run`, which never falls back to the registry the way `bunx` does.
-  The `.ts` checks keep a `bun` shebang, which needs no build step and no `dist/` entry, unlike the oxlint plugin that node loads.
+  The `.ts` checks keep a `bun` shebang, which needs no build step and no `dist/` entry, unlike the oxlint plugins that node loads.
 - `checks-lint` runs each gate as its own bin in a child process rather than importing it, so a gate behaves the same called alone or through the entry point, and `lint-coverage.sh` stays a shell script.
   The gates run one at a time with their output passed straight through, so each report reads whole and in the table's order.
 - `checks-lint` determines applicable gates from tracked files instead of accepting a repository selection.

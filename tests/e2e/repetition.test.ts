@@ -140,3 +140,18 @@ test(
   },
   60_000,
 );
+
+test(
+  "a path the head's .jscpd.json names that the base lacks reads as empty at the base",
+  async () => {
+    const { write, commit, script } = await repository({ "src/ledger.ts": block("ledger") });
+    const base = await commit("feat: base");
+    await write({ ".jscpd.json": JSON.stringify({ path: ["src", "tools"] }), "tools/copy.ts": block("ledger") });
+    const head = await commit("feat: a measured folder");
+    const red = await script("repetition.ts", base, head);
+    expect(red.text).toContain(`repetition: 2 ${ROSE}  src/ledger.ts: 10 repeated line(s), up from 0\n`);
+    expect(red.text).toContain("  tools/copy.ts: 10 repeated line(s), up from 0\n");
+    expect(red.exitCode).toBe(1);
+  },
+  60_000,
+);

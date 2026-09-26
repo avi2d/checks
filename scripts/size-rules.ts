@@ -15,7 +15,7 @@ const STATEMENTS = {
 
 const COMPLEXITY = {
   rule: "cognitive-complexity",
-  plugin: "effect-channel",
+  plugin: "readability",
   limits: "The highest cognitive complexity a function may reach, a switch counted once",
 } as const;
 
