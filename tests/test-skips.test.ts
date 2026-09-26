@@ -43,6 +43,7 @@ test("a describe declaration covers every test inside its lines", () => {
     file: "tests/pricing.test.ts",
     line: 10,
     lastLine: 20,
+    nestedSkips: [{ line: 16, lastLine: 18 }],
     name: "totals",
     reason: "waits for the rounding fix",
   };
@@ -54,6 +55,9 @@ test("a describe declaration covers every test inside its lines", () => {
 
   const outside = result("tests/pricing.test.ts", 21, "totals > later", "skipped");
   expect(judgeSkips([...inner, outside], [group], "ci").undeclared).toEqual([outside]);
+
+  const ownSkip = result("tests/pricing.test.ts", 17, "totals > nested > skips itself", "skipped");
+  expect(judgeSkips([...inner, ownSkip], [group], "ci").undeclared).toEqual([ownSkip]);
 
   const ran = inner.map((skipped) => ({ ...skipped, outcome: "passed" as const }));
   expect(judgeSkips(ran, [group], "ci").stale).toEqual([group]);

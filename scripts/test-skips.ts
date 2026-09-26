@@ -3,7 +3,10 @@ import { identifierName, isRecord, lineOf, parseTypeScript, spanEnd, spanStart, 
 
 export type Environment = "ci" | "local";
 export type TestTier = "live" | "pixel";
-type SkipSite = { readonly scope: "test" } | { readonly scope: "describe"; readonly lastLine: number };
+export type LineRange = { readonly line: number; readonly lastLine: number };
+type SkipSite =
+  | { readonly scope: "test" }
+  | { readonly scope: "describe"; readonly lastLine: number; readonly nestedSkips: readonly LineRange[] };
 export type SkipDeclaration = SkipSite & {
   readonly file: string;
   readonly line: number;
@@ -58,11 +61,6 @@ function memberOf(node: unknown): Member | undefined {
   return { object: identifierName(node["object"]), property: identifierName(node["property"]) };
 }
 
-type DeclarationScan =
-  | { readonly kind: "none" }
-  | { readonly kind: "invalid"; readonly message: string }
-  | { readonly kind: "valid"; readonly declaration: SkipDeclaration };
-
 type SkipReasonScan =
   | { readonly kind: "none" }
   | { readonly kind: "invalid"; readonly message: string }
@@ -90,42 +88,49 @@ function skipReasonCall(node: unknown, aliases: ReadonlySet<string>): SkipReason
   return { kind: "valid", name: label, reason, ...(when === undefined ? {} : { when }) };
 }
 
-type RegisteredSkip = { readonly scope: SkipDeclaration["scope"]; readonly first: unknown };
+type RegisteredSkip = {
+  readonly node: Record<string, unknown>;
+  readonly scope: SkipDeclaration["scope"];
+  readonly first: unknown;
+};
 
 function registeredSkip(node: Record<string, unknown>): RegisteredSkip | undefined {
+  if (node["type"] !== "CallExpression") return undefined;
   const callee = node["callee"];
   const curried = isRecord(callee) && callee["type"] === "CallExpression";
   const member = memberOf(curried ? callee["callee"] : callee);
   const methods = curried ? ["skipIf", "if"] : ["skip", "todo"];
   if (member === undefined || !methods.includes(member.property ?? "")) return undefined;
-  return { scope: member.object === "describe" ? "describe" : "test", first: expressionOf(argumentsOf(node)[0]) };
+  return { node, scope: member.object === "describe" ? "describe" : "test", first: expressionOf(argumentsOf(node)[0]) };
 }
 
-function declarationAt(
-  node: Record<string, unknown>,
-  aliases: ReadonlySet<string>,
-  file: string,
-  source: string,
-): DeclarationScan {
-  if (node["type"] !== "CallExpression") return { kind: "none" };
-  const registered = registeredSkip(node);
-  if (registered === undefined || !isRecord(registered.first)) return { kind: "none" };
-  const metadata = skipReasonCall(registered.first, aliases);
-  if (metadata.kind !== "valid") return metadata;
-  const { name, reason, when } = metadata;
-  const site: SkipSite =
-    registered.scope === "describe" ? { scope: "describe", lastLine: lineOf(source, spanEnd(node)) } : { scope: "test" };
-  return {
-    kind: "valid",
-    declaration: {
-      ...site,
-      file,
-      line: lineOf(source, spanStart(registered.first)),
-      name,
-      reason,
-      ...(when === undefined ? {} : { when }),
-    },
+function registeredSkips(module: unknown): readonly RegisteredSkip[] {
+  const found: RegisteredSkip[] = [];
+  const visit = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      for (const child of node) visit(child);
+      return;
+    }
+    if (!isRecord(node)) return;
+    const registered = registeredSkip(node);
+    if (registered !== undefined) found.push(registered);
+    for (const value of Object.values(node)) visit(value);
   };
+  visit(module);
+  return found;
+}
+
+function linesOf(registered: RegisteredSkip, source: string): LineRange {
+  const line = lineOf(source, spanStart(isRecord(registered.first) ? registered.first : registered.node));
+  return { line, lastLine: registered.scope === "describe" ? lineOf(source, spanEnd(registered.node)) : line };
+}
+
+function nestedIn(inner: RegisteredSkip, outer: RegisteredSkip): boolean {
+  return (
+    inner !== outer &&
+    spanStart(outer.node) <= spanStart(inner.node) &&
+    spanEnd(inner.node) <= spanEnd(outer.node)
+  );
 }
 
 type DeclarationsRead =
@@ -135,21 +140,25 @@ type DeclarationsRead =
 function declarationsIn(source: string, file: string, module: unknown): DeclarationsRead {
   const aliases = importedSkipReasonNames(module);
   if (aliases.size === 0) return { kind: "valid", declarations: [] };
+  const registrations = registeredSkips(module);
   const declarations: SkipDeclaration[] = [];
-  let issue: string | undefined;
-  const visit = (node: unknown): void => {
-    if (Array.isArray(node)) {
-      for (const child of node) visit(child);
-      return;
-    }
-    if (!isRecord(node)) return;
-    const scan = declarationAt(node, aliases, file, source);
-    if (scan.kind === "invalid") issue ??= scan.message;
-    if (scan.kind === "valid") declarations.push(scan.declaration);
-    for (const value of Object.values(node)) visit(value);
-  };
-  visit(module);
-  return issue === undefined ? { kind: "valid", declarations } : { kind: "invalid", message: issue };
+  for (const registered of registrations) {
+    const metadata = skipReasonCall(registered.first, aliases);
+    if (metadata.kind === "invalid") return metadata;
+    if (metadata.kind === "none") continue;
+    const { name, reason, when } = metadata;
+    const { line, lastLine } = linesOf(registered, source);
+    const site: SkipSite =
+      registered.scope === "describe"
+        ? {
+            scope: "describe",
+            lastLine,
+            nestedSkips: registrations.filter((inner) => nestedIn(inner, registered)).map((inner) => linesOf(inner, source)),
+          }
+        : { scope: "test" };
+    declarations.push({ ...site, file, line, name, reason, ...(when === undefined ? {} : { when }) });
+  }
+  return { kind: "valid", declarations };
 }
 
 function selectedTierFile(file: string, tier: TestTier | undefined): boolean {

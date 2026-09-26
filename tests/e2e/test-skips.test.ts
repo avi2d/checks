@@ -118,6 +118,24 @@ test("a declaration on a skipped describe covers every test inside it", async ()
   expect(declared.text).toContain("checks-test: 3 skipped test(s), each declared at its test site");
 });
 
+test("a describe declaration does not cover a skip registered inside a running describe", async () => {
+  await consumer(
+    [
+      'import { describe, expect, test } from "bun:test";',
+      'import { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";',
+      'describe.skipIf(false)(skipReason("needs a display", "screen"), () => {',
+      '  test.skip("broken", () => expect(1).toBe(1));',
+      '  test("ok", () => expect(1).toBe(1));',
+      "});",
+      "",
+    ].join("\n"),
+  );
+
+  const refused = await checksTest(false);
+  expect(refused.exitCode).toBe(1);
+  expect(refused.text).toContain("tests/suite.test.ts:4 screen > broken: skipped with no reason at its test site");
+});
+
 test("a declared todo passes", async () => {
   await consumer(
     'import { test } from "bun:test";\nimport { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";\ntest.todo(skipReason("needs the tax table", "applies tax"));\n',

@@ -24,6 +24,7 @@ It returns the test name unchanged, and `checks-test` reads the reason, the name
 The Bun call stays at the test site so the JUnit report points to the line where its first argument starts.
 Use `test.skip(skipReason(reason, name), fn)` for an unconditional skip and `test.todo(skipReason(reason, name))` for a todo.
 A declaration on `describe.skip` or `describe.skipIf` covers every test inside that describe.
+A test or describe inside it that registers its own skip needs its own `skipReason`.
 
 Add `"ci"` or `"local"` as the third `skipReason` argument when a declaration applies to one environment.
 Omit the third argument when it applies in both environments.
