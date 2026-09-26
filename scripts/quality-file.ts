@@ -82,9 +82,9 @@ const Gates = Schema.Struct({
   lint: Schema.optionalKey(LintGates),
 });
 
-const RunsOn = Schema.Union([Schema.NonEmptyString, Schema.NonEmptyArray(Schema.NonEmptyString)]).annotate({
+const RunsOn = Schema.NonEmptyArray(Schema.NonEmptyString).annotate({
   identifier: "RunsOn",
-  description: "The runs-on value of every job the kit generates, a single label or a list; ubuntu-latest when absent",
+  description: "The runner labels every job the kit generates runs on; ubuntu-latest when absent",
 });
 
 const EffectSources = Schema.Struct({

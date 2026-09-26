@@ -93,6 +93,8 @@ test("every field decodes, and a key the schema does not name is refused rather 
   expect(refusal({ gates: { ci: [] } })).toContain('at ["gates"]["ci"]');
   expect(refusal({ sources: { effect: { paths: [] } } })).toContain('at ["sources"]["effect"]["paths"]');
   expect(refusal({ commitIdentity: { authors: [] } })).toContain('at ["commitIdentity"]["authors"]');
+  expect(refusal({ runsOn: "self-hosted" })).toContain('at ["runsOn"]');
+  expect(refusal({ runsOn: [] })).toContain('at ["runsOn"]');
   expect(Effect.runSync(Effect.flip(decodeQuality("{", "quality.json"))).message).toStartWith("quality.json: ");
 });
 

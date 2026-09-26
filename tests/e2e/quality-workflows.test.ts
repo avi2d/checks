@@ -112,7 +112,7 @@ test(
     const commitlint = parseWorkflow(await readFile(join(repo.dir, COMMITLINT_WORKFLOW), "utf8"));
     expect(runsOn(commitlint)).toEqual(labels);
 
-    await writeFile(join(repo.dir, "quality.json"), JSON.stringify({ ...QUALITY, runsOn: "winbox" }));
+    await writeFile(join(repo.dir, "quality.json"), JSON.stringify({ ...QUALITY, runsOn: ["winbox"] }));
     const red = await repo.script("quality.ts", "--check");
     expect(red.text).toContain(`${SUITE_WORKFLOW} is stale against quality.json and the kit recipe`);
     expect(red.text).toContain(`${COMMITLINT_WORKFLOW} is stale against quality.json and the kit recipe`);

@@ -410,27 +410,19 @@
       "minLength": 1
     },
     "RunsOn": {
-      "anyOf": [
+      "type": "array",
+      "prefixItems": [
         {
           "type": "string",
           "minLength": 1
-        },
-        {
-          "type": "array",
-          "prefixItems": [
-            {
-              "type": "string",
-              "minLength": 1
-            }
-          ],
-          "minItems": 1,
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
         }
       ],
-      "description": "The runs-on value of every job the kit generates, a single label or a list; ubuntu-latest when absent"
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "The runner labels every job the kit generates runs on; ubuntu-latest when absent"
     },
     "Identity": {
       "type": "object",

@@ -109,9 +109,13 @@ function runScalar(command: string): string {
   return /(^[\s#&*!|>@`'"%{[-])|:\s|\s#|:$|[\n\\]/.test(command) ? JSON.stringify(command) : command;
 }
 
+function flowScalar(label: string): string {
+  return /[,[\]{}]/.test(label) ? JSON.stringify(label) : runScalar(label);
+}
+
 function runsOnLine(runsOn: Quality["runsOn"]): string {
   if (runsOn === undefined) return "ubuntu-latest";
-  return typeof runsOn === "string" ? runScalar(runsOn) : `[${runsOn.map(runScalar).join(", ")}]`;
+  return `[${runsOn.map(flowScalar).join(", ")}]`;
 }
 
 export function commitlintWorkflow(commitlintConfig: string, runsOn: Quality["runsOn"]): string {

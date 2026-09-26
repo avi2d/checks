@@ -83,14 +83,14 @@ test("a gate no plain step can carry still reaches the runner as the exact comma
   ]);
 });
 
-test("runs-on is ubuntu-latest when quality.json declares none, a single label unquoted, or a list of labels", () => {
+test("runs-on is ubuntu-latest when quality.json declares none, or else the declared list of labels", () => {
   const suite = parseWorkflow(suiteWorkflow("main", ["bun run lint"], false, false, undefined));
   expect(runsOn(suite)).toBe("ubuntu-latest");
   const commitlint = parseWorkflow(commitlintWorkflow(KIT_CONFIG, undefined));
   expect(runsOn(commitlint)).toBe("ubuntu-latest");
 
-  const labelled = parseWorkflow(suiteWorkflow("main", ["bun run lint"], false, false, "self-hosted"));
-  expect(runsOn(labelled)).toBe("self-hosted");
+  const labelled = parseWorkflow(suiteWorkflow("main", ["bun run lint"], false, false, ["self-hosted"]));
+  expect(runsOn(labelled)).toEqual(["self-hosted"]);
 
   const labels = ["self-hosted", "Linux", "X64", "winbox"] as const;
   const listed = parseWorkflow(suiteWorkflow("main", ["bun run lint"], false, false, labels));
@@ -114,6 +114,12 @@ test("workflowsFor routes a gate the title lint runs to its own workflow and kee
   const unrun = ["commitlint", "node_modules/.bin/commitlint", "./node_modules/.bin/commitlint --from origin/main --to HEAD"] as const;
   const [kept] = workflowsFor({ gates: { ci: unrun } }, recipe);
   expect(runs(parseWorkflow(kept?.content ?? ""))).toEqual([INSTALL, ...unrun]);
+});
+
+test("a label carrying a flow indicator stays one label in the runs-on list", () => {
+  const labels = ["self-hosted", "${{ vars.RUNNER }}", "a,b", "x[y]"] as const;
+  expect(runsOn(parseWorkflow(suiteWorkflow("main", ["bun run lint"], false, false, labels)))).toEqual(labels);
+  expect(runsOn(parseWorkflow(commitlintWorkflow(KIT_CONFIG, labels)))).toEqual(labels);
 });
 
 test("workflowsFor carries quality.json's runsOn onto both the suite and the commitlint job", () => {

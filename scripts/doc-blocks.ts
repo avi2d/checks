@@ -208,7 +208,7 @@ const QUALITY_ROWS: Described<QualityFields, KeyRow> = {
   },
   runsOn: {
     readBy: "`checks-quality`",
-    holds: "the `runs-on` value of every job the ci and commitlint workflows run, `ubuntu-latest` when absent",
+    holds: "the runner labels every job the ci and commitlint workflows run on, `ubuntu-latest` when absent",
   },
   commitIdentity: {
     authors: {

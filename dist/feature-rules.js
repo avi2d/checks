@@ -153,9 +153,9 @@ var Gates = Schema3.Struct({
   scheduled: Schema3.optionalKey(Schema3.Array(Command).annotate({ description: "The commands a cron-scheduled workflow runs" })),
   lint: Schema3.optionalKey(LintGates)
 });
-var RunsOn = Schema3.Union([Schema3.NonEmptyString, Schema3.NonEmptyArray(Schema3.NonEmptyString)]).annotate({
+var RunsOn = Schema3.NonEmptyArray(Schema3.NonEmptyString).annotate({
   identifier: "RunsOn",
-  description: "The runs-on value of every job the kit generates, a single label or a list; ubuntu-latest when absent"
+  description: "The runner labels every job the kit generates runs on; ubuntu-latest when absent"
 });
 var EffectSources = Schema3.Struct({
   paths: Schema3.NonEmptyArray(PathGlob).annotate({

@@ -44,7 +44,7 @@ The kit's bins find the file at the git root and read it there:
 | `gates.ci` | `checks-ci-wiring`, `checks-quality` | the commands CI runs on every pull request, as [checks-ci-wiring](../gates/checks-ci-wiring.md) says |
 | `gates.scheduled` | `checks-ci-wiring` | the commands a schedule runs |
 | `gates.lint` | `checks-lint`, `checks-ci-wiring` | the gates `checks-lint` runs when not all apply, as [Gate selection](../gates/checks-lint.md#gate-selection) says |
-| `runsOn` | `checks-quality` | the `runs-on` value of every job the ci and commitlint workflows run, `ubuntu-latest` when absent |
+| `runsOn` | `checks-quality` | the runner labels every job the ci and commitlint workflows run on, `ubuntu-latest` when absent |
 | `commitIdentity.authors` | `checks-commit-identity` | the identities allowed to author and commit, as [checks-commit-identity](../gates/checks-commit-identity.md) says |
 | `sources.production` | `checks-size-budget`, `checks-repetition`, `checks-quality` | the source the repository ships, as [checks-size-budget](../gates/checks-size-budget.md) and [checks-repetition](../gates/checks-repetition.md) say |
 | `sources.effect` | `checks-quality` | the paths held to the Effect rules, and the files under them that are not, as [The Effect rules](effect-rules.md) says |
