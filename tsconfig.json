@@ -31,5 +31,5 @@
       }
     ]
   },
-  "include": ["effect-channel/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts"]
+  "include": ["effect-channel/**/*.ts", "readability/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts"]
 }

@@ -57,12 +57,12 @@ The kit's own `.oxlintrc.json` sets these limits for each size override, and a r
 
 <!-- generated size-limits: bun run build writes it from .oxlintrc.json, SIZE_RULES in scripts/size-rules.ts and scripts/doc-blocks.ts -->
 
-| Limits | oxlint rule | `effect-channel/**/*.ts`, `scripts/**/*.ts` | `tests/**/*.ts` |
+| Limits | oxlint rule | `effect-channel/**/*.ts`, `readability/**/*.ts`, `scripts/**/*.ts` | `tests/**/*.ts` |
 | --- | --- | --- | --- |
 | The most lines a file may hold, blank and comment lines counted | `max-lines` | 400 | 600 |
 | The most lines a function may span, blank and comment lines counted | `max-lines-per-function` | 100 | off |
 | The most statements a function may hold | `max-statements` | 30 | 50 |
-| The highest cognitive complexity a function may reach, a switch counted once | `effect-channel/cognitive-complexity` | 15 | 15 |
+| The highest cognitive complexity a function may reach, a switch counted once | `readability/cognitive-complexity` | 15 | 15 |
 | The deepest a block may nest inside a function | `max-depth` | 4 | 4 |
 
 <!-- end generated size-limits -->
