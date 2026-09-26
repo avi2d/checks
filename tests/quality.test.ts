@@ -146,3 +146,10 @@ test("without gates.ci only the title lint is generated", () => {
     './node_modules/.bin/commitlint --config ./commitlint.config.js --edit "$RUNNER_TEMP/pr-title"',
   );
 });
+
+test("a label or gate YAML would read as a null, a boolean or a number stays the same string", () => {
+  const labels = ["null", "~", "true", "False", "yes", "off", "123", "-7", "0x1F", "0o17", "1.5", ".5", "1e3", ".inf", "-.Inf", ".NaN"] as const;
+  expect(runsOn(parseWorkflow(suiteWorkflow("main", labels, false, false, labels)))).toEqual(labels);
+  expect(runs(parseWorkflow(suiteWorkflow("main", labels, false, false, undefined)))).toEqual([INSTALL, ...labels]);
+  expect(runsOn(parseWorkflow(commitlintWorkflow(KIT_CONFIG, labels)))).toEqual(labels);
+});
