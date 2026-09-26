@@ -2,6 +2,18 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.24.0
+
+Released 2026-09-27.
+
+### Features
+
+- **scripts:** ship checks-changelog, checks-release-notes and checks-release-report bins [#77](https://github.com/avi2d/checks/pull/77)
+
+### Fixes
+
+- **scripts:** make checks-vendor re-freeze a cached tree whose owner write bit came back [#76](https://github.com/avi2d/checks/pull/76)
+
 ## 0.23.0
 
 Released 2026-09-26.
