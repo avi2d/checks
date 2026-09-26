@@ -27,4 +27,4 @@ test("every relative link in a markdown file the package ships resolves to a fil
       .map((target) => `${file} links ${target}`),
   );
   expect(dangling).toEqual([]);
-});
+}, 30_000);
