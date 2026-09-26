@@ -51,6 +51,7 @@
     "scripts/quarantine-clock.ts",
     "scripts/docs.ts",
     "scripts/vendor.ts",
+    "scripts/vendor-args.ts",
     "scripts/doc-outline.ts",
     "scripts/doc-rules.ts",
     "scripts/doc-references.ts",

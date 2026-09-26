@@ -1,10 +1,9 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { git } from "./git.ts";
-import { runMain, Usage } from "./main.ts";
+import { runMain } from "./main.ts";
+import { librariesFrom, NAME, OPENER, type Library } from "./vendor-args.ts";
 
-const NAME = "checks-vendor";
-const USAGE = `usage: ${NAME} [--library <name> --package <package> --repository <remote> --tag <template> [--path <manifest>]]...`;
 const CACHE_HOME = ".cache/avi2dg-checks";
 const RECORD_SUFFIX = ".commit";
 const LINKS = "repos";
@@ -20,55 +19,6 @@ export class VendorError extends Schema.TaggedError<VendorError>()("VendorError"
 export class Unreachable extends Schema.TaggedError<Unreachable>()("Unreachable", {
   message: Schema.String,
 }) {}
-
-const Library = Schema.Struct({
-  name: Schema.String.check(Schema.isPattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)),
-  package: Schema.NonEmptyString,
-  repository: Schema.NonEmptyString,
-  tag: Schema.String.check(Schema.isPattern(/\{version\}/)),
-  path: Schema.optionalKey(Schema.String.check(Schema.isPattern(/^(?:[\w.@+-]+\/)*[\w.@+-]+\.\w+$/))),
-});
-type Library = typeof Library.Type;
-
-const Libraries = Schema.Array(Library).check(
-  Schema.makeFilter((libraries) => {
-    const names = libraries.map(({ name }) => name);
-    const repeated = names.find((name, index) => names.indexOf(name) !== index);
-    return repeated === undefined || `--library ${repeated} appears more than once`;
-  }),
-);
-
-const OPENER = "--library";
-const FIELDS = new Map<string, keyof Library>([
-  ["--package", "package"],
-  ["--repository", "repository"],
-  ["--tag", "tag"],
-  ["--path", "path"],
-]);
-
-function misuse(message: string): Usage {
-  return new Usage({ message: `${message}\n${USAGE}` });
-}
-
-const librariesFrom = Effect.fn("librariesFrom")(function* (args: readonly string[]) {
-  const groups: Record<string, string>[] = [];
-  for (let index = 0; index < args.length; index += 2) {
-    const flag = args[index] ?? "";
-    const value = args[index + 1];
-    if (value === undefined || value.startsWith("--")) return yield* misuse(`${flag} takes a value`);
-    if (flag === OPENER) {
-      groups.push({ name: value });
-      continue;
-    }
-    const field = FIELDS.get(flag);
-    const current = groups.at(-1);
-    if (field === undefined) return yield* misuse(`${flag} is not an argument`);
-    if (current === undefined) return yield* misuse(`${flag} comes before any ${OPENER}`);
-    if (field in current) return yield* misuse(`${flag} appears twice for ${OPENER} ${current["name"]}`);
-    current[field] = value;
-  }
-  return yield* Schema.decodeUnknownEffect(Libraries)(groups).pipe(Effect.mapError((cause) => misuse(cause.message)));
-});
 
 export function tagFor(template: string, version: string): string {
   return template.replaceAll(VERSION_TOKEN, version);
@@ -171,6 +121,11 @@ function clearing(dir: string): string {
   return `clear it with \`chmod -R u+w ${dir} && rm -rf ${dir}\` and rerun ${NAME}`;
 }
 
+function writableAt(dir: string, paths: readonly string[], by: string): string {
+  const [first = dir] = paths;
+  return `${paths.length === 1 ? "1 path" : `${paths.length} paths`} writable by ${by}, starting with ${first}`;
+}
+
 const freeze = Effect.fn("freeze")(function* (dir: string) {
   const fs = yield* FileSystem.FileSystem;
   for (const { entry, mode } of yield* modes(dir)) {
@@ -212,7 +167,8 @@ const recorded = Effect.fn("recorded")(function* (dir: string) {
   return Option.some(text.trim());
 });
 
-const verify = Effect.fn("verify")(function* (dir: string, library: Library, installed: string, tag: string) {
+// Returns the paths still carrying the owner write bit and fails on every other finding, reading the status only once none are left.
+const inspect = Effect.fn("inspect")(function* (dir: string, library: Library, installed: string, tag: string) {
   const held = yield* recorded(dir);
   if (Option.isNone(held)) {
     return yield* new VendorError({ message: `${recordOf(dir)} is missing, so ${dir} has no commit to hold to; ${clearing(dir)}` });
@@ -223,13 +179,13 @@ const verify = Effect.fn("verify")(function* (dir: string, library: Library, ins
     return yield* new VendorError({ message: `${dir} sits on ${head}, not the recorded ${record}; ${clearing(dir)}` });
   }
   yield* checkVersion(dir, library, installed, tag);
-  const tampered = (yield* modes(dir)).filter(({ mode }) => (mode & WRITE_BITS) !== 0).map(({ entry }) => entry);
-  if (tampered.length > 0) {
-    const [first = dir] = tampered;
-    return yield* new VendorError({
-      message: `${dir} leaves ${tampered.length} paths writable, starting with ${first}; ${clearing(dir)}`,
-    });
+  const found = yield* modes(dir);
+  const shared = found.filter(({ mode }) => (mode & WRITE_BITS & ~OWNER_WRITE) !== 0).map(({ entry }) => entry);
+  if (shared.length > 0) {
+    return yield* new VendorError({ message: `${dir} leaves ${writableAt(dir, shared, "group or others")}; ${clearing(dir)}` });
   }
+  const writable = found.filter(({ mode }) => (mode & OWNER_WRITE) !== 0).map(({ entry }) => entry);
+  if (writable.length > 0) return writable;
   const status = yield* git(["status", "--porcelain", "--ignored"], dir).pipe(
     Effect.mapError((cause) => new VendorError({ message: `${dir} reports no status: ${cause.message}` })),
   );
@@ -237,6 +193,7 @@ const verify = Effect.fn("verify")(function* (dir: string, library: Library, ins
     const [first = ""] = status.trim().split("\n");
     return yield* new VendorError({ message: `${dir} holds writes outside the recorded commit, starting with ${first}; ${clearing(dir)}` });
   }
+  return writable;
 });
 
 const ensureLink = Effect.fn("ensureLink")(function* (root: string, library: Library, dir: string) {
@@ -315,8 +272,26 @@ const land = Effect.fn("land")(function* (library: Library, installed: string, t
   return yield* stage(staging, library, installed, tag, dir).pipe(Effect.ensuring(discard(staging)));
 });
 
-const vend = Effect.fn("vend")(function* (root: string, cache: string, library: Library) {
+function verified(library: Library, tag: string): string {
+  return `${LINKS}/${library.name} still holds ${tag}, verified against its recorded commit`;
+}
+
+const settle = Effect.fn("settle")(function* (library: Library, installed: string, tag: string, dir: string) {
   const fs = yield* FileSystem.FileSystem;
+  if (!(yield* fs.exists(dir)) && (yield* land(library, installed, tag, dir))) {
+    return `cloned ${tag} from ${library.repository} and linked ${LINKS}/${library.name}`;
+  }
+  const writable = yield* inspect(dir, library, installed, tag);
+  if (writable.length === 0) return verified(library, tag);
+  yield* freeze(dir);
+  const left = yield* inspect(dir, library, installed, tag);
+  if (left.length > 0) {
+    return yield* new VendorError({ message: `${dir} leaves ${writableAt(dir, left, "its owner")}; ${clearing(dir)}` });
+  }
+  return `found ${writableAt(dir, writable, "its owner")}, and froze the tree again, so ${verified(library, tag)}`;
+});
+
+const vend = Effect.fn("vend")(function* (root: string, cache: string, library: Library) {
   const path = yield* Path.Path;
   const installed = yield* manifestVersion(
     path.join(root, "node_modules", ...library.package.split("/"), "package.json"),
@@ -324,12 +299,7 @@ const vend = Effect.fn("vend")(function* (root: string, cache: string, library: 
   );
   const tag = tagFor(library.tag, installed);
   const dir = path.join(cache, LINKS, ...remoteSegments(library.repository), tag);
-  if (!(yield* fs.exists(dir)) && (yield* land(library, installed, tag, dir))) {
-    yield* Console.error(`${NAME}: cloned ${tag} from ${library.repository} and linked ${LINKS}/${library.name}`);
-  } else {
-    yield* verify(dir, library, installed, tag);
-    yield* Console.error(`${NAME}: ${LINKS}/${library.name} still holds ${tag}, verified against its recorded commit`);
-  }
+  yield* Console.error(`${NAME}: ${yield* settle(library, installed, tag, dir)}`);
   yield* ensureLink(root, library, dir);
 });
 

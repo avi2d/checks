@@ -16,9 +16,12 @@ The clone is staged beside its cache entry and moves into place only once it is 
 Every later run verifies the link rather than trusting it, and does so without contacting the remote.
 It confirms the tree sits on the recorded commit.
 It confirms the manifest inside the tree still names the installed version.
-It confirms no write bit came back and no write landed outside the recorded commit.
+It confirms no write bit is left once it has frozen the tree and no write landed outside the recorded commit.
 It never follows a link inside the tree, so no mode outside the cache is touched.
-Any failed confirmation fails the run.
+A tool that clears the read only mode of `repos/<name>` changes the tree's top directory through the link, as the GitHub Actions runner does when it empties `$RUNNER_TEMP`.
+A run that finds an owner write bit strips it from the tree again, then confirms no write landed outside the recorded commit.
+A group or other write bit is never stripped, and fails the run before it reads the tree's status.
+Any other failed confirmation fails the run, and so does a write the tree still holds once it is read only again.
 A failed library drops its `repos/<name>` link, so a reader falls back to `node_modules/<package>` rather than a tree the run could not vouch for.
 A missing tag, an unknown installed version or a manifest naming another version fails it too.
 A tag moved upstream after the first fetch is not followed, since a cached tree stays on its recorded commit.
@@ -67,6 +70,12 @@ checks-vendor: repos/effect still holds effect@4.0.0-rc.115, verified against it
 ```
 
 A later run reports the link it kept.
+
+```
+checks-vendor: found 1 path writable by its owner, starting with /home/runner/.cache/avi2dg-checks/repos/github.com/Effect-TS/effect/effect@4.0.0-rc.115, and froze the tree again, so repos/effect still holds effect@4.0.0-rc.115, verified against its recorded commit
+```
+
+A run that found an owner write bit reports how many paths carried one and the first of them.
 
 ## Wiring
 
