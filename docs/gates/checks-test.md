@@ -6,7 +6,7 @@
 
 It runs the default suite with `bun test --randomize` and reads Bun's JUnit report from that run.
 Bun exits zero when tests skip, so `checks-test` checks every skipped test against its source declaration.
-A native `test.skip`, `test.skipIf`, `test.if`, `describe.skip` or `test.todo` without a declaration fails.
+A test that `test.skip`, `test.skipIf`, `test.if`, `test.todo` or an enclosing `describe.skip` skips fails unless the test declares its reason.
 
 Import `skipReason` from `@avi2dg/checks/scripts/test-skips.ts` beside the native Bun test call:
 
@@ -23,8 +23,8 @@ test.skipIf(!hasNix)(
 It returns the test name unchanged, and `checks-test` reads the reason, the name and the source line from the test file.
 The Bun call stays at the test site so the JUnit report points to the line where its first argument starts.
 Use `test.skip(skipReason(reason, name), fn)` for an unconditional skip and `test.todo(skipReason(reason, name))` for a todo.
-A declaration on `describe.skip` or `describe.skipIf` covers every test inside that describe.
-A test or describe inside it that registers its own skip needs its own `skipReason`.
+A skip is declared on the test itself and only there.
+`checks-test` refuses `skipReason` on `describe.skip`, `describe.skipIf` or `describe.if`, so declare each test inside the describe instead.
 
 Add `"ci"` or `"local"` as the third `skipReason` argument when a declaration applies to one environment.
 Omit the third argument when it applies in both environments.

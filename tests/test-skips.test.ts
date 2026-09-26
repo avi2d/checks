@@ -4,7 +4,7 @@ import { skipReason, type SkipDeclaration } from "../scripts/test-skips.ts";
 import type { TestResult } from "../scripts/test-report.ts";
 
 function declaration(file: string, line: number, reason: string, when?: "ci" | "local"): SkipDeclaration {
-  return { scope: "test", file, line, name: "rounds half to even", reason, ...(when === undefined ? {} : { when }) };
+  return { file, line, name: "rounds half to even", reason, ...(when === undefined ? {} : { when }) };
 }
 
 function result(file: string, line: number, name: string, outcome: TestResult["outcome"]): TestResult {
@@ -35,32 +35,6 @@ test("a declared test inside a describe keeps the describe path in its name", ()
   const nested = result("tests/pricing.test.ts", 12, "totals > rounds half to even", "skipped");
   const verdict = judgeSkips([nested], [declaration("tests/pricing.test.ts", 12, "waits for the rounding fix")], "ci");
   expect(passes(verdict)).toBe(true);
-});
-
-test("a describe declaration covers every test inside its lines", () => {
-  const group: SkipDeclaration = {
-    scope: "describe",
-    file: "tests/pricing.test.ts",
-    line: 10,
-    lastLine: 20,
-    nestedSkips: [{ line: 16, lastLine: 18 }],
-    name: "totals",
-    reason: "waits for the rounding fix",
-  };
-  const inner = [
-    result("tests/pricing.test.ts", 11, "totals > rounds half to even", "skipped"),
-    result("tests/pricing.test.ts", 14, "outer > totals > deeper > sums", "skipped"),
-  ];
-  expect(passes(judgeSkips(inner, [group], "ci"))).toBe(true);
-
-  const outside = result("tests/pricing.test.ts", 21, "totals > later", "skipped");
-  expect(judgeSkips([...inner, outside], [group], "ci").undeclared).toEqual([outside]);
-
-  const ownSkip = result("tests/pricing.test.ts", 17, "totals > nested > skips itself", "skipped");
-  expect(judgeSkips([...inner, ownSkip], [group], "ci").undeclared).toEqual([ownSkip]);
-
-  const ran = inner.map((skipped) => ({ ...skipped, outcome: "passed" as const }));
-  expect(judgeSkips(ran, [group], "ci").stale).toEqual([group]);
 });
 
 test("a declared todo passes and an undeclared skip or todo fails", () => {

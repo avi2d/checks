@@ -3,13 +3,7 @@ import { Config, Console, Effect, FileSystem, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import { TEST_ENTRY_POINT } from "./gates.ts";
 import { runMain, Usage } from "./main.ts";
-import {
-  readSkipDeclarations,
-  type Environment,
-  type LineRange,
-  type SkipDeclaration,
-  type TestTier,
-} from "./test-skips.ts";
+import { readSkipDeclarations, type Environment, type SkipDeclaration, type TestTier } from "./test-skips.ts";
 import { NAME_SEPARATOR, parseReport, ReportError, reporterArgs, type TestResult } from "./test-report.ts";
 
 export type { Environment, SkipDeclaration } from "./test-skips.ts";
@@ -34,16 +28,11 @@ const TIERS = new Map<string, TestTier>([
 ]);
 
 function matches(declaration: SkipDeclaration, result: TestResult): boolean {
-  if (declaration.file !== result.file) return false;
   const { name } = declaration;
-  if (declaration.scope === "test") {
-    return declaration.line === result.line && (result.name === name || result.name.endsWith(`${NAME_SEPARATOR}${name}`));
-  }
-  const within = (range: LineRange) => range.line <= result.line && result.line <= range.lastLine;
   return (
-    within(declaration) &&
-    !declaration.nestedSkips.some(within) &&
-    (result.name.startsWith(`${name}${NAME_SEPARATOR}`) || result.name.includes(`${NAME_SEPARATOR}${name}${NAME_SEPARATOR}`))
+    declaration.file === result.file &&
+    declaration.line === result.line &&
+    (result.name === name || result.name.endsWith(`${NAME_SEPARATOR}${name}`))
   );
 }
 

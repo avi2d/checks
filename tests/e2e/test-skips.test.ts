@@ -94,46 +94,45 @@ test("a skip wrapped across lines is declared at the line Bun reports", async ()
   expect(declared.text).toContain("checks-test: 3 skipped test(s), each declared at its test site");
 });
 
-test("a declaration on a skipped describe covers every test inside it", async () => {
+test("a skipReason on a describe is refused before the suite runs", async () => {
   await consumer(
     [
       'import { describe, expect, test } from "bun:test";',
       'import { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";',
-      'describe.skip(skipReason("needs the external fixture", "fixture group"), () => {',
-      '  test("loads the fixture", () => expect(1).toBe(1));',
-      '  test("reads the fixture", () => expect(1).toBe(1));',
-      "});",
-      'describe.skipIf(true)(skipReason("CI has no daemon", "daemon group"), () => {',
-      '  describe("nested", () => {',
-      '    test("reaches the daemon", () => expect(1).toBe(1));',
-      "  });",
-      "});",
-      'test("still runs", () => expect(1).toBe(1));',
-      "",
-    ].join("\n"),
-  );
-
-  const declared = await checksTest(true);
-  expect(declared.exitCode).toBe(0);
-  expect(declared.text).toContain("checks-test: 3 skipped test(s), each declared at its test site");
-});
-
-test("a describe declaration does not cover a skip registered inside a running describe", async () => {
-  await consumer(
-    [
-      'import { describe, expect, test } from "bun:test";',
-      'import { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";',
-      'describe.skipIf(false)(skipReason("needs a display", "screen"), () => {',
-      '  test.skip("broken", () => expect(1).toBe(1));',
-      '  test("ok", () => expect(1).toBe(1));',
+      'describe.skipIf(true)(skipReason("needs a display", "screen"), () => {',
+      '  test("renders", () => expect(1).toBe(1));',
       "});",
       "",
     ].join("\n"),
   );
 
   const refused = await checksTest(false);
+  expect(refused.exitCode).toBe(2);
+  expect(refused.text).toContain(
+    "tests/suite.test.ts: line 3: skipReason cannot declare a describe; declare each test inside it with its own skipReason",
+  );
+});
+
+test("a declared test inside an undeclared skipped describe passes, and an undeclared one fails", async () => {
+  const suite = (inner: string) =>
+    [
+      'import { describe, expect, test } from "bun:test";',
+      'import { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";',
+      'describe.skip("screen", () => {',
+      '  test.skipIf(true)(skipReason("needs a display", "renders"), () => expect(1).toBe(1));',
+      inner,
+      "});",
+      "",
+    ].join("\n");
+  await consumer(suite(""));
+  const declared = await checksTest(true);
+  expect(declared.exitCode).toBe(0);
+  expect(declared.text).toContain("checks-test: 1 skipped test(s), each declared at its test site");
+
+  await writeFile(join(dir, "tests", "suite.test.ts"), suite('  test("scrolls", () => expect(1).toBe(1));'));
+  const refused = await checksTest(true);
   expect(refused.exitCode).toBe(1);
-  expect(refused.text).toContain("tests/suite.test.ts:4 screen > broken: skipped with no reason at its test site");
+  expect(refused.text).toContain("tests/suite.test.ts:5 screen > scrolls: skipped with no reason at its test site");
 });
 
 test("a declared todo passes", async () => {

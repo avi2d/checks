@@ -1,13 +1,9 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
-import { identifierName, isRecord, lineOf, parseTypeScript, spanEnd, spanStart, stringValue } from "./swc.ts";
+import { identifierName, isRecord, lineOf, parseTypeScript, spanStart, stringValue } from "./swc.ts";
 
 export type Environment = "ci" | "local";
 export type TestTier = "live" | "pixel";
-export type LineRange = { readonly line: number; readonly lastLine: number };
-type SkipSite =
-  | { readonly scope: "test" }
-  | { readonly scope: "describe"; readonly lastLine: number; readonly nestedSkips: readonly LineRange[] };
-export type SkipDeclaration = SkipSite & {
+export type SkipDeclaration = {
   readonly file: string;
   readonly line: number;
   readonly name: string;
@@ -88,11 +84,7 @@ function skipReasonCall(node: unknown, aliases: ReadonlySet<string>): SkipReason
   return { kind: "valid", name: label, reason, ...(when === undefined ? {} : { when }) };
 }
 
-type RegisteredSkip = {
-  readonly node: Record<string, unknown>;
-  readonly scope: SkipDeclaration["scope"];
-  readonly first: unknown;
-};
+type RegisteredSkip = { readonly onDescribe: boolean; readonly first: unknown };
 
 function registeredSkip(node: Record<string, unknown>): RegisteredSkip | undefined {
   if (node["type"] !== "CallExpression") return undefined;
@@ -101,7 +93,7 @@ function registeredSkip(node: Record<string, unknown>): RegisteredSkip | undefin
   const member = memberOf(curried ? callee["callee"] : callee);
   const methods = curried ? ["skipIf", "if"] : ["skip", "todo"];
   if (member === undefined || !methods.includes(member.property ?? "")) return undefined;
-  return { node, scope: member.object === "describe" ? "describe" : "test", first: expressionOf(argumentsOf(node)[0]) };
+  return { onDescribe: member.object === "describe", first: expressionOf(argumentsOf(node)[0]) };
 }
 
 function registeredSkips(module: unknown): readonly RegisteredSkip[] {
@@ -120,19 +112,6 @@ function registeredSkips(module: unknown): readonly RegisteredSkip[] {
   return found;
 }
 
-function linesOf(registered: RegisteredSkip, source: string): LineRange {
-  const line = lineOf(source, spanStart(isRecord(registered.first) ? registered.first : registered.node));
-  return { line, lastLine: registered.scope === "describe" ? lineOf(source, spanEnd(registered.node)) : line };
-}
-
-function nestedIn(inner: RegisteredSkip, outer: RegisteredSkip): boolean {
-  return (
-    inner !== outer &&
-    spanStart(outer.node) <= spanStart(inner.node) &&
-    spanEnd(inner.node) <= spanEnd(outer.node)
-  );
-}
-
 type DeclarationsRead =
   | { readonly kind: "valid"; readonly declarations: readonly SkipDeclaration[] }
   | { readonly kind: "invalid"; readonly message: string };
@@ -140,23 +119,21 @@ type DeclarationsRead =
 function declarationsIn(source: string, file: string, module: unknown): DeclarationsRead {
   const aliases = importedSkipReasonNames(module);
   if (aliases.size === 0) return { kind: "valid", declarations: [] };
-  const registrations = registeredSkips(module);
   const declarations: SkipDeclaration[] = [];
-  for (const registered of registrations) {
-    const metadata = skipReasonCall(registered.first, aliases);
-    if (metadata.kind === "invalid") return metadata;
+  for (const { onDescribe, first } of registeredSkips(module)) {
+    if (!isRecord(first)) continue;
+    const metadata = skipReasonCall(first, aliases);
     if (metadata.kind === "none") continue;
+    const line = lineOf(source, spanStart(first));
+    if (onDescribe) {
+      return {
+        kind: "invalid",
+        message: `line ${line}: skipReason cannot declare a describe; declare each test inside it with its own skipReason`,
+      };
+    }
+    if (metadata.kind === "invalid") return metadata;
     const { name, reason, when } = metadata;
-    const { line, lastLine } = linesOf(registered, source);
-    const site: SkipSite =
-      registered.scope === "describe"
-        ? {
-            scope: "describe",
-            lastLine,
-            nestedSkips: registrations.filter((inner) => nestedIn(inner, registered)).map((inner) => linesOf(inner, source)),
-          }
-        : { scope: "test" };
-    declarations.push({ ...site, file, line, name, reason, ...(when === undefined ? {} : { when }) });
+    declarations.push({ file, line, name, reason, ...(when === undefined ? {} : { when }) });
   }
   return { kind: "valid", declarations };
 }
