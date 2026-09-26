@@ -78,6 +78,28 @@ test(
 );
 
 test(
+  "a repository that gains its version late releases everything up to the version-adding commit",
+  async () => {
+    await initRepo();
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({ name: "widget", repository: { type: "git", url: "git+https://github.com/acme/widget.git" } }, null, 2),
+    );
+    await commit("feat: build a bill (#1)");
+    await commit("fix: keep the order of parts (#2)");
+    await bump("0.1.0");
+    await commit("chore: add version (#3)");
+
+    expect(await rewritten(1)).toBe(
+      written(
+        section("0.1.0", "2026-09-01", ["Features", "build a bill [#1](https://github.com/acme/widget/pull/1)"], ["Fixes", "keep the order of parts [#2](https://github.com/acme/widget/pull/2)"]),
+      ),
+    );
+  },
+  { timeout: 30_000 },
+);
+
+test(
   "a clone without the tags writes the changelog the tagged checkout writes",
   async () => {
     await initRepo();

@@ -24,8 +24,21 @@ const decodeManifestJson = Schema.decodeUnknownEffect(
   ),
 );
 
+const decodeManifestAtJson = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(
+    Schema.Struct({
+      name: Schema.String,
+      version: Schema.optional(Schema.String),
+      repository: Schema.optional(Schema.Union([Schema.String, Schema.Struct({ url: Schema.optional(Schema.String) })])),
+    }),
+  ),
+);
+
 const decodeManifest = (text: string, source: string) =>
   decodeManifestJson(text).pipe(Effect.mapError((cause) => new ChangelogUnreadable({ message: `${source}: ${cause.message}` })));
+
+const decodeManifestAt = (text: string, source: string) =>
+  decodeManifestAtJson(text).pipe(Effect.mapError((cause) => new ChangelogUnreadable({ message: `${source}: ${cause.message}` })));
 
 const today = DateTime.nowInCurrentZone.pipe(DateTime.withCurrentZoneLocal, Effect.map(DateTime.formatIsoDate));
 
@@ -38,7 +51,7 @@ function repositoryWebUrl(repository: string): string | undefined {
 }
 
 const versionAt = Effect.fn("versionAt")(function* (root: string, sha: string) {
-  return (yield* decodeManifest(yield* git(["show", `${sha}:${MANIFEST}`], root), `${MANIFEST} at ${sha}`)).version;
+  return (yield* decodeManifestAt(yield* git(["show", `${sha}:${MANIFEST}`], root), `${MANIFEST} at ${sha}`)).version;
 });
 
 const readBumps = Effect.fn("readBumps")(function* (root: string) {
@@ -51,6 +64,7 @@ const readBumps = Effect.fn("readBumps")(function* (root: string) {
     const [sha, date, parent] = line.split(FIELD);
     if (sha === undefined || date === undefined || parent === undefined) continue;
     const version = yield* versionAt(root, sha);
+    if (version === undefined) continue;
     if (parent === "" || (yield* versionAt(root, parent)) !== version) bumps.push({ sha, version, date });
   }
   return bumps;
