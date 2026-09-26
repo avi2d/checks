@@ -2,14 +2,12 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { changedPaths, collect, git, pathsAt, rangeEnds, type Change } from "./git.ts";
 import { runMain } from "./main.ts";
-import { renderJson } from "./quality-file.ts";
+import { readSizeRules } from "./native-config.ts";
 import { rangeGateInputs } from "./range-gate.ts";
 import {
   budgetOf,
-  budgetsOf,
   diagnosticCode,
   qualifiedName,
-  SIZE_DEFAULTS,
   SIZE_RULES,
   TESTS_DIRECTORY,
   type Applies,
@@ -155,7 +153,7 @@ const measure = Effect.fn("measure")(function* (tree: string, budgets: Budgets, 
   const fs = yield* FileSystem.FileSystem;
   if (!(yield* fs.exists(tree))) return [];
   // oxlint reads an override's glob from the directory of the config that holds it, so the config sits in the tree.
-  yield* fs.writeFileString((yield* Path.Path).join(tree, CONFIG), renderJson(sizeConfig(budgets, plugin)));
+  yield* fs.writeFileString((yield* Path.Path).join(tree, CONFIG), `${JSON.stringify(sizeConfig(budgets, plugin), null, 2)}\n`);
 
   const { stdout, stderr, exitCode } = yield* collect("oxlint", ["-c", CONFIG, "-f", "json", "."], tree).pipe(
     Effect.mapError((cause) => new OxlintUnreadable({ message: `cannot run oxlint: ${cause.message}` })),
@@ -215,8 +213,8 @@ const runBudget = Effect.fn("runBudget")(
   function* (root: string, size: Size, production: readonly string[], base: string, head: string) {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const applies = size.applies ?? SIZE_DEFAULTS.applies;
-    const budgets = budgetsOf(size);
+    const applies = size.applies ?? "ratchet";
+    const budgets: Budgets = { production: size.production ?? {}, tests: size.tests ?? {} };
     const pathspecs = [...production.map((glob) => `:(glob)${glob}`), ...TESTS, DECLARATIONS];
     const held = yield* heldFiles(root, applies, pathspecs, base, head);
     const holds = new Set(held.map((file) => file.path));
@@ -270,13 +268,14 @@ export function passes(verdict: Verdict): boolean {
 }
 
 const budget = Effect.gen(function* () {
-  const { refs, root, source, quality } = yield* rangeGateInputs(USAGE);
-  if (quality.size === undefined) {
-    yield* Console.log(`${NAME}: ${source} declares no size budget`);
+  const { refs, root } = yield* rangeGateInputs(USAGE);
+  const configured = yield* readSizeRules(root);
+  if (configured === undefined) {
+    yield* Console.log(`${NAME}: .oxlintrc.json declares no size rules`);
     return true;
   }
   const { base, head } = yield* rangeEnds(refs.first, refs.second, root);
-  const verdict = yield* runBudget(root, quality.size, quality.sources?.production ?? [], base, head);
+  const verdict = yield* runBudget(root, configured.size, configured.production, base, head);
 
   yield* Console.log(report(verdict));
   return passes(verdict);

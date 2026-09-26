@@ -60,8 +60,8 @@ async function seedConsumer(dir: string, remote: string, installed: string): Pro
   await mkdir(join(dir, "node_modules", "fake-lib"), { recursive: true });
   await writeFile(join(dir, "node_modules", "fake-lib", "package.json"), manifest(installed));
   await writeFile(
-    join(dir, "quality.json"),
-    JSON.stringify({ sources: { libraries: [{ name: "fake-lib", package: "fake-lib", repository: remote, tag: TEMPLATE }] } }),
+    join(dir, "package.json"),
+    JSON.stringify({ vendorSources: [{ name: "fake-lib", package: "fake-lib", repository: remote, tag: TEMPLATE }] }),
   );
 }
 

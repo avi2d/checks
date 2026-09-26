@@ -1,5 +1,5 @@
 import { slotLabel, type FixedSlot, type HeadingRule, type OpenSlot, type Presence, type Slot } from "./doc-outline.ts";
-import { MODES } from "./quality-file.ts";
+import { MODES } from "./native-config.ts";
 
 export const KINDS = ["readme", "changelog", "adr", "agents", "claude", ...MODES] as const;
 export type Kind = (typeof KINDS)[number];

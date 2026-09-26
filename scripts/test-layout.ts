@@ -3,8 +3,8 @@ import { parse } from "@swc/core";
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { git } from "./git.ts";
 import { runMain } from "./main.ts";
-import { ENTRY_POINT, QUALITY_FILE, TEST_ENTRY_POINT } from "./gates.ts";
-import { readQuality } from "./quality-file.ts";
+import { ENTRY_POINT, TEST_ENTRY_POINT } from "./gates.ts";
+import { readVendorSources } from "./native-config.ts";
 
 export type Violation = {
   readonly file: string;
@@ -275,7 +275,7 @@ export function bunfigViolations(consumer: unknown, preset: unknown, vendors: bo
   const accepted = acceptedIgnores(vendors);
   if (!accepted.some((ignores) => Bun.deepEquals(found(IGNORES_KEY), ignores))) {
     const wanted = accepted.map((ignores) => JSON.stringify(ignores)).join(" or ");
-    violations.push(drifted(IGNORES_KEY, wanted, `the check pins it, requiring ${VENDORED} where ${QUALITY_FILE} declares sources.libraries`));
+    violations.push(drifted(IGNORES_KEY, wanted, `the check pins it, requiring ${VENDORED} where package.json declares vendorSources`));
   }
   return violations;
 }
@@ -330,8 +330,7 @@ export const run = Effect.fn("run")(function* (root: string, presetPath: string)
 
   const bunfig = path.join(root, "bunfig.toml");
   const consumerBunfig = (yield* fs.exists(bunfig)) ? yield* parsedToml(bunfig) : undefined;
-  const { quality } = yield* readQuality(root);
-  const vendors = (quality.sources?.libraries ?? []).length > 0;
+  const vendors = (yield* readVendorSources(root)).length > 0;
   violations.push(...bunfigViolations(consumerBunfig, yield* parsedToml(presetPath), vendors));
 
   return { files: files.length, violations };

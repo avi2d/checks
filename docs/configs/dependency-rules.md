@@ -35,7 +35,7 @@ module.exports = {
 
 A rule that restates a base name overrides it field by field.
 That is how an entry point stops being an orphan: redeclare `no-orphans` with the entry added to its `pathNot`.
-A repository that declares feature owners spreads the rules `quality.json` compiles to into the same `forbidden`, as [checks-feature-owners](../gates/checks-feature-owners.md#import-boundary) says.
+A repository with an import boundary writes its rule directly under `forbidden`.
 
 ## Running it
 
@@ -59,5 +59,4 @@ jobs:
 
 ## Related topics
 
-- [checks-feature-owners](../gates/checks-feature-owners.md)
 - [Why it is shaped this way](../design.md)

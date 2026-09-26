@@ -32,8 +32,8 @@ const PLANTS: readonly (Plant & { readonly reference: string })[] = [
 
 const repository = docsRepos();
 
-async function start(quality: unknown = {}): Promise<DocsRepo> {
-  const repo = await repository(quality);
+async function start(): Promise<DocsRepo> {
+  const repo = await repository();
   await repo.put("package.json", MANIFEST);
   await repo.put("scripts/build.ts", "export const build = 1;\n");
   return repo;
@@ -82,9 +82,9 @@ test(
 );
 
 test(
-  "a path git ignores, a bin a dependency installs and a command in a doc for consumers are not held to the repository",
+  "a path git ignores or a bin a dependency installs is not held to the repository",
   async () => {
-    const { put, commit, docs } = await start({ docs: { forConsumers: ["docs/consumers.md"] } });
+    const { put, commit, docs } = await start();
     await put("generated/keep.txt", "kept\n");
     await put(GUIDE, OPENING);
     const base = await commit("start");

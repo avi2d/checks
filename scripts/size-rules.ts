@@ -1,5 +1,3 @@
-import { Schema } from "effect";
-
 export const TESTS_DIRECTORY = "tests";
 
 const COUNTED = { skipBlankLines: false, skipComments: false };
@@ -72,47 +70,11 @@ export const SIZE_DEFAULTS = {
   tests: { fileLines: 600, statements: 50, complexity: 15, depth: 4 },
 } as const satisfies Budgets & { readonly applies: Applies };
 
-const Limit = Schema.Int.check(Schema.isGreaterThan(0));
-
-function limit({ limits }: SizeRule, fallback: number) {
-  return Schema.optionalKey(Limit.annotate({ description: `${limits}; ${fallback} when absent` }));
-}
-
-const ProductionBudget = Schema.Struct({
-  fileLines: limit(FILE_LINES, SIZE_DEFAULTS.production.fileLines),
-  functionLines: limit(FUNCTION_LINES, SIZE_DEFAULTS.production.functionLines),
-  statements: limit(STATEMENTS, SIZE_DEFAULTS.production.statements),
-  complexity: limit(COMPLEXITY, SIZE_DEFAULTS.production.complexity),
-  depth: limit(DEPTH, SIZE_DEFAULTS.production.depth),
-});
-
-const TestBudget = Schema.Struct({
-  fileLines: limit(FILE_LINES, SIZE_DEFAULTS.tests.fileLines),
-  statements: limit(STATEMENTS, SIZE_DEFAULTS.tests.statements),
-  complexity: limit(COMPLEXITY, SIZE_DEFAULTS.tests.complexity),
-  depth: limit(DEPTH, SIZE_DEFAULTS.tests.depth),
-});
-
-export const Size = Schema.Struct({
-  applies: Schema.optionalKey(
-    Schema.Literals(APPLIES).annotate({
-      description: `Which production and test files the budget holds: ratchet, the ones a range adds or changes, to no more overrun per rule than at the range's base; all, every one. ${SIZE_DEFAULTS.applies} when absent. The rest are listed as advisory`,
-      message: "Expected ratchet or all, and ratchet replaces changed",
-    }),
-  ),
-  production: Schema.optionalKey(
-    ProductionBudget.annotate({
-      description: `The budget of the files under sources.production, and of the files listed as advisory outside ${TESTS_DIRECTORY}/`,
-    }),
-  ),
-  tests: Schema.optionalKey(
-    TestBudget.annotate({ description: `The budget of the files under ${TESTS_DIRECTORY}/, which sets no limit on a function's lines` }),
-  ),
-}).annotate({
-  description: "The size budget oxlint holds production and test files to, read by checks-size-budget",
-  messageUnexpectedKey: "Expected only applies, production and tests, since each limit is set inside production or tests",
-});
-export type Size = typeof Size.Type;
+export type Size = {
+  readonly applies?: Applies;
+  readonly production?: Budget;
+  readonly tests?: Budget;
+};
 
 export function budgetsOf(size: Size): Budgets {
   return {

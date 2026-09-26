@@ -2,7 +2,7 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { changedPaths, checkoutFiles, collect, git, pathsAt, rangeFromArgs } from "./git.ts";
 import { runMain } from "./main.ts";
-import { readQuality } from "./quality-file.ts";
+import { readSizeRules } from "./native-config.ts";
 
 export type Fragment = {
   readonly file: string;
@@ -167,10 +167,9 @@ export function report({ measured, rises, advisory }: Held): string {
 const hold = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const { base, head } = yield* rangeFromArgs(process.argv.slice(2), USAGE, root);
-  const { source, quality } = yield* readQuality(root);
-  const production = quality.sources?.production ?? [];
+  const production = (yield* readSizeRules(root))?.production ?? [];
   if (production.length === 0) {
-    yield* Console.log(`${NAME}: ${source} declares no sources.production`);
+    yield* Console.log(`${NAME}: .oxlintrc.json declares no production size override`);
     return true;
   }
   const held = yield* runHold(root, production, base, head);

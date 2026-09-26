@@ -6,8 +6,6 @@ import { consumerTrees, KIT_BIN, kitTree, type KitTree } from "./lib/consumer-tr
 import { findings } from "./lib/findings.ts";
 import { CHECKOUT, scratchDirs } from "./lib/fixture-repo.ts";
 
-const QUALITY = join(CHECKOUT, "scripts", "quality.ts");
-
 const SCOPED = "scripts/plant.ts";
 const BIN_PLANT = "scripts/bin.ts";
 const UNSCOPED = "tests/plant.ts";
@@ -60,7 +58,7 @@ const CLEAN: Readonly<Record<string, string>> = {
   [UNSCOPED]: `export const answer = 42;\n`,
 };
 
-const OWN_OXLINT = [".oxlintrc.json", "oxlintrc.json", "oxlintrc.quality.json", "dist/index.js"];
+const OWN_OXLINT = [".oxlintrc.json", "oxlintrc.json", "dist/index.js"];
 
 const consumerTree = consumerTrees("checks-effect-scope-consumer-");
 const scratch = scratchDirs();
@@ -69,7 +67,7 @@ let tree: KitTree;
 
 async function consumer(): Promise<void> {
   tree = await consumerTree({
-    quality: { sources: { effect: { paths: ["scripts/**/*.ts"] } } },
+    paths: ["scripts/**/*.ts"],
     include: ["scripts/**/*.ts", "tests/**/*.ts"],
     types: ["bun"],
   });
@@ -117,8 +115,6 @@ test(
   async () => {
     await consumer();
     await plantViolations();
-    expect((await tree.run("bun", [QUALITY, "generate"])).exitCode).toBe(0);
-
     const red = await oxlint();
     expect(red.exitCode).not.toBe(0);
     expect(red.linted.get(SCOPED)).toEqual(expect.arrayContaining(SCOPE_OXLINT));
@@ -137,8 +133,6 @@ test(
   async () => {
     await consumer();
     await plantViolations();
-    expect((await tree.run("bun", [QUALITY, "generate"])).exitCode).toBe(0);
-
     const refused = await diagnostics();
     expect(refused.get(SCOPED)).toEqual(expect.arrayContaining([...SCOPE_SERVICE, ...KIT_SERVICE]));
     for (const rule of SCOPE_SERVICE) expect(refused.get(UNSCOPED) ?? []).not.toContain(rule);

@@ -40,7 +40,7 @@ lint-coverage: 71/71 tracked .ts/.tsx files
 
 ## Opting out
 
-A repository that tracks no `.ts` or `.tsx` file leaves it out of `gates.lint`, as [Gate selection](checks-lint.md#gate-selection) says.
+`checks-lint` runs this gate only when the repository tracks `.ts` or `.tsx` files.
 A repository that tracks one keeps it.
 
 ## Related topics

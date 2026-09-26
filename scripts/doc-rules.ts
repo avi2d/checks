@@ -12,12 +12,11 @@ import {
 } from "./doc-outline.ts";
 import { ADR_STATUSES, TEMPLATES, templateFile, type Kind, type Title } from "./doc-templates.ts";
 import { ADR_DIRECTORY, DOCS_DIRECTORY } from "./prose-matchers.ts";
-import { MODES, type Docs, type Mode } from "./quality-file.ts";
+import { MODES } from "./native-config.ts";
 
 export type Placement =
   | { readonly type: "judged"; readonly kind: Kind }
   | { readonly type: "undeclared" }
-  | { readonly type: "ambiguous"; readonly modes: readonly Mode[] }
   | { readonly type: "unjudged" };
 
 export type Doc = {
@@ -37,14 +36,16 @@ export const ROOT_FILES: ReadonlyMap<string, Kind> = new Map<string, Kind>([
   ["CONTRIBUTING.md", "how-to"],
 ]);
 
-export function placementOf(path: string, docs: Docs | undefined): Placement {
+export function placementOf(path: string, text = ""): Placement {
   const root = ROOT_FILES.get(path);
   if (root !== undefined) return { type: "judged", kind: root };
   if (!path.endsWith(".md") || path === ADR_INDEX) return { type: "unjudged" };
   if (path.startsWith(ADR_DIRECTORY)) return { type: "judged", kind: "adr" };
-  const modes = MODES.filter((mode) => (docs?.pages?.[mode] ?? []).some((glob) => new Bun.Glob(glob).match(path)));
-  const [mode, ...others] = modes;
-  if (mode !== undefined) return others.length === 0 ? { type: "judged", kind: mode } : { type: "ambiguous", modes };
+  if (path.startsWith("docs/gates/") || path.startsWith("docs/configs/")) return { type: "judged", kind: "reference" };
+  if (path === "docs/design.md") return { type: "judged", kind: "explanation" };
+  const named = /^---\nkind: (tutorial|how-to|reference|explanation)\n---\n/.exec(text)?.[1];
+  const mode = MODES.find((known) => known === named);
+  if (mode !== undefined) return { type: "judged", kind: mode };
   return path.startsWith(DOCS_DIRECTORY) ? { type: "undeclared" } : { type: "unjudged" };
 }
 
@@ -171,20 +172,21 @@ function exactProblems(kind: Kind, expected: string, actual: string): readonly V
 export function judge(kind: Kind, doc: Doc, records: readonly string[]): readonly Violation[] {
   const template = TEMPLATES[kind];
   if (template.shape === "exact") return exactProblems(kind, template.text, doc.text);
-  const outline = parseOutline(doc.text);
+  const frontMatter = /^---\nkind: (?:tutorial|how-to|reference|explanation)\n---\n/.exec(doc.text)?.[0] ?? "";
+  const outline = parseOutline(doc.text.slice(frontMatter.length));
+  const lineOffset = frontMatter === "" ? 0 : frontMatter.split("\n").length - 1;
   const title = titleOf(outline);
   return [
     ...outlineProblems(outline),
     ...(title === undefined ? [] : titleProblems(template.title, title)),
     ...matchSections(outline.sections, template.sections, 2, title?.line ?? 1),
     ...kindProblems(kind, doc, outline, records),
-  ].toSorted((a, b) => a.line - b.line);
+  ].map(({ line, message }) => ({ line: line + lineOffset, message })).toSorted((a, b) => a.line - b.line);
 }
 
 export function placementProblem(placement: Placement): string | undefined {
   if (placement.type === "undeclared") {
-    return `is a page under ${DOCS_DIRECTORY} with no mode; declare it under docs.pages in quality.json as ${MODES.join(", ")}`;
+    return `is a page under ${DOCS_DIRECTORY} with no mode; add kind: ${MODES.join(", ")} in YAML front matter`;
   }
-  if (placement.type === "ambiguous") return `is declared under docs.pages as ${placement.modes.join(" and ")}, and a page has one mode`;
   return undefined;
 }

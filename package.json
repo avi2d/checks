@@ -11,6 +11,15 @@
     "access": "public"
   },
   "type": "module",
+  "vendorSources": [
+    {
+      "name": "effect",
+      "package": "effect",
+      "repository": "https://github.com/Effect-TS/effect.git",
+      "tag": "effect@{version}",
+      "path": "packages/effect/package.json"
+    }
+  ],
   "files": [
     "CHANGELOG.md",
     "CONTRIBUTING.md",
@@ -40,13 +49,11 @@
     "scripts/comment-gate.ts",
     "scripts/suppressions-ratchet.ts",
     "scripts/backtest.ts",
-    "scripts/quality-file.ts",
-    "scripts/quality.ts",
+    "scripts/native-config.ts",
     "scripts/size-budget.ts",
     "scripts/range-gate.ts",
     "scripts/size-rules.ts",
     "scripts/repetition.ts",
-    "scripts/feature-owners.ts",
     "scripts/quarantine-clock.ts",
     "scripts/docs.ts",
     "scripts/vendor.ts",
@@ -58,12 +65,10 @@
     "templates/",
     "presets/effect.oxlint.json",
     "presets/effect.language-service.json",
-    "quality.schema.json",
     "oxlintrc.json",
     "stryker.preset.js",
     "tsconfig.effect.json",
-    "dist/index.js",
-    "dist/feature-rules.js"
+    "dist/index.js"
   ],
   "exports": {
     "./bunfig.toml": "./bunfig.toml",
@@ -84,11 +89,9 @@
     "./scripts/comment-gate.ts": "./scripts/comment-gate.ts",
     "./scripts/suppressions-ratchet.ts": "./scripts/suppressions-ratchet.ts",
     "./scripts/backtest.ts": "./scripts/backtest.ts",
-    "./scripts/quality-file.ts": "./scripts/quality-file.ts",
-    "./scripts/quality.ts": "./scripts/quality.ts",
+    "./scripts/native-config.ts": "./scripts/native-config.ts",
     "./scripts/size-budget.ts": "./scripts/size-budget.ts",
     "./scripts/repetition.ts": "./scripts/repetition.ts",
-    "./scripts/feature-owners.ts": "./scripts/feature-owners.ts",
     "./scripts/quarantine-clock.ts": "./scripts/quarantine-clock.ts",
     "./scripts/docs.ts": "./scripts/docs.ts",
     "./scripts/vendor.ts": "./scripts/vendor.ts",
@@ -103,12 +106,10 @@
     "./templates/explanation.md": "./templates/explanation.md",
     "./presets/effect.oxlint.json": "./presets/effect.oxlint.json",
     "./presets/effect.language-service.json": "./presets/effect.language-service.json",
-    "./quality.schema.json": "./quality.schema.json",
     "./oxlintrc.json": "./oxlintrc.json",
     "./stryker.preset.js": "./stryker.preset.js",
     "./tsconfig.effect.json": "./tsconfig.effect.json",
-    "./dist/index.js": "./dist/index.js",
-    "./dist/feature-rules.js": "./dist/feature-rules.js"
+    "./dist/index.js": "./dist/index.js"
   },
   "bin": {
     "checks-lint": "scripts/lint.ts",
@@ -123,17 +124,15 @@
     "checks-comment-gate": "scripts/comment-gate.ts",
     "checks-suppressions-ratchet": "scripts/suppressions-ratchet.ts",
     "checks-backtest": "scripts/backtest.ts",
-    "checks-quality": "scripts/quality.ts",
     "checks-size-budget": "scripts/size-budget.ts",
     "checks-repetition": "scripts/repetition.ts",
-    "checks-feature-owners": "scripts/feature-owners.ts",
     "checks-quarantine-clock": "scripts/quarantine-clock.ts",
     "checks-docs": "scripts/docs.ts",
     "checks-vendor": "scripts/vendor.ts"
   },
   "scripts": {
     "prepare": "bun scripts/vendor.ts",
-    "build": "bun build effect-channel/index.ts --outdir dist --target node --format esm && bun build scripts/feature-rules.ts --outdir dist --target node --format esm --packages external && bun scripts/quality-schema.ts && bun scripts/doc-templates-write.ts && bun scripts/changelog-write.ts && bun scripts/doc-blocks-write.ts",
+    "build": "bun build effect-channel/index.ts --outdir dist --target node --format esm && bun scripts/doc-templates-write.ts && bun scripts/changelog-write.ts && bun scripts/doc-blocks-write.ts",
     "lint": "oxlint --type-aware && bun scripts/lint.ts && depcruise --config .dependency-cruiser.cjs .",
     "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
     "test": "bun scripts/test.ts"

@@ -1,9 +1,8 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { dirname, join } from "node:path";
-import { CHECKOUT, fixtureRepos, lintWiring, type FixtureRepo } from "./lib/fixture-repo.ts";
+import { CHECKOUT, fixtureRepos, lintWiring, sizeOverride, type FixtureRepo } from "./lib/fixture-repo.ts";
 
-const QUALITY = { sources: { production: ["src/**/*.ts"] } };
 const ROSE = "production file(s) repeat more lines than where the range starts, at 50 tokens and 5 lines:\n";
 const open = fixtureRepos("checks-repetition-");
 
@@ -28,8 +27,8 @@ function lines(count: number, prefix: string): string {
   return Array.from({ length: count }, (_, index) => `export const ${prefix}${index} = ${index};\n`).join("");
 }
 
-function repository(files: Readonly<Record<string, string>>, quality: unknown = QUALITY): Promise<FixtureRepo> {
-  return open({ "quality.json": JSON.stringify(quality), ...files });
+function repository(files: Readonly<Record<string, string>>): Promise<FixtureRepo> {
+  return open({ ".oxlintrc.json": sizeOverride(["src/**/*.ts"]), ...files });
 }
 
 test(
@@ -76,7 +75,7 @@ test(
 test(
   "checks-lint runs the repetition hold over its range, red on an added copy and green once it is gone",
   async () => {
-    const { dir, write, commit, lint } = await repository({ ...(await lintWiring(QUALITY)), "src/ledger.ts": block("ledger") });
+    const { dir, write, commit, lint } = await repository({ ...(await lintWiring()), "src/ledger.ts": block("ledger") });
     await commit("feat: base");
     await $`git update-ref refs/remotes/origin/main HEAD && git checkout -q -b feature`.cwd(dir).quiet();
     await write({ "src/copy.ts": block("ledger") });
@@ -84,13 +83,13 @@ test(
 
     const red = await lint();
     expect(red.text).toContain("  src/copy.ts: 10 repeated line(s), up from 0\n");
-    expect(red.text).toContain("checks-lint: 1 of 12 gate(s) failed: checks-repetition\n");
+    expect(red.text).toContain("checks-lint: 1 of 10 gate(s) failed: checks-repetition\n");
     expect(red.exitCode).toBe(1);
 
     await write({ "src/copy.ts": "export const copy = 1;\n" });
     await commit("fix: no copy");
     const green = await lint();
-    expect(green.text).toContain("checks-lint: 12 gate(s) pass\n");
+    expect(green.text).toContain("checks-lint: 10 gate(s) pass\n");
     expect(green.exitCode).toBe(0);
   },
   60_000,

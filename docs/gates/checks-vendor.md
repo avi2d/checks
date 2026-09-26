@@ -1,6 +1,6 @@
 # checks-vendor
 
-`checks-vendor` pins each library `quality.json` declares to one shared read-only clone on the machine and links it under `repos/`.
+`checks-vendor` pins each library `package.json` declares under `vendorSources` to one shared read-only clone and links it under `repos/`.
 
 ## What it checks
 
@@ -26,7 +26,7 @@ A read through the link resolves outside the checkout, so a reader that must sta
 ## What it reads
 
 It reads the working tree.
-That is `quality.json`, `node_modules/<package>/package.json` for each declared library and the `repos/` links.
+That is `package.json`, `node_modules/<package>/package.json` for each declared library and the `repos/` links.
 It reads the shared cache outside the checkout.
 That is each tag tree, its recorded commit and its manifest.
 It contacts a remote only when a tag is not cached yet, to confirm the tag exists and to clone it.
@@ -37,7 +37,7 @@ It contacts a remote only when a tag is not cached yet, to confirm the tag exist
 checks-vendor
 ```
 
-It takes no arguments, since `quality.json` names the libraries.
+It takes no arguments, since `package.json` names the libraries.
 
 ## Exit codes
 
@@ -45,7 +45,7 @@ It takes no arguments, since `quality.json` names the libraries.
 | --- | --- |
 | 0 | every declared library links a verified tree, its remote could not be reached for a first fetch, or no git checkout holds the run |
 | 1 | a tag is missing or lands elsewhere than its record, an installed version is unknown, a tree was written to, a record disagrees with its tree, a version disagrees or a link is blocked |
-| 2 | `quality.json` does not decode, `HOME` is unset, or arguments were passed |
+| 2 | `package.json` does not decode, `HOME` is unset, or arguments were passed |
 
 ## Sample output
 
@@ -88,10 +88,10 @@ A consumer whose `tsconfig.json` has no explicit `include` keeps the trees out w
 
 ## Opting out
 
-It runs only in a repository that declares `sources.libraries`.
+It pins sources only when `package.json` declares `vendorSources`.
 A repository without that key reports nothing to pin and changes nothing.
 A repository that declares no library needs no `prepare` entry for it.
 
 ## Related topics
 
-- [The quality file](../configs/quality-file.md)
+- [Native settings](../configs/native-settings.md)

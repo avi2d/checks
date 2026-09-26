@@ -16,7 +16,7 @@ To check a change the way CI does:
 1. Run `bun run typecheck`.
 1. Run `bun run test`, which runs the suite through `scripts/test.ts`.
 
-CI runs the commands `gates.ci` lists in `quality.json`, which include `git diff --exit-code` over the whole tree after the build and the commit lint on the pull request title.
+CI runs the commands in `.github/workflows/ci.yml` and lints the pull request title in `.github/workflows/commitlint.yml`.
 
 ## Regenerate what is committed
 
@@ -24,9 +24,8 @@ Each generated file is committed, and lint, the suite or CI's diff after the bui
 
 To regenerate after an edit:
 
-1. After editing `sources.effect` in `quality.json` or a file in `presets/`, run `bun scripts/quality.ts generate`, which rewrites `oxlintrc.quality.json` and `tsconfig.quality.json`.
-1. After editing `effect-channel/`, `scripts/feature-rules.ts`, the schema in `scripts/quality-file.ts` or the templates in `scripts/doc-templates.ts`, run `bun run build`.
-   It rewrites `dist/index.js`, `dist/feature-rules.js`, `quality.schema.json` and `templates/`.
+1. After editing `effect-channel/` or the templates in `scripts/doc-templates.ts`, run `bun run build`.
+   It rewrites `dist/index.js` and `templates/`.
 1. After editing anything a generated block names as its source in its opening marker, run `bun run build`, which rewrites every generated block.
 1. Commit what the command rewrote in the same commit as the edit.
 
@@ -66,15 +65,15 @@ To place a change:
    | --- | --- |
    | `scripts/` | every bin, and the modules they share |
    | `effect-channel/` | the oxlint plugin with the Effect error-channel and cognitive complexity rules |
-   | `dist/` | the committed bundles of the plugin and of `featureRules` |
-   | `presets/` | the Effect presets `checks-quality` builds its fragments from |
+   | `dist/` | the committed oxlint plugin bundle |
+   | `presets/` | the Effect rule blocks consumers copy into native configs |
    | `templates/` | one template per kind of doc file, which `bun run build` renders |
    | `CHANGELOG.md` | every release, which `bun run build` writes from the conventional commits |
    | `tests/` | the suite, with the tests that spawn a process under `tests/e2e/` |
    | `docs/gates/` | one reference page per bin |
    | `docs/configs/` | one reference page per shipped config a bin does not own |
    | `docs/design.md` | why the kit is shaped the way it is |
-   | the root configs | `oxlintrc.json`, `tsconfig.effect.json`, `bunfig.toml`, `commitlint.config.js`, `dependency-cruiser.config.js`, `stryker.preset.js` and `quality.schema.json`, which a consuming repository extends or copies |
+   | the root configs | `oxlintrc.json`, `tsconfig.effect.json`, `bunfig.toml`, `commitlint.config.js`, `dependency-cruiser.config.js`, `stryker.preset.js`, which a consuming repository extends or copies |
 
 1. Change the page under `docs/` that describes the behaviour in the same commit as the behaviour.
    A new bin gets its page under `docs/gates/`, and the suite fails until it has one.

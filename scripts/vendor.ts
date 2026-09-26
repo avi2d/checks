@@ -1,12 +1,11 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Option, Path, Schema } from "effect";
-import { QUALITY_FILE } from "./gates.ts";
 import { git } from "./git.ts";
 import { runMain, Usage } from "./main.ts";
-import { readQuality, type Library } from "./quality-file.ts";
+import { readVendorSources, type Library } from "./native-config.ts";
 
 const NAME = "checks-vendor";
-const USAGE = `usage: ${NAME} takes no arguments, since quality.json names the libraries`;
+const USAGE = `usage: ${NAME} takes no arguments, since package.json vendorSources names the libraries`;
 const CACHE_HOME = ".cache/avi2dg-checks";
 const RECORD_SUFFIX = ".commit";
 const LINKS = "repos";
@@ -308,10 +307,9 @@ const main = Effect.gen(function* () {
   );
   if (Option.isNone(toplevel)) return true;
   const root = toplevel.value;
-  const { quality } = yield* readQuality(root);
-  const libraries = quality.sources?.libraries ?? [];
+  const libraries = yield* readVendorSources(root);
   if (libraries.length === 0) {
-    yield* Console.error(`${NAME}: ${QUALITY_FILE} declares no libraries, so nothing is pinned`);
+    yield* Console.error(`${NAME}: package.json declares no vendorSources, so nothing is pinned`);
     return true;
   }
   const cache = yield* cacheRoot();

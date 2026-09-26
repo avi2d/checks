@@ -15,26 +15,24 @@ function found(kind: Kind, text: string, path = kind === "adr" ? RECORD : `docs/
   return judge(kind, { path, text }, records).map(({ line, message }) => `${line}: ${message}`);
 }
 
-test("a root file, a record and a declared page each map to their kind, and other Markdown is left alone", () => {
-  const docs = { pages: { reference: ["docs/gates/*.md", "docs/design.md"], explanation: ["docs/design.md"] } };
+test("a root file, a record and a page map to their kind, and other Markdown is left alone", () => {
   const kinds = ["README.md", "CHANGELOG.md", "AGENTS.md", "CLAUDE.md", "CONTRIBUTING.md", "docs/adr/0001-x.md", "docs/gates/lint.md"].map(
-    (path) => placementOf(path, docs),
+    (path) => placementOf(path),
   );
   expect(kinds).toEqual(
     (["readme", "changelog", "agents", "claude", "how-to", "adr", "reference"] as const).map((kind) => ({ type: "judged", kind })),
   );
-  expect(["docs/adr/README.md", "src/README.md", "notes.md", "docs/image.png"].map((path) => placementOf(path, docs).type)).toEqual([
+  expect(["docs/adr/README.md", "src/README.md", "notes.md", "docs/image.png"].map((path) => placementOf(path).type)).toEqual([
     "unjudged",
     "unjudged",
     "unjudged",
     "unjudged",
   ]);
-  expect(placementProblem(placementOf("docs/stack/cross.md", docs))).toBe(
-    "is a page under docs/ with no mode; declare it under docs.pages in quality.json as tutorial, how-to, reference, explanation",
+  expect(placementProblem(placementOf("docs/stack/cross.md"))).toBe(
+    "is a page under docs/ with no mode; add kind: tutorial, how-to, reference, explanation in YAML front matter",
   );
-  expect(placementProblem(placementOf("docs/design.md", docs))).toBe(
-    "is declared under docs.pages as reference and explanation, and a page has one mode",
-  );
+  expect(placementOf("docs/stack/cross.md", "---\nkind: tutorial\n---\n# Build a stack\n")).toEqual({ type: "judged", kind: "tutorial" });
+  expect(placementOf("docs/design.md")).toEqual({ type: "judged", kind: "explanation" });
 });
 
 test("a filled-in document of every kind holds to its template", () => {

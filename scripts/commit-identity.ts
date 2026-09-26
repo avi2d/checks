@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
-import { Console, Effect, Schema } from "effect";
+import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { git, refArgs } from "./git.ts";
 import { runMain } from "./main.ts";
-import { readQuality, type Identity } from "./quality-file.ts";
+import { Identity as IdentitySchema, type Identity } from "./native-config.ts";
 
 type Commit = {
   readonly sha: string;
@@ -38,9 +38,26 @@ function render(identity: Identity): string {
   return `${identity.name} <${identity.email}>`;
 }
 
+const Author = Schema.Union([IdentitySchema, Schema.String.check(Schema.isPattern(/^[^<>]+ <[^<>]+>(?: \([^)]+\))?$/))]);
+const Authors = Schema.Struct({
+  author: Schema.optionalKey(Author),
+  contributors: Schema.optionalKey(Schema.Array(Author)),
+});
+
+function identityOf(author: typeof Author.Type): Identity | undefined {
+  if (typeof author !== "string") return author;
+  const matched = /^(.+?) <([^<>]+)>(?: \([^)]+\))?$/.exec(author);
+  return matched === null ? undefined : { name: matched[1] ?? "", email: matched[2] ?? "" };
+}
+
 const allowedAuthors = Effect.gen(function* () {
-  const { quality } = yield* readQuality((yield* git(["rev-parse", "--show-toplevel"])).trim());
-  return quality.commitIdentity?.authors ?? DEFAULT_AUTHORS;
+  const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
+  const file = (yield* Path.Path).join(root, "package.json");
+  const manifest = yield* (yield* FileSystem.FileSystem).readFileString(file).pipe(
+    Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Authors))),
+  );
+  const listed = [manifest.author, ...(manifest.contributors ?? [])].filter((entry) => entry !== undefined).map(identityOf);
+  return listed.length === 0 ? DEFAULT_AUTHORS : listed.filter((entry) => entry !== undefined);
 });
 
 const readCommits = Effect.fn("readCommits")(function* (revisions: readonly string[]) {

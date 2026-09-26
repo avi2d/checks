@@ -4,15 +4,13 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
 
 - Every config in an oxlint `extends` chain brings its own `plugins`, and one that sets none brings oxlint's default plugins, whose category rules the base's `categories` then turn on across the tree.
   `rules`, `categories` and `jsPlugins` inherit as expected.
-  That is why the consumer snippet restates `plugins` and nothing else, and why the generated fragment always sets them.
+  That is why the consumer config and each override restate `plugins`.
 - `node_modules/` is excluded through the consumer's `.gitignore`, not `ignorePatterns`: oxlint still walks the installed package when only `ignorePatterns` names it.
 - `files` in package.json is the published surface: `tests/`, `AGENTS.md` and the `.ts` plugin source never reach an install.
   npm adds `package.json`, `README` and `LICENSE` to the tarball whatever `files` says.
   `bun pm pack` builds the same tarball the registry serves, which is what the packed-tarball consumer e2e test installs.
 - The plugin ships compiled as `dist/index.js`, built with `bun build effect-channel/index.ts --outdir dist --target node --format esm`.
   Node refuses to type-strip a `.ts` plugin under `node_modules`, so the `.ts` source would fail to load from an installed package.
-- `featureRules` ships compiled as `dist/feature-rules.js` for the same reason, with `effect` left out of the bundle so it resolves the consumer's own copy.
-  dependency-cruiser uses a config's export as it is and never awaits it, so the declaration decodes synchronously, and `quality.json` exempts that one file from the Effect rules.
 - `checks-size-budget` writes the head commit's files to a temporary directory and runs oxlint there.
   Its configuration loads the kit's own plugin bundle for the complexity rule and turns every category off.
   The consumer's own `.oxlintrc.json`, its ignore files and its other rules never reach the count.
@@ -26,7 +24,7 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
 - `dist/` is committed.
   No `prepack` or `prepublishOnly` builds it, so a publish ships whatever bundle the publishing worktree holds.
   Rebuild it after pulling with `bun run build`.
-  `bun run build` also emits `quality.schema.json`, `templates/` and `CHANGELOG.md`, which are committed the same way.
+  `bun run build` also emits `templates/` and `CHANGELOG.md`, which are committed the same way.
   CI runs `git diff --exit-code` over the whole tree after the build, because a test that compares a generated file with its source passes on the copy the build just rewrote.
 - `CHANGELOG.md` is generated, so a release commit carries it and the tarball ships it.
   The commit that bumps package.json `version` closes its release, and the `v*` tag goes on that commit, so commits merged after it wait for the next release.
@@ -37,11 +35,9 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   Entries come from commit subjects, the squash-merged pull request titles commitlint holds to the conventional format.
   The bodies are the branch's own messages, which nothing lints.
   The release path needs no `contents: write`: the changelog arrives in the release commit's pull request, not from a workflow that pushes.
-- `quality.json` is JSON, not TOML or a TypeScript module: a bun bin, a hook running without `node_modules`, a `.cjs` or `.mjs` config and `jq` all parse it with nothing installed, and nobody runs a repository's own code to learn its policy.
-  It holds declarations only.
-  The kit's bins read it directly.
-  oxlint and tsc read nothing but their own JSON, so they extend generated fragments, which `checks-quality --check` holds to the declarations.
-- `quality.json` refuses a key its schema does not name, so a kit that cannot enforce a newer key refuses it rather than let the repository believe it enforced.
+- Workflow YAML owns CI execution, and `checks-ci-wiring` derives required steps from kit rules and the package scripts.
+  Oxlint and TypeScript read their own overrides directly, so the consumer can change a rule where its tool reads it.
+  The Effect scopes occur in two native files, and the installed consumer test checks both independently.
 - The base parses with swc because typescript 7, which is tsgo, has no compiler API for dependency-cruiser to use.
   Without `@swc/core` installed the cruise silently skips every `.ts` file, so this repo's test asserts its own TypeScript is cruised.
 - `bunfig.toml` has no `extends` and no include: bun ignores an unknown top-level key in silence, so a preset cannot be inherited and the consumer's copy is compared key by key against the installed one instead.
@@ -55,8 +51,8 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   The `.ts` checks keep a `bun` shebang, which needs no build step and no `dist/` entry, unlike the oxlint plugin that node loads.
 - `checks-lint` runs each gate as its own bin in a child process rather than importing it, so a gate behaves the same called alone or through the entry point, and `lint-coverage.sh` stays a shell script.
   The gates run one at a time with their output passed straight through, so each report reads whole and in the table's order.
-- A gate selection is checked against the repository's contents rather than trusted, so it cannot skip a gate that applies.
-  ci-wiring does that check, which is why a selection without it, or without another gate that applies everywhere, is refused as `checks-lint` reads it: nothing would check the selection otherwise.
+- `checks-lint` determines applicable gates from tracked files instead of accepting a repository selection.
+  A TypeScript gate starts running as soon as TypeScript source is tracked.
 - `checks-test` runs bun itself rather than reading a report some other run left: a skip taken only on CI is visible only in CI's own run, and an earlier run's report may be stale or narrowed.
   It reads the JUnit report bun writes to a temporary directory, since bun has no other per-test output meant for a program.
 - `checks-ci-wiring` runs inside `lint`, not in a workflow of its own: deleting the step that runs a check is the violation it catches, so the local `lint` is where it has to fail.
@@ -75,8 +71,8 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   That is the entry-point and layer recipe under Boundaries in [The dependency rules](configs/dependency-rules.md).
 - The templates in `templates/` are rendered from `scripts/doc-templates.ts`, the spec `checks-docs` reads.
   A template written by hand beside the check agrees with it only until someone edits one of them.
-- A page's Diátaxis mode is declared in `quality.json` rather than read from the page.
-  Whether a page teaches, walks a task, describes or explains is a judgment no program makes, so the repository states it once and the check holds the page to it.
+- A page's Diátaxis mode comes from its path for the kit's reference directories or from `kind` front matter for another page.
+  The repository makes the judgment beside the page, and the check holds it to that template.
 - `checks-docs` holds a doc file to its template when a change touches it, the way `checks-size-budget` holds a file to its budget.
   A repository adopts the templates as its files change, and an untouched file is listed as advisory rather than failing a change that never read it.
 - A task heading is verb first, and review holds it there rather than the check.
@@ -95,8 +91,8 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   A reference goes stale when the code it names moves far more often than when its own line is edited, so a gate on edited lines alone would miss the usual break.
 - A path under a top directory the repository lacks names a file in another repository, such as a consumer's, and no program tells that from a typo.
   A directory the range deletes still counts as this repository's, so a path under it reads as stale rather than foreign.
-- The command check passes over the docs a repository declares under `docs.forConsumers`.
-  This kit's README and reference pages speak to a consuming repository, whose scripts are not this one's, and no program tells an example for a consumer from an instruction for a contributor.
+- The command check passes over README and the gate and config reference pages.
+  Those files speak to a consuming repository, whose scripts are not this one's.
 
 ## Related topics
 

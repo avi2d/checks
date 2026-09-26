@@ -129,11 +129,11 @@ test(
 );
 
 test(
-  "commit-identity reads the allowlist from package.json while quality.json is absent",
+  "commit-identity reads the standard author from package.json",
   async () => {
     await initRepo({
       name: "commit-identity-fixture",
-      commitIdentity: { authors: [STRANGER] },
+      author: STRANGER,
     });
     const base = await commit({ message: "feat: base", author: STRANGER, committer: STRANGER });
     await commit({ message: "feat: theirs", author: STRANGER, committer: STRANGER });
@@ -149,10 +149,20 @@ test(
 );
 
 test(
-  "commit-identity reads the allowlist from quality.json, which a malformed one leaves undecided",
+  "commit-identity accepts an npm author string with a URL", async () => {
+    await initRepo({ author: "Pat Stranger <stranger@example.com> (https://example.com/pat)" });
+    await commit({ message: "feat: theirs", author: STRANGER, committer: STRANGER });
+    const green = await check("HEAD");
+    expect(green.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
+  "commit-identity reads contributors from package.json and refuses malformed identities",
   async () => {
     await initRepo();
-    await writeFile(join(dir, "quality.json"), JSON.stringify({ commitIdentity: { authors: [STRANGER] } }));
+    await writeFile(join(dir, "package.json"), JSON.stringify({ contributors: [STRANGER] }));
     await commit({ message: "feat: theirs", author: STRANGER, committer: STRANGER });
     const green = await check("HEAD");
     expect(green.text).toContain("1 commit(s) in HEAD carry only allowed identities");
@@ -163,9 +173,9 @@ test(
     expect(red.text).toContain("author avi2d <avi2dg@gmail.com>");
     expect(red.exitCode).toBe(1);
 
-    await writeFile(join(dir, "quality.json"), JSON.stringify({ commitIdentity: { authors: [{ name: STRANGER.name }] } }));
+    await writeFile(join(dir, "package.json"), JSON.stringify({ contributors: [{ name: STRANGER.name }] }));
     const malformed = await check("HEAD");
-    expect(malformed.text).toContain('quality.json: Missing key\n  at ["commitIdentity"]["authors"][0]["email"]');
+    expect(malformed.text).toContain('Missing key\n  at ["contributors"][0]["email"]');
     expect(malformed.exitCode).toBe(2);
   },
   60_000,
@@ -174,7 +184,7 @@ test(
 test(
   "commit-identity judges a root commit in the one-argument form",
   async () => {
-    await initRepo({ name: "commit-identity-fixture", commitIdentity: { authors: [STRANGER] } });
+    await initRepo({ name: "commit-identity-fixture", author: STRANGER });
     const root = await commit({ message: "feat: first", author: STRANGER, committer: STRANGER });
     const green = await check(root);
     expect(green.exitCode).toBe(0);
@@ -192,12 +202,12 @@ test(
 test(
   "commit-identity refuses a malformed allowlist and a missing argument",
   async () => {
-    await initRepo({ name: "commit-identity-fixture", commitIdentity: { authors: [] } });
+    await initRepo({ name: "commit-identity-fixture", author: "not an identity" });
     await commit({ message: "feat: base" });
 
     const malformed = await check("HEAD");
     expect(malformed.exitCode).toBe(2);
-    expect(malformed.text).toContain('package.json: Missing key\n  at ["commitIdentity"]["authors"][0]');
+    expect(malformed.text).toContain('at ["author"]');
 
     const usage = await check();
     expect(usage.exitCode).toBe(2);

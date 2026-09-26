@@ -13,7 +13,7 @@ The package ships one template per kind under `templates/`, and a repository sta
 cp node_modules/@avi2dg/checks/templates/how-to.md docs/add-a-supplier.md
 ```
 
-<!-- generated doc-kinds: bun run build writes it from scripts/doc-rules.ts, scripts/quality-file.ts, scripts/doc-templates.ts and scripts/doc-blocks.ts -->
+<!-- generated doc-kinds: bun run build writes it from scripts/doc-rules.ts, scripts/native-config.ts, scripts/doc-templates.ts and scripts/doc-blocks.ts -->
 
 | File | Kind | Template |
 | --- | --- | --- |
@@ -23,21 +23,19 @@ cp node_modules/@avi2dg/checks/templates/how-to.md docs/add-a-supplier.md
 | `CLAUDE.md` | claude | `templates/claude.md` |
 | `CONTRIBUTING.md` | how-to | `templates/how-to.md` |
 | each file in `docs/adr/` but its generated index, `README.md` | adr | `templates/adr.md` |
-| a page `docs.pages` declares | tutorial, how-to, reference or explanation | `templates/<mode>.md` |
+| a page with `kind` in front matter | tutorial, how-to, reference or explanation | `templates/<mode>.md` |
 
 <!-- end generated doc-kinds -->
 
 A file the table names on its own, such as `README.md`, sits at the repository root.
 No other Markdown file is judged, save a page under `docs/`, which needs a mode.
-Which Diátaxis mode a page is written in is a judgment, so `quality.json` declares it:
+Pages under `docs/gates/` and `docs/configs/` are reference pages, and `docs/design.md` is an explanation page.
+A page elsewhere under `docs/` declares its mode in front matter:
 
-```json
-"docs": {
-  "pages": {
-    "reference": ["docs/gates/*.md"],
-    "explanation": ["docs/design.md"]
-  }
-}
+```yaml
+---
+kind: tutorial
+---
 ```
 
 A template decides a file's structure, and the template file itself is the reference for each kind:
@@ -113,20 +111,15 @@ It fails on any other line when the range broke it, as by deleting the file it n
 A path under a top directory the repository lacks at both ends of the range names another repository's file, such as a consumer's, and is passed over.
 So is a path git ignores, since a clean checkout lacks a generated file by design.
 
-A doc that speaks to a repository installing this one is declared under `docs.forConsumers` in `quality.json`, and its commands are not held to this repository's `package.json`:
-
-```json
-"docs": {
-  "forConsumers": ["README.md", "docs/gates/*.md"]
-}
-```
+`README.md` and the pages under `docs/gates/` and `docs/configs/` speak to consumers.
+Their commands are not held to this repository's `package.json`.
 
 ## What it reads
 
-It reads each Markdown file from the head commit, and `docs.pages` from `quality.json`.
+It reads each Markdown file from the head commit and uses its path or front matter to choose a mode.
 A file the range adds, changes or renames is held to its template, and a file it deletes is not.
 It reads the lines the range adds or edits from the diff, with renames detected, so a renamed doc is judged only on the lines the rename changed.
-It reads the files tracked at both ends of the range, the `scripts` of each `package.json` a living doc sits under, and `docs.forConsumers` from `quality.json`.
+It reads the files tracked at both ends of the range and the `scripts` of each `package.json` a living doc sits under.
 From the working tree it reads the ignore files git reads, and `node_modules/.bin`.
 
 ## Arguments
@@ -145,7 +138,7 @@ With one it is that commit against its parent, or against the empty tree for a r
 | --- | --- |
 | 0 | every doc file the range touches holds to its template, every line it adds to a living doc or an agent file holds to the prose rules, and it adds or breaks no reference that does not resolve |
 | 1 | a doc file the range touches does not hold to its template, a line the range adds to a living doc or an agent file breaks a prose rule, or the range adds or breaks a reference that does not resolve |
-| 2 | `quality.json` or a `package.json` does not decode, or a ref does not resolve |
+| 2 | a `package.json` does not decode, or a ref does not resolve |
 
 ## Sample output
 
@@ -154,7 +147,7 @@ docs: 4 violation(s):
   README.md:1: lacks `## Where things are`
   README.md:12: carries `;`, a semicolon. Use two sentences
   README.md:20: names `scripts/bild.ts`, which is not in the repository
-  docs/parts.md: is a page under docs/ with no mode; declare it under docs.pages in quality.json as tutorial, how-to, reference, explanation
+  docs/parts.md: is a page under docs/ with no mode; add kind: tutorial, how-to, reference, explanation in YAML front matter
 docs: advisory, 1 doc file(s) the range leaves alone do not hold to their templates yet:
   docs/adr/0001-quality-gates.md: 5 violation(s)
 docs: advisory, 1 path(s), link(s) or command(s) the living docs name were broken before the range:
@@ -166,7 +159,7 @@ docs: advisory, 1 path(s), link(s) or command(s) the living docs name were broke
 It applies to every repository, so no selection leaves it out.
 A file the range leaves alone is only listed as advisory, so a repository adopts the templates as its files change.
 A line the range leaves alone takes no prose rule, so a repository adopts the prose rules as its lines change.
-A doc listed under `docs.forConsumers` holds no `bun run` command to this repository's `package.json`.
+A consumer doc holds no `bun run` command to this repository's `package.json`.
 `checks-lint` runs it over each pull request's range, as [checks-lint](checks-lint.md) says.
 
 ## Related topics

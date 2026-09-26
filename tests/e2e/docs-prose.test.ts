@@ -44,7 +44,7 @@ test(
   "each prose rule goes red on a line a change adds to a living doc, and green once the line is rewritten",
   async () => {
     await plantRedThenGreen(
-      await repository({}),
+      await repository(),
       PLANTS,
       ({ rule }) => [`plant ${rule}`, `rewrite ${rule}`],
       "living doc(s) or agent file(s) hold to the prose rules",
@@ -56,7 +56,7 @@ test(
 test(
   "a violation on a line the range leaves alone does not fail it, and editing that line does",
   async () => {
-    const { put, commit, docs } = await repository({});
+    const { put, commit, docs } = await repository();
     await put(GUIDE, `${OPENING}It builds; it ships.\n`);
     const base = await commit("a semicolon before the gate");
     await put(GUIDE, `${OPENING}It builds; it ships.\nIt reads the parts.\n`);
@@ -78,7 +78,7 @@ test(
 test(
   "a record, a changelog and fenced code take no prose rule",
   async () => {
-    const { put, commit, docs } = await repository({});
+    const { put, commit, docs } = await repository();
     const base = await commit("start");
     const record = await readFile(join(FIXTURES, "adr.md"), "utf8");
     await put("docs/adr/0001-a-part-names-its-supplier.md", `${record}\nIt builds; it ships (fast) — twice.\n`);
@@ -96,7 +96,7 @@ test(
 test(
   "an agent file takes the separator rules and no sentence or people-doc rule",
   async () => {
-    const { put, commit, docs } = await repository({});
+    const { put, commit, docs } = await repository();
     await put("tools/AGENTS.md", "# Tools\n");
     const base = await commit("start");
     await put("tools/AGENTS.md", "# Tools\n\nIt builds. It ships.\nThis page explains the tools, and Windows support is planned\nfor them.\n");
@@ -120,7 +120,7 @@ test(
 test(
   "a changed line is judged in the doc it was changed in, whatever its path holds",
   async () => {
-    const { put, commit, docs } = await repository({});
+    const { put, commit, docs } = await repository();
     await put("README.md", "# Widget\n\nIt builds; it ships.\n");
     await put("b/README.md", "# B\n\nIt builds.\n");
     await put("my tools/README.md", "# My tools\n\nIt builds.\n");

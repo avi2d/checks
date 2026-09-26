@@ -1,7 +1,7 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { dirname, join } from "node:path";
-import { CHECKOUT, fixtureRepos, lintWiring, type FixtureRepo } from "./lib/fixture-repo.ts";
+import { CHECKOUT, fixtureRepos, lintWiring, sizeOverride, type FixtureRepo } from "./lib/fixture-repo.ts";
 
 const BUDGET = "size-budget.ts";
 const SCRIPT = join(CHECKOUT, "scripts", BUDGET);
@@ -23,14 +23,14 @@ function branches(name: string, count: number): string {
   return `export function ${name}(x: number): number {\n${tests}  return -1;\n}\n`;
 }
 
-function repository(size: Record<string, unknown> = SIZE): Promise<FixtureRepo> {
-  return open({ "quality.json": JSON.stringify({ sources: { production: ["src/**/*.ts"] }, size }) });
+function repository(size: { readonly production?: { readonly fileLines?: number; readonly functionLines?: number } } = SIZE): Promise<FixtureRepo> {
+  return open({ ".oxlintrc.json": sizeOverride(["src/**/*.ts"], size.production) });
 }
 
 test(
   "without oxlint to run it cannot decide, and exits 2",
   async () => {
-    const { dir, write, commit } = await open({ "quality.json": JSON.stringify({ sources: { production: ["src/**/*.ts"] }, size: SIZE }) });
+    const { dir, write, commit } = await repository();
     await write({ "src/small.ts": constants(2) });
     const first = await commit("feat: first");
     const result = await $`${process.execPath} ${SCRIPT} ${first}`.cwd(dir).env({ ...process.env, PATH: dirname(Bun.which("git") ?? "/usr/bin/git") }).nothrow().quiet();
@@ -92,14 +92,11 @@ test(
 );
 
 test(
-  "checks-lint runs the size budget and the feature owners over its range, red on each and green once both hold",
+  "checks-lint runs the native size budget over its range, red on growth and green once fixed",
   async () => {
     const { dir, write, commit, lint } = await guardrails({
-      ...(await lintWiring({
-        sources: { production: ["src/**/*.ts"] },
-        size: SIZE,
-        features: [{ name: "billing", root: "src/billing", entries: ["src/billing/index.ts"], proof: "tests/e2e/billing.test.ts" }],
-      })),
+      ...(await lintWiring()),
+      ".oxlintrc.json": sizeOverride(["src/**/*.ts"], SIZE.production),
       "src/billing/index.ts": "export const charge = 1;\n",
     });
     await commit("feat: base");
@@ -109,17 +106,15 @@ test(
 
     const red = await lint();
     expect(red.text).toContain("  src/billing/ledger.ts: File has too many lines (30).");
-    expect(red.text).toContain("  billing: proof tests/e2e/billing.test.ts is not in the head commit");
-    expect(red.text).toContain("checks-lint: 2 of 12 gate(s) failed: checks-size-budget, checks-feature-owners\n");
+    expect(red.text).toContain("checks-lint: 1 of 10 gate(s) failed: checks-size-budget\n");
     expect(red.exitCode).toBe(1);
 
     await write({
       "src/billing/ledger.ts": constants(2),
-      "tests/e2e/billing.test.ts": `import { expect, test } from "bun:test";\nimport { charge } from "../../src/billing/index.ts";\n\ntest("charges", () => {\n  expect(charge).toBe(1);\n});\n`,
     });
     await commit("fix: guardrails");
     const green = await lint();
-    expect(green.text).toContain("checks-lint: 12 gate(s) pass\n");
+    expect(green.text).toContain("checks-lint: 10 gate(s) pass\n");
     expect(green.exitCode).toBe(0);
   },
   60_000,

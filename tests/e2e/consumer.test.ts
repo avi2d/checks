@@ -381,16 +381,15 @@ test(
         compare: "checks-mutation-compare mutation.json mutation.json",
         wiring: "checks-ci-wiring",
         flake: "checks-flake --runs 2",
-        generate: "checks-quality generate",
-        quality: "checks-quality --check",
         size: "checks-size-budget HEAD",
         repetition: "checks-repetition HEAD",
-        owners: "checks-feature-owners HEAD",
         docs: "checks-docs HEAD",
         kit: "oxlint --type-aware && checks-lint",
       },
     });
-    await writeFile(join(dir, "quality.json"), JSON.stringify({ gates: { ci: ["bun run lint"] } }));
+    await mkdir(join(dir, ".github/workflows"), { recursive: true });
+    await writeFile(join(dir, ".github/workflows/ci.yml"), "on: pull_request\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n      - run: bun run build\n      - run: git diff --exit-code\n      - run: bun run typecheck\n      - run: bun run test\n");
+    await writeFile(join(dir, ".github/workflows/commitlint.yml"), "on: pull_request\njobs:\n  title:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ./node_modules/.bin/commitlint\n");
 
     const manifest = Schema.decodeSync(Manifest)(await readFile(join(CHECKOUT, "package.json"), "utf8"));
     const bins = Object.keys(manifest.bin);
@@ -408,11 +407,6 @@ test(
     await commitAll("feat: base");
     await writeFile(join(dir, "clean.ts"), `export const answer = 42;\n`);
     await commitAll("feat: second");
-
-    const generated = await runScript("generate");
-    expect(generated.stdout).toContain("checks-quality: wrote .github/workflows/ci.yml");
-    expect(generated.stdout).toContain("checks-quality: wrote .github/workflows/commitlint.yml");
-    expect(generated.exitCode).toBe(0);
 
     const lint = await runScript("lint");
     expect(lint.text).toContain("tracked .ts/.tsx files");
@@ -443,11 +437,9 @@ test(
     expect(flake.exitCode).toBe(0);
 
     for (const [script, report] of [
-      ["wiring", "1 gate(s) run on pull requests to main"],
-      ["quality", "checks-quality: no sources.effect is declared, so no fragment is generated; .github/workflows/ci.yml and .github/workflows/commitlint.yml hold the kit recipe"],
-      ["size", "size-budget: quality.json declares no size budget"],
-      ["repetition", "repetition: quality.json declares no sources.production"],
-      ["owners", "feature-owners: quality.json declares no feature"],
+      ["wiring", "6 gate(s) run on pull requests to main"],
+      ["size", "size-budget: .oxlintrc.json declares no size rules"],
+      ["repetition", "repetition: .oxlintrc.json declares no production size override"],
       ["docs", "docs: 0 doc file(s) the range touches hold to their templates"],
       ["ratchet", "no count in oxlint-suppressions.json rose or appeared"],
       ["clock", "no test in tests/quarantine/ is past 30 days"],
@@ -461,42 +453,33 @@ test(
     const kit = await runScript("kit", withoutPullRequestEvent());
     expect(kit.text).toContain("from HEAD against origin/main");
     expect(kit.text).toContain("commit-identity: 1 commit(s)");
-    expect(kit.text).toContain("checks-lint: 12 gate(s) pass");
+    expect(kit.text).toContain("checks-lint: 10 gate(s) pass");
     expect(kit.exitCode).toBe(0);
   },
   180_000,
 );
 
 test(
-  "packed-tarball consumer generates the quality fragments with the installed bin, and they hold its Effect paths",
+  "packed-tarball consumer uses native Effect overrides without generated fragments",
   async () => {
-    await useConsumer("tarball", { scripts: { generate: "checks-quality generate" } });
-    await writeFile(
-      join(dir, "quality.json"),
-      JSON.stringify({
-        $schema: "./node_modules/@avi2dg/checks/quality.schema.json",
-        sources: { effect: { paths: ["src/**/*.ts"] } },
-      }),
-    );
+    await useConsumer("tarball");
     await writeFile(
       join(dir, ".oxlintrc.json"),
       JSON.stringify({
-        extends: ["./node_modules/@avi2dg/checks/oxlintrc.json", "./oxlintrc.quality.json"],
+        extends: ["./node_modules/@avi2dg/checks/oxlintrc.json"],
         plugins: ["typescript", "oxc", "eslint", "import"],
+        overrides: [{
+          files: ["src/**/*.ts"],
+          plugins: ["typescript", "oxc", "eslint", "import", "node", "promise", "unicorn"],
+          rules: { "effect-channel/no-throw": "error", "effect-channel/no-try-catch": "error" },
+        }],
       }),
     );
-    await writeFile(
-      join(dir, "tsconfig.json"),
-      JSON.stringify({ extends: ["@avi2dg/checks/tsconfig.effect.json", "./tsconfig.quality.json"], include: ["src/**/*.ts"] }),
-    );
+    await writeFile(join(dir, "tsconfig.json"), JSON.stringify({ extends: ["@avi2dg/checks/tsconfig.effect.json"], include: ["src/**/*.ts"] }));
     await mkdir(join(dir, "src"));
     await writeFile(join(dir, "src", "load.ts"), "export const load = (text: string): string => text;\n");
     await writeFile(join(dir, "edge.ts"), `export function edge(): never {\n  throw new Error("outside the declared paths");\n}\n`);
     await $`git init -q`.cwd(dir).quiet();
-
-    const generated = await $`bun run generate`.cwd(dir).nothrow().quiet();
-    expect(generated.stdout.toString()).toContain("checks-quality: oxlintrc.quality.json and tsconfig.quality.json and .github/workflows/commitlint.yml hold what quality.json declares");
-    expect(generated.exitCode).toBe(0);
     expect((await oxlint()).exitCode).toBe(0);
 
     await writeFile(join(dir, "src", "load.ts"), `export function load(): never {\n  throw new Error("inside them");\n}\n`);

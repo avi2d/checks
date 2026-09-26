@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
 import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
-import { DEFAULT_BRANCH, selectedGates, type KitGate } from "./gates.ts";
+import { EVERY_REPOSITORY, KIT_GATES, type KitGate } from "./gates.ts";
+import { readWorkflows, workflowBranch } from "./ci-wiring.ts";
 import { git } from "./git.ts";
 import { runMain, Usage } from "./main.ts";
-import { readQuality } from "./quality-file.ts";
 
 type Range = {
   readonly refs: readonly [tip: string] | readonly [base: string, head: string];
@@ -54,11 +54,6 @@ const pullRequestEnds = Effect.fn("pullRequestEnds")(function* (eventPath: strin
     ),
   );
   return pullRequestEndsOf(pullRequest);
-});
-
-const readWiring = Effect.gen(function* () {
-  const { source, quality } = yield* readQuality((yield* git(["rev-parse", "--show-toplevel"])).trim());
-  return { source, defaultBranch: quality.defaultBranch ?? DEFAULT_BRANCH, lintGates: quality.gates?.lint };
 });
 
 // Decides the base ref `git symbolic-ref` already resolved, or the repository's declared
@@ -184,14 +179,14 @@ const runGate = Effect.fn("runGate")(function* (gate: KitGate, range: Range) {
 });
 
 const lint = Effect.gen(function* () {
-  const { source, defaultBranch, lintGates } = yield* readWiring;
-  const range = yield* resolveRange(process.argv.slice(2), defaultBranch);
+  const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
+  const range = yield* resolveRange(process.argv.slice(2), workflowBranch(yield* readWorkflows(root)));
   yield* Console.log(`${NAME}: ${describe(range)} from ${range.source}`);
-  const gates = selectedGates(lintGates);
-  if (lintGates !== undefined) {
-    yield* Console.log(`${NAME}: ${source} selects ${gates.map((gate) => gate.bin).join(", ")}`);
-  }
-
+  const gates = yield* Effect.filter(KIT_GATES, (gate) =>
+    gate.appliesTo === EVERY_REPOSITORY
+      ? Effect.succeed(true)
+      : git(["ls-files", "--", ...gate.appliesTo.pathspecs], root).pipe(Effect.map((files) => files.trim() !== "")),
+  );
   const verdicts = yield* Effect.forEach(gates, (gate) => runGate(gate, range));
   const failed = verdicts.filter((verdict) => verdict.outcome !== "passed");
   if (failed.length === 0) {
