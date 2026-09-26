@@ -2,6 +2,19 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.20.0
+
+Released 2026-09-26.
+
+### Features
+
+- **scripts:** pin node from .node-version in the generated CI workflow (#64)
+- **scripts:** add checks-subsumed-tests to report tests another test subsumes in a (#62)
+
+### Fixes
+
+- **scripts:** lint a PR title that starts with # in the generated commitlint workflow (#63)
+
 ## 0.19.0
 
 Released 2026-09-26.
