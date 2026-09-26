@@ -19,7 +19,7 @@ const decodeManifestJson = Schema.decodeUnknownEffect(
     Schema.Struct({
       name: Schema.String,
       version: Schema.String,
-      repository: Schema.optional(Schema.Struct({ url: Schema.String })),
+      repository: Schema.optional(Schema.Struct({ url: Schema.optional(Schema.String) })),
     }),
   ),
 );
@@ -32,8 +32,6 @@ const today = DateTime.nowInCurrentZone.pipe(DateTime.withCurrentZoneLocal, Effe
 function repositoryWebUrl(repository: string): string {
   return repository
     .replace(/^git\+/, "")
-    .replace(/^git@([^:]+):/, "https://$1/")
-    .replace(/^ssh:\/\/git@([^/]+)\//, "https://$1/")
     .replace(/\.git$/, "")
     .replace(/\/$/, "");
 }
@@ -76,7 +74,10 @@ const write = Effect.gen(function* () {
   }
   const target = path.join(root, CHANGELOG);
   const { name, version, repository } = yield* decodeManifest(yield* fs.readFileString(path.join(root, MANIFEST)), MANIFEST);
-  const repositoryUrl = repositoryWebUrl(repository?.url ?? (yield* git(["remote", "get-url", "origin"], root)).trim());
+  if (repository?.url === undefined) {
+    return yield* new ChangelogUnreadable({ message: `${MANIFEST} has no repository.url, which the changelog links each pull request under` });
+  }
+  const repositoryUrl = repositoryWebUrl(repository.url);
   const recorded = (yield* fs.exists(target)) ? releaseDates(yield* fs.readFileString(target)) : new Map<string, string>();
   const pending = version === (yield* versionAt(root, "HEAD")) ? undefined : { sha: "HEAD", version, date: yield* today };
   const released = cuts(yield* readBumps(root), recorded, yield* readPublished(root), pending);

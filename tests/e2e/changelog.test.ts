@@ -198,3 +198,16 @@ test(
   },
   { timeout: 30_000 },
 );
+
+test(
+  "a package.json without repository.url is refused, since each entry links its pull request under it",
+  async () => {
+    await initRepo();
+    await writeFile(join(dir, "package.json"), JSON.stringify({ name: "widget", version: "0.1.0" }, null, 2));
+    await commit("feat: build a bill (#1)");
+    const refused = await changelog();
+    expect(refused.exitCode).toBe(2);
+    expect(refused.text).toContain("changelog: package.json has no repository.url");
+  },
+  { timeout: 30_000 },
+);
