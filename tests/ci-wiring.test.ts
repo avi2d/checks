@@ -261,6 +261,18 @@ test("a gate step counts only as the gate alone on one line with plain arguments
   expect(stepGaps("bun run lint:deps")).toEqual([{ gate: "bun run lint", blocked: [] }]);
 });
 
+test("bun run counts for a gate only when the gate's first word is a path bun runs as a file", () => {
+  for (const gate of ["./node_modules/.bin/commitlint", "../bin/check", "/opt/bin/check"]) {
+    expect(stepGaps(`bun run ${gate} --edit "$RUNNER_TEMP/pr-title"`, gate)).toEqual([]);
+  }
+  for (const [script, gate] of [
+    ["bun run tsc --noEmit", "tsc --noEmit"],
+    ["bun run node_modules/.bin/commitlint", "node_modules/.bin/commitlint"],
+  ] as const) {
+    expect(stepGaps(script, gate).map((gap) => gap.gate)).toEqual([gate]);
+  }
+});
+
 test("a step running checks-lint covers each kit gate it runs by bare bin name, called the way the gate is declared", () => {
   const kit = declared({
     gates: {
