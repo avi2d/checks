@@ -54,7 +54,6 @@
             "add adds"
           ],
           "id": "2",
-          "killedBy": [],
           "location": {
             "end": {
               "column": 15,
@@ -75,7 +74,6 @@
             "add adds"
           ],
           "id": "3",
-          "killedBy": [],
           "location": {
             "end": {
               "column": 15,
@@ -194,7 +192,6 @@
             "mul multiplies"
           ],
           "id": "4",
-          "killedBy": [],
           "location": {
             "end": {
               "column": 15,
@@ -215,7 +212,6 @@
             "mul multiplies"
           ],
           "id": "5",
-          "killedBy": [],
           "location": {
             "end": {
               "column": 15,
@@ -256,7 +252,6 @@
           "coveredBy": [
             "fresh works"
           ],
-          "killedBy": [],
           "testsCompleted": 1
         },
         {
@@ -277,7 +272,6 @@
           "coveredBy": [
             "fresh works"
           ],
-          "killedBy": [],
           "testsCompleted": 1
         }
       ]
