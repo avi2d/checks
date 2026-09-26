@@ -52,7 +52,7 @@ Delete each `testSkips` entry from `package.json` after you add its reason besid
 Keep its `when` value as the third argument to `skipReason`.
 
 Move tests that need a live machine into `tests/live/` and tests that need a screen into `tests/pixel/`.
-For example, a test in `tests/e2e/stack/x3-theme.test.ts` that skips when Nix is missing moves to `tests/live/stack/x3-theme.test.ts`.
+For example, a test under `tests/e2e/stack/` that skips when Nix is missing moves to the same path under `tests/live/stack/`.
 Its `testSkips` entry becomes `skipReason("Nix is unavailable", name)` inside its `test.skipIf` call.
 Add the matching package scripts when either directory contains tests:
 
