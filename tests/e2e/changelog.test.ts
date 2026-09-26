@@ -19,7 +19,10 @@ async function initRepo(): Promise<void> {
 }
 
 async function bump(version: string): Promise<void> {
-  await writeFile(join(dir, "package.json"), JSON.stringify({ name: "widget", version }, null, 2));
+  await writeFile(
+    join(dir, "package.json"),
+    JSON.stringify({ name: "widget", version, repository: { type: "git", url: "git+https://github.com/acme/widget.git" } }, null, 2),
+  );
 }
 
 async function commit(message: string): Promise<void> {
@@ -61,8 +64,8 @@ test(
     const pending = /^Released (\S+)\.$/m.exec(bumped)?.[1] ?? "";
     expect([before, localDate()]).toContain(pending);
     const expected = written(
-      section("0.2.0", pending, ["Fixes", "**parts:** keep the order of parts (#2)"]),
-      section("0.1.0", "2026-09-01", ["Features", "build a bill (#1)"]),
+      section("0.2.0", pending, ["Fixes", "**parts:** keep the order of parts [#2](https://github.com/acme/widget/pull/2)"]),
+      section("0.1.0", "2026-09-01", ["Features", "build a bill [#1](https://github.com/acme/widget/pull/1)"]),
     );
     expect(bumped).toBe(expected);
 
@@ -135,8 +138,8 @@ test(
 
     expect(await rewritten(2)).toBe(
       written(
-        section("0.3.0", "2026-09-10", ["Features", "price a bill (#4)"], ["Fixes", "**parts:** keep the order of parts (#3)"]),
-        section("0.1.0", "2026-09-05", ["Features", "build a bill (#1)"]),
+        section("0.3.0", "2026-09-10", ["Features", "price a bill [#4](https://github.com/acme/widget/pull/4)"], ["Fixes", "**parts:** keep the order of parts [#3](https://github.com/acme/widget/pull/3)"]),
+        section("0.1.0", "2026-09-05", ["Features", "build a bill [#1](https://github.com/acme/widget/pull/1)"]),
       ),
     );
   },
@@ -167,9 +170,9 @@ test(
     const pending = /^Released (\S+)\.$/m.exec(rebumped)?.[1] ?? "";
     expect(rebumped).toBe(
       written(
-        section("0.3.0", pending, ["Features", "price a bill (#3)"], ["Fixes", "**parts:** keep the order of parts (#5)"]),
+        section("0.3.0", pending, ["Features", "price a bill [#3](https://github.com/acme/widget/pull/3)"], ["Fixes", "**parts:** keep the order of parts [#5](https://github.com/acme/widget/pull/5)"]),
         section("0.2.0", /^Released (\S+)\.$/m.exec(released)?.[1] ?? ""),
-        section("0.1.0", "2026-09-01", ["Features", "build a bill (#1)"]),
+        section("0.1.0", "2026-09-01", ["Features", "build a bill [#1](https://github.com/acme/widget/pull/1)"]),
       ),
     );
   },

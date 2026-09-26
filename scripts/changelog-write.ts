@@ -14,12 +14,29 @@ class ChangelogUnreadable extends Schema.TaggedError<ChangelogUnreadable>()("Cha
   message: Schema.String,
 }) {}
 
-const decodeManifestJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ name: Schema.String, version: Schema.String })));
+const decodeManifestJson = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(
+    Schema.Struct({
+      name: Schema.String,
+      version: Schema.String,
+      repository: Schema.optional(Schema.Struct({ url: Schema.String })),
+    }),
+  ),
+);
 
 const decodeManifest = (text: string, source: string) =>
   decodeManifestJson(text).pipe(Effect.mapError((cause) => new ChangelogUnreadable({ message: `${source}: ${cause.message}` })));
 
 const today = DateTime.nowInCurrentZone.pipe(DateTime.withCurrentZoneLocal, Effect.map(DateTime.formatIsoDate));
+
+function repositoryWebUrl(repository: string): string {
+  return repository
+    .replace(/^git\+/, "")
+    .replace(/^git@([^:]+):/, "https://$1/")
+    .replace(/^ssh:\/\/git@([^/]+)\//, "https://$1/")
+    .replace(/\.git$/, "")
+    .replace(/\/$/, "");
+}
 
 const versionAt = Effect.fn("versionAt")(function* (root: string, sha: string) {
   return (yield* decodeManifest(yield* git(["show", `${sha}:${MANIFEST}`], root), `${MANIFEST} at ${sha}`)).version;
@@ -58,12 +75,13 @@ const write = Effect.gen(function* () {
     return yield* new ChangelogUnreadable({ message: "the checkout is shallow, so the releases reach back past its history; fetch all of it" });
   }
   const target = path.join(root, CHANGELOG);
-  const { name, version } = yield* decodeManifest(yield* fs.readFileString(path.join(root, MANIFEST)), MANIFEST);
+  const { name, version, repository } = yield* decodeManifest(yield* fs.readFileString(path.join(root, MANIFEST)), MANIFEST);
+  const repositoryUrl = repositoryWebUrl(repository?.url ?? (yield* git(["remote", "get-url", "origin"], root)).trim());
   const recorded = (yield* fs.exists(target)) ? releaseDates(yield* fs.readFileString(target)) : new Map<string, string>();
   const pending = version === (yield* versionAt(root, "HEAD")) ? undefined : { sha: "HEAD", version, date: yield* today };
   const released = cuts(yield* readBumps(root), recorded, yield* readPublished(root), pending);
   const found = (yield* Effect.forEach(released, (cut) => subjectsOf(root, cut))).toReversed();
-  yield* fs.writeFileString(target, renderChangelog(name, found));
+  yield* fs.writeFileString(target, renderChangelog(name, found, repositoryUrl));
   yield* Console.log(`${NAME}: wrote ${found.length} release(s) to ${CHANGELOG}`);
   return true;
 });
