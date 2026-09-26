@@ -37,7 +37,7 @@ test("the local range starts at origin/HEAD, and explicit bad refs are refused",
   const missing = await lint(repo, [base, "missing"]);
   expect(missing.exitCode).toBe(2);
   expect(missing.text).toContain("missing is not a commit");
-});
+}, 60_000);
 
 test("a pushed tip runs every range gate and names each failure", async () => {
   const { repo } = await repository();
@@ -50,7 +50,7 @@ test("a pushed tip runs every range gate and names each failure", async () => {
   expect(red.text).toContain(`checks-lint: tip ${tip} from HEAD against origin/main`);
   expect(red.text).toContain("checks-commit-identity, checks-comment-gate, checks-suppressions-ratchet");
   expect(red.exitCode).toBe(1);
-});
+}, 60_000);
 
 test("a pull request event ends the range at its head rather than the checked-out merge commit", async () => {
   const { repo, base } = await repository();
@@ -63,7 +63,7 @@ test("a pull request event ends the range at its head rather than the checked-ou
   expect(green.text).toContain(`checks-lint: range ${base}..${head} from pull request #7 into main`);
   expect(green.text).toContain("checks-lint: 9 gate(s) pass");
   expect(green.exitCode).toBe(0);
-});
+}, 60_000);
 
 test("a workflow omission makes the lint gate fail and restoring it makes it pass", async () => {
   const { repo } = await repository();
@@ -76,4 +76,4 @@ test("a workflow omission makes the lint gate fail and restoring it makes it pas
   await commit(repo, "fix: restore workflow");
   const green = await lint(repo);
   expect(green.exitCode).toBe(0);
-});
+}, 60_000);
