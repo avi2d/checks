@@ -82,6 +82,10 @@ export function cuts(
   }));
 }
 
+export function hasEntries(subjects: readonly string[]): boolean {
+  return subjects.some((subject) => groupOf(subject) !== undefined);
+}
+
 function renderRelease({ version, date, subjects }: Release, repositoryUrl: string): readonly string[] {
   const entries = subjects.flatMap((subject) => entryOf(subject, repositoryUrl) ?? []);
   const groups = CHANGE_GROUPS.flatMap((group) => {

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, DateTime, Effect, FileSystem, Path, Schema } from "effect";
-import { cuts, releaseDates, renderChangelog, type Bump, type Cut, type Release } from "./changelog.ts";
+import { cuts, hasEntries, releaseDates, renderChangelog, type Bump, type Cut, type Release } from "./changelog.ts";
 import { git } from "./git.ts";
 import { runMain } from "./main.ts";
 
@@ -112,7 +112,9 @@ const write = Effect.gen(function* () {
   const released = cuts(yield* readBumps(root), recorded, yield* readPublished(root), pending);
   const tip = released.at(-1);
   const extra = tip === undefined || tip.through === "HEAD" ? [] : yield* mergedTips(root, tip.through);
-  const found = (yield* Effect.forEach(released, (cut, index) => subjectsOf(root, cut, index === released.length - 1 ? extra : []))).toReversed();
+  const found = (yield* Effect.forEach(released, (cut, index) => subjectsOf(root, cut, index === released.length - 1 ? extra : [])))
+    .filter(({ subjects }) => hasEntries(subjects))
+    .toReversed();
   yield* fs.writeFileString(target, renderChangelog(name, found, repositoryUrl));
   yield* Console.log(`${NAME}: wrote ${found.length} release(s) to ${CHANGELOG}`);
   return true;

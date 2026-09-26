@@ -91,7 +91,7 @@ export const TEMPLATES: Readonly<Record<Kind, Template>> = {
     title: { type: "fixed", text: "Changelog" },
     lead: ["Every release of <package>, newest first, written by the release from its conventional commits."],
     sections: [
-      open("<version>", "version", REQUIRED, ["Released <YYYY-MM-DD>."], {
+      open("<version>", "version", optional("no release holds a conventional commit worth listing yet"), ["Released <YYYY-MM-DD>."], {
         subsections: CHANGE_GROUPS.map((group) =>
           fixed(group, optional("the release holds no such commit"), ["- **<the commit's scope, when it has one>:** <its description>"]),
         ),

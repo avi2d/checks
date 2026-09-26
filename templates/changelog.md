@@ -4,6 +4,8 @@ Every release of <package>, newest first, written by the release from its conven
 
 ## <version>
 
+<Leave this section out when no release holds a conventional commit worth listing yet.>
+
 Released <YYYY-MM-DD>.
 
 ### Breaking changes

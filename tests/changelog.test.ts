@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { cuts, releaseDates, renderChangelog, type Bump } from "../scripts/changelog.ts";
+import { cuts, hasEntries, releaseDates, renderChangelog, type Bump } from "../scripts/changelog.ts";
 import { judge } from "../scripts/doc-rules.ts";
 
 const SUBJECTS = [
@@ -113,9 +113,17 @@ test("the release being prepared covers everything past every release and keeps 
   expect(cuts(bumps("0.1.0"), recorded("0.3.0", "0.1.0"), new Set(), prepared).at(-1)?.date).toBe("2026-09-20");
 });
 
-test("a release with no conventional commit worth listing is its heading and its date", () => {
-  const rendered = renderChangelog("widget", [{ version: "0.1.0", date: "2026-09-20", subjects: ["docs: say why", "chore: tidy"] }], "https://github.com/acme/widget");
-  expect(rendered.split("\n").slice(4)).toEqual(["## 0.1.0", "", "Released 2026-09-20.", ""]);
+test("a release with no conventional commit worth listing has no entries to write", () => {
+  expect(hasEntries(["docs: say why", "chore: tidy", "ci: run the suite"])).toBe(false);
+  expect(hasEntries(["chore: tidy", "fix: keep the order"])).toBe(true);
+});
+
+test("a changelog with no release to write holds only its title and lead, which its template allows", () => {
+  const rendered = renderChangelog("widget", [], "https://github.com/acme/widget");
+  expect(rendered).toBe(
+    ["# Changelog", "", "Every release of `widget`, newest first, written by the release from its conventional commits."].join("\n") + "\n",
+  );
+  expect(judge("changelog", { path: "CHANGELOG.md", text: rendered }, [])).toEqual([]);
 });
 
 test("the dates a changelog already carries read back by version, so regenerating it keeps them", () => {
@@ -123,7 +131,7 @@ test("the dates a changelog already carries read back by version, so regeneratin
     "widget",
     [
       { version: "0.2.0", date: "2026-09-21", subjects: ["feat: price a bill"] },
-      { version: "0.1.0", date: "2026-09-02", subjects: [] },
+      { version: "0.1.0", date: "2026-09-02", subjects: ["fix: keep the order"] },
     ],
     "https://github.com/acme/widget",
   );

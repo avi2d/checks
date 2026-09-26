@@ -15,6 +15,7 @@ const SAMPLES = new Map([
 
 function sample(placeholder: string): string {
   if (placeholder.startsWith(`<${ADR_STATUSES[0]},`)) return `${ADR_STATUSES[1]}.`;
+  if (placeholder.startsWith("<Leave this section out when ")) return "";
   return SAMPLES.get(placeholder) ?? "Run it";
 }
 
