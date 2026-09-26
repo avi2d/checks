@@ -17,6 +17,7 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
 - The size rules are plain oxlint rules at `error` in `.oxlintrc.json`, and `bun run lint` enforces them on the whole tree.
   A repository records its existing violations with `oxlint --suppress-all`, and `checks-suppressions-ratchet` refuses any count that rises.
   The kit runs no size script of its own, since restating how oxlint reads its config and compares sites left corners the native rules never had.
+  The suppression count lets a file or function already over its limit grow without a new site, which was accepted in exchange for dropping that script, and each repository is to work its counts down to zero.
 - `checks-repetition` writes both ends of the range to temporary directories and runs jscpd in each with the head's `.jscpd.json`, so its `path` and `ignore` globs decide the files at both ends.
   It compares each file's count of repeated lines rather than using jscpd's `--baseline-from-ref`.
   That flag reports a repeated block as new once its text changes, so a change that shortens a grandfathered block would fail.

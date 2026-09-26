@@ -79,9 +79,9 @@ export function scratchDirs(): (prefix: string) => Promise<string> {
   );
 }
 
-export const UNVENDORED_BUNFIG = '[test]\npathIgnorePatterns = ["**/tests/quarantine/**"]\n';
+export const UNVENDORED_BUNFIG = '[test]\npathIgnorePatterns = ["**/tests/quarantine/**", "**/tests/live/**", "**/tests/pixel/**"]\n';
 
-export async function lintWiring(_settings: Readonly<Record<string, unknown>> = {}): Promise<Readonly<Record<string, string>>> {
+export function lintWiring(): Readonly<Record<string, string>> {
   return {
     "package.json": JSON.stringify({ name: "lint-fixture", type: "module", author: AUTHOR, scripts: { lint: "checks-lint", test: "checks-test" } }),
     "bunfig.toml": UNVENDORED_BUNFIG,

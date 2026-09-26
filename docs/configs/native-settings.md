@@ -53,17 +53,17 @@ It also requires lint, build, typecheck and test for each of those scripts that 
 The size rules are plain oxlint rules at `error` in `.oxlintrc.json`, and `bun run lint` enforces them on the whole tree.
 A repository records its existing violations with `oxlint --suppress-all`, which writes them to `oxlint-suppressions.json`.
 `checks-suppressions-ratchet` refuses any count in that file that rises, so the recorded debt only falls.
-The kit's recommended limits are below:
+The kit's own `.oxlintrc.json` sets these limits for each size override, and a repository may copy them:
 
-<!-- generated size-limits: bun run build writes it from SIZE_RULES and SIZE_DEFAULTS in scripts/size-rules.ts and scripts/doc-blocks.ts -->
+<!-- generated size-limits: bun run build writes it from .oxlintrc.json, SIZE_RULES in scripts/size-rules.ts and scripts/doc-blocks.ts -->
 
-| Key | Limits | oxlint rule | Production | Tests |
-| --- | --- | --- | --- | --- |
-| `fileLines` | The most lines a file may hold, blank and comment lines counted | `max-lines` | 400 | 600 |
-| `functionLines` | The most lines a function may span, blank and comment lines counted | `max-lines-per-function` | 100 | none |
-| `statements` | The most statements a function may hold | `max-statements` | 30 | 50 |
-| `complexity` | The highest cognitive complexity a function may reach, a switch counted once | `effect-channel/cognitive-complexity` | 15 | 15 |
-| `depth` | The deepest a block may nest inside a function | `max-depth` | 4 | 4 |
+| Limits | oxlint rule | `effect-channel/**/*.ts`, `scripts/**/*.ts` | `tests/**/*.ts` |
+| --- | --- | --- | --- |
+| The most lines a file may hold, blank and comment lines counted | `max-lines` | 400 | 600 |
+| The most lines a function may span, blank and comment lines counted | `max-lines-per-function` | 100 | off |
+| The most statements a function may hold | `max-statements` | 30 | 50 |
+| The highest cognitive complexity a function may reach, a switch counted once | `effect-channel/cognitive-complexity` | 15 | 15 |
+| The deepest a block may nest inside a function | `max-depth` | 4 | 4 |
 
 <!-- end generated size-limits -->
 

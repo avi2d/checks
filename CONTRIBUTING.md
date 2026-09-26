@@ -16,6 +16,8 @@ To check a change the way CI does:
 1. Run `bun run typecheck`.
 1. Run `bun run test`, which runs the suite through `scripts/test.ts`.
 
+Declare each skip with `skipReason(reason, name)` beside the native Bun test call, as [checks-test](docs/gates/checks-test.md) says.
+
 CI runs the commands in `.github/workflows/ci.yml` and lints the pull request title in `.github/workflows/commitlint.yml`.
 
 ## Regenerate what is committed

@@ -76,7 +76,7 @@ test(
 test(
   "checks-lint runs the repetition hold over its range, red on an added copy and green once it is gone",
   async () => {
-    const { dir, write, commit, lint } = await repository({ ...(await lintWiring()), "src/ledger.ts": block("ledger") });
+    const { dir, write, commit, lint } = await repository({ ...lintWiring(), "src/ledger.ts": block("ledger") });
     await commit("feat: base");
     await $`git update-ref refs/remotes/origin/main HEAD && git checkout -q -b feature`.cwd(dir).quiet();
     await write({ "src/copy.ts": block("ledger") });

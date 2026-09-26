@@ -16,7 +16,7 @@ async function commit(repo: FixtureRepo, message: string, identity: readonly str
 }
 
 async function repository(): Promise<{ repo: FixtureRepo; base: string }> {
-  const repo = await open({ ...(await lintWiring()), "widget.ts": "export const widget = 42;\n" });
+  const repo = await open({ ...lintWiring(), "widget.ts": "export const widget = 42;\n" });
   const base = await commit(repo, "feat: base", ["-c", "user.name=Wren Fixture", "-c", "user.email=wren@example.com"]);
   await $`git update-ref refs/remotes/origin/main HEAD && git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main && git checkout -q -b feature`.cwd(repo.dir).quiet();
   return { repo, base };
@@ -72,7 +72,7 @@ test("a workflow omission makes the lint gate fail and restoring it makes it pas
   const red = await lint(repo);
   expect(red.exitCode).toBe(1);
   expect(red.text).toContain("checks-ci-wiring");
-  await repo.write(await lintWiring());
+  await repo.write(lintWiring());
   await commit(repo, "fix: restore workflow");
   const green = await lint(repo);
   expect(green.exitCode).toBe(0);
