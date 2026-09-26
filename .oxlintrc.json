@@ -15,12 +15,12 @@
   },
   "overrides": [
     {
-      "files": ["effect-channel/**/*.ts", "scripts/**/*.ts"],
+      "files": ["effect-channel/**/*.ts", "readability/**/*.ts", "scripts/**/*.ts"],
       "rules": {
         "max-lines": ["error", { "max": 400, "skipBlankLines": false, "skipComments": false }],
         "max-lines-per-function": ["error", { "max": 100, "skipBlankLines": false, "skipComments": false }],
         "max-statements": ["error", { "max": 30 }],
-        "effect-channel/cognitive-complexity": ["error", { "max": 15 }],
+        "readability/cognitive-complexity": ["error", { "max": 15 }],
         "max-depth": ["error", { "max": 4 }]
       }
     },
@@ -30,7 +30,7 @@
         "max-lines": ["error", { "max": 600, "skipBlankLines": false, "skipComments": false }],
         "max-lines-per-function": "off",
         "max-statements": ["error", { "max": 50 }],
-        "effect-channel/cognitive-complexity": ["error", { "max": 15 }],
+        "readability/cognitive-complexity": ["error", { "max": 15 }],
         "max-depth": ["error", { "max": 4 }]
       }
     },

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const CHECKOUT = resolve(import.meta.dir, "..", "..");
-const PLUGIN = join(CHECKOUT, "dist", "index.js");
+const PLUGIN = join(CHECKOUT, "dist", "readability", "index.js");
 const OXLINT = join(CHECKOUT, "node_modules", ".bin", "oxlint");
 
 let dir = "";
@@ -26,7 +26,7 @@ async function lint(files: Readonly<Record<string, string>>, max: number): Promi
       plugins: [],
       categories: { correctness: "off" },
       jsPlugins: [PLUGIN],
-      rules: { "effect-channel/cognitive-complexity": ["error", { max }] },
+      rules: { "readability/cognitive-complexity": ["error", { max }] },
     }),
   );
   for (const [name, content] of Object.entries(files)) await writeFile(join(dir, name), content);

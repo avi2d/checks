@@ -1,5 +1,5 @@
 {
-  "path": ["effect-channel", "scripts"],
+  "path": ["effect-channel", "readability", "scripts"],
   "format": ["typescript"],
   "ignore": ["**/*.d.ts"]
 }

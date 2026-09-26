@@ -16,6 +16,7 @@ module.exports = {
         // Consumers load these entries, the plugin through its dist bundle, so no source file here imports them.
         pathNot: [
           "(^|/)effect-channel/index[.]ts$",
+          "(^|/)readability/index[.]ts$",
           "(^|/)stryker[.]preset[.]js$",
           "(^|/)[.][^/]+[.](?:js|cjs|mjs|ts|cts|mts|json)$",
           "[.]d[.]ts$",
