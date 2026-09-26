@@ -12,7 +12,10 @@ const Workflow = Schema.Struct({
     push: Schema.optionalKey(Schema.Struct({ branches: Schema.Array(Schema.String) })),
     pull_request: Schema.Struct({ types: Schema.Array(Schema.String) }),
   }),
-  jobs: Schema.Record(Schema.String, Schema.Struct({ steps: Schema.Array(Step) })),
+  jobs: Schema.Record(
+    Schema.String,
+    Schema.Struct({ "runs-on": Schema.Union([Schema.String, Schema.Array(Schema.String)]), steps: Schema.Array(Step) }),
+  ),
 });
 
 export type ParsedWorkflow = typeof Workflow.Type;
@@ -30,6 +33,12 @@ export function lastStep(workflow: ParsedWorkflow): Readonly<{ run: string; env:
   const last = steps.at(-1);
   if (last?.run === undefined) throw new Error("the last step of the parsed workflow carries no run");
   return { run: last.run, env: last.env ?? {} };
+}
+
+export function runsOn(workflow: ParsedWorkflow): string | readonly string[] {
+  const [job] = Object.values(workflow.jobs);
+  if (job === undefined) throw new Error("the parsed workflow carries no job");
+  return job["runs-on"];
 }
 
 export function setupBun(workflow: ParsedWorkflow): Readonly<Record<string, unknown>> | undefined {

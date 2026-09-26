@@ -88,6 +88,9 @@
       },
       "additionalProperties": false
     },
+    "runsOn": {
+      "$ref": "#/$defs/RunsOn"
+    },
     "commitIdentity": {
       "type": "object",
       "properties": {
@@ -405,6 +408,29 @@
     "Command": {
       "type": "string",
       "minLength": 1
+    },
+    "RunsOn": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string",
+              "minLength": 1
+            }
+          ],
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ],
+      "description": "The runs-on value of every job the kit generates, a single label or a list; ubuntu-latest when absent"
     },
     "Identity": {
       "type": "object",

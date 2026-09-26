@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { COMMITLINT_WORKFLOW, SUITE_WORKFLOW } from "../../scripts/quality.ts";
-import { parseWorkflow, runs, setupBun, setupNode } from "../lib/workflow.ts";
+import { parseWorkflow, runs, runsOn, setupBun, setupNode } from "../lib/workflow.ts";
 import { fixtureRepos } from "./lib/fixture-repo.ts";
 
 const repository = fixtureRepos("checks-quality-workflows-");
@@ -91,6 +91,32 @@ test(
 
     const suite = parseWorkflow(await readFile(join(repo.dir, SUITE_WORKFLOW), "utf8"));
     expect(setupNode(suite)).toEqual({ "node-version-file": ".node-version" });
+  },
+  60_000,
+);
+
+test(
+  "quality.json's runsOn reaches both jobs' runs-on, and --check catches a workflow stale against it",
+  async () => {
+    const labels = ["self-hosted", "Linux", "X64", "winbox"];
+    const repo = await repository({
+      "quality.json": JSON.stringify({ ...QUALITY, runsOn: labels }),
+      "package.json": JSON.stringify({ name: "workflow-fixture", type: "module" }),
+    });
+
+    const generated = await repo.script("quality.ts", "generate");
+    expect(generated.exitCode).toBe(0);
+
+    const suite = parseWorkflow(await readFile(join(repo.dir, SUITE_WORKFLOW), "utf8"));
+    expect(runsOn(suite)).toEqual(labels);
+    const commitlint = parseWorkflow(await readFile(join(repo.dir, COMMITLINT_WORKFLOW), "utf8"));
+    expect(runsOn(commitlint)).toEqual(labels);
+
+    await writeFile(join(repo.dir, "quality.json"), JSON.stringify({ ...QUALITY, runsOn: "winbox" }));
+    const red = await repo.script("quality.ts", "--check");
+    expect(red.text).toContain(`${SUITE_WORKFLOW} is stale against quality.json and the kit recipe`);
+    expect(red.text).toContain(`${COMMITLINT_WORKFLOW} is stale against quality.json and the kit recipe`);
+    expect(red.exitCode).toBe(1);
   },
   60_000,
 );

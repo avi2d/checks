@@ -82,6 +82,11 @@ const Gates = Schema.Struct({
   lint: Schema.optionalKey(LintGates),
 });
 
+const RunsOn = Schema.Union([Schema.NonEmptyString, Schema.NonEmptyArray(Schema.NonEmptyString)]).annotate({
+  identifier: "RunsOn",
+  description: "The runs-on value of every job the kit generates, a single label or a list; ubuntu-latest when absent",
+});
+
 const EffectSources = Schema.Struct({
   paths: Schema.NonEmptyArray(PathGlob).annotate({
     description: "Where source is written in Effect, held to the Effect rules of oxlint and the language service",
@@ -205,6 +210,7 @@ export const Quality = Schema.Struct({
     Schema.NonEmptyString.annotate({ description: "The branch pull requests merge into; main when absent" }),
   ),
   gates: Schema.optionalKey(Gates),
+  runsOn: Schema.optionalKey(RunsOn),
   commitIdentity: Schema.optionalKey(CommitIdentity),
   sources: Schema.optionalKey(Sources),
   size: Schema.optionalKey(Size),

@@ -85,8 +85,8 @@ export async function lintWiring(quality: Readonly<Record<string, unknown>>): Pr
   return {
     "package.json": JSON.stringify({ name: "lint-fixture", type: "module", scripts: { lint: "checks-lint", test: "checks-test" } }),
     "bunfig.toml": UNVENDORED_BUNFIG,
-    [SUITE_WORKFLOW]: suiteWorkflow("main", ci, false, false),
-    [COMMITLINT_WORKFLOW]: commitlintWorkflow("./node_modules/@avi2dg/checks/commitlint.config.js"),
+    [SUITE_WORKFLOW]: suiteWorkflow("main", ci, false, false, undefined),
+    [COMMITLINT_WORKFLOW]: commitlintWorkflow("./node_modules/@avi2dg/checks/commitlint.config.js", undefined),
     "quality.json": JSON.stringify({ gates: { ci }, commitIdentity: { authors: [AUTHOR] }, ...quality }),
   };
 }
