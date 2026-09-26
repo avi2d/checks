@@ -48,7 +48,7 @@ test(
     const first = await commit("feat: first");
 
     const red = await script(BUDGET, first);
-    expect(red.text).toContain("size-budget: 2 overrun(s) grew past the base in the production and test files the range adds or changes:\n");
+    expect(red.text).toContain("size-budget: 2 overrun(s) grew past the base in the files the range adds or changes:\n");
     expect(red.text).toContain(
       "  src/busy.ts: max-statements over by 1 in total, up from 0\n" +
         "    src/busy.ts:1: function `count` has too many statements (31). Maximum allowed is 30.\n",
@@ -80,7 +80,7 @@ test(
 
     const red = await script(BUDGET, "main", head);
     expect(red.text).toContain(
-      "size-budget: 1 overrun(s) grew past the base in the production and test files the range adds or changes:\n" +
+      "size-budget: 1 overrun(s) grew past the base in the files the range adds or changes:\n" +
         "  src/grown.ts: max-lines over by 10 in total, up from 0\n" +
         "    src/grown.ts: File has too many lines (30). Maximum allowed is 20.\n",
     );
@@ -115,6 +115,58 @@ test(
     await commit("fix: guardrails");
     const green = await lint();
     expect(green.text).toContain("checks-lint: 10 gate(s) pass\n");
+    expect(green.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+function maxLines(severity: unknown, max: number, files: readonly string[] = ["src/**/*.ts"]): { readonly files: readonly string[]; readonly rules: Readonly<Record<string, unknown>> } {
+  return { files, rules: { "max-lines": [severity, { max, skipBlankLines: false, skipComments: false }] } };
+}
+
+function oxlintrc(...overrides: readonly ReturnType<typeof maxLines>[]): string {
+  return JSON.stringify({ plugins: ["eslint"], categories: { correctness: "off" }, overrides });
+}
+
+for (const severity of ["warn", 1] as const) {
+  test(
+    `a size rule at ${JSON.stringify(severity)} holds existing debt where it stands and fails its growth`,
+    async () => {
+      const { write, commit, script } = await open({ ".oxlintrc.json": oxlintrc(maxLines(severity, 20)), "src/legacy.ts": constants(30) });
+      const base = await commit("feat: debt");
+      await write({ "src/legacy.ts": `${constants(29)}export const value29 = 99;\n` });
+      const kept = await commit("refactor: edit in place");
+      const green = await script(BUDGET, base, kept);
+      expect(green.text).toContain("size-budget: 1 file(s), the files the range adds or changes, raise no overrun past the base");
+      expect(green.text).toContain("size-budget: advisory, 1 overrun(s) where the budget does not hold yet:\n  src/legacy.ts: File has too many lines (30).");
+      expect(green.exitCode).toBe(0);
+
+      await write({ "src/legacy.ts": constants(31) });
+      const grown = await commit("feat: grow the debt");
+      const red = await script(BUDGET, base, grown);
+      expect(red.text).toContain("  src/legacy.ts: max-lines over by 11 in total, up from 10\n");
+      expect(red.exitCode).toBe(1);
+    },
+    60_000,
+  );
+}
+
+test(
+  "each override holds its own files to its own limit, as oxlint reads it",
+  async () => {
+    const config = (scriptsMax: number): string => oxlintrc(maxLines("error", 3), maxLines("error", scriptsMax, ["scripts/**/*.ts"]));
+    const { write, commit, script } = await open({ ".oxlintrc.json": config(1), "src/index.ts": constants(1), "scripts/tool.ts": constants(1, "tool") });
+    const base = await commit("feat: start");
+    await write({ "src/index.ts": constants(3), "scripts/tool.ts": constants(2, "tool") });
+    const head = await commit("feat: grow both");
+    const red = await script(BUDGET, base, head);
+    expect(red.text).toContain("  scripts/tool.ts: max-lines over by 1 in total, up from 0\n");
+    expect(red.text).not.toContain("src/index.ts");
+    expect(red.exitCode).toBe(1);
+
+    await write({ ".oxlintrc.json": config(2) });
+    const raised = await commit("chore: raise the scripts limit");
+    const green = await script(BUDGET, base, raised);
     expect(green.exitCode).toBe(0);
   },
   60_000,

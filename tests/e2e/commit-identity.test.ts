@@ -247,3 +247,19 @@ test(
   },
   60_000,
 );
+
+test(
+  "commit-identity holds a repository without package.json to the kit default",
+  async () => {
+    ({ dir } = await repository({ "README.md": "# fixture\n" }));
+    const base = await commit({ message: "feat: base" });
+    const owned = await check("HEAD");
+    expect(owned.exitCode).toBe(0);
+
+    await commit({ message: "feat: stolen", author: STRANGER });
+    const red = await check(base, "HEAD");
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain("allowed: avi2d <avi2dg@gmail.com>");
+  },
+  60_000,
+);

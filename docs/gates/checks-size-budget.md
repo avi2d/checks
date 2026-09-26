@@ -4,29 +4,27 @@ audience: consumers
 ---
 # checks-size-budget
 
-`checks-size-budget` measures the oxlint size rules declared in `.oxlintrc.json` against production and test files in a commit range.
+`checks-size-budget` runs oxlint with the repository's own `.oxlintrc.json` at both ends of a commit range and refuses a size overrun that grew.
 
 ## What it checks
 
-A size override is an override in `.oxlintrc.json` that sets any of oxlint's `max-lines`, `max-lines-per-function`, `max-statements`, `effect-channel/cognitive-complexity` and `max-depth` rules.
-Each size override holds its own `files` to its own limits, and a later override wins for a file two of them match, as oxlint merges them.
-Size rules at the top level hold every file no override changes.
-A glob without a slash matches at any depth, as oxlint reads it.
-An override whose globs all name test files, under `tests/` or ending in `.test.ts` or `.spec.ts`, is a test override, and any other is a production override.
+The size rules are oxlint's `max-lines`, `max-lines-per-function`, `max-statements`, `effect-channel/cognitive-complexity` and `max-depth`.
+oxlint alone decides which files each rule covers and at what limit, through the severities, overrides and excludes in `.oxlintrc.json`.
+A size rule at `error` is a hard limit, and `bun run lint` already fails every file over it.
+A size rule at `warn` is existing debt, and this gate stops it from growing.
 
 ```json
 {
   "plugins": ["typescript", "oxc", "eslint", "import"],
   "overrides": [
     { "files": ["src/**/*.ts"], "rules": { "max-lines": ["error", { "max": 400 }] } },
+    { "files": ["src/legacy/**/*.ts"], "rules": { "max-lines": ["warn", { "max": 400 }] } },
     { "files": ["tests/**/*.ts"], "rules": { "max-lines": ["error", { "max": 600 }] } }
   ]
 }
 ```
 
-Size rules without a production override exit 2, since an empty measurement cannot prove a budget.
-An override that mixes test and production globs exits 2, and so does a production glob that matches no tracked file.
-The kit's recommended limits are below, and only rules declared in `.oxlintrc.json` apply:
+The kit's recommended limits are below:
 
 <!-- generated size-limits: bun run build writes it from SIZE_RULES and SIZE_DEFAULTS in scripts/size-rules.ts and scripts/doc-blocks.ts -->
 
@@ -40,16 +38,16 @@ The kit's recommended limits are below, and only rules declared in `.oxlintrc.js
 
 <!-- end generated size-limits -->
 
-The gate compares the total overrun of each changed file a size override lists at the head with the base commit.
+The gate sums how far each changed file runs over each size rule at the head and compares it with the same file at the base commit.
+Both ends are measured under the head's `.oxlintrc.json`, so a changed limit never reads as growth.
 A new file starts from zero.
 An unchanged overrun appears as advisory rather than failing the range.
-Normal oxlint runs enforce the same native rules on the whole working tree.
-Declaration files are excluded.
 
 ## What it reads
 
-The bin reads the native size overrides from `.oxlintrc.json` and the files at both ends of the range.
-It uses oxlint to measure each revision without reading the working tree's file contents.
+The bin writes the tracked files of the head to a temporary directory, links the repository's `node_modules` beside them and runs oxlint there.
+It writes the base versions of the changed files over a second copy of the head and runs oxlint on those files.
+It never reads the working tree's file contents.
 
 ## Arguments
 
@@ -69,13 +67,13 @@ checks-size-budget <ref>
 ## Sample output
 
 ```
-size-budget: 1 overrun(s) grew past the base in the production and test files the range adds or changes:
+size-budget: 1 overrun(s) grew past the base in the files the range adds or changes:
   src/ledger.ts: max-lines over by 10 in total, up from 0
 ```
 
 ## Opting out
 
-When `.oxlintrc.json` names no size rule, the gate reports that no size budget was declared.
+When `.oxlintrc.json` turns on no size rule, oxlint reports no overrun and the gate passes.
 
 ## Related topics
 

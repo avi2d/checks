@@ -17,7 +17,7 @@ The package ships one template per kind under `templates/`, and a repository sta
 cp node_modules/@avi2dg/checks/templates/how-to.md docs/add-a-supplier.md
 ```
 
-<!-- generated doc-kinds: bun run build writes it from scripts/doc-rules.ts, scripts/native-config.ts, scripts/doc-templates.ts and scripts/doc-blocks.ts -->
+<!-- generated doc-kinds: bun run build writes it from scripts/doc-rules.ts, scripts/doc-templates.ts and scripts/doc-blocks.ts -->
 
 | File | Kind | Template |
 | --- | --- | --- |

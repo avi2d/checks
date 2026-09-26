@@ -1,9 +1,8 @@
 import { Effect, Schema } from "effect";
 import { ADR_DIRECTORY, ADR_INDEX, ROOT_FILES } from "./doc-rules.ts";
-import { listed, templateFile } from "./doc-templates.ts";
+import { listed, MODES, templateFile } from "./doc-templates.ts";
 import { EVERY_REPOSITORY, KIT_GATES } from "./gates.ts";
 import { AGENT_NAMES, DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, HISTORY_NAMES, LIVING_NAMES, PROSE_RULES } from "./prose-matchers.ts";
-import { MODES } from "./native-config.ts";
 import { SIZE_DEFAULTS, SIZE_RULES, qualifiedName, type Budget } from "./size-rules.ts";
 
 export const MANIFEST = "package.json";
@@ -130,7 +129,7 @@ const GATES: Block = {
 
 const DOC_KINDS: Block = {
   name: "doc-kinds",
-  from: ["scripts/doc-rules.ts", "scripts/native-config.ts", "scripts/doc-templates.ts"],
+  from: ["scripts/doc-rules.ts", "scripts/doc-templates.ts"],
   render: () => [
     "| File | Kind | Template |",
     "| --- | --- | --- |",

@@ -10,9 +10,8 @@ import {
   type Violation,
   VERSION,
 } from "./doc-outline.ts";
-import { ADR_STATUSES, TEMPLATES, templateFile, type Kind, type Title } from "./doc-templates.ts";
+import { ADR_STATUSES, MODES, TEMPLATES, templateFile, type Kind, type Title } from "./doc-templates.ts";
 import { ADR_DIRECTORY, DOCS_DIRECTORY } from "./prose-matchers.ts";
-import { MODES } from "./native-config.ts";
 
 export type Placement =
   | { readonly type: "judged"; readonly kind: Kind }

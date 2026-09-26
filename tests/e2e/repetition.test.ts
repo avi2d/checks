@@ -3,8 +3,9 @@ import { expect, test } from "bun:test";
 import { dirname, join } from "node:path";
 import { CHECKOUT, fixtureRepos, lintWiring, sizeOverride, type FixtureRepo } from "./lib/fixture-repo.ts";
 
-const ROSE = "production file(s) repeat more lines than where the range starts, at 50 tokens and 5 lines:\n";
+const ROSE = "file(s) .jscpd.json holds repeat more lines than where the range starts, at 50 tokens and 5 lines:\n";
 const open = fixtureRepos("checks-repetition-");
+const JSCPD = JSON.stringify({ path: ["src"], ignore: ["**/*.d.ts"] });
 
 // Ten lines and some 70 tokens, over jscpd's 50 and 5, and no two seeds share a token sequence that long.
 function block(seed: string): string {
@@ -28,7 +29,7 @@ function lines(count: number, prefix: string): string {
 }
 
 function repository(files: Readonly<Record<string, string>>): Promise<FixtureRepo> {
-  return open({ ".oxlintrc.json": sizeOverride(["src/**/*.ts"]), ...files });
+  return open({ ".oxlintrc.json": sizeOverride(["src/**/*.ts"]), ".jscpd.json": JSCPD, ...files });
 }
 
 test(
@@ -90,6 +91,27 @@ test(
     await commit("fix: no copy");
     const green = await lint();
     expect(green.text).toContain("checks-lint: 10 gate(s) pass\n");
+    expect(green.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
+  "the path and ignore keys of the head's .jscpd.json decide which files the hold measures",
+  async () => {
+    const { write, commit, script } = await repository({ "src/ledger.ts": block("ledger") });
+    const base = await commit("feat: base");
+    await write({ "src/copy.ts": block("ledger"), "tools/copy.ts": block("ledger") });
+    const head = await commit("feat: copies");
+    const red = await script("repetition.ts", base, head);
+    expect(red.text).toContain(`repetition: 2 ${ROSE}  src/copy.ts: 10 repeated line(s), up from 0\n`);
+    expect(red.text).not.toContain("tools/copy.ts");
+    expect(red.exitCode).toBe(1);
+
+    await write({ ".jscpd.json": JSON.stringify({ path: ["src"], ignore: ["**/copy.ts"] }) });
+    const ignored = await commit("chore: ignore the copy");
+    const green = await script("repetition.ts", base, ignored);
+    expect(green.text).toContain("repetition: 1 file(s) .jscpd.json holds repeat no more lines than where the range starts");
     expect(green.exitCode).toBe(0);
   },
   60_000,

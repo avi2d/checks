@@ -14,14 +14,14 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   `bun pm pack` builds the same tarball the registry serves, which is what the packed-tarball consumer e2e test installs.
 - The plugin ships compiled as `dist/index.js`, built with `bun build effect-channel/index.ts --outdir dist --target node --format esm`.
   Node refuses to type-strip a `.ts` plugin under `node_modules`, so the `.ts` source would fail to load from an installed package.
-- `checks-size-budget` writes the head commit's files to a temporary directory and runs oxlint there.
-  Its configuration loads the kit's own plugin bundle for the complexity rule and turns every category off.
-  The consumer's own `.oxlintrc.json`, its ignore files and its other rules never reach the count.
+- `checks-size-budget` writes the head commit's files to a temporary directory and runs oxlint there with the repository's own `.oxlintrc.json`.
+  oxlint alone reads its severities, overrides, excludes and defaults, so the gate never restates how oxlint reads a config.
+  The base versions of the changed files are measured under the head's config, so a changed limit never reads as a change in size.
 - `checks-size-budget` ratchets against the base of the range rather than a committed baseline such as `oxlint-suppressions.json`.
   A suppression file stores a count of sites per file and rule, and `max-lines` reports a file once however long it grows, so the count stays at one while the file doubles.
   The gate sums how far each site runs over its limit instead, which grows with the file.
   The base commit already holds that sum, so nothing is generated, committed or pruned.
-- `checks-repetition` writes the production files of both ends of the range to temporary directories and runs jscpd in each, so the consumer's `.jscpd.json` and ignore files never reach the count.
+- `checks-repetition` writes both ends of the range to temporary directories and runs jscpd in each with the head's `.jscpd.json`, so its `path` and `ignore` globs decide the files at both ends.
   It compares each file's count of repeated lines rather than using jscpd's `--baseline-from-ref`.
   That flag reports a repeated block as new once its text changes, so a change that shortens a grandfathered block would fail.
 - `dist/` is committed.
@@ -77,7 +77,7 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   That is the entry-point and layer recipe under Boundaries in [The dependency rules](configs/dependency-rules.md).
 - The templates in `templates/` are rendered from `scripts/doc-templates.ts`, the spec `checks-docs` reads.
   A template written by hand beside the check agrees with it only until someone edits one of them.
-- A page's Diátaxis mode comes from its path for the kit's reference directories or from `kind` front matter for another page.
+- A page's Diátaxis mode comes from `kind` front matter on the page, whatever directory holds it.
   The repository makes the judgment beside the page, and the check holds it to that template.
 - `checks-docs` holds a doc file to its template when a change touches it, the way `checks-size-budget` holds a file to its budget.
   A repository adopts the templates as its files change, and an untouched file is listed as advisory rather than failing a change that never read it.
@@ -97,8 +97,8 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   A reference goes stale when the code it names moves far more often than when its own line is edited, so a gate on edited lines alone would miss the usual break.
 - A path under a top directory the repository lacks names a file in another repository, such as a consumer's, and no program tells that from a typo.
   A directory the range deletes still counts as this repository's, so a path under it reads as stale rather than foreign.
-- The command check passes over README and the gate and config reference pages.
-  Those files speak to a consuming repository, whose scripts are not this one's.
+- The command check passes over a page whose front matter sets `audience: consumers`.
+  Such a page speaks to a consuming repository, whose scripts are not this one's.
 
 ## Related topics
 

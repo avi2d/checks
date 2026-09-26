@@ -1,0 +1,5 @@
+{
+  "path": ["effect-channel", "scripts"],
+  "format": ["typescript"],
+  "ignore": ["**/*.d.ts"]
+}

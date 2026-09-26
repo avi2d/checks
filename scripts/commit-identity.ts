@@ -60,10 +60,10 @@ function identityOf(person: typeof Person.Type): Identity | undefined {
 
 const allowedAuthors = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
+  const fs = yield* FileSystem.FileSystem;
   const file = (yield* Path.Path).join(root, "package.json");
-  const manifest = yield* (yield* FileSystem.FileSystem).readFileString(file).pipe(
-    Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Authors))),
-  );
+  if (!(yield* fs.exists(file))) return DEFAULT_AUTHORS;
+  const manifest = yield* fs.readFileString(file).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Authors))));
   const listed = [manifest.author, ...(manifest.contributors ?? [])]
     .filter((entry) => entry !== undefined)
     .map(identityOf)

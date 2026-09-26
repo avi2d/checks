@@ -437,9 +437,9 @@ test(
     expect(flake.exitCode).toBe(0);
 
     for (const [script, report] of [
-      ["wiring", "6 gate(s) run on pull requests to main"],
-      ["size", "size-budget: .oxlintrc.json declares no size rules"],
-      ["repetition", "repetition: .oxlintrc.json declares no production size override"],
+      ["wiring", "3 gate(s) run on pull requests to main"],
+      ["size", "raise no overrun past the base"],
+      ["repetition", "repetition: the head holds no .jscpd.json, so no file is measured"],
       ["docs", "docs: 0 doc file(s) the range touches hold to their templates"],
       ["ratchet", "no count in oxlint-suppressions.json rose or appeared"],
       ["clock", "no test in tests/quarantine/ is past 30 days"],
