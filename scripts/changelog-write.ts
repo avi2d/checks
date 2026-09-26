@@ -69,19 +69,17 @@ const readPublished = Effect.fn("readPublished")(function* (root: string) {
   return new Set(tags.split("\n").flatMap((tag) => (tag.startsWith(TAG_PREFIX) ? [tag.slice(TAG_PREFIX.length)] : [])));
 });
 
+// Every earlier main tip reaches the newest one, while an unlanded sibling merged earlier stays out of the release.
 const mergedTips = Effect.fn("mergedTips")(function* (root: string, through: string) {
-  const merges = yield* git(["log", "--first-parent", "--merges", "--format=%H", "HEAD"], root);
+  const [, ...parents] = (yield* git(["log", "--first-parent", "--merges", "-n", "1", "--format=%P", "HEAD"], root)).trim().split(" ");
   const tips: string[] = [];
-  for (const merge of merges.split("\n").filter((sha) => sha !== "")) {
-    const [, ...parents] = (yield* git(["rev-list", "--parents", "-n", "1", merge], root)).trim().split(" ");
-    for (const parent of parents.slice(1)) {
-      // A parent past the bump waits for a later release, so only a parent beside it joins this one.
-      const past = yield* git(["merge-base", "--is-ancestor", through, parent], root).pipe(
-        Effect.as(true),
-        Effect.catchTag("GitFailure", () => Effect.succeed(false)),
-      );
-      if (!past) tips.push(parent);
-    }
+  for (const parent of parents) {
+    // A parent past the bump belongs to a later release, so only a parent beside it joins this one.
+    const past = yield* git(["merge-base", "--is-ancestor", through, parent], root).pipe(
+      Effect.as(true),
+      Effect.catchTag("GitFailure", () => Effect.succeed(false)),
+    );
+    if (!past) tips.push(parent);
   }
   return tips;
 });

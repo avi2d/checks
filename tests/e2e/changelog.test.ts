@@ -169,7 +169,7 @@ test(
 );
 
 test(
-  "a commit the branch adds past its bump waits for a later release",
+  "a commit the branch adds past its bump stays out, since the squash merge folds it into the release commit",
   async () => {
     await initRepo();
     await bump("0.1.0");
@@ -185,6 +185,34 @@ test(
     const branch = await rewritten(2);
     expect(branch).toContain("- on main [#3](https://github.com/acme/widget/pull/3)");
     expect(branch).not.toContain("[#2](https://github.com/acme/widget/pull/2)");
+  },
+  { timeout: 30_000 },
+);
+
+test(
+  "a branch that merged an unlanded sibling and then main keeps main's changelog",
+  async () => {
+    await initRepo();
+    await bump("0.1.0");
+    await commit("feat: build a bill (#1)");
+    await commit("feat: base (#2)");
+    await $`git switch -q -c lower`.cwd(dir).quiet();
+    await commit("feat: on the lower (#10)");
+    await $`git switch -q -c upper`.cwd(dir).quiet();
+    await commit("feat: on the upper (#11)");
+    await $`git switch -q lower`.cwd(dir).quiet();
+    await commit("feat: more on the lower (#12)");
+    await $`git switch -q upper && git merge -q --no-ff --no-gpg-sign --no-edit lower`.cwd(dir).env({ ...process.env, ...DATED }).quiet();
+
+    await $`git switch -q main`.cwd(dir).quiet();
+    await bump("0.2.0");
+    await rewritten(2);
+    await commit("chore: release 0.2.0 (#20)");
+    await commit("feat: after the release (#21)");
+    const main = await readFile(join(dir, "CHANGELOG.md"), "utf8");
+
+    await $`git switch -q upper && git merge -q --no-ff --no-gpg-sign --no-edit main`.cwd(dir).env({ ...process.env, ...DATED }).quiet();
+    expect(await rewritten(2)).toBe(main);
   },
   { timeout: 30_000 },
 );
