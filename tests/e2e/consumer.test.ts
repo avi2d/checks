@@ -240,7 +240,7 @@ test(
       JSON.stringify({
         extends: ["./node_modules/@avi2dg/checks/oxlintrc.json"],
         plugins: ["typescript", "oxc", "eslint", "import"],
-        rules: { "effect-channel/cognitive-complexity": ["error", { max: 15 }] },
+        rules: { "readability/cognitive-complexity": ["error", { max: 15 }] },
       }),
     );
     await writeFile(join(dir, "settle.js"), TANGLED_SETTLE);
@@ -248,7 +248,7 @@ test(
     const red = await oxlint();
     expect(red.exitCode).not.toBe(0);
     expect(red.text).toContain("settle.js");
-    expect(red.text).toContain("effect-channel(cognitive-complexity)");
+    expect(red.text).toContain("readability(cognitive-complexity)");
     expect(red.text).toContain("has a cognitive complexity of 16. Maximum allowed is 15.");
 
     await writeFile(join(dir, "settle.js"), FLAT_SETTLE);
@@ -344,6 +344,7 @@ test(
     expect(existsSync(join(installed, "LICENSE"))).toBe(true);
     expect(existsSync(join(installed, "CHANGELOG.md"))).toBe(true);
     expect(existsSync(join(installed, "effect-channel"))).toBe(false);
+    expect(existsSync(join(installed, "readability"))).toBe(false);
     expect(existsSync(join(installed, "tests"))).toBe(false);
     expect(existsSync(join(installed, "AGENTS.md"))).toBe(false);
 

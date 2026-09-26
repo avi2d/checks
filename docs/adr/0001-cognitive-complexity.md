@@ -19,7 +19,7 @@ No SonarSource implementation source was read or copied, which keeps LGPL-3.0 co
 
 ## Decision
 
-The kit's own oxlint JS plugin carries a cognitive complexity rule, and the size budget's complexity limit at 15 holds functions to it in production and test code.
+The kit's readability oxlint JS plugin carries a cognitive complexity rule, and the size budget's complexity limit at 15 holds functions to it in production and test code.
 The rule follows Appendix B of the paper: B1 increments for breaks in linear flow, B2 nesting levels, and B3 nesting increments.
 Structurally it counts `if`, ternary operators, `switch`, `for`, `while`, `do while` and `catch` with a nesting increment, as the paper's Increment for breaks in the linear flow, Catches and Switches sections say.
 `else` and `else if` cost one flat increment and raise the nesting without taking a nesting increment of their own, as the Hybrid increment type says.
@@ -38,7 +38,8 @@ The paper's Increment for nested flow-break structures section instead sums a ne
 
 ## Consequences
 
-`effect-channel/cognitive-complexity` replaces oxlint's `complexity` in the size budget configuration, which now loads the kit's own plugin bundle to reach it.
+`readability/cognitive-complexity` replaces oxlint's `complexity` in the size budget configuration, which now loads the kit's readability plugin bundle to reach it.
+The rule moved out of the `effect-channel` plugin, which keeps only the Effect error-channel rules.
 The quality schema and the size budget docs name the new rule and its limit.
 The paper's worked examples for the word list, the prime sieve, the nested method, the pattern compiler, the model save and the symbol lookup are unit and end to end tests.
 Each scores what the paper's Appendix C prints, except that the nested method and the model save score their nested functions apart.

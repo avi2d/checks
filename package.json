@@ -1,6 +1,6 @@
 {
   "name": "@avi2dg/checks",
-  "version": "0.22.0",
+  "version": "0.23.0",
   "description": "Deterministic checks shared across the captain's TypeScript repos",
   "license": "MIT",
   "repository": {
@@ -62,7 +62,8 @@
     "oxlintrc.json",
     "stryker.preset.js",
     "tsconfig.effect.json",
-    "dist/index.js"
+    "dist/effect-channel/index.js",
+    "dist/readability/index.js"
   ],
   "exports": {
     "./bunfig.toml": "./bunfig.toml",
@@ -106,7 +107,8 @@
     "./oxlintrc.json": "./oxlintrc.json",
     "./stryker.preset.js": "./stryker.preset.js",
     "./tsconfig.effect.json": "./tsconfig.effect.json",
-    "./dist/index.js": "./dist/index.js"
+    "./dist/effect-channel/index.js": "./dist/effect-channel/index.js",
+    "./dist/readability/index.js": "./dist/readability/index.js"
   },
   "bin": {
     "checks-lint": "scripts/lint.ts",
@@ -131,7 +133,7 @@
   },
   "scripts": {
     "prepare": "bun scripts/vendor.ts --library effect --package effect --repository https://github.com/Effect-TS/effect.git --tag 'effect@{version}' --path packages/effect/package.json",
-    "build": "bun build effect-channel/index.ts --outdir dist --target node --format esm && bun scripts/doc-templates-write.ts && bun scripts/changelog-write.ts && bun scripts/doc-blocks-write.ts",
+    "build": "bun build effect-channel/index.ts --outdir dist/effect-channel --target node --format esm && bun build readability/index.ts --outdir dist/readability --target node --format esm && bun scripts/doc-templates-write.ts && bun scripts/changelog-write.ts && bun scripts/doc-blocks-write.ts",
     "lint": "oxlint --type-aware && bun scripts/lint.ts && depcruise --config .dependency-cruiser.cjs .",
     "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
     "test": "bun scripts/test.ts"
