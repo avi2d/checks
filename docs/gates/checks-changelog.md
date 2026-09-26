@@ -14,7 +14,7 @@ It links each entry to its pull request under the repository address `package.js
 It keeps the date a released section already carries and dates a new section today.
 It writes the whole file newest first, so the changelog is never edited by hand.
 A repository with no tag yet releases from its first commit.
-A release with no conventional commit worth listing keeps only its heading and its date.
+A version with no conventional commit worth listing writes no section.
 
 ## What it reads
 

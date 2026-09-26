@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, DateTime, Effect, FileSystem, Path, Schema } from "effect";
-import { cuts, releaseDates, renderChangelog, type Bump, type Cut, type Release } from "./changelog.ts";
+import { cuts, hasEntries, releaseDates, renderChangelog, type Bump, type Cut, type Release } from "./changelog.ts";
 import { git } from "./git.ts";
 import { runMain } from "./main.ts";
 
@@ -94,7 +94,7 @@ const write = Effect.gen(function* () {
   const recorded = (yield* fs.exists(target)) ? releaseDates(yield* fs.readFileString(target)) : new Map<string, string>();
   const pending = version === (yield* versionAt(root, "HEAD")) ? undefined : { sha: "HEAD", version, date: yield* today };
   const released = cuts(yield* readBumps(root), recorded, yield* readPublished(root), pending);
-  const found = (yield* Effect.forEach(released, (cut) => subjectsOf(root, cut))).toReversed();
+  const found = (yield* Effect.forEach(released, (cut) => subjectsOf(root, cut))).filter(({ subjects }) => hasEntries(subjects)).toReversed();
   yield* fs.writeFileString(target, renderChangelog(name, found, repositoryUrl));
   yield* Console.log(`${NAME}: wrote ${found.length} release(s) to ${CHANGELOG}`);
   return true;
