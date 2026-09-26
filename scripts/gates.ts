@@ -32,7 +32,6 @@ export const KIT_GATES = [
   { bin: "checks-suppressions-ratchet", script: "suppressions-ratchet.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-ci-wiring", script: "ci-wiring.ts", reads: "tree", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-docs", script: "docs.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
-  { bin: "checks-size-budget", script: "size-budget.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE },
   { bin: "checks-repetition", script: "repetition.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE },
   { bin: "checks-quarantine-clock", script: "quarantine-clock.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
 ] as const satisfies readonly KitGate[];

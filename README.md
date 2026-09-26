@@ -114,7 +114,6 @@ Add a pull request title lint step in another workflow using `./node_modules/.bi
 | [`checks-suppressions-ratchet`](docs/gates/checks-suppressions-ratchet.md) | the range | every repository |
 | [`checks-ci-wiring`](docs/gates/checks-ci-wiring.md) | the working tree | every repository |
 | [`checks-docs`](docs/gates/checks-docs.md) | the range | every repository |
-| [`checks-size-budget`](docs/gates/checks-size-budget.md) | the range | a repository tracking `*.ts` or `*.tsx` |
 | [`checks-repetition`](docs/gates/checks-repetition.md) | the range | a repository tracking `*.ts` or `*.tsx` |
 | [`checks-quarantine-clock`](docs/gates/checks-quarantine-clock.md) | the range | every repository |
 

@@ -81,17 +81,6 @@ export function scratchDirs(): (prefix: string) => Promise<string> {
 
 export const UNVENDORED_BUNFIG = '[test]\npathIgnorePatterns = ["**/tests/quarantine/**"]\n';
 
-export function sizeOverride(production: readonly string[], limits: { readonly fileLines?: number; readonly functionLines?: number } = {}): string {
-  const rules = {
-    "max-lines": ["error", { max: limits.fileLines ?? 400, skipBlankLines: false, skipComments: false }],
-    "max-lines-per-function": ["error", { max: limits.functionLines ?? 100, skipBlankLines: false, skipComments: false }],
-    "max-statements": ["error", { max: 30 }],
-    "effect-channel/cognitive-complexity": ["error", { max: 15 }],
-    "max-depth": ["error", { max: 4 }],
-  };
-  return JSON.stringify({ plugins: ["eslint", "typescript", "oxc", "import"], jsPlugins: [join(CHECKOUT, "dist/index.js")], overrides: [{ files: production, rules }, { files: ["tests/**/*.ts"], rules: { ...rules, "max-lines": ["error", { max: 600 }], "max-lines-per-function": "off", "max-statements": ["error", { max: 50 }] } }] });
-}
-
 export async function lintWiring(_settings: Readonly<Record<string, unknown>> = {}): Promise<Readonly<Record<string, string>>> {
   return {
     "package.json": JSON.stringify({ name: "lint-fixture", type: "module", author: AUTHOR, scripts: { lint: "checks-lint", test: "checks-test" } }),

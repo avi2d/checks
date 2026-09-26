@@ -381,7 +381,6 @@ test(
         compare: "checks-mutation-compare mutation.json mutation.json",
         wiring: "checks-ci-wiring",
         flake: "checks-flake --runs 2",
-        size: "checks-size-budget HEAD",
         repetition: "checks-repetition HEAD",
         docs: "checks-docs HEAD",
         kit: "oxlint --type-aware && checks-lint",
@@ -438,7 +437,6 @@ test(
 
     for (const [script, report] of [
       ["wiring", "3 gate(s) run on pull requests to main"],
-      ["size", "raise no overrun past the base"],
       ["repetition", "repetition: the head holds no .jscpd.json, so no file is measured"],
       ["docs", "docs: 0 doc file(s) the range touches hold to their templates"],
       ["ratchet", "no count in oxlint-suppressions.json rose or appeared"],
@@ -453,7 +451,7 @@ test(
     const kit = await runScript("kit", withoutPullRequestEvent());
     expect(kit.text).toContain("from HEAD against origin/main");
     expect(kit.text).toContain("commit-identity: 1 commit(s)");
-    expect(kit.text).toContain("checks-lint: 10 gate(s) pass");
+    expect(kit.text).toContain("checks-lint: 9 gate(s) pass");
     expect(kit.exitCode).toBe(0);
   },
   180_000,

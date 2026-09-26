@@ -191,7 +191,7 @@ const WHERE: Block = {
 export const TARGETS: readonly { readonly file: string; readonly blocks: readonly Block[] }[] = [
   { file: "README.md", blocks: [PREREQUISITES, INSTALL, GATES, WHERE] },
   { file: `${GATE_PAGES}/checks-docs.md`, blocks: [DOC_KINDS, LIVING_DOCS, PROSE] },
-  { file: `${GATE_PAGES}/checks-size-budget.md`, blocks: [SIZE_LIMITS] },
+  { file: "docs/configs/native-settings.md", blocks: [SIZE_LIMITS] },
 ];
 
 export type Spliced = { readonly type: "spliced"; readonly text: string } | { readonly type: "unmarked"; readonly blocks: readonly string[] };

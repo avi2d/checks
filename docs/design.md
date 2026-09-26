@@ -14,14 +14,9 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   `bun pm pack` builds the same tarball the registry serves, which is what the packed-tarball consumer e2e test installs.
 - The plugin ships compiled as `dist/index.js`, built with `bun build effect-channel/index.ts --outdir dist --target node --format esm`.
   Node refuses to type-strip a `.ts` plugin under `node_modules`, so the `.ts` source would fail to load from an installed package.
-- `checks-size-budget` writes the head commit's files to a temporary directory and runs oxlint there with the repository's own `.oxlintrc.json`.
-  oxlint alone reads its severities, overrides, excludes and defaults, so the gate never restates how oxlint reads a config.
-  The base versions of the changed files are measured under the head's config, so a changed limit never reads as a change in size.
-- `checks-size-budget` ratchets against the base of the range rather than a committed baseline such as `oxlint-suppressions.json`.
-  A suppression file stores a count of sites per file and rule, and `max-lines` reports a file once however long it grows, so the count stays at one while the file doubles.
-  The gate compares how far each site runs over its limit instead, which grows with the file.
-  It never sums sites, since a trimmed function would then pay for a new one.
-  The base commit already holds each overrun, so nothing is generated, committed or pruned.
+- The size rules are plain oxlint rules at `error` in `.oxlintrc.json`, and `bun run lint` enforces them on the whole tree.
+  A repository records its existing violations with `oxlint --suppress-all`, and `checks-suppressions-ratchet` refuses any count that rises.
+  The kit runs no size script of its own, since restating how oxlint reads its config and compares sites left corners the native rules never had.
 - `checks-repetition` writes both ends of the range to temporary directories and runs jscpd in each with the head's `.jscpd.json`, so its `path` and `ignore` globs decide the files at both ends.
   It compares each file's count of repeated lines rather than using jscpd's `--baseline-from-ref`.
   That flag reports a repeated block as new once its text changes, so a change that shortens a grandfathered block would fail.
@@ -80,7 +75,7 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   A template written by hand beside the check agrees with it only until someone edits one of them.
 - A page's Diátaxis mode comes from `kind` front matter on the page, whatever directory holds it.
   The repository makes the judgment beside the page, and the check holds it to that template.
-- `checks-docs` holds a doc file to its template when a change touches it, the way `checks-size-budget` holds a file to its budget.
+- `checks-docs` holds a doc file to its template when a change touches it, the way `checks-comment-gate` judges the comments a change adds.
   A repository adopts the templates as its files change, and an untouched file is listed as advisory rather than failing a change that never read it.
 - A task heading is verb first, and review holds it there rather than the check.
   No word list tells `Test layout` from `Test the layout`, and a check that passes the noun is worse than none.

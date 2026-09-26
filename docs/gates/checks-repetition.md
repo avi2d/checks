@@ -54,4 +54,4 @@ When the head holds no `.jscpd.json`, the gate reports that no file was measured
 ## Related topics
 
 - [Native settings](../configs/native-settings.md)
-- [checks-size-budget](checks-size-budget.md)
+- [checks-suppressions-ratchet](checks-suppressions-ratchet.md)

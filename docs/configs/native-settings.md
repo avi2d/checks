@@ -11,7 +11,8 @@ A consuming repository puts each setting in the file its tool reads.
 | File | Setting | Reader |
 | --- | --- | --- |
 | `.github/workflows/*.yml` | Pull request commands, scheduled commands, runner labels | GitHub Actions and `checks-ci-wiring` |
-| `.oxlintrc.json` | Effect paths, exemptions, file size, function size, statements, cognitive complexity and depth | oxlint and `checks-size-budget` |
+| `.oxlintrc.json` | Effect paths, exemptions, file size, function size, statements, cognitive complexity and depth | oxlint |
+| `oxlint-suppressions.json` | The existing violations oxlint suppresses, per file and rule | oxlint and `checks-suppressions-ratchet` |
 | `.jscpd.json` | The `path` and `ignore` globs of the files repetition is measured in | jscpd and `checks-repetition` |
 | `tsconfig.json` | Effect language service scope and severity | TypeScript and Effect language service |
 | `package.json` | `scripts` with the `checks-vendor` arguments in `prepare`, `author` and `contributors` | Bun, `checks-commit-identity` and `checks-vendor` |
@@ -45,12 +46,29 @@ The following table maps the former fields to their owners.
 The kit has no general configuration manifest or generated workflow.
 `checks-ci-wiring` requires title lint on opened and synchronized pull requests.
 It also requires lint, build, typecheck and test for each of those scripts that `package.json` defines, and a clean git diff after a build.
-`checks-size-budget` runs oxlint with the repository's own `.oxlintrc.json`, so oxlint alone decides which files each size rule covers and at what limit.
-A size rule at `error` is a hard limit that `bun run lint` enforces, and a rule at `warn` is existing debt that `checks-size-budget` stops from growing.
 `checks-repetition` runs jscpd with the repository's own `.jscpd.json`, so its `path` and `ignore` globs decide which files are measured.
+
+## Size limits
+
+The size rules are plain oxlint rules at `error` in `.oxlintrc.json`, and `bun run lint` enforces them on the whole tree.
+A repository records its existing violations with `oxlint --suppress-all`, which writes them to `oxlint-suppressions.json`.
+`checks-suppressions-ratchet` refuses any count in that file that rises, so the recorded debt only falls.
+The kit's recommended limits are below:
+
+<!-- generated size-limits: bun run build writes it from SIZE_RULES and SIZE_DEFAULTS in scripts/size-rules.ts and scripts/doc-blocks.ts -->
+
+| Key | Limits | oxlint rule | Production | Tests |
+| --- | --- | --- | --- | --- |
+| `fileLines` | The most lines a file may hold, blank and comment lines counted | `max-lines` | 400 | 600 |
+| `functionLines` | The most lines a function may span, blank and comment lines counted | `max-lines-per-function` | 100 | none |
+| `statements` | The most statements a function may hold | `max-statements` | 30 | 50 |
+| `complexity` | The highest cognitive complexity a function may reach, a switch counted once | `effect-channel/cognitive-complexity` | 15 | 15 |
+| `depth` | The deepest a block may nest inside a function | `max-depth` | 4 | 4 |
+
+<!-- end generated size-limits -->
 
 ## Related topics
 
 - [The Effect rules](effect-rules.md)
 - [The CI wiring check](../gates/checks-ci-wiring.md)
-- [The size budget](../gates/checks-size-budget.md)
+- [The suppressions ratchet](../gates/checks-suppressions-ratchet.md)

@@ -1,7 +1,7 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { dirname, join } from "node:path";
-import { CHECKOUT, fixtureRepos, lintWiring, sizeOverride, type FixtureRepo } from "./lib/fixture-repo.ts";
+import { CHECKOUT, fixtureRepos, lintWiring, type FixtureRepo } from "./lib/fixture-repo.ts";
 
 const ROSE = "file(s) .jscpd.json holds repeat more lines than where the range starts, at 50 tokens and 5 lines:\n";
 const open = fixtureRepos("checks-repetition-");
@@ -29,7 +29,7 @@ function lines(count: number, prefix: string): string {
 }
 
 function repository(files: Readonly<Record<string, string>>): Promise<FixtureRepo> {
-  return open({ ".oxlintrc.json": sizeOverride(["src/**/*.ts"]), ".jscpd.json": JSCPD, ...files });
+  return open({ ".jscpd.json": JSCPD, ...files });
 }
 
 test(
@@ -84,13 +84,13 @@ test(
 
     const red = await lint();
     expect(red.text).toContain("  src/copy.ts: 10 repeated line(s), up from 0\n");
-    expect(red.text).toContain("checks-lint: 1 of 10 gate(s) failed: checks-repetition\n");
+    expect(red.text).toContain("checks-lint: 1 of 9 gate(s) failed: checks-repetition\n");
     expect(red.exitCode).toBe(1);
 
     await write({ "src/copy.ts": "export const copy = 1;\n" });
     await commit("fix: no copy");
     const green = await lint();
-    expect(green.text).toContain("checks-lint: 10 gate(s) pass\n");
+    expect(green.text).toContain("checks-lint: 9 gate(s) pass\n");
     expect(green.exitCode).toBe(0);
   },
   60_000,
