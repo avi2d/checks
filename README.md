@@ -129,7 +129,7 @@ A repository leaves out a gate that does not apply to it through `gates.lint`, a
 
 These bins run on their own:
 
-- [`checks-test`](docs/gates/checks-test.md) runs the suite as `scripts.test` and refuses a skip the repository has not declared.
+- [`checks-test`](docs/gates/checks-test.md) runs the suite as `scripts.test` and refuses a skip without a reason at its test site.
 - [`checks-flake`](docs/gates/checks-flake.md) runs the suite on a schedule and records the seeds a flaky test fails with.
 - [`checks-mutation-compare`](docs/gates/checks-mutation-compare.md) holds every mutant in a pull request to no regression.
 - [`checks-subsumed-tests`](docs/gates/checks-subsumed-tests.md) lists each test another test subsumes in a mutation run.

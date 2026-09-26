@@ -10,6 +10,10 @@ It fails unless the repository holds this shape, and names the file and the path
   A `*.test.ts`, `*.spec.ts` or `*_test.ts` under `src/`, `test/`, `__tests__/` or the repository root fails.
 - `tests/lib/**` holds helpers and `tests/fixtures/**` holds data, and neither may hold a test file.
   Every other directory directly under `tests/` is a test group and may nest as deep as it likes.
+- `tests/live/**` holds tests that need a live machine, and `tests/pixel/**` holds tests that need a display.
+  Bun ignores both directories in the default suite.
+  A live tier with test files requires `test:live` set to `checks-test --tier=live`.
+  A pixel tier with test files requires `test:pixel` set to `checks-test --tier=pixel`.
 - A test runs at one of two levels.
   A test outside `tests/e2e/` runs in-process, so it may not import `node:child_process`, `net`, `http`, `https`, `http2`, `tls` or `dgram`.
   It may not import `$`, `spawn`, `spawnSync`, `connect`, `serve` or `listen` from `bun`, may not touch `Bun.$` or `Bun.spawn`, and may not call `fetch`.
@@ -18,8 +22,8 @@ It fails unless the repository holds this shape, and names the file and the path
 - `scripts.test` is exactly `checks-test`, which runs `bun test --randomize` as [checks-test](checks-test.md) says.
 - `scripts.lint` runs this check, itself or through `checks-lint` called by its bare bin name.
 - `bunfig.toml` carries every `[test]` key of the shipped preset with the same value.
-  `[test].pathIgnorePatterns` is the preset's `["**/tests/quarantine/**", "repos/**"]`, which the check pins itself, so the kit's own repository, whose bunfig is the preset, cannot drift it either.
-  A repository whose `quality.json` declares no `sources.libraries` may hold `["**/tests/quarantine/**"]` instead, and one that declares them must keep `repos/**`.
+  `[test].pathIgnorePatterns` is the preset's `["**/tests/quarantine/**", "**/tests/live/**", "**/tests/pixel/**", "repos/**"]`, which the check pins itself, so the kit's own repository, whose bunfig is the preset, cannot drift it either.
+  A repository whose `quality.json` declares no `sources.libraries` may omit `repos/**`, and one that declares them must keep it.
   Other tables, and extra `[test]` keys, are the repository's own.
 
 The in-process half is what a mutation run can mutate.
@@ -41,7 +45,8 @@ It reads the working tree.
 It scans the tracked and untracked files that `git ls-files --exclude-standard` reports, so `node_modules/` and every gitignored tree are out of reach, and a local run agrees with CI before `git add`.
 It parses each test and helper with swc and reads import specifiers and identifier use, so a test that only carries `"node:child_process"` as a string is not a violation.
 `tests/fixtures/**` is data and is not parsed.
-It reads `package.json` for `scripts.test` and `scripts.lint`, and compares `bunfig.toml` with the preset the installed kit ships.
+It reads `package.json` for `scripts.test` and `scripts.lint`.
+It also checks `test:live` and `test:pixel` when their directories contain test files, and compares `bunfig.toml` with the preset the installed kit ships.
 It reads `quality.json` for `sources.libraries`, which decides whether `repos/**` is pinned.
 
 ## Arguments

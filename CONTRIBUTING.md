@@ -16,6 +16,8 @@ To check a change the way CI does:
 1. Run `bun run typecheck`.
 1. Run `bun run test`, which runs the suite through `scripts/test.ts`.
 
+Declare each skip with `skipReason(reason, name)` beside the native Bun test call, as [checks-test](docs/gates/checks-test.md) says.
+
 CI runs the commands `gates.ci` lists in `quality.json`, which include `git diff --exit-code` over the whole tree after the build and the commit lint on the pull request title.
 
 ## Regenerate what is committed
