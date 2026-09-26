@@ -1,3 +1,4 @@
+import { Option, Result, Schema } from "effect";
 import {
   firstText,
   marked,
@@ -35,16 +36,19 @@ export const ROOT_FILES: ReadonlyMap<string, Kind> = new Map<string, Kind>([
   ["CONTRIBUTING.md", "how-to"],
 ]);
 
-const FRONT_MATTER = /^---\n((?:[\w-]+: .*\n)*)---\n/;
-const FIELD = /^([\w-]+): (.*)$/gm;
+const FRONT_MATTER = /^---\r?\n(?:([\s\S]*?)\r?\n)?(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/;
+const Fields = Schema.Struct({ kind: Schema.optionalKey(Schema.String), audience: Schema.optionalKey(Schema.String) });
+const decodeFields = Schema.decodeUnknownOption(Fields);
 
-function frontMatterOf(text: string): { readonly text: string; readonly fields: ReadonlyMap<string, string> } {
+function frontMatterOf(text: string): { readonly text: string; readonly fields: typeof Fields.Type } {
   const match = FRONT_MATTER.exec(text);
-  return { text: match?.[0] ?? "", fields: new Map([...(match?.[1] ?? "").matchAll(FIELD)].map(([, key = "", value = ""]) => [key, value])) };
+  if (match === null) return { text: "", fields: {} };
+  const parsed = Result.getOrUndefined(Result.try(() => Bun.YAML.parse(match[1] ?? "")));
+  return { text: match[0], fields: Option.getOrElse(decodeFields(parsed), () => ({})) };
 }
 
 export function speaksToConsumers(text: string): boolean {
-  return frontMatterOf(text).fields.get("audience") === "consumers";
+  return frontMatterOf(text).fields.audience === "consumers";
 }
 
 export function placementOf(path: string, text = ""): Placement {
@@ -52,7 +56,7 @@ export function placementOf(path: string, text = ""): Placement {
   if (root !== undefined) return { type: "judged", kind: root };
   if (!path.endsWith(".md") || path === ADR_INDEX) return { type: "unjudged" };
   if (path.startsWith(ADR_DIRECTORY)) return { type: "judged", kind: "adr" };
-  const named = frontMatterOf(text).fields.get("kind");
+  const named = frontMatterOf(text).fields.kind;
   const mode = MODES.find((known) => known === named);
   if (mode !== undefined) return { type: "judged", kind: mode };
   return path.startsWith(DOCS_DIRECTORY) ? { type: "undeclared" } : { type: "unjudged" };

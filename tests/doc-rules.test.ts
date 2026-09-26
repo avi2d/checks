@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { judge, placementOf, placementProblem } from "../scripts/doc-rules.ts";
+import { judge, placementOf, placementProblem, speaksToConsumers } from "../scripts/doc-rules.ts";
 import { KINDS, type Kind } from "../scripts/doc-templates.ts";
 
 const FIXTURES = resolve(import.meta.dir, "fixtures", "docs");
@@ -113,4 +113,16 @@ test("each mode's page is held to its own shape", () => {
   expect(found("agents", fixture("agents").replace("# Project agent memory", "# widget"))).toEqual([
     "1: `# widget` is not the template's title, `# Project agent memory`",
   ]);
+});
+
+test("front matter is read as YAML, so a list, quoted values and CRLF still declare kind and audience", () => {
+  const listed = "---\nkind: reference\ntags:\n  - a\naudience: consumers\n---\n# lint\n";
+  const quoted = '---\nkind: "reference"\naudience: "consumers"\n---\n# lint\n';
+  const crlf = "---\r\nkind: reference\r\naudience: consumers\r\n---\r\n# lint\r\n";
+  for (const text of [listed, quoted, crlf]) {
+    expect(placementOf("docs/gates/lint.md", text)).toEqual({ type: "judged", kind: "reference" });
+    expect(speaksToConsumers(text)).toBe(true);
+  }
+  expect(speaksToConsumers("---\nkind: reference\n---\n# lint\n")).toBe(false);
+  expect(placementOf("docs/gates/lint.md", "---\nkind: [reference\n---\n# lint\n").type).toBe("undeclared");
 });
