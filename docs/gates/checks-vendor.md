@@ -18,7 +18,12 @@ It confirms the tree sits on the recorded commit.
 It confirms the manifest inside the tree still names the installed version.
 It confirms no write bit came back and no write landed outside the recorded commit.
 It never follows a link inside the tree, so no mode outside the cache is touched.
-Any failed confirmation fails the run.
+A tool that clears the read only mode of `repos/<name>` changes the tree's top directory through the link, as the GitHub Actions runner does when it empties `$RUNNER_TEMP`.
+A run that finds a write bit strips every write bit from the tree again, then confirms no write landed outside the recorded commit.
+Any other failed confirmation fails the run, and so does a write the tree still holds once it is read only again.
+The first fetch and each run that strips write bits hold the lock `<tag>.lock` beside the tree, so runs sharing the cache wait for one another rather than race.
+A run that waits for the lock reports it, and a run interrupted while it waits exits at once.
+A lock older than two minutes counts as left by a killed run, and the next run that meets it takes it.
 A failed library drops its `repos/<name>` link, so a reader falls back to `node_modules/<package>` rather than a tree the run could not vouch for.
 A missing tag, an unknown installed version or a manifest naming another version fails it too.
 A tag moved upstream after the first fetch is not followed, since a cached tree stays on its recorded commit.
@@ -67,6 +72,12 @@ checks-vendor: repos/effect still holds effect@4.0.0-rc.115, verified against it
 ```
 
 A later run reports the link it kept.
+
+```
+checks-vendor: found 1 path writable, starting with /home/runner/.cache/avi2dg-checks/repos/github.com/Effect-TS/effect/effect@4.0.0-rc.115, and froze the tree again, so repos/effect still holds effect@4.0.0-rc.115, verified against its recorded commit
+```
+
+A run that found a write bit reports how many paths carried one and the first of them.
 
 ## Wiring
 

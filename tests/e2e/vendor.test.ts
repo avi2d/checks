@@ -1,7 +1,9 @@
 import { $ } from "bun";
 import { afterEach, expect, test } from "bun:test";
-import { appendFile, chmod, lstat, mkdir, readdir, readFile, readlink, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { appendFile, chmod, lstat, mkdir, readdir, readFile, readlink, rm, stat, symlink, utimes, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { Duration } from "effect";
+import { STALE_AFTER } from "../../scripts/lock.ts";
 import { remoteSegments, tagFor } from "../../scripts/vendor.ts";
 import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
 
@@ -165,6 +167,23 @@ async function writablePaths(dir: string): Promise<readonly string[]> {
   return found;
 }
 
+function spawnVendor(dir: string, home: string): Bun.Subprocess<"ignore", "ignore", "pipe"> {
+  const args = ['umask 022 && exec bun "$0" "$@"', VENDOR, ...libraryArgs(remotes.get(dir) ?? "")];
+  return Bun.spawn(["sh", "-c", ...args], { cwd: dir, env: homeEnv(home), stdin: "ignore", stdout: "ignore", stderr: "pipe" });
+}
+
+// The reader stays open, since cancelling it would close the pipe the run still writes to.
+async function untilWaiting(run: Bun.Subprocess<"ignore", "ignore", "pipe">): Promise<void> {
+  const reader = run.stderr.getReader();
+  const decoder = new TextDecoder();
+  let seen = "";
+  while (!seen.includes("which another run holds")) {
+    const { done, value } = await reader.read();
+    if (done) throw new Error(`the run ended before it waited: ${seen}`);
+    seen += decoder.decode(value, { stream: true });
+  }
+}
+
 async function clearReadOnlyThrough(link: string): Promise<void> {
   await chmod(link, (await stat(link)).mode | 0o200);
   await rm(link);
@@ -188,6 +207,44 @@ test(
     expect(next).toMatchObject({ exitCode: 0 });
     expect(await writablePaths(dir)).toEqual([]);
     expect(await readlink(join(ci, "repos", "fake-lib"))).toBe(dir);
+  },
+  60_000,
+);
+
+test(
+  "a run waits for the lock another run holds, and takes a lock left past its stale age",
+  async () => {
+    const home = await scratchHome();
+    const parent = await scratch("checks-vendor-remote-");
+    const consumer = await scratch("checks-vendor-consumer-");
+    const { remote } = await seedRemote(parent, "1.0.0", "fake-lib@1.0.0");
+    await seedConsumer(consumer, remote, "1.0.0");
+    expect((await vendor(consumer, home)).exitCode).toBe(0);
+    const dir = cachedDir(home, remote, "1.0.0");
+    const lock = `${dir}.lock`;
+
+    await writeFile(lock, "");
+    await chmod(dir, 0o755);
+    const cancelled = spawnVendor(consumer, home);
+    await untilWaiting(cancelled);
+    cancelled.kill("SIGTERM");
+    expect(await cancelled.exited).toBe(130);
+    expect(await readdir(dirname(dir))).toContain("fake-lib@1.0.0.lock");
+
+    const waiting = spawnVendor(consumer, home);
+    await untilWaiting(waiting);
+    expect(await writablePaths(dir)).toEqual([dir]);
+    await rm(lock);
+    expect(await waiting.exited).toBe(0);
+    expect(await writablePaths(dir)).toEqual([]);
+
+    await writeFile(lock, "");
+    const abandoned = new Date(Date.now() - Duration.toMillis(STALE_AFTER) - 60_000);
+    await utimes(lock, abandoned, abandoned);
+    await chmod(dir, 0o755);
+    expect(await vendor(consumer, home)).toMatchObject({ exitCode: 0 });
+    expect(await writablePaths(dir)).toEqual([]);
+    expect((await readdir(dirname(dir))).sort()).toEqual(["fake-lib@1.0.0", "fake-lib@1.0.0.commit"]);
   },
   60_000,
 );
@@ -310,7 +367,7 @@ test(
 );
 
 test(
-  "a write into the cached tree fails the run",
+  "a write into the cached tree fails every run, and the first leaves the tree frozen",
   async () => {
     const home = await scratchHome();
     const parent = await scratch("checks-vendor-remote-");
@@ -320,23 +377,66 @@ test(
     expect((await vendor(consumer, home)).exitCode).toBe(0);
 
     const dir = cachedDir(home, remote, "1.0.0");
-    await chmod(dir, 0o755);
-    const root = await vendor(consumer, home);
-    expect(root.exitCode).toBe(1);
-    expect(root.text).toContain(`writable, starting with ${dir};`);
-    await chmod(dir, 0o555);
-
     const file = join(dir, "index.ts");
     await chmod(file, 0o644);
     await appendFile(file, "// tampered\n");
     const exposed = await vendor(consumer, home);
     expect(exposed.exitCode).toBe(1);
-    expect(exposed.text).toContain("writable");
+    expect(exposed.text).toContain("outside the recorded commit, starting with M index.ts;");
+    expect(await writablePaths(dir)).toEqual([]);
+    expect(await linked(consumer)).toBe(false);
 
-    await chmod(file, 0o444);
     const hidden = await vendor(consumer, home);
     expect(hidden.exitCode).toBe(1);
     expect(hidden.text).toContain("outside the recorded commit");
+  },
+  60_000,
+);
+
+test(
+  "a record rewritten to another commit is refused even once the tree is writable",
+  async () => {
+    const home = await scratchHome();
+    const parent = await scratch("checks-vendor-remote-");
+    const consumer = await scratch("checks-vendor-consumer-");
+    const seed = await seedRemote(parent, "1.0.0", "fake-lib@1.0.0");
+    await seedConsumer(consumer, seed.remote, "1.0.0");
+    expect((await vendor(consumer, home)).exitCode).toBe(0);
+    const dir = cachedDir(home, seed.remote, "1.0.0");
+    const landed = (await readFile(`${dir}.commit`, "utf8")).trim();
+    await $`git ${IDENTITY} commit -q --no-gpg-sign --allow-empty -m other`.cwd(seed.work).quiet();
+    const forged = (await $`git rev-parse HEAD`.cwd(seed.work).quiet()).stdout.toString().trim();
+    expect(forged).not.toBe(landed);
+
+    await writeFile(`${dir}.commit`, `${forged}\n`);
+    await clearReadOnlyThrough(join(consumer, "repos", "fake-lib"));
+    const refused = await vendor(consumer, home);
+    expect(refused.exitCode).toBe(1);
+    expect(refused.text).toContain(`sits on ${landed}, not the recorded ${forged}`);
+    expect(await linked(consumer)).toBe(false);
+  },
+  60_000,
+);
+
+test(
+  "runs that find the tree writable at once all pass, and leave it frozen with no lock behind",
+  async () => {
+    const home = await scratchHome();
+    const parent = await scratch("checks-vendor-remote-");
+    const consumers = [];
+    for (let index = 0; index < 4; index += 1) consumers.push(await scratch("checks-vendor-consumer-"));
+    const { remote } = await seedRemote(parent, "1.0.0", "fake-lib@1.0.0");
+    for (const consumer of consumers) await seedConsumer(consumer, remote, "1.0.0");
+    const [first = ""] = consumers;
+    expect((await vendor(first, home)).exitCode).toBe(0);
+    const dir = cachedDir(home, remote, "1.0.0");
+
+    await $`chmod -R u+w ${dir}`.quiet();
+    const runs = await Promise.all(consumers.map((consumer) => vendor(consumer, home)));
+    expect(runs.map((run) => run.exitCode)).toEqual([0, 0, 0, 0]);
+    expect(runs.filter((run) => run.text.includes("froze")).length).toBeGreaterThan(0);
+    expect(await writablePaths(dir)).toEqual([]);
+    expect((await readdir(dirname(dir))).sort()).toEqual(["fake-lib@1.0.0", "fake-lib@1.0.0.commit"]);
   },
   60_000,
 );
