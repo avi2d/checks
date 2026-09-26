@@ -14,7 +14,7 @@ It fails when the changelog holds no section for the version or the section is e
 
 ## What it reads
 
-It reads `CHANGELOG.md` from the repository root.
+It reads `CHANGELOG.md` from the working directory.
 It reads the version from its arguments, not from `package.json`.
 
 ## Arguments

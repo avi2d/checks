@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
-import { Effect, FileSystem, Path, Schema } from "effect";
-import { git } from "./git.ts";
+import { Effect, FileSystem, Schema } from "effect";
 import { runMain, Usage } from "./main.ts";
 
 export class ReleaseSectionUnavailable extends Schema.TaggedError<ReleaseSectionUnavailable>()("ReleaseSectionUnavailable", {
@@ -30,9 +29,7 @@ const releaseNotes = Effect.gen(function* () {
   const [version, output, ...extra] = process.argv.slice(2);
   if (version === undefined || output === undefined || extra.length > 0) return yield* new Usage({ message: USAGE });
   const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
-  const notes = yield* extractReleaseNotes(yield* fs.readFileString(path.join(root, "CHANGELOG.md")), version);
+  const notes = yield* extractReleaseNotes(yield* fs.readFileString("CHANGELOG.md"), version);
   yield* fs.writeFileString(output, notes);
   return true;
 });
