@@ -36,7 +36,8 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   A section keeps the date it was written with, since the squash merge that lands the release commit may fall on another day.
   Entries come from commit subjects, the squash-merged pull request titles commitlint holds to the conventional format.
   The bodies are the branch's own messages, which nothing lints.
-  The release path needs no `contents: write`: the changelog arrives in the release commit's pull request, not from a workflow that pushes.
+  The changelog still arrives in the release commit's pull request, not from a workflow that pushes.
+  The release path writes to the repository only through the `github-release` job's `contents: write`, which creates or updates the GitHub release from the tag's `CHANGELOG.md` section.
 - `quality.json` is JSON, not TOML or a TypeScript module: a bun bin, a hook running without `node_modules`, a `.cjs` or `.mjs` config and `jq` all parse it with nothing installed, and nobody runs a repository's own code to learn its policy.
   It holds declarations only.
   The kit's bins read it directly.
