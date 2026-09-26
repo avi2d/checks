@@ -48,7 +48,6 @@
     "scripts/docs.ts",
     "scripts/vendor.ts",
     "scripts/vendor-args.ts",
-    "scripts/lock.ts",
     "scripts/doc-outline.ts",
     "scripts/doc-rules.ts",
     "scripts/doc-references.ts",

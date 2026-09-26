@@ -96,12 +96,11 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   A directory the range deletes still counts as this repository's, so a path under it reads as stale rather than foreign.
 - The command check passes over a page whose front matter sets `audience: consumers`.
   Such a page speaks to a consuming repository, whose scripts are not this one's.
-- `checks-vendor` strips a write bit that came back on a cached tree and keeps the tree, rather than refusing it or cloning it again.
+- `checks-vendor` strips an owner write bit that came back on a cached tree and keeps the tree, rather than refusing it or cloning it again.
   The GitHub Actions runner clears the read only mode of each item before it deletes `$RUNNER_TEMP`, and on a directory link that chmod lands on the shared tree's top directory.
   Refusing the tree would fail every later job on the runner until a person cleared it, and cloning it again would need the network after every such job.
   A write bit is not a write, so the run strips it and then holds the tree to the recorded commit as it holds any tree, and a write it finds there still fails the run.
-- The lock beside a cached tree is a file created with the `wx` flag, since Bun exposes no `flock`.
-  A killed holder leaves the file behind, so a lock older than two minutes stops excluding, and the work the lock guards stays safe for two runs at once.
+  A group or other write bit still fails the run, since another user could have edited `.git/config` through it before `git status` reads it.
 
 ## Related topics
 

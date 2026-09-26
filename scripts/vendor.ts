@@ -1,13 +1,11 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { git } from "./git.ts";
-import { withLock } from "./lock.ts";
 import { runMain } from "./main.ts";
 import { librariesFrom, NAME, OPENER, type Library } from "./vendor-args.ts";
 
 const CACHE_HOME = ".cache/avi2dg-checks";
 const RECORD_SUFFIX = ".commit";
-const LOCK_SUFFIX = ".lock";
 const LINKS = "repos";
 const VERSION_TOKEN = "{version}";
 // bun runs prepare under umask 0, so a mode left to the umask lets any local user swap the shared tree.
@@ -123,9 +121,9 @@ function clearing(dir: string): string {
   return `clear it with \`chmod -R u+w ${dir} && rm -rf ${dir}\` and rerun ${NAME}`;
 }
 
-function writableAt(dir: string, paths: readonly string[]): string {
+function writableAt(dir: string, paths: readonly string[], by: string): string {
   const [first = dir] = paths;
-  return `${paths.length === 1 ? "1 path" : `${paths.length} paths`} writable, starting with ${first}`;
+  return `${paths.length === 1 ? "1 path" : `${paths.length} paths`} writable by ${by}, starting with ${first}`;
 }
 
 const freeze = Effect.fn("freeze")(function* (dir: string) {
@@ -169,7 +167,7 @@ const recorded = Effect.fn("recorded")(function* (dir: string) {
   return Option.some(text.trim());
 });
 
-// Returns the paths still carrying a write bit and fails on every other finding, reading the status only once none are left.
+// Returns the paths still carrying the owner write bit and fails on every other finding, reading the status only once none are left.
 const inspect = Effect.fn("inspect")(function* (dir: string, library: Library, installed: string, tag: string) {
   const held = yield* recorded(dir);
   if (Option.isNone(held)) {
@@ -181,7 +179,12 @@ const inspect = Effect.fn("inspect")(function* (dir: string, library: Library, i
     return yield* new VendorError({ message: `${dir} sits on ${head}, not the recorded ${record}; ${clearing(dir)}` });
   }
   yield* checkVersion(dir, library, installed, tag);
-  const writable = (yield* modes(dir)).filter(({ mode }) => (mode & WRITE_BITS) !== 0).map(({ entry }) => entry);
+  const found = yield* modes(dir);
+  const shared = found.filter(({ mode }) => (mode & WRITE_BITS & ~OWNER_WRITE) !== 0).map(({ entry }) => entry);
+  if (shared.length > 0) {
+    return yield* new VendorError({ message: `${dir} leaves ${writableAt(dir, shared, "group or others")}; ${clearing(dir)}` });
+  }
+  const writable = found.filter(({ mode }) => (mode & OWNER_WRITE) !== 0).map(({ entry }) => entry);
   if (writable.length > 0) return writable;
   const status = yield* git(["status", "--porcelain", "--ignored"], dir).pipe(
     Effect.mapError((cause) => new VendorError({ message: `${dir} reports no status: ${cause.message}` })),
@@ -258,8 +261,12 @@ const stage = Effect.fn("stage")(function* (staging: string, library: Library, i
 const land = Effect.fn("land")(function* (library: Library, installed: string, tag: string, dir: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+  const parent = path.dirname(dir);
   yield* confirmTag(library.repository, tag);
-  const staging = yield* fs.makeTempDirectory({ directory: path.dirname(dir), prefix: `.${path.basename(dir)}-` }).pipe(
+  yield* fs.makeDirectory(parent, { recursive: true, mode: DIRECTORY_MODE }).pipe(
+    Effect.mapError((cause) => new VendorError({ message: `cannot hold ${dir}: ${cause.message}` })),
+  );
+  const staging = yield* fs.makeTempDirectory({ directory: parent, prefix: `.${path.basename(dir)}-` }).pipe(
     Effect.mapError((cause) => new VendorError({ message: `cannot stage ${dir}: ${cause.message}` })),
   );
   return yield* stage(staging, library, installed, tag, dir).pipe(Effect.ensuring(discard(staging)));
@@ -269,7 +276,7 @@ function verified(library: Library, tag: string): string {
   return `${LINKS}/${library.name} still holds ${tag}, verified against its recorded commit`;
 }
 
-const settleLocked = Effect.fn("settleLocked")(function* (library: Library, installed: string, tag: string, dir: string) {
+const settle = Effect.fn("settle")(function* (library: Library, installed: string, tag: string, dir: string) {
   const fs = yield* FileSystem.FileSystem;
   if (!(yield* fs.exists(dir)) && (yield* land(library, installed, tag, dir))) {
     return `cloned ${tag} from ${library.repository} and linked ${LINKS}/${library.name}`;
@@ -278,22 +285,10 @@ const settleLocked = Effect.fn("settleLocked")(function* (library: Library, inst
   if (writable.length === 0) return verified(library, tag);
   yield* freeze(dir);
   const left = yield* inspect(dir, library, installed, tag);
-  if (left.length > 0) return yield* new VendorError({ message: `${dir} leaves ${writableAt(dir, left)}; ${clearing(dir)}` });
-  return `found ${writableAt(dir, writable)}, and froze the tree again, so ${verified(library, tag)}`;
-});
-
-const settle = Effect.fn("settle")(function* (library: Library, installed: string, tag: string, dir: string) {
-  const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  if ((yield* fs.exists(dir)) && (yield* inspect(dir, library, installed, tag)).length === 0) return verified(library, tag);
-  yield* fs.makeDirectory(path.dirname(dir), { recursive: true, mode: DIRECTORY_MODE }).pipe(
-    Effect.mapError((cause) => new VendorError({ message: `cannot hold ${dir}: ${cause.message}` })),
-  );
-  const lock = `${dir}${LOCK_SUFFIX}`;
-  const waiting = Console.error(`${NAME}: waiting for ${lock}, which another run holds`);
-  return yield* withLock(lock, settleLocked(library, installed, tag, dir), waiting).pipe(
-    Effect.catchTag("LockError", (cause) => Effect.fail(new VendorError({ message: cause.message }))),
-  );
+  if (left.length > 0) {
+    return yield* new VendorError({ message: `${dir} leaves ${writableAt(dir, left, "its owner")}; ${clearing(dir)}` });
+  }
+  return `found ${writableAt(dir, writable, "its owner")}, and froze the tree again, so ${verified(library, tag)}`;
 });
 
 const vend = Effect.fn("vend")(function* (root: string, cache: string, library: Library) {
