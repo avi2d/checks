@@ -24,8 +24,13 @@ const decodeManifestJson = Schema.decodeUnknownEffect(
   ),
 );
 
+const decodeVersionJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ version: Schema.optional(Schema.String) })));
+
 const decodeManifest = (text: string, source: string) =>
   decodeManifestJson(text).pipe(Effect.mapError((cause) => new ChangelogUnreadable({ message: `${source}: ${cause.message}` })));
+
+const decodeVersion = (text: string, source: string) =>
+  decodeVersionJson(text).pipe(Effect.mapError((cause) => new ChangelogUnreadable({ message: `${source}: ${cause.message}` })));
 
 const today = DateTime.nowInCurrentZone.pipe(DateTime.withCurrentZoneLocal, Effect.map(DateTime.formatIsoDate));
 
@@ -38,7 +43,9 @@ function repositoryWebUrl(repository: string): string | undefined {
 }
 
 const versionAt = Effect.fn("versionAt")(function* (root: string, sha: string) {
-  return (yield* decodeManifest(yield* git(["show", `${sha}:${MANIFEST}`], root), `${MANIFEST} at ${sha}`)).version;
+  const blob = (yield* git(["ls-tree", "--object-only", sha, "--", MANIFEST], root)).trim();
+  if (blob === "") return undefined;
+  return (yield* decodeVersion(yield* git(["cat-file", "blob", blob], root), `${MANIFEST} at ${sha}`)).version;
 });
 
 const readBumps = Effect.fn("readBumps")(function* (root: string) {
@@ -51,6 +58,7 @@ const readBumps = Effect.fn("readBumps")(function* (root: string) {
     const [sha, date, parent] = line.split(FIELD);
     if (sha === undefined || date === undefined || parent === undefined) continue;
     const version = yield* versionAt(root, sha);
+    if (version === undefined) continue;
     if (parent === "" || (yield* versionAt(root, parent)) !== version) bumps.push({ sha, version, date });
   }
   return bumps;

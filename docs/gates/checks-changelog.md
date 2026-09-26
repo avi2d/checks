@@ -20,6 +20,7 @@ A release with no conventional commit worth listing keeps only its heading and i
 
 It reads `package.json`, `CHANGELOG.md` and the git history from the repository root.
 It finds releases in the version bumps of `package.json` across all of `HEAD` ancestry, so a checkout without tags writes the same file.
+It reads a commit whose `package.json` is missing or has no version as unversioned, so the commit that adds the version is the first release and a repository that adopts a version late still writes its changelog.
 It refuses a shallow checkout, since the releases reach back past its history.
 It refuses a `package.json` with no repository address, since each entry links its pull request under it.
 It refuses a repository address that is no `https` address once `git+`, a trailing slash and `.git` are dropped, since a pull request link needs one.
