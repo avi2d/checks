@@ -24,7 +24,7 @@ function recorded(...versions: readonly string[]): ReadonlyMap<string, string> {
 }
 
 test("a release lists its conventional commits under the template's groups, newest first, and leaves the rest out", () => {
-  const rendered = renderChangelog("widget", [{ version: "1.0.0", date: "2026-09-20", subjects: SUBJECTS }]);
+  const rendered = renderChangelog("widget", [{ version: "1.0.0", date: "2026-09-20", subjects: SUBJECTS }], "https://github.com/acme/widget");
   expect(rendered).toBe(
     [
       "# Changelog",
@@ -37,24 +37,24 @@ test("a release lists its conventional commits under the template's groups, newe
       "",
       "### Breaking changes",
       "",
-      "- **bill:** drop the legacy bill format (#5)",
+      "- **bill:** drop the legacy bill format [#5](https://github.com/acme/widget/pull/5)",
       "",
       "### Features",
       "",
-      "- **parts:** price a bill (#10)",
-      "- read a part's supplier (#2)",
+      "- **parts:** price a bill [#10](https://github.com/acme/widget/pull/10)",
+      "- read a part's supplier [#2](https://github.com/acme/widget/pull/2)",
       "",
       "### Fixes",
       "",
-      "- **parts:** keep the order of parts (#3)",
+      "- **parts:** keep the order of parts [#3](https://github.com/acme/widget/pull/3)",
       "",
       "### Performance",
       "",
-      "- **parts:** index parts by supplier (#7)",
+      "- **parts:** index parts by supplier [#7](https://github.com/acme/widget/pull/7)",
       "",
       "### Reverts",
       "",
-      "- read a part's supplier (#8)",
+      "- read a part's supplier [#8](https://github.com/acme/widget/pull/8)",
       "",
     ].join("\n"),
   );
@@ -114,15 +114,19 @@ test("the release being prepared covers everything past every release and keeps 
 });
 
 test("a release with no conventional commit worth listing is its heading and its date", () => {
-  const rendered = renderChangelog("widget", [{ version: "0.1.0", date: "2026-09-20", subjects: ["docs: say why", "chore: tidy"] }]);
+  const rendered = renderChangelog("widget", [{ version: "0.1.0", date: "2026-09-20", subjects: ["docs: say why", "chore: tidy"] }], "https://github.com/acme/widget");
   expect(rendered.split("\n").slice(4)).toEqual(["## 0.1.0", "", "Released 2026-09-20.", ""]);
 });
 
 test("the dates a changelog already carries read back by version, so regenerating it keeps them", () => {
-  const rendered = renderChangelog("widget", [
-    { version: "0.2.0", date: "2026-09-21", subjects: ["feat: price a bill"] },
-    { version: "0.1.0", date: "2026-09-02", subjects: [] },
-  ]);
+  const rendered = renderChangelog(
+    "widget",
+    [
+      { version: "0.2.0", date: "2026-09-21", subjects: ["feat: price a bill"] },
+      { version: "0.1.0", date: "2026-09-02", subjects: [] },
+    ],
+    "https://github.com/acme/widget",
+  );
   expect([...releaseDates(rendered)]).toEqual([
     ["0.2.0", "2026-09-21"],
     ["0.1.0", "2026-09-02"],
@@ -130,9 +134,13 @@ test("the dates a changelog already carries read back by version, so regeneratin
 });
 
 test("a rendered changelog holds to the changelog template checks-docs holds it to", () => {
-  const rendered = renderChangelog("widget", [
-    { version: "0.2.0", date: "2026-09-20", subjects: SUBJECTS.slice(0, 7) },
-    { version: "0.1.0", date: "2026-09-03", subjects: SUBJECTS.slice(7) },
-  ]);
+  const rendered = renderChangelog(
+    "widget",
+    [
+      { version: "0.2.0", date: "2026-09-20", subjects: SUBJECTS.slice(0, 7) },
+      { version: "0.1.0", date: "2026-09-03", subjects: SUBJECTS.slice(7) },
+    ],
+    "https://github.com/acme/widget",
+  );
   expect(judge("changelog", { path: "CHANGELOG.md", text: rendered }, [])).toEqual([]);
 });

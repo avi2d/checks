@@ -37,11 +37,12 @@ const GROUP_OF_TYPE = new Map<string, ChangeGroup>([
 
 // Only the subject is linted, and a squash merge's body is its branch's commit messages,
 // so a breaking change is read from the subject's `!` and never from a footer.
-function entryOf(subject: string): Entry | undefined {
+function entryOf(subject: string, repositoryUrl: string): Entry | undefined {
   const [, type = "", scope = "", breaking, description = ""] = CONVENTIONAL.exec(subject) ?? [];
   const group = breaking === "!" ? "Breaking changes" : GROUP_OF_TYPE.get(type);
   if (group === undefined) return undefined;
-  return { group, text: scope === "" ? description : `**${scope}:** ${description}` };
+  const linkedDescription = description.replace(/ \(#(\d+)\)$/, (_, number: string) => ` [#${number}](${repositoryUrl}/pull/${number})`);
+  return { group, text: scope === "" ? linkedDescription : `**${scope}:** ${linkedDescription}` };
 }
 
 // A bump not newer than the release before it is a revert: it cancels every release above the version it
@@ -76,8 +77,8 @@ export function cuts(
   }));
 }
 
-function renderRelease({ version, date, subjects }: Release): readonly string[] {
-  const entries = subjects.flatMap((subject) => entryOf(subject) ?? []);
+function renderRelease({ version, date, subjects }: Release, repositoryUrl: string): readonly string[] {
+  const entries = subjects.flatMap((subject) => entryOf(subject, repositoryUrl) ?? []);
   const groups = CHANGE_GROUPS.flatMap((group) => {
     const listed = entries.filter((entry) => entry.group === group).map(({ text }) => `- ${text}`);
     return listed.length === 0 ? [] : [`### ${group}`, listed.join("\n")];
@@ -85,11 +86,11 @@ function renderRelease({ version, date, subjects }: Release): readonly string[] 
   return [`## ${version}`, `Released ${date}.`, ...groups];
 }
 
-export function renderChangelog(name: string, found: readonly Release[]): string {
+export function renderChangelog(name: string, found: readonly Release[], repositoryUrl: string): string {
   const blocks = [
     "# Changelog",
     `Every release of \`${name}\`, newest first, written by the release from its conventional commits.`,
-    ...found.flatMap(renderRelease),
+    ...found.flatMap((release) => renderRelease(release, repositoryUrl)),
   ];
   return `${blocks.join("\n\n")}\n`;
 }

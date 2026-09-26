@@ -51,7 +51,9 @@ To release a version:
    ```
 
 1. Watch the `release` workflow.
-   It refuses a tag off `main` or one that disagrees with `package.json`, and reruns the build, the check that the build changed no committed file, lint, typecheck and the suite before it publishes.
+   It refuses a tag off `main` or one that disagrees with `package.json`.
+   It reruns the build, the check that the build changed no committed file, lint, typecheck and the suite before it publishes to npm.
+   After npm publish succeeds, the workflow creates or updates the GitHub release with the matching `CHANGELOG.md` section.
 
 `publishConfig.access` in `package.json` is what makes the scoped package public.
 npm attaches a trusted publisher only to a package that already exists, so a package's first version goes out by hand.
