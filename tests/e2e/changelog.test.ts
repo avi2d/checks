@@ -100,6 +100,26 @@ test(
 );
 
 test(
+  "a commit that adds package.json with its version releases everything before it",
+  async () => {
+    await initRepo();
+    await commit("feat: build a bill (#1)");
+    await commit("fix: keep the order of parts (#2)");
+    await bump("0.1.0");
+    await rewritten(1);
+    await rm(join(dir, "CHANGELOG.md"));
+    await commit("chore: add package.json (#3)");
+
+    expect(await rewritten(1)).toBe(
+      written(
+        section("0.1.0", "2026-09-01", ["Features", "build a bill [#1](https://github.com/acme/widget/pull/1)"], ["Fixes", "keep the order of parts [#2](https://github.com/acme/widget/pull/2)"]),
+      ),
+    );
+  },
+  { timeout: 30_000 },
+);
+
+test(
   "a clone without the tags writes the changelog the tagged checkout writes",
   async () => {
     await initRepo();
