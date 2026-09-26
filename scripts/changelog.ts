@@ -82,6 +82,24 @@ export function cuts(
   }));
 }
 
+export function hasEntries(subjects: readonly string[]): boolean {
+  return subjects.some((subject) => groupOf(subject) !== undefined);
+}
+
+export function compactReleases(releases: readonly Release[]): readonly Release[] {
+  const kept: Release[] = [];
+  let carried: readonly string[] = [];
+  for (const release of releases) {
+    if (!hasEntries(release.subjects)) {
+      carried = [...release.subjects, ...carried];
+      continue;
+    }
+    kept.push(carried.length === 0 ? release : { ...release, subjects: [...release.subjects, ...carried] });
+    carried = [];
+  }
+  return kept;
+}
+
 function renderRelease({ version, date, subjects }: Release, repositoryUrl: string): readonly string[] {
   const entries = subjects.flatMap((subject) => entryOf(subject, repositoryUrl) ?? []);
   const groups = CHANGE_GROUPS.flatMap((group) => {
@@ -92,10 +110,11 @@ function renderRelease({ version, date, subjects }: Release, repositoryUrl: stri
 }
 
 export function renderChangelog(name: string, found: readonly Release[], repositoryUrl: string): string {
+  const listed = found.filter((release) => hasEntries(release.subjects));
   const blocks = [
     "# Changelog",
     `Every release of \`${name}\`, newest first, written by the release from its conventional commits.`,
-    ...found.flatMap((release) => renderRelease(release, repositoryUrl)),
+    ...listed.flatMap((release) => renderRelease(release, repositoryUrl)),
   ];
   return `${blocks.join("\n\n")}\n`;
 }
