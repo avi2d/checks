@@ -65,7 +65,9 @@ export function plainCommand(script: string): Command | undefined {
 }
 
 export function invokes(command: Command | undefined, gate: Command): boolean {
-  return command !== undefined && gate.length <= command.length && gate.every((word, index) => command[index] === word);
+  if (command === undefined) return false;
+  const begins = (words: Command) => gate.length <= words.length && gate.every((word, index) => words[index] === word);
+  return begins(command) || (command[0] === "bun" && command[1] === "run" && begins(command.slice(2)));
 }
 
 export function mentions(script: string, gate: Command): boolean {

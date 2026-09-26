@@ -97,7 +97,7 @@ const OWN_COMMITLINT_CONFIG = "./commitlint.config.js";
 const KIT_COMMITLINT_CONFIG = "./node_modules/@avi2dg/checks/commitlint.config.js";
 
 function titleLint(commitlintConfig: string): string {
-  return `./node_modules/.bin/commitlint --config ${commitlintConfig} --edit "$RUNNER_TEMP/pr-title"`;
+  return `bun run ./node_modules/.bin/commitlint --config ${commitlintConfig} --edit "$RUNNER_TEMP/pr-title"`;
 }
 
 function runsInTitleLint(gate: string, commitlintConfig: string): boolean {

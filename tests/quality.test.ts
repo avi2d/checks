@@ -52,7 +52,7 @@ test("each fragment holds the declared paths under the kit's presets, and the ex
 
 const KIT_CONFIG = "./node_modules/@avi2dg/checks/commitlint.config.js";
 const INSTALL = "bun install --frozen-lockfile";
-const TITLE_LINT = `./node_modules/.bin/commitlint --config ${KIT_CONFIG} --edit "$RUNNER_TEMP/pr-title"`;
+const TITLE_LINT = `bun run ./node_modules/.bin/commitlint --config ${KIT_CONFIG} --edit "$RUNNER_TEMP/pr-title"`;
 
 test("the suite workflow runs the declared gates in order after a frozen install, on pushes to the default branch", () => {
   const workflow = parseWorkflow(suiteWorkflow("main", ["bun run build", "git diff --exit-code", "bun run lint"], true, false, undefined));
@@ -143,7 +143,7 @@ test("without gates.ci only the title lint is generated", () => {
   const generated = workflowsFor({}, { commitlintConfig: "./commitlint.config.js", bunVersionFile: true, nodeVersionFile: false });
   expect(generated.map((workflow) => workflow.file)).toEqual([".github/workflows/commitlint.yml"]);
   expect(runs(parseWorkflow(generated[0]?.content ?? "")).at(-1)).toBe(
-    './node_modules/.bin/commitlint --config ./commitlint.config.js --edit "$RUNNER_TEMP/pr-title"',
+    'bun run ./node_modules/.bin/commitlint --config ./commitlint.config.js --edit "$RUNNER_TEMP/pr-title"',
   );
 });
 
