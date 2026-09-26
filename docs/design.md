@@ -34,7 +34,8 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   A section keeps the date it was written with, since the squash merge that lands the release commit may fall on another day.
   Entries come from commit subjects, the squash-merged pull request titles commitlint holds to the conventional format.
   The bodies are the branch's own messages, which nothing lints.
-  The release path needs no `contents: write`: the changelog arrives in the release commit's pull request, not from a workflow that pushes.
+  The changelog still arrives in the release commit's pull request, not from a workflow that pushes.
+  The release path writes to the repository only through the `github-release` job's `contents: write`, which creates or updates the GitHub release from the tag's `CHANGELOG.md` section.
 - Workflow YAML owns CI execution, and `checks-ci-wiring` derives required steps from kit rules and the package scripts.
   Oxlint and TypeScript read their own overrides directly, so the consumer can change a rule where its tool reads it.
   The Effect scopes occur in two native files, and the installed consumer test checks both independently.
