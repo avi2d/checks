@@ -51,7 +51,6 @@ Reproduce a failing run with bun test --randomize --seed=<seed>.
 ## Opting out
 
 Nothing runs it but a schedule the repository writes.
-A repository that stops scheduling it also drops it from `gates.scheduled`, which `checks-ci-wiring` otherwise fails on.
 
 ## Running it on a schedule
 
@@ -75,15 +74,6 @@ jobs:
         with:
           name: flake-report
           path: flake-report.json
-```
-
-It declares the step in `gates.scheduled`, so `checks-ci-wiring` fails once the schedule stops running it:
-
-```json
-"gates": {
-  "ci": ["bun run lint", "bun run typecheck", "bun run test"],
-  "scheduled": ["bunx checks-flake --runs 10 --report flake-report.json"]
-}
 ```
 
 ## Related topics
