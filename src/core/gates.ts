@@ -10,7 +10,21 @@ type TrackedContent = {
 
 export const EVERY_REPOSITORY = "every repository";
 
+export const VECTORS = ["complexity", "quality", "tests", "docs", "delivery", "dependencies"] as const;
+
+export type Vector = (typeof VECTORS)[number];
+
+const VECTOR_DIRECTORIES = {
+  complexity: "complexity",
+  quality: "quality",
+  tests: "testing",
+  docs: "docs",
+  delivery: "delivery",
+  dependencies: "dependencies",
+} as const satisfies Record<Vector, string>;
+
 export type KitGate = Program & {
+  readonly vector: Vector;
   readonly reads: "tree" | "range";
   readonly args?: readonly string[];
   readonly appliesTo: typeof EVERY_REPOSITORY | TrackedContent;
@@ -24,14 +38,18 @@ export const DEFAULT_BRANCH = "main";
 
 const TYPESCRIPT_SOURCE: TrackedContent = { pathspecs: ["*.ts", "*.tsx"], content: "TypeScript source" };
 
+function inVector(vector: Vector, file: string): Pick<KitGate, "vector" | "script"> {
+  return { vector, script: `${VECTOR_DIRECTORIES[vector]}/${file}` };
+}
+
 export const KIT_GATES = [
-  { bin: "checks-lint-coverage", script: "quality/lint-coverage.sh", reads: "tree", appliesTo: TYPESCRIPT_SOURCE },
-  { bin: "checks-test-layout", script: "testing/test-layout.ts", reads: "tree", appliesTo: TYPESCRIPT_SOURCE },
-  { bin: "checks-commit-identity", script: "delivery/commit-identity.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
-  { bin: "checks-comment-gate", script: "quality/comment-gate.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
-  { bin: "checks-suppressions-ratchet", script: "complexity/suppressions-ratchet.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
-  { bin: "checks-ci-wiring", script: "delivery/ci-wiring.ts", reads: "tree", appliesTo: EVERY_REPOSITORY },
-  { bin: "checks-docs", script: "docs/docs.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
-  { bin: "checks-repetition", script: "complexity/repetition.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE },
-  { bin: "checks-quarantine-clock", script: "testing/quarantine-clock.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
+  { bin: "checks-suppressions-ratchet", ...inVector("complexity", "suppressions-ratchet.ts"), reads: "range", appliesTo: EVERY_REPOSITORY },
+  { bin: "checks-repetition", ...inVector("complexity", "repetition.ts"), reads: "range", appliesTo: TYPESCRIPT_SOURCE },
+  { bin: "checks-lint-coverage", ...inVector("quality", "lint-coverage.sh"), reads: "tree", appliesTo: TYPESCRIPT_SOURCE },
+  { bin: "checks-comment-gate", ...inVector("quality", "comment-gate.ts"), reads: "range", appliesTo: EVERY_REPOSITORY },
+  { bin: "checks-test-layout", ...inVector("tests", "test-layout.ts"), reads: "tree", appliesTo: TYPESCRIPT_SOURCE },
+  { bin: "checks-quarantine-clock", ...inVector("tests", "quarantine-clock.ts"), reads: "range", appliesTo: EVERY_REPOSITORY },
+  { bin: "checks-docs", ...inVector("docs", "docs.ts"), reads: "range", appliesTo: EVERY_REPOSITORY },
+  { bin: "checks-commit-identity", ...inVector("delivery", "commit-identity.ts"), reads: "range", appliesTo: EVERY_REPOSITORY },
+  { bin: "checks-ci-wiring", ...inVector("delivery", "ci-wiring.ts"), reads: "tree", appliesTo: EVERY_REPOSITORY },
 ] as const satisfies readonly KitGate[];

@@ -150,11 +150,11 @@ const GATES: Block = {
   name: "gates",
   from: ["KIT_GATES in src/core/gates.ts"],
   render: () => [
-    "| Gate | Reads | Runs in |",
-    "| --- | --- | --- |",
-    ...KIT_GATES.map(({ bin, reads, appliesTo }) => {
+    "| Vector | Gate | Reads | Runs in |",
+    "| --- | --- | --- | --- |",
+    ...KIT_GATES.map(({ vector, bin, reads, appliesTo }) => {
       const runsIn = appliesTo === EVERY_REPOSITORY ? appliesTo : `a repository tracking ${appliesTo.pathspecs.map(code).join(" or ")}`;
-      return `| [${code(bin)}](${GATE_PAGES}/${bin}.md) | ${READS[reads]} | ${runsIn} |`;
+      return `| ${vector} | [${code(bin)}](${GATE_PAGES}/${bin}.md) | ${READS[reads]} | ${runsIn} |`;
     }),
   ],
 };

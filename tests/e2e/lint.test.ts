@@ -48,7 +48,7 @@ test("a pushed tip runs every range gate and names each failure", async () => {
   await $`git update-ref refs/remotes/origin/main HEAD`.cwd(repo.dir).quiet();
   const red = await lint(repo);
   expect(red.text).toContain(`checks-lint: tip ${tip} from HEAD against origin/main`);
-  expect(red.text).toContain("checks-commit-identity, checks-comment-gate, checks-suppressions-ratchet");
+  expect(red.text).toContain("checks-suppressions-ratchet, checks-comment-gate, checks-commit-identity");
   expect(red.exitCode).toBe(1);
 }, 60_000);
 

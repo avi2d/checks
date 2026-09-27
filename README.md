@@ -102,20 +102,21 @@ Add a pull request title lint step in another workflow using `./node_modules/.bi
 
 `checks-lint` runs these gates in this order, each over the working tree or over the range it resolves, and names every one that fails.
 `checks-lint` runs every applicable gate, including the TypeScript gates once the repository tracks TypeScript.
+Each gate belongs to the vector it judges a repository on, and the gates run grouped by vector.
 
 <!-- generated gates: bun run build writes it from KIT_GATES in src/core/gates.ts and scripts/doc-blocks.ts -->
 
-| Gate | Reads | Runs in |
-| --- | --- | --- |
-| [`checks-lint-coverage`](docs/gates/checks-lint-coverage.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
-| [`checks-test-layout`](docs/gates/checks-test-layout.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
-| [`checks-commit-identity`](docs/gates/checks-commit-identity.md) | the range | every repository |
-| [`checks-comment-gate`](docs/gates/checks-comment-gate.md) | the range | every repository |
-| [`checks-suppressions-ratchet`](docs/gates/checks-suppressions-ratchet.md) | the range | every repository |
-| [`checks-ci-wiring`](docs/gates/checks-ci-wiring.md) | the working tree | every repository |
-| [`checks-docs`](docs/gates/checks-docs.md) | the range | every repository |
-| [`checks-repetition`](docs/gates/checks-repetition.md) | the range | a repository tracking `*.ts` or `*.tsx` |
-| [`checks-quarantine-clock`](docs/gates/checks-quarantine-clock.md) | the range | every repository |
+| Vector | Gate | Reads | Runs in |
+| --- | --- | --- | --- |
+| complexity | [`checks-suppressions-ratchet`](docs/gates/checks-suppressions-ratchet.md) | the range | every repository |
+| complexity | [`checks-repetition`](docs/gates/checks-repetition.md) | the range | a repository tracking `*.ts` or `*.tsx` |
+| quality | [`checks-lint-coverage`](docs/gates/checks-lint-coverage.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
+| quality | [`checks-comment-gate`](docs/gates/checks-comment-gate.md) | the range | every repository |
+| tests | [`checks-test-layout`](docs/gates/checks-test-layout.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
+| tests | [`checks-quarantine-clock`](docs/gates/checks-quarantine-clock.md) | the range | every repository |
+| docs | [`checks-docs`](docs/gates/checks-docs.md) | the range | every repository |
+| delivery | [`checks-commit-identity`](docs/gates/checks-commit-identity.md) | the range | every repository |
+| delivery | [`checks-ci-wiring`](docs/gates/checks-ci-wiring.md) | the working tree | every repository |
 
 <!-- end generated gates -->
 
