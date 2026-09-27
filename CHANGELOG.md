@@ -2,6 +2,23 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.27.0
+
+Released 2026-09-27.
+
+### Breaking changes
+
+- **quality:** add data-shape oxlint plugin for readonly params and schema twins [#96](https://github.com/avi2d/checks/pull/96)
+- ship stricter type gates for any, optional keys, process.env and ts-reset [#94](https://github.com/avi2d/checks/pull/94)
+
+### Features
+
+- **docs:** check agent files, vanished names and reports about the past [#95](https://github.com/avi2d/checks/pull/95)
+
+### Fixes
+
+- describe the kit without naming its owner in the package description [#91](https://github.com/avi2d/checks/pull/91)
+
 ## 0.26.0
 
 Released 2026-09-27.
