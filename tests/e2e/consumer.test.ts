@@ -115,10 +115,8 @@ async function writeOxlintrc(own: Readonly<Record<string, unknown>> = {}): Promi
 
 async function writeWidgetRepo(testFile: string, widget: string): Promise<void> {
   await writeFile(join(dir, "bunfig.toml"), UNVENDORED_BUNFIG);
-  await writeFile(
-    join(dir, "tsconfig.json"),
-    JSON.stringify({ compilerOptions: { module: "preserve", moduleResolution: "bundler", allowImportingTsExtensions: true, noEmit: true, strict: true, types: ["bun"] } }),
-  );
+  const compilerOptions = { module: "preserve", moduleResolution: "bundler", allowImportingTsExtensions: true, noEmit: true, strict: true, types: ["bun"] };
+  await writeFile(join(dir, "tsconfig.json"), JSON.stringify({ extends: "@avi2dg/checks/tsconfig.effect.json", compilerOptions }));
   await writeFile(join(dir, "widget.ts"), WIDGET);
   await mkdir(dirname(join(dir, testFile)), { recursive: true });
   await writeFile(join(dir, testFile), widgetTest(widget));
@@ -309,9 +307,7 @@ test(
 
     const red = await oxlint();
     expect(red.exitCode).not.toBe(0);
-    for (const rule of ["no-unsafe-assignment", "no-unsafe-member-access", "no-unsafe-return"]) {
-      expect(red.text).toContain(`typescript(${rule})`);
-    }
+    for (const rule of ["no-unsafe-assignment", "no-unsafe-member-access", "no-unsafe-return"]) expect(red.text).toContain(`typescript(${rule})`);
     expect(red.text).toContain("src/names.ts");
     expect(red.text).not.toContain("names.test.ts");
 
@@ -375,32 +371,16 @@ test(
       "./templates/*",
       "./tsconfig.effect.json",
     ]);
-    const targets = Object.values(manifest.exports);
-    expect(targets.length).toBeGreaterThan(0);
-    for (const target of targets) {
-      if (target.endsWith("/*")) {
-        expect(existsSync(join(installed, target.slice(0, -1).concat("readme.md")))).toBe(true);
-      } else {
-        expect(existsSync(join(installed, target))).toBe(true);
-      }
-    }
     const resolved = Object.entries(manifest.exports).map(([key, target]) => {
       const specifier = key.endsWith("/*") ? `${manifest.name}${key.slice(1, -1)}readme.md` : `${manifest.name}${key.slice(1)}`;
       const file = target.endsWith("/*") ? join(installed, target.slice(0, -1).concat("readme.md")) : join(installed, target);
       return [key, realpathSync(Bun.resolveSync(specifier, dir)) === realpathSync(file)];
     });
     expect(resolved.filter(([, found]) => !found)).toEqual([]);
-    expect(existsSync(join(installed, "dist", "templates", "readme.md"))).toBe(true);
-    expect(existsSync(join(installed, "src", "quality", "presets", "effect.oxlint.json"))).toBe(true);
-    expect(existsSync(join(installed, "templates"))).toBe(false);
-    expect(existsSync(join(installed, "presets"))).toBe(false);
-    expect(existsSync(join(installed, "LICENSE"))).toBe(true);
-    expect(existsSync(join(installed, "CHANGELOG.md"))).toBe(true);
-    expect(existsSync(join(installed, "knip-base.json"))).toBe(true);
-    expect(existsSync(join(installed, "src", "quality", "effect-channel"))).toBe(false);
-    expect(existsSync(join(installed, "src", "complexity", "readability"))).toBe(false);
-    expect(existsSync(join(installed, "tests"))).toBe(false);
-    expect(existsSync(join(installed, "AGENTS.md"))).toBe(false);
+    const shipped = ["ts-reset.d.ts", "dist/templates/readme.md", "src/quality/presets/effect.oxlint.json", "LICENSE", "CHANGELOG.md", "knip-base.json"];
+    const unshipped = ["templates", "presets", "src/quality/effect-channel", "src/complexity/readability", "tests", "AGENTS.md"];
+    expect(shipped.filter((path) => !existsSync(join(installed, path)))).toEqual([]);
+    expect(unshipped.filter((path) => existsSync(join(installed, path)))).toEqual([]);
 
     await writeWidgetRepo("tests/unit/widget.test.ts", "../../widget.ts");
 
@@ -418,6 +398,30 @@ test(
     expect(red.exitCode).not.toBe(0);
     expect(red.text).toContain("plant.ts");
     expect(red.text).toContain("effect-channel(no-error-channel-escape)");
+  },
+  180_000,
+);
+
+const RESET_LEAKS = `export const port: number = JSON.parse("8080");\nexport const first = (value: unknown): string => (Array.isArray(value) ? value[0] : "");\n`;
+const RESET_CHECKED = `export const port = Number(JSON.parse("8080"));\nexport const first = (value: unknown): string => (Array.isArray(value) && typeof value[0] === "string" ? value[0] : "");\n`;
+
+test(
+  "packed-tarball consumer with its own include fails tsc on an Array.isArray and a JSON.parse leak, passes once each is checked",
+  async () => {
+    await useConsumer("tarball");
+    const compilerOptions = { strict: true, noEmit: true, module: "preserve", moduleResolution: "bundler" };
+    await writeFile(join(dir, "tsconfig.json"), JSON.stringify({ extends: "@avi2dg/checks/tsconfig.effect.json", compilerOptions, include: ["src"] }));
+    await mkdir(join(dir, "src"));
+    await writeFile(join(dir, "src", "leaks.ts"), RESET_LEAKS);
+    const tsc = (): Promise<Ran> => ran($`${join(dir, "node_modules", ".bin", "tsc")}`.cwd(dir));
+
+    const red = await tsc();
+    expect(red.text).toContain("src/leaks.ts(1,14): error TS2322: Type 'unknown' is not assignable to type 'number'.");
+    expect(red.text).toMatch(/src\/leaks\.ts\(2,\d+\): error TS2322: Type 'unknown' is not assignable to type 'string'\./);
+    expect(red.exitCode).not.toBe(0);
+
+    await writeFile(join(dir, "src", "leaks.ts"), RESET_CHECKED);
+    expect(await tsc()).toEqual({ exitCode: 0, text: "" });
   },
   180_000,
 );
@@ -481,14 +485,9 @@ test(
     const manifest = Schema.decodeSync(Manifest)(await readFile(join(CHECKOUT, "package.json"), "utf8"));
     const bins = Object.keys(manifest.bin);
     expect(bins).toContain("checks-ci-wiring");
-    for (const bin of bins) {
-      expect(existsSync(join(dir, "node_modules", ".bin", bin))).toBe(true);
-    }
+    expect(bins.filter((bin) => !existsSync(join(dir, "node_modules", ".bin", bin)))).toEqual([]);
 
-    await writeFile(
-      join(dir, "mutation.json"),
-      await readFile(join(CHECKOUT, "tests", "fixtures", "mutation-compare", "base.json"), "utf8"),
-    );
+    await writeFile(join(dir, "mutation.json"), await readFile(join(CHECKOUT, "tests/fixtures/mutation-compare/base.json"), "utf8"));
 
     await writeWidgetRepo("tests/unit/widget.test.ts", "../../widget.ts");
     await commitAll("feat: base");
@@ -497,6 +496,7 @@ test(
 
     const lint = await runScript("lint");
     expect(lint.text).toContain("tracked .ts/.tsx files");
+    expect(lint.text).toContain("holds the ts-reset rules is-array and json-parse");
     expect(lint.text).toContain("satisfy the layout");
     expect(lint.text).toContain("carry only allowed identities");
     expect(lint.exitCode).toBe(0);

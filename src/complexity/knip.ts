@@ -27,7 +27,7 @@ const hasKnipConfig = Effect.fn("hasKnipConfig")(function* (root: string) {
   const manifest: unknown = yield* fs.readFileString(path.join(root, "package.json")).pipe(
     Effect.flatMap((text) =>
       Effect.try({
-        try: () => JSON.parse(text) as unknown,
+        try: () => JSON.parse(text),
         catch: () => new KnipError({ message: "package.json does not parse as JSON" }),
       })
     ),

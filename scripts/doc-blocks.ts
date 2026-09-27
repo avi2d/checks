@@ -39,6 +39,7 @@ const SHIPPED = {
   "oxlintrc.json": "the oxlint base config `.oxlintrc.json` extends",
   "stryker.preset.js": "the Stryker mutation-testing preset",
   "tsconfig.effect.json": "the tsconfig fragment with the shared compiler options and the Effect language-service block",
+  "ts-reset.d.ts": "the two ts-reset rules `tsconfig.effect.json` lists in `files`",
   "dist/": "the compiled oxlint plugins and the doc templates, one template per kind of doc file",
 } as const;
 

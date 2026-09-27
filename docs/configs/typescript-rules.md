@@ -52,6 +52,19 @@ A consumer inherits the override through `extends`, and a file under `tests/` an
 - `erasableSyntaxOnly` refuses TypeScript syntax that does not erase to JavaScript, such as an `enum` or a parameter property.
 - `exactOptionalPropertyTypes` refuses `undefined` as the value of an optional property whose type does not name `undefined`, so a type derived from a `Schema.optionalKey` field accepts only a missing key, as the schema does.
 
+## ts-reset rules
+
+`tsconfig.effect.json` lists the kit's `ts-reset.d.ts` in `files`, and that file loads two rules of `@total-typescript/ts-reset`, a dependency of the kit:
+
+- `is-array` types the array `Array.isArray` narrows a value to as `unknown[]` rather than `any[]`.
+- `json-parse` types the value `JSON.parse` returns as `unknown` rather than `any`.
+
+tsc then refuses code that uses either value as a type it has not checked.
+The fragment also sets `include` to every file under the directory of the repository's `tsconfig.json` and to `ts-reset.d.ts`.
+A repository whose `tsconfig.json` sets `include` or `files` but not both keeps both rules.
+A repository that sets only `files` also gets every file under that directory in its program.
+A repository that sets both `files` and `include` drops both rules, and `checks-lint-coverage` fails it.
+
 ## Related topics
 
 - [The Effect rules](effect-rules.md)
