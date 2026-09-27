@@ -33,6 +33,18 @@ Without the flag, oxlint skips them and reports nothing about them.
 - `typescript/no-unsafe-type-assertion` refuses an `as` that narrows a value to a type the compiler cannot prove.
 - `typescript/no-deprecated` refuses a use of a symbol whose declaration carries a `@deprecated` tag, in the repository's own code or in a package's types, and repeats the tag's text.
 
+## Rules outside tests
+
+An override in `oxlintrc.json` turns on these type-aware rules in each `.ts` and `.tsx` file outside `tests/`:
+
+- `typescript/no-unsafe-assignment` refuses assigning an `any` value to a variable, a property or a destructured name.
+- `typescript/no-unsafe-member-access` refuses reading a member of an `any` value.
+- `typescript/no-unsafe-argument` refuses passing an `any` value to a parameter of another type.
+- `typescript/no-unsafe-return` refuses returning an `any` value from a function, unless the function returns `unknown`.
+- `typescript/no-unsafe-call` refuses calling an `any` value.
+
+A consumer inherits the override through `extends`, and a file under `tests/` answers to none of the five.
+
 ## Related topics
 
 - [The Effect rules](effect-rules.md)

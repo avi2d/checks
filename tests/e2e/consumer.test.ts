@@ -52,6 +52,7 @@ function manifestFor(checks: string): Record<string, unknown> {
       effect: "4.0.0-rc.115",
       oxlint: "1.83.0",
       "@swc/core": "1.16.2",
+      "@types/bun": "1.4.2",
     },
   };
 }
@@ -94,21 +95,30 @@ async function useConsumer(kind: Kind, manifest: Record<string, unknown> = {}): 
   await resetWorkspace(dir);
   const checks = kind === "file" ? `file:${CHECKOUT}` : `file:${tarballPath}`;
   await writeFile(join(dir, "package.json"), JSON.stringify({ ...manifestFor(checks), ...manifest }));
+  await writeOxlintrc();
+  // oxlint honours .gitignore but not ignorePatterns for node_modules,
+  // so the fixture carries the same node_modules/ entry a real consumer has.
+  await writeFile(join(dir, ".gitignore"), "node_modules/\n");
+}
+
+async function writeOxlintrc(own: Readonly<Record<string, unknown>> = {}): Promise<void> {
   await writeFile(
     join(dir, ".oxlintrc.json"),
     JSON.stringify({
       extends: ["./node_modules/@avi2dg/checks/oxlintrc.json"],
       // oxlint's plugins do not inherit through extends, so the consumer restates them.
       plugins: ["typescript", "oxc", "eslint", "import"],
+      ...own,
     }),
   );
-  // oxlint honours .gitignore but not ignorePatterns for node_modules,
-  // so the fixture carries the same node_modules/ entry a real consumer has.
-  await writeFile(join(dir, ".gitignore"), "node_modules/\n");
 }
 
 async function writeWidgetRepo(testFile: string, widget: string): Promise<void> {
   await writeFile(join(dir, "bunfig.toml"), UNVENDORED_BUNFIG);
+  await writeFile(
+    join(dir, "tsconfig.json"),
+    JSON.stringify({ compilerOptions: { module: "preserve", moduleResolution: "bundler", allowImportingTsExtensions: true, noEmit: true, strict: true, types: ["bun"] } }),
+  );
   await writeFile(join(dir, "widget.ts"), WIDGET);
   await mkdir(dirname(join(dir, testFile)), { recursive: true });
   await writeFile(join(dir, testFile), widgetTest(widget));
@@ -154,19 +164,9 @@ test(
   "file: consumer that turns on no-throw and no-try-catch for src/ goes red on each, green once removed",
   async () => {
     await useConsumer("file");
-    await writeFile(
-      join(dir, ".oxlintrc.json"),
-      JSON.stringify({
-        extends: ["./node_modules/@avi2dg/checks/oxlintrc.json"],
-        plugins: ["typescript", "oxc", "eslint", "import"],
-        overrides: [
-          {
-            files: ["src/**"],
-            rules: { "effect-channel/no-throw": "error", "effect-channel/no-try-catch": "error" },
-          },
-        ],
-      }),
-    );
+    await writeOxlintrc({
+      overrides: [{ files: ["src/**"], rules: { "effect-channel/no-throw": "error", "effect-channel/no-try-catch": "error" } }],
+    });
     await mkdir(join(dir, "src"));
     await mkdir(join(dir, "scripts"));
     const load = join(dir, "src", "load.ts");
@@ -241,14 +241,7 @@ test(
   "file: consumer goes red on a tangled function under cognitive-complexity, green once it is flattened",
   async () => {
     await useConsumer("file");
-    await writeFile(
-      join(dir, ".oxlintrc.json"),
-      JSON.stringify({
-        extends: ["./node_modules/@avi2dg/checks/oxlintrc.json"],
-        plugins: ["typescript", "oxc", "eslint", "import"],
-        rules: { "readability/cognitive-complexity": ["error", { max: 15 }] },
-      }),
-    );
+    await writeOxlintrc({ rules: { "readability/cognitive-complexity": ["error", { max: 15 }] } });
     await writeFile(join(dir, "settle.js"), TANGLED_SETTLE);
 
     const red = await oxlint();
@@ -296,6 +289,36 @@ test(
     expect(red.text).toContain("caller.ts");
 
     await writeFile(join(dir, "caller.ts"), `import { fresh } from "./legacy";\n\nexport const value = fresh();\n`);
+    const green = await oxlint();
+    expect(green.exitCode).toBe(0);
+  },
+  180_000,
+);
+
+const ANY_LEAK = `export function firstName(text: string): string {\n  const parsed = JSON.parse(text);\n  return parsed.name;\n}\n`;
+
+test(
+  "file: consumer goes red on an any leak in production under no-unsafe-*, silent on the same leak in tests/",
+  async () => {
+    await useConsumer("file");
+    await writeFile(join(dir, "tsconfig.json"), JSON.stringify({ compilerOptions: { strict: true }, include: ["src", "tests"] }));
+    await mkdir(join(dir, "src"));
+    await mkdir(join(dir, "tests", "unit"), { recursive: true });
+    await writeFile(join(dir, "src", "names.ts"), ANY_LEAK);
+    await writeFile(join(dir, "tests", "unit", "names.test.ts"), ANY_LEAK);
+
+    const red = await oxlint();
+    expect(red.exitCode).not.toBe(0);
+    for (const rule of ["no-unsafe-assignment", "no-unsafe-member-access", "no-unsafe-return"]) {
+      expect(red.text).toContain(`typescript(${rule})`);
+    }
+    expect(red.text).toContain("src/names.ts");
+    expect(red.text).not.toContain("names.test.ts");
+
+    await writeFile(
+      join(dir, "src", "names.ts"),
+      `export function firstName(text: string): unknown {\n  const parsed: unknown = JSON.parse(text);\n  return typeof parsed === "object" && parsed !== null && "name" in parsed ? parsed.name : undefined;\n}\n`,
+    );
     const green = await oxlint();
     expect(green.exitCode).toBe(0);
   },
@@ -549,18 +572,13 @@ test(
   "packed-tarball consumer uses native Effect overrides without generated fragments",
   async () => {
     await useConsumer("tarball");
-    await writeFile(
-      join(dir, ".oxlintrc.json"),
-      JSON.stringify({
-        extends: ["./node_modules/@avi2dg/checks/oxlintrc.json"],
-        plugins: ["typescript", "oxc", "eslint", "import"],
-        overrides: [{
-          files: ["src/**/*.ts"],
-          plugins: ["typescript", "oxc", "eslint", "import", "node", "promise", "unicorn"],
-          rules: { "effect-channel/no-throw": "error", "effect-channel/no-try-catch": "error" },
-        }],
-      }),
-    );
+    await writeOxlintrc({
+      overrides: [{
+        files: ["src/**/*.ts"],
+        plugins: ["typescript", "oxc", "eslint", "import", "node", "promise", "unicorn"],
+        rules: { "effect-channel/no-throw": "error", "effect-channel/no-try-catch": "error" },
+      }],
+    });
     await writeFile(join(dir, "tsconfig.json"), JSON.stringify({ extends: ["@avi2dg/checks/tsconfig.effect.json"], include: ["src/**/*.ts"] }));
     await mkdir(join(dir, "src"));
     await writeFile(join(dir, "src", "load.ts"), "export const load = (text: string): string => text;\n");

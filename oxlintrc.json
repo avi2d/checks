@@ -18,5 +18,18 @@
     "typescript/no-non-null-assertion": "error",
     "typescript/no-deprecated": "error",
     "typescript/consistent-return": "off"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["**/*.ts", "**/*.tsx"],
+      "excludeFiles": ["tests/**"],
+      "rules": {
+        "typescript/no-unsafe-assignment": "error",
+        "typescript/no-unsafe-member-access": "error",
+        "typescript/no-unsafe-argument": "error",
+        "typescript/no-unsafe-return": "error",
+        "typescript/no-unsafe-call": "error"
+      }
+    }
+  ]
 }

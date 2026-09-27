@@ -8,6 +8,10 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
 - Every config in an oxlint `extends` chain brings its own `plugins`, and one that sets none brings oxlint's default plugins, whose category rules the base's `categories` then turn on across the tree.
   `rules`, `categories` and `jsPlugins` inherit as expected.
   That is why the consumer config and each override restate `plugins`.
+- The base turns on the five `typescript/no-unsafe-*` rules in an override for `.ts` and `.tsx` files outside `tests/`, so every consumer gets them through `extends`.
+  `typescript/no-explicit-any` and `strict` already refuse an `any` someone writes, so the `any` left is one nobody wrote.
+  `Array.isArray` narrows an `unknown` to `any[]`, `JSON.parse` returns `any`, `Object.entries` lists `any` values from an `object`, and a defaulted parameter in a generator passed to `Effect.fnUntraced` is typed `any`.
+  Tests stay out because bun:test types its asymmetric matchers, such as `expect.arrayContaining`, as `any`, and those made 22 of the 34 findings in the tests of the kit and its consumers.
 - `node_modules/` is excluded through the consumer's `.gitignore`, not `ignorePatterns`: oxlint still walks the installed package when only `ignorePatterns` names it.
 - `files` in package.json is the published surface: `tests/`, `AGENTS.md` and the `.ts` plugin source never reach an install.
   npm adds `package.json`, `README` and `LICENSE` to the tarball whatever `files` says.

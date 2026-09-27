@@ -177,7 +177,7 @@ function callUse(node: Record<string, unknown>): string | undefined {
   const callee = node["callee"];
   const calleeName = identifierName(callee);
   if (calleeName !== undefined && BANNED_GLOBAL_CALLS.includes(calleeName)) return `calls ${calleeName}`;
-  const argument = Array.isArray(node["arguments"]) ? node["arguments"][0] : undefined;
+  const argument: unknown = Array.isArray(node["arguments"]) ? node["arguments"][0] : undefined;
   const specifier = isRecord(argument) ? stringValue(argument["expression"]) : undefined;
   const banned = specifier === undefined ? undefined : bannedModule(specifier);
   if (banned === undefined) return undefined;
