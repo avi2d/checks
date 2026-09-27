@@ -55,6 +55,26 @@ test(
 );
 
 test(
+  "a path an agent file names goes red on a line a change adds, and green once it resolves",
+  async () => {
+    const { put, commit, docs } = await start();
+    await put("tools/AGENTS.md", "# Tools\n\nIt runs `scripts/bild.ts`.\n");
+    const planted = await commit("an agent file names a path that resolves nowhere");
+
+    const refused = await docs(planted);
+    expect(refused.text).toContain("  tools/AGENTS.md:3: names `scripts/bild.ts`, which is not in the repository");
+    expect(refused.exitCode).toBe(1);
+
+    await put("tools/AGENTS.md", "# Tools\n\nIt runs `scripts/build.ts`.\n");
+    const fixed = await commit("point the agent file at what exists");
+    const kept = await docs(planted, fixed);
+    expect(kept.text).toContain("docs: the range breaks no path, link or command the 1 living doc(s) name");
+    expect(kept.exitCode).toBe(0);
+  },
+  120_000,
+);
+
+test(
   "a range that breaks a reference on a line it leaves alone fails, and one broken before it is advisory",
   async () => {
     const { put, remove, commit, docs } = await start();
