@@ -94,10 +94,10 @@ test("a changelog is refused for a release out of order, a release without its d
 
 test("CLAUDE.md is the template word for word, and a line added or changed is refused where it starts", () => {
   expect(found("claude", `${fixture("claude")}Read the README too.\n`)).toEqual([
-    "3: differs from templates/claude.md, which it holds word for word",
+    "3: differs from dist/templates/claude.md, which it holds word for word",
   ]);
   expect(found("claude", fixture("claude").replace("@AGENTS.md", "@README.md"))).toEqual([
-    "2: differs from templates/claude.md, which it holds word for word",
+    "2: differs from dist/templates/claude.md, which it holds word for word",
   ]);
 });
 

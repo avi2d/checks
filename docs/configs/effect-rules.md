@@ -31,7 +31,7 @@ The repo's `.oxlintrc.json` owns its Effect paths and exemptions in an override:
 }
 ```
 
-The kit ships the rule block in `presets/effect.oxlint.json` for copying into the override.
+The kit ships the rule block in `src/quality/presets/effect.oxlint.json` for copying into the override.
 Each config in an oxlint `extends` chain sets `plugins` explicitly, because an omitted list enables defaults across the chain.
 `unicorn/no-process-exit` does not check a shebang script, so a bin can use `eslint/no-restricted-properties` for `process.exit`.
 
@@ -39,7 +39,7 @@ Each config in an oxlint `extends` chain sets `plugins` explicitly, because an o
 
 The repository's `tsconfig.json` holds its Effect override under `compilerOptions.plugins`.
 The override includes the same source paths and excludes the same exempt paths as oxlint.
-The kit ships severity values in `presets/effect.language-service.json` for the override's `options`.
+The kit ships severity values in `src/quality/presets/effect.language-service.json` for the override's `options`.
 The kit's `tsconfig.effect.json` keeps the shared language service diagnostics.
 
 ## Related topics

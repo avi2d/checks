@@ -43,7 +43,7 @@ const PLANTS: readonly Plant[] = [
     kind: "claude",
     path: "CLAUDE.md",
     defect: (text) => `${text}Also read README.md.\n`,
-    refusal: "CLAUDE.md:3: differs from templates/claude.md, which it holds word for word",
+    refusal: "CLAUDE.md:3: differs from dist/templates/claude.md, which it holds word for word",
   },
   {
     kind: "tutorial",

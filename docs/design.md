@@ -30,7 +30,7 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
 - `dist/` is committed.
   No `prepack` or `prepublishOnly` builds it, so a publish ships whatever bundle the publishing worktree holds.
   Rebuild it after pulling with `bun run build`.
-  `bun run build` also emits `templates/` and `CHANGELOG.md`, which are committed the same way.
+  `bun run build` also emits `dist/templates/` and `CHANGELOG.md`, which are committed the same way.
   CI runs `git diff --exit-code` over the whole tree after the build, because a test that compares a generated file with its source passes on the copy the build just rewrote.
 - `CHANGELOG.md` is generated, so a release commit carries it and the tarball ships it.
   The commit that bumps package.json `version` closes its release, and the `v*` tag goes on that commit, so commits merged after it wait for the next release.
@@ -78,7 +78,7 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   Setting your own `options.enhancedResolveOptions` replaces the base's, so restate `exportsFields` and `conditionNames` if you do.
 - dependency-cruiser `extends` merges same-name `forbidden` rules with the child's fields winning.
   That is the entry-point and layer recipe under Boundaries in [The dependency rules](configs/dependency-rules.md).
-- The templates in `templates/` are rendered from `src/docs/doc-templates.ts`, the spec `checks-docs` reads.
+- The templates in `dist/templates/` are rendered from `src/docs/doc-templates.ts`, the spec `checks-docs` reads.
   A template written by hand beside the check agrees with it only until someone edits one of them.
 - A page's Diátaxis mode comes from `kind` front matter on the page, whatever directory holds it.
   The repository makes the judgment beside the page, and the check holds it to that template.
