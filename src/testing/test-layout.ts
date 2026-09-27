@@ -14,11 +14,14 @@ export type Violation = {
 const TESTS = "tests/";
 const UNIT = "tests/unit/";
 const E2E = "tests/e2e/";
+const QUARANTINED = "tests/quarantine/";
 const HELPER_DIRS = ["tests/lib/", "tests/fixtures/"] as const;
 const DATA_DIR = "tests/fixtures/";
 const TEST_TIERS = ["live", "pixel"] as const;
-const LEVELS = ["unit", "e2e", ...TEST_TIERS, "quarantine"] as const;
-const LEVEL_DIR = new RegExp(`^tests/(?:${LEVELS.join("|")})/`);
+const SPAWNING_LEVELS = ["e2e", ...TEST_TIERS] as const;
+const LEVELS = ["unit", ...SPAWNING_LEVELS] as const;
+const LEVEL_DIR = new RegExp(`^tests/(?:quarantine/)?(?:${LEVELS.join("|")})/`);
+const QUARANTINE_BELOW_LEVEL = new RegExp(`^tests/(${LEVELS.join("|")})/((?:[^/]+/)*?)quarantine/(.+)$`);
 const LEVEL_NAMES = new Intl.ListFormat("en", { type: "disjunction" }).format(LEVELS);
 
 export const TEST_FILE = /(?:[.](?:test|spec)|_test)[.](tsx?)$/;
@@ -49,7 +52,7 @@ const QUARANTINE = "**/tests/quarantine/**";
 const LIVE_TESTS = "**/tests/live/**";
 const PIXEL_TESTS = "**/tests/pixel/**";
 const VENDORED = "repos/**";
-const OUT_OF_PROCESS: readonly string[] = [E2E, ...TEST_TIERS.map((tier) => `${TESTS}${tier}/`)];
+const OUT_OF_PROCESS: readonly string[] = SPAWNING_LEVELS.flatMap((level) => [`${TESTS}${level}/`, `${QUARANTINED}${level}/`]);
 const ACCEPTED_IGNORES: readonly (readonly string[])[] = [
   [QUARANTINE, LIVE_TESTS, PIXEL_TESTS, VENDORED],
   [QUARANTINE, LIVE_TESTS, PIXEL_TESTS],
@@ -80,7 +83,23 @@ function targetFor(file: string): string {
     .replace(/^\/+/, "");
   const renamed = withoutLeadingDirs.replace(TEST_FILE, ".test.$1");
   if (LEVEL_DIR.test(renamed)) return renamed;
+  if (renamed.startsWith(QUARANTINED)) return `${QUARANTINED}unit/${renamed.slice(QUARANTINED.length)}`;
   return `${UNIT}${renamed.startsWith(TESTS) ? renamed.slice(TESTS.length) : renamed}`;
+}
+
+function quarantineTargetFor(file: string): string | undefined {
+  const below = QUARANTINE_BELOW_LEVEL.exec(file);
+  if (below !== null) return `${QUARANTINED}${below[1]}/${below[2]}${below[3]}`.replace(TEST_FILE, ".test.$1");
+  if (file.startsWith(QUARANTINED) && !LEVEL_DIR.test(file)) return targetFor(file);
+  return undefined;
+}
+
+function outOfProcessTargetFor(file: string): string {
+  if (file.startsWith(QUARANTINED)) {
+    const rest = file.slice(QUARANTINED.length);
+    return `${QUARANTINED}e2e/${rest.startsWith("unit/") ? rest.slice("unit/".length) : rest}`;
+  }
+  return `${E2E}${file.slice(file.startsWith(UNIT) ? UNIT.length : TESTS.length)}`;
 }
 
 export function placementViolations(files: readonly string[]): readonly Violation[] {
@@ -96,11 +115,20 @@ export function placementViolations(files: readonly string[]): readonly Violatio
       });
       continue;
     }
+    const quarantineTarget = quarantineTargetFor(file);
+    if (quarantineTarget !== undefined) {
+      violations.push({
+        file,
+        line: undefined,
+        message: `a quarantined test keeps its level at tests/quarantine/<level>/, which the default run skips; move it to ${quarantineTarget}`,
+      });
+      continue;
+    }
     if (!TARGET_FILE.test(file)) {
       violations.push({
         file,
         line: undefined,
-        message: `a test file must live at tests/<level>/**/*.test.ts, with ${LEVEL_NAMES} as the level; move it to ${target}`,
+        message: `a test file must live at tests/<level>/**/*.test.ts, or tests/quarantine/<level>/**/*.test.ts while quarantined, with ${LEVEL_NAMES} as the level; move it to ${target}`,
       });
     }
   }
@@ -190,7 +218,7 @@ export const isolationViolations = Effect.fn("isolationViolations")(function* (f
         violations.push({
           file,
           line: lineOf(source, spanStart(node)),
-          message: `a test outside ${E2E} must stay in-process, and this ${use}; move it to ${E2E}${file.slice(file.startsWith(UNIT) ? UNIT.length : TESTS.length)}`,
+          message: `a test outside ${E2E} must stay in-process, and this ${use}; move it to ${outOfProcessTargetFor(file)}`,
         });
       }
     }

@@ -32,7 +32,8 @@ test("placement names every test file outside tests/<level>/**/*.test.ts and its
     "tests/e2e/widget.test.ts",
     "tests/live/widget.test.ts",
     "tests/pixel/widget.test.ts",
-    "tests/quarantine/widget.test.ts",
+    "tests/quarantine/unit/widget.test.ts",
+    "tests/quarantine/e2e/group/widget.test.ts",
     "tests/lib/helper.ts",
     "tests/fixtures/sample.json",
   ]);
@@ -48,8 +49,26 @@ test("placement names every test file outside tests/<level>/**/*.test.ts and its
     ["tests/integration/widget.test.ts", "tests/unit/integration/widget.test.ts"],
   ]);
   expect(violations[0]?.message).toBe(
-    "a test file must live at tests/<level>/**/*.test.ts, with unit, e2e, live, pixel, or quarantine as the level; move it to tests/unit/widget.test.ts",
+    "a test file must live at tests/<level>/**/*.test.ts, or tests/quarantine/<level>/**/*.test.ts while quarantined, with unit, e2e, live, or pixel as the level; move it to tests/unit/widget.test.ts",
   );
+});
+
+test("a quarantined test keeps its level under tests/quarantine/, and a quarantine directory below a level is refused", () => {
+  const violations = placementViolations([
+    "tests/quarantine/widget.test.ts",
+    "tests/quarantine/group/widget.spec.ts",
+    "tests/e2e/quarantine/widget.test.ts",
+    "tests/unit/group/quarantine/deep/widget.test.ts",
+    "tests/quarantine/live/widget.test.ts",
+  ]);
+
+  expect(violations.map((violation) => [violation.file, violation.message.split("move it to ")[1]])).toEqual([
+    ["tests/quarantine/widget.test.ts", "tests/quarantine/unit/widget.test.ts"],
+    ["tests/quarantine/group/widget.spec.ts", "tests/quarantine/unit/group/widget.test.ts"],
+    ["tests/e2e/quarantine/widget.test.ts", "tests/quarantine/e2e/widget.test.ts"],
+    ["tests/unit/group/quarantine/deep/widget.test.ts", "tests/quarantine/unit/group/deep/widget.test.ts"],
+  ]);
+  expect(violations[0]?.message).toStartWith("a quarantined test keeps its level at tests/quarantine/<level>/, which the default run skips;");
 });
 
 test("tests/lib and tests/fixtures may hold helpers and data but never a test", () => {
@@ -92,6 +111,13 @@ test.each([
     `a test outside tests/e2e/ must stay in-process, and this ${expected}`,
   );
   expect(violations[0]?.message).toEndWith("move it to tests/e2e/widget.test.ts");
+});
+
+test("a quarantined in-process test that spawns is sent to the e2e level inside quarantine", async () => {
+  const spawn = 'import { spawnSync } from "node:child_process";\n';
+
+  expect((await isolation("tests/quarantine/unit/widget.test.ts", spawn))[0]?.message).toEndWith("move it to tests/quarantine/e2e/widget.test.ts");
+  expect((await isolation("tests/quarantine/widget.test.ts", spawn))[0]?.message).toEndWith("move it to tests/quarantine/e2e/widget.test.ts");
 });
 
 test("an in-process test may read files, use fs and time, and import its own source", async () => {

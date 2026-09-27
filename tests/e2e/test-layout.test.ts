@@ -16,6 +16,8 @@ const MANIFEST = {
   },
 };
 const CLEAN_TEST = 'import { expect, test } from "bun:test";\ntest("adds", () => {\n  expect(1 + 1).toBe(2);\n});\n';
+const FAILING_SPAWN = 'import { spawnSync } from "node:child_process";\nimport { expect, test } from "bun:test";\ntest("flakes", () => {\n  expect(spawnSync("true").status).toBe(1);\n});\n';
+const quarantined = fixtureRepos("checks-test-layout-quarantine-");
 
 let dir = "";
 
@@ -142,6 +144,45 @@ test(
     const fixed = await repo.script("testing/test-layout.ts", repo.dir);
     expect(fixed.exitCode).toBe(0);
     expect(fixed.text).toContain("satisfy the layout");
+  },
+  60_000,
+);
+
+test(
+  "a spawning test quarantines under tests/quarantine/e2e/, which the layout check accepts, the default run skips and the clock counts",
+  async () => {
+    const repo = await quarantined({
+      "package.json": `${JSON.stringify(MANIFEST, null, 2)}\n`,
+      "bunfig.toml": UNVENDORED_BUNFIG,
+      "tests/unit/widget.test.ts": CLEAN_TEST,
+      "tests/quarantine/e2e/flaky.test.ts": FAILING_SPAWN,
+    });
+
+    const accepted = await repo.script("testing/test-layout.ts", repo.dir);
+    expect(accepted.text).toContain("satisfy the layout");
+    expect(accepted.exitCode).toBe(0);
+
+    const suite = await ran($`bun test`.cwd(repo.dir));
+    expect(suite.text).not.toContain("flaky");
+    expect(suite.exitCode).toBe(0);
+
+    await repo.commit("test: quarantine the flaky spawn");
+    const clock = await repo.script("testing/quarantine-clock.ts", "HEAD");
+    expect(clock.text).toContain("(1 checked)");
+
+    await repo.write({
+      "tests/quarantine/unit/spawner.test.ts": FAILING_SPAWN,
+      "tests/quarantine/loose.test.ts": CLEAN_TEST,
+      "tests/e2e/quarantine/hidden.test.ts": CLEAN_TEST,
+    });
+    const refused = await repo.script("testing/test-layout.ts", repo.dir);
+    expect(refused.exitCode).toBe(1);
+    expect(refused.text).toContain("tests/quarantine/unit/spawner.test.ts:1: a test outside tests/e2e/ must stay in-process");
+    expect(refused.text).toContain("move it to tests/quarantine/e2e/spawner.test.ts");
+    expect(refused.text).toContain("tests/quarantine/loose.test.ts: a quarantined test keeps its level");
+    expect(refused.text).toContain("move it to tests/quarantine/unit/loose.test.ts");
+    expect(refused.text).toContain("tests/e2e/quarantine/hidden.test.ts: a quarantined test keeps its level");
+    expect(refused.text).toContain("move it to tests/quarantine/e2e/hidden.test.ts");
   },
   60_000,
 );

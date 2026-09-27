@@ -10,7 +10,8 @@ audience: consumers
 
 It fails unless the repository holds this shape, and names the file and the path to move it to when it does not.
 
-- Every test file is `tests/<level>/**/*.test.ts` or `.tsx`, and the level is `unit`, `e2e`, `live`, `pixel` or `quarantine`.
+- Every test file is `tests/<level>/**/*.test.ts` or `.tsx`, and the level is `unit`, `e2e`, `live` or `pixel`.
+  A quarantined test keeps its level as `tests/quarantine/<level>/**/*.test.ts`.
   A `*.test.ts`, `*.spec.ts` or `*_test.ts` under `src/`, `test/`, `__tests__/`, the repository root or a directory under `tests/` that names no level fails.
   The path it names for the move is under `tests/unit/` unless the file already sits under a level.
 - `tests/lib/**` holds helpers and `tests/fixtures/**` holds data, and neither may hold a test file.
@@ -20,9 +21,9 @@ It fails unless the repository holds this shape, and names the file and the path
   A live tier with test files requires `test:live` set to `checks-test --tier=live`.
   A pixel tier with test files requires `test:pixel` set to `checks-test --tier=pixel`.
 - A test runs in-process or in a process of its own.
-  A test outside `tests/e2e/`, `tests/live/` and `tests/pixel/` runs in-process, so it may not import `node:child_process`, `net`, `http`, `https`, `http2`, `tls` or `dgram`.
+  A test outside the `e2e`, `live` and `pixel` levels runs in-process, quarantined or not, so it may not import `node:child_process`, `net`, `http`, `https`, `http2`, `tls` or `dgram`.
   It may not import `$`, `spawn`, `spawnSync`, `connect`, `serve` or `listen` from `bun`, may not touch `Bun.$` or `Bun.spawn`, and may not call `fetch`.
-  A test inside `tests/e2e/`, `tests/live/` or `tests/pixel/` may do all of it.
+  A test at the `e2e`, `live` or `pixel` level may do all of it, under `tests/quarantine/` as well.
   Helpers in `tests/lib/**` answer to the same rule, since an in-process test reaches them.
 - `scripts.test` is exactly `checks-test`, which runs `bun test --randomize` as [checks-test](checks-test.md) says.
 - `scripts.lint` runs this check, itself or through `checks-lint` called by its bare bin name.
@@ -36,7 +37,10 @@ The in-process tests under `tests/unit/` are what a mutation run takes as its te
 
 The preset also skips `tests/quarantine/**` and `repos/**` on a default run.
 The `repos/**` entry keeps the suite from following the library links `checks-vendor` manages into trees whose tests are not this repository's.
-A test that turns flaky moves there, so the suite stays trustworthy, and the flake still runs on demand:
+A test that turns flaky moves there at its own level, so the suite stays trustworthy.
+A flaky test under `tests/e2e/stack/` moves to the same path under `tests/quarantine/e2e/stack/`, where it may still spawn, and moves back once fixed.
+A `quarantine` directory below a level is refused, since the preset's ignore does not reach it and the test would still run.
+The flake still runs on demand:
 
 ```sh
 bun test --path-ignore-patterns='' tests/quarantine
@@ -73,7 +77,7 @@ It checks the directory it runs in, or the directory it is given.
 
 ```
 test-layout: 4 violation(s)
-  src/a.test.ts: a test file must live at tests/<level>/**/*.test.ts, with unit, e2e, live, pixel, or quarantine as the level; move it to tests/unit/a.test.ts
+  src/a.test.ts: a test file must live at tests/<level>/**/*.test.ts, or tests/quarantine/<level>/**/*.test.ts while quarantined, with unit, e2e, live, or pixel as the level; move it to tests/unit/a.test.ts
   package.json: scripts.test must be exactly "checks-test", which runs bun test --randomize and judges its skips, found "bun test"
   package.json: scripts.lint must run the layout check: add "checks-lint"
   bunfig.toml: bunfig.toml is missing; bun has no bunfig extends, so copy node_modules/@avi2dg/checks/bunfig.toml
