@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, DateTime, Effect, FileSystem, Path, Schema } from "effect";
-import { cuts, hasEntries, releaseDates, renderChangelog, type Bump, type Cut, type Release } from "./changelog.ts";
+import { cuts, hasEntries, namesPullRequest, releaseDates, renderChangelog, type Bump, type Cut, type Release } from "./changelog.ts";
 import { git } from "./git.ts";
 import { runMain } from "./main.ts";
 
@@ -69,8 +69,28 @@ const readPublished = Effect.fn("readPublished")(function* (root: string) {
   return new Set(tags.split("\n").flatMap((tag) => (tag.startsWith(TAG_PREFIX) ? [tag.slice(TAG_PREFIX.length)] : [])));
 });
 
-const subjectsOf = Effect.fn("subjectsOf")(function* (root: string, { version, date, through, after }: Cut) {
-  const log = yield* git(["log", "--topo-order", "--format=%s", through, "--not", ...after], root);
+const mergedTips = Effect.fn("mergedTips")(function* (root: string, through: string) {
+  // A bump that names its pull request or sits off the first-parent chain is main's release, so no squash merge of this branch releases more under it.
+  if (namesPullRequest((yield* git(["log", "-1", "--format=%s", through], root)).trim())) return [];
+  if (!(yield* git(["rev-list", "--first-parent", "HEAD"], root)).split("\n").includes(through)) return [];
+  const merges = yield* git(["log", "--merges", "--format=%P", `${through}..HEAD`], root);
+  const tips: string[] = [];
+  for (const [, ...parents] of merges.split("\n").filter((line) => line !== "").map((line) => line.split(" "))) {
+    for (const parent of parents) {
+      // A parent past the bump belongs to a later release, so only a parent beside it joins this one.
+      const past = yield* git(["merge-base", "--is-ancestor", through, parent], root).pipe(
+        Effect.as(true),
+        Effect.catchTag("GitFailure", () => Effect.succeed(false)),
+      );
+      if (!past) tips.push(parent);
+    }
+  }
+  return tips;
+});
+
+// The bump reaches no commit main gained after it, yet the squash merge releases them under it.
+const subjectsOf = Effect.fn("subjectsOf")(function* (root: string, { version, date, through, after }: Cut, extra: readonly string[] = []) {
+  const log = yield* git(["log", "--topo-order", "--format=%s", through, ...extra, "--not", ...after], root);
   return { version, date, subjects: log.split("\n").filter((subject) => subject !== "") } satisfies Release;
 });
 
@@ -94,7 +114,11 @@ const write = Effect.gen(function* () {
   const recorded = (yield* fs.exists(target)) ? releaseDates(yield* fs.readFileString(target)) : new Map<string, string>();
   const pending = version === (yield* versionAt(root, "HEAD")) ? undefined : { sha: "HEAD", version, date: yield* today };
   const released = cuts(yield* readBumps(root), recorded, yield* readPublished(root), pending);
-  const found = (yield* Effect.forEach(released, (cut) => subjectsOf(root, cut))).filter(({ subjects }) => hasEntries(subjects)).toReversed();
+  const tip = released.at(-1);
+  const extra = tip === undefined || tip.through === "HEAD" ? [] : yield* mergedTips(root, tip.through);
+  const found = (yield* Effect.forEach(released, (cut, index) => subjectsOf(root, cut, index === released.length - 1 ? extra : [])))
+    .filter(({ subjects }) => hasEntries(subjects))
+    .toReversed();
   yield* fs.writeFileString(target, renderChangelog(name, found, repositoryUrl));
   yield* Console.log(`${NAME}: wrote ${found.length} release(s) to ${CHANGELOG}`);
   return true;
