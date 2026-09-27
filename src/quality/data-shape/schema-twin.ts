@@ -8,6 +8,8 @@ type Shape = ESTree.TSTypeLiteral | ESTree.TSInterfaceBody;
 
 const STRUCTS: ReadonlySet<string> = new Set(["Struct", "TaggedStruct", "Class"]);
 
+const REFINEMENTS: ReadonlySet<string> = new Set(["check", "pipe", "annotate"]);
+
 const SCHEMA_KINDS: Readonly<Record<string, Kind>> = {
   String: "string",
   NonEmptyString: "string",
@@ -68,6 +70,13 @@ function kindOf(name: string | undefined): Kind {
   return name === undefined ? "wild" : (SCHEMA_KINDS[name] ?? "wild");
 }
 
+function refinedBase(value: ESTree.CallExpression): ESTree.Expression | undefined {
+  const { callee } = value;
+  if (callee.type !== "MemberExpression" || callee.object.type === "Super") return undefined;
+  if (callee.property.type !== "Identifier" || !REFINEMENTS.has(callee.property.name)) return undefined;
+  return callee.object;
+}
+
 function schemaKind(value: ESTree.Expression | undefined): { readonly optional: boolean; readonly kind: Kind } {
   if (value !== undefined && value.type === "CallExpression") {
     const name = schemaCallName(value.callee);
@@ -76,9 +85,8 @@ function schemaKind(value: ESTree.Expression | undefined): { readonly optional: 
       const inner = first === undefined || first.type === "SpreadElement" ? undefined : first;
       return { optional: true, kind: schemaKind(inner).kind };
     }
-    if (name === "NullOr" || name === "UndefinedOr" || name === "check" || name === "pipe") {
-      return { optional: false, kind: "wild" };
-    }
+    const base = refinedBase(value);
+    if (base !== undefined) return schemaKind(base);
     return { optional: false, kind: kindOf(name) };
   }
   return { optional: false, kind: kindOf(schemaCallName(value)) };
@@ -117,20 +125,12 @@ function schemaFields(call: ESTree.CallExpression): Field[] | undefined {
   return found.length >= 2 ? found : undefined;
 }
 
-function compatible(left: Kind, right: Kind): boolean {
-  return (
-    left === right ||
-    (left === "literal" && right === "string") ||
-    (left === "string" && right === "literal")
-  );
-}
-
 function twins(typeFields: readonly Field[], schema: readonly Field[]): boolean {
   return (
     typeFields.length === schema.length &&
     typeFields.every((field) => {
       const match = schema.find((one) => one.name === field.name);
-      return match !== undefined && match.optional === field.optional && compatible(field.kind, match.kind);
+      return match !== undefined && match.optional === field.optional && field.kind === match.kind;
     })
   );
 }

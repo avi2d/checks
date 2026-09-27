@@ -220,6 +220,7 @@ var readonly_collection_param_default = rule;
 
 // src/quality/data-shape/schema-twin.ts
 var STRUCTS = new Set(["Struct", "TaggedStruct", "Class"]);
+var REFINEMENTS = new Set(["check", "pipe", "annotate"]);
 var SCHEMA_KINDS = {
   String: "string",
   NonEmptyString: "string",
@@ -293,6 +294,14 @@ function schemaCallName(node) {
 function kindOf(name) {
   return name === undefined ? "wild" : SCHEMA_KINDS[name] ?? "wild";
 }
+function refinedBase(value) {
+  const { callee } = value;
+  if (callee.type !== "MemberExpression" || callee.object.type === "Super")
+    return;
+  if (callee.property.type !== "Identifier" || !REFINEMENTS.has(callee.property.name))
+    return;
+  return callee.object;
+}
 function schemaKind(value) {
   if (value !== undefined && value.type === "CallExpression") {
     const name = schemaCallName(value.callee);
@@ -301,9 +310,9 @@ function schemaKind(value) {
       const inner = first === undefined || first.type === "SpreadElement" ? undefined : first;
       return { optional: true, kind: schemaKind(inner).kind };
     }
-    if (name === "NullOr" || name === "UndefinedOr" || name === "check" || name === "pipe") {
-      return { optional: false, kind: "wild" };
-    }
+    const base = refinedBase(value);
+    if (base !== undefined)
+      return schemaKind(base);
     return { optional: false, kind: kindOf(name) };
   }
   return { optional: false, kind: kindOf(schemaCallName(value)) };
@@ -345,13 +354,10 @@ function schemaFields(call) {
   }
   return found.length >= 2 ? found : undefined;
 }
-function compatible(left, right) {
-  return left === right || left === "literal" && right === "string" || left === "string" && right === "literal";
-}
 function twins(typeFields, schema) {
   return typeFields.length === schema.length && typeFields.every((field) => {
     const match = schema.find((one) => one.name === field.name);
-    return match !== undefined && match.optional === field.optional && compatible(field.kind, match.kind);
+    return match !== undefined && match.optional === field.optional && field.kind === match.kind;
   });
 }
 function schemaName(call) {

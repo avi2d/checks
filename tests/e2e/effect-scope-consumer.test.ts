@@ -58,7 +58,13 @@ const CLEAN: Readonly<Record<string, string>> = {
   [UNSCOPED]: `export const answer = 42;\n`,
 };
 
-const OWN_OXLINT = [".oxlintrc.json", "oxlintrc.json", "dist/effect-channel/index.js", "dist/readability/index.js"];
+const OWN_OXLINT = [
+  ".oxlintrc.json",
+  "oxlintrc.json",
+  "dist/effect-channel/index.js",
+  "dist/readability/index.js",
+  "dist/data-shape/index.js",
+];
 
 const consumerTree = consumerTrees("checks-effect-scope-consumer-");
 const scratch = scratchDirs();
