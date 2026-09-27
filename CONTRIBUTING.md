@@ -80,7 +80,7 @@ To place a change:
    | `presets/` | the Effect rule blocks consumers copy into native configs |
    | `templates/` | one template per kind of doc file, which `bun run build` renders |
    | `CHANGELOG.md` | every release, which `bun run build` writes from the conventional commits |
-   | `tests/` | the suite, with the tests that spawn a process under `tests/e2e/` |
+   | `tests/` | the suite, with the in-process tests under `tests/unit/` and the tests that spawn a process under `tests/e2e/` |
    | `docs/gates/` | one reference page per bin |
    | `docs/configs/` | one reference page per shipped config a bin does not own |
    | `docs/design.md` | why the kit is shaped the way it is |

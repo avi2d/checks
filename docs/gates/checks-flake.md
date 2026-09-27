@@ -43,7 +43,7 @@ checks-flake: 3 of 10 run(s) failed, 1 test(s) failing in them
 
 | Test | Failed | Seeds |
 | --- | --- | --- |
-| tests/cache.test.ts:6 reads the cache | 3 of 10 runs | 2170533150, 4046124386, 180394251 |
+| tests/unit/cache.test.ts:6 reads the cache | 3 of 10 runs | 2170533150, 4046124386, 180394251 |
 
 Reproduce a failing run with bun test --randomize --seed=<seed>.
 ```

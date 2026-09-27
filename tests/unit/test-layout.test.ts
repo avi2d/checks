@@ -16,7 +16,7 @@ const PRESET = {
   test: { pathIgnorePatterns: ["**/tests/quarantine/**", "**/tests/live/**", "**/tests/pixel/**", "repos/**"] },
 };
 
-test("placement names every test file outside tests/**/*.test.ts and its target", () => {
+test("placement names every test file outside tests/<level>/**/*.test.ts and its target", () => {
   const violations = placementViolations([
     "src/widget.ts",
     "src/widget.test.ts",
@@ -26,19 +26,30 @@ test("placement names every test file outside tests/**/*.test.ts and its target"
     "widget.test.ts",
     "tests/widget.spec.ts",
     "tests/group/nested/widget.test.ts",
+    "tests/integration/widget.test.ts",
+    "tests/unit/widget.test.ts",
+    "tests/unit/group/widget.test.ts",
     "tests/e2e/widget.test.ts",
+    "tests/live/widget.test.ts",
+    "tests/pixel/widget.test.ts",
+    "tests/quarantine/widget.test.ts",
     "tests/lib/helper.ts",
     "tests/fixtures/sample.json",
   ]);
 
   expect(violations.map((violation) => [violation.file, violation.message.split("move it to ")[1]])).toEqual([
-    ["src/widget.test.ts", "tests/widget.test.ts"],
-    ["src/deep/widget.spec.ts", "tests/deep/widget.test.ts"],
-    ["src/__tests__/widget_test.ts", "tests/widget.test.ts"],
-    ["test/widget.test.ts", "tests/test/widget.test.ts"],
-    ["widget.test.ts", "tests/widget.test.ts"],
-    ["tests/widget.spec.ts", "tests/widget.test.ts"],
+    ["src/widget.test.ts", "tests/unit/widget.test.ts"],
+    ["src/deep/widget.spec.ts", "tests/unit/deep/widget.test.ts"],
+    ["src/__tests__/widget_test.ts", "tests/unit/widget.test.ts"],
+    ["test/widget.test.ts", "tests/unit/test/widget.test.ts"],
+    ["widget.test.ts", "tests/unit/widget.test.ts"],
+    ["tests/widget.spec.ts", "tests/unit/widget.test.ts"],
+    ["tests/group/nested/widget.test.ts", "tests/unit/group/nested/widget.test.ts"],
+    ["tests/integration/widget.test.ts", "tests/unit/integration/widget.test.ts"],
   ]);
+  expect(violations[0]?.message).toBe(
+    "a test file must live at tests/<level>/**/*.test.ts, with unit, e2e, live, pixel, or quarantine as the level; move it to tests/unit/widget.test.ts",
+  );
 });
 
 test("tests/lib and tests/fixtures may hold helpers and data but never a test", () => {
@@ -48,12 +59,12 @@ test("tests/lib and tests/fixtures may hold helpers and data but never a test", 
     {
       file: "tests/lib/helper.test.ts",
       line: undefined,
-      message: "tests/lib and tests/fixtures hold helpers and data, never tests; move it to tests/helper.test.ts",
+      message: "tests/lib and tests/fixtures hold helpers and data, never tests; move it to tests/unit/helper.test.ts",
     },
     {
       file: "tests/fixtures/thing.test.ts",
       line: undefined,
-      message: "tests/lib and tests/fixtures hold helpers and data, never tests; move it to tests/thing.test.ts",
+      message: "tests/lib and tests/fixtures hold helpers and data, never tests; move it to tests/unit/thing.test.ts",
     },
   ]);
 });
@@ -74,7 +85,7 @@ test.each([
   ['const net = await import("node:net");\n', "imports node:net"],
   ['const http = require("node:http");\n', "requires node:http"],
 ])("an in-process test may not %j", async (source, expected) => {
-  const violations = await isolation("tests/widget.test.ts", source);
+  const violations = await isolation("tests/unit/widget.test.ts", source);
 
   expect(violations).not.toBeEmpty();
   expect(violations[0]?.message).toStartWith(
@@ -93,25 +104,25 @@ test("an in-process test may read files, use fs and time, and import its own sou
     "",
   ].join("\n");
 
-  expect(await isolation("tests/widget.test.ts", source)).toBeEmpty();
+  expect(await isolation("tests/unit/widget.test.ts", source)).toBeEmpty();
 });
 
 test("isolation reports the line the banned use sits on", async () => {
   const source = ["const a = 1;", "", "const b = Bun.spawn([`ls`]);", ""].join("\n");
 
-  expect((await isolation("tests/widget.test.ts", source))[0]?.line).toBe(3);
+  expect((await isolation("tests/unit/widget.test.ts", source))[0]?.line).toBe(3);
 });
 
 test("isolation counts the line from the top of the file when leading trivia precedes the banned use", async () => {
   const source = ["// one", "// two", "", "", 'import cp from "node:child_process";', ""].join("\n");
 
-  expect((await isolation("tests/widget.test.ts", source))[0]?.line).toBe(5);
+  expect((await isolation("tests/unit/widget.test.ts", source))[0]?.line).toBe(5);
 });
 
 test("isolation reports the right line when a multibyte character precedes the banned use", async () => {
   const source = ['const name = "🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀";', 'const b = 1, c = fetch("x");', "", "", "", ""].join("\n");
 
-  expect((await isolation("tests/widget.test.ts", source))[0]?.line).toBe(2);
+  expect((await isolation("tests/unit/widget.test.ts", source))[0]?.line).toBe(2);
 });
 
 test("scripts.test must be the test entry point and scripts.lint must run the check", () => {

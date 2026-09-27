@@ -313,12 +313,12 @@ test(
 
     const red = await runScript("lint");
     expect(red.exitCode).not.toBe(0);
-    expect(red.text).toContain("widget.test.ts: a test file must live at tests/**/*.test.ts");
-    expect(red.text).toContain("move it to tests/widget.test.ts");
+    expect(red.text).toContain("widget.test.ts: a test file must live at tests/<level>/**/*.test.ts");
+    expect(red.text).toContain("move it to tests/unit/widget.test.ts");
 
-    await mkdir(join(dir, "tests"));
-    await rename(join(dir, "widget.test.ts"), join(dir, "tests", "widget.test.ts"));
-    await writeFile(join(dir, "tests", "widget.test.ts"), widgetTest("../widget.ts"));
+    await mkdir(join(dir, "tests", "unit"), { recursive: true });
+    await rename(join(dir, "widget.test.ts"), join(dir, "tests", "unit", "widget.test.ts"));
+    await writeFile(join(dir, "tests", "unit", "widget.test.ts"), widgetTest("../../widget.ts"));
     await $`git add -A`.cwd(dir).quiet();
 
     const green = await runScript("lint");
@@ -357,7 +357,7 @@ test(
     expect(existsSync(join(installed, "tests"))).toBe(false);
     expect(existsSync(join(installed, "AGENTS.md"))).toBe(false);
 
-    await writeWidgetRepo("tests/widget.test.ts", "../widget.ts");
+    await writeWidgetRepo("tests/unit/widget.test.ts", "../../widget.ts");
 
     const green = await runScript("lint");
     expect(green.text).toContain("satisfy the layout");
@@ -412,7 +412,7 @@ test(
       await readFile(join(CHECKOUT, "tests", "fixtures", "mutation-compare", "base.json"), "utf8"),
     );
 
-    await writeWidgetRepo("tests/widget.test.ts", "../widget.ts");
+    await writeWidgetRepo("tests/unit/widget.test.ts", "../../widget.ts");
     await commitAll("feat: base");
     await writeFile(join(dir, "clean.ts"), `export const answer = 42;\n`);
     await commitAll("feat: second");

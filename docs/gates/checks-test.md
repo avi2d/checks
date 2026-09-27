@@ -87,7 +87,7 @@ It refuses test filters because every test excluded by a filter would look skipp
 
 ```
 checks-test: 1 skipped test(s) undeclared in this local run:
-  tests/pricing.test.ts:12 rounds half to even: skipped with no reason at its test site; use test.skipIf(condition)(skipReason(reason, name), fn)
+  tests/unit/pricing.test.ts:12 rounds half to even: skipped with no reason at its test site; use test.skipIf(condition)(skipReason(reason, name), fn)
 ```
 
 A run with no skipped tests ends with:

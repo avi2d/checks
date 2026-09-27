@@ -12,12 +12,17 @@ export type Violation = {
 };
 
 const TESTS = "tests/";
+const UNIT = "tests/unit/";
 const E2E = "tests/e2e/";
 const HELPER_DIRS = ["tests/lib/", "tests/fixtures/"] as const;
 const DATA_DIR = "tests/fixtures/";
+const TEST_TIERS = ["live", "pixel"] as const;
+const LEVELS = ["unit", "e2e", ...TEST_TIERS, "quarantine"] as const;
+const LEVEL_DIR = new RegExp(`^tests/(?:${LEVELS.join("|")})/`);
+const LEVEL_NAMES = new Intl.ListFormat("en", { type: "disjunction" }).format(LEVELS);
 
 export const TEST_FILE = /(?:[.](?:test|spec)|_test)[.](tsx?)$/;
-const TARGET_FILE = /^tests\/(?:[^/]+\/)*[^/]+[.]test[.]tsx?$/;
+const TARGET_FILE = new RegExp(`${LEVEL_DIR.source}(?:[^/]+/)*[^/]+[.]test[.]tsx?$`);
 const TYPESCRIPT = /[.]tsx?$/;
 
 const BANNED_MODULES: readonly string[] = [
@@ -44,7 +49,6 @@ const QUARANTINE = "**/tests/quarantine/**";
 const LIVE_TESTS = "**/tests/live/**";
 const PIXEL_TESTS = "**/tests/pixel/**";
 const VENDORED = "repos/**";
-const TEST_TIERS = ["live", "pixel"] as const;
 const OUT_OF_PROCESS: readonly string[] = [E2E, ...TEST_TIERS.map((tier) => `${TESTS}${tier}/`)];
 const ACCEPTED_IGNORES: readonly (readonly string[])[] = [
   [QUARANTINE, LIVE_TESTS, PIXEL_TESTS, VENDORED],
@@ -75,7 +79,8 @@ function targetFor(file: string): string {
     .replace(/(?:^|\/)__tests__\//, "/")
     .replace(/^\/+/, "");
   const renamed = withoutLeadingDirs.replace(TEST_FILE, ".test.$1");
-  return renamed.startsWith(TESTS) ? renamed : `${TESTS}${renamed}`;
+  if (LEVEL_DIR.test(renamed)) return renamed;
+  return `${UNIT}${renamed.startsWith(TESTS) ? renamed.slice(TESTS.length) : renamed}`;
 }
 
 export function placementViolations(files: readonly string[]): readonly Violation[] {
@@ -95,7 +100,7 @@ export function placementViolations(files: readonly string[]): readonly Violatio
       violations.push({
         file,
         line: undefined,
-        message: `a test file must live at tests/**/*.test.ts; move it to ${target}`,
+        message: `a test file must live at tests/<level>/**/*.test.ts, with ${LEVEL_NAMES} as the level; move it to ${target}`,
       });
     }
   }
@@ -185,7 +190,7 @@ export const isolationViolations = Effect.fn("isolationViolations")(function* (f
         violations.push({
           file,
           line: lineOf(source, spanStart(node)),
-          message: `a test outside ${E2E} must stay in-process, and this ${use}; move it to ${E2E}${file.slice(TESTS.length)}`,
+          message: `a test outside ${E2E} must stay in-process, and this ${use}; move it to ${E2E}${file.slice(file.startsWith(UNIT) ? UNIT.length : TESTS.length)}`,
         });
       }
     }
