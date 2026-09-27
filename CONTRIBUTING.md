@@ -27,7 +27,7 @@ Each generated file is committed, and lint, the suite or CI's diff after the bui
 To regenerate after an edit:
 
 1. After editing `src/quality/effect-channel/`, `src/complexity/readability/` or the templates in `src/docs/doc-templates.ts`, run `bun run build`.
-   It rewrites `dist/` and `templates/`.
+   It rewrites `dist/`.
 1. After editing anything a generated block names as its source in its opening marker, run `bun run build`, which rewrites every generated block.
 1. Commit what the command rewrote in the same commit as the edit.
 
@@ -77,8 +77,8 @@ To place a change:
    | `src/dependencies/` | what code may import, and which library sources an agent reads |
    | `scripts/` | the kit's own build, which nothing ships |
    | `dist/` | the committed oxlint plugin bundles |
-   | `presets/` | the Effect rule blocks consumers copy into native configs |
-   | `templates/` | one template per kind of doc file, which `bun run build` renders |
+   | `dist/templates/` | one template per kind of doc file, which `bun run build` renders |
+   | `src/quality/presets/` | the Effect rule blocks consumers copy into native configs |
    | `CHANGELOG.md` | every release, which `bun run build` writes from the conventional commits |
    | `tests/` | the suite, with the in-process tests under `tests/unit/` and the tests that spawn a process under `tests/e2e/` |
    | `docs/gates/` | one reference page per bin |

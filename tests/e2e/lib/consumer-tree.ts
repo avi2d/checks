@@ -43,10 +43,10 @@ export function consumerTrees(prefix: string): (shape: ConsumerShape) => Promise
     const oxlint = Schema.decodeSync(Schema.fromJsonString(Schema.Struct({
       plugins: Schema.Array(Schema.String),
       rules: Schema.Record(Schema.String, Schema.String),
-    })))(await readFile(join(CHECKOUT, "presets/effect.oxlint.json"), "utf8"));
+    })))(await readFile(join(CHECKOUT, "src/quality/presets/effect.oxlint.json"), "utf8"));
     const service = Schema.decodeSync(Schema.fromJsonString(Schema.Struct({
       diagnosticSeverity: Schema.Record(Schema.String, Schema.String),
-    })))(await readFile(join(CHECKOUT, "presets/effect.language-service.json"), "utf8"));
+    })))(await readFile(join(CHECKOUT, "src/quality/presets/effect.language-service.json"), "utf8"));
     await tree.put(".gitignore", "node_modules/\n");
     await tree.put(".oxlintrc.json", {
       extends: ["./node_modules/@avi2dg/checks/oxlintrc.json"],

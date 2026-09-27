@@ -23,7 +23,7 @@ type Exact = {
 
 export type Template = Outlined | Exact;
 
-export const TEMPLATE_DIRECTORY = "templates";
+export const TEMPLATE_DIRECTORY = "dist/templates";
 
 export const ADR_STATUSES = ["Proposed", "Accepted", "Rejected", "Deprecated", "Superseded", "Retired"] as const;
 
