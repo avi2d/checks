@@ -18,6 +18,8 @@ const Manifest = Schema.fromJsonString(
   }),
 );
 
+const OxlintPlugins = Schema.fromJsonString(Schema.Struct({ jsPlugins: Schema.Array(Schema.String) }));
+
 type Output = {
   readonly exitCode: number;
   readonly stdout: string;
@@ -395,16 +397,14 @@ test(
       await $`tar -xzf ${tarballPath} -C ${unpacked}`.quiet();
       const root = join(unpacked, "package");
       const manifest = Schema.decodeSync(Manifest)(await readFile(join(CHECKOUT, "package.json"), "utf8"));
-      const entry = [...Object.values(manifest.bin), ...Object.values(manifest.exports)].map((target) =>
-        target.startsWith("./") ? target.slice(2) : target,
-      );
-      // Oxlint loads dist through jsPlugins, not imports, so Knip needs them as entry.
-      await writeFile(
-        join(root, "knip.tarball.json"),
-        JSON.stringify({ entry: [...entry, "dist/effect-channel/index.js", "dist/readability/index.js"] }),
-      );
-      // Knip loads commitlint.config.js without its deps here, and it sits outside project files.
-      await rm(join(root, "commitlint.config.js"));
+      const oxlintrc = Schema.decodeSync(OxlintPlugins)(await readFile(join(root, "oxlintrc.json"), "utf8"));
+      const entry = [
+        ...Object.values(manifest.bin),
+        ...Object.values(manifest.exports),
+        ...oxlintrc.jsPlugins,
+        "commitlint.config.js",
+      ].map((target) => (target.startsWith("./") ? target.slice(2) : target));
+      await writeFile(join(root, "knip.tarball.json"), JSON.stringify({ entry, commitlint: false }));
       const knip = join(CHECKOUT, "node_modules", ".bin", "knip");
       const scan = () => ran($`${knip} --production --include files --no-progress -c knip.tarball.json`.cwd(root));
       await writeFile(join(root, "src", "planted-dead.ts"), `export const planted = 1;\n`);

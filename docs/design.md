@@ -19,7 +19,7 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   Sorting by what loads a file put the two oxlint plugins at the root and every bin in one flat `scripts/`, so the files for one purpose sat in several places and nothing said which gate a helper served.
   A mutation runner's default scope covers `src/`, so the kit's own Stryker run mutates its source without a `mutate` list.
   The testing vector and its directory are named testing rather than tests, since a `src/tests/` beside the root `tests/` would read as a second suite.
-  `exports` keeps each `./scripts/` key a consumer imports, pointed at the file's new home, so an import specifier resolves as before while a path read without resolution does not.
+  An `exports` key a consumer resolves as a specifier keeps pointing at the file's new home, so that specifier resolves as before while a path read without resolution does not.
 - The size rules are plain oxlint rules at `error` in `.oxlintrc.json`, and `bun run lint` enforces them on the whole tree.
   A repository records its existing violations with `oxlint --suppress-all`, and `checks-suppressions-ratchet` refuses any count that rises.
   The kit runs no size script of its own, since restating how oxlint reads its config and compares sites left corners the native rules never had.
