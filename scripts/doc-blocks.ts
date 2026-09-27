@@ -35,6 +35,7 @@ const SHIPPED = {
   "bunfig.toml": "the bunfig preset a repository copies",
   "commitlint.config.js": "the shared commitlint config",
   "dependency-cruiser.config.js": "the shared dependency-cruiser base",
+  "knip-base.json": "the Knip base a repository's configuration imports",
   "src/": "every bin, which a package script calls by its `checks-` name, and the modules the bins import",
   "templates/": "one template per kind of doc file, which a new doc file starts from",
   "presets/": "the Effect rule blocks a repository copies into its native config",

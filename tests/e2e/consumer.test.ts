@@ -352,6 +352,7 @@ test(
     expect(resolved.filter(([, found]) => !found)).toEqual([]);
     expect(existsSync(join(installed, "LICENSE"))).toBe(true);
     expect(existsSync(join(installed, "CHANGELOG.md"))).toBe(true);
+    expect(existsSync(join(installed, "knip-base.json"))).toBe(true);
     expect(existsSync(join(installed, "src", "quality", "effect-channel"))).toBe(false);
     expect(existsSync(join(installed, "src", "complexity", "readability"))).toBe(false);
     expect(existsSync(join(installed, "tests"))).toBe(false);
@@ -399,6 +400,7 @@ test(
     await mkdir(join(dir, ".github/workflows"), { recursive: true });
     await writeFile(join(dir, ".github/workflows/ci.yml"), "on: pull_request\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n      - run: bun run build\n      - run: git diff --exit-code\n      - run: bun run typecheck\n      - run: bun run test\n");
     await writeFile(join(dir, ".github/workflows/commitlint.yml"), "on: pull_request\njobs:\n  title:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ./node_modules/.bin/commitlint\n");
+    await writeFile(join(dir, "knip.json"), JSON.stringify({ entry: ["*.ts", "tests/**/*.ts"], include: ["files"], treatConfigHintsAsErrors: true }));
 
     const manifest = Schema.decodeSync(Manifest)(await readFile(join(CHECKOUT, "package.json"), "utf8"));
     const bins = Object.keys(manifest.bin);
@@ -461,8 +463,35 @@ test(
     const kit = await runScript("kit", withoutPullRequestEvent());
     expect(kit.text).toContain("from HEAD against origin/main");
     expect(kit.text).toContain("commit-identity: 1 commit(s)");
-    expect(kit.text).toContain("checks-lint: 9 gate(s) pass");
+    expect(kit.text).toContain("checks-lint: 10 gate(s) pass");
     expect(kit.exitCode).toBe(0);
+  },
+  180_000,
+);
+
+test(
+  "packed-tarball consumer goes red on a dead file through the published knip base, green once it is removed",
+  async () => {
+    await useConsumer("tarball", { scripts: { unused: "checks-unused" } });
+    await writeFile(
+      join(dir, "knip.config.ts"),
+      `import base from "@avi2dg/checks/knip-base.json";\nexport default { ...base, entry: ["index.ts"] };\n`,
+    );
+    await writeFile(join(dir, "index.ts"), `import { used } from "./used.ts";\n\nexport const index = used;\n`);
+    await writeFile(join(dir, "used.ts"), `export const used = 1;\nexport const unusedExport = 2;\n`);
+    await writeFile(join(dir, "dead.ts"), `export const dead = 1;\n`);
+    await $`git init -q && git add -A`.cwd(dir).quiet();
+
+    const red = await runScript("unused");
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain("unused: 1 unreferenced file(s):\n  dead.ts");
+    expect(red.text).not.toContain("unusedExport");
+
+    await rm(join(dir, "dead.ts"));
+    await $`git add -A`.cwd(dir).quiet();
+    const green = await runScript("unused");
+    expect(green.exitCode).toBe(0);
+    expect(green.text).toContain("unused: no unreferenced files among 3 tracked .ts/.tsx file(s)");
   },
   180_000,
 );
