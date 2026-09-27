@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
 import { readFile } from "node:fs/promises";
-import { Usage } from "../../scripts/main.ts";
+import { Usage } from "../../src/core/main.ts";
 import {
   compareReports,
   formatComparison,
@@ -11,7 +11,7 @@ import {
   passes,
   type ReportFile,
   ReportError,
-} from "../../scripts/mutation-compare.ts";
+} from "../../src/testing/mutation-compare.ts";
 
 const FIXTURES = new URL("../fixtures/mutation-compare/", import.meta.url);
 

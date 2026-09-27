@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
-import { declarationFor, findGaps, formatReport, parseWorkflow, requiredCommands } from "../../scripts/ci-wiring.ts";
+import { declarationFor, findGaps, formatReport, parseWorkflow, requiredCommands } from "../../src/delivery/ci-wiring.ts";
 
 const scripts = ["lint", "build", "typecheck", "test"];
 const declaration = declarationFor(scripts, "main");

@@ -12,8 +12,14 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
 - `files` in package.json is the published surface: `tests/`, `AGENTS.md` and the `.ts` plugin source never reach an install.
   npm adds `package.json`, `README` and `LICENSE` to the tarball whatever `files` says.
   `bun pm pack` builds the same tarball the registry serves, which is what the packed-tarball consumer e2e test installs.
-- Each plugin ships compiled under `dist/`, built with `bun build <name>/index.ts --outdir dist/<name> --target node --format esm`.
+- Each plugin ships compiled under `dist/`, built with `bun build src/<vector>/<name>/index.ts --outdir dist/<name> --target node --format esm`.
   Node refuses to type-strip a `.ts` plugin under `node_modules`, so the `.ts` source would fail to load from an installed package.
+- The source sits under `src/<vector>/`, one directory for each thing the kit judges a repository on: complexity, quality, tests, docs, delivery and dependencies.
+  `src/core/` holds what every vector runs on, and `scripts/` holds only the kit's own build, which nothing ships.
+  Sorting by what loads a file put the two oxlint plugins at the root and every bin in one flat `scripts/`, so the files for one purpose sat in several places and nothing said which gate a helper served.
+  A mutation runner's default scope covers `src/`, so the kit's own Stryker run mutates its source without a `mutate` list.
+  The tests vector lives in `src/testing/`, since a `src/tests/` beside the root `tests/` would read as a second suite.
+  `exports` keeps each `./scripts/` key a consumer imports, pointed at the file's new home, so an import specifier resolves as before while a path read without resolution does not.
 - The size rules are plain oxlint rules at `error` in `.oxlintrc.json`, and `bun run lint` enforces them on the whole tree.
   A repository records its existing violations with `oxlint --suppress-all`, and `checks-suppressions-ratchet` refuses any count that rises.
   The kit runs no size script of its own, since restating how oxlint reads its config and compares sites left corners the native rules never had.
@@ -72,7 +78,7 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   Setting your own `options.enhancedResolveOptions` replaces the base's, so restate `exportsFields` and `conditionNames` if you do.
 - dependency-cruiser `extends` merges same-name `forbidden` rules with the child's fields winning.
   That is the entry-point and layer recipe under Boundaries in [The dependency rules](configs/dependency-rules.md).
-- The templates in `templates/` are rendered from `scripts/doc-templates.ts`, the spec `checks-docs` reads.
+- The templates in `templates/` are rendered from `src/docs/doc-templates.ts`, the spec `checks-docs` reads.
   A template written by hand beside the check agrees with it only until someone edits one of them.
 - A page's Diátaxis mode comes from `kind` front matter on the page, whatever directory holds it.
   The repository makes the judgment beside the page, and the check holds it to that template.
@@ -86,7 +92,7 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   Under a hard wrap a one-word edit reflows a paragraph, and the gate would then demand fixes to sentences the edit never touched.
 - An agent file such as `AGENTS.md` takes the separator rules and no other prose rule.
   One sentence per line serves the people who review a doc's diffs, and an agent file keeps each entry to one line however many sentences it holds.
-- `scripts/prose-matchers.ts` imports nothing, so the gate and a write-time hook run one matcher and refuse in the same words.
+- `src/docs/prose-matchers.ts` imports nothing, so the gate and a write-time hook run one matcher and refuse in the same words.
   A hook bundle ships without `node_modules`, so a matcher that needed Vale or a package could not refuse at write time.
 - Readability grades and words such as easy stay out of the prose rules.
   A score cannot fail a change without failing correct prose, and a suggestion nobody runs an editor for is never seen.

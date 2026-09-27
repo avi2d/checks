@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CHECKOUT, ran, type Ran } from "./lib/fixture-repo.ts";
 
-const SCRIPT = join(CHECKOUT, "scripts", "lint-coverage.sh");
+const SCRIPT = join(CHECKOUT, "src", "quality", "lint-coverage.sh");
 const BIN = join(CHECKOUT, "node_modules", ".bin");
 const SYSTEM_PATH = "/usr/bin:/bin";
 const PLANT = "src/skipped.ts";

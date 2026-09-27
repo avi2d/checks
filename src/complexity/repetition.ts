@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
-import { changedPaths, checkoutFiles, collect, git, pathsAt, rangeFromArgs } from "./git.ts";
-import { runMain } from "./main.ts";
+import { changedPaths, checkoutFiles, collect, git, pathsAt, rangeFromArgs } from "../core/git.ts";
+import { runMain } from "../core/main.ts";
 
 export type Fragment = {
   readonly file: string;

@@ -2,7 +2,7 @@
 import { Console, Effect } from "effect";
 import { BUN_VERSION, DocBlocksUnwritable, kitFacts, MANIFEST, OXLINTRC, splice, TARGETS } from "./doc-blocks.ts";
 import { kitCheckout } from "./kit-checkout.ts";
-import { runMain } from "./main.ts";
+import { runMain } from "../src/core/main.ts";
 
 const write = Effect.gen(function* () {
   const checkout = yield* kitCheckout;

@@ -51,7 +51,7 @@ jobs:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - name: extract release notes
-        run: bun scripts/release-notes.ts "${GITHUB_REF_NAME#v}" "$RUNNER_TEMP/release-notes.md"
+        run: bun src/delivery/release-notes.ts "${GITHUB_REF_NAME#v}" "$RUNNER_TEMP/release-notes.md"
       - name: create or update GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

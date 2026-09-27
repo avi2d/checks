@@ -6,7 +6,7 @@ import {
   placementViolations,
   scriptViolations,
   type Violation,
-} from "../../scripts/test-layout.ts";
+} from "../../src/testing/test-layout.ts";
 
 function isolation(file: string, source: string): Promise<readonly Violation[]> {
   return Effect.runPromise(isolationViolations(file, source));
@@ -119,7 +119,7 @@ test("scripts.test must be the test entry point and scripts.lint must run the ch
     scriptViolations({
       scripts: {
         test: "checks-test",
-        lint: "oxlint && bun ./node_modules/@avi2dg/checks/scripts/test-layout.ts",
+        lint: "oxlint && bun ./node_modules/@avi2dg/checks/src/testing/test-layout.ts",
       },
     }),
   ).toBeEmpty();
@@ -127,13 +127,13 @@ test("scripts.test must be the test entry point and scripts.lint must run the ch
   expect(
     scriptViolations({
       scripts: {
-        test: "bun scripts/test.ts",
+        test: "bun src/testing/test.ts",
         lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout",
       },
     }),
   ).toBeEmpty();
 
-  for (const lint of ["oxlint --type-aware && checks-lint && depcruise src", "oxlint && bun scripts/lint.ts"]) {
+  for (const lint of ["oxlint --type-aware && checks-lint && depcruise src", "oxlint && bun src/core/lint.ts"]) {
     expect(scriptViolations({ scripts: { test: "checks-test", lint } })).toBeEmpty();
   }
   for (const lint of [

@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
-import { git } from "./git.ts";
-import { runMain } from "./main.ts";
-import { ENTRY_POINT, TEST_ENTRY_POINT } from "./gates.ts";
-import { identifierName, isRecord, lineOf, parseTypeScript, spanStart, stringValue } from "./swc.ts";
+import { git } from "../core/git.ts";
+import { runMain } from "../core/main.ts";
+import { ENTRY_POINT, TEST_ENTRY_POINT } from "../core/gates.ts";
+import { identifierName, isRecord, lineOf, parseTypeScript, spanStart, stringValue } from "../core/swc.ts";
 
 export type Violation = {
   readonly file: string;
@@ -50,10 +50,10 @@ const ACCEPTED_IGNORES: readonly (readonly string[])[] = [
   [QUARANTINE, LIVE_TESTS, PIXEL_TESTS, VENDORED],
   [QUARANTINE, LIVE_TESTS, PIXEL_TESTS],
 ];
-export const LAYOUT_CHECK_MARK = "scripts/test-layout.ts";
+export const LAYOUT_CHECK_MARK = "src/testing/test-layout.ts";
 export const LAYOUT_CHECK_BIN = "checks-test-layout";
-const OWN_ENTRY_POINT = `scripts/${ENTRY_POINT.script}`;
-const TEST_SCRIPTS: readonly string[] = [TEST_ENTRY_POINT.bin, `bun scripts/${TEST_ENTRY_POINT.script}`];
+const OWN_ENTRY_POINT = `src/${ENTRY_POINT.script}`;
+const TEST_SCRIPTS: readonly string[] = [TEST_ENTRY_POINT.bin, `bun src/${TEST_ENTRY_POINT.script}`];
 
 export class LayoutError extends Schema.TaggedError<LayoutError>()("LayoutError", {
   message: Schema.String,
@@ -333,7 +333,7 @@ export function report({ files, violations }: Result): string {
 const layout = Effect.gen(function* () {
   const path = yield* Path.Path;
   const root = process.argv[2] ?? process.cwd();
-  const result = yield* run(root, path.join(import.meta.dir, "..", "bunfig.toml"));
+  const result = yield* run(root, path.join(import.meta.dir, "..", "..", "bunfig.toml"));
   yield* Console.log(report(result));
   return result.violations.length === 0;
 });

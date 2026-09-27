@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 import { Console, Effect, Option } from "effect";
 import { refused, syntaxOf } from "./comments.ts";
-import { changedLines, git, parentOrEmptyTree, refArgs } from "./git.ts";
-import { runMain } from "./main.ts";
+import { changedLines, git, parentOrEmptyTree, refArgs } from "../core/git.ts";
+import { runMain } from "../core/main.ts";
 
 export type GateResult = {
   readonly files: number;

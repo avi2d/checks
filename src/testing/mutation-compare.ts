@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Schema } from "effect";
-import { runMain, Usage } from "./main.ts";
+import { runMain, Usage } from "../core/main.ts";
 
 export type Location = {
   readonly start: { readonly line: number; readonly column: number };

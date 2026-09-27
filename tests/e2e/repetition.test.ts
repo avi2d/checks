@@ -38,7 +38,7 @@ test(
     const { dir, commit } = await repository({ "src/ledger.ts": block("ledger") });
     const first = await commit("feat: first");
     const gitOnly = { ...process.env, PATH: dirname(Bun.which("git") ?? "/usr/bin/git") };
-    const result = await $`${process.execPath} ${join(CHECKOUT, "scripts", "repetition.ts")} ${first}`.cwd(dir).env(gitOnly).nothrow().quiet();
+    const result = await $`${process.execPath} ${join(CHECKOUT, "src", "complexity", "repetition.ts")} ${first}`.cwd(dir).env(gitOnly).nothrow().quiet();
     expect(result.stderr.toString()).toContain("repetition: cannot run jscpd");
     expect(result.exitCode).toBe(2);
   },
@@ -50,7 +50,7 @@ test(
   async () => {
     const { dir, write, commit, script } = await repository({ "src/ledger.ts": block("ledger"), "src/invoice.ts": block("ledger") });
     const first = await commit("feat: base");
-    const rootRange = await script("repetition.ts", first);
+    const rootRange = await script("complexity/repetition.ts", first);
     expect(rootRange.text).toContain(
       `repetition: 2 ${ROSE}  src/invoice.ts: 10 repeated line(s), up from 0\n    src/invoice.ts:1-10 repeats src/ledger.ts:1-10\n  src/ledger.ts: 10 repeated line(s), up from 0\n`,
     );
@@ -65,7 +65,7 @@ test(
     await $`git checkout -q feature`.cwd(dir).quiet();
     await write({ "src/copy.ts": lines(2, "copy"), "src/other.ts": block("ledger") });
 
-    const red = await script("repetition.ts", "main", head);
+    const red = await script("complexity/repetition.ts", "main", head);
     expect(red.text).toContain(`repetition: 1 ${ROSE}  src/copy.ts: 10 repeated line(s), up from 0\n`);
     expect(red.text).not.toContain("other.ts");
     expect(red.exitCode).toBe(1);
@@ -103,14 +103,14 @@ test(
     const base = await commit("feat: base");
     await write({ "src/copy.ts": block("ledger"), "tools/copy.ts": block("ledger") });
     const head = await commit("feat: copies");
-    const red = await script("repetition.ts", base, head);
+    const red = await script("complexity/repetition.ts", base, head);
     expect(red.text).toContain(`repetition: 2 ${ROSE}  src/copy.ts: 10 repeated line(s), up from 0\n`);
     expect(red.text).not.toContain("tools/copy.ts");
     expect(red.exitCode).toBe(1);
 
     await write({ ".jscpd.json": JSON.stringify({ path: ["src"], ignore: ["**/copy.ts"] }) });
     const ignored = await commit("chore: ignore the copy");
-    const green = await script("repetition.ts", base, ignored);
+    const green = await script("complexity/repetition.ts", base, ignored);
     expect(green.text).toContain("repetition: 1 file(s) .jscpd.json holds repeat no more lines than where the range starts");
     expect(green.exitCode).toBe(0);
   },
@@ -128,13 +128,13 @@ test(
     const base = await commit("feat: base over the threshold");
     await write({ "src/small.ts": lines(2, "small") });
     const kept = await commit("feat: no new copy");
-    const green = await script("repetition.ts", base, kept);
+    const green = await script("complexity/repetition.ts", base, kept);
     expect(green.text).toContain("repeat no more lines than where the range starts");
     expect(green.exitCode).toBe(0);
 
     await write({ "src/copy.ts": block("ledger") });
     const copied = await commit("feat: another copy");
-    const red = await script("repetition.ts", base, copied);
+    const red = await script("complexity/repetition.ts", base, copied);
     expect(red.text).toContain("  src/copy.ts: 10 repeated line(s), up from 0\n");
     expect(red.exitCode).toBe(1);
   },
@@ -148,7 +148,7 @@ test(
     const base = await commit("feat: base");
     await write({ ".jscpd.json": JSON.stringify({ path: ["src", "tools"] }), "tools/copy.ts": block("ledger") });
     const head = await commit("feat: a measured folder");
-    const red = await script("repetition.ts", base, head);
+    const red = await script("complexity/repetition.ts", base, head);
     expect(red.text).toContain(`repetition: 2 ${ROSE}  src/ledger.ts: 10 repeated line(s), up from 0\n`);
     expect(red.text).toContain("  tools/copy.ts: 10 repeated line(s), up from 0\n");
     expect(red.exitCode).toBe(1);

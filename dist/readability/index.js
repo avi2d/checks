@@ -1,4 +1,4 @@
-// readability/cognitive-nodes.ts
+// src/complexity/readability/cognitive-nodes.ts
 var CONTROL_TYPES = ["IfStatement", "ConditionalExpression", "SwitchStatement", "SwitchCase", "TryStatement", "CatchClause"];
 var LOOP_TYPES = ["ForStatement", "ForInStatement", "ForOfStatement", "WhileStatement", "DoWhileStatement", "LabeledStatement"];
 var CALL_TYPES = ["LogicalExpression", "BreakStatement", "ContinueStatement", "CallExpression", "NewExpression", "ImportExpression"];
@@ -7,7 +7,7 @@ var PLAIN_A_TYPES = ["BlockStatement", "ExpressionStatement", "ReturnStatement",
 var PLAIN_B_TYPES = ["ClassDeclaration", "ClassExpression", "ClassBody", "MethodDefinition", "TSAbstractMethodDefinition", "PropertyDefinition", "TSAbstractPropertyDefinition", "AccessorProperty", "TSAbstractAccessorProperty", "ObjectExpression", "ArrayExpression"];
 var PLAIN_C_TYPES = ["AwaitExpression", "UnaryExpression", "UpdateExpression", "SpreadElement", "YieldExpression", "BinaryExpression", "AssignmentExpression", "TSAsExpression", "TSSatisfiesExpression", "TSTypeAssertion", "TSNonNullExpression", "ChainExpression", "ParenthesizedExpression", "Decorator", "TSInstantiationExpression", "MemberExpression", "JSXMemberExpression", "TemplateLiteral", "TaggedTemplateExpression", "SequenceExpression", "JSXElement", "JSXFragment", "JSXOpeningElement", "JSXAttribute", "JSXExpressionContainer", "JSXSpreadChild", "JSXSpreadAttribute"];
 
-// readability/cognitive-plain.ts
+// src/complexity/readability/cognitive-plain.ts
 function isControl(node) {
   return CONTROL_TYPES.includes(node.type);
 }
@@ -142,7 +142,7 @@ function plainChildrenC(node) {
   }
 }
 
-// readability/cognitive.ts
+// src/complexity/readability/cognitive.ts
 function unreachable2(_value) {}
 function scoreList(state, nodes, nesting, parent) {
   for (const node of nodes) {
@@ -334,7 +334,7 @@ function cognitiveComplexity(root, names) {
   return state.recursive ? state.total + 1 : state.total;
 }
 
-// readability/cognitive-complexity.ts
+// src/complexity/readability/cognitive-complexity.ts
 var DEFAULT_MAX = 15;
 function maxOf(options) {
   const [first] = options;
@@ -416,7 +416,7 @@ var rule = {
 };
 var cognitive_complexity_default = rule;
 
-// readability/index.ts
+// src/complexity/readability/index.ts
 var plugin = {
   meta: { name: "readability" },
   rules: {

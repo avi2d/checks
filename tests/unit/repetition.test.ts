@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { clonesOf, describe, heldOf, report, repeatedLines, risesOf, type Clone, type Fragment } from "../../scripts/repetition.ts";
+import { clonesOf, describe, heldOf, report, repeatedLines, risesOf, type Clone, type Fragment } from "../../src/complexity/repetition.ts";
 
 function fragment(file: string, start: number, end: number): Fragment {
   return { file, start, end };

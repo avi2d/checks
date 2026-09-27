@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect, Schema } from "effect";
-import { commitOf, git, isShallowBoundary, refArgs } from "./git.ts";
-import { runMain } from "./main.ts";
+import { commitOf, git, isShallowBoundary, refArgs } from "../core/git.ts";
+import { runMain } from "../core/main.ts";
 import { TEST_FILE } from "./test-layout.ts";
 
 export const QUARANTINE = "tests/quarantine/";

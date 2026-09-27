@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { judge, placementOf, placementProblem, speaksToConsumers } from "../../scripts/doc-rules.ts";
-import { KINDS, type Kind } from "../../scripts/doc-templates.ts";
+import { judge, placementOf, placementProblem, speaksToConsumers } from "../../src/docs/doc-rules.ts";
+import { KINDS, type Kind } from "../../src/docs/doc-templates.ts";
 
 const FIXTURES = resolve(import.meta.dir, "..", "fixtures", "docs");
 const RECORD = "docs/adr/0001-a-part-names-its-supplier.md";

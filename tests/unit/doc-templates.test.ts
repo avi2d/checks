@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { judge } from "../../scripts/doc-rules.ts";
-import { ADR_STATUSES, KINDS, renderTemplate, TEMPLATE_DIRECTORY, TEMPLATES, templateFile } from "../../scripts/doc-templates.ts";
+import { judge } from "../../src/docs/doc-rules.ts";
+import { ADR_STATUSES, KINDS, renderTemplate, TEMPLATE_DIRECTORY, TEMPLATES, templateFile } from "../../src/docs/doc-templates.ts";
 
 const CHECKOUT = resolve(import.meta.dir, "..", "..");
 const PLACEHOLDER = /<(?!!--)[^>\s][^>]*>/g;

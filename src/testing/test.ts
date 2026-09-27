@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 import { Config, Console, Effect, FileSystem, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
-import { TEST_ENTRY_POINT } from "./gates.ts";
-import { runMain, Usage } from "./main.ts";
+import { TEST_ENTRY_POINT } from "../core/gates.ts";
+import { runMain, Usage } from "../core/main.ts";
 import { readSkipDeclarations, type Environment, type SkipDeclaration, type TestTier } from "./test-skips.ts";
 import { NAME_SEPARATOR, parseReport, ReportError, reporterArgs, type TestResult } from "./test-report.ts";
 

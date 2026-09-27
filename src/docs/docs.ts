@@ -3,8 +3,8 @@ import { Console, Effect } from "effect";
 import { rootsOf, unresolvedIn, type Judging, type Unresolved } from "./doc-references.ts";
 import { ADR_DIRECTORY, judge, placementOf, placementProblem, speaksToConsumers, type Placement } from "./doc-rules.ts";
 import { readTexts, snapshotAt, stillMissing } from "./doc-snapshot.ts";
-import { changedLines, changedPaths, git, pathsAt, rangeEnds, refArgs } from "./git.ts";
-import { runMain } from "./main.ts";
+import { changedLines, changedPaths, git, pathsAt, rangeEnds, refArgs } from "../core/git.ts";
+import { runMain } from "../core/main.ts";
 import { isLivingDoc, proseFindings, readerOf } from "./prose-matchers.ts";
 
 type Finding = {

@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import { Usage } from "./main.ts";
+import { Usage } from "../core/main.ts";
 
 export const NAME = "checks-vendor";
 export const OPENER = "--library";

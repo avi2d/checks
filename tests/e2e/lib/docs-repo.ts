@@ -30,7 +30,7 @@ export async function docsRepo(): Promise<DocsRepo> {
     put: (path, text) => write({ [path]: text }),
     remove: (path) => rm(join(dir, path)),
     commit,
-    docs: (...args) => script("docs.ts", ...args),
+    docs: (...args) => script("docs/docs.ts", ...args),
     dispose,
   };
 }

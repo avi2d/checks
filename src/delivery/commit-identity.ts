@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
-import { git, refArgs } from "./git.ts";
-import { runMain } from "./main.ts";
+import { git, refArgs } from "../core/git.ts";
+import { runMain } from "../core/main.ts";
 
 type Identity = { readonly name: string; readonly email: string };
 

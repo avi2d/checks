@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 import { Console, Effect, Schema } from "effect";
 import { groupOf } from "./changelog.ts";
-import { git } from "./git.ts";
-import { runMain, Usage } from "./main.ts";
+import { git } from "../core/git.ts";
+import { runMain, Usage } from "../core/main.ts";
 
 export class ReleaseReportUnreadable extends Schema.TaggedError<ReleaseReportUnreadable>()("ReleaseReportUnreadable", {
   message: Schema.String,

@@ -1,6 +1,6 @@
-import { firstText, parseOutline, VERSION } from "./doc-outline.ts";
-import { RELEASED } from "./doc-rules.ts";
-import { CHANGE_GROUPS, type ChangeGroup } from "./doc-templates.ts";
+import { firstText, parseOutline, VERSION } from "../docs/doc-outline.ts";
+import { RELEASED } from "../docs/doc-rules.ts";
+import { CHANGE_GROUPS, type ChangeGroup } from "../docs/doc-templates.ts";
 
 export type Bump = {
   readonly sha: string;

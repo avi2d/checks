@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { cognitiveComplexity, type SelfNames } from "../../readability/cognitive.ts";
+import { cognitiveComplexity, type SelfNames } from "../../src/complexity/readability/cognitive.ts";
 import {
   CALL_TYPES,
   CONTROL_TYPES,
@@ -8,8 +8,8 @@ import {
   PLAIN_A_TYPES,
   PLAIN_B_TYPES,
   PLAIN_C_TYPES,
-} from "../../readability/cognitive-nodes.ts";
-import type { Arrow, NamedFunction, Static, SyntaxNode } from "../../readability/cognitive-nodes.ts";
+} from "../../src/complexity/readability/cognitive-nodes.ts";
+import type { Arrow, NamedFunction, Static, SyntaxNode } from "../../src/complexity/readability/cognitive-nodes.ts";
 
 const id = (name: string): SyntaxNode => ({ type: "Identifier", name });
 const lit = (): SyntaxNode => ({ type: "Literal" });

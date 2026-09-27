@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { findEntry, overdueOf, QUARANTINE_DAYS, report } from "../../scripts/quarantine-clock.ts";
+import { findEntry, overdueOf, QUARANTINE_DAYS, report } from "../../src/testing/quarantine-clock.ts";
 
 const DAY = 86400;
 const FILE = "tests/quarantine/billing.test.ts";

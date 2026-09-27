@@ -88,7 +88,7 @@ export function syntaxOf(path: string): Syntax | undefined {
 }
 
 export function unreadable(path: string): string {
-  return `${path} is code the comment checks cannot read: add a comment syntax for .${extensionOf(path)} to scripts/comment-matchers.ts`;
+  return `${path} is code the comment checks cannot read: add a comment syntax for .${extensionOf(path)} to src/quality/comment-matchers.ts`;
 }
 
 const WORD = /[\w$]/;

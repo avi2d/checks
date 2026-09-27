@@ -103,7 +103,7 @@ Add a pull request title lint step in another workflow using `./node_modules/.bi
 `checks-lint` runs these gates in this order, each over the working tree or over the range it resolves, and names every one that fails.
 `checks-lint` runs every applicable gate, including the TypeScript gates once the repository tracks TypeScript.
 
-<!-- generated gates: bun run build writes it from KIT_GATES in scripts/gates.ts and scripts/doc-blocks.ts -->
+<!-- generated gates: bun run build writes it from KIT_GATES in src/core/gates.ts and scripts/doc-blocks.ts -->
 
 | Gate | Reads | Runs in |
 | --- | --- | --- |
@@ -161,7 +161,7 @@ Every path is relative to the installed package, `node_modules/@avi2dg/checks/`.
 | `bunfig.toml` | the bunfig preset a repository copies |
 | `commitlint.config.js` | the shared commitlint config |
 | `dependency-cruiser.config.js` | the shared dependency-cruiser base |
-| `scripts/` | every bin, which a package script calls by its `checks-` name |
+| `src/` | every bin, which a package script calls by its `checks-` name, and the modules the bins import |
 | `templates/` | one template per kind of doc file, which a new doc file starts from |
 | `presets/` | the Effect rule blocks a repository copies into its native config |
 | `oxlintrc.json` | the oxlint base config `.oxlintrc.json` extends |

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Effect, FileSystem, Schema } from "effect";
-import { runMain, Usage } from "./main.ts";
+import { runMain, Usage } from "../core/main.ts";
 
 export class ReleaseSectionUnavailable extends Schema.TaggedError<ReleaseSectionUnavailable>()("ReleaseSectionUnavailable", {
   message: Schema.String,

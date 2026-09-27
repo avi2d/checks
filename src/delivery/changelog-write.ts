@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 import { Console, DateTime, Effect, FileSystem, Path, Schema } from "effect";
 import { cuts, hasEntries, namesPullRequest, releaseDates, renderChangelog, type Bump, type Cut, type Release } from "./changelog.ts";
-import { git } from "./git.ts";
-import { runMain } from "./main.ts";
+import { git } from "../core/git.ts";
+import { runMain } from "../core/main.ts";
 
 const NAME = "checks-changelog";
 const CHANGELOG = "CHANGELOG.md";

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
-import * as Matchers from "../../scripts/comment-matchers.ts";
-import { comments, refused, UnreadableCode } from "../../scripts/comments.ts";
+import * as Matchers from "../../src/quality/comment-matchers.ts";
+import { comments, refused, UnreadableCode } from "../../src/quality/comments.ts";
 
 test("code that is not a comment is not read as one", () => {
   const source = [
@@ -207,7 +207,7 @@ test("a prefixed char literal still opens where its prefix ends", () => {
 });
 
 test("code the checks cannot read is named rather than passed over", () => {
-  const named = "src/main.pl is code the comment checks cannot read: add a comment syntax for .pl to scripts/comment-matchers.ts";
+  const named = "src/main.pl is code the comment checks cannot read: add a comment syntax for .pl to src/quality/comment-matchers.ts";
   const failure = Effect.runSync(Effect.flip(comments("src/main.pl", "# a comment")));
   expect(failure).toBeInstanceOf(UnreadableCode);
   expect(failure.message).toBe(named);

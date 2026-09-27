@@ -1,5 +1,5 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
-import { identifierName, isRecord, lineOf, parseTypeScript, spanStart, stringValue } from "./swc.ts";
+import { identifierName, isRecord, lineOf, parseTypeScript, spanStart, stringValue } from "../core/swc.ts";
 
 export type Environment = "ci" | "local";
 export type TestTier = "live" | "pixel";

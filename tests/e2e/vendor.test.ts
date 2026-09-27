@@ -2,10 +2,10 @@ import { $ } from "bun";
 import { afterEach, expect, test } from "bun:test";
 import { appendFile, chmod, lstat, mkdir, readdir, readFile, readlink, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { remoteSegments, tagFor } from "../../scripts/vendor.ts";
+import { remoteSegments, tagFor } from "../../src/dependencies/vendor.ts";
 import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
 
-const VENDOR = join(CHECKOUT, "scripts", "vendor.ts");
+const VENDOR = join(CHECKOUT, "src", "dependencies", "vendor.ts");
 const TEMPLATE = "fake-lib@{version}";
 const IDENTITY = ["-c", "user.name=Wren Fixture", "-c", "user.email=wren@example.com"];
 

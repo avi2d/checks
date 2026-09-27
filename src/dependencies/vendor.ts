@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Option, Path, Schema } from "effect";
-import { git } from "./git.ts";
-import { runMain } from "./main.ts";
+import { git } from "../core/git.ts";
+import { runMain } from "../core/main.ts";
 import { librariesFrom, NAME, OPENER, type Library } from "./vendor-args.ts";
 
 const CACHE_HOME = ".cache/avi2dg-checks";

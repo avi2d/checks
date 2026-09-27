@@ -12,9 +12,9 @@ To check a change the way CI does:
 
 1. Run `bun install`.
 1. Run `bun run build`, which rewrites the files it generates, as Regenerate what is committed lists.
-1. Run `bun run lint`, which runs oxlint, the kit's own gates through `scripts/lint.ts`, and the dependency cruise.
+1. Run `bun run lint`, which runs oxlint, the kit's own gates through `src/core/lint.ts`, and the dependency cruise.
 1. Run `bun run typecheck`.
-1. Run `bun run test`, which runs the suite through `scripts/test.ts`.
+1. Run `bun run test`, which runs the suite through `src/testing/test.ts`.
 
 Declare each skip with `skipReason(reason, name)` beside the native Bun test call, as [checks-test](docs/gates/checks-test.md) says.
 
@@ -26,7 +26,7 @@ Each generated file is committed, and lint, the suite or CI's diff after the bui
 
 To regenerate after an edit:
 
-1. After editing `effect-channel/`, `readability/` or the templates in `scripts/doc-templates.ts`, run `bun run build`.
+1. After editing `src/quality/effect-channel/`, `src/complexity/readability/` or the templates in `src/docs/doc-templates.ts`, run `bun run build`.
    It rewrites `dist/` and `templates/`.
 1. After editing anything a generated block names as its source in its opening marker, run `bun run build`, which rewrites every generated block.
 1. Commit what the command rewrote in the same commit as the edit.
@@ -68,9 +68,14 @@ To place a change:
 
    | Path | What it holds |
    | --- | --- |
-   | `scripts/` | every bin, and the modules they share |
-   | `effect-channel/` | the oxlint plugin with the Effect error-channel rules |
-   | `readability/` | the oxlint plugin with the readability rules |
+   | `src/core/` | the `checks-lint` entry point, the gate registry and the modules every bin runs on |
+   | `src/complexity/` | the gates that bound how large and tangled code may grow, and the `readability` oxlint plugin |
+   | `src/quality/` | the gates that hold code correct and idiomatic, and the `effect-channel` oxlint plugin |
+   | `src/testing/` | the gates that judge how the suite is laid out, run and trusted |
+   | `src/docs/` | the doc gate and the rules it reads |
+   | `src/delivery/` | the gates and bins for how a change reaches `main` and a release |
+   | `src/dependencies/` | what code may import, and which library sources an agent reads |
+   | `scripts/` | the kit's own build, which nothing ships |
    | `dist/` | the committed oxlint plugin bundles |
    | `presets/` | the Effect rule blocks consumers copy into native configs |
    | `templates/` | one template per kind of doc file, which `bun run build` renders |
@@ -86,7 +91,7 @@ To place a change:
 
 This repository holds itself to the kit, with two exceptions of its own.
 Its `.dependency-cruiser.cjs` redeclares `no-orphans` with each plugin entry added to its `pathNot`.
-Its `.oxlintrc.json` lifts `effect-channel/no-throw` from `scripts/comment-matchers.ts`, whose synchronous `refused()` a host loads without `node_modules`.
+Its `.oxlintrc.json` lifts `effect-channel/no-throw` from `src/quality/comment-matchers.ts`, whose synchronous `refused()` a host loads without `node_modules`.
 
 ## Related topics
 

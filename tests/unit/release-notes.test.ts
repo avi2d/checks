@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { expect, test } from "bun:test";
-import { extractReleaseNotes } from "../../scripts/release-notes.ts";
+import { extractReleaseNotes } from "../../src/delivery/release-notes.ts";
 
 test("release notes contain only the requested section with outer blank lines trimmed", () => {
   const changelog = [

@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 import { Console, Effect, Option } from "effect";
 import { comments, refused, syntaxOf } from "./comments.ts";
-import { git } from "./git.ts";
-import { runMain, Usage } from "./main.ts";
+import { git } from "../core/git.ts";
+import { runMain, Usage } from "../core/main.ts";
 
 type Landed = {
   readonly sha: string;

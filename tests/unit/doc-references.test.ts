@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { anchoredTargets, anchorsOf, snapshotOf, unresolvedIn, type Snapshot } from "../../scripts/doc-references.ts";
+import { anchoredTargets, anchorsOf, snapshotOf, unresolvedIn, type Snapshot } from "../../src/docs/doc-references.ts";
 
 const FILES = [
   "README.md",

@@ -17,7 +17,8 @@
         "name": "@effect/language-service",
         "overrides": [
           {
-            "include": ["scripts/**/*.ts"],
+            "include": ["src/**/*.ts", "scripts/**/*.ts"],
+            "exclude": ["src/quality/effect-channel/**", "src/complexity/readability/**"],
             "options": {
               "diagnosticSeverity": {
                 "nodeBuiltinImport": "error",
@@ -31,5 +32,5 @@
       }
     ]
   },
-  "include": ["effect-channel/**/*.ts", "readability/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts"]
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts"]
 }

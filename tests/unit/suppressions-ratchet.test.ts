@@ -6,7 +6,7 @@ import {
   report,
   type Suppressions,
   SuppressionsError,
-} from "../../scripts/suppressions-ratchet.ts";
+} from "../../src/complexity/suppressions-ratchet.ts";
 
 function suppressions(entries: Record<string, Record<string, number>>): Suppressions {
   return new Map(Object.entries(entries).map(([file, rules]) => [file, new Map(Object.entries(rules))]));

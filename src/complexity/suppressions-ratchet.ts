@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect, Schema } from "effect";
-import { git, commitOf, parentOrEmptyTree, refArgs } from "./git.ts";
-import { runMain } from "./main.ts";
+import { git, commitOf, parentOrEmptyTree, refArgs } from "../core/git.ts";
+import { runMain } from "../core/main.ts";
 
 export const SUPPRESSIONS = "oxlint-suppressions.json";
 

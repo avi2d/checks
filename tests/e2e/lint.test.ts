@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { withoutPullRequestEvent } from "../lib/env.ts";
 import { CHECKOUT, fixtureRepos, lintWiring, ran, type FixtureRepo, type Ran } from "./lib/fixture-repo.ts";
 
-const SCRIPT = join(CHECKOUT, "scripts", "lint.ts");
+const SCRIPT = join(CHECKOUT, "src", "core", "lint.ts");
 const OWNER = ["-c", "user.name=Wren Fixture", "-c", "user.email=wren@example.com"];
 const STRANGER = ["-c", "user.name=stranger", "-c", "user.email=stranger@example.com"];
 const open = fixtureRepos("checks-lint-");

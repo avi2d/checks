@@ -37,19 +37,19 @@ test(
     const head = await repo.commit("chore: head");
     const entryDay = daysAgo(40).slice(0, "YYYY-MM-DD".length);
 
-    const red = await repo.script("quarantine-clock.ts", head);
+    const red = await repo.script("testing/quarantine-clock.ts", head);
     expect(red.exitCode).toBe(1);
     expect(red.text).toContain(
       "quarantine-clock: 1 test(s) in tests/quarantine/ is past 30 days; fix each and move it back, or delete it:",
     );
     expect(red.text).toContain(`  tests/quarantine/billing.test.ts entered quarantine on ${entryDay} (`);
 
-    const ranged = await repo.script("quarantine-clock.ts", `${head}~1`, head);
+    const ranged = await repo.script("testing/quarantine-clock.ts", `${head}~1`, head);
     expect(ranged.exitCode).toBe(1);
     expect(ranged.text).toContain("tests/quarantine/billing.test.ts entered quarantine on");
 
     await mkdir(join(repo.dir, "src"), { recursive: true });
-    const nested = await ran($`bun ${join(CHECKOUT, "scripts", "quarantine-clock.ts")} ${head}`.cwd(join(repo.dir, "src")));
+    const nested = await ran($`bun ${join(CHECKOUT, "src", "testing", "quarantine-clock.ts")} ${head}`.cwd(join(repo.dir, "src")));
     expect(nested.exitCode).toBe(1);
     expect(nested.text).toContain(`  tests/quarantine/billing.test.ts entered quarantine on ${entryDay} (`);
   },
@@ -66,7 +66,7 @@ test(
       .cwd(repo.dir)
       .quiet();
 
-    const red = await repo.script("quarantine-clock.ts", "HEAD");
+    const red = await repo.script("testing/quarantine-clock.ts", "HEAD");
     expect(red.exitCode).toBe(1);
     expect(red.text).toContain("  tests/quarantine/billing.test.ts entered quarantine on");
     expect(red.text).toContain("(40 days ago)");
@@ -84,7 +84,7 @@ test(
     await repo.write({ "notes.md": "# notes\n" });
     const head = await repo.commit("chore: head");
 
-    const green = await repo.script("quarantine-clock.ts", head);
+    const green = await repo.script("testing/quarantine-clock.ts", head);
     expect(green.exitCode).toBe(0);
     expect(green.text).toContain("quarantine-clock: no test in tests/quarantine/ is past 30 days (2 checked)");
   },
@@ -100,7 +100,7 @@ test(
     await repo.write({ "notes.md": "# notes\n" });
     const head = await repo.commit("chore: head");
 
-    const green = await repo.script("quarantine-clock.ts", head);
+    const green = await repo.script("testing/quarantine-clock.ts", head);
     expect(green.exitCode).toBe(0);
     expect(green.text).toContain("quarantine-clock: no test in tests/quarantine/ is past 30 days (1 checked)");
   },
@@ -117,7 +117,7 @@ test(
     const head = await repo.commit("chore: head");
     const moveDay = daysAgo(40).slice(0, "YYYY-MM-DD".length);
 
-    const red = await repo.script("quarantine-clock.ts", head);
+    const red = await repo.script("testing/quarantine-clock.ts", head);
     expect(red.exitCode).toBe(1);
     expect(red.text).toContain(`  tests/quarantine/billing.test.ts entered quarantine on ${moveDay} (`);
   },
@@ -131,15 +131,15 @@ test(
     await repo.write({ "notes.md": "# notes\n" });
     const head = await repo.commit("chore: head");
 
-    const none = await repo.script("quarantine-clock.ts", head);
+    const none = await repo.script("testing/quarantine-clock.ts", head);
     expect(none.exitCode).toBe(0);
     expect(none.text).toContain("quarantine-clock: no test in tests/quarantine/ is past 30 days (0 checked)");
 
-    const unknown = await repo.script("quarantine-clock.ts", "no-such-ref");
+    const unknown = await repo.script("testing/quarantine-clock.ts", "no-such-ref");
     expect(unknown.exitCode).toBe(2);
     expect(unknown.text).toContain("quarantine-clock: git rev-parse");
 
-    const usage = await repo.script("quarantine-clock.ts");
+    const usage = await repo.script("testing/quarantine-clock.ts");
     expect(usage.exitCode).toBe(2);
     expect(usage.text).toContain("usage: quarantine-clock.ts");
   },
@@ -156,7 +156,7 @@ test(
     const shallow = join(await scratch("checks-quarantine-clock-shallow-"), "clone");
     await $`git clone -q --depth 1 ${`file://${repo.dir}`} ${shallow}`.quiet();
 
-    const truncated = await ran($`bun ${join(CHECKOUT, "scripts", "quarantine-clock.ts")} HEAD`.cwd(shallow));
+    const truncated = await ran($`bun ${join(CHECKOUT, "src", "testing", "quarantine-clock.ts")} HEAD`.cwd(shallow));
     expect(truncated.exitCode).toBe(2);
     expect(truncated.text).toContain(
       "quarantine-clock: cannot see tests/quarantine/billing.test.ts entering tests/quarantine/; fetch the whole history",

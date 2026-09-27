@@ -15,7 +15,7 @@
   },
   "overrides": [
     {
-      "files": ["effect-channel/**/*.ts", "readability/**/*.ts", "scripts/**/*.ts"],
+      "files": ["src/**/*.ts", "scripts/**/*.ts"],
       "rules": {
         "max-lines": ["error", { "max": 400, "skipBlankLines": false, "skipComments": false }],
         "max-lines-per-function": ["error", { "max": 100, "skipBlankLines": false, "skipComments": false }],
@@ -35,7 +35,8 @@
       }
     },
     {
-      "files": ["scripts/**/*.ts"],
+      "files": ["src/**/*.ts", "scripts/**/*.ts"],
+      "excludeFiles": ["src/quality/effect-channel/**", "src/complexity/readability/**"],
       "plugins": ["typescript", "oxc", "eslint", "import", "node", "promise", "unicorn"],
       "rules": {
         "node/no-sync": "error",
@@ -47,7 +48,7 @@
       }
     },
     {
-      "files": ["scripts/comment-matchers.ts"],
+      "files": ["src/quality/comment-matchers.ts"],
       "rules": {
         "effect-channel/no-throw": "off"
       }

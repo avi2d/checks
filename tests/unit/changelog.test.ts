@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { cuts, hasEntries, releaseDates, renderChangelog, type Bump } from "../../scripts/changelog.ts";
-import { judge } from "../../scripts/doc-rules.ts";
+import { cuts, hasEntries, releaseDates, renderChangelog, type Bump } from "../../src/delivery/changelog.ts";
+import { judge } from "../../src/docs/doc-rules.ts";
 
 const SUBJECTS = [
   "chore: begin history",

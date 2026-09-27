@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Config, Console, Effect, FileSystem, Option, Path, Random, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
-import { runMain, Usage } from "./main.ts";
+import { runMain, Usage } from "../core/main.ts";
 import { NAME_SEPARATOR, parseReport, ReportError, reporterArgs, type TestResult } from "./test-report.ts";
 
 export type Run = {

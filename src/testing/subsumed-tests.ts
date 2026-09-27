@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem } from "effect";
-import { runMain, Usage } from "./main.ts";
+import { runMain, Usage } from "../core/main.ts";
 import { type KillRun, parseKillRun, ReportError } from "./mutation-compare.ts";
 
 export type KillSets = ReadonlyMap<string, ReadonlySet<string>>;

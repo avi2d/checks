@@ -5,14 +5,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CHECKOUT, fixtureRepos, ran, UNVENDORED_BUNFIG, type Ran } from "./lib/fixture-repo.ts";
 
-const CHECK = join(CHECKOUT, "scripts", "test-layout.ts");
+const CHECK = join(CHECKOUT, "src", "testing", "test-layout.ts");
 const PRESET = join(CHECKOUT, "bunfig.toml");
 
 const MANIFEST = {
   name: "consumer",
   scripts: {
     test: "checks-test",
-    lint: "oxlint && bun ./node_modules/@avi2dg/checks/scripts/test-layout.ts",
+    lint: "oxlint && bun ./node_modules/@avi2dg/checks/src/testing/test-layout.ts",
   },
 };
 const CLEAN_TEST = 'import { expect, test } from "bun:test";\ntest("adds", () => {\n  expect(1 + 1).toBe(2);\n});\n';
@@ -119,7 +119,7 @@ test(
       "tests/pixel/display.test.ts": spawning,
     });
 
-    const missing = await repo.script("test-layout.ts", repo.dir);
+    const missing = await repo.script("testing/test-layout.ts", repo.dir);
     expect(missing.exitCode).toBe(1);
     expect(missing.text).toContain('test:live must be "checks-test --tier=live"');
     expect(missing.text).toContain('test:pixel must be "checks-test --tier=pixel"');
@@ -131,7 +131,7 @@ test(
         2,
       )}\n`,
     });
-    const fixed = await repo.script("test-layout.ts", repo.dir);
+    const fixed = await repo.script("testing/test-layout.ts", repo.dir);
     expect(fixed.exitCode).toBe(0);
     expect(fixed.text).toContain("satisfy the layout");
   },

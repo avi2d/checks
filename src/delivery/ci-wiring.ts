@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
-import { defaultBranch, git } from "./git.ts";
-import { runMain } from "./main.ts";
-import { ENTRY_POINT, KIT_GATES, type KitGate } from "./gates.ts";
+import { defaultBranch, git } from "../core/git.ts";
+import { runMain } from "../core/main.ts";
+import { ENTRY_POINT, KIT_GATES, type KitGate } from "../core/gates.ts";
 import { invokes, mentions, plainCommand, type Command } from "./shell-command.ts";
 
 export type { Command };

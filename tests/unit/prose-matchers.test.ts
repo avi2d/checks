@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isLivingDoc, PROSE_RULES, proseFindings, proseRefused, readerOf, scanMarkdown } from "../../scripts/prose-matchers.ts";
+import { isLivingDoc, PROSE_RULES, proseFindings, proseRefused, readerOf, scanMarkdown } from "../../src/docs/prose-matchers.ts";
 
 function refusals(text: string, within?: ReadonlySet<number>): readonly string[] {
   return proseFindings(text, "people", within).map(({ line, message }) => `${line}: ${message}`);

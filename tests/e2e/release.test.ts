@@ -4,8 +4,8 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CHECKOUT, fixtureRepos, ran } from "./lib/fixture-repo.ts";
 
-const REPORT = join(CHECKOUT, "scripts", "release-report.ts");
-const NOTES = join(CHECKOUT, "scripts", "release-notes.ts");
+const REPORT = join(CHECKOUT, "src", "delivery", "release-report.ts");
+const NOTES = join(CHECKOUT, "src", "delivery", "release-notes.ts");
 const DATED = { GIT_AUTHOR_DATE: "2026-09-01T12:00:00+00:00", GIT_COMMITTER_DATE: "2026-09-01T12:00:00+00:00" };
 
 const repository = fixtureRepos("checks-release-");
