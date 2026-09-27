@@ -6,7 +6,7 @@ import { vanishedNames } from "./doc-names.ts";
 import { readTexts, snapshotAt, stillMissing } from "./doc-snapshot.ts";
 import { changedLines, changedPaths, git, pathsAt, rangeEnds, refArgs } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
-import { isLivingDoc, proseFindings, readerOf } from "./prose-matchers.ts";
+import { proseFindings, readerOf } from "./prose-matchers.ts";
 
 type Finding = {
   readonly path: string;
@@ -17,7 +17,6 @@ type Finding = {
 type Judged = {
   readonly held: readonly string[];
   readonly edited: { readonly docs: number; readonly lines: number };
-  readonly living: number;
   readonly named: number;
   readonly findings: readonly Finding[];
   readonly advisory: ReadonlyMap<string, number>;
@@ -90,7 +89,6 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   const changed = yield* changedLines(base, head, MARKDOWN, root);
   const present = yield* pathsAt(head, MARKDOWN, root);
   const records = present.filter((path) => path.startsWith(ADR_DIRECTORY));
-  const living = present.filter(isLivingDoc);
   const proseDocs = present.flatMap((path) => {
     const reader = readerOf(path);
     return reader === undefined ? [] : [{ path, reader }];
@@ -115,7 +113,6 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   return {
     held: judged.map(({ path }) => path).filter((path) => touched.has(path)),
     edited: { docs: edited.length, lines: edited.reduce((sum, { path }) => sum + (changed.get(path)?.size ?? 0), 0) },
-    living: living.length,
     named: referenced.size,
     findings: [...templated.filter((finding) => touched.has(finding.path)), ...prose, ...references.failing, ...vanished].toSorted(inPathOrder),
     advisory,

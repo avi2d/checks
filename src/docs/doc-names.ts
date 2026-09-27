@@ -9,7 +9,6 @@ const OUTSIDE_DOCS = [".", ":(exclude)*.md"];
 const NOT_ONE_NAME = /\s|<[^>]*>|^-/;
 const HAS_LETTER = /[A-Za-z]/;
 
-// A specifier of this package, or a path into an install, names the file it resolves to.
 function nameOf(span: string, ownPackage: string | undefined): string | undefined {
   if (span.length < 3 || !HAS_LETTER.test(span) || NOT_ONE_NAME.test(span)) return undefined;
   let name = span
@@ -80,7 +79,6 @@ const directDeps = Effect.fn("directDeps")(function* (root: string, head: string
   ];
 });
 
-// A name the range moves into an installed direct dependency is still present, so it is not vanished.
 const installedAt = Effect.fn("installedAt")(function* (root: string, deps: readonly string[], names: readonly string[]) {
   if (deps.length === 0 || names.length === 0) return new Set<string>();
   const { stdout } = yield* collect(
@@ -110,7 +108,6 @@ export const vanishedNames = Effect.fn("vanishedNames")(function* (
   const confirmed = yield* Effect.forEach(gone, (name) => heldAt(root, head, name), { concurrency: 8 });
   const installed = yield* installedAt(root, yield* directDeps(root, head), gone);
   const vanished = new Set(gone.filter((_, index) => confirmed[index] === false && !installed.has(gone[index] ?? "")));
-  // A span the reference check already reports as a broken path is not reported a second time.
   const reported = new Set(
     failed.flatMap((one) => (one.kind === "path" ? [`${one.path}:${one.line}:${nameOf(one.named, resolved) ?? one.named}`] : [])),
   );
