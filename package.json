@@ -58,6 +58,7 @@
     "src/docs/doc-references.ts",
     "src/docs/doc-snapshot.ts",
     "src/docs/doc-templates.ts",
+    "src/docs/doc-names.ts",
     "dist/templates/",
     "src/quality/presets/effect.oxlint.json",
     "src/quality/presets/effect.language-service.json",
