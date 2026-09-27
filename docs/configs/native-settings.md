@@ -27,24 +27,6 @@ Every page under `docs/` names its mode in `kind` front matter, whatever directo
 A page whose front matter sets `audience: consumers` names commands a consuming repository runs, so `checks-docs` does not hold them to this `package.json`.
 Every other living doc names commands this repository runs, and `checks-docs` holds each one to its `package.json`.
 
-## Consumer migration
-
-The following table maps the former fields to their owners.
-
-| Former field | New owner |
-| --- | --- |
-| `defaultBranch` | Git's `refs/remotes/origin/HEAD`, or the pull request base or event repository in CI |
-| `runsOn`, `gates.ci`, `gates.scheduled` | `runs-on` and `run` steps in `.github/workflows/*.yml` |
-| `gates.lint` | `checks-lint` runs every kit gate |
-| `commitIdentity.authors` | `author` and `contributors` in `package.json` |
-| `sources.production` | `path` and `ignore` in `.jscpd.json` |
-| `size.production`, `size.tests` | File overrides and native size rules in `.oxlintrc.json` |
-| `sources.effect.paths`, `sources.effect.exempt` | Overrides in `.oxlintrc.json` and `tsconfig.json` |
-| `sources.libraries` | `checks-vendor` arguments in the `prepare` script of `package.json` |
-| `docs.pages` | `kind` front matter on each page |
-| `docs.forConsumers` | `audience: consumers` front matter on each page |
-| `features`, `changeSignal`, `agentRules` | No active declarations used these fields |
-
 The kit has no general configuration manifest or generated workflow.
 `checks-ci-wiring` requires title lint on opened and synchronized pull requests.
 It also requires lint, build, typecheck and test for each of those scripts that `package.json` defines, and a clean git diff after a build.

@@ -155,7 +155,6 @@ To move a repository to a newer release of the kit:
 
 The repository's lockfile pins the kit, so a repository moves only when it runs these steps.
 [CHANGELOG.md](CHANGELOG.md), shipped in the package, lists what each release changed.
-A repository that tracks `quality.json` moves its settings as [Native settings](docs/configs/native-settings.md#consumer-migration) maps.
 
 ## Where things are
 
