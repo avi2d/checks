@@ -32,7 +32,7 @@ test("the local range starts at origin/HEAD, and explicit bad refs are refused",
   const head = await commit(repo, "feat: clean", ["-c", "user.name=Wren Fixture", "-c", "user.email=wren@example.com"]);
   const green = await lint(repo);
   expect(green.text).toContain(`checks-lint: range ${base}..${head} from HEAD against origin/main`);
-  expect(green.text).toContain("checks-lint: 10 gate(s) pass");
+  expect(green.text).toContain("checks-lint: 11 gate(s) pass");
   expect(green.exitCode).toBe(0);
   const missing = await lint(repo, [base, "missing"]);
   expect(missing.exitCode).toBe(2);
@@ -61,7 +61,7 @@ test("a pull request event ends the range at its head rather than the checked-ou
   await writeFile(event, JSON.stringify({ pull_request: { number: 7, base: { ref: "main" }, head: { sha: head } } }));
   const green = await lint(repo, [], { GITHUB_EVENT_NAME: "pull_request", GITHUB_EVENT_PATH: event });
   expect(green.text).toContain(`checks-lint: range ${base}..${head} from pull request #7 into main`);
-  expect(green.text).toContain("checks-lint: 10 gate(s) pass");
+  expect(green.text).toContain("checks-lint: 11 gate(s) pass");
   expect(green.exitCode).toBe(0);
 }, 60_000);
 

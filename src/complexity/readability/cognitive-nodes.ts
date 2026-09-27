@@ -1,36 +1,36 @@
-export type Identifier = { readonly type: "Identifier"; readonly name: string };
-export type Literal = { readonly type: "Literal" };
-export type ThisMarker = { readonly type: "ThisExpression" | "Super" | "MetaProperty" };
+type Identifier = { readonly type: "Identifier"; readonly name: string };
+type Literal = { readonly type: "Literal" };
+type ThisMarker = { readonly type: "ThisExpression" | "Super" | "MetaProperty" };
 export type If = { readonly type: "IfStatement"; readonly test: SyntaxNode; readonly consequent: SyntaxNode; readonly alternate: SyntaxNode | null };
-export type Conditional = {
+type Conditional = {
   readonly type: "ConditionalExpression";
   readonly test: SyntaxNode;
   readonly consequent: SyntaxNode;
   readonly alternate: SyntaxNode;
 };
-export type Switch = { readonly type: "SwitchStatement"; readonly discriminant: SyntaxNode; readonly cases: readonly SyntaxNode[] };
-export type SwitchCase = { readonly type: "SwitchCase"; readonly test: SyntaxNode | null; readonly consequent: readonly SyntaxNode[] };
-export type For = {
+type Switch = { readonly type: "SwitchStatement"; readonly discriminant: SyntaxNode; readonly cases: readonly SyntaxNode[] };
+type SwitchCase = { readonly type: "SwitchCase"; readonly test: SyntaxNode | null; readonly consequent: readonly SyntaxNode[] };
+type For = {
   readonly type: "ForStatement";
   readonly init: SyntaxNode | null;
   readonly test: SyntaxNode | null;
   readonly update: SyntaxNode | null;
   readonly body: SyntaxNode;
 };
-export type ForEach = {
+type ForEach = {
   readonly type: "ForInStatement" | "ForOfStatement";
   readonly left: SyntaxNode;
   readonly right: SyntaxNode;
   readonly body: SyntaxNode;
 };
-export type While = { readonly type: "WhileStatement"; readonly test: SyntaxNode; readonly body: SyntaxNode };
-export type DoWhile = { readonly type: "DoWhileStatement"; readonly body: SyntaxNode; readonly test: SyntaxNode };
-export type Try = { readonly type: "TryStatement"; readonly block: SyntaxNode; readonly handler: SyntaxNode | null; readonly finalizer: SyntaxNode | null };
-export type Catch = { readonly type: "CatchClause"; readonly param: SyntaxNode | null; readonly body: SyntaxNode };
-export type Logical = { readonly type: "LogicalExpression"; readonly left: SyntaxNode; readonly operator: string; readonly right: SyntaxNode };
-export type Jump = { readonly type: "BreakStatement" | "ContinueStatement"; readonly label: SyntaxNode | null };
-export type Call = { readonly type: "CallExpression" | "NewExpression"; readonly callee: SyntaxNode; readonly arguments: readonly SyntaxNode[] };
-export type ImportCall = { readonly type: "ImportExpression"; readonly source: SyntaxNode; readonly options: SyntaxNode | null };
+type While = { readonly type: "WhileStatement"; readonly test: SyntaxNode; readonly body: SyntaxNode };
+type DoWhile = { readonly type: "DoWhileStatement"; readonly body: SyntaxNode; readonly test: SyntaxNode };
+type Try = { readonly type: "TryStatement"; readonly block: SyntaxNode; readonly handler: SyntaxNode | null; readonly finalizer: SyntaxNode | null };
+type Catch = { readonly type: "CatchClause"; readonly param: SyntaxNode | null; readonly body: SyntaxNode };
+type Logical = { readonly type: "LogicalExpression"; readonly left: SyntaxNode; readonly operator: string; readonly right: SyntaxNode };
+type Jump = { readonly type: "BreakStatement" | "ContinueStatement"; readonly label: SyntaxNode | null };
+type Call = { readonly type: "CallExpression" | "NewExpression"; readonly callee: SyntaxNode; readonly arguments: readonly SyntaxNode[] };
+type ImportCall = { readonly type: "ImportExpression"; readonly source: SyntaxNode; readonly options: SyntaxNode | null };
 export type NamedFunction = {
   readonly type: "FunctionDeclaration" | "FunctionExpression" | "TSDeclareFunction" | "TSEmptyBodyFunctionExpression";
   readonly id: SyntaxNode | null;
@@ -39,42 +39,42 @@ export type NamedFunction = {
 };
 export type Arrow = { readonly type: "ArrowFunctionExpression"; readonly params: readonly SyntaxNode[]; readonly body: SyntaxNode };
 export type Static = { readonly type: "StaticBlock"; readonly body: readonly SyntaxNode[] };
-export type Labeled = { readonly type: "LabeledStatement"; readonly body: SyntaxNode };
-export type Block = { readonly type: "BlockStatement"; readonly body: readonly SyntaxNode[] };
-export type ExpressionStatement = { readonly type: "ExpressionStatement"; readonly expression: SyntaxNode };
-export type Return = { readonly type: "ReturnStatement" | "ThrowStatement"; readonly argument: SyntaxNode | null };
-export type VariableDeclaration = { readonly type: "VariableDeclaration"; readonly declarations: readonly SyntaxNode[] };
-export type VariableDeclarator = { readonly type: "VariableDeclarator"; readonly id: SyntaxNode; readonly init: SyntaxNode | null };
-export type AssignmentPattern = { readonly type: "AssignmentPattern"; readonly left: SyntaxNode; readonly right: SyntaxNode };
-export type ObjectPattern = { readonly type: "ObjectPattern"; readonly properties: readonly SyntaxNode[] };
-export type ArrayPattern = { readonly type: "ArrayPattern"; readonly elements: readonly (SyntaxNode | null)[] };
-export type Property = { readonly type: "Property"; readonly key: SyntaxNode; readonly value: SyntaxNode };
-export type Rest = { readonly type: "RestElement"; readonly argument: SyntaxNode };
-export type ParameterProperty = { readonly type: "TSParameterProperty"; readonly parameter: SyntaxNode };
-export type Class = {
+type Labeled = { readonly type: "LabeledStatement"; readonly body: SyntaxNode };
+type Block = { readonly type: "BlockStatement"; readonly body: readonly SyntaxNode[] };
+type ExpressionStatement = { readonly type: "ExpressionStatement"; readonly expression: SyntaxNode };
+type Return = { readonly type: "ReturnStatement" | "ThrowStatement"; readonly argument: SyntaxNode | null };
+type VariableDeclaration = { readonly type: "VariableDeclaration"; readonly declarations: readonly SyntaxNode[] };
+type VariableDeclarator = { readonly type: "VariableDeclarator"; readonly id: SyntaxNode; readonly init: SyntaxNode | null };
+type AssignmentPattern = { readonly type: "AssignmentPattern"; readonly left: SyntaxNode; readonly right: SyntaxNode };
+type ObjectPattern = { readonly type: "ObjectPattern"; readonly properties: readonly SyntaxNode[] };
+type ArrayPattern = { readonly type: "ArrayPattern"; readonly elements: readonly (SyntaxNode | null)[] };
+type Property = { readonly type: "Property"; readonly key: SyntaxNode; readonly value: SyntaxNode };
+type Rest = { readonly type: "RestElement"; readonly argument: SyntaxNode };
+type ParameterProperty = { readonly type: "TSParameterProperty"; readonly parameter: SyntaxNode };
+type Class = {
   readonly type: "ClassDeclaration" | "ClassExpression";
   readonly decorators: readonly SyntaxNode[];
   readonly id: SyntaxNode | null;
   readonly superClass: SyntaxNode | null;
   readonly body: SyntaxNode;
 };
-export type ClassBody = { readonly type: "ClassBody"; readonly body: readonly SyntaxNode[] };
-export type Method = { readonly type: "MethodDefinition" | "TSAbstractMethodDefinition"; readonly key: SyntaxNode; readonly value: SyntaxNode };
-export type Field = {
+type ClassBody = { readonly type: "ClassBody"; readonly body: readonly SyntaxNode[] };
+type Method = { readonly type: "MethodDefinition" | "TSAbstractMethodDefinition"; readonly key: SyntaxNode; readonly value: SyntaxNode };
+type Field = {
   readonly type: "PropertyDefinition" | "TSAbstractPropertyDefinition" | "AccessorProperty" | "TSAbstractAccessorProperty";
   readonly key: SyntaxNode;
   readonly value: SyntaxNode | null;
 };
-export type ObjectLiteral = { readonly type: "ObjectExpression"; readonly properties: readonly SyntaxNode[] };
-export type ArrayLiteral = { readonly type: "ArrayExpression"; readonly elements: readonly (SyntaxNode | null)[] };
-export type UnaryLike = {
+type ObjectLiteral = { readonly type: "ObjectExpression"; readonly properties: readonly SyntaxNode[] };
+type ArrayLiteral = { readonly type: "ArrayExpression"; readonly elements: readonly (SyntaxNode | null)[] };
+type UnaryLike = {
   readonly type: "AwaitExpression" | "UnaryExpression" | "UpdateExpression" | "SpreadElement";
   readonly argument: SyntaxNode;
 };
-export type Yield = { readonly type: "YieldExpression"; readonly argument: SyntaxNode | null };
-export type Binary = { readonly type: "BinaryExpression"; readonly left: SyntaxNode; readonly right: SyntaxNode };
-export type Assign = { readonly type: "AssignmentExpression"; readonly left: SyntaxNode; readonly right: SyntaxNode };
-export type Wrap = {
+type Yield = { readonly type: "YieldExpression"; readonly argument: SyntaxNode | null };
+type Binary = { readonly type: "BinaryExpression"; readonly left: SyntaxNode; readonly right: SyntaxNode };
+type Assign = { readonly type: "AssignmentExpression"; readonly left: SyntaxNode; readonly right: SyntaxNode };
+type Wrap = {
   readonly type:
     | "TSAsExpression"
     | "TSSatisfiesExpression"
@@ -86,21 +86,21 @@ export type Wrap = {
     | "TSInstantiationExpression";
   readonly expression: SyntaxNode;
 };
-export type Member = { readonly type: "MemberExpression" | "JSXMemberExpression"; readonly object: SyntaxNode; readonly property: SyntaxNode };
-export type Template = { readonly type: "TemplateLiteral"; readonly expressions: readonly SyntaxNode[] };
-export type Tagged = { readonly type: "TaggedTemplateExpression"; readonly tag: SyntaxNode; readonly quasi: SyntaxNode };
-export type Sequence = { readonly type: "SequenceExpression"; readonly expressions: readonly SyntaxNode[] };
-export type With = { readonly type: "WithStatement"; readonly object: SyntaxNode; readonly body: SyntaxNode };
-export type JSXElement = { readonly type: "JSXElement"; readonly openingElement: SyntaxNode; readonly children: readonly SyntaxNode[] };
-export type JSXFragment = { readonly type: "JSXFragment"; readonly children: readonly SyntaxNode[] };
-export type JSXOpening = { readonly type: "JSXOpeningElement"; readonly attributes: readonly SyntaxNode[] };
-export type JSXAttribute = { readonly type: "JSXAttribute"; readonly value: SyntaxNode | null };
-export type JSXExpression = { readonly type: "JSXExpressionContainer" | "JSXSpreadChild"; readonly expression: SyntaxNode };
-export type JSXSpread = { readonly type: "JSXSpreadAttribute"; readonly argument: SyntaxNode };
-export type EnumDeclaration = { readonly type: "TSEnumDeclaration"; readonly body: SyntaxNode };
-export type EnumBody = { readonly type: "TSEnumBody"; readonly members: readonly SyntaxNode[] };
-export type EnumMember = { readonly type: "TSEnumMember"; readonly initializer: SyntaxNode | null };
-export type Leaves = {
+type Member = { readonly type: "MemberExpression" | "JSXMemberExpression"; readonly object: SyntaxNode; readonly property: SyntaxNode };
+type Template = { readonly type: "TemplateLiteral"; readonly expressions: readonly SyntaxNode[] };
+type Tagged = { readonly type: "TaggedTemplateExpression"; readonly tag: SyntaxNode; readonly quasi: SyntaxNode };
+type Sequence = { readonly type: "SequenceExpression"; readonly expressions: readonly SyntaxNode[] };
+type With = { readonly type: "WithStatement"; readonly object: SyntaxNode; readonly body: SyntaxNode };
+type JSXElement = { readonly type: "JSXElement"; readonly openingElement: SyntaxNode; readonly children: readonly SyntaxNode[] };
+type JSXFragment = { readonly type: "JSXFragment"; readonly children: readonly SyntaxNode[] };
+type JSXOpening = { readonly type: "JSXOpeningElement"; readonly attributes: readonly SyntaxNode[] };
+type JSXAttribute = { readonly type: "JSXAttribute"; readonly value: SyntaxNode | null };
+type JSXExpression = { readonly type: "JSXExpressionContainer" | "JSXSpreadChild"; readonly expression: SyntaxNode };
+type JSXSpread = { readonly type: "JSXSpreadAttribute"; readonly argument: SyntaxNode };
+type EnumDeclaration = { readonly type: "TSEnumDeclaration"; readonly body: SyntaxNode };
+type EnumBody = { readonly type: "TSEnumBody"; readonly members: readonly SyntaxNode[] };
+type EnumMember = { readonly type: "TSEnumMember"; readonly initializer: SyntaxNode | null };
+type Leaves = {
   readonly type:
     | "Hashbang"
     | "EmptyStatement"

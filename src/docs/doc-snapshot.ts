@@ -2,7 +2,7 @@ import { Effect, FileSystem, Path, Schema } from "effect";
 import { anchoredTargets, anchorsOf, PACKAGE_MANIFEST, packagesOf, snapshotOf, type Unresolved } from "./doc-references.ts";
 import { git, pathsAt } from "../core/git.ts";
 
-export class ManifestUnreadable extends Schema.TaggedError<ManifestUnreadable>()("ManifestUnreadable", {
+class ManifestUnreadable extends Schema.TaggedError<ManifestUnreadable>()("ManifestUnreadable", {
   message: Schema.String,
 }) {}
 

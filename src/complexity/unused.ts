@@ -1,22 +1,11 @@
 #!/usr/bin/env bun
-import { Console, Effect, FileSystem, Path, Schema } from "effect";
-import { collect, git } from "../core/git.ts";
+import { Console, Effect, Schema } from "effect";
 import { runMain } from "../core/main.ts";
+import { scanTree } from "./knip.ts";
 
 export type Scan = { readonly tracked: number; readonly files: readonly string[] };
 
 const NAME = "unused";
-const CONFIGS = [
-  ".knip.json",
-  ".knip.jsonc",
-  "knip.json",
-  "knip.jsonc",
-  "knip.js",
-  "knip.ts",
-  "knip.config.js",
-  "knip.config.ts",
-] as const;
-const TYPESCRIPT = ["*.ts", "*.tsx"];
 const JUDGED = /\.tsx?$/;
 
 class UnusedError extends Schema.TaggedError<UnusedError>()("UnusedError", {
@@ -46,51 +35,13 @@ export function report({ tracked, files }: Scan): string {
   return [`${NAME}: ${files.length} unreferenced file(s):`, ...files.map((file) => `  ${file}`)].join("\n");
 }
 
-const hasConfig = Effect.fn("hasConfig")(function* (root: string) {
-  const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  for (const name of CONFIGS) {
-    if (yield* fs.exists(path.join(root, name))) return true;
-  }
-  const manifest: unknown = yield* fs.readFileString(path.join(root, "package.json")).pipe(
-    Effect.flatMap((text) =>
-      Effect.try({
-        try: () => JSON.parse(text) as unknown,
-        catch: () => new UnusedError({ message: "package.json does not parse as JSON" }),
-      })
-    ),
-  );
-  return typeof manifest === "object" && manifest !== null && "knip" in manifest;
-});
-
-const knip = Effect.fn("knip")(function* () {
-  const path = yield* Path.Path;
-  const main = yield* Effect.try({
-    try: () => new URL("../bin/knip.js", import.meta.resolve("knip")),
-    catch: () => new UnusedError({ message: "cannot resolve knip from the installed kit" }),
-  });
-  return yield* path.fromFileUrl(main);
-});
-
 const unused = Effect.gen(function* () {
-  const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
-  const tracked = (yield* git(["ls-files", "--", ...TYPESCRIPT], root))
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line !== "");
-  if (tracked.length === 0) return yield* new UnusedError({ message: "no tracked .ts or .tsx files to scan" });
-  if (!(yield* hasConfig(root))) {
-    yield* Console.log(`${NAME}: no knip configuration names entry files, so add one extending the kit's knip-base.json`);
-    return false;
-  }
-  const run = yield* collect(process.execPath, [yield* knip(), "--files", "--reporter", "json"], root).pipe(
-    Effect.mapError((cause) => new UnusedError({ message: `cannot run knip: ${cause.message}` })),
+  const { tracked, reported } = yield* scanTree(NAME, ["--files"]).pipe(
+    Effect.mapError((cause) => new UnusedError({ message: cause.message })),
   );
-  if (run.exitCode !== 0 && run.exitCode !== 1) {
-    return yield* new UnusedError({ message: `knip exits ${run.exitCode}: ${(run.stdout + run.stderr).trim()}` });
-  }
-  const files = yield* filesOf(run.stdout);
-  yield* Console.log(report({ tracked: tracked.length, files }));
+  if (reported.kind === "unconfigured") return false;
+  const files = yield* filesOf(reported.stdout);
+  yield* Console.log(report({ tracked, files }));
   return files.length === 0;
 });
 

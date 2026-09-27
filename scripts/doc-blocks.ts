@@ -48,7 +48,7 @@ function isShipped(path: string): path is ShippedPath {
   return Object.hasOwn(SHIPPED, path);
 }
 
-export type SizeScope = { readonly files: readonly string[]; readonly limits: ReadonlyMap<string, string> };
+type SizeScope = { readonly files: readonly string[]; readonly limits: ReadonlyMap<string, string> };
 
 export type KitFacts = {
   readonly manifest: typeof Manifest.Type;

@@ -21,7 +21,7 @@ export type DocsRepo = {
   readonly dispose: () => Promise<void>;
 };
 
-export async function docsRepo(): Promise<DocsRepo> {
+async function docsRepo(): Promise<DocsRepo> {
   const { dir, write, commit, script, dispose } = await fixtureRepo("checks-docs-", {
     "widget.ts": "export const widget = 1;\n",
   });

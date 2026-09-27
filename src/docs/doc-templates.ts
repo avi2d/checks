@@ -9,14 +9,14 @@ export type Title =
   | { readonly type: "fixed"; readonly text: string }
   | { readonly type: "open"; readonly placeholder: string; readonly rule: HeadingRule; readonly prefix?: string };
 
-export type Outlined = {
+type Outlined = {
   readonly shape: "outline";
   readonly title: Title;
   readonly lead: readonly string[];
   readonly sections: readonly Slot[];
 };
 
-export type Exact = {
+type Exact = {
   readonly shape: "exact";
   readonly text: string;
 };

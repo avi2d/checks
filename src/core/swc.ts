@@ -1,7 +1,7 @@
 import { parse } from "@swc/core";
 import { Effect, Schema } from "effect";
 
-export class TypeScriptParseError extends Schema.TaggedError<TypeScriptParseError>()("TypeScriptParseError", {
+class TypeScriptParseError extends Schema.TaggedError<TypeScriptParseError>()("TypeScriptParseError", {
   message: Schema.String,
 }) {}
 
