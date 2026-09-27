@@ -124,7 +124,7 @@ Each reference a living doc or an agent file names has to resolve at the head co
   A span the path check already reports is not reported again.
   A name an installed direct dependency still holds counts as present.
   A span with a space, a placeholder or a leading dash names a command or a flag, and is skipped.
-  A span that opens with `@avi2dg/checks/`, `node_modules/`, `./` or `~/` reads as the file it names.
+  A span that opens with the repository's own package name and a slash, `node_modules/`, `./` or `~/` reads as the file it names.
 
 A reference that does not resolve fails when it sits on a line the range adds or edits.
 On any other line, it fails when the range broke it, for example by deleting the file it names or renaming the heading it links.
@@ -147,10 +147,11 @@ audience: consumers
 It reads each Markdown file at the head commit, and uses its path or front matter to choose its kind.
 A file the range adds, changes or renames is held to its template, and a file it deletes is not.
 It reads the lines the range adds or edits from the diff, with renames detected, so a renamed doc is judged only on the lines the rename changed.
-It reads the files tracked at both ends of the range, and the `scripts` of each `package.json` a living doc sits under.
+It reads the files tracked at both ends of the range, and the `scripts` of each `package.json` a living doc or an agent file sits under.
 It compares each code span a living doc or an agent file names with the text git tracks outside the docs at both ends of the range.
+It reads the repository's own name and its direct dependencies from the root `package.json` at the head commit.
 A name that an installed direct dependency still holds counts as present.
-From the working tree it reads the ignore files git reads, and `node_modules/.bin`.
+From the working tree it reads the ignore files git reads, `node_modules/.bin`, and the directory of each direct dependency under `node_modules`.
 
 ## Arguments
 
@@ -168,7 +169,7 @@ With one it is that commit against its parent, or against the empty tree for a r
 | --- | --- |
 | 0 | every doc file the range touches holds to its template, every line it adds to a living doc or an agent file holds to the prose rules, it adds or breaks no reference that does not resolve, and no code span a living doc or an agent file names vanished from every file outside the docs |
 | 1 | a doc file the range touches does not hold to its template, a line the range adds to a living doc or an agent file breaks a prose rule, the range adds or breaks a reference that does not resolve, or the range removes a name a living doc or an agent file still carries |
-| 2 | a `package.json` does not decode, or a ref does not resolve |
+| 2 | a `package.json` does not decode, a ref does not resolve, or `grep` cannot read an installed direct dependency |
 
 ## Sample output
 
@@ -178,8 +179,8 @@ docs: 6 violation(s):
   README.md:12: carries `;`, a semicolon. Use two sentences
   README.md:14: carries `former`, a report about the past. Say what is true now, and leave what changed to the changelog, a commit message or a decision record
   README.md:20: names `scripts/bild.ts`, which is not in the repository
-  docs/parts.md:9: names `gates.lint`, which the range removed from every file outside the docs. Say what holds now, or drop the line
   docs/parts.md: is a page under docs/ with no mode; add kind: tutorial, how-to, reference, explanation in YAML front matter
+  docs/parts.md:9: names `gates.lint`, which the range removed from every file outside the docs. Say what holds now, or drop the line
 docs: advisory, 1 doc file(s) the range leaves alone do not hold to their templates yet:
   docs/adr/0001-quality-gates.md: 5 violation(s)
 docs: advisory, 1 path(s), link(s) or command(s) the living docs or agent files name were broken before the range:

@@ -73,6 +73,14 @@ describe("each rule goes red on a planted line and green on its rewrite", () => 
   test("used to after a form of be is habit, not history", () => {
     expect(refusals("It is used to build bills.")).toEqual([]);
   });
+
+  test("used to after a contracted form of be is habit, not history", () => {
+    expect(refusals("It's used to build bills, and that's used to ship them.")).toEqual([]);
+  });
+
+  test("used to after a form of be and one adverb is habit, not history", () => {
+    expect(refusals("It is also used to build bills, and is typically used to ship them.")).toEqual([]);
+  });
 });
 
 describe("what a reader does not read as prose passes", () => {

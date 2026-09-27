@@ -259,7 +259,7 @@ const PROMISES: readonly (readonly [shows: string, pattern: string])[] = [
 ];
 const PAST: readonly (readonly [shows: string, pattern: string])[] = [
   ["formerly", String.raw`former(?:ly)?`], ["previously", "previously"], ["as before", "as before"],
-  ["used to", String.raw`(?<!\b(?:is|are|was|were|be|been|being|get|gets|got)\s)used to`],
+  ["used to", String.raw`(?<!\b(?:is|are|was|were|be|been|being|get|gets|got|\w+['’](?:s|re))\s(?:(?:also|often|\w+ly)\s)?)used to`],
   ["was replaced", String.raw`(?:was|were|has been|have been) (?:replaced|removed|renamed|dropped|deleted|retired|superseded)`],
   ["moved from", String.raw`(?:renamed|moved) from`], ["new owner", String.raw`new (?:home|owner)`],
 ];

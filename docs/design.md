@@ -141,7 +141,7 @@ The repository judges the mode beside the page, and the check holds the page to 
 A repository adopts the templates as its files change, and an untouched file is listed as advisory.
 The prose rules judge only the lines a change adds or edits.
 A report about the past is refused the way a promise about the future is, because history on a living page reads as current fact.
-Text nobody touched never turns a change red, and a record keeps the words it was written in.
+Text nobody touched never breaks the templates or the prose rules, and a record keeps the words it was written in.
 A repository needs no cleanup pass before the gate runs.
 Review, not the check, keeps a task heading verb first.
 No word list tells `Test layout` from `Test the layout`, and a check that passes the noun would be worse than none.

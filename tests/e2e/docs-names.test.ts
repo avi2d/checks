@@ -48,3 +48,23 @@ test(
   },
   120_000,
 );
+
+test(
+  "a name the range removes that an installed direct dependency still holds is not reported, even inside a longer name",
+  async () => {
+    const { put, commit, docs } = await repository();
+    await put("package.json", JSON.stringify({ name: "widget", devDependencies: { kit: "1.0.0" } }));
+    await put(".gitignore", "node_modules/\n");
+    await put("node_modules/kit/oxlintrc.json", JSON.stringify({ rules: { "sprocket-rule": "error" } }));
+    await put("widget.ts", "export const sprocket = 'sprocket-rule';\n");
+    await put(GUIDE, `${OPENING}It builds \`sprocket\` under \`sprocket-rule\`.\n`);
+    const base = await commit("a guide names a rule the repository sets");
+    await put("widget.ts", "export const gadget = 1;\n");
+    const head = await commit("leave the rule to the installed kit");
+
+    const kept = await docs(base, head);
+    expect(kept.text).not.toContain("which the range removed from every file outside the docs");
+    expect(kept.exitCode).toBe(0);
+  },
+  120_000,
+);

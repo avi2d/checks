@@ -1,4 +1,5 @@
-import { Effect, Option, Schema } from "effect";
+import { Effect, FileSystem, Option, Path, Schema } from "effect";
+import { ChildProcessSpawner } from "effect/unstable/process";
 import { collect, git, pathsAt } from "../core/git.ts";
 import type { Unresolved } from "./doc-references.ts";
 import { scanMarkdown } from "./prose-matchers.ts";
@@ -32,11 +33,20 @@ function namesIn(texts: ReadonlyMap<string, string>, ownPackage: string | undefi
   );
 }
 
-class DepsUnreadable extends Schema.TaggedError<DepsUnreadable>()("DepsUnreadable", {
+class InstalledUnreadable extends Schema.TaggedError<InstalledUnreadable>()("InstalledUnreadable", {
   message: Schema.String,
 }) {}
 
-const decodeDeps = Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown));
+const Group = Schema.optionalKey(Schema.Record(Schema.String, Schema.Unknown));
+const Manifest = Schema.Struct({
+  name: Schema.optionalKey(Schema.String),
+  dependencies: Group,
+  devDependencies: Group,
+  peerDependencies: Group,
+  optionalDependencies: Group,
+});
+const decodeManifest = Schema.decodeUnknownOption(Schema.fromJsonString(Manifest));
+const NO_MANIFEST: typeof Manifest.Type = {};
 
 // git grep exits 1 when nothing matches, which is an answer rather than a failure.
 const matchedAt = Effect.fn("matchedAt")(function* (root: string, rev: string, names: readonly string[]) {
@@ -56,38 +66,27 @@ const heldAt = Effect.fn("heldAt")(function* (root: string, rev: string, name: s
   );
 });
 
-const packageName = Effect.fn("packageName")(function* (root: string, head: string) {
+const manifestAt = Effect.fn("manifestAt")(function* (root: string, head: string) {
   const manifest = yield* git(["show", `${head}:package.json`], root).pipe(Effect.catchTag("GitFailure", () => Effect.succeed("")));
-  return /"name"\s*:\s*"([^"]+)"/.exec(manifest)?.[1];
+  const { name, dependencies, devDependencies, peerDependencies, optionalDependencies } = Option.getOrElse(decodeManifest(manifest), () => NO_MANIFEST);
+  const deps = [dependencies, devDependencies, peerDependencies, optionalDependencies].flatMap((group) => Object.keys(group ?? {}));
+  return { name, deps: [...new Set(deps)] };
 });
 
-const directDeps = Effect.fn("directDeps")(function* (root: string, head: string) {
-  const manifest = yield* git(["show", `${head}:package.json`], root).pipe(Effect.catchTag("GitFailure", () => Effect.succeed("")));
-  const parsed: unknown = yield* Effect.try({
-    try: () => JSON.parse(manifest) as unknown,
-    catch: () => new DepsUnreadable({ message: "package.json does not parse as JSON" }),
-  }).pipe(Effect.catchTag("DepsUnreadable", () => Effect.succeed({})));
-  const empty: Record<string, unknown> = {};
-  const fields = Option.getOrElse(decodeDeps(parsed), () => empty);
-  return [
-    ...new Set(
-      ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"].flatMap((key) => {
-        const group = fields[key];
-        return typeof group === "object" && group !== null ? Object.keys(group) : [];
-      }),
-    ),
-  ];
+const installedDirs = Effect.fn("installedDirs")(function* (root: string, deps: readonly string[]) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const dirs = deps.map((dep) => `node_modules/${dep}/`);
+  const present = yield* Effect.forEach(dirs, (dir) => fs.exists(path.join(root, dir)), { concurrency: 8 });
+  return dirs.filter((_, index) => present[index] === true);
 });
 
-const installedAt = Effect.fn("installedAt")(function* (root: string, deps: readonly string[], names: readonly string[]) {
-  if (deps.length === 0 || names.length === 0) return new Set<string>();
-  const { stdout } = yield* collect(
-    "grep",
-    ["-R", "-I", "-F", "-o", "-h", "--no-color", "-f", "-", "--", ...deps.map((dep) => `node_modules/${dep}`)],
-    root,
-    { input: `${names.join("\n")}\n` },
-  ).pipe(Effect.orElseSucceed(() => ({ stdout: "" })));
-  return new Set(stdout.split("\n").filter((line) => line !== ""));
+const installedHolds = Effect.fn("installedHolds")(function* (root: string, dirs: readonly string[], name: string) {
+  if (dirs.length === 0) return false;
+  const { stderr, exitCode } = yield* collect("grep", ["-r", "-I", "-F", "-q", "-e", name, "--", ...dirs], root);
+  if (exitCode === ChildProcessSpawner.ExitCode(0)) return true;
+  if (exitCode === ChildProcessSpawner.ExitCode(1)) return false;
+  return yield* new InstalledUnreadable({ message: `grep for \`${name}\` in ${dirs.join(", ")}: ${stderr.trim()}` });
 });
 
 export const vanishedNames = Effect.fn("vanishedNames")(function* (
@@ -96,20 +95,21 @@ export const vanishedNames = Effect.fn("vanishedNames")(function* (
   head: string,
   texts: ReadonlyMap<string, string>,
   failed: readonly (Unresolved & { readonly path: string })[],
-  ownPackage?: string,
 ) {
-  const resolved = ownPackage ?? (yield* packageName(root, head));
-  const named = namesIn(texts, resolved);
+  const manifest = yield* manifestAt(root, head);
+  const named = namesIn(texts, manifest.name);
   const names = [...new Set(named.map(({ name }) => name))];
   const atHead = yield* matchedAt(root, head, names);
   const candidates = names.filter((name) => !atHead.has(name));
   const atBase = yield* matchedAt(root, base, candidates);
   const gone = candidates.filter((name) => atBase.has(name));
   const confirmed = yield* Effect.forEach(gone, (name) => heldAt(root, head, name), { concurrency: 8 });
-  const installed = yield* installedAt(root, yield* directDeps(root, head), gone);
-  const vanished = new Set(gone.filter((_, index) => confirmed[index] === false && !installed.has(gone[index] ?? "")));
+  const unheld = gone.filter((_, index) => confirmed[index] === false);
+  const dirs = yield* installedDirs(root, manifest.deps);
+  const installed = yield* Effect.forEach(unheld, (name) => installedHolds(root, dirs, name), { concurrency: 8 });
+  const vanished = new Set(unheld.filter((_, index) => installed[index] === false));
   const reported = new Set(
-    failed.flatMap((one) => (one.kind === "path" ? [`${one.path}:${one.line}:${nameOf(one.named, resolved) ?? one.named}`] : [])),
+    failed.flatMap((one) => (one.kind === "path" ? [`${one.path}:${one.line}:${nameOf(one.named, manifest.name) ?? one.named}`] : [])),
   );
   return named
     .filter(({ name }) => vanished.has(name))
