@@ -17,6 +17,8 @@ The package ships one template per kind under `dist/templates/`, and a repositor
 cp node_modules/@avi2dg/checks/dist/templates/how-to.md docs/add-a-supplier.md
 ```
 
+A host resolves a template as `@avi2dg/checks/templates/how-to.md`, which keeps pointing at it wherever the package holds the templates.
+
 <!-- generated doc-kinds: bun run build writes it from src/docs/doc-rules.ts, src/docs/doc-templates.ts and scripts/doc-blocks.ts -->
 
 | File | Kind | Template |
