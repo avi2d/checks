@@ -195,7 +195,7 @@ function unread(line: number, raw: string, kind: LineKind): MarkdownLine {
   return { line, kind, raw, prose: BLANK.repeat(raw.length), code: [], links: [] };
 }
 
-function settext(lines: MarkdownLine[]): MarkdownLine[] {
+function settext(lines: readonly MarkdownLine[]): MarkdownLine[] {
   return lines.map((line, index) => {
     const next = lines[index + 1];
     return line.kind === "prose" && next?.kind === "break" && UNDERLINE.test(next.raw) ? { ...line, kind: "heading" } : line;

@@ -139,10 +139,7 @@ test(
   "file: consumer goes red on a planted Effect.ignore, green once it is removed",
   async () => {
     await useConsumer("file");
-    await writeFile(
-      join(dir, "plant.ts"),
-      `import { Effect } from "effect";\n\nexport const program = Effect.ignore(Effect.fail("boom"));\n\nEffect.succeed(1);\n`,
-    );
+    await writeFile(join(dir, "plant.ts"), `import { Effect } from "effect";\n\nexport const program = Effect.ignore(Effect.fail("boom"));\n\nEffect.succeed(1);\n`);
 
     const red = await oxlint();
     expect(red.exitCode).not.toBe(0);
@@ -169,20 +166,14 @@ test(
     await mkdir(join(dir, "scripts"));
     const load = join(dir, "src", "load.ts");
 
-    await writeFile(
-      load,
-      `export const load = (text: string): unknown => {\n  if (text === "") throw new Error("empty manifest");\n  return JSON.parse(text);\n};\n`,
-    );
+    await writeFile(load, `export const load = (text: string): unknown => {\n  if (text === "") throw new Error("empty manifest");\n  return JSON.parse(text);\n};\n`);
     const thrown = await oxlint();
     expect(thrown.exitCode).not.toBe(0);
     expect(thrown.text).toContain("effect-channel(no-throw)");
     expect(thrown.text).toContain("Effect.fail");
     expect(thrown.text).not.toContain("effect-channel(no-try-catch)");
 
-    await writeFile(
-      load,
-      `export const load = (text: string): unknown => {\n  try {\n    return JSON.parse(text);\n  } catch {\n    return null;\n  }\n};\n`,
-    );
+    await writeFile(load, `export const load = (text: string): unknown => {\n  try {\n    return JSON.parse(text);\n  } catch {\n    return null;\n  }\n};\n`);
     const caught = await oxlint();
     expect(caught.exitCode).not.toBe(0);
     expect(caught.text).toContain("effect-channel(no-try-catch)");
@@ -256,6 +247,25 @@ test(
 );
 
 test(
+  "file: consumer goes red on a mutable collection parameter and a schema twin, green once each is fixed",
+  async () => {
+    await useConsumer("file");
+    await writeFile(join(dir, "totals.ts"), `export function total(items: string[]): number {\n  return items.length;\n}\n`);
+    await writeFile(join(dir, "status.ts"), `import { Schema } from "effect";\nexport type Status = { readonly code: string; readonly count: number };\nexport const StatusSchema = Schema.Struct({ code: Schema.String, count: Schema.Number });\n`);
+    await mkdir(join(dir, "tests"));
+    await writeFile(join(dir, "tests", "oracle.ts"), `import { Schema } from "effect";\nexport type Oracle = { readonly code: string; readonly count: number };\nexport const OracleSchema = Schema.Struct({ code: Schema.String, count: Schema.Number });\n`);
+    const red = await oxlint();
+    expect(red.text).toContain("data-shape(readonly-collection-param)");
+    expect(red.text).toContain("data-shape(schema-twin)");
+    expect(red.text).not.toContain("oracle.ts");
+    await writeFile(join(dir, "totals.ts"), `export function total(items: readonly string[]): number {\n  return items.length;\n}\n`);
+    await writeFile(join(dir, "status.ts"), `import { Schema } from "effect";\nexport const StatusSchema = Schema.Struct({ code: Schema.String, count: Schema.Number });\nexport type Status = typeof StatusSchema.Type;\n`);
+    expect((await oxlint()).exitCode).toBe(0);
+  },
+  180_000,
+);
+
+test(
   "file: consumer lint stays green with a lint-dirty file inside the installed package",
   async () => {
     await useConsumer("file");
@@ -275,10 +285,7 @@ test(
   "file: consumer goes red on a call to a function tagged @deprecated, green once it calls the replacement",
   async () => {
     await useConsumer("file");
-    await writeFile(
-      join(dir, "legacy.ts"),
-      `/** @deprecated Call fresh instead. */\nexport const stale = (): number => 1;\n\nexport const fresh = (): number => 2;\n`,
-    );
+    await writeFile(join(dir, "legacy.ts"), `/** @deprecated Call fresh instead. */\nexport const stale = (): number => 1;\n\nexport const fresh = (): number => 2;\n`);
     await writeFile(join(dir, "caller.ts"), `import { stale } from "./legacy";\n\nexport const value = stale();\n`);
 
     const red = await oxlint();
@@ -377,8 +384,8 @@ test(
       return [key, realpathSync(Bun.resolveSync(specifier, dir)) === realpathSync(file)];
     });
     expect(resolved.filter(([, found]) => !found)).toEqual([]);
-    const shipped = ["ts-reset.d.ts", "dist/templates/readme.md", "src/quality/presets/effect.oxlint.json", "LICENSE", "CHANGELOG.md", "knip-base.json"];
-    const unshipped = ["templates", "presets", "src/quality/effect-channel", "src/complexity/readability", "tests", "AGENTS.md"];
+    const shipped = ["ts-reset.d.ts", "dist/templates/readme.md", "src/quality/presets/effect.oxlint.json", "LICENSE", "CHANGELOG.md", "knip-base.json", "dist/data-shape/index.js"];
+    const unshipped = ["templates", "presets", "src/quality/effect-channel", "src/complexity/readability", "src/quality/data-shape", "tests", "AGENTS.md"];
     expect(shipped.filter((path) => !existsSync(join(installed, path)))).toEqual([]);
     expect(unshipped.filter((path) => existsSync(join(installed, path)))).toEqual([]);
 
@@ -388,10 +395,7 @@ test(
     expect(green.text).toContain("satisfy the layout");
     expect(green.exitCode).toBe(0);
 
-    await writeFile(
-      join(dir, "plant.ts"),
-      `import { Effect } from "effect";\n\nexport const program = Effect.ignore(Effect.fail("boom"));\n\nEffect.succeed(1);\n`,
-    );
+    await writeFile(join(dir, "plant.ts"), `import { Effect } from "effect";\n\nexport const program = Effect.ignore(Effect.fail("boom"));\n\nEffect.succeed(1);\n`);
     await $`git add -A`.cwd(dir).quiet();
 
     const red = await runScript("lint");
@@ -545,10 +549,7 @@ test(
   "packed-tarball consumer goes red on a dead file through the published knip base, green once it is removed",
   async () => {
     await useConsumer("tarball", { scripts: { unused: "checks-unused" } });
-    await writeFile(
-      join(dir, "knip.config.ts"),
-      `import base from "@avi2dg/checks/knip-base.json";\nexport default { ...base, entry: ["index.ts"] };\n`,
-    );
+    await writeFile(join(dir, "knip.config.ts"), `import base from "@avi2dg/checks/knip-base.json";\nexport default { ...base, entry: ["index.ts"] };\n`);
     await writeFile(join(dir, "index.ts"), `import { used } from "./used.ts";\n\nexport const index = used;\n`);
     await writeFile(join(dir, "used.ts"), `export const used = 1;\nexport const unusedExport = 2;\n`);
     await writeFile(join(dir, "dead.ts"), `export const dead = 1;\n`);

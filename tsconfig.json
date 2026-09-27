@@ -18,7 +18,7 @@
         "overrides": [
           {
             "include": ["src/**/*.ts", "scripts/**/*.ts"],
-            "exclude": ["src/quality/effect-channel/**", "src/complexity/readability/**"],
+            "exclude": ["src/quality/effect-channel/**", "src/complexity/readability/**", "src/quality/data-shape/**"],
             "options": {
               "diagnosticSeverity": {
                 "nodeBuiltinImport": "error",
