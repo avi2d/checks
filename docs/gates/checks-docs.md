@@ -5,7 +5,7 @@ audience: consumers
 # checks-docs
 
 `checks-docs` is the gate that holds a repository's doc files to the kit's templates and prose rules.
-It also fails when a doc names a file, a heading or a script that does not exist.
+It also fails when a doc names a file, a heading or a script that does not exist, or a name the range removed from every file outside the docs.
 
 ## What it checks
 
