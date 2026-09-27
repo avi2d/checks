@@ -11,7 +11,7 @@ It also fails when a doc names a file, a heading or a script that does not exist
 
 It holds each doc file a change touches to the template for its kind.
 It lists every other doc file that does not match its template yet, and does not fail on it.
-It holds each line a change adds or edits to the prose rules, as [The prose rules](#the-prose-rules) says.
+It holds each line a change adds or edits in a living doc or an agent file to the prose rules, as [The prose rules](#the-prose-rules) says.
 It fails when a living doc names a path, link or command that does not resolve, and the range added or broke it.
 [Paths, links and commands](#paths-links-and-commands) says how each one resolves.
 The package ships one template per kind under `dist/templates/`, and a repository starts a new doc file by copying one:

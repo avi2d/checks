@@ -109,9 +109,13 @@ That flag reports a repeated block as new once its text changes, so a change tha
 `checks-test` runs bun itself rather than reading a report that another run left.
 A skip taken only on CI shows only in CI's own run, and an earlier run's report may be stale or narrowed.
 It reads the JUnit report bun writes to a temporary directory, because bun has no other per-test output meant for a program.
+
+## Quarantine has one limit
+
+`checks-quarantine-clock` holds every quarantined test to one limit of 30 days.
 GitLab quarantines a flaky test for 3 days on its fast path, and for at most 3 months on its long path.
 It then opens a merge request that deletes the test.
-`checks-quarantine-clock` holds every quarantined test to one limit of 30 days.
+The kit's one limit falls between GitLab's two, so a flaky test gets a month to be fixed, and no path keeps it out of the run for 3 months.
 
 ## The changelog comes from the commits
 
