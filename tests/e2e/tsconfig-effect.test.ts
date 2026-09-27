@@ -48,7 +48,7 @@ const scratch = scratchDirs();
 
 let dir = "";
 
-function run(binary: string, args: string[]): Promise<Ran> {
+function run(binary: string, args: readonly string[]): Promise<Ran> {
   return ran($`${binary} ${args}`.cwd(dir));
 }
 

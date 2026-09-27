@@ -33,6 +33,16 @@ Without the flag, oxlint skips them and reports nothing about them.
 - `typescript/no-unsafe-type-assertion` refuses an `as` that narrows a value to a type the compiler cannot prove.
 - `typescript/no-deprecated` refuses a use of a symbol whose declaration carries a `@deprecated` tag, in the repository's own code or in a package's types, and repeats the tag's text.
 
+## Data-shape rules
+
+The base loads the kit's `data-shape` plugin from `dist/` with one rule for every TypeScript file and one for production files.
+
+- `data-shape/readonly-collection-param` refuses a parameter typed `T[]`, `Array<T>`, `Map` or `Set` that the function never mutates, stores, returns or passes on, and passing it to a readonly parameter of a function declared in the same file does not count as passing it on.
+- Type such a parameter `readonly T[]`, `ReadonlyArray<T>`, `ReadonlyMap` or `ReadonlySet`.
+- `data-shape/schema-twin` refuses an object type whose fields match a `Schema.Struct`, `TaggedStruct` or `Class` in the same file by name, count, optionality and kind.
+- Derive such a type from the schema with `typeof Name.Type` instead of writing both.
+- The twin rule runs on production files only, so a test that declares its own schema as an oracle stays green.
+
 ## Rules outside tests
 
 An override in `oxlintrc.json` turns on these type-aware rules in each `.ts` and `.tsx` file outside `tests/`:

@@ -17,6 +17,7 @@ module.exports = {
         pathNot: [
           "(^|/)effect-channel/index[.]ts$",
           "(^|/)readability/index[.]ts$",
+          "(^|/)data-shape/index[.]ts$",
           "(^|/)stryker[.]preset[.]js$",
           "(^|/)[.][^/]+[.](?:js|cjs|mjs|ts|cts|mts|json)$",
           "[.]d[.]ts$",
@@ -29,7 +30,7 @@ module.exports = {
     },
   ],
   options: {
-    // The bundles built from effect-channel and readability, which the cruise reads as source.
+    // The bundles built from effect-channel, readability and data-shape, which the cruise reads as source.
     // The cruise follows the repos/ links without the second branch.
     exclude: { path: "^(dist|repos)/" },
   },

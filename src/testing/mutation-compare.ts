@@ -2,27 +2,43 @@
 import { Console, Effect, FileSystem, Schema } from "effect";
 import { runMain, Usage } from "../core/main.ts";
 
-export type Location = {
-  readonly start: { readonly line: number; readonly column: number };
-  readonly end: { readonly line: number; readonly column: number };
-};
+const PositionSchema = Schema.Struct({ line: Schema.Finite, column: Schema.Finite });
+const LocationSchema = Schema.Struct({ start: PositionSchema, end: PositionSchema });
 
-export type Mutant = {
-  readonly status: string;
-  readonly mutatorName: string;
-  readonly replacement: string;
-  readonly killedBy?: readonly string[];
-  readonly location: Location;
-};
+export type Location = typeof LocationSchema.Type;
 
-export type ReportFile = {
-  readonly source: string;
-  readonly mutants: readonly Mutant[];
-};
+const MutantStatusSchema = Schema.Literals([
+  "Killed",
+  "Survived",
+  "Timeout",
+  "NoCoverage",
+  "Ignored",
+  "CompileError",
+  "RuntimeError",
+  "Pending",
+]);
 
-export type TestFile = {
-  readonly tests: readonly { readonly id: string; readonly name: string }[];
-};
+export type MutantStatus = typeof MutantStatusSchema.Type;
+
+const MutantSchema = Schema.Struct({
+  status: MutantStatusSchema,
+  mutatorName: Schema.String,
+  replacement: Schema.String,
+  killedBy: Schema.optionalKey(Schema.Array(Schema.String)),
+  location: LocationSchema,
+});
+
+export type Mutant = typeof MutantSchema.Type;
+
+const ReportFileSchema = Schema.Struct({ source: Schema.String, mutants: Schema.Array(MutantSchema) });
+
+export type ReportFile = typeof ReportFileSchema.Type;
+
+const TestFileSchema = Schema.Struct({
+  tests: Schema.Array(Schema.Struct({ id: Schema.String, name: Schema.String })),
+});
+
+export type TestFile = typeof TestFileSchema.Type;
 
 export type KillRun = {
   readonly files: ReadonlyMap<string, ReportFile>;
@@ -35,8 +51,8 @@ export type MutantChange = {
   readonly location: Location;
   readonly mutatorName: string;
   readonly replacement: string;
-  readonly from: string;
-  readonly to: string;
+  readonly from: MutantStatus;
+  readonly to: MutantStatus;
 };
 
 export type UnmatchedMutant = {
@@ -44,7 +60,7 @@ export type UnmatchedMutant = {
   readonly location: Location;
   readonly mutatorName: string;
   readonly replacement: string;
-  readonly status: string;
+  readonly status: MutantStatus;
 };
 
 export type Comparison = {
@@ -65,35 +81,25 @@ export class ReportError extends Schema.TaggedError<ReportError>()("ReportError"
   message: Schema.String,
 }) {}
 
-const DETECTED = new Set(["Killed", "Timeout"]);
-const UNDETECTED = new Set(["Survived", "NoCoverage"]);
-const LEAVES_SCORE = new Set(["CompileError", "RuntimeError", "Ignored", "Pending"]);
+const OUTCOME = {
+  Killed: "detected",
+  Timeout: "detected",
+  Survived: "undetected",
+  NoCoverage: "undetected",
+  CompileError: "leaves-score",
+  RuntimeError: "leaves-score",
+  Ignored: "leaves-score",
+  Pending: "leaves-score",
+} as const satisfies Record<MutantStatus, "detected" | "undetected" | "leaves-score">;
 const USAGE = "usage: mutation-compare.ts [--advisory] <base-report> <head-report>";
 
-const Files = Schema.Record(
-  Schema.String,
-  Schema.Struct({
-    source: Schema.String,
-    mutants: Schema.Array(
-      Schema.Struct({
-        status: Schema.String,
-        mutatorName: Schema.String,
-        replacement: Schema.String,
-        killedBy: Schema.optionalKey(Schema.Array(Schema.String)),
-        location: Schema.Struct({
-          start: Schema.Struct({ line: Schema.Finite, column: Schema.Finite }),
-          end: Schema.Struct({ line: Schema.Finite, column: Schema.Finite }),
-        }),
-      }),
-    ),
-  }),
-);
+const Files = Schema.Record(Schema.String, ReportFileSchema);
 const decodeReport = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ files: Files })));
 const decodeKillRun = Schema.decodeUnknownEffect(
   Schema.fromJsonString(
     Schema.Struct({
       files: Files,
-      testFiles: Schema.Record(Schema.String, Schema.Struct({ tests: Schema.Array(Schema.Struct({ id: Schema.String, name: Schema.String })) })),
+      testFiles: Schema.Record(Schema.String, TestFileSchema),
       config: Schema.optionalKey(Schema.Struct({ disableBail: Schema.optionalKey(Schema.Boolean) })),
     }),
   ),
@@ -211,9 +217,9 @@ function judgeMatch(path: string, mutant: UnmatchedMutant, counterpart: Unmatche
     from: mutant.status,
     to: counterpart.status,
   };
-  if (mutant.status !== counterpart.status && (LEAVES_SCORE.has(mutant.status) || LEAVES_SCORE.has(counterpart.status))) {
+  if (mutant.status !== counterpart.status && (OUTCOME[mutant.status] === "leaves-score" || OUTCOME[counterpart.status] === "leaves-score")) {
     findings.moves.push(change);
-  } else if (DETECTED.has(mutant.status) && UNDETECTED.has(counterpart.status)) {
+  } else if (OUTCOME[mutant.status] === "detected" && OUTCOME[counterpart.status] === "undetected") {
     findings.regressions.push(change);
   }
 }

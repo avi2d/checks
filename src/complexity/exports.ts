@@ -4,11 +4,13 @@ import { checkoutFiles, commitOf, git, pathsAt, rangeEnds, refArgs } from "../co
 import { runMain } from "../core/main.ts";
 import { knipReport, scanTree } from "./knip.ts";
 
-export type UnusedSymbol = {
-  readonly file: string;
-  readonly kind: "export" | "type";
-  readonly name: string;
-};
+const UnusedSymbolSchema = Schema.Struct({
+  file: Schema.String,
+  kind: Schema.Literals(["export", "type"]),
+  name: Schema.String,
+});
+
+export type UnusedSymbol = typeof UnusedSymbolSchema.Type;
 
 export type Baseline = readonly UnusedSymbol[];
 
@@ -51,17 +53,7 @@ const decodeKnipReport = Schema.decodeUnknownEffect(
   ),
 );
 
-const decodeBaseline = Schema.decodeUnknownEffect(
-  Schema.fromJsonString(
-    Schema.Array(
-      Schema.Struct({
-        file: Schema.String,
-        kind: Schema.Literals(["export", "type"]),
-        name: Schema.String,
-      }),
-    ),
-  ),
-);
+const decodeBaseline = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Array(UnusedSymbolSchema)));
 
 function byPosition(a: UnusedSymbol, b: UnusedSymbol): number {
   return a.file.localeCompare(b.file) || a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name);
