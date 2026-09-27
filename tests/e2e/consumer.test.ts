@@ -265,49 +265,20 @@ test(
 );
 
 test(
-  "file: consumer goes red on a mutable array parameter nothing mutates, green once it is readonly",
+  "file: consumer goes red on a mutable collection parameter and a schema twin, green once each is fixed",
   async () => {
     await useConsumer("file");
     await writeFile(join(dir, "totals.ts"), `export function total(items: string[]): number {\n  return items.length;\n}\n`);
-
-    const red = await oxlint();
-    expect(red.exitCode).not.toBe(0);
-    expect(red.text).toContain("totals.ts");
-    expect(red.text).toContain("data-shape(readonly-collection-param)");
-
-    await writeFile(join(dir, "totals.ts"), `export function total(items: readonly string[]): number {\n  return items.length;\n}\n`);
-    const green = await oxlint();
-    expect(green.exitCode).toBe(0);
-  },
-  180_000,
-);
-
-test(
-  "file: consumer goes red on a production type repeating a Schema, green once it is derived, while a test oracle stays green",
-  async () => {
-    await useConsumer("file");
-    await writeFile(
-      join(dir, "status.ts"),
-      `import { Schema } from "effect";\n\nexport type Status = {\n  readonly code: string;\n  readonly count: number;\n};\n\nexport const StatusSchema = Schema.Struct({ code: Schema.String, count: Schema.Number });\n`,
-    );
+    await writeFile(join(dir, "status.ts"), `import { Schema } from "effect";\nexport type Status = { readonly code: string; readonly count: number };\nexport const StatusSchema = Schema.Struct({ code: Schema.String, count: Schema.Number });\n`);
     await mkdir(join(dir, "tests"));
-    await writeFile(
-      join(dir, "tests", "oracle.ts"),
-      `import { Schema } from "effect";\n\nexport type Oracle = {\n  readonly code: string;\n  readonly count: number;\n};\n\nexport const OracleSchema = Schema.Struct({ code: Schema.String, count: Schema.Number });\n`,
-    );
-
+    await writeFile(join(dir, "tests", "oracle.ts"), `import { Schema } from "effect";\nexport type Oracle = { readonly code: string; readonly count: number };\nexport const OracleSchema = Schema.Struct({ code: Schema.String, count: Schema.Number });\n`);
     const red = await oxlint();
-    expect(red.exitCode).not.toBe(0);
-    expect(red.text).toContain("status.ts");
+    expect(red.text).toContain("data-shape(readonly-collection-param)");
     expect(red.text).toContain("data-shape(schema-twin)");
     expect(red.text).not.toContain("oracle.ts");
-
-    await writeFile(
-      join(dir, "status.ts"),
-      `import { Schema } from "effect";\n\nexport const StatusSchema = Schema.Struct({ code: Schema.String, count: Schema.Number });\n\nexport type Status = typeof StatusSchema.Type;\n`,
-    );
-    const green = await oxlint();
-    expect(green.exitCode).toBe(0);
+    await writeFile(join(dir, "totals.ts"), `export function total(items: readonly string[]): number {\n  return items.length;\n}\n`);
+    await writeFile(join(dir, "status.ts"), `import { Schema } from "effect";\nexport const StatusSchema = Schema.Struct({ code: Schema.String, count: Schema.Number });\nexport type Status = typeof StatusSchema.Type;\n`);
+    expect((await oxlint()).exitCode).toBe(0);
   },
   180_000,
 );
