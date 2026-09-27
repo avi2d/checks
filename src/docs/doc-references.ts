@@ -1,6 +1,6 @@
 import { scanMarkdown, type MarkdownLine } from "./prose-matchers.ts";
 
-export type ReferenceKind = "path" | "link" | "command";
+type ReferenceKind = "path" | "link" | "command";
 
 export type Unresolved = {
   readonly kind: ReferenceKind;

@@ -119,6 +119,7 @@ Each gate belongs to the vector it judges a repository on, and the table groups 
 | complexity | [`checks-suppressions-ratchet`](docs/gates/checks-suppressions-ratchet.md) | the range | every repository |
 | complexity | [`checks-repetition`](docs/gates/checks-repetition.md) | the range | a repository tracking `*.ts` or `*.tsx` |
 | complexity | [`checks-unused`](docs/gates/checks-unused.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
+| complexity | [`checks-exports`](docs/gates/checks-exports.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
 | quality | [`checks-lint-coverage`](docs/gates/checks-lint-coverage.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
 | quality | [`checks-comment-gate`](docs/gates/checks-comment-gate.md) | the range | every repository |
 | testing | [`checks-test-layout`](docs/gates/checks-test-layout.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |

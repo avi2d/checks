@@ -1,5 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@6.38.0/schema.json",
   "include": ["files"],
-  "entry": ["src/quality/effect-channel/index.ts", "src/complexity/readability/index.ts", "tests/**/*.test.ts"]
+  "entry": ["src/quality/effect-channel/index.ts", "src/complexity/readability/index.ts", "tests/**/*.test.ts"],
+  "ignoreDependencies": ["@commitlint/cli", "@effect/platform-node-shared", "jscpd"]
 }

@@ -24,10 +24,6 @@ export function parseWorkflow(text: string): ParsedWorkflow {
   return Schema.decodeUnknownSync(Workflow)(Bun.YAML.parse(text));
 }
 
-export function runs(workflow: ParsedWorkflow): readonly string[] {
-  return Object.values(workflow.jobs).flatMap((job) => job.steps.flatMap((step) => (step.run === undefined ? [] : [step.run])));
-}
-
 export function lastStep(workflow: ParsedWorkflow): Readonly<{ run: string; env: Readonly<Record<string, string>> }> {
   const steps = Object.values(workflow.jobs).flatMap((job) => job.steps);
   const last = steps.at(-1);
@@ -35,18 +31,3 @@ export function lastStep(workflow: ParsedWorkflow): Readonly<{ run: string; env:
   return { run: last.run, env: last.env ?? {} };
 }
 
-export function runsOn(workflow: ParsedWorkflow): string | readonly string[] {
-  const [job] = Object.values(workflow.jobs);
-  if (job === undefined) throw new Error("the parsed workflow carries no job");
-  return job["runs-on"];
-}
-
-export function setupBun(workflow: ParsedWorkflow): Readonly<Record<string, unknown>> | undefined {
-  const steps = Object.values(workflow.jobs).flatMap((job) => job.steps);
-  return steps.find((step) => step.uses?.startsWith("oven-sh/setup-bun@") === true)?.with;
-}
-
-export function setupNode(workflow: ParsedWorkflow): Readonly<Record<string, unknown>> | undefined {
-  const steps = Object.values(workflow.jobs).flatMap((job) => job.steps);
-  return steps.find((step) => step.uses?.startsWith("actions/setup-node@") === true)?.with;
-}

@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect";
 
-export type Outcome = "passed" | "failed" | "skipped" | "todo";
+type Outcome = "passed" | "failed" | "skipped" | "todo";
 
 export type TestResult = {
   readonly file: string;
