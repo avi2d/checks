@@ -2,6 +2,15 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.24.2
+
+Released 2026-09-27.
+
+### Fixes
+
+- **scripts:** list commits merged in after a bump under that release [#82](https://github.com/avi2d/checks/pull/82)
+- **scripts:** leave versions with no listable commits out of the changelog [#81](https://github.com/avi2d/checks/pull/81)
+
 ## 0.24.1
 
 Released 2026-09-27.
