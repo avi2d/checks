@@ -2,6 +2,15 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.26.0
+
+Released 2026-09-27.
+
+### Breaking changes
+
+- **complexity:** add checks-exports gate holding unused exports to a shrinking baseline [#89](https://github.com/avi2d/checks/pull/89)
+- move doc templates into dist/templates and presets into src/quality [#88](https://github.com/avi2d/checks/pull/88)
+
 ## 0.25.0
 
 Released 2026-09-27.
