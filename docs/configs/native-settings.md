@@ -25,7 +25,7 @@ A consuming repository puts each setting in the file its tool reads, and no mani
 
 Every page under `docs/` names its mode in `kind` front matter, whatever directory holds it.
 A page whose front matter sets `audience: consumers` names commands that a consuming repository runs.
-`checks-docs` skips the `bun run` commands on such a page, and looks up those in every other living doc in its nearest `package.json`.
+`checks-docs` skips the `bun run` commands on such a page, and resolves those in every other living doc as [Paths, links and commands](../gates/checks-docs.md#paths-links-and-commands) says.
 
 ## Size limits
 
