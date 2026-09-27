@@ -1,6 +1,7 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { join } from "node:path";
+import { Schema } from "effect";
 import { CHECKOUT } from "./lib/fixture-repo.ts";
 
 const SOURCE_FOLDERS = [
@@ -17,6 +18,8 @@ const SOURCE_FOLDERS = [
   "tests",
 ] as const;
 
+const Cruise = Schema.fromJsonString(Schema.Struct({ modules: Schema.Array(Schema.Struct({ source: Schema.String })) }));
+
 test(
   "the repo cruise parses its own TypeScript under each src/ vector, both plugins, scripts and tests",
   async () => {
@@ -25,7 +28,7 @@ test(
       .cwd(CHECKOUT)
       .nothrow()
       .quiet();
-    const sources: string[] = JSON.parse(result.stdout.toString()).modules.map((module: { source: string }) => module.source);
+    const sources = Schema.decodeSync(Cruise)(result.stdout.toString()).modules.map((module) => module.source);
     const typescriptUnder = (folder: string) => sources.filter((source) => source.startsWith(`${folder}/`) && source.endsWith(".ts"));
     expect(SOURCE_FOLDERS.filter((folder) => typescriptUnder(folder).length === 0)).toEqual([]);
   },

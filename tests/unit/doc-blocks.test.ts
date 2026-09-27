@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Effect } from "effect";
 import { BUN_VERSION, INSTALL, kitFacts, MANIFEST, OXLINTRC, splice, TARGETS } from "../../scripts/doc-blocks.ts";
+import { KIT_GATES } from "../../src/core/gates.ts";
 
 const CHECKOUT = resolve(import.meta.dir, "..", "..");
 
@@ -18,7 +19,7 @@ test("each committed doc carries the blocks bun run build writes from package.js
 });
 
 const FACTS = {
-  manifest: { name: "@acme/kit", peerDependencies: { zod: "4.0.0", "@acme/peer": "1.2.3" }, devDependencies: { typescript: "7.0.0" }, files: [] },
+  manifest: { name: "@acme/kit", peerDependencies: { zod: "4.0.0", "@acme/peer": "1.2.3" }, files: [] },
   bun: "1.3.0",
   shipped: [],
   sizeScopes: [],
@@ -34,7 +35,7 @@ test("a stale block is rewritten at its marker's indent, peers sorted by name, a
       "   <!-- generated install: bun run build writes it from package.json and scripts/doc-blocks.ts -->",
       "",
       "   ```sh",
-      "   bun add -d @acme/kit @acme/peer@1.2.3 zod@4.0.0 typescript@7.0.0",
+      "   bun add -d @acme/kit @acme/peer@1.2.3 zod@4.0.0",
       "   ```",
       "",
       "   <!-- end generated install -->",
@@ -42,6 +43,26 @@ test("a stale block is rewritten at its marker's indent, peers sorted by name, a
       "1. Next.",
     ].join("\n"),
   });
+});
+
+test("a stale lint sample count is rewritten from KIT_GATES", () => {
+  const target = TARGETS.find(({ file }) => file === "docs/gates/checks-lint.md");
+  expect(target).toBeDefined();
+  const stale = [
+    "## Sample output",
+    "",
+    "<!-- generated lint-sample: by hand -->",
+    "",
+    "```",
+    "checks-lint: range abc..def from HEAD against origin/main",
+    "checks-lint: 1 of 3 gate(s) failed: checks-comment-gate",
+    "```",
+    "",
+    "<!-- end generated lint-sample -->",
+  ].join("\n");
+  const spliced = splice(stale, target?.blocks ?? [], FACTS);
+  expect(spliced.type).toBe("spliced");
+  if (spliced.type === "spliced") expect(spliced.text).toContain(`1 of ${KIT_GATES.length} gate(s) failed`);
 });
 
 test("a doc missing a block's markers is refused naming the block, rather than written without it", () => {

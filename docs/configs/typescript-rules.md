@@ -4,7 +4,7 @@ audience: consumers
 ---
 # The TypeScript rules
 
-The oxlint base config holds a repository's TypeScript to a set of rules, and some of them need type information.
+The oxlint base config and the tsconfig fragment hold a repository's TypeScript to a set of rules, and some of them need type information.
 
 ## Syntax rules
 
@@ -42,6 +42,38 @@ The base loads the kit's `data-shape` plugin from `dist/` with one rule for ever
 - `data-shape/schema-twin` refuses an object type whose fields match a `Schema.Struct`, `TaggedStruct` or `Class` in the same file by name, count, optionality and kind.
 - Derive such a type from the schema with `typeof Name.Type` instead of writing both.
 - The twin rule runs on production files only, so a test that declares its own schema as an oracle stays green.
+
+## Rules outside tests
+
+An override in `oxlintrc.json` turns on these type-aware rules in each `.ts` and `.tsx` file outside `tests/`:
+
+- `typescript/no-unsafe-assignment` refuses assigning an `any` value to a variable, a property or a destructured name.
+- `typescript/no-unsafe-member-access` refuses reading a member of an `any` value.
+- `typescript/no-unsafe-argument` refuses passing an `any` value to a parameter of another type.
+- `typescript/no-unsafe-return` refuses returning an `any` value from a function, unless the function returns `unknown`.
+- `typescript/no-unsafe-call` refuses calling an `any` value.
+
+A consumer inherits the override through `extends`, and a file under `tests/` answers to none of the five.
+
+## Compiler options
+
+`tsconfig.effect.json` sets these compiler options in each repository whose `tsconfig.json` extends it:
+
+- `erasableSyntaxOnly` refuses TypeScript syntax that does not erase to JavaScript, such as an `enum` or a parameter property.
+- `exactOptionalPropertyTypes` refuses `undefined` as the value of an optional property whose type does not name `undefined`, so a type derived from a `Schema.optionalKey` field accepts only a missing key, as the schema does.
+
+## ts-reset rules
+
+`tsconfig.effect.json` lists the kit's `ts-reset.d.ts` in `files`, and that file loads two rules of `@total-typescript/ts-reset`, a dependency of the kit:
+
+- `is-array` types the array `Array.isArray` narrows a value to as `unknown[]` rather than `any[]`.
+- `json-parse` types the value `JSON.parse` returns as `unknown` rather than `any`.
+
+tsc then refuses code that uses either value as a type it has not checked.
+The fragment also sets `include` to every file under the directory of the repository's `tsconfig.json` and to `ts-reset.d.ts`.
+A repository whose `tsconfig.json` sets `include` or `files` but not both keeps both rules.
+A repository that sets only `files` also gets every file under that directory in its program.
+A repository that sets both `files` and `include` drops both rules, and `checks-lint-coverage` fails it.
 
 ## Related topics
 

@@ -64,6 +64,7 @@
     "oxlintrc.json",
     "stryker.preset.js",
     "tsconfig.effect.json",
+    "ts-reset.d.ts",
     "dist/effect-channel/index.js",
     "dist/readability/index.js",
     "dist/data-shape/index.js"
@@ -114,7 +115,8 @@
     "effect": "4.0.0-rc.115",
     "jscpd": "5.3.2",
     "oxlint": "1.83.0",
-    "oxlint-tsgolint": "7.0.2002"
+    "oxlint-tsgolint": "7.0.2002",
+    "typescript": "7.0.2"
   },
   "devDependencies": {
     "@effect/tsgo": "0.45.0",
@@ -133,6 +135,7 @@
     "@commitlint/config-conventional": "21.2.3",
     "@effect/platform-bun": "4.0.0-rc.115",
     "@effect/platform-node-shared": "4.0.0-rc.115",
+    "@total-typescript/ts-reset": "0.6.1",
     "knip": "6.38.0"
   }
 }

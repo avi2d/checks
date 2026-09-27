@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { readFile } from "node:fs/promises";
 import { Usage } from "../../src/core/main.ts";
 import { parseKillRun, ReportError } from "../../src/testing/mutation-compare.ts";
@@ -13,13 +13,15 @@ const TWIN_B = "tests/mul.test.ts > mul multiplies in either order";
 const LONER = "tests/mul.test.ts > mul checks its guard";
 const IDLE = "tests/mul.test.ts > mul names its label";
 
+const ReportFields = Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown));
+
 async function fixture(name: string): Promise<Report> {
   const text = await readFile(new URL(name, FIXTURES), "utf8");
   return analyze(Effect.runSync(parseKillRun(name, text)));
 }
 
 async function withConfig(config: object | undefined): Promise<string> {
-  const { config: _recorded, ...report } = JSON.parse(await readFile(new URL("report.json", FIXTURES), "utf8"));
+  const { config: _recorded, ...report } = Schema.decodeSync(ReportFields)(await readFile(new URL("report.json", FIXTURES), "utf8"));
   return JSON.stringify(config === undefined ? report : { ...report, config });
 }
 

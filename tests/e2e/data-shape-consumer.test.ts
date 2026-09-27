@@ -65,7 +65,7 @@ const COMPUTED_PUSH = `export function add(items: string[]): void {
 const JSX_PROP = `function TagList(props: { readonly tags: string[] }): string {
   return props.tags.join(",");
 }
-export function renderTags(tags: string[]): string {
+export function renderTags(tags: string[]): unknown {
   return <TagList tags={tags} />;
 }
 `;

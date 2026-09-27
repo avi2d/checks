@@ -40,10 +40,14 @@ With two arguments, the base and head override range discovery.
 
 ## Sample output
 
+<!-- generated lint-sample: bun run build writes it from KIT_GATES in src/core/gates.ts and scripts/doc-blocks.ts -->
+
 ```
 checks-lint: range 2504acf098d120e73a8ece3c96f22b934f35c6a8..10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD against origin/main
 checks-lint: 1 of 11 gate(s) failed: checks-comment-gate
 ```
+
+<!-- end generated lint-sample -->
 
 ## When it runs
 

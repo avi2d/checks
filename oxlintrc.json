@@ -30,7 +30,12 @@
       "files": ["**/*.ts", "**/*.tsx"],
       "excludeFiles": ["tests/**"],
       "rules": {
-        "data-shape/schema-twin": "error"
+        "data-shape/schema-twin": "error",
+        "typescript/no-unsafe-assignment": "error",
+        "typescript/no-unsafe-member-access": "error",
+        "typescript/no-unsafe-argument": "error",
+        "typescript/no-unsafe-return": "error",
+        "typescript/no-unsafe-call": "error"
       }
     }
   ]
