@@ -120,6 +120,14 @@ function writtenObjects(target: WriteTarget): string[] {
   return [];
 }
 
+// A computed key that is not a string literal may name any method, so it counts as a mutation.
+function calledMethod(callee: ESTree.MemberExpression): string | undefined {
+  const { property } = callee;
+  if (!callee.computed && property.type === "Identifier") return property.name;
+  if (property.type === "Literal" && typeof property.value === "string") return property.value;
+  return undefined;
+}
+
 function watch(params: readonly ESTree.ParamPattern[]): Watched[] {
   const found: Watched[] = [];
   for (const param of params) {
@@ -175,9 +183,9 @@ const rule: CreateRule = {
     const call = (node: ESTree.CallExpression): void => {
       const { callee } = node;
       if (callee.type !== "MemberExpression") return;
-      const { object, property } = callee;
-      if (object.type !== "Identifier" || property.type !== "Identifier") return;
-      mark(object.name, property.name);
+      const { object } = callee;
+      if (object.type !== "Identifier") return;
+      mark(object.name, calledMethod(callee));
     };
 
     const passedReadonly = (site: ESTree.CallExpression | ESTree.NewExpression, argument: ESTree.Node): boolean => {

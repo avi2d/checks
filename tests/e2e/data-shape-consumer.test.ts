@@ -57,6 +57,11 @@ const SWAP = `export function shuffle(items: string[], pick: (bound: number) => 
 }
 `;
 
+const COMPUTED_PUSH = `export function add(items: string[]): void {
+  items["push"]("a");
+}
+`;
+
 const JSX_PROP = `function TagList(props: { readonly tags: string[] }): string {
   return props.tags.join(",");
 }
@@ -88,6 +93,7 @@ test(
     await tree.put("src/stamp.ts", TRUE_TWIN);
     await tree.put("src/label.ts", EXTENDED_INTERFACE);
     await tree.put("src/shuffle.ts", SWAP);
+    await tree.put("src/add.ts", COMPUTED_PUSH);
     await tree.put("src/tags.tsx", JSX_PROP);
     await tree.put("src/created.ts", TAGGED_TWIN);
     await tree.put("src/deleted.ts", TAGGED_PAYLOAD);

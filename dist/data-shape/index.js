@@ -81,6 +81,14 @@ function writtenObjects(target) {
     return writtenObjects(target.argument);
   return [];
 }
+function calledMethod(callee) {
+  const { property } = callee;
+  if (!callee.computed && property.type === "Identifier")
+    return property.name;
+  if (property.type === "Literal" && typeof property.value === "string")
+    return property.value;
+  return;
+}
 function watch(params) {
   const found = [];
   for (const param of params) {
@@ -139,10 +147,10 @@ var rule = {
       const { callee } = node;
       if (callee.type !== "MemberExpression")
         return;
-      const { object, property } = callee;
-      if (object.type !== "Identifier" || property.type !== "Identifier")
+      const { object } = callee;
+      if (object.type !== "Identifier")
         return;
-      mark(object.name, property.name);
+      mark(object.name, calledMethod(callee));
     };
     const passedReadonly = (site, argument) => {
       if (site.callee.type !== "Identifier")
