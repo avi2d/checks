@@ -210,6 +210,17 @@ const SIZE_LIMITS: Block = {
   ],
 };
 
+const LINT_SAMPLE: Block = {
+  name: "lint-sample",
+  from: ["KIT_GATES in src/core/gates.ts"],
+  render: () => [
+    "```",
+    "checks-lint: range 2504acf098d120e73a8ece3c96f22b934f35c6a8..10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD against origin/main",
+    `checks-lint: 1 of ${KIT_GATES.length} gate(s) failed: checks-comment-gate`,
+    "```",
+  ],
+};
+
 const WHERE: Block = {
   name: "shipped",
   from: [MANIFEST],
@@ -219,6 +230,7 @@ const WHERE: Block = {
 export const TARGETS: readonly { readonly file: string; readonly blocks: readonly Block[] }[] = [
   { file: "README.md", blocks: [PREREQUISITES, INSTALL, GATES, WHERE] },
   { file: `${GATE_PAGES}/checks-docs.md`, blocks: [DOC_KINDS, LIVING_DOCS, PROSE] },
+  { file: `${GATE_PAGES}/checks-lint.md`, blocks: [LINT_SAMPLE] },
   { file: "docs/configs/native-settings.md", blocks: [SIZE_LIMITS] },
 ];
 
