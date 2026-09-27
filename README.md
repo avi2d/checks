@@ -135,7 +135,6 @@ These bins run on their own:
 - [`checks-flake`](docs/gates/checks-flake.md) runs the suite on a schedule and records the seeds a flaky test fails with.
 - [`checks-mutation-compare`](docs/gates/checks-mutation-compare.md) holds every mutant in a pull request to no regression.
 - [`checks-subsumed-tests`](docs/gates/checks-subsumed-tests.md) lists each test another test subsumes in a mutation run.
-- [`checks-backtest`](docs/gates/checks-backtest.md) reports what the comment check would have refused in recent history.
 - [`checks-changelog`](docs/gates/checks-changelog.md) writes the pending release into `CHANGELOG.md` from the conventional commits since the last release.
 - [`checks-release-notes`](docs/gates/checks-release-notes.md) writes one `CHANGELOG.md` section to a file for a GitHub release.
 - [`checks-release-report`](docs/gates/checks-release-report.md) tells whether the history holds unreleased features or fixes since the last tag.
@@ -166,7 +165,6 @@ Every path is relative to the installed package, `node_modules/@avi2dg/checks/`.
 | Path | What it holds |
 | --- | --- |
 | `CHANGELOG.md` | every release, and what it changed |
-| `CONTRIBUTING.md` | how this repository is developed and released |
 | `docs/` | a reference page per bin and per shared config, and why the kit is shaped this way |
 | `bunfig.toml` | the bunfig preset a repository copies |
 | `commitlint.config.js` | the shared commitlint config |
@@ -190,4 +188,3 @@ Every path is relative to the installed package, `node_modules/@avi2dg/checks/`.
 - [The dependency rules](docs/configs/dependency-rules.md)
 - [The commit message lint](docs/configs/commit-messages.md)
 - [Why it is shaped this way](docs/design.md)
-- [Contribute to checks](CONTRIBUTING.md)

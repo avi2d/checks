@@ -8,7 +8,7 @@ The shared commitlint config holds each pull request title to conventional commi
 
 ## Config
 
-Commits follow `@commitlint/config-conventional` plus the house prefixes `commitlint.config.js` lists, shared from `@avi2dg/checks/commitlint.config.js`.
+Commits follow `@commitlint/config-conventional` plus the house prefixes `commitlint.config.js` lists, shared from `node_modules/@avi2dg/checks/commitlint.config.js`.
 It arrives with the kit, since `@commitlint/cli` and `@commitlint/config-conventional` are dependencies, not peers.
 
 ## Workflow

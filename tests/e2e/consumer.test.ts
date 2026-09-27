@@ -18,6 +18,8 @@ const Manifest = Schema.fromJsonString(
   }),
 );
 
+const OxlintPlugins = Schema.fromJsonString(Schema.Struct({ jsPlugins: Schema.Array(Schema.String) }));
+
 type Output = {
   readonly exitCode: number;
   readonly stdout: string;
@@ -340,6 +342,15 @@ test(
 
     const installed = join(dir, "node_modules", "@avi2dg", "checks");
     const manifest = Schema.decodeSync(Manifest)(await readFile(join(CHECKOUT, "package.json"), "utf8"));
+    expect(Object.keys(manifest.exports).toSorted()).toEqual([
+      "./dependency-cruiser.config.js",
+      "./knip-base.json",
+      "./scripts/comment-matchers.ts",
+      "./scripts/prose-matchers.ts",
+      "./scripts/test-skips.ts",
+      "./stryker.preset.js",
+      "./tsconfig.effect.json",
+    ]);
     const targets = Object.values(manifest.exports);
     expect(targets.length).toBeGreaterThan(0);
     for (const target of targets) {
@@ -379,6 +390,39 @@ test(
 );
 
 test(
+  "packed tarball holds no file knip names as unreferenced when every bin and exports target is an entry",
+  async () => {
+    const unpacked = await mkdtemp(join(tmpdir(), "checks-tarball-knip-"));
+    try {
+      await $`tar -xzf ${tarballPath} -C ${unpacked}`.quiet();
+      const root = join(unpacked, "package");
+      const manifest = Schema.decodeSync(Manifest)(await readFile(join(CHECKOUT, "package.json"), "utf8"));
+      const oxlintrc = Schema.decodeSync(OxlintPlugins)(await readFile(join(root, "oxlintrc.json"), "utf8"));
+      const entry = [
+        ...Object.values(manifest.bin),
+        ...Object.values(manifest.exports),
+        ...oxlintrc.jsPlugins,
+        "commitlint.config.js",
+      ].map((target) => (target.startsWith("./") ? target.slice(2) : target));
+      await writeFile(join(root, "knip.tarball.json"), JSON.stringify({ entry, commitlint: false }));
+      const knip = join(CHECKOUT, "node_modules", ".bin", "knip");
+      const scan = () => ran($`${knip} --production --include files --no-progress -c knip.tarball.json`.cwd(root));
+      await writeFile(join(root, "src", "planted-dead.ts"), `export const planted = 1;\n`);
+      const red = await scan();
+      expect(red.exitCode).not.toBe(0);
+      expect(red.text).toContain("src/planted-dead.ts");
+      await rm(join(root, "src", "planted-dead.ts"));
+      const scanned = await scan();
+      expect(scanned.text).not.toContain("Unused files");
+      expect(scanned.exitCode).toBe(0);
+    } finally {
+      await rm(unpacked, { recursive: true, force: true });
+    }
+  },
+  180_000,
+);
+
+test(
   "packed-tarball consumer runs every bin by its short name from a package script",
   async () => {
     await useConsumer("tarball", {
@@ -388,7 +432,6 @@ test(
         gate: "checks-comment-gate HEAD",
         ratchet: "checks-suppressions-ratchet HEAD",
         clock: "checks-quarantine-clock HEAD",
-        backtest: "checks-backtest 5",
         compare: "checks-mutation-compare mutation.json mutation.json",
         wiring: "checks-ci-wiring",
         flake: "checks-flake --runs 2",
@@ -428,10 +471,6 @@ test(
     const gate = await runScript("gate");
     expect(gate.text).toContain("carry no refused comment");
     expect(gate.exitCode).toBe(0);
-
-    const backtest = await runScript("backtest");
-    expect(backtest.text).toContain("commits touching code");
-    expect(backtest.exitCode).toBe(0);
 
     const compare = await runScript("compare");
     expect(compare.stdout).toContain("no regression");

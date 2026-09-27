@@ -24,7 +24,7 @@ A host such as a hook bundle can therefore copy it alone into a directory with n
 The kit's own dependency cruise fails when that file gains an import.
 `REFUSED_DIRECTIVES` in that file owns the refused directive names, and the checker builds its directive pattern from that list, so the two cannot disagree.
 A consumer reads the same contract by importing `REFUSED_DIRECTIVES` from `@avi2dg/checks/scripts/comment-matchers.ts`.
-`src/quality/comments.ts` wraps the same matchers in Effect for the gate and for [checks-backtest](checks-backtest.md).
+`src/quality/comments.ts` wraps the same matchers in Effect for the gate.
 
 ## Arguments
 
@@ -60,5 +60,4 @@ It applies to every repository, so no selection leaves it out.
 
 ## Related topics
 
-- [checks-backtest](checks-backtest.md)
 - [checks-lint](checks-lint.md)

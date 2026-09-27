@@ -30,7 +30,6 @@ const Version = Schema.String.check(Schema.isPattern(/^\d+\.\d+\.\d+$/, { messag
 
 const SHIPPED = {
   "CHANGELOG.md": "every release, and what it changed",
-  "CONTRIBUTING.md": "how this repository is developed and released",
   "docs/": "a reference page per bin and per shared config, and why the kit is shaped this way",
   "bunfig.toml": "the bunfig preset a repository copies",
   "commitlint.config.js": "the shared commitlint config",
