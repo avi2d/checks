@@ -95,7 +95,7 @@ jobs:
         run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/release-notes.md"
 ```
 
-A repository that never publishes to npm releases with this workflow instead, since only `checks` publishes a package:
+A repository that never publishes to npm releases with this workflow instead:
 
 ```yaml
 name: release
