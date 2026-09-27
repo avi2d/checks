@@ -91,14 +91,19 @@ export type Visit = { readonly at: Date; readonly name: string };
 `;
 
 const REFINED_TWIN = `import { Schema } from "effect";
-export const RawLibrary = Schema.Struct({ name: Schema.String.check(Schema.isMinLength(1)), size: Schema.Int.pipe(Schema.annotate({})) });
+export const RawLibrary = Schema.Struct({ name: Schema.String.check(Schema.isMinLength(1)), size: Schema.Int.annotate({}) });
 export type Library = { readonly name: string; readonly size: number };
+`;
+
+const BRANDED_PIPE = `import { Schema } from "effect";
+export const User = Schema.Struct({ id: Schema.String.pipe(Schema.brand("UserId")), name: Schema.String });
+export type NewUser = { readonly id: string; readonly name: string };
 `;
 
 const consumerTree = consumerTrees("checks-data-shape-consumer-");
 
 test(
-  "data-shape stays silent on a parameter that may be mutated, a domain type, an extended interface, a tagged payload, a narrowed string and a refined domain type, and reports a readonly callee and true twins",
+  "data-shape stays silent on a parameter that may be mutated, a domain type, an extended interface, a tagged payload, a narrowed string, a refined domain type and a branded pipe, and reports a readonly callee and true twins",
   async () => {
     const tree = await consumerTree({ paths: ["scripts/**/*.ts"], include: ["src/**/*.ts", "src/**/*.tsx"], types: [] });
     await tree.put("src/walker.ts", ACCUMULATOR_WALKER);
@@ -115,6 +120,7 @@ test(
     await tree.put("src/parsed.ts", NARROWED_STRING);
     await tree.put("src/visit.ts", REFINED_DOMAIN_TYPE);
     await tree.put("src/library.ts", REFINED_TWIN);
+    await tree.put("src/user.ts", BRANDED_PIPE);
     const { text } = await tree.run(join(KIT_BIN, "oxlint"), ["--type-aware", "-f", "unix", "src"]);
     expect(findings(text, /^(\S+?):\d+:\d+: .*\[Error\/([^\]]+)\]$/gm)).toEqual(
       new Map([

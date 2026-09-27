@@ -220,7 +220,7 @@ var readonly_collection_param_default = rule;
 
 // src/quality/data-shape/schema-twin.ts
 var STRUCTS = new Set(["Struct", "TaggedStruct", "Class"]);
-var REFINEMENTS = new Set(["check", "pipe", "annotate"]);
+var REFINEMENTS = new Set(["check", "annotate"]);
 var SCHEMA_KINDS = {
   String: "string",
   NonEmptyString: "string",

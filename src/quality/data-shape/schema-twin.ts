@@ -8,7 +8,7 @@ type Shape = ESTree.TSTypeLiteral | ESTree.TSInterfaceBody;
 
 const STRUCTS: ReadonlySet<string> = new Set(["Struct", "TaggedStruct", "Class"]);
 
-const REFINEMENTS: ReadonlySet<string> = new Set(["check", "pipe", "annotate"]);
+const REFINEMENTS: ReadonlySet<string> = new Set(["check", "annotate"]);
 
 const SCHEMA_KINDS: Readonly<Record<string, Kind>> = {
   String: "string",
