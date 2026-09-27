@@ -179,7 +179,7 @@ export const bailWarning = (source: string, run: KillRun): Effect.Effect<string 
       }),
     );
   if (run.bail === "unrecorded") return Effect.succeed(`${source} records no config, so nothing shows whether bail was off: build it with \`bunx stryker run --disableBail\``);
-  return Effect.succeed(undefined);
+  return Effect.undefined;
 };
 
 export const parseArgs = Effect.fnUntraced(function* (argv: readonly string[]): Effect.fn.Return<Options, Usage> {
