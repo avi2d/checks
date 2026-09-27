@@ -17,6 +17,7 @@ type Judged = {
   readonly held: readonly string[];
   readonly edited: { readonly docs: number; readonly lines: number };
   readonly living: number;
+  readonly named: number;
   readonly findings: readonly Finding[];
   readonly advisory: ReadonlyMap<string, number>;
   readonly brokenBefore: readonly Finding[];
@@ -76,6 +77,7 @@ const referenceFindings = Effect.fn("referenceFindings")(function* (range: Range
   const finding = ({ path, line, message }: Located): Finding => ({ path, line, message });
   return {
     failing: found.filter((one) => onChangedLines(one) || !before.has(keyOf(one))).map(finding),
+    failed: found,
     brokenBefore: elsewhere.filter((one) => before.has(keyOf(one))).map(finding),
   };
 });
@@ -104,17 +106,15 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   const judging = (path: string): Judging => ({ commands: !speaksToConsumers(text(path)) });
   // A directory the range deletes still belongs to this repository, so a path under it is stale rather than another repository's.
   const roots = rootsOf(yield* pathsAt(base, [], root));
-  const references = yield* referenceFindings(
-    { root, base, head, roots, changed, renamedFrom },
-    new Map(living.map((path) => [path, text(path)])),
-    judging,
-  );
+  const referenced = new Map(proseDocs.map(({ path }) => [path, text(path)]));
+  const references = yield* referenceFindings({ root, base, head, roots, changed, renamedFrom }, referenced, judging);
   const advisory = new Map<string, number>();
   for (const { path } of templated.filter((finding) => !touched.has(finding.path))) advisory.set(path, (advisory.get(path) ?? 0) + 1);
   return {
     held: judged.map(({ path }) => path).filter((path) => touched.has(path)),
     edited: { docs: edited.length, lines: edited.reduce((sum, { path }) => sum + (changed.get(path)?.size ?? 0), 0) },
     living: living.length,
+    named: referenced.size,
     findings: [...templated.filter((finding) => touched.has(finding.path)), ...prose, ...references.failing].toSorted(inPathOrder),
     advisory,
     brokenBefore: references.brokenBefore.toSorted(inPathOrder),
@@ -125,13 +125,13 @@ function describe({ path, line, message }: Finding): string {
   return `  ${path}${line === undefined ? "" : `:${line}`}: ${message}`;
 }
 
-export function report({ held, edited, living, findings, advisory, brokenBefore }: Judged): string {
+export function report({ held, edited, named, findings, advisory, brokenBefore }: Judged): string {
   const verdict =
     findings.length === 0
       ? [
           `${NAME}: ${held.length} doc file(s) the range touches hold to their templates`,
           `${NAME}: ${edited.lines} line(s) the range adds or edits in ${edited.docs} living doc(s) or agent file(s) hold to the prose rules`,
-          `${NAME}: the range breaks no path, link or command the ${living} living doc(s) name`,
+          `${NAME}: the range breaks no path, link or command the ${named} living doc(s) or agent file(s) name`,
         ]
       : [`${NAME}: ${findings.length} violation(s):`, ...findings.map(describe)];
   const unconformed =
@@ -144,7 +144,10 @@ export function report({ held, edited, living, findings, advisory, brokenBefore 
   const broken =
     brokenBefore.length === 0
       ? []
-      : [`${NAME}: advisory, ${brokenBefore.length} path(s), link(s) or command(s) the living docs name were broken before the range:`, ...brokenBefore.map(describe)];
+      : [
+          `${NAME}: advisory, ${brokenBefore.length} path(s), link(s) or command(s) the living docs or agent files name were broken before the range:`,
+          ...brokenBefore.map(describe),
+        ];
   return [...verdict, ...unconformed, ...broken].join("\n");
 }
 
