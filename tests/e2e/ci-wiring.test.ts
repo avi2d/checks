@@ -5,7 +5,7 @@ import { withoutPullRequestEvent } from "../lib/env.ts";
 import { CHECKOUT, fixtureRepos, ran, type FixtureRepo, type Ran } from "./lib/fixture-repo.ts";
 
 const open = fixtureRepos("checks-ci-wiring-");
-const SCRIPT = join(CHECKOUT, "scripts", "ci-wiring.ts");
+const SCRIPT = join(CHECKOUT, "src", "delivery", "ci-wiring.ts");
 const workflow = `on:\n  pull_request:\n    types: [opened, synchronize]\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n      - run: bun run build\n      - run: git diff --exit-code\n      - run: bun run typecheck\n      - run: bun run test\n      - run: ./node_modules/.bin/commitlint\n`;
 const scripts = (names: readonly string[]): string => JSON.stringify({ name: "consumer", scripts: Object.fromEntries(names.map((name) => [name, name])) });
 

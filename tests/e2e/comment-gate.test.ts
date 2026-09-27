@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CHECKOUT, fixtureRepos } from "./lib/fixture-repo.ts";
 
-const GATE = "comment-gate.ts";
+const GATE = "quality/comment-gate.ts";
 const repository = fixtureRepos("checks-comment-gate-");
 
 test(
@@ -110,7 +110,7 @@ test(
     const shallow = await mkdtemp(join(tmpdir(), "checks-comment-gate-shallow-"));
     try {
       await $`git clone -q --depth 1 ${`file://${dir}`} ${shallow}`.quiet();
-      const result = await $`bun ${join(CHECKOUT, "scripts", GATE)} HEAD`.cwd(shallow).nothrow().quiet();
+      const result = await $`bun ${join(CHECKOUT, "src", GATE)} HEAD`.cwd(shallow).nothrow().quiet();
       expect(result.exitCode).toBe(2);
       expect(result.stderr.toString()).toContain("comment-gate: git rev-parse");
     } finally {

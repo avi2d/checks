@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CHECKOUT, fixtureRepos, ran, type Ran } from "./lib/fixture-repo.ts";
 
-const SCRIPT = join(CHECKOUT, "scripts", "suppressions-ratchet.ts");
+const SCRIPT = join(CHECKOUT, "src", "complexity", "suppressions-ratchet.ts");
 const OXLINT = join(CHECKOUT, "node_modules", ".bin", "oxlint");
 const RULES = JSON.stringify({ rules: { "eslint/no-debugger": "error" } });
 const open = fixtureRepos("checks-suppressions-ratchet-");

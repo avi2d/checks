@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Kind } from "../../scripts/doc-templates.ts";
+import type { Kind } from "../../src/docs/doc-templates.ts";
 import { docsRepos, type DocsRepo } from "./lib/docs-repo.ts";
 import { CHECKOUT } from "./lib/fixture-repo.ts";
 

@@ -1,7 +1,7 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { copyFile, mkdir, readFile, symlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { CHECKOUT, scratchDirs } from "./lib/fixture-repo.ts";
 
 type HostLoaded = {
@@ -12,7 +12,7 @@ type HostLoaded = {
 
 const HOST_LOADED: readonly HostLoaded[] = [
   {
-    path: "scripts/comment-matchers.ts",
+    path: "src/quality/comment-matchers.ts",
     entry: `import { SYNTAXES, refused } from "./matchers";
 
 const refusals = refused("src/probe.ts", "const a = 1; // @ts-expect-error\\n");
@@ -26,7 +26,7 @@ console.log(JSON.stringify({ reads: Object.hasOwn(SYNTAXES, "ts"), refusals }));
     },
   },
   {
-    path: "scripts/prose-matchers.ts",
+    path: "src/docs/prose-matchers.ts",
     entry: `import { isLivingDoc, proseRefused } from "./matchers";
 
 const refusals = proseRefused("docs/guide.md", "It builds; it ships.\\n", new Set([1]));
@@ -61,11 +61,11 @@ for (const { path, entry, output } of HOST_LOADED) {
         await copyFile(join(CHECKOUT, config), join(dir, config));
       }
       for (const linked of ["node_modules", "dist"]) await symlink(join(CHECKOUT, linked), join(dir, linked));
-      await mkdir(join(dir, "scripts"));
+      await mkdir(join(dir, dirname(path)), { recursive: true });
       const source = await readFile(join(CHECKOUT, path), "utf8");
       const cruise = async (text: string): Promise<string> => {
         await writeFile(join(dir, path), text);
-        const cruised = await $`${join(dir, "node_modules", ".bin", "depcruise")} --config .dependency-cruiser.cjs scripts`
+        const cruised = await $`${join(dir, "node_modules", ".bin", "depcruise")} --config .dependency-cruiser.cjs ${dirname(path)}`
           .cwd(dir)
           .nothrow()
           .quiet();

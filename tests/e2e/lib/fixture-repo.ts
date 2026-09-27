@@ -46,8 +46,8 @@ export async function fixtureRepo(prefix: string, files: Readonly<Record<string,
       await $`git add -A && git ${IDENTITY} commit -q --no-gpg-sign -m ${message}`.cwd(dir).quiet();
       return (await $`git rev-parse HEAD`.cwd(dir).quiet()).stdout.toString().trim();
     },
-    script: (name, ...args) => ran($`bun ${join(CHECKOUT, "scripts", name)} ${args}`.cwd(dir).env({ ...process.env, PATH: KIT_PATH })),
-    lint: () => ran($`bun ${join(CHECKOUT, "scripts", "lint.ts")}`.cwd(dir).env({ ...withoutPullRequestEvent(), PATH: KIT_PATH })),
+    script: (name, ...args) => ran($`bun ${join(CHECKOUT, "src", name)} ${args}`.cwd(dir).env({ ...process.env, PATH: KIT_PATH })),
+    lint: () => ran($`bun ${join(CHECKOUT, "src", "core", "lint.ts")}`.cwd(dir).env({ ...withoutPullRequestEvent(), PATH: KIT_PATH })),
     dispose: () => rm(dir, { recursive: true, force: true }),
   };
 }

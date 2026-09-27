@@ -17,7 +17,7 @@ The package ships one template per kind under `templates/`, and a repository sta
 cp node_modules/@avi2dg/checks/templates/how-to.md docs/add-a-supplier.md
 ```
 
-<!-- generated doc-kinds: bun run build writes it from scripts/doc-rules.ts, scripts/doc-templates.ts and scripts/doc-blocks.ts -->
+<!-- generated doc-kinds: bun run build writes it from src/docs/doc-rules.ts, src/docs/doc-templates.ts and scripts/doc-blocks.ts -->
 
 | File | Kind | Template |
 | --- | --- | --- |
@@ -60,7 +60,7 @@ A template decides a file's structure, and the template file itself is the refer
 
 A line a change adds or edits in a living doc or an agent file is held to the prose rules, and a line the change leaves alone is not, so a repository needs no cleanup pass before it runs them.
 
-<!-- generated living-docs: bun run build writes it from scripts/prose-matchers.ts and scripts/doc-blocks.ts -->
+<!-- generated living-docs: bun run build writes it from src/docs/prose-matchers.ts and scripts/doc-blocks.ts -->
 
 A living doc is one of these:
 
@@ -77,7 +77,7 @@ These are records, and take no prose rule:
 
 <!-- end generated living-docs -->
 
-<!-- generated prose-rules: bun run build writes it from PROSE_RULES in scripts/prose-matchers.ts and scripts/doc-blocks.ts -->
+<!-- generated prose-rules: bun run build writes it from PROSE_RULES in src/docs/prose-matchers.ts and scripts/doc-blocks.ts -->
 
 | Refused | For example | Write instead | In agent files |
 | --- | --- | --- | --- |
@@ -98,14 +98,14 @@ A bold label that opens a line, as in `**Status.**`, heads the sentence after it
 Fenced code, inline code, link destinations, URLs, HTML comments and front matter are not prose, so no rule reads them.
 Readability scores and word choice, such as easy, are not checked.
 
-`scripts/prose-matchers.ts` holds the rules and a synchronous `proseRefused()`, and imports nothing.
+`src/docs/prose-matchers.ts` holds the rules and a synchronous `proseRefused()`, and imports nothing.
 A host such as a hook bundle can therefore copy it alone into a directory with no `node_modules` and import it as `@avi2dg/checks/scripts/prose-matchers.ts`, to refuse the same lines at write time.
 
 ## Paths, links and commands
 
 Each reference a living doc names has to resolve at the head commit:
 
-- A path in inline code that ends in a file extension, such as `scripts/lint.ts`, names a file from the root or from the doc's directory.
+- A path in inline code that ends in a file extension, such as `src/core/lint.ts`, names a file from the root or from the doc's directory.
 - A relative Markdown link names a file or a directory, and its anchor names a heading in the file it links, as GitHub derives the anchor, or an explicit `id`.
 - A `bun run` command in code names a script in the nearest `package.json`, a bin in `node_modules/.bin`, or a file that exists.
 

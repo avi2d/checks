@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -11,7 +11,11 @@ import { CHECKOUT, ran, UNVENDORED_BUNFIG, type Ran } from "./lib/fixture-repo.t
 const WIDGET = "export const widget = 42;\n";
 
 const Manifest = Schema.fromJsonString(
-  Schema.Struct({ exports: Schema.Record(Schema.String, Schema.String), bin: Schema.Record(Schema.String, Schema.String) }),
+  Schema.Struct({
+    name: Schema.String,
+    exports: Schema.Record(Schema.String, Schema.String),
+    bin: Schema.Record(Schema.String, Schema.String),
+  }),
 );
 
 type Output = {
@@ -264,7 +268,7 @@ test(
     await useConsumer("file");
     await writeFile(join(dir, "clean.ts"), `export const answer = 42;\n`);
     await writeFile(
-      join(dir, "node_modules", "@avi2dg", "checks", "effect-channel", "planted.ts"),
+      join(dir, "node_modules", "@avi2dg", "checks", "src", "quality", "effect-channel", "planted.ts"),
       `import { Effect } from "effect";\n\nexport const planted = Effect.ignore(Effect.fail("boom"));\n`,
     );
 
@@ -309,12 +313,12 @@ test(
 
     const red = await runScript("lint");
     expect(red.exitCode).not.toBe(0);
-    expect(red.text).toContain("widget.test.ts: a test file must live at tests/**/*.test.ts");
-    expect(red.text).toContain("move it to tests/widget.test.ts");
+    expect(red.text).toContain("widget.test.ts: a test file must live at tests/<level>/**/*.test.ts");
+    expect(red.text).toContain("move it to tests/unit/widget.test.ts");
 
-    await mkdir(join(dir, "tests"));
-    await rename(join(dir, "widget.test.ts"), join(dir, "tests", "widget.test.ts"));
-    await writeFile(join(dir, "tests", "widget.test.ts"), widgetTest("../widget.ts"));
+    await mkdir(join(dir, "tests", "unit"), { recursive: true });
+    await rename(join(dir, "widget.test.ts"), join(dir, "tests", "unit", "widget.test.ts"));
+    await writeFile(join(dir, "tests", "unit", "widget.test.ts"), widgetTest("../../widget.ts"));
     await $`git add -A`.cwd(dir).quiet();
 
     const green = await runScript("lint");
@@ -341,14 +345,19 @@ test(
     for (const target of targets) {
       expect(existsSync(join(installed, target))).toBe(true);
     }
+    const resolved = Object.entries(manifest.exports).map(([key, target]) => [
+      key,
+      realpathSync(Bun.resolveSync(`${manifest.name}${key.slice(1)}`, dir)) === realpathSync(join(installed, target)),
+    ]);
+    expect(resolved.filter(([, found]) => !found)).toEqual([]);
     expect(existsSync(join(installed, "LICENSE"))).toBe(true);
     expect(existsSync(join(installed, "CHANGELOG.md"))).toBe(true);
-    expect(existsSync(join(installed, "effect-channel"))).toBe(false);
-    expect(existsSync(join(installed, "readability"))).toBe(false);
+    expect(existsSync(join(installed, "src", "quality", "effect-channel"))).toBe(false);
+    expect(existsSync(join(installed, "src", "complexity", "readability"))).toBe(false);
     expect(existsSync(join(installed, "tests"))).toBe(false);
     expect(existsSync(join(installed, "AGENTS.md"))).toBe(false);
 
-    await writeWidgetRepo("tests/widget.test.ts", "../widget.ts");
+    await writeWidgetRepo("tests/unit/widget.test.ts", "../../widget.ts");
 
     const green = await runScript("lint");
     expect(green.text).toContain("satisfy the layout");
@@ -403,7 +412,7 @@ test(
       await readFile(join(CHECKOUT, "tests", "fixtures", "mutation-compare", "base.json"), "utf8"),
     );
 
-    await writeWidgetRepo("tests/widget.test.ts", "../widget.ts");
+    await writeWidgetRepo("tests/unit/widget.test.ts", "../../widget.ts");
     await commitAll("feat: base");
     await writeFile(join(dir, "clean.ts"), `export const answer = 42;\n`);
     await commitAll("feat: second");

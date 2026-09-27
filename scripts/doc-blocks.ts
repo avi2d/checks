@@ -1,9 +1,9 @@
 import { Effect, Schema } from "effect";
-import { ADR_DIRECTORY, ADR_INDEX, ROOT_FILES } from "./doc-rules.ts";
-import { listed, MODES, templateFile } from "./doc-templates.ts";
-import { EVERY_REPOSITORY, KIT_GATES } from "./gates.ts";
-import { AGENT_NAMES, DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, HISTORY_NAMES, LIVING_NAMES, PROSE_RULES } from "./prose-matchers.ts";
-import { SIZE_RULES, qualifiedName } from "./size-rules.ts";
+import { ADR_DIRECTORY, ADR_INDEX, ROOT_FILES } from "../src/docs/doc-rules.ts";
+import { listed, MODES, templateFile } from "../src/docs/doc-templates.ts";
+import { EVERY_REPOSITORY, KIT_GATES, VECTORS } from "../src/core/gates.ts";
+import { AGENT_NAMES, DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, HISTORY_NAMES, LIVING_NAMES, PROSE_RULES } from "../src/docs/prose-matchers.ts";
+import { SIZE_RULES, qualifiedName } from "../src/complexity/size-rules.ts";
 
 export const MANIFEST = "package.json";
 export const BUN_VERSION = ".bun-version";
@@ -35,7 +35,7 @@ const SHIPPED = {
   "bunfig.toml": "the bunfig preset a repository copies",
   "commitlint.config.js": "the shared commitlint config",
   "dependency-cruiser.config.js": "the shared dependency-cruiser base",
-  "scripts/": "every bin, which a package script calls by its `checks-` name",
+  "src/": "every bin, which a package script calls by its `checks-` name, and the modules the bins import",
   "templates/": "one template per kind of doc file, which a new doc file starts from",
   "presets/": "the Effect rule blocks a repository copies into its native config",
   "oxlintrc.json": "the oxlint base config `.oxlintrc.json` extends",
@@ -148,20 +148,20 @@ const READS = { tree: "the working tree", range: "the range" } as const;
 
 const GATES: Block = {
   name: "gates",
-  from: ["KIT_GATES in scripts/gates.ts"],
+  from: ["KIT_GATES in src/core/gates.ts"],
   render: () => [
-    "| Gate | Reads | Runs in |",
-    "| --- | --- | --- |",
-    ...KIT_GATES.map(({ bin, reads, appliesTo }) => {
+    "| Vector | Gate | Reads | Runs in |",
+    "| --- | --- | --- | --- |",
+    ...KIT_GATES.toSorted((a, b) => VECTORS.indexOf(a.vector) - VECTORS.indexOf(b.vector)).map(({ vector, bin, reads, appliesTo }) => {
       const runsIn = appliesTo === EVERY_REPOSITORY ? appliesTo : `a repository tracking ${appliesTo.pathspecs.map(code).join(" or ")}`;
-      return `| [${code(bin)}](${GATE_PAGES}/${bin}.md) | ${READS[reads]} | ${runsIn} |`;
+      return `| ${vector} | [${code(bin)}](${GATE_PAGES}/${bin}.md) | ${READS[reads]} | ${runsIn} |`;
     }),
   ],
 };
 
 const DOC_KINDS: Block = {
   name: "doc-kinds",
-  from: ["scripts/doc-rules.ts", "scripts/doc-templates.ts"],
+  from: ["src/docs/doc-rules.ts", "src/docs/doc-templates.ts"],
   render: () => [
     "| File | Kind | Template |",
     "| --- | --- | --- |",
@@ -173,7 +173,7 @@ const DOC_KINDS: Block = {
 
 const LIVING_DOCS: Block = {
   name: "living-docs",
-  from: ["scripts/prose-matchers.ts"],
+  from: ["src/docs/prose-matchers.ts"],
   render: () => [
     "A living doc is one of these:",
     "",
@@ -192,7 +192,7 @@ const LIVING_DOCS: Block = {
 
 const PROSE: Block = {
   name: "prose-rules",
-  from: ["PROSE_RULES in scripts/prose-matchers.ts"],
+  from: ["PROSE_RULES in src/docs/prose-matchers.ts"],
   render: () => [
     "| Refused | For example | Write instead | In agent files |",
     "| --- | --- | --- | --- |",
@@ -202,7 +202,7 @@ const PROSE: Block = {
 
 const SIZE_LIMITS: Block = {
   name: "size-limits",
-  from: [OXLINTRC, "SIZE_RULES in scripts/size-rules.ts"],
+  from: [OXLINTRC, "SIZE_RULES in src/complexity/size-rules.ts"],
   render: ({ sizeScopes }) => [
     `| Limits | oxlint rule | ${sizeScopes.map(({ files }) => files.map(code).join(", ")).join(" | ")} |`,
     `| --- | --- | ${sizeScopes.map(() => "---").join(" | ")} |`,

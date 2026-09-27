@@ -43,7 +43,7 @@ With one it judges that commit, including a repository's first commit.
 
 ```
 quarantine-clock: 1 test(s) in tests/quarantine/ is past 30 days; fix each and move it back, or delete it:
-  tests/quarantine/billing.test.ts entered quarantine on 2026-08-01 (45 days ago)
+  tests/quarantine/unit/billing.test.ts entered quarantine on 2026-08-01 (45 days ago)
 ```
 
 ## Opting out

@@ -4,7 +4,7 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CHECKOUT, fixtureRepos, ran, type Ran } from "./lib/fixture-repo.ts";
 
-const SCRIPT = join(CHECKOUT, "scripts", "commit-identity.ts");
+const SCRIPT = join(CHECKOUT, "src", "delivery", "commit-identity.ts");
 
 const OWNER = { name: "avi2d", email: "avi2dg@gmail.com" };
 const STRANGER = { name: "Pat Stranger", email: "stranger@example.com" };

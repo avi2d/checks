@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { Schema } from "effect";
 import { CHECKOUT, scratchDirs } from "./lib/fixture-repo.ts";
 
-const SCRIPT = join(CHECKOUT, "scripts", "flake.ts");
+const SCRIPT = join(CHECKOUT, "src", "testing", "flake.ts");
 const SEEDS = Array.from({ length: 12 }, (_, index) => index + 1);
 
 const ORDER_DEPENDENT = `import { expect, test } from "bun:test";

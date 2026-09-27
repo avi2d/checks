@@ -4,7 +4,7 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CHECKOUT, fixtureRepos, ran, type Ran } from "./lib/fixture-repo.ts";
 
-const SCRIPT = join(CHECKOUT, "scripts", "changelog-write.ts");
+const SCRIPT = join(CHECKOUT, "src", "delivery", "changelog-write.ts");
 const DATED = { GIT_AUTHOR_DATE: "2026-09-01T12:00:00+00:00", GIT_COMMITTER_DATE: "2026-09-01T12:00:00+00:00" };
 // bun test pins its own zone to UTC, so the writer and the expected date both take this one instead.
 const ZONE = "Pacific/Kiritimati";

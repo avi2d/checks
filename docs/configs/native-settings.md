@@ -55,9 +55,9 @@ A repository records its existing violations with `oxlint --suppress-all`, which
 `checks-suppressions-ratchet` refuses any count in that file that rises, so the recorded debt only falls.
 The kit's own `.oxlintrc.json` sets these limits for each size override, and a repository may copy them:
 
-<!-- generated size-limits: bun run build writes it from .oxlintrc.json, SIZE_RULES in scripts/size-rules.ts and scripts/doc-blocks.ts -->
+<!-- generated size-limits: bun run build writes it from .oxlintrc.json, SIZE_RULES in src/complexity/size-rules.ts and scripts/doc-blocks.ts -->
 
-| Limits | oxlint rule | `effect-channel/**/*.ts`, `readability/**/*.ts`, `scripts/**/*.ts` | `tests/**/*.ts` |
+| Limits | oxlint rule | `src/**/*.ts`, `scripts/**/*.ts` | `tests/**/*.ts` |
 | --- | --- | --- | --- |
 | The most lines a file may hold, blank and comment lines counted | `max-lines` | 400 | 600 |
 | The most lines a function may span, blank and comment lines counted | `max-lines-per-function` | 100 | off |

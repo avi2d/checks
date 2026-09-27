@@ -4,7 +4,7 @@ import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
 
-const SCRIPT = join(CHECKOUT, "scripts", "test.ts");
+const SCRIPT = join(CHECKOUT, "src", "testing", "test.ts");
 const BUNFIG = '[test]\npathIgnorePatterns = ["**/tests/quarantine/**", "**/tests/live/**", "**/tests/pixel/**"]\n';
 
 const scratch = scratchDirs();

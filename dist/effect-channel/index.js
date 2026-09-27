@@ -1,4 +1,4 @@
-// effect-channel/no-error-channel-escape.ts
+// src/quality/effect-channel/no-error-channel-escape.ts
 var EFFECT_SOURCES = new Set(["effect", "effect/Effect"]);
 var INSTEAD = {
   drops: "it drops the failure and the success together, so no caller can tell one from the other. Handle the error by tag, or keep it as a value with Effect.result or Effect.exit",
@@ -69,7 +69,7 @@ var rule = {
 };
 var no_error_channel_escape_default = rule;
 
-// effect-channel/no-throw.ts
+// src/quality/effect-channel/no-throw.ts
 var rule2 = {
   meta: {
     type: "problem",
@@ -88,7 +88,7 @@ var rule2 = {
 };
 var no_throw_default = rule2;
 
-// effect-channel/no-try-catch.ts
+// src/quality/effect-channel/no-try-catch.ts
 var rule3 = {
   meta: {
     type: "problem",
@@ -107,7 +107,7 @@ var rule3 = {
 };
 var no_try_catch_default = rule3;
 
-// effect-channel/index.ts
+// src/quality/effect-channel/index.ts
 var plugin = {
   meta: { name: "effect-channel" },
   rules: {

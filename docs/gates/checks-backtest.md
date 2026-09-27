@@ -15,7 +15,7 @@ Each commit that introduced a refusal is then listed with its refusals.
 
 ## What it reads
 
-It reads each commit and its first parent, and the files each commit changes that have a comment syntax in `scripts/comment-matchers.ts`.
+It reads each commit and its first parent, and the files each commit changes that have a comment syntax in `src/quality/comment-matchers.ts`.
 `generated/`, `vendor/`, `repos/`, `node_modules/` and `dist/` are out of reach, so the figures are authored code.
 
 ## Arguments

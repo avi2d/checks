@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 import { Console, Effect } from "effect";
-import { KINDS, renderTemplate, TEMPLATE_DIRECTORY, TEMPLATES, templateFile } from "./doc-templates.ts";
+import { KINDS, renderTemplate, TEMPLATE_DIRECTORY, TEMPLATES, templateFile } from "../src/docs/doc-templates.ts";
 import { kitCheckout } from "./kit-checkout.ts";
-import { runMain } from "./main.ts";
+import { runMain } from "../src/core/main.ts";
 
 const write = Effect.gen(function* () {
   const checkout = yield* kitCheckout;

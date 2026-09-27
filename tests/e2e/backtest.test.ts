@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { join } from "node:path";
 import { CHECKOUT, fixtureRepos } from "./lib/fixture-repo.ts";
 
-const SCRIPT = join(CHECKOUT, "scripts", "backtest.ts");
+const SCRIPT = join(CHECKOUT, "src", "quality", "backtest.ts");
 const repository = fixtureRepos("checks-backtest-");
 
 test(
