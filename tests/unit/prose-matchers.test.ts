@@ -31,6 +31,18 @@ describe("each rule goes red on a planted line and green on its rewrite", () => 
       "It stays manual.",
     ],
     [
+      "past report",
+      "It is the former home of the build.",
+      "1: carries `former`, a report about the past. Say what is true now, and leave what changed to the changelog, a commit message or a decision record",
+      "It builds bills.",
+    ],
+    [
+      "used to",
+      "It used to build bills.",
+      "1: carries `used to`, a report about the past. Say what is true now, and leave what changed to the changelog, a commit message or a decision record",
+      "It builds bills.",
+    ],
+    [
       "self-reference",
       "This page explains the gate.",
       "1: carries `This page explains`, a sentence that opens by talking about the page. Talk directly about the subject",
@@ -56,6 +68,10 @@ describe("each rule goes red on a planted line and green on its rewrite", () => 
     const runOn = "carries a sentence that runs across lines. Join the sentence onto one line";
     expect(refusals(wrapped)).toEqual([`1: ${runOn}`, `2: ${runOn}`]);
     expect(refusals("It builds the bill and ships it to the supplier.\n")).toEqual([]);
+  });
+
+  test("used to after a form of be is habit, not history", () => {
+    expect(refusals("It is used to build bills.")).toEqual([]);
   });
 });
 
