@@ -12,7 +12,6 @@ It fails naming each test that entered `tests/quarantine/` more than 30 days bef
 `checks-test-layout` pins `tests/quarantine/` out of every default run, so a test there protects nothing until it moves back.
 Each failure names the file, the day it entered quarantine, and what to do, which is to fix it and move it back, or delete it.
 The limit is 30 days for every test, with no setting to raise it.
-GitLab quarantines fast for 3 days and long term for at most 3 months, then opens a deletion merge request automatically.
 
 ## What it reads
 

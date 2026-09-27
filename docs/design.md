@@ -3,111 +3,175 @@ kind: explanation
 ---
 # Why it is shaped this way
 
-Each entry below is a choice in the kit's shape and the constraint that forced it.
+Most of the kit's shape follows from a limit in a tool it runs on, such as oxlint, bun, npm, Stryker or GitHub Actions.
+Each section names the limit and what the obvious alternative would break.
 
-- Every config in an oxlint `extends` chain brings its own `plugins`, and one that sets none brings oxlint's default plugins, whose category rules the base's `categories` then turn on across the tree.
-  `rules`, `categories` and `jsPlugins` inherit as expected.
-  That is why the consumer config and each override restate `plugins`.
-- `node_modules/` is excluded through the consumer's `.gitignore`, not `ignorePatterns`: oxlint still walks the installed package when only `ignorePatterns` names it.
-- `files` in package.json is the published surface: `tests/`, `AGENTS.md` and the `.ts` plugin source never reach an install.
-  npm adds `package.json`, `README` and `LICENSE` to the tarball whatever `files` says.
-  `bun pm pack` builds the same tarball the registry serves, which is what the packed-tarball consumer e2e test installs.
-- Each plugin ships compiled under `dist/`, built with `bun build src/<vector>/<name>/index.ts --outdir dist/<name> --target node --format esm`.
-  Node refuses to type-strip a `.ts` plugin under `node_modules`, so the `.ts` source would fail to load from an installed package.
-- The source sits under `src/<vector>/`, one directory for each thing the kit judges a repository on: complexity, quality, testing, docs, delivery and dependencies.
-  `src/core/` holds what every vector runs on, and `scripts/` holds only the kit's own build, which nothing ships.
-  Sorting by what loads a file put the two oxlint plugins at the root and every bin in one flat `scripts/`, so the files for one purpose sat in several places and nothing said which gate a helper served.
-  A mutation runner's default scope covers `src/`, so the kit's own Stryker run mutates its source without a `mutate` list.
-  The testing vector and its directory are named testing rather than tests, since a `src/tests/` beside the root `tests/` would read as a second suite.
-  An `exports` key a consumer resolves as a specifier keeps pointing at the file's new home, so that specifier resolves as before while a path read without resolution does not.
-- The size rules are plain oxlint rules at `error` in `.oxlintrc.json`, and `bun run lint` enforces them on the whole tree.
-  A repository records its existing violations with `oxlint --suppress-all`, and `checks-suppressions-ratchet` refuses any count that rises.
-  The kit runs no size script of its own, since restating how oxlint reads its config and compares sites left corners the native rules never had.
-  The suppression count lets a file or function already over its limit grow without a new site, which was accepted in exchange for dropping that script, and each repository is to work its counts down to zero.
-- `checks-repetition` writes both ends of the range to temporary directories and runs jscpd in each with the head's `.jscpd.json`, so its `path` and `ignore` globs decide the files at both ends.
-  It compares each file's count of repeated lines rather than using jscpd's `--baseline-from-ref`.
-  That flag reports a repeated block as new once its text changes, so a change that shortens a grandfathered block would fail.
-- `dist/` is committed.
-  No `prepack` or `prepublishOnly` builds it, so a publish ships whatever bundle the publishing worktree holds.
-  Rebuild it after pulling with `bun run build`.
-  `bun run build` also emits `dist/templates/` and `CHANGELOG.md`, which are committed the same way.
-  CI runs `git diff --exit-code` over the whole tree after the build, because a test that compares a generated file with its source passes on the copy the build just rewrote.
-- `CHANGELOG.md` is generated, so a release commit carries it and the tarball ships it.
-  The commit that bumps package.json `version` closes its release, and the `v*` tag goes on that commit, so commits merged after it wait for the next release.
-  Releases come from the commits, over all of HEAD's ancestry, so a checkout without tags, a fork and a branch that merged `main` in write the same file.
-  A bump not newer than the release before it is a revert: it cancels every release above the version it returns to, and a tag only keeps a reverted release that was already published.
-  The committed changelog is the record of what was released: a version older than the newest it lists and absent from it was never published, and its commits go into the next release.
-  A section keeps the date it was written with, since the squash merge that lands the release commit may fall on another day.
-  Entries come from commit subjects, the squash-merged pull request titles commitlint holds to the conventional format.
-  The bodies are the branch's own messages, which nothing lints.
-  The changelog still arrives in the release commit's pull request, not from a workflow that pushes.
-  The release path writes to the repository only through the `github-release` job's `contents: write`, which creates or updates the GitHub release from the tag's `CHANGELOG.md` section.
-- Workflow YAML owns CI execution, and the kit owns the required commands, but a repository is held only to the commands its own `package.json` can run.
-  `checks-ci-wiring` requires `bun run` with each of `lint`, `build`, `typecheck` and `test` that `package.json` defines as a script, `git diff --exit-code` when a `build` script exists, and commitlint always.
-  The target branch comes from git's own record in `refs/remotes/origin/HEAD`, or in CI from the pull request base or the default branch GitHub's event names, and never from a guess at the workflow files, and `checks-lint` starts its local range from the same branch.
-  Oxlint and TypeScript read their own overrides directly, so the consumer can change a rule where its tool reads it.
-  The Effect scopes occur in two native files, and the installed consumer test checks both independently.
-- The base parses with swc because typescript 7, which is tsgo, has no compiler API for dependency-cruiser to use.
-  Without `@swc/core` installed the cruise silently skips every `.ts` file, so this repo's test asserts its own TypeScript is cruised.
-- `bunfig.toml` has no `extends` and no include: bun ignores an unknown top-level key in silence, so a preset cannot be inherited and the consumer's copy is compared key by key against the installed one instead.
-  `[test] pathIgnorePatterns` is a real bunfig key, and an empty `--path-ignore-patterns` flag overrides the file's own list.
-- The Stryker preset is a JavaScript module, not JSON: Stryker 10 does not resolve `extends` in a JSON config, but a `.mjs` config that spreads an imported object consumes it.
-  Keys the consumer sets after the spread win.
-- The `.ts` bins are written in Effect, so `effect` is a peer dependency and `@effect/platform-bun`, which only the bins use, is a dependency.
-  `@effect/platform-node-shared` is a direct dependency at the same exact version only to pin it: `@effect/platform-bun` asks for it with a `^` range, and a newer rc peers on a newer `effect` than consumers install, so all three move together.
-- Each runnable script ships a `checks-` bin entry, so consumer `package.json` scripts call the short name, which the package manager puts on `PATH` only there.
-  A shell runs it through `bun run`, which never falls back to the registry the way `bunx` does.
-  The `.ts` checks keep a `bun` shebang, which needs no build step and no `dist/` entry, unlike the oxlint plugins that node loads.
-- `checks-lint` runs each gate as its own bin in a child process rather than importing it, so a gate behaves the same called alone or through the entry point, and `lint-coverage.sh` stays a shell script.
-  The gates run one at a time with their output passed straight through, so each report reads whole and in the table's order.
-- `checks-lint` determines applicable gates from tracked files instead of accepting a repository selection.
-  A TypeScript gate starts running as soon as TypeScript source is tracked.
-- `checks-test` runs bun itself rather than reading a report some other run left: a skip taken only on CI is visible only in CI's own run, and an earlier run's report may be stale or narrowed.
-  It reads the JUnit report bun writes to a temporary directory, since bun has no other per-test output meant for a program.
-- `checks-ci-wiring` runs inside `lint`, not in a workflow of its own: deleting the step that runs a check is the violation it catches, so the local `lint` is where it has to fail.
-- Workflows are parsed with `Bun.YAML`, which the `bun` shebang already provides, so the check adds no dependency.
-  It reads `on` as a string key, not as the YAML 1.1 boolean.
-- `bun` counts as a built-in module.
-  Nothing installed resolves it except `@types/bun`, which would otherwise make every runtime `bun` import look like a dev-only dependency.
-- The pull request merge commit GitHub builds is authored by `GitHub <noreply@github.com>`, which commit-identity refuses as an author.
-  `checks-lint` ends a pull request's range at the event's head sha, so the merge commit is never in it.
-  A `lint` that calls `checks-commit-identity HEAD` itself checks out `github.event.pull_request.head.sha` instead of the default merge ref.
-- `no-deep-imports` judges the import specifier, never the resolved file.
-  The base honours `exports` maps, so a subpath the map publishes resolves and passes, one it omits fails to resolve and is reported, and a package without an `exports` map publishes every file.
-  A bare import always passes whatever file its entry lives in.
-  Setting your own `options.enhancedResolveOptions` replaces the base's, so restate `exportsFields` and `conditionNames` if you do.
-- dependency-cruiser `extends` merges same-name `forbidden` rules with the child's fields winning.
-  That is the entry-point and layer recipe under Boundaries in [The dependency rules](configs/dependency-rules.md).
-- The templates in `dist/templates/` are rendered from `src/docs/doc-templates.ts`, the spec `checks-docs` reads.
-  A template written by hand beside the check agrees with it only until someone edits one of them.
-- A page's Diátaxis mode comes from `kind` front matter on the page, whatever directory holds it.
-  The repository makes the judgment beside the page, and the check holds it to that template.
-- `checks-docs` holds a doc file to its template when a change touches it, the way `checks-comment-gate` judges the comments a change adds.
-  A repository adopts the templates as its files change, and an untouched file is listed as advisory rather than failing a change that never read it.
-- A task heading is verb first, and review holds it there rather than the check.
-  No word list tells `Test layout` from `Test the layout`, and a check that passes the noun is worse than none.
-- The prose rules judge only the lines a change adds or edits, the way `checks-comment-gate` judges comments.
-  Text nobody touched never turns a change red, a record keeps the words it was written in, and a repository needs no cleanup pass before the gate runs.
-- A living doc takes one sentence per line, so a changed line is a changed sentence.
-  Under a hard wrap a one-word edit reflows a paragraph, and the gate would then demand fixes to sentences the edit never touched.
-- An agent file such as `AGENTS.md` takes the separator rules and no other prose rule.
-  One sentence per line serves the people who review a doc's diffs, and an agent file keeps each entry to one line however many sentences it holds.
-- `src/docs/prose-matchers.ts` imports nothing, so the gate and a write-time hook run one matcher and refuse in the same words.
-  A hook bundle ships without `node_modules`, so a matcher that needed Vale or a package could not refuse at write time.
-- Readability grades and words such as easy stay out of the prose rules.
-  A score cannot fail a change without failing correct prose, and a suggestion nobody runs an editor for is never seen.
-- A path, link or command on a line the range leaves alone fails when the range broke it, as by deleting the file it names.
-  A reference goes stale when the code it names moves far more often than when its own line is edited, so a gate on edited lines alone would miss the usual break.
-- A path under a top directory the repository lacks names a file in another repository, such as a consumer's, and no program tells that from a typo.
-  A directory the range deletes still counts as this repository's, so a path under it reads as stale rather than foreign.
-- The command check passes over a page whose front matter sets `audience: consumers`.
-  Such a page speaks to a consuming repository, whose scripts are not this one's.
-- `checks-vendor` strips an owner write bit that came back on a cached tree and keeps the tree, rather than refusing it or cloning it again.
-  The GitHub Actions runner clears the read only mode of each item before it deletes `$RUNNER_TEMP`, and on a directory link that chmod lands on the shared tree's top directory.
-  Refusing the tree would fail every later job on the runner until a person cleared it, and cloning it again would need the network after every such job.
-  A write bit is not a write, so the run strips it and then holds the tree to the recorded commit as it holds any tree, and a write it finds there still fails the run.
-  A group or other write bit still fails the run, since another user could have edited `.git/config` through it before `git status` reads it.
+## Each tool reads its own config
+
+A repository keeps each setting in the file its tool reads, such as `.oxlintrc.json`, `tsconfig.json` or `.jscpd.json`.
+A developer then changes a rule where the tool reads it, and the tool's own docs describe that file.
+The Effect paths sit in two of those files, `.oxlintrc.json` and `tsconfig.json`, and the installed consumer test checks each one on its own.
+
+oxlint does not pass `plugins` down an `extends` chain.
+A config in the chain that sets no `plugins` gets oxlint's default plugins, and the base's `categories` then turn on their rules across the tree.
+So a consumer's `.oxlintrc.json` and each of its overrides list `plugins` again.
+`rules`, `categories` and `jsPlugins` pass down the chain as expected.
+`.gitignore` keeps oxlint out of `node_modules/`, because oxlint still walks the installed package when only `ignorePatterns` names it.
+
+bun has no bunfig `extends`, and it ignores an unknown top-level key without a warning.
+So a repository copies the kit's `bunfig.toml`, and `checks-test-layout` compares the copy with the installed one key by key.
+An empty `--path-ignore-patterns` flag overrides the copied `[test] pathIgnorePatterns`, which is how a quarantined test still runs on demand.
+
+Stryker 10 does not resolve `extends` in a JSON config.
+So the Stryker preset is a JavaScript module that a repository's `stryker.conf.mjs` spreads, and a key set after the spread wins.
+
+The dependency-cruiser base parses with swc, because TypeScript 7, which is tsgo, has no compiler API that dependency-cruiser can use.
+Without `@swc/core` installed, the cruise skips every `.ts` file without a warning, so the kit's own suite asserts that its TypeScript is cruised.
+The base counts `bun` as a built-in module.
+Only `@types/bun` resolves it, and that package is a dev dependency, so every runtime `bun` import would otherwise read as dev only.
+
+## The source is sorted by what it judges
+
+The source sits under `src/<vector>/`, one directory for each thing the kit judges a repository on: complexity, quality, testing, docs, delivery and dependencies.
+`src/core/` holds what every vector runs on.
+`scripts/` holds only the kit's own build, and nothing in it ships.
+Sorting files by what loads them would put both oxlint plugins at the root and every bin in one flat directory.
+Nothing would then say which gate a helper serves.
+A mutation runner's default scope covers `src/`, so the kit's own Stryker run mutates its source with no `mutate` list.
+The testing directory is named `testing` rather than `tests`, because a `src/tests/` beside the root `tests/` would read as a second suite.
+
+Four `exports` keys name a path the file does not sit at, because consumers resolve them by that name.
+`@avi2dg/checks/scripts/test-skips.ts`, `@avi2dg/checks/scripts/comment-matchers.ts` and `@avi2dg/checks/scripts/prose-matchers.ts` point at their files under `src/`.
+`@avi2dg/checks/templates/*` points at `dist/templates/`.
+A path read without the resolver, such as `node_modules/@avi2dg/checks/scripts/test-skips.ts`, does not exist.
+
+## The package ships built plugins and runnable bins
+
+`files` in `package.json` lists what an install gets.
+`tests/`, `AGENTS.md` and the TypeScript source of the oxlint plugins never reach an install.
+npm adds `package.json`, `README.md` and `LICENSE` whatever `files` says.
+`bun pm pack` builds the same tarball the registry serves, and the consumer e2e test installs that tarball.
+
+Each oxlint plugin ships compiled under `dist/`, because Node refuses to strip types from a `.ts` file under `node_modules`.
+`dist/` is committed, with the doc templates in `dist/templates/`, and so is `CHANGELOG.md`, which the same build writes.
+No `prepack` or `prepublishOnly` script rebuilds them, so a publish ships the committed files.
+CI runs `git diff --exit-code` over the whole tree after `bun run build`.
+A test that compares a generated file with its source cannot do this job, because it would read the copy the build just rewrote.
+
+Each runnable script ships as a `checks-` bin, so a consumer's `package.json` script calls it by the short name.
+The package manager puts a bin on `PATH` only inside a package script.
+A shell reaches it through `bun run`, which never falls back to the registry the way `bunx` does.
+The `.ts` bins keep a `bun` shebang and need no build step, unlike the oxlint plugins that Node loads.
+
+The bins are written in Effect.
+So `effect` is a peer dependency, and `@effect/platform-bun`, which only the bins use, is a dependency.
+`@effect/platform-node-shared` is a direct dependency only to pin its version.
+`@effect/platform-bun` asks for it with a `^` range, and a newer release candidate of it peers on a newer `effect` than consumers install.
+So the three packages move together at one exact version.
+
+## checks-lint runs each gate as its own bin
+
+`checks-lint` runs each gate in a child process rather than importing it.
+A gate then behaves the same alone or through `checks-lint`, and `lint-coverage.sh` can stay a shell script.
+The gates run one at a time and pass their output straight through, so each report reads whole and in the order of the gate table.
+`checks-lint` picks the gates that apply from the tracked files, and a repository cannot select gates.
+A TypeScript gate runs as soon as the repository tracks TypeScript source.
+
+GitHub authors the pull request merge commit it builds as `GitHub <noreply@github.com>`, and `checks-commit-identity` refuses that author.
+So `checks-lint` ends a pull request's range at the event's head commit, and the merge commit is never in it.
+A `lint` that calls `checks-commit-identity HEAD` directly checks out `github.event.pull_request.head.sha` rather than the default merge ref.
+
+## Workflows say how CI runs
+
+A repository's workflow YAML says how CI runs, and the kit says which commands must run.
+`checks-ci-wiring` holds a repository only to the commands its own `package.json` defines, so a repository with no `build` script is not asked to run one.
+The target branch comes from git's `refs/remotes/origin/HEAD`, or in CI from the pull request base or the default branch in GitHub's event.
+It never comes from the workflow files, and `checks-lint` starts its local range from the same branch.
+`checks-ci-wiring` runs inside `lint`, not in a workflow of its own.
+The violation it catches is a deleted workflow step, so it has to fail in the local `lint`.
+It parses workflows with `Bun.YAML`, which the `bun` shebang already provides, so it adds no dependency.
+It reads `on` as a string key, not as the YAML 1.1 boolean.
+
+## Size and repetition only fail on growth
+
+The size limits are oxlint's own rules at `error`, not a script of the kit's.
+A script of the kit's own would restate how oxlint reads its config and compares sites, and each restatement adds cases oxlint itself does not have.
+A repository records its existing violations with `oxlint --suppress-all`, and `checks-suppressions-ratchet` refuses any count that rises.
+The cost is that a file or function already over its limit can grow without adding a site the count sees.
+Each repository works its counts down to zero.
+
+`checks-repetition` runs jscpd at both ends of the range with the head's `.jscpd.json`, so the same `path` and `ignore` globs pick the files at both ends.
+It compares each file's count of repeated lines, and does not use jscpd's `--baseline-from-ref`.
+That flag reports a repeated block as new once its text changes, so a change that shortens an existing repeated block would fail.
+
+## checks-test runs the suite itself
+
+`checks-test` runs bun itself rather than reading a report that another run left.
+A skip taken only on CI shows only in CI's own run, and an earlier run's report may be stale or narrowed.
+It reads the JUnit report bun writes to a temporary directory, because bun has no other per-test output meant for a program.
+GitLab quarantines a flaky test for 3 days on its fast path, and for at most 3 months on its long path.
+It then opens a merge request that deletes the test.
+`checks-quarantine-clock` holds every quarantined test to one limit of 30 days.
+
+## The changelog comes from the commits
+
+`CHANGELOG.md` is generated from the commits, so the release commit carries it and the tarball ships it.
+The commit that bumps `version` in `package.json` closes a release, and the `v*` tag goes on that commit.
+Commits merged after the bump wait for the next release.
+Releases come from the version bumps across all of `HEAD`'s ancestry, not from tags.
+So a checkout without tags, a fork, and a branch that merged `main` in all write the same file.
+A section keeps the date it was written, because the squash merge that lands the release commit may fall on another day.
+Entries come from commit subjects, which are the squash-merged pull request titles that commitlint holds to the conventional format.
+A commit body holds the branch's own messages, and nothing lints it, so no entry comes from a body.
+The changelog arrives in the release pull request, and no workflow pushes to the repository.
+The only write access the release path holds is the `github-release` job's `contents: write`, which creates or updates the GitHub release from the tag's `CHANGELOG.md` section.
+
+## The docs gate judges what a change touches
+
+The templates in `dist/templates/` are rendered from `src/docs/doc-templates.ts`, which is the spec `checks-docs` reads.
+A template written by hand beside the check would agree with it only until someone edits one of them.
+A page's Diátaxis mode comes from `kind` front matter on the page, whatever directory holds it.
+The repository judges the mode beside the page, and the check holds the page to that mode's template.
+
+`checks-docs` holds a doc file to its template only when a change touches it, the way `checks-comment-gate` judges only the comments a change adds.
+A repository adopts the templates as its files change, and an untouched file is listed as advisory.
+The prose rules judge only the lines a change adds or edits.
+Text nobody touched never turns a change red, and a record keeps the words it was written in.
+A repository needs no cleanup pass before the gate runs.
+Review, not the check, keeps a task heading verb first.
+No word list tells `Test layout` from `Test the layout`, and a check that passes the noun would be worse than none.
+
+A living doc takes one sentence per line, so a changed line is a changed sentence.
+Under a hard wrap, a one-word edit reflows a paragraph, and the gate would demand fixes to sentences the edit never touched.
+An agent file such as `AGENTS.md` takes the separator rules and no other prose rule.
+One sentence per line serves the people who review a doc's diffs.
+An agent file keeps each entry on one line, however many sentences it holds.
+Readability grades and words such as easy stay out of the prose rules.
+A score cannot fail a change without failing correct prose, and a suggestion that only an editor shows is never seen.
+
+`src/docs/prose-matchers.ts` imports nothing, so the gate and a write-time hook run one matcher and refuse in the same words.
+A hook bundle ships without `node_modules`, so a matcher that needed Vale or another package could not refuse at write time.
+
+A path, link or command on a line the range leaves alone still fails when the range broke it, for example by deleting the file it names.
+A reference goes stale far more often because the code it names moves than because its own line is edited.
+So a gate on edited lines alone would miss the usual break.
+A path under a top directory the repository lacks names a file in another repository, such as a consumer's.
+No program can tell such a path from a typo.
+A directory the range deletes still counts as this repository's, so a path under it reads as stale rather than foreign.
+The command check passes over a page whose front matter sets `audience: consumers`, because such a page names a consuming repository's scripts.
+
+## checks-vendor keeps a tree whose write bit came back
+
+The GitHub Actions runner clears the read only mode of each item before it deletes `$RUNNER_TEMP`.
+On a directory link, that change lands on the shared tree's top directory.
+Refusing the tree would fail every later job on the runner until a person cleared it.
+Cloning the tree again would need the network after every such job.
+A write bit is not a write.
+So `checks-vendor` strips an owner write bit and checks the tree against its recorded commit like any other tree.
+A write it finds there still fails the run.
+A group or other write bit fails the run, because another user could have edited `.git/config` through it before `git status` reads it.
 
 ## Related topics
 
 - [checks](../README.md)
+- [The dependency rules](configs/dependency-rules.md)
