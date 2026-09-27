@@ -91,6 +91,21 @@ test(
 );
 
 test(
+  "lint-coverage stays red on a skipped file when tsc then cannot read tsconfig.json",
+  async () => {
+    await writeFile(join(dir, ".gitignore"), `${PLANT}\n`);
+    await writeFile(join(dir, "tsconfig.json"), "{ broken");
+    const red = await coverage();
+    await rm(join(dir, "tsconfig.json"));
+    await writeFile(join(dir, ".gitignore"), "");
+    expect(red.text).toContain("skips 1/3");
+    expect(red.text).toContain("tsc could not list the program tsconfig.json builds");
+    expect(red.exitCode).toBe(1);
+  },
+  60_000,
+);
+
+test(
   "lint-coverage goes red on a consumer tsconfig.json that sets both files and include, green on include alone and on neither",
   async () => {
     const tree = await consumerTree({ paths: ["src/**/*.ts"], include: ["src/**/*.ts"], types: [] });

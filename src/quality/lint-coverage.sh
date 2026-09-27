@@ -42,6 +42,9 @@ fi
 if ! tsc --listFilesOnly -p tsconfig.json > "$tmp/program" 2> "$tmp/program-error"; then
   echo "lint-coverage: tsc could not list the program tsconfig.json builds:"
   cat "$tmp/program" "$tmp/program-error"
+  if [ "$status" -eq 1 ]; then
+    exit 1
+  fi
   exit 2
 fi
 
