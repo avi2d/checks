@@ -83,7 +83,7 @@ const unused = Effect.gen(function* () {
     yield* Console.log(`${NAME}: no knip configuration names entry files, so add one extending the kit's knip-base.json`);
     return false;
   }
-  const run = yield* collect(process.execPath, [yield* knip(), "--reporter", "json"], root).pipe(
+  const run = yield* collect(process.execPath, [yield* knip(), "--files", "--reporter", "json"], root).pipe(
     Effect.mapError((cause) => new UnusedError({ message: `cannot run knip: ${cause.message}` })),
   );
   if (run.exitCode !== 0 && run.exitCode !== 1) {

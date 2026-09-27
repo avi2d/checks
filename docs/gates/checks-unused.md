@@ -10,6 +10,7 @@ audience: consumers
 
 It runs Knip with the repository's own configuration and names each `.ts` or `.tsx` file no entry reaches.
 It reads only the files issue type, so an unused export or dependency never fails it.
+It asks Knip for that issue type itself, so a configuration that narrows `include`, excludes files or turns the files rule off still has its files judged.
 It fails when the repository tracks no TypeScript source, since an empty scan would pass without judging anything.
 It fails when the repository holds no Knip configuration, since Knip's default entries cannot tell a dead file from an entry point.
 

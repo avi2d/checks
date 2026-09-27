@@ -92,6 +92,27 @@ test(
 );
 
 test(
+  "judges files even when the knip configuration narrows include, excludes files or turns the files rule off",
+  async () => {
+    for (const narrowed of [{ include: ["exports"] }, { exclude: ["files"] }, { rules: { files: "off" } }]) {
+      const { commit, script } = await open(
+        configured({
+          "knip.json": JSON.stringify({ entry: ["index.ts"], ...narrowed }),
+          "index.ts": `export const index = 1;\n`,
+          "dead.ts": `export const dead = 1;\n`,
+        }),
+      );
+      await commit("feat: base");
+
+      const red = await script("complexity/unused.ts");
+      expect(red.text).toBe("unused: 1 unreferenced file(s):\n  dead.ts\n");
+      expect(red.exitCode).toBe(1);
+    }
+  },
+  120_000,
+);
+
+test(
   "fails when the repository holds no knip configuration",
   async () => {
     const { commit, script } = await open(configured({ "index.ts": `export const index = 1;\n` }));
