@@ -390,12 +390,34 @@ test(
 test(
   "packed tarball holds no file knip names as unreferenced when every bin and exports target is an entry",
   async () => {
-    await useConsumer("tarball");
-    const root = join(dir, "node_modules", "@avi2dg", "checks");
-    const knip = join(CHECKOUT, "node_modules", ".bin", "knip");
-    const scanned = await ran($`${knip} --production --include files --no-progress`.cwd(root));
-    expect(scanned.text).not.toContain("Unused files");
-    expect(scanned.exitCode).toBe(0);
+    const unpacked = await mkdtemp(join(tmpdir(), "checks-tarball-knip-"));
+    try {
+      await $`tar -xzf ${tarballPath} -C ${unpacked}`.quiet();
+      const root = join(unpacked, "package");
+      const manifest = Schema.decodeSync(Manifest)(await readFile(join(CHECKOUT, "package.json"), "utf8"));
+      const entry = [...Object.values(manifest.bin), ...Object.values(manifest.exports)].map((target) =>
+        target.startsWith("./") ? target.slice(2) : target,
+      );
+      // Oxlint loads dist through jsPlugins, not imports, so Knip needs them as entry.
+      await writeFile(
+        join(root, "knip.tarball.json"),
+        JSON.stringify({ entry: [...entry, "dist/effect-channel/index.js", "dist/readability/index.js"] }),
+      );
+      // Knip loads commitlint.config.js without its deps here, and it sits outside project files.
+      await rm(join(root, "commitlint.config.js"));
+      const knip = join(CHECKOUT, "node_modules", ".bin", "knip");
+      const scan = () => ran($`${knip} --production --include files --no-progress -c knip.tarball.json`.cwd(root));
+      await writeFile(join(root, "src", "planted-dead.ts"), `export const planted = 1;\n`);
+      const red = await scan();
+      expect(red.exitCode).not.toBe(0);
+      expect(red.text).toContain("src/planted-dead.ts");
+      await rm(join(root, "src", "planted-dead.ts"));
+      const scanned = await scan();
+      expect(scanned.text).not.toContain("Unused files");
+      expect(scanned.exitCode).toBe(0);
+    } finally {
+      await rm(unpacked, { recursive: true, force: true });
+    }
   },
   180_000,
 );
