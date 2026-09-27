@@ -200,7 +200,7 @@ function gapsAmong(gates: readonly Gate[], steps: readonly RunStep[], lintGates:
     const blocked = invoking.flatMap(({ location, blocker }) =>
       blocker === undefined ? [] : [{ location, blocker }],
     );
-    return [{ gate: gate.command, entryPoint: entryPoint?.join(" "), blocked }];
+    return [{ gate: gate.command, ...(entryPoint === undefined ? {} : { entryPoint: entryPoint.join(" ") }), blocked }];
   });
 }
 

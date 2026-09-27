@@ -4,7 +4,7 @@ audience: consumers
 ---
 # The TypeScript rules
 
-The oxlint base config holds a repository's TypeScript to a set of rules, and a reader looks it up to learn what each rule refuses and which rules need type information.
+The oxlint base config and the tsconfig fragment hold a repository's TypeScript to a set of rules, and a reader looks it up to learn what each rule refuses and which rules need type information.
 
 ## Syntax rules
 
@@ -44,6 +44,13 @@ An override in `oxlintrc.json` turns on these type-aware rules in each `.ts` and
 - `typescript/no-unsafe-call` refuses calling an `any` value.
 
 A consumer inherits the override through `extends`, and a file under `tests/` answers to none of the five.
+
+## Compiler options
+
+`tsconfig.effect.json` sets these compiler options in each repository whose `tsconfig.json` extends it:
+
+- `erasableSyntaxOnly` refuses TypeScript syntax that does not erase to JavaScript, such as an `enum` or a parameter property.
+- `exactOptionalPropertyTypes` refuses `undefined` as the value of an optional property whose type does not name `undefined`, so a type derived from a `Schema.optionalKey` field accepts only a missing key, as the schema does.
 
 ## Related topics
 

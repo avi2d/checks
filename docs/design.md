@@ -12,6 +12,9 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   `typescript/no-explicit-any` and `strict` already refuse an `any` someone writes, so the `any` left is one nobody wrote.
   `Array.isArray` narrows an `unknown` to `any[]`, `JSON.parse` returns `any`, `Object.entries` lists `any` values from an `object`, and a defaulted parameter in a generator passed to `Effect.fnUntraced` is typed `any`.
   Tests stay out because bun:test types its asymmetric matchers, such as `expect.arrayContaining`, as `any`, and those made 22 of the 34 findings in the tests of the kit and its consumers.
+- `tsconfig.effect.json` sets `exactOptionalPropertyTypes`, so every repository that extends it gets the option in the same release.
+  `Schema.optionalKey` means the key is missing, never `undefined`, and without the option a type derived from the schema accepts an `undefined` the schema rejects when it decodes.
+  tsc keeps no baseline, and the only escape for one site is a `@ts-expect-error`, which `typescript/ban-ts-comment` refuses, so each error the option raises is fixed where it lands.
 - `node_modules/` is excluded through the consumer's `.gitignore`, not `ignorePatterns`: oxlint still walks the installed package when only `ignorePatterns` names it.
 - `files` in package.json is the published surface: `tests/`, `AGENTS.md` and the `.ts` plugin source never reach an install.
   npm adds `package.json`, `README` and `LICENSE` to the tarball whatever `files` says.

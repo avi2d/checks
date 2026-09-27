@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "erasableSyntaxOnly": true,
+    "exactOptionalPropertyTypes": true,
     "plugins": [
       {
         "name": "@effect/language-service",

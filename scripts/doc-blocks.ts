@@ -38,7 +38,7 @@ const SHIPPED = {
   "src/": "every bin, which a package script calls by its `checks-` name, the modules the bins import, and the Effect rule blocks under `src/quality/presets/`",
   "oxlintrc.json": "the oxlint base config `.oxlintrc.json` extends",
   "stryker.preset.js": "the Stryker mutation-testing preset",
-  "tsconfig.effect.json": "the tsconfig fragment with the Effect language-service block",
+  "tsconfig.effect.json": "the tsconfig fragment with the shared compiler options and the Effect language-service block",
   "dist/": "the compiled oxlint plugins and the doc templates, one template per kind of doc file",
 } as const;
 

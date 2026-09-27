@@ -175,7 +175,7 @@ Every path is relative to the installed package, `node_modules/@avi2dg/checks/`.
 | `dist/` | the compiled oxlint plugins and the doc templates, one template per kind of doc file |
 | `oxlintrc.json` | the oxlint base config `.oxlintrc.json` extends |
 | `stryker.preset.js` | the Stryker mutation-testing preset |
-| `tsconfig.effect.json` | the tsconfig fragment with the Effect language-service block |
+| `tsconfig.effect.json` | the tsconfig fragment with the shared compiler options and the Effect language-service block |
 
 <!-- end generated shipped -->
 
