@@ -3,6 +3,8 @@
     "nodeBuiltinImport": "error",
     "asyncFunction": "error",
     "newPromise": "error",
-    "extendsNativeError": "error"
+    "extendsNativeError": "error",
+    "processEnv": "error",
+    "processEnvInEffect": "error"
   }
 }

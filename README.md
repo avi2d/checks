@@ -10,7 +10,6 @@ Each repository owns its workflows and native tool configs, as [Native settings]
 
 - A git repository, whose history the range gates read.
 - Bun 1.3.13, which runs every bin.
-- TypeScript 7.0.2, whose `tsc` the `typecheck` script runs.
 - The peer dependencies, at the exact versions the kit pins:
   - `@effect/tsgo` 0.45.0
   - `@swc/core` 1.16.2
@@ -19,6 +18,7 @@ Each repository owns its workflows and native tool configs, as [Native settings]
   - `jscpd` 5.3.2
   - `oxlint` 1.83.0
   - `oxlint-tsgolint` 7.0.2002
+  - `typescript` 7.0.2
 
 <!-- end generated prerequisites -->
 
@@ -174,7 +174,8 @@ Every path is relative to the installed package, `node_modules/@avi2dg/checks/`.
 | `dist/` | the compiled oxlint plugins and the doc templates, one template per kind of doc file |
 | `oxlintrc.json` | the oxlint base config `.oxlintrc.json` extends |
 | `stryker.preset.js` | the Stryker mutation-testing preset |
-| `tsconfig.effect.json` | the tsconfig fragment with the Effect language-service block |
+| `tsconfig.effect.json` | the tsconfig fragment with the shared compiler options and the Effect language-service block |
+| `ts-reset.d.ts` | the two ts-reset rules `tsconfig.effect.json` lists in `files` |
 
 <!-- end generated shipped -->
 

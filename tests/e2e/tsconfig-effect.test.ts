@@ -37,12 +37,45 @@ const TsconfigEffect = Schema.fromJsonString(
   }),
 );
 
+const MUTANT = `import { Schema } from "effect";
+
+const Mutant = Schema.Struct({ status: Schema.String, killedBy: Schema.optionalKey(Schema.Array(Schema.String)) });
+
+export const built: typeof Mutant.Type = { status: "Killed", killedBy: undefined };
+`;
+
 const scratch = scratchDirs();
 
 let dir = "";
 
 function run(binary: string, args: string[]): Promise<Ran> {
   return ran($`${binary} ${args}`.cwd(dir));
+}
+
+function tsc(): Promise<Ran> {
+  return run(join(CHECKOUT, "node_modules", ".bin", "tsc"), ["--noEmit"]);
+}
+
+async function consumer(include: readonly string[]): Promise<void> {
+  dir = await scratch("checks-tsconfig-");
+  await writeFile(
+    join(dir, "tsconfig.json"),
+    JSON.stringify({
+      extends: join(CHECKOUT, "tsconfig.effect.json"),
+      compilerOptions: {
+        strict: true,
+        noEmit: true,
+        module: "preserve",
+        moduleResolution: "bundler",
+        target: "esnext",
+        lib: ["esnext"],
+        skipLibCheck: true,
+      },
+      include,
+    }),
+  );
+  // effect-tsgo discovers its typescript binary and the effect package from the project directory.
+  await symlink(join(CHECKOUT, "node_modules"), join(dir, "node_modules"));
 }
 
 test("tsconfig.effect.json carries the language-service block and erasableSyntaxOnly", async () => {
@@ -60,30 +93,12 @@ test("tsconfig.effect.json carries the language-service block and erasableSyntax
   }
 
   // The fragment must also work through extends, not just read correctly.
-  dir = await scratch("checks-tsconfig-");
-  await writeFile(
-    join(dir, "tsconfig.json"),
-    JSON.stringify({
-      extends: join(CHECKOUT, "tsconfig.effect.json"),
-      compilerOptions: {
-        strict: true,
-        noEmit: true,
-        module: "preserve",
-        moduleResolution: "bundler",
-        target: "esnext",
-        lib: ["esnext"],
-        skipLibCheck: true,
-      },
-      include: ["plant.ts", "enum-plant.ts"],
-    }),
-  );
+  await consumer(["plant.ts", "enum-plant.ts"]);
   await writeFile(
     join(dir, "plant.ts"),
     `import { Effect } from "effect";\n\nEffect.succeed(1);\n`,
   );
   await writeFile(join(dir, "enum-plant.ts"), `export enum Color {\n  Red = "red",\n}\n`);
-  // effect-tsgo discovers its typescript binary and the effect package from the project directory.
-  await symlink(join(CHECKOUT, "node_modules"), join(dir, "node_modules"));
 
   const diagnostics = await run(join(CHECKOUT, "node_modules", ".bin", "effect-tsgo"), [
     "diagnostics",
@@ -96,7 +111,22 @@ test("tsconfig.effect.json carries the language-service block and erasableSyntax
   expect(diagnostics.exitCode).not.toBe(0);
   expect(diagnostics.text).toContain("effect(floatingEffect)");
 
-  const typecheck = await run(join(CHECKOUT, "node_modules", ".bin", "tsc"), ["--noEmit"]);
+  const typecheck = await tsc();
   expect(typecheck.exitCode).not.toBe(0);
   expect(typecheck.text).toContain("erasableSyntaxOnly");
+});
+
+test("a consumer of tsconfig.effect.json fails an undefined in a Schema.optionalKey field, passes once the key is left out", async () => {
+  await consumer(["mutant.ts"]);
+  await writeFile(join(dir, "mutant.ts"), MUTANT);
+
+  const red = await tsc();
+  expect(red.exitCode).not.toBe(0);
+  expect(red.text).toContain("mutant.ts(5,14): error TS2375");
+  expect(red.text).toContain("exactOptionalPropertyTypes");
+
+  await writeFile(join(dir, "mutant.ts"), MUTANT.replace(", killedBy: undefined", ""));
+  const green = await tsc();
+  expect(green.text).toBe("");
+  expect(green.exitCode).toBe(0);
 });
