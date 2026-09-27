@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, DateTime, Effect, FileSystem, Path, Schema } from "effect";
-import { cuts, hasEntries, releaseDates, renderChangelog, type Bump, type Cut, type Release } from "./changelog.ts";
+import { cuts, hasEntries, namesPullRequest, releaseDates, renderChangelog, type Bump, type Cut, type Release } from "./changelog.ts";
 import { git } from "./git.ts";
 import { runMain } from "./main.ts";
 
@@ -70,7 +70,8 @@ const readPublished = Effect.fn("readPublished")(function* (root: string) {
 });
 
 const mergedTips = Effect.fn("mergedTips")(function* (root: string, through: string) {
-  // A bump off the first-parent chain came in with main, so the squash merge releases nothing more under it.
+  // A bump that names its pull request or sits off the first-parent chain is main's release, so no squash merge of this branch releases more under it.
+  if (namesPullRequest((yield* git(["log", "-1", "--format=%s", through], root)).trim())) return [];
   if (!(yield* git(["rev-list", "--first-parent", "HEAD"], root)).split("\n").includes(through)) return [];
   const merges = yield* git(["log", "--merges", "--format=%P", `${through}..HEAD`], root);
   const tips: string[] = [];

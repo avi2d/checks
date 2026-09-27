@@ -246,6 +246,30 @@ test(
 );
 
 test(
+  "a branch off a squash-merged release that merges an unlanded branch keeps main's changelog",
+  async () => {
+    await initRepo();
+    await bump("0.1.0");
+    await commit("feat: build a bill (#1)");
+    await commit("feat: base (#2)");
+    await $`git switch -q -c lower`.cwd(dir).quiet();
+    await commit("feat: on the lower (#10)");
+
+    await $`git switch -q main`.cwd(dir).quiet();
+    await bump("0.2.0");
+    await rewritten(2);
+    await commit("chore: release 0.2.0 (#20)");
+    const main = await readFile(join(dir, "CHANGELOG.md"), "utf8");
+
+    await $`git switch -q -c feature`.cwd(dir).quiet();
+    await commit("feat: on the feature (#30)");
+    await $`git merge -q --no-ff --no-gpg-sign --no-edit lower`.cwd(dir).env({ ...process.env, ...DATED }).quiet();
+    expect(await rewritten(2)).toBe(main);
+  },
+  { timeout: 30_000 },
+);
+
+test(
   "a branch that pulls a remote tip carrying main in after its bump releases what the squash merge releases",
   async () => {
     await initRepo();

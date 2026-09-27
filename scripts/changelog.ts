@@ -28,6 +28,8 @@ type Entry = {
 
 const CONVENTIONAL = /^([a-z]+)(?:\(([^()]*)\))?(!)?: (\S.*)$/;
 
+const PULL_REQUEST = / \(#(\d+)\)$/;
+
 const GROUP_OF_TYPE = new Map<string, ChangeGroup>([
   ["feat", "Features"],
   ["fix", "Fixes"],
@@ -42,11 +44,15 @@ export function groupOf(subject: string): ChangeGroup | undefined {
   return breaking === "!" ? "Breaking changes" : GROUP_OF_TYPE.get(type);
 }
 
+export function namesPullRequest(subject: string): boolean {
+  return PULL_REQUEST.test(subject);
+}
+
 function entryOf(subject: string, repositoryUrl: string): Entry | undefined {
   const group = groupOf(subject);
   if (group === undefined) return undefined;
   const [, , scope = "", , description = ""] = CONVENTIONAL.exec(subject) ?? [];
-  const linkedDescription = description.replace(/ \(#(\d+)\)$/, (_, number: string) => ` [#${number}](${repositoryUrl}/pull/${number})`);
+  const linkedDescription = description.replace(PULL_REQUEST, (_, number: string) => ` [#${number}](${repositoryUrl}/pull/${number})`);
   return { group, text: scope === "" ? linkedDescription : `**${scope}:** ${linkedDescription}` };
 }
 
