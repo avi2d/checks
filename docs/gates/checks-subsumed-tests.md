@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-subsumed-tests
 
-`checks-subsumed-tests` is the report that lists each test another test subsumes in a Stryker mutation run, and a reader looks it up to judge whether the suite carries tests it no longer needs.
+`checks-subsumed-tests` is the report that lists each test in a Stryker mutation run that one other test subsumes, by killing every mutant it kills.
 
 ## What it checks
 
@@ -63,9 +63,9 @@ greedy cover: 3 of 6 test(s) keep all 6 kill(s)
   cover "tests/mul.test.ts > mul checks its guard"
 ```
 
-## Opting out
+## When it runs
 
-Nothing runs it but a person who wants the figures.
+Only a person who wants the figures runs it.
 
 ## Related topics
 

@@ -108,9 +108,9 @@ Add a pull request title lint step in another workflow using `./node_modules/.bi
 
 ## What runs
 
-`checks-lint` runs these gates, each over the working tree or over the range it resolves, and names every one that fails.
-`checks-lint` runs every applicable gate, including the TypeScript gates once the repository tracks TypeScript.
-Each gate belongs to the vector it judges a repository on, and the table groups the gates by vector.
+`checks-lint` runs each of these gates that applies to the repository, and names every one that fails.
+A gate reads either the working tree or the range `checks-lint` resolves.
+The table groups the gates by vector, the part of a repository each one judges.
 
 <!-- generated gates: bun run build writes it from KIT_GATES in src/core/gates.ts and scripts/doc-blocks.ts -->
 
@@ -155,7 +155,6 @@ To move a repository to a newer release of the kit:
 
 The repository's lockfile pins the kit, so a repository moves only when it runs these steps.
 [CHANGELOG.md](CHANGELOG.md), shipped in the package, lists what each release changed.
-A repository that tracks `quality.json` moves its settings as [Native settings](docs/configs/native-settings.md#consumer-migration) maps.
 
 ## Where things are
 

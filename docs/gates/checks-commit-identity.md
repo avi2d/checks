@@ -48,10 +48,10 @@ commit-identity: 1 of 1 commit(s) in HEAD carry a foreign identity:
   allowed: avi2d <avi2dg@gmail.com>
 ```
 
-## Opting out
+## When it runs
 
-This gate runs on every repository through `checks-lint`.
-The repository adds owners through `package.json` rather than omitting the gate.
+`checks-lint` runs it over each pull request's range in every repository.
+A repository allows another author by adding them to `author` or `contributors` in `package.json`.
 
 ## Related topics
 

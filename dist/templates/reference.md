@@ -1,6 +1,6 @@
 # <The thing this page describes, as a noun>
 
-<What the thing is, in one sentence, and when a reader looks it up.>
+<What the thing is, in one sentence.>
 
 ## <One part of it, as a noun>
 

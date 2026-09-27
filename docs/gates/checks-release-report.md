@@ -53,10 +53,10 @@ A history with nothing to release prints one line:
 release-report: no unreleased changes since v0.1.0
 ```
 
-## Opting out
+## When it runs
 
-Nothing runs it but a person or a scheduler deciding when to cut a release.
-A repository with no versioned releases leaves it out.
+Only a person or a scheduler deciding when to cut a release runs it.
+A repository with no versioned releases does not need it.
 
 ## Related topics
 

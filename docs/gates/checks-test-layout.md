@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-test-layout
 
-`checks-test-layout` is the gate that holds a repository's tests to one layout, and a reader looks it up to learn where a test file goes and what it may import.
+`checks-test-layout` is the gate that holds a repository's tests to one layout, which says where a test file goes and what it may import.
 
 ## What it checks
 
@@ -83,10 +83,10 @@ test-layout: 4 violation(s)
   bunfig.toml: bunfig.toml is missing; bun has no bunfig extends, so copy node_modules/@avi2dg/checks/bunfig.toml
 ```
 
-## Opting out
+## When it runs
 
-`checks-lint` runs this gate when the repository tracks TypeScript, so a repository without TypeScript needs neither the test script nor bunfig.
-A repository that tracks one keeps it.
+`checks-lint` runs it when the repository tracks TypeScript.
+A repository without TypeScript needs neither the `checks-test` script nor `bunfig.toml`.
 
 ## Related topics
 

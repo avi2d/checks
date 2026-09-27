@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-mutation-compare
 
-`checks-mutation-compare` is the gate that holds every mutant in a pull request to no regression rather than an absolute score, and a reader looks it up to wire mutation testing into CI.
+`checks-mutation-compare` is the gate that fails a pull request when any mutant regresses, rather than judging an absolute score.
 
 ## What it checks
 
@@ -65,9 +65,9 @@ mutation-compare: REGRESSION (1 mutant(s))
   moved src/loader.ts:4:1 ClassDeclaration "class {}": Killed -> RuntimeError
 ```
 
-## Opting out
+## When it runs
 
-Nothing runs it but a CI step the repository writes.
+Only a CI step the repository writes runs it.
 A repository runs it with `--advisory` for its first month, then drops the flag so it blocks.
 
 ## Running it in CI

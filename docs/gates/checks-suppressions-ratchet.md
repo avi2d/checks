@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-suppressions-ratchet
 
-`checks-suppressions-ratchet` is the gate that holds oxlint's bulk-suppression baseline to counts that only fall, and a reader looks it up when a change raised a count.
+`checks-suppressions-ratchet` is the gate that fails when a change raises a count in `oxlint-suppressions.json`.
 
 ## What it checks
 
@@ -43,11 +43,10 @@ suppressions-ratchet: 2 count(s) in oxlint-suppressions.json rose or appeared; f
   src/dispatch.ts typescript/no-non-null-assertion rose from 12 to 13
 ```
 
-## Opting out
+## When it runs
 
-It applies to every repository, so no selection leaves it out.
+`checks-lint` runs it over each pull request's range in every repository, as [checks-lint](checks-lint.md) says.
 A repository with no `oxlint-suppressions.json` passes, since both ends count as empty.
-`checks-lint` runs it over each pull request's range, as [checks-lint](checks-lint.md) says.
 
 ## Related topics
 

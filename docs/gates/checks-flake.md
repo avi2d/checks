@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-flake
 
-`checks-flake` is the scheduled run that finds flaky tests and records the seeds each one fails with, and a reader looks it up to reproduce a flaky failure.
+`checks-flake` is the scheduled run that finds flaky tests and records the seeds each one fails with.
 
 ## What it checks
 
@@ -48,9 +48,9 @@ checks-flake: 3 of 10 run(s) failed, 1 test(s) failing in them
 Reproduce a failing run with bun test --randomize --seed=<seed>.
 ```
 
-## Opting out
+## When it runs
 
-Nothing runs it but a schedule the repository writes.
+Only a schedule the repository writes runs it.
 
 ## Running it on a schedule
 

@@ -4,7 +4,7 @@ audience: consumers
 ---
 # The dependency rules
 
-The shared dependency-cruiser base holds a repository's imports to a set of rules every repository shares, and a reader looks it up to add a boundary of its own.
+The shared dependency-cruiser base holds a repository's imports to a set of rules, and a repository adds its own boundaries on top.
 
 ## Base rules
 
@@ -18,6 +18,12 @@ The shared dependency-cruiser base holds a repository's imports to a set of rule
 - `no-deep-imports`, which refuses a subpath the package's exports map does not publish
 
 The base parses with swc, so it needs `@swc/core` installed, and without it the cruise silently skips every `.ts` file.
+
+`no-deep-imports` judges the import specifier, never the file it resolves to.
+The base honours `exports` maps, so a subpath the map publishes resolves and passes, and a subpath it omits fails to resolve and is reported.
+A package without an `exports` map publishes every file.
+A bare import always passes, whatever file its entry lives in.
+A repository that sets its own `options.enhancedResolveOptions` replaces the base's, and restates `exportsFields` and `conditionNames` in it.
 
 ## Boundaries
 

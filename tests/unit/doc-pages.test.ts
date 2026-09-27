@@ -7,7 +7,7 @@ import { GATE_PAGES, MANIFEST } from "../../scripts/doc-blocks.ts";
 import { parseOutline } from "../../src/docs/doc-outline.ts";
 
 const CHECKOUT = resolve(import.meta.dir, "..", "..");
-const SECTIONS = ["What it checks", "What it reads", "Arguments", "Exit codes", "Sample output", "Opting out"];
+const SECTIONS = ["What it checks", "What it reads", "Arguments", "Exit codes", "Sample output", "When it runs"];
 
 function read(file: string): string {
   return readFileSync(resolve(CHECKOUT, file), "utf8");
