@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { listsTag, remoteSegments, tagFor } from "../scripts/vendor.ts";
+import { listsTag, remoteSegments, tagFor } from "../../scripts/vendor.ts";
 
 test("tagFor fills the version token", () => {
   expect(tagFor("effect@{version}", "4.0.0-rc.115")).toBe("effect@4.0.0-rc.115");

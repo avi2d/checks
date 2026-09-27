@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
-import { parseAddedLines } from "../scripts/git.ts";
-import { refused } from "../scripts/comments.ts";
+import { parseAddedLines } from "../../scripts/git.ts";
+import { refused } from "../../scripts/comments.ts";
 
 const DIFF = [
   "diff --git src/a.ts src/a.ts",

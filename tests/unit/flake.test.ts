@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { recordOf, summary, type Run } from "../scripts/flake.ts";
-import type { TestResult } from "../scripts/test-report.ts";
+import { recordOf, summary, type Run } from "../../scripts/flake.ts";
+import type { TestResult } from "../../scripts/test-report.ts";
 
 function failed(file: string, line: number, name: string): TestResult {
   return { file, line, name, outcome: "failed" };

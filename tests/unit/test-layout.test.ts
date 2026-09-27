@@ -6,7 +6,7 @@ import {
   placementViolations,
   scriptViolations,
   type Violation,
-} from "../scripts/test-layout.ts";
+} from "../../scripts/test-layout.ts";
 
 function isolation(file: string, source: string): Promise<readonly Violation[]> {
   return Effect.runPromise(isolationViolations(file, source));
@@ -87,7 +87,7 @@ test("an in-process test may read files, use fs and time, and import its own sou
   const source = [
     'import { readFile } from "node:fs/promises";',
     'import { join } from "node:path";',
-    'import { widget } from "../src/widget.ts";',
+    'import { widget } from "../../src/widget.ts";',
     'const text = await readFile(join("a", "b"), "utf8");',
     "const value = widget(text, Date.now());",
     "",

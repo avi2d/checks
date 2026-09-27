@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { judgeSkips, passes, report } from "../scripts/test.ts";
-import { skipReason, type SkipDeclaration } from "../scripts/test-skips.ts";
-import type { TestResult } from "../scripts/test-report.ts";
+import { judgeSkips, passes, report } from "../../scripts/test.ts";
+import { skipReason, type SkipDeclaration } from "../../scripts/test-skips.ts";
+import type { TestResult } from "../../scripts/test-report.ts";
 
 function declaration(file: string, line: number, reason: string, when?: "ci" | "local"): SkipDeclaration {
   return { file, line, name: "rounds half to even", reason, ...(when === undefined ? {} : { when }) };

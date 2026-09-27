@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { matchSections, outlineProblems, parseOutline, type Slot } from "../scripts/doc-outline.ts";
+import { matchSections, outlineProblems, parseOutline, type Slot } from "../../scripts/doc-outline.ts";
 
 const REQUIRED = { required: true } as const;
 const OPTIONAL = { required: false, omitWhen: "never" } as const;

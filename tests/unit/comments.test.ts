@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
-import * as Matchers from "../scripts/comment-matchers.ts";
-import { comments, refused, UnreadableCode } from "../scripts/comments.ts";
+import * as Matchers from "../../scripts/comment-matchers.ts";
+import { comments, refused, UnreadableCode } from "../../scripts/comments.ts";
 
 test("code that is not a comment is not read as one", () => {
   const source = [

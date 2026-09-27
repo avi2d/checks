@@ -2,9 +2,9 @@ import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Effect, Exit } from "effect";
-import { parseReport } from "../scripts/test-report.ts";
+import { parseReport } from "../../scripts/test-report.ts";
 
-const REPORT = join(import.meta.dir, "fixtures", "test-report", "bun.xml");
+const REPORT = join(import.meta.dir, "..", "fixtures", "test-report", "bun.xml");
 
 function failureOf(xml: string): string {
   const exit = Effect.runSyncExit(parseReport(xml));

@@ -7,7 +7,7 @@ import {
   pullRequestEndsOf,
   rangeOf,
   selectEnds,
-} from "../scripts/lint.ts";
+} from "../../scripts/lint.ts";
 
 test("rangeOf collapses to a lone tip when merge-base found the head itself, or keeps the range otherwise", () => {
   expect(rangeOf("abc", "abc")).toEqual(["abc"]);

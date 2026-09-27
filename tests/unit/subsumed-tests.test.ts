@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
 import { readFile } from "node:fs/promises";
-import { Usage } from "../scripts/main.ts";
-import { parseKillRun, ReportError } from "../scripts/mutation-compare.ts";
-import { analyze, bailWarning, formatReport, parseArgs, type Report } from "../scripts/subsumed-tests.ts";
+import { Usage } from "../../scripts/main.ts";
+import { parseKillRun, ReportError } from "../../scripts/mutation-compare.ts";
+import { analyze, bailWarning, formatReport, parseArgs, type Report } from "../../scripts/subsumed-tests.ts";
 
-const FIXTURES = new URL("./fixtures/subsumed-tests/", import.meta.url);
+const FIXTURES = new URL("../fixtures/subsumed-tests/", import.meta.url);
 const WIDE = "tests/add.test.ts > add covers every operator";
 const NARROW = "tests/add.test.ts > add sums two numbers";
 const TWIN_A = "tests/mul.test.ts > mul multiplies";

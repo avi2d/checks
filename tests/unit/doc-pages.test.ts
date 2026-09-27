@@ -2,11 +2,11 @@ import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Schema } from "effect";
-import kitOxlint from "../oxlintrc.json" with { type: "json" };
-import { GATE_PAGES, MANIFEST } from "../scripts/doc-blocks.ts";
-import { parseOutline } from "../scripts/doc-outline.ts";
+import kitOxlint from "../../oxlintrc.json" with { type: "json" };
+import { GATE_PAGES, MANIFEST } from "../../scripts/doc-blocks.ts";
+import { parseOutline } from "../../scripts/doc-outline.ts";
 
-const CHECKOUT = resolve(import.meta.dir, "..");
+const CHECKOUT = resolve(import.meta.dir, "..", "..");
 const SECTIONS = ["What it checks", "What it reads", "Arguments", "Exit codes", "Sample output", "Opting out"];
 
 function read(file: string): string {

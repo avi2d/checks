@@ -2,9 +2,9 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Effect } from "effect";
-import { BUN_VERSION, INSTALL, kitFacts, MANIFEST, OXLINTRC, splice, TARGETS } from "../scripts/doc-blocks.ts";
+import { BUN_VERSION, INSTALL, kitFacts, MANIFEST, OXLINTRC, splice, TARGETS } from "../../scripts/doc-blocks.ts";
 
-const CHECKOUT = resolve(import.meta.dir, "..");
+const CHECKOUT = resolve(import.meta.dir, "..", "..");
 
 function read(file: string): string {
   return readFileSync(resolve(CHECKOUT, file), "utf8");
