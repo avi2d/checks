@@ -54,6 +54,28 @@ test(
 );
 
 test(
+  "a report about the past goes red on a line a change adds, in a living doc and in an agent file",
+  async () => {
+    const { put, commit, docs } = await repository();
+    await put(GUIDE, OPENING);
+    const base = await commit("start");
+    await put(GUIDE, `${OPENING}It is the former home of the build.\n`);
+    await put("tools/AGENTS.md", "# Tools\n\nIt is the former home of the build.\n");
+    const head = await commit("report what the build changed");
+
+    const refused = await docs(base, head);
+    expect(refused.text).toContain(
+      `  ${GUIDE}:4: carries \`former\`, a report about the past. Say what is true now, and leave what changed to the changelog, a commit message or a decision record`,
+    );
+    expect(refused.text).toContain(
+      "  tools/AGENTS.md:3: carries `former`, a report about the past. Say what is true now, and leave what changed to the changelog, a commit message or a decision record",
+    );
+    expect(refused.exitCode).toBe(1);
+  },
+  120_000,
+);
+
+test(
   "a violation on a line the range leaves alone does not fail it, and editing that line does",
   async () => {
     const { put, commit, docs } = await repository();

@@ -31,6 +31,18 @@ describe("each rule goes red on a planted line and green on its rewrite", () => 
       "It stays manual.",
     ],
     [
+      "past report",
+      "It is the former home of the build.",
+      "1: carries `former`, a report about the past. Say what is true now, and leave what changed to the changelog, a commit message or a decision record",
+      "It builds bills.",
+    ],
+    [
+      "used to",
+      "It used to build bills.",
+      "1: carries `used to`, a report about the past. Say what is true now, and leave what changed to the changelog, a commit message or a decision record",
+      "It builds bills.",
+    ],
+    [
       "self-reference",
       "This page explains the gate.",
       "1: carries `This page explains`, a sentence that opens by talking about the page. Talk directly about the subject",
@@ -56,6 +68,19 @@ describe("each rule goes red on a planted line and green on its rewrite", () => 
     const runOn = "carries a sentence that runs across lines. Join the sentence onto one line";
     expect(refusals(wrapped)).toEqual([`1: ${runOn}`, `2: ${runOn}`]);
     expect(refusals("It builds the bill and ships it to the supplier.\n")).toEqual([]);
+  });
+
+  test("used to after a form of be is habit, not history", () => {
+    expect(refusals("It is used to build bills.")).toEqual([]);
+  });
+
+  test("used to after a contracted form of be is habit, not history", () => {
+    expect(refusals("It's used to build bills, and that's used to ship them.")).toEqual([]);
+  });
+
+  test("used to after a form of be and one adverb is habit, not history", () => {
+    expect(refusals("It is also used to build bills, and is typically used to ship them.")).toEqual([]);
+    expect(refusals("The key is not used to sign, and is never used to ship.")).toEqual([]);
   });
 });
 
@@ -151,7 +176,7 @@ test("an agent file takes the separator rules and no other, and a changelog take
   expect(["AGENTS.md", "CLAUDE.md", "tools/AGENTS.md"].map(readerOf)).toEqual(["agents", "agents", "agents"]);
   expect(["CHANGELOG.md", "docs/adr/0001-a-record.md"].map(readerOf)).toEqual([undefined, undefined]);
   const separators = PROSE_RULES.filter(({ readers }) => readers.includes("agents")).map(({ refuses }) => refuses);
-  expect(separators).toEqual(["an em dash", "an en dash", "a parenthesis other than the plural `(s)`", "a hyphen used as a dash", "a semicolon"]);
+  expect(separators).toEqual(["an em dash", "an en dash", "a parenthesis other than the plural `(s)`", "a hyphen used as a dash", "a semicolon", "a report about the past"]);
 
   const text = "It builds — fast; it ships (twice) - once.\nIt builds. It ships.\nThis page explains it, and support is planned\nand ships.\n";
   expect(proseRefused("AGENTS.md", text).map((refusal) => refusal.split(",")[0])).toEqual([

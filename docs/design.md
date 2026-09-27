@@ -173,16 +173,19 @@ The repository judges the mode beside the page, and the check holds the page to 
 `checks-docs` holds a doc file to its template only when a change touches it, the way `checks-comment-gate` judges only the comments a change adds.
 A repository adopts the templates as its files change, and an untouched file is listed as advisory.
 The prose rules judge only the lines a change adds or edits.
-Text nobody touched never turns a change red, and a record keeps the words it was written in.
+A report about the past is refused the way a promise about the future is, because history on a living page reads as current fact.
+Text nobody touched never breaks the templates or the prose rules, and a record keeps the words it was written in.
 A repository needs no cleanup pass before the gate runs.
 Review, not the check, keeps a task heading verb first.
 No word list tells `Test layout` from `Test the layout`, and a check that passes the noun would be worse than none.
 
 A living doc takes one sentence per line, so a changed line is a changed sentence.
 Under a hard wrap, a one-word edit reflows a paragraph, and the gate would demand fixes to sentences the edit never touched.
-An agent file such as `AGENTS.md` takes the separator rules and no other prose rule.
+An agent file such as `AGENTS.md` takes the separator rules and the rule against a report about the past, and no other prose rule.
+An agent reads stale history as literally as a person, so the past rule judges agent files too.
 One sentence per line serves the people who review a doc's diffs.
 An agent file keeps each entry on one line, however many sentences it holds.
+The reference check reads agent files too, because a path they name goes stale the same way.
 Readability grades and words such as easy stay out of the prose rules.
 A score cannot fail a change without failing correct prose, and a suggestion that only an editor shows is never seen.
 
@@ -192,6 +195,8 @@ A hook bundle ships without `node_modules`, so a matcher that needed Vale or ano
 A path, link or command on a line the range leaves alone still fails when the range broke it, for example by deleting the file it names.
 A reference goes stale far more often because the code it names moves than because its own line is edited.
 So a gate on edited lines alone would miss the usual break.
+A name that is not a path goes stale the same way, and the reference check never reads it.
+So the range that removes such a name from every file outside the docs fails on each line that still carries it.
 A path under a top directory the repository lacks names a file in another repository, such as a consumer's.
 No program can tell such a path from a typo.
 A directory the range deletes still counts as this repository's, so a path under it reads as stale rather than foreign.

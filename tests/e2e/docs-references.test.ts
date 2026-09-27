@@ -48,8 +48,28 @@ test(
       await start(),
       PLANTS,
       ({ reference }) => [`plant ${reference} that resolves nowhere`, `point ${reference} at what exists`],
-      "docs: the range breaks no path, link or command the 1 living doc(s) name",
+      "docs: the range breaks no path, link or command the 1 living doc(s) or agent file(s) name",
     );
+  },
+  120_000,
+);
+
+test(
+  "a path an agent file names goes red on a line a change adds, and green once it resolves",
+  async () => {
+    const { put, commit, docs } = await start();
+    await put("tools/AGENTS.md", "# Tools\n\nIt runs `scripts/bild.ts`.\n");
+    const planted = await commit("an agent file names a path that resolves nowhere");
+
+    const refused = await docs(planted);
+    expect(refused.text).toContain("  tools/AGENTS.md:3: names `scripts/bild.ts`, which is not in the repository");
+    expect(refused.exitCode).toBe(1);
+
+    await put("tools/AGENTS.md", "# Tools\n\nIt runs `scripts/build.ts`.\n");
+    const fixed = await commit("point the agent file at what exists");
+    const kept = await docs(planted, fixed);
+    expect(kept.text).toContain("docs: the range breaks no path, link or command the 1 living doc(s) or agent file(s) name");
+    expect(kept.exitCode).toBe(0);
   },
   120_000,
 );
@@ -65,7 +85,7 @@ test(
 
     const quiet = await docs(base, unrelated);
     expect(quiet.text).toContain(
-      "docs: advisory, 1 path(s), link(s) or command(s) the living docs name were broken before the range:\n" +
+      "docs: advisory, 1 path(s), link(s) or command(s) the living docs or agent files name were broken before the range:\n" +
         `  ${GUIDE}:5: names \`scripts/legacy.ts\`, which is not in the repository`,
     );
     expect(quiet.exitCode).toBe(0);
@@ -101,7 +121,7 @@ test(
     await put(".gitignore", "generated/*.json\nnode_modules/\n");
     await put("node_modules/.bin/checks-lint", "#!/bin/sh\n");
     const green = await docs(base, head);
-    expect(green.text).toContain("docs: the range breaks no path, link or command the 1 living doc(s) name");
+    expect(green.text).toContain("docs: the range breaks no path, link or command the 1 living doc(s) or agent file(s) name");
     expect(green.exitCode).toBe(0);
   },
   120_000,
@@ -126,7 +146,7 @@ test(
     await put("README.md", `---\naudience: consumers\n---\n${shipped}`);
     const marked = await commit("mark the README as speaking to consumers");
     const green = await docs(base, marked);
-    expect(green.text).toContain("docs: the range breaks no path, link or command the 1 living doc(s) name");
+    expect(green.text).toContain("docs: the range breaks no path, link or command the 1 living doc(s) or agent file(s) name");
     expect(green.exitCode).toBe(0);
   },
   120_000,
