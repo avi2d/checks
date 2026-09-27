@@ -30,6 +30,35 @@ Without `@swc/core` installed, the cruise skips every `.ts` file without a warni
 The base counts `bun` as a built-in module.
 Only `@types/bun` resolves it, and that package is a dev dependency, so every runtime `bun` import would otherwise read as dev only.
 
+## The shared configs close gaps in the types
+
+The shared configs refuse four places where a value's type says less than the value does.
+Each sits in a file a consumer already extends or copies.
+
+The base `oxlintrc.json` turns on the five `typescript/no-unsafe-*` rules in an override for `.ts` and `.tsx` files outside `tests/`, so every consumer gets them through `extends`.
+`typescript/no-explicit-any` and `strict` already refuse an `any` someone writes, so the `any` left is one nobody wrote.
+`Array.isArray` narrows an `unknown` to `any[]`, `JSON.parse` returns `any`, `Object.entries` lists `any` values from an `object`, and a defaulted parameter in a generator passed to `Effect.fnUntraced` is typed `any`.
+Tests stay out because bun:test types its asymmetric matchers, such as `expect.arrayContaining`, as returning `any`.
+Those matchers made 22 of the 34 findings in the tests of the kit and its consumers.
+
+`tsconfig.effect.json` sets `exactOptionalPropertyTypes`, so every repository that extends it gets the option in the same release.
+`Schema.optionalKey` means the key is missing, never `undefined`.
+Without the option, a type derived from the schema accepts an `undefined` the schema rejects when it decodes.
+tsc keeps no baseline, and the only escape for one site is a `@ts-expect-error`, which `typescript/ban-ts-comment` refuses.
+So each error the option raises is fixed where it lands.
+
+The language service preset sets `processEnv` and `processEnvInEffect` at error, so code in a repository's Effect paths reads the environment through `Config`.
+`Config` decodes a variable and fails in the error channel when it is missing, where `process.env` hands back a `string | undefined` that each caller checks by hand.
+The language service keeps no baseline either, so each read the two diagnostics find moves to `Config` when a repository takes the preset.
+
+`tsconfig.effect.json` loads the `is-array` and `json-parse` rules of `@total-typescript/ts-reset`, so tsc refuses code that relied on the `any` that `Array.isArray` and `JSON.parse` hand out.
+The `no-unsafe-*` rules flag each place that `any` is used, and these two rules close it where it starts, in `tests/` as well.
+The other eight ts-reset rules stay out, because `set-has` breaks correct code in the kit and a consumer, and the rest find nothing.
+A global declaration reaches a program only when a root file, a `types` entry or an import names it, and a repository's own `files`, `include` or `types` replaces the fragment's list of the same name.
+So the fragment lists the rules in `files`, and in `include` beside every file under the repository's `tsconfig.json`, and one of the two lists survives unless a repository sets both.
+`types` cannot carry the rules, since every consumer sets its own `types` to reach `bun`.
+`checks-lint-coverage` fails the repository that sets both lists, because nothing in tsc would say the rules were gone.
+
 ## The source is sorted by what it judges
 
 The source sits under `src/<vector>/`, one directory for each thing the kit judges a repository on: complexity, quality, testing, docs, delivery and dependencies.

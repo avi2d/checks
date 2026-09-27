@@ -19,7 +19,7 @@ const SCOPE_OXLINT = [
   "effect-channel(no-try-catch)",
 ];
 const PROCESS_EXIT = "eslint(no-restricted-properties)";
-const SCOPE_SERVICE = ["nodeBuiltinImport", "asyncFunction", "newPromise", "extendsNativeError"];
+const SCOPE_SERVICE = ["nodeBuiltinImport", "asyncFunction", "newPromise", "extendsNativeError", "processEnv", "processEnvInEffect"];
 const KIT_SERVICE = ["anyUnknownInErrorContext", "unsafeEffectTypeAssertion", "catchAllToMapError", "missingEffectError"];
 
 const PLANT = `import { Effect } from "effect";
@@ -51,6 +51,10 @@ export const unknownFailure = (cause: unknown) => Effect.fail(cause);
 export const narrowed = failing as Effect.Effect<number>;
 export const remapped = failing.pipe(Effect.catch((error) => Effect.fail(error.length)));
 export const missing: Effect.Effect<number> = failing;
+export const home = process.env["HOME"];
+export const homeInEffect = Effect.gen(function* () {
+  return yield* Effect.succeed(process.env["HOME"]);
+});
 `;
 
 const CLEAN: Readonly<Record<string, string>> = {

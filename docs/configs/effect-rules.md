@@ -40,6 +40,16 @@ Each config in an oxlint `extends` chain sets `plugins` explicitly, because an o
 The repository's `tsconfig.json` holds its Effect override under `compilerOptions.plugins`.
 The override includes the same source paths and excludes the same exempt paths as oxlint.
 The kit ships severity values in `src/quality/presets/effect.language-service.json` for the override's `options`.
+The preset turns these diagnostics to errors:
+
+- `nodeBuiltinImport` refuses an import of a Node built-in module that has an Effect counterpart.
+- `asyncFunction` refuses an `async` function.
+- `newPromise` refuses `new Promise`.
+- `extendsNativeError` refuses a class that extends the native `Error` directly.
+- `processEnv` refuses a read of `process.env` outside an Effect generator.
+- `processEnvInEffect` refuses a read of `process.env` inside an Effect generator.
+
+Effect's `Config` reads the environment in place of `process.env`.
 The kit's `tsconfig.effect.json` keeps the shared language service diagnostics.
 
 ## Related topics

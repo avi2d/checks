@@ -13,7 +13,6 @@ export const OXLINTRC = ".oxlintrc.json";
 const Manifest = Schema.Struct({
   name: Schema.String,
   peerDependencies: Schema.Record(Schema.String, Schema.String),
-  devDependencies: Schema.Struct({ typescript: Schema.String }),
   files: Schema.Array(Schema.String),
 });
 
@@ -38,7 +37,8 @@ const SHIPPED = {
   "src/": "every bin, which a package script calls by its `checks-` name, the modules the bins import, and the Effect rule blocks under `src/quality/presets/`",
   "oxlintrc.json": "the oxlint base config `.oxlintrc.json` extends",
   "stryker.preset.js": "the Stryker mutation-testing preset",
-  "tsconfig.effect.json": "the tsconfig fragment with the Effect language-service block",
+  "tsconfig.effect.json": "the tsconfig fragment with the shared compiler options and the Effect language-service block",
+  "ts-reset.d.ts": "the two ts-reset rules `tsconfig.effect.json` lists in `files`",
   "dist/": "the compiled oxlint plugins and the doc templates, one template per kind of doc file",
 } as const;
 
@@ -126,7 +126,6 @@ const PREREQUISITES: Block = {
   render: ({ manifest, bun }) => [
     "- A git repository, whose history the range gates read.",
     `- Bun ${bun}, which runs every bin.`,
-    `- TypeScript ${manifest.devDependencies.typescript}, whose ${code("tsc")} the ${code("typecheck")} script runs.`,
     "- The peer dependencies, at the exact versions the kit pins:",
     ...peers(manifest).map(([name, version]) => `  - ${code(name)} ${version}`),
   ],
@@ -137,7 +136,7 @@ export const INSTALL: Block = {
   from: [MANIFEST],
   render: ({ manifest }) => [
     "```sh",
-    ["bun add -d", manifest.name, ...peers(manifest).map(([name, version]) => `${name}@${version}`), `typescript@${manifest.devDependencies.typescript}`].join(" "),
+    ["bun add -d", manifest.name, ...peers(manifest).map(([name, version]) => `${name}@${version}`)].join(" "),
     "```",
   ],
 };

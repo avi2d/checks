@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { Console, Effect, FileSystem, Option, Path, Schema } from "effect";
+import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { git } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { librariesFrom, NAME, OPENER, type Library } from "./vendor-args.ts";
@@ -305,10 +305,9 @@ const vend = Effect.fn("vend")(function* (root: string, cache: string, library: 
 
 const cacheRoot = Effect.fn("cacheRoot")(function* () {
   const path = yield* Path.Path;
-  const home = process.env.HOME;
-  if (home === undefined || home === "") {
-    return yield* new VendorError({ message: "HOME is missing, so the shared cache has no root" });
-  }
+  const home = yield* Config.NonEmptyString("HOME").pipe(
+    Effect.mapError(() => new VendorError({ message: "HOME is missing, so the shared cache has no root" })),
+  );
   return path.join(home, CACHE_HOME);
 });
 

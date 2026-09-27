@@ -1,6 +1,9 @@
 {
+  "files": ["./ts-reset.d.ts"],
+  "include": ["${configDir}/**/*", "./ts-reset.d.ts"],
   "compilerOptions": {
     "erasableSyntaxOnly": true,
+    "exactOptionalPropertyTypes": true,
     "plugins": [
       {
         "name": "@effect/language-service",
