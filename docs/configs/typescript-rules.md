@@ -37,7 +37,7 @@ Without the flag, oxlint skips them and reports nothing about them.
 
 The base loads the kit's `data-shape` plugin from `dist/` with one rule for every TypeScript file and one for production files.
 
-- `data-shape/readonly-collection-param` refuses a parameter typed `T[]`, `Array<T>`, `Map` or `Set` that the function never mutates, stores or returns, and never passes to a call other than a readonly parameter of a function declared in the same file.
+- `data-shape/readonly-collection-param` refuses a parameter typed `T[]`, `Array<T>`, `Map` or `Set` that the function never mutates, stores, returns or passes on, and passing it to a readonly parameter of a function declared in the same file does not count as passing it on.
 - Type such a parameter `readonly T[]`, `ReadonlyArray<T>`, `ReadonlyMap` or `ReadonlySet`.
 - `data-shape/schema-twin` refuses an object type whose fields match a `Schema.Struct`, `TaggedStruct` or `Class` in the same file by name, count, optionality and kind.
 - Derive such a type from the schema with `typeof Name.Type` instead of writing both.

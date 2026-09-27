@@ -25,6 +25,14 @@ const ARRAY_METHODS: ReadonlySet<string> = new Set([
 
 const COLLECTION_METHODS: ReadonlySet<string> = new Set(["set", "delete", "clear", "add"]);
 
+const HANDOFF_PARENTS: ReadonlySet<string> = new Set([
+  "ArrayExpression",
+  "ReturnStatement",
+  "YieldExpression",
+  "JSXExpressionContainer",
+  "JSXSpreadAttribute",
+]);
+
 const READONLY_NAMES: ReadonlySet<string> = new Set(["ReadonlyArray", "ReadonlyMap", "ReadonlySet"]);
 
 function isArrayType(type: ESTree.TSType | undefined): boolean {
@@ -79,7 +87,9 @@ function isPassThrough(parent: ESTree.Node | null, child: ESTree.Node): parent i
   if (parent.type === "ConditionalExpression") return parent.test !== child;
   return (
     parent.type === "LogicalExpression" ||
+    parent.type === "AwaitExpression" ||
     parent.type === "TSAsExpression" ||
+    parent.type === "TSTypeAssertion" ||
     parent.type === "TSSatisfiesExpression" ||
     parent.type === "TSNonNullExpression"
   );
@@ -89,6 +99,25 @@ function valuePosition(node: ESTree.Node): ESTree.Node {
   let current = node;
   while (isPassThrough(current.parent, current)) current = current.parent;
   return current;
+}
+
+type WriteTarget =
+  | ESTree.AssignmentTarget
+  | ESTree.AssignmentTargetMaybeDefault
+  | ESTree.AssignmentTargetRest
+  | ESTree.ForStatementLeft
+  | null;
+
+function writtenObjects(target: WriteTarget): string[] {
+  if (target === null) return [];
+  if (target.type === "MemberExpression") return target.object.type === "Identifier" ? [target.object.name] : [];
+  if (target.type === "ArrayPattern") return target.elements.flatMap((element) => writtenObjects(element));
+  if (target.type === "ObjectPattern") {
+    return target.properties.flatMap((one) => writtenObjects(one.type === "Property" ? one.value : one));
+  }
+  if (target.type === "AssignmentPattern") return writtenObjects(target.left);
+  if (target.type === "RestElement") return writtenObjects(target.argument);
+  return [];
 }
 
 function watch(params: readonly ESTree.ParamPattern[]): Watched[] {
@@ -167,16 +196,14 @@ const rule: CreateRule = {
         return parent.callee !== value && !passedReadonly(parent, value);
       }
       if (parent.type === "VariableDeclarator") return parent.init === value;
-      if (parent.type === "AssignmentExpression") return parent.right === value;
-      if (parent.type === "Property") return parent.value === value;
+      if (parent.type === "AssignmentExpression" || parent.type === "AssignmentPattern") return parent.right === value;
+      if (parent.type === "Property" || parent.type === "PropertyDefinition") return parent.value === value;
       if (parent.type === "ArrowFunctionExpression") return parent.body === value;
-      return parent.type === "ArrayExpression" || parent.type === "ReturnStatement";
+      return HANDOFF_PARENTS.has(parent.type);
     };
 
-    const written = (target: ESTree.AssignmentTarget | ESTree.SimpleAssignmentTarget): void => {
-      if (target.type !== "MemberExpression") return;
-      if (target.object.type !== "Identifier") return;
-      mark(target.object.name, undefined);
+    const written = (target: WriteTarget): void => {
+      for (const name of writtenObjects(target)) mark(name, undefined);
     };
 
     return {
@@ -198,6 +225,15 @@ const rule: CreateRule = {
       },
       UpdateExpression: (node) => {
         written(node.argument);
+      },
+      UnaryExpression: (node) => {
+        if (node.operator === "delete" && node.argument.type === "MemberExpression") written(node.argument);
+      },
+      ForOfStatement: (node) => {
+        written(node.left);
+      },
+      ForInStatement: (node) => {
+        written(node.left);
       },
     };
   },

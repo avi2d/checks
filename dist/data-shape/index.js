@@ -11,6 +11,13 @@ var ARRAY_METHODS = new Set([
   "copyWithin"
 ]);
 var COLLECTION_METHODS = new Set(["set", "delete", "clear", "add"]);
+var HANDOFF_PARENTS = new Set([
+  "ArrayExpression",
+  "ReturnStatement",
+  "YieldExpression",
+  "JSXExpressionContainer",
+  "JSXSpreadAttribute"
+]);
 var READONLY_NAMES = new Set(["ReadonlyArray", "ReadonlyMap", "ReadonlySet"]);
 function isArrayType(type) {
   if (type === undefined)
@@ -50,13 +57,29 @@ function isPassThrough(parent, child) {
     return false;
   if (parent.type === "ConditionalExpression")
     return parent.test !== child;
-  return parent.type === "LogicalExpression" || parent.type === "TSAsExpression" || parent.type === "TSSatisfiesExpression" || parent.type === "TSNonNullExpression";
+  return parent.type === "LogicalExpression" || parent.type === "AwaitExpression" || parent.type === "TSAsExpression" || parent.type === "TSTypeAssertion" || parent.type === "TSSatisfiesExpression" || parent.type === "TSNonNullExpression";
 }
 function valuePosition(node) {
   let current = node;
   while (isPassThrough(current.parent, current))
     current = current.parent;
   return current;
+}
+function writtenObjects(target) {
+  if (target === null)
+    return [];
+  if (target.type === "MemberExpression")
+    return target.object.type === "Identifier" ? [target.object.name] : [];
+  if (target.type === "ArrayPattern")
+    return target.elements.flatMap((element) => writtenObjects(element));
+  if (target.type === "ObjectPattern") {
+    return target.properties.flatMap((one) => writtenObjects(one.type === "Property" ? one.value : one));
+  }
+  if (target.type === "AssignmentPattern")
+    return writtenObjects(target.left);
+  if (target.type === "RestElement")
+    return writtenObjects(target.argument);
+  return [];
 }
 function watch(params) {
   const found = [];
@@ -139,20 +162,17 @@ var rule = {
       }
       if (parent.type === "VariableDeclarator")
         return parent.init === value;
-      if (parent.type === "AssignmentExpression")
+      if (parent.type === "AssignmentExpression" || parent.type === "AssignmentPattern")
         return parent.right === value;
-      if (parent.type === "Property")
+      if (parent.type === "Property" || parent.type === "PropertyDefinition")
         return parent.value === value;
       if (parent.type === "ArrowFunctionExpression")
         return parent.body === value;
-      return parent.type === "ArrayExpression" || parent.type === "ReturnStatement";
+      return HANDOFF_PARENTS.has(parent.type);
     };
     const written = (target) => {
-      if (target.type !== "MemberExpression")
-        return;
-      if (target.object.type !== "Identifier")
-        return;
-      mark(target.object.name, undefined);
+      for (const name of writtenObjects(target))
+        mark(name, undefined);
     };
     return {
       Program: (node) => {
@@ -174,6 +194,16 @@ var rule = {
       },
       UpdateExpression: (node) => {
         written(node.argument);
+      },
+      UnaryExpression: (node) => {
+        if (node.operator === "delete" && node.argument.type === "MemberExpression")
+          written(node.argument);
+      },
+      ForOfStatement: (node) => {
+        written(node.left);
+      },
+      ForInStatement: (node) => {
+        written(node.left);
       }
     };
   }
@@ -295,7 +325,7 @@ function schemaFields(call) {
   const fields = call.arguments.find((one) => one.type === "ObjectExpression");
   if (fields === undefined)
     return;
-  const found = [];
+  const found = property.name === "TaggedStruct" ? [{ name: "_tag", optional: false, kind: "literal" }] : [];
   for (const prop of fields.properties) {
     if (prop.type !== "Property" || prop.computed)
       continue;

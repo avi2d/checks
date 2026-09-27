@@ -49,23 +49,54 @@ export interface Label extends Owned {
 }
 `;
 
+const SWAP = `export function shuffle(items: string[], pick: (bound: number) => number): void {
+  for (let index = items.length - 1; index > 0; index--) {
+    const other = pick(index);
+    [items[index], items[other]] = [items[other], items[index]];
+  }
+}
+`;
+
+const JSX_PROP = `function TagList(props: { readonly tags: string[] }): string {
+  return props.tags.join(",");
+}
+export function renderTags(tags: string[]): string {
+  return <TagList tags={tags} />;
+}
+`;
+
+const TAGGED_TWIN = `import { Schema } from "effect";
+export const Created = Schema.TaggedStruct("Created", { id: Schema.String, at: Schema.Number });
+export type CreatedEvent = { readonly _tag: "Created"; readonly id: string; readonly at: number };
+`;
+
+const TAGGED_PAYLOAD = `import { Schema } from "effect";
+export const Deleted = Schema.TaggedStruct("Deleted", { id: Schema.String, at: Schema.Number });
+export type DeletedInput = { readonly id: string; readonly at: number };
+`;
+
 const consumerTree = consumerTrees("checks-data-shape-consumer-");
 
 test(
-  "data-shape stays silent on a parameter that may be mutated, a domain type and an extended interface, and reports a readonly callee and a true twin",
+  "data-shape stays silent on a parameter that may be mutated, a domain type, an extended interface and a tagged payload, and reports a readonly callee and true twins",
   async () => {
-    const tree = await consumerTree({ paths: ["scripts/**/*.ts"], include: ["src/**/*.ts"], types: [] });
+    const tree = await consumerTree({ paths: ["scripts/**/*.ts"], include: ["src/**/*.ts", "src/**/*.tsx"], types: [] });
     await tree.put("src/walker.ts", ACCUMULATOR_WALKER);
     await tree.put("src/queue.ts", PARAMETER_PROPERTY);
     await tree.put("src/count.ts", READONLY_CALLEE);
     await tree.put("src/event.ts", DOMAIN_TYPE);
     await tree.put("src/stamp.ts", TRUE_TWIN);
     await tree.put("src/label.ts", EXTENDED_INTERFACE);
+    await tree.put("src/shuffle.ts", SWAP);
+    await tree.put("src/tags.tsx", JSX_PROP);
+    await tree.put("src/created.ts", TAGGED_TWIN);
+    await tree.put("src/deleted.ts", TAGGED_PAYLOAD);
     const { text } = await tree.run(join(KIT_BIN, "oxlint"), ["--type-aware", "-f", "unix", "src"]);
     expect(findings(text, /^(\S+?):\d+:\d+: .*\[Error\/([^\]]+)\]$/gm)).toEqual(
       new Map([
         ["src/count.ts", ["data-shape(readonly-collection-param)"]],
         ["src/stamp.ts", ["data-shape(schema-twin)"]],
+        ["src/created.ts", ["data-shape(schema-twin)"]],
       ]),
     );
   },

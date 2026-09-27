@@ -106,7 +106,7 @@ function schemaFields(call: ESTree.CallExpression): Field[] | undefined {
   }
   const fields = call.arguments.find((one): one is ESTree.ObjectExpression => one.type === "ObjectExpression");
   if (fields === undefined) return undefined;
-  const found: Field[] = [];
+  const found: Field[] = property.name === "TaggedStruct" ? [{ name: "_tag", optional: false, kind: "literal" }] : [];
   for (const prop of fields.properties) {
     if (prop.type !== "Property" || prop.computed) continue;
     const name = keyName(prop.key);
