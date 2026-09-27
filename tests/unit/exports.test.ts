@@ -39,11 +39,12 @@ test("baselineOf decodes the committed baseline and fails on what is not one", (
   );
 });
 
-test("driftOf refuses an unused export the head baseline does not hold, an entry its base does not hold, and an entry Knip no longer reports", () => {
+test("driftOf refuses an unused export the head baseline does not hold, an added entry the base did not leave unused, and an entry Knip no longer reports", () => {
   const reported: Baseline = [
     { file: "src/used.ts", kind: "export", name: "unusedExport" },
     { file: "src/used.ts", kind: "type", name: "UnusedOptions" },
     { file: "src/new.ts", kind: "export", name: "listed" },
+    { file: "src/old.ts", kind: "export", name: "seeded" },
   ];
   const base: Baseline = [
     { file: "src/used.ts", kind: "export", name: "unusedExport" },
@@ -53,15 +54,17 @@ test("driftOf refuses an unused export the head baseline does not hold, an entry
   const head: Baseline = [
     { file: "src/used.ts", kind: "export", name: "unusedExport" },
     { file: "src/new.ts", kind: "export", name: "listed" },
+    { file: "src/old.ts", kind: "export", name: "seeded" },
     { file: "src/gone.ts", kind: "export", name: "removed" },
   ];
-  expect(driftOf({ reported, base, head })).toEqual({
+  const unusedAtBase: Baseline = [{ file: "src/old.ts", kind: "export", name: "seeded" }];
+  expect(driftOf({ reported, base, head, unusedAtBase })).toEqual({
     unlisted: [{ file: "src/used.ts", kind: "type", name: "UnusedOptions" }],
     added: [{ file: "src/new.ts", kind: "export", name: "listed" }],
     stale: [{ file: "src/gone.ts", kind: "export", name: "removed" }],
   });
-  expect(driftOf({ reported, base: reported, head: reported })).toEqual({ unlisted: [], added: [], stale: [] });
-  expect(driftOf({ reported: [], base, head: [] })).toEqual({ unlisted: [], added: [], stale: [] });
+  expect(driftOf({ reported, base: [], head: reported, unusedAtBase: reported })).toEqual({ unlisted: [], added: [], stale: [] });
+  expect(driftOf({ reported: [], base, head: [], unusedAtBase: [] })).toEqual({ unlisted: [], added: [], stale: [] });
 });
 
 test("report holds a clean scan, counts a held baseline, and lists each drift", () => {
@@ -80,7 +83,7 @@ test("report holds a clean scan, counts a held baseline, and lists each drift", 
     [
       "exports: 1 unused export(s) not in exports-baseline.json:",
       "  src/used.ts: unusedExport (export)",
-      "exports: 1 exports-baseline.json export(s) the range adds, remove the export instead:",
+      "exports: 1 exports-baseline.json export(s) the range adds that its base did not leave unused, remove the export instead:",
       "  src/new.ts: listed (export)",
       "exports: 1 exports-baseline.json export(s) no longer reported, remove them:",
       "  src/gone.ts: Removed (type)",

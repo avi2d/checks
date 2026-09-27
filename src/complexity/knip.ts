@@ -44,7 +44,7 @@ const knipBinary = Effect.fn("knipBinary")(function* () {
   return yield* path.fromFileUrl(main);
 });
 
-const knipReport = Effect.fn("knipReport")(function* (root: string, args: readonly string[]) {
+export const knipReport = Effect.fn("knipReport")(function* (root: string, args: readonly string[]) {
   if (!(yield* hasKnipConfig(root))) return { kind: "unconfigured" } as const;
   const run = yield* collect(process.execPath, [yield* knipBinary(), ...args, "--reporter", "json"], root).pipe(
     Effect.mapError((cause) => new KnipError({ message: `cannot run knip: ${cause.message}` })),

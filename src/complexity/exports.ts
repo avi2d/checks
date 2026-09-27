@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
-import { git, rangeEnds, refArgs } from "../core/git.ts";
+import { checkoutFiles, git, pathsAt, rangeEnds, refArgs } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
-import { scanTree } from "./knip.ts";
+import { knipReport, scanTree } from "./knip.ts";
 
 export type UnusedSymbol = {
   readonly file: string;
@@ -16,6 +16,7 @@ export type Held = {
   readonly reported: readonly UnusedSymbol[];
   readonly base: Baseline;
   readonly head: Baseline;
+  readonly unusedAtBase: readonly UnusedSymbol[];
 };
 
 export type Drift = {
@@ -26,6 +27,7 @@ export type Drift = {
 
 const NAME = "exports";
 export const BASELINE_FILE = "exports-baseline.json";
+const INCLUDED = ["--include", "exports,types"];
 const WRITE = "--write";
 const USAGE = `usage: exports.ts <ref> | <base-ref> <head-ref> | ${WRITE}`;
 
@@ -107,8 +109,12 @@ function outside(symbols: readonly UnusedSymbol[], others: readonly UnusedSymbol
   return symbols.filter((symbol) => !known.has(keyOf(symbol))).toSorted(byPosition);
 }
 
-export function driftOf({ reported, base, head }: Held): Drift {
-  return { unlisted: outside(reported, head), added: outside(head, base), stale: outside(head, reported) };
+export function driftOf({ reported, base, head, unusedAtBase }: Held): Drift {
+  return {
+    unlisted: outside(reported, head),
+    added: outside(head, [...base, ...unusedAtBase]),
+    stale: outside(head, reported),
+  };
 }
 
 function describe(symbol: UnusedSymbol): string {
@@ -118,7 +124,7 @@ function describe(symbol: UnusedSymbol): string {
 export function report(head: Baseline, { unlisted, added, stale }: Drift): string {
   const sections = [
     { symbols: unlisted, what: `unused export(s) not in ${BASELINE_FILE}:` },
-    { symbols: added, what: `${BASELINE_FILE} export(s) the range adds, remove the export instead:` },
+    { symbols: added, what: `${BASELINE_FILE} export(s) the range adds that its base did not leave unused, remove the export instead:` },
     { symbols: stale, what: `${BASELINE_FILE} export(s) no longer reported, remove them:` },
   ].filter(({ symbols }) => symbols.length > 0);
   if (sections.length > 0) {
@@ -129,16 +135,34 @@ export function report(head: Baseline, { unlisted, added, stale }: Drift): strin
     : `${NAME}: ${head.length} unused export(s) in ${BASELINE_FILE}, and no new ones`;
 }
 
-const scan = scanTree(NAME, ["--include", "exports,types"]).pipe(
-  Effect.mapError((cause) => new ExportsError({ message: cause.message })),
+const scan = scanTree(NAME, INCLUDED).pipe(Effect.mapError((cause) => new ExportsError({ message: cause.message })));
+
+// Knip loads the configuration's imports, such as the kit's knip-base.json, from a node_modules the checkout lacks.
+const unusedAt = Effect.fn("unusedAt")(
+  function* (rev: string, root: string) {
+    const files = yield* pathsAt(rev, [], root);
+    if (files.length === 0) return [] satisfies readonly UnusedSymbol[];
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const tree = yield* checkoutFiles(rev, files, yield* fs.makeTempDirectoryScoped({ prefix: "checks-exports-" }), root);
+    const modules = path.join(root, "node_modules");
+    if (yield* fs.exists(modules)) yield* fs.symlink(modules, path.join(tree, "node_modules"));
+    const reported = yield* knipReport(tree, INCLUDED).pipe(
+      Effect.mapError((cause) => new ExportsError({ message: `at ${rev}: ${cause.message}` })),
+    );
+    return reported.kind === "unconfigured" ? [] : yield* symbolsOf(reported.stdout);
+  },
+  Effect.scoped,
 );
 
 const check = Effect.fn("check")(function* (first: string, second: string | undefined) {
   const { root, reported } = yield* scan;
   if (reported.kind === "unconfigured") return false;
-  const { base } = yield* rangeEnds(first, second, root);
+  const { base: baseRev } = yield* rangeEnds(first, second, root);
+  const base = yield* baselineAt(baseRev, root);
   const head = yield* baselineInTree(root);
-  const drift = driftOf({ reported: yield* symbolsOf(reported.stdout), base: yield* baselineAt(base, root), head });
+  const unusedAtBase = outside(head, base).length === 0 ? [] : yield* unusedAt(baseRev, root);
+  const drift = driftOf({ reported: yield* symbolsOf(reported.stdout), base, head, unusedAtBase });
   yield* Console.log(report(head, drift));
   return drift.unlisted.length === 0 && drift.added.length === 0 && drift.stale.length === 0;
 });

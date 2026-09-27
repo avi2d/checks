@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { mkdir, readFile, symlink } from "node:fs/promises";
+import { join } from "node:path";
 import { CHECKOUT, fixtureRepos, lintWiring } from "./lib/fixture-repo.ts";
 
 const open = fixtureRepos("checks-exports-");
@@ -80,25 +82,28 @@ test(
 );
 
 test(
-  "refuses a baseline entry the range adds together with its unused export, from either end of the range",
+  "refuses a new dead export listed with its entry, from either end of the range, while accepting one the base already left unused",
   async () => {
     const { write, commit, script } = await open(
       configured({
         "knip.config.ts": extendingBase(["src/index.ts"]),
-        "exports-baseline.json": "[]\n",
         "src/index.ts": `import { used } from "./used.ts";\n\nexport const index = used;\n`,
-        "src/used.ts": `export const used = 1;\n`,
+        "src/used.ts": `export const used = 1;\nexport const unusedExport = 2;\n`,
       }),
     );
     const base = await commit("feat: base");
 
     await write({
-      "exports-baseline.json": JSON.stringify([{ file: "src/used.ts", kind: "export", name: "foo" }]),
-      "src/used.ts": `export const used = 1;\nexport const foo = 2;\n`,
+      "exports-baseline.json": JSON.stringify([
+        { file: "src/used.ts", kind: "export", name: "foo" },
+        { file: "src/used.ts", kind: "export", name: "unusedExport" },
+      ]),
+      "src/used.ts": `export const used = 1;\nexport const unusedExport = 2;\nexport const foo = 3;\n`,
     });
     const added = await commit("feat: add an unused export and list it");
 
-    const expected = "exports: 1 exports-baseline.json export(s) the range adds, remove the export instead:\n  src/used.ts: foo (export)\n";
+    const expected =
+      "exports: 1 exports-baseline.json export(s) the range adds that its base did not leave unused, remove the export instead:\n  src/used.ts: foo (export)\n";
     const range = await script(GATE, base, added);
     expect(range.text).toBe(expected);
     expect(range.exitCode).toBe(1);
@@ -110,35 +115,68 @@ test(
 );
 
 test(
-  "--write seeds the baseline with every reported symbol, which the range adding it refuses and the next range holds",
+  "refuses an export the range stops importing and lists in the baseline",
+  async () => {
+    const { write, commit, script } = await open(
+      configured({
+        "knip.config.ts": extendingBase(["src/index.ts"]),
+        "src/index.ts": `import { helper, used } from "./used.ts";\n\nexport const index = used + helper;\n`,
+        "src/used.ts": `export const used = 1;\nexport const helper = 2;\n`,
+      }),
+    );
+    const base = await commit("feat: base");
+
+    await write({
+      "exports-baseline.json": JSON.stringify([{ file: "src/used.ts", kind: "export", name: "helper" }]),
+      "src/index.ts": `import { used } from "./used.ts";\n\nexport const index = used;\n`,
+    });
+    await commit("refactor: stop importing helper and list it");
+
+    const red = await script(GATE, base, "HEAD");
+    expect(red.text).toBe(
+      "exports: 1 exports-baseline.json export(s) the range adds that its base did not leave unused, remove the export instead:\n  src/used.ts: helper (export)\n",
+    );
+    expect(red.exitCode).toBe(1);
+  },
+  120_000,
+);
+
+test(
+  "--write seeds the baseline with every reported symbol, which the seeding range and the next range both hold",
   async () => {
     const { dir, write, commit, script } = await open(
       configured({
-        "knip.config.ts": extendingBase(["src/index.ts"]),
+        ".gitignore": "node_modules\n",
+        "knip.config.ts": `import base from "@avi2dg/checks/knip-base.json";\nexport default { ...base, entry: ["src/index.ts"] };\n`,
         "src/index.ts": `import { used } from "./used.ts";\n\nexport const index = used;\n`,
         "src/used.ts": `export const used = 1;\nexport const unusedExport = 2;\nexport type UnusedOptions = { readonly flag: boolean };\n`,
       }),
     );
-    await commit("feat: base");
+    await mkdir(join(dir, "node_modules", "@avi2dg"), { recursive: true });
+    await symlink(CHECKOUT, join(dir, "node_modules", "@avi2dg", "checks"));
+    const base = await commit("feat: base");
 
     const seeded = await script(GATE, "--write");
     expect(seeded.text).toBe("exports: wrote 2 unused export(s) to exports-baseline.json\n");
     expect(seeded.exitCode).toBe(0);
-    expect(JSON.parse(await Bun.file(`${dir}/exports-baseline.json`).text())).toEqual([
+    expect(JSON.parse(await readFile(join(dir, "exports-baseline.json"), "utf8"))).toEqual([
       { file: "src/used.ts", kind: "export", name: "unusedExport" },
       { file: "src/used.ts", kind: "type", name: "UnusedOptions" },
     ]);
     const seeding = await commit("chore: seed the exports baseline");
 
-    const adopted = await script(GATE, seeding);
-    expect(adopted.text).toContain("exports: 2 exports-baseline.json export(s) the range adds");
-    expect(adopted.exitCode).toBe(1);
+    const held = "exports: 2 unused export(s) in exports-baseline.json, and no new ones\n";
+    for (const refs of [[seeding], [base, seeding]]) {
+      const adopted = await script(GATE, ...refs);
+      expect(adopted.text).toBe(held);
+      expect(adopted.exitCode).toBe(0);
+    }
 
     await write({ "notes.md": "# notes\n" });
     await commit("docs: add notes");
-    const held = await script(GATE, seeding, "HEAD");
-    expect(held.text).toBe("exports: 2 unused export(s) in exports-baseline.json, and no new ones\n");
-    expect(held.exitCode).toBe(0);
+    const next = await script(GATE, seeding, "HEAD");
+    expect(next.text).toBe(held);
+    expect(next.exitCode).toBe(0);
   },
   120_000,
 );
