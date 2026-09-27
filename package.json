@@ -46,7 +46,6 @@
     "scripts/comment-gate.ts",
     "scripts/suppressions-ratchet.ts",
     "scripts/backtest.ts",
-    "scripts/range-gate.ts",
     "scripts/repetition.ts",
     "scripts/quarantine-clock.ts",
     "scripts/docs.ts",
