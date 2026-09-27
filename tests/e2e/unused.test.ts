@@ -73,7 +73,7 @@ test(
 );
 
 test(
-  "forced colour and other issue types reported beside the files leave the dead file the only one named",
+  "forced colour still fails the gate on a dead file and names only that file",
   async () => {
     const { dir, commit } = await open(
       configured({
