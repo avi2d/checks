@@ -18,6 +18,10 @@ So a consumer's `.oxlintrc.json` and each of its overrides list `plugins` again.
 `rules`, `categories` and `jsPlugins` pass down the chain as expected.
 `.gitignore` keeps oxlint out of `node_modules/`, because oxlint still walks the installed package when only `ignorePatterns` names it.
 
+The base turns `data-shape/readonly-collection-param` on for every TypeScript file and `data-shape/schema-twin` on for production files only.
+`typescript/prefer-readonly-parameter-types` would flag every object parameter for deep `readonly`, so the kit rule stays with the collections a function never mutates.
+A test that declares its own schema as an oracle for a production type is reasonable, so the twin rule leaves `tests/` out.
+
 bun has no bunfig `extends`, and it ignores an unknown top-level key without a warning.
 So a repository copies the kit's `bunfig.toml`, and `checks-test-layout` compares the copy with the installed one key by key.
 An empty `--path-ignore-patterns` flag overrides the copied `[test] pathIgnorePatterns`, which is how a quarantined test still runs on demand.

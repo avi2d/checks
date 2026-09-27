@@ -26,7 +26,7 @@ Each generated file is committed, and lint, the suite or CI's diff after the bui
 
 To regenerate after an edit:
 
-1. After editing `src/quality/effect-channel/`, `src/complexity/readability/` or the templates in `src/docs/doc-templates.ts`, run `bun run build`.
+1. After editing `src/quality/effect-channel/`, `src/complexity/readability/`, `src/quality/data-shape/` or the templates in `src/docs/doc-templates.ts`, run `bun run build`.
    It rewrites `dist/`.
 1. After editing anything a generated block names as its source in its opening marker, run `bun run build`, which rewrites every generated block.
 1. Commit what the command rewrote in the same commit as the edit.

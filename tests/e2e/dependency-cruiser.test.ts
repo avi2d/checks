@@ -15,7 +15,7 @@ function depcruise(config: string, ...targets: string[]): Promise<Ran> {
   return ran($`${binary} --config ${config} ${targets}`.cwd(dir));
 }
 
-async function writeConfig(extraForbidden: unknown[] = []): Promise<string> {
+async function writeConfig(extraForbidden: readonly unknown[] = []): Promise<string> {
   const path = join(dir, ".dependency-cruiser.cjs");
   await writeFile(
     path,

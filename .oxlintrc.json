@@ -36,7 +36,7 @@
     },
     {
       "files": ["src/**/*.ts", "scripts/**/*.ts"],
-      "excludeFiles": ["src/quality/effect-channel/**", "src/complexity/readability/**"],
+      "excludeFiles": ["src/quality/effect-channel/**", "src/complexity/readability/**", "src/quality/data-shape/**"],
       "plugins": ["typescript", "oxc", "eslint", "import", "node", "promise", "unicorn"],
       "rules": {
         "node/no-sync": "error",

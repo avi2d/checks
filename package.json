@@ -65,7 +65,8 @@
     "stryker.preset.js",
     "tsconfig.effect.json",
     "dist/effect-channel/index.js",
-    "dist/readability/index.js"
+    "dist/readability/index.js",
+    "dist/data-shape/index.js"
   ],
   "exports": {
     "./dependency-cruiser.config.js": "./dependency-cruiser.config.js",
@@ -101,7 +102,7 @@
   },
   "scripts": {
     "prepare": "bun src/dependencies/vendor.ts --library effect --package effect --repository https://github.com/Effect-TS/effect.git --tag 'effect@{version}' --path packages/effect/package.json",
-    "build": "bun build src/quality/effect-channel/index.ts --outdir dist/effect-channel --target node --format esm && bun build src/complexity/readability/index.ts --outdir dist/readability --target node --format esm && bun scripts/doc-templates-write.ts && bun src/delivery/changelog-write.ts && bun scripts/doc-blocks-write.ts",
+    "build": "bun build src/quality/effect-channel/index.ts --outdir dist/effect-channel --target node --format esm && bun build src/complexity/readability/index.ts --outdir dist/readability --target node --format esm && bun build src/quality/data-shape/index.ts --outdir dist/data-shape --target node --format esm && bun scripts/doc-templates-write.ts && bun src/delivery/changelog-write.ts && bun scripts/doc-blocks-write.ts",
     "lint": "oxlint --type-aware && bun src/core/lint.ts && depcruise --config .dependency-cruiser.cjs .",
     "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
     "test": "bun src/testing/test.ts"

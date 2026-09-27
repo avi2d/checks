@@ -1,6 +1,6 @@
 {
   "plugins": ["typescript", "oxc", "eslint", "import"],
-  "jsPlugins": ["./dist/effect-channel/index.js", "./dist/readability/index.js"],
+  "jsPlugins": ["./dist/effect-channel/index.js", "./dist/readability/index.js", "./dist/data-shape/index.js"],
   "categories": { "correctness": "error", "suspicious": "error" },
   "rules": {
     "effect-channel/no-error-channel-escape": "error",
@@ -18,5 +18,20 @@
     "typescript/no-non-null-assertion": "error",
     "typescript/no-deprecated": "error",
     "typescript/consistent-return": "off"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["**/*.ts", "**/*.tsx"],
+      "rules": {
+        "data-shape/readonly-collection-param": "error"
+      }
+    },
+    {
+      "files": ["**/*.ts", "**/*.tsx"],
+      "excludeFiles": ["tests/**"],
+      "rules": {
+        "data-shape/schema-twin": "error"
+      }
+    }
+  ]
 }

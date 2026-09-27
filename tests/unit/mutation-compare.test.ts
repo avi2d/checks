@@ -6,6 +6,7 @@ import {
   compareReports,
   formatComparison,
   type Mutant,
+  type MutantStatus,
   parseArgs,
   parseReport,
   passes,
@@ -23,7 +24,7 @@ function at(line: number, start: number, end: number): Mutant["location"] {
   return { start: { line, column: start }, end: { line, column: end } };
 }
 
-function mutant(overrides: Partial<Mutant> & { readonly status: string }): Mutant {
+function mutant(overrides: Partial<Mutant> & { readonly status: MutantStatus }): Mutant {
   return {
     mutatorName: "ArithmeticOperator",
     replacement: "a - b",
@@ -117,7 +118,7 @@ test("a lost kill below an inserted line still fails", () => {
 
 test("run B's shape, kills moving to RuntimeError under bail, holds no regression", () => {
   const source = Array.from({ length: 78 }, (_, i) => `load(${i});`).join("\n");
-  const loader = (status: string) => new Map([["src/loader.ts", { source, mutants: Array.from({ length: 78 }, (_, i) => mutant({ status, location: at(i + 1, 1, 5) })) }]]);
+  const loader = (status: MutantStatus) => new Map([["src/loader.ts", { source, mutants: Array.from({ length: 78 }, (_, i) => mutant({ status, location: at(i + 1, 1, 5) })) }]]);
   const comparison = compareReports(loader("Killed"), loader("RuntimeError"));
   expect(comparison.regression).toBe(false);
   expect(comparison.regressions).toHaveLength(0);
@@ -135,7 +136,7 @@ test("mutants sharing a location, mutator and replacement match by occurrence or
 });
 
 test("an untested duplicate added above a killed mutant is listed, not a regression", () => {
-  const flip = (status: string, line: number) => mutant({ status, mutatorName: "BooleanLiteral", replacement: "false", location: at(line, 3, 7) });
+  const flip = (status: MutantStatus, line: number) => mutant({ status, mutatorName: "BooleanLiteral", replacement: "false", location: at(line, 3, 7) });
   const base = new Map([["src/a.ts", { source: "f(true);\n", mutants: [flip("Killed", 1)] }]]);
   const head = new Map([["src/a.ts", { source: "g(true);\nf(true);\n", mutants: [flip("NoCoverage", 1), flip("Killed", 2)] }]]);
   const comparison = compareReports(base, head);
@@ -145,7 +146,7 @@ test("an untested duplicate added above a killed mutant is listed, not a regress
 });
 
 test("a lost kill below a removed duplicate still fails", () => {
-  const flip = (status: string, line: number) => mutant({ status, mutatorName: "BooleanLiteral", replacement: "false", location: at(line, 3, 7) });
+  const flip = (status: MutantStatus, line: number) => mutant({ status, mutatorName: "BooleanLiteral", replacement: "false", location: at(line, 3, 7) });
   const base = new Map([["src/a.ts", { source: "g(true);\nf(true);\n", mutants: [flip("NoCoverage", 1), flip("Killed", 2)] }]]);
   const head = new Map([["src/a.ts", { source: "f(true);\n", mutants: [flip("Survived", 1)] }]]);
   const comparison = compareReports(base, head);
@@ -166,7 +167,7 @@ test("mutants on a changed line have no counterpart, are listed and never fail t
 
 test("moves into or out of the statuses that leave the score are reported apart from regressions, in line order", () => {
   const source = Array.from({ length: 10 }, (_, i) => `v${i};`).join("\n");
-  const report = (statuses: readonly [string, number][]) => new Map([["src/a.ts", { source, mutants: statuses.map(([status, line]) => mutant({ status, location: at(line, 1, 3) })) }]]);
+  const report = (statuses: readonly [MutantStatus, number][]) => new Map([["src/a.ts", { source, mutants: statuses.map(([status, line]) => mutant({ status, location: at(line, 1, 3) })) }]]);
   const base = report([["Killed", 10], ["Killed", 2], ["Pending", 3], ["Killed", 1]]);
   const head = report([["Ignored", 10], ["Pending", 2], ["Survived", 3], ["CompileError", 1]]);
   const comparison = compareReports(base, head);

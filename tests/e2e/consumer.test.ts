@@ -265,6 +265,54 @@ test(
 );
 
 test(
+  "file: consumer goes red on a mutable array parameter nothing mutates, green once it is readonly",
+  async () => {
+    await useConsumer("file");
+    await writeFile(join(dir, "totals.ts"), `export function total(items: string[]): number {\n  return items.length;\n}\n`);
+
+    const red = await oxlint();
+    expect(red.exitCode).not.toBe(0);
+    expect(red.text).toContain("totals.ts");
+    expect(red.text).toContain("data-shape(readonly-collection-param)");
+
+    await writeFile(join(dir, "totals.ts"), `export function total(items: readonly string[]): number {\n  return items.length;\n}\n`);
+    const green = await oxlint();
+    expect(green.exitCode).toBe(0);
+  },
+  180_000,
+);
+
+test(
+  "file: consumer goes red on a production type repeating a Schema, green once it is derived, while a test oracle stays green",
+  async () => {
+    await useConsumer("file");
+    await writeFile(
+      join(dir, "status.ts"),
+      `import { Schema } from "effect";\n\nexport type Status = {\n  readonly code: string;\n  readonly count: number;\n};\n\nexport const StatusSchema = Schema.Struct({ code: Schema.String, count: Schema.Number });\n`,
+    );
+    await mkdir(join(dir, "tests"));
+    await writeFile(
+      join(dir, "tests", "oracle.ts"),
+      `import { Schema } from "effect";\n\nexport type Oracle = {\n  readonly code: string;\n  readonly count: number;\n};\n\nexport const OracleSchema = Schema.Struct({ code: Schema.String, count: Schema.Number });\n`,
+    );
+
+    const red = await oxlint();
+    expect(red.exitCode).not.toBe(0);
+    expect(red.text).toContain("status.ts");
+    expect(red.text).toContain("data-shape(schema-twin)");
+    expect(red.text).not.toContain("oracle.ts");
+
+    await writeFile(
+      join(dir, "status.ts"),
+      `import { Schema } from "effect";\n\nexport const StatusSchema = Schema.Struct({ code: Schema.String, count: Schema.Number });\n\nexport type Status = typeof StatusSchema.Type;\n`,
+    );
+    const green = await oxlint();
+    expect(green.exitCode).toBe(0);
+  },
+  180_000,
+);
+
+test(
   "file: consumer lint stays green with a lint-dirty file inside the installed package",
   async () => {
     await useConsumer("file");
@@ -376,6 +424,8 @@ test(
     expect(existsSync(join(installed, "knip-base.json"))).toBe(true);
     expect(existsSync(join(installed, "src", "quality", "effect-channel"))).toBe(false);
     expect(existsSync(join(installed, "src", "complexity", "readability"))).toBe(false);
+    expect(existsSync(join(installed, "src", "quality", "data-shape"))).toBe(false);
+    expect(existsSync(join(installed, "dist", "data-shape", "index.js"))).toBe(true);
     expect(existsSync(join(installed, "tests"))).toBe(false);
     expect(existsSync(join(installed, "AGENTS.md"))).toBe(false);
 
