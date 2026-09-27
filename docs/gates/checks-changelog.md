@@ -22,11 +22,11 @@ A version with no conventional commit worth listing writes no section.
 
 ## What it reads
 
-It reads `package.json`, `CHANGELOG.md` and the git history from the repository root.
-It finds releases in the version bumps of `package.json` across all of `HEAD` ancestry, so a checkout without tags writes the same file.
+It reads `package.json`, `CHANGELOG.md`, the `v*` tags and the git history from the repository root.
+It finds releases in the version bumps of `package.json` across all of `HEAD` ancestry, so a checkout without tags writes the same file when no release was reverted.
 It reads a commit whose `package.json` is missing or has no version as unversioned, so the commit that adds the version is the first release and a repository that adopts a version late still writes its changelog.
 A bump to a version no newer than the release before it is a revert.
-A revert cancels every release above the version it returns to, except a release that was already published.
+A revert cancels every release above the version it returns to, except a release a `v` tag marks as published.
 A version older than the newest in the committed `CHANGELOG.md` and absent from it was never published, so its commits go into the next release.
 It refuses a shallow checkout, since the releases reach back past its history.
 It refuses a `package.json` with no repository address, since each entry links its pull request under it.

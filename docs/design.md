@@ -84,7 +84,7 @@ A `lint` that calls `checks-commit-identity HEAD` directly checks out `github.ev
 ## Workflows say how CI runs
 
 A repository's workflow YAML says how CI runs, and the kit says which commands must run.
-`checks-ci-wiring` holds a repository only to the commands its own `package.json` defines, so a repository with no `build` script is not asked to run one.
+`checks-ci-wiring` holds a repository to title lint on every pull request and to the `bun run` commands its own `package.json` defines, so a repository with no `build` script is not asked to run one.
 The target branch comes from git's `refs/remotes/origin/HEAD`, or in CI from the pull request base or the default branch in GitHub's event.
 It never comes from the workflow files, and `checks-lint` starts its local range from the same branch.
 `checks-ci-wiring` runs inside `lint`, not in a workflow of its own.
@@ -123,7 +123,7 @@ The kit's one limit falls between GitLab's two, so a flaky test gets a month to 
 The commit that bumps `version` in `package.json` closes a release, and the `v*` tag goes on that commit.
 Commits merged after the bump wait for the next release.
 Releases come from the version bumps across all of `HEAD`'s ancestry, not from tags.
-So a checkout without tags, a fork, and a branch that merged `main` in all write the same file.
+So a checkout without tags, a fork, and a branch that merged `main` in all write the same file when no release was reverted.
 A section keeps the date it was written, because the squash merge that lands the release commit may fall on another day.
 Entries come from commit subjects, which are the squash-merged pull request titles that commitlint holds to the conventional format.
 A commit body holds the branch's own messages, and nothing lints it, so no entry comes from a body.
