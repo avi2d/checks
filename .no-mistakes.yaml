@@ -1,0 +1,23 @@
+review:
+  path_instructions:
+    - path: "*.md"
+      instructions: |
+        Judge each changed Markdown file a person reads, README.md,
+        CONTRIBUTING.md and the pages under docs/, against the
+        technical-writing skill, and each changed AGENTS.md or CLAUDE.md
+        against the writing-for-agents skill. Read them at
+        ~/.agents/skills/technical-writing/SKILL.md and
+        ~/.agents/skills/writing-for-agents/SKILL.md on this host, and don't
+        restate them here. checks-docs already decides templates, one
+        sentence per line, dashes, parentheses, semicolons and broken
+        references, so leave those to it. Flag history in a living doc, such
+        as a former name, a migration table or what something used to do,
+        because what changed belongs in the commit. bun run build writes
+        CHANGELOG.md and dist/templates/, so skip them.
+    - path: "*"
+      instructions: |
+        Find each sentence in README.md, CONTRIBUTING.md, AGENTS.md,
+        CLAUDE.md or a page under docs/ that this change makes untrue, even
+        when the change leaves that file alone: a count, a path, a name, a
+        flag, an exit code, a sample output or a described behaviour. Flag it
+        with the file and line, and say what is true after the change.
