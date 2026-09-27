@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-unused
 
-`checks-unused` is the gate that refuses a TypeScript file no entry point reaches, and a reader looks it up when a file seems dead but every other check passes.
+`checks-unused` is the gate that refuses a TypeScript file no entry point reaches.
 
 ## What it checks
 
@@ -54,10 +54,10 @@ A passing run counts the files it judged:
 unused: no unreferenced files among 110 tracked .ts/.tsx file(s)
 ```
 
-## Opting out
+## When it runs
 
-`checks-lint` runs this gate only when the repository tracks `.ts` or `.tsx` files.
-A repository that tracks one names its entries in a Knip configuration.
+`checks-lint` runs it when the repository tracks a `.ts` or `.tsx` file.
+Such a repository names its entries in a Knip configuration.
 
 ## Related topics
 

@@ -96,9 +96,10 @@ A run with no skipped tests ends with:
 checks-test: no test skipped
 ```
 
-## Opting out
+## When it runs
 
-A repository that tracks no TypeScript source does not need `checks-test`, as [checks-test-layout](checks-test-layout.md) says.
+The repository's `test` script runs it.
+A repository that tracks no TypeScript source does not need it, as [checks-test-layout](checks-test-layout.md) says.
 
 ## Related topics
 

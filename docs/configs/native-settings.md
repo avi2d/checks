@@ -4,7 +4,7 @@ audience: consumers
 ---
 # Native settings
 
-A consuming repository puts each setting in the file its tool reads.
+A consuming repository puts each setting in the file its tool reads, and no manifest of the kit gathers them.
 
 ## Settings by file
 
@@ -24,37 +24,14 @@ A consuming repository puts each setting in the file its tool reads.
 | Each page under `docs/` | Diátaxis mode in `kind` front matter, and `audience: consumers` on a page that speaks to a consuming repository | `checks-docs` |
 
 Every page under `docs/` names its mode in `kind` front matter, whatever directory holds it.
-A page whose front matter sets `audience: consumers` names commands a consuming repository runs, so `checks-docs` does not hold them to this `package.json`.
-Every other living doc names commands this repository runs, and `checks-docs` holds each one to its `package.json`.
-
-## Consumer migration
-
-The following table maps the former fields to their owners.
-
-| Former field | New owner |
-| --- | --- |
-| `defaultBranch` | Git's `refs/remotes/origin/HEAD`, or the pull request base or event repository in CI |
-| `runsOn`, `gates.ci`, `gates.scheduled` | `runs-on` and `run` steps in `.github/workflows/*.yml` |
-| `gates.lint` | `checks-lint` runs every kit gate |
-| `commitIdentity.authors` | `author` and `contributors` in `package.json` |
-| `sources.production` | `path` and `ignore` in `.jscpd.json` |
-| `size.production`, `size.tests` | File overrides and native size rules in `.oxlintrc.json` |
-| `sources.effect.paths`, `sources.effect.exempt` | Overrides in `.oxlintrc.json` and `tsconfig.json` |
-| `sources.libraries` | `checks-vendor` arguments in the `prepare` script of `package.json` |
-| `docs.pages` | `kind` front matter on each page |
-| `docs.forConsumers` | `audience: consumers` front matter on each page |
-| `features`, `changeSignal`, `agentRules` | No active declarations used these fields |
-
-The kit has no general configuration manifest or generated workflow.
-`checks-ci-wiring` requires title lint on opened and synchronized pull requests.
-It also requires lint, build, typecheck and test for each of those scripts that `package.json` defines, and a clean git diff after a build.
-`checks-repetition` runs jscpd with the repository's own `.jscpd.json`, so its `path` and `ignore` globs decide which files are measured.
+A page whose front matter sets `audience: consumers` names commands that a consuming repository runs.
+`checks-docs` skips the `bun run` commands on such a page, and resolves those in every other living doc as [Paths, links and commands](../gates/checks-docs.md#paths-links-and-commands) says.
 
 ## Size limits
 
-The size rules are plain oxlint rules at `error` in `.oxlintrc.json`, and `bun run lint` enforces them on the whole tree.
+The size rules are oxlint's own rules at `error` in `.oxlintrc.json`, so `bun run lint` fails on any file over them.
 A repository records its existing violations with `oxlint --suppress-all`, which writes them to `oxlint-suppressions.json`.
-`checks-suppressions-ratchet` refuses any count in that file that rises, so the recorded debt only falls.
+`checks-suppressions-ratchet` refuses any count in that file that rises.
 The kit's own `.oxlintrc.json` sets these limits for each size override, and a repository may copy them:
 
 <!-- generated size-limits: bun run build writes it from .oxlintrc.json, SIZE_RULES in src/complexity/size-rules.ts and scripts/doc-blocks.ts -->
@@ -72,5 +49,6 @@ The kit's own `.oxlintrc.json` sets these limits for each size override, and a r
 ## Related topics
 
 - [The Effect rules](effect-rules.md)
-- [The CI wiring check](../gates/checks-ci-wiring.md)
-- [The suppressions ratchet](../gates/checks-suppressions-ratchet.md)
+- [checks-ci-wiring](../gates/checks-ci-wiring.md)
+- [checks-suppressions-ratchet](../gates/checks-suppressions-ratchet.md)
+- [checks-docs](../gates/checks-docs.md)

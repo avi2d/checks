@@ -154,7 +154,7 @@ export const TEMPLATES: Readonly<Record<Kind, Template>> = {
   reference: {
     shape: "outline",
     title: { type: "open", placeholder: "<The thing this page describes, as a noun>", rule: "any" },
-    lead: ["<What the thing is, in one sentence, and when a reader looks it up.>"],
+    lead: ["<What the thing is, in one sentence.>"],
     sections: [
       open("<One part of it, as a noun>", "any", optional("the lead and one table describe all of it"), [
         "<A table, a list or a short description, with no steps and no opinion.>",

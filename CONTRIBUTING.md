@@ -33,7 +33,9 @@ To regenerate after an edit:
 
 ## Release a version
 
-A release is a tag on `main`, which the `release` workflow publishes through npm trusted publishing, so no token is stored anywhere and GitHub mints the publish credential for each run.
+A release is a tag on `main`.
+The `release` workflow publishes it through npm trusted publishing.
+GitHub mints the publish credential for each run, so no npm token is stored anywhere.
 
 To release a version:
 
@@ -41,7 +43,8 @@ To release a version:
    The build writes the version's section into `CHANGELOG.md` from the conventional commits since the last release, so the changelog is never edited by hand.
 1. Commit both as `chore: release <version>` and title the pull request the same.
    The squash merge lands the title as the commit's subject, and a `feat` or `fix` title would add an entry the committed changelog lacks.
-1. Merge `main` into the release branch and run `bun run build` again right before it merges, committing what it rewrote, since the build lists a commit merged in after the bump under the release.
+1. Right before the pull request merges, merge `main` into the release branch and run `bun run build` again.
+   Commit what the build rewrote, because the build lists a commit merged in after the bump under this release.
    Never rebase the release branch.
 1. Once it merges, tag that commit on `main` with the version and push the tag, since the version bump commit closes the release:
 
@@ -56,9 +59,7 @@ To release a version:
    After npm publish succeeds, the workflow creates or updates the GitHub release with the matching `CHANGELOG.md` section.
 
 `publishConfig.access` in `package.json` is what makes the scoped package public.
-npm attaches a trusted publisher only to a package that already exists, so a package's first version goes out by hand.
-That is `npm publish` from the tagged commit as `avi2dg`, then adding the trusted publisher in the package's npm settings, with the repository `avi2d/checks` and the workflow `release.yml`.
-That first tag's `release` run fails on the already-published version, and every later tag publishes through the workflow.
+The package's npm settings name the repository `avi2d/checks` and the workflow `release.yml` as its trusted publisher.
 
 ## Find where a change goes
 

@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-exports
 
-`checks-exports` is the gate that refuses an exported value or type nothing imports, and a reader looks it up when Knip names a symbol no file reaches.
+`checks-exports` is the gate that refuses an exported value or type nothing imports.
 
 ## What it checks
 
@@ -92,10 +92,10 @@ A passing run with an empty baseline says so:
 exports: no unused exports or types
 ```
 
-## Opting out
+## When it runs
 
-`checks-lint` runs this gate only when the repository tracks `.ts` or `.tsx` files.
-A repository that tracks one names its entries in a Knip configuration.
+`checks-lint` runs it over each pull request's range when the repository tracks a `.ts` or `.tsx` file.
+Such a repository names its entries in a Knip configuration.
 
 ## Related topics
 

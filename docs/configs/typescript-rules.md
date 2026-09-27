@@ -4,7 +4,7 @@ audience: consumers
 ---
 # The TypeScript rules
 
-The oxlint base config and the tsconfig fragment hold a repository's TypeScript to a set of rules, and a reader looks it up to learn what each rule refuses and which rules need type information.
+The oxlint base config and the tsconfig fragment hold a repository's TypeScript to a set of rules, and some of them need type information.
 
 ## Syntax rules
 

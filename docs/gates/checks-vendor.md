@@ -102,10 +102,10 @@ A consumer whose `tsconfig.json` has no explicit `include` keeps the trees out w
 { "exclude": ["node_modules", "repos"] }
 ```
 
-## Opting out
+## When it runs
 
-It pins sources only for the libraries its arguments name.
-A run with no arguments reports nothing to pin and changes nothing.
+The repository's `prepare` script runs it, as [Wiring](#wiring) shows.
+It pins only the libraries its arguments name, and a run with no arguments changes nothing.
 A repository that pins no library needs no `prepare` entry for it.
 
 ## Related topics
