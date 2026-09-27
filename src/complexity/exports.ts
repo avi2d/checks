@@ -158,7 +158,8 @@ const unusedAt = Effect.fn("unusedAt")(
 const check = Effect.fn("check")(function* (first: string, second: string | undefined) {
   const { root, reported } = yield* scan;
   if (reported.kind === "unconfigured") return false;
-  const { base: baseRev } = yield* rangeEnds(first, second, root);
+  // Knip scans the checked-out tree, which a pull request's merge checkout makes differ from the range head.
+  const { base: baseRev } = yield* rangeEnds(first, second === undefined ? undefined : "HEAD", root);
   const base = yield* baselineAt(baseRev, root);
   const head = yield* baselineInTree(root);
   const unusedAtBase = outside(head, base).length === 0 ? [] : yield* unusedAt(baseRev, root);

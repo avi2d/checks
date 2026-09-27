@@ -45,7 +45,8 @@ checks-exports <ref>
 checks-exports --write
 ```
 
-With two arguments the base is where the head branched off, at their merge-base.
+With two arguments the base is where the checked-out commit branched off the base ref, at their merge-base.
+So a pull request's merge checkout is judged against the base branch it merges, and the head ref only names the range.
 With one the base is that commit's parent, or the empty tree for a repository's first commit, where nothing counts as already unused.
 With `--write` it records every unused export and type Knip reports into `exports-baseline.json`, the way `oxlint --suppress-all` seeds `oxlint-suppressions.json`.
 

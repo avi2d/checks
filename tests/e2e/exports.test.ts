@@ -1,3 +1,4 @@
+import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { mkdir, readFile, symlink } from "node:fs/promises";
 import { join } from "node:path";
@@ -137,6 +138,37 @@ test(
       "exports: 1 exports-baseline.json export(s) the range adds that its base did not leave unused, remove the export instead:\n  src/used.ts: helper (export)\n",
     );
     expect(red.exitCode).toBe(1);
+  },
+  120_000,
+);
+
+test(
+  "a merge checkout is judged against the base branch it merges, so a symbol the base branch seeded is not added by the pull request",
+  async () => {
+    const { dir, write, commit, script } = await open(
+      configured({
+        "knip.config.ts": extendingBase(["src/index.ts"]),
+        "src/index.ts": `import { used } from "./used.ts";\n\nexport const index = used;\n`,
+        "src/used.ts": `export const used = 1;\n`,
+      }),
+    );
+    await commit("feat: base");
+    await $`git checkout -q -b pr`.cwd(dir);
+    await write({ "notes.md": "# notes\n" });
+    const prHead = await commit("docs: add notes");
+
+    await $`git checkout -q main`.cwd(dir);
+    await write({ "src/used.ts": `export const used = 1;\nexport const seeded = 2;\n` });
+    await commit("feat: add an export nothing imports");
+    await write({ "exports-baseline.json": JSON.stringify([{ file: "src/used.ts", kind: "export", name: "seeded" }]) });
+    await commit("chore: seed the exports baseline");
+
+    await $`git checkout -q --detach main`.cwd(dir);
+    await $`git -c user.name=Wren -c user.email=wren@example.com merge -q --no-ff --no-edit pr`.cwd(dir);
+
+    const merged = await script(GATE, "main", prHead);
+    expect(merged.text).toBe("exports: 1 unused export(s) in exports-baseline.json, and no new ones\n");
+    expect(merged.exitCode).toBe(0);
   },
   120_000,
 );
