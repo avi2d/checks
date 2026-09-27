@@ -3,11 +3,7 @@ import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { collect, git } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 
-export type Scan = {
-  readonly tracked: number;
-  readonly files: readonly string[];
-  readonly unmatched: readonly string[];
-};
+export type Scan = { readonly tracked: number; readonly files: readonly string[] };
 
 const NAME = "unused";
 const CONFIGS = [
@@ -21,42 +17,33 @@ const CONFIGS = [
   "knip.config.ts",
 ] as const;
 const TYPESCRIPT = ["*.ts", "*.tsx"];
-const FILES_HEADER = /^Unused files \(\d+\)$/;
-const SECTION_HEADER =
-  /^(?:Unused files|Unused dependencies|Unused devDependencies|Unused exports|Unused exported types|Unused enum members|Unused class members|Unused binaries|Unused unlisted|Unresolved imports|Configuration hints) \(\d+\)$/;
-const REFINE_ENTRY = "Refine entry pattern";
+const JUDGED = /\.tsx?$/;
 
 class UnusedError extends Schema.TaggedError<UnusedError>()("UnusedError", {
   message: Schema.String,
 }) {}
 
-export function filesOf(stdout: string): readonly string[] {
-  const lines = stdout.split("\n");
-  const start = lines.findIndex((line) => FILES_HEADER.test(line.trim()));
-  if (start === -1) return [];
-  const files: string[] = [];
-  for (const raw of lines.slice(start + 1)) {
-    const line = raw.trim();
-    if (line === "" || SECTION_HEADER.test(line)) return files;
-    files.push(line);
-  }
-  return files;
-}
+const decodeKnipReport = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(
+    Schema.Struct({
+      issues: Schema.Array(Schema.Struct({ files: Schema.optional(Schema.Array(Schema.Struct({ name: Schema.String }))) })),
+    }),
+  ),
+);
 
-export function unmatchedOf(diagnostics: string): readonly string[] {
-  return diagnostics
-    .split("\n")
-    .filter((line) => line.includes(REFINE_ENTRY))
-    .map((line) => line.split(/ {2,}/).at(0)?.trim() ?? "")
-    .filter((pattern) => pattern !== "");
-}
+export const filesOf = Effect.fn("filesOf")(function* (stdout: string) {
+  const { issues } = yield* decodeKnipReport(stdout).pipe(
+    Effect.mapError((cause) => new UnusedError({ message: `knip's JSON report does not decode: ${cause.message}` })),
+  );
+  return issues
+    .flatMap(({ files = [] }) => files.map(({ name }) => name))
+    .filter((file) => JUDGED.test(file))
+    .toSorted();
+});
 
-export function report({ tracked, files, unmatched }: Scan): string {
-  if (files.length === 0 && unmatched.length === 0) return `${NAME}: no unreferenced files among ${tracked} tracked .ts/.tsx file(s)`;
-  const dead = files.length === 0 ? [] : [`${NAME}: ${files.length} unreferenced file(s):`, ...files.map((file) => `  ${file}`)];
-  const mistyped =
-    unmatched.length === 0 ? [] : [`${NAME}: ${unmatched.length} knip entry pattern(s) match no file:`, ...unmatched.map((pattern) => `  ${pattern}`)];
-  return [...dead, ...mistyped].join("\n");
+export function report({ tracked, files }: Scan): string {
+  if (files.length === 0) return `${NAME}: no unreferenced files among ${tracked} tracked .ts/.tsx file(s)`;
+  return [`${NAME}: ${files.length} unreferenced file(s):`, ...files.map((file) => `  ${file}`)].join("\n");
 }
 
 const hasConfig = Effect.fn("hasConfig")(function* (root: string) {
@@ -77,20 +64,12 @@ const hasConfig = Effect.fn("hasConfig")(function* (root: string) {
 });
 
 const knip = Effect.fn("knip")(function* () {
-  const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  let directory: string | undefined = import.meta.dir;
-  while (directory !== undefined) {
-    const root = path.join(directory, "node_modules", "knip");
-    if (yield* fs.exists(path.join(root, "package.json"))) {
-      const cli = path.join(root, "bin", "knip.js");
-      if (yield* fs.exists(cli)) return cli;
-      return yield* new UnusedError({ message: `knip ships no bin/knip.js under ${root}` });
-    }
-    const parent = path.dirname(directory);
-    directory = parent === directory ? undefined : parent;
-  }
-  return yield* new UnusedError({ message: "cannot resolve knip from the installed kit" });
+  const main = yield* Effect.try({
+    try: () => new URL("../bin/knip.js", import.meta.resolve("knip")),
+    catch: () => new UnusedError({ message: "cannot resolve knip from the installed kit" }),
+  });
+  return yield* path.fromFileUrl(main);
 });
 
 const unused = Effect.gen(function* () {
@@ -104,16 +83,15 @@ const unused = Effect.gen(function* () {
     yield* Console.log(`${NAME}: no knip configuration names entry files, so add one extending the kit's knip-base.json`);
     return false;
   }
-  const run = yield* collect(process.execPath, [yield* knip()], root).pipe(
+  const run = yield* collect(process.execPath, [yield* knip(), "--reporter", "json"], root).pipe(
     Effect.mapError((cause) => new UnusedError({ message: `cannot run knip: ${cause.message}` })),
   );
   if (run.exitCode !== 0 && run.exitCode !== 1) {
     return yield* new UnusedError({ message: `knip exits ${run.exitCode}: ${(run.stdout + run.stderr).trim()}` });
   }
-  const scan: Scan = { tracked: tracked.length, files: filesOf(run.stdout).toSorted(), unmatched: unmatchedOf(`${run.stdout}
-${run.stderr}`).toSorted() };
-  yield* Console.log(report(scan));
-  return scan.files.length === 0 && scan.unmatched.length === 0;
+  const files = yield* filesOf(run.stdout);
+  yield* Console.log(report({ tracked: tracked.length, files }));
+  return files.length === 0;
 });
 
 if (import.meta.main) runMain(NAME, unused);

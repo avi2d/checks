@@ -1,6 +1,7 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { CHECKOUT, fixtureRepos, lintWiring } from "./lib/fixture-repo.ts";
+import { join } from "node:path";
+import { CHECKOUT, fixtureRepos, lintWiring, ran } from "./lib/fixture-repo.ts";
 
 const open = fixtureRepos("checks-unused-");
 
@@ -16,7 +17,7 @@ function extendingBase(entry: readonly string[]): string {
 }
 
 test(
-  "red on an unreferenced file and green once it is removed, while an unused export in a referenced file never fails",
+  "red on an unreferenced TypeScript file and green once it is removed, while an unused export or a dead script outside TypeScript never fails",
   async () => {
     const { dir, commit, script } = await open(
       configured({
@@ -24,12 +25,13 @@ test(
         "src/index.ts": `import { used } from "./used.ts";\n\nexport const index = used;\nexport const unusedExport = 1;\n`,
         "src/used.ts": `export const used = 1;\nexport const unusedExport = 2;\n`,
         "src/dead.ts": `export const dead = 1;\n`,
+        "scripts/dead.mjs": `export const dead = 1;\n`,
       }),
     );
     await commit("feat: base");
 
     const red = await script("complexity/unused.ts");
-    expect(red.text).toContain("unused: 1 unreferenced file(s):\n  src/dead.ts");
+    expect(red.text).toContain("unused: 1 unreferenced file(s):\n  src/dead.ts\n");
     expect(red.text).not.toContain("unusedExport");
     expect(red.exitCode).toBe(1);
 
@@ -59,23 +61,31 @@ test(
 );
 
 test(
-  "fails when no TypeScript source is tracked and when an entry pattern matches no file",
+  "fails when no TypeScript source is tracked",
   async () => {
     const untracked = await open(configured({ "knip.json": JSON.stringify({ entry: ["index.ts"] }) }));
     await untracked.write({ "index.ts": `export const index = 1;\n` });
     const empty = await untracked.script("complexity/unused.ts");
     expect(empty.text).toContain("unused: no tracked .ts or .tsx files to scan");
     expect(empty.exitCode).toBe(2);
+  },
+  120_000,
+);
 
-    const mistyped = await open(
+test(
+  "forced colour and other issue types reported beside the files leave the dead file the only one named",
+  async () => {
+    const { dir, commit } = await open(
       configured({
-        "knip.json": JSON.stringify({ entry: ["src/missing.ts", "src/index.ts"] }),
-        "src/index.ts": `export const index = 1;\n`,
+        "knip.json": JSON.stringify({ entry: ["src/index.ts"] }),
+        "src/index.ts": `import { z } from "zod";\n\nexport const index = z;\n`,
+        "src/dead.ts": `export const dead = 1;\n`,
       }),
     );
-    await mistyped.commit("feat: base");
-    const red = await mistyped.script("complexity/unused.ts");
-    expect(red.text).toContain("unused: 1 knip entry pattern(s) match no file:\n  src/missing.ts");
+    await commit("feat: base");
+
+    const red = await ran($`bun ${join(CHECKOUT, "src", "complexity", "unused.ts")}`.cwd(dir).env({ ...process.env, FORCE_COLOR: "1" }));
+    expect(red.text).toBe("unused: 1 unreferenced file(s):\n  src/dead.ts\n");
     expect(red.exitCode).toBe(1);
   },
   120_000,
@@ -99,7 +109,7 @@ test(
   async () => {
     const { dir, write, commit, lint } = await open({
       ...lintWiring(),
-      "knip.json": JSON.stringify({ entry: ["widget.ts"], include: ["files"], treatConfigHintsAsErrors: true }),
+      "knip.json": JSON.stringify({ entry: ["widget.ts"], include: ["files"] }),
       "widget.ts": `export const widget = 42;\n`,
     });
     await commit("feat: base");

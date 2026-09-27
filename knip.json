@@ -1,35 +1,5 @@
 {
   "$schema": "https://unpkg.com/knip@6.38.0/schema.json",
   "include": ["files"],
-  "entry": [
-    "src/core/lint.ts",
-    "src/complexity/repetition.ts",
-    "src/complexity/suppressions-ratchet.ts",
-    "src/complexity/unused.ts",
-    "src/delivery/changelog.ts",
-    "src/delivery/changelog-write.ts",
-    "src/delivery/ci-wiring.ts",
-    "src/delivery/commit-identity.ts",
-    "src/delivery/release-notes.ts",
-    "src/delivery/release-report.ts",
-    "src/dependencies/vendor.ts",
-    "src/docs/docs.ts",
-    "src/docs/prose-matchers.ts",
-    "src/quality/backtest.ts",
-    "src/quality/comment-gate.ts",
-    "src/quality/comment-matchers.ts",
-    "src/quality/comments.ts",
-    "src/testing/flake.ts",
-    "src/testing/mutation-compare.ts",
-    "src/testing/quarantine-clock.ts",
-    "src/testing/subsumed-tests.ts",
-    "src/testing/test.ts",
-    "src/testing/test-layout.ts",
-    "src/testing/test-skips.ts",
-    "src/quality/effect-channel/index.ts",
-    "src/complexity/readability/index.ts",
-    "scripts/doc-templates-write.ts",
-    "scripts/doc-blocks-write.ts",
-    "tests/**/*.test.ts"
-  ]
+  "entry": ["src/quality/effect-channel/index.ts", "src/complexity/readability/index.ts", "tests/**/*.test.ts"]
 }

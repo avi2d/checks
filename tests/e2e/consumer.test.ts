@@ -400,7 +400,7 @@ test(
     await mkdir(join(dir, ".github/workflows"), { recursive: true });
     await writeFile(join(dir, ".github/workflows/ci.yml"), "on: pull_request\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n      - run: bun run build\n      - run: git diff --exit-code\n      - run: bun run typecheck\n      - run: bun run test\n");
     await writeFile(join(dir, ".github/workflows/commitlint.yml"), "on: pull_request\njobs:\n  title:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ./node_modules/.bin/commitlint\n");
-    await writeFile(join(dir, "knip.json"), JSON.stringify({ entry: ["*.ts", "tests/**/*.ts"], include: ["files"], treatConfigHintsAsErrors: true }));
+    await writeFile(join(dir, "knip.json"), JSON.stringify({ entry: ["*.ts", "tests/**/*.ts"], include: ["files"] }));
 
     const manifest = Schema.decodeSync(Manifest)(await readFile(join(CHECKOUT, "package.json"), "utf8"));
     const bins = Object.keys(manifest.bin);
