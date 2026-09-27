@@ -65,6 +65,14 @@ To consume the kit from a repository:
    cp node_modules/@avi2dg/checks/bunfig.toml bunfig.toml
    ```
 
+1. Name the repository's entry files in `knip.config.ts`, spreading the kit's Knip base:
+
+   ```ts
+   import base from "@avi2dg/checks/knip-base.json";
+
+   export default { ...base, entry: ["src/index.ts", "tests/**/*.test.ts"] };
+   ```
+
 1. Add scripts to `package.json`, replacing the build entry with the repository's own build command:
 
    ```json

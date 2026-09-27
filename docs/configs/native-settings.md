@@ -14,7 +14,7 @@ A consuming repository puts each setting in the file its tool reads.
 | `.oxlintrc.json` | Effect paths, exemptions, file size, function size, statements, cognitive complexity and depth | oxlint |
 | `oxlint-suppressions.json` | The existing violations oxlint suppresses, per file and rule | oxlint and `checks-suppressions-ratchet` |
 | `.jscpd.json` | The `path` and `ignore` globs of the files repetition is measured in | jscpd and `checks-repetition` |
-| `knip.json` | The `entry` globs Knip traces unreferenced files from | Knip and `checks-unused` |
+| `knip.config.ts` | The `entry` globs Knip traces unreferenced files from, spread over the kit's `knip-base.json` | Knip and `checks-unused` |
 | `tsconfig.json` | Effect language service scope and severity | TypeScript and Effect language service |
 | `package.json` | `scripts` with the `checks-vendor` arguments in `prepare`, `author` and `contributors` | Bun, `checks-commit-identity` and `checks-vendor` |
 | `bunfig.toml` | Test discovery and quarantine exclusion | Bun and `checks-test-layout` |
