@@ -6,7 +6,7 @@ type Field = { readonly name: string; readonly optional: boolean; readonly kind:
 
 type Shape = ESTree.TSTypeLiteral | ESTree.TSInterfaceBody;
 
-const STRUCTS: ReadonlySet<string> = new Set(["Struct", "TaggedStruct", "Class", "TaggedClass", "TaggedError"]);
+const STRUCTS: ReadonlySet<string> = new Set(["Struct", "TaggedStruct", "Class"]);
 
 const SCHEMA_KINDS: Readonly<Record<string, Kind>> = {
   String: "string",
@@ -119,8 +119,6 @@ function schemaFields(call: ESTree.CallExpression): Field[] | undefined {
 
 function compatible(left: Kind, right: Kind): boolean {
   return (
-    left === "wild" ||
-    right === "wild" ||
     left === right ||
     (left === "literal" && right === "string") ||
     (left === "string" && right === "literal")
@@ -165,6 +163,7 @@ const rule: CreateRule = {
     const schemas: { readonly name: string | undefined; readonly fields: readonly Field[] }[] = [];
 
     const collect = (node: Shape): void => {
+      if (node.parent.type === "TSInterfaceDeclaration" && node.parent.extends.length > 0) return;
       const fields = shapeFields(node);
       if (fields.length >= 2) shapes.push({ node, fields });
     };

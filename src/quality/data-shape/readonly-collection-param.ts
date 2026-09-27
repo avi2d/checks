@@ -25,6 +25,8 @@ const ARRAY_METHODS: ReadonlySet<string> = new Set([
 
 const COLLECTION_METHODS: ReadonlySet<string> = new Set(["set", "delete", "clear", "add"]);
 
+const READONLY_NAMES: ReadonlySet<string> = new Set(["ReadonlyArray", "ReadonlyMap", "ReadonlySet"]);
+
 function isArrayType(type: ESTree.TSType | undefined): boolean {
   if (type === undefined) return false;
   if (type.type === "TSArrayType") return true;
@@ -42,12 +44,51 @@ function isMapOrSet(type: ESTree.TSType | undefined): boolean {
 type Named = { readonly name: string; readonly type: ESTree.TSType | undefined };
 
 function namedOf(param: ESTree.ParamPattern): Named | undefined {
-  const target = param.type === "TSParameterProperty" ? param.parameter : param;
-  if (target.type === "Identifier") return { name: target.name, type: target.typeAnnotation?.typeAnnotation };
-  if (target.type === "AssignmentPattern" && target.left.type === "Identifier") {
-    return { name: target.left.name, type: target.left.typeAnnotation?.typeAnnotation };
+  if (param.type === "Identifier") return { name: param.name, type: param.typeAnnotation?.typeAnnotation };
+  if (param.type === "AssignmentPattern" && param.left.type === "Identifier") {
+    return { name: param.left.name, type: param.left.typeAnnotation?.typeAnnotation };
   }
   return undefined;
+}
+
+function isReadonlyType(type: ESTree.TSType | undefined): boolean {
+  if (type?.type === "TSTypeOperator") return type.operator === "readonly";
+  return (
+    type?.type === "TSTypeReference" &&
+    type.typeName.type === "Identifier" &&
+    READONLY_NAMES.has(type.typeName.name)
+  );
+}
+
+function declaredFunctions(program: ESTree.Program): Map<string, readonly ESTree.ParamPattern[]> {
+  const found = new Map<string, readonly ESTree.ParamPattern[]>();
+  for (const statement of program.body) {
+    const declaration =
+      statement.type === "ExportNamedDeclaration" || statement.type === "ExportDefaultDeclaration"
+        ? statement.declaration
+        : statement;
+    if (declaration?.type === "FunctionDeclaration" && declaration.id !== null) {
+      found.set(declaration.id.name, declaration.params);
+    }
+  }
+  return found;
+}
+
+function isPassThrough(parent: ESTree.Node | null, child: ESTree.Node): parent is ESTree.Node {
+  if (parent === null) return false;
+  if (parent.type === "ConditionalExpression") return parent.test !== child;
+  return (
+    parent.type === "LogicalExpression" ||
+    parent.type === "TSAsExpression" ||
+    parent.type === "TSSatisfiesExpression" ||
+    parent.type === "TSNonNullExpression"
+  );
+}
+
+function valuePosition(node: ESTree.Node): ESTree.Node {
+  let current = node;
+  while (isPassThrough(current.parent, current)) current = current.parent;
+  return current;
 }
 
 function watch(params: readonly ESTree.ParamPattern[]): Watched[] {
@@ -72,6 +113,7 @@ const rule: CreateRule = {
   },
   create(context) {
     const stack: Frame[] = [];
+    let functions = new Map<string, readonly ESTree.ParamPattern[]>();
 
     const mark = (name: string, method: string | undefined): void => {
       for (let index = stack.length - 1; index >= 0; index--) {
@@ -109,6 +151,28 @@ const rule: CreateRule = {
       mark(object.name, property.name);
     };
 
+    const passedReadonly = (site: ESTree.CallExpression | ESTree.NewExpression, argument: ESTree.Node): boolean => {
+      if (site.callee.type !== "Identifier") return false;
+      const params = functions.get(site.callee.name);
+      const index = site.arguments.findIndex((one) => one === argument);
+      const param = params?.[index];
+      return param !== undefined && isReadonlyType(namedOf(param)?.type);
+    };
+
+    const escapes = (node: ESTree.Node): boolean => {
+      const value = valuePosition(node);
+      const { parent } = value;
+      if (parent === null) return false;
+      if (parent.type === "CallExpression" || parent.type === "NewExpression") {
+        return parent.callee !== value && !passedReadonly(parent, value);
+      }
+      if (parent.type === "VariableDeclarator") return parent.init === value;
+      if (parent.type === "AssignmentExpression") return parent.right === value;
+      if (parent.type === "Property") return parent.value === value;
+      if (parent.type === "ArrowFunctionExpression") return parent.body === value;
+      return parent.type === "ArrayExpression" || parent.type === "ReturnStatement";
+    };
+
     const written = (target: ESTree.AssignmentTarget | ESTree.SimpleAssignmentTarget): void => {
       if (target.type !== "MemberExpression") return;
       if (target.object.type !== "Identifier") return;
@@ -116,6 +180,12 @@ const rule: CreateRule = {
     };
 
     return {
+      Program: (node) => {
+        functions = declaredFunctions(node);
+      },
+      Identifier: (node) => {
+        if (escapes(node)) mark(node.name, undefined);
+      },
       FunctionDeclaration: enter,
       FunctionExpression: enter,
       ArrowFunctionExpression: enter,

@@ -11,6 +11,7 @@ var ARRAY_METHODS = new Set([
   "copyWithin"
 ]);
 var COLLECTION_METHODS = new Set(["set", "delete", "clear", "add"]);
+var READONLY_NAMES = new Set(["ReadonlyArray", "ReadonlyMap", "ReadonlySet"]);
 function isArrayType(type) {
   if (type === undefined)
     return false;
@@ -22,13 +23,40 @@ function isMapOrSet(type) {
   return type?.type === "TSTypeReference" && type.typeName.type === "Identifier" && (type.typeName.name === "Map" || type.typeName.name === "Set");
 }
 function namedOf(param) {
-  const target = param.type === "TSParameterProperty" ? param.parameter : param;
-  if (target.type === "Identifier")
-    return { name: target.name, type: target.typeAnnotation?.typeAnnotation };
-  if (target.type === "AssignmentPattern" && target.left.type === "Identifier") {
-    return { name: target.left.name, type: target.left.typeAnnotation?.typeAnnotation };
+  if (param.type === "Identifier")
+    return { name: param.name, type: param.typeAnnotation?.typeAnnotation };
+  if (param.type === "AssignmentPattern" && param.left.type === "Identifier") {
+    return { name: param.left.name, type: param.left.typeAnnotation?.typeAnnotation };
   }
   return;
+}
+function isReadonlyType(type) {
+  if (type?.type === "TSTypeOperator")
+    return type.operator === "readonly";
+  return type?.type === "TSTypeReference" && type.typeName.type === "Identifier" && READONLY_NAMES.has(type.typeName.name);
+}
+function declaredFunctions(program) {
+  const found = new Map;
+  for (const statement of program.body) {
+    const declaration = statement.type === "ExportNamedDeclaration" || statement.type === "ExportDefaultDeclaration" ? statement.declaration : statement;
+    if (declaration?.type === "FunctionDeclaration" && declaration.id !== null) {
+      found.set(declaration.id.name, declaration.params);
+    }
+  }
+  return found;
+}
+function isPassThrough(parent, child) {
+  if (parent === null)
+    return false;
+  if (parent.type === "ConditionalExpression")
+    return parent.test !== child;
+  return parent.type === "LogicalExpression" || parent.type === "TSAsExpression" || parent.type === "TSSatisfiesExpression" || parent.type === "TSNonNullExpression";
+}
+function valuePosition(node) {
+  let current = node;
+  while (isPassThrough(current.parent, current))
+    current = current.parent;
+  return current;
 }
 function watch(params) {
   const found = [];
@@ -53,6 +81,7 @@ var rule = {
   },
   create(context) {
     const stack = [];
+    let functions = new Map;
     const mark = (name, method) => {
       for (let index = stack.length - 1;index >= 0; index--) {
         const frame = stack[index];
@@ -92,6 +121,32 @@ var rule = {
         return;
       mark(object.name, property.name);
     };
+    const passedReadonly = (site, argument) => {
+      if (site.callee.type !== "Identifier")
+        return false;
+      const params = functions.get(site.callee.name);
+      const index = site.arguments.findIndex((one) => one === argument);
+      const param = params?.[index];
+      return param !== undefined && isReadonlyType(namedOf(param)?.type);
+    };
+    const escapes = (node) => {
+      const value = valuePosition(node);
+      const { parent } = value;
+      if (parent === null)
+        return false;
+      if (parent.type === "CallExpression" || parent.type === "NewExpression") {
+        return parent.callee !== value && !passedReadonly(parent, value);
+      }
+      if (parent.type === "VariableDeclarator")
+        return parent.init === value;
+      if (parent.type === "AssignmentExpression")
+        return parent.right === value;
+      if (parent.type === "Property")
+        return parent.value === value;
+      if (parent.type === "ArrowFunctionExpression")
+        return parent.body === value;
+      return parent.type === "ArrayExpression" || parent.type === "ReturnStatement";
+    };
     const written = (target) => {
       if (target.type !== "MemberExpression")
         return;
@@ -100,6 +155,13 @@ var rule = {
       mark(target.object.name, undefined);
     };
     return {
+      Program: (node) => {
+        functions = declaredFunctions(node);
+      },
+      Identifier: (node) => {
+        if (escapes(node))
+          mark(node.name, undefined);
+      },
       FunctionDeclaration: enter,
       FunctionExpression: enter,
       ArrowFunctionExpression: enter,
@@ -119,7 +181,7 @@ var rule = {
 var readonly_collection_param_default = rule;
 
 // src/quality/data-shape/schema-twin.ts
-var STRUCTS = new Set(["Struct", "TaggedStruct", "Class", "TaggedClass", "TaggedError"]);
+var STRUCTS = new Set(["Struct", "TaggedStruct", "Class"]);
 var SCHEMA_KINDS = {
   String: "string",
   NonEmptyString: "string",
@@ -246,7 +308,7 @@ function schemaFields(call) {
   return found.length >= 2 ? found : undefined;
 }
 function compatible(left, right) {
-  return left === "wild" || right === "wild" || left === right || left === "literal" && right === "string" || left === "string" && right === "literal";
+  return left === right || left === "literal" && right === "string" || left === "string" && right === "literal";
 }
 function twins(typeFields, schema) {
   return typeFields.length === schema.length && typeFields.every((field) => {
@@ -281,6 +343,8 @@ var rule2 = {
     const shapes = [];
     const schemas = [];
     const collect = (node) => {
+      if (node.parent.type === "TSInterfaceDeclaration" && node.parent.extends.length > 0)
+        return;
       const fields = shapeFields(node);
       if (fields.length >= 2)
         shapes.push({ node, fields });

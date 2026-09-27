@@ -51,8 +51,8 @@ export type MutantChange = {
   readonly location: Location;
   readonly mutatorName: string;
   readonly replacement: string;
-  readonly from: string;
-  readonly to: string;
+  readonly from: MutantStatus;
+  readonly to: MutantStatus;
 };
 
 export type UnmatchedMutant = {
