@@ -14,11 +14,11 @@ Each entry below is a choice in the kit's shape and the constraint that forced i
   `bun pm pack` builds the same tarball the registry serves, which is what the packed-tarball consumer e2e test installs.
 - Each plugin ships compiled under `dist/`, built with `bun build src/<vector>/<name>/index.ts --outdir dist/<name> --target node --format esm`.
   Node refuses to type-strip a `.ts` plugin under `node_modules`, so the `.ts` source would fail to load from an installed package.
-- The source sits under `src/<vector>/`, one directory for each thing the kit judges a repository on: complexity, quality, tests, docs, delivery and dependencies.
+- The source sits under `src/<vector>/`, one directory for each thing the kit judges a repository on: complexity, quality, testing, docs, delivery and dependencies.
   `src/core/` holds what every vector runs on, and `scripts/` holds only the kit's own build, which nothing ships.
   Sorting by what loads a file put the two oxlint plugins at the root and every bin in one flat `scripts/`, so the files for one purpose sat in several places and nothing said which gate a helper served.
   A mutation runner's default scope covers `src/`, so the kit's own Stryker run mutates its source without a `mutate` list.
-  The tests vector lives in `src/testing/`, since a `src/tests/` beside the root `tests/` would read as a second suite.
+  The testing vector and its directory are named testing rather than tests, since a `src/tests/` beside the root `tests/` would read as a second suite.
   `exports` keeps each `./scripts/` key a consumer imports, pointed at the file's new home, so an import specifier resolves as before while a path read without resolution does not.
 - The size rules are plain oxlint rules at `error` in `.oxlintrc.json`, and `bun run lint` enforces them on the whole tree.
   A repository records its existing violations with `oxlint --suppress-all`, and `checks-suppressions-ratchet` refuses any count that rises.

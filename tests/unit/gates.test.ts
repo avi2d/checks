@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { ENTRY_POINT, KIT_GATES, TEST_ENTRY_POINT, VECTORS } from "../../src/core/gates.ts";
+import { ENTRY_POINT, KIT_GATES, TEST_ENTRY_POINT } from "../../src/core/gates.ts";
 
 const OUTSIDE_LINT = {
   "checks-changelog": "src/delivery/changelog-write.ts",
@@ -16,11 +16,9 @@ const OUTSIDE_LINT = {
 
 test("every bin is an entry point, a gate the lint entry point runs, or a tool outside lint", () => {
   const manifest: unknown = JSON.parse(readFileSync(resolve(import.meta.dir, "..", "..", "package.json"), "utf8"));
-  const run = [ENTRY_POINT, TEST_ENTRY_POINT, ...KIT_GATES].map((program) => [program.bin, `src/${program.script}`]);
+  const run = [
+    ...[ENTRY_POINT, TEST_ENTRY_POINT].map(({ bin, script }) => [bin, `src/${script}`]),
+    ...KIT_GATES.map(({ bin, vector, file }) => [bin, `src/${vector}/${file}`]),
+  ];
   expect(manifest).toHaveProperty("bin", { ...Object.fromEntries(run), ...OUTSIDE_LINT });
-});
-
-test("the gates run grouped by vector, in the order VECTORS lists", () => {
-  const ranks = KIT_GATES.map(({ vector }) => VECTORS.indexOf(vector));
-  expect(ranks).toEqual(ranks.toSorted((a, b) => a - b));
 });

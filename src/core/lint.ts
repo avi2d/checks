@@ -151,8 +151,8 @@ function outcomeOf(exitCode: number): Outcome {
 
 const runGate = Effect.fn("runGate")(function* (gate: KitGate, range: Range) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const script = (yield* Path.Path).join(import.meta.dir, "..", gate.script);
-  const program = gate.script.endsWith(".sh") ? "sh" : process.execPath;
+  const script = (yield* Path.Path).join(import.meta.dir, "..", gate.vector, gate.file);
+  const program = gate.file.endsWith(".sh") ? "sh" : process.execPath;
   const args = gate.reads === "range" ? [script, ...range.refs] : [script, ...(gate.args ?? [])];
   const exitCode = yield* spawner
     .exitCode(ChildProcess.make(program, args, { stdin: "ignore", stdout: "inherit", stderr: "inherit" }))
