@@ -340,6 +340,15 @@ test(
 
     const installed = join(dir, "node_modules", "@avi2dg", "checks");
     const manifest = Schema.decodeSync(Manifest)(await readFile(join(CHECKOUT, "package.json"), "utf8"));
+    expect(Object.keys(manifest.exports).toSorted()).toEqual([
+      "./dependency-cruiser.config.js",
+      "./knip-base.json",
+      "./scripts/comment-matchers.ts",
+      "./scripts/prose-matchers.ts",
+      "./scripts/test-skips.ts",
+      "./stryker.preset.js",
+      "./tsconfig.effect.json",
+    ]);
     const targets = Object.values(manifest.exports);
     expect(targets.length).toBeGreaterThan(0);
     for (const target of targets) {
@@ -379,6 +388,19 @@ test(
 );
 
 test(
+  "packed tarball holds no file knip names as unreferenced when every bin and exports target is an entry",
+  async () => {
+    await useConsumer("tarball");
+    const root = join(dir, "node_modules", "@avi2dg", "checks");
+    const knip = join(CHECKOUT, "node_modules", ".bin", "knip");
+    const scanned = await ran($`${knip} --production --include files --no-progress`.cwd(root));
+    expect(scanned.text).not.toContain("Unused files");
+    expect(scanned.exitCode).toBe(0);
+  },
+  180_000,
+);
+
+test(
   "packed-tarball consumer runs every bin by its short name from a package script",
   async () => {
     await useConsumer("tarball", {
@@ -388,7 +410,6 @@ test(
         gate: "checks-comment-gate HEAD",
         ratchet: "checks-suppressions-ratchet HEAD",
         clock: "checks-quarantine-clock HEAD",
-        backtest: "checks-backtest 5",
         compare: "checks-mutation-compare mutation.json mutation.json",
         wiring: "checks-ci-wiring",
         flake: "checks-flake --runs 2",
@@ -428,10 +449,6 @@ test(
     const gate = await runScript("gate");
     expect(gate.text).toContain("carry no refused comment");
     expect(gate.exitCode).toBe(0);
-
-    const backtest = await runScript("backtest");
-    expect(backtest.text).toContain("commits touching code");
-    expect(backtest.exitCode).toBe(0);
 
     const compare = await runScript("compare");
     expect(compare.stdout).toContain("no regression");

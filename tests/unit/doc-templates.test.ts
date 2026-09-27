@@ -34,11 +34,9 @@ test("the template directory holds a template for each kind and nothing else", (
   );
 });
 
-test("each template ships in the package under its own export, where a consuming repository copies it from", () => {
+test("each template ships in the package where a consuming repository copies it from", () => {
   const manifest: unknown = JSON.parse(readFileSync(resolve(CHECKOUT, "package.json"), "utf8"));
-  const exported = Object.fromEntries(KINDS.map((kind) => [`./${templateFile(kind)}`, `./${templateFile(kind)}`]));
   expect(manifest).toHaveProperty("files", expect.arrayContaining([`${TEMPLATE_DIRECTORY}/`]));
-  expect(manifest).toHaveProperty("exports", expect.objectContaining(exported));
 });
 
 test("a template with each placeholder filled in holds to its own kind", () => {
