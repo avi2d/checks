@@ -2,6 +2,19 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.25.0
+
+Released 2026-09-27.
+
+### Breaking changes
+
+- stop shipping checks-backtest and unused exports keys, guard the tarball with Knip [#86](https://github.com/avi2d/checks/pull/86)
+- sort the kit into src/<vector>/ and require tests/<level>/ [#84](https://github.com/avi2d/checks/pull/84)
+
+### Features
+
+- add checks-unused gate that rejects unreferenced TypeScript files via Knip [#85](https://github.com/avi2d/checks/pull/85)
+
 ## 0.24.2
 
 Released 2026-09-27.
