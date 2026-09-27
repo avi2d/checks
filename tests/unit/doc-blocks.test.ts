@@ -18,7 +18,7 @@ test("each committed doc carries the blocks bun run build writes from package.js
 });
 
 const FACTS = {
-  manifest: { name: "@acme/kit", peerDependencies: { zod: "4.0.0", "@acme/peer": "1.2.3" }, devDependencies: { typescript: "7.0.0" }, files: [] },
+  manifest: { name: "@acme/kit", peerDependencies: { zod: "4.0.0", "@acme/peer": "1.2.3" }, files: [] },
   bun: "1.3.0",
   shipped: [],
   sizeScopes: [],
@@ -34,7 +34,7 @@ test("a stale block is rewritten at its marker's indent, peers sorted by name, a
       "   <!-- generated install: bun run build writes it from package.json and scripts/doc-blocks.ts -->",
       "",
       "   ```sh",
-      "   bun add -d @acme/kit @acme/peer@1.2.3 zod@4.0.0 typescript@7.0.0",
+      "   bun add -d @acme/kit @acme/peer@1.2.3 zod@4.0.0",
       "   ```",
       "",
       "   <!-- end generated install -->",
