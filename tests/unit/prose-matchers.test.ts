@@ -80,6 +80,7 @@ describe("each rule goes red on a planted line and green on its rewrite", () => 
 
   test("used to after a form of be and one adverb is habit, not history", () => {
     expect(refusals("It is also used to build bills, and is typically used to ship them.")).toEqual([]);
+    expect(refusals("The key is not used to sign, and is never used to ship.")).toEqual([]);
   });
 });
 

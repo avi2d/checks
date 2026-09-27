@@ -102,7 +102,10 @@ export const vanishedNames = Effect.fn("vanishedNames")(function* (
   const atHead = yield* matchedAt(root, head, names);
   const candidates = names.filter((name) => !atHead.has(name));
   const atBase = yield* matchedAt(root, base, candidates);
-  const gone = candidates.filter((name) => atBase.has(name));
+  const heldAtBase = yield* Effect.forEach(candidates, (name) => (atBase.has(name) ? Effect.succeed(true) : heldAt(root, base, name)), {
+    concurrency: 8,
+  });
+  const gone = candidates.filter((_, index) => heldAtBase[index] === true);
   const confirmed = yield* Effect.forEach(gone, (name) => heldAt(root, head, name), { concurrency: 8 });
   const unheld = gone.filter((_, index) => confirmed[index] === false);
   const dirs = yield* installedDirs(root, manifest.deps);

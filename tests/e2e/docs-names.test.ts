@@ -68,3 +68,26 @@ test(
   },
   120_000,
 );
+
+test(
+  "a name the base held only inside a longer name the doc also names still fails when the range removes both",
+  async () => {
+    const { put, commit, docs } = await repository();
+    await put("package.json", MANIFEST);
+    await put("widget.ts", "export const rule = 'sprocket-rule';\n");
+    await put(GUIDE, `${OPENING}It builds \`sprocket\`.\nIt sets \`sprocket-rule\`.\n`);
+    const base = await commit("a guide names a rule and its prefix");
+    await put("widget.ts", "export const gadget = 1;\n");
+    const head = await commit("drop the rule");
+
+    const refused = await docs(base, head);
+    expect(refused.text).toContain(
+      `  ${GUIDE}:4: names \`sprocket\`, which the range removed from every file outside the docs. Say what holds now, or drop the line`,
+    );
+    expect(refused.text).toContain(
+      `  ${GUIDE}:5: names \`sprocket-rule\`, which the range removed from every file outside the docs. Say what holds now, or drop the line`,
+    );
+    expect(refused.exitCode).toBe(1);
+  },
+  120_000,
+);
