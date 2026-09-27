@@ -30,7 +30,7 @@ It takes none.
 
 | Code | When |
 | --- | --- |
-| 0 | oxlint walks every tracked `.ts` and `.tsx` file, or the repository tracks none, and the program holds both ts-reset rules or the root holds no `tsconfig.json` |
+| 0 | the repository tracks no `.ts` or `.tsx` file, or oxlint walks each one and the program holds both ts-reset rules or the root holds no `tsconfig.json` |
 | 1 | oxlint skips a tracked file, or the program drops a ts-reset rule |
 | 2 | oxlint cannot walk the tree, or tsc cannot list the program after oxlint walks every tracked file, as when either is not on `PATH` or a config does not parse |
 
