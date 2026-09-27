@@ -11,23 +11,25 @@ audience: consumers
 It holds each doc file a change touches to the template for its kind, and lists every other doc file that does not conform yet without failing.
 It holds each line a change adds or edits in a living doc or an agent file to the prose rules, as [The prose rules](#the-prose-rules) says.
 It fails when a living doc names a path, link or command that does not resolve, and the range added it or broke it, as [Paths, links and commands](#paths-links-and-commands) says.
-The package ships one template per kind under `templates/`, and a repository starts a new doc file by copying one:
+The package ships one template per kind under `dist/templates/`, and a repository starts a new doc file by copying one:
 
 ```sh
-cp node_modules/@avi2dg/checks/templates/how-to.md docs/add-a-supplier.md
+cp node_modules/@avi2dg/checks/dist/templates/how-to.md docs/add-a-supplier.md
 ```
+
+A host resolves a template as `@avi2dg/checks/templates/how-to.md`, which keeps pointing at it wherever the package holds the templates.
 
 <!-- generated doc-kinds: bun run build writes it from src/docs/doc-rules.ts, src/docs/doc-templates.ts and scripts/doc-blocks.ts -->
 
 | File | Kind | Template |
 | --- | --- | --- |
-| `README.md` | readme | `templates/readme.md` |
-| `CHANGELOG.md` | changelog | `templates/changelog.md` |
-| `AGENTS.md` | agents | `templates/agents.md` |
-| `CLAUDE.md` | claude | `templates/claude.md` |
-| `CONTRIBUTING.md` | how-to | `templates/how-to.md` |
-| each file in `docs/adr/` but its generated index, `README.md` | adr | `templates/adr.md` |
-| a page with `kind` in front matter | tutorial, how-to, reference or explanation | `templates/<mode>.md` |
+| `README.md` | readme | `dist/templates/readme.md` |
+| `CHANGELOG.md` | changelog | `dist/templates/changelog.md` |
+| `AGENTS.md` | agents | `dist/templates/agents.md` |
+| `CLAUDE.md` | claude | `dist/templates/claude.md` |
+| `CONTRIBUTING.md` | how-to | `dist/templates/how-to.md` |
+| each file in `docs/adr/` but its generated index, `README.md` | adr | `dist/templates/adr.md` |
+| a page with `kind` in front matter | tutorial, how-to, reference or explanation | `dist/templates/<mode>.md` |
 
 <!-- end generated doc-kinds -->
 

@@ -56,9 +56,9 @@
     "src/docs/doc-references.ts",
     "src/docs/doc-snapshot.ts",
     "src/docs/doc-templates.ts",
-    "templates/",
-    "presets/effect.oxlint.json",
-    "presets/effect.language-service.json",
+    "dist/templates/",
+    "src/quality/presets/effect.oxlint.json",
+    "src/quality/presets/effect.language-service.json",
     "oxlintrc.json",
     "stryker.preset.js",
     "tsconfig.effect.json",
@@ -72,6 +72,7 @@
     "./scripts/comment-matchers.ts": "./src/quality/comment-matchers.ts",
     "./scripts/prose-matchers.ts": "./src/docs/prose-matchers.ts",
     "./stryker.preset.js": "./stryker.preset.js",
+    "./templates/*": "./dist/templates/*",
     "./tsconfig.effect.json": "./tsconfig.effect.json"
   },
   "bin": {

@@ -349,18 +349,28 @@ test(
       "./scripts/prose-matchers.ts",
       "./scripts/test-skips.ts",
       "./stryker.preset.js",
+      "./templates/*",
       "./tsconfig.effect.json",
     ]);
     const targets = Object.values(manifest.exports);
     expect(targets.length).toBeGreaterThan(0);
     for (const target of targets) {
-      expect(existsSync(join(installed, target))).toBe(true);
+      if (target.endsWith("/*")) {
+        expect(existsSync(join(installed, target.slice(0, -1).concat("readme.md")))).toBe(true);
+      } else {
+        expect(existsSync(join(installed, target))).toBe(true);
+      }
     }
-    const resolved = Object.entries(manifest.exports).map(([key, target]) => [
-      key,
-      realpathSync(Bun.resolveSync(`${manifest.name}${key.slice(1)}`, dir)) === realpathSync(join(installed, target)),
-    ]);
+    const resolved = Object.entries(manifest.exports).map(([key, target]) => {
+      const specifier = key.endsWith("/*") ? `${manifest.name}${key.slice(1, -1)}readme.md` : `${manifest.name}${key.slice(1)}`;
+      const file = target.endsWith("/*") ? join(installed, target.slice(0, -1).concat("readme.md")) : join(installed, target);
+      return [key, realpathSync(Bun.resolveSync(specifier, dir)) === realpathSync(file)];
+    });
     expect(resolved.filter(([, found]) => !found)).toEqual([]);
+    expect(existsSync(join(installed, "dist", "templates", "readme.md"))).toBe(true);
+    expect(existsSync(join(installed, "src", "quality", "presets", "effect.oxlint.json"))).toBe(true);
+    expect(existsSync(join(installed, "templates"))).toBe(false);
+    expect(existsSync(join(installed, "presets"))).toBe(false);
     expect(existsSync(join(installed, "LICENSE"))).toBe(true);
     expect(existsSync(join(installed, "CHANGELOG.md"))).toBe(true);
     expect(existsSync(join(installed, "knip-base.json"))).toBe(true);

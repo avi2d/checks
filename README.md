@@ -170,13 +170,11 @@ Every path is relative to the installed package, `node_modules/@avi2dg/checks/`.
 | `commitlint.config.js` | the shared commitlint config |
 | `dependency-cruiser.config.js` | the shared dependency-cruiser base |
 | `knip-base.json` | the Knip base a repository's configuration imports |
-| `src/` | every bin, which a package script calls by its `checks-` name, and the modules the bins import |
-| `templates/` | one template per kind of doc file, which a new doc file starts from |
-| `presets/` | the Effect rule blocks a repository copies into its native config |
+| `src/` | every bin, which a package script calls by its `checks-` name, the modules the bins import, and the Effect rule blocks under `src/quality/presets/` |
+| `dist/` | the compiled oxlint plugins and the doc templates, one template per kind of doc file |
 | `oxlintrc.json` | the oxlint base config `.oxlintrc.json` extends |
 | `stryker.preset.js` | the Stryker mutation-testing preset |
 | `tsconfig.effect.json` | the tsconfig fragment with the Effect language-service block |
-| `dist/` | the compiled oxlint plugins, one per purpose |
 
 <!-- end generated shipped -->
 
