@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
-import { checkoutFiles, git, pathsAt, rangeEnds, refArgs } from "../core/git.ts";
+import { checkoutFiles, commitOf, git, pathsAt, rangeEnds, refArgs } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { knipReport, scanTree } from "./knip.ts";
 
@@ -155,11 +155,20 @@ const unusedAt = Effect.fn("unusedAt")(
   Effect.scoped,
 );
 
+// Knip scans the checked-out tree, and a pull request's merge checkout holds the base branch tip beside the range head.
+const judgedBase = Effect.fn("judgedBase")(function* (first: string, second: string | undefined, root: string) {
+  const { base } = yield* rangeEnds(first, second, root);
+  if (second === undefined) return base;
+  const head = yield* commitOf(second, root);
+  const parents = (yield* git(["rev-parse", "HEAD^@"], root)).split("\n").filter((line) => line !== "");
+  const [other, ...rest] = parents.filter((parent) => parent !== head);
+  return parents.includes(head) && other !== undefined && rest.length === 0 ? other : base;
+});
+
 const check = Effect.fn("check")(function* (first: string, second: string | undefined) {
   const { root, reported } = yield* scan;
   if (reported.kind === "unconfigured") return false;
-  // Knip scans the checked-out tree, which a pull request's merge checkout makes differ from the range head.
-  const { base: baseRev } = yield* rangeEnds(first, second === undefined ? undefined : "HEAD", root);
+  const baseRev = yield* judgedBase(first, second, root);
   const base = yield* baselineAt(baseRev, root);
   const head = yield* baselineInTree(root);
   const unusedAtBase = outside(head, base).length === 0 ? [] : yield* unusedAt(baseRev, root);

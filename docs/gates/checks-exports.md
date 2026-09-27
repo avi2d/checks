@@ -45,8 +45,9 @@ checks-exports <ref>
 checks-exports --write
 ```
 
-With two arguments the base is where the checked-out commit branched off the base ref, at their merge-base.
-So a pull request's merge checkout is judged against the base branch it merges, and the head ref only names the range.
+With two arguments the base is where the head branched off, at their merge-base.
+When the checked-out commit is a merge of the head ref and one other commit, as a pull request's default checkout is, the base is that other commit instead.
+So under `checks-lint` a pull request's merge checkout is judged against the base branch tip it merges, and a symbol that branch already baselined does not count as added.
 With one the base is that commit's parent, or the empty tree for a repository's first commit, where nothing counts as already unused.
 With `--write` it records every unused export and type Knip reports into `exports-baseline.json`, the way `oxlint --suppress-all` seeds `oxlint-suppressions.json`.
 

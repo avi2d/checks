@@ -1,8 +1,9 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { mkdir, readFile, symlink } from "node:fs/promises";
+import { mkdir, readFile, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { CHECKOUT, fixtureRepos, lintWiring } from "./lib/fixture-repo.ts";
+import { withoutPullRequestEvent } from "../lib/env.ts";
+import { CHECKOUT, fixtureRepos, lintWiring, ran, type Ran } from "./lib/fixture-repo.ts";
 
 const open = fixtureRepos("checks-exports-");
 const GATE = "complexity/exports.ts";
@@ -142,35 +143,75 @@ test(
   120_000,
 );
 
+const LEGACY_A = { file: "legacy.ts", kind: "export", name: "legacyA" };
+const LEGACY_Z = { file: "legacy.ts", kind: "export", name: "legacyZ" };
+
+function baselineLines(entries: readonly object[]): string {
+  return `[\n${entries.map((entry) => `  ${JSON.stringify(entry)}`).join(",\n")}\n]\n`;
+}
+
+async function pullRequestMergeCheckout(pr: Readonly<Record<string, string>>): Promise<Ran> {
+  const { dir, write, commit } = await open({
+    ...lintWiring(),
+    "knip.json": JSON.stringify({ entry: ["index.ts"] }),
+    "index.ts": `import { helper } from "./helper.ts";\nimport { kept } from "./legacy.ts";\nimport { used } from "./used.ts";\n\nexport const index = used + helper + kept;\n`,
+    "used.ts": `export const used = 1;\n`,
+    "helper.ts": `export const helper = 1;\n`,
+    "legacy.ts": `export const kept = 0;\nexport const legacyA = 1;\nexport const legacyZ = 2;\n`,
+    "exports-baseline.json": baselineLines([LEGACY_A, LEGACY_Z]),
+  });
+  await commit("feat: base");
+  await $`git checkout -q -b pr`.cwd(dir);
+  await write(pr);
+  const prHead = await commit("feat: change the pull request");
+
+  await $`git checkout -q main`.cwd(dir);
+  await write({ "helper.ts": `export const helper = 1;\nexport const seeded = 2;\n` });
+  await commit("feat: add an export nothing imports");
+  await write({ "exports-baseline.json": baselineLines([{ file: "helper.ts", kind: "export", name: "seeded" }, LEGACY_A, LEGACY_Z]) });
+  await commit("chore: seed the exports baseline");
+  await $`git update-ref refs/remotes/origin/main main && git checkout -q --detach main`.cwd(dir);
+  await $`git -c user.name=GitHub -c user.email=noreply@github.com merge -q --no-ff --no-gpg-sign -m merge pr`.cwd(dir).quiet();
+
+  const event = join(dir, "event.json");
+  await writeFile(event, JSON.stringify({ pull_request: { number: 7, base: { ref: "main" }, head: { sha: prHead } } }));
+  return ran(
+    $`bun ${join(CHECKOUT, "src", "core", "lint.ts")}`.cwd(dir).env({
+      ...withoutPullRequestEvent(),
+      PATH: `${join(CHECKOUT, "node_modules", ".bin")}:${process.env["PATH"] ?? ""}`,
+      GITHUB_EVENT_NAME: "pull_request",
+      GITHUB_EVENT_PATH: event,
+    }),
+  );
+}
+
 test(
-  "a merge checkout is judged against the base branch it merges, so a symbol the base branch seeded is not added by the pull request",
+  "checks-lint on a pull request merge checkout holds a symbol the base branch seeded that the pull request never touched",
   async () => {
-    const { dir, write, commit, script } = await open(
-      configured({
-        "knip.config.ts": extendingBase(["src/index.ts"]),
-        "src/index.ts": `import { used } from "./used.ts";\n\nexport const index = used;\n`,
-        "src/used.ts": `export const used = 1;\n`,
-      }),
-    );
-    await commit("feat: base");
-    await $`git checkout -q -b pr`.cwd(dir);
-    await write({ "notes.md": "# notes\n" });
-    const prHead = await commit("docs: add notes");
-
-    await $`git checkout -q main`.cwd(dir);
-    await write({ "src/used.ts": `export const used = 1;\nexport const seeded = 2;\n` });
-    await commit("feat: add an export nothing imports");
-    await write({ "exports-baseline.json": JSON.stringify([{ file: "src/used.ts", kind: "export", name: "seeded" }]) });
-    await commit("chore: seed the exports baseline");
-
-    await $`git checkout -q --detach main`.cwd(dir);
-    await $`git -c user.name=Wren -c user.email=wren@example.com merge -q --no-ff --no-edit pr`.cwd(dir);
-
-    const merged = await script(GATE, "main", prHead);
-    expect(merged.text).toBe("exports: 1 unused export(s) in exports-baseline.json, and no new ones\n");
-    expect(merged.exitCode).toBe(0);
+    const green = await pullRequestMergeCheckout({
+      "index.ts": `import { helper } from "./helper.ts";\nimport { kept } from "./legacy.ts";\nimport { used } from "./used.ts";\n\nexport const index = used + helper + kept + 1;\n`,
+    });
+    expect(green.text).toContain("exports: 3 unused export(s) in exports-baseline.json, and no new ones");
+    expect(green.text).toContain("checks-lint: 11 gate(s) pass");
+    expect(green.exitCode).toBe(0);
   },
-  120_000,
+  180_000,
+);
+
+test(
+  "checks-lint on a pull request merge checkout refuses a dead export the pull request adds with its entry",
+  async () => {
+    const red = await pullRequestMergeCheckout({
+      "used.ts": `export const used = 1;\nexport const fresh = 3;\n`,
+      "exports-baseline.json": baselineLines([LEGACY_A, { file: "used.ts", kind: "export", name: "fresh" }, LEGACY_Z]),
+    });
+    expect(red.text).toContain(
+      "exports: 1 exports-baseline.json export(s) the range adds that its base did not leave unused, remove the export instead:\n  used.ts: fresh (export)\n",
+    );
+    expect(red.text).toContain("1 of 11 gate(s) failed: checks-exports");
+    expect(red.exitCode).toBe(1);
+  },
+  180_000,
 );
 
 test(
