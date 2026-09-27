@@ -39,33 +39,51 @@ test("baselineOf decodes the committed baseline and fails on what is not one", (
   );
 });
 
-test("driftOf refuses an unused export the baseline does not hold and a baseline entry Knip no longer reports", () => {
+test("driftOf refuses an unused export the head baseline does not hold, an entry its base does not hold, and an entry Knip no longer reports", () => {
   const reported: Baseline = [
     { file: "src/used.ts", kind: "export", name: "unusedExport" },
     { file: "src/used.ts", kind: "type", name: "UnusedOptions" },
+    { file: "src/new.ts", kind: "export", name: "listed" },
   ];
-  const baseline: Baseline = [
+  const base: Baseline = [
     { file: "src/used.ts", kind: "export", name: "unusedExport" },
+    { file: "src/used.ts", kind: "type", name: "UnusedOptions" },
     { file: "src/gone.ts", kind: "export", name: "removed" },
   ];
-  expect(driftOf(reported, baseline)).toEqual({
+  const head: Baseline = [
+    { file: "src/used.ts", kind: "export", name: "unusedExport" },
+    { file: "src/new.ts", kind: "export", name: "listed" },
+    { file: "src/gone.ts", kind: "export", name: "removed" },
+  ];
+  expect(driftOf({ reported, base, head })).toEqual({
     unlisted: [{ file: "src/used.ts", kind: "type", name: "UnusedOptions" }],
+    added: [{ file: "src/new.ts", kind: "export", name: "listed" }],
     stale: [{ file: "src/gone.ts", kind: "export", name: "removed" }],
   });
-  expect(driftOf(reported, reported)).toEqual({ unlisted: [], stale: [] });
+  expect(driftOf({ reported, base: reported, head: reported })).toEqual({ unlisted: [], added: [], stale: [] });
+  expect(driftOf({ reported: [], base, head: [] })).toEqual({ unlisted: [], added: [], stale: [] });
 });
 
 test("report holds a clean scan, counts a held baseline, and lists each drift", () => {
-  expect(report([], { unlisted: [], stale: [] })).toBe("exports: no unused exports or types");
-  expect(report([{ file: "src/used.ts", kind: "export", name: "unusedExport" }], { unlisted: [], stale: [] })).toBe(
+  const none = { unlisted: [], added: [], stale: [] };
+  expect(report([], none)).toBe("exports: no unused exports or types");
+  expect(report([{ file: "src/used.ts", kind: "export", name: "unusedExport" }], none)).toBe(
     "exports: 1 unused export(s) in exports-baseline.json, and no new ones",
   );
   expect(
     report([], {
       unlisted: [{ file: "src/used.ts", kind: "export", name: "unusedExport" }],
+      added: [{ file: "src/new.ts", kind: "export", name: "listed" }],
       stale: [{ file: "src/gone.ts", kind: "type", name: "Removed" }],
     }),
   ).toBe(
-    "exports: 1 unused export(s) not in exports-baseline.json:\n  src/used.ts: unusedExport (export)\nexports: 1 exports-baseline.json export(s) no longer reported, remove them:\n  src/gone.ts: Removed (type)",
+    [
+      "exports: 1 unused export(s) not in exports-baseline.json:",
+      "  src/used.ts: unusedExport (export)",
+      "exports: 1 exports-baseline.json export(s) the range adds, remove the export instead:",
+      "  src/new.ts: listed (export)",
+      "exports: 1 exports-baseline.json export(s) no longer reported, remove them:",
+      "  src/gone.ts: Removed (type)",
+    ].join("\n"),
   );
 });

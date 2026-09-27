@@ -13,15 +13,18 @@ It reads only the exports and types issue types, so an unreferenced file or an u
 It asks Knip for those issue types itself, so a configuration that narrows `include` or excludes them still has its exports judged.
 A configuration that turns the exports or types rules off silences those symbols, so keep both rules on.
 It holds each reported symbol against `exports-baseline.json`, and fails on any symbol the baseline does not hold.
+It fails on any baseline entry the base of the range does not hold, so a new unused export cannot be listed to let it through.
 It fails on any baseline entry Knip no longer reports, so the baseline only shrinks.
 It fails when the repository tracks no TypeScript source, since an empty scan would pass without judging anything.
 It fails when the repository holds no Knip configuration, since Knip's default entries cannot tell a dead export from a public one.
 
 ## What it reads
 
-It reads the working tree, so an uncommitted file is judged like a committed one.
+It runs Knip over the working tree, so an uncommitted file is judged like a committed one.
 It reads the repository's Knip configuration, which names the entries.
 It reads `exports-baseline.json` in the repository root, which holds each accepted unused export as a file, kind and name triple.
+It reads `exports-baseline.json` again at the base of the range, where a commit without the file counts as empty.
+So the commit that first adds a baseline fails with every entry added, as `checks-suppressions-ratchet` does for its own baseline.
 Knip configurations do not extend a package file, so the consumer configuration imports the kit's base and spreads it:
 
 ```ts
@@ -35,15 +38,24 @@ The gate resolves the Knip binary from the installed kit, so a consumer installs
 
 ## Arguments
 
-It takes none.
+```sh
+checks-exports <base-ref> <head-ref>
+checks-exports <ref>
+checks-exports --write
+```
+
+With two arguments it reads the base baseline where the head branched off, at their merge-base.
+With one it reads the base baseline at that commit's parent, or at the empty tree for a repository's first commit.
+With `--write` it records every unused export and type Knip reports into `exports-baseline.json`, the way `oxlint --suppress-all` seeds `oxlint-suppressions.json`.
+A repository seeds its baseline this way when it adopts the gate, and lands that commit knowing the range that adds it fails.
 
 ## Exit codes
 
 | Code | When |
 | --- | --- |
-| 0 | no reported symbol is unlisted and no baseline entry is stale |
-| 1 | a reported symbol is unlisted, a baseline entry is stale or the repository holds no Knip configuration |
-| 2 | the repository tracks no TypeScript source, Knip cannot run, or a report does not parse |
+| 0 | no reported symbol is unlisted, no baseline entry is added or stale, or `--write` recorded the baseline |
+| 1 | a reported symbol is unlisted, a baseline entry is added or stale or the repository holds no Knip configuration |
+| 2 | a ref does not resolve, the repository tracks no TypeScript source, Knip cannot run, or a report or baseline does not parse |
 
 ## Sample output
 
@@ -51,6 +63,13 @@ It takes none.
 exports: 2 unused export(s) not in exports-baseline.json:
   src/used.ts: unusedExport (export)
   src/used.ts: UnusedOptions (type)
+```
+
+A baseline entry the range adds fails even when Knip reports its symbol:
+
+```
+exports: 1 exports-baseline.json export(s) the range adds, remove the export instead:
+  src/used.ts: unusedExport (export)
 ```
 
 A passing run with a held baseline counts what it holds:
@@ -73,4 +92,5 @@ A repository that tracks one names its entries in a Knip configuration.
 ## Related topics
 
 - [checks-lint](checks-lint.md)
+- [checks-suppressions-ratchet](checks-suppressions-ratchet.md)
 - [checks-unused](checks-unused.md)

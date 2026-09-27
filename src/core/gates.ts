@@ -41,6 +41,6 @@ export const KIT_GATES = [
   { bin: "checks-docs", vector: "docs", file: "docs.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-repetition", vector: "complexity", file: "repetition.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE },
   { bin: "checks-unused", vector: "complexity", file: "unused.ts", reads: "tree", appliesTo: TYPESCRIPT_SOURCE },
-  { bin: "checks-exports", vector: "complexity", file: "exports.ts", reads: "tree", appliesTo: TYPESCRIPT_SOURCE },
+  { bin: "checks-exports", vector: "complexity", file: "exports.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE },
   { bin: "checks-quarantine-clock", vector: "testing", file: "quarantine-clock.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
 ] as const satisfies readonly KitGate[];

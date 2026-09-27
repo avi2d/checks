@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { CHECKOUT, fixtureRepos, lintWiring } from "./lib/fixture-repo.ts";
 
 const open = fixtureRepos("checks-exports-");
+const GATE = "complexity/exports.ts";
 
 function configured(files: Readonly<Record<string, string>>): Readonly<Record<string, string>> {
   return {
@@ -25,9 +26,9 @@ test(
         "src/dead.ts": `export const dead = 1;\n`,
       }),
     );
-    await commit("feat: base");
+    const base = await commit("feat: base");
 
-    const red = await script("complexity/exports.ts");
+    const red = await script(GATE, base, "HEAD");
     expect(red.text).toBe(
       "exports: 2 unused export(s) not in exports-baseline.json:\n  src/used.ts: unusedExport (export)\n  src/used.ts: UnusedOptions (type)\n",
     );
@@ -35,7 +36,7 @@ test(
     expect(red.exitCode).toBe(1);
 
     await write({ "src/used.ts": `export const used = 1;\n` });
-    const green = await script("complexity/exports.ts");
+    const green = await script(GATE, base, "HEAD");
     expect(green.text).toBe("exports: no unused exports or types\n");
     expect(green.exitCode).toBe(0);
   },
@@ -57,23 +58,87 @@ test(
         "src/used.ts": `export const used = 1;\nexport const unusedExport = 2;\nexport type UnusedOptions = { readonly flag: boolean };\n`,
       }),
     );
-    await commit("feat: base");
+    const base = await commit("feat: base");
 
-    const passing = await script("complexity/exports.ts");
+    const passing = await script(GATE, base, "HEAD");
     expect(passing.text).toBe("exports: 2 unused export(s) in exports-baseline.json, and no new ones\n");
     expect(passing.exitCode).toBe(0);
 
     await write({ "src/used.ts": `export const used = 1;\n` });
-    const stale = await script("complexity/exports.ts");
+    const stale = await script(GATE, base, "HEAD");
     expect(stale.text).toBe(
       "exports: 2 exports-baseline.json export(s) no longer reported, remove them:\n  src/used.ts: unusedExport (export)\n  src/used.ts: UnusedOptions (type)\n",
     );
     expect(stale.exitCode).toBe(1);
 
     await write({ "exports-baseline.json": "[]\n" });
-    const clean = await script("complexity/exports.ts");
+    const clean = await script(GATE, base, "HEAD");
     expect(clean.text).toBe("exports: no unused exports or types\n");
     expect(clean.exitCode).toBe(0);
+  },
+  120_000,
+);
+
+test(
+  "refuses a baseline entry the range adds together with its unused export, from either end of the range",
+  async () => {
+    const { write, commit, script } = await open(
+      configured({
+        "knip.config.ts": extendingBase(["src/index.ts"]),
+        "exports-baseline.json": "[]\n",
+        "src/index.ts": `import { used } from "./used.ts";\n\nexport const index = used;\n`,
+        "src/used.ts": `export const used = 1;\n`,
+      }),
+    );
+    const base = await commit("feat: base");
+
+    await write({
+      "exports-baseline.json": JSON.stringify([{ file: "src/used.ts", kind: "export", name: "foo" }]),
+      "src/used.ts": `export const used = 1;\nexport const foo = 2;\n`,
+    });
+    const added = await commit("feat: add an unused export and list it");
+
+    const expected = "exports: 1 exports-baseline.json export(s) the range adds, remove the export instead:\n  src/used.ts: foo (export)\n";
+    const range = await script(GATE, base, added);
+    expect(range.text).toBe(expected);
+    expect(range.exitCode).toBe(1);
+    const tip = await script(GATE, added);
+    expect(tip.text).toBe(expected);
+    expect(tip.exitCode).toBe(1);
+  },
+  120_000,
+);
+
+test(
+  "--write seeds the baseline with every reported symbol, which the range adding it refuses and the next range holds",
+  async () => {
+    const { dir, write, commit, script } = await open(
+      configured({
+        "knip.config.ts": extendingBase(["src/index.ts"]),
+        "src/index.ts": `import { used } from "./used.ts";\n\nexport const index = used;\n`,
+        "src/used.ts": `export const used = 1;\nexport const unusedExport = 2;\nexport type UnusedOptions = { readonly flag: boolean };\n`,
+      }),
+    );
+    await commit("feat: base");
+
+    const seeded = await script(GATE, "--write");
+    expect(seeded.text).toBe("exports: wrote 2 unused export(s) to exports-baseline.json\n");
+    expect(seeded.exitCode).toBe(0);
+    expect(JSON.parse(await Bun.file(`${dir}/exports-baseline.json`).text())).toEqual([
+      { file: "src/used.ts", kind: "export", name: "unusedExport" },
+      { file: "src/used.ts", kind: "type", name: "UnusedOptions" },
+    ]);
+    const seeding = await commit("chore: seed the exports baseline");
+
+    const adopted = await script(GATE, seeding);
+    expect(adopted.text).toContain("exports: 2 exports-baseline.json export(s) the range adds");
+    expect(adopted.exitCode).toBe(1);
+
+    await write({ "notes.md": "# notes\n" });
+    await commit("docs: add notes");
+    const held = await script(GATE, seeding, "HEAD");
+    expect(held.text).toBe("exports: 2 unused export(s) in exports-baseline.json, and no new ones\n");
+    expect(held.exitCode).toBe(0);
   },
   120_000,
 );
@@ -83,7 +148,7 @@ test(
   async () => {
     const untracked = await open(configured({ "knip.json": JSON.stringify({ entry: ["index.ts"] }) }));
     await untracked.write({ "index.ts": `export const index = 1;\n` });
-    const empty = await untracked.script("complexity/exports.ts");
+    const empty = await untracked.script(GATE, "HEAD");
     expect(empty.text).toContain("exports: no tracked .ts or .tsx files to scan");
     expect(empty.exitCode).toBe(2);
   },
@@ -96,7 +161,7 @@ test(
     const { commit, script } = await open(configured({ "index.ts": `export const index = 1;\n` }));
     await commit("feat: base");
 
-    const red = await script("complexity/exports.ts");
+    const red = await script(GATE, "HEAD");
     expect(red.text).toContain("exports: no knip configuration names entry files");
     expect(red.exitCode).toBe(1);
   },
@@ -116,7 +181,7 @@ test(
       );
       await commit("feat: base");
 
-      const red = await script("complexity/exports.ts");
+      const red = await script(GATE, "HEAD");
       expect(red.text).toBe("exports: 1 unused export(s) not in exports-baseline.json:\n  used.ts: unusedExport (export)\n");
       expect(red.exitCode).toBe(1);
     }
@@ -136,7 +201,7 @@ test(
     );
     await commit("feat: base");
 
-    const passing = await script("complexity/exports.ts");
+    const passing = await script(GATE, "HEAD");
     expect(passing.text).toBe("exports: no unused exports or types\n");
     expect(passing.exitCode).toBe(0);
   },
@@ -144,7 +209,7 @@ test(
 );
 
 test(
-  "checks-lint runs the gate over the working tree, red on an added unused export and green once it is used",
+  "checks-lint runs the gate over its range, red on an added unused export and green once it is used",
   async () => {
     const { write, commit, lint } = await open({
       ...lintWiring(),
