@@ -84,6 +84,8 @@ test(
     await rm(join(dir, "tsconfig.json"));
     expect(undecided.exitCode).toBe(2);
     expect(undecided.text).toContain("tsc could not list the program tsconfig.json builds");
+    expect(undecided.text).toContain("tsconfig.json(1,9): error TS1005: '}' expected.");
+    expect(undecided.text).not.toContain("lib.es5.d.ts");
 
     expect((await coverage()).exitCode).toBe(0);
   },
