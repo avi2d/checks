@@ -49,9 +49,9 @@ ci-wiring: 1 of 6 gate(s) do not run on pull requests to main:
     no run step invokes it
 ```
 
-## Opting out
+## When it runs
 
-Every repository runs this gate through `checks-lint`.
+`checks-lint` runs it in every repository.
 
 ## Related topics
 

@@ -4,7 +4,7 @@ audience: consumers
 ---
 # The commit message lint
 
-The shared commitlint config holds each pull request title to conventional commits, and a reader looks it up to wire the lint into a repository's CI.
+The shared commitlint config holds each pull request title to the conventional commit format.
 
 ## Config
 

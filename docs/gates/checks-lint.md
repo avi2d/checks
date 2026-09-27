@@ -45,10 +45,10 @@ checks-lint: range 2504acf098d120e73a8ece3c96f22b934f35c6a8..10ba7d8935b73ed7262
 checks-lint: 1 of 9 gate(s) failed: checks-comment-gate
 ```
 
-## Opting out
+## When it runs
 
-A repository runs `checks-lint` in a pull request workflow with the full git history fetched.
-The gate automatically omits TypeScript gates when no TypeScript file is tracked.
+A repository runs it from `bun run lint` in a pull request workflow that fetches the whole git history.
+It leaves out the TypeScript gates while the repository tracks no TypeScript file.
 
 ## Related topics
 

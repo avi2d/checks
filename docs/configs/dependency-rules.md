@@ -4,7 +4,7 @@ audience: consumers
 ---
 # The dependency rules
 
-The shared dependency-cruiser base holds a repository's imports to a set of rules every repository shares, and a reader looks it up to add a boundary of its own.
+The shared dependency-cruiser base holds a repository's imports to a set of rules, and a repository adds its own boundaries on top.
 
 ## Base rules
 

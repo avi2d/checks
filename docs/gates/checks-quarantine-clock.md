@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-quarantine-clock
 
-`checks-quarantine-clock` is the gate that fails a test left in `tests/quarantine/` past 30 days, and a reader looks it up when a quarantined test went red.
+`checks-quarantine-clock` is the gate that fails a test left in `tests/quarantine/` past 30 days.
 
 ## What it checks
 
@@ -45,11 +45,10 @@ quarantine-clock: 1 test(s) in tests/quarantine/ is past 30 days; fix each and m
   tests/quarantine/unit/billing.test.ts entered quarantine on 2026-08-01 (45 days ago)
 ```
 
-## Opting out
+## When it runs
 
-It applies to every repository, so no selection leaves it out.
+`checks-lint` runs it over each pull request's range in every repository, as [checks-lint](checks-lint.md) says.
 A repository with no test file under `tests/quarantine/` passes with nothing checked.
-`checks-lint` runs it over each pull request's range, as [checks-lint](checks-lint.md) says.
 
 ## Related topics
 

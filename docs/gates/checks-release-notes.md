@@ -130,10 +130,10 @@ jobs:
 Cut a release by merging a pull request that holds only the version bump and the built changelog, then tagging the merge commit on the target branch and pushing the tag.
 The workflow refuses a tag that disagrees with `package.json`, so the tag always names the section the notes come from.
 
-## Opting out
+## When it runs
 
-Nothing runs it but the release workflow of a repository that publishes GitHub releases.
-A repository with no versioned releases leaves it out.
+Only the release workflow of a repository that publishes GitHub releases runs it.
+A repository with no versioned releases does not need it.
 
 ## Related topics
 

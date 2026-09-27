@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-comment-gate
 
-`checks-comment-gate` is the gate that refuses a banned comment on a line a change adds, and a reader looks it up to learn which comments it refuses.
+`checks-comment-gate` is the gate that refuses a banned comment on a line a change adds.
 
 ## What it checks
 
@@ -53,10 +53,9 @@ comment-gate: 2 violation(s):
   src/a.ts:2 carries the machine-read directive `eslint-disable-next-line`. Fix what the tool is reporting, or stop running the tool on this file
 ```
 
-## Opting out
+## When it runs
 
-It applies to every repository, so no selection leaves it out.
-`checks-lint` runs it over each pull request's range, as [checks-lint](checks-lint.md) says.
+`checks-lint` runs it over each pull request's range in every repository, as [checks-lint](checks-lint.md) says.
 
 ## Related topics
 

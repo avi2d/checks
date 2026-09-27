@@ -175,7 +175,7 @@ docs: advisory, 1 path(s), link(s) or command(s) the living docs name were broke
   docs/parts.md:9: links to `suppliers.md#prices`, and `docs/suppliers.md` has no heading with that anchor
 ```
 
-## Opting out
+## When it runs
 
 `checks-lint` runs it over each pull request's range in every repository, as [checks-lint](checks-lint.md) says.
 A repository adopts the templates as its files change, and the prose rules as its lines change, because an untouched file or line never fails.

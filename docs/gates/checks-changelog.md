@@ -54,10 +54,10 @@ Run it through the build, as the release workflow in [checks-release-notes](chec
 checks-changelog: wrote 2 release(s) to CHANGELOG.md
 ```
 
-## Opting out
+## When it runs
 
-Nothing runs it but the build of a repository that keeps a changelog.
-A repository with no versioned releases leaves it out.
+Only the build of a repository that keeps a changelog runs it.
+A repository with no versioned releases does not need it.
 
 ## Related topics
 

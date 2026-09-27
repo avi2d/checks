@@ -48,8 +48,9 @@ repetition: 1 file(s) .jscpd.json holds repeat more lines than where the range s
   src/copy.ts: 10 repeated line(s), up from 0
 ```
 
-## Opting out
+## When it runs
 
+`checks-lint` runs it over each pull request's range when the repository tracks a `.ts` or `.tsx` file.
 When the head holds no `.jscpd.json`, the gate reports that no file was measured.
 
 ## Related topics

@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-lint-coverage
 
-`checks-lint-coverage` is the gate that fails when oxlint silently skips a tracked TypeScript file, and a reader looks it up when a file seems never to be linted.
+`checks-lint-coverage` is the gate that fails when oxlint skips a tracked TypeScript file without saying so.
 
 ## What it checks
 
@@ -42,10 +42,9 @@ A passing run counts the files:
 lint-coverage: 71/71 tracked .ts/.tsx files
 ```
 
-## Opting out
+## When it runs
 
-`checks-lint` runs this gate only when the repository tracks `.ts` or `.tsx` files.
-A repository that tracks one keeps it.
+`checks-lint` runs it when the repository tracks a `.ts` or `.tsx` file.
 
 ## Related topics
 
