@@ -41,7 +41,8 @@ To release a version:
    The build writes the version's section into `CHANGELOG.md` from the conventional commits since the last release, so the changelog is never edited by hand.
 1. Commit both as `chore: release <version>` and title the pull request the same.
    The squash merge lands the title as the commit's subject, and a `feat` or `fix` title would add an entry the committed changelog lacks.
-1. Rebase the pull request onto `main` right before it merges, since a commit merged in between belongs to the release and the committed section would lack it.
+1. Merge `main` into the release branch and run `bun run build` again right before it merges, committing what it rewrote, since the build lists a commit merged in after the bump under the release.
+   Never rebase the release branch.
 1. Once it merges, tag that commit on `main` with the version and push the tag, since the version bump commit closes the release:
 
    ```sh

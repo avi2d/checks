@@ -13,6 +13,7 @@ It lists every conventional commit the release closes, grouped as Features, Fixe
 It lists the commits a branch merged in after its bump under that bump, since the squash merge releases them there.
 It leaves out what the branch added past its bump, since the squash merge folds it into the release commit.
 Only a branch carrying its own unlanded bump lists the commits of an unlanded branch it merges, so such a branch takes in only main.
+CI must build the pull request head commit, the `actions/checkout` ref `github.event.pull_request.head.sha`, and not the GitHub merge ref, since the merge ref puts main first and the branch's own bump off the first-parent chain.
 It links each entry to its pull request under the repository address `package.json` names.
 It keeps the date a released section already carries and dates a new section today.
 It writes the whole file newest first, so the changelog is never edited by hand.
