@@ -121,7 +121,7 @@ Each reference a living doc or an agent file names has to resolve at the head co
   Its anchor names a heading in that file, as GitHub derives the anchor, or an explicit `id`.
 - A `bun run` command in code names a script in the nearest `package.json`, a bin in `node_modules/.bin`, or a file that exists.
 - A code span fails when some tracked file outside the docs held that exact text at the base, and none holds it at the head.
-  A span the path check already reports is not reported again.
+  A span the path check already fails on is not reported again.
   A name an installed direct dependency still holds counts as present.
   A span with a space, a placeholder or a leading dash names a command or a flag, and is skipped.
   A span that opens with the repository's own package name and a slash, `node_modules/`, `./` or `~/` reads as the file it names.

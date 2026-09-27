@@ -91,3 +91,23 @@ test(
   },
   120_000,
 );
+
+test(
+  "a name the range removes still fails when the path check lists it only as broken before the range",
+  async () => {
+    const { put, commit, docs } = await repository();
+    await put("package.json", JSON.stringify({ name: "widget", scripts: { legacy: "bun scripts/legacy.ts" } }));
+    await put("scripts/build.ts", "export const build = 1;\n");
+    await put(GUIDE, `${OPENING}It runs \`scripts/legacy.ts\`.\n`);
+    const base = await commit("a guide names a script that is already gone");
+    await put("package.json", JSON.stringify({ name: "widget", scripts: {} }));
+    const head = await commit("drop the script entry");
+
+    const refused = await docs(base, head);
+    expect(refused.text).toContain(
+      `  ${GUIDE}:4: names \`scripts/legacy.ts\`, which the range removed from every file outside the docs. Say what holds now, or drop the line`,
+    );
+    expect(refused.exitCode).toBe(1);
+  },
+  120_000,
+);

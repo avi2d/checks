@@ -75,9 +75,10 @@ const referenceFindings = Effect.fn("referenceFindings")(function* (range: Range
   const elsewhere = found.filter((one) => !onChangedLines(one));
   const before = elsewhere.length === 0 ? new Set<string>() : yield* brokenBeforeRange(range, elsewhere, judging);
   const finding = ({ path, line, message }: Located): Finding => ({ path, line, message });
+  const failed = found.filter((one) => onChangedLines(one) || !before.has(keyOf(one)));
   return {
-    failing: found.filter((one) => onChangedLines(one) || !before.has(keyOf(one))).map(finding),
-    failed: found,
+    failing: failed.map(finding),
+    failed,
     brokenBefore: elsewhere.filter((one) => before.has(keyOf(one))).map(finding),
   };
 });
