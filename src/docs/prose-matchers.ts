@@ -258,6 +258,16 @@ const PROMISES: readonly (readonly [shows: string, pattern: string])[] = [
   ["in a future release", "in a future (?:release|version)"],
 ];
 
+const PAST: readonly (readonly [shows: string, pattern: string])[] = [
+  ["formerly", String.raw`former(?:ly)?`],
+  ["previously", "previously"],
+  ["as before", "as before"],
+  ["used to", String.raw`(?<!\b(?:is|are|was|were|be|been|being|get|gets|got)\s)used to`],
+  ["was replaced", String.raw`(?:was|were|has been|have been) (?:replaced|removed|renamed|dropped|deleted|retired|superseded)`],
+  ["moved from", String.raw`(?:renamed|moved) from`],
+  ["new owner", String.raw`new (?:home|owner)`],
+];
+
 const code = (text: string): string => `\`${text}\``;
 const EVERY_READER: readonly Reader[] = ["people", "agents"];
 const PEOPLE: readonly Reader[] = ["people"];
@@ -286,6 +296,13 @@ const RULES: readonly MatchedRule[] = [
     example: PROMISES.map(([shows]) => code(shows)).join(", "),
     instead: "Say what is true now",
     find: new RegExp(PROMISES.map(([, pattern]) => String.raw`\b${pattern}\b`).join("|"), "gi"),
+  },
+  {
+    readers: EVERY_READER,
+    refuses: "a report about the past",
+    example: PAST.map(([shows]) => code(shows)).join(", "),
+    instead: "Say what is true now, and leave what changed to the changelog, a commit message or a decision record",
+    find: new RegExp(PAST.map(([, pattern]) => String.raw`(?<![\w-])${pattern}(?![\w-])`).join("|"), "gi"),
   },
   {
     readers: PEOPLE,

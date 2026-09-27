@@ -167,7 +167,7 @@ test("an agent file takes the separator rules and no other, and a changelog take
   expect(["AGENTS.md", "CLAUDE.md", "tools/AGENTS.md"].map(readerOf)).toEqual(["agents", "agents", "agents"]);
   expect(["CHANGELOG.md", "docs/adr/0001-a-record.md"].map(readerOf)).toEqual([undefined, undefined]);
   const separators = PROSE_RULES.filter(({ readers }) => readers.includes("agents")).map(({ refuses }) => refuses);
-  expect(separators).toEqual(["an em dash", "an en dash", "a parenthesis other than the plural `(s)`", "a hyphen used as a dash", "a semicolon"]);
+  expect(separators).toEqual(["an em dash", "an en dash", "a parenthesis other than the plural `(s)`", "a hyphen used as a dash", "a semicolon", "a report about the past"]);
 
   const text = "It builds — fast; it ships (twice) - once.\nIt builds. It ships.\nThis page explains it, and support is planned\nand ships.\n";
   expect(proseRefused("AGENTS.md", text).map((refusal) => refusal.split(",")[0])).toEqual([
