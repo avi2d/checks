@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import { collect, git, pathsAt } from "../core/git.ts";
 import type { Unresolved } from "./doc-references.ts";
 import { scanMarkdown } from "./prose-matchers.ts";
@@ -10,7 +10,7 @@ const NOT_ONE_NAME = /\s|<[^>]*>|^-/;
 const HAS_LETTER = /[A-Za-z]/;
 
 // A specifier of this package, or a path into an install, names the file it resolves to.
-export function nameOf(span: string, ownPackage: string | undefined): string | undefined {
+function nameOf(span: string, ownPackage: string | undefined): string | undefined {
   if (span.length < 3 || !HAS_LETTER.test(span) || NOT_ONE_NAME.test(span)) return undefined;
   let name = span
     .replace(/^(["'])(.*)\1$/, "$2")
@@ -20,7 +20,7 @@ export function nameOf(span: string, ownPackage: string | undefined): string | u
   return name.length < 3 ? undefined : name;
 }
 
-export function namesIn(texts: ReadonlyMap<string, string>, ownPackage: string | undefined): readonly { path: string; line: number; name: string }[] {
+function namesIn(texts: ReadonlyMap<string, string>, ownPackage: string | undefined): readonly { path: string; line: number; name: string }[] {
   return [...texts].flatMap(([path, text]) =>
     scanMarkdown(text).flatMap((line) =>
       line.kind === "code" || line.kind === "front-matter"
@@ -36,6 +36,8 @@ export function namesIn(texts: ReadonlyMap<string, string>, ownPackage: string |
 class DepsUnreadable extends Schema.TaggedError<DepsUnreadable>()("DepsUnreadable", {
   message: Schema.String,
 }) {}
+
+const decodeDeps = Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown));
 
 // git grep exits 1 when nothing matches, which is an answer rather than a failure.
 const matchedAt = Effect.fn("matchedAt")(function* (root: string, rev: string, names: readonly string[]) {
@@ -66,12 +68,12 @@ const directDeps = Effect.fn("directDeps")(function* (root: string, head: string
     try: () => JSON.parse(manifest) as unknown,
     catch: () => new DepsUnreadable({ message: "package.json does not parse as JSON" }),
   }).pipe(Effect.catchTag("DepsUnreadable", () => Effect.succeed({})));
-  if (typeof parsed !== "object" || parsed === null) return [];
-  const groups = parsed as Readonly<Record<string, unknown>>;
+  const empty: Record<string, unknown> = {};
+  const fields = Option.getOrElse(decodeDeps(parsed), () => empty);
   return [
     ...new Set(
       ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"].flatMap((key) => {
-        const group = groups[key];
+        const group = fields[key];
         return typeof group === "object" && group !== null ? Object.keys(group) : [];
       }),
     ),
