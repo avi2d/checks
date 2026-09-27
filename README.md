@@ -65,6 +65,14 @@ To consume the kit from a repository:
    cp node_modules/@avi2dg/checks/bunfig.toml bunfig.toml
    ```
 
+1. Name the repository's entry files in `knip.config.ts`, spreading the kit's Knip base:
+
+   ```ts
+   import base from "@avi2dg/checks/knip-base.json";
+
+   export default { ...base, entry: ["src/index.ts", "tests/**/*.test.ts"] };
+   ```
+
 1. Add scripts to `package.json`, replacing the build entry with the repository's own build command:
 
    ```json
@@ -110,6 +118,7 @@ Each gate belongs to the vector it judges a repository on, and the table groups 
 | --- | --- | --- | --- |
 | complexity | [`checks-suppressions-ratchet`](docs/gates/checks-suppressions-ratchet.md) | the range | every repository |
 | complexity | [`checks-repetition`](docs/gates/checks-repetition.md) | the range | a repository tracking `*.ts` or `*.tsx` |
+| complexity | [`checks-unused`](docs/gates/checks-unused.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
 | quality | [`checks-lint-coverage`](docs/gates/checks-lint-coverage.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
 | quality | [`checks-comment-gate`](docs/gates/checks-comment-gate.md) | the range | every repository |
 | testing | [`checks-test-layout`](docs/gates/checks-test-layout.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
@@ -162,6 +171,7 @@ Every path is relative to the installed package, `node_modules/@avi2dg/checks/`.
 | `bunfig.toml` | the bunfig preset a repository copies |
 | `commitlint.config.js` | the shared commitlint config |
 | `dependency-cruiser.config.js` | the shared dependency-cruiser base |
+| `knip-base.json` | the Knip base a repository's configuration imports |
 | `src/` | every bin, which a package script calls by its `checks-` name, and the modules the bins import |
 | `templates/` | one template per kind of doc file, which a new doc file starts from |
 | `presets/` | the Effect rule blocks a repository copies into its native config |

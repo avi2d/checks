@@ -20,6 +20,7 @@
     "bunfig.toml",
     "commitlint.config.js",
     "dependency-cruiser.config.js",
+    "knip-base.json",
     "src/quality/lint-coverage.sh",
     "src/core/main.ts",
     "src/core/git.ts",
@@ -47,6 +48,7 @@
     "src/complexity/suppressions-ratchet.ts",
     "src/quality/backtest.ts",
     "src/complexity/repetition.ts",
+    "src/complexity/unused.ts",
     "src/testing/quarantine-clock.ts",
     "src/docs/docs.ts",
     "src/dependencies/vendor.ts",
@@ -69,6 +71,7 @@
     "./bunfig.toml": "./bunfig.toml",
     "./commitlint.config.js": "./commitlint.config.js",
     "./dependency-cruiser.config.js": "./dependency-cruiser.config.js",
+    "./knip-base.json": "./knip-base.json",
     "./scripts/lint-coverage.sh": "./src/quality/lint-coverage.sh",
     "./scripts/lint.ts": "./src/core/lint.ts",
     "./scripts/changelog.ts": "./src/delivery/changelog.ts",
@@ -90,6 +93,7 @@
     "./scripts/suppressions-ratchet.ts": "./src/complexity/suppressions-ratchet.ts",
     "./scripts/backtest.ts": "./src/quality/backtest.ts",
     "./scripts/repetition.ts": "./src/complexity/repetition.ts",
+    "./scripts/unused.ts": "./src/complexity/unused.ts",
     "./scripts/quarantine-clock.ts": "./src/testing/quarantine-clock.ts",
     "./scripts/docs.ts": "./src/docs/docs.ts",
     "./scripts/vendor.ts": "./src/dependencies/vendor.ts",
@@ -127,6 +131,7 @@
     "checks-suppressions-ratchet": "src/complexity/suppressions-ratchet.ts",
     "checks-backtest": "src/quality/backtest.ts",
     "checks-repetition": "src/complexity/repetition.ts",
+    "checks-unused": "src/complexity/unused.ts",
     "checks-quarantine-clock": "src/testing/quarantine-clock.ts",
     "checks-docs": "src/docs/docs.ts",
     "checks-vendor": "src/dependencies/vendor.ts"
@@ -164,6 +169,7 @@
     "@commitlint/cli": "21.2.3",
     "@commitlint/config-conventional": "21.2.3",
     "@effect/platform-bun": "4.0.0-rc.115",
-    "@effect/platform-node-shared": "4.0.0-rc.115"
+    "@effect/platform-node-shared": "4.0.0-rc.115",
+    "knip": "6.38.0"
   }
 }
