@@ -153,3 +153,22 @@ test(
   },
   120_000,
 );
+
+test(
+  "a commented-out entry and an entry in an HTML block stay green when the range touches another file, and a nested file points with ../",
+  async () => {
+    const { put, commit, docs } = await initRepo();
+    await putParts(put);
+    const hidden = "<!--\n- Write good code.\n-->\n\n<details>\n- Write better code.\n</details>\n\n";
+    await put("AGENTS.md", COMPLIANT.replace("## Parts\n\n", `## Parts\n\n${hidden}`));
+    await put("pkg/AGENTS.md", COMPLIANT.replace("- Edit `src/parts.toml` instead of the generated `src/parts.json`.", "- Edit `../src/parts.toml` first."));
+    const previous = await commit("hidden entries and a nested router");
+    await put("notes.md", "anything\n");
+    const head = await commit("touch only another file");
+
+    const green = await docs(previous, head);
+    expect(green.text).toContain("docs: the 2 agent file(s) hold to the ceiling, and every entry names a tracked path, a link or a command");
+    expect(green.exitCode).toBe(0);
+  },
+  120_000,
+);

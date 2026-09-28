@@ -113,12 +113,11 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   const vanished = yield* vanishedNames(root, base, head, referenced, references.failed);
   const agents = proseDocs.filter(({ path }) => isAgentFile(path));
   const tracked = snapshotOf(yield* pathsAt(head, [], root), new Map(), new Map());
-  const isTracked = (path: string): boolean => tracked.files.has(path) || tracked.directories.has(path);
   const ceilings = agents.flatMap(({ path }) => {
     const ceiling = ceilingFinding(text(path));
     return ceiling === undefined ? [] : [{ path, ...ceiling }];
   });
-  const entries = agents.flatMap(({ path }) => entryFindings(path, text(path), isTracked).map((finding) => ({ path, ...finding })));
+  const entries = agents.flatMap(({ path }) => entryFindings(path, text(path), tracked).map((finding) => ({ path, ...finding })));
   const advisory = new Map<string, number>();
   for (const { path } of templated.filter((finding) => !touched.has(finding.path))) advisory.set(path, (advisory.get(path) ?? 0) + 1);
   return {

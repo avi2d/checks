@@ -151,12 +151,14 @@ A file over 3,000 characters fails.
 Move each part's notes into the people doc that covers that part, and delete what a check or the code already holds.
 Each entry names at least one of these, or it fails:
 
-- A path in inline code that git tracks at the head commit, a file or a directory, from the root or from the file's directory, such as `package.json`, `LICENSE` or `.gitignore`.
-- A Markdown link with a destination.
+- A path in inline code that git tracks at the head commit, a file or a directory, such as `package.json`, `LICENSE` or `.gitignore`.
+  It resolves from the root or from the file's directory, `./` and `../` included, and a path that ends in `/` names a directory.
+- A Markdown link written `[text](target)` with a destination, and not an image.
 - A `bun run` command.
 
 Whether the link or the command resolves is the reference rule's call, as [Paths, links and commands](#paths-links-and-commands) says, and it fails when the range adds or breaks one.
-An entry is any list item outside `## Maintaining this file`, the items above the first section included.
+An entry is any list item a reader sees outside `## Maintaining this file`, the items above the first section included.
+A list item inside an HTML comment or an HTML block is not an entry.
 A fresh file passes the ceiling, and its entries pass once each names the file that holds its detail.
 
 ## What it reads

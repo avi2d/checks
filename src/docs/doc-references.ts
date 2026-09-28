@@ -38,11 +38,11 @@ export function snapshotOf(
   return { files: new Set(files), directories, roots: new Set([...rootsOf(files), ...alsoRoots]), anchors, scripts };
 }
 
-function directoryOf(path: string): string {
+export function directoryOf(path: string): string {
   return path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
 }
 
-function normalize(path: string): string | undefined {
+export function normalize(path: string): string | undefined {
   const parts: string[] = [];
   for (const part of path.split("/")) {
     if (part === "" || part === ".") continue;
