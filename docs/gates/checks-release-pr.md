@@ -169,7 +169,7 @@ Where a status and a check share a name, branch protection requires both, so the
 The call turns the repository setting on:
 
 ```sh
-gh api --method PUT repos/<owner>/<repo>/actions/permissions/workflow -f default_workflow_permissions=read -F can_approve_pull_request_reviews=true
+gh api --method PUT repos/<owner>/<repo>/actions/permissions/workflow -F can_approve_pull_request_reviews=true
 ```
 
 ## Related topics
