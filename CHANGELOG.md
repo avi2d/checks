@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.28.0
+
+Released 2026-09-28.
+
+### Features
+
+- **dependencies:** add checks-advisories gate for advisories a bun.lock change adds [#98](https://github.com/avi2d/checks/pull/98)
+
 ## 0.27.0
 
 Released 2026-09-27.
