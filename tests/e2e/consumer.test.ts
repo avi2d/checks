@@ -1,12 +1,13 @@
 import { $ } from "bun";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { existsSync, realpathSync } from "node:fs";
-import { mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { Schema } from "effect";
 import { withoutPullRequestEvent } from "../lib/env.ts";
 import { CHECKOUT, ran, UNVENDORED_BUNFIG, type Ran } from "./lib/fixture-repo.ts";
+import { installConsumer, manifestFor, resetWorkspace, widgetTest } from "./lib/installed-consumer.ts";
 
 const WIDGET = "export const widget = 42;\n";
 
@@ -29,45 +30,11 @@ type Output = {
 
 type Kind = "file" | "tarball";
 
-// Every dependency and its version are the same across every fixture, so one
-// `bun install` per kind serves every test that uses it.
-const KEPT_ACROSS_TESTS = new Set(["node_modules", "bun.lock"]);
-
 let dir = "";
 let fileDir = "";
 let tarballDir = "";
 let tarballPath = "";
 let packDir = "";
-
-function widgetTest(widget: string): string {
-  return `import { expect, test } from "bun:test";\nimport { widget } from "${widget}";\ntest("widget", () => {\n  expect(widget).toBe(42);\n});\n`;
-}
-
-function manifestFor(checks: string): Record<string, unknown> {
-  return {
-    name: "checks-consumer-fixture",
-    type: "module",
-    devDependencies: {
-      "@avi2dg/checks": checks,
-      effect: "4.0.0-rc.115",
-      oxlint: "1.83.0",
-      "@swc/core": "1.16.2",
-      "@types/bun": "1.4.2",
-    },
-  };
-}
-
-async function installConsumer(installDir: string, checks: string): Promise<void> {
-  await writeFile(join(installDir, "package.json"), JSON.stringify(manifestFor(checks)));
-  await $`bun install`.cwd(installDir).quiet();
-}
-
-async function resetWorkspace(workDir: string): Promise<void> {
-  for (const entry of await readdir(workDir)) {
-    if (KEPT_ACROSS_TESTS.has(entry)) continue;
-    await rm(join(workDir, entry), { recursive: true, force: true });
-  }
-}
 
 beforeAll(async () => {
   fileDir = await mkdtemp(join(tmpdir(), "checks-consumer-file-"));
