@@ -30,6 +30,8 @@ function planted(): Readonly<Record<string, string>> {
       link("https", `panel.home-fixture.net/sub/${hex(16)}`),
       link("ss", `${legacyShadowsocks}#home`),
       link("socks5", `home:${hex(12)}@${HOST}:1080`),
+      link("hysteria", `${HOST}:443?protocol=udp&auth=${hex(12)}&upmbps=100#home`),
+      link("hysteria", `${HOST}:443?protocol=udp&obfsParam=${hex(8)}#home`),
     ].join("\n"),
     "deploy/key": `${armor("BEGIN")}\n${randomBytes(300).toString("base64")}\n${armor("END")}\n`,
     ".env": `GITHUB_TOKEN=${["gh", "p_"].join("")}${alphanumeric(36)}\n`,
@@ -48,6 +50,9 @@ const PLACEHOLDERS: Readonly<Record<string, string>> = {
     link("socks5", "localhost:1080"),
     link("ss", "homevpnserver-fixture.net:8388"),
     link("vmess", `${HOST}:443`),
+    link("hysteria", "vpn.example.com:443?protocol=udp&auth=<password>#home"),
+    link("hysteria", `vpn.example.com:443?protocol=udp&auth=${hex(12)}#home`),
+    link("hysteria", `${HOST}:443?protocol=udp&upmbps=100#home`),
   ].join("\n"),
   "deploy/key": "<ssh-private-key>\n",
   ".env": "GITHUB_TOKEN=<github-token>\n",
@@ -66,7 +71,7 @@ test(
     const head = await repo.commit("feat: plant secrets");
     const failed = await repo.script(GATE, base, head);
     expect(failed.exitCode).toBe(1);
-    expect(failed.text).toContain("secrets: the range adds 15 secret(s)");
+    expect(failed.text).toContain("secrets: the range adds 17 secret(s)");
     for (const place of [
       "vpn/wg0.conf:2 wireguard-key",
       "vpn/wg0.conf:6 wireguard-key",
@@ -81,6 +86,8 @@ test(
       "vpn/links.txt:5 proxy-subscription-url",
       "vpn/links.txt:6 proxy-share-link",
       "vpn/links.txt:7 proxy-share-link",
+      "vpn/links.txt:8 proxy-share-link",
+      "vpn/links.txt:9 proxy-share-link",
       "deploy/key:1 private-key",
       ".env:1 github-pat",
     ]) {

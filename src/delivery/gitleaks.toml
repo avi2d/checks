@@ -14,13 +14,16 @@ keywords = ["private", "preshared", "pre_shared", "pre-shared", "psk"]
 [[rules]]
 id = "proxy-share-link"
 description = "A proxy share link that carries its credential, such as vless://, vmess://, ss:// or trojan://"
-regex = '''(?i)\b(?:(?:vless|ss|trojan|hysteria2?|hy2|tuic|socks5?)://([^\s"'`<>@?#]{8,})@[^\s"'`<>]+|(?:vmess|ssr?)://([A-Za-z0-9+/_-]{16,}={0,2})(?:[^\w+/=@:.-]|$))'''
+regex = '''(?i)\b(?:(?:vless|ss|trojan|hysteria2?|hy2|tuic|socks5?)://([^\s"'`<>@?#]{8,})@[^\s"'`<>]+|(?:vmess|ssr?)://([A-Za-z0-9+/_-]{16,}={0,2})(?:[^\w+/=@:.-]|$)|(?:vless|vmess|ssr?|trojan|hysteria2?|hy2|tuic|socks5?)://[^\s"'`<>@?#]+\?(?:[^\s"'`<>#]*&)?(?:auth|auth_str|obfsParam|obfs-password|password)=([^\s"'`<>&#]{8,}))'''
 keywords = ["vless://", "vmess://", "ss://", "ssr://", "trojan://", "hysteria://", "hysteria2://", "hy2://", "tuic://", "socks://", "socks5://"]
 
 [[rules.allowlists]]
 description = "A link to a reserved example or test host"
 regexTarget = "match"
-regexes = ['''@(?:[\w-]+\.)*(?:example\.(?:com|net|org)|[\w-]+\.(?:example|invalid|test)|localhost)(?:[:/?#]|$)''']
+regexes = [
+  '''@(?:[\w-]+\.)*(?:example\.(?:com|net|org)|[\w-]+\.(?:example|invalid|test)|localhost)(?:[:/?#]|$)''',
+  '''^(?i)[a-z0-9]+://(?:[\w-]+\.)*(?:example\.(?:com|net|org)|[\w-]+\.(?:example|invalid|test)|localhost)(?::\d+)?(?:[/?#]|$)''',
+]
 
 [[rules]]
 id = "proxy-subscription-url"
