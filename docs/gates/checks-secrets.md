@@ -17,8 +17,8 @@ It runs gitleaks' default rules, which know the API keys and tokens of common se
 
 | Rule | What it matches | What passes |
 | --- | --- | --- |
-| `wireguard-key` | a WireGuard or AmneziaWG `PrivateKey` or `PresharedKey` value, 44 base64 characters, written `PrivateKey = <key>`, `"privateKey": "<key>"` or `private_key: <key>` | a placeholder such as `<private-key>` or `${WG_PRIVATE_KEY}` |
-| `proxy-share-link` | a `vless://`, `vmess://`, `ss://`, `ssr://`, `trojan://`, `hysteria://`, `hysteria2://`, `hy2://`, `tuic://`, `socks://` or `socks5://` link with 8 or more characters of credential | a placeholder such as `vless://<uuid>@vpn.example.com:443`, and a link to `example.com`, `example.net`, `example.org`, a host under `.example`, `.invalid` or `.test`, or `localhost` |
+| `wireguard-key` | a WireGuard or AmneziaWG private or pre-shared key value, 44 base64 characters, under a name that ends in `PrivateKey`, `PresharedKey` or `psk`, such as `PrivateKey = <key>`, `"privateKey": "<key>"`, `wg_private_key: <key>` or `client_psk: <key>` | a placeholder such as `<private-key>` or `${WG_PRIVATE_KEY}` |
+| `proxy-share-link` | a `vless://`, `ss://`, `trojan://`, `hysteria://`, `hysteria2://`, `hy2://`, `tuic://`, `socks://` or `socks5://` link with 8 or more characters of credential before an `@`, and a `vmess://`, `ss://` or `ssr://` link whose whole payload is 16 or more base64 characters | a placeholder such as `vless://<uuid>@vpn.example.com:443`, a link with no credential such as `socks5://127.0.0.1:1080`, and a link whose host after the `@` is `example.com`, `example.net`, `example.org`, a host under `.example`, `.invalid` or `.test`, or `localhost` |
 | `proxy-subscription-url` | an `http` or `https` URL whose `sub`, `subs`, `subscribe`, `subscription` or `link` path segment or `token`, `key`, `uuid` or `id` query value carries 16 or more token characters | a URL to one of the example hosts above |
 
 No setting accepts a finding.

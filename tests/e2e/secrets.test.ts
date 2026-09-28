@@ -17,15 +17,19 @@ const HOST = "vpn.home-fixture.net";
 function planted(): Readonly<Record<string, string>> {
   const vmess = Buffer.from(JSON.stringify({ v: "2", add: HOST, port: "443", id: randomUUID(), net: "ws" })).toString("base64");
   const shadowsocks = Buffer.from(`chacha20-ietf-poly1305:${hex(12)}`).toString("base64");
+  const legacyShadowsocks = Buffer.from(`chacha20-ietf-poly1305:${hex(12)}@${HOST}:8388`).toString("base64");
   return {
     "vpn/wg0.conf": `[Interface]\nPrivateKey = ${base64Key()}\n\n[Peer]\nPublicKey = ${base64Key()}\nPresharedKey = ${base64Key()}\n`,
     "vpn/awg0.json": JSON.stringify({ privateKey: base64Key(), jc: 4 }),
+    "vpn/vars.yml": `client_psk: ${base64Key()}\nwireguard_psk: ${base64Key()}\nwg_private_key: ${base64Key()}\n`,
     "vpn/links.txt": [
       link("vless", `${randomUUID()}@${HOST}:443?security=reality#home`),
       link("vmess", vmess),
       link("ss", `${shadowsocks}@${HOST}:8388#home`),
       link("trojan", `${hex(12)}@${HOST}:443#home`),
       link("https", `panel.home-fixture.net/sub/${hex(16)}`),
+      link("ss", `${legacyShadowsocks}#home`),
+      link("socks5", `home:${hex(12)}@${HOST}:1080`),
     ].join("\n"),
     "deploy/key": `${armor("BEGIN")}\n${randomBytes(300).toString("base64")}\n${armor("END")}\n`,
     ".env": `GITHUB_TOKEN=${["gh", "p_"].join("")}${alphanumeric(36)}\n`,
@@ -40,6 +44,10 @@ const PLACEHOLDERS: Readonly<Record<string, string>> = {
     link("vmess", "<base64-config>"),
     link("trojan", `${randomUUID()}@vpn.example.com:443#home`),
     link("https", "panel.example.com/sub/0123456789abcdef0123456789abcdef"),
+    link("socks5", "127.0.0.1:1080"),
+    link("socks5", "localhost:1080"),
+    link("ss", "homevpnserver-fixture.net:8388"),
+    link("vmess", `${HOST}:443`),
   ].join("\n"),
   "deploy/key": "<ssh-private-key>\n",
   ".env": "GITHUB_TOKEN=<github-token>\n",
@@ -58,16 +66,21 @@ test(
     const head = await repo.commit("feat: plant secrets");
     const failed = await repo.script(GATE, base, head);
     expect(failed.exitCode).toBe(1);
-    expect(failed.text).toContain("secrets: the range adds 10 secret(s)");
+    expect(failed.text).toContain("secrets: the range adds 15 secret(s)");
     for (const place of [
       "vpn/wg0.conf:2 wireguard-key",
       "vpn/wg0.conf:6 wireguard-key",
       "vpn/awg0.json:1 wireguard-key",
+      "vpn/vars.yml:1 wireguard-key",
+      "vpn/vars.yml:2 wireguard-key",
+      "vpn/vars.yml:3 wireguard-key",
       "vpn/links.txt:1 proxy-share-link",
       "vpn/links.txt:2 proxy-share-link",
       "vpn/links.txt:3 proxy-share-link",
       "vpn/links.txt:4 proxy-share-link",
       "vpn/links.txt:5 proxy-subscription-url",
+      "vpn/links.txt:6 proxy-share-link",
+      "vpn/links.txt:7 proxy-share-link",
       "deploy/key:1 private-key",
       ".env:1 github-pat",
     ]) {
