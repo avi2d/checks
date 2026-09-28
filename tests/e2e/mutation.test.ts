@@ -31,3 +31,16 @@ test("loading the preset for a scoped run, a CI run or another command lets it t
   expect((await ran($`bun ${PRESET} run`.env({ ...withoutCi, CI: "true" }))).exitCode).toBe(0);
   expect((await ran($`bun ${PRESET} init`.env(withoutCi))).exitCode).toBe(0);
 });
+
+const PLUGIN = join(CHECKOUT, "src", "testing", "mutation-guard-plugin.js");
+const buildGuard = `const { strykerPlugins } = await import(${JSON.stringify(PLUGIN)}); strykerPlugins[0].factory({ incrementalFile: "reports/custom.json" });`;
+
+test("the preset's guard plugin checks the incremental report the resolved options name", async () => {
+  const repo = await open({ "reports/other.json": "{}" });
+  const refused = await ran($`bun -e ${buildGuard} stryker run --incremental`.cwd(repo.dir).env(withoutCi));
+  expect(refused.exitCode).toBe(1);
+  expect(refused.text).toContain("no report at reports/custom.json");
+
+  const withReport = await open({ "reports/custom.json": "{}" });
+  expect((await ran($`bun -e ${buildGuard} stryker run --incremental`.cwd(withReport.dir).env(withoutCi))).exitCode).toBe(0);
+});

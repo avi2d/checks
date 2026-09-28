@@ -2,7 +2,6 @@ import { existsSync } from "node:fs";
 
 const NON_RUNS = ["--help", "-h", "--version"];
 const MUTATE_FLAGS = ["--mutate", "-m"];
-const DEFAULT_INCREMENTAL_FILE = "reports/stryker-incremental.json";
 
 function namesGlob(args) {
   return args.some(
@@ -12,19 +11,17 @@ function namesGlob(args) {
   );
 }
 
-function incrementalFile(args) {
-  const index = args.indexOf("--incrementalFile");
-  if (index !== -1) return args[index + 1] ?? DEFAULT_INCREMENTAL_FILE;
-  const inline = args.find((arg) => arg.startsWith("--incrementalFile="));
-  return inline === undefined ? DEFAULT_INCREMENTAL_FILE : inline.slice("--incrementalFile=".length);
+function allowedAnyway(args, ci) {
+  return ci === "true" || args.some((arg) => NON_RUNS.includes(arg)) || namesGlob(args);
 }
 
-export function fullRunRefusal(args, ci, reportExists = existsSync) {
-  if (ci === "true" || args.some((arg) => NON_RUNS.includes(arg)) || namesGlob(args)) return undefined;
-  if (args.includes("--incremental") && !args.includes("--force")) {
-    const report = incrementalFile(args);
-    if (reportExists(report)) return undefined;
-    return `refusing a full mutation run outside CI: \`--incremental\` finds no report at ${report} to reuse; download the main baseline report from the CI \`mutation-report\` artifact into ${report}, or scope this run with \`--mutate <glob>\``;
-  }
+export function fullRunRefusal(args, ci) {
+  if (allowedAnyway(args, ci) || (args.includes("--incremental") && !args.includes("--force"))) return undefined;
   return "refusing a full mutation run outside CI; start the same run in CI with `gh workflow run mutation`, or scope this run with `--mutate <glob>` or `--incremental`";
+}
+
+// Only the resolved options know the incrementalFile a consumer config sets, so this runs after config load.
+export function missingReportRefusal(args, ci, incrementalFile, reportExists = existsSync) {
+  if (allowedAnyway(args, ci) || reportExists(incrementalFile)) return undefined;
+  return `refusing a full mutation run outside CI: \`--incremental\` finds no report at ${incrementalFile} to reuse; download the main baseline report from the CI \`mutation-report\` artifact into ${incrementalFile}, or scope this run with \`--mutate <glob>\``;
 }

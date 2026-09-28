@@ -14,13 +14,15 @@ A `--mutate` without a glob, `--incrementalFile` alone or `--incremental` with `
 Its refusal names `gh workflow run mutation` as the command that starts the same run in CI.
 A run scoped with `--mutate <glob>`, `--mutate=<glob>` or `-m <glob>` stays allowed locally, because pull request comparisons scope to named files.
 An incremental run stays allowed locally only when its incremental report exists, because it reuses the results of mutants that did not change.
-That report is the path `--incrementalFile` names, else `reports/stryker-incremental.json`.
+That report is the `incrementalFile` Stryker resolves from the command line and the config file, else `reports/stryker-incremental.json`.
 With no report there, the refusal says to download the main baseline report from the CI `mutation-report` artifact into that path, or to pass `--mutate <glob>`.
 `--help`, `-h` and `--version` are not runs, so they pass straight through to Stryker.
 A laptop with `CI=true` set opts in to a full run on purpose, and the refusal lets it through.
 
 The shared Stryker preset makes the same decision from `process.argv` when a `stryker run` loads it.
 So a bare `bunx stryker run` in a repository whose `stryker.conf.mjs` spreads the preset is refused the same way, and `checks-mutation` is a thin wrapper over that decision.
+The preset also registers an ignore plugin that checks the incremental report once Stryker has resolved its options, because a config file can set `incrementalFile` after the preset loads.
+A config that replaces `plugins` or `ignorers` must keep the preset's entries, or that check does not run.
 
 ## What it reads
 
@@ -40,7 +42,7 @@ Every argument after the bin name forwards to `stryker run`.
 | Code | When |
 | --- | --- |
 | 0 | Stryker exited 0 |
-| 1 | Stryker exited nonzero |
+| 1 | Stryker exited nonzero, including an incremental run refused for a missing report |
 | 2 | a full run outside CI was refused, or Stryker could not start |
 
 ## Sample output
@@ -52,6 +54,7 @@ checks-mutation: refusing a full mutation run outside CI; start the same run in 
 ```
 
 A bare `bunx stryker run` fails to load its config with the same refusal as the error and exits 1.
+An `--incremental` run with no report stops before instrumenting with the missing-report refusal as the error and exits 1.
 
 ## When it runs
 
