@@ -29,6 +29,7 @@ Builds are pinned for macOS and Linux, each on x64 and arm64.
 
 It scans offline against OSV-Scanner's npm database in `~/.cache/avi2dg-checks/osv-scanner/db/`.
 When the last refresh is more than 24 hours old, the scan asks for the database again, and OSV-Scanner downloads it only when the copy differs.
+A last refresh dated ahead of the clock counts as no refresh.
 When that download fails, it scans the cached copy and says so, as long as that copy was refreshed within 7 days.
 With no copy refreshed within 7 days it exits 2.
 A cold cache downloads about 55 MB of scanner and 217 MB of database.
