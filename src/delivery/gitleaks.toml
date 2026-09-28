@@ -21,7 +21,7 @@ entropy = 3.0
 
 [[rules.allowlists]]
 description = "A file named for a public key"
-paths = ['''(?i)(?:^|/)[^/]*pub(?:lic)?[^/]*$''']
+paths = ['''(?i)pub(?:lic)?[_.-]?key$''']
 
 [[rules]]
 id = "proxy-userinfo-link"

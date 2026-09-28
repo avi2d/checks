@@ -3,9 +3,10 @@ import { Option } from "effect";
 import { gitleaksBuildFor, type Leak } from "../../src/delivery/gitleaks.ts";
 import { report } from "../../src/delivery/secrets.ts";
 
-const leak = (File: string, StartLine: number, RuleID: string, Commit = "e19e45c2f00dfeed"): Leak => ({
+const leak = (File: string, StartLine: number, RuleID: string, Commit = "e19e45c2f00dfeed", StartColumn = 1): Leak => ({
   File,
   StartLine,
+  StartColumn,
   RuleID,
   Commit,
   Description: `the ${RuleID} rule`,
@@ -33,6 +34,16 @@ test("the report counts a secret gitleaks matches twice on one line, once as wri
   expect(report([twice, twice, leak("vpn/links.txt", 3, "proxy-userinfo-link", "a0b1c2d3e4f5a6b7")]).split("\n")).toEqual([
     "secrets: the range adds 2 secret(s); put a placeholder such as <private-key> in its place in the commit that added it, and rotate any secret that left this machine:",
     "  vpn/links.txt:3 proxy-userinfo-link in a0b1c2d3: the proxy-userinfo-link rule",
+    "  vpn/links.txt:3 proxy-userinfo-link in e19e45c2: the proxy-userinfo-link rule",
+  ]);
+});
+
+test("the report counts two secrets one rule finds at different columns of one line as two", () => {
+  const first = leak("vpn/links.txt", 3, "proxy-userinfo-link", "e19e45c2f00dfeed", 1);
+  const second = leak("vpn/links.txt", 3, "proxy-userinfo-link", "e19e45c2f00dfeed", 46);
+  expect(report([first, second]).split("\n")).toEqual([
+    "secrets: the range adds 2 secret(s); put a placeholder such as <private-key> in its place in the commit that added it, and rotate any secret that left this machine:",
+    "  vpn/links.txt:3 proxy-userinfo-link in e19e45c2: the proxy-userinfo-link rule",
     "  vpn/links.txt:3 proxy-userinfo-link in e19e45c2: the proxy-userinfo-link rule",
   ]);
 });

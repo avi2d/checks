@@ -26,13 +26,14 @@ function byPlace(left: Leak, right: Leak): number {
   return (
     left.File.localeCompare(right.File) ||
     left.StartLine - right.StartLine ||
+    left.StartColumn - right.StartColumn ||
     left.RuleID.localeCompare(right.RuleID) ||
     left.Commit.localeCompare(right.Commit)
   );
 }
 
 function withoutDecodedRepeats(leaks: readonly Leak[]): readonly Leak[] {
-  return [...new Map(leaks.map((leak) => [`${leak.Commit}:${leak.File}:${leak.StartLine}:${leak.RuleID}`, leak])).values()];
+  return [...new Map(leaks.map((leak) => [`${leak.Commit}:${leak.File}:${leak.StartLine}:${leak.StartColumn}:${leak.RuleID}`, leak])).values()];
 }
 
 export function report(leaks: readonly Leak[]): string {

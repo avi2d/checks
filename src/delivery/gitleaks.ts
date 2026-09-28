@@ -58,6 +58,7 @@ const Leak = Schema.Struct({
   Description: Schema.String,
   File: Schema.String,
   StartLine: Schema.Int,
+  StartColumn: Schema.Int,
   Commit: Schema.String,
 });
 
