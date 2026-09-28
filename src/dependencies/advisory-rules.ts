@@ -99,17 +99,27 @@ export type AcknowledgementClock = {
   readonly problems: readonly AcknowledgementProblem[];
 };
 
+type Scope = { readonly kind: "range" } | { readonly kind: "head" };
+
+export type Dates = { readonly head: number; readonly now: number };
+
+// A range reads the head's date so a commit gets one verdict, and --all reads today so an entry expires in an idle repository.
+function measuredFrom(scope: Scope, { head, now }: Dates): number {
+  return scope.kind === "head" ? now : head;
+}
+
 function dayOf(ms: number): string {
   return new Date(ms).toISOString().slice(0, "YYYY-MM-DD".length);
 }
 
-export function clockOf(acknowledgements: readonly Acknowledgement[], headAt: number): AcknowledgementClock {
-  const limit = headAt + ACKNOWLEDGEMENT_DAYS * DAY_MS;
+export function clockOf(acknowledgements: readonly Acknowledgement[], scope: Scope, dates: Dates): AcknowledgementClock {
+  const from = measuredFrom(scope, dates);
+  const limit = from + ACKNOWLEDGEMENT_DAYS * DAY_MS;
   const live: Acknowledgement[] = [];
   const problems: AcknowledgementProblem[] = [];
   for (const acknowledgement of acknowledgements) {
     const until = Date.parse(`${acknowledgement.until}T00:00:00Z`);
-    if (until <= headAt) problems.push({ kind: "expired", acknowledgement });
+    if (until <= from) problems.push({ kind: "expired", acknowledgement });
     else if (until > limit) problems.push({ kind: "too-far", acknowledgement, latest: dayOf(limit) });
     else live.push(acknowledgement);
   }
@@ -141,8 +151,6 @@ export function judge(base: readonly Finding[], head: readonly Finding[], clock:
   };
 }
 
-type Scope = { readonly kind: "range" } | { readonly kind: "head" };
-
 export type Outcome =
   | { readonly kind: "unchanged"; readonly problems: readonly AcknowledgementProblem[] }
   | { readonly kind: "scanned"; readonly scope: Scope; readonly judged: Judged };
@@ -158,7 +166,7 @@ function problemLine(problem: AcknowledgementProblem): string {
     case "expired":
       return `  ${name} ${id} expired on ${until}; upgrade the package, or renew the entry with a new reason`;
     case "too-far":
-      return `  ${name} ${id} runs until ${until}, past the ${ACKNOWLEDGEMENT_DAYS} days after the head that end on ${problem.latest}`;
+      return `  ${name} ${id} runs until ${until}, more than ${ACKNOWLEDGEMENT_DAYS} days out; name a day no later than ${problem.latest}`;
     case "unmatched":
       return `  ${name} ${id} matches nothing in ${LOCKFILE} at the head; delete it`;
   }

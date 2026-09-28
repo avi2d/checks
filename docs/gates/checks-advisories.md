@@ -53,9 +53,10 @@ A cold cache downloads about 55 MB of scanner and 217 MB of database.
 It reads the file at the head of the range.
 Each entry names the package, one id or alias of the advisory, the day the entry stops holding, and why the repository accepts the advisory.
 An entry holds until its `until` day begins in UTC.
-It measures from the later of the head's author and committer dates, so a commit gets the same verdict on every run.
-An entry whose `until` falls more than 30 days after the head fails the run and covers nothing, and no setting raises the limit.
-Once the head is dated past `until`, the entry fails every range until the package is upgraded or the entry is renewed with a new reason, whether or not the range touches `bun.lock`.
+A range measures from the later of the head's author and committer dates, so a commit gets the same verdict on every run.
+`--all` measures from the current time, so an entry expires in a repository that takes no commit.
+An entry whose `until` falls more than 30 days after that moment fails the run and covers nothing, and no setting raises the limit.
+Once that moment passes `until`, the entry fails every run until the package is upgraded or the entry is renewed with a new reason, whether or not the range touches `bun.lock`.
 When a scan runs, an entry that matches no advisory at the head fails, so the file holds only live entries.
 A file that does not decode as that list exits 2.
 
@@ -64,12 +65,12 @@ A file that does not decode as that list exits 2.
 ```sh
 checks-advisories <base-ref> <head-ref>
 checks-advisories <ref>
-checks-advisories --all [<ref>]
+checks-advisories --all
 ```
 
 With two arguments it judges the range from their merge base to the head.
 With one it judges that commit against its parent, or against an empty tree for a repository's first commit.
-With `--all` it fails on every advisory in `bun.lock` at the ref that no entry covers, reading `HEAD` when no ref is given.
+With `--all` it fails on every advisory in `bun.lock` at `HEAD` that no entry covers.
 
 ## Exit codes
 

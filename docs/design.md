@@ -227,11 +227,12 @@ OSV.dev's npm export also holds OpenSSF's reports of malicious packages, which G
 
 The kit pins the scanner by version and by the SHA-256 of each build, because a scanner release is code that runs on every runner.
 Trivy's own advisory GHSA-69fq-xp46-6x23 records a malicious release published with stolen credentials.
-The scan runs offline against a database refreshed once a day, so most runs need no network and two runs on one day read the same advisories.
+The scan runs offline against a database refreshed once a day, so most runs need no network.
 
 The acknowledgement file belongs to the kit rather than to `osv-scanner.toml`.
 OSV-Scanner's `ignoreUntil` accepts any day, such as 2099-01-01, and measures it against the clock of the machine that runs the scan.
-The kit caps each entry at 30 days after the head and measures from the head's dates, as `checks-quarantine-clock` does, so a commit gets the same verdict on every run.
+The kit caps each entry at 30 days and measures a range from the head's dates, as `checks-quarantine-clock` does, so a commit gets the same verdict on every run.
+`--all` measures from the current time instead, because a head's dates never move in a repository that takes no commit, and an entry measured from them would never expire.
 The file is JSON because `Bun.TOML` cannot parse a TOML date.
 
 ## Related topics

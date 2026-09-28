@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { Option } from "effect";
-import { buildFor, refreshPlan, REFRESH_HOURS, USABLE_DAYS, usableWithoutRefresh } from "../../src/dependencies/osv-scanner.ts";
+import { buildFor, refreshAge, refreshPlan, REFRESH_HOURS, USABLE_DAYS, usableWithoutRefresh } from "../../src/dependencies/osv-scanner.ts";
 
 const HOUR = 3_600_000;
 
@@ -21,4 +21,15 @@ test("a database stays usable after a failed refresh only while its last refresh
   expect(usableWithoutRefresh(Option.none())).toBe(false);
   expect(usableWithoutRefresh(Option.some(USABLE_DAYS * 24 * HOUR - 1))).toBe(true);
   expect(usableWithoutRefresh(Option.some(USABLE_DAYS * 24 * HOUR + 1))).toBe(false);
+});
+
+test("a refresh marker dated ahead of the clock or unreadable counts as no refresh, so the scan refreshes", () => {
+  const now = Date.parse("2026-09-28T12:00:00Z");
+  expect(refreshAge(Option.some("2026-09-28T10:00:00.000Z\n"), now)).toEqual(Option.some(2 * HOUR));
+  expect(refreshAge(Option.some("2026-09-28T12:00:00.000Z"), now)).toEqual(Option.some(0));
+  expect(refreshAge(Option.some("2026-09-29T12:00:00.000Z"), now)).toEqual(Option.none());
+  expect(refreshAge(Option.some("yesterday"), now)).toEqual(Option.none());
+  expect(refreshAge(Option.none(), now)).toEqual(Option.none());
+  expect(refreshPlan(refreshAge(Option.some("2027-01-01T00:00:00.000Z"), now))).toBe("refresh");
+  expect(usableWithoutRefresh(refreshAge(Option.some("2027-01-01T00:00:00.000Z"), now))).toBe(false);
 });

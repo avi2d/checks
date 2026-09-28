@@ -10,6 +10,7 @@ audience: consumers
 
 It runs the gates under [What runs](../../README.md#what-runs), each in its own process.
 Gates requiring tracked TypeScript files begin running when the repository tracks TypeScript.
+`checks-advisories` begins running when the repository tracks `bun.lock`.
 All other gates run for every repository.
 
 ## What it reads

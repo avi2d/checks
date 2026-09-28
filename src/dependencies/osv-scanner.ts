@@ -100,12 +100,15 @@ export function usableWithoutRefresh(refreshedAgo: Option.Option<number>): boole
 
 type Database = { readonly dir: string; readonly marker: string };
 
+// An unparsable marker gives NaN and one dated ahead of the clock a negative age, and neither says how old the database is.
+export function refreshAge(recorded: Option.Option<string>, now: number): Option.Option<number> {
+  return Option.filter(Option.map(recorded, (text) => now - Date.parse(text.trim())), (ago) => ago >= 0);
+}
+
 const refreshedAgo = Effect.fn("refreshedAgo")(function* ({ marker }: Database) {
   const fs = yield* FileSystem.FileSystem;
   const recorded = yield* fs.readFileString(marker).pipe(Effect.option);
-  const at = Option.filter(Option.map(recorded, (text) => Date.parse(text.trim())), (ms) => !Number.isNaN(ms));
-  const now = yield* Clock.currentTimeMillis;
-  return Option.map(at, (ms) => now - ms);
+  return refreshAge(recorded, yield* Clock.currentTimeMillis);
 });
 
 const FLAGS: Readonly<Record<RefreshPlan, readonly string[]>> = {

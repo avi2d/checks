@@ -17,6 +17,9 @@ import {
 } from "../../src/dependencies/advisory-rules.ts";
 
 const HEAD_AT = Date.parse("2026-09-27T12:00:00Z");
+const RANGE = { kind: "range" } as const;
+const ALL = { kind: "head" } as const;
+const FRESH = { head: HEAD_AT, now: HEAD_AT };
 
 function recorded(name: string) {
   const text = readFileSync(resolve(import.meta.dir, "..", "fixtures", "advisories", `${name}.json`), "utf8");
@@ -69,7 +72,7 @@ test("advisories found at both ends of a recorded range predate it and fail noth
     "qs@6.15.1 GHSA-x5fp-wj9c-mxmx",
     "smol-toml@1.7.0 GHSA-7w5x-hrqm-74c2",
   ]);
-  expect(judge(base, head, clockOf([], HEAD_AT))).toEqual({ failing: [], acknowledged: 0, predating: 4, problems: [] });
+  expect(judge(base, head, clockOf([], RANGE, FRESH))).toEqual({ failing: [], acknowledged: 0, predating: 4, problems: [] });
 });
 
 test("a malware report carries its aliases and no severity", () => {
@@ -90,7 +93,7 @@ test("an acknowledgement holds until its day begins, and only within 30 days of 
   const lastDay = acknowledgement("minimist", "GHSA-vh95-rmgr-6w4m", "2026-10-27");
   const expired = acknowledgement("lodash", "GHSA-35jh-r3h4-6jhm", "2026-09-27");
   const tooFar = acknowledgement("lodash", "GHSA-29mw-wpgm-hmr9", "2099-01-01");
-  expect(clockOf([live, lastDay, expired, tooFar], HEAD_AT)).toEqual({
+  expect(clockOf([live, lastDay, expired, tooFar], RANGE, FRESH)).toEqual({
     live: [live, lastDay],
     problems: [
       { kind: "expired", acknowledgement: expired },
@@ -99,9 +102,19 @@ test("an acknowledgement holds until its day begins, and only within 30 days of 
   });
 });
 
+test("a range measures an acknowledgement from its head, and --all from today, so an entry expires in an idle repository", () => {
+  const idle = { head: Date.parse("2026-09-01T12:00:00Z"), now: Date.parse("2026-10-01T12:00:00Z") };
+  const lapsed = acknowledgement("qs", "GHSA-4mjr-xmp4-gh2g", "2026-09-20");
+  expect(clockOf([lapsed], RANGE, idle)).toEqual({ live: [lapsed], problems: [] });
+  expect(clockOf([lapsed], ALL, idle)).toEqual({ live: [], problems: [{ kind: "expired", acknowledgement: lapsed }] });
+  const renewed = acknowledgement("qs", "GHSA-4mjr-xmp4-gh2g", "2026-10-31");
+  expect(clockOf([renewed], ALL, idle)).toEqual({ live: [renewed], problems: [] });
+  expect(clockOf([renewed], RANGE, idle)).toEqual({ live: [], problems: [{ kind: "too-far", acknowledgement: renewed, latest: "2026-10-01" }] });
+});
+
 test("an acknowledgement running too far covers nothing, so its advisory still fails", () => {
   const head = [finding("minimist", "GHSA-xvch-5gv4-984h")];
-  const judged = judge([], head, clockOf([acknowledgement("minimist", "GHSA-xvch-5gv4-984h", "2099-01-01")], HEAD_AT));
+  const judged = judge([], head, clockOf([acknowledgement("minimist", "GHSA-xvch-5gv4-984h", "2099-01-01")], RANGE, FRESH));
   expect(judged.failing).toEqual(head);
   expect(judged.acknowledged).toBe(0);
   expect(judged.problems.map(({ kind }) => kind)).toEqual(["too-far"]);
@@ -111,7 +124,7 @@ test("a live acknowledgement covers its package's advisory by any of its ids, an
   const head = [finding("debug", "MAL-2025-46974", ["GHSA-4x49-vf9v-38px"])];
   const covering = acknowledgement("debug", "GHSA-4x49-vf9v-38px", "2026-10-01");
   const stray = acknowledgement("qs", "GHSA-4mjr-xmp4-gh2g", "2026-10-01");
-  const judged = judge([], head, clockOf([covering, stray], HEAD_AT));
+  const judged = judge([], head, clockOf([covering, stray], RANGE, FRESH));
   expect(judged).toEqual({ failing: [], acknowledged: 1, predating: 0, problems: [{ kind: "unmatched", acknowledgement: stray }] });
   expect(passes({ kind: "scanned", scope: { kind: "range" }, judged })).toBe(false);
 });
@@ -129,7 +142,7 @@ test("acknowledgements decode only with a package, an id, a calendar day and a r
 
 test("a range report names each advisory it adds and how to clear it", () => {
   const planted = recorded("planted");
-  const judged = judge([], findingsIn(planted, atHead).filter(({ name }) => name === "minimist"), clockOf([], HEAD_AT));
+  const judged = judge([], findingsIn(planted, atHead).filter(({ name }) => name === "minimist"), clockOf([], RANGE, FRESH));
   expect(report({ kind: "scanned", scope: { kind: "range" }, judged })).toBe(
     [
       "advisories: the range adds 2 advisory(ies) to bun.lock (0 at the head predate the range, 0 acknowledged); upgrade each package, or acknowledge its advisory in advisory-acks.json:",

@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
+import { Clock, Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { changedPaths, commitOf, git, pathsAt, rangeFromArgs, writtenAt } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 import {
@@ -21,7 +21,7 @@ import { scanLockfiles, scannerBinary } from "./osv-scanner.ts";
 
 const NAME = "advisories";
 const ALL = "--all";
-const USAGE = `usage: advisories.ts <ref> | <base-ref> <head-ref> | ${ALL} [<ref>]`;
+const USAGE = `usage: advisories.ts <ref> | <base-ref> <head-ref> | ${ALL}`;
 const SIDES = ["base", "head"] as const;
 
 class AdvisoriesError extends Schema.TaggedError<AdvisoriesError>()("AdvisoriesError", {
@@ -32,9 +32,8 @@ type Request = { readonly kind: "range"; readonly base: string; readonly head: s
 
 const requestOf = Effect.fn("requestOf")(function* (args: readonly string[]) {
   if (args[0] === ALL) {
-    const [, ref = "HEAD", ...extra] = args;
-    if (extra.length > 0) return yield* new Usage({ message: USAGE });
-    return { kind: "head", head: yield* commitOf(ref) } satisfies Request;
+    if (args.length > 1) return yield* new Usage({ message: USAGE });
+    return { kind: "head", head: yield* commitOf("HEAD") } satisfies Request;
   }
   const { base, head } = yield* rangeFromArgs(args, USAGE);
   return { kind: "range", base, head: yield* commitOf(head) } satisfies Request;
@@ -99,7 +98,8 @@ const toStepSummary = Effect.fn("toStepSummary")(function* (text: string) {
 const advisories = Effect.gen(function* () {
   const request = yield* requestOf(process.argv.slice(2));
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
-  const clock = clockOf(yield* acknowledgementsAt(request.head, root), (yield* writtenAt(request.head, root)) * 1000);
+  const dates = { head: (yield* writtenAt(request.head, root)) * 1000, now: yield* Clock.currentTimeMillis };
+  const clock = clockOf(yield* acknowledgementsAt(request.head, root), { kind: request.kind }, dates);
   const outcome = yield* outcomeOf(request, root, clock);
   const text = report(outcome);
   yield* Console.log(text);

@@ -158,13 +158,35 @@ test(
     const refused = await gate(repo, box, base, far);
     expect(refused.exitCode).toBe(1);
     expect(refused.text).toContain("  minimist@0.0.8 GHSA-xvch-5gv4-984h critical: Prototype Pollution in minimist");
-    expect(refused.text).toContain("  minimist GHSA-xvch-5gv4-984h runs until 2099-01-01, past the 30 days after the head");
+    expect(refused.text).toContain(`  minimist GHSA-xvch-5gv4-984h runs until 2099-01-01, more than 30 days out; name a day no later than ${day(now + 30 * DAY)}`);
 
     await repo.write({ "advisory-acks.json": JSON.stringify([{ package: "minimist", id: "GHSA-xvch-5gv4-984h", reason: "no day" }]) });
     const dayless = await commitAt(repo, "chore: acknowledge with no day", now);
     const undecided = await gate(repo, box, base, dayless);
     expect(undecided.exitCode).toBe(2);
     expect(undecided.text).toContain("advisory-acks.json at");
+  },
+  120_000,
+);
+
+test(
+  "--all measures an acknowledgement from today, so it expires on a head that predates its day",
+  async () => {
+    const now = Date.now();
+    const lapsed = day(now - 10 * DAY);
+    const repo = await open({ "bun.lock": lockfile({ minimist: "0.0.8" }) });
+    await repo.write({
+      "advisory-acks.json": JSON.stringify([{ package: "minimist", id: "GHSA-xvch-5gv4-984h", until: lapsed, reason: "mkdirp never parses untrusted argv here" }]),
+    });
+    const head = await commitAt(repo, "chore: lock", now - 40 * DAY);
+    const box = await sandbox();
+
+    expect((await gate(repo, box, head)).exitCode).toBe(0);
+    const all = await gate(repo, box, "--all");
+    expect(all.exitCode).toBe(1);
+    expect(all.text).toContain(`  minimist GHSA-xvch-5gv4-984h expired on ${lapsed}; upgrade the package, or renew the entry with a new reason`);
+    expect(all.text).toContain("  minimist@0.0.8 GHSA-xvch-5gv4-984h critical: Prototype Pollution in minimist");
+    expect((await gate(repo, box, "--all", head)).exitCode).toBe(2);
   },
   120_000,
 );
