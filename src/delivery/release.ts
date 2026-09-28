@@ -56,7 +56,7 @@ export const runBuild = Effect.fn("runBuild")(function* (root: string) {
   if (exitCode !== ChildProcessSpawner.ExitCode(0)) return yield* new BuildFailed({ message: `bun run build exited ${exitCode}` });
 });
 
-const lastTag = Effect.fn("lastTag")(function* (root: string) {
+export const lastTag = Effect.fn("lastTag")(function* (root: string) {
   const described = yield* git(["describe", "--tags", "--abbrev=0", `--match=${RELEASE_TAG}`, "HEAD"], root).pipe(
     Effect.map((tag) => tag.trim()),
     Effect.catchTag("GitFailure", () => Effect.succeed("")),

@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { dispatch, GitHubFailure } from "./github.ts";
-import { releasedVersionOf, releaseTitle, runBuild } from "./release.ts";
+import { lastTag, releasedVersionOf, runBuild } from "./release.ts";
 import { git } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 
@@ -45,8 +45,10 @@ const releaseTag = Effect.gen(function* () {
   yield* runBuild(root);
   const rebuilt = (yield* git(["diff", "--name-only"], root)).trim().split("\n").filter((file) => file !== "");
   if (rebuilt.length > 0) {
+    const since = yield* lastTag(root);
+    const returned = since === undefined ? "the version it held before this release" : since.slice(1);
     return yield* new TagRefused({
-      message: `the build rewrites ${rebuilt.join(", ")} at ${head.slice(0, 12)}, which the release workflow's build check refuses; open a \`${releaseTitle(version)}\` pull request that only rebuilds CHANGELOG.md, merge it, and let daily-release run again on that merge`,
+      message: `the build rewrites ${rebuilt.join(", ")} at ${head.slice(0, 12)}, which the release workflow's build check refuses; open a \`chore: cancel the unpublished ${version}\` pull request that returns ${MANIFEST} to ${returned} and commits what \`bun run build\` then writes to CHANGELOG.md, and the next daily-release run cuts the release again with every change since ${since ?? "the first commit"}`,
     });
   }
   yield* git(["push", "--quiet", "origin", `${head}:refs/tags/${tag}`], root);

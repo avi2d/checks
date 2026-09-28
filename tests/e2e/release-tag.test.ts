@@ -82,7 +82,7 @@ test(
 );
 
 test(
-  "a release that merged behind main is refused before it is tagged, and the refusal names the pull request that rebuilds its changelog",
+  "a release that merged behind main is refused before it is tagged, and returning its version cancels it so the next release holds every change since the last tag",
   async () => {
     const repo = await repository({ "package.json": manifest("0.1.0") });
     const land = async (subject: string, files: Readonly<Record<string, string>>): Promise<string> => {
@@ -92,6 +92,7 @@ test(
     await land("feat: build a bill (#1)", { "notes/1.txt": "bill\n" });
     await $`bun ${CHANGELOG}`.cwd(repo.dir).quiet();
     await land("docs: write the changelog (#2)", {});
+    await $`git tag v0.1.0`.cwd(repo.dir).quiet();
     await land("feat: price a bill (#3)", { "notes/3.txt": "price\n" });
     await repo.write({ "package.json": manifest("0.2.0") });
     await $`bun ${CHANGELOG}`.cwd(repo.dir).quiet();
@@ -103,10 +104,36 @@ test(
     const refused = await main.run(["release.yml"]);
     expect(refused.exitCode).toBe(2);
     expect(refused.text).toContain(
-      `checks-release-tag: the build rewrites CHANGELOG.md at ${main.head.slice(0, 12)}, which the release workflow's build check refuses; open a \`chore: release 0.2.0\` pull request that only rebuilds CHANGELOG.md, merge it, and let daily-release run again on that merge`,
+      `checks-release-tag: the build rewrites CHANGELOG.md at ${main.head.slice(0, 12)}, which the release workflow's build check refuses; open a \`chore: cancel the unpublished 0.2.0\` pull request that returns package.json to 0.1.0 and commits what \`bun run build\` then writes to CHANGELOG.md, and the next daily-release run cuts the release again with every change since v0.1.0`,
     );
     expect(await main.inOrigin("tag", "--list")).toBe("");
     expect((await main.state()).calls).toEqual([]);
+
+    await land("fix(parts): keep the parts after a refund (#6)", { "notes/6.txt": "refund\n" });
+    await repo.write({ "package.json": manifest("0.1.0") });
+    await $`bun ${CHANGELOG}`.cwd(repo.dir).quiet();
+    await land("chore: cancel the unpublished 0.2.0 (#7)", {});
+    expect(await readFile(join(repo.dir, "CHANGELOG.md"), "utf8")).not.toContain("## 0.2.0");
+    await $`bun ${CHANGELOG}`.cwd(repo.dir).quiet();
+    expect((await $`git status --porcelain`.cwd(repo.dir).quiet()).stdout.toString()).toBe("");
+
+    const pending = await repo.script("delivery/release-report.ts");
+    expect(pending).toEqual({
+      exitCode: 1,
+      text: [
+        "release-report: 3 unreleased change(s) since v0.1.0:",
+        "  fix(parts): keep the parts after a refund (#6)",
+        "  fix(parts): keep the order of parts (#4)",
+        "  feat: price a bill (#3)",
+        "",
+      ].join("\n"),
+    });
+
+    await repo.write({ "package.json": manifest("0.2.0") });
+    await $`bun ${CHANGELOG}`.cwd(repo.dir).quiet();
+    const recut = await readFile(join(repo.dir, "CHANGELOG.md"), "utf8");
+    const recutSection = recut.slice(recut.indexOf("## 0.2.0"), recut.indexOf("## 0.1.0"));
+    for (const pull of ["#3", "#4", "#6"]) expect(recutSection).toContain(`[${pull}]`);
   },
   60_000,
 );

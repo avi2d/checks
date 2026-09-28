@@ -18,7 +18,8 @@ A rerun then finds the tag and does nothing, so that command is what dispatches 
 It refuses when `v<version>` already tags another commit.
 Before it pushes the tag, it runs `bun run build` and refuses when the build rewrites a committed file.
 That happens when a release pull request merged behind `main`, so its `CHANGELOG.md` lacks the commits `main` gained.
-The refusal says to open a `chore: release <version>` pull request that only rebuilds `CHANGELOG.md` and merge it, and `daily-release` runs again on that merge.
+The refusal says to open a `chore: cancel the unpublished <version>` pull request that returns `package.json` to the last tag's version and commits what `bun run build` then writes to `CHANGELOG.md`.
+The build reads the returned version as a revert, so it drops the unpublished section, and the next `daily-release` run cuts the release again with every change since the last tag.
 
 ## What it reads
 
