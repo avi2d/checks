@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.31.0
+
+Released 2026-09-28.
+
+### Features
+
+- lint .astro files in lint coverage, unused and a thin-frontmatter rule [#108](https://github.com/avi2d/checks/pull/108)
+
 ## 0.30.0
 
 Released 2026-09-28.
