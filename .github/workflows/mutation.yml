@@ -112,7 +112,7 @@ jobs:
           scope=""
           while IFS= read -r file; do
             case "$file" in
-              src/*.ts) scope="$scope,$file";;
+              src/*.ts|src/*.js) scope="$scope,$file";;
             esac
           done <<EOF
           $(git diff --name-only --diff-filter=ACMRT "$base...HEAD")
