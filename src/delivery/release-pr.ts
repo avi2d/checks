@@ -14,9 +14,13 @@ type Staged =
   | { readonly kind: "written"; readonly path: string; readonly mode: string }
   | { readonly kind: "deleted"; readonly path: string; readonly mode: string };
 
+type Read =
+  | { readonly kind: "written"; readonly path: string; readonly mode: string; readonly content: string }
+  | { readonly kind: "deleted"; readonly path: string; readonly mode: string };
+
 type Built = {
   readonly tree: string;
-  readonly files: readonly { readonly staged: Staged; readonly content: string }[];
+  readonly files: readonly Read[];
 };
 
 type Remote = {
@@ -105,10 +109,10 @@ const runBuild = Effect.fn("runBuild")(function* (root: string) {
 });
 
 const readStaged = Effect.fn("readStaged")(function* (root: string, staged: Staged) {
-  if (staged.kind === "deleted") return { staged, content: "" };
+  if (staged.kind === "deleted") return staged;
   if (!REGULAR_FILE_MODES.has(staged.mode)) return yield* refused(`the build wrote ${staged.path} with mode ${staged.mode}, which is no regular file`);
   const bytes = yield* (yield* FileSystem.FileSystem).readFile((yield* Path.Path).join(root, staged.path));
-  return { staged, content: Encoding.encodeBase64(bytes) };
+  return { ...staged, content: Encoding.encodeBase64(bytes) };
 });
 
 // The build writes into the working tree, so the tree it starts from has to hold nothing a release would sweep in.
@@ -129,10 +133,10 @@ const buildRelease = Effect.fn("buildRelease")(function* (root: string, bumped: 
   }).pipe(Effect.ensuring(restore));
 });
 
-const treeEntry = Effect.fn("treeEntry")(function* ({ staged, content }: Built["files"][number]) {
-  if (staged.kind === "deleted") return { path: staged.path, mode: staged.mode, type: "blob", sha: null };
-  const { sha } = yield* gitHubJson(decodeSha, "POST", `${REPOSITORY}/git/blobs`, { content, encoding: "base64" });
-  return { path: staged.path, mode: staged.mode, type: "blob", sha };
+const treeEntry = Effect.fn("treeEntry")(function* (file: Read) {
+  if (file.kind === "deleted") return { path: file.path, mode: file.mode, type: "blob", sha: null };
+  const { sha } = yield* gitHubJson(decodeSha, "POST", `${REPOSITORY}/git/blobs`, { content: file.content, encoding: "base64" });
+  return { path: file.path, mode: file.mode, type: "blob", sha };
 });
 
 const commitRelease = Effect.fn("commitRelease")(function* (root: string, head: string, built: Built, version: string) {
