@@ -135,6 +135,7 @@ These bins run on their own:
 
 - [`checks-test`](docs/gates/checks-test.md) runs the suite as `scripts.test` and refuses a skip without a reason at its test site.
 - [`checks-flake`](docs/gates/checks-flake.md) runs the suite on a schedule and records the seeds a flaky test fails with.
+- [`checks-mutation`](docs/gates/checks-mutation.md) runs Stryker for scoped checks and refuses a full run outside CI.
 - [`checks-mutation-compare`](docs/gates/checks-mutation-compare.md) holds every mutant in a pull request to no regression.
 - [`checks-subsumed-tests`](docs/gates/checks-subsumed-tests.md) lists each test another test subsumes in a mutation run.
 - [`checks-changelog`](docs/gates/checks-changelog.md) writes the pending release into `CHANGELOG.md` from the conventional commits since the last release.
@@ -174,7 +175,7 @@ Every path is relative to the installed package, `node_modules/@avi2dg/checks/`.
 | `src/` | every bin, which a package script calls by its `checks-` name, the modules the bins import, and the Effect rule blocks under `src/quality/presets/` |
 | `dist/` | the compiled oxlint plugins and the doc templates, one template per kind of doc file |
 | `oxlintrc.json` | the oxlint base config `.oxlintrc.json` extends |
-| `stryker.preset.js` | the Stryker mutation-testing preset |
+| `stryker.preset.js` | the Stryker mutation-testing preset, which refuses a full run outside CI |
 | `tsconfig.effect.json` | the tsconfig fragment with the shared compiler options and the Effect language-service block |
 | `ts-reset.d.ts` | the two ts-reset rules `tsconfig.effect.json` lists in `files` |
 
