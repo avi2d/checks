@@ -6,7 +6,7 @@ import { scanTree } from "./knip.ts";
 export type Scan = { readonly tracked: number; readonly files: readonly string[] };
 
 const NAME = "unused";
-const JUDGED = /\.tsx?$/;
+const JUDGED = /[.]tsx?$|[.]astro$/;
 
 class UnusedError extends Schema.TaggedError<UnusedError>()("UnusedError", {
   message: Schema.String,
@@ -31,7 +31,7 @@ export const filesOf = Effect.fn("filesOf")(function* (stdout: string) {
 });
 
 export function report({ tracked, files }: Scan): string {
-  if (files.length === 0) return `${NAME}: no unreferenced files among ${tracked} tracked .ts/.tsx file(s)`;
+  if (files.length === 0) return `${NAME}: no unreferenced files among ${tracked} tracked .ts/.tsx/.astro file(s)`;
   return [`${NAME}: ${files.length} unreferenced file(s):`, ...files.map((file) => `  ${file}`)].join("\n");
 }
 

@@ -266,6 +266,33 @@ test(
 );
 
 test(
+  "file: consumer goes red on logic in .astro frontmatter, green once only imports, props and markup remain",
+  async () => {
+    await useConsumer("file");
+    await writeFile(join(dir, "load.ts"), `export function load(): string[] {\n  return [];\n}\n`);
+    await writeFile(
+      join(dir, "page.astro"),
+      `---\nimport { load } from "./load.ts";\n\nconst items = await load();\n---\n<html><body>{items.length}</body></html>\n`,
+    );
+
+    const red = await oxlint();
+    expect(red.exitCode).not.toBe(0);
+    expect(red.text).toContain("page.astro");
+    expect(red.text).toContain("readability(thin-astro)");
+
+    await writeFile(join(dir, "render.ts"), `export function render(title: string): string {\n  return title;\n}\n`);
+    await writeFile(
+      join(dir, "page.astro"),
+      `---\nimport { render } from "./render.ts";\n\ninterface Props {\n  title: string;\n}\n\nconst { title } = Astro.props;\n---\n<html><body><h1>{title}</h1>{render(title)}</body></html>\n`,
+    );
+    await rm(join(dir, "load.ts"));
+
+    expect((await oxlint()).exitCode).toBe(0);
+  },
+  180_000,
+);
+
+test(
   "file: consumer lint stays green with a lint-dirty file inside the installed package",
   async () => {
     await useConsumer("file");
@@ -499,7 +526,7 @@ test(
     await commitAll("feat: second");
 
     const lint = await runScript("lint");
-    expect(lint.text).toContain("tracked .ts/.tsx files");
+    expect(lint.text).toContain("tracked .ts/.tsx/.astro files");
     expect(lint.text).toContain("holds the ts-reset rules is-array and json-parse");
     expect(lint.text).toContain("satisfy the layout");
     expect(lint.text).toContain("carry only allowed identities");
@@ -564,7 +591,7 @@ test(
     await $`git add -A`.cwd(dir).quiet();
     const green = await runScript("unused");
     expect(green.exitCode).toBe(0);
-    expect(green.text).toContain("unused: no unreferenced files among 3 tracked .ts/.tsx file(s)");
+    expect(green.text).toContain("unused: no unreferenced files among 3 tracked .ts/.tsx/.astro file(s)");
   },
   180_000,
 );

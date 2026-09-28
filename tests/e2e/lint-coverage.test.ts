@@ -108,6 +108,27 @@ test(
 );
 
 test(
+  "lint-coverage goes red on a gitignored tracked .astro file, green once it is restored",
+  async () => {
+    await writeFile(join(dir, "src", "skipped.astro"), "---\nconst title = \"plant\";\n---\n<html><body><h1>{title}</h1></body></html>\n");
+    await $`git add -A`.cwd(dir).quiet();
+    await writeFile(join(dir, ".gitignore"), "src/skipped.astro\n");
+    const red = await coverage();
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain("skips 1/4");
+    expect(red.text).toContain("src/skipped.astro");
+
+    await writeFile(join(dir, ".gitignore"), "");
+    const green = await coverage();
+    expect(green.exitCode).toBe(0);
+    expect(green.text).toContain("4/4 tracked .ts/.tsx/.astro files");
+
+    await $`rm src/skipped.astro && git add -A`.cwd(dir).quiet();
+  },
+  60_000,
+);
+
+test(
   "lint-coverage goes red on a consumer tsconfig.json that sets both files and include, green on include alone and on neither",
   async () => {
     const tree = await consumerTree({ paths: ["src/**/*.ts"], include: ["src/**/*.ts"], types: [] });

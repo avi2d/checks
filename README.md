@@ -118,9 +118,9 @@ The table groups the gates by vector, the part of a repository each one judges.
 | --- | --- | --- | --- |
 | complexity | [`checks-suppressions-ratchet`](docs/gates/checks-suppressions-ratchet.md) | the range | every repository |
 | complexity | [`checks-repetition`](docs/gates/checks-repetition.md) | the range | a repository tracking `*.ts` or `*.tsx` |
-| complexity | [`checks-unused`](docs/gates/checks-unused.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
+| complexity | [`checks-unused`](docs/gates/checks-unused.md) | the working tree | a repository tracking `*.ts` or `*.tsx` or `*.astro` |
 | complexity | [`checks-exports`](docs/gates/checks-exports.md) | the range | a repository tracking `*.ts` or `*.tsx` |
-| quality | [`checks-lint-coverage`](docs/gates/checks-lint-coverage.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
+| quality | [`checks-lint-coverage`](docs/gates/checks-lint-coverage.md) | the working tree | a repository tracking `*.ts` or `*.tsx` or `*.astro` |
 | quality | [`checks-comment-gate`](docs/gates/checks-comment-gate.md) | the range | every repository |
 | testing | [`checks-test-layout`](docs/gates/checks-test-layout.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
 | testing | [`checks-quarantine-clock`](docs/gates/checks-quarantine-clock.md) | the range | every repository |

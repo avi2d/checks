@@ -16,7 +16,7 @@ const CONFIGS = [
   "knip.config.ts",
 ] as const;
 
-const TYPESCRIPT = ["*.ts", "*.tsx"];
+const TYPESCRIPT = ["*.ts", "*.tsx", "*.astro"];
 
 const hasKnipConfig = Effect.fn("hasKnipConfig")(function* (root: string) {
   const fs = yield* FileSystem.FileSystem;
@@ -61,7 +61,7 @@ export const scanTree = Effect.fn("scanTree")(function* (name: string, args: rea
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line !== "");
-  if (tracked.length === 0) return yield* new KnipError({ message: "no tracked .ts or .tsx files to scan" });
+  if (tracked.length === 0) return yield* new KnipError({ message: "no tracked .ts, .tsx or .astro files to scan" });
   const reported = yield* knipReport(root, args);
   if (reported.kind === "unconfigured") {
     yield* Console.log(`${name}: no knip configuration names entry files, so add one extending the kit's knip-base.json`);

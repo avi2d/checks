@@ -43,6 +43,13 @@ The base loads the kit's `data-shape` plugin from `dist/` with one rule for ever
 - Derive such a type from the schema with `typeof Name.Type` instead of writing both.
 - The twin rule runs on production files only, so a test that declares its own schema as an oracle stays green.
 
+## Astro rules
+
+An override in `oxlintrc.json` turns on one rule of the kit's `readability` plugin in each `.astro` file:
+
+- `readability/thin-astro` refuses a frontmatter statement that is neither an import, a type or interface declaration, nor a variable read from `Astro.props`.
+- Move a refused statement into a `.ts` file and import it, so the `.astro` file holds only imports, props and markup.
+
 ## Rules outside tests
 
 An override in `oxlintrc.json` turns on these type-aware rules in each `.ts` and `.tsx` file outside `tests/`:
