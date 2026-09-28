@@ -38,11 +38,17 @@ const NAME = "docs";
 const USAGE = "usage: docs.ts <ref> | <base-ref> <head-ref>";
 const MARKDOWN = [":(glob)**/*.md"];
 
-function templateFindings(path: string, text: string, placement: Placement, records: readonly string[]): readonly Finding[] {
+function templateFindings(
+  path: string,
+  text: string,
+  placement: Placement,
+  records: readonly string[],
+  texts: ReadonlyMap<string, string>,
+): readonly Finding[] {
   const misplaced = placementProblem(placement);
   if (misplaced !== undefined) return [{ path, line: undefined, message: misplaced }];
   if (placement.type !== "judged") return [];
-  return judge(placement.kind, { path, text }, records).map(({ line, message }) => ({ path, line, message }));
+  return judge(placement.kind, { path, text }, records, texts).map(({ line, message }) => ({ path, line, message }));
 }
 
 function inPathOrder(a: Finding, b: Finding): number {
@@ -98,7 +104,7 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   const text = (path: string): string => texts.get(path) ?? "";
   const judged = present.map((path) => ({ path, placement: placementOf(path, text(path)) })).filter(({ placement }) => placement.type !== "unjudged");
 
-  const templated = judged.flatMap(({ path, placement }) => templateFindings(path, text(path), placement, records));
+  const templated = judged.flatMap(({ path, placement }) => templateFindings(path, text(path), placement, records, texts));
   const edited = proseDocs.filter(({ path }) => changed.has(path));
   const prose = edited.flatMap(({ path, reader }) =>
     proseFindings(text(path), reader, changed.get(path)).map(({ line, message }) => ({ path, line, message })),

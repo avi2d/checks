@@ -78,6 +78,36 @@ test("a record is refused for its name, its number, its date, its status and a n
   expect(found("adr", record.replace("## Decision\n\nA part names its supplier.\n\n", ""))).toEqual(["1: lacks `## Decision`"]);
 });
 
+const SECOND = "docs/adr/0002-a-spare-names-its-supplier.md";
+
+function secondRecord(first: string): string {
+  return first.replace("# 1.", "# 2.").replace("Accepted.", "Accepted. Amends 0001: spares name a supplier too.");
+}
+
+test("a revision link one side only names is refused until both records name each other", () => {
+  const first = fixture("adr");
+  const second = secondRecord(first);
+  const paths = [RECORD, SECOND];
+  const texts = new Map([
+    [RECORD, first],
+    [SECOND, second],
+  ]);
+  expect(judge("adr", { path: SECOND, text: second }, paths, texts).map(({ line, message }) => `${line}: ${message}`)).toEqual([
+    "7: `## Status` names 0001 without 0001 naming 0002 back",
+  ]);
+  expect(judge("adr", { path: RECORD, text: first }, paths, texts).map(({ line, message }) => `${line}: ${message}`)).toEqual([
+    "5: `## Status` is named by 0002 without naming 0002 back",
+  ]);
+
+  const namedBack = first.replace("Accepted.", "Accepted. Amended by 0002: spares name a supplier too.");
+  const paired = new Map([
+    [RECORD, namedBack],
+    [SECOND, second],
+  ]);
+  expect(judge("adr", { path: RECORD, text: namedBack }, paths, paired)).toEqual([]);
+  expect(judge("adr", { path: SECOND, text: second }, paths, paired)).toEqual([]);
+});
+
 test("a changelog is refused for a release out of order, a release without its date and a group it does not know", () => {
   const changelog = fixture("changelog");
   expect(found("changelog", changelog.replace("## 1.0.0", "## 1.2.0"))).toEqual([
