@@ -20,11 +20,35 @@ test("a --mutate without a glob is still a full run", () => {
   expect(fullRunRefusal(["--mutate="], "")).toBeDefined();
 });
 
+const reportPresent = () => true;
+const reportMissing = () => false;
+
 test("only the enabling --incremental flag scopes a run", () => {
-  expect(fullRunRefusal(["--incremental"], "")).toBeUndefined();
+  expect(fullRunRefusal(["--incremental"], "", reportPresent)).toBeUndefined();
   expect(fullRunRefusal(["--incrementalFile", "reports/mutation/incremental.json"], "")).toBeDefined();
   expect(fullRunRefusal(["--incremental=false"], "")).toBeDefined();
-  expect(fullRunRefusal(["--incremental", "--force"], "")).toBeDefined();
+  expect(fullRunRefusal(["--incremental", "--force"], "", reportPresent)).toBeDefined();
+});
+
+test("an --incremental run with no report to reuse is refused and names both ways forward", () => {
+  const refusal = fullRunRefusal(["--incremental"], "", reportMissing);
+  expect(refusal).toContain("reports/stryker-incremental.json");
+  expect(refusal).toContain("mutation-report");
+  expect(refusal).toContain("--mutate <glob>");
+  expect(fullRunRefusal(["--incremental", "--mutate", "src/billing.ts"], "", reportMissing)).toBeUndefined();
+  expect(fullRunRefusal(["--incremental"], "true", reportMissing)).toBeUndefined();
+});
+
+test("the incremental report checked is the one --incrementalFile names, else the default", () => {
+  const checked: string[] = [];
+  const record = (path: string) => {
+    checked.push(path);
+    return true;
+  };
+  fullRunRefusal(["--incremental"], "", record);
+  fullRunRefusal(["--incremental", "--incrementalFile", "reports/a.json"], "", record);
+  fullRunRefusal(["--incremental", "--incrementalFile=reports/b.json"], "", record);
+  expect(checked).toEqual(["reports/stryker-incremental.json", "reports/a.json", "reports/b.json"]);
 });
 
 test("every run stays allowed with CI=true", () => {
