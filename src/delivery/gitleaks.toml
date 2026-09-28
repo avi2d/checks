@@ -44,10 +44,6 @@ description = "A link to a reserved example or test host"
 regexTarget = "match"
 regexes = ['''^(?i)[a-z0-9]+://(?:[^\s"'`@?#]*@)?(?:[\w-]+\.)*(?:example\.(?:com|net|org)|[\w-]+\.(?:example|invalid|test)|localhost)(?::\d+)?(?:[/?#]|$)''']
 
-[[rules.allowlists]]
-description = "A credential that is a ${VARIABLE} placeholder"
-regexes = ['''^(?:[^:]*:)?\$\{\w+\}$''']
-
 [[rules]]
 id = "proxy-base64-link"
 description = "A proxy share link whose whole payload is base64, such as vmess://, ss:// or ssr://"
@@ -66,16 +62,13 @@ id = "proxy-query-credential"
 description = "A proxy share link that carries its credential in the query, such as hysteria://host?auth="
 regex = '''(?i)\b(?:vless|vmess|ssr?|trojan|hysteria2?|hy2|tuic|socks5?h?|wireguard|wg)://[^\s"'`?#]*\?(?:[^\s"'`<>#]*&)?(?:auth|auth_str|obfsParam|obfs-password|password|pk)=([^\s"'`<>&#]+)'''
 secretGroup = 1
+entropy = 2.5
 keywords = ["vless://", "vmess://", "ss://", "ssr://", "trojan://", "hysteria://", "hysteria2://", "hy2://", "tuic://", "socks://", "socksh://", "socks5://", "socks5h://", "wireguard://", "wg://"]
 
 [[rules.allowlists]]
 description = "A link to a reserved example or test host"
 regexTarget = "match"
 regexes = ['''^(?i)[a-z0-9]+://(?:[^\s"'`@?#]*@)?(?:[\w-]+\.)*(?:example\.(?:com|net|org)|[\w-]+\.(?:example|invalid|test)|localhost)(?::\d+)?(?:[/?#]|$)''']
-
-[[rules.allowlists]]
-description = "A credential that is a ${VARIABLE} placeholder"
-regexes = ['''^\$\{\w+\}$''']
 
 [[rules]]
 id = "proxy-subscription-url"
@@ -89,3 +82,8 @@ keywords = ["sub", "link"]
 description = "A link to a reserved example or test host"
 regexTarget = "match"
 regexes = ['''^(?i)https?://(?:[\w-]+\.)*(?:example\.(?:com|net|org)|[\w-]+\.(?:example|invalid|test)|localhost)(?:[:/?#]|$)''']
+
+[[allowlists]]
+description = "A link credential that is only a template reference, such as {password}, ${pass}, $PASS, {{ password }} or %(password)s"
+targetRules = ["proxy-userinfo-link", "proxy-query-credential"]
+regexes = ['''^(?:[^:]*:)?(?:\$\{[\w.]+\}|\$\w+|\{\{\s*[\w.]+\s*\}\}|\{[\w.]+\}|%\([\w.]+\)s)$''']
