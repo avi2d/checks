@@ -8,6 +8,7 @@ import {
   ruleProblem,
   type Heading,
   type Outline,
+  type Section,
   type Violation,
   VERSION,
 } from "./doc-outline.ts";
@@ -93,8 +94,76 @@ function recordNumber(path: string): number | undefined {
   return name === undefined ? undefined : Number(name);
 }
 
+const REVISION_CLAUSE = /\b(?:amend(?:s|ed)|narrow(?:s|ed)|supersede[sd])\b(?:[^.]|\.(?=\S))*/gi;
+const RECORD_REFERENCE = /\b(\d{4})\b/g;
+
+function numbersIn(text: string): ReadonlySet<number> {
+  return new Set(Array.from(text.matchAll(RECORD_REFERENCE), (match) => Number(match[1])));
+}
+
+function revisedIn(status: string): ReadonlySet<number> {
+  return new Set((status.match(REVISION_CLAUSE) ?? []).flatMap((clause) => [...numbersIn(clause)]));
+}
+
+function padded(number: number): string {
+  return String(number).padStart(4, "0");
+}
+
+function outlineOf(text: string): Outline {
+  return parseOutline(text.slice(frontMatterOf(text).text.length));
+}
+
+function statusSection(outline: Outline): Section | undefined {
+  return outline.sections.find(({ heading }) => heading.title === "Status");
+}
+
+type StatusLinks = {
+  readonly cited: ReadonlySet<number>;
+  readonly revised: ReadonlySet<number>;
+};
+
+function statusLinks(section: Section): StatusLinks {
+  const text = section.body.map(({ text: body }) => body).join("\n");
+  return { cited: numbersIn(text), revised: revisedIn(text) };
+}
+
+export type Records = {
+  readonly paths: readonly string[];
+  readonly links: ReadonlyMap<number, StatusLinks>;
+};
+
+export function recordsOf(records: readonly Doc[]): Records {
+  const links = new Map<number, StatusLinks>();
+  for (const { path, text } of records) {
+    const number = recordNumber(path);
+    const section = number === undefined || links.has(number) ? undefined : statusSection(outlineOf(text));
+    if (number !== undefined && section !== undefined) links.set(number, statusLinks(section));
+  }
+  return { paths: records.map(({ path }) => path), links };
+}
+
+function pairProblems(filed: number, own: Section, mine: StatusLinks, number: number, other: StatusLinks): readonly Violation[] {
+  if (number === filed) return [];
+  if (mine.revised.has(number) && !other.cited.has(filed)) {
+    const line = own.body.find(({ text: body }) => body.includes(padded(number)))?.line ?? own.heading.line;
+    return [{ line, message: `\`## Status\` names ${padded(number)} without ${padded(number)} naming ${padded(filed)} back` }];
+  }
+  if (other.revised.has(filed) && !mine.cited.has(number)) {
+    return [{ line: own.heading.line, message: `\`## Status\` is named by ${padded(number)} without naming ${padded(number)} back` }];
+  }
+  return [];
+}
+
+function revisionLinkProblems(path: string, outline: Outline, links: ReadonlyMap<number, StatusLinks>): readonly Violation[] {
+  const filed = recordNumber(path);
+  const own = filed === undefined ? undefined : statusSection(outline);
+  if (filed === undefined || own === undefined) return [];
+  const mine = statusLinks(own);
+  return [...links].flatMap(([number, other]) => pairProblems(filed, own, mine, number, other));
+}
+
 function statusProblem(outline: Outline): Violation | undefined {
-  const status = outline.sections.find(({ heading }) => heading.title === "Status");
+  const status = statusSection(outline);
   if (status === undefined) return undefined;
   const opening = firstText(status.body);
   const word = opening?.text.trim().split(/\s+/, 1)[0]?.replace(/[.,;:]+$/, "");
@@ -126,7 +195,7 @@ function sharedNumberProblem(path: string, filed: number | undefined, records: r
   return sharing.length === 0 ? undefined : { line: 1, message: `shares number ${filed} with ${sharing.join(", ")}` };
 }
 
-function adrProblems(path: string, outline: Outline, records: readonly string[]): readonly Violation[] {
+function adrProblems(path: string, outline: Outline, records: Records): readonly Violation[] {
   const filed = recordNumber(path);
   const misnamed: Violation | undefined =
     filed === undefined
@@ -137,7 +206,8 @@ function adrProblems(path: string, outline: Outline, records: readonly string[])
     recordTitleProblem(outline, filed),
     recordDateProblem(outline),
     statusProblem(outline),
-    sharedNumberProblem(path, filed, records),
+    sharedNumberProblem(path, filed, records.paths),
+    ...revisionLinkProblems(path, outline, records.links),
   ].filter((violation) => violation !== undefined);
 }
 
@@ -167,7 +237,7 @@ function stepsProblems(kind: Kind, { prose }: Outline): readonly Violation[] {
   return [{ line: 1, message: `numbers no steps, which a ${kind} page lists as \`1.\` items` }];
 }
 
-function kindProblems(kind: Kind, doc: Doc, outline: Outline, records: readonly string[]): readonly Violation[] {
+function kindProblems(kind: Kind, doc: Doc, outline: Outline, records: Records): readonly Violation[] {
   if (kind === "adr") return adrProblems(doc.path, outline, records);
   if (kind === "changelog") return changelogProblems(outline);
   if (kind === "how-to" || kind === "tutorial") return stepsProblems(kind, outline);
@@ -182,7 +252,7 @@ function exactProblems(kind: Kind, expected: string, actual: string): readonly V
   return [{ line, message: `differs from ${templateFile(kind)}, which it holds word for word` }];
 }
 
-export function judge(kind: Kind, doc: Doc, records: readonly string[]): readonly Violation[] {
+export function judge(kind: Kind, doc: Doc, records: Records): readonly Violation[] {
   const template = TEMPLATES[kind];
   if (template.shape === "exact") return exactProblems(kind, template.text, doc.text);
   const frontMatter = frontMatterOf(doc.text).text;
