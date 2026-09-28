@@ -15,24 +15,9 @@ const armor = (edge: string) => `-----${edge} OPENSSH PRIVATE KEY-----`;
 const HOST = "vpn.home-fixture.net";
 
 function planted(): Readonly<Record<string, string>> {
-  const vmess = Buffer.from(JSON.stringify({ v: "2", add: HOST, port: "443", id: randomUUID(), net: "ws" })).toString("base64");
-  const shadowsocks = Buffer.from(`chacha20-ietf-poly1305:${hex(12)}`).toString("base64");
-  const legacyShadowsocks = Buffer.from(`chacha20-ietf-poly1305:${hex(12)}@${HOST}:8388`).toString("base64");
   return {
     "vpn/wg0.conf": `[Interface]\nPrivateKey = ${base64Key()}\n\n[Peer]\nPublicKey = ${base64Key()}\nPresharedKey = ${base64Key()}\n`,
     "vpn/awg0.json": JSON.stringify({ privateKey: base64Key(), jc: 4 }),
-    "vpn/vars.yml": `client_psk: ${base64Key()}\nwireguard_psk: ${base64Key()}\nwg_private_key: ${base64Key()}\n`,
-    "vpn/links.txt": [
-      link("vless", `${randomUUID()}@${HOST}:443?security=reality#home`),
-      link("vmess", vmess),
-      link("ss", `${shadowsocks}@${HOST}:8388#home`),
-      link("trojan", `${hex(12)}@${HOST}:443#home`),
-      link("https", `panel.home-fixture.net/sub/${hex(16)}`),
-      link("ss", `${legacyShadowsocks}#home`),
-      link("socks5", `home:${hex(12)}@${HOST}:1080`),
-      link("hysteria", `${HOST}:443?protocol=udp&auth=${hex(12)}&upmbps=100#home`),
-      link("hysteria", `${HOST}:443?protocol=udp&obfsParam=${hex(8)}#home`),
-    ].join("\n"),
     "deploy/key": `${armor("BEGIN")}\n${randomBytes(300).toString("base64")}\n${armor("END")}\n`,
     ".env": `GITHUB_TOKEN=${["gh", "p_"].join("")}${alphanumeric(36)}\n`,
   };
@@ -41,22 +26,66 @@ function planted(): Readonly<Record<string, string>> {
 const PLACEHOLDERS: Readonly<Record<string, string>> = {
   "vpn/wg0.conf": "[Interface]\nPrivateKey = <private-key>\n\n[Peer]\nPublicKey = <server-public-key>\nPresharedKey = ${WG_PRESHARED_KEY}\n",
   "vpn/awg0.json": JSON.stringify({ privateKey: "<private-key>", jc: 4 }),
-  "vpn/links.txt": [
-    link("vless", "<uuid>@vpn.example.com:443?security=reality#home"),
-    link("vmess", "<base64-config>"),
-    link("trojan", `${randomUUID()}@vpn.example.com:443#home`),
-    link("https", "panel.example.com/sub/0123456789abcdef0123456789abcdef"),
-    link("socks5", "127.0.0.1:1080"),
-    link("socks5", "localhost:1080"),
-    link("ss", "homevpnserver-fixture.net:8388"),
-    link("vmess", `${HOST}:443`),
-    link("hysteria", "vpn.example.com:443?protocol=udp&auth=<password>#home"),
-    link("hysteria", `vpn.example.com:443?protocol=udp&auth=${hex(12)}#home`),
-    link("hysteria", `${HOST}:443?protocol=udp&upmbps=100#home`),
-  ].join("\n"),
   "deploy/key": "<ssh-private-key>\n",
   ".env": "GITHUB_TOKEN=<github-token>\n",
 };
+
+type Case = { readonly line: string; readonly rules: readonly string[] };
+
+function cases(): readonly Case[] {
+  const vmess = Buffer.from(JSON.stringify({ v: "2", add: HOST, port: "443", id: randomUUID(), net: "ws" })).toString("base64");
+  const shadowsocks = Buffer.from(`chacha20-ietf-poly1305:${hex(12)}`).toString("base64");
+  const legacyShadowsocks = Buffer.from(`chacha20-ietf-poly1305:${hex(12)}@${HOST}:8388`).toString("base64");
+  const userinfo = ["proxy-userinfo-link"];
+  const base64 = ["proxy-base64-link"];
+  const query = ["proxy-query-credential"];
+  const key = ["wireguard-key"];
+  const passes: readonly string[] = [];
+  return [
+    { line: link("vless", `${randomUUID()}@${HOST}:443?security=reality#home`), rules: userinfo },
+    { line: link("ss", `${shadowsocks}@${HOST}:8388#home`), rules: userinfo },
+    { line: link("trojan", `${hex(12)}@${HOST}:443#home`), rules: userinfo },
+    { line: link("socks5", `home:${hex(12)}@${HOST}:1080`), rules: userinfo },
+    { line: link("vmess", vmess), rules: base64 },
+    { line: `Import this link: ${link("vmess", vmess)}.`, rules: base64 },
+    { line: `${link("vmess", vmess)}: that one`, rules: base64 },
+    { line: link("ss", `${legacyShadowsocks}#home`), rules: base64 },
+    { line: `Legacy: ${link("ss", legacyShadowsocks)}.`, rules: base64 },
+    { line: link("hysteria", `${HOST}:443?protocol=udp&auth=${hex(12)}&upmbps=100#home`), rules: query },
+    { line: link("hysteria", `${HOST}:443?protocol=udp&obfsParam=${hex(8)}#home`), rules: query },
+    { line: link("hysteria2", `<password>@${HOST}:443/?obfs=salamander&obfs-password=${hex(10)}`), rules: query },
+    { line: link("hysteria2", `pw@${HOST}:443/?obfs=salamander&obfs-password=${hex(10)}`), rules: [...userinfo, ...query] },
+    { line: link("https", `panel.home-fixture.net/sub/${hex(16)}`), rules: ["proxy-subscription-url"] },
+    { line: `client_psk: ${base64Key()}`, rules: key },
+    { line: `wireguard_psk: ${base64Key()}`, rules: key },
+    { line: `wg_private_key: ${base64Key()}`, rules: key },
+    { line: `ALL_PROXY=${link("socks5", "127.0.0.1:1080")}`, rules: passes },
+    { line: `proxy: ${link("socks5", "localhost:1080")}`, rules: passes },
+    { line: link("ss", "homevpnserver-fixture.net:8388"), rules: passes },
+    { line: link("ss", "homevpnserverfixture1:8388"), rules: passes },
+    { line: link("vmess", `${HOST}:443`), rules: passes },
+    { line: link("vmess", "<base64-config>"), rules: passes },
+    { line: link("vless", "<uuid>@vpn.example.com:443?security=reality#home"), rules: passes },
+    { line: link("trojan", "fixturepassword@vpn.example.com:443#home"), rules: passes },
+    { line: link("trojan", "${TROJAN_PASSWORD}@" + `${HOST}:443#home`), rules: passes },
+    { line: link("hysteria", "vpn.example.com:443?protocol=udp&auth=<password>#home"), rules: passes },
+    { line: link("hysteria", "vpn.example.com:443?protocol=udp&auth=fixturepassword#home"), rules: passes },
+    { line: link("hysteria2", "pw@vpn.example.com:443/?obfs=salamander&obfs-password=fixturepassword"), rules: passes },
+    { line: link("hysteria", `${HOST}:443?protocol=udp&auth=` + "${HYSTERIA_AUTH}#home"), rules: passes },
+    { line: link("hysteria", `${HOST}:443?protocol=udp&upmbps=100#home`), rules: passes },
+    { line: link("https", "panel.example.com/sub/0123456789abcdef0123456789abcdef"), rules: passes },
+    { line: "client_psk: <preshared-key>", rules: passes },
+  ];
+}
+
+function caseRulesByLine(report: string): ReadonlyMap<number, readonly string[]> {
+  const found = new Map<number, string[]>();
+  for (const [, line, rule] of report.matchAll(/^ {2}vpn\/cases\.txt:(\d+) (\S+) in /gm)) {
+    const rules = found.get(Number(line)) ?? [];
+    found.set(Number(line), [...rules, rule ?? ""].toSorted());
+  }
+  return found;
+}
 
 async function started(): Promise<{ readonly repo: FixtureRepo; readonly base: string }> {
   const repo = await open({ "README.md": "# fixture\n" });
@@ -64,30 +93,18 @@ async function started(): Promise<{ readonly repo: FixtureRepo; readonly base: s
 }
 
 test(
-  "a range adding a real secret of each kind fails on each, and the same files with placeholders pass",
+  "a range adding a real secret in a config file, a key file or an env file fails on each, and the same files with placeholders pass",
   async () => {
     const { repo, base } = await started();
     await repo.write(planted());
     const head = await repo.commit("feat: plant secrets");
     const failed = await repo.script(GATE, base, head);
     expect(failed.exitCode).toBe(1);
-    expect(failed.text).toContain("secrets: the range adds 17 secret(s)");
+    expect(failed.text).toContain("secrets: the range adds 5 secret(s)");
     for (const place of [
       "vpn/wg0.conf:2 wireguard-key",
       "vpn/wg0.conf:6 wireguard-key",
       "vpn/awg0.json:1 wireguard-key",
-      "vpn/vars.yml:1 wireguard-key",
-      "vpn/vars.yml:2 wireguard-key",
-      "vpn/vars.yml:3 wireguard-key",
-      "vpn/links.txt:1 proxy-share-link",
-      "vpn/links.txt:2 proxy-share-link",
-      "vpn/links.txt:3 proxy-share-link",
-      "vpn/links.txt:4 proxy-share-link",
-      "vpn/links.txt:5 proxy-subscription-url",
-      "vpn/links.txt:6 proxy-share-link",
-      "vpn/links.txt:7 proxy-share-link",
-      "vpn/links.txt:8 proxy-share-link",
-      "vpn/links.txt:9 proxy-share-link",
       "deploy/key:1 private-key",
       ".env:1 github-pat",
     ]) {
@@ -98,6 +115,19 @@ test(
     await clean.repo.write(PLACEHOLDERS);
     const passed = await clean.repo.script(GATE, clean.base, await clean.repo.commit("feat: placeholders"));
     expect(passed).toEqual({ exitCode: 0, text: "secrets: the range adds no secret\n" });
+  },
+  SCAN_MS,
+);
+
+test(
+  "each link and key line fails on exactly the rules its row names, and a row naming none passes",
+  async () => {
+    const table = cases();
+    const { repo, base } = await started();
+    await repo.write({ "vpn/cases.txt": `${table.map((row) => row.line).join("\n")}\n` });
+    const found = caseRulesByLine((await repo.script(GATE, base, await repo.commit("feat: plant cases"))).text);
+    const expected = table.map((row, index) => ({ line: index + 1, rules: row.rules.toSorted() }));
+    expect(expected.map(({ line }) => ({ line, rules: found.get(line) ?? [] }))).toEqual(expected);
   },
   SCAN_MS,
 );
@@ -145,7 +175,7 @@ test(
     await repo.write({ "vpn/links.txt": link("trojan", `${hex(12)}@${HOST}:443#home`) });
     await repo.commit("feat: add a link");
     const lint = await repo.lint();
-    expect(lint.text).toContain("  vpn/links.txt:1 proxy-share-link in ");
+    expect(lint.text).toContain("  vpn/links.txt:1 proxy-userinfo-link in ");
     expect(lint.text).toContain("checks-secrets");
   },
   SCAN_MS,

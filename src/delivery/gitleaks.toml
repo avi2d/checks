@@ -12,18 +12,43 @@ entropy = 3.0
 keywords = ["private", "preshared", "pre_shared", "pre-shared", "psk"]
 
 [[rules]]
-id = "proxy-share-link"
-description = "A proxy share link that carries its credential, such as vless://, vmess://, ss:// or trojan://"
-regex = '''(?i)\b(?:(?:vless|ss|trojan|hysteria2?|hy2|tuic|socks5?)://([^\s"'`<>@?#]{8,})@[^\s"'`<>]+|(?:vmess|ssr?)://([A-Za-z0-9+/_-]{16,}={0,2})(?:[^\w+/=@:.-]|$)|(?:vless|vmess|ssr?|trojan|hysteria2?|hy2|tuic|socks5?)://[^\s"'`<>@?#]+\?(?:[^\s"'`<>#]*&)?(?:auth|auth_str|obfsParam|obfs-password|password)=([^\s"'`<>&#]{8,}))'''
+id = "proxy-userinfo-link"
+description = "A proxy share link that carries its credential before the @, such as vless://, trojan:// or socks5://"
+regex = '''(?i)\b(?:vless|ss|trojan|hysteria2?|hy2|tuic|socks5?)://([^\s"'`<>@?#]+)@[^\s"'`<>]+'''
+secretGroup = 1
+keywords = ["vless://", "ss://", "trojan://", "hysteria://", "hysteria2://", "hy2://", "tuic://", "socks://", "socks5://"]
+
+[[rules.allowlists]]
+description = "A link to a reserved example or test host"
+regexTarget = "match"
+regexes = ['''^(?i)[a-z0-9]+://(?:[^\s"'`@?#]*@)?(?:[\w-]+\.)*(?:example\.(?:com|net|org)|[\w-]+\.(?:example|invalid|test)|localhost)(?::\d+)?(?:[/?#]|$)''']
+
+[[rules.allowlists]]
+description = "A credential that is a ${VARIABLE} placeholder"
+regexes = ['''^(?:[^:]*:)?\$\{\w+\}$''']
+
+[[rules]]
+id = "proxy-base64-link"
+description = "A proxy share link whose whole payload is base64, such as vmess://, ss:// or ssr://"
+regex = '''(?i)\b(?:vmess|ssr?)://([A-Za-z0-9+/_-]{16,}={0,2})[.,:;!?)\]]*(?:[\s"'`<>#]|$)'''
+secretGroup = 1
+keywords = ["vmess://", "ss://", "ssr://"]
+
+[[rules]]
+id = "proxy-query-credential"
+description = "A proxy share link that carries its credential in the query, such as hysteria://host?auth="
+regex = '''(?i)\b(?:vless|vmess|ssr?|trojan|hysteria2?|hy2|tuic|socks5?)://[^\s"'`?#]*\?(?:[^\s"'`<>#]*&)?(?:auth|auth_str|obfsParam|obfs-password|password)=([^\s"'`<>&#]+)'''
+secretGroup = 1
 keywords = ["vless://", "vmess://", "ss://", "ssr://", "trojan://", "hysteria://", "hysteria2://", "hy2://", "tuic://", "socks://", "socks5://"]
 
 [[rules.allowlists]]
 description = "A link to a reserved example or test host"
 regexTarget = "match"
-regexes = [
-  '''@(?:[\w-]+\.)*(?:example\.(?:com|net|org)|[\w-]+\.(?:example|invalid|test)|localhost)(?:[:/?#]|$)''',
-  '''^(?i)[a-z0-9]+://(?:[\w-]+\.)*(?:example\.(?:com|net|org)|[\w-]+\.(?:example|invalid|test)|localhost)(?::\d+)?(?:[/?#]|$)''',
-]
+regexes = ['''^(?i)[a-z0-9]+://(?:[^\s"'`@?#]*@)?(?:[\w-]+\.)*(?:example\.(?:com|net|org)|[\w-]+\.(?:example|invalid|test)|localhost)(?::\d+)?(?:[/?#]|$)''']
+
+[[rules.allowlists]]
+description = "A credential that is a ${VARIABLE} placeholder"
+regexes = ['''^\$\{\w+\}$''']
 
 [[rules]]
 id = "proxy-subscription-url"
