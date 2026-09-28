@@ -75,12 +75,15 @@ The shared preset refuses a full `stryker run` outside CI and names that workflo
 
 ## Running it in CI
 
-It runs on pull requests, comparing the head report against a report built at the merge-base:
+It runs on pull requests from a workflow named `mutation-compare`, comparing the head report against a report built at the merge-base:
 
 ```yaml
+name: mutation-compare
+on:
+  pull_request:
 jobs:
   mutation-compare:
-    runs-on: ${{ vars.CI_RUNS_ON || fromJSON('["self-hosted","Linux","X64","winbox"]') }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
@@ -89,13 +92,23 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bunx stryker run
       - run: |
-          base="$(git merge-base HEAD origin/main)"
-          git worktree add /tmp/mutation-base "$base"
-          (cd /tmp/mutation-base && bun install --frozen-lockfile && bunx stryker run)
-      - run: bun run checks-mutation-compare --advisory /tmp/mutation-base/reports/mutation/mutation.json reports/mutation/mutation.json
+          base_worktree="$RUNNER_TEMP/mutation-base-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          echo "BASE_WORKTREE=$base_worktree" >> "$GITHUB_ENV"
+          git worktree prune
+          git worktree add "$base_worktree" "$(git merge-base HEAD origin/main)"
+          (cd "$base_worktree" && bun install --frozen-lockfile && bunx stryker run)
+      - run: bun run checks-mutation-compare --advisory "$BASE_WORKTREE/reports/mutation/mutation.json" reports/mutation/mutation.json
+      - if: always() && env.BASE_WORKTREE != ''
+        run: |
+          git worktree remove --force "$BASE_WORKTREE"
+          git worktree prune
 ```
 
-Both Stryker runs are full sweeps, so the job runs on the fleet's self-hosted runner, as the baseline does.
+Both Stryker runs are full sweeps, and GitHub sets `CI=true` on every runner, so the preset lets them through.
+The base worktree's path carries the run's id and attempt, and the last step removes it even when a run fails, so a runner kept between jobs starts each job clean.
+A public repository keeps `runs-on: ubuntu-latest`, because a pull request from a fork runs its own code on the runner.
+A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || fromJSON('["self-hosted","Linux","X64","winbox"]') }}` instead.
+With `CI_RUNS_ON` unset, the job then runs on the fleet's self-hosted Linux runner labelled `winbox`, which is where a private repository sends its full sweeps.
 
 ## Related topics
 

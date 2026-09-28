@@ -64,9 +64,10 @@ A scheduled run never starts one, because a baseline costs a full Stryker run.
 
 ## Running it in CI
 
-A repository starts a baseline by hand and keeps its report as an artifact:
+A repository starts a baseline by hand from a workflow named `mutation` and keeps its report as an artifact:
 
 ```yaml
+name: mutation
 on:
   workflow_dispatch:
 jobs:
@@ -88,6 +89,7 @@ jobs:
 
 With `CI_RUNS_ON` unset, the job runs on the fleet's self-hosted Linux runner labelled `winbox`, which is where a private repository sends its full sweeps.
 A repository sets `CI_RUNS_ON` only to name a different runner.
+The `name: mutation` line is what `gh workflow run mutation` looks up.
 GitHub sets `CI=true` on every runner, so the preset lets the full run through there.
 
 ## Related topics
