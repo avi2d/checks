@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 
 const Step = Schema.Struct({
+  name: Schema.optionalKey(Schema.String),
   uses: Schema.optionalKey(Schema.String),
   run: Schema.optionalKey(Schema.String),
   with: Schema.optionalKey(Schema.Record(Schema.String, Schema.Unknown)),
@@ -24,10 +25,11 @@ export function parseWorkflow(text: string): ParsedWorkflow {
   return Schema.decodeUnknownSync(Workflow)(Bun.YAML.parse(text));
 }
 
-export function lastStep(workflow: ParsedWorkflow): Readonly<{ run: string; env: Readonly<Record<string, string>> }> {
-  const steps = Object.values(workflow.jobs).flatMap((job) => job.steps);
-  const last = steps.at(-1);
-  if (last?.run === undefined) throw new Error("the last step of the parsed workflow carries no run");
-  return { run: last.run, env: last.env ?? {} };
+export function stepNamed(workflow: ParsedWorkflow, name: string): Readonly<{ run: string; env: Readonly<Record<string, string>> }> {
+  const step = Object.values(workflow.jobs)
+    .flatMap((job) => job.steps)
+    .find((one) => one.name === name);
+  if (step?.run === undefined) throw new Error(`the parsed workflow has no step named ${name} that carries a run`);
+  return { run: step.run, env: step.env ?? {} };
 }
 

@@ -175,8 +175,10 @@ The `github-release` job's `contents: write` creates or updates the GitHub relea
 Both jobs act with the workflow token, and GitHub starts no workflow for a push or a pull request that token makes.
 A GitHub App or a personal token would start them, but either is a credential each repository stores and someone rotates.
 So `checks-release-pr` dispatches the required checks on the release head, and `checks-release-tag` dispatches the release workflow on the tag, since a dispatch is the one run the token can start.
-A check a dispatched run reports carries the job's name, and a required check matches by that name on the head commit.
-The cost is a `workflow_dispatch` trigger on each workflow a release needs, a title lint that reads its title from the open pull request, and the repository setting that lets the token open a pull request.
+GitHub keeps a dispatched run's checks off the pull request, and branch protection does not count them.
+So each dispatched job reports its result as a commit status named for the job, which a required check of that name counts.
+Where a status and a check share a name, branch protection requires both, so the status never passes a pull request whose own check failed.
+The cost is a `workflow_dispatch` trigger and a status step on each workflow a release needs, a title lint that reads its title from the open pull request, and the repository setting that lets the token open a pull request.
 
 ## The docs gate judges what a change touches
 

@@ -25,6 +25,7 @@ GitHub appends ` (#N)` to the squashed subject, so the workflow lints the title 
 The workflow moves git's comment character off `#`, so a title starting with `#` is linted like any other.
 The workflow also triggers on `workflow_dispatch`, since a release pull request the workflow token opens starts no `pull_request` run, as [checks-release-pr](../gates/checks-release-pr.md) says.
 A dispatched run carries no pull request, so the workflow reads the title of the one open pull request its branch heads, and fails when there is none.
+It reports a dispatched run's result on the head commit as a `commitlint` status, since GitHub keeps a dispatched run's check off the pull request.
 The kit's own `.github/workflows/commitlint.yml` shows the step.
 
 It never sees a commit's author or committer fields, nor the `Co-authored-by` trailer GitHub writes from a foreign author when it squashes, so it cannot enforce who a commit belongs to.

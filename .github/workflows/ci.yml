@@ -5,6 +5,9 @@ on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
   workflow_dispatch:
+permissions:
+  contents: read
+  statuses: write
 jobs:
   checks:
     runs-on: ubuntu-latest
@@ -24,3 +27,10 @@ jobs:
       - run: bun run lint
       - run: bun run typecheck
       - run: bun run test
+      # GitHub keeps a dispatched run's check off the pull request, so the job reports its result there as a commit status.
+      - name: report the result on the head commit
+        if: always() && github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATE: ${{ job.status == 'success' && 'success' || 'failure' }}
+        run: gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" -f state="$STATE" -f context="$GITHUB_JOB" -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --silent

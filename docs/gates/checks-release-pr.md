@@ -21,12 +21,13 @@ It refuses when the last release tag names a version other than the one `package
 It refuses a version that is not a plain `major.minor.patch`.
 It writes the next version into `package.json`, runs `bun run build` so the build writes `CHANGELOG.md`, and commits every tracked file the build changed as `chore: release <version>`.
 The commit's one parent is `HEAD`.
-It makes the commit through the GitHub API, which attributes it to `github-actions[bot]`, so the job sets no git identity.
+It makes the commit through the GitHub API, which attributes it to `github-actions[bot]` and signs it, so the job sets no git identity.
 It checks that the tree GitHub built matches the tree the build wrote.
 It points the branch `release/<branch>` at the commit, where `<branch>` is the branch `HEAD` is on.
 It opens a pull request from that branch into `<branch>` titled `chore: release <version>`, with the body `Release <version>.`, or retitles the open one to the new version.
 It then dispatches each workflow its arguments name on the release branch.
 A pull request the workflow token opens starts no `pull_request` workflow, so the dispatch is what runs the required checks on the release head.
+GitHub keeps a dispatched run's checks off the pull request, so each dispatched job reports its result as a commit status named for the job, which the required check of that name counts.
 When the release branch already holds this version on top of `HEAD` and its pull request carries the right title, it pushes nothing and dispatches nothing.
 It leaves the working tree as it found it.
 
@@ -154,10 +155,25 @@ The checks it dispatches are the release pull request's own required checks, and
 
 The daily release needs the repository's other workflows to accept the dispatch:
 
-- `.github/workflows/ci.yml` and `.github/workflows/commitlint.yml` trigger on `workflow_dispatch`.
+- `.github/workflows/ci.yml` and `.github/workflows/commitlint.yml` trigger on `workflow_dispatch`, grant `statuses: write`, and end each required job with the step below.
 - The title lint reads the title of the one open pull request its branch heads when the event carries none, as [Commit messages](../configs/commit-messages.md) says.
 - `.github/workflows/release.yml` triggers on `workflow_dispatch` and refuses a ref that is not a tag, as [checks-release-notes](checks-release-notes.md) shows.
-- **Allow GitHub Actions to create and approve pull requests** is on, which this call sets:
+- **Allow GitHub Actions to create and approve pull requests** is on, which the call after the step sets.
+
+The step reports a dispatched run's result as a commit status on the head commit:
+
+```yaml
+      - name: report the result on the head commit
+        if: always() && github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATE: ${{ job.status == 'success' && 'success' || 'failure' }}
+        run: gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" -f state="$STATE" -f context="$GITHUB_JOB" -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --silent
+```
+
+The status takes the job's id as its name, so a required job's id is the check name the branch requires.
+Where a status and a check share a name, branch protection requires both, so the status never passes a pull request whose own check failed.
+The call turns the repository setting on:
 
 ```sh
 gh api --method PUT repos/<owner>/<repo>/actions/permissions/workflow -f default_workflow_permissions=read -F can_approve_pull_request_reviews=true
