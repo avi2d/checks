@@ -152,4 +152,4 @@ const check = Effect.gen(function* () {
   return true;
 });
 
-runMain("commit-identity", check);
+if (import.meta.main) runMain("commit-identity", check);
