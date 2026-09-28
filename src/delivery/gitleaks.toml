@@ -13,10 +13,11 @@ keywords = ["private", "preshared", "pre_shared", "pre-shared", "psk"]
 
 [[rules]]
 id = "proxy-userinfo-link"
-description = "A proxy share link that carries its credential before the @, such as vless://, trojan:// or socks5://"
-regex = '''(?i)\b(?:vless|ss|trojan|hysteria2?|hy2|tuic|socks5?)://([^\s"'`<>@?#]+)@[^\s"'`<>]+'''
+description = "A proxy share link that carries its credential before the @, such as vless://, trojan://, socks5:// or wireguard://"
+regex = '''(?i)\b(?:vless|vmess|ss|trojan|hysteria2?|hy2|tuic|socks5?h?|wireguard|wg)://([^\s"'`<>@?#]+)@[^\s"'`<>]+'''
 secretGroup = 1
-keywords = ["vless://", "ss://", "trojan://", "hysteria://", "hysteria2://", "hy2://", "tuic://", "socks://", "socks5://"]
+entropy = 2.5
+keywords = ["vless://", "vmess://", "ss://", "trojan://", "hysteria://", "hysteria2://", "hy2://", "tuic://", "socks://", "socksh://", "socks5://", "socks5h://", "wireguard://", "wg://"]
 
 [[rules.allowlists]]
 description = "A link to a reserved example or test host"
@@ -30,16 +31,22 @@ regexes = ['''^(?:[^:]*:)?\$\{\w+\}$''']
 [[rules]]
 id = "proxy-base64-link"
 description = "A proxy share link whose whole payload is base64, such as vmess://, ss:// or ssr://"
-regex = '''(?i)\b(?:vmess|ssr?)://([A-Za-z0-9+/_-]{16,}={0,2})[.,:;!?)\]]*(?:[\s"'`<>#]|$)'''
+regex = '''(?i)\b(?:vmess|ssr?)://([A-Za-z0-9+/_-]{16,}={0,2})@?'''
 secretGroup = 1
+entropy = 4.2
 keywords = ["vmess://", "ss://", "ssr://"]
+
+[[rules.allowlists]]
+description = "A payload an @ follows, which proxy-userinfo-link judges"
+regexTarget = "match"
+regexes = ['''@$''']
 
 [[rules]]
 id = "proxy-query-credential"
 description = "A proxy share link that carries its credential in the query, such as hysteria://host?auth="
-regex = '''(?i)\b(?:vless|vmess|ssr?|trojan|hysteria2?|hy2|tuic|socks5?)://[^\s"'`?#]*\?(?:[^\s"'`<>#]*&)?(?:auth|auth_str|obfsParam|obfs-password|password)=([^\s"'`<>&#]+)'''
+regex = '''(?i)\b(?:vless|vmess|ssr?|trojan|hysteria2?|hy2|tuic|socks5?h?|wireguard|wg)://[^\s"'`?#]*\?(?:[^\s"'`<>#]*&)?(?:auth|auth_str|obfsParam|obfs-password|password)=([^\s"'`<>&#]+)'''
 secretGroup = 1
-keywords = ["vless://", "vmess://", "ss://", "ssr://", "trojan://", "hysteria://", "hysteria2://", "hy2://", "tuic://", "socks://", "socks5://"]
+keywords = ["vless://", "vmess://", "ss://", "ssr://", "trojan://", "hysteria://", "hysteria2://", "hy2://", "tuic://", "socks://", "socksh://", "socks5://", "socks5h://", "wireguard://", "wg://"]
 
 [[rules.allowlists]]
 description = "A link to a reserved example or test host"

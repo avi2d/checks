@@ -11,6 +11,7 @@ const base64Key = () => randomBytes(32).toString("base64");
 const hex = (bytes: number) => randomBytes(bytes).toString("hex");
 const alphanumeric = (length: number) => randomBytes(length * 2).toString("base64").replace(/[^A-Za-z0-9]/g, "").slice(0, length);
 const link = (scheme: string, rest: string) => `${scheme}://${rest}`;
+const withPadding = (text: string) => Buffer.from(text + " ".repeat((4 - (text.length % 3)) % 3)).toString("base64");
 const armor = (edge: string) => `-----${edge} OPENSSH PRIVATE KEY-----`;
 const HOST = "vpn.home-fixture.net";
 
@@ -36,6 +37,8 @@ function cases(): readonly Case[] {
   const vmess = Buffer.from(JSON.stringify({ v: "2", add: HOST, port: "443", id: randomUUID(), net: "ws" })).toString("base64");
   const shadowsocks = Buffer.from(`chacha20-ietf-poly1305:${hex(12)}`).toString("base64");
   const legacyShadowsocks = Buffer.from(`chacha20-ietf-poly1305:${hex(12)}@${HOST}:8388`).toString("base64");
+  const paddedVmess = withPadding(JSON.stringify({ v: "2", add: HOST, port: "443", id: randomUUID(), net: "ws" }));
+  const paddedShadowsocks = withPadding(`chacha20-ietf-poly1305:${hex(12)}@${HOST}:8388`);
   const userinfo = ["proxy-userinfo-link"];
   const base64 = ["proxy-base64-link"];
   const query = ["proxy-query-credential"];
@@ -46,15 +49,24 @@ function cases(): readonly Case[] {
     { line: link("ss", `${shadowsocks}@${HOST}:8388#home`), rules: userinfo },
     { line: link("trojan", `${hex(12)}@${HOST}:443#home`), rules: userinfo },
     { line: link("socks5", `home:${hex(12)}@${HOST}:1080`), rules: userinfo },
+    { line: link("socks5h", `home:${hex(12)}@${HOST}:1080`), rules: userinfo },
+    { line: link("vmess", `${randomUUID()}@${HOST}:443?type=ws#home`), rules: userinfo },
+    { line: link("wireguard", `${encodeURIComponent(base64Key())}@${HOST}:51820?address=10.0.0.2/32&mtu=1280#home`), rules: userinfo },
     { line: link("vmess", vmess), rules: base64 },
     { line: `Import this link: ${link("vmess", vmess)}.`, rules: base64 },
     { line: `${link("vmess", vmess)}: that one`, rules: base64 },
     { line: link("ss", `${legacyShadowsocks}#home`), rules: base64 },
     { line: `Legacy: ${link("ss", legacyShadowsocks)}.`, rules: base64 },
+    { line: `${link("vmess", paddedVmess)}—the link`, rules: base64 },
+    { line: `${link("ss", paddedShadowsocks)}—see below`, rules: base64 },
+    { line: `| ${link("vmess", paddedVmess)}|`, rules: base64 },
+    { line: `| ${link("ss", paddedShadowsocks)}|`, rules: base64 },
+    { line: `${link("vmess", paddedVmess)}-see below`, rules: base64 },
+    { line: `${link("ss", paddedShadowsocks)}-see below`, rules: base64 },
     { line: link("hysteria", `${HOST}:443?protocol=udp&auth=${hex(12)}&upmbps=100#home`), rules: query },
     { line: link("hysteria", `${HOST}:443?protocol=udp&obfsParam=${hex(8)}#home`), rules: query },
     { line: link("hysteria2", `<password>@${HOST}:443/?obfs=salamander&obfs-password=${hex(10)}`), rules: query },
-    { line: link("hysteria2", `pw@${HOST}:443/?obfs=salamander&obfs-password=${hex(10)}`), rules: [...userinfo, ...query] },
+    { line: link("hysteria2", `pw@${HOST}:443/?obfs=salamander&obfs-password=${hex(10)}`), rules: query },
     { line: link("https", `panel.home-fixture.net/sub/${hex(16)}`), rules: ["proxy-subscription-url"] },
     { line: `client_psk: ${base64Key()}`, rules: key },
     { line: `wireguard_psk: ${base64Key()}`, rules: key },
@@ -66,6 +78,10 @@ function cases(): readonly Case[] {
     { line: link("vmess", `${HOST}:443`), rules: passes },
     { line: link("vmess", "<base64-config>"), rules: passes },
     { line: link("vless", "<uuid>@vpn.example.com:443?security=reality#home"), rules: passes },
+    { line: link("vmess", `${randomUUID()}@vpn.example.com:443?type=ws#home`), rules: passes },
+    { line: link("wireguard", "<private-key>@vpn.example.com:51820"), rules: passes },
+    { line: link("trojan", `pw@${HOST}:443#home`), rules: passes },
+    { line: link("socks5", `user@${HOST}:1080`), rules: passes },
     { line: link("trojan", "fixturepassword@vpn.example.com:443#home"), rules: passes },
     { line: link("trojan", "${TROJAN_PASSWORD}@" + `${HOST}:443#home`), rules: passes },
     { line: link("hysteria", "vpn.example.com:443?protocol=udp&auth=<password>#home"), rules: passes },
@@ -81,8 +97,8 @@ function cases(): readonly Case[] {
 function caseRulesByLine(report: string): ReadonlyMap<number, readonly string[]> {
   const found = new Map<number, string[]>();
   for (const [, line, rule] of report.matchAll(/^ {2}vpn\/cases\.txt:(\d+) (\S+) in /gm)) {
-    const rules = found.get(Number(line)) ?? [];
-    found.set(Number(line), [...rules, rule ?? ""].toSorted());
+    const rules = new Set(found.get(Number(line))).add(rule ?? "");
+    found.set(Number(line), [...rules].toSorted());
   }
   return found;
 }
