@@ -4,9 +4,9 @@ checks judges a repository through small binaries called gates, and `README.md` 
 
 ## Before you change a part
 
-- A gate, its page under `docs/` or a shipped config: read [Find where a change goes](CONTRIBUTING.md#find-where-a-change-goes) first, and change the page in the same commit as the behaviour.
+- A gate, its page under `docs/` or a shipped config: read [Find where a change goes](CONTRIBUTING.md#find-where-a-change-goes) first.
 - Anything the Effect rules hold: read [The Effect rules](docs/configs/effect-rules.md) first.
-- A test: read [checks-test-layout](docs/gates/checks-test-layout.md) first, and pass `withoutPullRequestEvent()` from `tests/lib/env.ts` to a spawned `checks-lint`.
+- A test: read [Check a change](CONTRIBUTING.md#check-a-change) and [checks-test-layout](docs/gates/checks-test-layout.md) first.
 - A doc page: read [checks-docs](docs/gates/checks-docs.md) first.
 - A workflow: read [checks-ci-wiring](docs/gates/checks-ci-wiring.md) first.
 

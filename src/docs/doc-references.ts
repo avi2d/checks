@@ -61,14 +61,22 @@ function exists(snapshot: Snapshot, path: string): boolean {
 }
 
 const PARENT = /^\.\.\//;
-const PATH = /^((?:\.{1,2}\/)*(?:[\w.@-]+\/)+[\w.@-]+\.(?:ts|tsx|mts|cts|js|jsx|cjs|mjs|md|mdx|json|jsonc|sh|bash|zsh|toml|nix|lua|ya?ml|txt|py|rs|go|css|html))(?::\d+(?::\d+)?)?$/;
+const FILE = /^((?:\.{1,2}\/)*(?:[\w.@-]+\/)*[\w.@-]+\.(?:ts|tsx|mts|cts|js|jsx|cjs|mjs|md|mdx|json|jsonc|sh|bash|zsh|toml|nix|lua|ya?ml|txt|py|rs|go|css|html))(?::\d+(?::\d+)?)?$/;
+
+function placesOf(doc: string, named: string): { readonly fromRoot: string | undefined; readonly fromDoc: string | undefined } {
+  return { fromRoot: PARENT.test(named) ? undefined : normalize(named), fromDoc: within(directoryOf(doc), named) };
+}
+
+function existsAt(snapshot: Snapshot, { fromRoot, fromDoc }: ReturnType<typeof placesOf>): boolean {
+  return [fromRoot, fromDoc].some((path) => path !== undefined && exists(snapshot, path));
+}
 
 function unresolvedPath(doc: string, line: number, span: string, snapshot: Snapshot): Unresolved | undefined {
-  const named = PATH.exec(span)?.[1];
-  if (named === undefined) return undefined;
-  const fromDoc = within(directoryOf(doc), named);
-  const fromRoot = PARENT.test(named) ? undefined : normalize(named);
-  if ([fromRoot, fromDoc].some((path) => path !== undefined && exists(snapshot, path))) return undefined;
+  const named = FILE.exec(span)?.[1];
+  if (named === undefined || !named.includes("/")) return undefined;
+  const places = placesOf(doc, named);
+  if (existsAt(snapshot, places)) return undefined;
+  const { fromRoot, fromDoc } = places;
   const checked = fromRoot ?? fromDoc;
   // A path whose top directory this repository lacks names a file in another one, such as a consumer's.
   if (checked === undefined || (fromRoot !== undefined && !snapshot.roots.has(fromRoot.split("/")[0] ?? ""))) return undefined;
@@ -78,13 +86,18 @@ function unresolvedPath(doc: string, line: number, span: string, snapshot: Snaps
 const SCHEME = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
 const ASCII_ESCAPE = /%([0-7][0-9a-f])/gi;
 
-function unresolvedLink(doc: string, line: number, target: string, snapshot: Snapshot): Unresolved | undefined {
+function linkedPath(doc: string, target: string): string | undefined {
   if (target === "" || SCHEME.test(target)) return undefined;
   const hash = target.indexOf("#");
   const written = (hash < 0 ? target : target.slice(0, hash)).split("?", 1)[0] ?? "";
   const decoded = written.replace(ASCII_ESCAPE, (_, code: string) => String.fromCharCode(Number.parseInt(code, 16)));
-  const path = decoded === "" ? doc : decoded.startsWith("/") ? normalize(decoded) : within(directoryOf(doc), decoded);
+  return decoded === "" ? doc : decoded.startsWith("/") ? normalize(decoded) : within(directoryOf(doc), decoded);
+}
+
+function unresolvedLink(doc: string, line: number, target: string, snapshot: Snapshot): Unresolved | undefined {
+  const path = linkedPath(doc, target);
   if (path === undefined) return undefined;
+  const hash = target.indexOf("#");
   const named = target;
   if (!exists(snapshot, path)) {
     return { kind: "link", line, named, message: `links to \`${named}\`, which is not in the repository`, missing: { type: "file", path } };
@@ -131,12 +144,30 @@ function commandsOn({ kind, raw, code }: MarkdownLine): readonly string[] {
   return texts.flatMap((text) => [...text.matchAll(RUN)].map(([, name = ""]) => name.replace(/[),.;:]+$/, "")));
 }
 
-export function isPathSpan(span: string): boolean {
-  return PATH.exec(span)?.[1] !== undefined;
+function pathResolves(doc: string, span: string, snapshot: Snapshot): boolean {
+  const named = FILE.exec(span)?.[1];
+  return named !== undefined && existsAt(snapshot, placesOf(doc, named));
 }
 
-export function commandNames(line: MarkdownLine): readonly string[] {
-  return commandsOn(line).filter((name) => !NOT_A_NAME.test(name));
+function linkResolves(doc: string, line: number, target: string, snapshot: Snapshot): boolean {
+  const path = linkedPath(doc, target);
+  return path !== undefined && exists(snapshot, path) && unresolvedLink(doc, line, target, snapshot) === undefined;
+}
+
+function commandResolves(doc: string, name: string, snapshot: Snapshot): boolean {
+  const packageDirectory = packageOf(doc, snapshot);
+  if (packageDirectory === undefined || NOT_A_NAME.test(name)) return false;
+  if (!RUNS_A_FILE.test(name)) return snapshot.scripts.get(packageDirectory)?.has(name) === true;
+  const path = within(packageDirectory, name);
+  return path !== undefined && exists(snapshot, path);
+}
+
+export function pointsAtSomething(doc: string, markdown: MarkdownLine, snapshot: Snapshot, { commands }: Judging): boolean {
+  return (
+    markdown.code.some((span) => pathResolves(doc, span, snapshot)) ||
+    markdown.links.some((target) => linkResolves(doc, markdown.line, target, snapshot)) ||
+    (commands && commandsOn(markdown).some((name) => commandResolves(doc, name, snapshot)))
+  );
 }
 
 export type Judging = { readonly commands: boolean };

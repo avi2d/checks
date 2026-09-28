@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect } from "effect";
 import { ceilingFinding, entryFindings, isAgentFile } from "./doc-agents.ts";
-import { rootsOf, unresolvedIn, type Judging, type Unresolved } from "./doc-references.ts";
+import { rootsOf, unresolvedIn, type Judging, type Snapshot, type Unresolved } from "./doc-references.ts";
 import { ADR_DIRECTORY, judge, placementOf, placementProblem, speaksToConsumers, type Placement } from "./doc-rules.ts";
 import { vanishedNames } from "./doc-names.ts";
 import { readTexts, snapshotAt, stillMissing } from "./doc-snapshot.ts";
@@ -51,7 +51,7 @@ function inPathOrder(a: Finding, b: Finding): number {
   return a.path === b.path ? (a.line ?? 0) - (b.line ?? 0) : a.path < b.path ? -1 : 1;
 }
 
-function locate(path: string, text: string, snapshot: Parameters<typeof unresolvedIn>[2], judging: Judging): readonly Located[] {
+function locate(path: string, text: string, snapshot: Snapshot, judging: Judging): readonly Located[] {
   return unresolvedIn(path, text, snapshot, judging).map((unresolved) => ({ ...unresolved, path }));
 }
 
@@ -68,8 +68,12 @@ const brokenBeforeRange = Effect.fn("brokenBeforeRange")(function* (range: Range
   return new Set(docs.flatMap(({ path, from }) => locate(from, texts.get(from) ?? "", snapshot, judging(path)).map((one) => keyOf({ ...one, path }))));
 });
 
-const referenceFindings = Effect.fn("referenceFindings")(function* (range: Range, texts: ReadonlyMap<string, string>, judging: (path: string) => Judging) {
-  const snapshot = yield* snapshotAt(range.root, range.head, texts, range.roots);
+const referenceFindings = Effect.fn("referenceFindings")(function* (
+  range: Range,
+  texts: ReadonlyMap<string, string>,
+  snapshot: Snapshot,
+  judging: (path: string) => Judging,
+) {
   const unresolved = [...texts].flatMap(([path, text]) => locate(path, text, snapshot, judging(path)));
   const missing = yield* stillMissing(range.root, unresolved);
   const found = unresolved.filter((_, index) => missing[index] === true);
@@ -109,16 +113,15 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   // A directory the range deletes still belongs to this repository, so a path under it is stale rather than another repository's.
   const roots = rootsOf(yield* pathsAt(base, [], root));
   const referenced = new Map(proseDocs.map(({ path }) => [path, text(path)]));
-  const references = yield* referenceFindings({ root, base, head, roots, changed, renamedFrom }, referenced, judging);
+  const snapshot = yield* snapshotAt(root, head, referenced, roots);
+  const references = yield* referenceFindings({ root, base, head, roots, changed, renamedFrom }, referenced, snapshot, judging);
   const vanished = yield* vanishedNames(root, base, head, referenced, references.failed);
   const agents = proseDocs.filter(({ path }) => isAgentFile(path));
   const ceilings = agents.flatMap(({ path }) => {
     const ceiling = ceilingFinding(text(path));
     return ceiling === undefined ? [] : [{ path, ...ceiling }];
   });
-  const entries = agents.flatMap(({ path }) =>
-    entryFindings(text(path), changed.get(path) ?? new Set(), !speaksToConsumers(text(path))).map((finding) => ({ path, ...finding })),
-  );
+  const entries = agents.flatMap(({ path }) => entryFindings(path, text(path), snapshot, judging(path)).map((finding) => ({ path, ...finding })));
   const advisory = new Map<string, number>();
   for (const { path } of templated.filter((finding) => !touched.has(finding.path))) advisory.set(path, (advisory.get(path) ?? 0) + 1);
   return {
@@ -150,7 +153,7 @@ export function report({ held, edited, named, agents, findings, advisory, broken
           `${NAME}: ${held.length} doc file(s) the range touches hold to their templates`,
           `${NAME}: ${edited.lines} line(s) the range adds or edits in ${edited.docs} living doc(s) or agent file(s) hold to the prose rules`,
           `${NAME}: the range breaks no path, link or command the ${named} living doc(s) or agent file(s) name`,
-          `${NAME}: the ${agents} agent file(s) hold to the ceiling, and every entry the range adds names a path, link or command`,
+          `${NAME}: the ${agents} agent file(s) hold to the ceiling, and every entry names a path, link or command that resolves`,
         ]
       : [`${NAME}: ${findings.length} violation(s):`, ...findings.map(describe)];
   const unconformed =

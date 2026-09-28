@@ -1,6 +1,6 @@
 import { parseOutline } from "./doc-outline.ts";
-import { commandNames, isPathSpan } from "./doc-references.ts";
-import { AGENT_NAMES, scanMarkdown, type MarkdownLine } from "./prose-matchers.ts";
+import { pointsAtSomething, type Judging, type Snapshot } from "./doc-references.ts";
+import { AGENT_NAMES, scanMarkdown } from "./prose-matchers.ts";
 
 export const AGENT_CEILING = 3000;
 
@@ -24,28 +24,21 @@ export function ceilingFinding(text: string): AgentFinding | undefined {
   };
 }
 
-export function topicBullets(text: string): readonly number[] {
+export function entryLines(text: string): readonly number[] {
   const outline = parseOutline(text);
-  return outline.sections.flatMap((section, index) => {
-    if (section.heading.title === MAINTAINING) return [];
-    const end = outline.sections[index + 1]?.heading.line ?? Number.POSITIVE_INFINITY;
-    return outline.prose
-      .filter((line) => line.line > section.heading.line && line.line < end && LIST_ITEM.test(line.text))
-      .map((line) => line.line);
-  });
+  const kept = outline.sections.flatMap((section, index) =>
+    section.heading.title === MAINTAINING ? [{ from: section.heading.line, to: outline.sections[index + 1]?.heading.line ?? Number.POSITIVE_INFINITY }] : [],
+  );
+  return outline.prose
+    .filter((line) => LIST_ITEM.test(line.text) && !kept.some(({ from, to }) => line.line > from && line.line < to))
+    .map((line) => line.line);
 }
 
-function namesReference(line: MarkdownLine | undefined, commands: boolean): boolean {
-  if (line === undefined || line.kind === "code" || line.kind === "front-matter") return true;
-  return line.code.some(isPathSpan) || line.links.length > 0 || (commands && commandNames(line).length > 0);
-}
-
-export function entryFindings(text: string, changed: ReadonlySet<number>, commands: boolean): readonly AgentFinding[] {
-  const bullets = topicBullets(text);
-  if (bullets.length === 0) return [];
+export function entryFindings(path: string, text: string, snapshot: Snapshot, judging: Judging): readonly AgentFinding[] {
   const scanned = new Map(scanMarkdown(text).map((line) => [line.line, line]));
-  return bullets.flatMap((line) => {
-    if (!changed.has(line) || namesReference(scanned.get(line), commands)) return [];
+  return entryLines(text).flatMap((line) => {
+    const markdown = scanned.get(line);
+    if (markdown === undefined || markdown.kind === "code" || markdown.kind === "front-matter" || pointsAtSomething(path, markdown, snapshot, judging)) return [];
     return [
       {
         line,
