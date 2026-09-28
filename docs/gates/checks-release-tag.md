@@ -16,10 +16,14 @@ It does nothing when `v<version>` already tags `HEAD`, so a rerun after a releas
 When the dispatch fails after the push, it names `gh workflow run <workflow> --ref v<version>`.
 A rerun then finds the tag and does nothing, so that command is what dispatches the release workflow by hand.
 It refuses when `v<version>` already tags another commit.
+Before it pushes the tag, it runs `bun run build` and refuses when the build rewrites a committed file.
+That happens when a release pull request merged behind `main`, so its `CHANGELOG.md` lacks the commits `main` gained.
+The refusal says to open a `chore: release <version>` pull request that only rebuilds `CHANGELOG.md` and merge it, and `daily-release` runs again on that merge.
 
 ## What it reads
 
 It reads the subject of `HEAD` and `package.json` from the checkout, and the tag from `origin` with `git ls-remote`.
+The build it runs reads the whole history, so the checkout fetches all of it.
 It pushes the tag with the credentials the checkout holds.
 It calls the GitHub API through `gh api`, which takes the repository from the checkout's remote and the token from `GH_TOKEN`.
 The token needs `contents: write` and `actions: write`.
@@ -38,7 +42,7 @@ That workflow triggers on `workflow_dispatch` and keeps its own guards, as [chec
 | Code | When |
 | --- | --- |
 | 0 | `HEAD` is no release commit, its tag already tags it, or the tag is pushed and the release workflow dispatched |
-| 2 | the arguments do not parse, `package.json` disagrees with the subject, the tag tags another commit, or the push or a GitHub API call fails |
+| 2 | the arguments do not parse, `package.json` disagrees with the subject, the tag tags another commit, the build fails or rewrites a committed file, or the push or a GitHub API call fails |
 
 ## Sample output
 

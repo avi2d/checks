@@ -49,10 +49,12 @@ To release a version:
    It holds only the version bump and the section the build wrote into `CHANGELOG.md`, so the changelog is never edited by hand.
 1. If `main` moved under it, run `gh workflow run daily-release` again rather than updating the branch.
    The job rebuilds the release on the new `main`, while a merge of `main` into the branch leaves the committed changelog short of the commits the merge brought, which fails the build check.
-1. Merge the pull request through the repository's usual merge path once its checks pass, and keep its title.
+1. Merge the pull request through the repository's usual merge path once its checks pass and it holds current `main`, and keep its title.
    The squash merge lands the title as the commit's subject, and a `feat` or `fix` title would add an entry the committed changelog lacks.
 1. Watch the `release` workflow, which the `tag` job of `daily-release` dispatches once it tags the merge commit.
-   It refuses a ref that is not a tag, a tag off `main` or one that disagrees with `package.json`.
+   The `tag` job first reruns the build, and refuses to tag a merge whose `CHANGELOG.md` the build rewrites.
+   Its error says to open a `chore: release <version>` pull request that only rebuilds `CHANGELOG.md` and merge it.
+   The release workflow refuses a ref that is not a tag, a tag off `main` or one that disagrees with `package.json`.
    It reruns the build, the check that the build changed no committed file, lint, typecheck and the suite before it publishes to npm.
    After npm publish succeeds, the workflow creates or updates the GitHub release with the matching `CHANGELOG.md` section.
 

@@ -1,10 +1,12 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fakeGh, type FakeGh } from "./lib/fake-gh.ts";
-import { CHECKOUT, fixtureRepos, ran, type Ran, scratchDirs } from "./lib/fixture-repo.ts";
+import { CHECKOUT, type FixtureRepo, fixtureRepos, ran, type Ran, scratchDirs } from "./lib/fixture-repo.ts";
 
 const SCRIPT = join(CHECKOUT, "src", "delivery", "release-tag.ts");
+const CHANGELOG = join(CHECKOUT, "src", "delivery", "changelog-write.ts");
 
 const repository = fixtureRepos("checks-release-tag-");
 const scratch = scratchDirs();
@@ -16,10 +18,13 @@ type Landed = {
   readonly inOrigin: (...args: readonly string[]) => Promise<string>;
 };
 
-// main as a squash merge lands a commit on it, with a bare origin the tag is pushed to.
-async function landed(version: string, subject: string): Promise<Landed> {
-  const repo = await repository({ "package.json": JSON.stringify({ name: "widget", version }) });
-  const head = await repo.commit(subject);
+function manifest(version: string): string {
+  const scripts = { build: `bun ${CHANGELOG}` };
+  return `${JSON.stringify({ name: "widget", version, repository: { type: "git", url: "git+https://github.com/acme/widget.git" }, scripts }, null, 2)}\n`;
+}
+
+// A bare origin the tag is pushed to, holding main as the repository has it.
+async function withOrigin(repo: FixtureRepo, head: string): Promise<Landed> {
   const home = await scratch("checks-release-tag-home-");
   const origin = join(home, "origin.git");
   await $`git init -q --bare -b main ${origin} && git remote add origin ${origin} && git push -q origin main`.cwd(repo.dir).quiet();
@@ -32,13 +37,22 @@ async function landed(version: string, subject: string): Promise<Landed> {
   };
 }
 
+// main as a squash merge lands a commit on it, carrying the changelog the build writes.
+async function landed(version: string, subject: string): Promise<Landed> {
+  const repo = await repository({ "package.json": manifest(version) });
+  await repo.commit("chore: add the manifest");
+  await $`bun ${CHANGELOG}`.cwd(repo.dir).quiet();
+  return withOrigin(repo, await repo.commit(subject));
+}
+
 test(
   "a landed release commit is tagged with its version once, and the release workflow is dispatched on the tag",
   async () => {
     const main = await landed("0.2.0", "chore: release 0.2.0 (#7)");
 
     const tagged = await main.run(["release.yml"]);
-    expect(tagged).toEqual({ exitCode: 0, text: `release-tag: tagged ${main.head.slice(0, 12)} as v0.2.0, and dispatched release.yml on it\n` });
+    expect(tagged.exitCode).toBe(0);
+    expect(tagged.text).toContain(`release-tag: tagged ${main.head.slice(0, 12)} as v0.2.0, and dispatched release.yml on it\n`);
     expect(await main.inOrigin("rev-parse", "v0.2.0^{commit}")).toBe(main.head);
     expect((await main.state()).dispatches).toEqual([{ workflow: "release.yml", ref: "v0.2.0" }]);
 
@@ -63,6 +77,36 @@ test(
     const again = await main.run(["release.yml"]);
     expect(again).toEqual({ exitCode: 0, text: `release-tag: v0.2.0 already tags ${main.head.slice(0, 12)}\n` });
     expect((await main.state()).dispatches).toEqual([]);
+  },
+  60_000,
+);
+
+test(
+  "a release that merged behind main is refused before it is tagged, and the refusal names the pull request that rebuilds its changelog",
+  async () => {
+    const repo = await repository({ "package.json": manifest("0.1.0") });
+    const land = async (subject: string, files: Readonly<Record<string, string>>): Promise<string> => {
+      await repo.write(files);
+      return repo.commit(subject);
+    };
+    await land("feat: build a bill (#1)", { "notes/1.txt": "bill\n" });
+    await $`bun ${CHANGELOG}`.cwd(repo.dir).quiet();
+    await land("docs: write the changelog (#2)", {});
+    await land("feat: price a bill (#3)", { "notes/3.txt": "price\n" });
+    await repo.write({ "package.json": manifest("0.2.0") });
+    await $`bun ${CHANGELOG}`.cwd(repo.dir).quiet();
+    const builtBeforeTheFix = await readFile(join(repo.dir, "CHANGELOG.md"), "utf8");
+    await $`git checkout -q -- .`.cwd(repo.dir).quiet();
+    await land("fix(parts): keep the order of parts (#4)", { "notes/4.txt": "order\n" });
+    const main = await withOrigin(repo, await land("chore: release 0.2.0 (#5)", { "package.json": manifest("0.2.0"), "CHANGELOG.md": builtBeforeTheFix }));
+
+    const refused = await main.run(["release.yml"]);
+    expect(refused.exitCode).toBe(2);
+    expect(refused.text).toContain(
+      `checks-release-tag: the build rewrites CHANGELOG.md at ${main.head.slice(0, 12)}, which the release workflow's build check refuses; open a \`chore: release 0.2.0\` pull request that only rebuilds CHANGELOG.md, merge it, and let daily-release run again on that merge`,
+    );
+    expect(await main.inOrigin("tag", "--list")).toBe("");
+    expect((await main.state()).calls).toEqual([]);
   },
   60_000,
 );

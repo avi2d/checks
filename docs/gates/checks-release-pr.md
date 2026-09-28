@@ -124,6 +124,8 @@ jobs:
       actions: write
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
@@ -136,8 +138,8 @@ jobs:
 
 A public repository keeps `runs-on: ubuntu-latest`.
 A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || fromJSON('["self-hosted","Linux","X64","winbox"]') }}` on both jobs, as its other workflows do.
-A repository whose build needs more than Bun adds the steps its `.github/workflows/ci.yml` runs before `bun run build`, and nothing after it.
-The job runs no test suite and no mutation run.
+A repository whose build needs more than Bun adds the steps its `.github/workflows/ci.yml` runs before `bun run build` to both jobs, and nothing after it.
+Neither job runs a test suite or a mutation run.
 On a hosted runner the `pull-request` job takes about 25 seconds, which GitHub bills as one minute, whether it opens, refreshes or leaves the pull request alone.
 A private repository runs it on its self-hosted runner, which bills no minutes.
 The `tag` job runs only when a release lands, and a job its `if` skips bills nothing.
@@ -152,6 +154,8 @@ The daily release needs the repository's other workflows to accept the dispatch:
 - The title lint reads the title of the one open pull request its branch heads when the event carries none, as [Commit messages](../configs/commit-messages.md) says.
 - `.github/workflows/release.yml` triggers on `workflow_dispatch` and refuses a ref that is not a tag, as [checks-release-notes](checks-release-notes.md) shows.
 - **Allow GitHub Actions to create and approve pull requests** is on, which the call after the step sets.
+- A release pull request holds current `main` when it merges.
+  One that merges behind `main` lands a changelog short of the commits `main` gained, and `checks-release-tag` refuses to tag it.
 
 The step reports a dispatched run's result as a commit status on the head commit:
 

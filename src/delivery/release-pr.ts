@@ -1,8 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect, Encoding, FileSystem, Path, Schema } from "effect";
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import { dispatch, gitHubJson, REPOSITORY } from "./github.ts";
-import { nextVersion, type Pending, readPending, releaseTitle, withVersion } from "./release.ts";
+import { nextVersion, type Pending, readPending, releaseTitle, runBuild, withVersion } from "./release.ts";
 import { git } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 
@@ -98,14 +97,6 @@ const readRemote = Effect.fn("readRemote")(function* (root: string, branch: stri
     Effect.orElseSucceed(() => undefined),
   );
   return { parents, version } satisfies Remote;
-});
-
-const runBuild = Effect.fn("runBuild")(function* (root: string) {
-  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const exitCode = yield* spawner.exitCode(
-    ChildProcess.make(process.execPath, ["run", "build"], { cwd: root, stdin: "ignore", stdout: "inherit", stderr: "inherit" }),
-  );
-  if (exitCode !== ChildProcessSpawner.ExitCode(0)) return yield* refused(`bun run build exited ${exitCode}`);
 });
 
 const readStaged = Effect.fn("readStaged")(function* (root: string, staged: Staged) {

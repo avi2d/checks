@@ -1,8 +1,13 @@
 import { Effect, Schema } from "effect";
+import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import { groupOf } from "./changelog.ts";
 import { git } from "../core/git.ts";
 
 class ReleaseUnreadable extends Schema.TaggedError<ReleaseUnreadable>()("ReleaseUnreadable", {
+  message: Schema.String,
+}) {}
+
+class BuildFailed extends Schema.TaggedError<BuildFailed>()("BuildFailed", {
   message: Schema.String,
 }) {}
 
@@ -42,6 +47,14 @@ export function releaseTitle(version: string): string {
 export function releasedVersionOf(subject: string): string | undefined {
   return RELEASE_SUBJECT.exec(subject)?.[1];
 }
+
+export const runBuild = Effect.fn("runBuild")(function* (root: string) {
+  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const exitCode = yield* spawner.exitCode(
+    ChildProcess.make(process.execPath, ["run", "build"], { cwd: root, stdin: "ignore", stdout: "inherit", stderr: "inherit" }),
+  );
+  if (exitCode !== ChildProcessSpawner.ExitCode(0)) return yield* new BuildFailed({ message: `bun run build exited ${exitCode}` });
+});
 
 const lastTag = Effect.fn("lastTag")(function* (root: string) {
   const described = yield* git(["describe", "--tags", "--abbrev=0", `--match=${RELEASE_TAG}`, "HEAD"], root).pipe(

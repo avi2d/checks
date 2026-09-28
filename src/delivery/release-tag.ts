@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { dispatch, GitHubFailure } from "./github.ts";
-import { releasedVersionOf } from "./release.ts";
+import { releasedVersionOf, releaseTitle, runBuild } from "./release.ts";
 import { git } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 
@@ -42,6 +42,13 @@ const releaseTag = Effect.gen(function* () {
     return true;
   }
   if (tagged !== undefined) return yield* new TagRefused({ message: `${tag} already tags ${tagged.slice(0, 12)}, not ${head.slice(0, 12)}` });
+  yield* runBuild(root);
+  const rebuilt = (yield* git(["diff", "--name-only"], root)).trim().split("\n").filter((file) => file !== "");
+  if (rebuilt.length > 0) {
+    return yield* new TagRefused({
+      message: `the build rewrites ${rebuilt.join(", ")} at ${head.slice(0, 12)}, which the release workflow's build check refuses; open a \`${releaseTitle(version)}\` pull request that only rebuilds CHANGELOG.md, merge it, and let daily-release run again on that merge`,
+    });
+  }
   yield* git(["push", "--quiet", "origin", `${head}:refs/tags/${tag}`], root);
   yield* dispatch(workflow, tag).pipe(
     Effect.mapError(
