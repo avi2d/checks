@@ -13,8 +13,6 @@ export type Unresolved = {
     | { readonly type: "anchor" };
 };
 
-export type Reference = "resolved" | Unresolved;
-
 export type Snapshot = {
   readonly files: ReadonlySet<string>;
   readonly directories: ReadonlySet<string>;
@@ -63,43 +61,37 @@ function exists(snapshot: Snapshot, path: string): boolean {
 }
 
 const PARENT = /^\.\.\//;
-const LOCATION = /:\d+(?::\d+)?$/;
-const PATH = /^(?:\.{1,2}\/)*(?:[\w.@-]+\/)+[\w.@-]+\.(?:ts|tsx|mts|cts|js|jsx|cjs|mjs|md|mdx|json|jsonc|sh|bash|zsh|toml|nix|lua|ya?ml|txt|py|rs|go|css|html)$/;
+const PATH = /^((?:\.{1,2}\/)*(?:[\w.@-]+\/)+[\w.@-]+\.(?:ts|tsx|mts|cts|js|jsx|cjs|mjs|md|mdx|json|jsonc|sh|bash|zsh|toml|nix|lua|ya?ml|txt|py|rs|go|css|html))(?::\d+(?::\d+)?)?$/;
 
-function pathReference(doc: string, line: number, span: string, snapshot: Snapshot): Reference | undefined {
-  const named = span.replace(LOCATION, "");
-  if (named === "" || /\s/.test(named)) return undefined;
+function unresolvedPath(doc: string, line: number, span: string, snapshot: Snapshot): Unresolved | undefined {
+  const named = PATH.exec(span)?.[1];
+  if (named === undefined) return undefined;
   const fromDoc = within(directoryOf(doc), named);
   const fromRoot = PARENT.test(named) ? undefined : normalize(named);
-  if ([fromRoot, fromDoc].some((path) => path !== undefined && path !== "" && exists(snapshot, path))) return "resolved";
+  if ([fromRoot, fromDoc].some((path) => path !== undefined && exists(snapshot, path))) return undefined;
   const checked = fromRoot ?? fromDoc;
   // A path whose top directory this repository lacks names a file in another one, such as a consumer's.
-  if (!PATH.test(named) || checked === undefined || (fromRoot !== undefined && !snapshot.roots.has(fromRoot.split("/")[0] ?? ""))) return undefined;
+  if (checked === undefined || (fromRoot !== undefined && !snapshot.roots.has(fromRoot.split("/")[0] ?? ""))) return undefined;
   return { kind: "path", line, named, message: `names \`${named}\`, which is not in the repository`, missing: { type: "file", path: checked } };
 }
 
 const SCHEME = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
 const ASCII_ESCAPE = /%([0-7][0-9a-f])/gi;
 
-function linkedPath(doc: string, target: string): string | undefined {
+function unresolvedLink(doc: string, line: number, target: string, snapshot: Snapshot): Unresolved | undefined {
   if (target === "" || SCHEME.test(target)) return undefined;
   const hash = target.indexOf("#");
   const written = (hash < 0 ? target : target.slice(0, hash)).split("?", 1)[0] ?? "";
   const decoded = written.replace(ASCII_ESCAPE, (_, code: string) => String.fromCharCode(Number.parseInt(code, 16)));
-  return decoded === "" ? doc : decoded.startsWith("/") ? normalize(decoded) : within(directoryOf(doc), decoded);
-}
-
-function linkReference(doc: string, line: number, target: string, snapshot: Snapshot): Reference | undefined {
-  const path = linkedPath(doc, target);
+  const path = decoded === "" ? doc : decoded.startsWith("/") ? normalize(decoded) : within(directoryOf(doc), decoded);
   if (path === undefined) return undefined;
-  const hash = target.indexOf("#");
   const named = target;
   if (!exists(snapshot, path)) {
     return { kind: "link", line, named, message: `links to \`${named}\`, which is not in the repository`, missing: { type: "file", path } };
   }
   const anchor = hash < 0 ? "" : target.slice(hash + 1);
   const anchors = snapshot.anchors.get(path);
-  if (anchor === "" || anchors === undefined || anchors.has(anchor) || anchors.has(anchor.toLowerCase())) return "resolved";
+  if (anchor === "" || anchors === undefined || anchors.has(anchor) || anchors.has(anchor.toLowerCase())) return undefined;
   return { kind: "link", line, named, message: `links to \`${named}\`, and \`${path}\` has no heading with that anchor`, missing: { type: "anchor" } };
 }
 
@@ -114,17 +106,16 @@ function packageOf(doc: string, snapshot: Snapshot): string | undefined {
   return undefined;
 }
 
-function commandReference(doc: string, line: number, name: string, snapshot: Snapshot): Reference | undefined {
+function unresolvedCommand(doc: string, line: number, name: string, snapshot: Snapshot): Unresolved | undefined {
   const packageDirectory = packageOf(doc, snapshot);
   if (packageDirectory === undefined || NOT_A_NAME.test(name)) return undefined;
   const named = `bun run ${name}`;
   if (RUNS_A_FILE.test(name)) {
     const path = within(packageDirectory, name);
-    if (path === undefined) return undefined;
-    if (exists(snapshot, path)) return "resolved";
+    if (path === undefined || exists(snapshot, path)) return undefined;
     return { kind: "command", line, named, message: `runs \`${named}\`, and \`${path}\` is not in the repository`, missing: { type: "file", path } };
   }
-  if (snapshot.scripts.get(packageDirectory)?.has(name) === true) return "resolved";
+  if (snapshot.scripts.get(packageDirectory)?.has(name) === true) return undefined;
   const manifest = packageDirectory === "" ? PACKAGE_MANIFEST : `${packageDirectory}/${PACKAGE_MANIFEST}`;
   return {
     kind: "command",
@@ -140,25 +131,30 @@ function commandsOn({ kind, raw, code }: MarkdownLine): readonly string[] {
   return texts.flatMap((text) => [...text.matchAll(RUN)].map(([, name = ""]) => name.replace(/[),.;:]+$/, "")));
 }
 
-export type Judging = { readonly commands: boolean };
-
-export function referencesOn(doc: string, markdown: MarkdownLine, snapshot: Snapshot, { commands }: Judging): readonly Reference[] {
-  const { line } = markdown;
-  const prose = markdown.kind === "code" || markdown.kind === "front-matter" ? [] : markdown.code.map((span) => pathReference(doc, line, span, snapshot));
-  const links = markdown.links.map((target) => linkReference(doc, line, target, snapshot));
-  const runs = commands && markdown.kind !== "front-matter" ? commandsOn(markdown).map((name) => commandReference(doc, line, name, snapshot)) : [];
-  return [...prose, ...links, ...runs].filter((found) => found !== undefined);
+export function commandNames(line: MarkdownLine): readonly string[] {
+  return commandsOn(line).filter((name) => !NOT_A_NAME.test(name));
 }
 
-export function unresolvedIn(doc: string, text: string, snapshot: Snapshot, judging: Judging): readonly Unresolved[] {
-  return scanMarkdown(text).flatMap((markdown) => referencesOn(doc, markdown, snapshot, judging).filter((found) => found !== "resolved"));
+export type Judging = { readonly commands: boolean };
+
+export function unresolvedIn(doc: string, text: string, snapshot: Snapshot, { commands }: Judging): readonly Unresolved[] {
+  return scanMarkdown(text).flatMap((markdown) => {
+    const { line } = markdown;
+    const prose = markdown.kind === "code" || markdown.kind === "front-matter" ? [] : markdown.code.map((span) => unresolvedPath(doc, line, span, snapshot));
+    const links = markdown.links.map((target) => unresolvedLink(doc, line, target, snapshot));
+    const runs = commands && markdown.kind !== "front-matter" ? commandsOn(markdown).map((name) => unresolvedCommand(doc, line, name, snapshot)) : [];
+    return [...prose, ...links, ...runs].filter((found) => found !== undefined);
+  });
 }
 
 export function anchoredTargets(doc: string, text: string): readonly string[] {
   return scanMarkdown(text).flatMap(({ links }) =>
     links.flatMap((target) => {
-      const path = linkedPath(doc, target);
-      return target.includes("#") && path?.endsWith(".md") === true ? [path] : [];
+      const hash = target.indexOf("#");
+      if (hash < 0 || SCHEME.test(target)) return [];
+      const written = target.slice(0, hash);
+      const path = written === "" ? doc : written.startsWith("/") ? normalize(written) : within(directoryOf(doc), written);
+      return path?.endsWith(".md") === true ? [path] : [];
     }),
   );
 }

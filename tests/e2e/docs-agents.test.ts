@@ -56,7 +56,7 @@ test(
     await put("AGENTS.md", COMPLIANT);
     const fixed = await commit("a router under the ceiling");
     const green = await docs(planted, fixed);
-    expect(green.text).toContain("docs: the 1 agent file(s) hold to the ceiling, and every entry names a path, link or command that resolves");
+    expect(green.text).toContain("docs: the 1 agent file(s) hold to the ceiling, and every entry names a tracked path, a link or a command");
     expect(green.exitCode).toBe(0);
   },
   120_000,
@@ -76,7 +76,7 @@ test(
     await put("AGENTS.md", COMPLIANT.replace("- Edit `src/parts.toml` instead of the generated `src/parts.json`.", "- Write good code."));
     const planted = await commit("an entry that names nothing");
     const red = await docs(previous, planted);
-    expect(red.text).toContain("  AGENTS.md:7: names no path, link or command that resolves");
+    expect(red.text).toContain("  AGENTS.md:7: names no tracked path, link or `bun run` command");
     expect(red.exitCode).toBe(1);
 
     await put("AGENTS.md", COMPLIANT);
@@ -118,7 +118,7 @@ test(
     const head = await commit("touch only another file");
 
     const red = await docs(previous, head);
-    expect(red.text).toContain("  AGENTS.md:7: names no path, link or command that resolves");
+    expect(red.text).toContain("  AGENTS.md:7: names no tracked path, link or `bun run` command");
     expect(red.exitCode).toBe(1);
 
     await put("AGENTS.md", COMPLIANT.replace("- Edit `src/parts.toml` instead of the generated `src/parts.json`.", "- Edit `widget.ts` first."));
@@ -130,30 +130,25 @@ test(
 );
 
 test(
-  "an entry pointing at a missing anchor behind a query goes red, and entries naming an extensionless file or an installed bin stay green",
+  "an entry naming a root file git tracks, such as LICENSE, points, and one naming an untracked root file does not",
   async () => {
     const { put, commit, docs } = await initRepo();
     await putParts(put);
     await put("LICENSE", "MIT\n");
-    await put("package.json", '{ "name": "fixture", "scripts": {} }\n');
-    await put(".gitignore", "node_modules/\n");
-    await put("node_modules/.bin/checks-lint", "#!/bin/sh\n");
-    await put("docs/layout.md", "# Layout\n\n## Parts\n\nThe parts live under src.\n");
     await put("AGENTS.md", COMPLIANT);
-    const previous = await commit("a router with a people doc");
+    const previous = await commit("a router and a licence");
 
     const entry = "- Edit `src/parts.toml` instead of the generated `src/parts.json`.";
-    await put("AGENTS.md", COMPLIANT.replace(entry, "- Read [the layout](docs/layout.md?plain=1#missing) first."));
-    const planted = await commit("an entry whose anchor is missing");
+    await put("AGENTS.md", COMPLIANT.replace(entry, "- Read `NOTICE` first."));
+    const planted = await commit("an entry naming a root file git does not track");
     const red = await docs(previous, planted);
-    expect(red.text).toContain("  AGENTS.md:7: names no path, link or command that resolves");
+    expect(red.text).toContain("  AGENTS.md:7: names no tracked path, link or `bun run` command");
     expect(red.exitCode).toBe(1);
 
-    const pointers = ["- Read `LICENSE` first.", "- Run `bun run checks-lint` first.", "- Read [the layout](docs/layout.md?plain=1#parts) first."];
-    await put("AGENTS.md", COMPLIANT.replace(entry, pointers.join("\n")));
-    const fixed = await commit("entries naming an extensionless file, an installed bin and a query-anchored link");
+    await put("AGENTS.md", COMPLIANT.replace(entry, "- Read `LICENSE` first."));
+    const fixed = await commit("an entry naming the licence");
     const green = await docs(planted, fixed);
-    expect(green.text).toContain("every entry names a path, link or command that resolves");
+    expect(green.text).toContain("every entry names a tracked path, a link or a command");
     expect(green.exitCode).toBe(0);
   },
   120_000,

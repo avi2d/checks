@@ -14,7 +14,7 @@ It lists every other doc file that does not match its template yet, and does not
 It holds each line a change adds or edits in a living doc or an agent file to the prose rules, as [The prose rules](#the-prose-rules) says.
 It fails when a living doc or an agent file names a path, link or command that does not resolve, and the range added or broke it.
 It fails when an agent file holds more than 3,000 characters, whatever the range touches, as [Agent files](#agent-files) says.
-It fails when an entry in an agent file names no path, link or command that resolves, whatever the range touches.
+It fails when an entry in an agent file names no tracked path, link or `bun run` command, whatever the range touches.
 It fails when a living doc or an agent file names a code span the range removed from every file outside the docs, on any line.
 [Paths, links and commands](#paths-links-and-commands) says how each reference resolves.
 The package ships one template per kind under `dist/templates/`, and a repository starts a new doc file by copying one:
@@ -149,15 +149,13 @@ audience: consumers
 An agent file holds the router its template sketches, and the two rules below hold its shape whatever the range touches.
 A file over 3,000 characters fails.
 Move each part's notes into the people doc that covers that part, and delete what a check or the code already holds.
-Each entry names at least one reference that resolves at the head commit, or it fails:
+Each entry names at least one of these, or it fails:
 
-- A path in inline code names any file or directory from the root or from the file's directory, such as `package.json`, `LICENSE` or `.gitignore`.
-- A relative Markdown link names a file or directory, and its anchor names a heading there.
-  An empty link or a link with a scheme does not count.
-- A `bun run` command names a script in the nearest `package.json`, a bin in `node_modules/.bin`, or a file that exists.
+- A path in inline code that git tracks at the head commit, a file or a directory, from the root or from the file's directory, such as `package.json`, `LICENSE` or `.gitignore`.
+- A Markdown link with a destination.
+- A `bun run` command.
 
-A path git ignores counts too, as it does in [Paths, links and commands](#paths-links-and-commands).
-
+Whether the link or the command resolves is the reference rule's call, as [Paths, links and commands](#paths-links-and-commands) says, and it fails when the range adds or breaks one.
 An entry is any list item outside `## Maintaining this file`, the items above the first section included.
 A fresh file passes the ceiling, and its entries pass once each names the file that holds its detail.
 
@@ -187,8 +185,8 @@ With one it is that commit against its parent, or against the empty tree for a r
 
 | Code | When |
 | --- | --- |
-| 0 | every doc file the range touches holds to its template, every line it adds to a living doc or an agent file holds to the prose rules, it adds or breaks no reference that does not resolve, every agent file holds to the ceiling, every entry in an agent file names a path, link or command that resolves, and no code span a living doc or an agent file names vanished from every file outside the docs |
-| 1 | a doc file the range touches does not hold to its template, a line the range adds to a living doc or an agent file breaks a prose rule, the range adds or breaks a reference that does not resolve, an agent file is over the ceiling, an entry in an agent file names no path, link or command that resolves, or the range removes a name a living doc or an agent file still carries |
+| 0 | every doc file the range touches holds to its template, every line it adds to a living doc or an agent file holds to the prose rules, it adds or breaks no reference that does not resolve, every agent file holds to the ceiling, every entry in an agent file names a tracked path, a link or a command, and no code span a living doc or an agent file names vanished from every file outside the docs |
+| 1 | a doc file the range touches does not hold to its template, a line the range adds to a living doc or an agent file breaks a prose rule, the range adds or breaks a reference that does not resolve, an agent file is over the ceiling, an entry in an agent file names no tracked path, link or command, or the range removes a name a living doc or an agent file still carries |
 | 2 | a `package.json` does not decode, a ref does not resolve, or `grep` cannot read an installed direct dependency |
 
 ## Sample output

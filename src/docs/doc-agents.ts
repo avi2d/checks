@@ -1,6 +1,6 @@
 import { parseOutline } from "./doc-outline.ts";
-import { referencesOn, type Judging, type Reference, type Snapshot, type Unresolved } from "./doc-references.ts";
-import { AGENT_NAMES, scanMarkdown } from "./prose-matchers.ts";
+import { commandNames } from "./doc-references.ts";
+import { AGENT_NAMES, scanMarkdown, type MarkdownLine } from "./prose-matchers.ts";
 
 export const AGENT_CEILING = 3000;
 
@@ -34,22 +34,27 @@ export function entryLines(text: string): readonly number[] {
     .map((line) => line.line);
 }
 
-export function entryFindings(
-  path: string,
-  text: string,
-  snapshot: Snapshot,
-  judging: Judging,
-  stillBroken: (unresolved: Unresolved) => boolean,
-): readonly AgentFinding[] {
+function namesTrackedPath(agentFile: string, span: string, tracked: (path: string) => boolean): boolean {
+  const named = span.replace(/^(?:\.\/)+/, "").replace(/\/+$/, "");
+  const directory = agentFile.includes("/") ? agentFile.slice(0, agentFile.lastIndexOf("/")) : "";
+  return named !== "" && [named, directory === "" ? named : `${directory}/${named}`].some(tracked);
+}
+
+function points(agentFile: string, line: MarkdownLine, tracked: (path: string) => boolean): boolean {
+  return (
+    line.code.some((span) => namesTrackedPath(agentFile, span, tracked)) || line.links.some((target) => target !== "") || commandNames(line).length > 0
+  );
+}
+
+export function entryFindings(agentFile: string, text: string, tracked: (path: string) => boolean): readonly AgentFinding[] {
   const scanned = new Map(scanMarkdown(text).map((line) => [line.line, line]));
-  const points = (reference: Reference): boolean => reference === "resolved" || !stillBroken(reference);
   return entryLines(text).flatMap((line) => {
     const markdown = scanned.get(line);
-    if (markdown === undefined || markdown.kind === "code" || markdown.kind === "front-matter" || referencesOn(path, markdown, snapshot, judging).some(points)) return [];
+    if (markdown === undefined || markdown.kind === "code" || markdown.kind === "front-matter" || points(agentFile, markdown, tracked)) return [];
     return [
       {
         line,
-        message: "names no path, link or command that resolves. Name the file, link or command that holds the detail",
+        message: "names no tracked path, link or `bun run` command. Name the file, link or command that holds the detail",
       },
     ];
   });

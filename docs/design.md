@@ -176,7 +176,8 @@ A repository adopts the templates as its files change, and an untouched file is 
 The prose rules judge only the lines a change adds or edits.
 A report about the past is refused the way a promise about the future is, because history on a living page reads as current fact.
 Text nobody touched never breaks the templates or the prose rules, and a record keeps the words it was written in.
-A repository needs no cleanup pass before the gate runs.
+A repository needs no cleanup pass before the gate runs, except on its agent files.
+The ceiling and the entry rule judge every agent file at the head commit, because an agent reads the whole file every session, touched or not.
 Review, not the check, keeps a task heading verb first.
 No word list tells `Test layout` from `Test the layout`, and a check that passes the noun would be worse than none.
 
