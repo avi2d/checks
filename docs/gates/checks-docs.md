@@ -61,6 +61,7 @@ A template decides a file's structure, and the template file itself is the refer
   A `Date: YYYY-MM-DD` line follows the title.
   The first word under Status is Proposed, Accepted, Rejected, Deprecated, Superseded or Retired.
   No other record holds its number.
+  A Status that amends, narrows or supersedes another record names it, and the other record names it back.
 - A changelog lists its releases newest first, and each opens with a `Released YYYY-MM-DD.` line.
 - A how-to or tutorial page numbers its steps.
 - `CLAUDE.md` is its template word for word.

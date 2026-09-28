@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { cuts, hasEntries, releaseDates, renderChangelog, type Bump } from "../../src/delivery/changelog.ts";
-import { judge } from "../../src/docs/doc-rules.ts";
+import { judge, recordsOf } from "../../src/docs/doc-rules.ts";
 
 const SUBJECTS = [
   "chore: begin history",
@@ -123,7 +123,7 @@ test("a changelog with no release to write holds only its title and lead, which 
   expect(rendered).toBe(
     ["# Changelog", "", "Every release of `widget`, newest first, written by the release from its conventional commits."].join("\n") + "\n",
   );
-  expect(judge("changelog", { path: "CHANGELOG.md", text: rendered }, [])).toEqual([]);
+  expect(judge("changelog", { path: "CHANGELOG.md", text: rendered }, recordsOf([]))).toEqual([]);
 });
 
 test("the dates a changelog already carries read back by version, so regenerating it keeps them", () => {
@@ -150,5 +150,5 @@ test("a rendered changelog holds to the changelog template checks-docs holds it 
     ],
     "https://github.com/acme/widget",
   );
-  expect(judge("changelog", { path: "CHANGELOG.md", text: rendered }, [])).toEqual([]);
+  expect(judge("changelog", { path: "CHANGELOG.md", text: rendered }, recordsOf([]))).toEqual([]);
 });
