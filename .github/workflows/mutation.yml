@@ -1,0 +1,160 @@
+name: mutation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - src/**
+      - tests/**
+      - stryker.conf.mjs
+      - stryker.preset.js
+      - package.json
+      - bun.lock
+      - .github/workflows/mutation.yml
+  pull_request:
+    paths:
+      - src/**
+      - tests/**
+      - stryker.conf.mjs
+      - stryker.preset.js
+      - package.json
+      - bun.lock
+      - .github/workflows/mutation.yml
+  workflow_dispatch:
+
+# Advisory on purpose: the comparator's --advisory flag keeps a regression from
+# failing the job, so a failure here still means the run itself broke.
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    if: github.event_name != 'pull_request'
+    # Queue rather than cancel: a baseline must finish to upload, and the queued run resumes from it.
+    concurrency:
+      group: mutation-baseline
+      cancel-in-progress: false
+    # About 45 minutes for the first full run on these runners; later runs are
+    # incremental from the uploaded state and take minutes.
+    timeout-minutes: 120
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: bun install --frozen-lockfile
+      # The previous baseline's incremental state turns every run after the first into the mutants main changed.
+      - name: Restore previous baseline state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id="$(gh run list --workflow mutation.yml --branch main --status success --limit 20 --json databaseId,event --jq 'map(select(.event != "pull_request"))[0].databaseId // empty')"
+          download="$(mktemp -d)"
+          if [ -n "$run_id" ] && gh run download "$run_id" --name mutation-baseline --dir "$download" && [ -f "$download/stryker-incremental.json" ]; then
+            mkdir -p reports
+            cp "$download/stryker-incremental.json" reports/stryker-incremental.json
+          fi
+      # Incremental with no prior state runs everything, and writes the state the next main run reuses.
+      - run: time bun run mutate:incremental
+      # Only main publishes the baseline the next main run and every pull request resume from.
+      - uses: actions/upload-artifact@v4
+        if: github.ref == 'refs/heads/main'
+        with:
+          name: mutation-baseline
+          path: |
+            reports/mutation/mutation.json
+            reports/stryker-incremental.json
+          retention-days: 90
+
+  compare:
+    if: github.event_name == 'pull_request'
+    # Cancel here and never on main: a newer push obsoletes this comparison, while a baseline must run to upload.
+    concurrency:
+      group: mutation-${{ github.ref }}
+      cancel-in-progress: true
+    # Scoped to the files the pull request changes, so minutes track the diff, not the suite.
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      # Changed src files mutate directly; changed tests add the src files they
+      # cover in main's baseline, so a test-only pull request is measured too.
+      - name: Select mutation scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          base="$(git merge-base HEAD origin/main)"
+          echo "BASE_SHA=$base" >> "$GITHUB_ENV"
+          baseline="$(mktemp -d)/mutation.json"
+          run_id="$(gh run list --workflow mutation.yml --branch main --status success --limit 20 --json databaseId,event --jq 'map(select(.event != "pull_request"))[0].databaseId // empty')"
+          download="$(mktemp -d)"
+          if [ -n "$run_id" ] && gh run download "$run_id" --name mutation-baseline --dir "$download" && [ -f "$download/mutation.json" ]; then
+            cp "$download/mutation.json" "$baseline"
+          else
+            baseline=""
+          fi
+          scope=""
+          while IFS= read -r file; do
+            case "$file" in
+              src/*.ts) scope="$scope,$file";;
+            esac
+          done <<EOF
+          $(git diff --name-only --diff-filter=ACMRT "$base...HEAD")
+          EOF
+          tests="$(git diff --name-only --diff-filter=ACMRTD "$base...HEAD" -- 'tests/unit/*.test.ts')"
+          if [ -n "$tests" ] && [ -n "$baseline" ]; then
+            covered="$(jq -r --arg tests "$tests" '
+              ($tests | split("\n")) as $changed
+              | ([.testFiles | to_entries[] | select(.key as $k | $changed | index($k)) | .value.tests[].id]) as $ids
+              | [.files | to_entries[] | select(.value.mutants[]?.coveredBy[]? as $c | $ids | index($c)) | .key] | join(",")
+            ' "$baseline")"
+            scope="$scope,$covered"
+          fi
+          echo "SCOPE=$(printf '%s' "$scope" | tr ',' '\n' | sed '/^$/d' | sort -u | paste -sd ',' -)" >> "$GITHUB_ENV"
+      - name: Report empty scope
+        if: env.SCOPE == ''
+        run: "echo 'mutation: no source files changed, nothing to mutate'"
+      - uses: oven-sh/setup-bun@v2
+        if: env.SCOPE != ''
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/setup-node@v5
+        if: env.SCOPE != ''
+        with:
+          node-version: 24
+      - if: env.SCOPE != ''
+        run: bun install --frozen-lockfile
+      # Seeded from main's baseline, so only the mutants main has not already scored run here.
+      - name: Build scope report at merge base
+        if: env.SCOPE != ''
+        run: |
+          git worktree add "$RUNNER_TEMP/mutation-base" "$BASE_SHA"
+          if [ ! -f "$RUNNER_TEMP/mutation-base/stryker.conf.mjs" ]; then
+            echo 'mutation: merge base predates mutation testing, skipping comparison'
+            echo 'SKIP_COMPARE=true' >> "$GITHUB_ENV"
+          else
+            (cd "$RUNNER_TEMP/mutation-base" && bun install --frozen-lockfile && time bunx stryker run --mutate "$SCOPE")
+          fi
+      # Only the mutants the pull request changed run again.
+      - name: Build scope report at head
+        if: env.SCOPE != '' && env.SKIP_COMPARE != 'true'
+        run: time bunx stryker run --mutate "$SCOPE"
+      - name: Compare scope reports
+        if: env.SCOPE != '' && env.SKIP_COMPARE != 'true'
+        run: ./node_modules/.bin/checks-mutation-compare --advisory "$RUNNER_TEMP/mutation-base/reports/mutation/mutation.json" reports/mutation/mutation.json
