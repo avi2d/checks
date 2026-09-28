@@ -11,6 +11,8 @@ audience: consumers
 The author and committer of each commit must be allowed.
 A commit whose trailer block carries a `Co-authored-by` trailer, as git parses it, is refused.
 `GitHub <noreply@github.com>` is allowed as committer only.
+`github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>` is allowed as author only of a commit whose subject is `chore: release <version>`, with or without the pull request number a squash merge adds.
+GitHub attributes the release commit [checks-release-pr](checks-release-pr.md) makes to that bot, since it commits through the workflow token.
 
 ## What it reads
 

@@ -7,6 +7,8 @@ const OUTSIDE_LINT = {
   "checks-changelog": "src/delivery/changelog-write.ts",
   "checks-release-notes": "src/delivery/release-notes.ts",
   "checks-release-report": "src/delivery/release-report.ts",
+  "checks-release-pr": "src/delivery/release-pr.ts",
+  "checks-release-tag": "src/delivery/release-tag.ts",
   "checks-mutation": "src/testing/mutation.ts",
   "checks-mutation-compare": "src/testing/mutation-compare.ts",
   "checks-subsumed-tests": "src/testing/subsumed-tests.ts",

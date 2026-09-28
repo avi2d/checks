@@ -23,6 +23,9 @@ It lints the pull request title and nothing else.
 The title is the enforced subject because a squash merge uses it as the main commit subject, and per-commit messages are not linted.
 GitHub appends ` (#N)` to the squashed subject, so the workflow lints the title with that suffix attached, and the header length limit applies to the landed subject, not the bare title.
 The workflow moves git's comment character off `#`, so a title starting with `#` is linted like any other.
+The workflow also triggers on `workflow_dispatch`, since a release pull request the workflow token opens starts no `pull_request` run, as [checks-release-pr](../gates/checks-release-pr.md) says.
+A dispatched run carries no pull request, so the workflow reads the title of the one open pull request its branch heads, and fails when there is none.
+The kit's own `.github/workflows/commitlint.yml` shows the step.
 
 It never sees a commit's author or committer fields, nor the `Co-authored-by` trailer GitHub writes from a foreign author when it squashes, so it cannot enforce who a commit belongs to.
 [checks-commit-identity](../gates/checks-commit-identity.md) is that enforcement.

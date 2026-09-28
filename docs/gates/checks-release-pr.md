@@ -1,0 +1,171 @@
+---
+kind: reference
+audience: consumers
+---
+# checks-release-pr
+
+`checks-release-pr` opens or refreshes the one pull request that releases the next version, and dispatches its checks on its head.
+
+## What it checks
+
+It lists the unreleased changes the way [checks-release-report](checks-release-report.md) does, and does nothing when there are none.
+It bumps the version `package.json` holds by the kit's rule:
+
+| Unreleased changes | Below 1.0.0 | From 1.0.0 |
+| --- | --- | --- |
+| a breaking change | minor | major |
+| a feature and no breaking change | minor | minor |
+| only fixes, performance changes or reverts | patch | patch |
+
+It refuses when the last release tag names a version other than the one `package.json` holds, since an untagged bump means a release landed that nothing published.
+It refuses a version that is not a plain `major.minor.patch`.
+It writes the next version into `package.json`, runs `bun run build` so the build writes `CHANGELOG.md`, and commits every tracked file the build changed as `chore: release <version>`.
+The commit's one parent is `HEAD`.
+It makes the commit through the GitHub API, which attributes it to `github-actions[bot]`, so the job sets no git identity.
+It checks that the tree GitHub built matches the tree the build wrote.
+It points the branch `release/<branch>` at the commit, where `<branch>` is the branch `HEAD` is on.
+It opens a pull request from that branch into `<branch>` titled `chore: release <version>`, with the body `Release <version>.`, or retitles the open one to the new version.
+It then dispatches each workflow its arguments name on the release branch.
+A pull request the workflow token opens starts no `pull_request` workflow, so the dispatch is what runs the required checks on the release head.
+When the release branch already holds this version on top of `HEAD` and its pull request carries the right title, it pushes nothing and dispatches nothing.
+It leaves the working tree as it found it.
+
+## What it reads
+
+It reads the `v*` tags, the commit subjects since the last one and `package.json` from the checkout.
+It refuses a shallow checkout, a detached `HEAD` and a working tree with changes to tracked files.
+It reads the release branch from `origin` with `git ls-remote` and `git fetch`.
+It calls the GitHub API through `gh api`, which takes the repository from the checkout's remote and the token from `GH_TOKEN`.
+The token needs `contents: write`, `pull-requests: write` and `actions: write`.
+The repository needs **Allow GitHub Actions to create and approve pull requests** turned on under its Actions settings, or GitHub refuses the pull request.
+
+## Arguments
+
+```sh
+checks-release-pr <workflow>...
+```
+
+Each argument names a workflow file under `.github/workflows/` whose jobs report the checks the default branch requires, such as `ci.yml` and `commitlint.yml`.
+Each named workflow triggers on `workflow_dispatch`.
+Name no workflow that runs something else on dispatch, such as a mutation baseline.
+
+## Exit codes
+
+| Code | When |
+| --- | --- |
+| 0 | nothing is unreleased, or the release pull request is open on the current `HEAD` and its checks are dispatched |
+| 2 | the arguments do not parse, a refusal above applies, the build fails, or a GitHub API call fails |
+
+## Sample output
+
+A run that opens the pull request prints the build's own output, then one line:
+
+```
+release-pr: opened https://github.com/acme/widget/pull/12 to release 0.4.0, and dispatched ci.yml, commitlint.yml on release/main
+```
+
+A run on the same `HEAD` the next day prints one line:
+
+```
+release-pr: https://github.com/acme/widget/pull/12 releases 0.4.0 from 3f2a9c81d0b4 and is current
+```
+
+## When it runs
+
+The daily release workflow below runs it once a day on the default branch, after `checks-release-report` finds unreleased changes.
+Run the workflow by hand with `gh workflow run daily-release` to refresh the release pull request sooner.
+
+## Running it in CI
+
+A repository takes the daily release as `.github/workflows/daily-release.yml`.
+The `pull-request` job runs on the schedule, and the `tag` job runs when a release commit lands on `main`, as [checks-release-tag](checks-release-tag.md) says:
+
+```yaml
+name: daily-release
+on:
+  schedule:
+    - cron: "29 3 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  pull-request:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: release-pull-request
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      - name: report unreleased changes
+        id: report
+        run: |
+          if ./node_modules/.bin/checks-release-report; then
+            echo "due=false" >> "$GITHUB_OUTPUT"
+          elif [ $? -eq 1 ]; then
+            echo "due=true" >> "$GITHUB_OUTPUT"
+          else
+            exit 2
+          fi
+      - name: open or refresh the release pull request
+        if: steps.report.outputs.due == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./node_modules/.bin/checks-release-pr ci.yml commitlint.yml
+  tag:
+    if: "github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: release ')"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      - name: tag the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./node_modules/.bin/checks-release-tag release.yml
+```
+
+A public repository keeps `runs-on: ubuntu-latest`.
+A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || fromJSON('["self-hosted","Linux","X64","winbox"]') }}` on both jobs, as its other workflows do.
+A repository whose build needs more than Bun adds the steps its `.github/workflows/ci.yml` runs before `bun run build`, and nothing after it.
+The job runs no test suite and no mutation run.
+On a hosted runner the `pull-request` job takes under a minute, billed as one minute a day, and the `tag` job runs only when a release lands.
+A job skipped by its `if` bills nothing.
+The checks it dispatches are the release pull request's own required checks, and they run again only when `main` moves under it.
+
+The daily release needs the repository's other workflows to accept the dispatch:
+
+- `.github/workflows/ci.yml` and `.github/workflows/commitlint.yml` trigger on `workflow_dispatch`.
+- The title lint reads the title of the one open pull request its branch heads when the event carries none, as [Commit messages](../configs/commit-messages.md) says.
+- `.github/workflows/release.yml` triggers on `workflow_dispatch` and refuses a ref that is not a tag, as [checks-release-notes](checks-release-notes.md) shows.
+- **Allow GitHub Actions to create and approve pull requests** is on, which this call sets:
+
+```sh
+gh api --method PUT repos/<owner>/<repo>/actions/permissions/workflow -f default_workflow_permissions=read -F can_approve_pull_request_reviews=true
+```
+
+## Related topics
+
+- [checks-release-report](checks-release-report.md)
+- [checks-release-tag](checks-release-tag.md)
+- [checks-changelog](checks-changelog.md)
+- [checks-release-notes](checks-release-notes.md)

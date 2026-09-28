@@ -10,6 +10,7 @@ const OWNER = { name: "avi2d", email: "avi2dg@gmail.com" };
 const STRANGER = { name: "Pat Stranger", email: "stranger@example.com" };
 const SQUASH = { name: "GitHub", email: "noreply@github.com" };
 const INTRUDER = { name: "Ivy Intruder", email: "intruder@example.com" };
+const ACTIONS_BOT = { name: "github-actions[bot]", email: "41898282+github-actions[bot]@users.noreply.github.com" };
 
 type Identity = { name: string; email: string };
 
@@ -124,6 +125,28 @@ test(
 
     const single = await check("HEAD");
     expect(single.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
+  "commit-identity lets the Actions bot author a release commit and nothing else",
+  async () => {
+    await initRepo();
+    const base = await commit({ message: "feat: base" });
+    await commit({ message: "chore: release 0.2.0", author: ACTIONS_BOT, committer: SQUASH });
+    await commit({ message: "chore: release 0.2.0 (#12)", author: ACTIONS_BOT, committer: SQUASH });
+
+    const green = await check(base, "HEAD");
+    expect(green.text).toContain("2 commit(s)");
+    expect(green.exitCode).toBe(0);
+
+    const chore = await commit({ message: "chore: tidy", author: ACTIONS_BOT, committer: SQUASH });
+    const red = await check(base, "HEAD");
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain(`${chore.slice(0, 12)} chore: tidy\n    author github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>`);
+    expect(red.text).toContain("1 of 3 commit(s)");
+    expect(red.text).toContain("allowed as release author only: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>");
   },
   60_000,
 );

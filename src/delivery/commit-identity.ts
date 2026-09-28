@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
+import { releasedVersionOf } from "./release.ts";
 import { git, refArgs } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 
@@ -19,6 +20,9 @@ const DEFAULT_AUTHORS: readonly Identity[] = [{ name: "avi2d", email: "avi2dg@gm
 
 // GitHub writes the squash commit, so it commits what the owner authored and never authors.
 const SQUASH_COMMITTER: Identity = { name: "GitHub", email: "noreply@github.com" };
+
+// checks-release-pr commits through the workflow token, which GitHub attributes to its Actions bot.
+const RELEASE_AUTHOR: Identity = { name: "github-actions[bot]", email: "41898282+github-actions[bot]@users.noreply.github.com" };
 
 // git's own trailer parser, so only the trailer block counts and prose never does.
 const CO_AUTHORED_BY_FORMAT = "%(trailers:key=Co-authored-by)";
@@ -113,7 +117,8 @@ function allows(allowed: readonly Identity[], identity: Identity): boolean {
 
 function inspect(commit: Commit, allowed: readonly Identity[]): Offence | undefined {
   const reasons: string[] = [];
-  if (!allows(allowed, commit.author)) {
+  const authors = releasedVersionOf(commit.subject) === undefined ? allowed : [...allowed, RELEASE_AUTHOR];
+  if (!allows(authors, commit.author)) {
     reasons.push(`author ${render(commit.author)}`);
   }
   if (!allows([...allowed, SQUASH_COMMITTER], commit.committer)) {
@@ -144,6 +149,7 @@ const check = Effect.gen(function* () {
     }
     lines.push(`  allowed: ${allowed.map(render).join(", ")}`);
     lines.push(`  allowed as committer only: ${render(SQUASH_COMMITTER)}`);
+    lines.push(`  allowed as release author only: ${render(RELEASE_AUTHOR)}`);
     yield* Console.error(lines.join("\n"));
     return false;
   }
