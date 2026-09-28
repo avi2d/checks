@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.32.0
+
+Released 2026-09-28.
+
+### Features
+
+- **delivery:** add checks-release-pr and checks-release-tag
+
 ## 0.31.0
 
 Released 2026-09-28.
