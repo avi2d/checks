@@ -84,6 +84,6 @@ regexTarget = "match"
 regexes = ['''^(?i)https?://(?:[\w-]+\.)*(?:example\.(?:com|net|org)|[\w-]+\.(?:example|invalid|test)|localhost)(?:[:/?#]|$)''']
 
 [[allowlists]]
-description = "A link credential that is only a template reference, such as {password}, ${pass}, $PASS, {{ password }} or %(password)s"
+description = "A link credential that is only template references, such as {password}, ${pass}, ${pass:-}, ${pass:?message}, $PASS, {{ password }} or %(password)s, with a user part that is one too"
 targetRules = ["proxy-userinfo-link", "proxy-query-credential"]
-regexes = ['''^(?:[^:]*:)?(?:\$\{[\w.]+\}|\$\w+|\{\{\s*[\w.]+\s*\}\}|\{[\w.]+\}|%\([\w.]+\)s)$''']
+regexes = ['''^(?:(?:\$\{[A-Za-z_][\w.]*(?:\}|:?-\}|:?\?[^}\s]*\}?)|\$[A-Za-z_]\w*|\{\{\s*[A-Za-z_][\w.]*\s*\}\}|\{[A-Za-z_][\w.]*\}|%\([A-Za-z_][\w.]*\)s):)?(?:\$\{[A-Za-z_][\w.]*(?:\}|:?-\}|:?\?[^}\s]*\}?)|\$[A-Za-z_]\w*|\{\{\s*[A-Za-z_][\w.]*\s*\}\}|\{[A-Za-z_][\w.]*\}|%\([A-Za-z_][\w.]*\)s)$''']
