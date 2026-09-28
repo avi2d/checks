@@ -8,7 +8,7 @@ import { CHECKOUT } from "./lib/fixture-repo.ts";
 const Packed = Schema.fromJsonString(Schema.Tuple([Schema.Struct({ files: Schema.Array(Schema.Struct({ path: Schema.String })) })]));
 
 function relativeLinks(markdown: string): readonly string[] {
-  return [...markdown.matchAll(/\]\(([^)\s]+)\)/g)].flatMap(([, target = ""]) => {
+  return [...markdown.replaceAll(/`[^`\n]*`/g, "").matchAll(/\]\(([^)\s]+)\)/g)].flatMap(([, target = ""]) => {
     const path = target.split("#")[0] ?? "";
     return path === "" || /^[a-z][a-z+.-]*:/i.test(path) ? [] : [path];
   });

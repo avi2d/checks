@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect";
 import { ADR_DIRECTORY, ADR_INDEX, ROOT_FILES } from "../src/docs/doc-rules.ts";
 import { listed, MODES, templateFile } from "../src/docs/doc-templates.ts";
-import { EVERY_REPOSITORY, KIT_GATES, VECTORS } from "../src/core/gates.ts";
+import { EVERY_REPOSITORY, KIT_GATES, VECTORS, type KitGate } from "../src/core/gates.ts";
 import { AGENT_NAMES, DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, HISTORY_NAMES, LIVING_NAMES, PROSE_RULES } from "../src/docs/prose-matchers.ts";
 import { SIZE_RULES, qualifiedName } from "../src/complexity/size-rules.ts";
 
@@ -149,9 +149,9 @@ const GATES: Block = {
   render: () => [
     "| Vector | Gate | Reads | Runs in |",
     "| --- | --- | --- | --- |",
-    ...KIT_GATES.toSorted((a, b) => VECTORS.indexOf(a.vector) - VECTORS.indexOf(b.vector)).map(({ vector, bin, reads, appliesTo }) => {
+    ...KIT_GATES.toSorted((a, b) => VECTORS.indexOf(a.vector) - VECTORS.indexOf(b.vector)).map(({ vector, bin, reads, alsoReads, appliesTo }: KitGate) => {
       const runsIn = appliesTo === EVERY_REPOSITORY ? appliesTo : `a repository tracking ${appliesTo.pathspecs.map(code).join(" or ")}`;
-      return `| ${vector} | [${code(bin)}](${GATE_PAGES}/${bin}.md) | ${READS[reads]} | ${runsIn} |`;
+      return `| ${vector} | [${code(bin)}](${GATE_PAGES}/${bin}.md) | ${READS[reads]}${alsoReads === undefined ? "" : `, and ${alsoReads}`} | ${runsIn} |`;
     }),
   ],
 };
