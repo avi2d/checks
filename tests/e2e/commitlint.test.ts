@@ -51,10 +51,16 @@ test(
     }
     const red = await lint("frobnicate(scope): add x");
     expect(red.exitCode).not.toBe(0);
+    const atLimit = `feat(scope): ${"x".repeat(100 - "feat(scope): ".length)}`;
+    expect(atLimit.length).toBe(100);
+    const accepted = await lint(atLimit);
+    expect(accepted.exitCode).toBe(0);
+    expect(accepted.text).not.toContain("[header-max-length]");
     const header = `feat(scope): ${"x".repeat(101 - "feat(scope): ".length)}`;
     expect(header.length).toBe(101);
     const long = await lint(header);
     expect(long.exitCode).not.toBe(0);
+    expect(long.text).toContain("[header-max-length]");
   },
   120_000,
 );

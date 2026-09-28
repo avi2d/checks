@@ -9,6 +9,7 @@ audience: consumers
 ## What it checks
 
 It runs the default suite with `bun test --randomize` and reads Bun's JUnit report from that run.
+It runs Bun with `CI=true`, so `test.only` fails the run in every environment.
 Bun exits zero when tests skip, so `checks-test` checks every skipped test against its source declaration.
 A test that `test.skip`, `test.skipIf`, `test.if`, `test.todo` or an enclosing `describe.skip` skips fails unless the test declares its reason.
 
@@ -33,6 +34,8 @@ A skip is declared on the test itself and only there.
 Add `"ci"` or `"local"` as the third `skipReason` argument when a declaration applies to one environment.
 Omit the third argument when it applies in both environments.
 A declaration for the other environment is not judged in the current run.
+Bun sees `CI` set in every `checks-test` run, so a `"ci"` skip whose condition reads `process.env.CI` also skips in a local run and fails there as undeclared.
+Gate a `"ci"` skip on what CI lacks, such as a daemon or a tool, and never on `process.env.CI`.
 
 A declaration whose test passes or does not register fails a CI run.
 A local run warns about the same declaration because a condition can depend on the machine.
