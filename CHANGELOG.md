@@ -2,6 +2,18 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.29.0
+
+Released 2026-09-28.
+
+### Breaking changes
+
+- **docs:** hold agent files to a 3,000-character router where every entry points [#101](https://github.com/avi2d/checks/pull/101)
+
+### Fixes
+
+- **testing:** run checks-test with CI=true so focused tests fail locally [#100](https://github.com/avi2d/checks/pull/100)
+
 ## 0.28.0
 
 Released 2026-09-28.
