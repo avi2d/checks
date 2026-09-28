@@ -57,14 +57,6 @@ const BEFORE_YOU_BEGIN = fixed("Before you begin", REQUIRED, ["- <each prerequis
 
 const STEPS = ["To <do the task>:", "", "1. <step>", "1. <step>"];
 
-const MAINTAINING = [
-  "Keep this file for knowledge useful to almost every future agent session in this project.",
-  "Do not repeat what the codebase already shows.",
-  "Point to the authoritative file or command instead.",
-  "Prefer rewriting or pruning existing entries over appending new ones.",
-  "When updating this file, preserve this bar for all agents and keep entries concise.",
-];
-
 export const CHANGE_GROUPS = ["Breaking changes", "Features", "Fixes", "Performance", "Reverts"] as const;
 export type ChangeGroup = (typeof CHANGE_GROUPS)[number];
 
@@ -122,7 +114,6 @@ export const TEMPLATES: Readonly<Record<Kind, Template>> = {
       open("<A topic an agent needs>", "any", optional("the lead holds every constraint"), [
         "- <A constraint an agent cannot infer from the code, and the file that holds its detail.>",
       ]),
-      fixed("Maintaining this file", REQUIRED, MAINTAINING),
     ],
   },
   claude: {

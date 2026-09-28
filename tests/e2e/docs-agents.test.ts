@@ -27,7 +27,6 @@ const COMPLIANT = [
   "",
   "- Edit `src/parts.toml` instead of the generated `src/parts.json`.",
   "",
-  MAINTAINING,
 ].join("\n");
 
 async function putParts(put: DocsRepo["put"]): Promise<void> {
@@ -168,6 +167,28 @@ test(
 
     const green = await docs(previous, head);
     expect(green.text).toContain("docs: the 2 agent file(s) hold to the ceiling, and every entry names a tracked path, a link or a command");
+    expect(green.exitCode).toBe(0);
+  },
+  120_000,
+);
+
+test(
+  "a consumer file still carrying the old Maintaining section fails when the range touches another file, and passes once it is deleted",
+  async () => {
+    const { put, commit, docs } = await initRepo();
+    await putParts(put);
+    await put("AGENTS.md", `${COMPLIANT}\n${MAINTAINING}`);
+    const previous = await commit("a router with the old Maintaining section");
+    await put("notes.md", "anything\n");
+    const head = await commit("touch only another file");
+
+    const red = await docs(previous, head);
+    expect(red.text).toContain("  AGENTS.md:9: holds `## Maintaining this file`, which a router leaves out");
+    expect(red.exitCode).toBe(1);
+
+    await put("AGENTS.md", COMPLIANT);
+    const fixed = await commit("delete the Maintaining section");
+    const green = await docs(head, fixed);
     expect(green.exitCode).toBe(0);
   },
   120_000,

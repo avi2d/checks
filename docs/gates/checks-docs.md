@@ -13,7 +13,7 @@ It holds each doc file a change touches to the template for its kind.
 It lists every other doc file that does not match its template yet, and does not fail on it.
 It holds each line a change adds or edits in a living doc or an agent file to the prose rules, as [The prose rules](#the-prose-rules) says.
 It fails when a living doc or an agent file names a path, link or command that does not resolve, and the range added or broke it.
-It fails when an agent file holds more than 3,000 characters, whatever the range touches, as [Agent files](#agent-files) says.
+It fails when an agent file holds more than 3,000 characters or a `## Maintaining this file` section, whatever the range touches, as [Agent files](#agent-files) says.
 It fails when an entry in an agent file names no tracked path, link or `bun run` command, whatever the range touches.
 It fails when a living doc or an agent file names a code span the range removed from every file outside the docs, on any line.
 [Paths, links and commands](#paths-links-and-commands) says how each reference resolves.
@@ -146,19 +146,20 @@ audience: consumers
 
 ## Agent files
 
-An agent file holds the router its template sketches, and the two rules below hold its shape whatever the range touches.
+An agent file holds the router its template sketches, and the rules below hold its shape whatever the range touches.
 A file over 3,000 characters fails.
 Move each part's notes into the people doc that covers that part, and delete what a check or the code already holds.
+A file that holds a `## Maintaining this file` section fails, because this gate holds the shape the section asked for.
 Each entry names at least one of these, or it fails:
 
 - A path in inline code that git tracks at the head commit, a file or a directory, such as `package.json`, `LICENSE` or `.gitignore`.
-  It resolves from the root or from the file's directory, `./` and `../` included, and a path that ends in `/` names a directory.
-- A Markdown link written `[text](target)` with a destination, and not an image.
+  It resolves from the root or from the file's directory, `./` and `../` included, and a path that ends in `/` or `/.` names a directory, never a file.
+- A Markdown link written `[text](target)` with a destination and a closing parenthesis, and not an image.
 - A `bun run` command.
 
 Whether the link or the command resolves is the reference rule's call, as [Paths, links and commands](#paths-links-and-commands) says, and it fails when the range adds or breaks one.
-An entry is any list item a reader sees outside `## Maintaining this file`, the items above the first section included.
-A list item inside an HTML comment or an HTML block is not an entry.
+An entry is any list item a reader sees, the items above the first section included.
+A list item inside an HTML comment, an HTML block or an indented code block is not an entry.
 A fresh file passes the ceiling, and its entries pass once each names the file that holds its detail.
 
 ## What it reads
@@ -169,7 +170,7 @@ It reads the lines the range adds or edits from the diff, with renames detected,
 It reads the files tracked at both ends of the range, and the `scripts` of each `package.json` a living doc or an agent file sits under.
 It compares each code span a living doc or an agent file names with the text git tracks outside the docs at both ends of the range.
 It reads the repository's own name and its direct dependencies from the root `package.json` at the head commit.
-It reads each agent file at the head commit for the ceiling and its entries, whatever the range touches.
+It reads each agent file at the head commit for the ceiling, its sections and its entries, whatever the range touches.
 A name that an installed direct dependency still holds counts as present.
 From the working tree it reads the ignore files git reads, `node_modules/.bin`, and the directory of each direct dependency under `node_modules`.
 
@@ -187,8 +188,8 @@ With one it is that commit against its parent, or against the empty tree for a r
 
 | Code | When |
 | --- | --- |
-| 0 | every doc file the range touches holds to its template, every line it adds to a living doc or an agent file holds to the prose rules, it adds or breaks no reference that does not resolve, every agent file holds to the ceiling, every entry in an agent file names a tracked path, a link or a command, and no code span a living doc or an agent file names vanished from every file outside the docs |
-| 1 | a doc file the range touches does not hold to its template, a line the range adds to a living doc or an agent file breaks a prose rule, the range adds or breaks a reference that does not resolve, an agent file is over the ceiling, an entry in an agent file names no tracked path, link or command, or the range removes a name a living doc or an agent file still carries |
+| 0 | every doc file the range touches holds to its template, every line it adds to a living doc or an agent file holds to the prose rules, it adds or breaks no reference that does not resolve, every agent file holds to the ceiling and holds no `## Maintaining this file`, every entry in an agent file names a tracked path, a link or a command, and no code span a living doc or an agent file names vanished from every file outside the docs |
+| 1 | a doc file the range touches does not hold to its template, a line the range adds to a living doc or an agent file breaks a prose rule, the range adds or breaks a reference that does not resolve, an agent file is over the ceiling or holds `## Maintaining this file`, an entry in an agent file names no tracked path, link or command, or the range removes a name a living doc or an agent file still carries |
 | 2 | a `package.json` does not decode, a ref does not resolve, or `grep` cannot read an installed direct dependency |
 
 ## Sample output

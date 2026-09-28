@@ -1,12 +1,14 @@
-import { parseOutline } from "./doc-outline.ts";
-import { commandNames, directoryOf, normalize, type Snapshot } from "./doc-references.ts";
+import { commandNames, type Snapshot } from "./doc-references.ts";
 import { AGENT_NAMES, scanMarkdown, type MarkdownLine } from "./prose-matchers.ts";
 
 export const AGENT_CEILING = 3000;
 
-const MAINTAINING = "Maintaining this file";
 const LIST_ITEM = /^(?:\s*>)*\s*(?:[-*+]|\d{1,9}[.)])(?:\s|$)/;
-const INLINE_LINK = /(?<![!\\])\[(?:[^[\]\\]|\\.|\[[^\]]*\])*\]\(\s*<?[^\s()<>]/g;
+const INDENT = /^[ \t]*/;
+const CODE_INDENT = 4;
+const INLINE_LINK =
+  /(?<![!\\])\[(?:[^[\]\\]|\\.|\[[^\]]*\])*\]\(\s*(?:<[^<>\n]+>|[^\s()<>]+(?:\([^\s()]*\)[^\s()<>]*)*)(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)/g;
+const MAINTAINING = /^\s{0,3}#{1,6}\s+Maintaining this file(?:\s+#+)?\s*$/;
 
 export type AgentFinding = {
   readonly line: number | undefined;
@@ -25,24 +27,62 @@ export function ceilingFinding(text: string): AgentFinding | undefined {
   };
 }
 
+export function maintainingFinding(text: string): AgentFinding | undefined {
+  const heading = scanMarkdown(text).find(({ kind, raw }) => kind === "heading" && MAINTAINING.test(raw));
+  if (heading === undefined) return undefined;
+  return {
+    line: heading.line,
+    message: "holds `## Maintaining this file`, which a router leaves out. Delete the section, since checks-docs holds the file's shape",
+  };
+}
+
+function indentOf(raw: string): number {
+  return (INDENT.exec(raw)?.[0] ?? "").replaceAll("\t", "    ").length;
+}
+
 export function entries(text: string): readonly MarkdownLine[] {
-  const outline = parseOutline(text);
-  const kept = outline.sections.flatMap((section, index) =>
-    section.heading.title === MAINTAINING ? [{ from: section.heading.line, to: outline.sections[index + 1]?.heading.line ?? Number.POSITIVE_INFINITY }] : [],
-  );
-  return scanMarkdown(text).filter(
-    (line) => line.kind === "prose" && LIST_ITEM.test(line.prose) && !kept.some(({ from, to }) => line.line > from && line.line < to),
-  );
+  let inList = false;
+  let afterBlank = true;
+  return scanMarkdown(text).filter((line) => {
+    const blank = line.raw.trim() === "";
+    const indented = !blank && indentOf(line.raw) >= CODE_INDENT && !line.raw.trimStart().startsWith(">");
+    const listItem = line.kind === "prose" && LIST_ITEM.test(line.prose) && (inList || !indented);
+    if (listItem) inList = true;
+    else if (!blank && !indented && (afterBlank || line.kind !== "prose")) inList = false;
+    afterBlank = blank;
+    return listItem;
+  });
 }
 
 type Tracked = Pick<Snapshot, "files" | "directories">;
 
+const STAYS = new Set(["", "."]);
+
+function joined(directory: string, segment: string): string {
+  return directory === "" ? segment : `${directory}/${segment}`;
+}
+
+function enter(directory: string, segment: string, tracked: Tracked): string | undefined {
+  if (STAYS.has(segment)) return directory;
+  if (segment === "..") return directory === "" ? undefined : directory.slice(0, Math.max(directory.lastIndexOf("/"), 0));
+  const next = joined(directory, segment);
+  return tracked.directories.has(next) ? next : undefined;
+}
+
+function resolvesFrom(directory: string, span: string, tracked: Tracked): boolean {
+  const segments = span.split("/");
+  const last = segments.pop() ?? "";
+  const walked = segments.reduce<string | undefined>((at, segment) => (at === undefined ? undefined : enter(at, segment, tracked)), directory);
+  if (walked === undefined) return false;
+  if (!STAYS.has(last) && last !== ".." && tracked.files.has(joined(walked, last))) return true;
+  const end = enter(walked, last, tracked);
+  return end !== undefined && end !== "" && end !== directory;
+}
+
 function namesTrackedPath(agentFile: string, span: string, tracked: Tracked): boolean {
-  const directory = directoryOf(agentFile);
-  const fromRoot = span.startsWith("./") || span.startsWith("../") ? undefined : normalize(span);
-  const fromFile = normalize(directory === "" ? span : `${directory}/${span}`);
-  const namesDirectory = span.endsWith("/");
-  return [fromRoot, fromFile].some((path) => path !== undefined && path !== "" && (tracked.directories.has(path) || (!namesDirectory && tracked.files.has(path))));
+  const directory = agentFile.includes("/") ? agentFile.slice(0, agentFile.lastIndexOf("/")) : "";
+  const fromFile = resolvesFrom(directory, span, tracked);
+  return fromFile || (!span.startsWith("./") && !span.startsWith("../") && resolvesFrom("", span, tracked));
 }
 
 function namesLink({ raw, prose }: MarkdownLine): boolean {

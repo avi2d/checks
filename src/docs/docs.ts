@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect } from "effect";
-import { ceilingFinding, entryFindings, isAgentFile } from "./doc-agents.ts";
+import { ceilingFinding, entryFindings, isAgentFile, maintainingFinding } from "./doc-agents.ts";
 import { rootsOf, snapshotOf, unresolvedIn, type Judging, type Unresolved } from "./doc-references.ts";
 import { ADR_DIRECTORY, judge, placementOf, placementProblem, speaksToConsumers, type Placement } from "./doc-rules.ts";
 import { vanishedNames } from "./doc-names.ts";
@@ -113,10 +113,9 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   const vanished = yield* vanishedNames(root, base, head, referenced, references.failed);
   const agents = proseDocs.filter(({ path }) => isAgentFile(path));
   const tracked = snapshotOf(yield* pathsAt(head, [], root), new Map(), new Map());
-  const ceilings = agents.flatMap(({ path }) => {
-    const ceiling = ceilingFinding(text(path));
-    return ceiling === undefined ? [] : [{ path, ...ceiling }];
-  });
+  const shapes = agents.flatMap(({ path }) =>
+    [ceilingFinding(text(path)), maintainingFinding(text(path))].flatMap((finding) => (finding === undefined ? [] : [{ path, ...finding }])),
+  );
   const entries = agents.flatMap(({ path }) => entryFindings(path, text(path), tracked).map((finding) => ({ path, ...finding })));
   const advisory = new Map<string, number>();
   for (const { path } of templated.filter((finding) => !touched.has(finding.path))) advisory.set(path, (advisory.get(path) ?? 0) + 1);
@@ -130,7 +129,7 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
       ...prose,
       ...references.failing,
       ...vanished,
-      ...ceilings,
+      ...shapes,
       ...entries,
     ].toSorted(inPathOrder),
     advisory,
