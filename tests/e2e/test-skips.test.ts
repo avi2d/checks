@@ -182,22 +182,31 @@ test("a declaration whose registration no longer exists fails in CI and warns lo
   expect(local.text).toContain("warning: 1 declaration(s) matching no skipped test");
 });
 
-test("a declaration applies only to its selected environment", async () => {
+test("a ci declaration gated on a missing resource skips in CI and is not judged locally", async () => {
   await consumer(
-    'import { expect, test } from "bun:test";\nimport { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";\ntest.skipIf(true)(skipReason("CI has no daemon", "reaches the local daemon", "ci"), () => expect(1).toBe(1));\n',
+    'import { expect, test } from "bun:test";\nimport { existsSync } from "node:fs";\nimport { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";\ntest.skipIf(!existsSync(new URL("../daemon.sock", import.meta.url)))(skipReason("CI has no daemon", "reaches the local daemon", "ci"), () => expect(1).toBe(1));\n',
   );
 
   const ci = await checksTest(true);
   expect(ci.exitCode).toBe(0);
   expect(ci.text).toContain("1 skipped test(s), each declared at its test site");
 
-  await writeFile(
-    join(dir, "tests", "suite.test.ts"),
-    'import { expect, test } from "bun:test";\nimport { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";\ntest.skipIf(false)(skipReason("CI has no daemon", "reaches the local daemon", "ci"), () => expect(1).toBe(1));\n',
-  );
+  await writeFile(join(dir, "daemon.sock"), "");
   const local = await checksTest(false);
   expect(local.exitCode).toBe(0);
   expect(local.text).toContain("1 declaration(s) for ci not judged in this local run");
+});
+
+test("a ci skip gated on process.env.CI fails a local run as undeclared", async () => {
+  await consumer(
+    'import { expect, test } from "bun:test";\nimport { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";\ntest.skipIf(Boolean(process.env.CI))(skipReason("CI has no daemon", "reaches the local daemon", "ci"), () => expect(1).toBe(1));\n',
+  );
+
+  const ci = await checksTest(true);
+  expect(ci.exitCode).toBe(0);
+  const local = await checksTest(false);
+  expect(local.exitCode).toBe(1);
+  expect(local.text).toContain("1 skipped test(s) undeclared in this local run");
 });
 
 test("the default run excludes live tests and the live and pixel tiers judge only their own directory", async () => {

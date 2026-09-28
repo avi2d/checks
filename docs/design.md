@@ -140,7 +140,7 @@ That flag reports a repeated block as new once its text changes, so a change tha
 ## checks-test runs the suite itself
 
 `checks-test` runs bun itself rather than reading a report that another run left.
-A skip taken only on CI shows only in CI's own run, and an earlier run's report may be stale or narrowed.
+A skip that a missing daemon or tool causes on CI shows only in CI's own run, and an earlier run's report may be stale or narrowed.
 It reads the JUnit report bun writes to a temporary directory, because bun has no other per-test output meant for a program.
 
 ## Quarantine has one limit
