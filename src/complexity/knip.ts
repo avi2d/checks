@@ -16,7 +16,7 @@ const CONFIGS = [
   "knip.config.ts",
 ] as const;
 
-const TYPESCRIPT = ["*.ts", "*.tsx", "*.astro"];
+const SOURCE = ["*.ts", "*.tsx", "*.astro"];
 
 const hasKnipConfig = Effect.fn("hasKnipConfig")(function* (root: string) {
   const fs = yield* FileSystem.FileSystem;
@@ -57,7 +57,7 @@ export const knipReport = Effect.fn("knipReport")(function* (root: string, args:
 
 export const scanTree = Effect.fn("scanTree")(function* (name: string, args: readonly string[]) {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
-  const tracked = (yield* git(["ls-files", "--", ...TYPESCRIPT], root))
+  const tracked = (yield* git(["ls-files", "--", ...SOURCE], root))
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line !== "");
