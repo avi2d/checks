@@ -71,7 +71,7 @@ Only a CI step the repository writes runs it.
 A repository runs it with `--advisory` for its first month, then drops the flag so it blocks.
 A full sweep runs in CI and never on a laptop.
 Start a baseline with `gh workflow run mutation` and keep its report as an artifact.
-`checks-mutation` refuses a full local run and names that workflow command instead.
+The shared preset refuses a full `stryker run` outside CI and names that workflow command instead, as [checks-mutation](checks-mutation.md) says.
 
 ## Running it in CI
 
@@ -80,7 +80,7 @@ It runs on pull requests, comparing the head report against a report built at th
 ```yaml
 jobs:
   mutation-compare:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || fromJSON('["self-hosted","Linux","X64","winbox"]') }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -95,6 +95,9 @@ jobs:
       - run: bun run checks-mutation-compare --advisory /tmp/mutation-base/reports/mutation/mutation.json reports/mutation/mutation.json
 ```
 
+Both Stryker runs are full sweeps, so the job runs on the fleet's self-hosted runner, as the baseline does.
+
 ## Related topics
 
+- [checks-mutation](checks-mutation.md)
 - [checks-test-layout](checks-test-layout.md)

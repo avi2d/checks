@@ -37,6 +37,7 @@
     "src/testing/flake.ts",
     "src/delivery/commit-identity.ts",
     "src/testing/mutation.ts",
+    "src/testing/mutation-scope.js",
     "src/testing/mutation-compare.ts",
     "src/testing/subsumed-tests.ts",
     "src/delivery/ci-wiring.ts",

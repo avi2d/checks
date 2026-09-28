@@ -175,7 +175,7 @@ Every path is relative to the installed package, `node_modules/@avi2dg/checks/`.
 | `src/` | every bin, which a package script calls by its `checks-` name, the modules the bins import, and the Effect rule blocks under `src/quality/presets/` |
 | `dist/` | the compiled oxlint plugins and the doc templates, one template per kind of doc file |
 | `oxlintrc.json` | the oxlint base config `.oxlintrc.json` extends |
-| `stryker.preset.js` | the Stryker mutation-testing preset |
+| `stryker.preset.js` | the Stryker mutation-testing preset, which refuses a full run outside CI |
 | `tsconfig.effect.json` | the tsconfig fragment with the shared compiler options and the Effect language-service block |
 | `ts-reset.d.ts` | the two ts-reset rules `tsconfig.effect.json` lists in `files` |
 

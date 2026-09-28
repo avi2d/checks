@@ -1,3 +1,9 @@
+import { fullRunRefusal } from "./src/testing/mutation-scope.js";
+
+const [, , command, ...args] = process.argv;
+const refusal = command === "run" ? fullRunRefusal(args, process.env.CI ?? "") : undefined;
+if (refusal !== undefined) throw new Error(refusal);
+
 export default {
   packageManager: "npm",
   plugins: ["@stryker-mutator/*", "@hughescr/stryker-bun-runner"],

@@ -8,32 +8,36 @@ audience: consumers
 
 ## What it checks
 
-It refuses a full mutation run when `CI` is not true.
-A full run is one with no `--mutate` flag and no `--incremental` flag.
+It refuses a full mutation run when `CI` is not `true`.
+A full run is one with no `--mutate <glob>` and no `--incremental` flag.
+A `--mutate` without a glob, `--incrementalFile` alone or `--incremental` with `--force` is still a full run.
 Its refusal names `gh workflow run mutation` as the command that starts the same run in CI.
-A run scoped with `--mutate` stays allowed locally, because pull request comparisons scope to named files.
-An incremental run stays allowed locally, because a worker rechecks only changed mutants.
-A full sweep runs in CI and never on a laptop.
+A run scoped with `--mutate <glob>` or `--mutate=<glob>` stays allowed locally, because pull request comparisons scope to named files.
+An incremental run stays allowed locally, because it reuses the results of mutants that did not change.
+`--help`, `-h` and `--version` are not runs, so they pass straight through to Stryker.
+A laptop with `CI=true` set opts in to a full run on purpose, and the refusal lets it through.
+
+The shared Stryker preset makes the same decision from `process.argv` when a `stryker run` loads it.
+So a bare `bunx stryker run` in a repository whose `stryker.conf.mjs` spreads the preset is refused the same way, and `checks-mutation` is a thin wrapper over that decision.
 
 ## What it reads
 
 It reads `CI` from the environment.
-It forwards every other argument to `stryker run` through `bun x stryker run`.
+It forwards every argument to `stryker run` through `bun x stryker run`.
 
 ## Arguments
 
 ```sh
-checks-mutation [--mutate <glob>...] [--incremental] [<stryker args>...]
+checks-mutation [--mutate <glob>] [--incremental] [<stryker args>...]
 ```
 
 Every argument after the bin name forwards to `stryker run`.
-`--help` prints the usage without running Stryker.
 
 ## Exit codes
 
 | Code | When |
 | --- | --- |
-| 0 | Stryker passed, or `--help` was given |
+| 0 | Stryker exited 0 |
 | 1 | Stryker exited nonzero |
 | 2 | a full run outside CI was refused, or Stryker could not start |
 
@@ -42,8 +46,10 @@ Every argument after the bin name forwards to `stryker run`.
 A full run outside CI prints its refusal and exits 2:
 
 ```
-checks-mutation: refusing a full mutation run outside CI; start the same run in CI with `gh workflow run mutation`, or scope this run with `--mutate` or `--incremental`
+checks-mutation: refusing a full mutation run outside CI; start the same run in CI with `gh workflow run mutation`, or scope this run with `--mutate <glob>` or `--incremental`
 ```
+
+A bare `bunx stryker run` fails to load its config with the same refusal as the error and exits 1.
 
 ## When it runs
 
@@ -60,7 +66,7 @@ on:
   workflow_dispatch:
 jobs:
   mutation:
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.CI_RUNS_ON || fromJSON('["self-hosted","Linux","X64","winbox"]') }}
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -75,9 +81,11 @@ jobs:
           path: reports/mutation/mutation.json
 ```
 
-Private repositories set the `CI_RUNS_ON` variable to their self-hosted runner label.
-The kit leaves the variable unset and falls back to `ubuntu-latest` at no cost.
+With `CI_RUNS_ON` unset, the job runs on the fleet's self-hosted Linux runner labelled `winbox`, which is where a private repository sends its full sweeps.
+A repository sets `CI_RUNS_ON` only to name a different runner.
+GitHub sets `CI=true` on every runner, so the preset lets the full run through there.
 
 ## Related topics
 
 - [checks-mutation-compare](checks-mutation-compare.md)
+- [checks-subsumed-tests](checks-subsumed-tests.md)
