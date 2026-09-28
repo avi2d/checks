@@ -58,17 +58,30 @@ regexTarget = "match"
 regexes = ['''@$''']
 
 [[rules]]
-id = "proxy-query-credential"
-description = "A credential in the auth, auth_str, obfsParam, obfs-password, password or pk query parameter of a link, such as hysteria://host?auth="
-regex = '''(?i)[?&](?:auth|auth_str|obfsParam|obfs-password|password|pk)=([^\s"'`<>&#]+)'''
+id = "proxy-query-credential-first"
+description = "The first auth, auth_str, obfsParam, obfs-password, password or pk query parameter of a proxy share link, such as hysteria://host?auth="
+regex = '''(?i)\b(?:vless|vmess|ssr?|trojan|hysteria2?|hy2|tuic|socks5?h?|wireguard|wg)://[^\s"'`?#]*\?(?:[^\s"'`<>#]*?&)??(?:auth|auth_str|obfsParam|obfs-password|password|pk)=([^\s"'`<>&#]+)'''
 secretGroup = 1
 entropy = 2.5
-keywords = ["auth=", "auth_str=", "obfsparam=", "obfs-password=", "password=", "pk="]
+keywords = ["vless://", "vmess://", "ss://", "ssr://", "trojan://", "hysteria://", "hysteria2://", "hy2://", "tuic://", "socks://", "socksh://", "socks5://", "socks5h://", "wireguard://", "wg://"]
 
 [[rules.allowlists]]
-description = "A line whose link to a reserved example or test host carries one of these parameters"
-regexTarget = "line"
-regexes = ['''(?i)[a-z0-9]+://(?:[^\s"'`@?#/]*@)?(?:[\w-]+\.)*(?:example\.(?:com|net|org)|[\w-]+\.(?:example|invalid|test)|localhost)(?::\d+)?(?:/[^\s"'`<>?#]*)?\?[^\s"'`<>#]*?\b(?:auth|auth_str|obfsParam|obfs-password|password|pk)=''']
+description = "A link to a reserved example or test host"
+regexTarget = "match"
+regexes = ['''^(?i)[a-z0-9]+://(?:[^\s"'`@?#]*@)?(?:[\w-]+\.)*(?:example\.(?:com|net|org)|[\w-]+\.(?:example|invalid|test)|localhost)(?::\d+)?(?:[/?#]|$)''']
+
+[[rules]]
+id = "proxy-query-credential-last"
+description = "The last auth, auth_str, obfsParam, obfs-password, password or pk query parameter of a proxy share link, such as hysteria://host?auth="
+regex = '''(?i)\b(?:vless|vmess|ssr?|trojan|hysteria2?|hy2|tuic|socks5?h?|wireguard|wg)://[^\s"'`?#]*\?(?:[^\s"'`<>#]*&)?(?:auth|auth_str|obfsParam|obfs-password|password|pk)=([^\s"'`<>&#]+)'''
+secretGroup = 1
+entropy = 2.5
+keywords = ["vless://", "vmess://", "ss://", "ssr://", "trojan://", "hysteria://", "hysteria2://", "hy2://", "tuic://", "socks://", "socksh://", "socks5://", "socks5h://", "wireguard://", "wg://"]
+
+[[rules.allowlists]]
+description = "A link to a reserved example or test host"
+regexTarget = "match"
+regexes = ['''^(?i)[a-z0-9]+://(?:[^\s"'`@?#]*@)?(?:[\w-]+\.)*(?:example\.(?:com|net|org)|[\w-]+\.(?:example|invalid|test)|localhost)(?::\d+)?(?:[/?#]|$)''']
 
 [[rules]]
 id = "proxy-subscription-url"
@@ -95,6 +108,6 @@ regexTarget = "match"
 regexes = ['''^(?i)https?://(?:[\w-]+\.)*(?:example\.(?:com|net|org)|[\w-]+\.(?:example|invalid|test)|localhost)(?:[:/?#]|$)''']
 
 [[allowlists]]
-description = "A link credential that is only template references, such as {password}, ${pass}, ${pass:-}, ${pass:?message}, $PASS, {{ password }} or %(password)s, with a user part that is one too"
-targetRules = ["proxy-userinfo-link", "proxy-query-credential"]
-regexes = ['''^(?:(?:\$\{[A-Za-z_][\w.]*(?:\}|:?-\}|:?\?[^}\s]*\}?)|\$[A-Za-z_]\w*|\{\{\s*[A-Za-z_][\w.]*\s*\}\}|\{[A-Za-z_][\w.]*\}|%\([A-Za-z_][\w.]*\)s):)?(?:\$\{[A-Za-z_][\w.]*(?:\}|:?-\}|:?\?[^}\s]*\}?)|\$[A-Za-z_]\w*|\{\{\s*[A-Za-z_][\w.]*\s*\}\}|\{[A-Za-z_][\w.]*\}|%\([A-Za-z_][\w.]*\)s)$''']
+description = "A link credential that is only template references, such as {password}, ${pass}, ${encodeURIComponent(pass)}, ${pass:-}, ${pass:?message}, $PASS, {{ password }} or %(password)s, with a user part that is one too"
+targetRules = ["proxy-userinfo-link", "proxy-query-credential-first", "proxy-query-credential-last"]
+regexes = ['''^(?:(?:\$\{[A-Za-z_][\w.()\[\],]*(?:\}|:?-\}|:?\?[^}\s]*\}?)|\$[A-Za-z_]\w*|\{\{\s*[A-Za-z_][\w.]*\s*\}\}|\{[A-Za-z_][\w.]*\}|%\([A-Za-z_][\w.]*\)s):)?(?:\$\{[A-Za-z_][\w.()\[\],]*(?:\}|:?-\}|:?\?[^}\s]*\}?)|\$[A-Za-z_]\w*|\{\{\s*[A-Za-z_][\w.]*\s*\}\}|\{[A-Za-z_][\w.]*\}|%\([A-Za-z_][\w.]*\)s)$''']

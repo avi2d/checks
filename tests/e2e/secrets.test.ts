@@ -41,7 +41,9 @@ function cases(): readonly Case[] {
   const paddedShadowsocks = withPadding(`chacha20-ietf-poly1305:${hex(12)}@${HOST}:8388`);
   const userinfo = ["proxy-userinfo-link"];
   const base64 = ["proxy-base64-link"];
-  const query = ["proxy-query-credential"];
+  const firstQuery = ["proxy-query-credential-first"];
+  const lastQuery = ["proxy-query-credential-last"];
+  const query = [...firstQuery, ...lastQuery];
   const key = ["wireguard-key"];
   const keyFile = ["wireguard-key-file"];
   const dotKeyFile = ["wireguard-dot-key-file"];
@@ -71,11 +73,14 @@ function cases(): readonly Case[] {
     { line: link("hysteria", `${HOST}:443?protocol=udp&obfsParam=${hex(12)}#home`), rules: query },
     { line: link("hysteria2", `<password>@${HOST}:443/?obfs=salamander&obfs-password=${hex(12)}`), rules: query },
     { line: link("hysteria2", `pw@${HOST}:443/?obfs=salamander&obfs-password=${hex(12)}`), rules: query },
-    { line: link("hysteria", `${HOST}:443?protocol=udp&auth=${hex(12)}&upmbps=100&obfsParam=pw#home`), rules: query },
-    { line: link("hysteria", `${HOST}:443?protocol=udp&auth=${hex(12)}&upmbps=100&obfsParam=\${OBFS}#home`), rules: query },
-    { line: link("hysteria", `${HOST}:443?protocol=udp&auth=${hex(12)}&upmbps=100&obfsParam={{ obfs }}#home`), rules: query },
-    { line: link("hysteria2", `pw@${HOST}:443/?obfs=salamander&obfs-password=${hex(12)}&password=pw`), rules: query },
-    { line: link("wg", `${HOST}:51820?pk=${base64Key()}&password=x`), rules: query },
+    { line: link("hysteria", `${HOST}:443?protocol=udp&auth=${hex(12)}&upmbps=100&obfsParam=pw#home`), rules: firstQuery },
+    { line: link("hysteria", `${HOST}:443?protocol=udp&auth=${hex(12)}&upmbps=100&obfsParam=\${OBFS}#home`), rules: firstQuery },
+    { line: link("hysteria", `${HOST}:443?protocol=udp&auth=${hex(12)}&upmbps=100&obfsParam={{ obfs }}#home`), rules: firstQuery },
+    { line: link("hysteria2", `pw@${HOST}:443/?obfs=salamander&obfs-password=${hex(12)}&password=pw`), rules: firstQuery },
+    { line: link("wg", `${HOST}:51820?pk=${base64Key()}&password=x`), rules: firstQuery },
+    { line: link("hysteria", `${HOST}:443?protocol=udp&auth=pw&upmbps=100&obfsParam=${hex(12)}#home`), rules: lastQuery },
+    { line: `${link("hysteria", "vpn.example.com:443?auth=<password>")} ${link("hysteria", `${HOST}:443?auth=${hex(12)}`)}`, rules: query },
+    { line: JSON.stringify([link("hysteria", "vpn.example.com:443?auth=x"), link("wg", `${HOST}:51820?pk=${base64Key()}`)]), rules: query },
     { line: link("https", `panel.home-fixture.net/sub/${hex(16)}`), rules: ["proxy-subscription-url"] },
     { line: link("https", `panel.home-fixture.net/sub?token=${hex(16)}&key=${"a".repeat(20)}`), rules: ["proxy-subscription-url"] },
     { line: `client_psk: ${base64Key()}`, rules: key },
@@ -108,6 +113,9 @@ function cases(): readonly Case[] {
     { line: `\`${link("trojan", "${peer.password}@${host}:443")}\``, rules: passes },
     { line: `\`${link("wg", "${host}:51820?pk=${peer.privateKey}")}\``, rules: passes },
     { line: `curl -x "${link("socks5h", "$PROXY_USER:$PROXY_PASS@proxy.home-fixture.net:1080")}"`, rules: passes },
+    { line: `\`${link("hysteria", "${host}:443?auth=${hex(12)}&obfsParam=${encodeURIComponent(obfs)}")}\``, rules: passes },
+    { line: `\`${link("trojan", "${base64Key()}@${host}:443")}\``, rules: passes },
+    { line: `fetch(\`${link("https", "api.home-fixture.net/login?user=${user}&password=${encodeURIComponent(password)}")}\`)`, rules: passes },
     { line: link("hysteria", "{{host}}:443?auth={{ hysteria_auth }}"), rules: passes },
     ...["${pass}", "${pass:-}", "${pass-}", "${pass:?required}", "$PASS", "$pass", "$PROXY_PASS", "{{ password }}", "{{password}}", "%(password)s", "<password>"].flatMap(
       (reference) => [
@@ -122,6 +130,7 @@ function cases(): readonly Case[] {
     { line: link("trojan", `${hex(12)}:{x}@${HOST}:443#home`), rules: userinfo },
     { line: link("trojan", `${hex(12)}:\${PASS}@${HOST}:443#home`), rules: userinfo },
     { line: link("trojan", `\${PASS:-${hex(12)}}@${HOST}:443#home`), rules: userinfo },
+    { line: link("trojan", `\${PASS-${hex(12)}}@${HOST}:443#home`), rules: userinfo },
     { line: link("hysteria", `${HOST}:443?protocol=udp&auth=\${HY_AUTH:-${hex(12)}}#home`), rules: query },
     { line: link("https", "panel.example.com/sub/0123456789abcdef0123456789abcdef"), rules: passes },
     { line: "client_psk: <preshared-key>", rules: passes },
