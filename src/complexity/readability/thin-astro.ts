@@ -14,13 +14,13 @@ function unwrapped(expression: ESTree.Expression): ESTree.Expression {
 }
 
 function isAstroProps(value: ESTree.Expression): boolean {
+  if (value.type !== "MemberExpression" || value.computed) return false;
+  const { object, property } = value;
   return (
-    value.type === "MemberExpression" &&
-    value.computed === false &&
-    value.object.type === "Identifier" &&
-    value.object.name === "Astro" &&
-    value.property.type === "Identifier" &&
-    value.property.name === "props"
+    object.type === "Identifier" &&
+    object.name === "Astro" &&
+    property.type === "Identifier" &&
+    property.name === "props"
   );
 }
 
@@ -30,28 +30,15 @@ function readsProps(expression: ESTree.Expression, bound: ReadonlySet<string>): 
   return value.type === "Identifier" && bound.has(value.name);
 }
 
-function boundNames(pattern: ESTree.BindingPattern, found: Set<string>): void {
-  switch (pattern.type) {
-    case "Identifier":
-      found.add(pattern.name);
-      break;
-    case "ObjectPattern":
-      for (const property of pattern.properties) {
-        if (property.type === "Property") boundNames(property.value, found);
-        else boundNames(property.argument, found);
-      }
-      break;
-    case "ArrayPattern":
-      for (const element of pattern.elements) {
-        if (element === null) continue;
-        if (element.type === "RestElement") boundNames(element.argument, found);
-        else boundNames(element, found);
-      }
-      break;
-    case "AssignmentPattern":
-      boundNames(pattern.left, found);
-      break;
-  }
+function boundName(pattern: ESTree.BindingPattern | ESTree.BindingRestElement | null, found: Set<string>): void {
+  if (pattern === null) return;
+  if (pattern.type === "RestElement") boundName(pattern.argument, found);
+  else if (pattern.type === "AssignmentPattern") boundName(pattern.left, found);
+  else if (pattern.type === "ObjectPattern") {
+    for (const property of pattern.properties) boundName(property.type === "Property" ? property.value : property.argument, found);
+  } else if (pattern.type === "ArrayPattern") {
+    for (const element of pattern.elements) boundName(element, found);
+  } else found.add(pattern.name);
 }
 
 function isTypeDeclaration(statement: ESTree.Statement): boolean {
@@ -84,7 +71,7 @@ const rule: CreateRule = {
               (declarator) => declarator.init !== null && readsProps(declarator.init, bound),
             )
           ) {
-            for (const declarator of statement.declarations) boundNames(declarator.id, bound);
+            for (const declarator of statement.declarations) boundName(declarator.id, bound);
             continue;
           }
           context.report({

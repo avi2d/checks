@@ -425,7 +425,10 @@ function unwrapped(expression) {
   return current;
 }
 function isAstroProps(value) {
-  return value.type === "MemberExpression" && value.computed === false && value.object.type === "Identifier" && value.object.name === "Astro" && value.property.type === "Identifier" && value.property.name === "props";
+  if (value.type !== "MemberExpression" || value.computed)
+    return false;
+  const { object, property } = value;
+  return object.type === "Identifier" && object.name === "Astro" && property.type === "Identifier" && property.name === "props";
 }
 function readsProps(expression, bound) {
   const value = unwrapped(expression);
@@ -433,33 +436,21 @@ function readsProps(expression, bound) {
     return isAstroProps(value) || readsProps(value.object, bound);
   return value.type === "Identifier" && bound.has(value.name);
 }
-function boundNames(pattern, found) {
-  switch (pattern.type) {
-    case "Identifier":
-      found.add(pattern.name);
-      break;
-    case "ObjectPattern":
-      for (const property of pattern.properties) {
-        if (property.type === "Property")
-          boundNames(property.value, found);
-        else
-          boundNames(property.argument, found);
-      }
-      break;
-    case "ArrayPattern":
-      for (const element of pattern.elements) {
-        if (element === null)
-          continue;
-        if (element.type === "RestElement")
-          boundNames(element.argument, found);
-        else
-          boundNames(element, found);
-      }
-      break;
-    case "AssignmentPattern":
-      boundNames(pattern.left, found);
-      break;
-  }
+function boundName(pattern, found) {
+  if (pattern === null)
+    return;
+  if (pattern.type === "RestElement")
+    boundName(pattern.argument, found);
+  else if (pattern.type === "AssignmentPattern")
+    boundName(pattern.left, found);
+  else if (pattern.type === "ObjectPattern") {
+    for (const property of pattern.properties)
+      boundName(property.type === "Property" ? property.value : property.argument, found);
+  } else if (pattern.type === "ArrayPattern") {
+    for (const element of pattern.elements)
+      boundName(element, found);
+  } else
+    found.add(pattern.name);
 }
 function isTypeDeclaration(statement) {
   const declaration = statement.type === "ExportNamedDeclaration" ? statement.declaration : statement;
@@ -482,7 +473,7 @@ var rule2 = {
           }
           if (statement.type === "VariableDeclaration" && statement.declarations.length > 0 && statement.declarations.every((declarator) => declarator.init !== null && readsProps(declarator.init, bound))) {
             for (const declarator of statement.declarations)
-              boundNames(declarator.id, bound);
+              boundName(declarator.id, bound);
             continue;
           }
           context.report({
