@@ -53,6 +53,7 @@
     "src/docs/docs.ts",
     "src/dependencies/vendor.ts",
     "src/dependencies/vendor-args.ts",
+    "src/dependencies/cache-root.ts",
     "src/docs/doc-outline.ts",
     "src/docs/doc-rules.ts",
     "src/docs/doc-references.ts",
