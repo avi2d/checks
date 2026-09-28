@@ -12,7 +12,9 @@ It reads the subject of `HEAD`, and does nothing unless the subject is `chore: r
 It refuses a release commit whose `package.json` holds another version.
 It tags `HEAD` as `v<version>` and pushes the tag to `origin`.
 A tag the workflow token pushes starts no `push` workflow, so it then dispatches the workflow its argument names on the tag.
-It does nothing when `v<version>` already tags `HEAD`, since whoever pushed that tag started the release.
+It does nothing when `v<version>` already tags `HEAD`, so a rerun after a release never publishes it twice.
+When the dispatch fails after the push, it names `gh workflow run <workflow> --ref v<version>`.
+A rerun then finds the tag and does nothing, so that command is what dispatches the release workflow by hand.
 It refuses when `v<version>` already tags another commit.
 
 ## What it reads

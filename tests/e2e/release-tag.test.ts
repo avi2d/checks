@@ -11,7 +11,7 @@ const scratch = scratchDirs();
 
 type Landed = {
   readonly head: string;
-  readonly run: (...args: readonly string[]) => Promise<Ran>;
+  readonly run: (args: readonly string[], env?: Readonly<Record<string, string>>) => Promise<Ran>;
   readonly state: FakeGh["state"];
   readonly inOrigin: (...args: readonly string[]) => Promise<string>;
 };
@@ -26,7 +26,7 @@ async function landed(version: string, subject: string): Promise<Landed> {
   const fake = await fakeGh(home, origin);
   return {
     head,
-    run: (...args) => ran($`bun ${SCRIPT} ${args}`.cwd(repo.dir).env({ ...process.env, ...fake.env })),
+    run: (args, env = {}) => ran($`bun ${SCRIPT} ${args}`.cwd(repo.dir).env({ ...process.env, ...fake.env, ...env })),
     state: fake.state,
     inOrigin: async (...args) => (await $`git ${args}`.cwd(origin).quiet()).stdout.toString().trim(),
   };
@@ -37,14 +37,32 @@ test(
   async () => {
     const main = await landed("0.2.0", "chore: release 0.2.0 (#7)");
 
-    const tagged = await main.run("release.yml");
+    const tagged = await main.run(["release.yml"]);
     expect(tagged).toEqual({ exitCode: 0, text: `release-tag: tagged ${main.head.slice(0, 12)} as v0.2.0, and dispatched release.yml on it\n` });
     expect(await main.inOrigin("rev-parse", "v0.2.0^{commit}")).toBe(main.head);
     expect((await main.state()).dispatches).toEqual([{ workflow: "release.yml", ref: "v0.2.0" }]);
 
-    const again = await main.run("release.yml");
+    const again = await main.run(["release.yml"]);
     expect(again).toEqual({ exitCode: 0, text: `release-tag: v0.2.0 already tags ${main.head.slice(0, 12)}\n` });
     expect((await main.state()).dispatches).toHaveLength(1);
+  },
+  60_000,
+);
+
+test(
+  "a failed dispatch after the tag is pushed names the command that dispatches the release by hand, since a rerun finds the tag and does nothing",
+  async () => {
+    const main = await landed("0.2.0", "chore: release 0.2.0 (#7)");
+
+    const failed = await main.run(["release.yml"], { FAKE_GH_FAIL: "POST repos/{owner}/{repo}/actions/workflows/release.yml/dispatches" });
+    expect(failed.exitCode).toBe(2);
+    expect(failed.text).toContain("gh: Resource not accessible by integration (HTTP 403)");
+    expect(failed.text).toContain("v0.2.0 is pushed, so dispatch the release by hand with `gh workflow run release.yml --ref v0.2.0`");
+    expect(await main.inOrigin("rev-parse", "v0.2.0^{commit}")).toBe(main.head);
+
+    const again = await main.run(["release.yml"]);
+    expect(again).toEqual({ exitCode: 0, text: `release-tag: v0.2.0 already tags ${main.head.slice(0, 12)}\n` });
+    expect((await main.state()).dispatches).toEqual([]);
   },
   60_000,
 );
@@ -54,7 +72,7 @@ test(
   async () => {
     const main = await landed("0.2.0", "feat: price a bill (#4)");
 
-    expect(await main.run("release.yml")).toEqual({ exitCode: 0, text: `release-tag: ${main.head.slice(0, 12)} is no release commit\n` });
+    expect(await main.run(["release.yml"])).toEqual({ exitCode: 0, text: `release-tag: ${main.head.slice(0, 12)} is no release commit\n` });
     expect(await main.inOrigin("tag", "--list")).toBe("");
     expect((await main.state()).calls).toEqual([]);
   },
@@ -65,19 +83,19 @@ test(
   "a release commit whose package.json disagrees, or whose tag already sits elsewhere, is refused and dispatches nothing",
   async () => {
     const disagreeing = await landed("0.2.0", "chore: release 0.3.0 (#8)");
-    const refused = await disagreeing.run("release.yml");
+    const refused = await disagreeing.run(["release.yml"]);
     expect(refused.exitCode).toBe(2);
     expect(refused.text).toContain(`checks-release-tag: ${disagreeing.head.slice(0, 12)} releases 0.3.0, but package.json holds 0.2.0`);
 
     const moved = await landed("0.2.0", "chore: release 0.2.0 (#7)");
     const elsewhere = await moved.inOrigin("-c", "user.name=Wren Fixture", "-c", "user.email=wren@example.com", "commit-tree", `${moved.head}^{tree}`, "-m", "elsewhere");
     await moved.inOrigin("tag", "v0.2.0", elsewhere);
-    const clash = await moved.run("release.yml");
+    const clash = await moved.run(["release.yml"]);
     expect(clash.exitCode).toBe(2);
     expect(clash.text).toContain(`checks-release-tag: v0.2.0 already tags ${elsewhere.slice(0, 12)}, not ${moved.head.slice(0, 12)}`);
 
     for (const run of [disagreeing, moved]) expect((await run.state()).dispatches).toEqual([]);
-    expect((await moved.run()).text).toContain("usage: release-tag.ts <workflow>");
+    expect((await moved.run([])).text).toContain("usage: release-tag.ts <workflow>");
   },
   60_000,
 );

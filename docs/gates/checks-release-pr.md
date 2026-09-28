@@ -148,6 +148,7 @@ Nothing requires them, and approving them runs the same checks again.
 The daily release needs the repository's other workflows to accept the dispatch:
 
 - `.github/workflows/ci.yml` and `.github/workflows/commitlint.yml` trigger on `workflow_dispatch`, grant `statuses: write`, and end each required job with the step below.
+  `commitlint.yml` also grants `pull-requests: read`, which the title lookup needs.
 - The title lint reads the title of the one open pull request its branch heads when the event carries none, as [Commit messages](../configs/commit-messages.md) says.
 - `.github/workflows/release.yml` triggers on `workflow_dispatch` and refuses a ref that is not a tag, as [checks-release-notes](checks-release-notes.md) shows.
 - **Allow GitHub Actions to create and approve pull requests** is on, which the call after the step sets.

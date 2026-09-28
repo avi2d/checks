@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
-import { dispatch } from "./github.ts";
+import { dispatch, GitHubFailure } from "./github.ts";
 import { releasedVersionOf } from "./release.ts";
 import { git } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
@@ -43,7 +43,11 @@ const releaseTag = Effect.gen(function* () {
   }
   if (tagged !== undefined) return yield* new TagRefused({ message: `${tag} already tags ${tagged.slice(0, 12)}, not ${head.slice(0, 12)}` });
   yield* git(["push", "--quiet", "origin", `${head}:refs/tags/${tag}`], root);
-  yield* dispatch(workflow, tag);
+  yield* dispatch(workflow, tag).pipe(
+    Effect.mapError(
+      (failure) => new GitHubFailure({ message: `${failure.message}; ${tag} is pushed, so dispatch the release by hand with \`gh workflow run ${workflow} --ref ${tag}\`` }),
+    ),
+  );
   yield* Console.log(`release-tag: tagged ${head.slice(0, 12)} as ${tag}, and dispatched ${workflow} on it`);
   return true;
 });
