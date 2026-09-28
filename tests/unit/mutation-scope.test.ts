@@ -37,7 +37,7 @@ test("an --incremental run with its report present stays allowed", () => {
 test("an --incremental run with no report to reuse is refused and names both ways forward", () => {
   const refusal = missingReportRefusal(["--incremental"], "", "reports/custom.json", reportMissing);
   expect(refusal).toContain("no report at reports/custom.json");
-  expect(refusal).toContain("mutation-report");
+  expect(refusal).toContain("gh workflow run mutation");
   expect(refusal).toContain("--mutate <glob>");
   expect(missingReportRefusal(["--incremental", "--mutate", "src/billing.ts"], "", "reports/custom.json", reportMissing)).toBeUndefined();
   expect(missingReportRefusal(["--incremental"], "true", "reports/custom.json", reportMissing)).toBeUndefined();

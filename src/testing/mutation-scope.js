@@ -23,5 +23,5 @@ export function fullRunRefusal(args, ci) {
 // Only the resolved options know the incrementalFile a consumer config sets, so this runs after config load.
 export function missingReportRefusal(args, ci, incrementalFile, reportExists = existsSync) {
   if (allowedAnyway(args, ci) || reportExists(incrementalFile)) return undefined;
-  return `refusing a full mutation run outside CI: \`--incremental\` finds no report at ${incrementalFile} to reuse; download the main baseline report from the CI \`mutation-report\` artifact into ${incrementalFile}, or scope this run with \`--mutate <glob>\``;
+  return `refusing a full mutation run outside CI: \`--incremental\` finds no report at ${incrementalFile} to reuse; scope this run with \`--mutate <glob>\`, or start the full baseline in CI with \`gh workflow run mutation\``;
 }
