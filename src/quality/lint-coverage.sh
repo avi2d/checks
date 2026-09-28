@@ -1,5 +1,5 @@
 #!/bin/sh
-# lint-coverage: fail when oxlint silently skips a tracked TypeScript source,
+# lint-coverage: fail when oxlint silently skips a tracked TypeScript or Astro source,
 # or when tsconfig.json's program silently drops the ts-reset rules.
 set -eu
 

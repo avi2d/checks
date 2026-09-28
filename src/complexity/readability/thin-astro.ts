@@ -71,7 +71,7 @@ function isTypeDeclaration(statement: ESTree.Statement): boolean {
 const rule: CreateRule = {
   meta: {
     type: "problem",
-    docs: { description: "Disallow logic in .astro frontmatter and script blocks: only imports, props and markup" },
+    docs: { description: "Disallow logic in .astro frontmatter and script blocks: only imports, props and markup, with client code loaded by a side-effect import such as import \"../client.ts\"" },
   },
   create(context) {
     if (!context.filename.endsWith(".astro")) return {};

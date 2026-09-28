@@ -10,7 +10,7 @@ audience: consumers
 
 It fails when oxlint skips a tracked `.ts`, `.tsx` or `.astro` file, for example through a stray `.gitignore` entry.
 It compares `git ls-files` against oxlint's own file walk and names the missing files.
-It lists each tracked `.astro` file the same way, since oxlint lints the frontmatter and script blocks of an `.astro` file.
+It lists each tracked `.astro` file the same way, since oxlint lints the frontmatter and script blocks of an `.astro` file, where a script block loads client code with a side-effect import such as `import "../client.ts";`.
 
 It fails when the program `tsconfig.json` builds leaves out the `is-array` or the `json-parse` rule of `@total-typescript/ts-reset`, which `tsconfig.effect.json` lists.
 A `tsconfig.json` that does not extend `@avi2dg/checks/tsconfig.effect.json`, or that sets both `files` and `include`, leaves both rules out.
