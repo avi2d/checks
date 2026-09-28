@@ -30,7 +30,6 @@ export const decodeAcknowledgements = Schema.decodeUnknownEffect(Schema.fromJson
 
 const Vulnerability = Schema.Struct({
   id: Schema.String,
-  aliases: Schema.optionalKey(Schema.Array(Schema.String)),
   summary: Schema.optionalKey(Schema.String),
   database_specific: Schema.optionalKey(Schema.Struct({ severity: Schema.optionalKey(Schema.String) })),
 });
@@ -57,7 +56,6 @@ export type Finding = {
   readonly name: string;
   readonly version: string;
   readonly id: string;
-  readonly ids: readonly string[];
   readonly severity: string;
   readonly summary: string;
 };
@@ -72,34 +70,21 @@ export function findingsIn(scanned: OsvReport, lockfile: (path: string) => boole
         name,
         version,
         id: vulnerability.id,
-        ids: [vulnerability.id, ...(vulnerability.aliases ?? [])],
         severity: vulnerability.database_specific?.severity?.toLowerCase() ?? UNRATED,
         summary: vulnerability.summary ?? "",
       })),
     );
 }
 
-type Claim = { readonly name: string; readonly id: string; readonly ids: readonly string[] };
-
-function keyOf(name: string, id: string): string {
+// Two live records can list each other as aliases, so only the id the scan reports names an advisory.
+function keyOf({ name, id }: { readonly name: string; readonly id: string }): string {
   return `${name} ${id}`;
-}
-
-function recordsAt(head: readonly Finding[]): ReadonlySet<string> {
-  return new Set(head.map(({ name, id }) => keyOf(name, id)));
-}
-
-// Two live records can list each other as aliases, so a claim reaches a record by alias only once no head record carries the claim's own id.
-function reaches(claim: Claim, finding: Finding, atHead: ReadonlySet<string>): boolean {
-  if (claim.name !== finding.name) return false;
-  if (claim.id === finding.id) return true;
-  return !atHead.has(keyOf(claim.name, claim.id)) && claim.ids.some((id) => finding.ids.includes(id));
 }
 
 // Keyed by name and id rather than version, so moving between two affected versions adds nothing.
 export function introducedBy(base: readonly Finding[], head: readonly Finding[]): readonly Finding[] {
-  const atHead = recordsAt(head);
-  return head.filter((finding) => !base.some((known) => reaches(known, finding, atHead)));
+  const known = new Set(base.map(keyOf));
+  return head.filter((finding) => !known.has(keyOf(finding)));
 }
 
 type AcknowledgementProblem =
@@ -139,8 +124,8 @@ export function clockOf(acknowledgements: readonly Acknowledgement[], scope: Sco
   return { live, problems };
 }
 
-function claimOf({ package: name, id }: Acknowledgement): Claim {
-  return { name, id, ids: [id] };
+function covers(acknowledgement: Acknowledgement, finding: Finding): boolean {
+  return acknowledgement.package === finding.name && acknowledgement.id === finding.id;
 }
 
 type Judged = {
@@ -152,8 +137,6 @@ type Judged = {
 
 export function judge(base: readonly Finding[], head: readonly Finding[], clock: AcknowledgementClock): Judged {
   const added = introducedBy(base, head);
-  const atHead = recordsAt(head);
-  const covers = (acknowledgement: Acknowledgement, finding: Finding) => reaches(claimOf(acknowledgement), finding, atHead);
   const failing = added.filter((finding) => !clock.live.some((acknowledgement) => covers(acknowledgement, finding)));
   const unmatched = clock.live
     .filter((acknowledgement) => !head.some((finding) => covers(acknowledgement, finding)))
@@ -179,7 +162,7 @@ function problemLine(problem: AcknowledgementProblem): string {
   const { package: name, id, until } = problem.acknowledgement;
   switch (problem.kind) {
     case "expired":
-      return `  ${name} ${id} expired on ${until}; upgrade the package, or renew the entry with a new reason`;
+      return `  ${name} ${id} expired on ${until}; upgrade the package and delete the entry, or renew it with a later day`;
     case "too-far":
       return `  ${name} ${id} runs until ${until}, more than ${ACKNOWLEDGEMENT_DAYS} days out; name a day no later than ${problem.latest}`;
     case "unmatched":

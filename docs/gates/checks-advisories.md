@@ -9,8 +9,8 @@ audience: consumers
 ## What it checks
 
 It scans `bun.lock` at both ends of the range with OSV-Scanner and fails on each advisory the head's lockfile has and the base's lockfile lacks.
-It matches an advisory across the range by package name and id, so a range that moves a package between two affected versions adds nothing.
-It matches by alias only when the head no longer holds the base's id, because two live advisories can list each other as aliases.
+It matches an advisory across the range by package name and the id OSV-Scanner reports, so a range that moves a package between two affected versions adds nothing.
+It ignores aliases, because two live advisories can list each other as aliases.
 An advisory published against a package the base already held shows at both ends, so it fails no range, and `--all` reports it instead.
 Each failure names the package, its version, the advisory id, its severity and its summary.
 A range that leaves `bun.lock` unchanged runs no scan.
@@ -53,13 +53,14 @@ A cold cache downloads about 55 MB of scanner and 217 MB of database.
 ```
 
 It reads the file at the head of the range.
-Each entry names the package, one id or alias of the advisory, the day the entry stops holding, and why the repository accepts the advisory.
-An entry naming an id the head holds covers that advisory alone, and one naming any other id covers each advisory that lists it as an alias.
+Each entry names the package, the advisory's id as OSV-Scanner reports it, the day the entry stops holding, and why the repository accepts the advisory.
+An entry covers only the advisory with that id, so one naming an alias covers nothing.
 An entry holds until its `until` day begins in UTC.
 A range measures from the later of the head's author and committer dates, so a commit gets the same verdict on every run.
 `--all` measures from the current time, so an entry expires in a repository that takes no commit.
 An entry whose `until` falls more than 30 days after that moment fails the run and covers nothing, and no setting raises the limit.
-Once that moment passes `until`, the entry fails every run until the package is upgraded or the entry is renewed with a new reason, whether or not the range touches `bun.lock`.
+Once that moment passes `until`, the entry fails every run until it is deleted or renewed with a later `until`, whether or not the range touches `bun.lock`.
+Delete it once the package is upgraded.
 When a scan runs, an entry that matches no advisory at the head fails, so the file holds only live entries.
 A file that does not decode as that list exits 2.
 
@@ -90,7 +91,7 @@ advisories: the range adds 2 advisory(ies) to bun.lock (0 at the head predate th
   lodash@4.17.20 GHSA-35jh-r3h4-6jhm high: Command Injection in lodash
   minimist@0.0.8 GHSA-xvch-5gv4-984h critical: Prototype Pollution in minimist
 advisories: 1 acknowledgement(s) in advisory-acks.json do not hold:
-  qs GHSA-4mjr-xmp4-gh2g expired on 2026-10-20; upgrade the package, or renew the entry with a new reason
+  qs GHSA-4mjr-xmp4-gh2g expired on 2026-10-20; upgrade the package and delete the entry, or renew it with a later day
 ```
 
 ## When it runs

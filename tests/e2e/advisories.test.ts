@@ -155,7 +155,7 @@ test(
     const later = await commitAt(repo, "docs: readme", now + 20 * DAY);
     const expired = await gate(repo, box, head, later);
     expect(expired.exitCode).toBe(1);
-    expect(expired.text).toContain(`  minimist GHSA-xvch-5gv4-984h expired on ${day(now + 10 * DAY)}; upgrade the package, or renew the entry with a new reason`);
+    expect(expired.text).toContain(`  minimist GHSA-xvch-5gv4-984h expired on ${day(now + 10 * DAY)}; upgrade the package and delete the entry, or renew it with a later day`);
 
     await repo.write({ "advisory-acks.json": acknowledge("2099-01-01") });
     const far = await commitAt(repo, "chore: acknowledge for longer", now);
@@ -188,7 +188,7 @@ test(
     expect((await gate(repo, box, head)).exitCode).toBe(0);
     const all = await gate(repo, box, "--all");
     expect(all.exitCode).toBe(1);
-    expect(all.text).toContain(`  minimist GHSA-xvch-5gv4-984h expired on ${lapsed}; upgrade the package, or renew the entry with a new reason`);
+    expect(all.text).toContain(`  minimist GHSA-xvch-5gv4-984h expired on ${lapsed}; upgrade the package and delete the entry, or renew it with a later day`);
     expect(all.text).toContain("  minimist@0.0.8 GHSA-xvch-5gv4-984h critical: Prototype Pollution in minimist");
     expect((await gate(repo, box, "--all", head)).exitCode).toBe(2);
   },

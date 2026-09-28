@@ -37,8 +37,13 @@ function acknowledgement(pkg: string, id: string, until: string): Acknowledgemen
   return { package: pkg, id, until, reason: "the path never reaches untrusted input" };
 }
 
-function finding(name: string, id: string, aliases: readonly string[] = []): Finding {
-  return { name, version: "1.0.0", id, ids: [id, ...aliases], severity: "high", summary: "" };
+function finding(name: string, id: string): Finding {
+  return { name, version: "1.0.0", id, severity: "high", summary: "" };
+}
+
+function lodashAt(version: string, ids: readonly string[]): readonly Finding[] {
+  const head = findingsIn(recorded("planted"), atHead).filter(({ name }) => name === "lodash");
+  return head.filter(({ id }) => ids.includes(id)).map((found) => ({ ...found, version }));
 }
 
 test("a planted lodash and a nested minimist show up at the head of a recorded scan, and nowhere at its base", () => {
@@ -75,22 +80,22 @@ test("advisories found at both ends of a recorded range predate it and fail noth
   expect(judge(base, head, clockOf([], RANGE, FRESH))).toEqual({ failing: [], acknowledged: 0, predating: 4, problems: [] });
 });
 
-test("a malware report carries its aliases and no severity", () => {
+test("a malware report carries its own id and no severity", () => {
   const malware = findingsIn(recorded("malware"), atHead);
   const chalk = malware.find(({ name }) => name === "chalk");
   expect(chalk).toMatchObject({ id: "MAL-2025-46969", severity: "unrated" });
-  expect(chalk?.ids).toContain("GHSA-2v46-p5h4-248w");
 });
 
-test("an advisory the head names by an alias the base knew is not introduced", () => {
-  const base = [finding("debug", "GHSA-4x49-vf9v-38px", ["CVE-2025-59144"])];
-  expect(introducedBy(base, [finding("debug", "MAL-2025-46974", ["CVE-2025-59144"])])).toEqual([]);
+test("an advisory is known across a range by its package and the id the scan reports", () => {
+  const base = [finding("debug", "GHSA-4x49-vf9v-38px")];
+  expect(introducedBy(base, [finding("debug", "GHSA-4x49-vf9v-38px")])).toEqual([]);
+  expect(introducedBy(base, [finding("debug", "MAL-2025-46974")])).toHaveLength(1);
   expect(introducedBy(base, [finding("chalk", "GHSA-4x49-vf9v-38px")])).toHaveLength(1);
 });
 
-test("downgrading lodash from 4.17.21 to 4.17.20 adds the advisories the base's aliasing records do not carry", () => {
+test("downgrading lodash from 4.17.21 to 4.17.20 adds GHSA-35jh-r3h4-6jhm though the base's GHSA-r5fr-rjxr-66jc lists it as an alias", () => {
+  const base = lodashAt("4.17.21", ["GHSA-r5fr-rjxr-66jc", "GHSA-xxjr-mmjv-4gpg"]);
   const head = findingsIn(recorded("planted"), atHead).filter(({ name }) => name === "lodash");
-  const base = head.filter(({ id }) => id === "GHSA-r5fr-rjxr-66jc" || id === "GHSA-xxjr-mmjv-4gpg").map((found) => ({ ...found, version: "4.17.21" }));
   expect(keys(introducedBy(base, head))).toEqual([
     "lodash@4.17.20 GHSA-29mw-wpgm-hmr9",
     "lodash@4.17.20 GHSA-35jh-r3h4-6jhm",
@@ -98,13 +103,11 @@ test("downgrading lodash from 4.17.21 to 4.17.20 adds the advisories the base's 
   ]);
 });
 
-test("an acknowledgement covers only its own record when the head carries it, not another record listing its id as an alias", () => {
-  const head = findingsIn(recorded("planted"), atHead).filter(({ name }) => name === "lodash");
-  const kept = acknowledgement("lodash", "GHSA-r5fr-rjxr-66jc", "2026-10-01");
-  const judged = judge([], head, clockOf([kept], RANGE, FRESH));
-  expect(judged.acknowledged).toBe(1);
-  expect(keys(judged.failing)).toContain("lodash@4.17.20 GHSA-35jh-r3h4-6jhm");
-  expect(judged.problems).toEqual([]);
+test("an acknowledgement for GHSA-35jh-r3h4-6jhm does not cover GHSA-r5fr-rjxr-66jc, which lists it as an alias, and matches nothing", () => {
+  const head = lodashAt("4.17.21", ["GHSA-r5fr-rjxr-66jc"]);
+  const aliased = acknowledgement("lodash", "GHSA-35jh-r3h4-6jhm", "2026-10-01");
+  const judged = judge([], head, clockOf([aliased], RANGE, FRESH));
+  expect(judged).toEqual({ failing: head, acknowledged: 0, predating: 0, problems: [{ kind: "unmatched", acknowledgement: aliased }] });
 });
 
 test("an acknowledgement holds until its day begins, and only within 30 days of the head", () => {
@@ -139,9 +142,9 @@ test("an acknowledgement running too far covers nothing, so its advisory still f
   expect(judged.problems.map(({ kind }) => kind)).toEqual(["too-far"]);
 });
 
-test("a live acknowledgement covers its package's advisory by any of its ids, and one matching nothing fails", () => {
-  const head = [finding("debug", "MAL-2025-46974", ["GHSA-4x49-vf9v-38px"])];
-  const covering = acknowledgement("debug", "GHSA-4x49-vf9v-38px", "2026-10-01");
+test("a live acknowledgement covers its package's advisory by the id the scan reports, and one matching nothing fails", () => {
+  const head = [finding("debug", "MAL-2025-46974")];
+  const covering = acknowledgement("debug", "MAL-2025-46974", "2026-10-01");
   const stray = acknowledgement("qs", "GHSA-4mjr-xmp4-gh2g", "2026-10-01");
   const judged = judge([], head, clockOf([covering, stray], RANGE, FRESH));
   expect(judged).toEqual({ failing: [], acknowledged: 1, predating: 0, problems: [{ kind: "unmatched", acknowledgement: stray }] });
@@ -190,7 +193,7 @@ test("reports for a clean range, a whole head and an unchanged lockfile", () => 
     [
       "advisories: bun.lock is unchanged in the range, so nothing was scanned",
       "advisories: 1 acknowledgement(s) in advisory-acks.json do not hold:",
-      "  lodash GHSA-35jh-r3h4-6jhm expired on 2026-09-20; upgrade the package, or renew the entry with a new reason",
+      "  lodash GHSA-35jh-r3h4-6jhm expired on 2026-09-20; upgrade the package and delete the entry, or renew it with a later day",
     ].join("\n"),
   );
 });
