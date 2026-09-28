@@ -1,0 +1,37 @@
+title = "checks-secrets"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "wireguard-key"
+description = "A WireGuard or AmneziaWG private or pre-shared key"
+regex = '''(?i)\b(?:private[_-]?key|pre[_-]?shared[_-]?key|psk)["']?[ \t]*[:=][ \t]*["']?([A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=)'''
+secretGroup = 1
+entropy = 3.0
+keywords = ["private", "preshared", "pre_shared", "pre-shared", "psk"]
+
+[[rules]]
+id = "proxy-share-link"
+description = "A proxy share link that carries its credential, such as vless://, vmess://, ss:// or trojan://"
+regex = '''(?i)\b(?:vless|vmess|ssr?|trojan|hysteria2?|hy2|tuic|socks5?)://([^\s"'`<>@]{8,})(?:@[^\s"'`<>]+)?'''
+secretGroup = 1
+keywords = ["vless://", "vmess://", "ss://", "ssr://", "trojan://", "hysteria://", "hysteria2://", "hy2://", "tuic://", "socks://", "socks5://"]
+
+[[rules.allowlists]]
+description = "A link to a reserved example or test host"
+regexTarget = "match"
+regexes = ['''@(?:[\w-]+\.)*(?:example\.(?:com|net|org)|[\w-]+\.(?:example|invalid|test)|localhost)(?:[:/?#]|$)''']
+
+[[rules]]
+id = "proxy-subscription-url"
+description = "A proxy subscription URL whose path or query carries its token"
+regex = '''(?i)\bhttps?://[^\s"'`<>/]+/(?:[^\s"'`<>?]*/)?(?:sub|subs|subscribe|subscription|link)(?:/|\?(?:[^\s"'`<>]*&)?(?:token|key|uuid|id)=)([A-Za-z0-9_-]{16,})'''
+secretGroup = 1
+entropy = 3.0
+keywords = ["sub", "link"]
+
+[[rules.allowlists]]
+description = "A link to a reserved example or test host"
+regexTarget = "match"
+regexes = ['''^(?i)https?://(?:[\w-]+\.)*(?:example\.(?:com|net|org)|[\w-]+\.(?:example|invalid|test)|localhost)(?:[:/?#]|$)''']

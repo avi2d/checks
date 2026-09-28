@@ -238,6 +238,20 @@ The kit caps each entry at 30 days and measures a range from the head's dates, a
 `--all` measures from the current time instead, because a head's dates never move in a repository that takes no commit, and an entry measured from them would never expire.
 The file is JSON because `Bun.TOML` cannot parse a TOML date.
 
+## Secrets fail in every commit of the range
+
+`checks-secrets` scans each commit in the range rather than the files at the head.
+A secret a commit adds stays in that commit after a later commit deletes it, and a pushed branch has already sent it to the forge.
+So the fix is to rewrite the commit that added it, and to rotate the secret once it has left the machine.
+
+The gate runs gitleaks rather than a hand-written pattern list, because its default config already holds over 200 rules for the token shapes of common services.
+The kit's own rules in `src/delivery/gitleaks.toml` add only the VPN keys and proxy links those rules miss.
+The kit pins gitleaks by version and SHA-256 for the reason it pins OSV-Scanner.
+
+No finding can be accepted.
+A secret has no false positive worth keeping in git, because a placeholder carries the same shape without the value.
+So the gate ignores a repository's `.gitleaks.toml`, `.gitleaksignore` and `gitleaks:allow` comments, which would each let one repository pass what another fails.
+
 ## Related topics
 
 - [checks](../README.md)

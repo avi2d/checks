@@ -127,6 +127,7 @@ The table groups the gates by vector, the part of a repository each one judges.
 | docs | [`checks-docs`](docs/gates/checks-docs.md) | the range, and every agent file at the head commit | every repository |
 | delivery | [`checks-commit-identity`](docs/gates/checks-commit-identity.md) | the range | every repository |
 | delivery | [`checks-ci-wiring`](docs/gates/checks-ci-wiring.md) | the working tree | every repository |
+| delivery | [`checks-secrets`](docs/gates/checks-secrets.md) | the range | every repository |
 | dependencies | [`checks-advisories`](docs/gates/checks-advisories.md) | the range | a repository tracking `bun.lock` |
 
 <!-- end generated gates -->
