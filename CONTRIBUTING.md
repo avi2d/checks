@@ -20,7 +20,7 @@ Declare each skip with `skipReason(reason, name)` beside the native Bun test cal
 A test that spawns `checks-lint` passes it `withoutPullRequestEvent()` from `tests/lib/env.ts`, so the CI event cannot decide the range.
 
 CI runs the commands in `.github/workflows/ci.yml` and lints the pull request title in `.github/workflows/commitlint.yml`.
-`.github/workflows/mutation.yml` runs Stryker, with `stryker.conf.mjs`, as a baseline on `main` and as an advisory comparison scoped to the files a pull request changes.
+`.github/workflows/mutation.yml` runs Stryker, with `stryker.conf.mjs`, as a baseline on `main` or on any branch by hand, and as an advisory comparison scoped to the files a pull request changes.
 Run `bun run mutate` to mutate the source locally.
 
 ## Regenerate what is committed
