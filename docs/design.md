@@ -172,7 +172,8 @@ The daily release opens the release pull request from `main` whenever it holds a
 `checks-release-tag` writes only the `v*` tag of a release commit that already landed.
 The `github-release` job's `contents: write` creates or updates the GitHub release from the tag's `CHANGELOG.md` section.
 
-Both jobs act with the workflow token, and GitHub starts no workflow for a push or a pull request that token makes.
+Both jobs act with the workflow token.
+GitHub starts no run for a push that token makes, and holds the runs of a pull request it opens until a maintainer approves them.
 A GitHub App or a personal token would start them, but either is a credential each repository stores and someone rotates.
 So `checks-release-pr` dispatches the required checks on the release head, and `checks-release-tag` dispatches the release workflow on the tag, since a dispatch is the one run the token can start.
 GitHub keeps a dispatched run's checks off the pull request, and branch protection does not count them.

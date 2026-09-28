@@ -26,7 +26,7 @@ It checks that the tree GitHub built matches the tree the build wrote.
 It points the branch `release/<branch>` at the commit, where `<branch>` is the branch `HEAD` is on.
 It opens a pull request from that branch into `<branch>` titled `chore: release <version>`, with the body `Release <version>.`, or retitles the open one to the new version.
 It then dispatches each workflow its arguments name on the release branch.
-A pull request the workflow token opens starts no `pull_request` workflow, so the dispatch is what runs the required checks on the release head.
+GitHub holds the `pull_request` runs of a pull request the workflow token opens until a maintainer approves them, so the dispatch is what runs the required checks on the release head.
 GitHub keeps a dispatched run's checks off the pull request, so each dispatched job reports its result as a commit status named for the job, which the required check of that name counts.
 When the release branch already holds this version on top of `HEAD` and its pull request carries the right title, it pushes nothing and dispatches nothing.
 It leaves the working tree as it found it.
@@ -149,9 +149,12 @@ A public repository keeps `runs-on: ubuntu-latest`.
 A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || fromJSON('["self-hosted","Linux","X64","winbox"]') }}` on both jobs, as its other workflows do.
 A repository whose build needs more than Bun adds the steps its `.github/workflows/ci.yml` runs before `bun run build`, and nothing after it.
 The job runs no test suite and no mutation run.
-On a hosted runner the `pull-request` job takes under a minute, billed as one minute a day, and the `tag` job runs only when a release lands.
-A job skipped by its `if` bills nothing.
+On a hosted runner the `pull-request` job takes about 25 seconds, which GitHub bills as one minute, whether it opens, refreshes or leaves the pull request alone.
+A private repository runs it on its self-hosted runner, which bills no minutes.
+The `tag` job runs only when a release lands, and a job its `if` skips bills nothing.
 The checks it dispatches are the release pull request's own required checks, and they run again only when `main` moves under it.
+The pull request also lists its own `pull_request` runs as waiting for approval.
+Nothing requires them, and approving them runs the same checks again.
 
 The daily release needs the repository's other workflows to accept the dispatch:
 

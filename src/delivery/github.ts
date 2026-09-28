@@ -32,7 +32,7 @@ export function gitHubJson<A>(decode: Decode<A>, method: Method, path: string, b
   );
 }
 
-// A dispatch is the one run a workflow token starts, since GitHub starts no workflow for the token's own push or pull request.
+// A dispatch is the one run a workflow token starts at once: GitHub starts none for the token's push, and holds its pull request's runs for approval.
 export const dispatch = Effect.fn("dispatch")(function* (workflow: string, ref: string) {
   yield* gitHub("POST", `${REPOSITORY}/actions/workflows/${workflow}/dispatches`, { ref });
 });
