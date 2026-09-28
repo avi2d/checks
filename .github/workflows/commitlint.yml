@@ -1,8 +1,10 @@
 permissions:
   contents: read
+  pull-requests: read
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
+  workflow_dispatch:
 jobs:
   commitlint:
     runs-on: ubuntu-latest
@@ -11,9 +13,16 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       # Only the title is linted: it is what a squash merge lands, with GitHub appending " (#N)" to it.
-      - run: printf '%s' "$PR_TITLE (#0000)" > "$RUNNER_TEMP/pr-title"
+      # A dispatched run carries no pull request, so it reads the title of the open one its branch heads.
+      - run: |
+          title="$PR_TITLE"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            title="$(gh api "repos/$GITHUB_REPOSITORY/pulls?head=$GITHUB_REPOSITORY_OWNER:$GITHUB_REF_NAME&state=open" --jq 'if length == 1 then .[0].title else error("no one open pull request heads the branch") end')"
+          fi
+          printf '%s' "$title (#0000)" > "$RUNNER_TEMP/pr-title"
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
+          GH_TOKEN: ${{ github.token }}
       # A title starting with git's comment character lints as empty without this: commentChar moves off '#'.
       - run: bun run ./node_modules/.bin/commitlint --config ./commitlint.config.js --edit "$RUNNER_TEMP/pr-title"
         env:

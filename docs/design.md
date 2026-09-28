@@ -162,8 +162,21 @@ So a checkout without tags, a fork, and a branch that merged `main` in all write
 A section keeps the date it was written, because the squash merge that lands the release commit may fall on another day.
 Entries come from commit subjects, which are the squash-merged pull request titles that commitlint holds to the conventional format.
 A commit body holds the branch's own messages, and nothing lints it, so no entry comes from a body.
-The changelog arrives in the release pull request, and no workflow pushes to the repository.
-The only write access the release path holds is the `github-release` job's `contents: write`, which creates or updates the GitHub release from the tag's `CHANGELOG.md` section.
+The changelog arrives in the release pull request, and no workflow pushes to a branch a person works on.
+
+## A release is cut every day
+
+A release waits for no quiet moment, since a busy repository always has work under way.
+The daily release opens the release pull request from `main` whenever it holds a feature or a fix since the last tag, and a person merges it.
+`checks-release-pr` writes only to the `release/<branch>` branch it owns, and rebuilds that branch on `main` rather than merging `main` into it, so the changelog it carries is the one the build writes.
+`checks-release-tag` writes only the `v*` tag of a release commit that already landed.
+The `github-release` job's `contents: write` creates or updates the GitHub release from the tag's `CHANGELOG.md` section.
+
+Both jobs act with the workflow token, and GitHub starts no workflow for a push or a pull request that token makes.
+A GitHub App or a personal token would start them, but either is a credential each repository stores and someone rotates.
+So `checks-release-pr` dispatches the required checks on the release head, and `checks-release-tag` dispatches the release workflow on the tag, since a dispatch is the one run the token can start.
+A check a dispatched run reports carries the job's name, and a required check matches by that name on the head commit.
+The cost is a `workflow_dispatch` trigger on each workflow a release needs, a title lint that reads its title from the open pull request, and the repository setting that lets the token open a pull request.
 
 ## The docs gate judges what a change touches
 

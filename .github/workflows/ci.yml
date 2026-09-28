@@ -4,6 +4,7 @@ on:
     branches: [main]
   pull_request:
     types: [opened, edited, synchronize, reopened]
+  workflow_dispatch:
 jobs:
   checks:
     runs-on: ubuntu-latest
