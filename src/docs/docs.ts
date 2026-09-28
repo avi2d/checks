@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect } from "effect";
-import { rootsOf, unresolvedIn, type Judging, type Unresolved } from "./doc-references.ts";
+import { ceilingFinding, entryFindings, isAgentFile, maintainingFinding } from "./doc-agents.ts";
+import { rootsOf, snapshotOf, unresolvedIn, type Judging, type Unresolved } from "./doc-references.ts";
 import { ADR_DIRECTORY, judge, placementOf, placementProblem, speaksToConsumers, type Placement } from "./doc-rules.ts";
 import { vanishedNames } from "./doc-names.ts";
 import { readTexts, snapshotAt, stillMissing } from "./doc-snapshot.ts";
@@ -18,6 +19,7 @@ type Judged = {
   readonly held: readonly string[];
   readonly edited: { readonly docs: number; readonly lines: number };
   readonly named: number;
+  readonly agents: number;
   readonly findings: readonly Finding[];
   readonly advisory: ReadonlyMap<string, number>;
   readonly brokenBefore: readonly Finding[];
@@ -115,13 +117,27 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   const referenced = new Map(proseDocs.map(({ path }) => [path, text(path)]));
   const references = yield* referenceFindings({ root, base, head, roots, changed, renamedFrom }, referenced, judging);
   const vanished = yield* vanishedNames(root, base, head, referenced, references.failed);
+  const agents = proseDocs.filter(({ path }) => isAgentFile(path));
+  const tracked = snapshotOf(yield* pathsAt(head, [], root), new Map(), new Map());
+  const shapes = agents.flatMap(({ path }) =>
+    [ceilingFinding(text(path)), maintainingFinding(text(path))].flatMap((finding) => (finding === undefined ? [] : [{ path, ...finding }])),
+  );
+  const entries = agents.flatMap(({ path }) => entryFindings(path, text(path), tracked).map((finding) => ({ path, ...finding })));
   const advisory = new Map<string, number>();
   for (const { path } of templated.filter((finding) => !touched.has(finding.path))) advisory.set(path, (advisory.get(path) ?? 0) + 1);
   return {
     held: judged.map(({ path }) => path).filter((path) => touched.has(path)),
     edited: { docs: edited.length, lines: edited.reduce((sum, { path }) => sum + (changed.get(path)?.size ?? 0), 0) },
     named: referenced.size,
-    findings: [...templated.filter((finding) => touched.has(finding.path)), ...prose, ...references.failing, ...vanished].toSorted(inPathOrder),
+    agents: agents.length,
+    findings: [
+      ...templated.filter((finding) => touched.has(finding.path)),
+      ...prose,
+      ...references.failing,
+      ...vanished,
+      ...shapes,
+      ...entries,
+    ].toSorted(inPathOrder),
     advisory,
     brokenBefore: references.brokenBefore.toSorted(inPathOrder),
   } satisfies Judged;
@@ -131,13 +147,14 @@ function describe({ path, line, message }: Finding): string {
   return `  ${path}${line === undefined ? "" : `:${line}`}: ${message}`;
 }
 
-export function report({ held, edited, named, findings, advisory, brokenBefore }: Judged): string {
+export function report({ held, edited, named, agents, findings, advisory, brokenBefore }: Judged): string {
   const verdict =
     findings.length === 0
       ? [
           `${NAME}: ${held.length} doc file(s) the range touches hold to their templates`,
           `${NAME}: ${edited.lines} line(s) the range adds or edits in ${edited.docs} living doc(s) or agent file(s) hold to the prose rules`,
           `${NAME}: the range breaks no path, link or command the ${named} living doc(s) or agent file(s) name`,
+          `${NAME}: the ${agents} agent file(s) hold to the ceiling, and every entry names a tracked path, a link or a command`,
         ]
       : [`${NAME}: ${findings.length} violation(s):`, ...findings.map(describe)];
   const unconformed =

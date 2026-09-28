@@ -124,7 +124,7 @@ The table groups the gates by vector, the part of a repository each one judges.
 | quality | [`checks-comment-gate`](docs/gates/checks-comment-gate.md) | the range | every repository |
 | testing | [`checks-test-layout`](docs/gates/checks-test-layout.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
 | testing | [`checks-quarantine-clock`](docs/gates/checks-quarantine-clock.md) | the range | every repository |
-| docs | [`checks-docs`](docs/gates/checks-docs.md) | the range | every repository |
+| docs | [`checks-docs`](docs/gates/checks-docs.md) | the range, and every agent file at the head commit | every repository |
 | delivery | [`checks-commit-identity`](docs/gates/checks-commit-identity.md) | the range | every repository |
 | delivery | [`checks-ci-wiring`](docs/gates/checks-ci-wiring.md) | the working tree | every repository |
 | dependencies | [`checks-advisories`](docs/gates/checks-advisories.md) | the range | a repository tracking `bun.lock` |

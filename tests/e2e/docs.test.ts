@@ -36,8 +36,8 @@ const PLANTS: readonly Plant[] = [
   {
     kind: "agents",
     path: "AGENTS.md",
-    defect: (text) => text.replace("## Maintaining this file", "## Maintenance"),
-    refusal: "AGENTS.md:1: lacks `## Maintaining this file`",
+    defect: (text) => text.replace("# Project agent memory", "# Agent memory"),
+    refusal: "AGENTS.md:1: `# Agent memory` is not the template's title, `# Project agent memory`",
   },
   {
     kind: "claude",

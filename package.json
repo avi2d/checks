@@ -57,6 +57,7 @@
     "src/dependencies/advisories.ts",
     "src/dependencies/advisory-rules.ts",
     "src/dependencies/osv-scanner.ts",
+    "src/docs/doc-agents.ts",
     "src/docs/doc-outline.ts",
     "src/docs/doc-rules.ts",
     "src/docs/doc-references.ts",
