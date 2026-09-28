@@ -1,14 +1,14 @@
 #!/bin/sh
-# lint-coverage: fail when oxlint silently skips a tracked TypeScript source,
+# lint-coverage: fail when oxlint silently skips a tracked TypeScript or Astro source,
 # or when tsconfig.json's program silently drops the ts-reset rules.
 set -eu
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
-git ls-files -- '*.ts' '*.tsx' | LC_ALL=C sort > "$tmp/expected"
+git ls-files -- '*.ts' '*.tsx' '*.astro' | LC_ALL=C sort > "$tmp/expected"
 if ! [ -s "$tmp/expected" ]; then
-  echo "lint-coverage: no tracked .ts/.tsx files"
+  echo "lint-coverage: no tracked .ts/.tsx/.astro files"
   exit 0
 fi
 
@@ -18,7 +18,7 @@ if ! oxlint --debug=files > "$tmp/walk" 2> "$tmp/walk-error"; then
   cat "$tmp/walk" "$tmp/walk-error"
   exit 2
 fi
-grep -E '\.tsx?$' "$tmp/walk" | LC_ALL=C sort > "$tmp/walked" || true
+grep -E '[.]tsx?$|[.]astro$' "$tmp/walk" | LC_ALL=C sort > "$tmp/walked" || true
 
 expected_count="$(wc -l < "$tmp/expected" | tr -d ' ')"
 walked_count="$(grep -c . "$tmp/walked" || true)"
@@ -27,11 +27,16 @@ status=0
 comm -23 "$tmp/expected" "$tmp/walked" > "$tmp/missing"
 if [ -s "$tmp/missing" ]; then
   missing_count="$(wc -l < "$tmp/missing" | tr -d ' ')"
-  echo "lint-coverage: oxlint skips ${missing_count}/${expected_count} tracked .ts/.tsx files; missing:"
+  echo "lint-coverage: oxlint skips ${missing_count}/${expected_count} tracked .ts/.tsx/.astro files; missing:"
   cat "$tmp/missing"
   status=1
 else
-  echo "lint-coverage: ${walked_count}/${expected_count} tracked .ts/.tsx files"
+  echo "lint-coverage: ${walked_count}/${expected_count} tracked .ts/.tsx/.astro files"
+fi
+
+if ! grep -qE '[.]tsx?$' "$tmp/expected"; then
+  echo "lint-coverage: no tracked .ts/.tsx files, so no program to hold the ts-reset rules"
+  exit "$status"
 fi
 
 if ! [ -f tsconfig.json ]; then

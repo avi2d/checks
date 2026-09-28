@@ -1,12 +1,13 @@
 #!/usr/bin/env bun
 import { Console, Effect, Schema } from "effect";
+import { LINTED_SOURCE } from "../core/gates.ts";
 import { runMain } from "../core/main.ts";
 import { scanTree } from "./knip.ts";
 
 export type Scan = { readonly tracked: number; readonly files: readonly string[] };
 
 const NAME = "unused";
-const JUDGED = /\.tsx?$/;
+const JUDGED = /[.]tsx?$|[.]astro$/;
 
 class UnusedError extends Schema.TaggedError<UnusedError>()("UnusedError", {
   message: Schema.String,
@@ -31,12 +32,12 @@ export const filesOf = Effect.fn("filesOf")(function* (stdout: string) {
 });
 
 export function report({ tracked, files }: Scan): string {
-  if (files.length === 0) return `${NAME}: no unreferenced files among ${tracked} tracked .ts/.tsx file(s)`;
+  if (files.length === 0) return `${NAME}: no unreferenced files among ${tracked} tracked .ts/.tsx/.astro file(s)`;
   return [`${NAME}: ${files.length} unreferenced file(s):`, ...files.map((file) => `  ${file}`)].join("\n");
 }
 
 const unused = Effect.gen(function* () {
-  const { tracked, reported } = yield* scanTree(NAME, ["--files"]).pipe(
+  const { tracked, reported } = yield* scanTree(NAME, ["--files"], LINTED_SOURCE).pipe(
     Effect.mapError((cause) => new UnusedError({ message: cause.message })),
   );
   if (reported.kind === "unconfigured") return false;

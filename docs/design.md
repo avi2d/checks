@@ -86,7 +86,7 @@ npm adds `package.json`, `README.md` and `LICENSE` whatever `files` says.
 `bun pm pack` builds the same tarball the registry serves, and the consumer e2e test installs that tarball.
 
 Each oxlint plugin ships compiled under `dist/`, because Node refuses to strip types from a `.ts` file under `node_modules`.
-`@oxlint/plugins` ships no RuleTester, so each `effect-channel`, `readability` and `data-shape` rule is proven red and green against an installed consumer in `tests/e2e/consumer.test.ts`.
+`@oxlint/plugins` ships no RuleTester, so each `effect-channel`, `readability` and `data-shape` rule is proven red and green against an installed consumer in `tests/e2e/consumer.test.ts`, except `readability/thin-astro`, which `tests/e2e/astro-consumer.test.ts` proves against a consumer tree linked to the checkout.
 `dist/` is committed, with the doc templates in `dist/templates/`, and so is `CHANGELOG.md`, which the same build writes.
 No `prepack` or `prepublishOnly` script rebuilds them, so a publish ships the committed files.
 CI runs `git diff --exit-code` over the whole tree after `bun run build`.
@@ -109,7 +109,7 @@ So the three packages move together at one exact version.
 A gate then behaves the same alone or through `checks-lint`, and `lint-coverage.sh` can stay a shell script.
 The gates run one at a time and pass their output straight through, so each report reads whole and in the order of the gate table.
 `checks-lint` picks the gates that apply from the tracked files, and a repository cannot select gates.
-A TypeScript gate runs as soon as the repository tracks TypeScript source.
+A TypeScript gate runs as soon as the repository tracks TypeScript source, and `checks-lint-coverage` and `checks-unused` also run on tracked Astro source.
 
 GitHub authors the pull request merge commit it builds as `GitHub <noreply@github.com>`, and `checks-commit-identity` refuses that author.
 So `checks-lint` ends a pull request's range at the event's head commit, and the merge commit is never in it.

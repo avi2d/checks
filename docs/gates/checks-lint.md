@@ -10,6 +10,7 @@ audience: consumers
 
 It runs the gates under [What runs](../../README.md#what-runs), each in its own process.
 Gates requiring tracked TypeScript files begin running when the repository tracks TypeScript.
+`checks-lint-coverage` and `checks-unused` also begin running when the repository tracks an `.astro` file.
 `checks-advisories` begins running when the repository tracks `bun.lock`.
 All other gates run for every repository.
 
@@ -53,7 +54,7 @@ checks-lint: 1 of 12 gate(s) failed: checks-comment-gate
 ## When it runs
 
 A repository runs it from `bun run lint` in a pull request workflow that fetches the whole git history.
-It leaves out the TypeScript gates while the repository tracks no TypeScript file.
+It leaves out the TypeScript gates while the repository tracks no TypeScript file, except that `checks-lint-coverage` and `checks-unused` run when it tracks an `.astro` file.
 
 ## Related topics
 
