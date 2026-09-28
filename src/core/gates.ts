@@ -3,7 +3,7 @@ export type Program = {
   readonly script: string;
 };
 
-type TrackedContent = {
+export type TrackedContent = {
   readonly pathspecs: readonly string[];
   readonly content: string;
 };
@@ -30,9 +30,9 @@ export const TEST_ENTRY_POINT: Program = { bin: "checks-test", script: "testing/
 
 export const DEFAULT_BRANCH = "main";
 
-const TYPESCRIPT_SOURCE: TrackedContent = { pathspecs: ["*.ts", "*.tsx"], content: "TypeScript source" };
+export const TYPESCRIPT_SOURCE: TrackedContent = { pathspecs: ["*.ts", "*.tsx"], content: "TypeScript source" };
 
-const LINTED_SOURCE: TrackedContent = { pathspecs: ["*.ts", "*.tsx", "*.astro"], content: "TypeScript or Astro source" };
+export const LINTED_SOURCE: TrackedContent = { pathspecs: ["*.ts", "*.tsx", "*.astro"], content: "TypeScript or Astro source" };
 
 const BUN_LOCKFILE: TrackedContent = { pathspecs: ["bun.lock"], content: "a bun lockfile" };
 

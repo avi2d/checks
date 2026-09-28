@@ -468,7 +468,7 @@ var rule2 = {
     return {
       Program(node) {
         for (const statement of node.body) {
-          if (statement.type === "ImportDeclaration" || statement.type === "EmptyStatement" || isTypeDeclaration(statement)) {
+          if (statement.type === "ImportDeclaration" || statement.type === "EmptyStatement" || statement.type === "ExportNamedDeclaration" && statement.source !== null || isTypeDeclaration(statement)) {
             continue;
           }
           if (statement.type === "VariableDeclaration" && statement.declarations.length > 0 && statement.declarations.every((declarator) => declarator.init !== null && readsProps(declarator.init, bound))) {

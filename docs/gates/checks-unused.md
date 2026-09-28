@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-unused
 
-`checks-unused` is the gate that refuses a TypeScript file no entry point reaches.
+`checks-unused` is the gate that refuses a TypeScript or Astro file no entry point reaches.
 
 ## What it checks
 
@@ -40,7 +40,7 @@ It takes none.
 | --- | --- |
 | 0 | no tracked file is unreferenced |
 | 1 | a tracked file is unreferenced or the repository holds no Knip configuration |
-| 2 | the repository tracks no TypeScript source, Knip cannot run, or its configuration does not parse |
+| 2 | the repository tracks no TypeScript or Astro source, Knip cannot run, or its configuration does not parse |
 
 ## Sample output
 

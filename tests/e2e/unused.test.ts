@@ -91,7 +91,7 @@ test(
     const untracked = await open(configured({ "knip.json": JSON.stringify({ entry: ["index.ts"] }) }));
     await untracked.write({ "index.ts": `export const index = 1;\n` });
     const empty = await untracked.script("complexity/unused.ts");
-    expect(empty.text).toContain("unused: no tracked .ts, .tsx or .astro files to scan");
+    expect(empty.text).toContain("unused: no tracked TypeScript or Astro source to scan");
     expect(empty.exitCode).toBe(2);
   },
   120_000,

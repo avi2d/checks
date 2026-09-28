@@ -15,8 +15,10 @@ const consumerTree = consumerTrees("checks-lint-coverage-consumer-");
 
 let dir = "";
 
-function coverage(path = `${BIN}:${process.env.PATH ?? ""}`): Promise<Ran> {
-  return ran($`${SCRIPT}`.cwd(dir).env({ ...process.env, PATH: path }));
+const KIT_PATH = `${BIN}:${process.env.PATH ?? ""}`;
+
+function coverage(path = KIT_PATH, cwd = dir): Promise<Ran> {
+  return ran($`${SCRIPT}`.cwd(cwd).env({ ...process.env, PATH: path }));
 }
 
 beforeAll(async () => {
@@ -124,6 +126,27 @@ test(
     expect(green.text).toContain("4/4 tracked .ts/.tsx/.astro files");
 
     await $`rm src/skipped.astro && git add -A`.cwd(dir).quiet();
+  },
+  60_000,
+);
+
+test(
+  "lint-coverage passes over the ts-reset rules in a repository that tracks only .astro files beside a tsconfig.json",
+  async () => {
+    const astro = await mkdtemp(join(tmpdir(), "checks-lint-coverage-astro-"));
+    try {
+      await $`mkdir -p src/pages`.cwd(astro).quiet();
+      await writeFile(join(astro, "src", "pages", "index.astro"), "---\nconst { title } = Astro.props;\n---\n<h1>{title}</h1>\n");
+      await writeFile(join(astro, "tsconfig.json"), JSON.stringify({ compilerOptions: { strict: true } }));
+      await $`git init -q && git add -A`.cwd(astro).quiet();
+
+      const green = await coverage(KIT_PATH, astro);
+      expect(green.text).toContain("1/1 tracked .ts/.tsx/.astro files");
+      expect(green.text).toContain("no tracked .ts/.tsx files, so no program to hold the ts-reset rules");
+      expect(green.exitCode).toBe(0);
+    } finally {
+      await rm(astro, { recursive: true, force: true });
+    }
   },
   60_000,
 );

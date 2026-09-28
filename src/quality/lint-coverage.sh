@@ -34,6 +34,11 @@ else
   echo "lint-coverage: ${walked_count}/${expected_count} tracked .ts/.tsx/.astro files"
 fi
 
+if ! grep -qE '[.]tsx?$' "$tmp/expected"; then
+  echo "lint-coverage: no tracked .ts/.tsx files, so no program to hold the ts-reset rules"
+  exit "$status"
+fi
+
 if ! [ -f tsconfig.json ]; then
   echo "lint-coverage: no tsconfig.json, so no program to hold the ts-reset rules"
   exit "$status"

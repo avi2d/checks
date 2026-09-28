@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect, Schema } from "effect";
+import { LINTED_SOURCE } from "../core/gates.ts";
 import { runMain } from "../core/main.ts";
 import { scanTree } from "./knip.ts";
 
@@ -36,7 +37,7 @@ export function report({ tracked, files }: Scan): string {
 }
 
 const unused = Effect.gen(function* () {
-  const { tracked, reported } = yield* scanTree(NAME, ["--files"]).pipe(
+  const { tracked, reported } = yield* scanTree(NAME, ["--files"], LINTED_SOURCE).pipe(
     Effect.mapError((cause) => new UnusedError({ message: cause.message })),
   );
   if (reported.kind === "unconfigured") return false;

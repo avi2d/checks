@@ -60,6 +60,7 @@ const rule: CreateRule = {
           if (
             statement.type === "ImportDeclaration" ||
             statement.type === "EmptyStatement" ||
+            (statement.type === "ExportNamedDeclaration" && statement.source !== null) ||
             isTypeDeclaration(statement)
           ) {
             continue;

@@ -1,5 +1,6 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdir, readFile, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { withoutPullRequestEvent } from "../lib/env.ts";
@@ -255,13 +256,32 @@ test(
 );
 
 test(
-  "fails when no TypeScript or Astro source is tracked",
+  "fails when no TypeScript source is tracked",
   async () => {
     const untracked = await open(configured({ "knip.json": JSON.stringify({ entry: ["index.ts"] }) }));
     await untracked.write({ "index.ts": `export const index = 1;\n` });
     const empty = await untracked.script(GATE, "HEAD");
-    expect(empty.text).toContain("exports: no tracked .ts, .tsx or .astro files to scan");
+    expect(empty.text).toContain("exports: no tracked TypeScript source to scan");
     expect(empty.exitCode).toBe(2);
+  },
+  120_000,
+);
+
+test(
+  "--write refuses to seed a baseline in a repository that tracks only Astro source",
+  async () => {
+    const { dir, commit, script } = await open(
+      configured({
+        "knip.json": JSON.stringify({ entry: ["src/pages/**/*.astro"] }),
+        "src/pages/index.astro": `---\nconst { title } = Astro.props;\n---\n<h1>{title}</h1>\n`,
+      }),
+    );
+    await commit("feat: base");
+
+    const refused = await script(GATE, "--write");
+    expect(refused.text).toContain("exports: no tracked TypeScript source to scan");
+    expect(refused.exitCode).toBe(2);
+    expect(existsSync(join(dir, "exports-baseline.json"))).toBe(false);
   },
   120_000,
 );
