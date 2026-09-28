@@ -9,6 +9,7 @@ audience: consumers
 ## What it checks
 
 It runs the default suite with `bun test --randomize` and reads Bun's JUnit report from that run.
+It runs Bun with `CI=true`, so `test.only` fails the run in every environment.
 Bun exits zero when tests skip, so `checks-test` checks every skipped test against its source declaration.
 A test that `test.skip`, `test.skipIf`, `test.if`, `test.todo` or an enclosing `describe.skip` skips fails unless the test declares its reason.
 

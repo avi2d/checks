@@ -184,12 +184,17 @@ test("a declaration whose registration no longer exists fails in CI and warns lo
 
 test("a declaration applies only to its selected environment", async () => {
   await consumer(
-    'import { expect, test } from "bun:test";\nimport { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";\ntest.skipIf(Boolean(process.env.CI))(skipReason("CI has no daemon", "reaches the local daemon", "ci"), () => expect(1).toBe(1));\n',
+    'import { expect, test } from "bun:test";\nimport { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";\ntest.skipIf(true)(skipReason("CI has no daemon", "reaches the local daemon", "ci"), () => expect(1).toBe(1));\n',
   );
 
   const ci = await checksTest(true);
   expect(ci.exitCode).toBe(0);
   expect(ci.text).toContain("1 skipped test(s), each declared at its test site");
+
+  await writeFile(
+    join(dir, "tests", "suite.test.ts"),
+    'import { expect, test } from "bun:test";\nimport { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";\ntest.skipIf(false)(skipReason("CI has no daemon", "reaches the local daemon", "ci"), () => expect(1).toBe(1));\n',
+  );
   const local = await checksTest(false);
   expect(local.exitCode).toBe(0);
   expect(local.text).toContain("1 declaration(s) for ci not judged in this local run");
@@ -213,4 +218,14 @@ test("the default run excludes live tests and the live and pixel tiers judge onl
   const pixelRun = await checksTest(false, ["--tier=pixel"]);
   expect(pixelRun.exitCode).toBe(0);
   expect(pixelRun.text).toContain("checks-test: 1 skipped test(s), each declared at its test site");
+});
+
+test("a focused test fails even without CI set", async () => {
+  await consumer(
+    'import { expect, test } from "bun:test";\ntest.only("focused passes", () => expect(1).toBe(1));\ntest("failing skipped by only", () => expect(1).toBe(2));\n',
+  );
+
+  const refused = await checksTest(false);
+  expect(refused.exitCode).toBe(1);
+  expect(refused.text).toContain(".only is disabled");
 });

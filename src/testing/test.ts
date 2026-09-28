@@ -118,7 +118,13 @@ const runSuite = Effect.fn("runSuite")(function* (outfile: string, tier: TestTie
   const tierArgs = tier === undefined ? [] : ["--path-ignore-patterns", "", `./tests/${tier}`];
   const args = ["test", "--randomize", ...tierArgs, ...reporterArgs(outfile)];
   return yield* spawner.exitCode(
-    ChildProcess.make(process.execPath, args, { stdin: "ignore", stdout: "inherit", stderr: "inherit" }),
+    ChildProcess.make(process.execPath, args, {
+      stdin: "ignore",
+      stdout: "inherit",
+      stderr: "inherit",
+      env: { CI: "true" },
+      extendEnv: true,
+    }),
   );
 });
 
