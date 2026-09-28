@@ -27,7 +27,7 @@ checks-release-report
 ```
 
 It takes no arguments.
-Run it before cutting a tag to decide whether a release is due.
+Run it to see whether a release is due and what it holds.
 
 ## Exit codes
 
@@ -55,10 +55,12 @@ release-report: no unreleased changes since v0.1.0
 
 ## When it runs
 
-Only a person or a scheduler deciding when to cut a release runs it.
+A person runs it to see what the next release holds.
+[checks-release-pr](checks-release-pr.md) reads the same changes before it opens the release pull request.
 A repository with no versioned releases does not need it.
 
 ## Related topics
 
 - [checks-changelog](checks-changelog.md)
 - [checks-release-notes](checks-release-notes.md)
+- [checks-release-pr](checks-release-pr.md)

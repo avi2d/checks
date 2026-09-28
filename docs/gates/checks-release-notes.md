@@ -55,6 +55,7 @@ name: release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 permissions:
   contents: read
   id-token: write
@@ -65,6 +66,8 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+      - name: ref is a tag
+        run: test "$GITHUB_REF_TYPE" = tag
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run build
@@ -102,6 +105,7 @@ name: release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -113,6 +117,8 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+      - name: ref is a tag
+        run: test "$GITHUB_REF_TYPE" = tag
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run build
@@ -127,7 +133,10 @@ jobs:
         run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/release-notes.md"
 ```
 
-Cut a release by merging a pull request that holds only the version bump and the built changelog, then tagging the merge commit on the target branch and pushing the tag.
+A release is a pull request that holds only the version bump and the built changelog, which [checks-release-pr](checks-release-pr.md) opens once a day.
+When it lands, [checks-release-tag](checks-release-tag.md) tags the merge commit and dispatches this workflow on the tag.
+A tag the workflow token pushes starts no `push` run, so the workflow triggers on `workflow_dispatch` as well, and refuses a dispatch on a ref that is not a tag.
+A tag a person pushes starts the same workflow through its `push` trigger.
 The workflow refuses a tag that disagrees with `package.json`, so the tag always names the section the notes come from.
 
 ## When it runs

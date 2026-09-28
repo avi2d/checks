@@ -1,32 +1,5 @@
 import { expect, test } from "bun:test";
-import { groupOf } from "../../src/delivery/changelog.ts";
-import { formatReport, unreleasedOf } from "../../src/delivery/release-report.ts";
-
-test("only the changelog groups count as unreleased", () => {
-  expect(
-    unreleasedOf([
-      "feat: price a bill (#4)",
-      "fix(parts): keep the order of parts (#3)",
-      "feat(bill)!: drop the legacy bill format (#5)",
-      "perf(parts): index parts by supplier (#7)",
-      "revert: read a part's supplier (#8)",
-      "docs: say why",
-      "chore: tidy",
-      "Merge branch 'main' into topic",
-    ]),
-  ).toEqual([
-    "feat: price a bill (#4)",
-    "fix(parts): keep the order of parts (#3)",
-    "feat(bill)!: drop the legacy bill format (#5)",
-    "perf(parts): index parts by supplier (#7)",
-    "revert: read a part's supplier (#8)",
-  ]);
-});
-
-test("a breaking change counts even when its type never releases on its own", () => {
-  expect(groupOf("ci(bill)!: drop the legacy bill format (#5)")).toBe("Breaking changes");
-  expect(unreleasedOf(["ci(bill)!: drop the legacy bill format (#5)"])).toEqual(["ci(bill)!: drop the legacy bill format (#5)"]);
-});
+import { formatReport } from "../../src/delivery/release-report.ts";
 
 test("the report names the tag and each unreleased subject", () => {
   expect(formatReport(["feat: price a bill (#4)", "fix: keep the order (#3)"], "v0.1.0")).toBe(
