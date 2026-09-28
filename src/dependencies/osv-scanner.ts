@@ -1,11 +1,10 @@
-import { Clock, Config, Crypto, Effect, Encoding, FileSystem, Option, Path, Schema } from "effect";
+import { Clock, Context, Crypto, Effect, Encoding, FileSystem, Layer, Option, Path, Schema } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { collect } from "../core/git.ts";
 
-const OSV_SCANNER_VERSION = "2.6.0";
+export const OSV_SCANNER_VERSION = "2.6.0";
 const RELEASES = `https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}`;
-const SCANNER_OVERRIDE = "CHECKS_OSV_SCANNER";
 const EXECUTABLE_MODE = 0o755;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
@@ -74,19 +73,30 @@ export const installPinned = Effect.fn("installPinned")(function* (url: string, 
   return binary;
 }, Effect.scoped);
 
-export const scannerBinary = Effect.fn("scannerBinary")(function* (cache: string) {
-  const override = yield* Config.option(Config.NonEmptyString(SCANNER_OVERRIDE));
-  if (Option.isSome(override)) return override.value;
+const pinnedBinary = Effect.fn("pinnedBinary")(function* (cache: string) {
   const build = buildFor(process.platform, process.arch);
   if (Option.isNone(build)) {
-    return yield* new OsvScannerError({
-      message: `no pinned OSV-Scanner build runs on ${process.platform}-${process.arch}; set ${SCANNER_OVERRIDE} to a scanner's path`,
-    });
+    return yield* new OsvScannerError({ message: `no pinned OSV-Scanner build runs on ${process.platform}-${process.arch}` });
   }
   const path = yield* Path.Path;
   const { asset, sha256 } = build.value;
   return yield* installPinned(`${RELEASES}/${asset}`, sha256, path.join(cache, "osv-scanner", OSV_SCANNER_VERSION, asset));
 });
+
+type PinnedBinary = ReturnType<typeof pinnedBinary>;
+
+export class Scanner extends Context.Service<
+  Scanner,
+  { readonly binary: (cache: string) => Effect.Effect<string, Effect.Error<PinnedBinary>> }
+>()("@avi2dg/checks/dependencies/Scanner") {
+  static readonly pinned = Layer.effect(
+    Scanner,
+    Effect.gen(function* () {
+      const services = yield* Effect.context<Effect.Services<PinnedBinary>>();
+      return Scanner.of({ binary: (cache) => pinnedBinary(cache).pipe(Effect.provideContext(services)) });
+    }),
+  );
+}
 
 type RefreshPlan = "refresh" | "offline";
 

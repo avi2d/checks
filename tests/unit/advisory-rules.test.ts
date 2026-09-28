@@ -88,6 +88,25 @@ test("an advisory the head names by an alias the base knew is not introduced", (
   expect(introducedBy(base, [finding("chalk", "GHSA-4x49-vf9v-38px")])).toHaveLength(1);
 });
 
+test("downgrading lodash from 4.17.21 to 4.17.20 adds the advisories the base's aliasing records do not carry", () => {
+  const head = findingsIn(recorded("planted"), atHead).filter(({ name }) => name === "lodash");
+  const base = head.filter(({ id }) => id === "GHSA-r5fr-rjxr-66jc" || id === "GHSA-xxjr-mmjv-4gpg").map((found) => ({ ...found, version: "4.17.21" }));
+  expect(keys(introducedBy(base, head))).toEqual([
+    "lodash@4.17.20 GHSA-29mw-wpgm-hmr9",
+    "lodash@4.17.20 GHSA-35jh-r3h4-6jhm",
+    "lodash@4.17.20 GHSA-f23m-r3pf-42rh",
+  ]);
+});
+
+test("an acknowledgement covers only its own record when the head carries it, not another record listing its id as an alias", () => {
+  const head = findingsIn(recorded("planted"), atHead).filter(({ name }) => name === "lodash");
+  const kept = acknowledgement("lodash", "GHSA-r5fr-rjxr-66jc", "2026-10-01");
+  const judged = judge([], head, clockOf([kept], RANGE, FRESH));
+  expect(judged.acknowledged).toBe(1);
+  expect(keys(judged.failing)).toContain("lodash@4.17.20 GHSA-35jh-r3h4-6jhm");
+  expect(judged.problems).toEqual([]);
+});
+
 test("an acknowledgement holds until its day begins, and only within 30 days of the head", () => {
   const live = acknowledgement("minimist", "GHSA-xvch-5gv4-984h", "2026-10-20");
   const lastDay = acknowledgement("minimist", "GHSA-vh95-rmgr-6w4m", "2026-10-27");

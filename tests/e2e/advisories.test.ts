@@ -1,15 +1,17 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { chmod, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { chmod, copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { Option } from "effect";
+import { buildFor, OSV_SCANNER_VERSION } from "../../src/dependencies/osv-scanner.ts";
 import { withoutPullRequestEvent } from "../lib/env.ts";
+import { FAKE_SCANNER_PATH, GATE_WITH_FAKE_SCANNER } from "./lib/advisories-gate.ts";
 import { CHECKOUT, fixtureRepos, lintWiring, ran, scratchDirs, type FixtureRepo, type Ran } from "./lib/fixture-repo.ts";
 
 const open = fixtureRepos("checks-advisories-");
 const scratch = scratchDirs();
 const IDENTITY = ["-c", "user.name=Wren Fixture", "-c", "user.email=wren@example.com"];
 const DAY = 86_400_000;
-const GATE = join(CHECKOUT, "src", "dependencies", "advisories.ts");
 
 const FAKE_SCANNER = `#!${process.execPath}
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -51,6 +53,8 @@ type Sandbox = {
   readonly calls: () => Promise<readonly string[]>;
   readonly summary: string;
   readonly marker: string;
+  readonly scanner: string;
+  readonly home: string;
 };
 
 async function sandbox(extra: Readonly<Record<string, string>> = {}): Promise<Sandbox> {
@@ -61,13 +65,13 @@ async function sandbox(extra: Readonly<Record<string, string>> = {}): Promise<Sa
   const log = join(dir, "calls.log");
   await writeFile(log, "");
   const summary = join(dir, "summary.md");
-  const env = { ...withoutPullRequestEvent(), HOME: dir, CHECKS_OSV_SCANNER: scanner, FAKE_OSV_LOG: log, GITHUB_STEP_SUMMARY: summary, ...extra };
+  const env = { ...withoutPullRequestEvent(), HOME: dir, [FAKE_SCANNER_PATH]: scanner, FAKE_OSV_LOG: log, GITHUB_STEP_SUMMARY: summary, ...extra };
   const calls = async () => (await readFile(log, "utf8")).split("\n").filter((line) => line !== "");
-  return { env, calls, summary, marker: join(dir, ".cache", "avi2dg-checks", "osv-scanner", "db", "refreshed") };
+  return { env, calls, summary, marker: join(dir, ".cache", "avi2dg-checks", "osv-scanner", "db", "refreshed"), scanner, home: dir };
 }
 
 function gate(repo: FixtureRepo, box: Sandbox, ...args: readonly string[]): Promise<Ran> {
-  return ran($`${process.execPath} ${GATE} ${args}`.cwd(repo.dir).env(box.env));
+  return ran($`${process.execPath} ${GATE_WITH_FAKE_SCANNER} ${args}`.cwd(repo.dir).env(box.env));
 }
 
 async function commitAt(repo: FixtureRepo, message: string, at: number): Promise<string> {
@@ -240,17 +244,23 @@ test(
 );
 
 test(
-  "checks-lint runs the gate in a repository that tracks bun.lock",
+  "checks-lint runs the gate in a repository that tracks bun.lock, which refuses a cached scanner that is not the pinned build",
   async () => {
+    const build = Option.getOrThrow(buildFor(process.platform, process.arch));
     const repo = await open({ ...lintWiring(), "bun.lock": lockfile({ "left-pad": "1.3.0" }) });
     await repo.commit("chore: wire");
     await repo.write({ "bun.lock": lockfile({ "left-pad": "1.3.0", minimist: "0.0.8" }) });
     await repo.commit("build: add minimist");
     const box = await sandbox();
+    const cached = join(box.home, ".cache", "avi2dg-checks", "osv-scanner", OSV_SCANNER_VERSION, build.asset);
+    await mkdir(dirname(cached), { recursive: true });
+    await copyFile(box.scanner, cached);
     const lint = await ran($`${process.execPath} ${join(CHECKOUT, "src", "core", "lint.ts")}`.cwd(repo.dir).env(box.env));
-    expect(lint.exitCode).toBe(1);
-    expect(lint.text).toContain("  minimist@0.0.8 GHSA-xvch-5gv4-984h critical: Prototype Pollution in minimist");
+    expect(lint.exitCode).toBe(2);
+    expect(lint.text).toContain(`${cached} has SHA-256 `);
+    expect(lint.text).toContain(`not the pinned ${build.sha256}; delete it and rerun`);
     expect(lint.text).toContain("gate(s) failed: checks-advisories");
+    expect(await box.calls()).toEqual([]);
   },
   120_000,
 );

@@ -9,7 +9,8 @@ audience: consumers
 ## What it checks
 
 It scans `bun.lock` at both ends of the range with OSV-Scanner and fails on each advisory the head's lockfile has and the base's lockfile lacks.
-It matches an advisory across the range by package name and by any of its ids and aliases, so a range that moves a package between two affected versions adds nothing.
+It matches an advisory across the range by package name and id, so a range that moves a package between two affected versions adds nothing.
+It matches by alias only when the head no longer holds the base's id, because two live advisories can list each other as aliases.
 An advisory published against a package the base already held shows at both ends, so it fails no range, and `--all` reports it instead.
 Each failure names the package, its version, the advisory id, its severity and its summary.
 A range that leaves `bun.lock` unchanged runs no scan.
@@ -25,7 +26,7 @@ It runs OSV-Scanner 2.6.0, pinned by the SHA-256 of each platform's build.
 On first use it downloads the build from the scanner's GitHub release into `~/.cache/avi2dg-checks/osv-scanner/2.6.0/`.
 It checks the SHA-256 again on every run and exits 2 on a copy that differs.
 Builds are pinned for macOS and Linux, each on x64 and arm64.
-`CHECKS_OSV_SCANNER`, when set, names a scanner binary to run in place of the pinned download.
+On any other platform it exits 2, and no setting runs a scanner other than the pinned build.
 
 It scans offline against OSV-Scanner's npm database in `~/.cache/avi2dg-checks/osv-scanner/db/`.
 When the last refresh is more than 24 hours old, the scan asks for the database again, and OSV-Scanner downloads it only when the copy differs.
@@ -53,6 +54,7 @@ A cold cache downloads about 55 MB of scanner and 217 MB of database.
 
 It reads the file at the head of the range.
 Each entry names the package, one id or alias of the advisory, the day the entry stops holding, and why the repository accepts the advisory.
+An entry naming an id the head holds covers that advisory alone, and one naming any other id covers each advisory that lists it as an alias.
 An entry holds until its `until` day begins in UTC.
 A range measures from the later of the head's author and committer dates, so a commit gets the same verdict on every run.
 `--all` measures from the current time, so an entry expires in a repository that takes no commit.

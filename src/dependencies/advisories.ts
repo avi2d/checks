@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
-import { Clock, Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
+import { Clock, Config, Console, Effect, FileSystem, type Layer, Option, Path, Schema } from "effect";
 import { changedPaths, commitOf, git, pathsAt, rangeFromArgs, writtenAt } from "../core/git.ts";
+import type { BunServices } from "@effect/platform-bun";
 import { runMain, Usage } from "../core/main.ts";
 import {
   ACKNOWLEDGEMENTS,
@@ -17,7 +18,7 @@ import {
   type Outcome,
 } from "./advisory-rules.ts";
 import { cacheRoot } from "./cache-root.ts";
-import { scanLockfiles, scannerBinary } from "./osv-scanner.ts";
+import { scanLockfiles, Scanner } from "./osv-scanner.ts";
 
 const NAME = "advisories";
 const ALL = "--all";
@@ -70,7 +71,7 @@ const findingsOf = Effect.fn("findingsOf")(function* (lockfiles: Lockfiles) {
     written.push(path.join(dir, side, LOCKFILE));
   }
   const cache = yield* cacheRoot();
-  const { stdout, note } = yield* scanLockfiles(yield* scannerBinary(cache), cache, config, written);
+  const { stdout, note } = yield* scanLockfiles(yield* (yield* Scanner).binary(cache), cache, config, written);
   if (Option.isSome(note)) yield* Console.error(`${NAME}: ${note.value}`);
   const scanned = yield* decodeOsvReport(stdout).pipe(
     Effect.mapError((cause) => new AdvisoriesError({ message: `cannot read the report OSV-Scanner wrote: ${cause.message}` })),
@@ -107,4 +108,8 @@ const advisories = Effect.gen(function* () {
   return passes(outcome);
 });
 
-if (import.meta.main) runMain(NAME, advisories);
+export function main(scanner: Layer.Layer<Scanner, never, BunServices.BunServices>): void {
+  runMain(NAME, advisories.pipe(Effect.provide(scanner)));
+}
+
+if (import.meta.main) main(Scanner.pinned);
