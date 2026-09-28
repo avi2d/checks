@@ -30,6 +30,8 @@ Build a bail-off report with this command:
 bunx stryker run --disableBail
 ```
 
+It is a full sweep, so outside CI the shared preset refuses it unless `--mutate <glob>` scopes it, as [checks-mutation](checks-mutation.md) says.
+
 The report records each killer as a test index, so it names each test by its file and its name from the report's `testFiles` table.
 
 ## Arguments

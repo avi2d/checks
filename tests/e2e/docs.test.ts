@@ -158,6 +158,33 @@ test(
 );
 
 test(
+  "a revision link one side only names goes red, and green once both records name each other",
+  async () => {
+    const { put, commit, docs } = await initRepo();
+    const first = await fixture("adr");
+    const second = first.replace("# 1.", "# 2.").replace("Accepted.", "Accepted. Amends 0001: spares name a supplier too.");
+    await put("docs/adr/0001-a-part-names-its-supplier.md", first);
+    const base = await commit("one record");
+    await put("docs/adr/0002-a-spare-names-its-supplier.md", second);
+    const head = await commit("a second record that amends the first");
+
+    const red = await docs(base, head);
+    expect(red.text).toContain("  docs/adr/0002-a-spare-names-its-supplier.md:7: `## Status` names 0001 without 0001 naming 0002 back\n");
+    expect(red.exitCode).toBe(1);
+
+    await put(
+      "docs/adr/0001-a-part-names-its-supplier.md",
+      first.replace("Accepted.", "Accepted. Amended by 0002: spares name a supplier too."),
+    );
+    const fixed = await commit("name the amendment back");
+    const green = await docs(head, fixed);
+    expect(green.text).toContain("docs: 1 doc file(s) the range touches hold to their templates");
+    expect(green.exitCode).toBe(0);
+  },
+  120_000,
+);
+
+test(
   "an unknown page kind does not silently skip the template",
   async () => {
     const { put, commit, docs } = await initRepo();
