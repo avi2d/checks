@@ -213,6 +213,27 @@ So `checks-vendor` strips an owner write bit and checks the tree against its rec
 A write it finds there still fails the run.
 A group or other write bit fails the run, because another user could have edited `.git/config` through it before `git status` reads it.
 
+## Advisories fail only the range that adds them
+
+`checks-advisories` compares the advisories at both ends of a range instead of failing on every advisory at the head.
+An advisory published against a package that landed a month earlier would otherwise fail every open pull request, including one that touches only docs.
+The scheduled `--all` run finds those advisories, and `advisory-acks.json` carries the ones a repository accepts for a while.
+
+The gate runs OSV-Scanner rather than Trivy, Grype or `bun audit`.
+Trivy 0.74.0 reads a nested `bun.lock` entry such as `mkdirp/minimist` under a name no advisory carries, so it misses every package bun nests.
+Grype 0.119.0 drops the dev dependencies of `bun.lock` with no setting that keeps them.
+`bun audit` asks the npm registry on every run and has no offline mode.
+OSV.dev's npm export also holds OpenSSF's reports of malicious packages, which GitHub's reviewed advisories leave out.
+
+The kit pins the scanner by version and by the SHA-256 of each build, because a scanner release is code that runs on every runner.
+Trivy's own advisory GHSA-69fq-xp46-6x23 records a malicious release published with stolen credentials.
+The scan runs offline against a database refreshed once a day, so most runs need no network and two runs on one day read the same advisories.
+
+The acknowledgement file belongs to the kit rather than to `osv-scanner.toml`.
+OSV-Scanner's `ignoreUntil` accepts any day, such as 2099-01-01, and measures it against the clock of the machine that runs the scan.
+The kit caps each entry at 30 days after the head and measures from the head's dates, as `checks-quarantine-clock` does, so a commit gets the same verdict on every run.
+The file is JSON because `Bun.TOML` cannot parse a TOML date.
+
 ## Related topics
 
 - [checks](../README.md)
