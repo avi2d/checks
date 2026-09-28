@@ -140,7 +140,6 @@ jobs:
           node-version: 24
       - if: env.SCOPE != ''
         run: bun install --frozen-lockfile
-      # Seeded from main's baseline, so only the mutants main has not already scored run here.
       - name: Build scope report at merge base
         if: env.SCOPE != ''
         run: |
@@ -151,7 +150,6 @@ jobs:
           else
             (cd "$RUNNER_TEMP/mutation-base" && bun install --frozen-lockfile && time bunx stryker run --mutate "$SCOPE")
           fi
-      # Only the mutants the pull request changed run again.
       - name: Build scope report at head
         if: env.SCOPE != '' && env.SKIP_COMPARE != 'true'
         run: time bunx stryker run --mutate "$SCOPE"

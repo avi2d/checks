@@ -1,5 +1,14 @@
+import { chmodSync, readFileSync, statSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import preset from "./stryker.preset.js";
+
+// In place, Stryker restores each file it rewrote by renaming a fresh copy over it, which drops a bin's executable bit.
+const binModes = new Map(
+  Object.values(JSON.parse(readFileSync("package.json", "utf8")).bin).map((file) => [file, statSync(file).mode]),
+);
+process.once("exit", () => {
+  for (const [file, mode] of binModes) chmodSync(file, mode);
+});
 
 export default {
   ...preset,
