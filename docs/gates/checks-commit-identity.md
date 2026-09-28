@@ -13,6 +13,7 @@ A commit whose trailer block carries a `Co-authored-by` trailer, as git parses i
 `GitHub <noreply@github.com>` is allowed as committer only.
 `github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>` is allowed as author only of a commit whose subject is `chore: release <version>`, with or without the pull request number a squash merge adds.
 GitHub attributes the release commit [checks-release-pr](checks-release-pr.md) makes to that bot, since it commits through the workflow token.
+Such a commit may carry a `Co-authored-by` trailer naming that bot, since GitHub adds one to some squash merges of a pull request the bot opened, and every other trailer is refused.
 
 ## What it reads
 

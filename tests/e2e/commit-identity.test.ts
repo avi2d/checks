@@ -152,6 +152,37 @@ test(
 );
 
 test(
+  "commit-identity lets a release squash name the Actions bot as its co-author, and refuses every other trailer",
+  async () => {
+    await initRepo();
+    const base = await commit({ message: "feat: base" });
+    await commit({
+      message: "chore: release 0.2.0 (#12)\n\nRelease 0.2.0.\n\nCo-authored-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>\n",
+      author: ACTIONS_BOT,
+      committer: SQUASH,
+    });
+    const green = await check(base, "HEAD");
+    expect(green.text).toContain("1 commit(s)");
+    expect(green.exitCode).toBe(0);
+
+    const stranger = await commit({
+      message: "chore: release 0.2.1 (#13)\n\nCo-authored-by: Pat Stranger <stranger@example.com>\n",
+      author: ACTIONS_BOT,
+      committer: SQUASH,
+    });
+    const botOnFeature = await commit({
+      message: "feat: price a bill (#14)\n\nCo-authored-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>\n",
+    });
+    const red = await check(base, "HEAD");
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain("2 of 3 commit(s)");
+    expect(red.text).toContain(`${stranger.slice(0, 12)} chore: release 0.2.1 (#13)\n    trailer Co-authored-by: Pat Stranger <stranger@example.com>`);
+    expect(red.text).toContain(`${botOnFeature.slice(0, 12)} feat: price a bill (#14)\n    trailer Co-authored-by: github-actions[bot]`);
+  },
+  60_000,
+);
+
+test(
   "commit-identity reads the standard author from package.json",
   async () => {
     await initRepo({

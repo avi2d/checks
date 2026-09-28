@@ -22,7 +22,15 @@ const DEFAULT_AUTHORS: readonly Identity[] = [{ name: "avi2d", email: "avi2dg@gm
 const SQUASH_COMMITTER: Identity = { name: "GitHub", email: "noreply@github.com" };
 
 // checks-release-pr commits through the workflow token, which GitHub attributes to its Actions bot.
+// GitHub may also name that bot as co-author when it squashes the pull request the bot opened.
 const RELEASE_AUTHOR: Identity = { name: "github-actions[bot]", email: "41898282+github-actions[bot]@users.noreply.github.com" };
+
+const CO_AUTHOR = /^co-authored-by:\s*(.*?)\s*<([^<>]*)>\s*$/i;
+
+function namesReleaseAuthor(trailer: string): boolean {
+  const [, name, email = ""] = CO_AUTHOR.exec(trailer) ?? [];
+  return name !== undefined && allows([RELEASE_AUTHOR], { name, email });
+}
 
 // git's own trailer parser, so only the trailer block counts and prose never does.
 const CO_AUTHORED_BY_FORMAT = "%(trailers:key=Co-authored-by)";
@@ -117,7 +125,8 @@ function allows(allowed: readonly Identity[], identity: Identity): boolean {
 
 function inspect(commit: Commit, allowed: readonly Identity[]): Offence | undefined {
   const reasons: string[] = [];
-  const authors = releasedVersionOf(commit.subject) === undefined ? allowed : [...allowed, RELEASE_AUTHOR];
+  const release = releasedVersionOf(commit.subject) !== undefined;
+  const authors = release ? [...allowed, RELEASE_AUTHOR] : allowed;
   if (!allows(authors, commit.author)) {
     reasons.push(`author ${render(commit.author)}`);
   }
@@ -125,6 +134,7 @@ function inspect(commit: Commit, allowed: readonly Identity[]): Offence | undefi
     reasons.push(`committer ${render(commit.committer)}`);
   }
   for (const trailer of commit.coAuthoredBy) {
+    if (release && namesReleaseAuthor(trailer)) continue;
     reasons.push(`trailer ${trailer}`);
   }
   return reasons.length === 0 ? undefined : { commit, reasons };
