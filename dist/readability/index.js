@@ -416,11 +416,104 @@ var rule = {
 };
 var cognitive_complexity_default = rule;
 
+// src/complexity/readability/thin-astro.ts
+function unwrapped(expression) {
+  let current = expression;
+  while (current.type === "TSAsExpression" || current.type === "TSSatisfiesExpression" || current.type === "TSNonNullExpression" || current.type === "TSTypeAssertion") {
+    current = current.expression;
+  }
+  return current;
+}
+function isAstroProps(value) {
+  if (value.type !== "MemberExpression" || value.computed)
+    return false;
+  const { object, property } = value;
+  return object.type === "Identifier" && object.name === "Astro" && property.type === "Identifier" && property.name === "props";
+}
+function isPlainValue(value, bound) {
+  return value.type === "Literal" || value.type === "Identifier" && bound.has(value.name);
+}
+function readsProps(expression, bound) {
+  const value = unwrapped(expression);
+  if (value.type !== "MemberExpression")
+    return value.type === "Identifier" && bound.has(value.name);
+  if (value.computed && !isPlainValue(value.property, bound))
+    return false;
+  return isAstroProps(value) || readsProps(value.object, bound);
+}
+function isPlainPattern(pattern, bound) {
+  if (pattern === null)
+    return true;
+  if (pattern.type === "RestElement")
+    return isPlainPattern(pattern.argument, bound);
+  if (pattern.type === "AssignmentPattern")
+    return isPlainValue(pattern.right, bound) && isPlainPattern(pattern.left, bound);
+  if (pattern.type === "ArrayPattern")
+    return pattern.elements.every((element) => isPlainPattern(element, bound));
+  if (pattern.type === "Identifier")
+    return true;
+  return pattern.properties.every((property) => property.type === "RestElement" ? isPlainPattern(property.argument, bound) : (!property.computed || isPlainValue(property.key, bound)) && isPlainPattern(property.value, bound));
+}
+function isPropsRead(declarator, bound) {
+  return declarator.init !== null && readsProps(declarator.init, bound) && isPlainPattern(declarator.id, bound);
+}
+function boundName(pattern, found) {
+  if (pattern === null)
+    return;
+  if (pattern.type === "RestElement")
+    boundName(pattern.argument, found);
+  else if (pattern.type === "AssignmentPattern")
+    boundName(pattern.left, found);
+  else if (pattern.type === "ObjectPattern") {
+    for (const property of pattern.properties)
+      boundName(property.type === "Property" ? property.value : property.argument, found);
+  } else if (pattern.type === "ArrayPattern") {
+    for (const element of pattern.elements)
+      boundName(element, found);
+  } else
+    found.add(pattern.name);
+}
+function isTypeDeclaration(statement) {
+  const declaration = statement.type === "ExportNamedDeclaration" ? statement.declaration : statement;
+  return declaration?.type === "TSInterfaceDeclaration" || declaration?.type === "TSTypeAliasDeclaration";
+}
+var rule2 = {
+  meta: {
+    type: "problem",
+    docs: { description: 'Disallow logic in .astro frontmatter and script blocks: only imports, props and markup, with client code loaded by a side-effect import such as import "../client.ts"' }
+  },
+  create(context) {
+    if (!context.filename.endsWith(".astro"))
+      return {};
+    const bound = new Set;
+    return {
+      Program(node) {
+        for (const statement of node.body) {
+          if (statement.type === "ImportDeclaration" || statement.type === "EmptyStatement" || statement.type === "ExportNamedDeclaration" && statement.source !== null || isTypeDeclaration(statement)) {
+            continue;
+          }
+          if (statement.type === "VariableDeclaration" && statement.declarations.length > 0 && statement.declarations.every((declarator) => isPropsRead(declarator, bound))) {
+            for (const declarator of statement.declarations)
+              boundName(declarator.id, bound);
+            continue;
+          }
+          context.report({
+            node: statement,
+            message: 'an .astro frontmatter or script block holds more than imports and props: move this statement into a .ts file and import it, so the .astro file holds only imports, props and markup; a script block loads client code with a side-effect import such as import "../client.ts"'
+          });
+        }
+      }
+    };
+  }
+};
+var thin_astro_default = rule2;
+
 // src/complexity/readability/index.ts
 var plugin = {
   meta: { name: "readability" },
   rules: {
-    "cognitive-complexity": cognitive_complexity_default
+    "cognitive-complexity": cognitive_complexity_default,
+    "thin-astro": thin_astro_default
   }
 };
 var readability_default = plugin;

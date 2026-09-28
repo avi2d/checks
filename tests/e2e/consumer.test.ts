@@ -499,7 +499,7 @@ test(
     await commitAll("feat: second");
 
     const lint = await runScript("lint");
-    expect(lint.text).toContain("tracked .ts/.tsx files");
+    expect(lint.text).toContain("tracked .ts/.tsx/.astro files");
     expect(lint.text).toContain("holds the ts-reset rules is-array and json-parse");
     expect(lint.text).toContain("satisfy the layout");
     expect(lint.text).toContain("carry only allowed identities");
@@ -564,7 +564,7 @@ test(
     await $`git add -A`.cwd(dir).quiet();
     const green = await runScript("unused");
     expect(green.exitCode).toBe(0);
-    expect(green.text).toContain("unused: no unreferenced files among 3 tracked .ts/.tsx file(s)");
+    expect(green.text).toContain("unused: no unreferenced files among 3 tracked .ts/.tsx/.astro file(s)");
   },
   180_000,
 );

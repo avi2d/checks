@@ -37,6 +37,13 @@
         "typescript/no-unsafe-return": "error",
         "typescript/no-unsafe-call": "error"
       }
+    },
+    {
+      "files": ["**/*.astro"],
+      "rules": {
+        "readability/thin-astro": "error",
+        "import/no-unassigned-import": "off"
+      }
     }
   ]
 }

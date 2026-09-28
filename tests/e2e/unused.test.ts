@@ -37,7 +37,32 @@ test(
 
     await $`rm src/dead.ts && git add -A`.cwd(dir).quiet();
     const green = await script("complexity/unused.ts");
-    expect(green.text).toContain("unused: no unreferenced files among 3 tracked .ts/.tsx file(s)");
+    expect(green.text).toContain("unused: no unreferenced files among 3 tracked .ts/.tsx/.astro file(s)");
+    expect(green.exitCode).toBe(0);
+  },
+  120_000,
+);
+
+test(
+  "red on an unreferenced .astro file and green once it is removed, while a .ts file only an .astro entry imports counts as used",
+  async () => {
+    const { dir, commit, script } = await open({
+      "package.json": JSON.stringify({ name: "unused-fixture", type: "module", dependencies: { astro: "7.0.0" } }),
+      "knip.config.ts": extendingBase(["src/pages/index.astro"]),
+      "src/pages/index.astro": `---\nimport { greeting } from "../greeting.ts";\n---\n<html><body><h1>{greeting}</h1></body></html>\n`,
+      "src/greeting.ts": `export const greeting = "hi";\n`,
+      "src/dead.astro": `---\nconst unused = 1;\n---\n<html><body><p>dead</p></body></html>\n`,
+    });
+    await commit("feat: base");
+
+    const red = await script("complexity/unused.ts");
+    expect(red.text).toContain("unused: 1 unreferenced file(s):\n  src/dead.astro\n");
+    expect(red.text).not.toContain("greeting.ts");
+    expect(red.exitCode).toBe(1);
+
+    await $`rm src/dead.astro && git add -A`.cwd(dir).quiet();
+    const green = await script("complexity/unused.ts");
+    expect(green.text).toContain("unused: no unreferenced files among 3 tracked .ts/.tsx/.astro file(s)");
     expect(green.exitCode).toBe(0);
   },
   120_000,
@@ -61,12 +86,12 @@ test(
 );
 
 test(
-  "fails when no TypeScript source is tracked",
+  "fails when no TypeScript or Astro source is tracked",
   async () => {
     const untracked = await open(configured({ "knip.json": JSON.stringify({ entry: ["index.ts"] }) }));
     await untracked.write({ "index.ts": `export const index = 1;\n` });
     const empty = await untracked.script("complexity/unused.ts");
-    expect(empty.text).toContain("unused: no tracked .ts or .tsx files to scan");
+    expect(empty.text).toContain("unused: no tracked TypeScript or Astro source to scan");
     expect(empty.exitCode).toBe(2);
   },
   120_000,

@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
+import { TYPESCRIPT_SOURCE } from "../core/gates.ts";
 import { checkoutFiles, commitOf, git, pathsAt, rangeEnds, refArgs } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { knipReport, scanTree } from "./knip.ts";
@@ -127,7 +128,7 @@ export function report(head: Baseline, { unlisted, added, stale }: Drift): strin
     : `${NAME}: ${head.length} unused export(s) in ${BASELINE_FILE}, and no new ones`;
 }
 
-const scan = scanTree(NAME, INCLUDED).pipe(Effect.mapError((cause) => new ExportsError({ message: cause.message })));
+const scan = scanTree(NAME, INCLUDED, TYPESCRIPT_SOURCE).pipe(Effect.mapError((cause) => new ExportsError({ message: cause.message })));
 
 // Knip loads the configuration's imports, such as the kit's knip-base.json, from a node_modules the checkout lacks.
 const unusedAt = Effect.fn("unusedAt")(

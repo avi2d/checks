@@ -1,4 +1,5 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
+import type { TrackedContent } from "../core/gates.ts";
 import { collect, git } from "../core/git.ts";
 
 class KnipError extends Schema.TaggedError<KnipError>()("KnipError", {
@@ -15,8 +16,6 @@ const CONFIGS = [
   "knip.config.js",
   "knip.config.ts",
 ] as const;
-
-const TYPESCRIPT = ["*.ts", "*.tsx"];
 
 const hasKnipConfig = Effect.fn("hasKnipConfig")(function* (root: string) {
   const fs = yield* FileSystem.FileSystem;
@@ -55,13 +54,13 @@ export const knipReport = Effect.fn("knipReport")(function* (root: string, args:
   return { kind: "reported", stdout: run.stdout } as const;
 });
 
-export const scanTree = Effect.fn("scanTree")(function* (name: string, args: readonly string[]) {
+export const scanTree = Effect.fn("scanTree")(function* (name: string, args: readonly string[], source: TrackedContent) {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
-  const tracked = (yield* git(["ls-files", "--", ...TYPESCRIPT], root))
+  const tracked = (yield* git(["ls-files", "--", ...source.pathspecs], root))
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line !== "");
-  if (tracked.length === 0) return yield* new KnipError({ message: "no tracked .ts or .tsx files to scan" });
+  if (tracked.length === 0) return yield* new KnipError({ message: `no tracked ${source.content} to scan` });
   const reported = yield* knipReport(root, args);
   if (reported.kind === "unconfigured") {
     yield* Console.log(`${name}: no knip configuration names entry files, so add one extending the kit's knip-base.json`);
