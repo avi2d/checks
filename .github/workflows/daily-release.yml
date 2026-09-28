@@ -29,18 +29,7 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      - name: report unreleased changes
-        id: report
-        run: |
-          if bun src/delivery/release-report.ts; then
-            echo "due=false" >> "$GITHUB_OUTPUT"
-          elif [ $? -eq 1 ]; then
-            echo "due=true" >> "$GITHUB_OUTPUT"
-          else
-            exit 2
-          fi
       - name: open or refresh the release pull request
-        if: steps.report.outputs.due == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: bun src/delivery/release-pr.ts ci.yml commitlint.yml

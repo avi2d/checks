@@ -55,8 +55,8 @@ release-report: no unreleased changes since v0.1.0
 
 ## When it runs
 
-The daily release workflow runs it once a day, and runs [checks-release-pr](checks-release-pr.md) when it exits 1, as [Running it in CI](checks-release-pr.md#running-it-in-ci) shows.
 A person runs it to see what the next release holds.
+[checks-release-pr](checks-release-pr.md) reads the same changes before it opens the release pull request.
 A repository with no versioned releases does not need it.
 
 ## Related topics

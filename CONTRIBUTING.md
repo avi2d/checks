@@ -49,7 +49,7 @@ To release a version:
    It holds only the version bump and the section the build wrote into `CHANGELOG.md`, so the changelog is never edited by hand.
 1. If `main` moved under it, run `gh workflow run daily-release` again rather than updating the branch.
    The job rebuilds the release on the new `main`, while a merge of `main` into the branch leaves the committed changelog short of the commits the merge brought, which fails the build check.
-1. Merge the pull request once its checks pass, and keep its title.
+1. Merge the pull request through the repository's usual merge path once its checks pass, and keep its title.
    The squash merge lands the title as the commit's subject, and a `feat` or `fix` title would add an entry the committed changelog lacks.
 1. Watch the `release` workflow, which the `tag` job of `daily-release` dispatches once it tags the merge commit.
    It refuses a ref that is not a tag, a tag off `main` or one that disagrees with `package.json`.

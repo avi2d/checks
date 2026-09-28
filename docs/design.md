@@ -167,7 +167,7 @@ The changelog arrives in the release pull request, and no workflow pushes to a b
 ## A release is cut every day
 
 A release waits for no quiet moment, since a busy repository always has work under way.
-The daily release opens the release pull request from `main` whenever it holds a feature or a fix since the last tag, and a person merges it.
+The daily release opens the release pull request from `main` whenever it holds a feature or a fix since the last tag, and the pull request merges through the repository's usual merge path once its checks pass.
 `checks-release-pr` writes only to the `release/<branch>` branch it owns, and rebuilds that branch on `main` rather than merging `main` into it, so the changelog it carries is the one the build writes.
 `checks-release-tag` writes only the `v*` tag of a release commit that already landed.
 The `github-release` job's `contents: write` creates or updates the GitHub release from the tag's `CHANGELOG.md` section.

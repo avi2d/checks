@@ -73,7 +73,7 @@ release-pr: https://github.com/acme/widget/pull/12 releases 0.4.0 from 3f2a9c81d
 
 ## When it runs
 
-The daily release workflow below runs it once a day on the default branch, after `checks-release-report` finds unreleased changes.
+The daily release workflow below runs it once a day on the default branch.
 Run the workflow by hand with `gh workflow run daily-release` to refresh the release pull request sooner.
 
 ## Running it in CI
@@ -111,18 +111,7 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      - name: report unreleased changes
-        id: report
-        run: |
-          if ./node_modules/.bin/checks-release-report; then
-            echo "due=false" >> "$GITHUB_OUTPUT"
-          elif [ $? -eq 1 ]; then
-            echo "due=true" >> "$GITHUB_OUTPUT"
-          else
-            exit 2
-          fi
       - name: open or refresh the release pull request
-        if: steps.report.outputs.due == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./node_modules/.bin/checks-release-pr ci.yml commitlint.yml
