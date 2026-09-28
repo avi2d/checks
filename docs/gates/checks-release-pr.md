@@ -18,6 +18,7 @@ It bumps the version `package.json` holds by the kit's rule:
 | only fixes, performance changes or reverts | patch | patch |
 
 It refuses when the last release tag names a version other than the one `package.json` holds, since an untagged bump means a release landed that nothing published.
+The refusal points at the `tag` job of `daily-release` on the release commit, whose own refusal says what to fix, rather than at a tag pushed by hand.
 It refuses a version that is not a plain `major.minor.patch`.
 It writes the next version into `package.json`, runs `bun run build` so the build writes `CHANGELOG.md`, and commits every tracked file the build changed as `chore: release <version>`.
 The commit's one parent is `HEAD`.

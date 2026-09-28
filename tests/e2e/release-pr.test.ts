@@ -182,7 +182,7 @@ test(
     await widget.commit("chore: jump");
     const untagged = await widget.run(["ci.yml"]);
     expect(untagged.exitCode).toBe(2);
-    expect(untagged.text).toContain("checks-release-pr: package.json holds 0.3.0, but the last release tag is v0.1.0; tag the release package.json names, or return its version to 0.1.0");
+    expect(untagged.text).toContain("checks-release-pr: package.json holds 0.3.0, but the last release tag is v0.1.0, so v0.3.0 is untagged; rerun the tag job of daily-release on the release commit, whose refusal says what to fix, or return its version to 0.1.0");
 
     await $`git reset -q --hard HEAD~1`.cwd(widget.dir).quiet();
     await writeFile(join(widget.dir, "CHANGELOG.md"), "edited by hand\n");

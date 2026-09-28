@@ -46,6 +46,8 @@ That workflow triggers on `workflow_dispatch` and keeps its own guards, as [chec
 
 ## Sample output
 
+A run that tags the release prints the build's own output, then one line:
+
 ```
 release-tag: tagged 3f2a9c81d0b4 as v0.4.0, and dispatched release.yml on it
 ```

@@ -67,7 +67,9 @@ const versionIn = (manifest: string) =>
 const releaseVersion = Effect.fn("releaseVersion")(function* (manifest: string, { since, unreleased }: Pending) {
   const { version } = yield* decodeVersion(manifest).pipe(Effect.mapError((cause) => refused(`${MANIFEST}: ${cause.message}`)));
   if (since !== undefined && since !== `v${version}`) {
-    return yield* refused(`${MANIFEST} holds ${version}, but the last release tag is ${since}; tag the release ${MANIFEST} names, or return its version to ${since.slice(1)}`);
+    return yield* refused(
+      `${MANIFEST} holds ${version}, but the last release tag is ${since}, so v${version} is untagged; rerun the tag job of daily-release on the release commit, whose refusal says what to fix, or return its version to ${since.slice(1)}`,
+    );
   }
   const next = nextVersion(version, unreleased);
   if (next === undefined) return yield* refused(`${MANIFEST} holds ${version}, which is no plain major.minor.patch version`);
