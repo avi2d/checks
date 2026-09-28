@@ -69,6 +69,9 @@ mutation-compare: REGRESSION (1 mutant(s))
 
 Only a CI step the repository writes runs it.
 A repository runs it with `--advisory` for its first month, then drops the flag so it blocks.
+A full sweep runs in CI and never on a laptop.
+Start a baseline with `gh workflow run mutation` and keep its report as an artifact.
+`checks-mutation` refuses a full local run and names that workflow command instead.
 
 ## Running it in CI
 
