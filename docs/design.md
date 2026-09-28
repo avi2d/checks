@@ -86,7 +86,7 @@ npm adds `package.json`, `README.md` and `LICENSE` whatever `files` says.
 `bun pm pack` builds the same tarball the registry serves, and the consumer e2e test installs that tarball.
 
 Each oxlint plugin ships compiled under `dist/`, because Node refuses to strip types from a `.ts` file under `node_modules`.
-`@oxlint/plugins` ships no RuleTester, so each `effect-channel`, `readability` and `data-shape` rule is proven red and green against an installed consumer in `tests/e2e/consumer.test.ts`.
+`@oxlint/plugins` ships no RuleTester, so each `effect-channel`, `readability` and `data-shape` rule is proven red and green against an installed consumer in `tests/e2e/consumer.test.ts`, except `readability/thin-astro`, which `tests/e2e/astro-consumer.test.ts` proves against a consumer tree linked to the checkout.
 `dist/` is committed, with the doc templates in `dist/templates/`, and so is `CHANGELOG.md`, which the same build writes.
 No `prepack` or `prepublishOnly` script rebuilds them, so a publish ships the committed files.
 CI runs `git diff --exit-code` over the whole tree after `bun run build`.
