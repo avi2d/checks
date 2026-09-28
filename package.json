@@ -117,7 +117,9 @@
     "build": "bun build src/quality/effect-channel/index.ts --outdir dist/effect-channel --target node --format esm && bun build src/complexity/readability/index.ts --outdir dist/readability --target node --format esm && bun build src/quality/data-shape/index.ts --outdir dist/data-shape --target node --format esm && bun scripts/doc-templates-write.ts && bun src/delivery/changelog-write.ts && bun scripts/doc-blocks-write.ts",
     "lint": "oxlint --type-aware && bun src/core/lint.ts && depcruise --config .dependency-cruiser.cjs .",
     "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
-    "test": "bun src/testing/test.ts"
+    "test": "bun src/testing/test.ts",
+    "mutate": "bunx stryker run",
+    "mutate:incremental": "bunx stryker run --incremental"
   },
   "peerDependencies": {
     "@swc/core": "1.16.2",
@@ -131,7 +133,9 @@
   },
   "devDependencies": {
     "@effect/tsgo": "0.45.0",
+    "@hughescr/stryker-bun-runner": "1.4.0",
     "@oxlint/plugins": "1.83.0",
+    "@stryker-mutator/core": "10.0.0",
     "@swc/core": "1.16.2",
     "@types/bun": "^1.3.0",
     "dependency-cruiser": "18.4.0",
@@ -148,5 +152,9 @@
     "@effect/platform-node-shared": "4.0.0-rc.115",
     "@total-typescript/ts-reset": "0.6.1",
     "knip": "6.38.0"
+  },
+  "overrides": {
+    "qs": "6.16.0",
+    "smol-toml": "1.9.0"
   }
 }
