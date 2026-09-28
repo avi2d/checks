@@ -41,7 +41,8 @@
     {
       "files": ["**/*.astro"],
       "rules": {
-        "readability/thin-astro": "error"
+        "readability/thin-astro": "error",
+        "import/no-unassigned-import": "off"
       }
     }
   ]

@@ -24,10 +24,32 @@ function isAstroProps(value: ESTree.Expression): boolean {
   );
 }
 
+function isPlainValue(value: ESTree.PropertyKey, bound: ReadonlySet<string>): boolean {
+  return value.type === "Literal" || (value.type === "Identifier" && bound.has(value.name));
+}
+
 function readsProps(expression: ESTree.Expression, bound: ReadonlySet<string>): boolean {
   const value = unwrapped(expression);
-  if (value.type === "MemberExpression") return isAstroProps(value) || readsProps(value.object, bound);
-  return value.type === "Identifier" && bound.has(value.name);
+  if (value.type !== "MemberExpression") return value.type === "Identifier" && bound.has(value.name);
+  if (value.computed && !isPlainValue(value.property, bound)) return false;
+  return isAstroProps(value) || readsProps(value.object, bound);
+}
+
+function isPlainPattern(pattern: ESTree.BindingPattern | ESTree.BindingRestElement | null, bound: ReadonlySet<string>): boolean {
+  if (pattern === null) return true;
+  if (pattern.type === "RestElement") return isPlainPattern(pattern.argument, bound);
+  if (pattern.type === "AssignmentPattern") return isPlainValue(pattern.right, bound) && isPlainPattern(pattern.left, bound);
+  if (pattern.type === "ArrayPattern") return pattern.elements.every((element) => isPlainPattern(element, bound));
+  if (pattern.type === "Identifier") return true;
+  return pattern.properties.every((property) =>
+    property.type === "RestElement"
+      ? isPlainPattern(property.argument, bound)
+      : (!property.computed || isPlainValue(property.key, bound)) && isPlainPattern(property.value, bound),
+  );
+}
+
+function isPropsRead(declarator: ESTree.VariableDeclarator, bound: ReadonlySet<string>): boolean {
+  return declarator.init !== null && readsProps(declarator.init, bound) && isPlainPattern(declarator.id, bound);
 }
 
 function boundName(pattern: ESTree.BindingPattern | ESTree.BindingRestElement | null, found: Set<string>): void {
@@ -49,7 +71,7 @@ function isTypeDeclaration(statement: ESTree.Statement): boolean {
 const rule: CreateRule = {
   meta: {
     type: "problem",
-    docs: { description: "Disallow logic in .astro frontmatter: only imports, props and markup" },
+    docs: { description: "Disallow logic in .astro frontmatter and script blocks: only imports, props and markup" },
   },
   create(context) {
     if (!context.filename.endsWith(".astro")) return {};
@@ -68,9 +90,7 @@ const rule: CreateRule = {
           if (
             statement.type === "VariableDeclaration" &&
             statement.declarations.length > 0 &&
-            statement.declarations.every(
-              (declarator) => declarator.init !== null && readsProps(declarator.init, bound),
-            )
+            statement.declarations.every((declarator) => isPropsRead(declarator, bound))
           ) {
             for (const declarator of statement.declarations) boundName(declarator.id, bound);
             continue;
@@ -78,7 +98,7 @@ const rule: CreateRule = {
           context.report({
             node: statement,
             message:
-              "frontmatter holds more than imports and props: move this statement into a .ts file and import it, so the .astro file holds only imports, props and markup",
+              "an .astro frontmatter or script block holds more than imports and props: move this statement into a .ts file and import it, so the .astro file holds only imports, props and markup; a script block loads client code with a side-effect import such as import \"../client.ts\"",
           });
         }
       },

@@ -430,11 +430,32 @@ function isAstroProps(value) {
   const { object, property } = value;
   return object.type === "Identifier" && object.name === "Astro" && property.type === "Identifier" && property.name === "props";
 }
+function isPlainValue(value, bound) {
+  return value.type === "Literal" || value.type === "Identifier" && bound.has(value.name);
+}
 function readsProps(expression, bound) {
   const value = unwrapped(expression);
-  if (value.type === "MemberExpression")
-    return isAstroProps(value) || readsProps(value.object, bound);
-  return value.type === "Identifier" && bound.has(value.name);
+  if (value.type !== "MemberExpression")
+    return value.type === "Identifier" && bound.has(value.name);
+  if (value.computed && !isPlainValue(value.property, bound))
+    return false;
+  return isAstroProps(value) || readsProps(value.object, bound);
+}
+function isPlainPattern(pattern, bound) {
+  if (pattern === null)
+    return true;
+  if (pattern.type === "RestElement")
+    return isPlainPattern(pattern.argument, bound);
+  if (pattern.type === "AssignmentPattern")
+    return isPlainValue(pattern.right, bound) && isPlainPattern(pattern.left, bound);
+  if (pattern.type === "ArrayPattern")
+    return pattern.elements.every((element) => isPlainPattern(element, bound));
+  if (pattern.type === "Identifier")
+    return true;
+  return pattern.properties.every((property) => property.type === "RestElement" ? isPlainPattern(property.argument, bound) : (!property.computed || isPlainValue(property.key, bound)) && isPlainPattern(property.value, bound));
+}
+function isPropsRead(declarator, bound) {
+  return declarator.init !== null && readsProps(declarator.init, bound) && isPlainPattern(declarator.id, bound);
 }
 function boundName(pattern, found) {
   if (pattern === null)
@@ -459,7 +480,7 @@ function isTypeDeclaration(statement) {
 var rule2 = {
   meta: {
     type: "problem",
-    docs: { description: "Disallow logic in .astro frontmatter: only imports, props and markup" }
+    docs: { description: "Disallow logic in .astro frontmatter and script blocks: only imports, props and markup" }
   },
   create(context) {
     if (!context.filename.endsWith(".astro"))
@@ -471,14 +492,14 @@ var rule2 = {
           if (statement.type === "ImportDeclaration" || statement.type === "EmptyStatement" || statement.type === "ExportNamedDeclaration" && statement.source !== null || isTypeDeclaration(statement)) {
             continue;
           }
-          if (statement.type === "VariableDeclaration" && statement.declarations.length > 0 && statement.declarations.every((declarator) => declarator.init !== null && readsProps(declarator.init, bound))) {
+          if (statement.type === "VariableDeclaration" && statement.declarations.length > 0 && statement.declarations.every((declarator) => isPropsRead(declarator, bound))) {
             for (const declarator of statement.declarations)
               boundName(declarator.id, bound);
             continue;
           }
           context.report({
             node: statement,
-            message: "frontmatter holds more than imports and props: move this statement into a .ts file and import it, so the .astro file holds only imports, props and markup"
+            message: 'an .astro frontmatter or script block holds more than imports and props: move this statement into a .ts file and import it, so the .astro file holds only imports, props and markup; a script block loads client code with a side-effect import such as import "../client.ts"'
           });
         }
       }

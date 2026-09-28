@@ -72,3 +72,68 @@ test(
   },
   60_000,
 );
+
+test(
+  "consumer goes red on logic in an .astro script block, green once the block holds only a side-effect import",
+  async () => {
+    const tree = await astroTree();
+    await tree.put(
+      "src/pages/page.astro",
+      `---\n---\n<html><body><button>Go</button></body></html>\n<script>\nconst button = document.querySelector("button");\nbutton?.addEventListener("click", () => {});\n</script>\n`,
+    );
+
+    const red = await oxlint(tree);
+    expect(red.exitCode).not.toBe(0);
+    expect(red.text).toContain("page.astro");
+    expect(red.text).toContain("readability(thin-astro)");
+
+    await tree.put(
+      "src/client.ts",
+      `document.querySelector("button")?.addEventListener("click", () => {});\n\nexport {};\n`,
+    );
+    await tree.put(
+      "src/pages/page.astro",
+      `---\n---\n<html><body><button>Go</button></body></html>\n<script>\nimport "../client.ts";\n</script>\n`,
+    );
+
+    const green = await oxlint(tree);
+    expect(green.text).not.toContain("readability(thin-astro)");
+    expect(green.text).not.toContain("no-unassigned-import");
+    expect(green.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
+  "consumer goes red on a call or await in an Astro.props default, green once each default is a literal or a props name",
+  async () => {
+    const tree = await astroTree();
+    await tree.put("src/load.ts", `export async function load(): Promise<number> {\n  return 0;\n}\n\nexport function label(): string {\n  return "Home";\n}\n`);
+    await tree.put(
+      "src/pages/called.astro",
+      `---\nimport { label } from "../load.ts";\n\nconst { title = label() } = Astro.props;\n---\n<html><body>{title}</body></html>\n`,
+    );
+    await tree.put(
+      "src/pages/awaited.astro",
+      `---\nimport { load } from "../load.ts";\n\nconst { count = await load() } = Astro.props;\n---\n<html><body>{count}</body></html>\n`,
+    );
+
+    const red = await oxlint(tree);
+    expect(red.exitCode).not.toBe(0);
+    expect(red.text).toContain("called.astro");
+    expect(red.text).toContain("awaited.astro");
+    expect(red.text).toContain("readability(thin-astro)");
+
+    await rm(join(tree.dir, "src", "load.ts"));
+    await rm(join(tree.dir, "src", "pages", "awaited.astro"));
+    await tree.put(
+      "src/pages/called.astro",
+      `---\ninterface Props {\n  title?: string;\n  heading?: string;\n}\n\nconst { title = "Home" } = Astro.props;\nconst { heading = title } = Astro.props;\n---\n<html><body><h1>{heading}</h1>{title}</body></html>\n`,
+    );
+
+    const green = await oxlint(tree);
+    expect(green.text).not.toContain("readability(thin-astro)");
+    expect(green.exitCode).toBe(0);
+  },
+  60_000,
+);
