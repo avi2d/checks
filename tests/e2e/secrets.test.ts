@@ -79,6 +79,9 @@ function cases(): readonly Case[] {
     { line: link("hysteria2", `pw@${HOST}:443/?obfs=salamander&obfs-password=${hex(12)}&password=pw`), rules: firstQuery },
     { line: link("wg", `${HOST}:51820?pk=${base64Key()}&password=x`), rules: firstQuery },
     { line: link("hysteria", `${HOST}:443?protocol=udp&auth=pw&upmbps=100&obfsParam=${hex(12)}#home`), rules: lastQuery },
+    { line: link("hysteria", `${HOST}:443?protocol=udp&peer=<sni>&auth=${hex(12)}#home`), rules: query },
+    { line: link("wg", `${HOST}:51820?peer_pk=<server-public-key>&pk=${base64Key()}#home`), rules: query },
+    { line: link("hysteria2", `pw@${HOST}:443/?sni=<sni>&obfs=salamander&obfs-password=${hex(12)}`), rules: query },
     { line: `${link("hysteria", "vpn.example.com:443?auth=<password>")} ${link("hysteria", `${HOST}:443?auth=${hex(12)}`)}`, rules: query },
     { line: JSON.stringify([link("hysteria", "vpn.example.com:443?auth=x"), link("wg", `${HOST}:51820?pk=${base64Key()}`)]), rules: query },
     { line: link("https", `panel.home-fixture.net/sub/${hex(16)}`), rules: ["proxy-subscription-url"] },
@@ -116,6 +119,10 @@ function cases(): readonly Case[] {
     { line: `\`${link("hysteria", "${host}:443?auth=${hex(12)}&obfsParam=${encodeURIComponent(obfs)}")}\``, rules: passes },
     { line: `\`${link("trojan", "${base64Key()}@${host}:443")}\``, rules: passes },
     { line: `fetch(\`${link("https", "api.home-fixture.net/login?user=${user}&password=${encodeURIComponent(password)}")}\`)`, rules: passes },
+    { line: `\`${link("wg", '${host}:51820?pk=${encodeURIComponent(peer.privateKey.toString("base64"))}&peer_pk=${pub}')}\``, rules: passes },
+    { line: `\`${link("hysteria", '${host}:443?auth=${auth ?? ""}')}\``, rules: passes },
+    { line: `\`${link("hysteria", "${host}:443?auth=${enc(a, b)}")}\``, rules: passes },
+    { line: `\`${link("hysteria", '${host}:443?auth=${encodeURIComponent("a b")}')}\``, rules: passes },
     { line: link("hysteria", "{{host}}:443?auth={{ hysteria_auth }}"), rules: passes },
     ...["${pass}", "${pass:-}", "${pass-}", "${pass:?required}", "$PASS", "$pass", "$PROXY_PASS", "{{ password }}", "{{password}}", "%(password)s", "<password>"].flatMap(
       (reference) => [
