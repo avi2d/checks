@@ -157,4 +157,4 @@ jobs:
         run: time bunx stryker run --mutate "$SCOPE"
       - name: Compare scope reports
         if: env.SCOPE != '' && env.SKIP_COMPARE != 'true'
-        run: ./node_modules/.bin/checks-mutation-compare --advisory "$RUNNER_TEMP/mutation-base/reports/mutation/mutation.json" reports/mutation/mutation.json
+        run: bun src/testing/mutation-compare.ts --advisory "$RUNNER_TEMP/mutation-base/reports/mutation/mutation.json" reports/mutation/mutation.json
