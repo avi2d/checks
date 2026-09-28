@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { judge, placementOf, placementProblem, speaksToConsumers } from "../../src/docs/doc-rules.ts";
+import { judge, placementOf, placementProblem, recordsOf, speaksToConsumers, type Doc } from "../../src/docs/doc-rules.ts";
 import { KINDS, type Kind } from "../../src/docs/doc-templates.ts";
 
 const FIXTURES = resolve(import.meta.dir, "..", "fixtures", "docs");
@@ -11,8 +11,8 @@ function fixture(kind: Kind): string {
   return readFileSync(resolve(FIXTURES, `${kind}.md`), "utf8");
 }
 
-function found(kind: Kind, text: string, path = kind === "adr" ? RECORD : `docs/${kind}.md`, records = [RECORD]): readonly string[] {
-  return judge(kind, { path, text }, records).map(({ line, message }) => `${line}: ${message}`);
+function found(kind: Kind, text: string, path = kind === "adr" ? RECORD : `docs/${kind}.md`, records: readonly Doc[] = [{ path: RECORD, text }]): readonly string[] {
+  return judge(kind, { path, text }, recordsOf(records)).map(({ line, message }) => `${line}: ${message}`);
 }
 
 test("a root file, a record and a page map to their kind, and other Markdown is left alone", () => {
@@ -74,7 +74,10 @@ test("a record is refused for its name, its number, its date, its status and a n
   expect(found("adr", record.replace("Accepted.", "Maybe."))).toEqual([
     "7: `## Status` opens with `Maybe` where one of Proposed, Accepted, Rejected, Deprecated, Superseded, Retired goes",
   ]);
-  expect(found("adr", record, RECORD, [RECORD, "docs/adr/0001-another.md"])).toEqual(["1: shares number 1 with docs/adr/0001-another.md"]);
+  expect(found("adr", record, RECORD, [
+    { path: RECORD, text: record },
+    { path: "docs/adr/0001-another.md", text: record },
+  ])).toEqual(["1: shares number 1 with docs/adr/0001-another.md"]);
   expect(found("adr", record.replace("## Decision\n\nA part names its supplier.\n\n", ""))).toEqual(["1: lacks `## Decision`"]);
 });
 
@@ -84,28 +87,38 @@ function secondRecord(first: string): string {
   return first.replace("# 1.", "# 2.").replace("Accepted.", "Accepted. Amends 0001: spares name a supplier too.");
 }
 
-test("a revision link one side only names is refused until both records name each other", () => {
-  const first = fixture("adr");
-  const second = secondRecord(first);
-  const paths = [RECORD, SECOND];
-  const texts = new Map([
-    [RECORD, first],
-    [SECOND, second],
-  ]);
-  expect(judge("adr", { path: SECOND, text: second }, paths, texts).map(({ line, message }) => `${line}: ${message}`)).toEqual([
-    "7: `## Status` names 0001 without 0001 naming 0002 back",
-  ]);
-  expect(judge("adr", { path: RECORD, text: first }, paths, texts).map(({ line, message }) => `${line}: ${message}`)).toEqual([
-    "5: `## Status` is named by 0002 without naming 0002 back",
-  ]);
+function refused(doc: Doc, records: readonly Doc[]): readonly string[] {
+  return judge("adr", doc, recordsOf(records)).map(({ line, message }) => `${line}: ${message}`);
+}
 
-  const namedBack = first.replace("Accepted.", "Accepted. Amended by 0002: spares name a supplier too.");
-  const paired = new Map([
-    [RECORD, namedBack],
-    [SECOND, second],
-  ]);
-  expect(judge("adr", { path: RECORD, text: namedBack }, paths, paired)).toEqual([]);
-  expect(judge("adr", { path: SECOND, text: second }, paths, paired)).toEqual([]);
+test("a revision link one side only names is refused until both records name each other", () => {
+  const first = { path: RECORD, text: fixture("adr") };
+  const second = { path: SECOND, text: secondRecord(first.text) };
+  expect(refused(second, [first, second])).toEqual(["7: `## Status` names 0001 without 0001 naming 0002 back"]);
+  expect(refused(first, [first, second])).toEqual(["5: `## Status` is named by 0002 without naming 0002 back"]);
+
+  const namedBack = { path: RECORD, text: first.text.replace("Accepted.", "Accepted. Amended by 0002: spares name a supplier too.") };
+  expect(refused(namedBack, [namedBack, second])).toEqual([]);
+  expect(refused(second, [namedBack, second])).toEqual([]);
+});
+
+test("every record a revision sentence links is held to naming it back, past each link's `.md`", () => {
+  const first = { path: RECORD, text: fixture("adr").replace("Accepted.", "Accepted. Amended by 0002.") };
+  const third = { path: "docs/adr/0003-a-tool-names-its-supplier.md", text: fixture("adr").replace("# 1.", "# 3.") };
+  const second = {
+    path: SECOND,
+    text: fixture("adr")
+      .replace("# 1.", "# 2.")
+      .replace("Accepted.", "Accepted. Amends [0001](0001-a-part-names-its-supplier.md) and [0003](0003-a-tool-names-its-supplier.md)."),
+  };
+  expect(refused(second, [first, second, third])).toEqual(["7: `## Status` names 0003 without 0003 naming 0002 back"]);
+});
+
+test("a word that only starts like a revision verb links no record", () => {
+  const first = { path: RECORD, text: fixture("adr") };
+  const second = { path: SECOND, text: fixture("adr").replace("# 1.", "# 2.").replace("Accepted.", "Accepted. Narrowly follows 0001.") };
+  expect(refused(second, [first, second])).toEqual([]);
+  expect(refused(first, [first, second])).toEqual([]);
 });
 
 test("a changelog is refused for a release out of order, a release without its date and a group it does not know", () => {

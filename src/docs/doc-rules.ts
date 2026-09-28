@@ -94,7 +94,7 @@ function recordNumber(path: string): number | undefined {
   return name === undefined ? undefined : Number(name);
 }
 
-const REVISION_CLAUSE = /\b(?:amend|narrow|supersede)\w*\b[^.]*/gi;
+const REVISION_CLAUSE = /\b(?:amend(?:s|ed)|narrow(?:s|ed)|supersede[sd])\b(?:[^.]|\.(?=\S))*/gi;
 const RECORD_REFERENCE = /\b(\d{4})\b/g;
 
 function numbersIn(text: string): ReadonlySet<number> {
@@ -127,21 +127,19 @@ function statusLinks(section: Section): StatusLinks {
   return { cited: numbersIn(text), revised: revisedIn(text) };
 }
 
-function knownStatuses(
-  filed: number,
-  own: Section,
-  records: readonly string[],
-  texts: ReadonlyMap<string, string>,
-): Map<number, Section> {
-  const known = new Map<number, Section>([[filed, own]]);
-  for (const other of records) {
-    const number = recordNumber(other);
-    const text = number === undefined ? undefined : texts.get(other);
-    if (number === undefined || number === filed || known.has(number) || text === undefined) continue;
-    const section = statusSection(outlineOf(text));
-    if (section !== undefined) known.set(number, section);
+export type Records = {
+  readonly paths: readonly string[];
+  readonly links: ReadonlyMap<number, StatusLinks>;
+};
+
+export function recordsOf(records: readonly Doc[]): Records {
+  const links = new Map<number, StatusLinks>();
+  for (const { path, text } of records) {
+    const number = recordNumber(path);
+    const section = number === undefined || links.has(number) ? undefined : statusSection(outlineOf(text));
+    if (number !== undefined && section !== undefined) links.set(number, statusLinks(section));
   }
-  return known;
+  return { paths: records.map(({ path }) => path), links };
 }
 
 function pairProblems(filed: number, own: Section, mine: StatusLinks, number: number, other: StatusLinks): readonly Violation[] {
@@ -156,24 +154,16 @@ function pairProblems(filed: number, own: Section, mine: StatusLinks, number: nu
   return [];
 }
 
-function revisionLinkProblems(
-  path: string,
-  outline: Outline,
-  records: readonly string[],
-  texts: ReadonlyMap<string, string>,
-): readonly Violation[] {
+function revisionLinkProblems(path: string, outline: Outline, links: ReadonlyMap<number, StatusLinks>): readonly Violation[] {
   const filed = recordNumber(path);
   const own = filed === undefined ? undefined : statusSection(outline);
   if (filed === undefined || own === undefined) return [];
-  const links = new Map<number, StatusLinks>();
-  for (const [number, section] of knownStatuses(filed, own, records, texts)) links.set(number, statusLinks(section));
-  const mine = links.get(filed);
-  if (mine === undefined) return [];
+  const mine = statusLinks(own);
   return [...links].flatMap(([number, other]) => pairProblems(filed, own, mine, number, other));
 }
 
 function statusProblem(outline: Outline): Violation | undefined {
-  const status = outline.sections.find(({ heading }) => heading.title === "Status");
+  const status = statusSection(outline);
   if (status === undefined) return undefined;
   const opening = firstText(status.body);
   const word = opening?.text.trim().split(/\s+/, 1)[0]?.replace(/[.,;:]+$/, "");
@@ -205,7 +195,7 @@ function sharedNumberProblem(path: string, filed: number | undefined, records: r
   return sharing.length === 0 ? undefined : { line: 1, message: `shares number ${filed} with ${sharing.join(", ")}` };
 }
 
-function adrProblems(path: string, outline: Outline, records: readonly string[], texts: ReadonlyMap<string, string>): readonly Violation[] {
+function adrProblems(path: string, outline: Outline, records: Records): readonly Violation[] {
   const filed = recordNumber(path);
   const misnamed: Violation | undefined =
     filed === undefined
@@ -216,8 +206,8 @@ function adrProblems(path: string, outline: Outline, records: readonly string[],
     recordTitleProblem(outline, filed),
     recordDateProblem(outline),
     statusProblem(outline),
-    sharedNumberProblem(path, filed, records),
-    ...revisionLinkProblems(path, outline, records, texts),
+    sharedNumberProblem(path, filed, records.paths),
+    ...revisionLinkProblems(path, outline, records.links),
   ].filter((violation) => violation !== undefined);
 }
 
@@ -247,8 +237,8 @@ function stepsProblems(kind: Kind, { prose }: Outline): readonly Violation[] {
   return [{ line: 1, message: `numbers no steps, which a ${kind} page lists as \`1.\` items` }];
 }
 
-function kindProblems(kind: Kind, doc: Doc, outline: Outline, records: readonly string[], texts: ReadonlyMap<string, string>): readonly Violation[] {
-  if (kind === "adr") return adrProblems(doc.path, outline, records, texts);
+function kindProblems(kind: Kind, doc: Doc, outline: Outline, records: Records): readonly Violation[] {
+  if (kind === "adr") return adrProblems(doc.path, outline, records);
   if (kind === "changelog") return changelogProblems(outline);
   if (kind === "how-to" || kind === "tutorial") return stepsProblems(kind, outline);
   return [];
@@ -262,7 +252,7 @@ function exactProblems(kind: Kind, expected: string, actual: string): readonly V
   return [{ line, message: `differs from ${templateFile(kind)}, which it holds word for word` }];
 }
 
-export function judge(kind: Kind, doc: Doc, records: readonly string[], texts: ReadonlyMap<string, string> = new Map()): readonly Violation[] {
+export function judge(kind: Kind, doc: Doc, records: Records): readonly Violation[] {
   const template = TEMPLATES[kind];
   if (template.shape === "exact") return exactProblems(kind, template.text, doc.text);
   const frontMatter = frontMatterOf(doc.text).text;
@@ -273,7 +263,7 @@ export function judge(kind: Kind, doc: Doc, records: readonly string[], texts: R
     ...outlineProblems(outline),
     ...(title === undefined ? [] : titleProblems(template.title, title)),
     ...matchSections(outline.sections, template.sections, 2, title?.line ?? 1),
-    ...kindProblems(kind, doc, outline, records, texts),
+    ...kindProblems(kind, doc, outline, records),
   ].map(({ line, message }) => ({ line: line + lineOffset, message })).toSorted((a, b) => a.line - b.line);
 }
 
