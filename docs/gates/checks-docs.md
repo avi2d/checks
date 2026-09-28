@@ -151,10 +151,12 @@ A file over 3,000 characters fails.
 Move each part's notes into the people doc that covers that part, and delete what a check or the code already holds.
 Each entry names at least one reference that resolves at the head commit, or it fails:
 
-- A path in inline code names a file or directory from the root or from the file's directory, and a root-level file such as `package.json` counts.
+- A path in inline code names any file or directory from the root or from the file's directory, such as `package.json`, `LICENSE` or `.gitignore`.
 - A relative Markdown link names a file or directory, and its anchor names a heading there.
   An empty link or a link with a scheme does not count.
-- A `bun run` command names a script in the nearest `package.json` or a file that exists.
+- A `bun run` command names a script in the nearest `package.json`, a bin in `node_modules/.bin`, or a file that exists.
+
+A path git ignores counts too, as it does in [Paths, links and commands](#paths-links-and-commands).
 
 An entry is any list item outside `## Maintaining this file`, the items above the first section included.
 A fresh file passes the ceiling, and its entries pass once each names the file that holds its detail.

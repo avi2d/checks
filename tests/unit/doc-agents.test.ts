@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { AGENT_CEILING, ceilingFinding, entryFindings, entryLines, isAgentFile, type AgentFinding } from "../../src/docs/doc-agents.ts";
-import { snapshotOf } from "../../src/docs/doc-references.ts";
+import { anchoredTargets, snapshotOf, type Unresolved } from "../../src/docs/doc-references.ts";
 
 const LEAD = "# Project agent memory\n\nchecks judges a repository through gates, and `README.md` holds what a person reads.\n";
 const KEEP = "\n## Maintaining this file\n\nKeep this file for knowledge useful to almost every future agent session in this project.\n";
@@ -20,14 +20,16 @@ test("the ceiling holds at 3,000 characters and fails above it with the fix", ()
 });
 
 const SNAPSHOT = snapshotOf(
-  ["src/parts.toml", "docs/layout.md", "CONTRIBUTING.md", "package.json"],
+  ["src/parts.toml", "docs/layout.md", "CONTRIBUTING.md", "LICENSE", ".gitignore", "package.json"],
   new Map([["docs/layout.md", new Set(["parts"])]]),
   new Map([["", new Set(["parts"])]]),
 );
 const NAMES_NOTHING = "names no path, link or command that resolves. Name the file, link or command that holds the detail";
 
-function findingsFor(entry: string, commands = true): readonly AgentFinding[] {
-  return entryFindings("AGENTS.md", `${LEAD}\n## Parts\n\n${entry}\n`, SNAPSHOT, { commands });
+const ALL_BROKEN = (): boolean => true;
+
+function findingsFor(entry: string, commands = true, stillBroken: (unresolved: Unresolved) => boolean = ALL_BROKEN): readonly AgentFinding[] {
+  return entryFindings("AGENTS.md", `${LEAD}\n## Parts\n\n${entry}\n`, SNAPSHOT, { commands }, stillBroken);
 }
 
 test("entries are every list item but the Maintaining section and fenced code, the lead included", () => {
@@ -39,6 +41,9 @@ test("an entry passes when it names a path, a root-level file, a link or a comma
   const entries = [
     "- edit `src/parts.toml` instead",
     "- read `CONTRIBUTING.md` first",
+    "- read `LICENSE` first",
+    "- keep `.gitignore` in step",
+    "- open `src/parts.toml:3` first",
     "- read [the layout](docs/layout.md) first",
     "- read [the parts](docs/layout.md#parts) first",
     "- run `bun run parts` first",
@@ -54,6 +59,7 @@ test("an entry fails when nothing it names resolves", () => {
     "- read [the guide]() first",
     "- read [the guide](docs/missing.md) first",
     "- read [the guide](docs/layout.md#missing) first",
+    "- read [the guide](docs/layout.md?plain=1#missing) first",
     "- read [the guide](https://example.com/guide) first",
     "- run `bun run missing` first",
   ];
@@ -62,9 +68,20 @@ test("an entry fails when nothing it names resolves", () => {
 
 test("an entry fails wherever it sits and whatever the range touches, the lead included", () => {
   const text = `${LEAD}\n- write good code\n\n## Parts\n\n- edit \`src/parts.toml\` instead\n${KEEP}\n- a maintaining bullet\n`;
-  expect(entryFindings("AGENTS.md", text, SNAPSHOT, { commands: true })).toEqual([{ line: 5, message: NAMES_NOTHING }]);
+  expect(entryFindings("AGENTS.md", text, SNAPSHOT, { commands: true }, ALL_BROKEN)).toEqual([{ line: 5, message: NAMES_NOTHING }]);
 });
 
 test("a command counts only when the page judges commands", () => {
   expect(findingsFor("- run `bun run parts` first", false)).toEqual([{ line: 7, message: NAMES_NOTHING }]);
+});
+
+test("a reference the reference check excuses, such as an installed bin, counts", () => {
+  const excused = (unresolved: Unresolved): boolean => unresolved.missing.type !== "script";
+  expect(findingsFor("- run `bun run checks-lint` first", true, excused)).toEqual([]);
+  expect(findingsFor("- run `bun run checks-lint` first")).toEqual([{ line: 7, message: NAMES_NOTHING }]);
+});
+
+test("an anchored link loads the anchors of the file it names, a query or an escape included", () => {
+  const text = "- [a](docs/layout.md?plain=1#parts)\n- [b](docs/lay%6Fut.md#parts)\n- [c](docs/layout.md)\n- [d](https://example.com/a.md#x)\n";
+  expect(anchoredTargets("AGENTS.md", text)).toEqual(["docs/layout.md", "docs/layout.md"]);
 });

@@ -128,3 +128,33 @@ test(
   },
   120_000,
 );
+
+test(
+  "an entry pointing at a missing anchor behind a query goes red, and entries naming an extensionless file or an installed bin stay green",
+  async () => {
+    const { put, commit, docs } = await initRepo();
+    await putParts(put);
+    await put("LICENSE", "MIT\n");
+    await put("package.json", '{ "name": "fixture", "scripts": {} }\n');
+    await put(".gitignore", "node_modules/\n");
+    await put("node_modules/.bin/checks-lint", "#!/bin/sh\n");
+    await put("docs/layout.md", "# Layout\n\n## Parts\n\nThe parts live under src.\n");
+    await put("AGENTS.md", COMPLIANT);
+    const previous = await commit("a router with a people doc");
+
+    const entry = "- Edit `src/parts.toml` instead of the generated `src/parts.json`.";
+    await put("AGENTS.md", COMPLIANT.replace(entry, "- Read [the layout](docs/layout.md?plain=1#missing) first."));
+    const planted = await commit("an entry whose anchor is missing");
+    const red = await docs(previous, planted);
+    expect(red.text).toContain("  AGENTS.md:7: names no path, link or command that resolves");
+    expect(red.exitCode).toBe(1);
+
+    const pointers = ["- Read `LICENSE` first.", "- Run `bun run checks-lint` first.", "- Read [the layout](docs/layout.md?plain=1#parts) first."];
+    await put("AGENTS.md", COMPLIANT.replace(entry, pointers.join("\n")));
+    const fixed = await commit("entries naming an extensionless file, an installed bin and a query-anchored link");
+    const green = await docs(planted, fixed);
+    expect(green.text).toContain("every entry names a path, link or command that resolves");
+    expect(green.exitCode).toBe(0);
+  },
+  120_000,
+);

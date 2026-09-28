@@ -1,5 +1,5 @@
 import { parseOutline } from "./doc-outline.ts";
-import { pointsAtSomething, type Judging, type Snapshot } from "./doc-references.ts";
+import { referencesOn, type Judging, type Reference, type Snapshot, type Unresolved } from "./doc-references.ts";
 import { AGENT_NAMES, scanMarkdown } from "./prose-matchers.ts";
 
 export const AGENT_CEILING = 3000;
@@ -34,11 +34,18 @@ export function entryLines(text: string): readonly number[] {
     .map((line) => line.line);
 }
 
-export function entryFindings(path: string, text: string, snapshot: Snapshot, judging: Judging): readonly AgentFinding[] {
+export function entryFindings(
+  path: string,
+  text: string,
+  snapshot: Snapshot,
+  judging: Judging,
+  stillBroken: (unresolved: Unresolved) => boolean,
+): readonly AgentFinding[] {
   const scanned = new Map(scanMarkdown(text).map((line) => [line.line, line]));
+  const points = (reference: Reference): boolean => reference === "resolved" || !stillBroken(reference);
   return entryLines(text).flatMap((line) => {
     const markdown = scanned.get(line);
-    if (markdown === undefined || markdown.kind === "code" || markdown.kind === "front-matter" || pointsAtSomething(path, markdown, snapshot, judging)) return [];
+    if (markdown === undefined || markdown.kind === "code" || markdown.kind === "front-matter" || referencesOn(path, markdown, snapshot, judging).some(points)) return [];
     return [
       {
         line,

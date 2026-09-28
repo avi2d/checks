@@ -85,6 +85,7 @@ const referenceFindings = Effect.fn("referenceFindings")(function* (
   return {
     failing: failed.map(finding),
     failed,
+    stillBroken: new Set(found.map(keyOf)),
     brokenBefore: elsewhere.filter((one) => before.has(keyOf(one))).map(finding),
   };
 });
@@ -121,7 +122,12 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
     const ceiling = ceilingFinding(text(path));
     return ceiling === undefined ? [] : [{ path, ...ceiling }];
   });
-  const entries = agents.flatMap(({ path }) => entryFindings(path, text(path), snapshot, judging(path)).map((finding) => ({ path, ...finding })));
+  const entries = agents.flatMap(({ path }) =>
+    entryFindings(path, text(path), snapshot, judging(path), (unresolved) => references.stillBroken.has(keyOf({ ...unresolved, path }))).map((finding) => ({
+      path,
+      ...finding,
+    })),
+  );
   const advisory = new Map<string, number>();
   for (const { path } of templated.filter((finding) => !touched.has(finding.path))) advisory.set(path, (advisory.get(path) ?? 0) + 1);
   return {
