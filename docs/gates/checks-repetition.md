@@ -12,6 +12,7 @@ The gate runs jscpd at 50 tokens and 5 lines against the base and head revisions
 It compares repeated lines for each file, so a decrease in another file never offsets a rise.
 It follows an edited rename back to the original file.
 A file that repeats lines without a rise is advisory.
+A block two bins need goes into a module both import, as `rangeFromArgs` and `checkoutFiles` in `src/core/git.ts` show.
 
 ## What it reads
 

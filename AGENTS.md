@@ -1,27 +1,11 @@
 # Project agent memory
 
-This file is the project's committed home for project-intrinsic agent knowledge: build, test, release, architecture, and sharp-edge notes that should travel with the code.
+checks judges a repository through small binaries called gates, and `README.md` holds what a person reads.
 
-- Add durable project-specific notes here as they are discovered through real work.
-- `bun run build` writes every generated file this repo commits, `dist/`, `CHANGELOG.md` and the generated blocks in the docs, and CI fails when the tree differs after it. Run it under the bun `.bun-version` pins, because CI rebuilds with that bun and another version emits different bytes. `CHANGELOG.md` comes from the conventional commits between the commits that bump package.json `version`, so it is never edited by hand. `CONTRIBUTING.md` carries the release steps and docs/design.md the reasons.
-- Every oxlint config in an `extends` chain sets `plugins`. One without them brings oxlint's default plugins, and their category rules, into the whole tree.
-- `src/testing/test-layout.ts` decides this repo's own test layout too, so a new in-process test goes under `tests/unit/` and anything that spawns, shells out, or reaches the network goes under `tests/e2e/`. `docs/gates/checks-test-layout.md` carries the standard.
-- `.github/workflows/*.yml` owns the commands CI runs, and `checks-ci-wiring` requires title lint on every pull request, `bun run <name>` for each of lint, build, typecheck and test that `package.json` defines, and a clean git diff when a build script exists, without false `if` or `continue-on-error`.
-- `.oxlintrc.json` and `tsconfig.json` each declare their Effect-required paths directly. `CONTRIBUTING.md` "Regenerate what is committed" names each generated file and the command that rewrites it after an edit, and lint, the suite and CI's diff after the build fail on any of them left stale.
-- `@oxlint/plugins` ships no RuleTester, so each `effect-channel`, `readability` and `data-shape` rule is proven red and green against an installed consumer in `tests/e2e/consumer.test.ts`.
-- `bunfig.toml` is at once this repo's config and the preset consumers copy, because bun has no bunfig `extends`. Editing it changes every consumer's required file.
-- Each bin lives in `src/<vector>/` for the vector it judges, as `CONTRIBUTING.md` "Find where a change goes" lists, and `scripts/` holds only the kit's own build. When a file an `exports` key names moves, keep the key and point it at the file's path.
-- Effect is required in `src/` and `scripts/`, the bins and the modules they import: IO goes through Effect's `FileSystem` and `ChildProcess` as `src/core/git.ts` shows, a bin runs through `runMain` in `src/core/main.ts`, and failures are `Schema.TaggedError`s. `src/quality/effect-channel/`, `src/quality/data-shape/` and `src/complexity/readability/` are exempt because oxlint loads them without `node_modules`, and so is `src/quality/comment-matchers.ts`, which a host copies alone into a hook bundle. A host copies `src/docs/prose-matchers.ts` the same way, so `.dependency-cruiser.cjs` holds both to importing nothing, and Effect wrappers go in `src/quality/comments.ts` and `src/docs/docs.ts`. Tests stay plain `bun:test`, running an effect with `Effect.runSync` or `Effect.runPromise` where they call it. Native overrides in `.oxlintrc.json` and `tsconfig.json` enforce the Effect paths.
-- `.oxlintrc.json` sets native size rules at `error` for production and test files, so `bun run lint` fails on any file over them. A repository records existing violations with `oxlint --suppress-all`, and `checks-suppressions-ratchet` refuses any count that rises.
-- `bun run lint` fails a change that raises the count of lines jscpd repeats at 50 tokens and 5 lines in any file `.jscpd.json` holds, so a block two bins need goes into a module both import, as `rangeFromArgs` and `checkoutFiles` in `src/core/git.ts` show. A new e2e test opens its repository through `fixtureRepos` or its directory through `scratchDirs` in `tests/e2e/lib/fixture-repo.ts`, or an installed consumer through `consumerTrees` in `tests/e2e/lib/consumer-tree.ts`, and runs a command through `ran`, rather than copying another test's setup.
-- `checks-docs` runs in `bun run lint` and holds every doc file an edit touches to its template and every line it adds to a living doc or an agent file to the prose rules, as `docs/gates/checks-docs.md` lists. A page under `docs/` names its mode in `kind` front matter, and a page under `docs/gates/` or `docs/configs/` also sets `audience: consumers`. `dist/templates/` is rendered from `src/docs/doc-templates.ts` by `bun run build`. A new bin gets its page under `docs/gates/`, which a test requires.
-- CI runs the suite inside a pull request, so a test that spawns `checks-lint` passes it `withoutPullRequestEvent()` from `tests/lib/env.ts`. Without it the real event decides the range, and the test passes locally and fails on CI.
-- `bun run test` runs `src/testing/test.ts` and requires `skipReason` beside each skipped test. A test spawning `checks-test` sets `CI`, and a test spawning `checks-flake` sets or drops `GITHUB_STEP_SUMMARY` so CI values cannot decide which declarations hold or where the summary lands.
+## Before you change a part
 
-## Maintaining this file
-
-Keep this file for knowledge useful to almost every future agent session in this project.
-Do not repeat what the codebase already shows.
-Point to the authoritative file or command instead.
-Prefer rewriting or pruning existing entries over appending new ones.
-When updating this file, preserve this bar for all agents and keep entries concise.
+- A gate, its page under `docs/` or a shipped config: read [Find where a change goes](CONTRIBUTING.md#find-where-a-change-goes) first.
+- Anything the Effect rules hold: read [The Effect rules](docs/configs/effect-rules.md) first.
+- A test: read [Check a change](CONTRIBUTING.md#check-a-change) and [checks-test-layout](docs/gates/checks-test-layout.md) first.
+- A doc page: read [checks-docs](docs/gates/checks-docs.md) first.
+- A workflow: read [checks-ci-wiring](docs/gates/checks-ci-wiring.md) first.

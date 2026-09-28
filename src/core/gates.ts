@@ -19,6 +19,7 @@ export type KitGate = {
   readonly vector: Vector;
   readonly file: string;
   readonly reads: "tree" | "range";
+  readonly alsoReads?: string;
   readonly args?: readonly string[];
   readonly appliesTo: typeof EVERY_REPOSITORY | TrackedContent;
 };
@@ -42,7 +43,7 @@ export const KIT_GATES = [
   { bin: "checks-comment-gate", vector: "quality", file: "comment-gate.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-suppressions-ratchet", vector: "complexity", file: "suppressions-ratchet.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-ci-wiring", vector: "delivery", file: "ci-wiring.ts", reads: "tree", appliesTo: EVERY_REPOSITORY },
-  { bin: "checks-docs", vector: "docs", file: "docs.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
+  { bin: "checks-docs", vector: "docs", file: "docs.ts", reads: "range", alsoReads: "every agent file at the head commit", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-repetition", vector: "complexity", file: "repetition.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE },
   { bin: "checks-unused", vector: "complexity", file: "unused.ts", reads: "tree", appliesTo: LINTED_SOURCE },
   { bin: "checks-exports", vector: "complexity", file: "exports.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE },

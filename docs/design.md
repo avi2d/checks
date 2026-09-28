@@ -86,6 +86,7 @@ npm adds `package.json`, `README.md` and `LICENSE` whatever `files` says.
 `bun pm pack` builds the same tarball the registry serves, and the consumer e2e test installs that tarball.
 
 Each oxlint plugin ships compiled under `dist/`, because Node refuses to strip types from a `.ts` file under `node_modules`.
+`@oxlint/plugins` ships no RuleTester, so each `effect-channel`, `readability` and `data-shape` rule is proven red and green against an installed consumer in `tests/e2e/consumer.test.ts`.
 `dist/` is committed, with the doc templates in `dist/templates/`, and so is `CHANGELOG.md`, which the same build writes.
 No `prepack` or `prepublishOnly` script rebuilds them, so a publish ships the committed files.
 CI runs `git diff --exit-code` over the whole tree after `bun run build`.
@@ -176,7 +177,8 @@ A repository adopts the templates as its files change, and an untouched file is 
 The prose rules judge only the lines a change adds or edits.
 A report about the past is refused the way a promise about the future is, because history on a living page reads as current fact.
 Text nobody touched never breaks the templates or the prose rules, and a record keeps the words it was written in.
-A repository needs no cleanup pass before the gate runs.
+A repository needs no cleanup pass before the gate runs, except on its agent files.
+The ceiling, the rule against a `## Maintaining this file` section and the entry rule judge every agent file at the head commit, because an agent reads the whole file every session, touched or not.
 Review, not the check, keeps a task heading verb first.
 No word list tells `Test layout` from `Test the layout`, and a check that passes the noun would be worse than none.
 
