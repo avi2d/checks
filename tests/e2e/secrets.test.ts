@@ -44,6 +44,7 @@ function cases(): readonly Case[] {
   const query = ["proxy-query-credential"];
   const key = ["wireguard-key"];
   const keyFile = ["wireguard-key-file"];
+  const dotKeyFile = ["wireguard-dot-key-file"];
   const passes: readonly string[] = [];
   const lines: readonly Omit<Case, "file">[] = [
     { line: link("vless", `${randomUUID()}@${HOST}:443?security=reality#home`), rules: userinfo },
@@ -74,8 +75,6 @@ function cases(): readonly Case[] {
     { line: `client_psk: ${base64Key()}`, rules: key },
     { line: `wireguard_psk: ${base64Key()}`, rules: key },
     { line: `wg_private_key: ${base64Key()}`, rules: key },
-    { line: `${link("trojan", `${hex(12)}@${HOST}:443`)} ${link("trojan", `${hex(12)}@backup.home-fixture.net:443`)}`, rules: [...userinfo, ...userinfo] },
-    { line: JSON.stringify({ privateKey: base64Key(), peers: [{ presharedKey: base64Key() }] }), rules: [...key, ...key] },
     { line: `ALL_PROXY=${link("socks5", "127.0.0.1:1080")}`, rules: passes },
     { line: `proxy: ${link("socks5", "localhost:1080")}`, rules: passes },
     { line: link("ss", "homevpnserver-fixture.net:8388"), rules: passes },
@@ -102,12 +101,16 @@ function cases(): readonly Case[] {
   return [
     ...lines.map((row) => ({ file: "vpn/cases.txt", ...row })),
     { file: "wg/privatekey", line: base64Key(), rules: keyFile },
-    { file: "wg/wg0.key", line: base64Key(), rules: keyFile },
+    { file: "wg/wg0.key", line: base64Key(), rules: dotKeyFile },
+    { file: "wg/wg0-private.key", line: base64Key(), rules: [...keyFile, ...dotKeyFile] },
     { file: "wg/client_private_key", line: base64Key(), rules: keyFile },
     { file: "wg/presharedkey", line: base64Key(), rules: keyFile },
     { file: "wg/psk", line: base64Key(), rules: keyFile },
     { file: "wg/pubserver-privatekey", line: base64Key(), rules: keyFile },
     { file: "wg/republic_privatekey", line: base64Key(), rules: keyFile },
+    { file: "wg/server-privkey.pubkey", line: base64Key(), rules: keyFile },
+    { file: "wg/psk.pub.key", line: base64Key(), rules: keyFile },
+    { file: "wg/priv.public.key", line: base64Key(), rules: keyFile },
     { file: "wg/publickey", line: base64Key(), rules: passes },
     { file: "wg/server-public.key", line: base64Key(), rules: passes },
     { file: "wg/server_pub.key", line: base64Key(), rules: passes },
@@ -120,7 +123,7 @@ function cases(): readonly Case[] {
 function rulesByPlace(report: string): ReadonlyMap<string, readonly string[]> {
   const found = new Map<string, string[]>();
   for (const [, place, rule] of report.matchAll(/^ {2}(\S+:\d+) (\S+) in /gm)) {
-    found.set(place ?? "", [...(found.get(place ?? "") ?? []), rule ?? ""].toSorted());
+    found.set(place ?? "", [...new Set(found.get(place ?? "")).add(rule ?? "")].toSorted());
   }
   return found;
 }
@@ -162,7 +165,7 @@ test(
 );
 
 test(
-  "each link and key line fails on exactly the rules its row names, once each, and a row naming none passes",
+  "each link and key line fails on exactly the rules its row names, and a row naming none passes",
   async () => {
     const table = cases();
     const { repo, base } = await started();

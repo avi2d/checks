@@ -26,22 +26,16 @@ function byPlace(left: Leak, right: Leak): number {
   return (
     left.File.localeCompare(right.File) ||
     left.StartLine - right.StartLine ||
-    left.StartColumn - right.StartColumn ||
     left.RuleID.localeCompare(right.RuleID) ||
     left.Commit.localeCompare(right.Commit)
   );
 }
 
-function withoutDecodedRepeats(leaks: readonly Leak[]): readonly Leak[] {
-  return [...new Map(leaks.map((leak) => [`${leak.Commit}:${leak.File}:${leak.StartLine}:${leak.StartColumn}:${leak.RuleID}`, leak])).values()];
-}
-
 export function report(leaks: readonly Leak[]): string {
   if (leaks.length === 0) return `${NAME}: the range adds no secret`;
-  const secrets = withoutDecodedRepeats(leaks);
   return [
-    `${NAME}: the range adds ${secrets.length} secret(s); put a placeholder such as <private-key> in its place in the commit that added it, and rotate any secret that left this machine:`,
-    ...secrets.toSorted(byPlace).map(leakLine),
+    `${NAME}: the range adds ${leaks.length} secret(s); put a placeholder such as <private-key> in its place in the commit that added it, and rotate any secret that left this machine:`,
+    ...leaks.toSorted(byPlace).map(leakLine),
   ].join("\n");
 }
 
