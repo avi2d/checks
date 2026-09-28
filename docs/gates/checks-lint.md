@@ -21,6 +21,7 @@ A local run with `GITHUB_BASE_REF` set starts at that branch on `origin` instead
 A clone with no remote tracking refs checks `HEAD` alone.
 On a pull request the range ends at the event's head commit and starts at its merge base with the event's base branch.
 Tree gates read the working tree rather than the range.
+A test that spawns `checks-lint` passes it `withoutPullRequestEvent()` from `tests/lib/env.ts`, so the CI event cannot decide the range.
 
 ## Arguments
 

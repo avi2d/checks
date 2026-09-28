@@ -131,6 +131,14 @@ function commandsOn({ kind, raw, code }: MarkdownLine): readonly string[] {
   return texts.flatMap((text) => [...text.matchAll(RUN)].map(([, name = ""]) => name.replace(/[),.;:]+$/, "")));
 }
 
+export function isPathSpan(span: string): boolean {
+  return PATH.exec(span)?.[1] !== undefined;
+}
+
+export function commandNames(line: MarkdownLine): readonly string[] {
+  return commandsOn(line).filter((name) => !NOT_A_NAME.test(name));
+}
+
 export type Judging = { readonly commands: boolean };
 
 export function unresolvedIn(doc: string, text: string, snapshot: Snapshot, { commands }: Judging): readonly Unresolved[] {
