@@ -2,7 +2,7 @@
 import { Console, Effect } from "effect";
 import { ceilingFinding, entryFindings, isAgentFile, maintainingFinding } from "./doc-agents.ts";
 import { rootsOf, snapshotOf, unresolvedIn, type Judging, type Unresolved } from "./doc-references.ts";
-import { ADR_DIRECTORY, judge, placementOf, placementProblem, speaksToConsumers, type Placement } from "./doc-rules.ts";
+import { ADR_DIRECTORY, judge, placementOf, placementProblem, recordsOf, speaksToConsumers, type Placement, type Records } from "./doc-rules.ts";
 import { vanishedNames } from "./doc-names.ts";
 import { readTexts, snapshotAt, stillMissing } from "./doc-snapshot.ts";
 import { changedLines, changedPaths, git, pathsAt, rangeEnds, refArgs } from "../core/git.ts";
@@ -40,7 +40,7 @@ const NAME = "docs";
 const USAGE = "usage: docs.ts <ref> | <base-ref> <head-ref>";
 const MARKDOWN = [":(glob)**/*.md"];
 
-function templateFindings(path: string, text: string, placement: Placement, records: readonly string[]): readonly Finding[] {
+function templateFindings(path: string, text: string, placement: Placement, records: Records): readonly Finding[] {
   const misplaced = placementProblem(placement);
   if (misplaced !== undefined) return [{ path, line: undefined, message: misplaced }];
   if (placement.type !== "judged") return [];
@@ -91,13 +91,13 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   const renamedFrom = new Map(changes.flatMap((change) => (change.kind === "renamed" ? [[change.path, change.from] as const] : [])));
   const changed = yield* changedLines(base, head, MARKDOWN, root);
   const present = yield* pathsAt(head, MARKDOWN, root);
-  const records = present.filter((path) => path.startsWith(ADR_DIRECTORY));
   const proseDocs = present.flatMap((path) => {
     const reader = readerOf(path);
     return reader === undefined ? [] : [{ path, reader }];
   });
   const texts = yield* readTexts(root, head, [...new Set([...present.filter((path) => path.endsWith(".md")), ...proseDocs.map(({ path }) => path)])]);
   const text = (path: string): string => texts.get(path) ?? "";
+  const records = recordsOf(present.filter((path) => path.startsWith(ADR_DIRECTORY)).map((path) => ({ path, text: text(path) })));
   const judged = present.map((path) => ({ path, placement: placementOf(path, text(path)) })).filter(({ placement }) => placement.type !== "unjudged");
 
   const templated = judged.flatMap(({ path, placement }) => templateFindings(path, text(path), placement, records));

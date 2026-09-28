@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { judge } from "../../src/docs/doc-rules.ts";
+import { judge, recordsOf } from "../../src/docs/doc-rules.ts";
 import { ADR_STATUSES, KINDS, renderTemplate, TEMPLATE_DIRECTORY, TEMPLATES, templateFile } from "../../src/docs/doc-templates.ts";
 
 const CHECKOUT = resolve(import.meta.dir, "..", "..");
@@ -43,7 +43,7 @@ test("a template with each placeholder filled in holds to its own kind", () => {
   const refused = KINDS.flatMap((kind) => {
     const text = renderTemplate(TEMPLATES[kind]).replace(PLACEHOLDER, sample);
     const path = kind === "adr" ? "docs/adr/0001-template.md" : `docs/${kind}.md`;
-    return judge(kind, { path, text }, [path]).map(({ line, message }) => `${templateFile(kind)}:${line}: ${message}`);
+    return judge(kind, { path, text }, recordsOf([{ path, text }])).map(({ line, message }) => `${templateFile(kind)}:${line}: ${message}`);
   });
   expect(refused).toEqual([]);
 });
