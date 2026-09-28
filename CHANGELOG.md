@@ -2,6 +2,15 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.30.0
+
+Released 2026-09-28.
+
+### Features
+
+- **testing:** refuse full mutation runs outside CI [#106](https://github.com/avi2d/checks/pull/106)
+- **docs:** refuse a decision-record revision link named on one side only [#105](https://github.com/avi2d/checks/pull/105)
+
 ## 0.29.0
 
 Released 2026-09-28.
