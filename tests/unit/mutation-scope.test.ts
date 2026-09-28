@@ -6,14 +6,17 @@ test("a full run outside CI is refused and names the CI command", () => {
   expect(fullRunRefusal(["--concurrency", "4"], "false")).toContain("gh workflow run mutation");
 });
 
-test("a run scoped to a named glob stays allowed locally, in either spelling", () => {
+test("a run scoped to a named glob stays allowed locally, in any spelling", () => {
   expect(fullRunRefusal(["--mutate", "src/billing.ts"], "")).toBeUndefined();
   expect(fullRunRefusal(["--mutate=src/billing.ts"], "")).toBeUndefined();
+  expect(fullRunRefusal(["-m", "src/billing.ts"], "")).toBeUndefined();
 });
 
 test("a --mutate without a glob is still a full run", () => {
   expect(fullRunRefusal(["--mutate"], "")).toBeDefined();
   expect(fullRunRefusal(["--mutate", ""], "")).toBeDefined();
+  expect(fullRunRefusal(["-m"], "")).toBeDefined();
+  expect(fullRunRefusal(["-m", ""], "")).toBeDefined();
   expect(fullRunRefusal(["--mutate="], "")).toBeDefined();
 });
 

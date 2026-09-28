@@ -1,9 +1,11 @@
 const NON_RUNS = ["--help", "-h", "--version"];
+const MUTATE_FLAGS = ["--mutate", "-m"];
 
 function namesGlob(args) {
   return args.some(
     (arg, index) =>
-      (arg === "--mutate" && (args[index + 1] ?? "") !== "") || (arg.startsWith("--mutate=") && arg !== "--mutate="),
+      (MUTATE_FLAGS.includes(arg) && (args[index + 1] ?? "") !== "") ||
+      (arg.startsWith("--mutate=") && arg !== "--mutate="),
   );
 }
 
