@@ -255,12 +255,12 @@ test(
 );
 
 test(
-  "fails when no TypeScript source is tracked",
+  "fails when no TypeScript or Astro source is tracked",
   async () => {
     const untracked = await open(configured({ "knip.json": JSON.stringify({ entry: ["index.ts"] }) }));
     await untracked.write({ "index.ts": `export const index = 1;\n` });
     const empty = await untracked.script(GATE, "HEAD");
-    expect(empty.text).toContain("exports: no tracked .ts or .tsx files to scan");
+    expect(empty.text).toContain("exports: no tracked .ts, .tsx or .astro files to scan");
     expect(empty.exitCode).toBe(2);
   },
   120_000,
