@@ -53,6 +53,10 @@
     "src/docs/docs.ts",
     "src/dependencies/vendor.ts",
     "src/dependencies/vendor-args.ts",
+    "src/dependencies/cache-root.ts",
+    "src/dependencies/advisories.ts",
+    "src/dependencies/advisory-rules.ts",
+    "src/dependencies/osv-scanner.ts",
     "src/docs/doc-outline.ts",
     "src/docs/doc-rules.ts",
     "src/docs/doc-references.ts",
@@ -100,7 +104,8 @@
     "checks-exports": "src/complexity/exports.ts",
     "checks-quarantine-clock": "src/testing/quarantine-clock.ts",
     "checks-docs": "src/docs/docs.ts",
-    "checks-vendor": "src/dependencies/vendor.ts"
+    "checks-vendor": "src/dependencies/vendor.ts",
+    "checks-advisories": "src/dependencies/advisories.ts"
   },
   "scripts": {
     "prepare": "bun src/dependencies/vendor.ts --library effect --package effect --repository https://github.com/Effect-TS/effect.git --tag 'effect@{version}' --path packages/effect/package.json",

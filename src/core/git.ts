@@ -205,6 +205,16 @@ export const commitOf = Effect.fn("commitOf")(function* (rev: string, cwd?: stri
   return (yield* git(["rev-parse", "--verify", `${rev}^{commit}`], cwd)).trim();
 });
 
+// The later of the author and committer dates, in seconds, so a rebase neither restarts nor stops a clock read from it.
+export const writtenAt = Effect.fn("writtenAt")(function* (rev: string, cwd?: string) {
+  const shown = yield* git(["show", "-s", "--format=%at %ct", rev], cwd);
+  const dates = shown.trim().split(" ").map(Number);
+  if (dates.length !== 2 || !dates.every(Number.isInteger)) {
+    return yield* new GitFailure({ message: `cannot read when ${rev} was written` });
+  }
+  return Math.max(...dates);
+});
+
 // A scratch index leaves the repository's own index and working tree untouched.
 export const checkoutFiles = Effect.fn("checkoutFiles")(function* (rev: string, files: readonly string[], scratch: string, cwd?: string) {
   const path = yield* Path.Path;

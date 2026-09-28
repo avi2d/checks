@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
-import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
+import { Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { git } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
+import { cacheRoot } from "./cache-root.ts";
 import { librariesFrom, NAME, OPENER, type Library } from "./vendor-args.ts";
 
-const CACHE_HOME = ".cache/avi2dg-checks";
 const RECORD_SUFFIX = ".commit";
 const LINKS = "repos";
 const VERSION_TOKEN = "{version}";
@@ -301,14 +301,6 @@ const vend = Effect.fn("vend")(function* (root: string, cache: string, library: 
   const dir = path.join(cache, LINKS, ...remoteSegments(library.repository), tag);
   yield* Console.error(`${NAME}: ${yield* settle(library, installed, tag, dir)}`);
   yield* ensureLink(root, library, dir);
-});
-
-const cacheRoot = Effect.fn("cacheRoot")(function* () {
-  const path = yield* Path.Path;
-  const home = yield* Config.NonEmptyString("HOME").pipe(
-    Effect.mapError(() => new VendorError({ message: "HOME is missing, so the shared cache has no root" })),
-  );
-  return path.join(home, CACHE_HOME);
 });
 
 const main = Effect.gen(function* () {

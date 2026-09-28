@@ -75,7 +75,7 @@ To place a change:
    | `src/testing/` | the gates that judge how the suite is laid out, run and trusted |
    | `src/docs/` | the doc gate and the rules it reads |
    | `src/delivery/` | the gates and bins for how a change reaches `main` and a release |
-   | `src/dependencies/` | what code may import, and which library sources an agent reads |
+   | `src/dependencies/` | what code may import, which library sources an agent reads, and which locked package versions carry a known advisory |
    | `scripts/` | the kit's own build, which nothing ships |
    | `dist/` | the committed oxlint plugin bundles |
    | `dist/templates/` | one template per kind of doc file, which `bun run build` renders |

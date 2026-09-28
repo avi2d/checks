@@ -31,6 +31,8 @@ export const DEFAULT_BRANCH = "main";
 
 const TYPESCRIPT_SOURCE: TrackedContent = { pathspecs: ["*.ts", "*.tsx"], content: "TypeScript source" };
 
+const BUN_LOCKFILE: TrackedContent = { pathspecs: ["bun.lock"], content: "a bun lockfile" };
+
 export const KIT_GATES = [
   { bin: "checks-lint-coverage", vector: "quality", file: "lint-coverage.sh", reads: "tree", appliesTo: TYPESCRIPT_SOURCE },
   { bin: "checks-test-layout", vector: "testing", file: "test-layout.ts", reads: "tree", appliesTo: TYPESCRIPT_SOURCE },
@@ -43,4 +45,5 @@ export const KIT_GATES = [
   { bin: "checks-unused", vector: "complexity", file: "unused.ts", reads: "tree", appliesTo: TYPESCRIPT_SOURCE },
   { bin: "checks-exports", vector: "complexity", file: "exports.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE },
   { bin: "checks-quarantine-clock", vector: "testing", file: "quarantine-clock.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
+  { bin: "checks-advisories", vector: "dependencies", file: "advisories.ts", reads: "range", appliesTo: BUN_LOCKFILE },
 ] as const satisfies readonly KitGate[];

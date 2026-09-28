@@ -10,6 +10,7 @@ audience: consumers
 
 It runs the gates under [What runs](../../README.md#what-runs), each in its own process.
 Gates requiring tracked TypeScript files begin running when the repository tracks TypeScript.
+`checks-advisories` begins running when the repository tracks `bun.lock`.
 All other gates run for every repository.
 
 ## What it reads
@@ -44,7 +45,7 @@ With two arguments, the base and head override range discovery.
 
 ```
 checks-lint: range 2504acf098d120e73a8ece3c96f22b934f35c6a8..10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD against origin/main
-checks-lint: 1 of 11 gate(s) failed: checks-comment-gate
+checks-lint: 1 of 12 gate(s) failed: checks-comment-gate
 ```
 
 <!-- end generated lint-sample -->

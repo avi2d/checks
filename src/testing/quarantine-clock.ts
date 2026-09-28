@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect, Schema } from "effect";
-import { commitOf, git, isShallowBoundary, refArgs } from "../core/git.ts";
+import { commitOf, git, isShallowBoundary, refArgs, writtenAt } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { TEST_FILE } from "./test-layout.ts";
 
@@ -125,19 +125,10 @@ const entryAt = Effect.fn("entryAt")(function* (root: string, head: string, file
   return { file, at: entry.at, day: entry.day };
 });
 
-const headAt = Effect.fn("headAt")(function* (root: string, head: string) {
-  const shown = yield* git(["show", "-s", "--format=%at %ct", head], root);
-  const dates = shown.trim().split(" ").map(Number);
-  if (dates.length !== 2 || !dates.every(Number.isInteger)) {
-    return yield* new QuarantineError({ message: `cannot read when ${head} was written` });
-  }
-  return Math.max(...dates);
-});
-
 export const runHead = Effect.fn("runHead")(function* (root: string, head: string) {
   const files = yield* filesAt(root, head);
   const entries = yield* Effect.forEach(files, (file) => entryAt(root, head, file));
-  return { checked: files.length, overdue: overdueOf(entries, yield* headAt(root, head)) } satisfies ClockResult;
+  return { checked: files.length, overdue: overdueOf(entries, yield* writtenAt(head, root)) } satisfies ClockResult;
 });
 
 const clock = Effect.gen(function* () {
