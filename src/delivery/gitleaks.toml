@@ -12,6 +12,18 @@ entropy = 3.0
 keywords = ["private", "preshared", "pre_shared", "pre-shared", "psk"]
 
 [[rules]]
+id = "wireguard-key-file"
+description = "A WireGuard or AmneziaWG private or pre-shared key alone on a line of a file named for one"
+path = '''(?i)(?:^|/)[^/]*(?:(?:private|priv|pre[_-]?shared)[_-]?key|psk)[^/]*$|\.key$'''
+regex = '''(?m)^[ \t]*([A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=)[ \t]*\r?$'''
+secretGroup = 1
+entropy = 3.0
+
+[[rules.allowlists]]
+description = "A file named for a public key"
+paths = ['''(?i)(?:^|/)[^/]*pub(?:lic)?[^/]*$''']
+
+[[rules]]
 id = "proxy-userinfo-link"
 description = "A proxy share link that carries its credential before the @, such as vless://, trojan://, socks5:// or wireguard://"
 regex = '''(?i)\b(?:vless|vmess|ss|trojan|hysteria2?|hy2|tuic|socks5?h?|wireguard|wg)://([^\s"'`<>@?#]+)@[^\s"'`<>]+'''
@@ -44,7 +56,7 @@ regexes = ['''@$''']
 [[rules]]
 id = "proxy-query-credential"
 description = "A proxy share link that carries its credential in the query, such as hysteria://host?auth="
-regex = '''(?i)\b(?:vless|vmess|ssr?|trojan|hysteria2?|hy2|tuic|socks5?h?|wireguard|wg)://[^\s"'`?#]*\?(?:[^\s"'`<>#]*&)?(?:auth|auth_str|obfsParam|obfs-password|password)=([^\s"'`<>&#]+)'''
+regex = '''(?i)\b(?:vless|vmess|ssr?|trojan|hysteria2?|hy2|tuic|socks5?h?|wireguard|wg)://[^\s"'`?#]*\?(?:[^\s"'`<>#]*&)?(?:auth|auth_str|obfsParam|obfs-password|password|pk)=([^\s"'`<>&#]+)'''
 secretGroup = 1
 keywords = ["vless://", "vmess://", "ss://", "ssr://", "trojan://", "hysteria://", "hysteria2://", "hy2://", "tuic://", "socks://", "socksh://", "socks5://", "socks5h://", "wireguard://", "wg://"]
 

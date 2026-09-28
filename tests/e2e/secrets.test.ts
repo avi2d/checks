@@ -31,7 +31,7 @@ const PLACEHOLDERS: Readonly<Record<string, string>> = {
   ".env": "GITHUB_TOKEN=<github-token>\n",
 };
 
-type Case = { readonly line: string; readonly rules: readonly string[] };
+type Case = { readonly file: string; readonly line: string; readonly rules: readonly string[] };
 
 function cases(): readonly Case[] {
   const vmess = Buffer.from(JSON.stringify({ v: "2", add: HOST, port: "443", id: randomUUID(), net: "ws" })).toString("base64");
@@ -43,8 +43,9 @@ function cases(): readonly Case[] {
   const base64 = ["proxy-base64-link"];
   const query = ["proxy-query-credential"];
   const key = ["wireguard-key"];
+  const keyFile = ["wireguard-key-file"];
   const passes: readonly string[] = [];
-  return [
+  const lines: readonly Omit<Case, "file">[] = [
     { line: link("vless", `${randomUUID()}@${HOST}:443?security=reality#home`), rules: userinfo },
     { line: link("ss", `${shadowsocks}@${HOST}:8388#home`), rules: userinfo },
     { line: link("trojan", `${hex(12)}@${HOST}:443#home`), rules: userinfo },
@@ -52,6 +53,8 @@ function cases(): readonly Case[] {
     { line: link("socks5h", `home:${hex(12)}@${HOST}:1080`), rules: userinfo },
     { line: link("vmess", `${randomUUID()}@${HOST}:443?type=ws#home`), rules: userinfo },
     { line: link("wireguard", `${encodeURIComponent(base64Key())}@${HOST}:51820?address=10.0.0.2/32&mtu=1280#home`), rules: userinfo },
+    { line: link("wg", `${HOST}:51820?pk=${base64Key()}&local_address=10.0.0.2/32&peer_pk=${base64Key()}#home`), rules: query },
+    { line: link("wg", `${HOST}:51820?pk=${encodeURIComponent(base64Key())}&peer_pk=${encodeURIComponent(base64Key())}#home`), rules: query },
     { line: link("vmess", vmess), rules: base64 },
     { line: `Import this link: ${link("vmess", vmess)}.`, rules: base64 },
     { line: `${link("vmess", vmess)}: that one`, rules: base64 },
@@ -91,16 +94,33 @@ function cases(): readonly Case[] {
     { line: link("hysteria", `${HOST}:443?protocol=udp&upmbps=100#home`), rules: passes },
     { line: link("https", "panel.example.com/sub/0123456789abcdef0123456789abcdef"), rules: passes },
     { line: "client_psk: <preshared-key>", rules: passes },
+    { line: link("wg", `${HOST}:51820?pk=<private-key>&peer_pk=${base64Key()}#home`), rules: passes },
+    { line: base64Key(), rules: passes },
+  ];
+  return [
+    ...lines.map((row) => ({ file: "vpn/cases.txt", ...row })),
+    { file: "wg/privatekey", line: base64Key(), rules: keyFile },
+    { file: "wg/wg0.key", line: base64Key(), rules: keyFile },
+    { file: "wg/client_private_key", line: base64Key(), rules: keyFile },
+    { file: "wg/presharedkey", line: base64Key(), rules: keyFile },
+    { file: "wg/psk", line: base64Key(), rules: keyFile },
+    { file: "wg/publickey", line: base64Key(), rules: passes },
+    { file: "wg/server-public.key", line: base64Key(), rules: passes },
+    { file: "wg/peer.pub", line: base64Key(), rules: passes },
+    { file: "wg/client.privatekey", line: "<private-key>", rules: passes },
   ];
 }
 
-function caseRulesByLine(report: string): ReadonlyMap<number, readonly string[]> {
-  const found = new Map<number, string[]>();
-  for (const [, line, rule] of report.matchAll(/^ {2}vpn\/cases\.txt:(\d+) (\S+) in /gm)) {
-    const rules = new Set(found.get(Number(line))).add(rule ?? "");
-    found.set(Number(line), [...rules].toSorted());
+function rulesByPlace(report: string): ReadonlyMap<string, readonly string[]> {
+  const found = new Map<string, string[]>();
+  for (const [, place, rule] of report.matchAll(/^ {2}(\S+:\d+) (\S+) in /gm)) {
+    found.set(place ?? "", [...(found.get(place ?? "") ?? []), rule ?? ""].toSorted());
   }
   return found;
+}
+
+function linesByFile(table: readonly Case[]): Readonly<Record<string, string>> {
+  return Object.fromEntries(Map.groupBy(table, (row) => row.file).entries().map(([file, rows]) => [file, `${rows.map((row) => row.line).join("\n")}\n`]));
 }
 
 async function started(): Promise<{ readonly repo: FixtureRepo; readonly base: string }> {
@@ -136,14 +156,16 @@ test(
 );
 
 test(
-  "each link and key line fails on exactly the rules its row names, and a row naming none passes",
+  "each link and key line fails on exactly the rules its row names, once each, and a row naming none passes",
   async () => {
     const table = cases();
     const { repo, base } = await started();
-    await repo.write({ "vpn/cases.txt": `${table.map((row) => row.line).join("\n")}\n` });
-    const found = caseRulesByLine((await repo.script(GATE, base, await repo.commit("feat: plant cases"))).text);
-    const expected = table.map((row, index) => ({ line: index + 1, rules: row.rules.toSorted() }));
-    expect(expected.map(({ line }) => ({ line, rules: found.get(line) ?? [] }))).toEqual(expected);
+    await repo.write(linesByFile(table));
+    const found = rulesByPlace((await repo.script(GATE, base, await repo.commit("feat: plant cases"))).text);
+    const expected = [...Map.groupBy(table, (row) => row.file).entries()].flatMap(([file, rows]) =>
+      rows.map((row, index) => ({ place: `${file}:${index + 1}`, rules: row.rules.toSorted() })),
+    );
+    expect(expected.map(({ place }) => ({ place, rules: found.get(place) ?? [] }))).toEqual(expected);
   },
   SCAN_MS,
 );
