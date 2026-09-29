@@ -2,6 +2,15 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.32.0
+
+Released 2026-09-29.
+
+### Features
+
+- **delivery:** add checks-secrets gate that fails a range whose commits add a secret [#112](https://github.com/avi2d/checks/pull/112)
+- **delivery:** open a release pull request daily and tag it when it merges [#111](https://github.com/avi2d/checks/pull/111)
+
 ## 0.31.0
 
 Released 2026-09-28.
