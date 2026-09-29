@@ -2,7 +2,7 @@ import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { lastStep, parseWorkflow } from "../lib/workflow.ts";
+import { parseWorkflow, stepNamed } from "../lib/workflow.ts";
 import { CHECKOUT, ran, type Ran, scratchDirs } from "./lib/fixture-repo.ts";
 
 const scratch = scratchDirs();
@@ -66,7 +66,7 @@ test(
 );
 
 async function titleLinter(prefix: string, path: string): Promise<(title: string) => Promise<Ran>> {
-  const step = lastStep(parseWorkflow(await Bun.file(join(CHECKOUT, ".github/workflows/commitlint.yml")).text()));
+  const step = stepNamed(parseWorkflow(await Bun.file(join(CHECKOUT, ".github/workflows/commitlint.yml")).text()), "lint the title");
   const runnerTemp = await scratch(prefix);
   return async (title) => {
     await writeFile(join(runnerTemp, "pr-title"), title);

@@ -142,6 +142,8 @@ These bins run on their own:
 - [`checks-changelog`](docs/gates/checks-changelog.md) writes the pending release into `CHANGELOG.md` from the conventional commits since the last release.
 - [`checks-release-notes`](docs/gates/checks-release-notes.md) writes one `CHANGELOG.md` section to a file for a GitHub release.
 - [`checks-release-report`](docs/gates/checks-release-report.md) tells whether the history holds unreleased features or fixes since the last tag.
+- [`checks-release-pr`](docs/gates/checks-release-pr.md) opens or refreshes the pull request that releases the next version, and dispatches its checks.
+- [`checks-release-tag`](docs/gates/checks-release-tag.md) tags a landed release commit with its version and dispatches the release workflow on the tag.
 - [`checks-vendor`](docs/gates/checks-vendor.md) pins each library its `prepare` arguments name to a shared read-only clone and links it under `repos/`.
 
 `checks-lint` has [its own page](docs/gates/checks-lint.md), which says which range it resolves.
