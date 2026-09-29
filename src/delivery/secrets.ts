@@ -8,14 +8,26 @@ import { pinnedGitleaks, scanCommits, type Leak } from "./gitleaks.ts";
 const NAME = "secrets";
 const USAGE = "usage: secrets.ts <ref> | <base-ref> <head-ref>";
 const SHORT_SHA = 8;
+const NEW_SIDE_PREFIX = "b/";
 
 // git log reads a lone commit as its whole ancestry, so a single ref is bounded to itself.
-const commitsOf = Effect.fn("commitsOf")(function* (args: readonly string[], root: string) {
+// Without --remerge-diff git log prints no diff for a merge, and a first-parent diff would rescan what the merge brings in.
+const logOptionsOf = Effect.fn("logOptionsOf")(function* (args: readonly string[], root: string) {
   const { first, second } = yield* refArgs(args, USAGE);
-  if (second === undefined) return `-1 ${yield* commitOf(first, root)}`;
+  if (second === undefined) return `--remerge-diff -1 ${yield* commitOf(first, root)}`;
   const head = yield* commitOf(second, root);
   const base = (yield* git(["merge-base", yield* commitOf(first, root), head], root)).trim();
-  return `${base}..${head}`;
+  return `--remerge-diff ${base}..${head}`;
+});
+
+// gitleaks names a file under a remerge conflict header by its `+++ b/` line, so a path the commit does not hold carries that prefix.
+const atRepositoryPath = Effect.fn("atRepositoryPath")(function* (leak: Leak, root: string) {
+  if (!leak.File.startsWith(NEW_SIDE_PREFIX)) return leak;
+  const held = yield* git(["cat-file", "-e", `${leak.Commit}:${leak.File}`], root).pipe(
+    Effect.as(true),
+    Effect.catchTag("GitFailure", () => Effect.succeed(false)),
+  );
+  return held ? leak : { ...leak, File: leak.File.slice(NEW_SIDE_PREFIX.length) };
 });
 
 function leakLine({ File, StartLine, RuleID, Commit, Description }: Leak): string {
@@ -43,12 +55,13 @@ const secrets = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
-  const commits = yield* commitsOf(process.argv.slice(2), root);
+  const logOptions = yield* logOptionsOf(process.argv.slice(2), root);
   const binary = yield* pinnedGitleaks(yield* cacheRoot());
   const config = path.join(import.meta.dir, "gitleaks.toml");
   const ignoreDir = yield* fs.makeTempDirectoryScoped({ prefix: "checks-secrets-" });
   const gitDir = (yield* git(["rev-parse", "--absolute-git-dir"], root)).trim();
-  const leaks = yield* scanCommits({ binary, gitDir, commits, config, ignoreDir });
+  const reported = yield* scanCommits({ binary, gitDir, logOptions, config, ignoreDir });
+  const leaks = yield* Effect.forEach(reported, (leak) => atRepositoryPath(leak, root));
   yield* Console.log(report(leaks));
   return leaks.length === 0;
 }).pipe(Effect.scoped);

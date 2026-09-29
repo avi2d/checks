@@ -1,8 +1,12 @@
+import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { randomBytes, randomUUID } from "node:crypto";
-import { fixtureRepos, lintWiring, type FixtureRepo } from "./lib/fixture-repo.ts";
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { CHECKOUT, fixtureRepos, lintWiring, ran, scratchDirs, type FixtureRepo } from "./lib/fixture-repo.ts";
 
 const open = fixtureRepos("checks-secrets-");
+const scratch = scratchDirs();
 const GATE = "delivery/secrets.ts";
 const SCAN_MS = 120_000;
 
@@ -183,6 +187,22 @@ async function started(): Promise<{ readonly repo: FixtureRepo; readonly base: s
   return { repo, base: await repo.commit("chore: start") };
 }
 
+// Each side writes its own files, and the merge stops before its commit so the test writes the resolution.
+async function diverged(files: {
+  readonly topic: Readonly<Record<string, string>>;
+  readonly main: Readonly<Record<string, string>>;
+}): Promise<{ readonly repo: FixtureRepo; readonly main: string }> {
+  const { repo } = await started();
+  await $`git switch -q -c topic`.cwd(repo.dir).quiet();
+  await repo.write(files.topic);
+  await repo.commit("feat: topic side");
+  await $`git switch -q main`.cwd(repo.dir).quiet();
+  await repo.write(files.main);
+  const main = await repo.commit("feat: main side");
+  await $`git switch -q topic && git merge -q --no-ff --no-commit main`.cwd(repo.dir).nothrow().quiet();
+  return { repo, main };
+}
+
 test(
   "a range adding a real secret in a config file, a key file or an env file fails on each, and the same files with placeholders pass",
   async () => {
@@ -239,6 +259,57 @@ test(
     expect(range.text).toContain(`  vpn/wg0.conf:1 wireguard-key in ${added.slice(0, 8)}`);
     expect(await repo.script(GATE, removed)).toEqual({ exitCode: 0, text: "secrets: the range adds no secret\n" });
     expect((await repo.script(GATE, added)).exitCode).toBe(1);
+  },
+  SCAN_MS,
+);
+
+test(
+  "a key written while resolving a merge fails under its own path, and a key the merge brings in from before the range passes",
+  async () => {
+    const resolved = await diverged({
+      topic: { "vpn/wg0.conf": "topic\n", "b/wg0.conf": "topic\n", "b/peer.conf": "peer\n" },
+      main: { "vpn/wg0.conf": "main\n", "b/wg0.conf": "main\n" },
+    });
+    await resolved.repo.write({
+      "vpn/wg0.conf": `PrivateKey = ${base64Key()}\n`,
+      "b/wg0.conf": `PrivateKey = ${base64Key()}\n`,
+      "b/peer.conf": `PresharedKey = ${base64Key()}\n`,
+    });
+    const merge = await resolved.repo.commit("merge: main into topic");
+    const inMerge = (place: string) => `  ${place} wireguard-key in ${merge.slice(0, 8)}: A WireGuard or AmneziaWG private or pre-shared key`;
+    const failed = await resolved.repo.script(GATE, resolved.main, merge);
+    expect(failed.exitCode).toBe(1);
+    expect(failed.text.split("\n").slice(1, -1)).toEqual([inMerge("b/peer.conf:1"), inMerge("b/wg0.conf:1"), inMerge("vpn/wg0.conf:1")]);
+    expect((await resolved.repo.script(GATE, merge)).text).toBe(failed.text);
+
+    const inherited = await diverged({
+      topic: { "README.md": "# topic\n" },
+      main: { "README.md": "# main\n", "vpn/wg0.conf": `PrivateKey = ${base64Key()}\n` },
+    });
+    await inherited.repo.write({ "README.md": "# fixture\n" });
+    const passed = await inherited.repo.script(GATE, inherited.main, await inherited.repo.commit("merge: main into topic"));
+    expect(passed).toEqual({ exitCode: 0, text: "secrets: the range adds no secret\n" });
+  },
+  SCAN_MS,
+);
+
+test(
+  "a git too old to diff a merge's resolution fails the gate rather than passing it",
+  async () => {
+    const { repo, base } = await started();
+    await repo.write({ "vpn/wg0.conf": "PrivateKey = <private-key>\n" });
+    const head = await repo.commit("feat: add a placeholder");
+    const oldGit = await scratch("checks-secrets-git-");
+    await writeFile(
+      join(oldGit, "git"),
+      `#!/bin/sh\nfor arg in "$@"; do\n  if [ "$arg" = --remerge-diff ]; then echo "fatal: unrecognized argument: --remerge-diff" >&2; exit 128; fi\ndone\nexec ${Bun.which("git")} "$@"\n`,
+      { mode: 0o755 },
+    );
+    const rejected = await ran(
+      $`bun ${join(CHECKOUT, "src", GATE)} ${base} ${head}`.cwd(repo.dir).env({ ...process.env, PATH: `${oldGit}:${process.env["PATH"] ?? ""}` }),
+    );
+    expect(rejected.exitCode).toBe(2);
+    expect(rejected.text).toContain("unrecognized argument: --remerge-diff");
   },
   SCAN_MS,
 );

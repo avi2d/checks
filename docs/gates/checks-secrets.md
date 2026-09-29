@@ -9,6 +9,7 @@ audience: consumers
 ## What it checks
 
 It scans the lines each commit in the range adds, in every file the commit adds or modifies, with gitleaks.
+In a merge commit it scans the lines the merge's own resolution adds, such as a key written while resolving a conflict, and not what the merge brings in from the other parent.
 It fails on each secret the scan finds, and names its file, its line, the rule that matched and the commit that added it.
 A secret one commit adds and a later commit in the range removes still fails, because the first commit still holds it.
 It guards new changes only, and never scans a commit before the range, so a secret already in the history takes no part.
@@ -41,6 +42,7 @@ It skips the paths gitleaks' default config skips, such as lockfiles, images and
 ## What it reads
 
 It reads the commits of the range from git, not the working tree.
+It needs git 2.36 or newer, which diffs a merge against the merge git would make on its own, and it exits 2 on an older git.
 It reads its rules from `src/delivery/gitleaks.toml` in the installed package.
 
 It runs gitleaks 8.30.1, pinned by the SHA-256 of each platform's archive and of the binary inside it.
@@ -66,7 +68,7 @@ With one it scans that commit alone.
 | --- | --- |
 | 0 | no commit in the range adds a secret |
 | 1 | a commit in the range adds a secret |
-| 2 | a ref does not resolve, or no verified scanner is at hand, or gitleaks fails |
+| 2 | a ref does not resolve, or no verified scanner is at hand, or git is older than 2.36, or gitleaks fails |
 
 ## Sample output
 

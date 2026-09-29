@@ -260,6 +260,9 @@ The file is JSON because `Bun.TOML` cannot parse a TOML date.
 A secret a commit adds stays in that commit after a later commit deletes it, and a pushed branch has already sent it to the forge.
 So the fix is to rewrite the commit that added it, and to rotate the secret once it has left the machine.
 
+In a merge commit the gate scans only the merge's own resolution, the difference from the merge git would make on its own.
+A diff against the first parent would also scan what the merge brings in from the other parent, so a branch that merges main would fail on a secret main already holds, from before the range.
+
 The gate runs gitleaks rather than a hand-written pattern list, because its default config already holds over 200 rules for the token shapes of common services.
 The kit's own rules in `src/delivery/gitleaks.toml` add only the VPN keys and proxy links those rules miss.
 The kit pins gitleaks by version and SHA-256 for the reason it pins OSV-Scanner.

@@ -68,19 +68,20 @@ const decodeGitleaksReport = Schema.decodeUnknownEffect(Schema.fromJsonString(Sc
 export type Scan = {
   readonly binary: string;
   readonly gitDir: string;
-  readonly commits: string;
+  readonly logOptions: string;
   readonly config: string;
   readonly ignoreDir: string;
 };
 
 // gitleaks exits 1 both on a leak and on a fatal error, so it exits 0 on a leak here and the report alone tells them apart.
+// It exits 0 with an empty report when git log fails, and logs only errors here, so any line it logs fails the scan.
 // It reads a .gitleaksignore at its source whatever --gitleaks-ignore-path says, so the source is the git directory, where no tracked file lands.
-export const scanCommits = Effect.fn("scanCommits")(function* ({ binary, gitDir, commits, config, ignoreDir }: Scan) {
+export const scanCommits = Effect.fn("scanCommits")(function* ({ binary, gitDir, logOptions, config, ignoreDir }: Scan) {
   const args = [
     "git",
     gitDir,
     "--log-opts",
-    commits,
+    logOptions,
     "--config",
     config,
     "--gitleaks-ignore-path",
@@ -88,6 +89,7 @@ export const scanCommits = Effect.fn("scanCommits")(function* ({ binary, gitDir,
     "--ignore-gitleaks-allow",
     "--redact",
     "--no-banner",
+    "--no-color",
     "--log-level",
     "error",
     "--exit-code",
@@ -100,7 +102,9 @@ export const scanCommits = Effect.fn("scanCommits")(function* ({ binary, gitDir,
   const { stdout, stderr, exitCode } = yield* collect(binary, args, ignoreDir).pipe(
     Effect.mapError((cause) => new GitleaksError({ message: `cannot run ${binary}: ${cause.message}` })),
   );
-  if (exitCode !== 0) return yield* new GitleaksError({ message: `${binary} exited ${exitCode}: ${stderr.trim()}` });
+  if (exitCode !== 0 || stderr.trim() !== "") {
+    return yield* new GitleaksError({ message: `${binary} failed: ${stderr.trim() || `exit code ${exitCode}`}` });
+  }
   return yield* decodeGitleaksReport(stdout).pipe(
     Effect.mapError((cause) => new GitleaksError({ message: `cannot read the report gitleaks wrote: ${cause.message}` })),
   );
