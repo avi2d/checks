@@ -262,7 +262,7 @@ So the fix is to rewrite the commit that added it, and to rotate the secret once
 
 In a merge commit the gate scans only the merge's own resolution, the difference from the merge git would make on its own.
 A diff against the first parent would also scan what the merge brings in from the other parent, so a branch that merges main would fail on a secret main already holds, from before the range.
-Git gives no such diff for an octopus merge and warns instead of failing, so the gate refuses a range that holds one rather than pass a commit it never read.
+Git gives no such diff for an octopus merge and warns instead of failing, so the gate refuses to scan one rather than pass a commit it never read.
 
 The gate runs gitleaks rather than a hand-written pattern list, because its default config already holds over 200 rules for the token shapes of common services.
 The kit's own rules in `src/delivery/gitleaks.toml` add only the VPN keys and proxy links those rules miss.

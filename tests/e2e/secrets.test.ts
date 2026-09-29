@@ -308,6 +308,14 @@ test(
     const refused = `secrets: git gives no resolution diff for the octopus merge ${merge}, so the gate cannot scan it\n`;
     expect(await repo.script(GATE, base, merge)).toEqual({ exitCode: 2, text: refused });
     expect(await repo.script(GATE, merge)).toEqual({ exitCode: 2, text: refused });
+
+    await repo.write({ "vpn/wg1.conf": `PrivateKey = ${base64Key()}\n` });
+    const after = await repo.commit("feat: add a key after the octopus");
+    const alone = await repo.script(GATE, after);
+    expect(alone.exitCode).toBe(1);
+    expect(alone.text.split("\n").slice(1, -1)).toEqual([
+      `  vpn/wg1.conf:1 wireguard-key in ${after.slice(0, 8)}: A WireGuard or AmneziaWG private or pre-shared key`,
+    ]);
   },
   SCAN_MS,
 );

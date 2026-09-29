@@ -15,10 +15,10 @@ class OctopusMerge extends Schema.TaggedError<OctopusMerge>()("OctopusMerge", {
   message: Schema.String,
 }) {}
 
-// git log reads a lone commit as its whole ancestry, so a single ref is bounded to itself.
+// git reads a lone commit as its whole ancestry, and -1 limits only what a walk prints, so a single ref is bounded with --no-walk.
 const revisionsOf = Effect.fn("revisionsOf")(function* (args: readonly string[], root: string) {
   const { first, second } = yield* refArgs(args, USAGE);
-  if (second === undefined) return ["-1", yield* commitOf(first, root)];
+  if (second === undefined) return ["--no-walk", yield* commitOf(first, root)];
   const head = yield* commitOf(second, root);
   const base = (yield* git(["merge-base", yield* commitOf(first, root), head], root)).trim();
   return [`${base}..${head}`];
