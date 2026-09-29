@@ -84,13 +84,13 @@ test(
 
     const red = await lint();
     expect(red.text).toContain("  src/copy.ts: 10 repeated line(s), up from 0\n");
-    expect(red.text).toContain("checks-lint: 1 of 11 gate(s) failed: checks-repetition\n");
+    expect(red.text).toContain("checks-lint: 1 of 12 gate(s) failed: checks-repetition\n");
     expect(red.exitCode).toBe(1);
 
     await write({ "src/copy.ts": "export const copy = 1;\n" });
     await commit("fix: no copy");
     const green = await lint();
-    expect(green.text).toContain("checks-lint: 11 gate(s) pass\n");
+    expect(green.text).toContain("checks-lint: 12 gate(s) pass\n");
     expect(green.exitCode).toBe(0);
   },
   60_000,

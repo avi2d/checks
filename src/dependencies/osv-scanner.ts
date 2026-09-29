@@ -1,11 +1,9 @@
-import { Clock, Context, Crypto, Effect, Encoding, FileSystem, Layer, Option, Path, Schema } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import { Clock, Context, Effect, FileSystem, Layer, Option, Path, Schema } from "effect";
 import { collect } from "../core/git.ts";
+import { installPinned } from "./pinned-binary.ts";
 
 export const OSV_SCANNER_VERSION = "2.6.0";
 const RELEASES = `https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}`;
-const EXECUTABLE_MODE = 0o755;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 export const REFRESH_HOURS = 24;
@@ -33,46 +31,6 @@ export function buildFor(platform: string, arch: string): Option.Option<Build> {
   return Option.fromNullishOr(BUILDS[`${platform}-${arch}`]);
 }
 
-const sha256Of = Effect.fn("sha256Of")(function* (bytes: Uint8Array) {
-  const crypto = yield* Crypto.Crypto;
-  return Encoding.encodeHex(yield* crypto.digest("SHA-256", bytes));
-});
-
-const verified = Effect.fn("verified")(function* (binary: string, sha256: string) {
-  const fs = yield* FileSystem.FileSystem;
-  const found = yield* sha256Of(yield* fs.readFile(binary));
-  if (found !== sha256) {
-    return yield* new OsvScannerError({ message: `${binary} has SHA-256 ${found}, not the pinned ${sha256}; delete it and rerun` });
-  }
-  return binary;
-});
-
-const download = Effect.fn("download")(function* (url: string) {
-  const response = yield* HttpClient.get(url).pipe(Effect.flatMap(HttpClientResponse.filterStatusOk));
-  return new Uint8Array(yield* response.arrayBuffer);
-}, Effect.provide(FetchHttpClient.layer));
-
-// The binary lands through a rename in its own directory, so a concurrent run sees it whole or not at all.
-export const installPinned = Effect.fn("installPinned")(function* (url: string, sha256: string, binary: string) {
-  const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  if (yield* fs.exists(binary)) return yield* verified(binary, sha256);
-  const bytes = yield* download(url).pipe(
-    Effect.mapError((cause) => new OsvScannerError({ message: `cannot download ${url}: ${cause.message}` })),
-  );
-  const found = yield* sha256Of(bytes);
-  if (found !== sha256) {
-    return yield* new OsvScannerError({ message: `${url} has SHA-256 ${found}, not the pinned ${sha256}, so nothing was installed` });
-  }
-  yield* fs.makeDirectory(path.dirname(binary), { recursive: true });
-  const staging = yield* fs.makeTempDirectoryScoped({ directory: path.dirname(binary), prefix: `.${path.basename(binary)}-` });
-  const staged = path.join(staging, path.basename(binary));
-  yield* fs.writeFile(staged, bytes);
-  yield* fs.chmod(staged, EXECUTABLE_MODE);
-  yield* fs.rename(staged, binary);
-  return binary;
-}, Effect.scoped);
-
 const pinnedBinary = Effect.fn("pinnedBinary")(function* (cache: string) {
   const build = buildFor(process.platform, process.arch);
   if (Option.isNone(build)) {
@@ -80,7 +38,7 @@ const pinnedBinary = Effect.fn("pinnedBinary")(function* (cache: string) {
   }
   const path = yield* Path.Path;
   const { asset, sha256 } = build.value;
-  return yield* installPinned(`${RELEASES}/${asset}`, sha256, path.join(cache, "osv-scanner", OSV_SCANNER_VERSION, asset));
+  return yield* installPinned({ kind: "binary", url: `${RELEASES}/${asset}`, sha256 }, path.join(cache, "osv-scanner", OSV_SCANNER_VERSION, asset));
 });
 
 type PinnedBinary = ReturnType<typeof pinnedBinary>;

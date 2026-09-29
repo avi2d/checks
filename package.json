@@ -47,6 +47,9 @@
     "src/testing/subsumed-tests.ts",
     "src/delivery/ci-wiring.ts",
     "src/delivery/shell-command.ts",
+    "src/delivery/secrets.ts",
+    "src/delivery/gitleaks.ts",
+    "src/delivery/gitleaks.toml",
     "src/quality/comment-matchers.ts",
     "src/docs/prose-matchers.ts",
     "src/quality/comments.ts",
@@ -64,6 +67,7 @@
     "src/dependencies/advisories.ts",
     "src/dependencies/advisory-rules.ts",
     "src/dependencies/osv-scanner.ts",
+    "src/dependencies/pinned-binary.ts",
     "src/docs/doc-agents.ts",
     "src/docs/doc-outline.ts",
     "src/docs/doc-rules.ts",
@@ -116,7 +120,8 @@
     "checks-quarantine-clock": "src/testing/quarantine-clock.ts",
     "checks-docs": "src/docs/docs.ts",
     "checks-vendor": "src/dependencies/vendor.ts",
-    "checks-advisories": "src/dependencies/advisories.ts"
+    "checks-advisories": "src/dependencies/advisories.ts",
+    "checks-secrets": "src/delivery/secrets.ts"
   },
   "scripts": {
     "prepare": "bun src/dependencies/vendor.ts --library effect --package effect --repository https://github.com/Effect-TS/effect.git --tag 'effect@{version}' --path packages/effect/package.json",
