@@ -69,7 +69,7 @@ With one it scans that commit alone.
 | --- | --- |
 | 0 | no commit in the range adds a secret |
 | 1 | a commit in the range adds a secret |
-| 2 | a ref does not resolve, or no verified scanner is at hand, or git is older than 2.36, or gitleaks fails |
+| 2 | a ref does not resolve, or the range holds an octopus merge, or no verified scanner is at hand, or git is older than 2.36, or gitleaks fails |
 
 ## Sample output
 
