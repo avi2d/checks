@@ -31,7 +31,7 @@ A ninth rule, `proxy-subscription-path`, reports nothing: it finds the URL `prox
 These rules do not catch:
 
 - a real query value between two others of these parameters in one link whose values are low-entropy or template references, such as a real `auth` between an `obfsParam=pw` or `obfsParam=${OBFS}` and a `password=pw`
-- a real private key in the `pk` query value of an `https` URL, or of a scheme the table does not name
+- a real `auth`, `auth_str`, `obfsParam`, `obfs-password`, `password` or `pk` query value of an `http` or `https` URL, or of a scheme the table does not name, because the kit's query rules judge share links only, and gitleaks' default rules catch such a value only now and then
 - a credential that begins with `${` and is not a shell default such as `${PASS:-value}`, `${PASS-value}`, `${PASS:=value}` or `${PASS:+value}`, because it reads as an interpolation, even when it holds a fallback such as `${auth ?? "value"}`
 
 No setting accepts a finding.
