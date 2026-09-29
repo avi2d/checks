@@ -10,6 +10,7 @@ audience: consumers
 
 It scans the lines each commit in the range adds, in every file the commit adds or modifies, with gitleaks.
 In a merge commit it scans the lines the merge's own resolution adds, such as a key written while resolving a conflict, and not what the merge brings in from the other parent.
+It exits 2 on a range that holds an octopus merge, one with three or more parents, because git gives no resolution diff for one.
 It fails on each secret the scan finds, and names its file, its line, the rule that matched and the commit that added it.
 A secret one commit adds and a later commit in the range removes still fails, because the first commit still holds it.
 It guards new changes only, and never scans a commit before the range, so a secret already in the history takes no part.

@@ -294,6 +294,25 @@ test(
 );
 
 test(
+  "a range or ref holding an octopus merge fails the gate rather than passing it, since git gives no resolution diff for one",
+  async () => {
+    const { repo, base } = await started();
+    for (const side of ["x", "y"]) {
+      await $`git switch -q -c ${side} ${base}`.cwd(repo.dir).quiet();
+      await repo.write({ [`${side}.md`]: `# ${side}\n` });
+      await repo.commit(`feat: ${side} side`);
+    }
+    await $`git switch -q main && git merge -q --no-ff --no-commit x y`.cwd(repo.dir).quiet();
+    await repo.write({ "vpn/wg9.conf": `PrivateKey = ${base64Key()}\n` });
+    const merge = await repo.commit("merge: x and y");
+    const refused = `secrets: git gives no resolution diff for the octopus merge ${merge}, so the gate cannot scan it\n`;
+    expect(await repo.script(GATE, base, merge)).toEqual({ exitCode: 2, text: refused });
+    expect(await repo.script(GATE, merge)).toEqual({ exitCode: 2, text: refused });
+  },
+  SCAN_MS,
+);
+
+test(
   "a git too old to diff a merge's resolution fails the gate rather than passing it",
   async () => {
     const { repo, base } = await started();

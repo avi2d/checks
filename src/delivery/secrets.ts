@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { Console, Effect, FileSystem, Path } from "effect";
+import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { commitOf, git, refArgs } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { cacheRoot } from "../dependencies/cache-root.ts";
@@ -9,15 +9,32 @@ const NAME = "secrets";
 const USAGE = "usage: secrets.ts <ref> | <base-ref> <head-ref>";
 const SHORT_SHA = 8;
 const NEW_SIDE_PREFIX = "b/";
+const OCTOPUS_PARENTS = 3;
+
+class OctopusMerge extends Schema.TaggedError<OctopusMerge>()("OctopusMerge", {
+  message: Schema.String,
+}) {}
 
 // git log reads a lone commit as its whole ancestry, so a single ref is bounded to itself.
-// Without --remerge-diff git log prints no diff for a merge, and a first-parent diff would rescan what the merge brings in.
-const logOptionsOf = Effect.fn("logOptionsOf")(function* (args: readonly string[], root: string) {
+const revisionsOf = Effect.fn("revisionsOf")(function* (args: readonly string[], root: string) {
   const { first, second } = yield* refArgs(args, USAGE);
-  if (second === undefined) return `--remerge-diff -1 ${yield* commitOf(first, root)}`;
+  if (second === undefined) return ["-1", yield* commitOf(first, root)];
   const head = yield* commitOf(second, root);
   const base = (yield* git(["merge-base", yield* commitOf(first, root), head], root)).trim();
-  return `--remerge-diff ${base}..${head}`;
+  return [`${base}..${head}`];
+});
+
+// Without --remerge-diff git log prints no diff for a merge, and a first-parent diff would rescan what the merge brings in.
+// git skips --remerge-diff for an octopus merge with only a warning, so the scan would pass a commit it never read.
+const logOptionsOf = Effect.fn("logOptionsOf")(function* (args: readonly string[], root: string) {
+  const revisions = yield* revisionsOf(args, root);
+  const [octopus] = (yield* git(["rev-list", `--min-parents=${OCTOPUS_PARENTS}`, ...revisions], root)).split("\n");
+  if (octopus !== undefined && octopus !== "") {
+    return yield* new OctopusMerge({
+      message: `git gives no resolution diff for the octopus merge ${octopus}, so the gate cannot scan it`,
+    });
+  }
+  return ["--remerge-diff", ...revisions].join(" ");
 });
 
 // gitleaks names a file under a remerge conflict header by its `+++ b/` line, so a path the commit does not hold carries that prefix.
