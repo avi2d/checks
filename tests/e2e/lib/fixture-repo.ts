@@ -10,7 +10,6 @@ const COMMITLINT_WORKFLOW = ".github/workflows/commitlint.yml";
 export const CHECKOUT = resolve(import.meta.dir, "..", "..", "..");
 
 const AUTHOR = { name: "Wren Fixture", email: "wren@example.com" };
-const IDENTITY = ["-c", `user.name=${AUTHOR.name}`, "-c", `user.email=${AUTHOR.email}`];
 const KIT_PATH = `${join(CHECKOUT, "node_modules", ".bin")}:${process.env["PATH"] ?? ""}`;
 
 export type Ran = { readonly exitCode: number; readonly text: string };
@@ -31,7 +30,8 @@ export async function ran(pending: $.ShellPromise): Promise<Ran> {
 
 export async function fixtureRepo(prefix: string, files: Readonly<Record<string, string>>): Promise<FixtureRepo> {
   const dir = await mkdtemp(join(tmpdir(), prefix));
-  await $`git init -q -b main`.cwd(dir).quiet();
+  // An octopus merge writes commits too, so every git command here needs an identity, not only a commit.
+  await $`git init -q -b main && git config user.name ${AUTHOR.name} && git config user.email ${AUTHOR.email}`.cwd(dir).quiet();
   const write = async (written: Readonly<Record<string, string>>): Promise<void> => {
     for (const [name, content] of Object.entries(written)) {
       await mkdir(dirname(join(dir, name)), { recursive: true });
@@ -43,7 +43,7 @@ export async function fixtureRepo(prefix: string, files: Readonly<Record<string,
     dir,
     write,
     commit: async (message) => {
-      await $`git add -A && git ${IDENTITY} commit -q --no-gpg-sign -m ${message}`.cwd(dir).quiet();
+      await $`git add -A && git commit -q --no-gpg-sign -m ${message}`.cwd(dir).quiet();
       return (await $`git rev-parse HEAD`.cwd(dir).quiet()).stdout.toString().trim();
     },
     script: (name, ...args) => ran($`bun ${join(CHECKOUT, "src", name)} ${args}`.cwd(dir).env({ ...process.env, PATH: KIT_PATH })),
