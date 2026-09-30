@@ -94,7 +94,8 @@ jobs:
           fetch-depth: 0
       # Changed src files mutate directly; changed tests add the src files they
       # cover in main's baseline, so a test-only pull request is measured too.
-      # Each run mutates only the scope files its own tree has: Stryker cannot mutate a missing file.
+      # A unit test that imports a changed helper or names a changed fixture
+      # counts as changed, so a weakened helper is measured too.
       - name: Select mutation scope
         env:
           GH_TOKEN: ${{ github.token }}
@@ -106,39 +107,8 @@ jobs:
           download="$(mktemp -d)"
           if [ -n "$run_id" ] && gh run download "$run_id" --name mutation-baseline --dir "$download" && [ -f "$download/mutation.json" ]; then
             cp "$download/mutation.json" "$baseline"
-          else
-            baseline=""
           fi
-          scope=""
-          while IFS= read -r file; do
-            case "$file" in
-              src/*.ts|src/*.js) scope="$scope,$file";;
-            esac
-          done <<EOF
-          $(git diff --name-only --diff-filter=ACMRT "$base...HEAD")
-          EOF
-          tests="$(git diff --name-only --diff-filter=ACMRTD "$base...HEAD" -- 'tests/unit/*.test.ts')"
-          if [ -n "$tests" ] && [ -n "$baseline" ]; then
-            covered="$(jq -r --arg tests "$tests" '
-              ($tests | split("\n")) as $changed
-              | ([.testFiles | to_entries[] | select(.key as $k | $changed | index($k)) | .value.tests[].id]) as $ids
-              | [.files | to_entries[] | select(.value.mutants[]?.coveredBy[]? as $c | $ids | index($c)) | .key] | join(",")
-            ' "$baseline")"
-            scope="$scope,$covered"
-          fi
-          head_scope=""
-          base_scope=""
-          while IFS= read -r file; do
-            [ -f "$file" ] || continue
-            head_scope="$head_scope,$file"
-            if git cat-file -e "$base:$file" 2>/dev/null; then
-              base_scope="$base_scope,$file"
-            fi
-          done <<EOF
-          $(printf '%s' "$scope" | tr ',' '\n' | sed '/^$/d' | sort -u)
-          EOF
-          echo "SCOPE=${head_scope#,}" >> "$GITHUB_ENV"
-          echo "BASE_SCOPE=${base_scope#,}" >> "$GITHUB_ENV"
+          scripts/mutation-scope.sh "$base" "$baseline" >> "$GITHUB_ENV"
       - name: Report empty scope
         if: env.SCOPE == ''
         run: "echo 'mutation: no source files changed, nothing to mutate'"
