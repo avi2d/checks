@@ -109,7 +109,15 @@ test("an entry fails when it names no tracked path, no link and no command", () 
 });
 
 test("a nested agent file names a path from its own directory, its parent or the root", () => {
-  const passing = ["- edit `build.ts` first", "- edit `./build.ts` first", "- edit `tools/build.ts` first", "- read `../docs/layout.md` first", "- read `./../LICENSE` first"];
+  const passing = [
+    "- edit `build.ts` first",
+    "- edit `./build.ts` first",
+    "- edit `tools/build.ts` first",
+    "- read `../docs/layout.md` first",
+    "- read `./../LICENSE` first",
+    "- look under `./` first",
+    "- look under `../tools/` first",
+  ];
   expect(passing.map((entry) => findingsFor(entry, "tools/AGENTS.md"))).toEqual(passing.map(() => []));
   const failing = ["- edit `build.ts` first", "- read `../LICENSE` first", "- edit `./tools/../../build.ts` first"];
   expect(failing.map((entry) => findingsFor(entry))).toEqual(failing.map(() => [{ line: 7, message: NAMES_NOTHING }]));

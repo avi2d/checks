@@ -76,7 +76,7 @@ function resolvesFrom(directory: string, span: string, tracked: Tracked): boolea
   if (walked === undefined) return false;
   if (!STAYS.has(last) && last !== ".." && tracked.files.has(joined(walked, last))) return true;
   const end = enter(walked, last, tracked);
-  return end !== undefined && end !== "" && end !== directory;
+  return end !== undefined && end !== "";
 }
 
 function namesTrackedPath(agentFile: string, span: string, tracked: Tracked): boolean {
