@@ -38,7 +38,7 @@ function blockStarts(lines: readonly MarkdownLine[], type: NodeType): ReadonlySe
 function linesOpening(text: string, type: NodeType): readonly MarkdownLine[] {
   const lines = scanMarkdown(text);
   const starts = blockStarts(lines, type);
-  return lines.filter(({ line }) => starts.has(line));
+  return lines.filter(({ line }) => starts.has(line)).flatMap(({ line, raw }) => scanMarkdown(raw).map((alone) => ({ ...alone, line })));
 }
 
 export function maintainingFinding(text: string): AgentFinding | undefined {
@@ -57,6 +57,7 @@ export function entries(text: string): readonly MarkdownLine[] {
 type Tracked = Pick<Snapshot, "files" | "directories">;
 
 const STAYS = new Set(["", "."]);
+const NAMES_A_SEGMENT = /[^/]/;
 
 function joined(directory: string, segment: string): string {
   return directory === "" ? segment : `${directory}/${segment}`;
@@ -80,6 +81,7 @@ function resolvesFrom(directory: string, span: string, tracked: Tracked): boolea
 }
 
 function namesTrackedPath(agentFile: string, span: string, tracked: Tracked): boolean {
+  if (!NAMES_A_SEGMENT.test(span)) return false;
   const directory = agentFile.includes("/") ? agentFile.slice(0, agentFile.lastIndexOf("/")) : "";
   const fromFile = resolvesFrom(directory, span, tracked);
   return fromFile || (!span.startsWith("./") && !span.startsWith("../") && resolvesFrom("", span, tracked));

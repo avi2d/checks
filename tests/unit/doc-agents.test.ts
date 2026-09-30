@@ -55,6 +55,18 @@ test("a list item right after an HTML block that closes on its own line is an en
   expect(entryFindings("AGENTS.md", text, TRACKED)).toEqual([{ line: 10, message: NAMES_NOTHING }]);
 });
 
+test("a fence inside a closed HTML block leaves the entry after it readable", () => {
+  const text = `${LEAD}\n## Parts\n\n<pre>\n\`\`\`\n</pre>\n- Read \`LICENSE\` first.\n`;
+  expect(entryLines(text)).toEqual([10]);
+  expect(entryFindings("AGENTS.md", text, TRACKED)).toEqual([]);
+});
+
+test("an unmatched comment opener inside a script block leaves the entry after it readable", () => {
+  const text = `${LEAD}\n## Parts\n\n<script>\nconst open = "<!--";\n</script>\n- Read \`LICENSE\` first.\n`;
+  expect(entryLines(text)).toEqual([10]);
+  expect(entryFindings("AGENTS.md", text, TRACKED)).toEqual([]);
+});
+
 test("a visible Maintaining this file section fails, and a commented one or none does not", () => {
   expect(maintainingFinding(`${LEAD}\n## Parts\n\n- edit \`src/parts.toml\`\n${KEEP}`)).toEqual({
     line: 9,
@@ -121,6 +133,8 @@ test("a nested agent file names a path from its own directory, its parent or the
   expect(passing.map((entry) => findingsFor(entry, "tools/AGENTS.md"))).toEqual(passing.map(() => []));
   const failing = ["- edit `build.ts` first", "- read `../LICENSE` first", "- edit `./tools/../../build.ts` first"];
   expect(failing.map((entry) => findingsFor(entry))).toEqual(failing.map(() => [{ line: 7, message: NAMES_NOTHING }]));
+  const pointerless = ["- Keep a ` ` between words.", "- see `/` first", "- see `//` first"];
+  expect(pointerless.map((entry) => findingsFor(entry, "tools/AGENTS.md"))).toEqual(pointerless.map(() => [{ line: 7, message: NAMES_NOTHING }]));
 });
 
 test("an entry fails wherever it sits and whatever the range touches, the lead included", () => {
