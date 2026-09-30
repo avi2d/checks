@@ -157,7 +157,7 @@ export function anchoredTargets(doc: string, text: string): readonly string[] {
       const hash = target.indexOf("#");
       if (hash < 0 || SCHEME.test(target)) return [];
       const path = linkPath(doc, target, hash);
-      return path?.endsWith(".md") === true ? [path] : [];
+      return path !== undefined && (path.endsWith(".md") || path.endsWith(".mdx")) ? [path] : [];
     }),
   );
 }
