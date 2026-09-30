@@ -211,6 +211,10 @@ A score cannot fail a change without failing correct prose, and a suggestion tha
 `src/docs/prose-matchers.ts` imports nothing, so the gate and a write-time hook run one matcher and refuse in the same words.
 A hook bundle ships without `node_modules`, so a matcher that needed Vale or another package could not refuse at write time.
 
+The entry rule and the rule against a `## Maintaining this file` section take their list items and headings from `commonmark`, the CommonMark reference parser.
+A reader sees the blocks a renderer builds, and a line rule that guesses at blockquotes, HTML blocks and indented code misjudges each corner its guess misses.
+Only the gate runs these rules, so the parser costs no hook anything, and the line scan reads each entry's code spans and links from that entry's line alone.
+
 A path, link or command on a line the range leaves alone still fails when the range broke it, for example by deleting the file it names.
 A reference goes stale far more often because the code it names moves than because its own line is edited.
 So a gate on edited lines alone would miss the usual break.

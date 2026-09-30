@@ -35,9 +35,36 @@ test("entries are every visible list item, the lead and a Maintaining section in
   expect(entryLines(text)).toEqual([5, 9, 13, 22]);
 });
 
+test("a list in front matter is not an entry", () => {
+  expect(entryLines(`---\ntags:\n  - agents\n---\n${LEAD}\n- a lead bullet\n`)).toEqual([9]);
+});
+
 test("a line in an indented code block is not an entry, and a nested item is", () => {
   const text = `${LEAD}\n## Parts\n\nA paragraph.\n\n    - an indented code line\n    - another\n\n- an entry\n    - a nested entry\n\n    - a later paragraph of the entry\n`;
   expect(entryLines(text)).toEqual([12, 13, 15]);
+});
+
+test("an indented code line inside a blockquote is not an entry, and a quoted list item is", () => {
+  const text = `${LEAD}\n## Parts\n\n> A quoted paragraph.\n>\n>     - an indented code line in a quote\n>\n> - a quoted entry\n`;
+  expect(entryLines(text)).toEqual([11]);
+});
+
+test("a list item right after an HTML block that closes on its own line is an entry", () => {
+  const text = `${LEAD}\n## Parts\n\n<script>\n- a scripted line\n</script>\n- a visible entry\n`;
+  expect(entryLines(text)).toEqual([10]);
+  expect(entryFindings("AGENTS.md", text, TRACKED)).toEqual([{ line: 10, message: NAMES_NOTHING }]);
+});
+
+test("a fence inside a closed HTML block leaves the entry after it readable", () => {
+  const text = `${LEAD}\n## Parts\n\n<pre>\n\`\`\`\n</pre>\n- Read \`LICENSE\` first.\n`;
+  expect(entryLines(text)).toEqual([10]);
+  expect(entryFindings("AGENTS.md", text, TRACKED)).toEqual([]);
+});
+
+test("an unmatched comment opener inside a script block leaves the entry after it readable", () => {
+  const text = `${LEAD}\n## Parts\n\n<script>\nconst open = "<!--";\n</script>\n- Read \`LICENSE\` first.\n`;
+  expect(entryLines(text)).toEqual([10]);
+  expect(entryFindings("AGENTS.md", text, TRACKED)).toEqual([]);
 });
 
 test("a visible Maintaining this file section fails, and a commented one or none does not", () => {
@@ -46,6 +73,7 @@ test("a visible Maintaining this file section fails, and a commented one or none
     message: "holds `## Maintaining this file`, which a router leaves out. Delete the section, since checks-docs holds the file's shape",
   });
   expect(maintainingFinding(`${LEAD}\n<!-- ## Maintaining this file -->\n`)).toBeUndefined();
+  expect(maintainingFinding(`${LEAD}\n<!--\n\n## Maintaining this file\n\n-->\n`)).toBeUndefined();
   expect(maintainingFinding(`${LEAD}\n## Parts\n\n- edit \`src/parts.toml\`\n`)).toBeUndefined();
 });
 
@@ -93,10 +121,20 @@ test("an entry fails when it names no tracked path, no link and no command", () 
 });
 
 test("a nested agent file names a path from its own directory, its parent or the root", () => {
-  const passing = ["- edit `build.ts` first", "- edit `./build.ts` first", "- edit `tools/build.ts` first", "- read `../docs/layout.md` first", "- read `./../LICENSE` first"];
+  const passing = [
+    "- edit `build.ts` first",
+    "- edit `./build.ts` first",
+    "- edit `tools/build.ts` first",
+    "- read `../docs/layout.md` first",
+    "- read `./../LICENSE` first",
+    "- look under `./` first",
+    "- look under `../tools/` first",
+  ];
   expect(passing.map((entry) => findingsFor(entry, "tools/AGENTS.md"))).toEqual(passing.map(() => []));
   const failing = ["- edit `build.ts` first", "- read `../LICENSE` first", "- edit `./tools/../../build.ts` first"];
   expect(failing.map((entry) => findingsFor(entry))).toEqual(failing.map(() => [{ line: 7, message: NAMES_NOTHING }]));
+  const pointerless = ["- Keep a ` ` between words.", "- see `/` first", "- see `//` first"];
+  expect(pointerless.map((entry) => findingsFor(entry, "tools/AGENTS.md"))).toEqual(pointerless.map(() => [{ line: 7, message: NAMES_NOTHING }]));
 });
 
 test("an entry fails wherever it sits and whatever the range touches, the lead included", () => {
