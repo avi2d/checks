@@ -159,7 +159,7 @@ Each entry names at least one of these, or it fails:
 - A `bun run` command.
 
 Whether the link or the command resolves is the reference rule's call, as [Paths, links and commands](#paths-links-and-commands) says, and it fails when the range adds or breaks one.
-An entry is any list item a reader sees, the items above the first section included.
+An entry is any list item a reader sees as CommonMark renders the file, the items above the first section included.
 A list item inside an HTML comment, an HTML block or an indented code block is not an entry.
 A fresh file passes the ceiling, and its entries pass once each names the file that holds its detail.
 
