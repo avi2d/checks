@@ -150,7 +150,8 @@ audience: consumers
 An agent file holds the router its template sketches, and the rules below hold its shape whatever the range touches.
 A file over 3,000 characters fails.
 Move each part's notes into the people doc that covers that part, and delete what a check or the code already holds.
-A file that holds a `## Maintaining this file` section fails, because this gate holds the shape the section asked for.
+A file that holds a `## Maintaining this file` section a reader sees fails, because this gate holds the shape the section asked for.
+A heading inside an HTML comment, an HTML block or a code block is not such a section.
 Each entry names at least one of these, or it fails:
 
 - A path in inline code that git tracks at the head commit, a file or a directory, such as `package.json`, `LICENSE` or `.gitignore`.
