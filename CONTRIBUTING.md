@@ -20,7 +20,7 @@ Declare each skip with `skipReason(reason, name)` beside the native Bun test cal
 A test that spawns `checks-lint` passes it `withoutPullRequestEvent()` from `tests/lib/env.ts`, so the CI event cannot decide the range.
 
 CI runs the commands in `.github/workflows/ci.yml` and lints the pull request title in `.github/workflows/commitlint.yml`.
-`.github/workflows/mutation.yml` runs Stryker, with `stryker.conf.mjs`, as a baseline on `main` or on any branch by hand, and as an advisory comparison scoped to the files a pull request changes.
+`.github/workflows/mutation.yml` runs Stryker, with `stryker.conf.mjs`, as a baseline on `main` or on any branch by hand, and as an advisory comparison scoped to the sources a pull request changes or reaches through a changed test, helper or fixture.
 Run `bun run mutate -- --mutate <file>` to mutate one source file locally, since the preset refuses a full run outside CI.
 
 ## Regenerate what is committed
@@ -77,7 +77,7 @@ To place a change:
    | `src/docs/` | the doc gate and the rules it reads |
    | `src/delivery/` | the gates and bins for how a change reaches `main` and a release, and what a commit may not carry |
    | `src/dependencies/` | what code may import, which library sources an agent reads, which locked package versions carry a known advisory, and the pinned download of each scanner a gate runs |
-   | `scripts/` | the kit's own build, which nothing ships |
+   | `scripts/` | the kit's own build and CI tooling, which nothing ships |
    | `dist/` | the committed oxlint plugin bundles |
    | `dist/templates/` | one template per kind of doc file, which `bun run build` renders |
    | `src/quality/presets/` | the Effect rule blocks consumers copy into native configs |
