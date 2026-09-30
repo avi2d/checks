@@ -78,20 +78,28 @@ function unresolvedPath(doc: string, line: number, span: string, snapshot: Snaps
 const SCHEME = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
 const ASCII_ESCAPE = /%([0-7][0-9a-f])/gi;
 
+function linkPath(doc: string, target: string, hash: number): string | undefined {
+  const written = (hash < 0 ? target : target.slice(0, hash)).split("?", 1)[0] ?? "";
+  const decoded = written.replace(ASCII_ESCAPE, (_, code: string) => String.fromCharCode(Number.parseInt(code, 16)));
+  return decoded === "" ? doc : decoded.startsWith("/") ? normalize(decoded) : within(directoryOf(doc), decoded);
+}
+
 function unresolvedLink(doc: string, line: number, target: string, snapshot: Snapshot): Unresolved | undefined {
   if (target === "" || SCHEME.test(target)) return undefined;
   const hash = target.indexOf("#");
-  const written = (hash < 0 ? target : target.slice(0, hash)).split("?", 1)[0] ?? "";
-  const decoded = written.replace(ASCII_ESCAPE, (_, code: string) => String.fromCharCode(Number.parseInt(code, 16)));
-  const path = decoded === "" ? doc : decoded.startsWith("/") ? normalize(decoded) : within(directoryOf(doc), decoded);
+  const path = linkPath(doc, target, hash);
   if (path === undefined) return undefined;
   const named = target;
   if (!exists(snapshot, path)) {
     return { kind: "link", line, named, message: `links to \`${named}\`, which is not in the repository`, missing: { type: "file", path } };
   }
   const anchor = hash < 0 ? "" : target.slice(hash + 1);
+  if (anchor === "") return undefined;
   const anchors = snapshot.anchors.get(path);
-  if (anchor === "" || anchors === undefined || anchors.has(anchor) || anchors.has(anchor.toLowerCase())) return undefined;
+  if (anchors === undefined) {
+    return { kind: "link", line, named, message: `links to \`${named}\`, and \`${path}\` has no headings to check`, missing: { type: "anchor" } };
+  }
+  if (anchors.has(anchor) || anchors.has(anchor.toLowerCase())) return undefined;
   return { kind: "link", line, named, message: `links to \`${named}\`, and \`${path}\` has no heading with that anchor`, missing: { type: "anchor" } };
 }
 
@@ -152,9 +160,8 @@ export function anchoredTargets(doc: string, text: string): readonly string[] {
     links.flatMap((target) => {
       const hash = target.indexOf("#");
       if (hash < 0 || SCHEME.test(target)) return [];
-      const written = target.slice(0, hash);
-      const path = written === "" ? doc : written.startsWith("/") ? normalize(written) : within(directoryOf(doc), written);
-      return path?.endsWith(".md") === true ? [path] : [];
+      const path = linkPath(doc, target, hash);
+      return path !== undefined && (path.endsWith(".md") || path.endsWith(".mdx")) ? [path] : [];
     }),
   );
 }
