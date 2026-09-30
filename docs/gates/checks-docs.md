@@ -151,7 +151,8 @@ audience: consumers
 An agent file holds the router its template sketches, and the rules below hold its shape whatever the range touches.
 A file over 3,000 characters fails.
 Move each part's notes into the people doc that covers that part, and delete what a check or the code already holds.
-A file that holds a `## Maintaining this file` section fails, because this gate holds the shape the section asked for.
+A file that holds a `## Maintaining this file` section a reader sees fails, because this gate holds the shape the section asked for.
+A heading inside an HTML comment, an HTML block or a code block is not such a section.
 Each entry names at least one of these, or it fails:
 
 - A path in inline code that git tracks at the head commit, a file or a directory, such as `package.json`, `LICENSE` or `.gitignore`.
@@ -160,7 +161,7 @@ Each entry names at least one of these, or it fails:
 - A `bun run` command.
 
 Whether the link or the command resolves is the reference rule's call, as [Paths, links and commands](#paths-links-and-commands) says, and it fails when the range adds or breaks one.
-An entry is any list item a reader sees, the items above the first section included.
+An entry is any list item a reader sees as CommonMark renders the file, the items above the first section included.
 A list item inside an HTML comment, an HTML block or an indented code block is not an entry.
 A fresh file passes the ceiling, and its entries pass once each names the file that holds its detail.
 

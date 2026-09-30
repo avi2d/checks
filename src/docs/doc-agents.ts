@@ -1,11 +1,9 @@
+import { Parser, type NodeType } from "commonmark";
 import { commandNames, type Snapshot } from "./doc-references.ts";
 import { AGENT_NAMES, scanMarkdown, type MarkdownLine } from "./prose-matchers.ts";
 
 export const AGENT_CEILING = 3000;
 
-const LIST_ITEM = /^(?:\s*>)*\s*(?:[-*+]|\d{1,9}[.)])(?:\s|$)/;
-const INDENT = /^[ \t]*/;
-const CODE_INDENT = 4;
 const INLINE_LINK =
   /(?<![!\\])\[(?:[^[\]\\]|\\.|\[[^\]]*\])*\]\(\s*(?:<[^<>\n]+>|[^\s()<>]+(?:\([^\s()]*\)[^\s()<>]*)*)(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)/g;
 const MAINTAINING = /^\s{0,3}#{1,6}\s+Maintaining this file(?:\s+#+)?\s*$/;
@@ -27,8 +25,24 @@ export function ceilingFinding(text: string): AgentFinding | undefined {
   };
 }
 
+function blockStarts(lines: readonly MarkdownLine[], type: NodeType): ReadonlySet<number> {
+  const read = lines.map(({ kind, raw }) => (kind === "front-matter" ? "" : raw)).join("\n");
+  const walker = new Parser().parse(read).walker();
+  const starts = new Set<number>();
+  for (let step = walker.next(); step !== null; step = walker.next()) {
+    if (step.entering && step.node.type === type) starts.add(step.node.sourcepos[0][0]);
+  }
+  return starts;
+}
+
+function linesOpening(text: string, type: NodeType): readonly MarkdownLine[] {
+  const lines = scanMarkdown(text);
+  const starts = blockStarts(lines, type);
+  return lines.filter(({ line }) => starts.has(line)).flatMap(({ line, raw }) => scanMarkdown(raw).map((alone) => ({ ...alone, line })));
+}
+
 export function maintainingFinding(text: string): AgentFinding | undefined {
-  const heading = scanMarkdown(text).find(({ kind, raw }) => kind === "heading" && MAINTAINING.test(raw));
+  const heading = linesOpening(text, "heading").find(({ raw }) => MAINTAINING.test(raw));
   if (heading === undefined) return undefined;
   return {
     line: heading.line,
@@ -36,27 +50,14 @@ export function maintainingFinding(text: string): AgentFinding | undefined {
   };
 }
 
-function indentOf(raw: string): number {
-  return (INDENT.exec(raw)?.[0] ?? "").replaceAll("\t", "    ").length;
-}
-
 export function entries(text: string): readonly MarkdownLine[] {
-  let inList = false;
-  let afterBlank = true;
-  return scanMarkdown(text).filter((line) => {
-    const blank = line.raw.trim() === "";
-    const indented = !blank && indentOf(line.raw) >= CODE_INDENT && !line.raw.trimStart().startsWith(">");
-    const listItem = line.kind === "prose" && LIST_ITEM.test(line.prose) && (inList || !indented);
-    if (listItem) inList = true;
-    else if (!blank && !indented && (afterBlank || line.kind !== "prose")) inList = false;
-    afterBlank = blank;
-    return listItem;
-  });
+  return linesOpening(text, "item");
 }
 
 type Tracked = Pick<Snapshot, "files" | "directories">;
 
 const STAYS = new Set(["", "."]);
+const NAMES_A_SEGMENT = /[^/]/;
 
 function joined(directory: string, segment: string): string {
   return directory === "" ? segment : `${directory}/${segment}`;
@@ -76,10 +77,11 @@ function resolvesFrom(directory: string, span: string, tracked: Tracked): boolea
   if (walked === undefined) return false;
   if (!STAYS.has(last) && last !== ".." && tracked.files.has(joined(walked, last))) return true;
   const end = enter(walked, last, tracked);
-  return end !== undefined && end !== "" && end !== directory;
+  return end !== undefined && end !== "";
 }
 
 function namesTrackedPath(agentFile: string, span: string, tracked: Tracked): boolean {
+  if (!NAMES_A_SEGMENT.test(span)) return false;
   const directory = agentFile.includes("/") ? agentFile.slice(0, agentFile.lastIndexOf("/")) : "";
   const fromFile = resolvesFrom(directory, span, tracked);
   return fromFile || (!span.startsWith("./") && !span.startsWith("../") && resolvesFrom("", span, tracked));
