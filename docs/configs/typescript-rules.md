@@ -48,7 +48,7 @@ The base loads the kit's `data-shape` plugin from `dist/` with one rule for ever
 An override in `oxlintrc.json` turns on one rule of the kit's `readability` plugin in each `.astro` file:
 
 - `readability/thin-astro` refuses a statement in the frontmatter or a script block that is neither an import, a re-export from another module, a type or interface declaration, nor a variable read from `Astro.props`.
-- A default inside an `Astro.props` destructuring passes only when it is a literal, a `-` or `+` on a numeric literal, or a name read from `Astro.props` earlier, so `const { title = "Home" } = Astro.props;` passes and a call or `await` in a default is refused.
+- A default inside an `Astro.props` destructuring passes only when it is a literal, a `-` or `+` on a numeric literal, or a name read from `Astro.props` earlier, in the same pattern or a statement before it, so `const { title = "Home", heading = title } = Astro.props;` passes and a call or `await` in a default is refused.
 - Move a refused statement into a `.ts` file and import it, so the `.astro` file holds only imports, props and markup.
 - A script block loads client code with a side-effect import, as in `<script>import "../client.ts";</script>`, and the override turns off `import/no-unassigned-import` so that import passes.
 - A dynamic route re-exports `getStaticPaths` from a `.ts` file, as in `export { getStaticPaths } from "../lib/paths.ts";`.
