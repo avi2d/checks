@@ -94,8 +94,12 @@ function unresolvedLink(doc: string, line: number, target: string, snapshot: Sna
     return { kind: "link", line, named, message: `links to \`${named}\`, which is not in the repository`, missing: { type: "file", path } };
   }
   const anchor = hash < 0 ? "" : target.slice(hash + 1);
+  if (anchor === "") return undefined;
   const anchors = snapshot.anchors.get(path);
-  if (anchor === "" || anchors === undefined || anchors.has(anchor) || anchors.has(anchor.toLowerCase())) return undefined;
+  if (anchors === undefined) {
+    return { kind: "link", line, named, message: `links to \`${named}\`, and \`${path}\` has no headings to check`, missing: { type: "anchor" } };
+  }
+  if (anchors.has(anchor) || anchors.has(anchor.toLowerCase())) return undefined;
   return { kind: "link", line, named, message: `links to \`${named}\`, and \`${path}\` has no heading with that anchor`, missing: { type: "anchor" } };
 }
 
