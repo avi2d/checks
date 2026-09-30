@@ -26,6 +26,16 @@ function messages(doc: string, text: string, commands = true): readonly string[]
   return unresolvedIn(doc, text, snapshot(), { commands }).map(({ line, message }) => `${line}: ${message}`);
 }
 
+function anchoredSnapshot(files: readonly string[], doc: string, text: string, bodies: ReadonlyMap<string, string>): Snapshot {
+  const tracked = snapshotOf(files, new Map(), new Map());
+  const targets = [...new Set(anchoredTargets(doc, text))].filter((path) => tracked.files.has(path));
+  return snapshotOf(
+    files,
+    new Map(targets.map((path) => [path, anchorsOf(bodies.get(path) ?? "")])),
+    new Map(),
+  );
+}
+
 test("a path in code resolves from the root or from the doc, and one that resolves nowhere is named", () => {
   const text = [
     "Lint lives in `scripts/lint.ts`, and `scripts/lint.ts:12` is its entry, as a shell at the root reads `./scripts/lint.ts`.",
@@ -49,6 +59,42 @@ test("a relative link resolves to a file or a directory, and its anchor to a hea
   expect(messages("docs/guide.md", text)).toEqual([
     "3: links to `gates/checks-gone.md`, which is not in the repository",
     "3: links to `gates/checks-lint.md#options`, and `docs/gates/checks-lint.md` has no heading with that anchor",
+  ]);
+});
+
+test("a query string on a link does not hide a missing anchor", () => {
+  const text = "See [layout](gates/checks-lint.md?plain=1#missing).";
+  const found = unresolvedIn(
+    "docs/guide.md",
+    text,
+    anchoredSnapshot(FILES, "docs/guide.md", text, new Map([["docs/gates/checks-lint.md", LINT_PAGE]])),
+    { commands: false },
+  );
+  expect(found.map(({ line, message }) => `${line}: ${message}`)).toEqual([
+    "1: links to `gates/checks-lint.md?plain=1#missing`, and `docs/gates/checks-lint.md` has no heading with that anchor",
+  ]);
+});
+
+test("an anchor into an MDX page checks its headings", () => {
+  const files = [...FILES, "docs/widget.mdx"];
+  const text = "See [props](widget.mdx#missing).";
+  const found = unresolvedIn(
+    "docs/guide.md",
+    text,
+    anchoredSnapshot(files, "docs/guide.md", text, new Map([["docs/widget.mdx", "# Widget\n\n## Props\n"]])),
+    { commands: false },
+  );
+  expect(found.map(({ line, message }) => `${line}: ${message}`)).toEqual([
+    "1: links to `widget.mdx#missing`, and `docs/widget.mdx` has no heading with that anchor",
+  ]);
+});
+
+test("an anchor into a directory or a non-Markdown file fails as uncheckable", () => {
+  const text = "See [setup](../docs/#setup) and [entry](/scripts/lint.ts#entry).";
+  const found = unresolvedIn("docs/guide.md", text, anchoredSnapshot(FILES, "docs/guide.md", text, new Map()), { commands: false });
+  expect(found.map(({ line, message }) => `${line}: ${message}`)).toEqual([
+    "1: links to `../docs/#setup`, and `docs` has no headings to check",
+    "1: links to `/scripts/lint.ts#entry`, and `scripts/lint.ts` has no headings to check",
   ]);
 });
 

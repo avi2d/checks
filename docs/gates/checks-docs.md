@@ -121,7 +121,8 @@ Each reference a living doc or an agent file names has to resolve at the head co
 
 - A path in inline code that ends in a file extension, such as `src/core/lint.ts`, names a file from the root or from the doc's directory.
 - A relative Markdown link names a file or a directory.
-  Its anchor names a heading in that file, as GitHub derives the anchor, or an explicit `id`.
+  Its anchor names a heading in that Markdown or MDX file, as GitHub derives the anchor, or an explicit `id`.
+  An anchor into a directory or any other file fails, because it names no heading the gate can check.
 - A `bun run` command in code names a script in the nearest `package.json`, a bin in `node_modules/.bin`, or a file that exists.
 - A code span fails when some tracked file outside the docs held that exact text at the base, and none holds it at the head.
   A span the path check already fails on is not reported again.
