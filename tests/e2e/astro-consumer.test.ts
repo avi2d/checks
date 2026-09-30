@@ -179,3 +179,47 @@ test(
   },
   60_000,
 );
+
+test(
+  "consumer goes red on a signed number or a same-pattern name as a computed key, green once the key is a literal or an earlier statement's name",
+  async () => {
+    const tree = await astroTree();
+    await tree.put(
+      "src/pages/signed-key.astro",
+      `---\nconst { [-1]: count } = Astro.props;\n---\n<html><body>{count}</body></html>\n`,
+    );
+    await tree.put(
+      "src/pages/signed-index.astro",
+      `---\nconst count = Astro.props.values[-1];\n---\n<html><body>{count}</body></html>\n`,
+    );
+    await tree.put(
+      "src/pages/own-key.astro",
+      `---\nconst { key, [key]: title } = Astro.props;\n---\n<html><body>{title}</body></html>\n`,
+    );
+
+    const red = await oxlint(tree);
+    expect(red.exitCode).not.toBe(0);
+    expect(red.text).toContain("signed-key.astro");
+    expect(red.text).toContain("signed-index.astro");
+    expect(red.text).toContain("own-key.astro");
+    expect(red.text).toContain("readability(thin-astro)");
+
+    await tree.put(
+      "src/pages/signed-key.astro",
+      `---\nconst { [1]: count } = Astro.props;\n---\n<html><body>{count}</body></html>\n`,
+    );
+    await tree.put(
+      "src/pages/signed-index.astro",
+      `---\nconst count = Astro.props.values[1];\n---\n<html><body>{count}</body></html>\n`,
+    );
+    await tree.put(
+      "src/pages/own-key.astro",
+      `---\nconst { key } = Astro.props;\nconst { [key]: title } = Astro.props;\n---\n<html><body>{title}</body></html>\n`,
+    );
+
+    const green = await oxlint(tree);
+    expect(green.text).not.toContain("readability(thin-astro)");
+    expect(green.exitCode).toBe(0);
+  },
+  60_000,
+);

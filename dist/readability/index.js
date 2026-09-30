@@ -434,7 +434,7 @@ function isSignedNumber(value) {
   return value.type === "UnaryExpression" && (value.operator === "-" || value.operator === "+") && value.argument.type === "Literal" && typeof value.argument.value === "number";
 }
 function isPlainValue(value, bound) {
-  return value.type === "Literal" || value.type === "Identifier" && bound.has(value.name) || isSignedNumber(value);
+  return value.type === "Literal" || value.type === "Identifier" && bound.has(value.name);
 }
 function readsProps(expression, bound) {
   const value = unwrapped(expression);
@@ -445,22 +445,23 @@ function readsProps(expression, bound) {
   return isAstroProps(value) || readsProps(value.object, bound);
 }
 function isPlainPattern(pattern, bound) {
-  return isPlainInOrder(pattern, new Set(bound));
+  return isPlainInOrder(pattern, bound, new Set(bound));
 }
-function isPlainInOrder(pattern, seen) {
+function isPlainInOrder(pattern, bound, seen) {
   if (pattern === null)
     return true;
   if (pattern.type === "RestElement")
-    return isPlainInOrder(pattern.argument, seen);
-  if (pattern.type === "AssignmentPattern")
-    return isPlainValue(pattern.right, seen) && isPlainInOrder(pattern.left, seen);
+    return isPlainInOrder(pattern.argument, bound, seen);
+  if (pattern.type === "AssignmentPattern") {
+    return (isPlainValue(pattern.right, seen) || isSignedNumber(pattern.right)) && isPlainInOrder(pattern.left, bound, seen);
+  }
   if (pattern.type === "ArrayPattern")
-    return pattern.elements.every((element) => isPlainInOrder(element, seen));
+    return pattern.elements.every((element) => isPlainInOrder(element, bound, seen));
   if (pattern.type === "Identifier") {
     seen.add(pattern.name);
     return true;
   }
-  return pattern.properties.every((property) => property.type === "RestElement" ? isPlainInOrder(property.argument, seen) : (!property.computed || isPlainValue(property.key, seen)) && isPlainInOrder(property.value, seen));
+  return pattern.properties.every((property) => property.type === "RestElement" ? isPlainInOrder(property.argument, bound, seen) : (!property.computed || isPlainValue(property.key, bound)) && isPlainInOrder(property.value, bound, seen));
 }
 function isPropsRead(declarator, bound) {
   return declarator.init !== null && readsProps(declarator.init, bound) && isPlainPattern(declarator.id, bound);

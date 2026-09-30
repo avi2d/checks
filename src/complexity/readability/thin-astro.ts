@@ -24,7 +24,7 @@ function isAstroProps(value: ESTree.Expression): boolean {
   );
 }
 
-function isSignedNumber(value: ESTree.PropertyKey): boolean {
+function isSignedNumber(value: ESTree.Expression): boolean {
   return (
     value.type === "UnaryExpression" &&
     (value.operator === "-" || value.operator === "+") &&
@@ -34,7 +34,7 @@ function isSignedNumber(value: ESTree.PropertyKey): boolean {
 }
 
 function isPlainValue(value: ESTree.PropertyKey, bound: ReadonlySet<string>): boolean {
-  return value.type === "Literal" || (value.type === "Identifier" && bound.has(value.name)) || isSignedNumber(value);
+  return value.type === "Literal" || (value.type === "Identifier" && bound.has(value.name));
 }
 
 function readsProps(expression: ESTree.Expression, bound: ReadonlySet<string>): boolean {
@@ -45,22 +45,28 @@ function readsProps(expression: ESTree.Expression, bound: ReadonlySet<string>): 
 }
 
 function isPlainPattern(pattern: ESTree.BindingPattern | ESTree.BindingRestElement | null, bound: ReadonlySet<string>): boolean {
-  return isPlainInOrder(pattern, new Set(bound));
+  return isPlainInOrder(pattern, bound, new Set(bound));
 }
 
-function isPlainInOrder(pattern: ESTree.BindingPattern | ESTree.BindingRestElement | null, seen: Set<string>): boolean {
+function isPlainInOrder(
+  pattern: ESTree.BindingPattern | ESTree.BindingRestElement | null,
+  bound: ReadonlySet<string>,
+  seen: Set<string>,
+): boolean {
   if (pattern === null) return true;
-  if (pattern.type === "RestElement") return isPlainInOrder(pattern.argument, seen);
-  if (pattern.type === "AssignmentPattern") return isPlainValue(pattern.right, seen) && isPlainInOrder(pattern.left, seen);
-  if (pattern.type === "ArrayPattern") return pattern.elements.every((element) => isPlainInOrder(element, seen));
+  if (pattern.type === "RestElement") return isPlainInOrder(pattern.argument, bound, seen);
+  if (pattern.type === "AssignmentPattern") {
+    return (isPlainValue(pattern.right, seen) || isSignedNumber(pattern.right)) && isPlainInOrder(pattern.left, bound, seen);
+  }
+  if (pattern.type === "ArrayPattern") return pattern.elements.every((element) => isPlainInOrder(element, bound, seen));
   if (pattern.type === "Identifier") {
     seen.add(pattern.name);
     return true;
   }
   return pattern.properties.every((property) =>
     property.type === "RestElement"
-      ? isPlainInOrder(property.argument, seen)
-      : (!property.computed || isPlainValue(property.key, seen)) && isPlainInOrder(property.value, seen),
+      ? isPlainInOrder(property.argument, bound, seen)
+      : (!property.computed || isPlainValue(property.key, bound)) && isPlainInOrder(property.value, bound, seen),
   );
 }
 
