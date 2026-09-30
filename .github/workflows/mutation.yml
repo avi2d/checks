@@ -105,8 +105,8 @@ jobs:
           baseline="$(mktemp -d)/mutation.json"
           run_id="$(gh run list --workflow mutation.yml --branch main --status success --limit 20 --json databaseId,event --jq 'map(select(.event != "pull_request"))[0].databaseId // empty')"
           download="$(mktemp -d)"
-          if [ -n "$run_id" ] && gh run download "$run_id" --name mutation-baseline --dir "$download" && [ -f "$download/mutation.json" ]; then
-            cp "$download/mutation.json" "$baseline"
+          if [ -n "$run_id" ] && gh run download "$run_id" --name mutation-baseline --dir "$download" && [ -f "$download/mutation/mutation.json" ]; then
+            cp "$download/mutation/mutation.json" "$baseline"
           fi
           scripts/mutation-scope.sh "$base" "$baseline" >> "$GITHUB_ENV"
       - name: Report empty scope
