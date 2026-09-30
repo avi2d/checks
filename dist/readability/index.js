@@ -400,11 +400,11 @@ var rule = {
   create(context) {
     const max = maxOf(context.options);
     const check = (node) => {
-      const score2 = node.type === "StaticBlock" ? cognitiveComplexity(node, NO_NAMES) : cognitiveComplexity(node, selfNames(node));
-      if (score2 <= max)
+      const score = node.type === "StaticBlock" ? cognitiveComplexity(node, NO_NAMES) : cognitiveComplexity(node, selfNames(node));
+      if (score <= max)
         return;
       const name = node.type === "StaticBlock" ? "static block" : `function \`${displayName(node)}\``;
-      context.report({ node, message: `${name} has a cognitive complexity of ${score2}. Maximum allowed is ${max}.` });
+      context.report({ node, message: `${name} has a cognitive complexity of ${score}. Maximum allowed is ${max}.` });
     };
     return {
       FunctionDeclaration: check,
@@ -430,8 +430,11 @@ function isAstroProps(value) {
   const { object, property } = value;
   return object.type === "Identifier" && object.name === "Astro" && property.type === "Identifier" && property.name === "props";
 }
+function isSignedNumber(value) {
+  return value.type === "UnaryExpression" && (value.operator === "-" || value.operator === "+") && value.argument.type === "Literal" && typeof value.argument.value === "number";
+}
 function isPlainValue(value, bound) {
-  return value.type === "Literal" || value.type === "Identifier" && bound.has(value.name);
+  return value.type === "Literal" || value.type === "Identifier" && bound.has(value.name) || isSignedNumber(value);
 }
 function readsProps(expression, bound) {
   const value = unwrapped(expression);
@@ -442,17 +445,22 @@ function readsProps(expression, bound) {
   return isAstroProps(value) || readsProps(value.object, bound);
 }
 function isPlainPattern(pattern, bound) {
+  return isPlainInOrder(pattern, new Set(bound));
+}
+function isPlainInOrder(pattern, seen) {
   if (pattern === null)
     return true;
   if (pattern.type === "RestElement")
-    return isPlainPattern(pattern.argument, bound);
+    return isPlainInOrder(pattern.argument, seen);
   if (pattern.type === "AssignmentPattern")
-    return isPlainValue(pattern.right, bound) && isPlainPattern(pattern.left, bound);
+    return isPlainValue(pattern.right, seen) && isPlainInOrder(pattern.left, seen);
   if (pattern.type === "ArrayPattern")
-    return pattern.elements.every((element) => isPlainPattern(element, bound));
-  if (pattern.type === "Identifier")
+    return pattern.elements.every((element) => isPlainInOrder(element, seen));
+  if (pattern.type === "Identifier") {
+    seen.add(pattern.name);
     return true;
-  return pattern.properties.every((property) => property.type === "RestElement" ? isPlainPattern(property.argument, bound) : (!property.computed || isPlainValue(property.key, bound)) && isPlainPattern(property.value, bound));
+  }
+  return pattern.properties.every((property) => property.type === "RestElement" ? isPlainInOrder(property.argument, seen) : (!property.computed || isPlainValue(property.key, seen)) && isPlainInOrder(property.value, seen));
 }
 function isPropsRead(declarator, bound) {
   return declarator.init !== null && readsProps(declarator.init, bound) && isPlainPattern(declarator.id, bound);

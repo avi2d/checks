@@ -137,3 +137,45 @@ test(
   },
   60_000,
 );
+
+test(
+  "consumer goes red on logic in an Astro.props default, green once each default is a signed number or an earlier props name",
+  async () => {
+    const tree = await astroTree();
+    await tree.put(
+      "src/pages/forward.astro",
+      `---\nconst { heading = title, title = "Home" } = Astro.props;\n---\n<html><body><h1>{heading}</h1></body></html>\n`,
+    );
+    await tree.put(
+      "src/pages/negated.astro",
+      `---\nconst { count = -step } = Astro.props;\n---\n<html><body>{count}</body></html>\n`,
+    );
+    await tree.put(
+      "src/pages/stranger.astro",
+      `---\nconst { heading = title } = Astro.props;\n---\n<html><body><h1>{heading}</h1></body></html>\n`,
+    );
+
+    const red = await oxlint(tree);
+    expect(red.exitCode).not.toBe(0);
+    expect(red.text).toContain("forward.astro");
+    expect(red.text).toContain("negated.astro");
+    expect(red.text).toContain("stranger.astro");
+    expect(red.text).toContain("readability(thin-astro)");
+
+    await rm(join(tree.dir, "src", "pages", "forward.astro"));
+    await rm(join(tree.dir, "src", "pages", "negated.astro"));
+    await tree.put(
+      "src/pages/stranger.astro",
+      `---\nconst { count = -1, step = +1 } = Astro.props;\n---\n<html><body>{count}{step}</body></html>\n`,
+    );
+    await tree.put(
+      "src/pages/renamed.astro",
+      `---\nconst { title = "Home", heading = title } = Astro.props;\n---\n<html><body><h1>{heading}</h1></body></html>\n`,
+    );
+
+    const green = await oxlint(tree);
+    expect(green.text).not.toContain("readability(thin-astro)");
+    expect(green.exitCode).toBe(0);
+  },
+  60_000,
+);
