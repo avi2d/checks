@@ -78,12 +78,16 @@ function unresolvedPath(doc: string, line: number, span: string, snapshot: Snaps
 const SCHEME = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
 const ASCII_ESCAPE = /%([0-7][0-9a-f])/gi;
 
+function linkPath(doc: string, target: string, hash: number): string | undefined {
+  const written = (hash < 0 ? target : target.slice(0, hash)).split("?", 1)[0] ?? "";
+  const decoded = written.replace(ASCII_ESCAPE, (_, code: string) => String.fromCharCode(Number.parseInt(code, 16)));
+  return decoded === "" ? doc : decoded.startsWith("/") ? normalize(decoded) : within(directoryOf(doc), decoded);
+}
+
 function unresolvedLink(doc: string, line: number, target: string, snapshot: Snapshot): Unresolved | undefined {
   if (target === "" || SCHEME.test(target)) return undefined;
   const hash = target.indexOf("#");
-  const written = (hash < 0 ? target : target.slice(0, hash)).split("?", 1)[0] ?? "";
-  const decoded = written.replace(ASCII_ESCAPE, (_, code: string) => String.fromCharCode(Number.parseInt(code, 16)));
-  const path = decoded === "" ? doc : decoded.startsWith("/") ? normalize(decoded) : within(directoryOf(doc), decoded);
+  const path = linkPath(doc, target, hash);
   if (path === undefined) return undefined;
   const named = target;
   if (!exists(snapshot, path)) {
@@ -152,8 +156,7 @@ export function anchoredTargets(doc: string, text: string): readonly string[] {
     links.flatMap((target) => {
       const hash = target.indexOf("#");
       if (hash < 0 || SCHEME.test(target)) return [];
-      const written = target.slice(0, hash);
-      const path = written === "" ? doc : written.startsWith("/") ? normalize(written) : within(directoryOf(doc), written);
+      const path = linkPath(doc, target, hash);
       return path?.endsWith(".md") === true ? [path] : [];
     }),
   );
