@@ -75,6 +75,20 @@ test("a query string on a link does not hide a missing anchor", () => {
   ]);
 });
 
+test("an anchor into an MDX page checks its headings", () => {
+  const files = [...FILES, "docs/widget.mdx"];
+  const text = "See [props](widget.mdx#missing).";
+  const found = unresolvedIn(
+    "docs/guide.md",
+    text,
+    anchoredSnapshot(files, "docs/guide.md", text, new Map([["docs/widget.mdx", "# Widget\n\n## Props\n"]])),
+    { commands: false },
+  );
+  expect(found.map(({ line, message }) => `${line}: ${message}`)).toEqual([
+    "1: links to `widget.mdx#missing`, and `docs/widget.mdx` has no heading with that anchor",
+  ]);
+});
+
 test("a reference-style definition and a same-page anchor are links too", () => {
   const page = "# Guide\n\n## Set up\n\nSee [set up](#set-up) and [down](#tear-down).\n\n[gone]: ../missing.md\n";
   const found = unresolvedIn("docs/guide.md", page, snapshotOf(FILES, new Map([["docs/guide.md", anchorsOf(page)]]), new Map()), { commands: false });
