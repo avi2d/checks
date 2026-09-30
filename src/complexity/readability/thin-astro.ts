@@ -24,6 +24,15 @@ function isAstroProps(value: ESTree.Expression): boolean {
   );
 }
 
+function isSignedNumber(value: ESTree.Expression): boolean {
+  return (
+    value.type === "UnaryExpression" &&
+    (value.operator === "-" || value.operator === "+") &&
+    value.argument.type === "Literal" &&
+    typeof value.argument.value === "number"
+  );
+}
+
 function isPlainValue(value: ESTree.PropertyKey, bound: ReadonlySet<string>): boolean {
   return value.type === "Literal" || (value.type === "Identifier" && bound.has(value.name));
 }
@@ -36,15 +45,28 @@ function readsProps(expression: ESTree.Expression, bound: ReadonlySet<string>): 
 }
 
 function isPlainPattern(pattern: ESTree.BindingPattern | ESTree.BindingRestElement | null, bound: ReadonlySet<string>): boolean {
+  return isPlainInOrder(pattern, bound, new Set(bound));
+}
+
+function isPlainInOrder(
+  pattern: ESTree.BindingPattern | ESTree.BindingRestElement | null,
+  bound: ReadonlySet<string>,
+  seen: Set<string>,
+): boolean {
   if (pattern === null) return true;
-  if (pattern.type === "RestElement") return isPlainPattern(pattern.argument, bound);
-  if (pattern.type === "AssignmentPattern") return isPlainValue(pattern.right, bound) && isPlainPattern(pattern.left, bound);
-  if (pattern.type === "ArrayPattern") return pattern.elements.every((element) => isPlainPattern(element, bound));
-  if (pattern.type === "Identifier") return true;
+  if (pattern.type === "RestElement") return isPlainInOrder(pattern.argument, bound, seen);
+  if (pattern.type === "AssignmentPattern") {
+    return (isPlainValue(pattern.right, seen) || isSignedNumber(pattern.right)) && isPlainInOrder(pattern.left, bound, seen);
+  }
+  if (pattern.type === "ArrayPattern") return pattern.elements.every((element) => isPlainInOrder(element, bound, seen));
+  if (pattern.type === "Identifier") {
+    seen.add(pattern.name);
+    return true;
+  }
   return pattern.properties.every((property) =>
     property.type === "RestElement"
-      ? isPlainPattern(property.argument, bound)
-      : (!property.computed || isPlainValue(property.key, bound)) && isPlainPattern(property.value, bound),
+      ? isPlainInOrder(property.argument, bound, seen)
+      : (!property.computed || isPlainValue(property.key, bound)) && isPlainInOrder(property.value, bound, seen),
   );
 }
 
