@@ -1,7 +1,6 @@
-# Usage: git ls-files -- 'tests/*.ts' | awk -v changed=<a,b,...> -v preloads=<a,b,...> -f mutation-readers.awk
+# Usage: git ls-files -- 'tests/*.ts' | awk -v changed=<a,b,...> -f mutation-readers.awk
 # Prints "reader<TAB>changed" for each listed file that imports a changed file,
 # directly or through the files it imports, or names a changed fixture's path.
-# Bun runs each preload before every test file, so each test file imports it.
 # Plain POSIX awk, because the scope step runs before anything is installed.
 
 function resolved(dir, spec,   parts, count, index_, stack, depth, path) {
@@ -22,7 +21,13 @@ function module(path) {
   return path
 }
 
-function note(file, line,   rest, spec, needle) {
+function mentioned(line, needle,   each) {
+  if (mentions[needle] == "file") return index(line, needle)
+  for (each in directoryEnds) if (index(line, needle directoryEnds[each])) return 1
+  return 0
+}
+
+function note(file, line,   rest, spec, joined, needle) {
   rest = line
   while (match(rest, /(from|import)[ \t]*[(]?[ \t]*["'][.][^"']*["']/)) {
     spec = substr(rest, RSTART, RLENGTH)
@@ -32,16 +37,15 @@ function note(file, line,   rest, spec, needle) {
     imports[++edges] = file
     imported[edges] = module(resolved(directory, spec))
   }
+  joined = line
+  gsub(/["'`][ \t]*,[ \t]*["'`]/, "/", joined)
   for (needle in mentions) {
-    if (!(file in reached) && (index(line, needle "\"") || index(line, needle "'") || index(line, needle "`") || (mentions[needle] == "file" && index(line, needle)))) {
-      reached[file] = fixtureOf[needle]
-    }
+    if (!(file in reached) && mentioned(joined, needle)) reached[file] = fixtureOf[needle]
   }
 }
 
 BEGIN {
-  preloadCount = split(preloads, preloaded, ",")
-  for (each = 1; each <= preloadCount; each++) preloaded[each] = module(resolved("", preloaded[each]))
+  split("\" ' ` /\" /' /` /${", directoryEnds, " ")
   count = split(changed, paths, ",")
   for (each = 1; each <= count; each++) {
     path = paths[each]
@@ -60,9 +64,6 @@ BEGIN {
   file = $0
   directory = file
   sub(/\/[^\/]*$/, "", directory)
-  if (file ~ /\.test\.ts$/) {
-    for (each = 1; each <= preloadCount; each++) { imports[++edges] = file; imported[edges] = preloaded[each] }
-  }
   while ((getline line < file) > 0) note(file, line)
   close(file)
 }

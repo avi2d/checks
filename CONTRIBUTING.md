@@ -77,7 +77,7 @@ To place a change:
    | `src/docs/` | the doc gate and the rules it reads |
    | `src/delivery/` | the gates and bins for how a change reaches `main` and a release, and what a commit may not carry |
    | `src/dependencies/` | what code may import, which library sources an agent reads, which locked package versions carry a known advisory, and the pinned download of each scanner a gate runs |
-   | `scripts/` | the kit's own build, which nothing ships |
+   | `scripts/` | the kit's own build and CI tooling, which nothing ships |
    | `dist/` | the committed oxlint plugin bundles |
    | `dist/templates/` | one template per kind of doc file, which `bun run build` renders |
    | `src/quality/presets/` | the Effect rule blocks consumers copy into native configs |

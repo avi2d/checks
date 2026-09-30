@@ -26,19 +26,7 @@ $(git diff --name-only --diff-filter=ACMRTD "$base...HEAD")
 EOF
 # A unit test that imports a changed helper or names a changed fixture is as changed as its own edit.
 if [ -n "$touched" ]; then
-  preloads=""
-  if [ -f bunfig.toml ]; then
-    preloads="$(awk '
-      /^\[/ { table = $0 }
-      table ~ /^\[test\]/ && /^[ \t]*preload[ \t]*=/ { reading = 1; sub(/^[^=]*=/, ""); array = index($0, "[") }
-      reading {
-        line = $0
-        sub(/#.*/, "", line)
-        while (match(line, /"[^"]*"/)) { printf "%s%s", sep, substr(line, RSTART + 1, RLENGTH - 2); sep = ","; line = substr(line, RSTART + RLENGTH) }
-        if (!array || index(line, "]")) reading = 0
-      }' bunfig.toml)"
-  fi
-  readers="$(git ls-files -- 'tests/*.ts' | awk -v changed="${touched#,}" -v preloads="$preloads" -f "$(dirname "$0")/mutation-readers.awk" | sort)"
+  readers="$(git ls-files -- 'tests/*.ts' | awk -v changed="${touched#,}" -f "$(dirname "$0")/mutation-readers.awk" | sort)"
   while IFS="$tab" read -r reader via; do
     if [ -n "$reader" ] && test_file "$reader"; then
       case ",$tests," in *",$reader,"*) ;;

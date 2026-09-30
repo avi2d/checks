@@ -56,26 +56,32 @@ async function helpedRepo(): Promise<{ repo: FixtureRepo; base: string; baseline
   const { repo, base } = await repoWith({
     "src/covered.ts": body("covered"),
     "src/other.ts": body("other"),
-    "src/fixtured.ts": body("fixtured"),
-    "bunfig.toml": `[test]\npreload = ["./tests/lib/preload.ts"]\n`,
-    "tests/lib/preload.ts": `const { setup0 } = await import("./setup");\n${body("preload")}`,
-    "tests/lib/setup.ts": body("setup"),
+    "src/joined.ts": body("joined"),
+    "src/named.ts": body("named"),
+    "src/slashed.ts": body("slashed"),
+    "src/listed.ts": body("listed"),
+    "src/sibling.ts": body("sibling"),
     "tests/lib/effect.ts": body("effect"),
     "tests/lib/tree.ts": `import { effect0 } from "./effect";\n${body("tree")}`,
     "tests/lib/unused.ts": body("unused"),
     "tests/fixtures/eval/run.json": "{}\n",
+    "tests/fixtures/evaluated/run.json": "{}\n",
     "tests/unit/covered.test.ts": `import { effect0 } from "../lib/effect";\n${body("test")}`,
     "tests/unit/other.test.ts": `import {\n  tree0,\n} from "../lib/tree.ts";\n${body("test")}`,
-    "tests/unit/fixtured.test.ts": `const run = new URL("../fixtures/eval/run.json", import.meta.url);\n${body("test")}`,
+    "tests/unit/joined.test.ts": `const run = join(import.meta.dir, "..", "fixtures", "eval", "run.json");\n${body("test")}`,
+    "tests/unit/named.test.ts": `const run = (name: string) => resolve(import.meta.dir, "..", "fixtures", "eval", \`\${name}.json\`);\n${body("test")}`,
+    "tests/unit/slashed.test.ts": `const runs = new URL("../fixtures/eval/", import.meta.url);\n${body("test")}`,
     "tests/unit/listed.test.ts": `const runs = join(REPO, "tests/fixtures/eval");\n${body("test")}`,
-    "tests/unit/plain.test.ts": body("test"),
+    "tests/unit/sibling.test.ts": `const runs = new URL("../fixtures/evaluated/", import.meta.url);\n${body("test")}`,
   });
   const baseline = await coverageBaseline(repo, [
     { testFile: "tests/unit/covered.test.ts", sources: ["src/covered.ts"] },
     { testFile: "tests/unit/other.test.ts", sources: ["src/other.ts"] },
-    { testFile: "tests/unit/fixtured.test.ts", sources: ["src/fixtured.ts"] },
-    { testFile: "tests/unit/listed.test.ts", sources: ["src/fixtured.ts"] },
-    { testFile: "tests/unit/plain.test.ts", sources: ["src/plain.ts"] },
+    { testFile: "tests/unit/joined.test.ts", sources: ["src/joined.ts"] },
+    { testFile: "tests/unit/named.test.ts", sources: ["src/named.ts"] },
+    { testFile: "tests/unit/slashed.test.ts", sources: ["src/slashed.ts"] },
+    { testFile: "tests/unit/listed.test.ts", sources: ["src/listed.ts"] },
+    { testFile: "tests/unit/sibling.test.ts", sources: ["src/sibling.ts"] },
   ]);
   return { repo, base, baseline };
 }
@@ -90,29 +96,15 @@ test("a changed helper pulls in the covered sources of every unit test that impo
   expect(scope["BASE_SCOPE"]?.split(",").sort()).toEqual(["src/covered.ts", "src/other.ts"]);
 });
 
-test("a changed fixture pulls in the covered sources of every unit test that names it or its directory", async () => {
+test("a changed fixture pulls in the covered sources of every unit test that names it or its directory, in segments or with a trailing slash", async () => {
   const { repo, base, baseline } = await helpedRepo();
   await repo.write({ "tests/fixtures/eval/run.json": '{"weakened":true}\n' });
 
-  expect(await scopeOf(repo, base, baseline)).toEqual({ SCOPE: "src/fixtured.ts", BASE_SCOPE: "src/fixtured.ts" });
-});
-
-test("a changed preload pulls in the covered sources of every unit test", async () => {
-  const { repo, base, baseline } = await helpedRepo();
-  await repo.write({ "tests/lib/preload.ts": body("weakened") });
-
   const scope = await scopeOf(repo, base, baseline);
 
-  expect(scope["SCOPE"]?.split(",").sort().join(",")).toBe("src/covered.ts,src/fixtured.ts,src/other.ts");
-});
-
-test("a changed helper the preload imports pulls in the covered sources of every unit test", async () => {
-  const { repo, base, baseline } = await helpedRepo();
-  await repo.write({ "tests/lib/setup.ts": body("weakened") });
-
-  const scope = await scopeOf(repo, base, baseline);
-
-  expect(scope["SCOPE"]?.split(",").sort().join(",")).toBe("src/covered.ts,src/fixtured.ts,src/other.ts");
+  const readers = ["src/joined.ts", "src/listed.ts", "src/named.ts", "src/slashed.ts"];
+  expect(scope["SCOPE"]?.split(",").sort()).toEqual(readers);
+  expect(scope["BASE_SCOPE"]?.split(",").sort()).toEqual(readers);
 });
 
 test("a changed helper no unit test imports leaves the scope empty even with no baseline report", async () => {

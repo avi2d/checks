@@ -67,7 +67,7 @@ So the fragment lists the rules in `files`, and in `include` beside every file u
 
 The source sits under `src/<vector>/`, one directory for each thing the kit judges a repository on: complexity, quality, testing, docs, delivery and dependencies.
 `src/core/` holds what every vector runs on.
-`scripts/` holds only the kit's own build, and nothing in it ships.
+`scripts/` holds only the kit's own build and CI tooling, and nothing in it ships.
 Sorting files by what loads them would put both oxlint plugins at the root and every bin in one flat directory.
 Nothing would then say which gate a helper serves.
 A mutation runner's default scope covers `src/`, so the kit's own Stryker run mutates its source with no `mutate` list.
