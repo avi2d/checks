@@ -89,6 +89,15 @@ test("an anchor into an MDX page checks its headings", () => {
   ]);
 });
 
+test("an anchor into a directory or a non-Markdown file fails as uncheckable", () => {
+  const text = "See [setup](../docs/#setup) and [entry](/scripts/lint.ts#entry).";
+  const found = unresolvedIn("docs/guide.md", text, anchoredSnapshot(FILES, "docs/guide.md", text, new Map()), { commands: false });
+  expect(found.map(({ line, message }) => `${line}: ${message}`)).toEqual([
+    "1: links to `../docs/#setup`, and `docs` has no headings to check",
+    "1: links to `/scripts/lint.ts#entry`, and `scripts/lint.ts` has no headings to check",
+  ]);
+});
+
 test("a reference-style definition and a same-page anchor are links too", () => {
   const page = "# Guide\n\n## Set up\n\nSee [set up](#set-up) and [down](#tear-down).\n\n[gone]: ../missing.md\n";
   const found = unresolvedIn("docs/guide.md", page, snapshotOf(FILES, new Map([["docs/guide.md", anchorsOf(page)]]), new Map()), { commands: false });
