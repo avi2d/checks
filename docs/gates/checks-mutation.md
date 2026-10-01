@@ -60,9 +60,6 @@ An `--incremental` run with no report stops before instrumenting with the missin
 
 A repository runs full baselines from the mutation workflow on `workflow_dispatch`.
 A repository that picks a pull request scope from a baseline also runs that workflow on a nightly schedule.
-A scheduled or hand-started run restores no state and passes `--disableBail`, so its report lists every covering and killing test.
-That run uploads the report again as the `mutation-baseline-full` artifact.
-The scope step reads that artifact from the newest successful such run on `main` that has one.
 Run scoped checks locally during development.
 A scheduled run costs a full Stryker run.
 
