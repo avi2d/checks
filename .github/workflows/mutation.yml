@@ -109,9 +109,9 @@ jobs:
           baseline="$(mktemp -d)/mutation.json"
           # Only scheduled and hand-started runs list every covering test, so the scope reads the latest of those.
           # One query per event, so main's pushes cannot crowd a full baseline out of the list.
-          run_id="$(for event in schedule workflow_dispatch; do
-            gh run list --workflow mutation.yml --branch main --event "$event" --status success --limit 1 --json databaseId,createdAt --jq '.[]'
-          done | jq -rs 'max_by(.createdAt).databaseId // empty')"
+          scheduled="$(gh run list --workflow mutation.yml --branch main --event schedule --status success --limit 1 --json databaseId,createdAt --jq '.[]')"
+          dispatched="$(gh run list --workflow mutation.yml --branch main --event workflow_dispatch --status success --limit 1 --json databaseId,createdAt --jq '.[]')"
+          run_id="$(printf '%s\n%s\n' "$scheduled" "$dispatched" | jq -rs 'max_by(.createdAt).databaseId // empty')"
           download="$(mktemp -d)"
           if [ -n "$run_id" ] && gh run download "$run_id" --name mutation-baseline --dir "$download" && [ -f "$download/mutation/mutation.json" ]; then
             cp "$download/mutation/mutation.json" "$baseline"
