@@ -9,10 +9,6 @@ const Step = Schema.Struct({
 });
 
 const Workflow = Schema.Struct({
-  on: Schema.Struct({
-    push: Schema.optionalKey(Schema.Struct({ branches: Schema.Array(Schema.String) })),
-    pull_request: Schema.Struct({ types: Schema.Array(Schema.String) }),
-  }),
   jobs: Schema.Record(
     Schema.String,
     Schema.Struct({ "runs-on": Schema.Union([Schema.String, Schema.Array(Schema.String)]), steps: Schema.Array(Step) }),

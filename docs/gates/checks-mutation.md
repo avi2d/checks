@@ -59,8 +59,9 @@ An `--incremental` run with no report stops before instrumenting with the missin
 ## When it runs
 
 A repository runs full baselines from the mutation workflow on `workflow_dispatch`.
+A repository that picks a pull request scope from a baseline also runs that workflow on a nightly schedule.
 Run scoped checks locally during development.
-A scheduled run never starts one, because a baseline costs a full Stryker run.
+A scheduled run costs a full Stryker run.
 
 ## Running it in CI
 

@@ -21,6 +21,8 @@ on:
       - bun.lock
       - .github/workflows/mutation.yml
   workflow_dispatch:
+  schedule:
+    - cron: "23 1 * * *"
 
 # Advisory on purpose: the comparator's --advisory flag keeps a regression from
 # failing the job, so a failure here still means the run itself broke.
@@ -35,9 +37,9 @@ jobs:
     concurrency:
       group: mutation-baseline
       cancel-in-progress: false
-    # About 45 minutes for the first full run on these runners; later runs are
-    # incremental from the uploaded state and take minutes.
-    timeout-minutes: 60
+    # A no-bail full run takes about 65 minutes on these runners; a push
+    # is incremental from the uploaded state and takes minutes.
+    timeout-minutes: ${{ github.event_name == 'push' && 60 || 90 }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -53,8 +55,10 @@ jobs:
         with:
           node-version: 24
       - run: bun install --frozen-lockfile
-      # The previous baseline's incremental state turns every run after the first into the mutants main changed.
+      # Only pushes reuse state, so a scheduled or hand-started run tests every mutant afresh.
+      # The previous baseline's incremental state turns every push after the first into the mutants main changed.
       - name: Restore previous baseline state
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -65,7 +69,11 @@ jobs:
             cp "$download/stryker-incremental.json" reports/stryker-incremental.json
           fi
       # Incremental with no prior state runs everything, and writes the state the next main run reuses.
-      - run: time bun run mutate:incremental
+      - if: github.event_name == 'push'
+        run: time bun run mutate:incremental
+      # Bail records only a mutant's first killer, and a static mutant has no coverage, so a full run keeps every killing test.
+      - if: github.event_name != 'push'
+        run: time bun run mutate:incremental --disableBail
       # Every run uploads; readers take only main's, so a manual run elsewhere leaves main's baseline in place.
       - uses: actions/upload-artifact@v4
         with:
@@ -73,6 +81,13 @@ jobs:
           path: |
             reports/mutation/mutation.json
             reports/stryker-incremental.json
+          retention-days: 90
+      # Only a run that restored nothing lists every covering test, so only it uploads the report the scope step reads.
+      - if: github.event_name != 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-baseline-full
+          path: reports/mutation/mutation.json
           retention-days: 90
 
   compare:
@@ -103,11 +118,17 @@ jobs:
           base="$(git merge-base HEAD "origin/$GITHUB_BASE_REF")"
           echo "BASE_SHA=$base" >> "$GITHUB_ENV"
           baseline="$(mktemp -d)/mutation.json"
-          run_id="$(gh run list --workflow mutation.yml --branch main --status success --limit 20 --json databaseId,event --jq 'map(select(.event != "pull_request"))[0].databaseId // empty')"
+          # One query per event, so main's pushes cannot crowd a full baseline out of the list.
+          scheduled="$(gh run list --workflow mutation.yml --branch main --event schedule --status success --limit 1 --json databaseId,createdAt --jq '.[]')"
+          dispatched="$(gh run list --workflow mutation.yml --branch main --event workflow_dispatch --status success --limit 1 --json databaseId,createdAt --jq '.[]')"
           download="$(mktemp -d)"
-          if [ -n "$run_id" ] && gh run download "$run_id" --name mutation-baseline --dir "$download" && [ -f "$download/mutation/mutation.json" ]; then
-            cp "$download/mutation/mutation.json" "$baseline"
-          fi
+          # A run that predates the full artifact has none, so the older candidate gets its turn.
+          for run_id in $(printf '%s\n%s\n' "$scheduled" "$dispatched" | jq -rs 'sort_by(.createdAt) | reverse | .[].databaseId'); do
+            if gh run download "$run_id" --name mutation-baseline-full --dir "$download/$run_id" && [ -f "$download/$run_id/mutation.json" ]; then
+              cp "$download/$run_id/mutation.json" "$baseline"
+              break
+            fi
+          done
           scripts/mutation-scope.sh "$base" "$baseline" >> "$GITHUB_ENV"
       - name: Report empty scope
         if: env.SCOPE == ''
