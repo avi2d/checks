@@ -107,10 +107,10 @@ jobs:
           base="$(git merge-base HEAD "origin/$GITHUB_BASE_REF")"
           echo "BASE_SHA=$base" >> "$GITHUB_ENV"
           baseline="$(mktemp -d)/mutation.json"
-          # The scope reads the latest scheduled run: only a full run lists every covering test.
-          run_id="$(gh run list --workflow mutation.yml --branch main --event schedule --status success --limit 5 --json databaseId --jq '.[0].databaseId // empty')"
+          # Only scheduled and hand-started runs list every covering test, so the scope reads the latest of those.
+          run_id="$(gh run list --workflow mutation.yml --branch main --status success --limit 20 --json databaseId,event --jq 'map(select(.event == "schedule" or .event == "workflow_dispatch"))[0].databaseId // empty')"
           if [ -z "$run_id" ]; then
-            echo 'mutation: no scheduled baseline yet, falling back to the latest baseline' >&2
+            echo 'mutation: no full baseline yet, falling back to the latest baseline' >&2
             run_id="$(gh run list --workflow mutation.yml --branch main --status success --limit 20 --json databaseId,event --jq 'map(select(.event != "pull_request"))[0].databaseId // empty')"
           fi
           download="$(mktemp -d)"
