@@ -52,6 +52,27 @@ async function coverageBaseline(repo: FixtureRepo, links: readonly Link[]): Prom
   return path;
 }
 
+type SharedMutant = { readonly source: string; readonly coveredBy: string[]; readonly killedBy: string[] };
+
+async function sharedMutantBaseline(repo: FixtureRepo, mutants: readonly SharedMutant[]): Promise<string> {
+  const order = [...new Set(mutants.flatMap((mutant) => [...mutant.coveredBy, ...mutant.killedBy]))].sort();
+  const ids = new Map(order.map((testFile, index) => [testFile, `${index}`] as const));
+  const testFiles = Object.fromEntries(order.map((testFile) => [testFile, { tests: [{ id: ids.get(testFile), name: testFile }] }]));
+  const bySource = new Map<string, Array<{ coveredBy: string[]; killedBy: string[] }>>();
+  for (const mutant of mutants) {
+    const listed = bySource.get(mutant.source) ?? [];
+    listed.push({
+      coveredBy: mutant.coveredBy.map((testFile) => ids.get(testFile) ?? ""),
+      killedBy: mutant.killedBy.map((testFile) => ids.get(testFile) ?? ""),
+    });
+    bySource.set(mutant.source, listed);
+  }
+  const files = Object.fromEntries([...bySource].map(([source, listed]) => [source, { source: body("value"), mutants: listed }]));
+  const path = join(repo.dir, "baseline.json");
+  await repo.write({ "baseline.json": JSON.stringify({ files, testFiles }) });
+  return path;
+}
+
 async function helpedRepo(): Promise<{ repo: FixtureRepo; base: string; baseline: string }> {
   const { repo, base } = await repoWith({
     "src/covered.ts": body("covered"),
@@ -132,6 +153,23 @@ test("a changed test with no baseline report fails rather than scoping nothing",
 
   expect(done.exitCode).toBe(1);
   expect(done.text).toContain("mutation-scope: tests/unit/other.test.ts changed, but no baseline report");
+});
+
+test("a source covered by a changed test but killed first by another test stays in scope", async () => {
+  const { repo, base } = await repoWith({
+    "src/shared.ts": body("shared"),
+    "tests/unit/first.test.ts": body("first"),
+    "tests/unit/second.test.ts": body("second"),
+  });
+  const baseline = await sharedMutantBaseline(repo, [
+    { source: "src/shared.ts", coveredBy: [], killedBy: ["tests/unit/first.test.ts"] },
+  ]);
+  await repo.write({ "tests/unit/second.test.ts": body("weakened") });
+
+  const scope = await scopeOf(repo, base, baseline);
+
+  expect(scope["SCOPE"]).toBe("src/shared.ts");
+  expect(scope["BASE_SCOPE"]).toBe("src/shared.ts");
 });
 
 test("a changed source scopes directly, and an added one only at the head", async () => {
