@@ -39,7 +39,7 @@ jobs:
       cancel-in-progress: false
     # About 45 minutes for the first full run on these runners; later
     # pushes are incremental from the uploaded state and take minutes.
-    timeout-minutes: 60
+    timeout-minutes: ${{ github.event_name == 'push' && 60 || 90 }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
