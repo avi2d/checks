@@ -1,7 +1,7 @@
 import { $ } from "bun";
 import { expect, setDefaultTimeout, test } from "bun:test";
-import { readFile, rm, symlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { parseWorkflow, stepNamed } from "../lib/workflow.ts";
 import { CHECKOUT, fixtureRepos, ran, scratchDirs, type FixtureRepo, type Ran } from "./lib/fixture-repo.ts";
 
@@ -184,7 +184,7 @@ test("a changed source scopes directly, and an added one only at the head", asyn
   expect(scope["BASE_SCOPE"]).toBe("src/kept.ts");
 });
 
-// Answers `gh run list` from runs-<event>.json and `gh run download` from report-<id>.json, and fails a list whose fail-<event> exists.
+// Answers `gh run list` from runs-<event>.json and `gh run download` from artifacts/<id>/<name>, and fails a list whose fail-<event> exists.
 const FAKE_GH = `#!/bin/sh
 here="$(dirname "$0")"
 case "$1 $2" in
@@ -194,21 +194,37 @@ case "$1 $2" in
     if [ -f "$here/runs-$event.json" ]; then jq -c "$filter" "$here/runs-$event.json"; fi;;
   "run download")
     id="$3"
-    while [ $# -gt 0 ]; do case "$1" in --dir) dir="$2"; shift;; esac; shift; done
-    mkdir -p "$dir/mutation" && cp "$here/report-$id.json" "$dir/mutation/mutation.json";;
+    while [ $# -gt 0 ]; do case "$1" in --name) name="$2"; shift;; --dir) dir="$2"; shift;; esac; shift; done
+    if [ ! -d "$here/artifacts/$id/$name" ]; then echo "no valid artifacts found to download" >&2; exit 1; fi
+    mkdir -p "$dir" && cp -R "$here/artifacts/$id/$name/." "$dir/";;
   *) echo "fake gh: unknown call $*" >&2; exit 1;;
 esac
 `;
 
-type BaselineRun = { readonly event: "schedule" | "workflow_dispatch"; readonly id: number; readonly createdAt: string; readonly report: string };
+// A full run uploads its report under both artifacts; a run from before full baselines uploads only the incremental one.
+type BaselineRun = {
+  readonly event: "schedule" | "workflow_dispatch";
+  readonly id: number;
+  readonly createdAt: string;
+  readonly report: string;
+  readonly full: boolean;
+};
+
+function artifactsOf({ report, full }: BaselineRun): Readonly<Record<string, string>> {
+  const incremental = { "mutation-baseline/mutation/mutation.json": report };
+  return full ? { ...incremental, "mutation-baseline-full/mutation.json": report } : incremental;
+}
 
 async function selectScopeStep(repo: FixtureRepo, runs: readonly BaselineRun[], failing: readonly string[] = []): Promise<Ran & { readonly env: string }> {
   const step = stepNamed(parseWorkflow(await Bun.file(join(CHECKOUT, ".github/workflows/mutation.yml")).text()), "Select mutation scope");
   const bin = await scratch("checks-mutation-scope-gh-");
   await writeFile(join(bin, "gh"), FAKE_GH, { mode: 0o755 });
-  for (const { event, id, createdAt, report } of runs) {
-    await writeFile(join(bin, `runs-${event}.json`), JSON.stringify([{ databaseId: id, createdAt }]));
-    await writeFile(join(bin, `report-${id}.json`), report);
+  for (const run of runs) {
+    await writeFile(join(bin, `runs-${run.event}.json`), JSON.stringify([{ databaseId: run.id, createdAt: run.createdAt }]));
+    for (const [path, content] of Object.entries(artifactsOf(run))) {
+      await mkdir(dirname(join(bin, "artifacts", `${run.id}`, path)), { recursive: true });
+      await writeFile(join(bin, "artifacts", `${run.id}`, path), content);
+    }
   }
   for (const event of failing) await writeFile(join(bin, `fail-${event}`), "");
   await symlink(join(CHECKOUT, "scripts"), join(repo.dir, "scripts"));
@@ -244,16 +260,38 @@ async function restoredMutantPullRequest(): Promise<{ repo: FixtureRepo; full: s
   return { repo, full, incremental };
 }
 
-test("the scope step reads the newer of the latest scheduled and hand-started baselines", async () => {
+test("the scope step reads the newer of the latest scheduled and hand-started full baselines", async () => {
   const { repo, full, incremental } = await restoredMutantPullRequest();
 
   const done = await selectScopeStep(repo, [
-    { event: "schedule", id: 3, createdAt: "2026-10-01T01:23:00Z", report: full },
-    { event: "workflow_dispatch", id: 2, createdAt: "2026-09-30T12:00:00Z", report: incremental },
+    { event: "schedule", id: 3, createdAt: "2026-10-01T01:23:00Z", report: full, full: true },
+    { event: "workflow_dispatch", id: 2, createdAt: "2026-09-30T12:00:00Z", report: incremental, full: true },
   ]);
 
   expect(done.exitCode).toBe(0);
   expect(done.env).toContain("SCOPE=src/shared.ts\n");
+});
+
+test("the scope step passes over a newer hand-started run with no full baseline for the older scheduled one", async () => {
+  const { repo, full, incremental } = await restoredMutantPullRequest();
+
+  const done = await selectScopeStep(repo, [
+    { event: "schedule", id: 2, createdAt: "2026-09-30T01:23:00Z", report: full, full: true },
+    { event: "workflow_dispatch", id: 3, createdAt: "2026-10-01T12:00:00Z", report: incremental, full: false },
+  ]);
+
+  expect(done.exitCode).toBe(0);
+  expect(done.env).toContain("SCOPE=src/shared.ts\n");
+});
+
+test("the scope step fails a changed test when no run on main has a full baseline", async () => {
+  const { repo, incremental } = await restoredMutantPullRequest();
+
+  const done = await selectScopeStep(repo, [{ event: "workflow_dispatch", id: 3, createdAt: "2026-10-01T12:00:00Z", report: incremental, full: false }]);
+
+  expect(done.exitCode).not.toBe(0);
+  expect(done.text).toContain("mutation-scope: tests/unit/second.test.ts changed, but no baseline report");
+  expect(done.env).not.toContain("SCOPE=");
 });
 
 test("the scope step fails when a baseline query fails rather than reading the other event's older report", async () => {
@@ -262,8 +300,8 @@ test("the scope step fails when a baseline query fails rather than reading the o
   const done = await selectScopeStep(
     repo,
     [
-      { event: "schedule", id: 3, createdAt: "2026-10-01T01:23:00Z", report: full },
-      { event: "workflow_dispatch", id: 2, createdAt: "2026-09-30T12:00:00Z", report: incremental },
+      { event: "schedule", id: 3, createdAt: "2026-10-01T01:23:00Z", report: full, full: true },
+      { event: "workflow_dispatch", id: 2, createdAt: "2026-09-30T12:00:00Z", report: incremental, full: true },
     ],
     ["schedule"],
   );

@@ -69,7 +69,11 @@ jobs:
             cp "$download/stryker-incremental.json" reports/stryker-incremental.json
           fi
       # Incremental with no prior state runs everything, and writes the state the next main run reuses.
-      - run: time bun run mutate:incremental
+      - if: github.event_name == 'push'
+        run: time bun run mutate:incremental
+      # Bail records only a mutant's first killer, and a static mutant has no coverage, so a full run keeps every killing test.
+      - if: github.event_name != 'push'
+        run: time bun run mutate:incremental --disableBail
       # Every run uploads; readers take only main's, so a manual run elsewhere leaves main's baseline in place.
       - uses: actions/upload-artifact@v4
         with:
@@ -77,6 +81,13 @@ jobs:
           path: |
             reports/mutation/mutation.json
             reports/stryker-incremental.json
+          retention-days: 90
+      # Only a run that restored nothing lists every covering test, so only it uploads the report the scope step reads.
+      - if: github.event_name != 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-baseline-full
+          path: reports/mutation/mutation.json
           retention-days: 90
 
   compare:
@@ -107,15 +118,17 @@ jobs:
           base="$(git merge-base HEAD "origin/$GITHUB_BASE_REF")"
           echo "BASE_SHA=$base" >> "$GITHUB_ENV"
           baseline="$(mktemp -d)/mutation.json"
-          # Only scheduled and hand-started runs list every covering test, so the scope reads the latest of those.
           # One query per event, so main's pushes cannot crowd a full baseline out of the list.
           scheduled="$(gh run list --workflow mutation.yml --branch main --event schedule --status success --limit 1 --json databaseId,createdAt --jq '.[]')"
           dispatched="$(gh run list --workflow mutation.yml --branch main --event workflow_dispatch --status success --limit 1 --json databaseId,createdAt --jq '.[]')"
-          run_id="$(printf '%s\n%s\n' "$scheduled" "$dispatched" | jq -rs 'max_by(.createdAt).databaseId // empty')"
           download="$(mktemp -d)"
-          if [ -n "$run_id" ] && gh run download "$run_id" --name mutation-baseline --dir "$download" && [ -f "$download/mutation/mutation.json" ]; then
-            cp "$download/mutation/mutation.json" "$baseline"
-          fi
+          # A run that predates the full artifact has none, so the older candidate gets its turn.
+          for run_id in $(printf '%s\n%s\n' "$scheduled" "$dispatched" | jq -rs 'sort_by(.createdAt) | reverse | .[].databaseId'); do
+            if gh run download "$run_id" --name mutation-baseline-full --dir "$download/$run_id" && [ -f "$download/$run_id/mutation.json" ]; then
+              cp "$download/$run_id/mutation.json" "$baseline"
+              break
+            fi
+          done
           scripts/mutation-scope.sh "$base" "$baseline" >> "$GITHUB_ENV"
       - name: Report empty scope
         if: env.SCOPE == ''
