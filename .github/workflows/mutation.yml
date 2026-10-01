@@ -21,6 +21,8 @@ on:
       - bun.lock
       - .github/workflows/mutation.yml
   workflow_dispatch:
+  schedule:
+    - cron: "23 1 * * *"
 
 # Advisory on purpose: the comparator's --advisory flag keeps a regression from
 # failing the job, so a failure here still means the run itself broke.
@@ -53,8 +55,10 @@ jobs:
         with:
           node-version: 24
       - run: bun install --frozen-lockfile
-      # The previous baseline's incremental state turns every run after the first into the mutants main changed.
+      # Only pushes reuse state, so a scheduled or hand-started run tests every mutant afresh.
+      # The previous baseline's incremental state turns every push after the first into the mutants main changed.
       - name: Restore previous baseline state
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -103,7 +107,12 @@ jobs:
           base="$(git merge-base HEAD "origin/$GITHUB_BASE_REF")"
           echo "BASE_SHA=$base" >> "$GITHUB_ENV"
           baseline="$(mktemp -d)/mutation.json"
-          run_id="$(gh run list --workflow mutation.yml --branch main --status success --limit 20 --json databaseId,event --jq 'map(select(.event != "pull_request"))[0].databaseId // empty')"
+          # The scope reads the latest scheduled run: only a full run lists every covering test.
+          run_id="$(gh run list --workflow mutation.yml --branch main --event schedule --status success --limit 5 --json databaseId --jq '.[0].databaseId // empty')"
+          if [ -z "$run_id" ]; then
+            echo 'mutation: no scheduled baseline yet, falling back to the latest baseline' >&2
+            run_id="$(gh run list --workflow mutation.yml --branch main --status success --limit 20 --json databaseId,event --jq 'map(select(.event != "pull_request"))[0].databaseId // empty')"
+          fi
           download="$(mktemp -d)"
           if [ -n "$run_id" ] && gh run download "$run_id" --name mutation-baseline --dir "$download" && [ -f "$download/mutation/mutation.json" ]; then
             cp "$download/mutation/mutation.json" "$baseline"

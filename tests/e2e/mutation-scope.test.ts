@@ -162,7 +162,7 @@ test("a source covered by a changed test but killed first by another test stays 
     "tests/unit/second.test.ts": body("second"),
   });
   const baseline = await sharedMutantBaseline(repo, [
-    { source: "src/shared.ts", coveredBy: [], killedBy: ["tests/unit/first.test.ts"] },
+    { source: "src/shared.ts", coveredBy: ["tests/unit/first.test.ts", "tests/unit/second.test.ts"], killedBy: ["tests/unit/first.test.ts"] },
   ]);
   await repo.write({ "tests/unit/second.test.ts": body("weakened") });
 
