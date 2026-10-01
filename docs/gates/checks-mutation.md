@@ -60,7 +60,7 @@ An `--incremental` run with no report stops before instrumenting with the missin
 
 A repository runs full baselines from the mutation workflow on `workflow_dispatch`.
 A repository that picks a pull request scope from a baseline also runs that workflow on a nightly schedule.
-The scope step reads the latest scheduled run for its full perTest coverage.
+The scope step reads the latest successful scheduled or hand-started run on `main` for its full perTest coverage.
 Run scoped checks locally during development.
 A scheduled run costs a full Stryker run.
 

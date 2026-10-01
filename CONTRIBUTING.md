@@ -22,7 +22,7 @@ A test that spawns `checks-lint` passes it `withoutPullRequestEvent()` from `tes
 CI runs the commands in `.github/workflows/ci.yml` and lints the pull request title in `.github/workflows/commitlint.yml`.
 `.github/workflows/mutation.yml` runs Stryker, with `stryker.conf.mjs`, as a baseline on `main` or on any branch by hand, and as an advisory comparison scoped to the sources a pull request changes or reaches through a changed test, helper or fixture.
 A nightly scheduled run records full perTest coverage.
-The scope step reads the latest scheduled run.
+The scope step reads the latest successful scheduled or hand-started run on `main`.
 Run `bun run mutate -- --mutate <file>` to mutate one source file locally, since the preset refuses a full run outside CI.
 
 ## Regenerate what is committed

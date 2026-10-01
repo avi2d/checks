@@ -108,11 +108,10 @@ jobs:
           echo "BASE_SHA=$base" >> "$GITHUB_ENV"
           baseline="$(mktemp -d)/mutation.json"
           # Only scheduled and hand-started runs list every covering test, so the scope reads the latest of those.
-          run_id="$(gh run list --workflow mutation.yml --branch main --status success --limit 20 --json databaseId,event --jq 'map(select(.event == "schedule" or .event == "workflow_dispatch"))[0].databaseId // empty')"
-          if [ -z "$run_id" ]; then
-            echo 'mutation: no full baseline yet, falling back to the latest baseline' >&2
-            run_id="$(gh run list --workflow mutation.yml --branch main --status success --limit 20 --json databaseId,event --jq 'map(select(.event != "pull_request"))[0].databaseId // empty')"
-          fi
+          # One query per event, so main's pushes cannot crowd a full baseline out of the list.
+          run_id="$(for event in schedule workflow_dispatch; do
+            gh run list --workflow mutation.yml --branch main --event "$event" --status success --limit 1 --json databaseId,createdAt --jq '.[]'
+          done | jq -rs 'max_by(.createdAt).databaseId // empty')"
           download="$(mktemp -d)"
           if [ -n "$run_id" ] && gh run download "$run_id" --name mutation-baseline --dir "$download" && [ -f "$download/mutation/mutation.json" ]; then
             cp "$download/mutation/mutation.json" "$baseline"
