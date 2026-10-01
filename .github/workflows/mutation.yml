@@ -37,8 +37,8 @@ jobs:
     concurrency:
       group: mutation-baseline
       cancel-in-progress: false
-    # About 45 minutes for the first full run on these runners; later runs are
-    # incremental from the uploaded state and take minutes.
+    # About 45 minutes for the first full run on these runners; later
+    # pushes are incremental from the uploaded state and take minutes.
     timeout-minutes: 60
     runs-on: ubuntu-latest
     permissions:
