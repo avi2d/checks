@@ -169,5 +169,8 @@
   "overrides": {
     "qs": "6.16.0",
     "smol-toml": "1.9.0"
+  },
+  "patchedDependencies": {
+    "@hughescr/stryker-bun-runner@1.4.0": "patches/@hughescr%2Fstryker-bun-runner@1.4.0.patch"
   }
 }
