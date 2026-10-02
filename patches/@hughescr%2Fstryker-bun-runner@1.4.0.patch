@@ -1,6 +1,3 @@
-diff --git a/node_modules/@hughescr/stryker-bun-runner/.bun-tag-6c8d37fb2eb17d46 b/.bun-tag-6c8d37fb2eb17d46
-new file mode 100644
-index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/dist/coverage/preload-logic.js b/dist/coverage/preload-logic.js
 index b5bb852481f299890321adc67d249ac48e5dc906..b951095408dcc0c68e52541858c1e290cd5ffc6e 100644
 --- a/dist/coverage/preload-logic.js
@@ -45,7 +42,7 @@ index b5bb852481f299890321adc67d249ac48e5dc906..b951095408dcc0c68e52541858c1e290
    };
  }
 diff --git a/dist/index.js b/dist/index.js
-index 53ceac152f18ca4b34f068b2f1cd8a3012caa5f6..7fa4254eccd52fc53e7b50e97f12ffe4728cb281 100644
+index 53ceac152f18ca4b34f068b2f1cd8a3012caa5f6..9888968c6df5438285c5e95677f4a530f023bc9d 100644
 --- a/dist/index.js
 +++ b/dist/index.js
 @@ -5584,13 +5584,29 @@ async function cleanupPreloadScript(preloadPath) {
@@ -95,7 +92,25 @@ index 53ceac152f18ca4b34f068b2f1cd8a3012caa5f6..7fa4254eccd52fc53e7b50e97f12ffe4
      return {
        perTest,
        static: staticCoverage
-@@ -6742,6 +6759,9 @@ async function spawnBunTests(options, spawnDepth) {
+@@ -5768,8 +5785,16 @@ function buildFilteredPerTest(perTestEntries, staticIds) {
+ }
+ function stabilizeCoverage(coverage) {
+   const staticIds = new Set(Object.keys(coverage.static));
++  const staticCounts = { ...coverage.static };
++  for (const counts of Object.values(coverage.perTest)) {
++    for (const [mutantId, hitCount] of Object.entries(counts)) {
++      if (staticIds.has(mutantId)) {
++        staticCounts[mutantId] += hitCount;
++      }
++    }
++  }
+   return {
+-    static: coverage.static,
++    static: staticCounts,
+     perTest: buildFilteredPerTest(Object.entries(coverage.perTest), staticIds)
+   };
+ }
+@@ -6742,6 +6767,9 @@ async function spawnBunTests(options, spawnDepth) {
    if (options.activeMutant) {
      env.__STRYKER_ACTIVE_MUTANT__ = options.activeMutant;
    }
@@ -105,7 +120,7 @@ index 53ceac152f18ca4b34f068b2f1cd8a3012caa5f6..7fa4254eccd52fc53e7b50e97f12ffe4
    if (options.coverageFile) {
      env.__STRYKER_COVERAGE_FILE__ = options.coverageFile;
    }
-@@ -8921,6 +8941,7 @@ exit=%s timedOut=%s
+@@ -8921,6 +8949,7 @@ exit=%s timedOut=%s
          bunArgs: this.bunArgs,
          bunfigPath,
          activeMutant: options.activeMutant.id,
@@ -113,7 +128,7 @@ index 53ceac152f18ca4b34f068b2f1cd8a3012caa5f6..7fa4254eccd52fc53e7b50e97f12ffe4
          bail: !options.disableBail,
          sequentialMode: true,
          preloadScript: this.preloadScriptPath,
-@@ -8946,6 +8967,13 @@ exit=%s timedOut=%s
+@@ -8946,6 +8975,13 @@ exit=%s timedOut=%s
          status: MutantRunStatus.Timeout
        };
      }
