@@ -8,6 +8,7 @@ import { readTexts, snapshotAt, stillMissing } from "./doc-snapshot.ts";
 import { changedLines, changedPaths, git, pathsAt, rangeEnds, refArgs } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { proseFindings, readerOf } from "./prose-matchers.ts";
+import { longSentences } from "./sentence-length.ts";
 
 type Finding = {
   readonly path: string;
@@ -22,6 +23,7 @@ type Judged = {
   readonly agents: number;
   readonly findings: readonly Finding[];
   readonly advisory: ReadonlyMap<string, number>;
+  readonly sentenceAdvisory: readonly Finding[];
   readonly brokenBefore: readonly Finding[];
 };
 
@@ -105,6 +107,9 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   const prose = edited.flatMap(({ path, reader }) =>
     proseFindings(text(path), reader, changed.get(path)).map(({ line, message }) => ({ path, line, message })),
   );
+  const sentenceAdvisory = edited
+    .flatMap(({ path }) => longSentences(text(path), changed.get(path)).map(({ line, message }) => ({ path, line, message })))
+    .toSorted(inPathOrder);
   const judging = (path: string): Judging => ({ commands: !speaksToConsumers(text(path)) });
   // A directory the range deletes still belongs to this repository, so a path under it is stale rather than another repository's.
   const roots = rootsOf(yield* pathsAt(base, [], root));
@@ -133,6 +138,7 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
       ...entries,
     ].toSorted(inPathOrder),
     advisory,
+    sentenceAdvisory,
     brokenBefore: references.brokenBefore.toSorted(inPathOrder),
   } satisfies Judged;
 });
@@ -141,7 +147,7 @@ function describe({ path, line, message }: Finding): string {
   return `  ${path}${line === undefined ? "" : `:${line}`}: ${message}`;
 }
 
-export function report({ held, edited, named, agents, findings, advisory, brokenBefore }: Judged): string {
+export function report({ held, edited, named, agents, findings, advisory, sentenceAdvisory, brokenBefore }: Judged): string {
   const verdict =
     findings.length === 0
       ? [
@@ -158,6 +164,13 @@ export function report({ held, edited, named, agents, findings, advisory, broken
           `${NAME}: advisory, ${advisory.size} doc file(s) the range leaves alone do not hold to their templates yet:`,
           ...[...advisory].map(([path, count]) => `  ${path}: ${count} violation(s)`),
         ];
+  const sentences =
+    sentenceAdvisory.length === 0
+      ? []
+      : [
+          `${NAME}: advisory, ${sentenceAdvisory.length} sentence(s) over the trial length caps:`,
+          ...sentenceAdvisory.map(describe),
+        ];
   const broken =
     brokenBefore.length === 0
       ? []
@@ -165,7 +178,7 @@ export function report({ held, edited, named, agents, findings, advisory, broken
           `${NAME}: advisory, ${brokenBefore.length} path(s), link(s) or command(s) the living docs or agent files name were broken before the range:`,
           ...brokenBefore.map(describe),
         ];
-  return [...verdict, ...unconformed, ...broken].join("\n");
+  return [...verdict, ...unconformed, ...sentences, ...broken].join("\n");
 }
 
 const docs = Effect.gen(function* () {

@@ -243,7 +243,7 @@ export function scanMarkdown(text: string): readonly MarkdownLine[] {
 
 const LEADING_MARKERS = /^(?:\s*>)*\s*(?:#{1,6}\s+|(?:[-*+]|\d{1,9}[.)])\s+(?:\[[ xX]\]\s+)?)?/;
 
-function bodyOf({ prose }: MarkdownLine): string {
+export function bodyOf({ prose }: MarkdownLine): string {
   const markers = LEADING_MARKERS.exec(prose)?.[0] ?? "";
   return BLANK.repeat(markers.length) + prose.slice(markers.length);
 }

@@ -162,3 +162,32 @@ test(
   },
   120_000,
 );
+
+test(
+  "a sentence over the trial length cap is advisory, and never fails the range",
+  async () => {
+    const { put, commit, docs } = await repository();
+    await put(GUIDE, OPENING);
+    const base = await commit("start");
+    await put(
+      GUIDE,
+      `${OPENING}Now the gate reads each Markdown file at the head commit and uses its path or front matter to choose which template its kind needs today.\n`,
+    );
+    const head = await commit("a sentence over the trial cap");
+
+    const reported = await docs(base, head);
+    expect(reported.text).toContain("docs: advisory, 1 sentence(s) over the trial length caps:");
+    expect(reported.text).toContain(`  ${GUIDE}:4: carries a 26-word descriptive sentence, over the 25-word cap`);
+    expect(reported.exitCode).toBe(0);
+
+    await put(
+      GUIDE,
+      `${OPENING}The gate reads each Markdown file at the head commit and uses its path or front matter to choose which template its kind needs today.\n`,
+    );
+    const held = await commit("a sentence within the trial cap");
+    const clean = await docs(head, held);
+    expect(clean.text).not.toContain("trial length caps");
+    expect(clean.exitCode).toBe(0);
+  },
+  120_000,
+);

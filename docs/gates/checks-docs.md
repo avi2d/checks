@@ -110,6 +110,8 @@ A line holds one sentence, so a changed line is a changed sentence.
 A bold label that opens a line, as in `**Status.**`, heads the sentence after it and is not a sentence of its own.
 No rule reads fenced code, inline code, link destinations, URLs, HTML comments or front matter.
 Readability scores and word choice, such as easy, are not checked.
+A sentence over the trial length cap is listed as advisory and never fails the run.
+The cap is 20 words in an ordered list item and 25 words elsewhere.
 
 `src/docs/prose-matchers.ts` holds the rules and a synchronous `proseRefused()`, and imports nothing.
 The package exports it as `@avi2dg/checks/scripts/prose-matchers.ts`.
@@ -207,6 +209,8 @@ docs: 6 violation(s):
   docs/parts.md:9: names `gates.lint`, which the range removed from every file outside the docs. Say what holds now, or drop the line
 docs: advisory, 1 doc file(s) the range leaves alone do not hold to their templates yet:
   docs/adr/0001-quality-gates.md: 5 violation(s)
+docs: advisory, 1 sentence(s) over the trial length caps:
+  README.md:16: carries a 27-word descriptive sentence, over the 25-word cap (procedural means an ordered list item, capped at 20 words)
 docs: advisory, 1 path(s), link(s) or command(s) the living docs or agent files name were broken before the range:
   docs/parts.md:9: links to `suppliers.md#prices`, and `docs/suppliers.md` has no heading with that anchor
 ```

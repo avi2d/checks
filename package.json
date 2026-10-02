@@ -60,6 +60,7 @@
     "src/complexity/exports.ts",
     "src/complexity/knip.ts",
     "src/testing/quarantine-clock.ts",
+    "src/docs/sentence-length.ts",
     "src/docs/docs.ts",
     "src/dependencies/vendor.ts",
     "src/dependencies/vendor-args.ts",
