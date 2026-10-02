@@ -15,15 +15,25 @@ export type LongSentence = SentenceLength & {
   readonly message: string;
 };
 
+function graphemesOf(body: string): readonly string[] {
+  return [...new Intl.Segmenter().segment(body)].map(({ segment }) => segment);
+}
+
+function dropPrefix(raw: string): string {
+  const chars = graphemesOf(raw);
+  for (const [at, char] of chars.entries()) {
+    if (char !== " " && char !== "\t" && char !== ">") return chars.slice(at).join("");
+  }
+  return "";
+}
+
 function orderedAt(raw: string): boolean {
-  let at = 0;
-  while (raw.charAt(at) === " " || raw.charAt(at) === "\t" || raw.charAt(at) === ">") at += 1;
-  const digits = at;
-  while (raw.charAt(at) >= "0" && raw.charAt(at) <= "9") at += 1;
-  if (at === digits) return false;
-  const marker = raw.charAt(at);
+  const rest = dropPrefix(raw);
+  const digits = /^\d+/.exec(rest)?.[0] ?? "";
+  if (digits === "") return false;
+  const marker = rest.charAt(digits.length);
   if (marker !== "." && marker !== ")") return false;
-  const after = raw.charAt(at + 1);
+  const after = rest.charAt(digits.length + 1);
   return after === " " || after === "\t" || after === "";
 }
 
@@ -53,23 +63,25 @@ function isCloser(char: string): boolean {
 }
 
 function sentencesIn(body: string): readonly string[] {
+  const chars = graphemesOf(body);
   const sentences: string[] = [];
   let start = 0;
-  let at = 0;
-  while (at < body.length) {
-    const char = body.charAt(at);
-    if (char === "." || char === "!" || char === "?") {
-      let end = at + 1;
-      while (isCloser(body.charAt(end))) end += 1;
-      const next = body.charAt(end);
-      if (next === "" || next === " " || next === "\t") {
-        sentences.push(body.slice(start, end));
-        start = end;
-      }
-    }
-    at += 1;
+  let cut = -1;
+  for (const [at, char] of chars.entries()) {
+    if (char === "." || char === "!" || char === "?") cut = at + 1;
+    else if (cut === at && isCloser(char)) cut = at + 1;
+    else if (cut > start && (char === " " || char === "\t")) {
+      sentences.push(chars.slice(start, cut).join(""));
+      start = cut;
+      cut = -1;
+    } else if (cut > start) cut = -1;
   }
-  if (body.slice(start).trim() !== "") sentences.push(body.slice(start));
+  if (cut === chars.length && cut > start) {
+    sentences.push(chars.slice(start, cut).join(""));
+    start = cut;
+  }
+  const tail = chars.slice(start).join("");
+  if (tail.trim() !== "") sentences.push(tail);
   return sentences;
 }
 

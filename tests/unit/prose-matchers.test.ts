@@ -236,6 +236,15 @@ describe("a trial sentence length cap, procedural at 20 words and descriptive at
     ]);
   });
 
+  test("a sentence ending in a closing quote is split past the quote", () => {
+    const quoted = 'She said "hi." It builds.';
+    expect(sentenceLengths(quoted)).toEqual([
+      { line: 1, words: 3, kind: "descriptive" },
+      { line: 1, words: 2, kind: "descriptive" },
+    ]);
+    expect(lengths(quoted)).toEqual([]);
+  });
+
   test("each sentence on a line is counted on its own", () => {
     const two =
       "It builds. Now the gate reads each Markdown file at the head commit and uses its path or front matter to choose which template its kind needs today.";
@@ -257,6 +266,52 @@ describe("a trial sentence length cap, procedural at 20 words and descriptive at
       "Now the gate reads each Markdown file at the head commit and uses its path or front matter to choose which template its kind needs today.\nIt builds.\n";
     expect(lengths(text, new Set([2]))).toEqual([]);
     expect(lengths(text, new Set([1]))).toHaveLength(1);
+  });
+
+  test("a closing line without a terminator still counts as a sentence", () => {
+    expect(sentenceLengths("It builds\nand ships")).toEqual([
+      { line: 1, words: 2, kind: "descriptive" },
+      { line: 2, words: 2, kind: "descriptive" },
+    ]);
+  });
+
+  test("a lone code span or mark holds no word", () => {
+    expect(sentenceLengths("Run `x` or `y` now.")).toEqual([{ line: 1, words: 3, kind: "descriptive" }]);
+    expect(sentenceLengths("It holds / : @ marks.")).toEqual([{ line: 1, words: 3, kind: "descriptive" }]);
+  });
+
+  test("an indented or quoted ordered item stays procedural", () => {
+    const words = "Run the build, then lint, then typecheck, then the full suite, and commit only when each gate passes without complaint today.";
+    for (const line of [`   1. ${words}`, `> 1. ${words}`]) {
+      expect(lengths(line)).toEqual([
+        `1: carries a 21-word procedural sentence, over the ${PROCEDURAL_WORD_CAP}-word cap (procedural means an ordered list item; descriptive caps at ${DESCRIPTIVE_WORD_CAP} words)`,
+      ]);
+    }
+  });
+
+  test("only ASCII letters and digits make a word", () => {
+    expect(sentenceLengths("0 9 A Z a z / : @ [ { ~ _."))
+      .toEqual([{ line: 1, words: 6, kind: "descriptive" }]);
+  });
+
+  test("each closing mark ends a sentence past itself", () => {
+    for (const closer of ['"', "'", ")", "]", "*", "_", "”", "’"]) {
+      expect(sentenceLengths(`She said hi.${closer} It builds.`)).toEqual([
+        { line: 1, words: 3, kind: "descriptive" },
+        { line: 1, words: 2, kind: "descriptive" },
+      ]);
+    }
+  });
+
+  test("leading space, a trailing space and a tab change no count", () => {
+    const one = [{ line: 1, words: 2, kind: "descriptive" }] as const;
+    expect(sentenceLengths("  It builds.")).toEqual(one);
+    expect(sentenceLengths("It builds. ")).toEqual(one);
+    expect(sentenceLengths("It\tbuilds.")).toEqual(one);
+  });
+
+  test("a period inside a token splits nothing", () => {
+    expect(sentenceLengths("a.b c")).toEqual([{ line: 1, words: 2, kind: "descriptive" }]);
   });
 
   test("sentenceLengths reports every sentence with its kind", () => {
