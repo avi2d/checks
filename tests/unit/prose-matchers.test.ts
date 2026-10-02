@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { isLivingDoc, PROSE_RULES, proseFindings, proseRefused, readerOf, scanMarkdown } from "../../src/docs/prose-matchers.ts";
+import { DESCRIPTIVE_WORD_CAP, longSentences, PROCEDURAL_WORD_CAP, sentenceLengths, type SentenceKind } from "../../src/docs/sentence-length.ts";
 
 function refusals(text: string, within?: ReadonlySet<number>): readonly string[] {
   return proseFindings(text, "people", within).map(({ line, message }) => `${line}: ${message}`);
@@ -186,4 +187,140 @@ test("an agent file takes the separator rules and no other, and a changelog take
     "AGENTS.md:1 carries `;`",
   ]);
   expect(proseRefused("CHANGELOG.md", text)).toEqual([]);
+});
+
+describe("a trial sentence length cap, procedural at 20 words and descriptive at 25", () => {
+  const lengths = (text: string, within?: ReadonlySet<number>): readonly string[] =>
+    longSentences(text, within).map(({ line, message }) => `${line}: ${message}`);
+
+  test("20 words in an ordered list item holds, and 21 is reported", () => {
+    const twenty =
+      "1. Run the build, then lint, then typecheck, then the suite, and commit only when each gate passes without complaint today.";
+    const twentyOne =
+      "1. Run the build, then lint, then typecheck, then the full suite, and commit only when each gate passes without complaint today.";
+    expect(lengths(twenty)).toEqual([]);
+    expect(lengths(twentyOne)).toEqual([
+      `1: carries a 21-word procedural sentence, over the ${PROCEDURAL_WORD_CAP}-word cap (procedural means an ordered list item; descriptive caps at ${DESCRIPTIVE_WORD_CAP} words)`,
+    ]);
+  });
+
+  test("25 words outside an ordered list holds, and 26 is reported", () => {
+    const twentyFive =
+      "The gate reads each Markdown file at the head commit and uses its path or front matter to choose which template its kind needs today.";
+    const twentySix =
+      "Now the gate reads each Markdown file at the head commit and uses its path or front matter to choose which template its kind needs today.";
+    expect(lengths(twentyFive)).toEqual([]);
+    expect(lengths(twentySix)).toEqual([
+      `1: carries a 26-word descriptive sentence, over the ${DESCRIPTIVE_WORD_CAP}-word cap (procedural means an ordered list item, capped at ${PROCEDURAL_WORD_CAP} words)`,
+    ]);
+  });
+
+  test("a real over-length sentence from the checks CONTRIBUTING is reported", () => {
+    const real =
+      "`.github/workflows/mutation.yml` runs Stryker, with `stryker.conf.mjs`, as a baseline on `main` or on any branch by hand, and as an advisory comparison scoped to the sources a pull request changes or reaches through a changed test, helper or fixture.";
+    expect(lengths(real)).toEqual([
+      `1: carries a 35-word descriptive sentence, over the ${DESCRIPTIVE_WORD_CAP}-word cap (procedural means an ordered list item, capped at ${PROCEDURAL_WORD_CAP} words)`,
+    ]);
+  });
+
+  test("a `1)` marker is procedural, and a bullet is descriptive", () => {
+    const procedural =
+      "1) Run the build, then lint, then typecheck, then the full suite, and commit only when each gate passes without complaint today.";
+    const bullet =
+      "- Now the gate reads each Markdown file at the head commit and uses its path or front matter to choose which template its kind needs today.";
+    expect(lengths(procedural)).toEqual([
+      `1: carries a 21-word procedural sentence, over the ${PROCEDURAL_WORD_CAP}-word cap (procedural means an ordered list item; descriptive caps at ${DESCRIPTIVE_WORD_CAP} words)`,
+    ]);
+    expect(lengths(bullet)).toEqual([
+      `1: carries a 26-word descriptive sentence, over the ${DESCRIPTIVE_WORD_CAP}-word cap (procedural means an ordered list item, capped at ${PROCEDURAL_WORD_CAP} words)`,
+    ]);
+  });
+
+  test("a sentence ending in a closing quote is split past the quote", () => {
+    const quoted = 'She said "hi." It builds.';
+    expect(sentenceLengths(quoted)).toEqual([
+      { line: 1, words: 3, kind: "descriptive" },
+      { line: 1, words: 2, kind: "descriptive" },
+    ]);
+    expect(lengths(quoted)).toEqual([]);
+  });
+
+  test("each sentence on a line is counted on its own", () => {
+    const two =
+      "It builds. Now the gate reads each Markdown file at the head commit and uses its path or front matter to choose which template its kind needs today.";
+    expect(lengths(two)).toEqual([
+      `1: carries a 26-word descriptive sentence, over the ${DESCRIPTIVE_WORD_CAP}-word cap (procedural means an ordered list item, capped at ${PROCEDURAL_WORD_CAP} words)`,
+    ]);
+  });
+
+  test("headings, tables, code and link targets hold no words", () => {
+    const heading = "# Now the gate reads each Markdown file at the head commit and uses its path or front matter to choose which template its kind needs today.";
+    const table = "| Now the gate reads each Markdown file at the head commit and uses its path or front matter to choose which template its kind needs today. |";
+    expect(lengths(`${heading}\n${table}\n`)).toEqual([]);
+    expect(lengths("It builds `now the gate reads each Markdown file at the head commit and uses its path or front matter to choose which template its kind needs today`.\n")).toEqual([]);
+    expect(lengths("It builds [now](now-the-gate-reads-each-markdown-file-at-the-head-commit-and-uses-its-path-or-front-matter-to-choose-which-template-its-kind-needs-today).\n")).toEqual([]);
+  });
+
+  test("only the lines a change adds or edits are counted", () => {
+    const text =
+      "Now the gate reads each Markdown file at the head commit and uses its path or front matter to choose which template its kind needs today.\nIt builds.\n";
+    expect(lengths(text, new Set([2]))).toEqual([]);
+    expect(lengths(text, new Set([1]))).toHaveLength(1);
+  });
+
+  test("a closing line without a terminator still counts as a sentence", () => {
+    expect(sentenceLengths("It builds\nand ships")).toEqual([
+      { line: 1, words: 2, kind: "descriptive" },
+      { line: 2, words: 2, kind: "descriptive" },
+    ]);
+  });
+
+  test("a lone code span or mark holds no word", () => {
+    expect(sentenceLengths("Run `x` or `y` now.")).toEqual([{ line: 1, words: 3, kind: "descriptive" }]);
+    expect(sentenceLengths("It holds / : @ marks.")).toEqual([{ line: 1, words: 3, kind: "descriptive" }]);
+  });
+
+  test("an indented or quoted ordered item stays procedural", () => {
+    const words = "Run the build, then lint, then typecheck, then the full suite, and commit only when each gate passes without complaint today.";
+    for (const line of [`   1. ${words}`, `> 1. ${words}`]) {
+      expect(lengths(line)).toEqual([
+        `1: carries a 21-word procedural sentence, over the ${PROCEDURAL_WORD_CAP}-word cap (procedural means an ordered list item; descriptive caps at ${DESCRIPTIVE_WORD_CAP} words)`,
+      ]);
+    }
+  });
+
+  test("only ASCII letters and digits make a word", () => {
+    expect(sentenceLengths("0 9 A Z a z / : @ [ { ~ _."))
+      .toEqual([{ line: 1, words: 6, kind: "descriptive" }]);
+  });
+
+  test("each closing mark ends a sentence past itself", () => {
+    for (const closer of ['"', "'", ")", "]", "*", "_", "”", "’"]) {
+      expect(sentenceLengths(`She said hi.${closer} It builds.`)).toEqual([
+        { line: 1, words: 3, kind: "descriptive" },
+        { line: 1, words: 2, kind: "descriptive" },
+      ]);
+    }
+  });
+
+  test("leading space, a trailing space and a tab change no count", () => {
+    const one = [{ line: 1, words: 2, kind: "descriptive" }] as const;
+    expect(sentenceLengths("  It builds.")).toEqual(one);
+    expect(sentenceLengths("It builds. ")).toEqual(one);
+    expect(sentenceLengths("It\tbuilds.")).toEqual(one);
+  });
+
+  test("a period inside a token splits nothing", () => {
+    expect(sentenceLengths("a.b c")).toEqual([{ line: 1, words: 2, kind: "descriptive" }]);
+  });
+
+  test("sentenceLengths reports every sentence with its kind", () => {
+    const text = "It builds.\n\n1. Run the build, then lint, then typecheck, then the suite, and commit only when each gate passes without complaint today.\n";
+    expect(sentenceLengths(text)).toEqual([
+      { line: 1, words: 2, kind: "descriptive" },
+      { line: 3, words: 20, kind: "procedural" },
+    ]);
+    const kinds = (value: string): readonly SentenceKind[] => sentenceLengths(value).map(({ kind }) => kind);
+    expect(kinds(text)).toEqual(["descriptive", "procedural"]);
+  });
 });
