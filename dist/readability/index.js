@@ -400,11 +400,11 @@ var rule = {
   create(context) {
     const max = maxOf(context.options);
     const check = (node) => {
-      const score2 = node.type === "StaticBlock" ? cognitiveComplexity(node, NO_NAMES) : cognitiveComplexity(node, selfNames(node));
-      if (score2 <= max)
+      const score = node.type === "StaticBlock" ? cognitiveComplexity(node, NO_NAMES) : cognitiveComplexity(node, selfNames(node));
+      if (score <= max)
         return;
       const name = node.type === "StaticBlock" ? "static block" : `function \`${displayName(node)}\``;
-      context.report({ node, message: `${name} has a cognitive complexity of ${score2}. Maximum allowed is ${max}.` });
+      context.report({ node, message: `${name} has a cognitive complexity of ${score}. Maximum allowed is ${max}.` });
     };
     return {
       FunctionDeclaration: check,

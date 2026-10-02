@@ -11,5 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - run: bun src/dependencies/advisories.ts --all

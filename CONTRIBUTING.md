@@ -25,6 +25,9 @@ A nightly scheduled or hand-started run restores no state and passes `--disableB
 That run uploads the report again as the `mutation-baseline-full` artifact.
 The scope step reads that artifact from the newest successful such run on `main` that has one.
 Run `bun run mutate -- --mutate <file>` to mutate one source file locally, since the preset refuses a full run outside CI.
+The patch under `patches/` makes `@hughescr/stryker-bun-runner` honour Stryker's hit limit, so a mutant whose code loops endlessly ends as a `Timeout` within seconds.
+A static mutant, evaluated once when its module loads, never reaches that limit and still waits for `timeoutMS`.
+The patch applies only to this repository's install, not to a repository that installs the kit.
 
 ## Regenerate what is committed
 

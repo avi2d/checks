@@ -9,7 +9,7 @@ Each repository owns its workflows and native tool configs, as [Native settings]
 <!-- generated prerequisites: bun run build writes it from package.json, .bun-version and scripts/doc-blocks.ts -->
 
 - A git repository, whose history the range gates read.
-- Bun 1.3.13, which runs every bin.
+- Bun 1.4.2, which runs every bin.
 - The peer dependencies, at the exact versions the kit pins:
   - `@effect/tsgo` 0.45.0
   - `@swc/core` 1.16.2
