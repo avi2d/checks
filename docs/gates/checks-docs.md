@@ -110,6 +110,8 @@ A line holds one sentence, so a changed line is a changed sentence.
 A bold label that opens a line, as in `**Status.**`, heads the sentence after it and is not a sentence of its own.
 No rule reads fenced code, inline code, link destinations, URLs, HTML comments or front matter.
 Readability scores and word choice, such as easy, are not checked.
+A sentence over the trial length cap is listed as advisory and never fails the run.
+The cap is 20 words in an ordered list item and 25 words elsewhere.
 
 `src/docs/prose-matchers.ts` holds the rules and a synchronous `proseRefused()`, and imports nothing.
 The package exports it as `@avi2dg/checks/scripts/prose-matchers.ts`.
