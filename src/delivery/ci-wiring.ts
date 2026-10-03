@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
-import { Console, Effect, FileSystem, Path, Schema } from "effect";
+import { Config, Console, Effect, FileSystem, Path, Schema } from "effect";
 import { defaultBranch, git } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { ENTRY_POINT, KIT_GATES, type KitGate } from "../core/gates.ts";
-import { invokes, mentions, plainCommand, type Command } from "./shell-command.ts";
+import { fromProgram, invokes, mentions, plainCommand, shellCommands, withoutOptions, type Command } from "./shell-command.ts";
 
 export type { Command };
 
@@ -34,6 +34,18 @@ export type Gap = {
   readonly blocked: readonly BlockedInvocation[];
 };
 
+export type Visibility = "private" | "public" | "unknown";
+
+export type RunnerPolicy = {
+  readonly visibility: Visibility;
+  readonly scripts: ReadonlyMap<string, string>;
+};
+
+export type RunnerFault = {
+  readonly location: string;
+  readonly fault: string;
+};
+
 type RunStep = {
   readonly location: string;
   readonly blocker: string | undefined;
@@ -58,6 +70,17 @@ const CONSTANTS = new Map([
   ["false", false],
 ]);
 const STATUS_OVERRIDE = /\b(?:always|failure|cancelled)\s*\(/;
+// GitHub expressions match context and property names without regard to case.
+const OVERRIDE_ACCESS = String.raw`vars\s*(?:\.\s*CI_RUNS_ON\b|\[\s*'CI_RUNS_ON'\s*\])`;
+const RUNNER_OVERRIDE = new RegExp(String.raw`\b${OVERRIDE_ACCESS}`, "i");
+const HOSTED_OVERRIDE = new RegExp(String.raw`^\$\{\{\s*${OVERRIDE_ACCESS}\s*\|\|\s*'ubuntu-latest'\s*\}\}$`, "i");
+const MUTATION_RUNNER = ["self-hosted", "Linux", "X64", "winbox"];
+const HOSTED_DEFAULT = "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}";
+const MUTATION_BINS = ["checks-mutation", "checks-mutation-compare"];
+const BUN_OPERANDS = new Set(["--cwd", "-c", "--config", "--env-file", "-F", "--filter", "-r", "--preload", "--require", "--import", "-e", "--eval", "-p", "--print", "--elide-lines", "--tsconfig-override"]);
+// bun's own commands take precedence over a package.json script of the same name unless bun run names it.
+const BUN_COMMANDS = new Set(["test", "repl", "exec", "install", "i", "add", "a", "remove", "rm", "update", "outdated", "link", "unlink", "pm", "build", "init", "create", "c", "upgrade", "publish", "patch", "patch-commit", "audit", "info", "why"]);
+const EventRepository = Schema.fromJsonString(Schema.Struct({ repository: Schema.Struct({ private: Schema.Boolean }) }));
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -243,13 +266,75 @@ export function declarationFor(scripts: readonly string[], branch: string): Decl
   };
 }
 
+function runsMutation(script: string, scripts: ReadonlyMap<string, string>, walked: readonly string[] = []): boolean {
+  return shellCommands(script).some((command) => mutationCommand(command, scripts, walked));
+}
+
+function mutationCommand(command: Command, scripts: ReadonlyMap<string, string>, walked: readonly string[]): boolean {
+  const [first = "", ...rest] = fromProgram(command);
+  return first === "bun" ? bunRunsMutation(rest, scripts, walked) : mutationBin([first, ...rest]);
+}
+
+function bunRunsMutation(args: Command, scripts: ReadonlyMap<string, string>, walked: readonly string[]): boolean {
+  const [command = "", ...rest] = withoutOptions(args, BUN_OPERANDS);
+  if (command === "x") return mutationCommand(["bunx", ...rest], scripts, walked);
+  if (BUN_COMMANDS.has(command)) return false;
+  const [target = "", ...targetArgs] = command === "run" ? withoutOptions(rest, BUN_OPERANDS) : [command, ...rest];
+  const body = walked.includes(target) ? undefined : scripts.get(target);
+  return body === undefined ? mutationBin([target, ...targetArgs]) : runsMutation(body, scripts, [...walked, target]);
+}
+
+function mutationBin([program = "", subcommand]: Command): boolean {
+  const bin = program.slice(program.lastIndexOf("/") + 1);
+  return MUTATION_BINS.includes(bin) || (bin === "stryker" && subcommand === "run");
+}
+
+function sameLabels(runsOn: unknown, labels: readonly string[]): boolean {
+  const named = Array.isArray(runsOn) ? names(runsOn) : undefined;
+  return named?.length === labels.length && labels.every((label) => named.includes(label));
+}
+
+function readsOverride(runsOn: unknown): boolean {
+  if (typeof runsOn === "string") return RUNNER_OVERRIDE.test(runsOn);
+  const values = isRecord(runsOn) ? Object.values(runsOn) : Array.isArray(runsOn) ? runsOn : [];
+  return values.some(readsOverride);
+}
+
+function runnerFault(runsOn: unknown, mutation: boolean, visibility: Visibility): string | undefined {
+  const overridden = readsOverride(runsOn);
+  const pin = `set runs-on: [${MUTATION_RUNNER.join(", ")}]`;
+  if (mutation && overridden) return `a mutation job reads CI_RUNS_ON, so an override moves its full sweeps off winbox; ${pin}`;
+  if (mutation) return visibility === "private" && !sameLabels(runsOn, MUTATION_RUNNER) ? `a mutation job in a private repository runs off winbox; ${pin}` : undefined;
+  const hosted = typeof runsOn === "string" && HOSTED_OVERRIDE.test(runsOn.trim());
+  if (hosted || (visibility !== "private" && !overridden)) return undefined;
+  return `the job is not on a hosted runner CI_RUNS_ON can override; set runs-on: ${HOSTED_DEFAULT}`;
+}
+
+export function findRunnerFaults(policy: RunnerPolicy, workflows: readonly Workflow[]): readonly RunnerFault[] {
+  return workflows.flatMap((workflow) => {
+    const jobs = isRecord(workflow.document) ? workflow.document["jobs"] : undefined;
+    if (!isRecord(jobs)) return [];
+    return Object.entries(jobs).flatMap(([id, job]) => {
+      if (!isRecord(job) || job["runs-on"] === undefined) return [];
+      const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
+      const mutation = steps.some((step: unknown) => isRecord(step) && typeof step["run"] === "string" && runsMutation(step["run"], policy.scripts));
+      const fault = runnerFault(job["runs-on"], mutation, policy.visibility);
+      return fault === undefined ? [] : [{ location: `${workflow.path} job ${id}`, fault }];
+    });
+  });
+}
+
+export function formatRunnerReport(faults: readonly RunnerFault[]): string {
+  return [`ci-wiring: ${faults.length} job(s) run on the wrong runner:`, ...faults.map(({ location, fault }) => `  ${location}: ${fault}`)].join("\n");
+}
+
 export const parseWorkflow = (path: string, text: string): Effect.Effect<Workflow, WiringError> =>
   Effect.try({
     try: () => ({ path, document: Bun.YAML.parse(text) }),
     catch: (error) => new WiringError({ message: `cannot parse ${path}: ${String(error)}` }),
   });
 
-export const readDeclaration = Effect.fn("readDeclaration")(function* (root: string) {
+const readScripts = Effect.fn("readScripts")(function* (root: string) {
   const fs = yield* FileSystem.FileSystem;
   const file = (yield* Path.Path).join(root, "package.json");
   const { scripts = {} } = (yield* fs.exists(file))
@@ -258,7 +343,22 @@ export const readDeclaration = Effect.fn("readDeclaration")(function* (root: str
         Effect.mapError((cause) => new WiringError({ message: `cannot read ${file}: ${cause.message}` })),
       )
     : Manifest.make({});
-  return declarationFor(Object.keys(scripts), yield* defaultBranch(root));
+  return new Map(Object.entries(scripts));
+});
+
+export const readDeclaration = Effect.fn("readDeclaration")(function* (root: string) {
+  return declarationFor([...(yield* readScripts(root)).keys()], yield* defaultBranch(root));
+});
+
+// Only GitHub's event says whether the repository is private, so a run outside CI judges what holds in either.
+const readVisibility = Effect.gen(function* () {
+  const eventPath = yield* Config.String("GITHUB_EVENT_PATH").pipe(Config.withDefault(""));
+  if (eventPath === "") return "unknown" satisfies Visibility;
+  return yield* (yield* FileSystem.FileSystem).readFileString(eventPath).pipe(
+    Effect.flatMap(Schema.decodeUnknownEffect(EventRepository)),
+    Effect.map(({ repository }): Visibility => (repository.private ? "private" : "public")),
+    Effect.orElseSucceed((): Visibility => "unknown"),
+  );
 });
 
 export const readWorkflows = Effect.fn("readWorkflows")(function* (root: string) {
@@ -283,7 +383,9 @@ const wiring = Effect.gen(function* () {
   const gaps = findGaps(declaration, workflows);
   const gapReport = formatReport(declaration, gaps);
   yield* gaps.length > 0 ? Console.error(gapReport) : Console.log(gapReport);
-  return gaps.length === 0;
+  const faults = findRunnerFaults({ visibility: yield* readVisibility, scripts: yield* readScripts(root) }, workflows);
+  if (faults.length > 0) yield* Console.error(formatRunnerReport(faults));
+  return gaps.length === 0 && faults.length === 0;
 });
 
 if (import.meta.main) runMain("ci-wiring", wiring);

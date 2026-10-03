@@ -76,6 +76,8 @@ jobs:
           path: flake-report.json
 ```
 
+A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on the job, as [checks-ci-wiring](checks-ci-wiring.md#runners) requires.
+
 ## Related topics
 
 - [checks-test](checks-test.md)

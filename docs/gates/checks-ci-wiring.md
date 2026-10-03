@@ -21,10 +21,22 @@ It refuses a step or job with `if: false` or `continue-on-error: true`.
 It also refuses a workflow that does not trigger on both `opened` and `synchronize` pull requests to the target branch.
 A path filter cannot cover every pull request and therefore cannot satisfy the check.
 
+### Runners
+
+It also judges the runner of every job in every workflow.
+A mutation job is one with a run step that calls `stryker run`, `checks-mutation`, `checks-mutation-compare` or a `package.json` script that does, directly or through `bun`, `bun run` or `bunx`.
+The call counts as a command of its own or inside a command substitution, never as an argument to another command.
+A mutation job never names `CI_RUNS_ON` directly in `runs-on`, as `vars.CI_RUNS_ON` or `vars['CI_RUNS_ON']`, so an override for an outage cannot send its full sweeps to hosted runners.
+Any other job that names `CI_RUNS_ON` in `runs-on` carries exactly the hosted-default expression `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
+In a private repository each mutation job carries exactly the labels `[self-hosted, Linux, X64, winbox]` and every other job exactly the hosted-default expression.
+A public repository may keep `runs-on: ubuntu-latest` on every job, because a pull request from a fork runs its own code on the runner.
+The check knows a repository is private only from GitHub's event, so a run outside CI judges only the rules that hold in either.
+
 ## What it reads
 
 The bin reads `.github/workflows/*.yml`, `*.yaml` and the `scripts` in `package.json` from the working tree.
 It reads the target branch from `GITHUB_BASE_REF`, then from `refs/remotes/origin/HEAD` and then from the event file `GITHUB_EVENT_PATH` names.
+It reads whether the repository is private from `repository.private` in that event file.
 It parses the workflows with `Bun.YAML` without executing them.
 
 ## Arguments
@@ -36,7 +48,7 @@ It takes no arguments.
 | Code | Result |
 | --- | --- |
 | 0 | Every required command has a reachable step. |
-| 1 | A required command is missing or blocked. |
+| 1 | A required command is missing or blocked, or a job runs on the wrong runner. |
 | 2 | A workflow or `package.json` cannot be decoded. |
 
 ## Sample output
@@ -47,6 +59,13 @@ A missing step produces a report like this:
 ci-wiring: 1 of 6 gate(s) do not run on pull requests to main:
   bun run test
     no run step invokes it
+```
+
+A mutation job that names `CI_RUNS_ON` in `runs-on` produces a report like this:
+
+```
+ci-wiring: 1 job(s) run on the wrong runner:
+  .github/workflows/mutation-compare.yml job mutation-compare: a mutation job reads CI_RUNS_ON, so an override moves its full sweeps off winbox; set runs-on: [self-hosted, Linux, X64, winbox]
 ```
 
 ## When it runs

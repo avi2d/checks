@@ -64,6 +64,149 @@ export function plainCommand(script: string): Command | undefined {
   return words.length === 0 ? undefined : words;
 }
 
+type ShellPart = Span & { readonly substitutions: readonly string[] };
+
+const COMMAND_BREAKS = new Set(["\n", ";", "&", "|", "(", ")", "`"]);
+const WORD_BREAKS = new Set([" ", "\t"]);
+const REDIRECTS = new Set(["<", ">"]);
+const REDIRECT_OPERATOR = /^[<>][<>&|]*/;
+const FILE_DESCRIPTOR = /^\d+$/;
+const DOUBLE_QUOTE_ESCAPES = new Set(["$", "`", '"', "\\"]);
+const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+const RESERVED_WORDS = new Set(["!", "{", "if", "then", "elif", "else", "while", "until", "do"]);
+const LAUNCHER_OPERANDS = new Map<string, ReadonlySet<string>>([
+  ["time", new Set(["-o", "-f"])],
+  ["env", new Set(["-u", "-C", "--unset", "--chdir"])],
+  ["exec", new Set(["-a"])],
+  ["nohup", new Set()],
+  ["sudo", new Set(["-u", "-g", "-C", "-D", "-h", "-p", "-r", "-t", "-U", "--user", "--group", "--chdir", "--host", "--prompt"])],
+  ["bunx", new Set(["-p", "--package"])],
+  ["npx", new Set(["-p", "--package", "-c", "--call", "-w", "--workspace"])],
+]);
+
+function substitutionEnd(script: string, start: number): number {
+  if (script.charAt(start) === "`") {
+    const close = script.indexOf("`", start + 1);
+    return close === -1 ? script.length : close;
+  }
+  let depth = 0;
+  for (let index = start + 1; index < script.length; index += 1) {
+    if (script.charAt(index) === "(") depth += 1;
+    if (script.charAt(index) === ")") depth -= 1;
+    if (depth === 0) return index;
+  }
+  return script.length;
+}
+
+function doubleQuotedPart(script: string, index: number): ShellPart {
+  const char = script.charAt(index);
+  const next = script.charAt(index + 1);
+  if (char === "\\" && next === "\n") return { text: "", end: index + 2, substitutions: [] };
+  if (char === "\\" && DOUBLE_QUOTE_ESCAPES.has(next)) return { text: next, end: index + 2, substitutions: [] };
+  if (char !== "`" && !(char === "$" && next === "(")) return { text: char, end: index + 1, substitutions: [] };
+  const end = substitutionEnd(script, index);
+  return { text: "", end: end + 1, substitutions: [script.slice(index + (char === "`" ? 1 : 2), end)] };
+}
+
+function shellDoubleQuoted(script: string, open: number): ShellPart {
+  let text = "";
+  const substitutions: string[] = [];
+  let index = open + 1;
+  while (index < script.length && script.charAt(index) !== '"') {
+    const part = doubleQuotedPart(script, index);
+    text += part.text;
+    substitutions.push(...part.substitutions);
+    index = part.end;
+  }
+  return { text, end: index + 1, substitutions };
+}
+
+function shellPart(script: string, index: number): ShellPart {
+  const char = script.charAt(index);
+  if (char === "'") {
+    const close = script.indexOf("'", index + 1);
+    const end = close === -1 ? script.length : close;
+    return { text: script.slice(index + 1, end), end: end + 1, substitutions: [] };
+  }
+  if (char === '"') return shellDoubleQuoted(script, index);
+  if (char === "\\") return { text: script.charAt(index + 1), end: index + 2, substitutions: [] };
+  return { text: char, end: index + 1, substitutions: [] };
+}
+
+function commentEnd(script: string, from: number): number {
+  const newline = script.indexOf("\n", from);
+  return newline === -1 ? script.length : newline;
+}
+
+type ShellParse = {
+  readonly commands: string[][];
+  readonly substitutions: string[];
+  words: string[];
+  word: string | undefined;
+  redirecting: boolean;
+};
+
+function endWord(parse: ShellParse): void {
+  if (parse.word === undefined) return;
+  if (!parse.redirecting) parse.words.push(parse.word);
+  parse.redirecting = false;
+  parse.word = undefined;
+}
+
+function endCommand(parse: ShellParse): void {
+  endWord(parse);
+  parse.commands.push(parse.words);
+  parse.words = [];
+  parse.redirecting = false;
+}
+
+function startRedirect(parse: ShellParse, script: string, index: number): number {
+  if (parse.word !== undefined && FILE_DESCRIPTOR.test(parse.word)) parse.word = undefined;
+  endWord(parse);
+  parse.redirecting = true;
+  return index + (REDIRECT_OPERATOR.exec(script.slice(index))?.[0].length ?? 1);
+}
+
+export function shellCommands(script: string): readonly Command[] {
+  const parse: ShellParse = { commands: [], substitutions: [], words: [], word: undefined, redirecting: false };
+  let index = 0;
+  while (index < script.length) {
+    const char = script.charAt(index);
+    if (char === "\\" && script.charAt(index + 1) === "\n") {
+      index += 2;
+    } else if (char === "#" && parse.word === undefined) {
+      index = commentEnd(script, index);
+    } else if (REDIRECTS.has(char)) {
+      index = startRedirect(parse, script, index);
+    } else if (COMMAND_BREAKS.has(char) || WORD_BREAKS.has(char)) {
+      if (COMMAND_BREAKS.has(char)) endCommand(parse);
+      else endWord(parse);
+      index += 1;
+    } else {
+      const part = shellPart(script, index);
+      parse.word = (parse.word ?? "") + part.text;
+      parse.substitutions.push(...part.substitutions);
+      index = part.end;
+    }
+  }
+  endCommand(parse);
+  return [...parse.commands, ...parse.substitutions.flatMap(shellCommands)].filter((command) => command.length > 0);
+}
+
+export function withoutOptions(words: Command, operands: ReadonlySet<string>): Command {
+  const [first = "", ...rest] = words;
+  if (first === "--") return rest;
+  if (!first.startsWith("-")) return words;
+  return withoutOptions(operands.has(first) ? rest.slice(1) : rest, operands);
+}
+
+export function fromProgram(words: Command): Command {
+  const [first = "", ...rest] = words;
+  if (ASSIGNMENT.test(first) || RESERVED_WORDS.has(first)) return fromProgram(rest);
+  const operands = LAUNCHER_OPERANDS.get(first);
+  return operands === undefined ? words : fromProgram(withoutOptions(rest, operands));
+}
+
 // bun run resolves any other word, even one holding a slash, to a package.json script of that name first.
 const FILE_PATH = /^\.{0,2}\//;
 

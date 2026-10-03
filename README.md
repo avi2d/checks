@@ -104,6 +104,7 @@ To consume the kit from a repository:
    ```
 
 Add a pull request title lint step in another workflow using `./node_modules/.bin/commitlint`.
+A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on each job, as [checks-ci-wiring](docs/gates/checks-ci-wiring.md#runners) requires.
 `bun run lint` then ends with `checks-lint: <count> gate(s) pass`.
 
 ## What runs
