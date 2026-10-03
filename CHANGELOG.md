@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.34.0
+
+Released 2026-10-03.
+
+### Features
+
+- **delivery:** pin mutation jobs to winbox and default other jobs to hosted runners [#123](https://github.com/avi2d/checks/pull/123)
+
 ## 0.33.0
 
 Released 2026-10-03.
