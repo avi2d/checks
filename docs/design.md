@@ -100,7 +100,7 @@ The `.ts` bins keep a `bun` shebang and need no build step, unlike the oxlint pl
 The bins are written in Effect.
 So `effect` is a peer dependency, and `@effect/platform-bun`, which only the bins use, is a dependency.
 `@effect/platform-node-shared` is a direct dependency only to pin its version.
-`@effect/platform-bun` asks for it with a `^` range, and a newer release candidate of it peers on a newer `effect` than consumers install.
+`@effect/platform-bun` asks for it with a `^` range, so a newer minor of it could resolve and peer on a newer `effect` than the exact version consumers install.
 So the three packages move together at one exact version.
 
 ## checks-lint runs each gate as its own bin
