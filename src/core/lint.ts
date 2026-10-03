@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { EVERY_REPOSITORY, KIT_GATES, type KitGate } from "./gates.ts";
 import { defaultBranch, git } from "./git.ts";
 import { runMain, Usage } from "./main.ts";

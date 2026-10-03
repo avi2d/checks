@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import { ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcessSpawner } from "effect/process";
 import { collect } from "../core/git.ts";
 
 export class GitHubFailure extends Schema.TaggedError<GitHubFailure>()("GitHubFailure", {

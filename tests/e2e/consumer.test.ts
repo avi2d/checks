@@ -49,7 +49,7 @@ function manifestFor(checks: string): Record<string, unknown> {
     type: "module",
     devDependencies: {
       "@avi2dg/checks": checks,
-      effect: "4.0.0-rc.115",
+      effect: "4.0.0",
       oxlint: "1.83.0",
       "@swc/core": "1.16.2",
       "@types/bun": "1.4.2",
