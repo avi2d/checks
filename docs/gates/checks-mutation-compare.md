@@ -109,7 +109,7 @@ The base worktree's path carries the run's id and attempt, and the last step rem
 A public repository keeps `runs-on: ubuntu-latest`, because a pull request from a fork runs its own code on the runner.
 A private repository sets `runs-on: [self-hosted, Linux, X64, winbox]` instead, which is the fleet's self-hosted Linux runner where it sends its full sweeps.
 The job never reads `CI_RUNS_ON`, so an override that moves a repository's other jobs during a runner outage leaves the comparison waiting for `winbox`.
-[checks-ci-wiring](checks-ci-wiring.md#runners) refuses a mutation job that reads it.
+[checks-ci-wiring](checks-ci-wiring.md#runners) refuses a mutation job that names it in `runs-on`.
 
 ## Related topics
 

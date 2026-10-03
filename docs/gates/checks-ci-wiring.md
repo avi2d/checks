@@ -61,7 +61,7 @@ ci-wiring: 1 of 6 gate(s) do not run on pull requests to main:
     no run step invokes it
 ```
 
-A mutation job that reads `CI_RUNS_ON` produces a report like this:
+A mutation job that names `CI_RUNS_ON` in `runs-on` produces a report like this:
 
 ```
 ci-wiring: 1 job(s) run on the wrong runner:
