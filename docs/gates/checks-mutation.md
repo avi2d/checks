@@ -73,7 +73,7 @@ on:
   workflow_dispatch:
 jobs:
   mutation:
-    runs-on: ${{ vars.CI_RUNS_ON || fromJSON('["self-hosted","Linux","X64","winbox"]') }}
+    runs-on: [self-hosted, Linux, X64, winbox]
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -88,8 +88,9 @@ jobs:
           path: reports/mutation/mutation.json
 ```
 
-With `CI_RUNS_ON` unset, the job runs on the fleet's self-hosted Linux runner labelled `winbox`, which is where a private repository sends its full sweeps.
-A repository sets `CI_RUNS_ON` only to name a different runner.
+The job runs on the fleet's self-hosted Linux runner labelled `winbox`, which is where a repository sends its full sweeps.
+It never reads `CI_RUNS_ON`, so an override that moves a repository's other jobs during a runner outage leaves the sweep waiting for `winbox`.
+[checks-ci-wiring](checks-ci-wiring.md#runners) refuses a mutation job that reads it.
 The `name: mutation` line is what `gh workflow run mutation` looks up.
 GitHub sets `CI=true` on every runner, so the preset lets the full run through there.
 

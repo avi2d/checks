@@ -72,3 +72,35 @@ test("the default branch comes from origin HEAD, the pull request base or GitHub
   expect(release.exitCode).toBe(1);
   expect(release.text).toContain("limits pull_request to branches other than release");
 });
+
+test("a private repository's event holds mutation jobs to winbox and every other job to a hosted default", async () => {
+  const old = `\${{ vars.CI_RUNS_ON || fromJSON('["self-hosted","Linux","X64","winbox"]') }}`;
+  const mutation = (runsOn: string) => `on: pull_request\njobs:\n  mutation-compare:\n    runs-on: ${runsOn}\n    steps:\n      - run: bun run mutate\n`;
+  const repo = await open({
+    "package.json": JSON.stringify({ name: "consumer", scripts: { lint: "lint", test: "test", mutate: "bunx stryker run" } }),
+    ".github/workflows/ci.yml": workflow.replace("runs-on: ubuntu-latest", `runs-on: ${old}`),
+    ".github/workflows/mutation-compare.yml": mutation(old),
+    "event.json": JSON.stringify({ repository: { default_branch: "main", private: true } }),
+  });
+  await repo.commit("start");
+  const privateEvent = { GITHUB_EVENT_PATH: join(repo.dir, "event.json") };
+  const red = await wiring(repo, privateEvent);
+  expect(red.exitCode).toBe(1);
+  expect(red.text).toContain("2 job(s) run on the wrong runner");
+  expect(red.text).toContain(".github/workflows/mutation-compare.yml job mutation-compare: a mutation job reads CI_RUNS_ON");
+  expect(red.text).toContain(".github/workflows/ci.yml job checks: the job is not on a hosted runner");
+  expect((await wiring(repo)).exitCode).toBe(1);
+  await repo.write({ ".github/workflows/ci.yml": workflow, ".github/workflows/mutation-compare.yml": mutation("ubuntu-latest") });
+  expect((await wiring(repo)).exitCode).toBe(0);
+  const hosted = await wiring(repo, privateEvent);
+  expect(hosted.exitCode).toBe(1);
+  expect(hosted.text).toContain("job mutation-compare: a mutation job in a private repository runs off winbox");
+  expect(hosted.text).toContain("job checks: the job is not on a hosted runner");
+  await repo.write({
+    ".github/workflows/ci.yml": workflow.replace("runs-on: ubuntu-latest", "runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}"),
+    ".github/workflows/mutation-compare.yml": mutation("[self-hosted, Linux, X64, winbox]"),
+  });
+  const green = await wiring(repo, privateEvent);
+  expect(green.exitCode).toBe(0);
+  expect(green.text).toContain("3 gate(s) run on pull requests to main");
+});

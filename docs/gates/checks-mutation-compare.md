@@ -107,8 +107,9 @@ jobs:
 Both Stryker runs are full sweeps, and GitHub sets `CI=true` on every runner, so the preset lets them through.
 The base worktree's path carries the run's id and attempt, and the last step removes it even when a run fails, so a runner kept between jobs starts each job clean.
 A public repository keeps `runs-on: ubuntu-latest`, because a pull request from a fork runs its own code on the runner.
-A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || fromJSON('["self-hosted","Linux","X64","winbox"]') }}` instead.
-With `CI_RUNS_ON` unset, the job then runs on the fleet's self-hosted Linux runner labelled `winbox`, which is where a private repository sends its full sweeps.
+A private repository sets `runs-on: [self-hosted, Linux, X64, winbox]` instead, which is the fleet's self-hosted Linux runner where it sends its full sweeps.
+The job never reads `CI_RUNS_ON`, so an override that moves a repository's other jobs during a runner outage leaves the comparison waiting for `winbox`.
+[checks-ci-wiring](checks-ci-wiring.md#runners) refuses a mutation job that reads it.
 
 ## Related topics
 

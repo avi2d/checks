@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
-import { declarationFor, findGaps, formatReport, parseWorkflow, requiredCommands } from "../../src/delivery/ci-wiring.ts";
+import { declarationFor, findGaps, findRunnerFaults, formatReport, formatRunnerReport, parseWorkflow, requiredCommands } from "../../src/delivery/ci-wiring.ts";
 
 const scripts = ["lint", "build", "typecheck", "test"];
 const declaration = declarationFor(scripts, "main");
@@ -65,4 +65,53 @@ test("a second active workflow can satisfy a missing title gate", () => {
   const ci = workflow(full.replace("      - run: ./node_modules/.bin/commitlint\n", ""));
   const title = Effect.runSync(parseWorkflow(".github/workflows/title.yml", `${prefix}      - run: ./node_modules/.bin/commitlint\n`));
   expect(findGaps(declaration, [...ci, title])).toEqual([]);
+});
+
+const WINBOX = "[self-hosted, Linux, X64, winbox]";
+const HOSTED = "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}";
+const OLD_DEFAULT = `\${{ vars.CI_RUNS_ON || fromJSON('["self-hosted","Linux","X64","winbox"]') }}`;
+const noScripts = new Map<string, string>();
+
+function jobs(mutationRunsOn: string, checksRunsOn: string) {
+  return workflow(
+    `on: pull_request\njobs:\n  mutation:\n    runs-on: ${mutationRunsOn}\n    steps:\n      - run: bunx stryker run\n  checks:\n    runs-on: ${checksRunsOn}\n    steps:\n      - run: bun run lint\n`,
+  );
+}
+
+test("a private repository pins mutation jobs to winbox and defaults every other job to a hosted runner", () => {
+  expect(findRunnerFaults({ visibility: "private", scripts: noScripts }, jobs(WINBOX, HOSTED))).toEqual([]);
+  const old = findRunnerFaults({ visibility: "private", scripts: noScripts }, jobs(OLD_DEFAULT, OLD_DEFAULT));
+  expect(old.map(({ location }) => location)).toEqual([".github/workflows/ci.yml job mutation", ".github/workflows/ci.yml job checks"]);
+  expect(old[0]?.fault).toContain("reads CI_RUNS_ON");
+  expect(old[1]?.fault).toContain(HOSTED);
+  const plain = findRunnerFaults({ visibility: "private", scripts: noScripts }, jobs("ubuntu-latest", "ubuntu-latest"));
+  expect(plain.map(({ fault }) => fault)).toEqual([expect.stringContaining(WINBOX), expect.stringContaining(HOSTED)]);
+});
+
+test("any repository refuses a mutation job that reads CI_RUNS_ON and an override without the hosted default", () => {
+  for (const visibility of ["public", "unknown"] as const) {
+    expect(findRunnerFaults({ visibility, scripts: noScripts }, jobs("ubuntu-latest", "ubuntu-latest"))).toEqual([]);
+    expect(findRunnerFaults({ visibility, scripts: noScripts }, jobs(WINBOX, HOSTED))).toEqual([]);
+    expect(findRunnerFaults({ visibility, scripts: noScripts }, jobs(HOSTED, OLD_DEFAULT)).length).toBe(2);
+  }
+});
+
+test("a package script, a kit bin or a prefixed stryker run marks the job as a mutation job", () => {
+  const mutating = new Map([["mutate", "bunx stryker run --incremental"], ["loop", "bun run loop"]]);
+  for (const step of ["bun run mutate", "time bunx stryker run --mutate src", "./node_modules/.bin/checks-mutation-compare a b", "bun run checks-mutation"]) {
+    const faults = findRunnerFaults(
+      { visibility: "private", scripts: mutating },
+      workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${HOSTED}\n    steps:\n      - run: ${step}\n`),
+    );
+    expect(faults[0]?.fault).toContain(WINBOX);
+  }
+  const looping = workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${HOSTED}\n    steps:\n      - run: bun run loop\n`);
+  expect(findRunnerFaults({ visibility: "private", scripts: mutating }, looping)).toEqual([]);
+});
+
+test("the runner report names each job and what to set", () => {
+  const faults = findRunnerFaults({ visibility: "private", scripts: noScripts }, jobs("ubuntu-latest", HOSTED));
+  expect(formatRunnerReport(faults)).toBe(
+    `ci-wiring: 1 job(s) run on the wrong runner:\n  .github/workflows/ci.yml job mutation: ${faults[0]?.fault}`,
+  );
 });
