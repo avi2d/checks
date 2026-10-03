@@ -25,7 +25,8 @@ A path filter cannot cover every pull request and therefore cannot satisfy the c
 
 It also judges the runner of every job in every workflow.
 A mutation job is one with a run step that calls `stryker run`, `checks-mutation`, `checks-mutation-compare` or a `package.json` script that does.
-A mutation job never reads `CI_RUNS_ON`, so an override for an outage cannot send its full sweeps to hosted runners.
+The call counts as a command of its own or inside a command substitution, never as an argument to another command.
+A mutation job never reads `CI_RUNS_ON` in any form, such as `vars['CI_RUNS_ON']`, so an override for an outage cannot send its full sweeps to hosted runners.
 Any other job that reads `CI_RUNS_ON` sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
 In a private repository each mutation job sets `runs-on: [self-hosted, Linux, X64, winbox]` and every other job sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
 A public repository may keep `runs-on: ubuntu-latest` on every job, because a pull request from a fork runs its own code on the runner.

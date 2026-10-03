@@ -124,6 +124,30 @@ test("quoted words and line continuations still mark a mutation job, and a shell
   }
 });
 
+test("only a command's program marks a mutation job, wherever the shell runs that command", () => {
+  const mutating = new Map([["mutate", 'out="$(bunx stryker run)"']]);
+  const sweep = (run: string) =>
+    findRunnerFaults(
+      { visibility: "private", scripts: mutating },
+      workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${HOSTED}\n    steps:\n      - run: ${JSON.stringify(run)}\n`),
+    );
+  for (const run of ['output="$(bunx stryker run)"', 'echo "`checks-mutation`"', "bun run mutate", ">log.txt 2>&1 checks-mutation a b", "if bunx stryker run; then echo ok; fi"]) {
+    expect(sweep(run)[0]?.fault).toContain(WINBOX);
+  }
+  for (const run of ["echo 'checks-mutation'", "bun run lint > checks-mutation.log", "echo stryker run"]) {
+    expect(sweep(run)).toEqual([]);
+  }
+});
+
+test("bracket access or any case of CI_RUNS_ON still reads the override", () => {
+  for (const override of ["${{ vars['CI_RUNS_ON'] || 'ubuntu-latest' }}", "${{ VARS.ci_runs_on || 'ubuntu-latest' }}"]) {
+    for (const visibility of ["public", "unknown"] as const) {
+      expect(findRunnerFaults({ visibility, scripts: noScripts }, jobs(override, "ubuntu-latest"))[0]?.fault).toContain("reads CI_RUNS_ON");
+      expect(findRunnerFaults({ visibility, scripts: noScripts }, jobs(WINBOX, override.replace("'ubuntu-latest'", "fromJSON('[\"self-hosted\"]')")))).toHaveLength(1);
+    }
+  }
+});
+
 test("the runner report names each job and what to set", () => {
   const faults = findRunnerFaults({ visibility: "private", scripts: noScripts }, jobs("ubuntu-latest", HOSTED));
   expect(formatRunnerReport(faults)).toBe(

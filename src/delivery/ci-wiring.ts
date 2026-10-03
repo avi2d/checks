@@ -3,7 +3,7 @@ import { Config, Console, Effect, FileSystem, Path, Schema } from "effect";
 import { defaultBranch, git } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { ENTRY_POINT, KIT_GATES, type KitGate } from "../core/gates.ts";
-import { invokes, mentions, plainCommand, shellCommands, type Command } from "./shell-command.ts";
+import { fromProgram, invokes, mentions, plainCommand, shellCommands, type Command } from "./shell-command.ts";
 
 export type { Command };
 
@@ -70,7 +70,7 @@ const CONSTANTS = new Map([
   ["false", false],
 ]);
 const STATUS_OVERRIDE = /\b(?:always|failure|cancelled)\s*\(/;
-const RUNNER_OVERRIDE = "vars.CI_RUNS_ON";
+const RUNNER_OVERRIDE = /\bvars\s*(?:\.\s*CI_RUNS_ON\b|\[\s*'CI_RUNS_ON'\s*\])/i;
 const MUTATION_RUNNER = ["self-hosted", "Linux", "X64", "winbox"];
 const HOSTED_DEFAULT = "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}";
 const MUTATION_BINS = ["checks-mutation", "checks-mutation-compare"];
@@ -261,16 +261,21 @@ export function declarationFor(scripts: readonly string[], branch: string): Decl
 }
 
 function runsMutation(script: string, scripts: ReadonlyMap<string, string>, walked: readonly string[] = []): boolean {
-  return shellCommands(script).some((words) =>
-    words.some((word, index) => {
-      const bin = word.slice(word.lastIndexOf("/") + 1);
-      if (MUTATION_BINS.includes(bin)) return true;
-      if (bin === "stryker") return words[index + 1] === "run";
-      const name = word === "run" && words[index - 1] === "bun" ? words[index + 1] : undefined;
-      const body = name === undefined || walked.includes(name) ? undefined : scripts.get(name);
-      return body !== undefined && name !== undefined && runsMutation(body, scripts, [...walked, name]);
-    }),
-  );
+  return shellCommands(script).some((command) => mutationCommand(command, scripts, walked));
+}
+
+function mutationCommand(command: Command, scripts: ReadonlyMap<string, string>, walked: readonly string[]): boolean {
+  const [first = "", ...rest] = fromProgram(command);
+  if (first === "bun") {
+    const args = fromProgram(rest);
+    const run = args[0] === "run";
+    const target = run ? fromProgram(args.slice(1)) : args;
+    const name = target[0] ?? "";
+    const body = !run || walked.includes(name) ? undefined : scripts.get(name);
+    return body === undefined ? mutationCommand(target, scripts, walked) : runsMutation(body, scripts, [...walked, name]);
+  }
+  const bin = first.slice(first.lastIndexOf("/") + 1);
+  return MUTATION_BINS.includes(bin) || (bin === "stryker" && rest[0] === "run");
 }
 
 function sameLabels(runsOn: unknown, labels: readonly string[]): boolean {
@@ -280,13 +285,20 @@ function sameLabels(runsOn: unknown, labels: readonly string[]): boolean {
 
 const unspaced = (expression: string): string => expression.replace(/\s+/g, "");
 
+// GitHub expressions match context properties without regard to case.
+function readsOverride(runsOn: unknown): boolean {
+  if (typeof runsOn === "string") return RUNNER_OVERRIDE.test(runsOn);
+  const values = isRecord(runsOn) ? Object.values(runsOn) : Array.isArray(runsOn) ? runsOn : [];
+  return values.some(readsOverride);
+}
+
 function runnerFault(runsOn: unknown, mutation: boolean, visibility: Visibility): string | undefined {
-  const readsOverride = JSON.stringify(runsOn).includes(RUNNER_OVERRIDE);
+  const overridden = readsOverride(runsOn);
   const pin = `set runs-on: [${MUTATION_RUNNER.join(", ")}]`;
-  if (mutation && readsOverride) return `a mutation job reads CI_RUNS_ON, so an override moves its full sweeps off winbox; ${pin}`;
+  if (mutation && overridden) return `a mutation job reads CI_RUNS_ON, so an override moves its full sweeps off winbox; ${pin}`;
   if (mutation) return visibility === "private" && !sameLabels(runsOn, MUTATION_RUNNER) ? `a mutation job in a private repository runs off winbox; ${pin}` : undefined;
   const hosted = typeof runsOn === "string" && unspaced(runsOn) === unspaced(HOSTED_DEFAULT);
-  if (hosted || (visibility !== "private" && !readsOverride)) return undefined;
+  if (hosted || (visibility !== "private" && !overridden)) return undefined;
   return `the job is not on a hosted runner CI_RUNS_ON can override; set runs-on: ${HOSTED_DEFAULT}`;
 }
 
