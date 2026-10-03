@@ -73,7 +73,16 @@ const REDIRECT_OPERATOR = /^[<>][<>&|]*/;
 const FILE_DESCRIPTOR = /^\d+$/;
 const DOUBLE_QUOTE_ESCAPES = new Set(["$", "`", '"', "\\"]);
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
-const COMMAND_PREFIXES = new Set(["!", "{", "if", "then", "elif", "else", "while", "until", "do", "time", "env", "exec", "nohup", "sudo", "bunx", "npx"]);
+const RESERVED_WORDS = new Set(["!", "{", "if", "then", "elif", "else", "while", "until", "do"]);
+const LAUNCHER_OPERANDS = new Map<string, ReadonlySet<string>>([
+  ["time", new Set(["-o", "-f"])],
+  ["env", new Set(["-u", "-C", "--unset", "--chdir"])],
+  ["exec", new Set(["-a"])],
+  ["nohup", new Set()],
+  ["sudo", new Set(["-u", "-g", "-C", "-D", "-h", "-p", "-r", "-t", "-U", "--user", "--group", "--chdir", "--host", "--prompt"])],
+  ["bunx", new Set(["-p", "--package"])],
+  ["npx", new Set(["-p", "--package", "-c", "--call", "-w", "--workspace"])],
+]);
 
 function substitutionEnd(script: string, start: number): number {
   if (script.charAt(start) === "`") {
@@ -184,10 +193,18 @@ export function shellCommands(script: string): readonly Command[] {
   return [...parse.commands, ...parse.substitutions.flatMap(shellCommands)].filter((command) => command.length > 0);
 }
 
+export function withoutOptions(words: Command, operands: ReadonlySet<string>): Command {
+  const [first = "", ...rest] = words;
+  if (first === "--") return rest;
+  if (!first.startsWith("-")) return words;
+  return withoutOptions(operands.has(first) ? rest.slice(1) : rest, operands);
+}
+
 export function fromProgram(words: Command): Command {
   const [first = "", ...rest] = words;
-  if (first.startsWith("-") || ASSIGNMENT.test(first) || COMMAND_PREFIXES.has(first)) return fromProgram(rest);
-  return first === "bun" && rest[0] === "x" ? fromProgram(rest.slice(1)) : words;
+  if (ASSIGNMENT.test(first) || RESERVED_WORDS.has(first)) return fromProgram(rest);
+  const operands = LAUNCHER_OPERANDS.get(first);
+  return operands === undefined ? words : fromProgram(withoutOptions(rest, operands));
 }
 
 // bun run resolves any other word, even one holding a slash, to a package.json script of that name first.

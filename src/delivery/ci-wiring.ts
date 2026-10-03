@@ -3,7 +3,7 @@ import { Config, Console, Effect, FileSystem, Path, Schema } from "effect";
 import { defaultBranch, git } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { ENTRY_POINT, KIT_GATES, type KitGate } from "../core/gates.ts";
-import { fromProgram, invokes, mentions, plainCommand, shellCommands, type Command } from "./shell-command.ts";
+import { fromProgram, invokes, mentions, plainCommand, shellCommands, withoutOptions, type Command } from "./shell-command.ts";
 
 export type { Command };
 
@@ -70,10 +70,16 @@ const CONSTANTS = new Map([
   ["false", false],
 ]);
 const STATUS_OVERRIDE = /\b(?:always|failure|cancelled)\s*\(/;
-const RUNNER_OVERRIDE = /\bvars\s*(?:\.\s*CI_RUNS_ON\b|\[\s*'CI_RUNS_ON'\s*\])/i;
+// GitHub expressions match context and property names without regard to case.
+const OVERRIDE_ACCESS = String.raw`vars\s*(?:\.\s*CI_RUNS_ON\b|\[\s*'CI_RUNS_ON'\s*\])`;
+const RUNNER_OVERRIDE = new RegExp(String.raw`\b${OVERRIDE_ACCESS}`, "i");
+const HOSTED_OVERRIDE = new RegExp(String.raw`^\$\{\{\s*${OVERRIDE_ACCESS}\s*\|\|\s*'ubuntu-latest'\s*\}\}$`, "i");
 const MUTATION_RUNNER = ["self-hosted", "Linux", "X64", "winbox"];
 const HOSTED_DEFAULT = "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}";
 const MUTATION_BINS = ["checks-mutation", "checks-mutation-compare"];
+const BUN_OPERANDS = new Set(["--cwd", "-c", "--config", "--env-file", "-F", "--filter", "-r", "--preload", "--require", "--import", "-e", "--eval", "-p", "--print", "--elide-lines", "--tsconfig-override"]);
+// bun's own commands take precedence over a package.json script of the same name unless bun run names it.
+const BUN_COMMANDS = new Set(["test", "repl", "exec", "install", "i", "add", "a", "remove", "rm", "update", "outdated", "link", "unlink", "pm", "build", "init", "create", "c", "upgrade", "publish", "patch", "patch-commit", "audit", "info", "why"]);
 const EventRepository = Schema.fromJsonString(Schema.Struct({ repository: Schema.Struct({ private: Schema.Boolean }) }));
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -266,16 +272,21 @@ function runsMutation(script: string, scripts: ReadonlyMap<string, string>, walk
 
 function mutationCommand(command: Command, scripts: ReadonlyMap<string, string>, walked: readonly string[]): boolean {
   const [first = "", ...rest] = fromProgram(command);
-  if (first === "bun") {
-    const args = fromProgram(rest);
-    const run = args[0] === "run";
-    const target = run ? fromProgram(args.slice(1)) : args;
-    const name = target[0] ?? "";
-    const body = !run || walked.includes(name) ? undefined : scripts.get(name);
-    return body === undefined ? mutationCommand(target, scripts, walked) : runsMutation(body, scripts, [...walked, name]);
-  }
-  const bin = first.slice(first.lastIndexOf("/") + 1);
-  return MUTATION_BINS.includes(bin) || (bin === "stryker" && rest[0] === "run");
+  return first === "bun" ? bunRunsMutation(rest, scripts, walked) : mutationBin([first, ...rest]);
+}
+
+function bunRunsMutation(args: Command, scripts: ReadonlyMap<string, string>, walked: readonly string[]): boolean {
+  const [command = "", ...rest] = withoutOptions(args, BUN_OPERANDS);
+  if (command === "x") return mutationCommand(["bunx", ...rest], scripts, walked);
+  if (BUN_COMMANDS.has(command)) return false;
+  const [target = "", ...targetArgs] = command === "run" ? withoutOptions(rest, BUN_OPERANDS) : [command, ...rest];
+  const body = walked.includes(target) ? undefined : scripts.get(target);
+  return body === undefined ? mutationBin([target, ...targetArgs]) : runsMutation(body, scripts, [...walked, target]);
+}
+
+function mutationBin([program = "", subcommand]: Command): boolean {
+  const bin = program.slice(program.lastIndexOf("/") + 1);
+  return MUTATION_BINS.includes(bin) || (bin === "stryker" && subcommand === "run");
 }
 
 function sameLabels(runsOn: unknown, labels: readonly string[]): boolean {
@@ -283,9 +294,6 @@ function sameLabels(runsOn: unknown, labels: readonly string[]): boolean {
   return named?.length === labels.length && labels.every((label) => named.includes(label));
 }
 
-const unspaced = (expression: string): string => expression.replace(/\s+/g, "");
-
-// GitHub expressions match context properties without regard to case.
 function readsOverride(runsOn: unknown): boolean {
   if (typeof runsOn === "string") return RUNNER_OVERRIDE.test(runsOn);
   const values = isRecord(runsOn) ? Object.values(runsOn) : Array.isArray(runsOn) ? runsOn : [];
@@ -297,7 +305,7 @@ function runnerFault(runsOn: unknown, mutation: boolean, visibility: Visibility)
   const pin = `set runs-on: [${MUTATION_RUNNER.join(", ")}]`;
   if (mutation && overridden) return `a mutation job reads CI_RUNS_ON, so an override moves its full sweeps off winbox; ${pin}`;
   if (mutation) return visibility === "private" && !sameLabels(runsOn, MUTATION_RUNNER) ? `a mutation job in a private repository runs off winbox; ${pin}` : undefined;
-  const hosted = typeof runsOn === "string" && unspaced(runsOn) === unspaced(HOSTED_DEFAULT);
+  const hosted = typeof runsOn === "string" && HOSTED_OVERRIDE.test(runsOn.trim());
   if (hosted || (visibility !== "private" && !overridden)) return undefined;
   return `the job is not on a hosted runner CI_RUNS_ON can override; set runs-on: ${HOSTED_DEFAULT}`;
 }

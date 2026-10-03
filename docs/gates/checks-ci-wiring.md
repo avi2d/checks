@@ -24,11 +24,11 @@ A path filter cannot cover every pull request and therefore cannot satisfy the c
 ### Runners
 
 It also judges the runner of every job in every workflow.
-A mutation job is one with a run step that calls `stryker run`, `checks-mutation`, `checks-mutation-compare` or a `package.json` script that does.
+A mutation job is one with a run step that calls `stryker run`, `checks-mutation`, `checks-mutation-compare` or a `package.json` script that does, directly or through `bun`, `bun run` or `bunx`.
 The call counts as a command of its own or inside a command substitution, never as an argument to another command.
-A mutation job never reads `CI_RUNS_ON` in any form, such as `vars['CI_RUNS_ON']`, so an override for an outage cannot send its full sweeps to hosted runners.
-Any other job that reads `CI_RUNS_ON` sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
-In a private repository each mutation job sets `runs-on: [self-hosted, Linux, X64, winbox]` and every other job sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
+A mutation job never names `CI_RUNS_ON` directly in `runs-on`, as `vars.CI_RUNS_ON` or `vars['CI_RUNS_ON']`, so an override for an outage cannot send its full sweeps to hosted runners.
+Any other job that names `CI_RUNS_ON` in `runs-on` carries exactly the hosted-default expression `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
+In a private repository each mutation job carries exactly the labels `[self-hosted, Linux, X64, winbox]` and every other job exactly the hosted-default expression.
 A public repository may keep `runs-on: ubuntu-latest` on every job, because a pull request from a fork runs its own code on the runner.
 The check knows a repository is private only from GitHub's event, so a run outside CI judges only the rules that hold in either.
 
