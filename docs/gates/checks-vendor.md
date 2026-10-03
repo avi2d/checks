@@ -60,19 +60,19 @@ With no arguments it pins nothing.
 ## Sample output
 
 ```
-checks-vendor: cloned effect@4.0.0-rc.115 from https://github.com/Effect-TS/effect.git and linked repos/effect
+checks-vendor: cloned effect@4.0.0 from https://github.com/Effect-TS/effect.git and linked repos/effect
 ```
 
 A fresh fetch reports the tag it cloned and the link it made.
 
 ```
-checks-vendor: repos/effect still holds effect@4.0.0-rc.115, verified against its recorded commit
+checks-vendor: repos/effect still holds effect@4.0.0, verified against its recorded commit
 ```
 
 A later run reports the link it kept.
 
 ```
-checks-vendor: found 1 path writable by its owner, starting with /home/runner/.cache/avi2dg-checks/repos/github.com/Effect-TS/effect/effect@4.0.0-rc.115, and froze the tree again, so repos/effect still holds effect@4.0.0-rc.115, verified against its recorded commit
+checks-vendor: found 1 path writable by its owner, starting with /home/runner/.cache/avi2dg-checks/repos/github.com/Effect-TS/effect/effect@4.0.0, and froze the tree again, so repos/effect still holds effect@4.0.0, verified against its recorded commit
 ```
 
 A run that found an owner write bit reports how many paths carried one and the first of them.

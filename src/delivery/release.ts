@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { groupOf } from "./changelog.ts";
 import { git } from "../core/git.ts";
 

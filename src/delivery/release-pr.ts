@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
-import { Console, Effect, Encoding, FileSystem, Path, Schema } from "effect";
+import { Console, Effect, FileSystem, Path, Schema } from "effect";
+import * as Base64 from "effect/encoding/Base64";
 import { dispatch, gitHubJson, REPOSITORY } from "./github.ts";
 import { nextVersion, type Pending, readPending, releaseTitle, runBuild, withVersion } from "./release.ts";
 import { git } from "../core/git.ts";
@@ -105,7 +106,7 @@ const readStaged = Effect.fn("readStaged")(function* (root: string, staged: Stag
   if (staged.kind === "deleted") return staged;
   if (!REGULAR_FILE_MODES.has(staged.mode)) return yield* refused(`the build wrote ${staged.path} with mode ${staged.mode}, which is no regular file`);
   const bytes = yield* (yield* FileSystem.FileSystem).readFile((yield* Path.Path).join(root, staged.path));
-  return { ...staged, content: Encoding.encodeBase64(bytes) };
+  return { ...staged, content: Base64.encode(bytes) };
 });
 
 // The build writes into the working tree, so the tree it starts from has to hold nothing a release would sweep in.

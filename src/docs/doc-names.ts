@@ -1,5 +1,5 @@
 import { Effect, FileSystem, Option, Path, Schema } from "effect";
-import { ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcessSpawner } from "effect/process";
 import { collect, git, pathsAt } from "../core/git.ts";
 import type { Unresolved } from "./doc-references.ts";
 import { scanMarkdown } from "./prose-matchers.ts";

@@ -1,6 +1,7 @@
-import { Crypto, Effect, Encoding, FileSystem, Path, Schema } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import { Crypto, Effect, FileSystem, Path, Schema } from "effect";
+import * as Hex from "effect/encoding/Hex";
+import { HttpClient, HttpClientResponse } from "effect/http";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import { collect } from "../core/git.ts";
 
 const EXECUTABLE_MODE = 0o755;
@@ -19,7 +20,7 @@ function installedSha256(asset: Asset): string {
 
 const sha256Of = Effect.fn("sha256Of")(function* (bytes: Uint8Array) {
   const crypto = yield* Crypto.Crypto;
-  return Encoding.encodeHex(yield* crypto.digest("SHA-256", bytes));
+  return Hex.encode(yield* crypto.digest("SHA-256", bytes));
 });
 
 const verified = Effect.fn("verified")(function* (binary: string, sha256: string) {

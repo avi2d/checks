@@ -1,5 +1,5 @@
 import { Config, Effect, FileSystem, Path, Schema, Stream } from "effect";
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { DEFAULT_BRANCH } from "./gates.ts";
 import { Usage } from "./main.ts";
 
