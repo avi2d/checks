@@ -2,6 +2,21 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.33.0
+
+Released 2026-10-03.
+
+### Features
+
+- **docs:** report sentences over trial length caps as advisory [#120](https://github.com/avi2d/checks/pull/120)
+
+### Fixes
+
+- move effect to stable 4.0.0 [#122](https://github.com/avi2d/checks/pull/122)
+- **complexity:** accept signed numbers and earlier props names in thin-astro defaults [#115](https://github.com/avi2d/checks/pull/115)
+- **docs:** judge agent file entries and headings from a CommonMark parse [#116](https://github.com/avi2d/checks/pull/116)
+- **docs:** fail link anchors the checks-docs reference rule could not check [#114](https://github.com/avi2d/checks/pull/114)
+
 ## 0.32.0
 
 Released 2026-09-29.
