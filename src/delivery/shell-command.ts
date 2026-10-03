@@ -64,6 +64,77 @@ export function plainCommand(script: string): Command | undefined {
   return words.length === 0 ? undefined : words;
 }
 
+const COMMAND_BREAKS = new Set(["\n", ";", "&", "|", "(", ")", "`"]);
+const WORD_BREAKS = new Set([" ", "\t", "<", ">"]);
+const DOUBLE_QUOTE_ESCAPES = new Set(["$", "`", '"', "\\"]);
+
+function shellDoubleQuoted(script: string, open: number): Span {
+  let text = "";
+  let index = open + 1;
+  while (index < script.length && script.charAt(index) !== '"') {
+    const next = script.charAt(index + 1);
+    if (script.charAt(index) === "\\" && next === "\n") {
+      index += 2;
+    } else if (script.charAt(index) === "\\" && DOUBLE_QUOTE_ESCAPES.has(next)) {
+      text += next;
+      index += 2;
+    } else {
+      text += script.charAt(index);
+      index += 1;
+    }
+  }
+  return { text, end: index + 1 };
+}
+
+function shellPart(script: string, index: number): Span {
+  const char = script.charAt(index);
+  if (char === "'") {
+    const close = script.indexOf("'", index + 1);
+    const end = close === -1 ? script.length : close;
+    return { text: script.slice(index + 1, end), end: end + 1 };
+  }
+  if (char === '"') return shellDoubleQuoted(script, index);
+  if (char === "\\") return { text: script.charAt(index + 1), end: index + 2 };
+  return { text: char, end: index + 1 };
+}
+
+function commentEnd(script: string, from: number): number {
+  const newline = script.indexOf("\n", from);
+  return newline === -1 ? script.length : newline;
+}
+
+export function shellCommands(script: string): readonly Command[] {
+  const commands: string[][] = [];
+  let words: string[] = [];
+  let word: string | undefined;
+  const endWord = () => {
+    if (word !== undefined) words.push(word);
+    word = undefined;
+  };
+  let index = 0;
+  while (index < script.length) {
+    const char = script.charAt(index);
+    if (char === "\\" && script.charAt(index + 1) === "\n") {
+      index += 2;
+    } else if (char === "#" && word === undefined) {
+      index = commentEnd(script, index);
+    } else if (WORD_BREAKS.has(char) || COMMAND_BREAKS.has(char)) {
+      endWord();
+      if (COMMAND_BREAKS.has(char)) {
+        commands.push(words);
+        words = [];
+      }
+      index += 1;
+    } else {
+      const part = shellPart(script, index);
+      word = (word ?? "") + part.text;
+      index = part.end;
+    }
+  }
+  endWord();
+  return [...commands, words].filter((command) => command.length > 0);
+}
+
 // bun run resolves any other word, even one holding a slash, to a package.json script of that name first.
 const FILE_PATH = /^\.{0,2}\//;
 

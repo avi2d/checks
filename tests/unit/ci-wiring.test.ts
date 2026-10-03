@@ -109,6 +109,21 @@ test("a package script, a kit bin or a prefixed stryker run marks the job as a m
   expect(findRunnerFaults({ visibility: "private", scripts: mutating }, looping)).toEqual([]);
 });
 
+test("quoted words and line continuations still mark a mutation job, and a shell comment does not", () => {
+  const mutating = new Map([["mutate", "bunx 'stryker' \\\n  run"]]);
+  const sweep = (run: string) =>
+    findRunnerFaults(
+      { visibility: "private", scripts: mutating },
+      workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${HOSTED}\n    steps:\n      - run: ${JSON.stringify(run)}\n`),
+    );
+  for (const run of ['bun run "mutate"', "bun run mutate", '"./node_modules/.bin/checks-mutation"', "bunx stryker \\\n  run", "echo start\nbunx stryker run"]) {
+    expect(sweep(run)[0]?.fault).toContain(WINBOX);
+  }
+  for (const run of ["bun run lint\n# bunx stryker run", "bun run lint # bunx stryker run", "echo 'bunx stryker run'"]) {
+    expect(sweep(run)).toEqual([]);
+  }
+});
+
 test("the runner report names each job and what to set", () => {
   const faults = findRunnerFaults({ visibility: "private", scripts: noScripts }, jobs("ubuntu-latest", HOSTED));
   expect(formatRunnerReport(faults)).toBe(

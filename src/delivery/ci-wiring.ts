@@ -3,7 +3,7 @@ import { Config, Console, Effect, FileSystem, Path, Schema } from "effect";
 import { defaultBranch, git } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { ENTRY_POINT, KIT_GATES, type KitGate } from "../core/gates.ts";
-import { invokes, mentions, plainCommand, type Command } from "./shell-command.ts";
+import { invokes, mentions, plainCommand, shellCommands, type Command } from "./shell-command.ts";
 
 export type { Command };
 
@@ -261,15 +261,16 @@ export function declarationFor(scripts: readonly string[], branch: string): Decl
 }
 
 function runsMutation(script: string, scripts: ReadonlyMap<string, string>, walked: readonly string[] = []): boolean {
-  const tokens = script.split(/[\s|&;<>()`]+/);
-  return tokens.some((token, index) => {
-    const word = token.slice(token.lastIndexOf("/") + 1);
-    if (MUTATION_BINS.includes(word)) return true;
-    if (word === "stryker") return tokens[index + 1] === "run";
-    const name = token === "run" && tokens[index - 1] === "bun" ? tokens[index + 1] : undefined;
-    const body = name === undefined || walked.includes(name) ? undefined : scripts.get(name);
-    return body !== undefined && name !== undefined && runsMutation(body, scripts, [...walked, name]);
-  });
+  return shellCommands(script).some((words) =>
+    words.some((word, index) => {
+      const bin = word.slice(word.lastIndexOf("/") + 1);
+      if (MUTATION_BINS.includes(bin)) return true;
+      if (bin === "stryker") return words[index + 1] === "run";
+      const name = word === "run" && words[index - 1] === "bun" ? words[index + 1] : undefined;
+      const body = name === undefined || walked.includes(name) ? undefined : scripts.get(name);
+      return body !== undefined && name !== undefined && runsMutation(body, scripts, [...walked, name]);
+    }),
+  );
 }
 
 function sameLabels(runsOn: unknown, labels: readonly string[]): boolean {
