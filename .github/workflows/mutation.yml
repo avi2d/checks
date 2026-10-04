@@ -37,9 +37,9 @@ jobs:
     concurrency:
       group: mutation-baseline
       cancel-in-progress: false
-    # A no-bail full run takes about 65 minutes on these runners; a push
+    # A no-bail full run takes about 30 minutes on hosted runners; a push
     # is incremental from the uploaded state and takes minutes.
-    timeout-minutes: ${{ github.event_name == 'push' && 60 || 90 }}
+    timeout-minutes: ${{ github.event_name == 'push' && 60 || 45 }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
