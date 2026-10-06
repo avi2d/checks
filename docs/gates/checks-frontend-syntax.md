@@ -4,22 +4,21 @@ audience: consumers
 ---
 # checks-frontend-syntax
 
-`checks-frontend-syntax` is the opt-in gate that refuses two CSS constraints a program can decide: a transition over `all` and a body-wide `user-select: none`.
+`checks-frontend-syntax` is the opt-in gate that refuses two CSS constraints a program can decide: a transition over `all` and a body-wide `user-select`.
 
 ## What it checks
 
-It runs stylelint with one of stylelint's own rules and one rule of the kit's own, and with no other rule and no repository config:
+It runs stylelint with two of stylelint's own rules, and with no other rule and no repository config:
 
 | Rule | What it refuses | Why |
 | --- | --- | --- |
 | `declaration-property-value-disallowed-list` | `all` in the value of `transition` or `transition-property`, vendor prefixes included, such as `transition: all 200ms` or `-webkit-transition: opacity 1s, all 1s` | every property that changes then animates, including the ones that make the browser lay out the page again |
-| `checks/body-wide-user-select-none` | `user-select: none`, vendor prefixes included, in a rule whose selector list holds a selector that covers the whole document | a visitor cannot select or copy any text on the page |
+| `rule-selector-property-disallowed-list` | `user-select` or a prefixed `user-select` such as `-webkit-user-select` in a rule whose selector list holds `html`, `body`, `:root` or `*` | a visitor cannot select or copy any text on the page |
 
-A selector covers the whole document when its subject is `html`, `body` or `:root`, such as `body`, `html body` or `.dark body`.
-So does a `*` whose ancestors are only those or `*`, such as `*`, `body *` or `html > body > *`.
-Another value passes, so `body { user-select: text; }` does too.
-A control that needs selection off sets it on its own selector, such as `.drag-handle { user-select: none; }` or `.drag-handle *`, which passes.
-stylelint has no rule that pairs a selector with a value, so the kit holds this one itself.
+The second rule refuses any value on those selectors, so `body { user-select: text; }` fails as well.
+It matches each item of the selector list as a whole.
+So it does not follow `:is()`, `:where()` or `:not()`, nor a compound such as `html body` or `body *`.
+A control that needs selection off sets it on its own selector, such as `.drag-handle { user-select: none; }`, which passes.
 
 It judges each `.css` file, and each `<style>` block and `style` attribute in an `.html`, `.astro`, `.vue` or `.svelte` file, through `postcss-html`.
 It reports a file that does not parse, since it cannot judge one.
@@ -76,7 +75,7 @@ It checks the directory it runs in, or the directory it is given.
 ```
 frontend-syntax: 3 problem(s) in 2 file(s) from 3 declared input(s):
   dist/**/*.html: the declared input matches no file
-  src/layouts/Base.astro:4:15 Disallowed value "none" for property "user-select" in selector "body". Leave text selectable across the page, and turn selection off only on the control that needs it.
+  src/layouts/Base.astro:4:15 Disallowed property "user-select" for selector "body". Leave text selectable across the page, and turn selection off only on the control that needs it.
   src/styles/site.css:1:17 Disallowed value "all 200ms" for property "transition". Name the properties the transition animates.
 ```
 

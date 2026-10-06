@@ -10,7 +10,7 @@ const DECLARED = { "frontend-syntax.json": JSON.stringify({ inputs: ["src/**/*.c
 
 const CLEAN = {
   ...DECLARED,
-  "src/styles/site.css": "a { transition: color 200ms, transform 200ms; }\n.handle, .handle * { user-select: none; }\nbody { user-select: text; }\n",
+  "src/styles/site.css": "a { transition: color 200ms, transform 200ms; }\n.handle { user-select: none; }\n",
   "src/layouts/Base.astro": "---\nconst title = 'Home';\n---\n<html><head><title>{title}</title></head><body><slot /></body></html>\n<style>body { margin: 0; }</style>\n",
 };
 
@@ -37,25 +37,19 @@ const SEEDED = [
     rule: "body-wide user-select",
     file: "src/styles/site.css",
     violation: "html, body { user-select: none; }\n",
-    reported: 'src/styles/site.css:1:14 Disallowed value "none" for property "user-select" in selector "html, body". Leave text selectable across the page',
+    reported: 'src/styles/site.css:1:14 Disallowed property "user-select" for selector "html, body". Leave text selectable across the page',
   },
   {
-    rule: "user-select none on every element",
+    rule: "body-wide user-select of any value",
+    file: "src/styles/site.css",
+    violation: "body { user-select: text; }\n",
+    reported: 'src/styles/site.css:1:8 Disallowed property "user-select" for selector "body"',
+  },
+  {
+    rule: "user-select on every element",
     file: "src/layouts/Base.astro",
     violation: "---\n---\n<html><body><slot /></body></html>\n<style>* { -webkit-user-select: none; }</style>\n",
-    reported: 'src/layouts/Base.astro:4:12 Disallowed value "none" for property "-webkit-user-select" in selector "*"',
-  },
-  {
-    rule: "user-select none on the body inside html",
-    file: "src/styles/site.css",
-    violation: ".handle { user-select: none; }\nhtml body { user-select: NONE !important; }\n",
-    reported: 'src/styles/site.css:2:13 Disallowed value "none" for property "user-select" in selector "html body"',
-  },
-  {
-    rule: "user-select none on everything in the body",
-    file: "src/styles/site.css",
-    violation: ".handle, body * { user-select: none; }\n",
-    reported: 'src/styles/site.css:1:19 Disallowed value "none" for property "user-select" in selector ".handle, body *"',
+    reported: 'src/layouts/Base.astro:4:12 Disallowed property "-webkit-user-select" for selector "*"',
   },
 ] as const;
 

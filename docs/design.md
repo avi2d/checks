@@ -283,9 +283,8 @@ A browser check needs a built site and a browser, and a backend repository has n
 So a product opts in by declaring `browser-checks.json`, `checks-lint` never starts a browser, and the browser libraries are optional peers a backend never installs.
 `checks-frontend-syntax` needs no browser and runs inside `checks-lint`, but only where `frontend-syntax.json` declares its inputs, since a repository with no interface has no CSS to hold to it.
 
-Each check wraps a detector that already works rather than a rule of the kit's own, where such a detector exists.
-The syntax gate runs stylelint's built-in rule for `transition: all`, `axe` runs axe-core and `nesting` runs one html-validate rule.
-No stylelint rule pairs a selector with a value, so the syntax gate holds body-wide `user-select: none` with a stylelint rule of the kit's own.
+Each check wraps a detector that already works rather than a rule of the kit's own.
+The syntax gate runs two of stylelint's built-in rules, `axe` runs axe-core and `nesting` runs one html-validate rule.
 The `layout`, `keyboard` and `motion` probes are the website's own browser tests, generalized after they held on its English and Russian pages.
 A zoom-disabling viewport is judged by axe on the rendered page, because stylelint reads only CSS and html-validate has no rule for the viewport's content.
 

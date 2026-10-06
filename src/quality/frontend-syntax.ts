@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
-import type { LintResult, PublicApi, Rule } from "stylelint";
+import type { LintResult } from "stylelint";
 import { runMain, Usage } from "../core/main.ts";
 
 const NAME = "frontend-syntax";
@@ -8,58 +8,13 @@ const NAME = "frontend-syntax";
 const DECLARATION = "frontend-syntax.json";
 
 const TRANSITION_ALL = "declaration-property-value-disallowed-list";
-const BODY_WIDE_USER_SELECT = "checks/body-wide-user-select-none";
+const BODY_WIDE_USER_SELECT = "rule-selector-property-disallowed-list";
 const UNPARSED = "CssSyntaxError";
 
 const RULES = {
   [TRANSITION_ALL]: [{ "/^(?:-[a-z]+-)?transition(?:-property)?$/": ["/(?:^|[\\s,])all(?:[\\s,]|$)/i"] }],
-  [BODY_WIDE_USER_SELECT]: true,
+  [BODY_WIDE_USER_SELECT]: [{ "/(?:^|,)\\s*(?:html|body|:root|\\*)\\s*(?:,|$)/": ["/^(?:-[a-z]+-)?user-select$/"] }],
 } as const;
-
-const USER_SELECT = /^(?:-[a-z]+-)?user-select$/i;
-const NAMES_THE_DOCUMENT = /^(?:html|body|:root)(?![\w-])/i;
-const COMBINATOR = /[\s>+~]/;
-
-function splitOutsideBrackets(text: string, separator: RegExp): readonly string[] {
-  const parts: string[] = [];
-  let depth = 0;
-  let part = "";
-  for (const char of text) {
-    if (char === "(" || char === "[") depth += 1;
-    if (char === ")" || char === "]") depth -= 1;
-    if (depth === 0 && separator.test(char)) {
-      parts.push(part);
-      part = "";
-    } else {
-      part += char;
-    }
-  }
-  return [...parts, part].filter((one) => one !== "");
-}
-
-function coversTheDocument(selector: string): boolean {
-  const compounds = splitOutsideBrackets(selector, COMBINATOR);
-  const subject = compounds.at(-1);
-  if (subject === undefined) return false;
-  if (NAMES_THE_DOCUMENT.test(subject)) return true;
-  return subject === "*" && compounds.slice(0, -1).every((compound) => compound === "*" || NAMES_THE_DOCUMENT.test(compound));
-}
-
-function bodyWideUserSelect({ utils }: PublicApi): Rule {
-  const messages = utils.ruleMessages(BODY_WIDE_USER_SELECT, {
-    rejected: (property: string, selector: string) => `Disallowed value "none" for property "${property}" in selector "${selector}"`,
-  });
-  const rule = (): ReturnType<Rule> => (root, result) => {
-    root.walkDecls(USER_SELECT, (declaration) => {
-      const { parent } = declaration;
-      if (declaration.value.trim().toLowerCase() !== "none" || parent === undefined || !("selector" in parent)) return;
-      const { selector } = parent;
-      if (typeof selector !== "string" || !splitOutsideBrackets(selector, /,/).some((item) => coversTheDocument(item.trim()))) return;
-      utils.report({ ruleName: BODY_WIDE_USER_SELECT, result, node: declaration, message: messages.rejected, messageArgs: [declaration.prop, selector], word: declaration.prop });
-    });
-  };
-  return Object.assign(rule, { ruleName: BODY_WIDE_USER_SELECT, messages });
-}
 
 const ADVICE: Readonly<Record<string, string>> = {
   [TRANSITION_ALL]: "Name the properties the transition animates.",
@@ -132,7 +87,7 @@ export const scanInputs = Effect.fn("scanInputs")(function* (root: string, globs
   const path = yield* Path.Path;
   const stylelint = (yield* loadPeer("stylelint", () => import("stylelint"))).default;
   const html = (yield* loadPeer("postcss-html", () => import("postcss-html"))).default;
-  const config = { plugins: [stylelint.createPlugin(BODY_WIDE_USER_SELECT, bodyWideUserSelect(stylelint))], rules: RULES, overrides: [{ files: MARKUP, customSyntax: html }] };
+  const config = { rules: RULES, overrides: [{ files: MARKUP, customSyntax: html }] };
   const relative = (file: string): string => path.relative(root, file);
   const inputs: Input[] = [];
   const violations = new Map<string, Violation>();
