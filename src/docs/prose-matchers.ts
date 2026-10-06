@@ -51,7 +51,7 @@ const AUTOLINK = /^<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^\s<>]*|[^\s@<>]+@[^\s<>]+)
 const HTML_TAG = /^<\/?[A-Za-z][A-Za-z0-9-]*(?:\s[^<>]*)?\/?>/;
 const BARE_URL = /^https?:\/\/[^\s<>]*[^\s<>.,:;!?'")\]]/;
 const ENTITY = /^&(?:#\d+|#x[0-9a-f]+|[a-z][a-z0-9]*);/i;
-const WORD = /[\p{L}\p{N}_]/u;
+const WORD = /\w/;
 
 function hiddenAt(raw: string, at: number, rest: string): { readonly length: number; readonly fill: string } | undefined {
   const char = raw.charAt(at);
