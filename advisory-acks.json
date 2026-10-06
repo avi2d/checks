@@ -1,0 +1,8 @@
+[
+  {
+    "package": "braces",
+    "id": "GHSA-vfj7-8cjw-p6xm",
+    "until": "2026-11-05",
+    "reason": "no braces release fixes it, stylelint's micromatch pulls it in, and checks-frontend-syntax expands only the globs a repository declares for itself"
+  }
+]

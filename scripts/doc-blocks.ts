@@ -13,6 +13,7 @@ export const OXLINTRC = ".oxlintrc.json";
 const Manifest = Schema.Struct({
   name: Schema.String,
   peerDependencies: Schema.Record(Schema.String, Schema.String),
+  peerDependenciesMeta: Schema.optionalKey(Schema.Record(Schema.String, Schema.Struct({ optional: Schema.optionalKey(Schema.Boolean) }))),
   files: Schema.Array(Schema.String),
 });
 
@@ -116,8 +117,16 @@ function code(text: string): string {
   return `\`${text}\``;
 }
 
-function peers({ peerDependencies }: KitFacts["manifest"]): readonly (readonly [name: string, version: string])[] {
-  return Object.entries(peerDependencies).toSorted(([a], [b]) => (a < b ? -1 : 1));
+function peers({ peerDependencies, peerDependenciesMeta = {} }: KitFacts["manifest"], optional: boolean): readonly (readonly [name: string, version: string])[] {
+  return Object.entries(peerDependencies)
+    .filter(([name]) => (peerDependenciesMeta[name]?.optional === true) === optional)
+    .toSorted(([a], [b]) => (a < b ? -1 : 1));
+}
+
+function optionalPeers(manifest: KitFacts["manifest"]): readonly string[] {
+  const optional = peers(manifest, true);
+  if (optional.length === 0) return [];
+  return ["- The optional peers, which only an opt-in check loads, at the exact versions the kit pins:", ...optional.map(([name, version]) => `  - ${code(name)} ${version}`)];
 }
 
 const PREREQUISITES: Block = {
@@ -127,7 +136,8 @@ const PREREQUISITES: Block = {
     "- A git repository, whose history the range gates read.",
     `- Bun ${bun}, which runs every bin.`,
     "- The peer dependencies, at the exact versions the kit pins:",
-    ...peers(manifest).map(([name, version]) => `  - ${code(name)} ${version}`),
+    ...peers(manifest, false).map(([name, version]) => `  - ${code(name)} ${version}`),
+    ...optionalPeers(manifest),
   ],
 };
 
@@ -136,7 +146,7 @@ export const INSTALL: Block = {
   from: [MANIFEST],
   render: ({ manifest }) => [
     "```sh",
-    ["bun add -d", manifest.name, ...peers(manifest).map(([name, version]) => `${name}@${version}`)].join(" "),
+    ["bun add -d", manifest.name, ...peers(manifest, false).map(([name, version]) => `${name}@${version}`)].join(" "),
     "```",
   ],
 };

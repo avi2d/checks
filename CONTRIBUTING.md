@@ -78,7 +78,7 @@ To place a change:
    | --- | --- |
    | `src/core/` | the `checks-lint` entry point, the gate registry and the modules every bin runs on |
    | `src/complexity/` | the gates that bound how large and tangled code may grow, and the `readability` oxlint plugin |
-   | `src/quality/` | the gates that hold code correct and idiomatic, and the `effect-channel` and `data-shape` oxlint plugins |
+   | `src/quality/` | the gates that hold code correct and idiomatic, the `effect-channel` and `data-shape` oxlint plugins, and the opt-in frontend checks, with the browser runner under `src/quality/browser/` |
    | `src/testing/` | the gates that judge how the suite is laid out, run and trusted |
    | `src/docs/` | the doc gate and the rules it reads |
    | `src/delivery/` | the gates and bins for how a change reaches `main` and a release, and what a commit may not carry |

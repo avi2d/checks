@@ -19,6 +19,12 @@ Each repository owns its workflows and native tool configs, as [Native settings]
   - `oxlint` 1.83.0
   - `oxlint-tsgolint` 7.0.2002
   - `typescript` 7.0.2
+- The optional peers, which only an opt-in check loads, at the exact versions the kit pins:
+  - `@axe-core/playwright` 4.13.0
+  - `html-validate` 11.16.0
+  - `playwright-core` 1.63.0
+  - `postcss-html` 2.0.0
+  - `stylelint` 17.16.0
 
 <!-- end generated prerequisites -->
 
@@ -123,6 +129,7 @@ The table groups the gates by vector, the part of a repository each one judges.
 | complexity | [`checks-exports`](docs/gates/checks-exports.md) | the range | a repository tracking `*.ts` or `*.tsx` |
 | quality | [`checks-lint-coverage`](docs/gates/checks-lint-coverage.md) | the working tree | a repository tracking `*.ts` or `*.tsx` or `*.astro` |
 | quality | [`checks-comment-gate`](docs/gates/checks-comment-gate.md) | the range | every repository |
+| quality | [`checks-frontend-syntax`](docs/gates/checks-frontend-syntax.md) | the working tree | a repository tracking `frontend-syntax.json` |
 | testing | [`checks-test-layout`](docs/gates/checks-test-layout.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
 | testing | [`checks-quarantine-clock`](docs/gates/checks-quarantine-clock.md) | the range | every repository |
 | docs | [`checks-docs`](docs/gates/checks-docs.md) | the range, and every agent file at the head commit | every repository |
@@ -146,6 +153,7 @@ These bins run on their own:
 - [`checks-release-pr`](docs/gates/checks-release-pr.md) opens or refreshes the pull request that releases the next version, and dispatches its checks.
 - [`checks-release-tag`](docs/gates/checks-release-tag.md) tags a landed release commit with its version and dispatches the release workflow on the tag.
 - [`checks-vendor`](docs/gates/checks-vendor.md) pins each library its `prepare` arguments name to a shared read-only clone and links it under `repos/`.
+- [`checks-browser`](docs/gates/checks-browser.md) opens a product's built pages in Chrome and fails on the layout, keyboard, motion, accessibility, nesting and asset checks its `browser-checks.json` declares.
 
 `checks-lint` has [its own page](docs/gates/checks-lint.md), which says which range it resolves.
 The oxlint base, the dependency-cruiser base and the commitlint config run through their own tools, as the pages under Related topics say.
@@ -155,6 +163,7 @@ The oxlint base, the dependency-cruiser base and the commitlint config run throu
 To move a repository to a newer release of the kit:
 
 1. Run the install line again, which moves the kit to its newest release and the peers to the versions it pins.
+   A repository that opted in to `checks-browser` or `checks-frontend-syntax` also reruns the `bun add` line on its page.
 1. Review the Effect overrides in `.oxlintrc.json` and `tsconfig.json` when a release changes their presets.
 1. Copy `node_modules/@avi2dg/checks/bunfig.toml` over `bunfig.toml` again, since `checks-test-layout` compares the copy with the installed preset.
 1. Run `bun run lint`, `bun run typecheck` and `bun run test`.

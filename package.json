@@ -54,6 +54,8 @@
     "src/docs/prose-matchers.ts",
     "src/quality/comments.ts",
     "src/quality/comment-gate.ts",
+    "src/quality/frontend-syntax.ts",
+    "src/quality/browser/",
     "src/complexity/suppressions-ratchet.ts",
     "src/complexity/repetition.ts",
     "src/complexity/unused.ts",
@@ -95,7 +97,8 @@
     "./scripts/prose-matchers.ts": "./src/docs/prose-matchers.ts",
     "./stryker.preset.js": "./stryker.preset.js",
     "./templates/*": "./dist/templates/*",
-    "./tsconfig.effect.json": "./tsconfig.effect.json"
+    "./tsconfig.effect.json": "./tsconfig.effect.json",
+    "./browser-hooks.ts": "./src/quality/browser/hooks.ts"
   },
   "bin": {
     "checks-lint": "src/core/lint.ts",
@@ -122,7 +125,9 @@
     "checks-docs": "src/docs/docs.ts",
     "checks-vendor": "src/dependencies/vendor.ts",
     "checks-advisories": "src/dependencies/advisories.ts",
-    "checks-secrets": "src/delivery/secrets.ts"
+    "checks-secrets": "src/delivery/secrets.ts",
+    "checks-frontend-syntax": "src/quality/frontend-syntax.ts",
+    "checks-browser": "src/quality/browser/browser.ts"
   },
   "scripts": {
     "prepare": "bun src/dependencies/vendor.ts --library effect --package effect --repository https://github.com/Effect-TS/effect.git --tag 'effect@{version}' --path packages/effect/package.json",
@@ -134,16 +139,39 @@
     "mutate:incremental": "bunx stryker run --incremental"
   },
   "peerDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@effect/tsgo": "0.45.0",
     "@swc/core": "1.16.2",
     "dependency-cruiser": "18.4.0",
-    "@effect/tsgo": "0.45.0",
     "effect": "4.0.0",
+    "html-validate": "11.16.0",
     "jscpd": "5.3.2",
     "oxlint": "1.83.0",
     "oxlint-tsgolint": "7.0.2002",
+    "playwright-core": "1.63.0",
+    "postcss-html": "2.0.0",
+    "stylelint": "17.16.0",
     "typescript": "7.0.2"
   },
+  "peerDependenciesMeta": {
+    "@axe-core/playwright": {
+      "optional": true
+    },
+    "html-validate": {
+      "optional": true
+    },
+    "playwright-core": {
+      "optional": true
+    },
+    "postcss-html": {
+      "optional": true
+    },
+    "stylelint": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@effect/tsgo": "0.45.0",
     "@hughescr/stryker-bun-runner": "1.4.0",
     "@oxlint/plugins": "1.83.0",
@@ -153,9 +181,13 @@
     "@types/commonmark": "0.27.10",
     "dependency-cruiser": "18.4.0",
     "effect": "4.0.0",
+    "html-validate": "11.16.0",
     "jscpd": "5.3.2",
     "oxlint": "1.83.0",
     "oxlint-tsgolint": "7.0.2002",
+    "playwright-core": "1.63.0",
+    "postcss-html": "2.0.0",
+    "stylelint": "17.16.0",
     "typescript": "7.0.2"
   },
   "dependencies": {

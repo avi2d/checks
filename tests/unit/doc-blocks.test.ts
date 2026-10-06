@@ -45,6 +45,21 @@ test("a stale block is rewritten at its marker's indent, peers sorted by name, a
   });
 });
 
+test("an optional peer stays out of the install line and the required list, and gets its own list in the prerequisites", () => {
+  const facts = { ...FACTS, manifest: { ...FACTS.manifest, peerDependencies: { ...FACTS.manifest.peerDependencies, stylelint: "17.16.0" }, peerDependenciesMeta: { stylelint: { optional: true } } } };
+  const prerequisites = TARGETS.flatMap(({ blocks }) => blocks).find(({ name }) => name === "prerequisites");
+  expect({ install: INSTALL.render(facts), prerequisites: prerequisites?.render(facts).slice(2) }).toEqual({
+    install: ["```sh", "bun add -d @acme/kit @acme/peer@1.2.3 zod@4.0.0", "```"],
+    prerequisites: [
+      "- The peer dependencies, at the exact versions the kit pins:",
+      "  - `@acme/peer` 1.2.3",
+      "  - `zod` 4.0.0",
+      "- The optional peers, which only an opt-in check loads, at the exact versions the kit pins:",
+      "  - `stylelint` 17.16.0",
+    ],
+  });
+});
+
 test("a stale lint sample count is rewritten from KIT_GATES", () => {
   const target = TARGETS.find(({ file }) => file === "docs/gates/checks-lint.md");
   expect(target).toBeDefined();
