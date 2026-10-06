@@ -369,6 +369,7 @@ test(
     const installed = join(dir, "node_modules", "@avi2dg", "checks");
     const manifest = Schema.decodeSync(Manifest)(await readFile(join(CHECKOUT, "package.json"), "utf8"));
     expect(Object.keys(manifest.exports).toSorted()).toEqual([
+      "./browser-hooks.ts",
       "./dependency-cruiser.config.js",
       "./knip-base.json",
       "./scripts/comment-matchers.ts",
@@ -384,7 +385,7 @@ test(
       return [key, realpathSync(Bun.resolveSync(specifier, dir)) === realpathSync(file)];
     });
     expect(resolved.filter(([, found]) => !found)).toEqual([]);
-    const shipped = ["ts-reset.d.ts", "dist/templates/readme.md", "src/quality/presets/effect.oxlint.json", "LICENSE", "CHANGELOG.md", "knip-base.json", "dist/data-shape/index.js"];
+    const shipped = ["ts-reset.d.ts", "dist/templates/readme.md", "src/quality/presets/effect.oxlint.json", "LICENSE", "CHANGELOG.md", "knip-base.json", "dist/data-shape/index.js", "src/quality/browser/hooks.ts", "src/quality/frontend-syntax.ts"];
     const unshipped = ["templates", "presets", "src/quality/effect-channel", "src/complexity/readability", "src/quality/data-shape", "tests", "AGENTS.md"];
     expect(shipped.filter((path) => !existsSync(join(installed, path)))).toEqual([]);
     expect(unshipped.filter((path) => existsSync(join(installed, path)))).toEqual([]);

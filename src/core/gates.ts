@@ -36,11 +36,14 @@ export const LINTED_SOURCE: TrackedContent = { pathspecs: ["*.ts", "*.tsx", "*.a
 
 const BUN_LOCKFILE: TrackedContent = { pathspecs: ["bun.lock"], content: "a bun lockfile" };
 
+const FRONTEND_SYNTAX_DECLARATION: TrackedContent = { pathspecs: ["frontend-syntax.json"], content: "a frontend syntax declaration" };
+
 export const KIT_GATES = [
   { bin: "checks-lint-coverage", vector: "quality", file: "lint-coverage.sh", reads: "tree", appliesTo: LINTED_SOURCE },
   { bin: "checks-test-layout", vector: "testing", file: "test-layout.ts", reads: "tree", appliesTo: TYPESCRIPT_SOURCE },
   { bin: "checks-commit-identity", vector: "delivery", file: "commit-identity.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-comment-gate", vector: "quality", file: "comment-gate.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
+  { bin: "checks-frontend-syntax", vector: "quality", file: "frontend-syntax.ts", reads: "tree", appliesTo: FRONTEND_SYNTAX_DECLARATION },
   { bin: "checks-suppressions-ratchet", vector: "complexity", file: "suppressions-ratchet.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-ci-wiring", vector: "delivery", file: "ci-wiring.ts", reads: "tree", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-secrets", vector: "delivery", file: "secrets.ts", reads: "range", appliesTo: EVERY_REPOSITORY },

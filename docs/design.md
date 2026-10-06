@@ -73,8 +73,9 @@ Nothing would then say which gate a helper serves.
 A mutation runner's default scope covers `src/`, so the kit's own Stryker run mutates its source with no `mutate` list.
 The testing directory is named `testing` rather than `tests`, because a `src/tests/` beside the root `tests/` would read as a second suite.
 
-Four `exports` keys name a path the file does not sit at, because consumers resolve them by that name.
+Five `exports` keys name a path the file does not sit at, because consumers resolve them by that name.
 `@avi2dg/checks/scripts/test-skips.ts`, `@avi2dg/checks/scripts/comment-matchers.ts` and `@avi2dg/checks/scripts/prose-matchers.ts` point at their files under `src/`.
+`@avi2dg/checks/browser-hooks.ts` points at `src/quality/browser/hooks.ts`, whose types a product's browser hooks import.
 `@avi2dg/checks/templates/*` points at `dist/templates/`.
 A path read without the resolver, such as `node_modules/@avi2dg/checks/scripts/test-skips.ts`, does not exist.
 
@@ -275,6 +276,27 @@ The kit pins gitleaks by version and SHA-256 for the reason it pins OSV-Scanner.
 No finding can be accepted.
 A secret has no false positive worth keeping in git, because a placeholder carries the same shape without the value.
 So the gate ignores a repository's `.gitleaks.toml`, `.gitleaksignore` and `gitleaks:allow` comments, which would each let one repository pass what another fails.
+
+## The frontend checks are opt-in
+
+A browser check needs a built site and a browser, and a backend repository has neither.
+So a product opts in by declaring `browser-checks.json`, `checks-lint` never starts a browser, and the browser libraries are optional peers a backend never installs.
+`checks-frontend-syntax` needs no browser and runs inside `checks-lint`, but only where `frontend-syntax.json` declares its inputs, since a repository with no interface has no CSS to hold to it.
+
+Each check wraps a detector that already works rather than a rule of the kit's own.
+The syntax gate runs two of stylelint's built-in rules, `axe` runs axe-core and `nesting` runs one html-validate rule.
+The `layout`, `keyboard` and `motion` probes are the website's own browser tests, generalized after they held on its English and Russian pages.
+A zoom-disabling viewport is judged by axe on the rendered page, because stylelint reads only CSS and html-validate has no rule for the viewport's content.
+
+A check that scans nothing would pass without judging anything, as some detectors do on an empty directory.
+So every run names what it scanned, and an empty input, an unserved route or a target that matches nothing fails.
+A contrast axe cannot measure is listed as unverified, never counted as a pass.
+
+Valid choices and the order of async results depend on a product's own schema and requests, which no generic check knows.
+So the runner calls the product's hooks at each visit and holds them to the same inventory, rather than guessing at a product's domain.
+
+The runner drives the Chrome a machine already has through `playwright-core`, since Playwright's own browser builds are a separate download of their own.
+GitHub's hosted Ubuntu runners carry Chrome, and `CHROME_PATH` names any other build.
 
 ## Related topics
 

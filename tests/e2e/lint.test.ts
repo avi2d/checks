@@ -77,3 +77,18 @@ test("a workflow omission makes the lint gate fail and restoring it makes it pas
   const green = await lint(repo);
   expect(green.exitCode).toBe(0);
 }, 60_000);
+
+test("tracking frontend-syntax.json opts a repository into checks-frontend-syntax, which fails lint on a seeded transition all", async () => {
+  const { repo } = await repository();
+  await repo.write({ "frontend-syntax.json": JSON.stringify({ inputs: ["styles/*.css"] }), "styles/site.css": "a { transition: all 1s; }\n" });
+  await commit(repo, "feat: declare the stylesheets");
+  const red = await lint(repo);
+  expect(red.text).toContain('styles/site.css:1:17 Disallowed value "all 1s" for property "transition"');
+  expect(red.text).toContain("checks-lint: 1 of 13 gate(s) failed: checks-frontend-syntax");
+  expect(red.exitCode).toBe(1);
+  await repo.write({ "styles/site.css": "a { transition: color 1s; }\n" });
+  await commit(repo, "fix: name the property");
+  const green = await lint(repo);
+  expect(green.text).toContain("checks-lint: 13 gate(s) pass");
+  expect(green.exitCode).toBe(0);
+}, 60_000);

@@ -47,7 +47,8 @@ export default {
       comment:
         "The import resolves to an installed package the nearest package.json does not declare, so it holds only while something else keeps it hoisted. Declare it in dependencies, devDependencies or peerDependencies.",
       from: {},
-      to: { dependencyTypes: ["npm-no-pkg", "npm-unknown"] },
+      // dependency-cruiser reads every package.json key holding "ependencies" as a list, so peerDependenciesMeta tags a declared peer npm-no-pkg too.
+      to: { dependencyTypes: ["npm-no-pkg", "npm-unknown"], dependencyTypesNot: ["npm", "npm-dev", "npm-optional", "npm-peer"] },
     },
     {
       name: "not-to-unresolvable",

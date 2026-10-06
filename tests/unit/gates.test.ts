@@ -14,6 +14,7 @@ const OUTSIDE_LINT = {
   "checks-subsumed-tests": "src/testing/subsumed-tests.ts",
   "checks-flake": "src/testing/flake.ts",
   "checks-vendor": "src/dependencies/vendor.ts",
+  "checks-browser": "src/quality/browser/browser.ts",
 };
 
 test("every bin is an entry point, a gate the lint entry point runs, or a tool outside lint", () => {

@@ -200,6 +200,25 @@ test(
 );
 
 test(
+  "no-non-package-json stays green on a peer that peerDependenciesMeta marks optional",
+  async () => {
+    dir = await scratch("checks-depcruiser-optional-peer-");
+    await writeProject({
+      "src/entry.test.js": `import "./entry.js";\n`,
+      "src/entry.js": `import { optional } from "optional-pkg";\nexport const entry = optional;\n`,
+    });
+    await writePackage("optional-pkg", {}, { "index.js": `export const optional = 1;\n` });
+    await writeManifest({ peerDependencies: { "optional-pkg": "1.0.0" }, peerDependenciesMeta: { "optional-pkg": { optional: true } } });
+    const config = await writeConfig();
+
+    const green = await depcruise(config, "src");
+    expect(green.text).not.toContain("no-non-package-json");
+    expect(green.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
   "no-deep-imports goes red on a subpath the exports map omits, green on a published subpath and on bare entries",
   async () => {
     dir = await scratch("checks-depcruiser-deep-");
