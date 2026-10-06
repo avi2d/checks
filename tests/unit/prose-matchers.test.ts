@@ -80,6 +80,23 @@ describe("each rule goes red on a planted line and green on its rewrite", () => 
     expect(refusals("Он собирает.\nОн поставляет.")).toEqual([]);
   });
 
+  test("a second Russian sentence on one line is refused across guillemets", () => {
+    const second = (opening: string): string =>
+      `1: carries a second sentence on one line, which opens with \`${opening}\`. Start it on its own line`;
+    expect(refusals("Он ушёл. «Да», сказал он.")).toEqual([second("«Да», сказал он")]);
+    expect(refusals("Он сказал «Стой.» Потом ушёл.")).toEqual([second("Потом ушёл")]);
+  });
+
+  test("a Russian line closing on a guillemet ends its sentence", () => {
+    expect(refusals("Он крикнул «Стой!»\nПотом ушёл.")).toEqual([]);
+  });
+
+  test("рис is the noun rice, so a sentence after it is refused", () => {
+    expect(refusals("Он ест рис. Потом спит.")).toEqual([
+      "1: carries a second sentence on one line, which opens with `Потом спит`. Start it on its own line",
+    ]);
+  });
+
   test("a Russian abbreviation before a capital opens no sentence", () => {
     expect(refusals("Читай замок, см. Сборка пишет один.")).toEqual([]);
     expect(refusals("Читай замок, и т.д. Сборка пишет один.")).toEqual([]);
@@ -347,6 +364,13 @@ describe("a trial sentence length cap, procedural at 20 words and descriptive at
         { line: 1, words: 2, kind: "descriptive" },
       ]);
     }
+  });
+
+  test("a closing guillemet ends a Russian sentence past itself", () => {
+    expect(sentenceLengths("«Да.» Он ушёл.")).toEqual([
+      { line: 1, words: 1, kind: "descriptive" },
+      { line: 1, words: 2, kind: "descriptive" },
+    ]);
   });
 
   test("leading space, a trailing space and a tab change no count", () => {

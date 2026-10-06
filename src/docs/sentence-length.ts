@@ -59,7 +59,7 @@ function wordsIn(sentence: string): number {
 }
 
 function isCloser(char: string): boolean {
-  return char === '"' || char === "'" || char === ")" || char === "]" || char === "*" || char === "_" || char === "”" || char === "’";
+  return char === '"' || char === "'" || char === ")" || char === "]" || char === "*" || char === "_" || char === "”" || char === "’" || char === "»";
 }
 
 function sentencesIn(body: string): readonly string[] {

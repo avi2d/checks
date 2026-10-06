@@ -335,9 +335,9 @@ function ruleFindings(line: MarkdownLine, reader: Reader): ProseFinding[] {
   );
 }
 
-const SENTENCE_BREAK = /(?<=[^\s.!?])[.!?]["'”’)\]*_]*\s+(?=[\p{Lu}"“*_[\0])/gu;
-const ABBREVIATION = /(?<![\p{L}\p{N}_])(?:e\.g|i\.e|etc|vs|cf|approx|Mr|Mrs|Ms|Dr|St|No|Fig|см|напр|т\.\s*[едп]|др|стр|рис)$/iu;
-const SENTENCE_END = /[.!?:]["'”’)\]*_]*\s*$/;
+const SENTENCE_BREAK = /(?<=[^\s.!?])[.!?]["'”’»)\]*_]*\s+(?=[\p{Lu}"“«*_[\0])/gu;
+const ABBREVIATION = /(?<![\p{L}\p{N}_])(?:e\.g|i\.e|etc|vs|cf|approx|Mr|Mrs|Ms|Dr|St|No|Fig|см|напр|т\.\s*[едп]|др|стр)$/iu;
+const SENTENCE_END = /[.!?:]["'”’»)\]*_]*\s*$/;
 const LIST_ITEM = /^(?:\s*>)*\s*(?:[-*+]|\d{1,9}[.)])(?:\s|$)/;
 const QUOTE_DEPTH = /^(?:\s*>)*/;
 
