@@ -85,6 +85,13 @@ describe("each rule goes red on a planted line and green on its rewrite", () => 
     expect(refusals("Читай замок, и т.д. Сборка пишет один.")).toEqual([]);
   });
 
+  test("a spaced Russian abbreviation before a proper name opens no sentence", () => {
+    expect(refusals("Пишите имя полностью, т. е. Иван Иванов.")).toEqual([]);
+    expect(refusals("Пишите имя полностью, т.\u00a0е. Иван Иванов.")).toEqual([]);
+    expect(refusals("Читай замок, и т. д. Сборка пишет один.")).toEqual([]);
+    expect(refusals("Читай замок, и т. п. Сборка пишет один.")).toEqual([]);
+  });
+
   test("a sentence that runs on in Russian lowercase past a closing code span", () => {
     const wrapped = "Он читает `код`\nпоказывает его.\n";
     const runOn = "carries a sentence that runs across lines. Join the sentence onto one line";
