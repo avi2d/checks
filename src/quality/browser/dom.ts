@@ -58,8 +58,13 @@ function rectOfQuad(quad: readonly number[]): Rect {
   return { left: Math.min(...xs), top: Math.min(...ys), right: Math.max(...xs), bottom: Math.max(...ys) };
 }
 
+// Chromium refuses an element with no layout box rather than answering with no quads.
+const NO_LAYOUT_BOX = "Could not compute content quads";
+
 export const lineRects = Effect.fn("lineRects")(function* (dom: Dom, backendNodeId: number) {
-  const { quads } = yield* attempt("cannot read an element's boxes", () => dom.cdp.send("DOM.getContentQuads", { backendNodeId }));
+  const { quads } = yield* attempt("cannot read an element's boxes", () => dom.cdp.send("DOM.getContentQuads", { backendNodeId })).pipe(
+    Effect.catchTag("BrowserFailure", (failure) => (failure.message.includes(NO_LAYOUT_BOX) ? Effect.succeed({ quads: [] }) : Effect.fail(failure))),
+  );
   return quads.map(rectOfQuad).filter((rect) => rect.right - rect.left > 0 && rect.bottom - rect.top > 0);
 });
 

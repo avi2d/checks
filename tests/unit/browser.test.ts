@@ -63,16 +63,14 @@ function outcome(found: readonly string[], unverified: readonly string[] = []): 
   return {
     runs: [{ check: "layout", visit: VISIT, inventory: counted(["language switch", "language switch"]), found, unverified }],
     missingRoutes: [],
-    undeclaredPages: ["/404.html"],
   };
 }
 
-test("a clean run records what it scanned and passes, listing the pages no route declares as advisory", () => {
+test("a clean run records what it scanned and passes", () => {
   expect(passes(outcome([]))).toBe(true);
   expect(report(DECLARATION, outcome([]))).toBe(
     [
       "browser: layout at / (en), phone 375x812 touch, default scanned language switch 2",
-      "browser: advisory, 1 built page(s) no route declares: /404.html",
       "browser: 1 check run(s) over 2 route(s), 1 viewport(s), 2 state(s) and 2 target(s) pass",
     ].join("\n"),
   );
@@ -81,14 +79,14 @@ test("a clean run records what it scanned and passes, listing the pages no route
 test("a failure names its check and visit, unverified contrast is listed without failing, and a missing route or an empty run fails", () => {
   const failing = outcome(["language switch clips its own text"], ["color-contrast unverified: p"]);
   expect(passes(failing)).toBe(false);
-  expect(report(DECLARATION, failing).split("\n").slice(2)).toEqual([
+  expect(report(DECLARATION, failing).split("\n").slice(1)).toEqual([
     "browser: 1 contrast check(s) axe cannot measure, reported as unverified:",
     "  layout at / (en), phone 375x812 touch, default: color-contrast unverified: p",
     "browser: 1 failure(s) in 1 check run(s) over 2 route(s), 1 viewport(s), 2 state(s) and 2 target(s):",
     "  layout at / (en), phone 375x812 touch, default: language switch clips its own text",
   ]);
   expect(passes(outcome([], ["color-contrast unverified: p"]))).toBe(true);
-  const empty: Outcome = { runs: [], missingRoutes: ["/ru/"], undeclaredPages: [] };
+  const empty: Outcome = { runs: [], missingRoutes: ["/ru/"] };
   expect(passes(empty)).toBe(false);
   expect(report(DECLARATION, empty)).toBe(
     [

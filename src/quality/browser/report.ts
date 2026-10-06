@@ -13,7 +13,6 @@ export type Run = {
 export type Outcome = {
   readonly runs: readonly Run[];
   readonly missingRoutes: readonly string[];
-  readonly undeclaredPages: readonly string[];
 };
 
 export function counted(names: readonly string[]): readonly string[] {
@@ -43,9 +42,6 @@ export function report(declaration: Declaration, outcome: Outcome): string {
   ].join(" ");
   return [
     ...outcome.runs.map(({ check, visit, inventory }) => `${NAME}: ${check} at ${describeVisit(visit)} scanned ${inventory.length === 0 ? "nothing" : inventory.join(", ")}`),
-    ...(outcome.undeclaredPages.length === 0
-      ? []
-      : [`${NAME}: advisory, ${outcome.undeclaredPages.length} built page(s) no route declares: ${outcome.undeclaredPages.join(", ")}`]),
     ...(unverified.length === 0 ? [] : [`${NAME}: ${unverified.length} contrast check(s) axe cannot measure, reported as unverified:`, ...unverified.map((one) => `  ${one}`)]),
     ...(failures.length === 0 ? [`${NAME}: ${scope} pass`] : [`${NAME}: ${failures.length} failure(s) in ${scope}:`, ...failures.map((one) => `  ${one}`)]),
   ].join("\n");

@@ -10,19 +10,25 @@ audience: consumers
 
 It visits each declared route at each declared viewport in each declared state, and runs each declared check on its own fresh page.
 A visit is one route, one viewport and one state.
+Each check judges only the elements of a target that are visible at the visit.
+So a control the page renders once for each breakpoint is judged where it shows.
 
 | Check | What fails | Built on |
 | --- | --- | --- |
-| `layout` | a page wider than the viewport, and a target that overflows the viewport, is reachable only by scrolling sideways, is cut off by a container that cannot scroll, clips its own text, hides its text, has no visible box, or overlaps or is covered by another target | the DevTools protocol's boxes and hit test |
-| `keyboard` | a `focusable` target that Tab does not reach once for each element it matches, and a Tab stop on a target that shows no visible focus | Playwright's keyboard, and a screenshot of the target with and without focus |
-| `motion` | an animation or a transition that starts during load, on hover, on leaving a hovered control or on focus, and smooth scrolling, for a visitor who turns motion off | the page's own `document.getAnimations()`, in each state whose `reducedMotion` is `reduce` |
+| `layout` | a page wider than the viewport, and a target that overflows the viewport, is reachable only by scrolling sideways, is cut off by a container that cannot scroll, clips its own text, hides its text, or overlaps or is covered by another target | the DevTools protocol's boxes and hit test |
+| `keyboard` | a `focusable` target that Tab does not reach once for each visible element it matches, and a Tab stop on a target that shows no visible focus | Playwright's keyboard, and a screenshot of the target with and without focus |
+| `motion` | an animation or a transition longer than one frame that starts during load, on hover, on leaving a hovered control or on focus, and smooth scrolling, for a visitor who turns motion off | the page's own `document.getAnimations()`, in each state whose `reducedMotion` is `reduce` |
 | `axe` | each violation of axe's WCAG 2.2 AA rules, which include `color-contrast`, `nested-interactive`, `meta-viewport` and `target-size` | axe-core through `@axe-core/playwright` |
 | `nesting` | an element the HTML content model does not permit where it sits in the rendered page, such as a `<button>` inside an `<a>` | html-validate's `element-permitted-content` rule |
 | `assets` | a request that fails, and a response with a status of 400 or more, while the page loads to network idle | Playwright's request and response events |
 
 The `motion` check judges what moves on the rendered page, so a `prefers-reduced-motion` query in the source counts for nothing unless the motion stops.
 It runs only in a state whose `reducedMotion` is `reduce`.
-Durations, easing and how motion feels are judgement, so no check reads them.
+An animation that ends within one frame never moves, so the common reset that shortens every duration to near zero for reduced motion passes.
+Beyond that, durations, easing and how motion feels are judgement, so no check reads them.
+A control the pointer cannot reach, such as a skip link parked off the screen, is judged on focus alone, and the inventory counts it.
+
+It does not yet check the rendered page against a product's declared design tokens, which needs a separate decision.
 
 `axe` reports a contrast it cannot measure as unverified rather than as a pass or a failure.
 Text over a background image or a gradient is such a case, and the report lists each one under its own heading.
@@ -34,19 +40,20 @@ Neither sees a parent click handler that fires with a child control's click, whi
 
 The runner prints one line for each check at each visit.
 The line names the route, its locale, the viewport, the state and what the check scanned.
-For `layout`, `keyboard` and a hook, what it scanned is each target by name with the count of its elements.
+At every visit, whichever checks are declared, a `targets` run counts the visible elements each target that applies to the route matches.
+For `targets`, `layout`, `keyboard` and a hook, what it scanned is each target by name with the count of its elements.
 
 It fails, rather than passes, when a declaration leaves nothing to judge:
 
 - a declared route the site does not serve
-- a declared target that matches nothing on a route it applies to
+- a declared target that matches no visible element on a route it applies to
+- a route that no target applies to
 - a `layout` run or a hook that scans no target
 - a `keyboard` run in which Tab reaches no target
 - a `motion` run that finds no visible control
 - an empty list of routes, viewports, states, targets or checks, which the declaration refuses
 
 Each failure names the check, the route, the locale, the viewport and the state, and the target or the element it found.
-A built page that no route declares is listed as advisory.
 
 ### Product hooks
 
@@ -159,19 +166,19 @@ It reads the declaration in the directory it runs in, or in the directory it is 
 | Code | When |
 | --- | --- |
 | 0 | every check passes at every visit, and every declared route and target is there |
-| 1 | a check fails at a visit, a declared route is not served, a declared target matches nothing, or a run scans no target |
+| 1 | a check fails at a visit, a declared route is not served, a declared target matches no visible element, or a run scans no target |
 | 2 | `browser-checks.json` is missing, does not decode or contradicts itself, the site directory or the hooks module is missing, a peer cannot load, or Chrome cannot start |
 
 ## Sample output
 
 ```
+browser: targets at /ru/ (ru), phone 375x812 touch, enlarged text scanned language switch 1, email contact 1, headline 1
 browser: layout at /ru/ (ru), phone 375x812 touch, enlarged text scanned language switch 1, email contact 1, headline 1
 browser: keyboard at /ru/ (ru), phone 375x812 touch, enlarged text scanned language switch 1, email contact 1
 browser: axe at /ru/ (ru), phone 375x812 touch, enlarged text scanned 11 rule(s)
-browser: advisory, 1 built page(s) no route declares: /404.html
 browser: 1 contrast check(s) axe cannot measure, reported as unverified:
   axe at /ru/ (ru), phone 375x812 touch, enlarged text: color-contrast unverified: header > p: Element's background color could not be determined due to a background image
-browser: 2 failure(s) in 3 check run(s) over 1 route(s), 1 viewport(s), 1 state(s) and 3 target(s):
+browser: 2 failure(s) in 4 check run(s) over 1 route(s), 1 viewport(s), 1 state(s) and 3 target(s):
   layout at /ru/ (ru), phone 375x812 touch, enlarged text: email contact "Написать письмо владельцу" clips its own text
   axe at /ru/ (ru), phone 375x812 touch, enlarged text: nested-interactive (serious): button: Interactive controls must not be nested
 ```

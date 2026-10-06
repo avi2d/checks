@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import type { Page } from "playwright-core";
 import type { Target } from "./declaration.ts";
 import { attempt } from "./page.ts";
+import { countVisible } from "./targets.ts";
 
 const FOCUS_RING_MARGIN_PX = 6;
 
@@ -64,8 +65,7 @@ export const judgeKeyboard = Effect.fn("judgeKeyboard")(function* (page: Page, t
     }
   }
   for (const target of targets) {
-    const present = yield* count(page, target.selector);
-    if (present === 0) found.push(`${target.name} (${target.selector}) matches nothing`);
+    const present = yield* countVisible(page, target.selector);
     if ((reached.get(target.name) ?? 0) !== present) found.push(`Tab reached ${target.name} ${reached.get(target.name) ?? 0} of ${present} time(s)`);
   }
   return { found, reached } satisfies KeyboardReport;

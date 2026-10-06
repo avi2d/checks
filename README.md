@@ -163,6 +163,7 @@ The oxlint base, the dependency-cruiser base and the commitlint config run throu
 To move a repository to a newer release of the kit:
 
 1. Run the install line again, which moves the kit to its newest release and the peers to the versions it pins.
+   A repository that opted in to `checks-browser` or `checks-frontend-syntax` also reruns the `bun add` line on its page.
 1. Review the Effect overrides in `.oxlintrc.json` and `tsconfig.json` when a release changes their presets.
 1. Copy `node_modules/@avi2dg/checks/bunfig.toml` over `bunfig.toml` again, since `checks-test-layout` compares the copy with the installed preset.
 1. Run `bun run lint`, `bun run typecheck` and `bun run test`.

@@ -38,13 +38,17 @@ const textOf = Effect.fn("textOf")(function* (dom: Dom, id: number) {
   return typeof text === "string" ? normaliseText(text) : "";
 });
 
-const resolveTargets = Effect.fn("resolveTargets")(function* (dom: Dom, targets: readonly Target[], found: string[]) {
+const IS_VISIBLE = `function () {
+  const box = this.getBoundingClientRect();
+  return box.width > 0 && box.height > 0 && this.checkVisibility({ visibilityProperty: true });
+}`;
+
+const resolveTargets = Effect.fn("resolveTargets")(function* (dom: Dom, targets: readonly Target[]) {
   const resolved = new Map<number, Resolved>();
   for (const target of targets) {
-    const ids = yield* querySelectorAll(dom, target.selector);
-    if (ids.length === 0) found.push(`${target.name} (${target.selector}) matches nothing`);
-    for (const id of ids) {
-      if (!resolved.has(id)) resolved.set(id, { id, name: target.name, text: yield* textOf(dom, id) });
+    for (const id of yield* querySelectorAll(dom, target.selector)) {
+      if (resolved.has(id) || (yield* callOn(dom, id, IS_VISIBLE)) !== true) continue;
+      resolved.set(id, { id, name: target.name, text: yield* textOf(dom, id) });
     }
   }
   return [...resolved.values()];
@@ -145,10 +149,6 @@ const judgeReach = Effect.fn("judgeReach")(function* (dom: Dom, element: Resolve
     found.push(`${label(element)} hides its text "${normaliseText(unshown).slice(0, LABEL_CHARS)}"`);
     return 0;
   }
-  if ((yield* lineRects(dom, element.id)).length === 0) {
-    found.push(`${label(element)} has no visible box`);
-    return 0;
-  }
   yield* evaluate(dom.cdp, "window.scrollTo(0, 0)");
   if ((yield* callOn(dom, element.id, CUT_OFF_BY_UNSCROLLABLE)) === true) found.push(`${label(element)} is cut off by a container that cannot be scrolled`);
   yield* attempt("cannot scroll an element into view", () => dom.cdp.send("DOM.scrollIntoViewIfNeeded", { backendNodeId: element.id }));
@@ -167,7 +167,7 @@ export const judgeLayout = Effect.fn("judgeLayout")(function* (cdp: CDPSession, 
     found.push(`the page is ${viewport.contentWidth}px wide in a ${viewport.width}px viewport`);
   }
   const dom = yield* readDom(cdp);
-  const elements = yield* resolveTargets(dom, targets, found);
+  const elements = yield* resolveTargets(dom, targets);
   yield* findOverlaps(dom, elements, found);
   const scanned: Scanned[] = [];
   for (const element of elements) {

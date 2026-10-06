@@ -13,6 +13,7 @@ import { judgeNesting } from "./nesting.ts";
 import { attempt, launchChrome, load, openVisit, type BrowserFailure } from "./page.ts";
 import { counted, NAME, passes, report, type Run } from "./report.ts";
 import { readSite, serveSite } from "./serve.ts";
+import { judgeTargets } from "./targets.ts";
 
 const NO_TARGET = "scanned no target";
 
@@ -30,6 +31,15 @@ const run = (check: string, visit: Visit, inventory: readonly string[], found: r
   found,
   unverified,
 });
+
+const targetsRun = Effect.fn("targetsRun")(function* ({ browser, declaration, visit, url }: Visiting) {
+  const targets = targetsOn(declaration, visit.route.path);
+  const { page } = yield* openVisit(browser, visit);
+  yield* load(page, url);
+  const { found, visible } = yield* judgeTargets(page, targets);
+  const inventory = [...visible].map(([name, count]) => `${name} ${count}`);
+  return run("targets", visit, inventory, targets.length === 0 ? [...found, NO_TARGET] : found);
+}, Effect.scoped);
 
 const layoutRun = Effect.fn("layoutRun")(function* ({ browser, declaration, visit, url }: Visiting) {
   const { cdp, page } = yield* openVisit(browser, visit);
@@ -50,8 +60,9 @@ const keyboardRun = Effect.fn("keyboardRun")(function* ({ browser, declaration, 
 const motionRun = Effect.fn("motionRun")(function* ({ browser, visit, url }: Visiting) {
   const { page } = yield* openVisit(browser, visit, recordMotion);
   yield* load(page, url);
-  const { found, controls } = yield* judgeStillness(page);
-  return run("motion", visit, [`${controls} control(s)`], controls === 0 ? [...found, "scanned no control"] : found);
+  const { found, controls, unhovered } = yield* judgeStillness(page);
+  const inventory = [`${controls} control(s)`, ...(unhovered === 0 ? [] : [`${unhovered} it cannot hover, judged on focus alone`])];
+  return run("motion", visit, inventory, controls === 0 ? [...found, "scanned no control"] : found);
 }, Effect.scoped);
 
 const axeRun = Effect.fn("axeRun")(function* ({ browser, visit, url }: Visiting) {
@@ -99,16 +110,16 @@ const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: D
   const paths = declaration.routes.map(({ path }) => path);
   const hooks = declaration.hooks === undefined ? [] : yield* loadHooks(root, declaration.hooks, paths);
   const missingRoutes = paths.filter((path) => !site.files.has(path));
-  const undeclaredPages = site.pages.filter((page) => !paths.includes(page));
   const origin = yield* serveSite(site);
   const browser = yield* launchChrome;
   const runs: Run[] = [];
   for (const visit of visitsOf(declaration).filter(({ route }) => !missingRoutes.includes(route.path))) {
     const visiting = { browser, declaration, visit, url: new URL(visit.route.path, origin).href };
+    runs.push(yield* targetsRun(visiting));
     for (const check of declaration.checks.filter((one) => applies(one, visit))) runs.push(yield* BUILT_IN[check](visiting));
     for (const hook of hooks.filter(({ routes }) => routes === undefined || routes.includes(visit.route.path))) runs.push(yield* hookRun(hook, visiting));
   }
-  return { runs, missingRoutes, undeclaredPages };
+  return { runs, missingRoutes };
 }, Effect.scoped);
 
 const browserChecks = Effect.gen(function* () {

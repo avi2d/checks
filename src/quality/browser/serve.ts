@@ -5,7 +5,6 @@ const INDEX = "index.html";
 
 export type Site = {
   readonly files: ReadonlyMap<string, string>;
-  readonly pages: readonly string[];
 };
 
 export const readSite = Effect.fn("readSite")(function* (root: string, site: string) {
@@ -25,8 +24,7 @@ export const readSite = Effect.fn("readSite")(function* (root: string, site: str
     files.set(url, file);
     if (url.endsWith(`/${INDEX}`)) files.set(url.slice(0, -INDEX.length), file);
   }
-  const pages = [...files.keys()].filter((url) => url.endsWith("/") || (url.endsWith(".html") && !url.endsWith(`/${INDEX}`))).toSorted();
-  return { files, pages } satisfies Site;
+  return { files } satisfies Site;
 });
 
 function answer(site: Site, request: Request): Response {

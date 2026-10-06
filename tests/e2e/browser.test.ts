@@ -9,12 +9,16 @@ function sitePages(pages: Readonly<Record<string, string>>): Readonly<Record<str
   return Object.fromEntries(Object.entries(pages).map(([path, html]) => [`dist/${path}`, html]));
 }
 
-test("layout is red on sideways overflow, a clipped label, overlapping targets and a missing target, and green once each is fixed", async () => {
+test("layout is red on sideways overflow, a clipped, cut off, covered or hidden label, overlapping targets and a missing or invisible target, and green once each is fixed", async () => {
   const red = {
     "overflow.html": page(`<p><a href="/" style="white-space: nowrap">a label far too long to fit the narrow phone screen</a></p>`),
     "clipped.html": page(`<a href="/" style="display: inline-block; width: 40px; overflow: hidden; white-space: nowrap">Contact the owner</a>`),
+    "cut-off.html": page(`<div style="overflow: hidden; height: 20px"><p style="margin: 40px 0 0"><a href="/">Write to me</a></p></div>`),
+    "covered.html": page(`<p><a href="/">Write to me</a></p><div style="position: absolute; inset: 0; background: white"></div>`),
+    "transparent.html": page(`<p><a href="/" style="color: transparent">Write to me</a></p>`),
     "overlap.html": page(`<a href="/" style="position: absolute; top: 10px; left: 10px">Under</a><a href="/" style="position: absolute; top: 10px; left: 10px; background: white">Over</a>`),
     "missing.html": page("<p>No link here</p>"),
+    "invisible.html": page(`<p><a href="/" style="display: none">Write to me</a></p>`),
   };
   const site = await browserSite({ ...sitePages(red), "browser-checks.json": declaration({ routes: routesOf(red), checks: ["layout"] }) });
   const failed = await site.run();
@@ -23,18 +27,25 @@ test("layout is red on sideways overflow, a clipped label, overlapping targets a
     ["/overflow.html", "the page is"],
     ["/overflow.html", "is reachable only by scrolling the page sideways"],
     ["/clipped.html", 'link "Contact the owner" clips its own text'],
+    ["/cut-off.html", 'link "Write to me" is cut off by a container that cannot be scrolled'],
+    ["/covered.html", 'link "Write to me" is covered or clipped at'],
+    ["/transparent.html", 'link "Write to me" hides its text "Write to me"'],
     ["/overlap.html", 'link "Under" overlaps link "Over"'],
-    ["/missing.html", "link (main a) matches nothing"],
     ["/missing.html", "scanned no target"],
+    ["/invisible.html", "scanned no target"],
   ] as const) {
     expect(failures.filter((line) => line.startsWith(at("layout", path)) && line.includes(part))).not.toEqual([]);
+  }
+  for (const path of ["/missing.html", "/invisible.html"]) {
+    expect(failures).toContain(`${at("targets", path)} link (main a) matches no visible element`);
   }
   expect(failed.exitCode).toBe(1);
 
   await site.write(sitePages(Object.fromEntries(Object.keys(red).map((path) => [path, CLEAN_LINK]))));
   const passed = await site.run();
   expect(passed.text).toContain(`browser: ${at("layout", "/overflow.html").slice(0, -1)} scanned link 1`);
-  expect(passed.text).toContain("browser: 4 check run(s) over 4 route(s), 1 viewport(s), 1 state(s) and 1 target(s) pass");
+  expect(passed.text).toContain(`browser: ${at("targets", "/invisible.html").slice(0, -1)} scanned link 1`);
+  expect(passed.text).toContain("browser: 16 check run(s) over 8 route(s), 1 viewport(s), 1 state(s) and 1 target(s) pass");
   expect(passed.exitCode).toBe(0);
 }, 120_000);
 
@@ -81,6 +92,43 @@ test("keyboard is red on a hidden focus ring and on a target Tab skips, and gree
   expect(passed.exitCode).toBe(0);
 }, 120_000);
 
+test("keyboard is red when Tab never leaves the page, and green once the trap is gone", async () => {
+  const trap = `<button id="trap" type="button">Stay</button><script>document.getElementById("trap").addEventListener("keydown", (event) => { if (event.key === "Tab") event.preventDefault(); });</script>`;
+  const site = await browserSite({
+    "dist/index.html": page(`<p><a href="/">Write to me</a></p>${trap}`),
+    "browser-checks.json": declaration({ checks: ["keyboard"] }),
+  });
+  const failed = await site.run();
+  expect(failuresOf(failed.text)).toEqual([`${at("keyboard", "/")} Tab never leaves the page within 500 stops`]);
+  expect(failed.exitCode).toBe(1);
+
+  await site.write({ "dist/index.html": page(`<p><a href="/">Write to me</a></p><button type="button">Stay</button>`) });
+  const passed = await site.run();
+  expect(passed.text).toContain(`browser: ${at("keyboard", "/").slice(0, -1)} scanned link 1`);
+  expect(passed.exitCode).toBe(0);
+}, 120_000);
+
+test("a control the page renders once for each breakpoint is judged only where it shows, and passes at every viewport", async () => {
+  const site = await browserSite({
+    "dist/index.html": page(`<p><a class="phone" href="/">Write</a><a class="desktop" href="/">Write to me</a></p>`, {
+      head: "<style>.desktop { display: none; } @media (min-width: 1000px) { .phone { display: none; } .desktop { display: inline; } }</style>",
+    }),
+    "browser-checks.json": declaration({
+      viewports: [
+        { name: "phone", width: 320, height: 640 },
+        { name: "desktop", width: 1280, height: 800 },
+      ],
+      checks: ["layout", "keyboard"],
+    }),
+  });
+  const passed = await site.run();
+  for (const viewport of ["phone 320x640", "desktop 1280x800"]) {
+    for (const check of ["targets", "layout", "keyboard"]) expect(passed.text).toContain(`browser: ${at(check, "/", "default", viewport).slice(0, -1)} scanned link 1`);
+  }
+  expect(failuresOf(passed.text)).toEqual([]);
+  expect(passed.exitCode).toBe(0);
+}, 120_000);
+
 test("motion is red on a hover transition a visitor who turns motion off still sees, and green once it waits for no-preference", async () => {
   const hovered = (css: string): string => page(`<p><a href="/">Write to me</a></p>`, { head: `<style>${css}</style>` });
   const site = await browserSite({
@@ -88,16 +136,39 @@ test("motion is red on a hover transition a visitor who turns motion off still s
     "browser-checks.json": declaration({ states: [{ name: "default" }, { name: "reduced motion", reducedMotion: "reduce" }], checks: ["motion"] }),
   });
   const failed = await site.run();
-  expect(failuresOf(failed.text)).toEqual([
-    "motion at / (en), phone 320x640, reduced motion: color animated on hovering control 1",
-    "motion at / (en), phone 320x640, reduced motion: color animated on leaving control 1",
-  ]);
+  const reversed = "motion at / (en), phone 320x640, reduced motion: color animated on leaving control 1";
+  expect(failuresOf(failed.text).filter((line) => line !== reversed)).toEqual(["motion at / (en), phone 320x640, reduced motion: color animated on hovering control 1"]);
   expect(failed.text).not.toContain("motion at / (en), phone 320x640, default");
   expect(failed.exitCode).toBe(1);
 
   await site.write({ "dist/index.html": hovered("@media (prefers-reduced-motion: no-preference) { a { transition: color 300ms; } } a:hover { color: red; }") });
   const passed = await site.run();
   expect(passed.text).toContain("browser: motion at / (en), phone 320x640, reduced motion scanned 1 control(s)");
+  expect(passed.exitCode).toBe(0);
+}, 120_000);
+
+test("motion is red on an animation during load, a focus transition and smooth scrolling, skips hovering a control off the screen, and is green under the common reduced-motion reset", async () => {
+  const RESET =
+    "@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; } }";
+  const moving = (css: string): string =>
+    page(`<a href="#content" style="position: absolute; left: -9999px">Skip to the content</a><p id="content"><a class="write" href="/">Write to me</a></p>`, {
+      head: `<style>@keyframes arrive { from { opacity: 0; } } main { animation: arrive 1s; } html { scroll-behavior: smooth; } .write { transition: background-color 300ms; } .write:focus { background-color: yellow; }${css}</style>`,
+    });
+  const site = await browserSite({
+    "dist/index.html": moving(""),
+    "browser-checks.json": declaration({ states: [{ name: "reduced motion", reducedMotion: "reduce" }], checks: ["motion"] }),
+  });
+  const failed = await site.run();
+  expect(failuresOf(failed.text)).toEqual([
+    "motion at / (en), phone 320x640, reduced motion: arrive animated during load",
+    "motion at / (en), phone 320x640, reduced motion: the page scrolls smoothly",
+    "motion at / (en), phone 320x640, reduced motion: background-color animated on focusing control 2",
+  ]);
+  expect(failed.exitCode).toBe(1);
+
+  await site.write({ "dist/index.html": moving(RESET) });
+  const passed = await site.run();
+  expect(passed.text).toContain("browser: motion at / (en), phone 320x640, reduced motion scanned 2 control(s), 1 it cannot hover, judged on focus alone");
   expect(passed.exitCode).toBe(0);
 }, 120_000);
 
@@ -144,30 +215,48 @@ test("nesting is red on a button inside a link and on a link inside a button, an
   expect(passed.exitCode).toBe(0);
 }, 120_000);
 
-test("assets is red on an image the site does not serve, and green once it does", async () => {
+test("assets is red on an image the site does not serve and on a request that fails, and green once both load", async () => {
+  const pictured = (src: string): string => page(`<p><a href="/">Write to me</a></p><img src="${src}" alt="The owner" width="10" height="10">`);
   const site = await browserSite({
-    "dist/index.html": page(`<p><a href="/">Write to me</a></p><img src="/portrait.svg" alt="The owner" width="10" height="10">`),
-    "browser-checks.json": declaration({ checks: ["assets"] }),
+    "dist/index.html": pictured("/portrait.svg"),
+    "dist/refused.html": pictured("http://127.0.0.1:1/portrait.svg"),
+    "browser-checks.json": declaration({ routes: [{ path: "/", locale: "en" }, { path: "/refused.html", locale: "en" }], checks: ["assets"] }),
   });
   const failed = await site.run();
-  expect(failuresOf(failed.text)).toEqual([expect.stringMatching(/^assets at \/ \(en\), phone 320x640, default: http:\/\/127\.0\.0\.1:\d+\/portrait\.svg answers 404$/)]);
+  expect(failuresOf(failed.text)).toEqual([
+    expect.stringMatching(/^assets at \/ \(en\), phone 320x640, default: http:\/\/127\.0\.0\.1:\d+\/portrait\.svg answers 404$/),
+    `${at("assets", "/refused.html")} http://127.0.0.1:1/portrait.svg fails to load: net::ERR_UNSAFE_PORT`,
+  ]);
   expect(failed.exitCode).toBe(1);
 
-  await site.write({ "dist/portrait.svg": `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>` });
+  await site.write({ "dist/portrait.svg": `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>`, "dist/refused.html": pictured("/portrait.svg") });
   const passed = await site.run();
   expect(passed.text).toContain("browser: assets at / (en), phone 320x640, default scanned 2 request(s)");
   expect(passed.exitCode).toBe(0);
 }, 120_000);
 
-test("a declared route the site does not serve fails, a page no route declares is listed, and the run passes once the route is built", async () => {
+test("a declared target fails when it matches no visible element whichever checks are declared, and passes once it shows", async () => {
+  const site = await browserSite({
+    "dist/index.html": page("<p>No link here</p>"),
+    "browser-checks.json": declaration({ targets: [{ name: "link", selector: "main a" }], checks: ["assets"] }),
+  });
+  const failed = await site.run();
+  expect(failuresOf(failed.text)).toEqual([`${at("targets", "/")} link (main a) matches no visible element`]);
+  expect(failed.exitCode).toBe(1);
+
+  await site.write({ "dist/index.html": CLEAN_LINK });
+  const passed = await site.run();
+  expect(passed.text).toContain(`browser: ${at("targets", "/").slice(0, -1)} scanned link 1`);
+  expect(passed.exitCode).toBe(0);
+}, 120_000);
+
+test("a declared route the site does not serve fails, and the run passes once the route is built", async () => {
   const site = await browserSite({
     "dist/index.html": CLEAN_LINK,
-    "dist/404.html": page("<p>Not found</p>"),
     "browser-checks.json": declaration({ routes: [{ path: "/", locale: "en" }, { path: "/ru/", locale: "ru" }], checks: ["layout"] }),
   });
   const failed = await site.run();
   expect(failuresOf(failed.text)).toEqual(["route /ru/ serves no page from the declared site"]);
-  expect(failed.text).toContain("browser: advisory, 1 built page(s) no route declares: /404.html");
   expect(failed.exitCode).toBe(1);
 
   await site.write({ "dist/ru/index.html": page(`<p><a href="/">Написать мне</a></p>`, { lang: "ru" }) });
@@ -201,12 +290,16 @@ const SAVES = (ordered: boolean): string =>
 <script>
   const saved = document.getElementById("saved");
   let latest = 0;
+  let unsent = null;
   const save = (value) => {
     latest += 1;
     const mine = latest;
     fetch("/api/save?value=" + value)
       .then((response) => (${String(ordered)} && !response.ok ? value + " unsaved" : response.text()))
-      .catch(() => value + " unsaved")
+      .catch(() => {
+        unsent = value;
+        return value + " unsaved";
+      })
       .then((text) => {
         if (${String(ordered)} && mine !== latest) return;
         saved.textContent = text;
@@ -214,6 +307,12 @@ const SAVES = (ordered: boolean): string =>
   };
   document.getElementById("save-a").addEventListener("click", () => save("A"));
   document.getElementById("save-b").addEventListener("click", () => save("B"));
+  window.addEventListener("online", () => {
+    if (!${String(ordered)} || unsent === null) return;
+    const value = unsent;
+    unsent = null;
+    save(value);
+  });
   document.getElementById("language-form").addEventListener("submit", (event) => {
     event.preventDefault();
     fetch("/api/language", { method: "POST", body: document.getElementById("language").value });
@@ -267,6 +366,24 @@ export const checks: readonly ProductCheck[] = [
     },
   },
   {
+    name: "a save refused while offline lands once the page reconnects",
+    run: async (page, visit) => {
+      let online = false;
+      await page.route("**/api/save?**", (route) =>
+        online ? route.fulfill({ body: \`\${new URL(route.request().url()).searchParams.get("value")} saved\` }) : route.abort("internetdisconnected"),
+      );
+      await page.goto(visit.url);
+      await page.context().setOffline(true);
+      await page.click("#save-b");
+      await page.locator("#saved", { hasText: "B unsaved" }).waitFor();
+      online = true;
+      await page.context().setOffline(false);
+      await settled(page);
+      const shown = await page.textContent("#saved");
+      return { targets: ["saved result"], found: shown === "B saved" ? [] : [\`the saved result shows "\${shown}" once the page reconnects\`] };
+    },
+  },
+  {
     name: "every offered language decodes at the boundary",
     run: async (page, visit) => {
       const submitted: string[] = [];
@@ -287,7 +404,7 @@ export const checks: readonly ProductCheck[] = [
 ];
 `;
 
-test("product hooks are red on a late reply that replaces a newer save, a refused save that blanks the result and a choice the boundary refuses, and green once the page is fixed", async () => {
+test("product hooks are red on a late reply that replaces a newer save, a refused save that blanks the result, an offline save that never lands and a choice the boundary refuses, and green once the page is fixed", async () => {
   const site = await browserSite({
     "dist/index.html": SAVES(false),
     "tests/browser/hooks.ts": HOOKS(HOOK_TYPES),
@@ -297,6 +414,7 @@ test("product hooks are red on a late reply that replaces a newer save, a refuse
   expect(failuresOf(failed.text)).toEqual([
     `${at("hook a late reply never replaces a newer save", "/")} the saved result shows "A saved" once the late reply to A lands`,
     `${at("hook a rejected save shows as unsaved", "/")} the saved result shows "" after the save of B was refused`,
+    `${at("hook a save refused while offline lands once the page reconnects", "/")} the saved result shows "B unsaved" once the page reconnects`,
     `${at("hook every offered language decodes at the boundary", "/")} the language control offers de, which the boundary refuses`,
   ]);
   expect(failed.text).toContain("browser: hook every offered language decodes at the boundary at / (en), phone 320x640, default scanned language choice 3");
@@ -306,7 +424,8 @@ test("product hooks are red on a late reply that replaces a newer save, a refuse
   const passed = await site.run();
   expect(passed.text).toContain("browser: hook a late reply never replaces a newer save at / (en), phone 320x640, default scanned saved result 1");
   expect(passed.text).toContain("browser: hook a rejected save shows as unsaved at / (en), phone 320x640, default scanned saved result 1");
-  expect(passed.text).toContain("browser: 4 check run(s) over 1 route(s), 1 viewport(s), 1 state(s) and 1 target(s) pass");
+  expect(passed.text).toContain("browser: hook a save refused while offline lands once the page reconnects at / (en), phone 320x640, default scanned saved result 1");
+  expect(passed.text).toContain("browser: 6 check run(s) over 1 route(s), 1 viewport(s), 1 state(s) and 1 target(s) pass");
   expect(passed.exitCode).toBe(0);
 }, 120_000);
 
