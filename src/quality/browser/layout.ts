@@ -132,13 +132,16 @@ const FIRST_UNSHOWN_TEXT = `function () {
     if (text === "") continue;
     const parent = node.parentElement;
     const style = getComputedStyle(parent);
+    let boxed = parent;
+    while (getComputedStyle(boxed).display === "contents" && boxed.parentElement !== null) boxed = boxed.parentElement;
     const range = document.createRange();
     range.selectNodeContents(node);
     const drawn = Array.from(range.getClientRects()).some((rect) => rect.width > 0 && rect.height > 0);
     const shown =
       drawn &&
       parseFloat(style.fontSize) > 0 &&
-      parent.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) &&
+      style.visibility === "visible" &&
+      boxed.checkVisibility({ checkOpacity: true }) &&
       alphaOf(style.color) !== 0;
     if (!shown) return text;
   }
