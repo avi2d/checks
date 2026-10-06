@@ -13,11 +13,12 @@ It runs stylelint with two of stylelint's own rules, and with no other rule and 
 | Rule | What it refuses | Why |
 | --- | --- | --- |
 | `declaration-property-value-disallowed-list` | `all` in the value of `transition` or `transition-property`, vendor prefixes included, such as `transition: all 200ms` or `-webkit-transition: opacity 1s, all 1s` | every property that changes then animates, including the ones that make the browser lay out the page again |
-| `rule-selector-property-disallowed-list` | `user-select` or a prefixed `user-select` such as `-webkit-user-select` in a rule whose selector list holds `html`, `body`, `:root` or `*` | a visitor cannot select or copy any text on the page |
+| `rule-selector-property-disallowed-list` | `user-select` or a prefixed `user-select` such as `-webkit-user-select` in a rule whose selector list holds `html`, `body`, `:root` or `*`, or one of them inside `:global()` | a visitor cannot select or copy any text on the page |
 
 The second rule refuses any value on those selectors, so `body { user-select: text; }` fails as well.
 It matches each item of the selector list as a whole.
 So it does not follow `:is()`, `:where()` or `:not()`, nor a compound such as `html body` or `body *`.
+A nested rule is judged by its own selector, so `.card { * { user-select: none; } }` fails as `*`.
 A control that needs selection off sets it on its own selector, such as `.drag-handle { user-select: none; }`, which passes.
 
 It judges each `.css` file, and each `<style>` block and `style` attribute in an `.html`, `.astro`, `.vue` or `.svelte` file, through `postcss-html`.

@@ -49,6 +49,49 @@ test("layout is red on sideways overflow, a clipped, cut off, covered or hidden 
   expect(passed.exitCode).toBe(0);
 }, 120_000);
 
+test("layout passes an icon drawn before a label, a label in a shadow root, an SVG title, text hidden at this width, and a skip link parked until it is focused", async () => {
+  const SHADOW_LABEL = `<script>customElements.define("x-label", class extends HTMLElement { constructor() { super(); this.attachShadow({ mode: "open" }).innerHTML = "<span>Write to me</span>"; } });</script>`;
+  const SR_ONLY = "position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;";
+  const skipped = (css: string): string =>
+    page(`<a class="skip" href="#content">Skip to the content</a><p id="content"><a href="/">Write to me</a></p>`, { head: `<style>${css}</style>` });
+  const parked = {
+    "skip-link.html": ".skip { position: absolute; left: -9999px; }",
+    "sr-only.html": `.skip { ${SR_ONLY} }`,
+  };
+  const pages = {
+    ...Object.fromEntries(Object.entries(parked).map(([path, css]) => [path, skipped(css)])),
+    "icon.html": page(`<p><a href="/" class="icon">Write to me</a></p>`, { head: '<style>.icon::before { content: "→ →"; }</style>' }),
+    "shadow.html": page(`<p><a href="/"><x-label></x-label></a></p>${SHADOW_LABEL}`),
+    "svg-title.html": page(`<p><a href="/"><svg width="16" height="16" viewBox="0 0 16 16"><title>Mail</title><rect width="16" height="16"/></svg> Write</a></p>`),
+    "narrow-label.html": page(`<p><a href="/"><span class="wide">Write to me</span><span hidden>by email</span> ✉</a></p>`, { head: "<style>.wide { display: none; }</style>" }),
+  };
+  const site = await browserSite({
+    ...sitePages(pages),
+    "browser-checks.json": declaration({
+      routes: routesOf(pages),
+      targets: [
+        { name: "skip link", selector: "a.skip", routes: Object.keys(parked).map((path) => `/${path}`), focusable: true },
+        { name: "link", selector: "main a:not(.skip)", focusable: true },
+      ],
+      checks: ["layout"],
+    }),
+  });
+  const failed = await site.run();
+  const failures = failuresOf(failed.text);
+  for (const path of Object.keys(parked)) {
+    expect(failures.filter((line) => line.startsWith(`${at("layout", `/${path}`)} skip link "Skip to the content"`))).not.toEqual([]);
+  }
+  expect(failures.filter((line) => !line.includes('skip link "Skip to the content"'))).toEqual([]);
+  expect(failed.exitCode).toBe(1);
+
+  await site.write(sitePages(Object.fromEntries(Object.entries(parked).map(([path, css]) => [path, skipped(`.skip:not(:focus) { ${css.slice(css.indexOf("{") + 1, -1)} }`)]))));
+  const passed = await site.run();
+  expect(failuresOf(passed.text)).toEqual([]);
+  expect(passed.text).toContain(`browser: ${at("layout", "/skip-link.html").slice(0, -1)} scanned link 1, skip link 1 parked until focused`);
+  expect(passed.text).toContain(`browser: ${at("layout", "/shadow.html").slice(0, -1)} scanned link 1`);
+  expect(passed.exitCode).toBe(0);
+}, 120_000);
+
 test("a long Russian action that fits at default text but clips at enlarged text fails only in the enlarged state, and passes once it wraps", async () => {
   const action = (style: string): string =>
     page(`<p><a href="mailto:wren@example.com" style="display: inline-block; ${style}">Написать письмо владельцу</a></p>`, { lang: "ru" });

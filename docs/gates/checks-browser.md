@@ -15,7 +15,7 @@ So a control the page renders once for each breakpoint is judged where it shows.
 
 | Check | What fails | Built on |
 | --- | --- | --- |
-| `layout` | a page wider than the viewport, and a target that overflows the viewport, is reachable only by scrolling sideways, is cut off by a container that cannot scroll, clips its own text, hides its text, or overlaps or is covered by another target | the DevTools protocol's boxes and hit test |
+| `layout` | a page wider than the viewport, and a target that overflows the viewport, is reachable only by scrolling sideways, is cut off by a container that cannot scroll, clips its own text or hides its text, overlaps another target, or is covered by any element | the DevTools protocol's boxes and hit test |
 | `keyboard` | a `focusable` target that Tab does not reach once for each visible element it matches, and a Tab stop on a target that shows no visible focus | Playwright's keyboard, and a screenshot of the target with and without focus |
 | `motion` | an animation or a transition longer than one frame that starts during load, on hover, on leaving a hovered control or on focus, and smooth scrolling, for a visitor who turns motion off | the page's own `document.getAnimations()`, in each state whose `reducedMotion` is `reduce` |
 | `axe` | each violation of axe's WCAG 2.2 AA rules, which include `color-contrast`, `nested-interactive`, `meta-viewport` and `target-size` | axe-core through `@axe-core/playwright` |
@@ -27,6 +27,11 @@ It runs only in a state whose `reducedMotion` is `reduce`.
 An animation that ends within one frame never moves, so the common reset that shortens every duration to near zero for reduced motion passes.
 Beyond that, durations, easing and how motion feels are judgement, so no check reads them.
 A control the pointer cannot reach, such as a skip link parked off the screen, is judged on focus alone, and the inventory counts it.
+
+`layout` treats text in an SVG `<title>` or `<desc>`, under `display: none` or under `hidden` as left out, not hidden.
+Transparent, zero-size, `visibility: hidden` and zero-opacity text still fail.
+A `focusable` target parked off the screen or clipped until it is focused, such as a skip link, is left to `keyboard`.
+The `layout` inventory counts it as parked until focused.
 
 It does not yet check the rendered page against a product's declared design tokens, which needs a separate decision.
 

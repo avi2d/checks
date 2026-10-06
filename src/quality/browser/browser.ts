@@ -44,8 +44,9 @@ const targetsRun = Effect.fn("targetsRun")(function* ({ browser, declaration, vi
 const layoutRun = Effect.fn("layoutRun")(function* ({ browser, declaration, visit, url }: Visiting) {
   const { cdp, page } = yield* openVisit(browser, visit);
   yield* load(page, url);
-  const { found, scanned } = yield* judgeLayout(cdp, targetsOn(declaration, visit.route.path));
-  return run("layout", visit, counted(scanned.map(({ name }) => name)), scanned.length === 0 ? [...found, NO_TARGET] : found);
+  const { found, scanned, parked } = yield* judgeLayout(cdp, targetsOn(declaration, visit.route.path));
+  const inventory = [...counted(scanned.map(({ name }) => name)), ...counted(parked).map((one) => `${one} parked until focused`)];
+  return run("layout", visit, inventory, scanned.length === 0 ? [...found, NO_TARGET] : found);
 }, Effect.scoped);
 
 const keyboardRun = Effect.fn("keyboardRun")(function* ({ browser, declaration, visit, url }: Visiting) {

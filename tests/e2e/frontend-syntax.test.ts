@@ -46,6 +46,12 @@ const SEEDED = [
     reported: 'src/styles/site.css:1:8 Disallowed property "user-select" for selector "body"',
   },
   {
+    rule: "user-select on a global body in a scoped style block",
+    file: "src/layouts/Base.astro",
+    violation: "---\n---\n<html><body><slot /></body></html>\n<style>:global(body) { -webkit-user-select: none; }</style>\n",
+    reported: 'src/layouts/Base.astro:4:24 Disallowed property "-webkit-user-select" for selector ":global(body)"',
+  },
+  {
     rule: "user-select on every element",
     file: "src/layouts/Base.astro",
     violation: "---\n---\n<html><body><slot /></body></html>\n<style>* { -webkit-user-select: none; }</style>\n",

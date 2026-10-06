@@ -13,6 +13,9 @@ type TreeNode = {
   readonly nodeId: number;
   readonly backendNodeId: number;
   readonly children?: readonly TreeNode[];
+  readonly pseudoElements?: readonly TreeNode[];
+  readonly shadowRoots?: readonly TreeNode[];
+  readonly contentDocument?: TreeNode;
 };
 
 export type Dom = {
@@ -23,12 +26,13 @@ export type Dom = {
 };
 
 export const readDom = Effect.fn("readDom")(function* (cdp: CDPSession) {
-  const { root } = yield* attempt("cannot read the DOM", () => cdp.send("DOM.getDocument", { depth: -1 }));
+  const { root } = yield* attempt("cannot read the DOM", () => cdp.send("DOM.getDocument", { depth: -1, pierce: true }));
   const backendOf = new Map<number, number>();
   const parentOf = new Map<number, number>();
   const visit = (node: TreeNode): void => {
     backendOf.set(node.nodeId, node.backendNodeId);
-    for (const child of node.children ?? []) {
+    const { children = [], pseudoElements = [], shadowRoots = [], contentDocument } = node;
+    for (const child of [...children, ...pseudoElements, ...shadowRoots, ...(contentDocument === undefined ? [] : [contentDocument])]) {
       parentOf.set(child.backendNodeId, node.backendNodeId);
       visit(child);
     }

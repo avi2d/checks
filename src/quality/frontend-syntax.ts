@@ -13,7 +13,7 @@ const UNPARSED = "CssSyntaxError";
 
 const RULES = {
   [TRANSITION_ALL]: [{ "/^(?:-[a-z]+-)?transition(?:-property)?$/": ["/(?:^|[\\s,])all(?:[\\s,]|$)/i"] }],
-  [BODY_WIDE_USER_SELECT]: [{ "/(?:^|,)\\s*(?:html|body|:root|\\*)\\s*(?:,|$)/": ["/^(?:-[a-z]+-)?user-select$/"] }],
+  [BODY_WIDE_USER_SELECT]: [{ "/(?:^|,)\\s*(?:html|body|:root|\\*|:global\\(\\s*(?:html|body|:root|\\*)\\s*\\))\\s*(?:,|$)/": ["/^(?:-[a-z]+-)?user-select$/"] }],
 } as const;
 
 const ADVICE: Readonly<Record<string, string>> = {

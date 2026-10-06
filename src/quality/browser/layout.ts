@@ -17,6 +17,7 @@ type Scanned = {
 type LayoutReport = {
   readonly found: readonly string[];
   readonly scanned: readonly Scanned[];
+  readonly parked: readonly string[];
 };
 
 type Resolved = {
@@ -43,15 +44,33 @@ const IS_VISIBLE = `function () {
   return box.width > 0 && box.height > 0 && this.checkVisibility({ visibilityProperty: true });
 }`;
 
+const IS_PARKED = `function () {
+  const box = this.getBoundingClientRect();
+  return box.right + scrollX <= 0 || box.bottom + scrollY <= 0 || box.width <= 1 || box.height <= 1;
+}`;
+
+const parkedUntilFocused = Effect.fn("parkedUntilFocused")(function* (dom: Dom, id: number) {
+  if ((yield* callOn(dom, id, IS_PARKED)) !== true) return false;
+  yield* callOn(dom, id, "function () { this.focus(); }");
+  const parkedWhenFocused = yield* callOn(dom, id, IS_PARKED);
+  yield* evaluate(dom.cdp, "document.activeElement?.blur()");
+  return parkedWhenFocused !== true;
+});
+
 const resolveTargets = Effect.fn("resolveTargets")(function* (dom: Dom, targets: readonly Target[]) {
   const resolved = new Map<number, Resolved>();
+  const parked: string[] = [];
   for (const target of targets) {
     for (const id of yield* querySelectorAll(dom, target.selector)) {
       if (resolved.has(id) || (yield* callOn(dom, id, IS_VISIBLE)) !== true) continue;
+      if (target.focusable === true && (yield* parkedUntilFocused(dom, id))) {
+        parked.push(target.name);
+        continue;
+      }
       resolved.set(id, { id, name: target.name, text: yield* textOf(dom, id) });
     }
   }
-  return [...resolved.values()];
+  return { elements: [...resolved.values()], parked };
 });
 
 const findOverlaps = Effect.fn("findOverlaps")(function* (dom: Dom, elements: readonly Resolved[], found: string[]) {
@@ -99,7 +118,12 @@ const FIRST_UNSHOWN_TEXT = `function () {
     const components = color.slice(color.indexOf("(") + 1, -1).split(",");
     return components.length === 4 ? parseFloat(components[3]) : 1;
   };
-  const walker = document.createTreeWalker(this, NodeFilter.SHOW_TEXT);
+  const unrendered = (element) =>
+    element.closest("svg title, svg desc") !== null || element.hasAttribute("hidden") || getComputedStyle(element).display === "none";
+  const walker = document.createTreeWalker(this, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, (node) => {
+    if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
+    return unrendered(node) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP;
+  });
   for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
     const text = node.textContent.trim();
     if (text === "") continue;
@@ -167,12 +191,12 @@ export const judgeLayout = Effect.fn("judgeLayout")(function* (cdp: CDPSession, 
     found.push(`the page is ${viewport.contentWidth}px wide in a ${viewport.width}px viewport`);
   }
   const dom = yield* readDom(cdp);
-  const elements = yield* resolveTargets(dom, targets);
+  const { elements, parked } = yield* resolveTargets(dom, targets);
   yield* findOverlaps(dom, elements, found);
   const scanned: Scanned[] = [];
   for (const element of elements) {
     const lines = yield* judgeReach(dom, element, found);
     scanned.push({ name: element.name, text: element.text, lines });
   }
-  return { found, scanned } satisfies LayoutReport;
+  return { found, scanned, parked } satisfies LayoutReport;
 });
