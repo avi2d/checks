@@ -30,6 +30,7 @@ A control the pointer cannot reach, such as a skip link parked off the screen, i
 
 `layout` treats text in an SVG `<title>` or `<desc>`, in a `<textarea>`, or that the browser does not render as left out, not hidden.
 Text that is not rendered includes `display: none`, `hidden`, the options of a closed `<select>` and a closed `<details>`.
+An element under `display: contents`, such as a framework island, renders without a box of its own, so its text is judged.
 Transparent, zero-size, `visibility: hidden` and zero-opacity text still fail.
 A `focusable` target parked off the screen or clipped until it is focused, such as a skip link, is left to `keyboard`.
 The `layout` inventory counts it as parked until focused.

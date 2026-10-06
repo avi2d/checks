@@ -19,6 +19,8 @@ test("layout is red on sideways overflow, a clipped, cut off, covered or hidden 
     "invisible-word.html": page(`<p><a href="/">Write <span style="visibility: hidden">to me</span></a></p>`),
     "faded-word.html": page(`<p><a href="/">Write <span style="opacity: 0">to me</span></a></p>`),
     "shrunk-word.html": page(`<p><a href="/">Write <span style="font-size: 0">to me</span></a></p>`),
+    "contents-word.html": page(`<p><a href="/">Write <span style="display: contents"><span style="color: transparent">to me</span></span></a></p>`),
+    "island-word.html": page(`<p><a href="/">Write <astro-island style="display: contents"><span style="visibility: hidden">to me</span></astro-island></a></p>`),
     "overlap.html": page(`<a href="/" style="position: absolute; top: 10px; left: 10px">Under</a><a href="/" style="position: absolute; top: 10px; left: 10px; background: white">Over</a>`),
     "missing.html": page("<p>No link here</p>"),
     "invisible.html": page(`<p><a href="/" style="display: none">Write to me</a></p>`),
@@ -36,6 +38,8 @@ test("layout is red on sideways overflow, a clipped, cut off, covered or hidden 
     ["/invisible-word.html", 'link "Write to me" hides its text "to me"'],
     ["/faded-word.html", 'link "Write to me" hides its text "to me"'],
     ["/shrunk-word.html", 'link "Write to me" hides its text "to me"'],
+    ["/contents-word.html", 'link "Write to me" hides its text "to me"'],
+    ["/island-word.html", 'link "Write to me" hides its text "to me"'],
     ["/overlap.html", 'link "Under" overlaps link "Over"'],
     ["/missing.html", "scanned no target"],
     ["/invisible.html", "scanned no target"],
@@ -51,7 +55,7 @@ test("layout is red on sideways overflow, a clipped, cut off, covered or hidden 
   const passed = await site.run();
   expect(passed.text).toContain(`browser: ${at("layout", "/overflow.html").slice(0, -1)} scanned link 1`);
   expect(passed.text).toContain(`browser: ${at("targets", "/invisible.html").slice(0, -1)} scanned link 1`);
-  expect(passed.text).toContain("browser: 22 check run(s) over 11 route(s), 1 viewport(s), 1 state(s) and 1 target(s) pass");
+  expect(passed.text).toContain("browser: 26 check run(s) over 13 route(s), 1 viewport(s), 1 state(s) and 1 target(s) pass");
   expect(passed.exitCode).toBe(0);
 }, 120_000);
 
