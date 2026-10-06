@@ -71,6 +71,26 @@ describe("each rule goes red on a planted line and green on its rewrite", () => 
     expect(refusals("It builds the bill and ships it to the supplier.\n")).toEqual([]);
   });
 
+  test("a second Russian sentence on one line is refused, in either language order", () => {
+    const second = (opening: string): string =>
+      `1: carries a second sentence on one line, which opens with \`${opening}\`. Start it on its own line`;
+    expect(refusals("Он собирает. Он поставляет.")).toEqual([second("Он поставляет")]);
+    expect(refusals("It builds. Он поставляет.")).toEqual([second("Он поставляет")]);
+    expect(refusals("Он собирает. It ships.")).toEqual([second("It ships")]);
+    expect(refusals("Он собирает.\nОн поставляет.")).toEqual([]);
+  });
+
+  test("a Russian abbreviation before a capital opens no sentence", () => {
+    expect(refusals("Читай замок, см. Сборка пишет один.")).toEqual([]);
+    expect(refusals("Читай замок, и т.д. Сборка пишет один.")).toEqual([]);
+  });
+
+  test("a sentence that runs on in Russian lowercase past a closing code span", () => {
+    const wrapped = "Он читает `код`\nпоказывает его.\n";
+    const runOn = "carries a sentence that runs across lines. Join the sentence onto one line";
+    expect(refusals(wrapped)).toEqual([`1: ${runOn}`, `2: ${runOn}`]);
+  });
+
   test("used to after a form of be is habit, not history", () => {
     expect(refusals("It is used to build bills.")).toEqual([]);
   });
@@ -211,6 +231,25 @@ describe("a trial sentence length cap, procedural at 20 words and descriptive at
       "Now the gate reads each Markdown file at the head commit and uses its path or front matter to choose which template its kind needs today.";
     expect(lengths(twentyFive)).toEqual([]);
     expect(lengths(twentySix)).toEqual([
+      `1: carries a 26-word descriptive sentence, over the ${DESCRIPTIVE_WORD_CAP}-word cap (procedural means an ordered list item, capped at ${PROCEDURAL_WORD_CAP} words)`,
+    ]);
+  });
+
+  test("25 Russian words outside an ordered list hold, and 26 are reported", () => {
+    const twentyFive =
+      "Теперь ворота читают каждый файл разметки в головном коммите и применяют его путь или начальную запись чтобы выбрать какой шаблон нужен виду сегодня утром строго";
+    const twentySix = `${twentyFive} сейчас`;
+    expect(lengths(twentyFive)).toEqual([]);
+    expect(lengths(twentySix)).toEqual([
+      `1: carries a 26-word descriptive sentence, over the ${DESCRIPTIVE_WORD_CAP}-word cap (procedural means an ordered list item, capped at ${PROCEDURAL_WORD_CAP} words)`,
+    ]);
+  });
+
+  test("mixed English and Russian words count together", () => {
+    const mixed =
+      "Now the gate reads каждый файл разметки в головном коммите and uses его путь or начальную запись to choose какой шаблон нужен виду today утром строго";
+    expect(sentenceLengths(mixed)).toEqual([{ line: 1, words: 26, kind: "descriptive" }]);
+    expect(lengths(mixed)).toEqual([
       `1: carries a 26-word descriptive sentence, over the ${DESCRIPTIVE_WORD_CAP}-word cap (procedural means an ordered list item, capped at ${PROCEDURAL_WORD_CAP} words)`,
     ]);
   });
