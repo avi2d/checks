@@ -38,7 +38,7 @@ function orderedAt(raw: string): boolean {
 }
 
 function isWordChar(char: string): boolean {
-  return (char >= "0" && char <= "9") || (char >= "A" && char <= "Z") || (char >= "a" && char <= "z");
+  return /[\p{L}\p{N}]/u.test(char);
 }
 
 function wordsIn(sentence: string): number {
@@ -59,7 +59,7 @@ function wordsIn(sentence: string): number {
 }
 
 function isCloser(char: string): boolean {
-  return char === '"' || char === "'" || char === ")" || char === "]" || char === "*" || char === "_" || char === "”" || char === "’";
+  return char === '"' || char === "'" || char === ")" || char === "]" || char === "*" || char === "_" || char === "”" || char === "’" || char === "»";
 }
 
 function sentencesIn(body: string): readonly string[] {

@@ -335,9 +335,9 @@ function ruleFindings(line: MarkdownLine, reader: Reader): ProseFinding[] {
   );
 }
 
-const SENTENCE_BREAK = /(?<=[^\s.!?])[.!?]["'”’)\]*_]*\s+(?=[A-Z"“*_[\0])/g;
-const ABBREVIATION = /\b(?:e\.g|i\.e|etc|vs|cf|approx|Mr|Mrs|Ms|Dr|St|No|Fig)$/i;
-const SENTENCE_END = /[.!?:]["'”’)\]*_]*\s*$/;
+const SENTENCE_BREAK = /(?<=[^\s.!?])[.!?]["'”’»)\]*_]*\s+(?=[\p{Lu}"“«*_[\0])/gu;
+const ABBREVIATION = /(?<![\p{L}\p{N}_])(?:e\.g|i\.e|etc|vs|cf|approx|Mr|Mrs|Ms|Dr|St|No|Fig|см|напр|т\.\s*[едп]|др|стр)$/iu;
+const SENTENCE_END = /[.!?:]["'”’»)\]*_]*\s*$/;
 const LIST_ITEM = /^(?:\s*>)*\s*(?:[-*+]|\d{1,9}[.)])(?:\s|$)/;
 const QUOTE_DEPTH = /^(?:\s*>)*/;
 
@@ -355,7 +355,7 @@ function secondSentence(line: MarkdownLine): ProseFinding | undefined {
   return undefined;
 }
 
-const OPENS_LOWERCASE = /^\s*[a-z]/;
+const OPENS_LOWERCASE = /^\s*\p{Ll}/u;
 
 // A sentence may end inside the code or link that closes its line, so only a lowercase next line proves it runs on.
 function endsMidSentence(line: MarkdownLine, next: MarkdownLine): boolean {

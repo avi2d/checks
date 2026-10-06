@@ -71,6 +71,50 @@ describe("each rule goes red on a planted line and green on its rewrite", () => 
     expect(refusals("It builds the bill and ships it to the supplier.\n")).toEqual([]);
   });
 
+  test("a second Russian sentence on one line is refused, in either language order", () => {
+    const second = (opening: string): string =>
+      `1: carries a second sentence on one line, which opens with \`${opening}\`. Start it on its own line`;
+    expect(refusals("Он собирает. Он поставляет.")).toEqual([second("Он поставляет")]);
+    expect(refusals("It builds. Он поставляет.")).toEqual([second("Он поставляет")]);
+    expect(refusals("Он собирает. It ships.")).toEqual([second("It ships")]);
+    expect(refusals("Он собирает.\nОн поставляет.")).toEqual([]);
+  });
+
+  test("a second Russian sentence on one line is refused across guillemets", () => {
+    const second = (opening: string): string =>
+      `1: carries a second sentence on one line, which opens with \`${opening}\`. Start it on its own line`;
+    expect(refusals("Он ушёл. «Да», сказал он.")).toEqual([second("«Да», сказал он")]);
+    expect(refusals("Он сказал «Стой.» Потом ушёл.")).toEqual([second("Потом ушёл")]);
+  });
+
+  test("a Russian line closing on a guillemet ends its sentence", () => {
+    expect(refusals("Он крикнул «Стой!»\nПотом ушёл.")).toEqual([]);
+  });
+
+  test("рис is the noun rice, so a sentence after it is refused", () => {
+    expect(refusals("Он ест рис. Потом спит.")).toEqual([
+      "1: carries a second sentence on one line, which opens with `Потом спит`. Start it on its own line",
+    ]);
+  });
+
+  test("a Russian abbreviation before a capital opens no sentence", () => {
+    expect(refusals("Читай замок, см. Сборка пишет один.")).toEqual([]);
+    expect(refusals("Читай замок, и т.д. Сборка пишет один.")).toEqual([]);
+  });
+
+  test("a spaced Russian abbreviation before a proper name opens no sentence", () => {
+    expect(refusals("Пишите имя полностью, т. е. Иван Иванов.")).toEqual([]);
+    expect(refusals("Пишите имя полностью, т.\u00a0е. Иван Иванов.")).toEqual([]);
+    expect(refusals("Читай замок, и т. д. Сборка пишет один.")).toEqual([]);
+    expect(refusals("Читай замок, и т. п. Сборка пишет один.")).toEqual([]);
+  });
+
+  test("a sentence that runs on in Russian lowercase past a closing code span", () => {
+    const wrapped = "Он читает `код`\nпоказывает его.\n";
+    const runOn = "carries a sentence that runs across lines. Join the sentence onto one line";
+    expect(refusals(wrapped)).toEqual([`1: ${runOn}`, `2: ${runOn}`]);
+  });
+
   test("used to after a form of be is habit, not history", () => {
     expect(refusals("It is used to build bills.")).toEqual([]);
   });
@@ -215,6 +259,25 @@ describe("a trial sentence length cap, procedural at 20 words and descriptive at
     ]);
   });
 
+  test("25 Russian words outside an ordered list hold, and 26 are reported", () => {
+    const twentyFive =
+      "Теперь ворота читают каждый файл разметки в головном коммите и применяют его путь или начальную запись чтобы выбрать какой шаблон нужен виду сегодня утром строго";
+    const twentySix = `${twentyFive} сейчас`;
+    expect(lengths(twentyFive)).toEqual([]);
+    expect(lengths(twentySix)).toEqual([
+      `1: carries a 26-word descriptive sentence, over the ${DESCRIPTIVE_WORD_CAP}-word cap (procedural means an ordered list item, capped at ${PROCEDURAL_WORD_CAP} words)`,
+    ]);
+  });
+
+  test("mixed English and Russian words count together", () => {
+    const mixed =
+      "Now the gate reads каждый файл разметки в головном коммите and uses его путь or начальную запись to choose какой шаблон нужен виду today утром строго";
+    expect(sentenceLengths(mixed)).toEqual([{ line: 1, words: 26, kind: "descriptive" }]);
+    expect(lengths(mixed)).toEqual([
+      `1: carries a 26-word descriptive sentence, over the ${DESCRIPTIVE_WORD_CAP}-word cap (procedural means an ordered list item, capped at ${PROCEDURAL_WORD_CAP} words)`,
+    ]);
+  });
+
   test("a real over-length sentence from the checks CONTRIBUTING is reported", () => {
     const real =
       "`.github/workflows/mutation.yml` runs Stryker, with `stryker.conf.mjs`, as a baseline on `main` or on any branch by hand, and as an advisory comparison scoped to the sources a pull request changes or reaches through a changed test, helper or fixture.";
@@ -301,6 +364,13 @@ describe("a trial sentence length cap, procedural at 20 words and descriptive at
         { line: 1, words: 2, kind: "descriptive" },
       ]);
     }
+  });
+
+  test("a closing guillemet ends a Russian sentence past itself", () => {
+    expect(sentenceLengths("«Да.» Он ушёл.")).toEqual([
+      { line: 1, words: 1, kind: "descriptive" },
+      { line: 1, words: 2, kind: "descriptive" },
+    ]);
   });
 
   test("leading space, a trailing space and a tab change no count", () => {
