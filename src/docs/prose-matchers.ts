@@ -51,7 +51,7 @@ const AUTOLINK = /^<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^\s<>]*|[^\s@<>]+@[^\s<>]+)
 const HTML_TAG = /^<\/?[A-Za-z][A-Za-z0-9-]*(?:\s[^<>]*)?\/?>/;
 const BARE_URL = /^https?:\/\/[^\s<>]*[^\s<>.,:;!?'")\]]/;
 const ENTITY = /^&(?:#\d+|#x[0-9a-f]+|[a-z][a-z0-9]*);/i;
-const WORD = /\w/;
+const WORD = /[\p{L}\p{N}_]/u;
 
 function hiddenAt(raw: string, at: number, rest: string): { readonly length: number; readonly fill: string } | undefined {
   const char = raw.charAt(at);
@@ -335,8 +335,8 @@ function ruleFindings(line: MarkdownLine, reader: Reader): ProseFinding[] {
   );
 }
 
-const SENTENCE_BREAK = /(?<=[^\s.!?])[.!?]["'”’)\]*_]*\s+(?=[A-Z"“*_[\0])/g;
-const ABBREVIATION = /\b(?:e\.g|i\.e|etc|vs|cf|approx|Mr|Mrs|Ms|Dr|St|No|Fig)$/i;
+const SENTENCE_BREAK = /(?<=[^\s.!?])[.!?]["'”’)\]*_]*\s+(?=[\p{Lu}"“*_[\0])/gu;
+const ABBREVIATION = /(?<![\p{L}\p{N}_])(?:e\.g|i\.e|etc|vs|cf|approx|Mr|Mrs|Ms|Dr|St|No|Fig|см|напр|т\.е|т\.д|т\.п|др|стр|рис)$/iu;
 const SENTENCE_END = /[.!?:]["'”’)\]*_]*\s*$/;
 const LIST_ITEM = /^(?:\s*>)*\s*(?:[-*+]|\d{1,9}[.)])(?:\s|$)/;
 const QUOTE_DEPTH = /^(?:\s*>)*/;
@@ -355,7 +355,7 @@ function secondSentence(line: MarkdownLine): ProseFinding | undefined {
   return undefined;
 }
 
-const OPENS_LOWERCASE = /^\s*[a-z]/;
+const OPENS_LOWERCASE = /^\s*\p{Ll}/u;
 
 // A sentence may end inside the code or link that closes its line, so only a lowercase next line proves it runs on.
 function endsMidSentence(line: MarkdownLine, next: MarkdownLine): boolean {
