@@ -16,6 +16,9 @@ test("layout is red on sideways overflow, a clipped, cut off, covered or hidden 
     "cut-off.html": page(`<div style="overflow: hidden; height: 20px"><p style="margin: 40px 0 0"><a href="/">Write to me</a></p></div>`),
     "covered.html": page(`<p><a href="/">Write to me</a></p><div style="position: absolute; inset: 0; background: white"></div>`),
     "transparent.html": page(`<p><a href="/" style="color: transparent">Write to me</a></p>`),
+    "invisible-word.html": page(`<p><a href="/">Write <span style="visibility: hidden">to me</span></a></p>`),
+    "faded-word.html": page(`<p><a href="/">Write <span style="opacity: 0">to me</span></a></p>`),
+    "shrunk-word.html": page(`<p><a href="/">Write <span style="font-size: 0">to me</span></a></p>`),
     "overlap.html": page(`<a href="/" style="position: absolute; top: 10px; left: 10px">Under</a><a href="/" style="position: absolute; top: 10px; left: 10px; background: white">Over</a>`),
     "missing.html": page("<p>No link here</p>"),
     "invisible.html": page(`<p><a href="/" style="display: none">Write to me</a></p>`),
@@ -30,6 +33,9 @@ test("layout is red on sideways overflow, a clipped, cut off, covered or hidden 
     ["/cut-off.html", 'link "Write to me" is cut off by a container that cannot be scrolled'],
     ["/covered.html", 'link "Write to me" is covered or clipped at'],
     ["/transparent.html", 'link "Write to me" hides its text "Write to me"'],
+    ["/invisible-word.html", 'link "Write to me" hides its text "to me"'],
+    ["/faded-word.html", 'link "Write to me" hides its text "to me"'],
+    ["/shrunk-word.html", 'link "Write to me" hides its text "to me"'],
     ["/overlap.html", 'link "Under" overlaps link "Over"'],
     ["/missing.html", "scanned no target"],
     ["/invisible.html", "scanned no target"],
@@ -45,11 +51,11 @@ test("layout is red on sideways overflow, a clipped, cut off, covered or hidden 
   const passed = await site.run();
   expect(passed.text).toContain(`browser: ${at("layout", "/overflow.html").slice(0, -1)} scanned link 1`);
   expect(passed.text).toContain(`browser: ${at("targets", "/invisible.html").slice(0, -1)} scanned link 1`);
-  expect(passed.text).toContain("browser: 16 check run(s) over 8 route(s), 1 viewport(s), 1 state(s) and 1 target(s) pass");
+  expect(passed.text).toContain("browser: 22 check run(s) over 11 route(s), 1 viewport(s), 1 state(s) and 1 target(s) pass");
   expect(passed.exitCode).toBe(0);
 }, 120_000);
 
-test("layout passes an icon drawn before a label, a label in a shadow root, an SVG title, text hidden at this width, and a skip link parked until it is focused", async () => {
+test("layout passes an icon drawn before a label, a label in a shadow root, an SVG title, text hidden at this width, a closed select, a textarea, a closed details, and a skip link parked until it is focused", async () => {
   const SHADOW_LABEL = `<script>customElements.define("x-label", class extends HTMLElement { constructor() { super(); this.attachShadow({ mode: "open" }).innerHTML = "<span>Write to me</span>"; } });</script>`;
   const SR_ONLY = "position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;";
   const skipped = (css: string): string =>
@@ -63,6 +69,9 @@ test("layout passes an icon drawn before a label, a label in a shadow root, an S
     "icon.html": page(`<p><a href="/" class="icon">Write to me</a></p>`, { head: '<style>.icon::before { content: "→ →"; }</style>' }),
     "shadow.html": page(`<p><a href="/"><x-label></x-label></a></p>${SHADOW_LABEL}`),
     "svg-title.html": page(`<p><a href="/"><svg width="16" height="16" viewBox="0 0 16 16"><title>Mail</title><rect width="16" height="16"/></svg> Write</a></p>`),
+    "select.html": page(`<p><a href="/">Write to me</a></p><form><select id="language"><option>English</option><option>Русский</option></select></form>`),
+    "textarea.html": page(`<p><a href="/">Write to me</a></p><form><textarea>Hello there</textarea></form>`),
+    "details.html": page(`<nav><a href="/">Home</a><details><summary>More</summary><a href="/">Hidden link</a></details></nav>`),
     "narrow-label.html": page(`<p><a href="/"><span class="wide">Write to me</span><span hidden>by email</span> ✉</a></p>`, { head: "<style>.wide { display: none; }</style>" }),
   };
   const site = await browserSite({
@@ -72,6 +81,7 @@ test("layout passes an icon drawn before a label, a label in a shadow root, an S
       targets: [
         { name: "skip link", selector: "a.skip", routes: Object.keys(parked).map((path) => `/${path}`), focusable: true },
         { name: "link", selector: "main a:not(.skip)", focusable: true },
+        { name: "control", selector: "main form, main select, main nav", routes: ["/select.html", "/textarea.html", "/details.html"] },
       ],
       checks: ["layout"],
     }),

@@ -118,8 +118,8 @@ const FIRST_UNSHOWN_TEXT = `function () {
     const components = color.slice(color.indexOf("(") + 1, -1).split(",");
     return components.length === 4 ? parseFloat(components[3]) : 1;
   };
-  const unrendered = (element) =>
-    element.closest("svg title, svg desc") !== null || element.hasAttribute("hidden") || getComputedStyle(element).display === "none";
+  const unrendered = (element) => element.tagName === "TEXTAREA" || element.closest("svg title, svg desc") !== null || !element.checkVisibility();
+  if (unrendered(this)) return null;
   const walker = document.createTreeWalker(this, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, (node) => {
     if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
     return unrendered(node) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP;
