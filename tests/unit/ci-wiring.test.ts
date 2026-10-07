@@ -233,3 +233,28 @@ test("a script and file cycle terminates without marking a mutation job", () => 
   expect(sweep("scripts/a.sh")).toEqual([]);
   expect(sweep("scripts/missing.sh")).toEqual([]);
 });
+
+test("a package script named after the repository file it runs still reaches that file", () => {
+  const wired = new Map([["scripts/mutate.sh", "scripts/mutate.sh --incremental"]]);
+  const files = new Map([["scripts/mutate.sh", 'exec ./node_modules/.bin/stryker run "$@"']]);
+  const sweep = (runsOn: string) =>
+    findRunnerFaults({ visibility: "private", scripts: wired, files }, workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${runsOn}\n    steps:\n      - run: bun run scripts/mutate.sh\n`));
+  expect(sweep(HOSTED)[0]?.fault).toContain(WINBOX);
+  expect(sweep(WINBOX)).toEqual([]);
+});
+
+test("a here-document's text is data, and only an unquoted one's substitutions run", () => {
+  const files = new Map([
+    ["scripts/help.sh", "cat <<'EOF'\nbunx stryker run\nEOF\n"],
+    ["scripts/tabbed.sh", "cat <<-EOF >&2\n\tbunx stryker run\n\tEOF\necho done\n"],
+    ["scripts/expanded.sh", "cat <<EOF\nsummary: $(bunx stryker run)\nEOF\n"],
+    ["scripts/after.sh", "cat <<\"EOF\"\nusage\nEOF\nbunx stryker run\n"],
+  ]);
+  const sweep = (run: string) =>
+    findRunnerFaults({ visibility: "private", scripts: new Map(), files }, workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${HOSTED}\n    steps:\n      - run: ${run}\n`));
+  expect(sweep("scripts/help.sh")).toEqual([]);
+  expect(sweep("scripts/tabbed.sh")).toEqual([]);
+  expect(sweep("scripts/expanded.sh")[0]?.fault).toContain(WINBOX);
+  expect(sweep("scripts/after.sh")[0]?.fault).toContain(WINBOX);
+  expect(sweep("cat <<< 'bunx stryker run'")).toEqual([]);
+});

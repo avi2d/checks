@@ -28,6 +28,7 @@ A mutation job is one with a run step that calls `stryker run`, `checks-mutation
 A command runs a shell script by a path inside the repository, such as `scripts/mutate.sh` or `./mutate.sh`, or as a `bun` target that no `package.json` script names.
 A file counts as a shell script when its name ends in `.sh` or its first line names `sh`, `bash`, `dash`, `ksh` or `zsh`.
 The call counts as a command of its own or inside a command substitution, never as an argument to another command.
+The text of a here-document is data, so a call there counts only inside a command substitution when the delimiter is unquoted.
 A mutation job never names `CI_RUNS_ON` directly in `runs-on`, as `vars.CI_RUNS_ON` or `vars['CI_RUNS_ON']`, so an override for an outage cannot send its full sweeps to hosted runners.
 Any other job that names `CI_RUNS_ON` in `runs-on` carries exactly the hosted-default expression `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
 In a private repository each mutation job carries exactly the labels `[self-hosted, Linux, X64, winbox]` and every other job exactly the hosted-default expression.
