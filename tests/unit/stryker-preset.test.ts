@@ -41,9 +41,7 @@ test("mutation concurrency halves the cores, rounds down, and never drops below 
 });
 
 test("the preset spreads that cap to every consumer", () => {
-  expect((preset as { concurrency: unknown }).concurrency).toBe(
-    Math.max(1, Math.floor(availableParallelism() / 2)),
-  );
+  expect(preset).toMatchObject({ concurrency: Math.max(1, Math.floor(availableParallelism() / 2)) });
 });
 
 test("the preset ships the way every other shared artifact is exposed", async () => {
