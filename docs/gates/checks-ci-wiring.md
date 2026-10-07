@@ -24,9 +24,10 @@ A path filter cannot cover every pull request and therefore cannot satisfy the c
 ### Runners
 
 It also judges the runner of every job in every workflow.
-A mutation job is one with a run step that calls `stryker run`, `checks-mutation`, `checks-mutation-compare`, a `package.json` script that does, or a shell script in the repository that does, directly or through `bun`, `bun run` or `bunx`.
-A command runs a shell script by a path inside the repository, such as `scripts/mutate.sh` or `./mutate.sh`, or as a `bun` target that no `package.json` script names.
-The path resolves from the directory the command runs in: the step's `working-directory`, the job's or the workflow's `defaults.run.working-directory`, `bun --cwd=` and a literal `cd`.
+A mutation job is one with a run step that calls `stryker run`, `checks-mutation` or `checks-mutation-compare`, directly or through `bun`, `bun run` or `bunx`.
+The call counts too through a `package.json` script or a shell script in the repository.
+A command runs a shell script by a path inside the repository, such as `tools/mutate.sh` or `./mutate.sh`, or as a `bun` target that no `package.json` script names.
+The path resolves from the directory the command runs in: the step's `working-directory`, the job's or the workflow's `defaults.run.working-directory`, `bun --cwd` and a literal `cd`.
 A script file runs in its caller's directory, and a `package.json` script runs from the repository root.
 A path the check cannot know before the run, such as one built from an expression or a variable, reaches no file.
 A file counts as a shell script when its name ends in `.sh` or its first line names `sh`, `bash`, `dash`, `ksh` or `zsh`.
