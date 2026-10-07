@@ -24,8 +24,16 @@ A path filter cannot cover every pull request and therefore cannot satisfy the c
 ### Runners
 
 It also judges the runner of every job in every workflow.
-A mutation job is one with a run step that calls `stryker run`, `checks-mutation`, `checks-mutation-compare` or a `package.json` script that does, directly or through `bun`, `bun run` or `bunx`.
+A mutation job is one with a run step that calls `stryker run`, `checks-mutation` or `checks-mutation-compare`, directly or through `bun`, `bun run` or `bunx`.
+The call counts too through a `package.json` script or a shell script in the repository.
+A command runs a shell script by a path inside the repository, such as `tools/mutate.sh` or `./mutate.sh`, or as a `bun` target that no `package.json` script names.
+The path resolves from the directory the command runs in: the step's `working-directory`, the job's or the workflow's `defaults.run.working-directory`, `bun --cwd` and a literal `cd`.
+A script file runs in its caller's directory, and a `package.json` script runs from the repository root.
+A path the check cannot know before the run, such as one built from an expression or a variable, reaches no file.
+A file counts as a shell script when its name ends in `.sh` or its first line names `sh`, `bash`, `dash`, `ksh` or `zsh`.
 The call counts as a command of its own or inside a command substitution, never as an argument to another command.
+A here-document that `sh`, `bash`, `dash`, `ksh` or `zsh` reads is a script, and its calls count.
+The text of any other here-document is data, so a call there counts only inside a command substitution when the delimiter is unquoted.
 A mutation job never names `CI_RUNS_ON` directly in `runs-on`, as `vars.CI_RUNS_ON` or `vars['CI_RUNS_ON']`, so an override for an outage cannot send its full sweeps to hosted runners.
 Any other job that names `CI_RUNS_ON` in `runs-on` carries exactly the hosted-default expression `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
 In a private repository each mutation job carries exactly the labels `[self-hosted, Linux, X64, winbox]` and every other job exactly the hosted-default expression.
@@ -34,7 +42,7 @@ The check knows a repository is private only from GitHub's event, so a run outsi
 
 ## What it reads
 
-The bin reads `.github/workflows/*.yml`, `*.yaml` and the `scripts` in `package.json` from the working tree.
+The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts` in `package.json` and the shell scripts those steps and scripts run from the working tree.
 It reads the target branch from `GITHUB_BASE_REF`, then from `refs/remotes/origin/HEAD` and then from the event file `GITHUB_EVENT_PATH` names.
 It reads whether the repository is private from `repository.private` in that event file.
 It parses the workflows with `Bun.YAML` without executing them.

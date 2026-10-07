@@ -70,6 +70,7 @@ const COMMAND_BREAKS = new Set(["\n", ";", "&", "|", "(", ")", "`"]);
 const WORD_BREAKS = new Set([" ", "\t"]);
 const REDIRECTS = new Set(["<", ">"]);
 const REDIRECT_OPERATOR = /^[<>][<>&|]*/;
+const DELIMITER_BREAKS = new Set([...WORD_BREAKS, ...COMMAND_BREAKS, ...REDIRECTS]);
 const FILE_DESCRIPTOR = /^\d+$/;
 const DOUBLE_QUOTE_ESCAPES = new Set(["$", "`", '"', "\\"]);
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
@@ -138,9 +139,19 @@ function commentEnd(script: string, from: number): number {
   return newline === -1 ? script.length : newline;
 }
 
+export const SHELLS = ["sh", "bash", "dash", "ksh", "zsh"];
+
+type Heredoc = {
+  readonly consumer: Command;
+  readonly delimiter: string;
+  readonly tabs: boolean;
+  readonly literal: boolean;
+};
+
 type ShellParse = {
   readonly commands: string[][];
   readonly substitutions: string[];
+  readonly heredocs: Heredoc[];
   words: string[];
   word: string | undefined;
   redirecting: boolean;
@@ -163,12 +174,63 @@ function endCommand(parse: ShellParse): void {
 function startRedirect(parse: ShellParse, script: string, index: number): number {
   if (parse.word !== undefined && FILE_DESCRIPTOR.test(parse.word)) parse.word = undefined;
   endWord(parse);
+  const operator = REDIRECT_OPERATOR.exec(script.slice(index))?.[0] ?? script.charAt(index);
+  if (operator === "<<") return startHeredoc(parse, script, index + operator.length);
   parse.redirecting = true;
-  return index + (REDIRECT_OPERATOR.exec(script.slice(index))?.[0].length ?? 1);
+  return index + operator.length;
+}
+
+function startHeredoc(parse: ShellParse, script: string, from: number): number {
+  const tabs = script.charAt(from) === "-";
+  let start = tabs ? from + 1 : from;
+  while (WORD_BREAKS.has(script.charAt(start))) start += 1;
+  let delimiter = "";
+  let end = start;
+  while (end < script.length && !DELIMITER_BREAKS.has(script.charAt(end))) {
+    const part = shellPart(script, end);
+    delimiter += part.text;
+    end = part.end;
+  }
+  parse.heredocs.push({ consumer: parse.words, delimiter, tabs, literal: /['"\\]/.test(script.slice(start, end)) });
+  return end;
+}
+
+function heredocBody(script: string, from: number, { delimiter, tabs }: Heredoc): Span {
+  let line = from;
+  while (line < script.length) {
+    const lineEnd = commentEnd(script, line);
+    const text = script.slice(line, lineEnd);
+    if ((tabs ? text.replace(/^\t+/, "") : text) === delimiter) return { text: script.slice(from, line), end: lineEnd + 1 };
+    line = lineEnd + 1;
+  }
+  return { text: script.slice(from), end: script.length };
+}
+
+function bodySubstitutions(body: string): readonly string[] {
+  const substitutions: string[] = [];
+  let index = 0;
+  while (index < body.length) {
+    const part = doubleQuotedPart(body, index);
+    substitutions.push(...part.substitutions);
+    index = part.end;
+  }
+  return substitutions;
+}
+
+function skipHeredocs(parse: ShellParse, script: string, from: number): number {
+  let index = from;
+  for (const heredoc of parse.heredocs.splice(0)) {
+    const body = heredocBody(script, index, heredoc);
+    const [program = ""] = fromProgram(heredoc.consumer);
+    if (SHELLS.includes(program.slice(program.lastIndexOf("/") + 1))) parse.substitutions.push(body.text);
+    else if (!heredoc.literal) parse.substitutions.push(...bodySubstitutions(body.text));
+    index = body.end;
+  }
+  return index;
 }
 
 export function shellCommands(script: string): readonly Command[] {
-  const parse: ShellParse = { commands: [], substitutions: [], words: [], word: undefined, redirecting: false };
+  const parse: ShellParse = { commands: [], substitutions: [], heredocs: [], words: [], word: undefined, redirecting: false };
   let index = 0;
   while (index < script.length) {
     const char = script.charAt(index);
@@ -178,9 +240,11 @@ export function shellCommands(script: string): readonly Command[] {
       index = commentEnd(script, index);
     } else if (REDIRECTS.has(char)) {
       index = startRedirect(parse, script, index);
-    } else if (COMMAND_BREAKS.has(char) || WORD_BREAKS.has(char)) {
-      if (COMMAND_BREAKS.has(char)) endCommand(parse);
-      else endWord(parse);
+    } else if (COMMAND_BREAKS.has(char)) {
+      endCommand(parse);
+      index = char === "\n" ? skipHeredocs(parse, script, index + 1) : index + 1;
+    } else if (WORD_BREAKS.has(char)) {
+      endWord(parse);
       index += 1;
     } else {
       const part = shellPart(script, index);

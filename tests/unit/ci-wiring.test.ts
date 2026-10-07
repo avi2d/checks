@@ -178,3 +178,118 @@ test("the runner report names each job and what to set", () => {
     `ci-wiring: 1 job(s) run on the wrong runner:\n  .github/workflows/ci.yml job mutation: ${faults[0]?.fault}`,
   );
 });
+
+test("a package script through a repository file to stryker is a mutation job pinned to winbox", () => {
+  const wired = new Map([["mutate:incremental", "scripts/mutate.sh --incremental"]]);
+  const files = new Map([
+    ["scripts/mutate.sh", 'exec ./node_modules/.bin/stryker run "$@"'],
+    ["mutate.sh", "scripts/mutate.sh"],
+  ]);
+  const sweep = (run: string, runsOn: string) =>
+    findRunnerFaults(
+      { visibility: "private", scripts: wired, files },
+      workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${runsOn}\n    steps:\n      - run: ${JSON.stringify(run)}\n`),
+    );
+  const runs = ["time bun run mutate:incremental", "scripts/mutate.sh --incremental", "./scripts/mutate.sh --incremental", "./mutate.sh", "bun run ./scripts/mutate.sh", "bun scripts/mutate.sh", "bun mutate.sh"];
+  for (const run of runs) {
+    expect(sweep(run, HOSTED)[0]?.fault).toContain(WINBOX);
+    expect(sweep(run, WINBOX)).toEqual([]);
+  }
+  expect(sweep("mutate.sh", HOSTED)).toEqual([]);
+});
+
+test("a repository file without a mutation call stays a hosted job", () => {
+  const wired = new Map([["generate", "scripts/generate.sh"]]);
+  const files = new Map([["scripts/generate.sh", "echo done"]]);
+  const sweep = (run: string) =>
+    findRunnerFaults(
+      { visibility: "private", scripts: wired, files },
+      workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${HOSTED}\n    steps:\n      - run: ${JSON.stringify(run)}\n`),
+    );
+  for (const run of ["bun run generate", "scripts/generate.sh", "./scripts/generate.sh"]) {
+    expect(sweep(run)).toEqual([]);
+  }
+  expect(
+    findRunnerFaults(
+      { visibility: "private", scripts: wired, files },
+      workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${WINBOX}\n    steps:\n      - run: "bun run generate"\n`),
+    )[0]?.fault,
+  ).toContain(HOSTED);
+});
+
+test("a script and file cycle terminates without marking a mutation job", () => {
+  const wired = new Map([["loop", "scripts/loop.sh"]]);
+  const files = new Map([
+    ["scripts/loop.sh", "bun run loop"],
+    ["scripts/a.sh", "scripts/b.sh"],
+    ["scripts/b.sh", "scripts/a.sh"],
+  ]);
+  const sweep = (run: string) =>
+    findRunnerFaults(
+      { visibility: "private", scripts: wired, files },
+      workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${HOSTED}\n    steps:\n      - run: ${JSON.stringify(run)}\n`),
+    );
+  expect(sweep("bun run loop")).toEqual([]);
+  expect(sweep("scripts/a.sh")).toEqual([]);
+  expect(sweep("scripts/missing.sh")).toEqual([]);
+});
+
+test("a package script named after the repository file it runs still reaches that file", () => {
+  const wired = new Map([["scripts/mutate.sh", "scripts/mutate.sh --incremental"]]);
+  const files = new Map([["scripts/mutate.sh", 'exec ./node_modules/.bin/stryker run "$@"']]);
+  const sweep = (runsOn: string) =>
+    findRunnerFaults({ visibility: "private", scripts: wired, files }, workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${runsOn}\n    steps:\n      - run: bun run scripts/mutate.sh\n`));
+  expect(sweep(HOSTED)[0]?.fault).toContain(WINBOX);
+  expect(sweep(WINBOX)).toEqual([]);
+});
+
+test("a here-document's text is data, and only an unquoted one's substitutions run", () => {
+  const files = new Map([
+    ["scripts/help.sh", "cat <<'EOF'\nbunx stryker run\nEOF\n"],
+    ["scripts/tabbed.sh", "cat <<-EOF >&2\n\tbunx stryker run\n\tEOF\necho done\n"],
+    ["scripts/expanded.sh", "cat <<EOF\nsummary: $(bunx stryker run)\nEOF\n"],
+    ["scripts/after.sh", "cat <<\"EOF\"\nusage\nEOF\nbunx stryker run\n"],
+  ]);
+  const sweep = (run: string) =>
+    findRunnerFaults({ visibility: "private", scripts: new Map(), files }, workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${HOSTED}\n    steps:\n      - run: ${run}\n`));
+  expect(sweep("scripts/help.sh")).toEqual([]);
+  expect(sweep("scripts/tabbed.sh")).toEqual([]);
+  expect(sweep("scripts/expanded.sh")[0]?.fault).toContain(WINBOX);
+  expect(sweep("scripts/after.sh")[0]?.fault).toContain(WINBOX);
+  expect(sweep("cat <<< 'bunx stryker run'")).toEqual([]);
+});
+
+test("a here-document a shell reads is its script, quoted or not", () => {
+  const sweep = (run: string) =>
+    findRunnerFaults({ visibility: "private", scripts: new Map() }, workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${HOSTED}\n    steps:\n      - run: ${JSON.stringify(run)}\n`));
+  for (const delimiter of ["'EOF'", "EOF"]) {
+    expect(sweep(`bash <<${delimiter}\nset -e\nbunx stryker run\nEOF\n`)[0]?.fault).toContain(WINBOX);
+    expect(sweep(`/bin/sh -s <<-${delimiter} >&2\n\tbunx stryker run\n\tEOF\n`)[0]?.fault).toContain(WINBOX);
+  }
+  expect(sweep("cat <<'EOF'\nbunx stryker run\nEOF\n")).toEqual([]);
+});
+
+test("a repository file resolves from the directory its command runs in", () => {
+  const files = new Map([
+    ["mutate.sh", "echo report"],
+    ["tools/mutate.sh", "bunx stryker run"],
+    ["tools/report.sh", "./mutate.sh"],
+  ]);
+  const sweep = (job: string, defaults = "") =>
+    findRunnerFaults({ visibility: "private", scripts: new Map(), files }, workflow(`on: pull_request\n${defaults}jobs:\n  sweep:\n    runs-on: ${HOSTED}\n${job}`));
+  const step = (run: string, extra = "") => `    steps:\n      - run: ${JSON.stringify(run)}\n${extra}`;
+  const tools = "        working-directory: tools\n";
+  const mutation = (job: string, defaults?: string) => expect(sweep(job, defaults)[0]?.fault).toContain(WINBOX);
+  expect(sweep(step("./mutate.sh"))).toEqual([]);
+  mutation(step("./mutate.sh", tools));
+  mutation(step("../tools/mutate.sh", "        working-directory: ./docs\n"));
+  mutation(`    defaults:\n      run:\n        working-directory: tools\n${step("./mutate.sh")}`);
+  mutation(step("./mutate.sh"), "defaults:\n  run:\n    working-directory: tools\n");
+  expect(sweep(step("./mutate.sh", "        working-directory: .\n"), "defaults:\n  run:\n    working-directory: tools\n")).toEqual([]);
+  mutation(step("cd tools && ./mutate.sh"));
+  expect(sweep(step("cd tools; cd ..; ./mutate.sh"))).toEqual([]);
+  mutation(step("bun --cwd=tools run ./mutate.sh"));
+  mutation(step("./report.sh", tools));
+  expect(sweep(step("bun --cwd=tools run ../mutate.sh"))).toEqual([]);
+  expect(sweep(step("./mutate.sh", "        working-directory: ${{ github.workspace }}/tools\n"))).toEqual([]);
+});
