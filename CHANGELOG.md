@@ -2,6 +2,19 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.35.0
+
+Released 2026-10-07.
+
+### Features
+
+- **quality:** add the opt-in checks-browser runner and checks-frontend-syntax gate [#127](https://github.com/avi2d/checks/pull/127)
+
+### Fixes
+
+- **testing:** cap mutation concurrency at half the available cores [#129](https://github.com/avi2d/checks/pull/129)
+- **docs:** check Russian prose in the sentence length and one-sentence-per-line rules [#126](https://github.com/avi2d/checks/pull/126)
+
 ## 0.34.0
 
 Released 2026-10-03.
