@@ -1,6 +1,6 @@
 {
   "name": "@avi2dg/checks",
-  "version": "0.35.0",
+  "version": "0.35.1",
   "description": "Deterministic checks shared across a set of TypeScript repositories",
   "license": "MIT",
   "repository": {
