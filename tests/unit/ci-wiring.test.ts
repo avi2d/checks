@@ -181,16 +181,21 @@ test("the runner report names each job and what to set", () => {
 
 test("a package script through a repository file to stryker is a mutation job pinned to winbox", () => {
   const wired = new Map([["mutate:incremental", "scripts/mutate.sh --incremental"]]);
-  const files = new Map([["scripts/mutate.sh", 'exec ./node_modules/.bin/stryker run "$@"']]);
+  const files = new Map([
+    ["scripts/mutate.sh", 'exec ./node_modules/.bin/stryker run "$@"'],
+    ["mutate.sh", "scripts/mutate.sh"],
+  ]);
   const sweep = (run: string, runsOn: string) =>
     findRunnerFaults(
       { visibility: "private", scripts: wired, files },
       workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${runsOn}\n    steps:\n      - run: ${JSON.stringify(run)}\n`),
     );
-  for (const run of ["time bun run mutate:incremental", "scripts/mutate.sh --incremental", "./scripts/mutate.sh --incremental"]) {
+  const runs = ["time bun run mutate:incremental", "scripts/mutate.sh --incremental", "./scripts/mutate.sh --incremental", "./mutate.sh", "bun run ./scripts/mutate.sh", "bun scripts/mutate.sh", "bun mutate.sh"];
+  for (const run of runs) {
     expect(sweep(run, HOSTED)[0]?.fault).toContain(WINBOX);
     expect(sweep(run, WINBOX)).toEqual([]);
   }
+  expect(sweep("mutate.sh", HOSTED)).toEqual([]);
 });
 
 test("a repository file without a mutation call stays a hosted job", () => {

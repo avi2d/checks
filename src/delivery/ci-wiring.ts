@@ -3,7 +3,8 @@ import { Config, Console, Effect, FileSystem, Path, Schema } from "effect";
 import { defaultBranch, git } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { ENTRY_POINT, KIT_GATES, type KitGate } from "../core/gates.ts";
-import { fromProgram, invokes, mentions, plainCommand, readRepoFiles, repoFile, shellCommands, withoutOptions, type Command } from "./shell-command.ts";
+import { readShellFiles, runsMutation } from "./mutation-job.ts";
+import { invokes, mentions, plainCommand, type Command } from "./shell-command.ts";
 
 export type { Command };
 
@@ -77,10 +78,6 @@ const RUNNER_OVERRIDE = new RegExp(String.raw`\b${OVERRIDE_ACCESS}`, "i");
 const HOSTED_OVERRIDE = new RegExp(String.raw`^\$\{\{\s*${OVERRIDE_ACCESS}\s*\|\|\s*'ubuntu-latest'\s*\}\}$`, "i");
 const MUTATION_RUNNER = ["self-hosted", "Linux", "X64", "winbox"];
 const HOSTED_DEFAULT = "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}";
-const MUTATION_BINS = ["checks-mutation", "checks-mutation-compare"];
-const BUN_OPERANDS = new Set(["--cwd", "-c", "--config", "--env-file", "-F", "--filter", "-r", "--preload", "--require", "--import", "-e", "--eval", "-p", "--print", "--elide-lines", "--tsconfig-override"]);
-// bun's own commands take precedence over a package.json script of the same name unless bun run names it.
-const BUN_COMMANDS = new Set(["test", "repl", "exec", "install", "i", "add", "a", "remove", "rm", "update", "outdated", "link", "unlink", "pm", "build", "init", "create", "c", "upgrade", "publish", "patch", "patch-commit", "audit", "info", "why"]);
 const EventRepository = Schema.fromJsonString(Schema.Struct({ repository: Schema.Struct({ private: Schema.Boolean }) }));
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -267,35 +264,6 @@ export function declarationFor(scripts: readonly string[], branch: string): Decl
   };
 }
 
-function runsMutation(script: string, scripts: ReadonlyMap<string, string>, files: ReadonlyMap<string, string>, walked: readonly string[] = []): boolean {
-  return shellCommands(script).some((command) => mutationCommand(command, scripts, files, walked));
-}
-
-function mutationCommand(command: Command, scripts: ReadonlyMap<string, string>, files: ReadonlyMap<string, string>, walked: readonly string[]): boolean {
-  const [first = "", ...rest] = fromProgram(command);
-  if (first === "bun") return bunRunsMutation(rest, scripts, files, walked);
-  return mutationBin([first, ...rest]) || scriptFileRuns(first, scripts, files, walked);
-}
-
-function bunRunsMutation(args: Command, scripts: ReadonlyMap<string, string>, files: ReadonlyMap<string, string>, walked: readonly string[]): boolean {
-  const [command = "", ...rest] = withoutOptions(args, BUN_OPERANDS);
-  if (command === "x") return mutationCommand(["bunx", ...rest], scripts, files, walked);
-  if (BUN_COMMANDS.has(command)) return false;
-  const [target = "", ...targetArgs] = command === "run" ? withoutOptions(rest, BUN_OPERANDS) : [command, ...rest];
-  const body = walked.includes(target) ? undefined : scripts.get(target);
-  return body === undefined ? mutationBin([target, ...targetArgs]) : runsMutation(body, scripts, files, [...walked, target]);
-}
-
-function scriptFileRuns(program: string, scripts: ReadonlyMap<string, string>, files: ReadonlyMap<string, string>, walked: readonly string[]): boolean {
-  const rel = repoFile(program);
-  return rel !== undefined && !walked.includes(rel) && runsMutation(files.get(rel) ?? "", scripts, files, [...walked, rel]);
-}
-
-function mutationBin([program = "", subcommand]: Command): boolean {
-  const bin = program.slice(program.lastIndexOf("/") + 1);
-  return MUTATION_BINS.includes(bin) || (bin === "stryker" && subcommand === "run");
-}
-
 function sameLabels(runsOn: unknown, labels: readonly string[]): boolean {
   const named = Array.isArray(runsOn) ? names(runsOn) : undefined;
   return named?.length === labels.length && labels.every((label) => named.includes(label));
@@ -324,7 +292,7 @@ export function findRunnerFaults(policy: RunnerPolicy, workflows: readonly Workf
     return Object.entries(jobs).flatMap(([id, job]) => {
       if (!isRecord(job) || job["runs-on"] === undefined) return [];
       const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
-      const mutation = steps.some((step: unknown) => isRecord(step) && typeof step["run"] === "string" && runsMutation(step["run"], policy.scripts, policy.files ?? new Map()))
+      const mutation = steps.some((step: unknown) => isRecord(step) && typeof step["run"] === "string" && runsMutation(step["run"], policy.scripts, policy.files ?? new Map()));
       const fault = runnerFault(job["runs-on"], mutation, policy.visibility);
       return fault === undefined ? [] : [{ location: `${workflow.path} job ${id}`, fault }];
     });
@@ -392,7 +360,7 @@ const wiring = Effect.gen(function* () {
   yield* gaps.length > 0 ? Console.error(gapReport) : Console.log(gapReport);
   const scripts = yield* readScripts(root);
   const texts = [...scripts.values(), ...runSteps(workflows, () => undefined).map((step) => step.script)];
-  const faults = findRunnerFaults({ visibility: yield* readVisibility, scripts, files: yield* readRepoFiles(root, texts) }, workflows);
+  const faults = findRunnerFaults({ visibility: yield* readVisibility, scripts, files: yield* readShellFiles(root, scripts, texts) }, workflows);
   if (faults.length > 0) yield* Console.error(formatRunnerReport(faults));
   return gaps.length === 0 && faults.length === 0;
 });

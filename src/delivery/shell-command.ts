@@ -1,5 +1,3 @@
-import { Effect, FileSystem, Path } from "effect";
-
 export type Command = readonly string[];
 
 type Span = {
@@ -225,10 +223,9 @@ export function mentions(script: string, gate: Command): boolean {
 }
 
 export function repoFile(program: string): string | undefined {
-  const stripped = program.replace(/^(?:\.\/)+/, "");
-  if (stripped === "" || !stripped.includes("/") || stripped.startsWith("/") || stripped.startsWith("~")) return undefined;
+  if (program.startsWith("/") || program.startsWith("~")) return undefined;
   const resolved: string[] = [];
-  for (const part of stripped.split("/")) {
+  for (const part of program.split("/")) {
     if (part === "" || part === ".") continue;
     if (part === "..") {
       if (resolved.length === 0) return undefined;
@@ -237,29 +234,3 @@ export function repoFile(program: string): string | undefined {
   }
   return resolved.length === 0 ? undefined : resolved.join("/");
 }
-
-function repoFileRefs(script: string): readonly string[] {
-  return shellCommands(script).flatMap((command) => {
-    const [first = ""] = fromProgram(command);
-    const rel = repoFile(first);
-    return rel === undefined ? [] : [rel];
-  });
-}
-
-export const readRepoFiles = Effect.fn("readRepoFiles")(function* (root: string, texts: readonly string[]) {
-  const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  const contents = new Map<string, string>();
-  const seen = new Set<string>();
-  const queue = texts.flatMap(repoFileRefs);
-  while (queue.length > 0) {
-    const rel = queue.pop();
-    if (rel === undefined || seen.has(rel)) continue;
-    seen.add(rel);
-    const text = yield* fs.readFileString(path.join(root, rel)).pipe(Effect.orElseSucceed(() => undefined));
-    if (text === undefined) continue;
-    contents.set(rel, text);
-    queue.push(...repoFileRefs(text).filter((next) => !seen.has(next)));
-  }
-  return contents;
-});

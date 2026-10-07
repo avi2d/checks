@@ -24,8 +24,9 @@ A path filter cannot cover every pull request and therefore cannot satisfy the c
 ### Runners
 
 It also judges the runner of every job in every workflow.
-A mutation job is one with a run step that calls `stryker run`, `checks-mutation`, `checks-mutation-compare`, a `package.json` script that does, or a script file in the repository that does, directly or through `bun`, `bun run` or `bunx`.
-A script file counts when its repository path runs from a workflow step or a `package.json` script and the file runs a mutation call.
+A mutation job is one with a run step that calls `stryker run`, `checks-mutation`, `checks-mutation-compare`, a `package.json` script that does, or a shell script in the repository that does, directly or through `bun`, `bun run` or `bunx`.
+A command runs a shell script by a path inside the repository, such as `scripts/mutate.sh` or `./mutate.sh`, or as a `bun` target that no `package.json` script names.
+A file counts as a shell script when its name ends in `.sh` or its first line names `sh`, `bash`, `dash`, `ksh` or `zsh`.
 The call counts as a command of its own or inside a command substitution, never as an argument to another command.
 A mutation job never names `CI_RUNS_ON` directly in `runs-on`, as `vars.CI_RUNS_ON` or `vars['CI_RUNS_ON']`, so an override for an outage cannot send its full sweeps to hosted runners.
 Any other job that names `CI_RUNS_ON` in `runs-on` carries exactly the hosted-default expression `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
@@ -35,7 +36,7 @@ The check knows a repository is private only from GitHub's event, so a run outsi
 
 ## What it reads
 
-The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts` in `package.json` and the script files those steps and scripts run from the working tree.
+The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts` in `package.json` and the shell scripts those steps and scripts run from the working tree.
 It reads the target branch from `GITHUB_BASE_REF`, then from `refs/remotes/origin/HEAD` and then from the event file `GITHUB_EVENT_PATH` names.
 It reads whether the repository is private from `repository.private` in that event file.
 It parses the workflows with `Bun.YAML` without executing them.
