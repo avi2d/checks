@@ -178,3 +178,53 @@ test("the runner report names each job and what to set", () => {
     `ci-wiring: 1 job(s) run on the wrong runner:\n  .github/workflows/ci.yml job mutation: ${faults[0]?.fault}`,
   );
 });
+
+test("a package script through a repository file to stryker is a mutation job pinned to winbox", () => {
+  const wired = new Map([["mutate:incremental", "scripts/mutate.sh --incremental"]]);
+  const files = new Map([["scripts/mutate.sh", 'exec ./node_modules/.bin/stryker run "$@"']]);
+  const sweep = (run: string, runsOn: string) =>
+    findRunnerFaults(
+      { visibility: "private", scripts: wired, files },
+      workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${runsOn}\n    steps:\n      - run: ${JSON.stringify(run)}\n`),
+    );
+  for (const run of ["time bun run mutate:incremental", "scripts/mutate.sh --incremental", "./scripts/mutate.sh --incremental"]) {
+    expect(sweep(run, HOSTED)[0]?.fault).toContain(WINBOX);
+    expect(sweep(run, WINBOX)).toEqual([]);
+  }
+});
+
+test("a repository file without a mutation call stays a hosted job", () => {
+  const wired = new Map([["generate", "scripts/generate.sh"]]);
+  const files = new Map([["scripts/generate.sh", "echo done"]]);
+  const sweep = (run: string) =>
+    findRunnerFaults(
+      { visibility: "private", scripts: wired, files },
+      workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${HOSTED}\n    steps:\n      - run: ${JSON.stringify(run)}\n`),
+    );
+  for (const run of ["bun run generate", "scripts/generate.sh", "./scripts/generate.sh"]) {
+    expect(sweep(run)).toEqual([]);
+  }
+  expect(
+    findRunnerFaults(
+      { visibility: "private", scripts: wired, files },
+      workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${WINBOX}\n    steps:\n      - run: "bun run generate"\n`),
+    )[0]?.fault,
+  ).toContain(HOSTED);
+});
+
+test("a script and file cycle terminates without marking a mutation job", () => {
+  const wired = new Map([["loop", "scripts/loop.sh"]]);
+  const files = new Map([
+    ["scripts/loop.sh", "bun run loop"],
+    ["scripts/a.sh", "scripts/b.sh"],
+    ["scripts/b.sh", "scripts/a.sh"],
+  ]);
+  const sweep = (run: string) =>
+    findRunnerFaults(
+      { visibility: "private", scripts: wired, files },
+      workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${HOSTED}\n    steps:\n      - run: ${JSON.stringify(run)}\n`),
+    );
+  expect(sweep("bun run loop")).toEqual([]);
+  expect(sweep("scripts/a.sh")).toEqual([]);
+  expect(sweep("scripts/missing.sh")).toEqual([]);
+});

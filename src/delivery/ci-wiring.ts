@@ -3,7 +3,7 @@ import { Config, Console, Effect, FileSystem, Path, Schema } from "effect";
 import { defaultBranch, git } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { ENTRY_POINT, KIT_GATES, type KitGate } from "../core/gates.ts";
-import { fromProgram, invokes, mentions, plainCommand, shellCommands, withoutOptions, type Command } from "./shell-command.ts";
+import { fromProgram, invokes, mentions, plainCommand, readRepoFiles, repoFile, shellCommands, withoutOptions, type Command } from "./shell-command.ts";
 
 export type { Command };
 
@@ -39,6 +39,7 @@ export type Visibility = "private" | "public" | "unknown";
 export type RunnerPolicy = {
   readonly visibility: Visibility;
   readonly scripts: ReadonlyMap<string, string>;
+  readonly files?: ReadonlyMap<string, string>;
 };
 
 export type RunnerFault = {
@@ -266,22 +267,28 @@ export function declarationFor(scripts: readonly string[], branch: string): Decl
   };
 }
 
-function runsMutation(script: string, scripts: ReadonlyMap<string, string>, walked: readonly string[] = []): boolean {
-  return shellCommands(script).some((command) => mutationCommand(command, scripts, walked));
+function runsMutation(script: string, scripts: ReadonlyMap<string, string>, files: ReadonlyMap<string, string>, walked: readonly string[] = []): boolean {
+  return shellCommands(script).some((command) => mutationCommand(command, scripts, files, walked));
 }
 
-function mutationCommand(command: Command, scripts: ReadonlyMap<string, string>, walked: readonly string[]): boolean {
+function mutationCommand(command: Command, scripts: ReadonlyMap<string, string>, files: ReadonlyMap<string, string>, walked: readonly string[]): boolean {
   const [first = "", ...rest] = fromProgram(command);
-  return first === "bun" ? bunRunsMutation(rest, scripts, walked) : mutationBin([first, ...rest]);
+  if (first === "bun") return bunRunsMutation(rest, scripts, files, walked);
+  return mutationBin([first, ...rest]) || scriptFileRuns(first, scripts, files, walked);
 }
 
-function bunRunsMutation(args: Command, scripts: ReadonlyMap<string, string>, walked: readonly string[]): boolean {
+function bunRunsMutation(args: Command, scripts: ReadonlyMap<string, string>, files: ReadonlyMap<string, string>, walked: readonly string[]): boolean {
   const [command = "", ...rest] = withoutOptions(args, BUN_OPERANDS);
-  if (command === "x") return mutationCommand(["bunx", ...rest], scripts, walked);
+  if (command === "x") return mutationCommand(["bunx", ...rest], scripts, files, walked);
   if (BUN_COMMANDS.has(command)) return false;
   const [target = "", ...targetArgs] = command === "run" ? withoutOptions(rest, BUN_OPERANDS) : [command, ...rest];
   const body = walked.includes(target) ? undefined : scripts.get(target);
-  return body === undefined ? mutationBin([target, ...targetArgs]) : runsMutation(body, scripts, [...walked, target]);
+  return body === undefined ? mutationBin([target, ...targetArgs]) : runsMutation(body, scripts, files, [...walked, target]);
+}
+
+function scriptFileRuns(program: string, scripts: ReadonlyMap<string, string>, files: ReadonlyMap<string, string>, walked: readonly string[]): boolean {
+  const rel = repoFile(program);
+  return rel !== undefined && !walked.includes(rel) && runsMutation(files.get(rel) ?? "", scripts, files, [...walked, rel]);
 }
 
 function mutationBin([program = "", subcommand]: Command): boolean {
@@ -317,7 +324,7 @@ export function findRunnerFaults(policy: RunnerPolicy, workflows: readonly Workf
     return Object.entries(jobs).flatMap(([id, job]) => {
       if (!isRecord(job) || job["runs-on"] === undefined) return [];
       const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
-      const mutation = steps.some((step: unknown) => isRecord(step) && typeof step["run"] === "string" && runsMutation(step["run"], policy.scripts));
+      const mutation = steps.some((step: unknown) => isRecord(step) && typeof step["run"] === "string" && runsMutation(step["run"], policy.scripts, policy.files ?? new Map()))
       const fault = runnerFault(job["runs-on"], mutation, policy.visibility);
       return fault === undefined ? [] : [{ location: `${workflow.path} job ${id}`, fault }];
     });
@@ -383,7 +390,9 @@ const wiring = Effect.gen(function* () {
   const gaps = findGaps(declaration, workflows);
   const gapReport = formatReport(declaration, gaps);
   yield* gaps.length > 0 ? Console.error(gapReport) : Console.log(gapReport);
-  const faults = findRunnerFaults({ visibility: yield* readVisibility, scripts: yield* readScripts(root) }, workflows);
+  const scripts = yield* readScripts(root);
+  const texts = [...scripts.values(), ...runSteps(workflows, () => undefined).map((step) => step.script)];
+  const faults = findRunnerFaults({ visibility: yield* readVisibility, scripts, files: yield* readRepoFiles(root, texts) }, workflows);
   if (faults.length > 0) yield* Console.error(formatRunnerReport(faults));
   return gaps.length === 0 && faults.length === 0;
 });
