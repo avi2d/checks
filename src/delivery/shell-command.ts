@@ -139,7 +139,10 @@ function commentEnd(script: string, from: number): number {
   return newline === -1 ? script.length : newline;
 }
 
+export const SHELLS = ["sh", "bash", "dash", "ksh", "zsh"];
+
 type Heredoc = {
+  readonly consumer: Command;
   readonly delimiter: string;
   readonly tabs: boolean;
   readonly literal: boolean;
@@ -188,7 +191,7 @@ function startHeredoc(parse: ShellParse, script: string, from: number): number {
     delimiter += part.text;
     end = part.end;
   }
-  parse.heredocs.push({ delimiter, tabs, literal: /['"\\]/.test(script.slice(start, end)) });
+  parse.heredocs.push({ consumer: parse.words, delimiter, tabs, literal: /['"\\]/.test(script.slice(start, end)) });
   return end;
 }
 
@@ -218,7 +221,9 @@ function skipHeredocs(parse: ShellParse, script: string, from: number): number {
   let index = from;
   for (const heredoc of parse.heredocs.splice(0)) {
     const body = heredocBody(script, index, heredoc);
-    if (!heredoc.literal) parse.substitutions.push(...bodySubstitutions(body.text));
+    const [program = ""] = fromProgram(heredoc.consumer);
+    if (SHELLS.includes(program.slice(program.lastIndexOf("/") + 1))) parse.substitutions.push(body.text);
+    else if (!heredoc.literal) parse.substitutions.push(...bodySubstitutions(body.text));
     index = body.end;
   }
   return index;
@@ -279,17 +284,4 @@ export function invokes(command: Command | undefined, gate: Command): boolean {
 export function mentions(script: string, gate: Command): boolean {
   const tokens = script.split(/[\s|&;<>()`]+/);
   return tokens.some((_, start) => invokes(tokens.slice(start), gate));
-}
-
-export function repoFile(program: string): string | undefined {
-  if (program.startsWith("/") || program.startsWith("~")) return undefined;
-  const resolved: string[] = [];
-  for (const part of program.split("/")) {
-    if (part === "" || part === ".") continue;
-    if (part === "..") {
-      if (resolved.length === 0) return undefined;
-      resolved.pop();
-    } else resolved.push(part);
-  }
-  return resolved.length === 0 ? undefined : resolved.join("/");
 }

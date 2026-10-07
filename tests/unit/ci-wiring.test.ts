@@ -258,3 +258,38 @@ test("a here-document's text is data, and only an unquoted one's substitutions r
   expect(sweep("scripts/after.sh")[0]?.fault).toContain(WINBOX);
   expect(sweep("cat <<< 'bunx stryker run'")).toEqual([]);
 });
+
+test("a here-document a shell reads is its script, quoted or not", () => {
+  const sweep = (run: string) =>
+    findRunnerFaults({ visibility: "private", scripts: new Map() }, workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${HOSTED}\n    steps:\n      - run: ${JSON.stringify(run)}\n`));
+  for (const delimiter of ["'EOF'", "EOF"]) {
+    expect(sweep(`bash <<${delimiter}\nset -e\nbunx stryker run\nEOF\n`)[0]?.fault).toContain(WINBOX);
+    expect(sweep(`/bin/sh -s <<-${delimiter} >&2\n\tbunx stryker run\n\tEOF\n`)[0]?.fault).toContain(WINBOX);
+  }
+  expect(sweep("cat <<'EOF'\nbunx stryker run\nEOF\n")).toEqual([]);
+});
+
+test("a repository file resolves from the directory its command runs in", () => {
+  const files = new Map([
+    ["mutate.sh", "echo report"],
+    ["tools/mutate.sh", "bunx stryker run"],
+    ["tools/report.sh", "./mutate.sh"],
+  ]);
+  const sweep = (job: string, defaults = "") =>
+    findRunnerFaults({ visibility: "private", scripts: new Map(), files }, workflow(`on: pull_request\n${defaults}jobs:\n  sweep:\n    runs-on: ${HOSTED}\n${job}`));
+  const step = (run: string, extra = "") => `    steps:\n      - run: ${JSON.stringify(run)}\n${extra}`;
+  const tools = "        working-directory: tools\n";
+  const mutation = (job: string, defaults?: string) => expect(sweep(job, defaults)[0]?.fault).toContain(WINBOX);
+  expect(sweep(step("./mutate.sh"))).toEqual([]);
+  mutation(step("./mutate.sh", tools));
+  mutation(step("../tools/mutate.sh", "        working-directory: ./docs\n"));
+  mutation(`    defaults:\n      run:\n        working-directory: tools\n${step("./mutate.sh")}`);
+  mutation(step("./mutate.sh"), "defaults:\n  run:\n    working-directory: tools\n");
+  expect(sweep(step("./mutate.sh", "        working-directory: .\n"), "defaults:\n  run:\n    working-directory: tools\n")).toEqual([]);
+  mutation(step("cd tools && ./mutate.sh"));
+  expect(sweep(step("cd tools; cd ..; ./mutate.sh"))).toEqual([]);
+  mutation(step("bun --cwd=tools run ./mutate.sh"));
+  mutation(step("./report.sh", tools));
+  expect(sweep(step("bun --cwd=tools run ../mutate.sh"))).toEqual([]);
+  expect(sweep(step("./mutate.sh", "        working-directory: ${{ github.workspace }}/tools\n"))).toEqual([]);
+});

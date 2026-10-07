@@ -3,7 +3,7 @@ import { Config, Console, Effect, FileSystem, Path, Schema } from "effect";
 import { defaultBranch, git } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { ENTRY_POINT, KIT_GATES, type KitGate } from "../core/gates.ts";
-import { readShellFiles, runsMutation } from "./mutation-job.ts";
+import { readShellFiles, runsMutation, within, type Run } from "./mutation-job.ts";
 import { invokes, mentions, plainCommand, type Command } from "./shell-command.ts";
 
 export type { Command };
@@ -285,18 +285,37 @@ function runnerFault(runsOn: unknown, mutation: boolean, visibility: Visibility)
   return `the job is not on a hosted runner CI_RUNS_ON can override; set runs-on: ${HOSTED_DEFAULT}`;
 }
 
+function stepDirectory(value: unknown, inherited: string | undefined): string | undefined {
+  if (value === undefined) return inherited;
+  return typeof value === "string" ? within("", value) : undefined;
+}
+
+function defaultDirectory(node: unknown, inherited: string | undefined): string | undefined {
+  const defaults = isRecord(node) ? node["defaults"] : undefined;
+  const run = isRecord(defaults) ? defaults["run"] : undefined;
+  return stepDirectory(isRecord(run) ? run["working-directory"] : undefined, inherited);
+}
+
+function jobRuns(workflow: Workflow, job: Readonly<Record<string, unknown>>): readonly Run[] {
+  const dir = defaultDirectory(job, defaultDirectory(workflow.document, ""));
+  const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
+  return steps.flatMap((step: unknown) => (isRecord(step) && typeof step["run"] === "string" ? [{ script: step["run"], dir: stepDirectory(step["working-directory"], dir) }] : []));
+}
+
+function workflowJobs(workflow: Workflow): readonly (readonly [string, Readonly<Record<string, unknown>>])[] {
+  const jobs = isRecord(workflow.document) ? workflow.document["jobs"] : undefined;
+  return isRecord(jobs) ? Object.entries(jobs).flatMap(([id, job]) => (isRecord(job) ? [[id, job] as const] : [])) : [];
+}
+
 export function findRunnerFaults(policy: RunnerPolicy, workflows: readonly Workflow[]): readonly RunnerFault[] {
-  return workflows.flatMap((workflow) => {
-    const jobs = isRecord(workflow.document) ? workflow.document["jobs"] : undefined;
-    if (!isRecord(jobs)) return [];
-    return Object.entries(jobs).flatMap(([id, job]) => {
-      if (!isRecord(job) || job["runs-on"] === undefined) return [];
-      const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
-      const mutation = steps.some((step: unknown) => isRecord(step) && typeof step["run"] === "string" && runsMutation(step["run"], policy.scripts, policy.files ?? new Map()));
+  return workflows.flatMap((workflow) =>
+    workflowJobs(workflow).flatMap(([id, job]) => {
+      if (job["runs-on"] === undefined) return [];
+      const mutation = jobRuns(workflow, job).some((run) => runsMutation(run, policy.scripts, (file) => policy.files?.get(file)));
       const fault = runnerFault(job["runs-on"], mutation, policy.visibility);
       return fault === undefined ? [] : [{ location: `${workflow.path} job ${id}`, fault }];
-    });
-  });
+    }),
+  );
 }
 
 export function formatRunnerReport(faults: readonly RunnerFault[]): string {
@@ -359,8 +378,8 @@ const wiring = Effect.gen(function* () {
   const gapReport = formatReport(declaration, gaps);
   yield* gaps.length > 0 ? Console.error(gapReport) : Console.log(gapReport);
   const scripts = yield* readScripts(root);
-  const texts = [...scripts.values(), ...runSteps(workflows, () => undefined).map((step) => step.script)];
-  const faults = findRunnerFaults({ visibility: yield* readVisibility, scripts, files: yield* readShellFiles(root, scripts, texts) }, workflows);
+  const runs = workflows.flatMap((workflow) => workflowJobs(workflow).flatMap(([, job]) => jobRuns(workflow, job)));
+  const faults = findRunnerFaults({ visibility: yield* readVisibility, scripts, files: yield* readShellFiles(root, scripts, runs) }, workflows);
   if (faults.length > 0) yield* Console.error(formatRunnerReport(faults));
   return gaps.length === 0 && faults.length === 0;
 });

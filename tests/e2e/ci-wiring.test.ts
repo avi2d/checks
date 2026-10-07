@@ -105,16 +105,18 @@ test("a private repository's event holds mutation jobs to winbox and every other
   expect(green.text).toContain("3 gate(s) run on pull requests to main");
 });
 
-test("a private repository's mutation job through a repository shell script runs on winbox and a non-shell script does not count", async () => {
+test("a private repository's mutation job through a repository shell script in its run directory runs on winbox and a non-shell script does not count", async () => {
   const hosted = "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}";
   const winbox = "[self-hosted, Linux, X64, winbox]";
-  const runs = ["bun run mutate:incremental", "./mutate.sh", "bun run ./scripts/mutate.sh"];
+  const runs = ["bun run mutate:incremental", "./mutate.sh", "bun run ./scripts/mutate.sh", "cd tools && ./sweep.sh"];
   const mutation = (runsOn: string) =>
-    `on: pull_request\njobs:\n${runs.map((run, index) => `  sweep-${index}:\n    runs-on: ${runsOn}\n    steps:\n      - run: ${run}\n`).join("")}  report:\n    runs-on: ${hosted}\n    steps:\n      - run: scripts/report.ts\n`;
+    `on: pull_request\njobs:\n${runs.map((run, index) => `  sweep-${index}:\n    runs-on: ${runsOn}\n    steps:\n      - run: ${run}\n`).join("")}  report:\n    runs-on: ${hosted}\n    steps:\n      - run: scripts/report.ts\n      - run: ./mutate.sh\n        working-directory: docs\n`;
   const repo = await open({
     "package.json": JSON.stringify({ name: "consumer", scripts: { lint: "lint", test: "test", "mutate:incremental": "scripts/mutate.sh --incremental" } }),
     "scripts/mutate.sh": '#!/usr/bin/env bash\nset -euo pipefail\nexec ./node_modules/.bin/stryker run "$@"\n',
     "mutate.sh": "#!/bin/sh\nscripts/mutate.sh\n",
+    "tools/sweep.sh": "#!/bin/sh\ncd .. && ./mutate.sh\n",
+    "docs/mutate.sh": "#!/bin/sh\necho done\n",
     "scripts/report.ts": '#!/usr/bin/env bun\nconsole.log("checks-mutation");\n',
     ".github/workflows/ci.yml": workflow.replace("runs-on: ubuntu-latest", `runs-on: ${hosted}`),
     ".github/workflows/mutation.yml": mutation(hosted),
