@@ -387,7 +387,13 @@ import type { ProductCheck } from "${hookTypes}";
 
 const Language = Schema.Literals(["en", "ru"]);
 
-const settled = (page: Parameters<ProductCheck["run"]>[0]) => page.evaluate("new Promise((resolve) => setTimeout(resolve, 200))");
+// A sleep assumes the reply lands in time, and a bare wait never resolves once the page is fixed.
+async function shows(page: Parameters<ProductCheck["run"]>[0], text: string): Promise<void> {
+  await page
+    .locator("#saved", { hasText: text })
+    .waitFor({ timeout: 5_000 })
+    .catch(() => undefined);
+}
 
 async function heldSaves(page: Parameters<ProductCheck["run"]>[0], url: string): Promise<Map<string, Route>> {
   const held = new Map<string, Route>();
@@ -409,7 +415,7 @@ export const checks: readonly ProductCheck[] = [
       await held.get("B")?.fulfill({ body: "B saved" });
       await page.locator("#saved", { hasText: "B saved" }).waitFor();
       await Promise.all([page.waitForResponse("**/api/save?value=A"), held.get("A")?.fulfill({ body: "A saved" })]);
-      await settled(page);
+      await shows(page, "A saved");
       const shown = await page.textContent("#saved");
       return { targets: ["saved result"], found: shown === "B saved" ? [] : [\`the saved result shows "\${shown}" once the late reply to A lands\`] };
     },
@@ -419,9 +425,9 @@ export const checks: readonly ProductCheck[] = [
     run: async (page, visit) => {
       const held = await heldSaves(page, visit.url);
       await Promise.all([page.waitForResponse("**/api/save?value=A"), held.get("A")?.fulfill({ body: "A saved" })]);
-      await settled(page);
+      await shows(page, "A saved");
       await Promise.all([page.waitForResponse("**/api/save?value=B"), held.get("B")?.fulfill({ status: 503, body: "" })]);
-      await settled(page);
+      await page.waitForFunction(() => document.getElementById("saved")?.textContent !== "A saved");
       const shown = await page.textContent("#saved");
       return { targets: ["saved result"], found: shown === "B unsaved" ? [] : [\`the saved result shows "\${shown}" after the save of B was refused\`] };
     },
@@ -439,7 +445,7 @@ export const checks: readonly ProductCheck[] = [
       await page.locator("#saved", { hasText: "B unsaved" }).waitFor();
       online = true;
       await page.context().setOffline(false);
-      await settled(page);
+      await shows(page, "B saved");
       const shown = await page.textContent("#saved");
       return { targets: ["saved result"], found: shown === "B saved" ? [] : [\`the saved result shows "\${shown}" once the page reconnects\`] };
     },
@@ -456,7 +462,9 @@ export const checks: readonly ProductCheck[] = [
       const offered = await page.locator("#language option").evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value));
       for (const value of offered) {
         await page.selectOption("#language", value);
-        await Promise.all([page.waitForRequest("**/api/language"), page.click("#language-form button")]);
+        // A request fires before its route handles it, so each turn waits for the response too.
+        const [request] = await Promise.all([page.waitForRequest("**/api/language"), page.click("#language-form button")]);
+        await request.response();
       }
       const refused = submitted.filter((value) => !Schema.is(Language)(value));
       return { targets: offered.map(() => "language choice"), found: refused.map((value) => \`the language control offers \${value}, which the boundary refuses\`) };
