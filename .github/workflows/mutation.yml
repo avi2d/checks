@@ -21,8 +21,11 @@ on:
       - bun.lock
       - .github/workflows/mutation.yml
   workflow_dispatch:
-  schedule:
-    - cron: "23 1 * * *"
+    inputs:
+      full:
+        description: "Run every mutant afresh with no restored state, as the weekly baseline does"
+        type: boolean
+        default: true
 
 # Advisory on purpose: the comparator's --advisory flag keeps a regression from
 # failing the job, so a failure here still means the run itself broke.
@@ -37,9 +40,11 @@ jobs:
     concurrency:
       group: mutation-baseline
       cancel-in-progress: false
+    env:
+      FULL: ${{ github.event_name == 'workflow_dispatch' && inputs.full }}
     # A no-bail full run takes about 30 minutes on hosted runners; a push
     # is incremental from the uploaded state and takes minutes.
-    timeout-minutes: ${{ github.event_name == 'push' && 60 || 45 }}
+    timeout-minutes: ${{ (github.event_name == 'workflow_dispatch' && inputs.full) && 45 || 60 }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -55,10 +60,10 @@ jobs:
         with:
           node-version: 24
       - run: bun install --frozen-lockfile
-      # Only pushes reuse state, so a scheduled or hand-started run tests every mutant afresh.
-      # The previous baseline's incremental state turns every push after the first into the mutants main changed.
+      # A full run restores nothing, so it tests every mutant afresh.
+      # The previous baseline's incremental state turns every other run into the mutants main changed.
       - name: Restore previous baseline state
-        if: github.event_name == 'push'
+        if: env.FULL != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -69,10 +74,10 @@ jobs:
             cp "$download/stryker-incremental.json" reports/stryker-incremental.json
           fi
       # Incremental with no prior state runs everything, and writes the state the next main run reuses.
-      - if: github.event_name == 'push'
+      - if: env.FULL != 'true'
         run: time bun run mutate:incremental
       # Bail records only a mutant's first killer, and a static mutant has no coverage, so a full run keeps every killing test.
-      - if: github.event_name != 'push'
+      - if: env.FULL == 'true'
         run: time bun run mutate:incremental --disableBail
       # Every run uploads; readers take only main's, so a manual run elsewhere leaves main's baseline in place.
       - uses: actions/upload-artifact@v4
@@ -83,7 +88,7 @@ jobs:
             reports/stryker-incremental.json
           retention-days: 90
       # Only a run that restored nothing lists every covering test, so only it uploads the report the scope step reads.
-      - if: github.event_name != 'push'
+      - if: env.FULL == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: mutation-baseline-full
@@ -118,12 +123,10 @@ jobs:
           base="$(git merge-base HEAD "origin/$GITHUB_BASE_REF")"
           echo "BASE_SHA=$base" >> "$GITHUB_ENV"
           baseline="$(mktemp -d)/mutation.json"
-          # One query per event, so main's pushes cannot crowd a full baseline out of the list.
-          scheduled="$(gh run list --workflow mutation.yml --branch main --event schedule --status success --limit 1 --json databaseId,createdAt --jq '.[]')"
-          dispatched="$(gh run list --workflow mutation.yml --branch main --event workflow_dispatch --status success --limit 1 --json databaseId,createdAt --jq '.[]')"
+          # Only dispatched runs are listed, so main's pushes cannot crowd a full baseline out of the list.
           download="$(mktemp -d)"
-          # A run that predates the full artifact has none, so the older candidate gets its turn.
-          for run_id in $(printf '%s\n%s\n' "$scheduled" "$dispatched" | jq -rs 'sort_by(.createdAt) | reverse | .[].databaseId'); do
+          # A dispatched run with full off uploads no full artifact, so the next older run gets its turn.
+          for run_id in $(gh run list --workflow mutation.yml --branch main --event workflow_dispatch --status success --limit 20 --json databaseId --jq '.[].databaseId'); do
             if gh run download "$run_id" --name mutation-baseline-full --dir "$download/$run_id" && [ -f "$download/$run_id/mutation.json" ]; then
               cp "$download/$run_id/mutation.json" "$baseline"
               break
@@ -143,6 +146,8 @@ jobs:
           node-version: 24
       - if: env.SCOPE != ''
         run: bun install --frozen-lockfile
+      # Both builds skip static mutants: each one reruns the whole suite, and the full baseline still scores them.
+      # The base build writes the incremental state the head build resumes from.
       - name: Build scope report at merge base
         if: env.SCOPE != ''
         run: |
@@ -156,11 +161,19 @@ jobs:
             mkdir -p "$(dirname "$report")"
             echo '{"files":{}}' > "$report"
           else
-            (cd "$RUNNER_TEMP/mutation-base" && bun install --frozen-lockfile && time bunx stryker run --mutate "$BASE_SCOPE")
+            (cd "$RUNNER_TEMP/mutation-base" && bun install --frozen-lockfile && time bunx stryker run --incremental --ignoreStatic --mutate "$BASE_SCOPE")
           fi
+      # Resumed even when a test changed: Stryker reruns every mutant a changed test covers, and only a static mutant hides its coverage.
       - name: Build scope report at head
         if: env.SCOPE != '' && env.SKIP_COMPARE != 'true'
-        run: time bunx stryker run --mutate "$SCOPE"
+        run: |
+          state="$RUNNER_TEMP/mutation-base/reports/stryker-incremental.json"
+          if [ -f "$state" ]; then
+            mkdir -p reports
+            cp "$state" reports/stryker-incremental.json
+            echo "mutation: head resumes from the merge base's incremental state"
+          fi
+          time bunx stryker run --incremental --ignoreStatic --mutate "$SCOPE"
       - name: Compare scope reports
         if: env.SCOPE != '' && env.SKIP_COMPARE != 'true'
         run: bun src/testing/mutation-compare.ts --advisory "$RUNNER_TEMP/mutation-base/reports/mutation/mutation.json" reports/mutation/mutation.json

@@ -21,9 +21,12 @@ A test that spawns `checks-lint` passes it `withoutPullRequestEvent()` from `tes
 
 CI runs the commands in `.github/workflows/ci.yml` and lints the pull request title in `.github/workflows/commitlint.yml`.
 `.github/workflows/mutation.yml` runs Stryker, with `stryker.conf.mjs`, as a baseline on `main` or on any branch by hand, and as an advisory comparison scoped to the sources a pull request changes or reaches through a changed test, helper or fixture.
-A nightly scheduled or hand-started run restores no state and passes `--disableBail`, so its report lists every covering and killing test.
+The workflow has no schedule: the weekly full baseline starts with `gh workflow run mutation`, whose `full` input defaults to true.
+A full run restores no state and passes `--disableBail`, so its report lists every covering and killing test.
 That run uploads the report again as the `mutation-baseline-full` artifact.
-The scope step reads that artifact from the newest successful such run on `main` that has one.
+The scope step reads that artifact from the newest successful hand-started run on `main` that has one.
+The comparison passes `--ignoreStatic` to both of its Stryker runs, so it never scores a static mutant, and the full baseline still does.
+The head run resumes from the incremental state the merge-base run wrote, even when the pull request changes a test, and Stryker reruns each mutant a changed test covers.
 Run `bun run mutate -- --mutate <file>` to mutate one source file locally, since the preset refuses a full run outside CI.
 The patch under `patches/` makes `@hughescr/stryker-bun-runner` honour Stryker's hit limit, so a mutant whose code loops endlessly ends as a `Timeout` within seconds.
 A static mutant, evaluated once when its module loads, never reaches that limit and still waits for `timeoutMS`.
