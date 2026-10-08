@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.36.0
+
+Released 2026-10-08.
+
+### Features
+
+- **testing:** add unitTestFiles so each mutant loads only the unit tests that cover it [#132](https://github.com/avi2d/checks/pull/132)
+
 ## 0.35.1
 
 Released 2026-10-07.
