@@ -427,7 +427,7 @@ export const checks: readonly ProductCheck[] = [
       await Promise.all([page.waitForResponse("**/api/save?value=A"), held.get("A")?.fulfill({ body: "A saved" })]);
       await shows(page, "A saved");
       await Promise.all([page.waitForResponse("**/api/save?value=B"), held.get("B")?.fulfill({ status: 503, body: "" })]);
-      await page.waitForFunction(() => document.getElementById("saved")?.textContent !== "A saved");
+      await shows(page, "B unsaved");
       const shown = await page.textContent("#saved");
       return { targets: ["saved result"], found: shown === "B unsaved" ? [] : [\`the saved result shows "\${shown}" after the save of B was refused\`] };
     },
