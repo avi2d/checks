@@ -23,6 +23,20 @@ The shared Stryker preset makes the same decision from `process.argv` when a `st
 So a bare `bunx stryker run` in a repository whose `stryker.conf.mjs` spreads the preset is refused the same way, and `checks-mutation` is a thin wrapper over that decision.
 The preset also registers an ignore plugin that checks the incremental report once Stryker has resolved its options, because a config file can set `incrementalFile` after the preset loads.
 A config that replaces `plugins` or `ignorers` must keep the preset's entries, or that check does not run.
+The preset also exports `unitTestFiles`, which lists `tests/unit/*.test.ts` at config load.
+A repository sets `bun.testFiles` to its result, so each mutant loads only its covering tests:
+
+```js
+import preset, { unitTestFiles } from "@avi2dg/checks/stryker.preset.js";
+
+export default {
+  ...preset,
+  bun: {
+    ...preset.bun,
+    testFiles: unitTestFiles(),
+  },
+};
+```
 
 ## What it reads
 

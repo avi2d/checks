@@ -1,5 +1,5 @@
 import { chmodSync, readFileSync, statSync } from "node:fs";
-import preset from "./stryker.preset.js";
+import preset, { unitTestFiles } from "./stryker.preset.js";
 
 // In place, Stryker restores each file it rewrote by renaming a fresh copy over it, which drops a bin's executable bit.
 const binModes = new Map(
@@ -13,7 +13,7 @@ export default {
   ...preset,
   bun: {
     ...preset.bun,
-    testFiles: ["./tests/unit/"],
+    testFiles: unitTestFiles(),
   },
   // Only unit tests run per mutant: the e2e tests spawn processes and take minutes each.
   // Mutants run in place, as the preset sets: with TypeScript 7 Stryker cannot rewrite the tsconfig a sandbox copy needs.
