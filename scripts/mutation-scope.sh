@@ -12,6 +12,7 @@ baseline="$2"
 tab="$(printf '\t')"
 scope=""
 tests=""
+stale=""
 touched=""
 while IFS= read -r file; do
   if source_file "$file"; then scope="$scope,$file"; fi
@@ -29,6 +30,7 @@ if [ -n "$touched" ]; then
   readers="$(git ls-files -- 'tests/*.ts' | awk -v changed="${touched#,}" -f "$(dirname "$0")/mutation-readers.awk" | sort)"
   while IFS="$tab" read -r reader via; do
     if [ -n "$reader" ] && test_file "$reader"; then
+      case ",$stale," in *",$reader,"*) ;; *) stale="$stale,$reader";; esac
       case ",$tests," in *",$reader,"*) ;;
         *) tests="$tests,$reader"; echo "mutation-scope: $reader reads $via" >&2;;
       esac
@@ -77,3 +79,4 @@ $(printf '%s' "$scope" | tr ',' '\n' | sed '/^$/d' | sort -u)
 EOF
 echo "SCOPE=${head_scope#,}"
 echo "BASE_SCOPE=${base_scope#,}"
+echo "STALE_TESTS=${stale#,}"
