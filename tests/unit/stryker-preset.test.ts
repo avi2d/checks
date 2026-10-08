@@ -11,7 +11,7 @@ const presetUrl = new URL("../../stryker.preset.js", import.meta.url).href;
 const preset: unknown = (await import(presetUrl)).default;
 const { halfAvailableCores, unitTestFiles }: {
   halfAvailableCores: (cores?: number) => number;
-  unitTestFiles: (directory?: string) => Array<string>;
+  unitTestFiles: () => Array<string>;
 } = await import(presetUrl);
 
 const Manifest = Schema.fromJsonString(
@@ -76,7 +76,6 @@ const coveringFiles = async (testFiles: ReadonlyArray<string>, testId: string): 
 test("unitTestFiles lists every repository unit test with no leading ./, so a new file joins on its own", () => {
   const files = unitTestFiles();
   expect(files).toContain("tests/unit/stryker-preset.test.ts");
-  expect(files).toEqual(unitTestFiles("./tests/unit/"));
   expect(files.filter((file) => !file.startsWith("tests/unit/"))).toEqual([]);
 });
 
@@ -88,19 +87,20 @@ test("unitTestFiles paths are what resolveCoveringTestFiles at @hughescr/stryker
 });
 
 test("unitTestFiles walks nested groups, sorts, and skips files that are not unit tests", () => {
-  const directory = mkdtempSync(join(tmpdir(), "unit-test-files-"));
+  const repository = mkdtempSync(join(tmpdir(), "unit-test-files-"));
+  const original = process.cwd();
   try {
-    mkdirSync(join(directory, "group"));
+    mkdirSync(join(repository, "tests/unit/group"), { recursive: true });
+    mkdirSync(join(repository, "tests/e2e"));
     for (const name of ["b.test.ts", "a.test.tsx", "notes.ts", "c.spec.ts", "group/d.test.ts"]) {
-      writeFileSync(join(directory, name), "");
+      writeFileSync(join(repository, "tests/unit", name), "");
     }
-    expect(unitTestFiles(directory)).toEqual([
-      `${directory}/a.test.tsx`,
-      `${directory}/b.test.ts`,
-      `${directory}/group/d.test.ts`,
-    ]);
+    writeFileSync(join(repository, "tests/e2e/e.test.ts"), "");
+    process.chdir(repository);
+    expect(unitTestFiles()).toEqual(["tests/unit/a.test.tsx", "tests/unit/b.test.ts", "tests/unit/group/d.test.ts"]);
   } finally {
-    rmSync(directory, { recursive: true, force: true });
+    process.chdir(original);
+    rmSync(repository, { recursive: true, force: true });
   }
 });
 
