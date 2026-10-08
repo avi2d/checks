@@ -21,8 +21,6 @@ on:
       - bun.lock
       - .github/workflows/mutation.yml
   workflow_dispatch:
-  schedule:
-    - cron: "23 1 * * *"
 
 # Advisory on purpose: the comparator's --advisory flag keeps a regression from
 # failing the job, so a failure here still means the run itself broke.
@@ -55,7 +53,7 @@ jobs:
         with:
           node-version: 24
       - run: bun install --frozen-lockfile
-      # Only pushes reuse state, so a scheduled or hand-started run tests every mutant afresh.
+      # Only pushes reuse state, so a hand-started run tests every mutant afresh.
       # The previous baseline's incremental state turns every push after the first into the mutants main changed.
       - name: Restore previous baseline state
         if: github.event_name == 'push'
@@ -118,17 +116,12 @@ jobs:
           base="$(git merge-base HEAD "origin/$GITHUB_BASE_REF")"
           echo "BASE_SHA=$base" >> "$GITHUB_ENV"
           baseline="$(mktemp -d)/mutation.json"
-          # One query per event, so main's pushes cannot crowd a full baseline out of the list.
-          scheduled="$(gh run list --workflow mutation.yml --branch main --event schedule --status success --limit 1 --json databaseId,createdAt --jq '.[]')"
-          dispatched="$(gh run list --workflow mutation.yml --branch main --event workflow_dispatch --status success --limit 1 --json databaseId,createdAt --jq '.[]')"
+          # Only hand-started runs are listed, so main's pushes cannot crowd the full baseline out of the list.
+          run_id="$(gh run list --workflow mutation.yml --branch main --event workflow_dispatch --status success --limit 1 --json databaseId --jq '.[].databaseId')"
           download="$(mktemp -d)"
-          # A run that predates the full artifact has none, so the older candidate gets its turn.
-          for run_id in $(printf '%s\n%s\n' "$scheduled" "$dispatched" | jq -rs 'sort_by(.createdAt) | reverse | .[].databaseId'); do
-            if gh run download "$run_id" --name mutation-baseline-full --dir "$download/$run_id" && [ -f "$download/$run_id/mutation.json" ]; then
-              cp "$download/$run_id/mutation.json" "$baseline"
-              break
-            fi
-          done
+          if [ -n "$run_id" ] && gh run download "$run_id" --name mutation-baseline-full --dir "$download" && [ -f "$download/mutation.json" ]; then
+            cp "$download/mutation.json" "$baseline"
+          fi
           scripts/mutation-scope.sh "$base" "$baseline" >> "$GITHUB_ENV"
       - name: Report empty scope
         if: env.SCOPE == ''
@@ -143,6 +136,8 @@ jobs:
           node-version: 24
       - if: env.SCOPE != ''
         run: bun install --frozen-lockfile
+      # Both builds skip static mutants: each one reruns the whole suite, and the full baseline still scores them.
+      # The base build writes the incremental state the head build resumes from.
       - name: Build scope report at merge base
         if: env.SCOPE != ''
         run: |
@@ -156,11 +151,20 @@ jobs:
             mkdir -p "$(dirname "$report")"
             echo '{"files":{}}' > "$report"
           else
-            (cd "$RUNNER_TEMP/mutation-base" && bun install --frozen-lockfile && time bunx stryker run --mutate "$BASE_SCOPE")
+            (cd "$RUNNER_TEMP/mutation-base" && bun install --frozen-lockfile && time bunx stryker run --incremental --ignoreStatic --mutate "$BASE_SCOPE")
           fi
+      # Resumed even when a test changed: Stryker reruns every mutant a changed test covers, and only a static mutant hides its coverage.
+      # Stryker diffs a test file's own source only, so a test that reads a changed helper or fixture enters the state as removed.
       - name: Build scope report at head
         if: env.SCOPE != '' && env.SKIP_COMPARE != 'true'
-        run: time bunx stryker run --mutate "$SCOPE"
+        run: |
+          state="$RUNNER_TEMP/mutation-base/reports/stryker-incremental.json"
+          if [ -f "$state" ]; then
+            mkdir -p reports
+            jq --arg stale "$STALE_TESTS" '($stale | split(",")) as $stale | .testFiles |= with_entries(select(.key | IN($stale[]) | not))' "$state" > reports/stryker-incremental.json
+            echo "mutation: head resumes from the merge base's incremental state"
+          fi
+          time bunx stryker run --incremental --ignoreStatic --mutate "$SCOPE"
       - name: Compare scope reports
         if: env.SCOPE != '' && env.SKIP_COMPARE != 'true'
         run: bun src/testing/mutation-compare.ts --advisory "$RUNNER_TEMP/mutation-base/reports/mutation/mutation.json" reports/mutation/mutation.json

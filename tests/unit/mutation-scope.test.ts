@@ -44,6 +44,13 @@ test("an --incremental run with no report to reuse is refused and names both way
   expect(missingReportRefusal(["--incremental", "--help"], "", "reports/custom.json", reportMissing)).toBeUndefined();
 });
 
+test("the pull request comparison's own Stryker arguments stay allowed locally with no report to reuse", () => {
+  const compare = ["--incremental", "--ignoreStatic", "--mutate", "src/billing.ts"];
+  expect(fullRunRefusal(compare, "")).toBeUndefined();
+  expect(missingReportRefusal(compare, "", "reports/stryker-incremental.json", reportMissing)).toBeUndefined();
+  expect(fullRunRefusal(["--incremental", "--ignoreStatic", "--force"], "")).toBeDefined();
+});
+
 test("the report checked is the resolved incrementalFile it is given", () => {
   const checked: string[] = [];
   const record = (path: string) => {
