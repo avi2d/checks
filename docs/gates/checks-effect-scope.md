@@ -18,8 +18,10 @@ With `--check` it fails when the override in `tsconfig.json` differs from the on
 
 It reads `oxlint.config.ts` and `tsconfig.json` at the repository root.
 It reads `tsconfig.json` as TypeScript does, so a comment or a trailing comma parses, and refuses one that does not parse as a JSONC object.
-It writes back only the values that change, each as JSON with two spaces of indent.
-Every comment and the formatting around them stay as the repository wrote them.
+It rewrites only the `overrides` value of the `@effect/language-service` plugin, as JSON with two spaces of indent.
+When that value is missing it adds the member, and the plugin, `plugins` or `compilerOptions` holding it, after the last member of each.
+With `effect: false` it deletes the `overrides` member and its comma, and leaves the comments beside it.
+Every other byte of `tsconfig.json` stays as the repository wrote it.
 A repository without `tsconfig.json` has no language service to hold the paths, so it passes.
 
 ## Arguments

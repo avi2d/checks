@@ -2,7 +2,7 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { git } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
-import { patched } from "./jsonc-patch.ts";
+import { type Step, withMember, withoutMember } from "./jsonc-patch.ts";
 import { effectRules } from "./presets/oxlint.ts";
 import severities from "./presets/effect.language-service.json" with { type: "json" };
 
@@ -42,21 +42,16 @@ export type ServiceOverride = {
 
 const EFFECT_RULES = JSON.stringify(effectRules([]).rules);
 
+const SERVICE_OVERRIDES: readonly [Step, ...Step[]] = ["compilerOptions", "plugins", { name: LANGUAGE_SERVICE }, "overrides"];
+
 export function serviceOverrides(overrides: readonly (typeof Override.Type)[]): readonly ServiceOverride[] {
   return overrides
     .filter(({ rules }) => JSON.stringify(rules) === EFFECT_RULES)
     .map(({ files, excludeFiles = [] }) => (excludeFiles.length === 0 ? { include: files, options: severities } : { include: files, exclude: excludeFiles, options: severities }));
 }
 
-function ownedBy(plugin: JsonObject, overrides: readonly ServiceOverride[]): JsonObject {
-  const { overrides: _, ...rest } = plugin;
-  return overrides.length === 0 ? rest : { ...rest, overrides };
-}
-
-export function withServiceOverrides(plugins: readonly JsonObject[], overrides: readonly ServiceOverride[]): readonly JsonObject[] {
-  const index = plugins.findIndex(({ name }) => name === LANGUAGE_SERVICE);
-  if (index === -1) return overrides.length === 0 ? plugins : [...plugins, { name: LANGUAGE_SERVICE, overrides }];
-  return plugins.map((plugin, at) => (at === index ? ownedBy(plugin, overrides) : plugin));
+export function withServiceOverrides(tsconfig: string, overrides: readonly ServiceOverride[]): string {
+  return overrides.length === 0 ? withoutMember(tsconfig, SERVICE_OVERRIDES) : withMember(tsconfig, SERVICE_OVERRIDES, overrides);
 }
 
 const refuse = (message: string) => () => new EffectScopeError({ message });
@@ -72,11 +67,9 @@ const readScope = Effect.fn("readScope")(function* (file: string) {
   return serviceOverrides(config.overrides ?? []);
 });
 
-const rewritten = Effect.fn("rewritten")(function* (tsconfig: JsonObject, overrides: readonly ServiceOverride[]) {
+const pluginsOf = Effect.fn("pluginsOf")(function* (tsconfig: JsonObject) {
   const compilerOptions = yield* decodeObject(tsconfig["compilerOptions"] ?? {}).pipe(Effect.mapError(refuse(`${TSCONFIG} holds compilerOptions that is not an object`)));
-  const plugins = yield* decodePlugins(compilerOptions["plugins"] ?? []).pipe(Effect.mapError(refuse(`${TSCONFIG} holds compilerOptions.plugins that is not a list of objects`)));
-  const next = withServiceOverrides(plugins, overrides);
-  return next === plugins ? tsconfig : { ...tsconfig, compilerOptions: { ...compilerOptions, plugins: next } };
+  return yield* decodePlugins(compilerOptions["plugins"] ?? []).pipe(Effect.mapError(refuse(`${TSCONFIG} holds compilerOptions.plugins that is not a list of objects`)));
 });
 
 const effectScope = Effect.gen(function* () {
@@ -94,7 +87,8 @@ const effectScope = Effect.gen(function* () {
   const text = yield* fs.readFileString(tsconfigFile);
   const unparsed = refuse(`${TSCONFIG} does not parse as a JSONC object`);
   const tsconfig = yield* Effect.try({ try: () => Bun.JSONC.parse(text), catch: unparsed }).pipe(Effect.flatMap(decodeObject), Effect.mapError(unparsed));
-  const written = patched(text, yield* rewritten(tsconfig, overrides));
+  yield* pluginsOf(tsconfig);
+  const written = withServiceOverrides(text, overrides);
   if (written === text) {
     yield* Console.log(`${NAME}: ${TSCONFIG} holds the Effect paths of ${OXLINT_CONFIG}`);
     return true;

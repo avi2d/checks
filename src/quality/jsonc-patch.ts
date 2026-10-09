@@ -8,6 +8,10 @@ type Tree = Container | { readonly kind: "scalar"; readonly start: number; reado
 
 type Edit = { readonly start: number; readonly end: number; readonly text: string };
 
+export type Step = string | Readonly<Record<string, unknown>>;
+
+type Reached = { readonly container: Container; readonly entry: Entry } | { readonly container: Container; readonly missing: readonly [Step, ...Step[]] };
+
 const SCALAR_END = /[\s,:\]}/]/;
 
 class Scanner {
@@ -78,8 +82,43 @@ class Scanner {
   }
 }
 
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function valueOf(text: string, tree: Tree): unknown {
+  return tree.kind === "scalar" ? tree.value : Bun.JSONC.parse(text.slice(tree.start, tree.end));
+}
+
+function holds(text: string, tree: Tree, match: Readonly<Record<string, unknown>>): boolean {
+  if (tree.kind !== "object") return false;
+  return Object.entries(match).every(([key, wanted]) => {
+    const member = tree.entries.findLast((entry) => entry.key === key);
+    return member !== undefined && Bun.deepEquals(valueOf(text, member.node), wanted);
+  });
+}
+
+function childOf(text: string, container: Container, step: Step): Entry | undefined {
+  if (typeof step === "string") return container.kind === "object" ? container.entries.findLast(({ key }) => key === step) : undefined;
+  return container.kind === "array" ? container.entries.find(({ node }) => holds(text, node, step)) : undefined;
+}
+
+// Every step but the last reaches a container, an object for a key and an array for a match.
+function reached(text: string, path: readonly [Step, ...Step[]]): Reached | undefined {
+  let container = new Scanner(text).node();
+  let steps = path;
+  for (;;) {
+    if (container.kind === "scalar") return undefined;
+    const [step, ...tail] = steps;
+    const entry = childOf(text, container, step);
+    if (entry === undefined) return { container, missing: steps };
+    const [next, ...after] = tail;
+    if (next === undefined) return { container, entry };
+    container = entry.node;
+    steps = [next, ...after];
+  }
+}
+
+function childValue(step: Step, tail: readonly Step[], value: unknown): unknown {
+  const [next, ...after] = tail;
+  const inner = next === undefined ? value : typeof next === "string" ? { [next]: childValue(next, after, value) } : [childValue(next, after, value)];
+  return typeof step === "string" ? inner : Object.assign({}, step, inner);
 }
 
 function indentAt(text: string, at: number): string {
@@ -91,72 +130,74 @@ function serialized(value: unknown, indent: string): string {
   return JSON.stringify(value, null, 2).replaceAll("\n", `\n${indent}`);
 }
 
-function member([key, value]: readonly [Key, unknown], indent: string): string {
-  return typeof key === "string" ? `${JSON.stringify(key)}: ${serialized(value, indent)}` : serialized(value, indent);
-}
-
-function entryEnd({ node, comma }: Entry): number {
-  return comma === undefined ? node.end : comma + 1;
-}
-
-function blankFrom(text: string, at: number, step: 1 | -1): number {
+function spacesFrom(text: string, at: number, step: 1 | -1): number {
   let edge = at;
-  while (/\s/.test(text.charAt(step === 1 ? edge : edge - 1))) edge += step;
+  while (/[ \t]/.test(text.charAt(step === 1 ? edge : edge - 1))) edge += step;
   return edge;
 }
 
-function removedRun(text: string, entries: readonly Entry[], first: Entry, last: Entry): readonly Edit[] {
-  const after = entries[entries.indexOf(last) + 1];
-  if (after !== undefined) return [{ start: first.start, end: blankFrom(text, entryEnd(last), 1), text: "" }];
-  const span = { start: blankFrom(text, first.start, -1), end: entryEnd(last), text: "" };
-  const before = entries[entries.indexOf(first) - 1];
-  if (before?.comma === undefined || last.comma !== undefined) return [span];
-  return [{ start: before.comma, end: before.comma + 1, text: "" }, span];
+function newlineAt(text: string, at: number): number | undefined {
+  if (text.startsWith("\r\n", at)) return 2;
+  return text.charAt(at) === "\n" ? 1 : undefined;
 }
 
-function removals(text: string, { entries }: Container, removed: readonly number[]): readonly Edit[] {
-  return removed
-    .filter((index) => !removed.includes(index - 1))
-    .flatMap((index) => {
-      let last = index;
-      while (removed.includes(last + 1)) last += 1;
-      const [first, end] = [entries[index], entries[last]];
-      return first === undefined || end === undefined ? [] : removedRun(text, entries, first, end);
-    });
+function lineEndAfter(text: string, at: number): number | undefined {
+  let edge = spacesFrom(text, at, 1);
+  for (;;) {
+    if (text.startsWith("//", edge)) edge = text.includes("\n", edge) ? text.indexOf("\n", edge) : text.length;
+    else if (text.startsWith("/*", edge)) edge = spacesFrom(text, text.indexOf("*/", edge + 2) + 2, 1);
+    else return newlineAt(text, edge) === undefined ? undefined : edge;
+  }
 }
 
-function insertion(text: string, { start, end }: Container, last: Entry | undefined, added: readonly (readonly [Key, unknown])[]): Edit {
+function insertion(text: string, { start, end, entries }: Container, step: Step, value: unknown): Edit {
+  const key = typeof step === "string" ? `${JSON.stringify(step)}: ` : "";
+  const last = entries.at(-1);
   if (last === undefined) {
     const indent = indentAt(text, start);
-    const members = added.map((one) => `\n${indent}  ${member(one, `${indent}  `)}`).join(",");
-    return { start: start + 1, end: end - 1, text: `${text.slice(start + 1, end - 1).trimEnd()}${members}\n${indent}` };
+    return { start: start + 1, end: end - 1, text: `${text.slice(start + 1, end - 1).trimEnd()}\n${indent}  ${key}${serialized(value, `${indent}  `)}\n${indent}` };
   }
   const indent = indentAt(text, last.start);
-  const separator = text.slice(start, last.start).includes("\n") ? `,\n${indent}` : ", ";
-  return { start: last.node.end, end: last.node.end, text: added.map((one) => `${separator}${member(one, indent)}`).join("") };
+  const member = `${key}${serialized(value, indent)}${last.comma === undefined ? "" : ","}`;
+  const separated = last.comma === undefined ? "," : "";
+  const lineEnd = lineEndAfter(text, last.comma === undefined ? last.node.end : last.comma + 1);
+  const until = lineEnd ?? (last.comma === undefined ? last.node.end : last.comma + 1);
+  return { start: last.node.end, end: until, text: `${separated}${text.slice(last.node.end, until)}${lineEnd === undefined ? " " : `\n${indent}`}${member}` };
 }
 
-function containerEdits(text: string, tree: Container, next: unknown, wanted: ReadonlyMap<Key, unknown>): readonly Edit[] {
-  const removed = tree.entries.flatMap(({ key }, index) => (wanted.has(key) ? [] : [index]));
-  const added = [...wanted].filter(([key]) => !tree.entries.some((entry) => entry.key === key));
-  if (removed.length === tree.entries.length && removed.length > 0 && added.length > 0) {
-    return [{ start: tree.start, end: tree.end, text: serialized(next, indentAt(text, tree.start)) }];
+function removal(text: string, { entries }: Container, entry: Entry): readonly Edit[] {
+  const index = entries.indexOf(entry);
+  const followed = index < entries.length - 1;
+  const end = entry.comma === undefined ? entry.node.end : entry.comma + 1;
+  const lineStart = spacesFrom(text, entry.start, -1);
+  const lineEnd = spacesFrom(text, end, 1);
+  const newline = newlineAt(text, lineEnd);
+  const before = entries[index - 1]?.comma;
+  const comma = !followed && entry.comma === undefined && before !== undefined ? [{ start: before, end: before + 1, text: "" }] : [];
+  if (newline !== undefined && (lineStart === 0 || text.charAt(lineStart - 1) === "\n")) return [...comma, { start: lineStart, end: lineEnd + newline, text: "" }];
+  return [...comma, followed ? { start: entry.start, end: lineEnd, text: "" } : { start: lineStart, end, text: "" }];
+}
+
+function applied(text: string, edits: readonly Edit[]): string {
+  return edits.toSorted((one, other) => other.start - one.start).reduce((out, { start, end, text: replacement }) => out.slice(0, start) + replacement + out.slice(end), text);
+}
+
+// The text parses as JSONC, and value is a JSON value.
+export function withMember(text: string, path: readonly [Step, ...Step[]], value: unknown): string {
+  const found = reached(text, path);
+  if (found === undefined) return text;
+  if ("missing" in found) {
+    const [step, ...tail] = found.missing;
+    return applied(text, [insertion(text, found.container, step, childValue(step, tail, value))]);
   }
-  const kept = tree.entries.filter(({ key }) => wanted.has(key));
-  const changed = kept.flatMap(({ key, node }) => edits(text, node, wanted.get(key)));
-  return [...changed, ...removals(text, tree, removed), ...(added.length === 0 ? [] : [insertion(text, tree, kept.at(-1), added)])];
+  const { node, start } = found.entry;
+  if (Bun.deepEquals(valueOf(text, node), value)) return text;
+  return applied(text, [{ start: node.start, end: node.end, text: serialized(value, indentAt(text, start)) }]);
 }
 
-function edits(text: string, tree: Tree, next: unknown): readonly Edit[] {
-  if (tree.kind === "object" && isRecord(next)) return containerEdits(text, tree, next, new Map(Object.entries(next)));
-  if (tree.kind === "array" && Array.isArray(next)) return containerEdits(text, tree, next, new Map(next.entries()));
-  if (tree.kind === "scalar" && tree.value === next) return [];
-  return [{ start: tree.start, end: tree.end, text: serialized(next, indentAt(text, tree.start)) }];
-}
-
-// The text parses as JSONC, and next is a JSON value.
-export function patched(text: string, next: unknown): string {
-  return edits(text, new Scanner(text).node(), next)
-    .toSorted((one, other) => other.start - one.start || other.end - one.end)
-    .reduce((out, { start, end, text: replacement }) => out.slice(0, start) + replacement + out.slice(end), text);
+// The text parses as JSONC.
+export function withoutMember(text: string, path: readonly [Step, ...Step[]]): string {
+  const found = reached(text, path);
+  if (found === undefined || "missing" in found) return text;
+  return applied(text, removal(text, found.container, found.entry));
 }

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import severities from "../../src/quality/presets/effect.language-service.json" with { type: "json" };
-import { LANGUAGE_SERVICE, serviceOverrides, withServiceOverrides } from "../../src/quality/effect-scope.ts";
-import { patched } from "../../src/quality/jsonc-patch.ts";
+import { Schema } from "effect";
+import { LANGUAGE_SERVICE, serviceOverrides, type ServiceOverride, withServiceOverrides } from "../../src/quality/effect-scope.ts";
 import { defineConfig, effectRules } from "../../src/quality/presets/oxlint.ts";
 
 test("the language service takes the paths of the Effect override and nothing from the other overrides", () => {
@@ -14,60 +14,71 @@ test("an Effect override with nothing excluded writes no exclude, and effect: fa
   expect(serviceOverrides(defineConfig({ effect: false }).overrides ?? [])).toEqual([]);
 });
 
-test("the overrides replace the language service's own and keep its other keys and every other plugin", () => {
-  const overrides = serviceOverrides([effectRules(["src/**/*.ts"])]);
-  const other = { name: "other-plugin", strict: true };
-  const stale = { name: LANGUAGE_SERVICE, diagnosticSeverity: { floatingEffect: "error" }, overrides: [{ include: ["old/**"] }] };
-  expect(withServiceOverrides([other, stale], overrides)).toEqual([other, { name: LANGUAGE_SERVICE, diagnosticSeverity: { floatingEffect: "error" }, overrides }]);
-});
+const OVERRIDES = serviceOverrides([effectRules(["src/**/*.ts"])]);
 
-test("a tsconfig without the language service gains it only when there is a path to hold, and loses its overrides when there is none", () => {
-  const overrides = serviceOverrides([effectRules(["src/**/*.ts"])]);
-  expect(withServiceOverrides([], overrides)).toEqual([{ name: LANGUAGE_SERVICE, overrides }]);
-  const none: readonly Readonly<Record<string, unknown>>[] = [];
-  expect(withServiceOverrides(none, [])).toBe(none);
-  expect(withServiceOverrides([{ name: LANGUAGE_SERVICE, overrides }], [])).toEqual([{ name: LANGUAGE_SERVICE }]);
-});
+const TOKENS = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\/\/[^\n]*|\/\*[\s\S]*?\*\//g;
 
-const COMMENTED = `{
-  // kept
-  "compilerOptions": {
-    "strict": true, /* kept too */
-    "plugins": [{ "name": "a" }, { "name": "b", "overrides": [1, 2], "x": 'y' },],
-  },
+const commentsOf = (text: string) => (text.match(TOKENS) ?? []).filter((token) => token.startsWith("/"));
+
+function rewritten(tsconfig: string, overrides: readonly ServiceOverride[] = OVERRIDES): string {
+  const written = withServiceOverrides(tsconfig, overrides);
+  expect(commentsOf(written)).toEqual(commentsOf(tsconfig));
+  return written;
 }
-`;
 
-test("a patch rewrites only the values that differ and keeps the comments, quotes and trailing commas around them", () => {
-  const next = { compilerOptions: { strict: true, plugins: [{ name: "a" }, { name: "b", overrides: [1, 3], x: "y" }] } };
-  expect(patched(COMMENTED, next)).toBe(COMMENTED.replace("[1, 2]", "[1, 3]"));
-  expect(patched(COMMENTED, Bun.JSONC.parse(COMMENTED))).toBe(COMMENTED);
+function pluginsOf(tsconfig: string): unknown {
+  const { compilerOptions } = Schema.decodeUnknownSync(Schema.Struct({ compilerOptions: Schema.Struct({ plugins: Schema.Unknown }) }))(Bun.JSONC.parse(tsconfig));
+  return compilerOptions.plugins;
+}
+
+const indented = (indent: string) => JSON.stringify(OVERRIDES, null, 2).replaceAll("\n", `\n${indent}`);
+
+test("stale overrides are replaced as one value, and every byte outside it stays", () => {
+  const stale = `{\n  // kit paths\n  "compilerOptions": {\n    "plugins": [\n      { "name": "other" },\n      {\n        "name": "${LANGUAGE_SERVICE}", // the service\n        "overrides": [{ "include": ["old/**"] }], /* generated */\n        "diagnosticSeverity": { "floatingEffect": "error" },\n      },\n    ],\n  },\n}\n`;
+  expect(rewritten(stale)).toBe(stale.replace('[{ "include": ["old/**"] }]', indented("        ")));
 });
 
-test("a patch drops a removed member with its comma and appends an added one in the container's own layout", () => {
-  const dropped = { compilerOptions: { strict: true, plugins: [{ name: "a" }, { name: "b", x: "y" }] } };
-  expect(patched(COMMENTED, dropped)).toBe(COMMENTED.replace(` "overrides": [1, 2],`, ""));
-  const appended = { compilerOptions: { strict: true, plugins: [{ name: "a" }, { name: "b", overrides: [1, 2], x: "y" }, { name: "c" }] } };
-  expect(patched(COMMENTED, appended)).toBe(COMMENTED.replace(`'y' }`, `'y' }, {\n      "name": "c"\n    }`));
-  const added = { compilerOptions: { strict: true, plugins: [{ name: "a" }, { name: "b", overrides: [1, 2], x: "y" }] }, include: ["src"] };
-  expect(patched(COMMENTED, added)).toBe(COMMENTED.replace("  },\n}", '  },\n  "include": [\n    "src"\n  ],\n}'));
+test("overrides that already hold the paths, in any key order or layout, are left as written", () => {
+  const [held] = OVERRIDES;
+  const reordered = JSON.stringify({ options: held?.options, include: held?.include });
+  const tsconfig = `{ "compilerOptions": { "plugins": [{ "overrides": [${reordered}], "name": "${LANGUAGE_SERVICE}" }] } }`;
+  expect(rewritten(tsconfig)).toBe(tsconfig);
+  expect(rewritten(`{ "compilerOptions": {} }`, [])).toBe(`{ "compilerOptions": {} }`);
 });
 
-test("a patch fills an empty container on lines of its own and replaces one whose every member changes", () => {
-  expect(patched('{ "a": {} }', { a: { b: 1 } })).toBe('{ "a": {\n  "b": 1\n} }');
-  expect(patched('{\n  "a": { "b": 1 }\n}\n', { a: { c: 2 } })).toBe('{\n  "a": {\n    "c": 2\n  }\n}\n');
-  expect(patched('{ "a": [1, 2, 3] }', { a: [1] })).toBe('{ "a": [1] }');
-  expect(patched('{ "a": [1, 2] }', { a: [] })).toBe('{ "a": [] }');
+test("removed overrides take only their own text and comma, with the closer on their line or the next", () => {
+  const plugin = (body: string) => `{ "compilerOptions": { "plugins": [${body}] } }`;
+  const removed: readonly (readonly [string, string])[] = [
+    [`{ "name": "${LANGUAGE_SERVICE}", // the service\n "overrides": [1] }`, `{ "name": "${LANGUAGE_SERVICE}" // the service\n }`],
+    [`{ "name": "${LANGUAGE_SERVICE}", "overrides": [1] }`, `{ "name": "${LANGUAGE_SERVICE}" }`],
+    [`{ "name": "${LANGUAGE_SERVICE}", "overrides": [1], "x": 1 }`, `{ "name": "${LANGUAGE_SERVICE}", "x": 1 }`],
+    [`{\n  "name": "${LANGUAGE_SERVICE}", // the service\n  "overrides": [1]\n}`, `{\n  "name": "${LANGUAGE_SERVICE}" // the service\n}`],
+    [`{\n  "name": "${LANGUAGE_SERVICE}", // the service\n  "overrides": [1],\n}`, `{\n  "name": "${LANGUAGE_SERVICE}", // the service\n}`],
+    [`{\n  "name": "${LANGUAGE_SERVICE}",\n  "overrides": [1], // generated\n  // severities\n  "x": 1\n}`, `{\n  "name": "${LANGUAGE_SERVICE}",\n  // generated\n  // severities\n  "x": 1\n}`],
+  ];
+  for (const [before, after] of removed) {
+    const written = rewritten(plugin(before), []);
+    expect(written).toBe(plugin(after));
+    expect(pluginsOf(written)).toEqual([Object.fromEntries(Object.entries(Schema.decodeUnknownSync(Schema.Record(Schema.String, Schema.Unknown))(Bun.JSONC.parse(before))).filter(([key]) => key !== "overrides"))]);
+  }
 });
 
-test("a patch that drops members keeps every comment beside them and the layout of what stays", () => {
-  const service = '{\n  "name": "s", // the service\n  "overrides": [1]\n}';
-  expect(patched(service, { name: "s" })).toBe('{\n  "name": "s" // the service\n}');
-  const middle = '{\n  "name": "s", // the service\n  "overrides": [1],\n  // severities\n  "x": 1\n}';
-  expect(patched(middle, { name: "s", x: 1 })).toBe('{\n  "name": "s", // the service\n  // severities\n  "x": 1\n}');
-  const trailing = '{\n  "name": "s", // the service\n  "overrides": [1],\n}';
-  expect(patched(trailing, { name: "s" })).toBe('{\n  "name": "s", // the service\n}');
-  expect(patched('[\n  "a", // kept\n  "b",\n  "c"\n]', ["a"])).toBe('[\n  "a" // kept\n]');
-  expect(patched('{ "a": 1, "b": 2, }', { a: 1, c: 3 })).toBe('{ "a": 1, "c": 3, }');
-  expect(patched('{ "a": 1, "b": 2 }', { a: 1, c: 3 })).toBe('{ "a": 1, "c": 3 }');
+test("missing overrides are added after the plugin's last member, and its comment stays on that member", () => {
+  const service = `{\n  "compilerOptions": {\n    "plugins": [\n      {\n        "name": "${LANGUAGE_SERVICE}" // the service\n      }\n    ]\n  }\n}\n`;
+  expect(rewritten(service)).toBe(service.replace("// the service", `// the service\n        "overrides": ${indented("        ")}`).replace(`"${LANGUAGE_SERVICE}"`, `"${LANGUAGE_SERVICE}",`));
+  const inline = `{ "compilerOptions": { "plugins": [{ "name": "${LANGUAGE_SERVICE}", }] } }`;
+  expect(pluginsOf(rewritten(inline))).toEqual([{ name: LANGUAGE_SERVICE, overrides: OVERRIDES }]);
+});
+
+test("a missing plugin, plugins list or compilerOptions is added the same way, around the repository's own comments", () => {
+  const added = [
+    `{ "compilerOptions": { "plugins": [{ "name": "other" } /* other */] } }`,
+    `{\n  "compilerOptions": {\n    "strict": true // strict\n  }\n}\n`,
+    `{\n  // nothing yet\n}\n`,
+    `{}`,
+  ];
+  const service = { name: LANGUAGE_SERVICE, overrides: OVERRIDES };
+  expect(pluginsOf(rewritten(added[0] ?? ""))).toEqual([{ name: "other" }, service]);
+  for (const tsconfig of added.slice(1)) expect(pluginsOf(rewritten(tsconfig))).toEqual([service]);
+  expect(rewritten(added[1] ?? "")).toStartWith(`{\n  "compilerOptions": {\n    "strict": true, // strict\n    "plugins": [`);
 });
