@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-mutation-compare
 
-`checks-mutation-compare` is the gate that fails a pull request when any mutant regresses, rather than judging an absolute score.
+`checks-mutation-compare` compares the mutants of two reports and lists each one that regresses, rather than judging an absolute score.
 
 ## What it checks
 
@@ -68,7 +68,10 @@ mutation-compare: REGRESSION (1 mutant(s))
 ## When it runs
 
 Only a CI step the repository writes runs it.
-A repository runs it with `--advisory` for its first month, then drops the flag so it blocks.
+A repository runs it with `--advisory`, so the comparison stays advisory and never blocks a pull request.
+Its lines land only in the CI log.
+A repository that wants a reviewer to answer each regression line puts the lines in front of that reviewer with its own CI step.
+That step can post them as a pull request comment.
 A full sweep runs in CI and never on a laptop.
 Start a baseline with `gh workflow run mutation` and keep its report as an artifact.
 The shared preset refuses a full `stryker run` outside CI and names that workflow command instead, as [checks-mutation](checks-mutation.md) says.
