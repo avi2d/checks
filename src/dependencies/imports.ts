@@ -63,10 +63,17 @@ const depcruise = Effect.fn("depcruise")(function* () {
   return yield* path.fromFileUrl(main);
 });
 
+const trackedInTree = Effect.fn("trackedInTree")(function* (root: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const listed = yield* git(["ls-files", "-z", "--", ...CRUISED], root);
+  return yield* Effect.filter(listed.split("\0").filter(Boolean), (file) => fs.exists(path.join(root, file)), { concurrency: "unbounded" });
+});
+
 const imports = Effect.gen(function* () {
   if (process.argv.length > 2) return yield* new Usage({ message: USAGE });
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
-  const files = (yield* git(["ls-files", "--", ...CRUISED], root)).split("\n").filter((line) => line !== "");
+  const files = yield* trackedInTree(root);
   if (files.length === 0) return yield* new ImportsError({ message: "no tracked TypeScript to cruise" });
   const config = yield* configOf(root);
   const run = yield* collect(process.execPath, [yield* depcruise(), "--config", config.file, "--output-type", "json", ...files], root).pipe(

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CHECKOUT, fixtureRepos, type FixtureRepo } from "./lib/fixture-repo.ts";
 
@@ -78,6 +78,27 @@ test("in a repository that depends on astro the defaults pass a module only an .
   const red = await imports(repo);
   expect(red.text).toContain("error no-orphans: src/consts.ts");
   expect(red.exitCode).toBe(1);
+}, 60_000);
+
+test("a tracked file deleted without staging is left out of the cruise instead of stopping it", async () => {
+  const repo = await repository({ "src/lonely.ts": `export const lonely: number = 1;\n` });
+  await rm(join(repo.dir, "src", "lonely.ts"));
+  const green = await imports(repo);
+  expect(green.text).toContain("2 module(s) cruised against the kit's defaults, no violation");
+  expect(green.exitCode).toBe(0);
+}, 60_000);
+
+test("a file with a non-ASCII name is cruised and judged by its own path", async () => {
+  const repo = await repository({ "src/кот.ts": `export const cat: number = 1;\n` });
+  const red = await imports(repo);
+  expect(red.text).toContain("error no-orphans: src/кот.ts");
+  expect(red.exitCode).toBe(1);
+
+  await repo.write({ "src/index.ts": `import { cat } from "./кот.ts";\nexport const answer: number = cat;\n` });
+  await repo.commit("fix: import it");
+  const green = await imports(repo);
+  expect(green.text).toContain("3 module(s) cruised against the kit's defaults, no violation");
+  expect(green.exitCode).toBe(0);
 }, 60_000);
 
 test("a config dependency-cruiser cannot load leaves the gate undecided", async () => {

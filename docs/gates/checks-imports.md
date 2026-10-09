@@ -19,7 +19,7 @@ A repository that wants the rule back lists its own `no-orphans` under `forbidde
 
 ## What it reads
 
-It reads the working tree from the repository root.
+It reads the working tree from the repository root, and leaves out a tracked file the working tree no longer holds.
 It cruises against the first config it finds there:
 
 1. `dependency-cruiser.config.ts`, which calls `defineConfig` from `@avi2dg/checks/dependency-cruiser`.
