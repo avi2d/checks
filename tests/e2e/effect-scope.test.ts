@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import severities from "../../src/quality/presets/effect.language-service.json" with { type: "json" };
+import kitTsconfig from "../../tsconfig.effect.json" with { type: "json" };
 import { CHECKOUT, fixtureRepos, type FixtureRepo } from "./lib/fixture-repo.ts";
 
 const open = fixtureRepos("checks-effect-scope-");
@@ -12,7 +13,9 @@ const SERVICE = "@effect/language-service";
 
 const OVERRIDES = [{ include: ["src/**/*.ts"], options: severities }];
 
-const SEVERITY = `"diagnosticSeverity": { "floatingEffect": "error" }`;
+const KIT_SEVERITY = kitTsconfig.compilerOptions.plugins[0]?.diagnosticSeverity;
+
+const SEVERITY = `"diagnosticSeverity": ${JSON.stringify(KIT_SEVERITY)}`;
 
 const COMMENTED = `{
   // The kit's shared Effect diagnostics.
@@ -22,7 +25,7 @@ const COMMENTED = `{
     "plugins": [
       {
         "name": "${SERVICE}",
-        /* the repository's own severity */
+        /* the kit's severities */
         ${SEVERITY},
       },
     ],
@@ -54,7 +57,7 @@ test("a tsconfig.json with comments and trailing commas gains the Effect paths a
   expect(written.endsWith(COMMENTED.slice(insertedAt))).toBe(true);
   expect(Bun.JSONC.parse(written)).toEqual({
     extends: ["@avi2dg/checks/tsconfig.effect.json"],
-    compilerOptions: { strict: true, plugins: [{ name: SERVICE, diagnosticSeverity: { floatingEffect: "error" }, overrides: OVERRIDES }] },
+    compilerOptions: { strict: true, plugins: [{ name: SERVICE, diagnosticSeverity: KIT_SEVERITY, overrides: OVERRIDES }] },
     include: ["src/**/*.ts"],
   });
 
@@ -66,7 +69,7 @@ test("a tsconfig.json with comments and trailing commas gains the Effect paths a
 }, 60_000);
 
 test("the Effect paths written ahead of the plugin's other keys already hold, and nothing is rewritten", async () => {
-  const tsconfig = `${JSON.stringify({ compilerOptions: { plugins: [{ name: SERVICE, overrides: OVERRIDES, diagnosticSeverity: { floatingEffect: "error" } }] } }, null, 2)}\n`;
+  const tsconfig = `${JSON.stringify({ compilerOptions: { plugins: [{ name: SERVICE, overrides: OVERRIDES, diagnosticSeverity: KIT_SEVERITY }] } }, null, 2)}\n`;
   const repo = await repository(tsconfig);
   const held = await effectScope(repo, "--check");
   expect(held.text).toContain("tsconfig.json holds the Effect paths of oxlint.config.ts");
@@ -96,4 +99,25 @@ test("a compilerOptions or plugins set to null leaves the gate undecided rather 
     }
     expect(await tsconfigOf(repo)).toBe(tsconfig);
   }
+}, 60_000);
+
+test("after a release changes a kit severity the check fails and the next build rewrites it, keeping the repository's own key", async () => {
+  const entry = (diagnosticSeverity: unknown) => ({ compilerOptions: { plugins: [{ name: SERVICE, overrides: OVERRIDES, diagnosticSeverity }] } });
+  const repo = await repository(`${JSON.stringify(entry({ ...KIT_SEVERITY, floatingEffect: "warning", effectFnOpportunity: "error" }), null, 2)}\n`);
+  const stale = await effectScope(repo, "--check");
+  expect(stale.text).toContain("run checks-effect-scope to rewrite them");
+  expect(stale.exitCode).toBe(1);
+
+  expect((await effectScope(repo)).exitCode).toBe(0);
+  expect(Bun.JSONC.parse(await tsconfigOf(repo))).toEqual(entry({ ...KIT_SEVERITY, effectFnOpportunity: "error" }));
+  expect((await effectScope(repo, "--check")).exitCode).toBe(0);
+}, 60_000);
+
+test("a language service diagnosticSeverity that is not an object leaves the gate undecided", async () => {
+  const tsconfig = `{ "compilerOptions": { "plugins": [{ "name": "${SERVICE}", "diagnosticSeverity": null }] } }\n`;
+  const repo = await repository(tsconfig);
+  const undecided = await effectScope(repo);
+  expect(undecided.text).toContain(`tsconfig.json holds a ${SERVICE} diagnosticSeverity that is not an object`);
+  expect(undecided.exitCode).toBe(2);
+  expect(await tsconfigOf(repo)).toBe(tsconfig);
 }, 60_000);

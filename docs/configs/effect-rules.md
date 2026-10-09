@@ -71,9 +71,9 @@ The preset turns these diagnostics to errors:
 - `processEnvInEffect` refuses a read of `process.env` inside an Effect generator.
 
 Effect's `Config` reads the environment in place of `process.env`.
-The kit's `tsconfig.effect.json` keeps the shared language service diagnostics.
-A repository whose `tsconfig.json` holds its own plugin entry holds those severities in that entry too, since its entry stands in for the kit's.
-An entry `checks-effect-scope` creates carries the `diagnosticSeverity` of `tsconfig.effect.json`, and an entry the repository wrote keeps its own settings.
+The kit's `tsconfig.effect.json` holds the shared language service diagnostics.
+A plugin entry in the repository's `tsconfig.json` stands in for the kit's, so `checks-effect-scope` writes those severities into it on every run.
+The kit owns the severities of its own keys, and a repository adds keys of its own but does not change the kit's.
 
 ## Related topics
 

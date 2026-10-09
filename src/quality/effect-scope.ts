@@ -47,7 +47,9 @@ const SERVICE: readonly [Step, ...Step[]] = ["compilerOptions", "plugins", { nam
 
 const SERVICE_OVERRIDES: readonly [Step, ...Step[]] = [...SERVICE, "overrides"];
 
-const KIT_SEVERITY = kitTsconfig.compilerOptions.plugins.find(({ name }) => name === LANGUAGE_SERVICE)?.diagnosticSeverity;
+const SERVICE_SEVERITY: readonly [Step, ...Step[]] = [...SERVICE, "diagnosticSeverity"];
+
+const KIT_SEVERITY = kitTsconfig.compilerOptions.plugins.find(({ name }) => name === LANGUAGE_SERVICE)?.diagnosticSeverity ?? {};
 
 export function serviceOverrides(overrides: readonly (typeof Override.Type)[]): readonly ServiceOverride[] {
   return overrides
@@ -56,9 +58,9 @@ export function serviceOverrides(overrides: readonly (typeof Override.Type)[]): 
 }
 
 export function withServiceOverrides(tsconfig: string, overrides: readonly ServiceOverride[]): string {
-  if (overrides.length === 0) return withoutMember(tsconfig, SERVICE_OVERRIDES);
-  if (hasMember(tsconfig, SERVICE)) return withMember(tsconfig, SERVICE_OVERRIDES, overrides);
-  return withMember(tsconfig, SERVICE, { diagnosticSeverity: KIT_SEVERITY, overrides });
+  if (!hasMember(tsconfig, SERVICE)) return overrides.length === 0 ? tsconfig : withMember(tsconfig, SERVICE, { diagnosticSeverity: KIT_SEVERITY, overrides });
+  const paths = overrides.length === 0 ? withoutMember(tsconfig, SERVICE_OVERRIDES) : withMember(tsconfig, SERVICE_OVERRIDES, overrides);
+  return Object.entries(KIT_SEVERITY).reduce((text, [key, severity]) => withMember(text, [...SERVICE_SEVERITY, key], severity), paths);
 }
 
 const refuse = (message: string) => () => new EffectScopeError({ message });
@@ -74,9 +76,11 @@ const readScope = Effect.fn("readScope")(function* (file: string) {
   return serviceOverrides(config.overrides ?? []);
 });
 
-const pluginsOf = Effect.fn("pluginsOf")(function* (tsconfig: JsonObject) {
+const placeOfService = Effect.fn("placeOfService")(function* (tsconfig: JsonObject) {
   const compilerOptions = yield* decodeObject("compilerOptions" in tsconfig ? tsconfig["compilerOptions"] : {}).pipe(Effect.mapError(refuse(`${TSCONFIG} holds compilerOptions that is not an object`)));
-  return yield* decodePlugins("plugins" in compilerOptions ? compilerOptions["plugins"] : []).pipe(Effect.mapError(refuse(`${TSCONFIG} holds compilerOptions.plugins that is not a list of objects`)));
+  const plugins = yield* decodePlugins("plugins" in compilerOptions ? compilerOptions["plugins"] : []).pipe(Effect.mapError(refuse(`${TSCONFIG} holds compilerOptions.plugins that is not a list of objects`)));
+  const service = plugins.find(({ name }) => name === LANGUAGE_SERVICE) ?? {};
+  yield* decodeObject("diagnosticSeverity" in service ? service["diagnosticSeverity"] : {}).pipe(Effect.mapError(refuse(`${TSCONFIG} holds a ${LANGUAGE_SERVICE} diagnosticSeverity that is not an object`)));
 });
 
 const effectScope = Effect.gen(function* () {
@@ -94,18 +98,18 @@ const effectScope = Effect.gen(function* () {
   const text = yield* fs.readFileString(tsconfigFile);
   const unparsed = refuse(`${TSCONFIG} does not parse as a JSONC object`);
   const tsconfig = yield* Effect.try({ try: () => Bun.JSONC.parse(text), catch: unparsed }).pipe(Effect.flatMap(decodeObject), Effect.mapError(unparsed));
-  yield* pluginsOf(tsconfig);
+  yield* placeOfService(tsconfig);
   const written = withServiceOverrides(text, overrides);
   if (written === text) {
-    yield* Console.log(`${NAME}: ${TSCONFIG} holds the Effect paths of ${OXLINT_CONFIG}`);
+    yield* Console.log(`${NAME}: ${TSCONFIG} holds the Effect paths of ${OXLINT_CONFIG} and the kit's severities`);
     return true;
   }
   if (args[0] === CHECK) {
-    yield* Console.error(`${NAME}: the ${LANGUAGE_SERVICE} overrides in ${TSCONFIG} differ from the Effect paths of ${OXLINT_CONFIG}; run checks-effect-scope to rewrite them`);
+    yield* Console.error(`${NAME}: the ${LANGUAGE_SERVICE} entry in ${TSCONFIG} differs from the Effect paths of ${OXLINT_CONFIG} or the kit's severities; run checks-effect-scope to rewrite them`);
     return false;
   }
   yield* fs.writeFileString(tsconfigFile, written);
-  yield* Console.log(`${NAME}: wrote the Effect paths of ${OXLINT_CONFIG} to ${TSCONFIG}`);
+  yield* Console.log(`${NAME}: wrote the Effect paths of ${OXLINT_CONFIG} and the kit's severities to ${TSCONFIG}`);
   return true;
 });
 
