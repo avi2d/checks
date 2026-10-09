@@ -18,15 +18,15 @@ It fails when the repository holds no Knip configuration, since Knip's default e
 
 It reads the working tree, so an uncommitted file is judged like a committed one.
 It reads the repository's Knip configuration, which names the entries.
-Knip configurations do not extend a package file, so the consumer configuration imports the kit's base and spreads it:
+The repository writes `knip.config.ts` with the kit's builder, which requires `entry`, the files nothing imports:
 
 ```ts
-import base from "@avi2dg/checks/knip-base.json";
+import { defineConfig } from "@avi2dg/checks/knip";
 
-export default { ...base, entry: ["src/index.ts", "tests/**/*.test.ts"] };
+export default defineConfig({ entry: ["src/index.ts"] });
 ```
 
-The base in `knip-base.json` reports only unreferenced files.
+The builder sets `include` to unreferenced files alone, and adds `tests/**/*.test.ts` and `dependency-cruiser.config.ts` to the entries.
 In a repository that depends on `astro`, Knip reads `.astro` imports, so a file only an `.astro` entry imports counts as used and an `.astro` file no entry reaches is named.
 The gate resolves the Knip binary from the installed kit, so a consumer installs nothing beyond the kit.
 

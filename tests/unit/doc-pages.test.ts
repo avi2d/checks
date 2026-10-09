@@ -2,9 +2,9 @@ import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Schema } from "effect";
-import kitOxlint from "../../oxlintrc.json" with { type: "json" };
 import { GATE_PAGES, MANIFEST } from "../../scripts/doc-blocks.ts";
 import { parseOutline } from "../../src/docs/doc-outline.ts";
+import { base as oxlintBase } from "../../src/quality/presets/oxlint.ts";
 
 const CHECKOUT = resolve(import.meta.dir, "..", "..");
 const SECTIONS = ["What it checks", "What it reads", "Arguments", "Exit codes", "Sample output", "When it runs"];
@@ -40,7 +40,7 @@ function unnamedOn(page: string, names: readonly string[]): string[] {
 }
 
 test("the TypeScript rules page names each category and rule the oxlint base sets", () => {
-  const names = [...Object.keys(kitOxlint.categories), ...Object.keys(kitOxlint.rules)];
+  const names = [...Object.keys(oxlintBase.categories ?? {}), ...Object.keys(oxlintBase.rules ?? {})];
   expect(unnamedOn("docs/configs/typescript-rules.md", names)).toEqual([]);
 });
 

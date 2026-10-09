@@ -1,5 +1,0 @@
-{
-  "$schema": "https://unpkg.com/knip@6.38.0/schema.json",
-  "include": ["files"],
-  "entry": ["src/quality/effect-channel/index.ts", "src/complexity/readability/index.ts", "src/quality/data-shape/index.ts", "tests/**/*.test.ts"]
-}

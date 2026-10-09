@@ -4,11 +4,11 @@ audience: consumers
 ---
 # The TypeScript rules
 
-The oxlint base config and the tsconfig fragment hold a repository's TypeScript to a set of rules, and some of them need type information.
+The kit's oxlint base and the tsconfig fragment hold a repository's TypeScript to a set of rules, and some of them need type information.
 
 ## Syntax rules
 
-`oxlintrc.json` turns on the `correctness` and `suspicious` categories as errors, and these rules on top of them:
+`base` from `@avi2dg/checks/oxlint`, which every config its `defineConfig` returns starts from, turns on the `correctness` and `suspicious` categories as errors, and these rules on top of them:
 
 - `typescript/no-explicit-any` refuses an `any` type written out.
 - `typescript/ban-ts-comment` refuses `@ts-ignore`, `@ts-expect-error` and `@ts-nocheck`.
@@ -22,8 +22,8 @@ It turns on `effect-channel/no-error-channel-escape` as well, and [The Effect ru
 
 ## Type-aware rules
 
-These rules read the types, so they run only under `oxlint --type-aware` with `oxlint-tsgolint` installed.
-Without the flag, oxlint skips them and reports nothing about them.
+These rules read the types, so they run only with `oxlint-tsgolint` installed and type-aware linting on.
+`defineConfig` turns it on through `options.typeAware`, so a plain `oxlint` runs them.
 
 - `typescript/switch-exhaustiveness-check` refuses a `switch` over a union that leaves a member without a case.
 - `typescript/prefer-readonly` refuses a private member that nothing reassigns and that is not `readonly`.
@@ -45,7 +45,7 @@ The base loads the kit's `data-shape` plugin from `dist/` with one rule for ever
 
 ## Astro rules
 
-An override in `oxlintrc.json` turns on one rule of the kit's `readability` plugin in each `.astro` file:
+An override in `base` turns on one rule of the kit's `readability` plugin in each `.astro` file:
 
 - `readability/thin-astro` refuses a statement in the frontmatter or a script block that is neither an import, a re-export from another module, a type or interface declaration, nor a variable read from `Astro.props`.
 - A default inside an `Astro.props` destructuring passes only when it is a literal, a `-` or `+` on a numeric literal, or a name read from `Astro.props` earlier, in the same pattern or a statement before it, so `const { title = "Home", heading = title } = Astro.props;` passes and a call or `await` in a default is refused.
@@ -55,7 +55,7 @@ An override in `oxlintrc.json` turns on one rule of the kit's `readability` plug
 
 ## Rules outside tests
 
-An override in `oxlintrc.json` turns on these type-aware rules in each `.ts` and `.tsx` file outside `tests/`:
+An override in `base` turns on these type-aware rules in each `.ts` and `.tsx` file outside `tests/`:
 
 - `typescript/no-unsafe-assignment` refuses assigning an `any` value to a variable, a property or a destructured name.
 - `typescript/no-unsafe-member-access` refuses reading a member of an `any` value.
@@ -63,7 +63,7 @@ An override in `oxlintrc.json` turns on these type-aware rules in each `.ts` and
 - `typescript/no-unsafe-return` refuses returning an `any` value from a function, unless the function returns `unknown`.
 - `typescript/no-unsafe-call` refuses calling an `any` value.
 
-A consumer inherits the override through `extends`, and a file under `tests/` answers to none of the five.
+Every config `defineConfig` returns carries the override, and a file under `tests/` answers to none of the five.
 
 ## Compiler options
 

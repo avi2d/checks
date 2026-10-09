@@ -13,7 +13,7 @@ const WIDGET = "export const widget = 42;\n";
 const Manifest = Schema.fromJsonString(
   Schema.Struct({
     name: Schema.String,
-    exports: Schema.Record(Schema.String, Schema.String),
+    exports: Schema.Record(Schema.String, Schema.Union([Schema.String, Schema.Struct({ types: Schema.String, default: Schema.String })])),
     bin: Schema.Record(Schema.String, Schema.String),
   }),
 );
@@ -369,23 +369,17 @@ test(
     const installed = join(dir, "node_modules", "@avi2dg", "checks");
     const manifest = Schema.decodeSync(Manifest)(await readFile(join(CHECKOUT, "package.json"), "utf8"));
     expect(Object.keys(manifest.exports).toSorted()).toEqual([
-      "./browser-hooks.ts",
-      "./dependency-cruiser.config.js",
-      "./knip-base.json",
-      "./scripts/comment-matchers.ts",
-      "./scripts/prose-matchers.ts",
-      "./scripts/test-skips.ts",
-      "./stryker.preset.js",
-      "./templates/*",
-      "./tsconfig.effect.json",
+      ...["./browser-hooks.ts", "./dependency-cruiser", "./dependency-cruiser.config.js", "./knip", "./knip-base.json", "./oxlint"],
+      ...["./scripts/comment-matchers.ts", "./scripts/prose-matchers.ts", "./scripts/test-skips.ts", "./stryker.preset.js", "./templates/*", "./tsconfig.effect.json"],
     ]);
-    const resolved = Object.entries(manifest.exports).map(([key, target]) => {
+    const resolved = Object.entries(manifest.exports).map(([key, exported]) => {
+      const target = typeof exported === "string" ? exported : exported.default;
       const specifier = key.endsWith("/*") ? `${manifest.name}${key.slice(1, -1)}readme.md` : `${manifest.name}${key.slice(1)}`;
       const file = target.endsWith("/*") ? join(installed, target.slice(0, -1).concat("readme.md")) : join(installed, target);
       return [key, realpathSync(Bun.resolveSync(specifier, dir)) === realpathSync(file)];
     });
     expect(resolved.filter(([, found]) => !found)).toEqual([]);
-    const shipped = ["ts-reset.d.ts", "dist/templates/readme.md", "src/quality/presets/effect.oxlint.json", "LICENSE", "CHANGELOG.md", "knip-base.json", "dist/data-shape/index.js", "src/quality/browser/hooks.ts", "src/quality/frontend-syntax.ts"];
+    const shipped = ["ts-reset.d.ts", "dist/templates/readme.md", "dist/presets/oxlint.d.ts", "LICENSE", "CHANGELOG.md", "knip-base.json", "dist/data-shape/index.js", "src/quality/browser/hooks.ts", "src/quality/frontend-syntax.ts"];
     const unshipped = ["templates", "presets", "src/quality/effect-channel", "src/complexity/readability", "src/quality/data-shape", "tests", "AGENTS.md"];
     expect(shipped.filter((path) => !existsSync(join(installed, path)))).toEqual([]);
     expect(unshipped.filter((path) => existsSync(join(installed, path)))).toEqual([]);
@@ -442,9 +436,11 @@ test(
       const oxlintrc = Schema.decodeSync(OxlintPlugins)(await readFile(join(root, "oxlintrc.json"), "utf8"));
       const entry = [
         ...Object.values(manifest.bin),
-        ...Object.values(manifest.exports),
+        ...Object.values(manifest.exports).flatMap((exported) => (typeof exported === "string" ? [exported] : [exported.types, exported.default])),
         ...oxlintrc.jsPlugins,
         "commitlint.config.js",
+        // checks-imports hands this file to dependency-cruiser by path, and --production follows only an entry marked with !.
+        "src/dependencies/kit-defaults.ts!",
       ].map((target) => (target.startsWith("./") ? target.slice(2) : target));
       await writeFile(join(root, "knip.tarball.json"), JSON.stringify({ entry, commitlint: false }));
       const knip = join(CHECKOUT, "node_modules", ".bin", "knip");
@@ -486,6 +482,7 @@ test(
     await writeFile(join(dir, ".github/workflows/ci.yml"), "on: pull_request\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n      - run: bun run build\n      - run: git diff --exit-code\n      - run: bun run typecheck\n      - run: bun run test\n");
     await writeFile(join(dir, ".github/workflows/commitlint.yml"), "on: pull_request\njobs:\n  title:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ./node_modules/.bin/commitlint\n");
     await writeFile(join(dir, "knip.json"), JSON.stringify({ entry: ["*.ts", "tests/**/*.ts"], include: ["files"] }));
+    await writeFile(join(dir, "dependency-cruiser.config.ts"), `import { defineConfig } from "@avi2dg/checks/dependency-cruiser";\nexport default defineConfig({ orphans: ["^clean[.]ts$"] });\n`);
 
     const manifest = Schema.decodeSync(Manifest)(await readFile(join(CHECKOUT, "package.json"), "utf8"));
     const bins = Object.keys(manifest.bin);
@@ -540,17 +537,17 @@ test(
     const kit = await runScript("kit", withoutPullRequestEvent());
     expect(kit.text).toContain("from HEAD against origin/main");
     expect(kit.text).toContain("commit-identity: 1 commit(s)");
-    expect(kit.text).toContain("checks-lint: 13 gate(s) pass");
+    expect(kit.text).toContain("checks-lint: 14 gate(s) pass");
     expect(kit.exitCode).toBe(0);
   },
   180_000,
 );
 
 test(
-  "packed-tarball consumer goes red on a dead file through the published knip base, green once it is removed",
+  "packed-tarball consumer goes red on a dead file through the published knip builder, green once it is removed",
   async () => {
     await useConsumer("tarball", { scripts: { unused: "checks-unused" } });
-    await writeFile(join(dir, "knip.config.ts"), `import base from "@avi2dg/checks/knip-base.json";\nexport default { ...base, entry: ["index.ts"] };\n`);
+    await writeFile(join(dir, "knip.config.ts"), `import { defineConfig } from "@avi2dg/checks/knip";\nexport default defineConfig({ entry: ["index.ts"] });\n`);
     await writeFile(join(dir, "index.ts"), `import { used } from "./used.ts";\n\nexport const index = used;\n`);
     await writeFile(join(dir, "used.ts"), `export const used = 1;\nexport const unusedExport = 2;\n`);
     await writeFile(join(dir, "dead.ts"), `export const dead = 1;\n`);

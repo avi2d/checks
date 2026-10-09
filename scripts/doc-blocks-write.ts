@@ -1,12 +1,12 @@
 #!/usr/bin/env bun
 import { Console, Effect } from "effect";
-import { BUN_VERSION, DocBlocksUnwritable, kitFacts, MANIFEST, OXLINTRC, splice, TARGETS } from "./doc-blocks.ts";
+import { BUN_VERSION, DocBlocksUnwritable, kitFacts, MANIFEST, splice, TARGETS } from "./doc-blocks.ts";
 import { kitCheckout } from "./kit-checkout.ts";
 import { runMain } from "../src/core/main.ts";
 
 const write = Effect.gen(function* () {
   const checkout = yield* kitCheckout;
-  const facts = yield* kitFacts(yield* checkout.read(MANIFEST), yield* checkout.read(BUN_VERSION), yield* checkout.read(OXLINTRC));
+  const facts = yield* kitFacts(yield* checkout.read(MANIFEST), yield* checkout.read(BUN_VERSION));
   yield* Effect.forEach(TARGETS, ({ file, blocks }) =>
     Effect.gen(function* () {
       const spliced = splice(yield* checkout.read(file), blocks, facts);

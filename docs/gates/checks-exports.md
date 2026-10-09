@@ -25,16 +25,16 @@ It reads the repository's Knip configuration, which names the entries.
 It reads `exports-baseline.json` in the repository root, which holds each accepted unused export as a file, kind and name triple.
 It reads `exports-baseline.json` again at the base of the range, where a commit without the file counts as empty.
 When the range adds baseline entries, it runs Knip again on a temporary checkout of the base and removes the checkout when it ends.
-That checkout links the repository's `node_modules`, so a configuration importing the kit's base loads there too.
-Knip configurations do not extend a package file, so the consumer configuration imports the kit's base and spreads it:
+That checkout links the repository's `node_modules`, so a configuration importing the kit's builder loads there too.
+The repository writes `knip.config.ts` with the kit's builder, which requires `entry`, the files nothing imports:
 
 ```ts
-import base from "@avi2dg/checks/knip-base.json";
+import { defineConfig } from "@avi2dg/checks/knip";
 
-export default { ...base, entry: ["src/index.ts", "tests/**/*.test.ts"] };
+export default defineConfig({ entry: ["src/index.ts"] });
 ```
 
-The base in `knip-base.json` reports only unreferenced files.
+The builder sets `include` to unreferenced files alone, and adds `tests/**/*.test.ts` and `dependency-cruiser.config.ts` to the entries.
 The gate resolves the Knip binary from the installed kit, so a consumer installs nothing beyond the kit.
 
 ## Arguments

@@ -16,8 +16,8 @@ function configured(files: Readonly<Record<string, string>>): Readonly<Record<st
   };
 }
 
-function extendingBase(entry: readonly string[]): string {
-  return `import base from "${CHECKOUT}/knip-base.json";\nexport default { ...base, entry: ${JSON.stringify(entry)} };\n`;
+function kitConfig(entry: readonly string[]): string {
+  return `import { defineConfig } from "${CHECKOUT}/dist/presets/knip.js";\nexport default defineConfig({ entry: ${JSON.stringify(entry)} });\n`;
 }
 
 test(
@@ -25,7 +25,7 @@ test(
   async () => {
     const { write, commit, script } = await open(
       configured({
-        "knip.config.ts": extendingBase(["src/index.ts"]),
+        "knip.config.ts": kitConfig(["src/index.ts"]),
         "src/index.ts": `import { used } from "./used.ts";\n\nexport const index = used;\n`,
         "src/used.ts": `export const used = 1;\nexport const unusedExport = 2;\nexport type UnusedOptions = { readonly flag: boolean };\n`,
         "src/dead.ts": `export const dead = 1;\n`,
@@ -57,7 +57,7 @@ test(
     ];
     const { write, commit, script } = await open(
       configured({
-        "knip.config.ts": extendingBase(["src/index.ts"]),
+        "knip.config.ts": kitConfig(["src/index.ts"]),
         "exports-baseline.json": JSON.stringify(held),
         "src/index.ts": `import { used } from "./used.ts";\n\nexport const index = used;\n`,
         "src/used.ts": `export const used = 1;\nexport const unusedExport = 2;\nexport type UnusedOptions = { readonly flag: boolean };\n`,
@@ -89,7 +89,7 @@ test(
   async () => {
     const { write, commit, script } = await open(
       configured({
-        "knip.config.ts": extendingBase(["src/index.ts"]),
+        "knip.config.ts": kitConfig(["src/index.ts"]),
         "src/index.ts": `import { used } from "./used.ts";\n\nexport const index = used;\n`,
         "src/used.ts": `export const used = 1;\nexport const unusedExport = 2;\n`,
       }),
@@ -122,7 +122,7 @@ test(
   async () => {
     const { write, commit, script } = await open(
       configured({
-        "knip.config.ts": extendingBase(["src/index.ts"]),
+        "knip.config.ts": kitConfig(["src/index.ts"]),
         "src/index.ts": `import { helper, used } from "./used.ts";\n\nexport const index = used + helper;\n`,
         "src/used.ts": `export const used = 1;\nexport const helper = 2;\n`,
       }),
@@ -193,7 +193,7 @@ test(
       "index.ts": `import { helper } from "./helper.ts";\nimport { kept } from "./legacy.ts";\nimport { used } from "./used.ts";\n\nexport const index = used + helper + kept + 1;\n`,
     });
     expect(green.text).toContain("exports: 3 unused export(s) in exports-baseline.json, and no new ones");
-    expect(green.text).toContain("checks-lint: 12 gate(s) pass");
+    expect(green.text).toContain("checks-lint: 13 gate(s) pass");
     expect(green.exitCode).toBe(0);
   },
   180_000,
@@ -209,7 +209,7 @@ test(
     expect(red.text).toContain(
       "exports: 1 exports-baseline.json export(s) the range adds that its base did not leave unused, remove the export instead:\n  used.ts: fresh (export)\n",
     );
-    expect(red.text).toContain("1 of 12 gate(s) failed: checks-exports");
+    expect(red.text).toContain("1 of 13 gate(s) failed: checks-exports");
     expect(red.exitCode).toBe(1);
   },
   180_000,
@@ -221,7 +221,7 @@ test(
     const { dir, write, commit, script } = await open(
       configured({
         ".gitignore": "node_modules\n",
-        "knip.config.ts": `import base from "@avi2dg/checks/knip-base.json";\nexport default { ...base, entry: ["src/index.ts"] };\n`,
+        "knip.config.ts": `import { defineConfig } from "@avi2dg/checks/knip";\nexport default defineConfig({ entry: ["src/index.ts"] });\n`,
         "src/index.ts": `import { used } from "./used.ts";\n\nexport const index = used;\n`,
         "src/used.ts": `export const used = 1;\nexport const unusedExport = 2;\nexport type UnusedOptions = { readonly flag: boolean };\n`,
       }),
@@ -351,14 +351,14 @@ test(
     await commit("feat: base");
 
     const red = await lint();
-    expect(red.text).toContain("1 of 12 gate(s) failed: checks-exports");
+    expect(red.text).toContain("1 of 13 gate(s) failed: checks-exports");
     expect(red.text).toContain("exports: 1 unused export(s) not in exports-baseline.json:\n  used.ts: unusedExport (export)");
     expect(red.exitCode).toBe(1);
 
     await write({ "used.ts": `export const used = 1;\n` });
     await commit("refactor: use every export");
     const clean = await lint();
-    expect(clean.text).toContain("checks-lint: 12 gate(s) pass");
+    expect(clean.text).toContain("checks-lint: 13 gate(s) pass");
     expect(clean.exitCode).toBe(0);
   },
   180_000,

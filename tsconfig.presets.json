@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "rootDir": "src/quality/presets",
+    "outDir": "dist/presets"
+  },
+  "files": ["src/quality/presets/oxlint.ts", "src/quality/presets/knip.ts", "src/quality/presets/dependency-cruiser.ts"],
+  "include": []
+}

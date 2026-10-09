@@ -80,15 +80,21 @@
     "src/docs/doc-templates.ts",
     "src/docs/doc-names.ts",
     "dist/templates/",
-    "src/quality/presets/effect.oxlint.json",
     "src/quality/presets/effect.language-service.json",
+    "src/quality/presets/oxlint.ts",
+    "src/quality/presets/dependency-cruiser.ts",
+    "src/quality/effect-scope.ts",
+    "src/quality/jsonc-patch.ts",
+    "src/dependencies/imports.ts",
+    "src/dependencies/kit-defaults.ts",
     "oxlintrc.json",
     "stryker.preset.js",
     "tsconfig.effect.json",
     "ts-reset.d.ts",
     "dist/effect-channel/index.js",
     "dist/readability/index.js",
-    "dist/data-shape/index.js"
+    "dist/data-shape/index.js",
+    "dist/presets/"
   ],
   "exports": {
     "./dependency-cruiser.config.js": "./dependency-cruiser.config.js",
@@ -99,7 +105,19 @@
     "./stryker.preset.js": "./stryker.preset.js",
     "./templates/*": "./dist/templates/*",
     "./tsconfig.effect.json": "./tsconfig.effect.json",
-    "./browser-hooks.ts": "./src/quality/browser/hooks.ts"
+    "./browser-hooks.ts": "./src/quality/browser/hooks.ts",
+    "./oxlint": {
+      "types": "./dist/presets/oxlint.d.ts",
+      "default": "./dist/presets/oxlint.js"
+    },
+    "./knip": {
+      "types": "./dist/presets/knip.d.ts",
+      "default": "./dist/presets/knip.js"
+    },
+    "./dependency-cruiser": {
+      "types": "./dist/presets/dependency-cruiser.d.ts",
+      "default": "./dist/presets/dependency-cruiser.js"
+    }
   },
   "bin": {
     "checks-lint": "src/core/lint.ts",
@@ -128,12 +146,14 @@
     "checks-advisories": "src/dependencies/advisories.ts",
     "checks-secrets": "src/delivery/secrets.ts",
     "checks-frontend-syntax": "src/quality/frontend-syntax.ts",
-    "checks-browser": "src/quality/browser/browser.ts"
+    "checks-browser": "src/quality/browser/browser.ts",
+    "checks-imports": "src/dependencies/imports.ts",
+    "checks-effect-scope": "src/quality/effect-scope.ts"
   },
   "scripts": {
     "prepare": "bun src/dependencies/vendor.ts --library effect --package effect --repository https://github.com/Effect-TS/effect.git --tag 'effect@{version}' --path packages/effect/package.json",
-    "build": "bun build src/quality/effect-channel/index.ts --outdir dist/effect-channel --target node --format esm && bun build src/complexity/readability/index.ts --outdir dist/readability --target node --format esm && bun build src/quality/data-shape/index.ts --outdir dist/data-shape --target node --format esm && bun scripts/doc-templates-write.ts && bun src/delivery/changelog-write.ts && bun scripts/doc-blocks-write.ts",
-    "lint": "oxlint --type-aware && bun src/core/lint.ts && depcruise --config .dependency-cruiser.cjs .",
+    "build": "bun build src/quality/effect-channel/index.ts --outdir dist/effect-channel --target node --format esm && bun build src/complexity/readability/index.ts --outdir dist/readability --target node --format esm && bun build src/quality/data-shape/index.ts --outdir dist/data-shape --target node --format esm && bun build src/quality/presets/oxlint.ts src/quality/presets/knip.ts src/quality/presets/dependency-cruiser.ts --outdir dist/presets --target node --format esm && tsc -p tsconfig.presets.json && bun scripts/configs-write.ts && bun src/quality/effect-scope.ts && bun scripts/doc-templates-write.ts && bun src/delivery/changelog-write.ts && bun scripts/doc-blocks-write.ts",
+    "lint": "oxlint && bun src/core/lint.ts",
     "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
     "test": "bun src/testing/test.ts",
     "mutate": "bunx stryker run",

@@ -8,14 +8,25 @@ Each section names the limit and what the obvious alternative would break.
 
 ## Each tool reads its own config
 
-A repository keeps each setting in the file its tool reads, such as `.oxlintrc.json`, `tsconfig.json` or `.jscpd.json`.
+A repository keeps each setting in the file its tool reads, such as `oxlint.config.ts`, `tsconfig.json` or `.jscpd.json`.
 A developer then changes a rule where the tool reads it, and the tool's own docs describe that file.
-The Effect paths sit in two of those files, `.oxlintrc.json` and `tsconfig.json`, and the installed consumer test checks each one on its own.
+
+oxlint, Knip and dependency-cruiser each read a TypeScript config, so the kit ships a `defineConfig` for each over the tool's own config type.
+A repository writes the shape that tool's docs describe, and adds to the kit's rules through the tool's own keys.
+Each builder sets a default for every kit rule, and every glob in it covers the whole tree, so no unlisted directory escapes a rule.
+A rule set copied by hand would miss whatever the copy left out, and would fail on a path the copy forgot.
+A fact only the repository knows has no default, `effect` for oxlint and `entry` for Knip.
+Defaulting `effect` on fails a repository whose code is deliberately outside Effect, and defaulting it off leaves an Effect repository unchecked, so its type is required.
+Neither oxlint nor Knip typechecks the config it loads, so each builder also throws when it gets a config without that fact.
+Both tools read a config's default export synchronously, so a throw is the one refusal open to the builder.
+
+The Effect paths sit in `oxlint.config.ts` alone.
+`tsconfig.json` cannot import a TypeScript module, so `checks-effect-scope` writes the Effect language service override in `tsconfig.json` from them, and fails `checks-lint` when the two differ.
 
 oxlint does not pass `plugins` down an `extends` chain.
 A config in the chain that sets no `plugins` gets oxlint's default plugins, and the base's `categories` then turn on their rules across the tree.
-So a consumer's `.oxlintrc.json` and each of its overrides list `plugins` again.
-`rules`, `categories` and `jsPlugins` pass down the chain as expected.
+So `defineConfig` returns the whole root config with `plugins` set, and a repository adds its own keys rather than extending a kit object.
+oxlint reads a relative `jsPlugins` path against the consumer's config, so `base` names each plugin bundle by its absolute path in the installed kit.
 `.gitignore` keeps oxlint out of `node_modules/`, because oxlint still walks the installed package when only `ignorePatterns` names it.
 
 The base turns `data-shape/readonly-collection-param` on for every TypeScript file and `data-shape/schema-twin` on for production files only.
@@ -29,9 +40,9 @@ An empty `--path-ignore-patterns` flag overrides the copied `[test] pathIgnorePa
 Stryker 10 does not resolve `extends` in a JSON config.
 So the Stryker preset is a JavaScript module that a repository's `stryker.conf.mjs` spreads, and a key set after the spread wins.
 
-The dependency-cruiser base parses with swc, because TypeScript 7, which is tsgo, has no compiler API that dependency-cruiser can use.
+The dependency-cruiser rules parse with swc, because TypeScript 7, which is tsgo, has no compiler API that dependency-cruiser can use.
 Without `@swc/core` installed, the cruise skips every `.ts` file without a warning, so the kit's own suite asserts that its TypeScript is cruised.
-The base counts `bun` as a built-in module.
+The rules count `bun` as a built-in module.
 Only `@types/bun` resolves it, and that package is a dev dependency, so every runtime `bun` import would otherwise read as dev only.
 
 ## The shared configs close gaps in the types
@@ -39,7 +50,7 @@ Only `@types/bun` resolves it, and that package is a dev dependency, so every ru
 The shared configs refuse four places where a value's type says less than the value does.
 Each sits in a file a consumer already extends or copies.
 
-The base `oxlintrc.json` turns on the five `typescript/no-unsafe-*` rules in an override for `.ts` and `.tsx` files outside `tests/`, so every consumer gets them through `extends`.
+The oxlint `base` turns on the five `typescript/no-unsafe-*` rules in an override for `.ts` and `.tsx` files outside `tests/`, so every config `defineConfig` returns carries them.
 `typescript/no-explicit-any` and `strict` already refuse an `any` someone writes, so the `any` left is one nobody wrote.
 `Array.isArray` narrows an `unknown` to `any[]`, `JSON.parse` returns `any`, `Object.entries` lists `any` values from an `object`, and a defaulted parameter in a generator passed to `Effect.fnUntraced` is typed `any`.
 Tests stay out because bun:test types its asymmetric matchers, such as `expect.arrayContaining`, as returning `any`.
@@ -86,7 +97,8 @@ A path read without the resolver, such as `node_modules/@avi2dg/checks/scripts/t
 npm adds `package.json`, `README.md` and `LICENSE` whatever `files` says.
 `bun pm pack` builds the same tarball the registry serves, and the consumer e2e test installs that tarball.
 
-Each oxlint plugin ships compiled under `dist/`, because Node refuses to strip types from a `.ts` file under `node_modules`.
+Each oxlint plugin and each config builder ships compiled under `dist/`, because Node refuses to strip types from a `.ts` file under `node_modules`.
+oxlint loads `oxlint.config.ts` under Node, so the builders ship as JavaScript beside a `.d.ts` that `tsc` reads.
 `@oxlint/plugins` ships no RuleTester, so each `effect-channel`, `readability` and `data-shape` rule is proven red and green against an installed consumer in `tests/e2e/consumer.test.ts`, except `readability/thin-astro`, which `tests/e2e/astro-consumer.test.ts` proves against a consumer tree linked to the checkout.
 `dist/` is committed, with the doc templates in `dist/templates/`, and so is `CHANGELOG.md`, which the same build writes.
 No `prepack` or `prepublishOnly` script rebuilds them, so a publish ships the committed files.
@@ -111,6 +123,11 @@ A gate then behaves the same alone or through `checks-lint`, and `lint-coverage.
 The gates run one at a time and pass their output straight through, so each report reads whole and in the order of the gate table.
 `checks-lint` picks the gates that apply from the tracked files, and a repository cannot select gates.
 A TypeScript gate runs as soon as the repository tracks TypeScript source, and `checks-lint-coverage` and `checks-unused` also run on tracked Astro source.
+
+dependency-cruiser runs as the `checks-imports` gate rather than as a script each repository adds to `lint`, so no repository can leave it out.
+A repository with no config of its own is cruised against the kit's defaults, since every rule has one.
+The gate cruises the tracked TypeScript, so a build output or a linked library outside git never reaches the cruise.
+It runs dependency-cruiser under Bun, which loads a TypeScript config wherever it sits, the kit's defaults under `node_modules` among them.
 
 GitHub authors the pull request merge commit it builds as `GitHub <noreply@github.com>`, and `checks-commit-identity` refuses that author.
 So `checks-lint` ends a pull request's range at the event's head commit, and the merge commit is never in it.
