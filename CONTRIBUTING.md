@@ -12,7 +12,7 @@ To check a change the way CI does:
 
 1. Run `bun install`.
 1. Run `bun run build`, which rewrites the files it generates, as Regenerate what is committed lists.
-1. Run `bun run lint`, which runs oxlint, the kit's own gates through `src/core/lint.ts`, and the dependency cruise.
+1. Run `bun run lint`, which runs oxlint and then the kit's own gates through `src/core/lint.ts`, the dependency cruise among them.
 1. Run `bun run typecheck`.
 1. Run `bun run test`, which runs the suite through `src/testing/test.ts`.
 
@@ -40,8 +40,9 @@ Each generated file is committed, and lint, the suite or CI's diff after the bui
 
 To regenerate after an edit:
 
-1. After editing `src/quality/effect-channel/`, `src/complexity/readability/`, `src/quality/data-shape/` or the templates in `src/docs/doc-templates.ts`, run `bun run build`.
-   It rewrites `dist/`.
+1. After editing `src/quality/effect-channel/`, `src/complexity/readability/`, `src/quality/data-shape/`, `src/quality/presets/` or the templates in `src/docs/doc-templates.ts`, run `bun run build`.
+   It rewrites `dist/`, and writes `oxlintrc.json` and `dependency-cruiser.config.js` from the config builders.
+1. After editing the Effect paths in `oxlint.config.ts`, run `bun run build`, whose `checks-effect-scope` rewrites the Effect override in `tsconfig.json`.
 1. After editing anything a generated block names as its source in its opening marker, run `bun run build`, which rewrites every generated block.
 1. Commit what the command rewrote in the same commit as the edit.
 
@@ -89,22 +90,24 @@ To place a change:
    | `src/delivery/` | the gates and bins for how a change reaches `main` and a release, and what a commit may not carry |
    | `src/dependencies/` | what code may import, which library sources an agent reads, which locked package versions carry a known advisory, and the pinned download of each scanner a gate runs |
    | `scripts/` | the kit's own build and CI tooling, which nothing ships |
-   | `dist/` | the committed oxlint plugin bundles |
+   | `dist/` | the committed oxlint plugin bundles, and the config builders compiled under `dist/presets/` |
    | `dist/templates/` | one template per kind of doc file, which `bun run build` renders |
-   | `src/quality/presets/` | the Effect rule blocks consumers copy into native configs |
+   | `src/quality/presets/` | the oxlint, Knip and dependency-cruiser config builders, and the Effect language service severities |
    | `CHANGELOG.md` | every release, which `bun run build` writes from the conventional commits |
    | `tests/` | the suite, with the in-process tests under `tests/unit/` and the tests that spawn a process under `tests/e2e/` |
    | `docs/gates/` | one reference page per bin |
    | `docs/configs/` | one reference page per shipped config a bin does not own |
    | `docs/design.md` | why the kit is shaped the way it is |
-   | the root configs | `oxlintrc.json`, `tsconfig.effect.json` with the `ts-reset.d.ts` it lists, `bunfig.toml`, `commitlint.config.js`, `dependency-cruiser.config.js`, `stryker.preset.js`, which a consuming repository extends or copies |
+   | the root configs | `tsconfig.effect.json` with the `ts-reset.d.ts` it lists, `bunfig.toml`, `commitlint.config.js` and `stryker.preset.js`, which a consuming repository extends or copies, and `oxlintrc.json` and `dependency-cruiser.config.js`, which the build writes for a repository that extends them by path |
 
 1. Change the page under `docs/` that describes the behaviour in the same commit as the behaviour.
    A new bin gets its page under `docs/gates/`, and the suite fails until it has one.
 
-This repository holds itself to the kit, with two exceptions of its own.
-Its `.dependency-cruiser.cjs` redeclares `no-orphans` with each plugin entry added to its `pathNot`.
-Its `.oxlintrc.json` lifts `effect-channel/no-throw` from `src/quality/comment-matchers.ts`, whose synchronous `refused()` a host loads without `node_modules`.
+This repository holds itself to the kit through its own `oxlint.config.ts`, `knip.config.ts` and `dependency-cruiser.config.ts`, with these exceptions:
+
+- Its `oxlint.config.ts` lifts `effect-channel/no-throw` from `src/quality/comment-matchers.ts`, whose synchronous `refused()` a host loads without `node_modules`.
+- It keeps the oxlint plugins and the oxlint and Knip builders outside its Effect paths, since a tool loads each synchronously.
+- Its `dependency-cruiser.config.ts` names each plugin entry in `orphans`, and adds `host-loaded-imports-nothing`.
 
 ## Related topics
 

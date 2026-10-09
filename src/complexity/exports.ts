@@ -130,7 +130,7 @@ export function report(head: Baseline, { unlisted, added, stale }: Drift): strin
 
 const scan = scanTree(NAME, INCLUDED, TYPESCRIPT_SOURCE).pipe(Effect.mapError((cause) => new ExportsError({ message: cause.message })));
 
-// Knip loads the configuration's imports, such as the kit's knip-base.json, from a node_modules the checkout lacks.
+// Knip loads the configuration's imports, such as the kit's knip builder, from a node_modules the checkout lacks.
 const unusedAt = Effect.fn("unusedAt")(
   function* (rev: string, root: string) {
     const files = yield* pathsAt(rev, [], root);

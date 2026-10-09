@@ -15,7 +15,7 @@ const { halfAvailableCores, unitTestFiles }: {
 } = await import(presetUrl);
 
 const Manifest = Schema.fromJsonString(
-  Schema.Struct({ files: Schema.Array(Schema.String), exports: Schema.Record(Schema.String, Schema.String) }),
+  Schema.Struct({ files: Schema.Array(Schema.String), exports: Schema.Record(Schema.String, Schema.Unknown) }),
 );
 
 test("the preset carries exactly the agreed rollout settings, the full-run guard and no ignoreStatic", () => {

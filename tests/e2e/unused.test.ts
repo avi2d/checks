@@ -12,8 +12,8 @@ function configured(files: Readonly<Record<string, string>>): Readonly<Record<st
   };
 }
 
-function extendingBase(entry: readonly string[]): string {
-  return `import base from "${CHECKOUT}/knip-base.json";\nexport default { ...base, entry: ${JSON.stringify(entry)} };\n`;
+function kitConfig(entry: readonly string[]): string {
+  return `import { defineConfig } from "${CHECKOUT}/dist/presets/knip.js";\nexport default defineConfig({ entry: ${JSON.stringify(entry)} });\n`;
 }
 
 test(
@@ -21,7 +21,7 @@ test(
   async () => {
     const { dir, commit, script } = await open(
       configured({
-        "knip.config.ts": extendingBase(["src/index.ts"]),
+        "knip.config.ts": kitConfig(["src/index.ts"]),
         "src/index.ts": `import { used } from "./used.ts";\n\nexport const index = used;\nexport const unusedExport = 1;\n`,
         "src/used.ts": `export const used = 1;\nexport const unusedExport = 2;\n`,
         "src/dead.ts": `export const dead = 1;\n`,
@@ -48,7 +48,7 @@ test(
   async () => {
     const { dir, commit, script } = await open({
       "package.json": JSON.stringify({ name: "unused-fixture", type: "module", dependencies: { astro: "7.0.0" } }),
-      "knip.config.ts": extendingBase(["src/pages/index.astro"]),
+      "knip.config.ts": kitConfig(["src/pages/index.astro"]),
       "src/pages/index.astro": `---\nimport { greeting } from "../greeting.ts";\n---\n<html><body><h1>{greeting}</h1></body></html>\n`,
       "src/greeting.ts": `export const greeting = "hi";\n`,
       "src/dead.astro": `---\nconst unused = 1;\n---\n<html><body><p>dead</p></body></html>\n`,
@@ -161,20 +161,20 @@ test(
     await commit("feat: base");
 
     const green = await lint();
-    expect(green.text).toContain("checks-lint: 12 gate(s) pass");
+    expect(green.text).toContain("checks-lint: 13 gate(s) pass");
     expect(green.exitCode).toBe(0);
 
     await write({ "dead.ts": `export const dead = 1;\n` });
     await commit("feat: dead");
     const red = await lint();
-    expect(red.text).toContain("1 of 12 gate(s) failed: checks-unused");
+    expect(red.text).toContain("1 of 13 gate(s) failed: checks-unused");
     expect(red.text).toContain("unused: 1 unreferenced file(s):\n  dead.ts");
     expect(red.exitCode).toBe(1);
 
     await $`rm dead.ts && git add -A`.cwd(dir).quiet();
     await commit("refactor: drop the dead file");
     const clean = await lint();
-    expect(clean.text).toContain("checks-lint: 12 gate(s) pass");
+    expect(clean.text).toContain("checks-lint: 13 gate(s) pass");
     expect(clean.exitCode).toBe(0);
   },
   180_000,

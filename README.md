@@ -1,7 +1,8 @@
 # checks
 
 `@avi2dg/checks` is the kit of deterministic checks a TypeScript repository installs to hold its code, tests, commits, CI wiring and docs to one shared standard.
-It ships the lint gates `checks-lint` runs over each pull request, the test runners, and the configs a repository extends for oxlint, tsc, dependency-cruiser, commitlint, bun and Stryker.
+It ships the lint gates `checks-lint` runs over each pull request, the test runners, and a `defineConfig` for oxlint, Knip and dependency-cruiser.
+It also ships the configs a repository extends for tsc, commitlint, bun and Stryker.
 Each repository owns its workflows and native tool configs, as [Native settings](docs/configs/native-settings.md) maps.
 
 ## Before you begin
@@ -42,13 +43,12 @@ To consume the kit from a repository:
 
    <!-- end generated install -->
 
-1. Extend the oxlint base in `.oxlintrc.json`, restating `plugins`:
+1. Write `oxlint.config.ts` with the kit's builder, saying whether the sources are Effect programs:
 
-   ```json
-   {
-     "extends": ["./node_modules/@avi2dg/checks/oxlintrc.json"],
-     "plugins": ["typescript", "oxc", "eslint", "import"]
-   }
+   ```ts
+   import { defineConfig } from "@avi2dg/checks/oxlint";
+
+   export default defineConfig({ effect: true });
    ```
 
 1. Keep oxlint out of `node_modules/` through `.gitignore`:
@@ -71,19 +71,27 @@ To consume the kit from a repository:
    cp node_modules/@avi2dg/checks/bunfig.toml bunfig.toml
    ```
 
-1. Name the repository's entry files in `knip.config.ts`, spreading the kit's Knip base:
+1. Name the files nothing imports in `knip.config.ts`:
 
    ```ts
-   import base from "@avi2dg/checks/knip-base.json";
+   import { defineConfig } from "@avi2dg/checks/knip";
 
-   export default { ...base, entry: ["src/index.ts", "tests/**/*.test.ts"] };
+   export default defineConfig({ entry: ["src/index.ts"] });
+   ```
+
+1. Write `dependency-cruiser.config.ts` only when the kit's import rules need an entry point or a boundary of the repository's own:
+
+   ```ts
+   import { defineConfig } from "@avi2dg/checks/dependency-cruiser";
+
+   export default defineConfig({ orphans: ["^src/bin[.]ts$"] });
    ```
 
 1. Add scripts to `package.json`, replacing the build entry with the repository's own build command:
 
    ```json
-   "build": "bun build src/index.ts --outdir dist --target node",
-   "lint": "oxlint --type-aware && checks-lint",
+   "build": "bun build src/index.ts --outdir dist --target node && checks-effect-scope",
+   "lint": "oxlint && checks-lint",
    "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
    "test": "checks-test"
    ```
@@ -111,6 +119,7 @@ To consume the kit from a repository:
 
 Add a pull request title lint step in another workflow using `./node_modules/.bin/commitlint`.
 A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on each job, as [checks-ci-wiring](docs/gates/checks-ci-wiring.md#runners) requires.
+`checks-effect-scope` writes the Effect paths of `oxlint.config.ts` into `tsconfig.json`, as [The Effect rules](docs/configs/effect-rules.md#language-service) says.
 `bun run lint` then ends with `checks-lint: <count> gate(s) pass`.
 
 ## What runs
@@ -129,6 +138,7 @@ The table groups the gates by vector, the part of a repository each one judges.
 | complexity | [`checks-exports`](docs/gates/checks-exports.md) | the range | a repository tracking `*.ts` or `*.tsx` |
 | quality | [`checks-lint-coverage`](docs/gates/checks-lint-coverage.md) | the working tree | a repository tracking `*.ts` or `*.tsx` or `*.astro` |
 | quality | [`checks-comment-gate`](docs/gates/checks-comment-gate.md) | the range | every repository |
+| quality | [`checks-effect-scope`](docs/gates/checks-effect-scope.md) | the working tree | a repository tracking `oxlint.config.ts` |
 | quality | [`checks-frontend-syntax`](docs/gates/checks-frontend-syntax.md) | the working tree | a repository tracking `frontend-syntax.json` |
 | testing | [`checks-test-layout`](docs/gates/checks-test-layout.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
 | testing | [`checks-quarantine-clock`](docs/gates/checks-quarantine-clock.md) | the range | every repository |
@@ -136,6 +146,7 @@ The table groups the gates by vector, the part of a repository each one judges.
 | delivery | [`checks-commit-identity`](docs/gates/checks-commit-identity.md) | the range | every repository |
 | delivery | [`checks-ci-wiring`](docs/gates/checks-ci-wiring.md) | the working tree | every repository |
 | delivery | [`checks-secrets`](docs/gates/checks-secrets.md) | the range | every repository |
+| dependencies | [`checks-imports`](docs/gates/checks-imports.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
 | dependencies | [`checks-advisories`](docs/gates/checks-advisories.md) | the range | a repository tracking `bun.lock` |
 
 <!-- end generated gates -->
@@ -156,7 +167,7 @@ These bins run on their own:
 - [`checks-browser`](docs/gates/checks-browser.md) opens a product's built pages in Chrome and fails on the layout, keyboard, motion, accessibility, nesting and asset checks its `browser-checks.json` declares.
 
 `checks-lint` has [its own page](docs/gates/checks-lint.md), which says which range it resolves.
-The oxlint base, the dependency-cruiser base and the commitlint config run through their own tools, as the pages under Related topics say.
+oxlint and commitlint run through their own tools, as the pages under Related topics say.
 
 ## Upgrade
 
@@ -164,7 +175,7 @@ To move a repository to a newer release of the kit:
 
 1. Run the install line again, which moves the kit to its newest release and the peers to the versions it pins.
    A repository that opted in to `checks-browser` or `checks-frontend-syntax` also reruns the `bun add` line on its page.
-1. Review the Effect overrides in `.oxlintrc.json` and `tsconfig.json` when a release changes their presets.
+1. Run `bun run build`, whose `checks-effect-scope` rewrites the Effect override in `tsconfig.json` when a release changes its preset.
 1. Copy `node_modules/@avi2dg/checks/bunfig.toml` over `bunfig.toml` again, since `checks-test-layout` compares the copy with the installed preset.
 1. Run `bun run lint`, `bun run typecheck` and `bun run test`.
 
@@ -183,11 +194,11 @@ Every path is relative to the installed package, `node_modules/@avi2dg/checks/`.
 | `docs/` | a reference page per bin and per shared config, and why the kit is shaped this way |
 | `bunfig.toml` | the bunfig preset a repository copies |
 | `commitlint.config.js` | the shared commitlint config |
-| `dependency-cruiser.config.js` | the shared dependency-cruiser base |
-| `knip-base.json` | the Knip base a repository's configuration imports |
-| `src/` | every bin, which a package script calls by its `checks-` name, the modules the bins import, and the Effect rule blocks under `src/quality/presets/` |
-| `dist/` | the compiled oxlint plugins and the doc templates, one template per kind of doc file |
-| `oxlintrc.json` | the oxlint base config `.oxlintrc.json` extends |
+| `dependency-cruiser.config.js` | the kit's dependency-cruiser rules as a base a `.dependency-cruiser.cjs` extends by path, which the build writes |
+| `knip-base.json` | the Knip `include` setting, for a configuration that spreads it |
+| `src/` | every bin, which a package script calls by its `checks-` name, the modules the bins import, and the Effect language service severities under `src/quality/presets/` |
+| `dist/` | the compiled oxlint plugins, the config builders `@avi2dg/checks/oxlint`, `@avi2dg/checks/knip` and `@avi2dg/checks/dependency-cruiser` resolve to, and the doc templates, one template per kind of doc file |
+| `oxlintrc.json` | the oxlint `base` as a config a `.oxlintrc.json` extends by path, which the build writes |
 | `stryker.preset.js` | the Stryker mutation-testing preset, which refuses a full run outside CI |
 | `tsconfig.effect.json` | the tsconfig fragment with the shared compiler options and the Effect language-service block |
 | `ts-reset.d.ts` | the two ts-reset rules `tsconfig.effect.json` lists in `files` |

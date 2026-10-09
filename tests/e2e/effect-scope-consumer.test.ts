@@ -63,8 +63,8 @@ const CLEAN: Readonly<Record<string, string>> = {
 };
 
 const OWN_OXLINT = [
-  ".oxlintrc.json",
-  "oxlintrc.json",
+  "oxlint.config.ts",
+  "dist/presets/oxlint.js",
   "dist/effect-channel/index.js",
   "dist/readability/index.js",
   "dist/data-shape/index.js",
@@ -85,6 +85,7 @@ async function consumer(): Promise<void> {
 
 async function ownOxlintConfig(): Promise<void> {
   tree = kitTree(await scratch("checks-effect-scope-own-"));
+  await tree.put("package.json", { type: "module" });
   for (const config of OWN_OXLINT) await tree.put(config, await readFile(join(CHECKOUT, config), "utf8"));
   await symlink(join(CHECKOUT, "node_modules"), join(tree.dir, "node_modules"));
 }
@@ -150,6 +151,24 @@ test(
 
     await plantClean();
     expect(await diagnostics()).toEqual(new Map());
+  },
+  180_000,
+);
+
+test(
+  "effect: true written through checks-effect-scope holds every source outside tests/ to the scope rules and diagnostics",
+  async () => {
+    await consumer();
+    await tree.put("oxlint.config.ts", `import { defineConfig } from "@avi2dg/checks/oxlint";\n\nexport default defineConfig({ effect: true });\n`);
+    expect((await tree.run(process.execPath, [join(CHECKOUT, "src", "quality", "effect-scope.ts")])).exitCode).toBe(0);
+    await plantViolations();
+
+    const red = await oxlint();
+    expect(red.linted.get(SCOPED)).toEqual(expect.arrayContaining(SCOPE_OXLINT));
+    for (const rule of SCOPE_OXLINT) expect(red.linted.get(UNSCOPED) ?? []).not.toContain(rule);
+    const refused = await diagnostics();
+    expect(refused.get(SCOPED)).toEqual(expect.arrayContaining(SCOPE_SERVICE));
+    for (const rule of SCOPE_SERVICE) expect(refused.get(UNSCOPED) ?? []).not.toContain(rule);
   },
   180_000,
 );

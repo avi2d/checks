@@ -63,7 +63,7 @@ export const scanTree = Effect.fn("scanTree")(function* (name: string, args: rea
   if (tracked.length === 0) return yield* new KnipError({ message: `no tracked ${source.content} to scan` });
   const reported = yield* knipReport(root, args);
   if (reported.kind === "unconfigured") {
-    yield* Console.log(`${name}: no knip configuration names entry files, so add one extending the kit's knip-base.json`);
+    yield* Console.log(`${name}: no knip configuration names entry files, so add a knip.config.ts calling defineConfig from @avi2dg/checks/knip`);
   }
   return { root, tracked: tracked.length, reported };
 });

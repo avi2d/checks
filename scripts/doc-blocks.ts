@@ -3,12 +3,12 @@ import { ADR_DIRECTORY, ADR_INDEX, ROOT_FILES } from "../src/docs/doc-rules.ts";
 import { listed, MODES, templateFile } from "../src/docs/doc-templates.ts";
 import { EVERY_REPOSITORY, KIT_GATES, VECTORS, type KitGate } from "../src/core/gates.ts";
 import { AGENT_NAMES, DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, HISTORY_NAMES, LIVING_NAMES, PROSE_RULES } from "../src/docs/prose-matchers.ts";
-import { SIZE_RULES, qualifiedName } from "../src/complexity/size-rules.ts";
+import { SOURCE_LIMITS, SOURCES, TEST_LIMITS, TESTS, type SizeRule } from "../src/quality/presets/oxlint.ts";
 
 export const MANIFEST = "package.json";
 export const BUN_VERSION = ".bun-version";
 export const GATE_PAGES = "docs/gates";
-export const OXLINTRC = ".oxlintrc.json";
+const OXLINT_PRESET = "src/quality/presets/oxlint.ts";
 
 const Manifest = Schema.Struct({
   name: Schema.String,
@@ -17,15 +17,6 @@ const Manifest = Schema.Struct({
   files: Schema.Array(Schema.String),
 });
 
-const Oxlintrc = Schema.Struct({
-  overrides: Schema.Array(Schema.Struct({ files: Schema.Array(Schema.String), rules: Schema.optionalKey(Schema.Record(Schema.String, Schema.Unknown)) })),
-});
-
-const SizeSetting = Schema.Union([
-  Schema.Literals(["off", "warn", "error"]),
-  Schema.Tuple([Schema.Literals(["warn", "error"]), Schema.Struct({ max: Schema.Int })]),
-]);
-
 const Version = Schema.String.check(Schema.isPattern(/^\d+\.\d+\.\d+$/, { message: "is not a version such as 1.2.3" }));
 
 const SHIPPED = {
@@ -33,14 +24,14 @@ const SHIPPED = {
   "docs/": "a reference page per bin and per shared config, and why the kit is shaped this way",
   "bunfig.toml": "the bunfig preset a repository copies",
   "commitlint.config.js": "the shared commitlint config",
-  "dependency-cruiser.config.js": "the shared dependency-cruiser base",
-  "knip-base.json": "the Knip base a repository's configuration imports",
-  "src/": "every bin, which a package script calls by its `checks-` name, the modules the bins import, and the Effect rule blocks under `src/quality/presets/`",
-  "oxlintrc.json": "the oxlint base config `.oxlintrc.json` extends",
+  "dependency-cruiser.config.js": "the kit's dependency-cruiser rules as a base a `.dependency-cruiser.cjs` extends by path, which the build writes",
+  "knip-base.json": "the Knip `include` setting, for a configuration that spreads it",
+  "src/": "every bin, which a package script calls by its `checks-` name, the modules the bins import, and the Effect language service severities under `src/quality/presets/`",
+  "oxlintrc.json": "the oxlint `base` as a config a `.oxlintrc.json` extends by path, which the build writes",
   "stryker.preset.js": "the Stryker mutation-testing preset, which refuses a full run outside CI",
   "tsconfig.effect.json": "the tsconfig fragment with the shared compiler options and the Effect language-service block",
   "ts-reset.d.ts": "the two ts-reset rules `tsconfig.effect.json` lists in `files`",
-  "dist/": "the compiled oxlint plugins and the doc templates, one template per kind of doc file",
+  "dist/": "the compiled oxlint plugins, the config builders `@avi2dg/checks/oxlint`, `@avi2dg/checks/knip` and `@avi2dg/checks/dependency-cruiser` resolve to, and the doc templates, one template per kind of doc file",
 } as const;
 
 type ShippedPath = keyof typeof SHIPPED;
@@ -49,13 +40,22 @@ function isShipped(path: string): path is ShippedPath {
   return Object.hasOwn(SHIPPED, path);
 }
 
-type SizeScope = { readonly files: readonly string[]; readonly limits: ReadonlyMap<string, string> };
+const SIZE_RULE_LIMITS = {
+  "max-lines": "The most lines a file may hold, blank and comment lines counted",
+  "max-lines-per-function": "The most lines a function may span, blank and comment lines counted",
+  "max-statements": "The most statements a function may hold",
+  "readability/cognitive-complexity": "The highest cognitive complexity a function may reach, a switch counted once",
+  "max-depth": "The deepest a block may nest inside a function",
+} as const satisfies Readonly<Record<SizeRule, string>>;
+
+function isSizeRule(name: string): name is SizeRule {
+  return Object.hasOwn(SIZE_RULE_LIMITS, name);
+}
 
 export type KitFacts = {
   readonly manifest: typeof Manifest.Type;
   readonly bun: string;
   readonly shipped: readonly ShippedPath[];
-  readonly sizeScopes: readonly SizeScope[];
 };
 
 export class DocBlocksUnwritable extends Schema.TaggedError<DocBlocksUnwritable>()("DocBlocksUnwritable", {
@@ -64,8 +64,6 @@ export class DocBlocksUnwritable extends Schema.TaggedError<DocBlocksUnwritable>
 
 const decodeManifest = Schema.decodeUnknownEffect(Schema.fromJsonString(Manifest));
 const decodeVersion = Schema.decodeUnknownEffect(Version);
-const decodeOxlintrc = Schema.decodeUnknownEffect(Schema.fromJsonString(Oxlintrc));
-const decodeSizeSetting = Schema.decodeUnknownEffect(SizeSetting);
 
 function topLevel(file: string): string {
   return file.includes("/") ? file.slice(0, file.indexOf("/") + 1) : file;
@@ -83,28 +81,11 @@ function shippedPaths({ files }: typeof Manifest.Type): Effect.Effect<readonly S
   return Effect.fail(new DocBlocksUnwritable({ message: `${MANIFEST}: ${problems.join("; ")}` }));
 }
 
-const sizeLimit = Effect.fn("sizeLimit")(function* (name: string, setting: unknown) {
-  const decoded = yield* decodeSizeSetting(setting).pipe(
-    Effect.mapError(({ message }) => new DocBlocksUnwritable({ message: `${OXLINTRC}: ${name}: ${message}` })),
-  );
-  return [name, typeof decoded === "string" ? decoded : String(decoded[1].max)] as const;
-});
-
-const readSizeScopes = Effect.fn("readSizeScopes")(function* (oxlintrc: string) {
-  const { overrides } = yield* decodeOxlintrc(oxlintrc).pipe(Effect.mapError(({ message }) => new DocBlocksUnwritable({ message: `${OXLINTRC}: ${message}` })));
-  return yield* Effect.forEach(overrides, ({ files, rules = {} }) =>
-    Effect.forEach(
-      SIZE_RULES.map(qualifiedName).filter((name) => name in rules),
-      (name) => sizeLimit(name, rules[name]),
-    ).pipe(Effect.map((limits): readonly SizeScope[] => (limits.length === 0 ? [] : [{ files, limits: new Map(limits) }]))),
-  ).pipe(Effect.map((scopes) => scopes.flat()));
-});
-
-export const kitFacts = (manifest: string, bunVersion: string, oxlintrc: string): Effect.Effect<KitFacts, DocBlocksUnwritable> =>
+export const kitFacts = (manifest: string, bunVersion: string): Effect.Effect<KitFacts, DocBlocksUnwritable> =>
   Effect.gen(function* () {
     const decoded = yield* decodeManifest(manifest).pipe(Effect.mapError(({ message }) => new DocBlocksUnwritable({ message: `${MANIFEST}: ${message}` })));
     const bun = yield* decodeVersion(bunVersion.trim()).pipe(Effect.mapError(({ message }) => new DocBlocksUnwritable({ message: `${BUN_VERSION}: ${message}` })));
-    return { manifest: decoded, bun, shipped: yield* shippedPaths(decoded), sizeScopes: yield* readSizeScopes(oxlintrc) };
+    return { manifest: decoded, bun, shipped: yield* shippedPaths(decoded) };
   });
 
 export type Block = {
@@ -209,14 +190,13 @@ const PROSE: Block = {
 
 const SIZE_LIMITS: Block = {
   name: "size-limits",
-  from: [OXLINTRC, "SIZE_RULES in src/complexity/size-rules.ts"],
-  render: ({ sizeScopes }) => [
-    `| Limits | oxlint rule | ${sizeScopes.map(({ files }) => files.map(code).join(", ")).join(" | ")} |`,
-    `| --- | --- | ${sizeScopes.map(() => "---").join(" | ")} |`,
-    ...SIZE_RULES.map((entry) => {
-      const name = qualifiedName(entry);
-      return `| ${entry.limits} | ${code(name)} | ${sizeScopes.map(({ limits }) => limits.get(name) ?? "none").join(" | ")} |`;
-    }),
+  from: [`SOURCE_LIMITS, TEST_LIMITS, SOURCES and TESTS in ${OXLINT_PRESET}`],
+  render: () => [
+    `| Limits | oxlint rule | ${SOURCES.map(code).join(", ")} outside the tests | ${TESTS.map(code).join(", ")} |`,
+    "| --- | --- | --- | --- |",
+    ...Object.entries(SIZE_RULE_LIMITS).flatMap(([name, limits]) =>
+      isSizeRule(name) ? [`| ${limits} | ${code(name)} | ${SOURCE_LIMITS[name]} | ${TEST_LIMITS[name]} |`] : [],
+    ),
   ],
 };
 

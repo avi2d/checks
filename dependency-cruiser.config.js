@@ -1,83 +1,115 @@
 export default {
-  forbidden: [
+  "forbidden": [
     {
-      name: "no-circular",
-      severity: "error",
-      comment: "A circular relationship never has a single entry point, so invert one side.",
-      from: {},
-      to: { circular: true },
+      "name": "no-circular",
+      "severity": "error",
+      "comment": "A circular relationship never has a single entry point, so invert one side.",
+      "from": {},
+      "to": {
+        "circular": true
+      }
     },
     {
-      name: "no-orphans",
-      severity: "error",
-      comment:
-        "Nothing reaches this module. Use it, remove it, or exempt the entry point by name in your own config.",
-      from: {
-        orphan: true,
-        pathNot: [
+      "name": "no-orphans",
+      "severity": "error",
+      "comment": "Nothing reaches this module. Use it, remove it, or exempt the entry point by name in your own config.",
+      "from": {
+        "orphan": true,
+        "pathNot": [
           "(^|/)[.][^/]+[.](?:js|cjs|mjs|ts|cts|mts|json)$",
           "[.]d[.]ts$",
           "(^|/)tsconfig[.]json$",
           "(^|/)(?:babel|webpack)[.]config[.](?:js|cjs|mjs|ts|cts|mts|json)$",
           "(^|/)[^/]*[.]config[.](?:js|cjs|mjs|ts|cts|mts)$",
+          "[.](?:spec|test)[.](?:js|mjs|cjs|jsx|ts|mts|cts|tsx)$"
+        ]
+      },
+      "to": {}
+    },
+    {
+      "name": "not-to-dev-dep",
+      "severity": "error",
+      "comment": "Shipped source cannot rely on a package that is absent in production. Move it to dependencies or peerDependencies, or keep the import in a test or config file.",
+      "from": {
+        "pathNot": [
           "[.](?:spec|test)[.](?:js|mjs|cjs|jsx|ts|mts|cts|tsx)$",
+          "(^|/)[^/]*[.]config[.](?:js|cjs|mjs|ts|cts|mts)$"
+        ]
+      },
+      "to": {
+        "dependencyTypes": [
+          "npm-dev"
         ],
-      },
-      to: {},
+        "dependencyTypesNot": [
+          "type-only",
+          "npm-peer"
+        ]
+      }
     },
     {
-      name: "not-to-dev-dep",
-      severity: "error",
-      comment:
-        "Shipped source cannot rely on a package that is absent in production. Move it to dependencies or peerDependencies, or keep the import in a test or config file.",
-      from: {
-        pathNot: [
-          "[.](?:spec|test)[.](?:js|mjs|cjs|jsx|ts|mts|cts|tsx)$",
-          "(^|/)[^/]*[.]config[.](?:js|cjs|mjs|ts|cts|mts)$",
+      "name": "no-non-package-json",
+      "severity": "error",
+      "comment": "The import resolves to an installed package the nearest package.json does not declare, so it holds only while something else keeps it hoisted. Declare it in dependencies, devDependencies or peerDependencies.",
+      "from": {},
+      "to": {
+        "dependencyTypes": [
+          "npm-no-pkg",
+          "npm-unknown"
         ],
-      },
-      to: {
-        dependencyTypes: ["npm-dev"],
-        dependencyTypesNot: ["type-only", "npm-peer"],
-      },
+        "dependencyTypesNot": [
+          "npm",
+          "npm-dev",
+          "npm-optional",
+          "npm-peer"
+        ]
+      }
     },
     {
-      name: "no-non-package-json",
-      severity: "error",
-      comment:
-        "The import resolves to an installed package the nearest package.json does not declare, so it holds only while something else keeps it hoisted. Declare it in dependencies, devDependencies or peerDependencies.",
-      from: {},
-      // dependency-cruiser reads every package.json key holding "ependencies" as a list, so peerDependenciesMeta tags a declared peer npm-no-pkg too.
-      to: { dependencyTypes: ["npm-no-pkg", "npm-unknown"], dependencyTypesNot: ["npm", "npm-dev", "npm-optional", "npm-peer"] },
+      "name": "not-to-unresolvable",
+      "severity": "error",
+      "comment": "Nothing installed answers to this specifier. Install the package or fix the path.",
+      "from": {},
+      "to": {
+        "couldNotResolve": true
+      }
     },
     {
-      name: "not-to-unresolvable",
-      severity: "error",
-      comment: "Nothing installed answers to this specifier. Install the package or fix the path.",
-      from: {},
-      to: { couldNotResolve: true },
-    },
-    {
-      name: "no-deep-imports",
-      severity: "error",
-      comment:
-        "The specifier reaches past the package name into a subpath its exports map does not publish. Depend on a published entry instead.",
-      from: {},
-      to: {
-        couldNotResolve: true,
-        path: "^(@[^/]+/[^/]+|[^@./#][^/]*)/",
-      },
-    },
+      "name": "no-deep-imports",
+      "severity": "error",
+      "comment": "The specifier reaches past the package name into a subpath its exports map does not publish. Depend on a published entry instead.",
+      "from": {},
+      "to": {
+        "couldNotResolve": true,
+        "path": "^(@[^/]+/[^/]+|[^@./#][^/]*)/"
+      }
+    }
   ],
-  options: {
-    parser: "swc",
-    builtInModules: { add: ["bun"] },
-    doNotFollow: { path: ["node_modules"] },
-    // The cruise follows the repos/ links without this.
-    exclude: { path: "^repos/" },
-    enhancedResolveOptions: {
-      exportsFields: ["exports"],
-      conditionNames: ["types", "import", "require", "node", "default"],
+  "options": {
+    "parser": "swc",
+    "builtInModules": {
+      "add": [
+        "bun"
+      ]
     },
-  },
+    "doNotFollow": {
+      "path": [
+        "node_modules"
+      ]
+    },
+    "exclude": {
+      "path": "^repos/"
+    },
+    "enhancedResolveOptions": {
+      "exportsFields": [
+        "exports"
+      ],
+      "conditionNames": [
+        "types",
+        "import",
+        "require",
+        "node",
+        "default"
+      ]
+    }
+  }
 };

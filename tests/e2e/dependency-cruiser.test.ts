@@ -4,7 +4,7 @@ import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
 
-const BASE = join(CHECKOUT, "dependency-cruiser.config.js");
+const BUILDER = join(CHECKOUT, "dist", "presets", "dependency-cruiser.js");
 
 const scratch = scratchDirs();
 
@@ -16,10 +16,10 @@ function depcruise(config: string, ...targets: string[]): Promise<Ran> {
 }
 
 async function writeConfig(extraForbidden: readonly unknown[] = []): Promise<string> {
-  const path = join(dir, ".dependency-cruiser.cjs");
+  const path = join(dir, "dependency-cruiser.config.ts");
   await writeFile(
     path,
-    `module.exports = { extends: ${JSON.stringify(BASE)}, forbidden: ${JSON.stringify(extraForbidden)} };\n`,
+    `import { defineConfig } from ${JSON.stringify(BUILDER)};\n\nexport default defineConfig({ forbidden: ${JSON.stringify(extraForbidden)} });\n`,
   );
   return path;
 }
@@ -272,7 +272,7 @@ test(
 );
 
 test(
-  "a consumer layer rule rides along through extends, red then green",
+  "a project's own boundary rule rides along beside the kit's rules, red then green",
   async () => {
     dir = await scratch("checks-depcruiser-layers-");
     await writeProject({

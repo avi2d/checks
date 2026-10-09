@@ -85,6 +85,7 @@ export function lintWiring(): Readonly<Record<string, string>> {
   return {
     "package.json": JSON.stringify({ name: "lint-fixture", type: "module", author: AUTHOR, scripts: { lint: "checks-lint", test: "checks-test" } }),
     "knip.json": JSON.stringify({ entry: ["**/*.ts"], include: ["files"] }),
+    ".dependency-cruiser.mjs": `import { defineConfig } from "${join(CHECKOUT, "dist", "presets", "dependency-cruiser.js")}";\n\nexport default defineConfig({ orphans: ["[.]ts$"] });\n`,
     "bunfig.toml": UNVENDORED_BUNFIG,
     [SUITE_WORKFLOW]: "on:\n  pull_request:\n    types: [opened, synchronize]\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n      - run: bun run build\n      - run: git diff --exit-code\n      - run: bun run typecheck\n      - run: bun run test\n",
     [COMMITLINT_WORKFLOW]: "on:\n  pull_request:\n    types: [opened, synchronize]\njobs:\n  title:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ./node_modules/.bin/commitlint\n",
