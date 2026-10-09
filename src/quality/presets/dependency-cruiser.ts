@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import type { IConfiguration, ICruiseOptions, IForbiddenRuleType } from "dependency-cruiser";
 
 // dependency-cruiser's type requires builtInModules.override beside add, while an empty override would drop every built-in.
@@ -15,6 +16,8 @@ export type ChecksCruiseConfig = CruiseConfig & {
 export const DEV_ONLY = ["^tests/"] as const;
 
 const TEST_FILES = "[.](?:spec|test)[.](?:js|mjs|cjs|jsx|ts|mts|cts|tsx)$";
+
+const MANIFEST = "package.json";
 
 const CONFIG_FILES = "(^|/)[^/]*[.]config[.](?:js|cjs|mjs|ts|cts|mts)$";
 
@@ -120,8 +123,22 @@ function joinedExclude(exclude: ICruiseOptions["exclude"]): ExcludeObject {
   return { ...own, path: [...asList(BASE.options.exclude.path), ...asList(own.path)] };
 }
 
+function declaresAstro(manifest: unknown): boolean {
+  if (typeof manifest !== "object" || manifest === null) return false;
+  return ["dependencies", "devDependencies"].some((field) => {
+    const declared: unknown = Reflect.get(manifest, field);
+    return typeof declared === "object" && declared !== null && "astro" in declared;
+  });
+}
+
+// The cruise never reads an .astro importer, so a module only a page imports would read as an orphan.
+function dependsOnAstro(): boolean {
+  return existsSync(MANIFEST) && declaresAstro(JSON.parse(readFileSync(MANIFEST, "utf8")));
+}
+
 export function defineConfig({ devOnly = DEV_ONLY, orphans = [], forbidden = [], options, ...rest }: ChecksCruiseConfig = {}): CruiseConfig {
   const named = new Set(forbidden.map(({ name }) => name));
+  if (dependsOnAstro()) named.add("no-orphans");
   const kitRules = BASE.forbidden.filter(({ name }) => !named.has(name)).map((rule) => kitRule(rule, devOnly, orphans));
   return {
     ...rest,

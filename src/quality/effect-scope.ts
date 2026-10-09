@@ -2,6 +2,7 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { git } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
+import { patched } from "./jsonc-patch.ts";
 import { effectRules } from "./presets/oxlint.ts";
 import severities from "./presets/effect.language-service.json" with { type: "json" };
 
@@ -30,7 +31,7 @@ const Override = Schema.Struct({
 const OxlintModule = Schema.Struct({ default: Schema.Struct({ overrides: Schema.optionalKey(Schema.Array(Override)) }) });
 
 const decodeOxlintModule = Schema.decodeUnknownEffect(OxlintModule);
-const decodeTsconfig = Schema.decodeUnknownEffect(Schema.fromJsonString(JsonObject));
+const decodeTsconfig = Schema.decodeUnknownEffect(JsonObject);
 const decodeObject = Schema.decodeUnknownEffect(JsonObject);
 const decodePlugins = Schema.decodeUnknownEffect(Schema.Array(JsonObject));
 
@@ -91,9 +92,11 @@ const effectScope = Effect.gen(function* () {
     return true;
   }
   const overrides = yield* readScope(path.join(root, OXLINT_CONFIG));
-  const tsconfig = yield* decodeTsconfig(yield* fs.readFileString(tsconfigFile)).pipe(Effect.mapError(refuse(`${TSCONFIG} does not parse as a JSON object`)));
-  const next = yield* rewritten(tsconfig, overrides);
-  if (JSON.stringify(next) === JSON.stringify(tsconfig)) {
+  const text = yield* fs.readFileString(tsconfigFile);
+  const unparsed = refuse(`${TSCONFIG} does not parse as a JSONC object`);
+  const tsconfig = yield* Effect.try({ try: () => Bun.JSONC.parse(text), catch: unparsed }).pipe(Effect.flatMap(decodeTsconfig), Effect.mapError(unparsed));
+  const written = patched(text, yield* rewritten(tsconfig, overrides));
+  if (written === text) {
     yield* Console.log(`${NAME}: ${TSCONFIG} holds the Effect paths of ${OXLINT_CONFIG}`);
     return true;
   }
@@ -101,7 +104,7 @@ const effectScope = Effect.gen(function* () {
     yield* Console.error(`${NAME}: the ${LANGUAGE_SERVICE} overrides in ${TSCONFIG} differ from the Effect paths of ${OXLINT_CONFIG}; run checks-effect-scope to rewrite them`);
     return false;
   }
-  yield* fs.writeFileString(tsconfigFile, `${JSON.stringify(next, null, 2)}\n`);
+  yield* fs.writeFileString(tsconfigFile, written);
   yield* Console.log(`${NAME}: wrote the Effect paths of ${OXLINT_CONFIG} to ${TSCONFIG}`);
   return true;
 });

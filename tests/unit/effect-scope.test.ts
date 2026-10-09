@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import severities from "../../src/quality/presets/effect.language-service.json" with { type: "json" };
 import { LANGUAGE_SERVICE, serviceOverrides, withServiceOverrides } from "../../src/quality/effect-scope.ts";
+import { patched } from "../../src/quality/jsonc-patch.ts";
 import { defineConfig, effectRules } from "../../src/quality/presets/oxlint.ts";
 
 test("the language service takes the paths of the Effect override and nothing from the other overrides", () => {
@@ -26,4 +27,35 @@ test("a tsconfig without the language service gains it only when there is a path
   const none: readonly Readonly<Record<string, unknown>>[] = [];
   expect(withServiceOverrides(none, [])).toBe(none);
   expect(withServiceOverrides([{ name: LANGUAGE_SERVICE, overrides }], [])).toEqual([{ name: LANGUAGE_SERVICE }]);
+});
+
+const COMMENTED = `{
+  // kept
+  "compilerOptions": {
+    "strict": true, /* kept too */
+    "plugins": [{ "name": "a" }, { "name": "b", "overrides": [1, 2], "x": 'y' },],
+  },
+}
+`;
+
+test("a patch rewrites only the values that differ and keeps the comments, quotes and trailing commas around them", () => {
+  const next = { compilerOptions: { strict: true, plugins: [{ name: "a" }, { name: "b", overrides: [1, 3], x: "y" }] } };
+  expect(patched(COMMENTED, next)).toBe(COMMENTED.replace("[1, 2]", "[1, 3]"));
+  expect(patched(COMMENTED, Bun.JSONC.parse(COMMENTED))).toBe(COMMENTED);
+});
+
+test("a patch drops a removed member with its comma and appends an added one in the container's own layout", () => {
+  const dropped = { compilerOptions: { strict: true, plugins: [{ name: "a" }, { name: "b", x: "y" }] } };
+  expect(patched(COMMENTED, dropped)).toBe(COMMENTED.replace(` "overrides": [1, 2],`, ""));
+  const appended = { compilerOptions: { strict: true, plugins: [{ name: "a" }, { name: "b", overrides: [1, 2], x: "y" }, { name: "c" }] } };
+  expect(patched(COMMENTED, appended)).toBe(COMMENTED.replace(`'y' }`, `'y' }, {\n      "name": "c"\n    }`));
+  const added = { compilerOptions: { strict: true, plugins: [{ name: "a" }, { name: "b", overrides: [1, 2], x: "y" }] }, include: ["src"] };
+  expect(patched(COMMENTED, added)).toBe(COMMENTED.replace("  },\n}", '  },\n  "include": [\n    "src"\n  ],\n}'));
+});
+
+test("a patch fills an empty container on lines of its own and replaces one whose every member changes", () => {
+  expect(patched('{ "a": {} }', { a: { b: 1 } })).toBe('{ "a": {\n  "b": 1\n} }');
+  expect(patched('{\n  "a": { "b": 1 }\n}\n', { a: { c: 2 } })).toBe('{\n  "a": {\n    "c": 2\n  }\n}\n');
+  expect(patched('{ "a": [1, 2, 3] }', { a: [1] })).toBe('{ "a": [1] }');
+  expect(patched('{ "a": [1, 2] }', { a: [] })).toBe('{ "a": [] }');
 });

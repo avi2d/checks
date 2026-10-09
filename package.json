@@ -84,6 +84,7 @@
     "src/quality/presets/oxlint.ts",
     "src/quality/presets/dependency-cruiser.ts",
     "src/quality/effect-scope.ts",
+    "src/quality/jsonc-patch.ts",
     "src/dependencies/imports.ts",
     "src/dependencies/kit-defaults.ts",
     "oxlintrc.json",

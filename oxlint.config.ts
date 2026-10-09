@@ -7,9 +7,10 @@ export default defineConfig({
       "src/quality/effect-channel/**",
       "src/complexity/readability/**",
       "src/quality/data-shape/**",
-      // oxlint and knip read a config's default export synchronously, so these builders refuse a config by throwing.
+      // oxlint, knip and dependency-cruiser take a config's default export as a plain value, so these builders cannot run an Effect.
       "src/quality/presets/oxlint.ts",
       "src/quality/presets/knip.ts",
+      "src/quality/presets/dependency-cruiser.ts",
     ],
   },
   ignorePatterns: ["node_modules/**", "dist/**/*.js"],

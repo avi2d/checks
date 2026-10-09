@@ -1,6 +1,8 @@
 // src/quality/presets/dependency-cruiser.ts
+import { existsSync, readFileSync } from "node:fs";
 var DEV_ONLY = ["^tests/"];
 var TEST_FILES = "[.](?:spec|test)[.](?:js|mjs|cjs|jsx|ts|mts|cts|tsx)$";
+var MANIFEST = "package.json";
 var CONFIG_FILES = "(^|/)[^/]*[.]config[.](?:js|cjs|mjs|ts|cts|mts)$";
 var BASE = {
   forbidden: [
@@ -95,8 +97,21 @@ function joinedExclude(exclude) {
   const own = excludeObject(exclude);
   return { ...own, path: [...asList(BASE.options.exclude.path), ...asList(own.path)] };
 }
+function declaresAstro(manifest) {
+  if (typeof manifest !== "object" || manifest === null)
+    return false;
+  return ["dependencies", "devDependencies"].some((field) => {
+    const declared = Reflect.get(manifest, field);
+    return typeof declared === "object" && declared !== null && "astro" in declared;
+  });
+}
+function dependsOnAstro() {
+  return existsSync(MANIFEST) && declaresAstro(JSON.parse(readFileSync(MANIFEST, "utf8")));
+}
 function defineConfig({ devOnly = DEV_ONLY, orphans = [], forbidden = [], options, ...rest } = {}) {
   const named = new Set(forbidden.map(({ name }) => name));
+  if (dependsOnAstro())
+    named.add("no-orphans");
   const kitRules = BASE.forbidden.filter(({ name }) => !named.has(name)).map((rule) => kitRule(rule, devOnly, orphans));
   return {
     ...rest,

@@ -3,6 +3,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import severities from "../../src/quality/presets/effect.language-service.json" with { type: "json" };
 import { withoutPullRequestEvent } from "../lib/env.ts";
 import { findings } from "./lib/findings.ts";
 import { CHECKOUT, ran, type Ran } from "./lib/fixture-repo.ts";
@@ -152,9 +153,8 @@ test(
     expect(stale.exitCode).toBe(1);
 
     expect((await bin("checks-effect-scope")).exitCode).toBe(0);
-    const tsconfig = await readFile(join(dir, "tsconfig.json"), "utf8");
-    expect(tsconfig).toContain('"include": [\n              "**/*.ts",');
-    expect(tsconfig).toContain('"exclude": [\n              "tests/**",');
+    const { compilerOptions } = await Bun.file(join(dir, "tsconfig.json")).json();
+    expect(compilerOptions.plugins).toEqual([{ name: "@effect/language-service", overrides: [{ include: ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"], exclude: ["tests/**", "**/*.test.ts", "**/*.test.tsx"], options: severities }] }]);
     const fresh = await bin("checks-effect-scope", ["--check"]);
     expect(fresh.text).toContain("tsconfig.json holds the Effect paths of oxlint.config.ts");
     expect(fresh.exitCode).toBe(0);

@@ -12,6 +12,10 @@ It runs dependency-cruiser over every tracked `.ts`, `.tsx`, `.mts` and `.cts` f
 It fails on a violation whose rule has `error` severity, and lists a `warn` or `info` violation without failing.
 The rules are those [The dependency rules](../configs/dependency-rules.md) lists, plus each rule the repository's config adds.
 
+In a repository whose `package.json` lists `astro` under `dependencies` or `devDependencies`, the kit's defaults leave `no-orphans` out.
+The cruise never reads an `.astro` file, so a `.ts` module only a page imports would read as an orphan, and [checks-unused](checks-unused.md) already names each file no entry reaches there, `.astro` imports included.
+A repository that wants the rule back lists its own `no-orphans` under `forbidden` in `dependency-cruiser.config.ts`.
+
 ## What it reads
 
 It reads the working tree from the repository root.

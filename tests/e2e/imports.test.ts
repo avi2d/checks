@@ -64,6 +64,22 @@ test("a .dependency-cruiser.cjs extending the shipped base by path is cruised in
   expect(red.exitCode).toBe(1);
 }, 60_000);
 
+test("in a repository that depends on astro the defaults pass a module only an .astro page imports, and its own config can turn no-orphans back on", async () => {
+  const astro = JSON.stringify({ name: "checks-imports-astro", type: "module", dependencies: { astro: "5.0.0" }, devDependencies: { "fake-dev": "1.0.0" } });
+  const page = `---\nimport { SITE_TITLE } from "../consts.ts";\n---\n<h1>{SITE_TITLE}</h1>\n`;
+  const repo = await repository({ "package.json": astro, "src/consts.ts": `export const SITE_TITLE: string = "Site";\n`, "src/pages/index.astro": page });
+  const green = await imports(repo);
+  expect(green.text).toContain("cruised against the kit's defaults, no violation");
+  expect(green.exitCode).toBe(0);
+
+  const config = `import { defineConfig } from "${CHECKOUT}/dist/presets/dependency-cruiser.js";\n\nexport default defineConfig({ forbidden: [{ name: "no-orphans", severity: "error", from: { orphan: true, pathNot: ["[.]config[.]ts$", "[.]test[.]ts$"] }, to: {} }] });\n`;
+  await repo.write({ "dependency-cruiser.config.ts": config });
+  await repo.commit("feat: judge orphans");
+  const red = await imports(repo);
+  expect(red.text).toContain("error no-orphans: src/consts.ts");
+  expect(red.exitCode).toBe(1);
+}, 60_000);
+
 test("a config dependency-cruiser cannot load leaves the gate undecided", async () => {
   const repo = await repository({ "dependency-cruiser.config.ts": `throw new Error("unreadable");\n` });
   const undecided = await imports(repo);
