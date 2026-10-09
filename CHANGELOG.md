@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.37.0
+
+Released 2026-10-09.
+
+### Features
+
+- ship typed defineConfig builders for oxlint, knip and dependency-cruiser [#138](https://github.com/avi2d/checks/pull/138)
+
 ## 0.36.0
 
 Released 2026-10-08.
