@@ -140,11 +140,12 @@ function effectOverrides(effect: unknown): readonly OxlintOverride[] {
 }
 
 // oxlint drops an override's setting for a rule whose plugin is neither top-level nor named in that override.
+// Naming only that plugin turns on its correctness and suspicious rules, and naming the Effect override's set does not.
 function withRulePlugins(override: OxlintOverride): OxlintOverride {
   const rules = Object.keys(override.rules ?? {});
-  const needed = EFFECT_ONLY_PLUGINS.filter((plugin) => rules.some((rule) => rule.startsWith(`${plugin}/`)));
-  if (needed.length === 0) return override;
-  return { ...override, plugins: [...new Set([...(override.plugins ?? []), ...needed])] };
+  const namesEffectOnlyRule = rules.some((rule) => EFFECT_ONLY_PLUGINS.some((plugin) => rule.startsWith(`${plugin}/`)));
+  if (!namesEffectOnlyRule) return override;
+  return { ...override, plugins: [...new Set([...EFFECT_PLUGINS, ...(override.plugins ?? [])])] };
 }
 
 export function defineConfig({ effect, rules, overrides = [], options, ...rest }: ChecksConfig): OxlintConfig {

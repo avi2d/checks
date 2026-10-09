@@ -135,7 +135,8 @@ test(
 test(
   "an override that turns off promise/avoid-new for one file, without naming the plugin, stops reporting that file alone",
   async () => {
-    const promised = "export function later(): Promise<number> {\n  return new Promise((resolve) => resolve(1));\n}\n";
+    const promised =
+      "export function later(): Promise<number> {\n  return new Promise((resolve) => resolve(1));\n}\nexport const settled = Promise.resolve(1, 2);\nexport const thenable = { then: 1 };\n";
     await put({ "src/bridge.ts": promised, "src/other.ts": promised });
     await put({
       "oxlint.config.ts": OXLINT_CONFIG.replace(
@@ -145,7 +146,7 @@ test(
     });
     const linted = await oxlint();
     expect(linted.linted.get("src/bridge.ts")).toBeUndefined();
-    expect(linted.linted.get("src/other.ts")).toContain("promise(avoid-new)");
+    expect(linted.linted.get("src/other.ts")).toEqual(["promise(avoid-new)"]);
 
     for (const file of ["src/bridge.ts", "src/other.ts"]) await rm(join(dir, file));
     await put({ "oxlint.config.ts": OXLINT_CONFIG });

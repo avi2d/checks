@@ -113,10 +113,10 @@ function effectOverrides(effect) {
 }
 function withRulePlugins(override) {
   const rules = Object.keys(override.rules ?? {});
-  const needed = EFFECT_ONLY_PLUGINS.filter((plugin) => rules.some((rule) => rule.startsWith(`${plugin}/`)));
-  if (needed.length === 0)
+  const namesEffectOnlyRule = rules.some((rule) => EFFECT_ONLY_PLUGINS.some((plugin) => rule.startsWith(`${plugin}/`)));
+  if (!namesEffectOnlyRule)
     return override;
-  return { ...override, plugins: [...new Set([...override.plugins ?? [], ...needed])] };
+  return { ...override, plugins: [...new Set([...EFFECT_PLUGINS, ...override.plugins ?? []])] };
 }
 function defineConfig({ effect, rules, overrides = [], options, ...rest }) {
   return {
