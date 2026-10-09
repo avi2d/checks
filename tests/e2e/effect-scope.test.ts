@@ -81,3 +81,19 @@ test("a tsconfig.json that does not parse as JSONC leaves the gate undecided", a
   expect(undecided.text).toContain("tsconfig.json does not parse as a JSONC object");
   expect(undecided.exitCode).toBe(2);
 }, 60_000);
+
+test("a compilerOptions or plugins set to null leaves the gate undecided rather than passing without the Effect paths", async () => {
+  const refusals: Readonly<Record<string, string>> = {
+    [`{ "compilerOptions": null }\n`]: "tsconfig.json holds compilerOptions that is not an object",
+    [`{ "compilerOptions": { "plugins": null } }\n`]: "tsconfig.json holds compilerOptions.plugins that is not a list of objects",
+  };
+  for (const [tsconfig, refusal] of Object.entries(refusals)) {
+    const repo = await repository(tsconfig);
+    for (const args of [[], ["--check"]]) {
+      const undecided = await effectScope(repo, ...args);
+      expect(undecided.text).toContain(refusal);
+      expect(undecided.exitCode).toBe(2);
+    }
+    expect(await tsconfigOf(repo)).toBe(tsconfig);
+  }
+}, 60_000);

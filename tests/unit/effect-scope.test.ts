@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import severities from "../../src/quality/presets/effect.language-service.json" with { type: "json" };
 import { Schema } from "effect";
+import kitTsconfig from "../../tsconfig.effect.json" with { type: "json" };
 import { LANGUAGE_SERVICE, serviceOverrides, type ServiceOverride, withServiceOverrides } from "../../src/quality/effect-scope.ts";
 import { defineConfig, effectRules } from "../../src/quality/presets/oxlint.ts";
 
@@ -70,14 +71,15 @@ test("missing overrides are added after the plugin's last member, and its commen
   expect(pluginsOf(rewritten(inline))).toEqual([{ name: LANGUAGE_SERVICE, overrides: OVERRIDES }]);
 });
 
-test("a missing plugin, plugins list or compilerOptions is added the same way, around the repository's own comments", () => {
+test("a missing plugin, plugins list or compilerOptions is added the same way with the kit's severities, around the repository's own comments", () => {
   const added = [
     `{ "compilerOptions": { "plugins": [{ "name": "other" } /* other */] } }`,
     `{\n  "compilerOptions": {\n    "strict": true // strict\n  }\n}\n`,
     `{\n  // nothing yet\n}\n`,
     `{}`,
   ];
-  const service = { name: LANGUAGE_SERVICE, overrides: OVERRIDES };
+  const service = { ...kitTsconfig.compilerOptions.plugins[0], overrides: OVERRIDES };
+  expect(service.name).toBe(LANGUAGE_SERVICE);
   expect(pluginsOf(rewritten(added[0] ?? ""))).toEqual([{ name: "other" }, service]);
   for (const tsconfig of added.slice(1)) expect(pluginsOf(rewritten(tsconfig))).toEqual([service]);
   expect(rewritten(added[1] ?? "")).toStartWith(`{\n  "compilerOptions": {\n    "strict": true, // strict\n    "plugins": [`);

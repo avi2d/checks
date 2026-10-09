@@ -182,6 +182,12 @@ function applied(text: string, edits: readonly Edit[]): string {
   return edits.toSorted((one, other) => other.start - one.start).reduce((out, { start, end, text: replacement }) => out.slice(0, start) + replacement + out.slice(end), text);
 }
 
+// The text parses as JSONC.
+export function hasMember(text: string, path: readonly [Step, ...Step[]]): boolean {
+  const found = reached(text, path);
+  return found !== undefined && !("missing" in found);
+}
+
 // The text parses as JSONC, and value is a JSON value.
 export function withMember(text: string, path: readonly [Step, ...Step[]], value: unknown): string {
   const found = reached(text, path);

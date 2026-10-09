@@ -2,9 +2,10 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { git } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
-import { type Step, withMember, withoutMember } from "./jsonc-patch.ts";
+import { hasMember, type Step, withMember, withoutMember } from "./jsonc-patch.ts";
 import { effectRules } from "./presets/oxlint.ts";
 import severities from "./presets/effect.language-service.json" with { type: "json" };
+import kitTsconfig from "../../tsconfig.effect.json" with { type: "json" };
 
 export const OXLINT_CONFIG = "oxlint.config.ts";
 export const TSCONFIG = "tsconfig.json";
@@ -42,7 +43,11 @@ export type ServiceOverride = {
 
 const EFFECT_RULES = JSON.stringify(effectRules([]).rules);
 
-const SERVICE_OVERRIDES: readonly [Step, ...Step[]] = ["compilerOptions", "plugins", { name: LANGUAGE_SERVICE }, "overrides"];
+const SERVICE: readonly [Step, ...Step[]] = ["compilerOptions", "plugins", { name: LANGUAGE_SERVICE }];
+
+const SERVICE_OVERRIDES: readonly [Step, ...Step[]] = [...SERVICE, "overrides"];
+
+const KIT_SEVERITY = kitTsconfig.compilerOptions.plugins.find(({ name }) => name === LANGUAGE_SERVICE)?.diagnosticSeverity;
 
 export function serviceOverrides(overrides: readonly (typeof Override.Type)[]): readonly ServiceOverride[] {
   return overrides
@@ -51,7 +56,9 @@ export function serviceOverrides(overrides: readonly (typeof Override.Type)[]): 
 }
 
 export function withServiceOverrides(tsconfig: string, overrides: readonly ServiceOverride[]): string {
-  return overrides.length === 0 ? withoutMember(tsconfig, SERVICE_OVERRIDES) : withMember(tsconfig, SERVICE_OVERRIDES, overrides);
+  if (overrides.length === 0) return withoutMember(tsconfig, SERVICE_OVERRIDES);
+  if (hasMember(tsconfig, SERVICE)) return withMember(tsconfig, SERVICE_OVERRIDES, overrides);
+  return withMember(tsconfig, SERVICE, { diagnosticSeverity: KIT_SEVERITY, overrides });
 }
 
 const refuse = (message: string) => () => new EffectScopeError({ message });
@@ -68,8 +75,8 @@ const readScope = Effect.fn("readScope")(function* (file: string) {
 });
 
 const pluginsOf = Effect.fn("pluginsOf")(function* (tsconfig: JsonObject) {
-  const compilerOptions = yield* decodeObject(tsconfig["compilerOptions"] ?? {}).pipe(Effect.mapError(refuse(`${TSCONFIG} holds compilerOptions that is not an object`)));
-  return yield* decodePlugins(compilerOptions["plugins"] ?? []).pipe(Effect.mapError(refuse(`${TSCONFIG} holds compilerOptions.plugins that is not a list of objects`)));
+  const compilerOptions = yield* decodeObject("compilerOptions" in tsconfig ? tsconfig["compilerOptions"] : {}).pipe(Effect.mapError(refuse(`${TSCONFIG} holds compilerOptions that is not an object`)));
+  return yield* decodePlugins("plugins" in compilerOptions ? compilerOptions["plugins"] : []).pipe(Effect.mapError(refuse(`${TSCONFIG} holds compilerOptions.plugins that is not a list of objects`)));
 });
 
 const effectScope = Effect.gen(function* () {

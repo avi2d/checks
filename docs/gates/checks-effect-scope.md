@@ -20,6 +20,8 @@ It reads `oxlint.config.ts` and `tsconfig.json` at the repository root.
 It reads `tsconfig.json` as TypeScript does, so a comment or a trailing comma parses, and refuses one that does not parse as a JSONC object.
 It rewrites only the `overrides` value of the `@effect/language-service` plugin, as JSON with two spaces of indent.
 When that value is missing it adds the member, and the plugin, `plugins` or `compilerOptions` holding it, after the last member of each.
+A plugin entry it adds carries the `diagnosticSeverity` of the kit's `tsconfig.effect.json`.
+It refuses a `compilerOptions` or `plugins` set to `null`, which would leave no place for the paths.
 With `effect: false` it deletes the `overrides` member and its comma, and leaves the comments beside it.
 Every other byte of `tsconfig.json` stays as the repository wrote it.
 A repository without `tsconfig.json` has no language service to hold the paths, so it passes.
@@ -40,7 +42,7 @@ With `--check` it only compares.
 | --- | --- |
 | 0 | `tsconfig.json` holds the Effect paths, or was written to hold them |
 | 1 | with `--check`, `tsconfig.json` holds other Effect paths |
-| 2 | `oxlint.config.ts` does not load, or `tsconfig.json` does not parse |
+| 2 | `oxlint.config.ts` does not load, or `tsconfig.json` does not parse or sets `compilerOptions` or `plugins` to `null` |
 
 ## Sample output
 

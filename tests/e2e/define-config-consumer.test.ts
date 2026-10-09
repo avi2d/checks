@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import severities from "../../src/quality/presets/effect.language-service.json" with { type: "json" };
+import kitTsconfig from "../../tsconfig.effect.json" with { type: "json" };
 import { withoutPullRequestEvent } from "../lib/env.ts";
 import { findings } from "./lib/findings.ts";
 import { CHECKOUT, ran, type Ran } from "./lib/fixture-repo.ts";
@@ -154,7 +155,8 @@ test(
 
     expect((await bin("checks-effect-scope")).exitCode).toBe(0);
     const { compilerOptions } = await Bun.file(join(dir, "tsconfig.json")).json();
-    expect(compilerOptions.plugins).toEqual([{ name: "@effect/language-service", overrides: [{ include: ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"], exclude: ["tests/**", "**/*.test.ts", "**/*.test.tsx"], options: severities }] }]);
+    const [kitService] = kitTsconfig.compilerOptions.plugins;
+    expect(compilerOptions.plugins).toEqual([{ ...kitService, overrides: [{ include: ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"], exclude: ["tests/**", "**/*.test.ts", "**/*.test.tsx"], options: severities }] }]);
     const fresh = await bin("checks-effect-scope", ["--check"]);
     expect(fresh.text).toContain("tsconfig.json holds the Effect paths of oxlint.config.ts");
     expect(fresh.exitCode).toBe(0);

@@ -1,6 +1,8 @@
 import { $ } from "bun";
+import { expect } from "bun:test";
 import { mkdir, readdir, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import kitTsconfig from "../../../tsconfig.effect.json" with { type: "json" };
 import { withoutPullRequestEvent } from "../../lib/env.ts";
 import { CHECKOUT, ran, scratchDirs, type Ran } from "./fixture-repo.ts";
 
@@ -51,6 +53,9 @@ export function consumerTrees(prefix: string): (shape: ConsumerShape) => Promise
     });
     await $`git init -q -b main`.cwd(tree.dir).quiet();
     await $`bun ${join(CHECKOUT, "src", "quality", "effect-scope.ts")}`.cwd(tree.dir).quiet();
+    const [kitService] = kitTsconfig.compilerOptions.plugins;
+    const { compilerOptions } = await Bun.file(join(tree.dir, "tsconfig.json")).json();
+    expect(compilerOptions.plugins).toEqual([{ ...kitService, overrides: [expect.objectContaining({ include: [...paths] })] }]);
     return tree;
   };
 }
