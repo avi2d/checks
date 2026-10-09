@@ -84,3 +84,11 @@ test("a missing plugin, plugins list or compilerOptions is added the same way wi
   for (const tsconfig of added.slice(1)) expect(pluginsOf(rewritten(tsconfig))).toEqual([service]);
   expect(rewritten(added[1] ?? "")).toStartWith(`{\n  "compilerOptions": {\n    "strict": true, // strict\n    "plugins": [`);
 });
+
+test("this checkout's own language service entry holds the kit's severities beside its generated paths", async () => {
+  const Entry = Schema.Struct({ name: Schema.String, diagnosticSeverity: Schema.optionalKey(Schema.Unknown) });
+  const Own = Schema.Struct({ compilerOptions: Schema.Struct({ plugins: Schema.Array(Entry) }) });
+  const own = Schema.decodeUnknownSync(Own)(Bun.JSONC.parse(await Bun.file(new URL("../../tsconfig.json", import.meta.url)).text()));
+  const service = own.compilerOptions.plugins.find(({ name }) => name === LANGUAGE_SERVICE);
+  expect(service?.diagnosticSeverity).toEqual(kitTsconfig.compilerOptions.plugins[0]?.diagnosticSeverity);
+});
