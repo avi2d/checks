@@ -59,3 +59,15 @@ test("a patch fills an empty container on lines of its own and replaces one whos
   expect(patched('{ "a": [1, 2, 3] }', { a: [1] })).toBe('{ "a": [1] }');
   expect(patched('{ "a": [1, 2] }', { a: [] })).toBe('{ "a": [] }');
 });
+
+test("a patch that drops members keeps every comment beside them and the layout of what stays", () => {
+  const service = '{\n  "name": "s", // the service\n  "overrides": [1]\n}';
+  expect(patched(service, { name: "s" })).toBe('{\n  "name": "s" // the service\n}');
+  const middle = '{\n  "name": "s", // the service\n  "overrides": [1],\n  // severities\n  "x": 1\n}';
+  expect(patched(middle, { name: "s", x: 1 })).toBe('{\n  "name": "s", // the service\n  // severities\n  "x": 1\n}');
+  const trailing = '{\n  "name": "s", // the service\n  "overrides": [1],\n}';
+  expect(patched(trailing, { name: "s" })).toBe('{\n  "name": "s", // the service\n}');
+  expect(patched('[\n  "a", // kept\n  "b",\n  "c"\n]', ["a"])).toBe('[\n  "a" // kept\n]');
+  expect(patched('{ "a": 1, "b": 2, }', { a: 1, c: 3 })).toBe('{ "a": 1, "c": 3, }');
+  expect(patched('{ "a": 1, "b": 2 }', { a: 1, c: 3 })).toBe('{ "a": 1, "c": 3 }');
+});

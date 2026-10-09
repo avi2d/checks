@@ -21,7 +21,7 @@ Neither oxlint nor Knip typechecks the config it loads, so each builder also thr
 Both tools read a config's default export synchronously, so a throw is the one refusal open to the builder.
 
 The Effect paths sit in `oxlint.config.ts` alone.
-TypeScript reads only JSON, so `checks-effect-scope` writes the Effect language service override in `tsconfig.json` from them, and fails `checks-lint` when the two differ.
+`tsconfig.json` cannot import a TypeScript module, so `checks-effect-scope` writes the Effect language service override in `tsconfig.json` from them, and fails `checks-lint` when the two differ.
 
 oxlint does not pass `plugins` down an `extends` chain.
 A config in the chain that sets no `plugins` gets oxlint's default plugins, and the base's `categories` then turn on their rules across the tree.

@@ -31,7 +31,6 @@ const Override = Schema.Struct({
 const OxlintModule = Schema.Struct({ default: Schema.Struct({ overrides: Schema.optionalKey(Schema.Array(Override)) }) });
 
 const decodeOxlintModule = Schema.decodeUnknownEffect(OxlintModule);
-const decodeTsconfig = Schema.decodeUnknownEffect(JsonObject);
 const decodeObject = Schema.decodeUnknownEffect(JsonObject);
 const decodePlugins = Schema.decodeUnknownEffect(Schema.Array(JsonObject));
 
@@ -94,7 +93,7 @@ const effectScope = Effect.gen(function* () {
   const overrides = yield* readScope(path.join(root, OXLINT_CONFIG));
   const text = yield* fs.readFileString(tsconfigFile);
   const unparsed = refuse(`${TSCONFIG} does not parse as a JSONC object`);
-  const tsconfig = yield* Effect.try({ try: () => Bun.JSONC.parse(text), catch: unparsed }).pipe(Effect.flatMap(decodeTsconfig), Effect.mapError(unparsed));
+  const tsconfig = yield* Effect.try({ try: () => Bun.JSONC.parse(text), catch: unparsed }).pipe(Effect.flatMap(decodeObject), Effect.mapError(unparsed));
   const written = patched(text, yield* rewritten(tsconfig, overrides));
   if (written === text) {
     yield* Console.log(`${NAME}: ${TSCONFIG} holds the Effect paths of ${OXLINT_CONFIG}`);

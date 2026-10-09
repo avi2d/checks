@@ -1,6 +1,6 @@
 type Key = string | number;
 
-type Entry = { readonly key: Key; readonly start: number; readonly node: Tree };
+type Entry = { readonly key: Key; readonly start: number; readonly node: Tree; readonly comma: number | undefined };
 
 type Container = { readonly kind: "object" | "array"; readonly start: number; readonly end: number; readonly entries: readonly Entry[] };
 
@@ -52,9 +52,11 @@ class Scanner {
     for (this.blank(); this.at < this.text.length && this.text.charAt(this.at) !== close; this.blank()) {
       const entryStart = this.at;
       const key = kind === "object" ? this.member() : entries.length;
-      entries.push({ key, start: entryStart, node: this.node() });
+      const node = this.node();
       this.blank();
-      if (this.text.charAt(this.at) === ",") this.at += 1;
+      const comma = this.text.charAt(this.at) === "," ? this.at : undefined;
+      if (comma !== undefined) this.at += 1;
+      entries.push({ key, start: entryStart, node, comma });
     }
     this.at += 1;
     return { kind, start, end: this.at, entries };
@@ -93,24 +95,37 @@ function member([key, value]: readonly [Key, unknown], indent: string): string {
   return typeof key === "string" ? `${JSON.stringify(key)}: ${serialized(value, indent)}` : serialized(value, indent);
 }
 
-function removals({ start, end, entries }: Container, removed: readonly number[]): readonly Edit[] {
-  const runs = removed.filter((index) => !removed.includes(index - 1)).map((first) => {
-    let last = first;
-    while (removed.includes(last + 1)) last += 1;
-    return [first, last] as const;
-  });
-  return runs.map(([first, last]) => {
-    const before = entries[first - 1];
-    const after = entries[last + 1];
-    const removedLast = entries[last]?.node.end ?? end;
-    if (before !== undefined) return { start: before.node.end, end: removedLast, text: "" };
-    if (after !== undefined) return { start: entries[first]?.start ?? start, end: after.start, text: "" };
-    return { start: start + 1, end: end - 1, text: "" };
-  });
+function entryEnd({ node, comma }: Entry): number {
+  return comma === undefined ? node.end : comma + 1;
 }
 
-function insertion(text: string, { start, end, entries }: Container, added: readonly (readonly [Key, unknown])[]): Edit {
-  const last = entries.at(-1);
+function blankFrom(text: string, at: number, step: 1 | -1): number {
+  let edge = at;
+  while (/\s/.test(text.charAt(step === 1 ? edge : edge - 1))) edge += step;
+  return edge;
+}
+
+function removedRun(text: string, entries: readonly Entry[], first: Entry, last: Entry): readonly Edit[] {
+  const after = entries[entries.indexOf(last) + 1];
+  if (after !== undefined) return [{ start: first.start, end: blankFrom(text, entryEnd(last), 1), text: "" }];
+  const span = { start: blankFrom(text, first.start, -1), end: entryEnd(last), text: "" };
+  const before = entries[entries.indexOf(first) - 1];
+  if (before?.comma === undefined || last.comma !== undefined) return [span];
+  return [{ start: before.comma, end: before.comma + 1, text: "" }, span];
+}
+
+function removals(text: string, { entries }: Container, removed: readonly number[]): readonly Edit[] {
+  return removed
+    .filter((index) => !removed.includes(index - 1))
+    .flatMap((index) => {
+      let last = index;
+      while (removed.includes(last + 1)) last += 1;
+      const [first, end] = [entries[index], entries[last]];
+      return first === undefined || end === undefined ? [] : removedRun(text, entries, first, end);
+    });
+}
+
+function insertion(text: string, { start, end }: Container, last: Entry | undefined, added: readonly (readonly [Key, unknown])[]): Edit {
   if (last === undefined) {
     const indent = indentAt(text, start);
     const members = added.map((one) => `\n${indent}  ${member(one, `${indent}  `)}`).join(",");
@@ -127,8 +142,9 @@ function containerEdits(text: string, tree: Container, next: unknown, wanted: Re
   if (removed.length === tree.entries.length && removed.length > 0 && added.length > 0) {
     return [{ start: tree.start, end: tree.end, text: serialized(next, indentAt(text, tree.start)) }];
   }
-  const kept = tree.entries.flatMap(({ key, node }) => (wanted.has(key) ? edits(text, node, wanted.get(key)) : []));
-  return [...kept, ...removals(tree, removed), ...(added.length === 0 ? [] : [insertion(text, tree, added)])];
+  const kept = tree.entries.filter(({ key }) => wanted.has(key));
+  const changed = kept.flatMap(({ key, node }) => edits(text, node, wanted.get(key)));
+  return [...changed, ...removals(text, tree, removed), ...(added.length === 0 ? [] : [insertion(text, tree, kept.at(-1), added)])];
 }
 
 function edits(text: string, tree: Tree, next: unknown): readonly Edit[] {
@@ -141,6 +157,6 @@ function edits(text: string, tree: Tree, next: unknown): readonly Edit[] {
 // The text parses as JSONC, and next is a JSON value.
 export function patched(text: string, next: unknown): string {
   return edits(text, new Scanner(text).node(), next)
-    .toSorted((one, other) => other.start - one.start)
+    .toSorted((one, other) => other.start - one.start || other.end - one.end)
     .reduce((out, { start, end, text: replacement }) => out.slice(0, start) + replacement + out.slice(end), text);
 }

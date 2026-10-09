@@ -18,7 +18,8 @@ With `--check` it fails when the override in `tsconfig.json` differs from the on
 
 It reads `oxlint.config.ts` and `tsconfig.json` at the repository root.
 It reads `tsconfig.json` as TypeScript does, so a comment or a trailing comma parses, and refuses one that does not parse as a JSONC object.
-It writes back only the values that change, each as JSON with two spaces of indent, so every comment and the formatting around them stay as the repository wrote them.
+It writes back only the values that change, each as JSON with two spaces of indent.
+Every comment and the formatting around them stay as the repository wrote them.
 A repository without `tsconfig.json` has no language service to hold the paths, so it passes.
 
 ## Arguments
