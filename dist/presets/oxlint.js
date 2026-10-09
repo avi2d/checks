@@ -18,7 +18,8 @@ var TEST_LIMITS = {
 var SOURCES = ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"];
 var TESTS = ["tests/**", "**/*.test.ts", "**/*.test.tsx"];
 var PLUGINS = ["typescript", "oxc", "eslint", "import"];
-var EFFECT_PLUGINS = [...PLUGINS, "node", "promise", "unicorn"];
+var EFFECT_ONLY_PLUGINS = ["node", "promise", "unicorn"];
+var EFFECT_PLUGINS = [...PLUGINS, ...EFFECT_ONLY_PLUGINS];
 var JS_PLUGINS = ["dist/effect-channel/index.js", "dist/readability/index.js", "dist/data-shape/index.js"];
 var EFFECT_RULES = {
   "node/no-sync": "error",
@@ -110,6 +111,13 @@ function effectOverrides(effect) {
     throw new TypeError(REFUSED_EFFECT);
   return [effectRules(files, excludeFiles)];
 }
+function withRulePlugins(override) {
+  const rules = Object.keys(override.rules ?? {});
+  const needed = EFFECT_ONLY_PLUGINS.filter((plugin) => rules.some((rule) => rule.startsWith(`${plugin}/`)));
+  if (needed.length === 0)
+    return override;
+  return { ...override, plugins: [...new Set([...override.plugins ?? [], ...needed])] };
+}
 function defineConfig({ effect, rules, overrides = [], options, ...rest }) {
   return {
     ...BASE,
@@ -121,7 +129,7 @@ function defineConfig({ effect, rules, overrides = [], options, ...rest }) {
       sizeBudget(SOURCES, SOURCE_LIMITS, TESTS),
       sizeBudget(TESTS, TEST_LIMITS),
       ...effectOverrides(effect),
-      ...overrides
+      ...overrides.map(withRulePlugins)
     ]
   };
 }

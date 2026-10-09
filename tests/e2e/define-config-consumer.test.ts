@@ -133,6 +133,27 @@ test(
 );
 
 test(
+  "an override that turns off promise/avoid-new for one file, without naming the plugin, stops reporting that file alone",
+  async () => {
+    const promised = "export function later(): Promise<number> {\n  return new Promise((resolve) => resolve(1));\n}\n";
+    await put({ "src/bridge.ts": promised, "src/other.ts": promised });
+    await put({
+      "oxlint.config.ts": OXLINT_CONFIG.replace(
+        "{ effect: true }",
+        '{\n  effect: true,\n  overrides: [\n    // The host API hands back a callback, so the bridge builds the Promise itself.\n    { files: ["src/bridge.ts"], rules: { "promise/avoid-new": "off" } },\n  ],\n}',
+      ),
+    });
+    const linted = await oxlint();
+    expect(linted.linted.get("src/bridge.ts")).toBeUndefined();
+    expect(linted.linted.get("src/other.ts")).toContain("promise(avoid-new)");
+
+    for (const file of ["src/bridge.ts", "src/other.ts"]) await rm(join(dir, file));
+    await put({ "oxlint.config.ts": OXLINT_CONFIG });
+  },
+  180_000,
+);
+
+test(
   "knip and checks-imports read the kit's knip and dependency-cruiser builders, and neither config reads as unused",
   async () => {
     const unused = await bin("checks-unused");

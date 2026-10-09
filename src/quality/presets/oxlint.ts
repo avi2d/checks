@@ -37,7 +37,9 @@ export const TESTS = ["tests/**", "**/*.test.ts", "**/*.test.tsx"] as const;
 
 const PLUGINS = ["typescript", "oxc", "eslint", "import"] as const;
 
-const EFFECT_PLUGINS = [...PLUGINS, "node", "promise", "unicorn"] as const;
+const EFFECT_ONLY_PLUGINS = ["node", "promise", "unicorn"] as const;
+
+const EFFECT_PLUGINS = [...PLUGINS, ...EFFECT_ONLY_PLUGINS] as const;
 
 const JS_PLUGINS = ["dist/effect-channel/index.js", "dist/readability/index.js", "dist/data-shape/index.js"] as const;
 
@@ -137,6 +139,14 @@ function effectOverrides(effect: unknown): readonly OxlintOverride[] {
   return [effectRules(files, excludeFiles)];
 }
 
+// oxlint drops an override's setting for a rule whose plugin is neither top-level nor named in that override.
+function withRulePlugins(override: OxlintOverride): OxlintOverride {
+  const rules = Object.keys(override.rules ?? {});
+  const needed = EFFECT_ONLY_PLUGINS.filter((plugin) => rules.some((rule) => rule.startsWith(`${plugin}/`)));
+  if (needed.length === 0) return override;
+  return { ...override, plugins: [...new Set([...(override.plugins ?? []), ...needed])] };
+}
+
 export function defineConfig({ effect, rules, overrides = [], options, ...rest }: ChecksConfig): OxlintConfig {
   return {
     ...BASE,
@@ -148,7 +158,7 @@ export function defineConfig({ effect, rules, overrides = [], options, ...rest }
       sizeBudget(SOURCES, SOURCE_LIMITS, TESTS),
       sizeBudget(TESTS, TEST_LIMITS),
       ...effectOverrides(effect),
-      ...overrides,
+      ...overrides.map(withRulePlugins),
     ],
   };
 }
