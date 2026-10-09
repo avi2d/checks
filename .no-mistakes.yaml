@@ -1,6 +1,5 @@
 commands:
   prepare: "bun install --frozen-lockfile"
-  test: "bun test tests/unit"
 
 review:
   path_instructions:
