@@ -4,13 +4,14 @@ audience: consumers
 ---
 # checks-effect-scope
 
-`checks-effect-scope` writes the Effect paths of `oxlint.config.ts` into the Effect language service override in `tsconfig.json`, and as a gate fails when that override differs from them.
+`checks-effect-scope` writes the Effect paths of `oxlint.config.ts` and the kit's severities into the Effect language service plugin in `tsconfig.json`.
+As a gate it fails when either differs from what it would write.
 
 ## What it checks
 
 It loads `oxlint.config.ts` and takes the `files` and `excludeFiles` of the override holding the six Effect rules, the one the `effect` key of `defineConfig` builds.
 Each such override becomes one entry under `overrides` of the `@effect/language-service` plugin in `tsconfig.json`, with `files` as its `include`, `excludeFiles` as its `exclude`, and the severities in `src/quality/presets/effect.language-service.json` as its `options`.
-The `overrides` of that plugin belong to it, and every other key of `tsconfig.json` stays as the repository wrote it.
+The `overrides` of that plugin and the kit's keys in its `diagnosticSeverity` belong to it, and every other key of `tsconfig.json` stays as the repository wrote it.
 With `effect: false` the plugin holds no `overrides`.
 With `--check` it fails when the override or the kit's severities in `tsconfig.json` differ from what it would write, and writes nothing.
 
@@ -21,6 +22,7 @@ It reads `tsconfig.json` as TypeScript does, so a comment or a trailing comma pa
 It rewrites only the `overrides` value of the `@effect/language-service` plugin and the kit's keys in its `diagnosticSeverity`, as JSON with two spaces of indent.
 When that value is missing it adds the member, and the plugin, `plugins` or `compilerOptions` holding it, after the last member of each.
 Each key of the `diagnosticSeverity` in the kit's `tsconfig.effect.json` gets the kit's value, and a key the repository added stays.
+A key a release drops from `tsconfig.effect.json` stays in the repository's entry until the repository removes it.
 It refuses a `compilerOptions` or `plugins` set to `null`, or a `diagnosticSeverity` that is not an object, which would leave no place for what it writes.
 With `effect: false` it deletes the `overrides` member and its comma, and leaves the comments beside it.
 Every other byte of `tsconfig.json` stays as the repository wrote it.

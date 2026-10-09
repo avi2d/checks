@@ -17,7 +17,7 @@ A consuming repository puts each setting in the file its tool reads, and no mani
 | `.jscpd.json` | The `path` and `ignore` globs of the files repetition is measured in | jscpd and `checks-repetition` |
 | `knip.config.ts` | The `entry` globs Knip traces unreferenced files from | Knip, `checks-unused` and `checks-exports` |
 | `dependency-cruiser.config.ts` | Entry points nothing imports, paths that may import dev dependencies, and import boundaries, when the kit's defaults do not fit | `checks-imports` |
-| `tsconfig.json` | Compiler options, and the Effect language service override `checks-effect-scope` writes from `oxlint.config.ts` | TypeScript and Effect language service |
+| `tsconfig.json` | Compiler options, and the Effect language service plugin whose `overrides` and kit severities `checks-effect-scope` writes, keeping every other key | TypeScript and Effect language service |
 | `package.json` | `scripts` with the `checks-vendor` arguments in `prepare`, `author` and `contributors` | Bun, `checks-commit-identity` and `checks-vendor` |
 | `bunfig.toml` | Test discovery and quarantine exclusion | Bun and `checks-test-layout` |
 | `stryker.conf.mjs` | Mutation settings | Stryker |

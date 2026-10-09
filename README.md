@@ -119,7 +119,7 @@ To consume the kit from a repository:
 
 Add a pull request title lint step in another workflow using `./node_modules/.bin/commitlint`.
 A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on each job, as [checks-ci-wiring](docs/gates/checks-ci-wiring.md#runners) requires.
-`checks-effect-scope` writes the Effect paths of `oxlint.config.ts` into `tsconfig.json`, as [The Effect rules](docs/configs/effect-rules.md#language-service) says.
+`checks-effect-scope` writes the Effect paths of `oxlint.config.ts` and the kit's severities into `tsconfig.json`, as [The Effect rules](docs/configs/effect-rules.md#language-service) says.
 `bun run lint` then ends with `checks-lint: <count> gate(s) pass`.
 
 ## What runs
@@ -176,6 +176,7 @@ To move a repository to a newer release of the kit:
 1. Run the install line again, which moves the kit to its newest release and the peers to the versions it pins.
    A repository that opted in to `checks-browser` or `checks-frontend-syntax` also reruns the `bun add` line on its page.
 1. Run `bun run build`, whose `checks-effect-scope` rewrites the Effect override and the kit's severities in `tsconfig.json` when a release changes them.
+   A severity key the release drops stays in `tsconfig.json` until the repository removes it.
 1. Copy `node_modules/@avi2dg/checks/bunfig.toml` over `bunfig.toml` again, since `checks-test-layout` compares the copy with the installed preset.
 1. Run `bun run lint`, `bun run typecheck` and `bun run test`.
 
