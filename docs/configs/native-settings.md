@@ -53,6 +53,7 @@ export default defineConfig({
 
 `ignorePatterns`, `rules`, `overrides`, `settings`, `env`, `globals` and `options` mean what they mean in oxlint's own docs.
 The kit's rules come first, and the repository's `rules` and `overrides` land after them.
+An override that sets a `node/`, `promise/` or `unicorn/` rule gets the Effect override's `plugins`, since the kit loads those plugins only there.
 [The Effect rules](effect-rules.md) lists what `effect` accepts.
 `defineConfig` sets `options.typeAware`, so a plain `oxlint` runs the type-aware rules.
 The module also exports the blocks the config is built from: `base`, `sizeBudget`, `effectRules`, `SOURCE_LIMITS`, `TEST_LIMITS`, `SOURCES` and `TESTS`.
