@@ -98,17 +98,18 @@ const downloaded = Effect.fn("downloaded")(function* (run: number, artifact: Art
   return fetched && (yield* holds(dir, needed));
 });
 
-export function pruned(entries: readonly string[], kept: number): readonly string[] {
+export function pruned(entries: readonly string[], kept: number, restoring: string): readonly string[] {
   return entries
     .filter((entry) => /^\d+$/.test(entry))
     .sort((one, other) => Number(other) - Number(one))
-    .slice(kept);
+    .slice(kept)
+    .filter((entry) => entry !== restoring);
 }
 
-const prune = Effect.fn("prune")(function* (shelf: string) {
+const prune = Effect.fn("prune")(function* (shelf: string, restoring: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  for (const entry of pruned(yield* fs.readDirectory(shelf), KEPT_PER_ARTIFACT)) {
+  for (const entry of pruned(yield* fs.readDirectory(shelf), KEPT_PER_ARTIFACT, restoring)) {
     yield* fs.remove(path.join(shelf, entry), { recursive: true, force: true });
   }
 });
@@ -130,7 +131,7 @@ const throughCache = Effect.fn("throughCache")(function* (run: number, artifact:
     Effect.as(entry),
     Effect.catch((cause) => holds(entry, needed).pipe(Effect.flatMap((whole) => (whole ? Effect.succeed(staged) : Effect.fail(cause))))),
   );
-  yield* prune(shelf);
+  yield* prune(shelf, String(artifact.id));
   return Option.some<Fetched>({ dir: placed, how: "downloaded it into the runner's cache" });
 });
 
@@ -139,14 +140,19 @@ const uncached = Effect.fn("uncached")(function* (run: number, artifact: Artifac
   return (yield* downloaded(run, artifact, dir, needed)) ? Option.some<Fetched>({ dir, how: "downloaded it" }) : Option.none<Fetched>();
 });
 
-const restore = Effect.fn("restore")(function* (from: string, copies: readonly Copy[]) {
+const restore = Effect.fn("restore")(function* (from: string, needed: Copy, optional: readonly Copy[]) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  for (const copy of copies) {
-    const file = yield* held(from, copy.from);
-    if (Option.isNone(file)) continue;
-    yield* fs.makeDirectory(path.dirname(copy.to), { recursive: true });
-    yield* fs.copyFile(file.value, copy.to);
+  const copy = Effect.fn("copy")(function* (file: string, to: string) {
+    yield* fs.makeDirectory(path.dirname(to), { recursive: true });
+    yield* fs.copyFile(file, to);
+  });
+  const source = yield* held(from, needed.from);
+  if (Option.isNone(source)) return yield* new BaselineFailure({ message: `${from} lost ${needed.from.join(" and ")} before it was copied` });
+  yield* copy(source.value, needed.to);
+  for (const wanted of optional) {
+    const file = yield* held(from, wanted.from);
+    if (Option.isSome(file)) yield* copy(file.value, wanted.to);
   }
 });
 
@@ -154,7 +160,7 @@ const restoredFrom = Effect.fn("restoredFrom")(
   function* (run: number, artifact: Artifact, root: Option.Option<string>, request: Request) {
     const fetched = Option.isSome(root) ? yield* throughCache(run, artifact, root.value, request.needed) : yield* uncached(run, artifact, request.needed);
     if (Option.isNone(fetched)) return false;
-    yield* restore(fetched.value.dir, [request.needed, ...request.optional]);
+    yield* restore(fetched.value.dir, request.needed, request.optional);
     yield* Console.log(`mutation-baseline: ${fetched.value.how}, ${artifact.name} artifact ${artifact.id} from run ${run}`);
     return true;
   },

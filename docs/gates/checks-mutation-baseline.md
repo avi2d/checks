@@ -9,13 +9,15 @@ audience: consumers
 ## What it checks
 
 It reads the successful runs of `mutation.yml` on `main`.
-Without `--full` it takes the newest of the 20 newest of those runs that a pull request did not start, whether or not that run holds a baseline, and restores its `mutation-baseline` artifact.
+Without `--full` it takes the newest of the 20 newest of those runs that a pull request did not start.
+It restores that run's `mutation-baseline` artifact, and takes the run whether or not it holds one.
 It tries no older run, so a newest run without the artifact restores nothing.
 An artifact without `stryker-incremental.json` counts as no baseline.
 It copies `stryker-incremental.json` to the first destination, and `mutation/mutation.json` to the second destination when the artifact holds it.
 
 With `--full` it lists up to 50 `schedule` runs and up to 50 `workflow_dispatch` runs apart, so pushes cannot crowd the full runs out of one list.
-It tries those runs newest first and restores the `mutation-baseline-full` artifact of the first one whose artifact has not expired, downloads and holds the report, and tries no run after it.
+It tries those runs newest first, and restores the first `mutation-baseline-full` artifact that has not expired, downloads and holds the report.
+It tries no run after that one.
 It takes the report from `mutation.json` at the artifact's root, or else from `mutation/mutation.json`, and copies it to the destination.
 
 It creates the directories each destination needs.
@@ -37,7 +39,7 @@ On a hit the bin copies the files from the entry and downloads nothing.
 On a miss it downloads into a staging directory beside the entry and renames it into place.
 A job sharing the runner sees an entry whole or not at all.
 When another job placed the same entry first, the bin leaves that entry alone and restores from its own download.
-After each download it keeps the 2 highest artifact ids for that repository and artifact name, and removes the rest.
+After each download it keeps the 2 highest artifact ids for that repository and artifact name and the entry it restores from, and removes the rest.
 A 100 MB baseline zip can unpack to about 500 MB, so a repository restoring both artifacts holds about 2 GB.
 
 When `RUNNER_ENVIRONMENT` is `github-hosted`, it downloads into a temporary directory and writes no cache, since a hosted runner starts every job on a fresh machine.
@@ -57,7 +59,7 @@ checks-mutation-baseline --full <mutation-json-dest>
 | Code | When |
 | --- | --- |
 | 0 | it restored a baseline, or found none to restore |
-| 2 | the arguments do not parse, `gh` cannot list the runs, or the cache cannot be written |
+| 2 | the arguments do not parse, `gh` cannot list the runs, the cache cannot be written, or another job removed the entry before it was copied |
 
 A failed artifact lookup or download prints the `gh` error and moves on, as a missing artifact does.
 

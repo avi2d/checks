@@ -92,6 +92,25 @@ test("a newer baseline is downloaded past the stale entries, and the cache keeps
   expect(await runner.shelf("mutation-baseline")).toEqual(["150", "200"]);
 }, 30_000);
 
+test("a download older than the two cached ids still restores, and stays cached for the next job", async () => {
+  const runner = await selfHosted(MAIN_RUNS);
+  for (const newer of [250, 300]) {
+    const entry = join(runner.home, SHELVES, "mutation-baseline", String(newer));
+    await mkdir(entry, { recursive: true });
+    await writeFile(join(entry, "stryker-incremental.json"), '{"state":"newer"}');
+  }
+
+  const downloaded = await runner.run(["first/stryker-incremental.json"]);
+  const cached = await runner.run(["second/stryker-incremental.json"]);
+
+  expect(downloaded).toEqual({ exitCode: 0, text: "mutation-baseline: downloaded it into the runner's cache, mutation-baseline artifact 200 from run 20\n" });
+  expect(await runner.read("first/stryker-incremental.json")).toBe('{"state":"newest push"}');
+  expect(cached).toEqual({ exitCode: 0, text: "mutation-baseline: restored it from the runner's cache, mutation-baseline artifact 200 from run 20\n" });
+  expect(await runner.read("second/stryker-incremental.json")).toBe('{"state":"newest push"}');
+  expect(await runner.downloads()).toHaveLength(1);
+  expect(await runner.shelf("mutation-baseline")).toEqual(["200", "250", "300"]);
+}, 30_000);
+
 test("--full takes the newest scheduled or hand-started run whose full artifact downloads, and never a push's", async () => {
   const runner = await selfHosted([
     run(50, "push", "2026-10-05T00:00:00Z", [baseline(500, "mutation-baseline-full", "push")]),
