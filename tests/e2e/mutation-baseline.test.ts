@@ -166,6 +166,20 @@ test("two jobs that miss the cache together both restore, and the runner keeps o
   expect(await readdir(join(runner.home, SHELVES, "mutation-baseline"))).toEqual(["200"]);
 }, 30_000);
 
+test("an entry that lost its state file is downloaded past, and every job on the runner still restores", async () => {
+  const runner = await selfHosted(MAIN_RUNS);
+  const damaged = join(runner.home, SHELVES, "mutation-baseline", "200", "mutation");
+  await mkdir(damaged, { recursive: true });
+  await writeFile(join(damaged, "mutation.json"), '{"report":"left behind"}');
+
+  const downloaded = "mutation-baseline: downloaded it into the runner's cache, mutation-baseline artifact 200 from run 20\n";
+  for (const job of ["first", "second"]) {
+    expect(await runner.run([`${job}/stryker-incremental.json`, `${job}/mutation.json`])).toEqual({ exitCode: 0, text: downloaded });
+    expect(await runner.read(`${job}/stryker-incremental.json`)).toBe('{"state":"newest push"}');
+    expect(await runner.read(`${job}/mutation.json`)).toBe('{"report":"newest push"}');
+  }
+}, 30_000);
+
 test("with no baseline to restore it writes nothing and still exits 0", async () => {
   const none = await selfHosted([run(30, "pull_request", "2026-10-03T00:00:00Z", [baseline(300, "mutation-baseline", "pull request")])]);
   const restored = await none.run(["reports/stryker-incremental.json", "baseline/mutation.json"]);

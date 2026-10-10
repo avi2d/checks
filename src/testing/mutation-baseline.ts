@@ -126,10 +126,10 @@ const throughCache = Effect.fn("throughCache")(function* (run: number, artifact:
   yield* fs.makeDirectory(shelf, { recursive: true });
   const staged = path.join(yield* fs.makeTempDirectoryScoped({ directory: shelf, prefix: ".staging-" }), "artifact");
   if (!(yield* downloaded(run, artifact, staged, needed))) return Option.none<Fetched>();
-  // A job sharing the runner may have placed the same entry meanwhile, and removing it would break that job's restore.
+  // An entry already there stays, since a job sharing the runner may be copying from it, and the staged copy is whole.
   const placed = yield* fs.rename(staged, entry).pipe(
     Effect.as(entry),
-    Effect.catch((cause) => holds(entry, needed).pipe(Effect.flatMap((whole) => (whole ? Effect.succeed(staged) : Effect.fail(cause))))),
+    Effect.catch(() => Effect.succeed(staged)),
   );
   yield* prune(shelf, String(artifact.id));
   return Option.some<Fetched>({ dir: placed, how: "downloaded it into the runner's cache" });
