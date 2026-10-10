@@ -171,7 +171,12 @@ const restoredFrom = Effect.fn("restoredFrom")(
 const runnerCache = Effect.gen(function* () {
   const environment = yield* Config.String("RUNNER_ENVIRONMENT").pipe(Config.withDefault(""));
   if (environment === "github-hosted") return Option.none<string>();
-  return yield* cacheRoot().pipe(Effect.option);
+  return yield* cacheRoot().pipe(
+    Effect.map(Option.some),
+    Effect.catch(() =>
+      Console.error("mutation-baseline: the runner cache is disabled because HOME is unset, so the baseline is downloaded").pipe(Effect.as(Option.none<string>())),
+    ),
+  );
 });
 
 // An artifact that lacks `needed` counts as no baseline, and `optional` copies only what the artifact holds.

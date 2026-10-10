@@ -43,7 +43,7 @@ After each download it keeps the 2 highest artifact ids for that repository and 
 A 100 MB baseline zip can unpack to about 500 MB, so a repository restoring both artifacts holds about 2 GB.
 
 When `RUNNER_ENVIRONMENT` is `github-hosted`, it downloads into a temporary directory and writes no cache, since a hosted runner starts every job on a fresh machine.
-When `HOME` is unset it works the same way.
+When `HOME` is unset it works the same way, and prints to stderr that the runner cache is disabled.
 
 ## Arguments
 

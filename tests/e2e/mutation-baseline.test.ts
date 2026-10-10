@@ -13,7 +13,7 @@ const scratch = scratchDirs();
 
 type Runner = {
   readonly home: string;
-  readonly run: (args: readonly string[], env?: Readonly<Record<string, string>>) => Promise<Ran>;
+  readonly run: (args: readonly string[], env?: Readonly<Record<string, string | undefined>>) => Promise<Ran>;
   readonly downloads: () => Promise<readonly string[]>;
   readonly read: (file: string) => Promise<string | undefined>;
   readonly shelf: (artifact: string) => Promise<readonly string[]>;
@@ -185,6 +185,21 @@ test("a GitHub-hosted runner downloads the baseline without writing a cache", as
   const restored = await runner.run(["reports/stryker-incremental.json"], { RUNNER_ENVIRONMENT: "github-hosted" });
 
   expect(restored.text).toBe("mutation-baseline: downloaded it, mutation-baseline artifact 200 from run 20\n");
+  expect(await runner.read("reports/stryker-incremental.json")).toBe('{"state":"newest push"}');
+  expect(await readdir(join(runner.home, ".cache")).catch(() => [])).toEqual([]);
+}, 30_000);
+
+test("with HOME unset it says the runner cache is disabled, then downloads the baseline without writing a cache", async () => {
+  const runner = await selfHosted(MAIN_RUNS);
+
+  const restored = await runner.run(["reports/stryker-incremental.json"], { HOME: undefined });
+
+  expect(restored).toEqual({
+    exitCode: 0,
+    text:
+      "mutation-baseline: downloaded it, mutation-baseline artifact 200 from run 20\n" +
+      "mutation-baseline: the runner cache is disabled because HOME is unset, so the baseline is downloaded\n",
+  });
   expect(await runner.read("reports/stryker-incremental.json")).toBe('{"state":"newest push"}');
   expect(await readdir(join(runner.home, ".cache")).catch(() => [])).toEqual([]);
 }, 30_000);
