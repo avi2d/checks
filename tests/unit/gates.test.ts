@@ -11,6 +11,7 @@ const OUTSIDE_LINT = {
   "checks-release-tag": "src/delivery/release-tag.ts",
   "checks-mutation": "src/testing/mutation.ts",
   "checks-mutation-compare": "src/testing/mutation-compare.ts",
+  "checks-mutation-baseline": "src/testing/mutation-baseline.ts",
   "checks-subsumed-tests": "src/testing/subsumed-tests.ts",
   "checks-flake": "src/testing/flake.ts",
   "checks-vendor": "src/dependencies/vendor.ts",

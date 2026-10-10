@@ -186,14 +186,20 @@ test("a changed source scopes directly, and an added one only at the head", asyn
   expect(scope["BASE_SCOPE"]).toBe("src/kept.ts");
 });
 
-// Answers `gh run list` from runs-<event>.json up to its --limit and `gh run download` from artifacts/<id>/<name>, and fails a list whose fail-<event> exists.
+// Answers `gh run list` from runs-<event>.json up to its --limit, the artifact lookup and `gh run download` from artifacts/<id>/<name>, and fails a list whose fail-<event> exists.
 const FAKE_GH = `#!/bin/sh
 here="$(dirname "$0")"
 case "$1 $2" in
   "run list")
-    while [ $# -gt 0 ]; do case "$1" in --event) event="$2"; shift;; --limit) limit="$2"; shift;; --jq) filter="$2"; shift;; esac; shift; done
+    while [ $# -gt 0 ]; do case "$1" in --event) event="$2"; shift;; --limit) limit="$2"; shift;; esac; shift; done
     if [ -f "$here/fail-$event" ]; then echo "gh: HTTP 502 listing $event runs" >&2; exit 1; fi
-    if [ -f "$here/runs-$event.json" ]; then jq -c ".[:$limit] | $filter" "$here/runs-$event.json"; fi;;
+    if [ -f "$here/runs-$event.json" ]; then jq -c ".[:$limit]" "$here/runs-$event.json"; else echo "[]"; fi;;
+  "api "*)
+    id="$(echo "$2" | sed -E 's|.*/runs/([0-9]+)/artifacts.*|\\1|')"
+    name="\${2##*name=}"
+    if [ -d "$here/artifacts/$id/$name" ]; then
+      echo "{\\"artifacts\\":[{\\"id\\":$id,\\"name\\":\\"$name\\",\\"expired\\":false,\\"workflow_run\\":{\\"repository_id\\":1}}]}"
+    else echo '{"artifacts":[]}'; fi;;
   "run download")
     id="$3"
     while [ $# -gt 0 ]; do case "$1" in --name) name="$2"; shift;; --dir) dir="$2"; shift;; esac; shift; done
@@ -210,18 +216,19 @@ async function runStep(name: string, cwd: string, env: Readonly<Record<string, s
   return ran($`bash -e -c ${step.run}`.cwd(cwd).env({ ...process.env, ...step.env, ...env }));
 }
 
-// A full run uploads its report under both artifacts; a run from before full baselines uploads only the incremental one.
+// A full run uploads its report and state under both artifacts; a run from before full baselines uploads only the incremental one.
 type DispatchedRun = { readonly id: number; readonly report: string; readonly full: boolean };
 
 function artifactsOf({ report, full }: DispatchedRun): Readonly<Record<string, string>> {
-  const incremental = { "mutation-baseline/mutation/mutation.json": report };
-  return full ? { ...incremental, "mutation-baseline-full/mutation.json": report } : incremental;
+  const uploaded = (name: string) => ({ [`${name}/mutation/mutation.json`]: report, [`${name}/stryker-incremental.json`]: "{}" });
+  return full ? { ...uploaded("mutation-baseline"), ...uploaded("mutation-baseline-full") } : uploaded("mutation-baseline");
 }
 
 async function selectScopeStep(repo: FixtureRepo, newestFirst: readonly DispatchedRun[], listFails = false): Promise<Ran & { readonly env: string }> {
   const bin = await scratch("checks-mutation-scope-gh-");
   await writeFile(join(bin, "gh"), FAKE_GH, { mode: 0o755 });
-  await writeFile(join(bin, "runs-workflow_dispatch.json"), JSON.stringify(newestFirst.map(({ id }) => ({ databaseId: id }))));
+  const createdAt = (index: number): string => new Date(Date.UTC(2026, 9, 10 - index)).toISOString();
+  await writeFile(join(bin, "runs-workflow_dispatch.json"), JSON.stringify(newestFirst.map(({ id }, index) => ({ databaseId: id, event: "workflow_dispatch", createdAt: createdAt(index) }))));
   for (const run of newestFirst) {
     for (const [path, content] of Object.entries(artifactsOf(run))) {
       await mkdir(dirname(join(bin, "artifacts", `${run.id}`, path)), { recursive: true });
@@ -230,12 +237,16 @@ async function selectScopeStep(repo: FixtureRepo, newestFirst: readonly Dispatch
   }
   if (listFails) await writeFile(join(bin, "fail-workflow_dispatch"), "");
   await symlink(join(CHECKOUT, "scripts"), join(repo.dir, "scripts"));
+  await mkdir(join(repo.dir, "src", "testing"), { recursive: true });
+  await symlink(join(CHECKOUT, "src", "testing", "mutation-baseline.ts"), join(repo.dir, "src", "testing", "mutation-baseline.ts"));
   const githubEnv = join(bin, "github-env");
   await writeFile(githubEnv, "");
   const done = await runStep("Select mutation scope", repo.dir, {
     PATH: `${bin}:${process.env["PATH"] ?? ""}`,
     GITHUB_BASE_REF: "main",
     GITHUB_ENV: githubEnv,
+    HOME: bin,
+    RUNNER_TEMP: bin,
   });
   return { ...done, env: await readFile(githubEnv, "utf8") };
 }

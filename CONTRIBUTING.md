@@ -23,8 +23,8 @@ CI runs the commands in `.github/workflows/ci.yml` and lints the pull request ti
 `.github/workflows/mutation.yml` runs Stryker, with `stryker.conf.mjs`, as a baseline on `main` or on any branch by hand, and as an advisory comparison scoped to the sources a pull request changes or reaches through a changed test, helper or fixture.
 The workflow has no schedule: the weekly full baseline starts with `gh workflow run mutation`.
 A hand-started run restores no state and passes `--disableBail`, so its report lists every covering and killing test.
-That run uploads the report again as the `mutation-baseline-full` artifact.
-The scope step reads that artifact from the newest successful hand-started run on `main`.
+That run uploads the report and its incremental state again as the `mutation-baseline-full` artifact.
+Both jobs restore a baseline through [checks-mutation-baseline](docs/gates/checks-mutation-baseline.md), and the scope step passes `--full` to read that artifact.
 The comparison passes `--ignoreStatic` to both of its Stryker runs, so it never scores a static mutant, and the full baseline still does.
 The head run resumes from the merge-base run's incremental state, even when the pull request changes a test.
 Stryker reruns each mutant whose covering test file changed, and it compares only the test file's own source.

@@ -59,13 +59,7 @@ jobs:
         if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          run_id="$(gh run list --workflow mutation.yml --branch main --status success --limit 20 --json databaseId,event --jq 'map(select(.event != "pull_request"))[0].databaseId // empty')"
-          download="$(mktemp -d)"
-          if [ -n "$run_id" ] && gh run download "$run_id" --name mutation-baseline --dir "$download" && [ -f "$download/stryker-incremental.json" ]; then
-            mkdir -p reports
-            cp "$download/stryker-incremental.json" reports/stryker-incremental.json
-          fi
+        run: bun src/testing/mutation-baseline.ts reports/stryker-incremental.json
       # Incremental with no prior state runs everything, and writes the state the next main run reuses.
       - if: github.event_name == 'push'
         run: time bun run mutate:incremental
@@ -81,11 +75,14 @@ jobs:
             reports/stryker-incremental.json
           retention-days: 90
       # Only a run that restored nothing lists every covering test, so only it uploads the report the scope step reads.
+      # The state rides along because checks-mutation-baseline counts an artifact without it as no baseline.
       - if: github.event_name != 'push'
         uses: actions/upload-artifact@v4
         with:
           name: mutation-baseline-full
-          path: reports/mutation/mutation.json
+          path: |
+            reports/mutation/mutation.json
+            reports/stryker-incremental.json
           retention-days: 90
 
   compare:
@@ -105,6 +102,11 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
+      # The scope step restores the baseline through the kit's own bin, so bun and the install come first.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
       # Changed src files mutate directly; changed tests add the src files they
       # cover in main's baseline, so a test-only pull request is measured too.
       # A unit test that imports a changed helper or names a changed fixture
@@ -115,27 +117,16 @@ jobs:
         run: |
           base="$(git merge-base HEAD "origin/$GITHUB_BASE_REF")"
           echo "BASE_SHA=$base" >> "$GITHUB_ENV"
-          baseline="$(mktemp -d)/mutation.json"
-          # Only hand-started runs are listed, so main's pushes cannot crowd the full baseline out of the list.
-          run_id="$(gh run list --workflow mutation.yml --branch main --event workflow_dispatch --status success --limit 1 --json databaseId --jq '.[].databaseId')"
-          download="$(mktemp -d)"
-          if [ -n "$run_id" ] && gh run download "$run_id" --name mutation-baseline-full --dir "$download" && [ -f "$download/mutation.json" ]; then
-            cp "$download/mutation.json" "$baseline"
-          fi
-          scripts/mutation-scope.sh "$base" "$baseline" >> "$GITHUB_ENV"
+          baseline="$RUNNER_TEMP/baseline-full"
+          bun src/testing/mutation-baseline.ts --full "$baseline/stryker-incremental.json" "$baseline/mutation.json"
+          scripts/mutation-scope.sh "$base" "$baseline/mutation.json" >> "$GITHUB_ENV"
       - name: Report empty scope
         if: env.SCOPE == ''
         run: "echo 'mutation: no source files changed, nothing to mutate'"
-      - uses: oven-sh/setup-bun@v2
-        if: env.SCOPE != ''
-        with:
-          bun-version-file: .bun-version
       - uses: actions/setup-node@v5
         if: env.SCOPE != ''
         with:
           node-version: 24
-      - if: env.SCOPE != ''
-        run: bun install --frozen-lockfile
       # Both builds skip static mutants: each one reruns the whole suite, and the full baseline still scores them.
       # The base build writes the incremental state the head build resumes from.
       - name: Build scope report at merge base
