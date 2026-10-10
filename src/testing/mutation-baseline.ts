@@ -129,7 +129,7 @@ const throughCache = Effect.fn("throughCache")(function* (run: number, artifact:
   // An entry already there stays, since a job sharing the runner may be copying from it, and the staged copy is whole.
   const placed = yield* fs.rename(staged, entry).pipe(
     Effect.as(entry),
-    Effect.catch(() => Effect.succeed(staged)),
+    Effect.orElseSucceed(() => staged),
   );
   yield* prune(shelf, String(artifact.id));
   return Option.some<Fetched>({ dir: placed, how: "downloaded it into the runner's cache" });
@@ -172,8 +172,8 @@ const runnerCache = Effect.gen(function* () {
   const environment = yield* Config.String("RUNNER_ENVIRONMENT").pipe(Config.withDefault(""));
   if (environment === "github-hosted") return Option.none<string>();
   return yield* cacheRoot().pipe(
-    Effect.map(Option.some),
-    Effect.catch(() =>
+    Effect.asSome,
+    Effect.catchTag("CacheUnrooted", () =>
       Console.error("mutation-baseline: the runner cache is disabled because HOME is unset, so the baseline is downloaded").pipe(Effect.as(Option.none<string>())),
     ),
   );

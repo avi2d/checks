@@ -38,8 +38,9 @@ GitHub gives every upload a new artifact id, so an entry under a listed id is ne
 On a hit the bin copies the files from the entry and downloads nothing.
 On a miss it downloads into a staging directory beside the entry and renames it into place.
 A job sharing the runner sees an entry whole or not at all.
-When the entry already exists, because another job placed it first or it lost a file, the bin leaves it alone and restores from its own download.
-After each download it keeps the 2 highest artifact ids for that repository and artifact name and the entry it restores from, and removes the rest.
+If the entry already exists, because another job placed it or it lost a file, the bin keeps it and restores from its own download.
+After each download it keeps the 2 highest artifact ids for that repository and artifact name, plus the entry it restores from.
+It removes the rest.
 A 100 MB baseline zip can unpack to about 500 MB, so a repository restoring both artifacts holds about 2 GB.
 
 When `RUNNER_ENVIRONMENT` is `github-hosted`, it downloads into a temporary directory and writes no cache, since a hosted runner starts every job on a fresh machine.
