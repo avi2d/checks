@@ -2,7 +2,7 @@ import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { fakeActions, type FakeRun } from "./lib/fake-actions.ts";
+import { fakeActions, type FakeOptions, type FakeRun } from "./lib/fake-actions.ts";
 import { CHECKOUT, ran, type Ran, scratchDirs } from "./lib/fixture-repo.ts";
 
 const SCRIPT = join(CHECKOUT, "src", "testing", "mutation-baseline.ts");
@@ -23,14 +23,19 @@ function baseline(id: number, name: string, tag: string, expired = false) {
   return { id, name, expired, files: { "stryker-incremental.json": `{"state":"${tag}"}`, "mutation/mutation.json": `{"report":"${tag}"}` } };
 }
 
+// The full artifact as upload-artifact writes it from the one path reports/mutation/mutation.json: the file at its root.
+function fullReport(id: number, tag: string) {
+  return { id, name: "mutation-baseline-full", expired: false, files: { "mutation.json": `{"report":"${tag}"}` } };
+}
+
 function run(databaseId: number, event: string, createdAt: string, artifacts: FakeRun["artifacts"]): FakeRun {
   return { databaseId, event, createdAt, artifacts };
 }
 
 // HOME holds the runner's cache, so each runner starts with an empty one.
-async function selfHosted(runs: readonly FakeRun[]): Promise<Runner> {
+async function selfHosted(runs: readonly FakeRun[], options: FakeOptions = {}): Promise<Runner> {
   const home = await scratch("checks-mutation-baseline-");
-  const fake = await fakeActions(home, REPOSITORY_ID, runs);
+  const fake = await fakeActions(home, REPOSITORY_ID, runs, options);
   const work = join(home, "work");
   await mkdir(work);
   return {
@@ -96,12 +101,50 @@ test("--full takes the newest scheduled or hand-started run whose full artifact 
     run(30, "schedule", "2026-10-03T00:00:00Z", [baseline(300, "mutation-baseline-full", "older schedule")]),
   ]);
 
-  const restored = await runner.run(["--full", "full/stryker-incremental.json", "full/mutation.json"]);
+  const restored = await runner.run(["--full", "full/mutation.json"]);
 
   expect(restored).toEqual({ exitCode: 0, text: "mutation-baseline: downloaded it into the runner's cache, mutation-baseline-full artifact 350 from run 35\n" });
-  expect(await runner.read("full/stryker-incremental.json")).toBe('{"state":"dispatch"}');
   expect(await runner.read("full/mutation.json")).toBe('{"report":"dispatch"}');
   expect(await runner.shelf("mutation-baseline-full")).toEqual(["350"]);
+}, 30_000);
+
+test("--full restores the report a full artifact holds at its root, with no incremental state beside it, and then from the cache", async () => {
+  const runner = await selfHosted([run(35, "workflow_dispatch", "2026-10-03T12:00:00Z", [fullReport(350, "root layout")])]);
+
+  const downloaded = await runner.run(["--full", "full/mutation.json"]);
+  const cached = await runner.run(["--full", "again/mutation.json"]);
+
+  expect(downloaded).toEqual({ exitCode: 0, text: "mutation-baseline: downloaded it into the runner's cache, mutation-baseline-full artifact 350 from run 35\n" });
+  expect(await runner.read("full/mutation.json")).toBe('{"report":"root layout"}');
+  expect(cached).toEqual({ exitCode: 0, text: "mutation-baseline: restored it from the runner's cache, mutation-baseline-full artifact 350 from run 35\n" });
+  expect(await runner.read("again/mutation.json")).toBe('{"report":"root layout"}');
+  expect(await runner.downloads()).toHaveLength(1);
+}, 30_000);
+
+test("--full passes over an artifact without the report and downloads no run after the first that holds one", async () => {
+  const runner = await selfHosted([
+    run(40, "workflow_dispatch", "2026-10-04T00:00:00Z", [{ id: 400, name: "mutation-baseline-full", expired: false, files: { "stryker-incremental.json": "{}" } }]),
+    run(35, "schedule", "2026-10-03T12:00:00Z", [fullReport(350, "first with a report")]),
+    run(30, "workflow_dispatch", "2026-10-03T00:00:00Z", [fullReport(300, "older")]),
+  ]);
+
+  const restored = await runner.run(["--full", "full/mutation.json"]);
+
+  expect(restored.text).toBe("mutation-baseline: downloaded it into the runner's cache, mutation-baseline-full artifact 350 from run 35\n");
+  expect(await runner.read("full/mutation.json")).toBe('{"report":"first with a report"}');
+  expect((await runner.downloads()).map((call) => call.split(" ")[2])).toEqual(["40", "35"]);
+}, 30_000);
+
+test("two jobs that miss the cache together both restore, and the runner keeps one entry", async () => {
+  const runner = await selfHosted(MAIN_RUNS, { downloadsMeet: 2 });
+
+  const [first, second] = await Promise.all([runner.run(["first/stryker-incremental.json"]), runner.run(["second/stryker-incremental.json"])]);
+
+  const downloaded = "mutation-baseline: downloaded it into the runner's cache, mutation-baseline artifact 200 from run 20\n";
+  expect([first, second]).toEqual([{ exitCode: 0, text: downloaded }, { exitCode: 0, text: downloaded }]);
+  expect(await runner.read("first/stryker-incremental.json")).toBe('{"state":"newest push"}');
+  expect(await runner.read("second/stryker-incremental.json")).toBe('{"state":"newest push"}');
+  expect(await readdir(join(runner.home, SHELVES, "mutation-baseline"))).toEqual(["200"]);
 }, 30_000);
 
 test("with no baseline to restore it writes nothing and still exits 0", async () => {
@@ -131,6 +174,6 @@ test("a missing destination prints the usage and exits 2", async () => {
   const runner = await selfHosted(MAIN_RUNS);
   expect(await runner.run(["--full"])).toEqual({
     exitCode: 2,
-    text: "checks-mutation-baseline: usage: checks-mutation-baseline [--full] <incremental-dest> [mutation-json-dest]\n",
+    text: "checks-mutation-baseline: usage: checks-mutation-baseline <incremental-dest> [mutation-json-dest] | --full <mutation-json-dest>\n",
   });
 }, 30_000);

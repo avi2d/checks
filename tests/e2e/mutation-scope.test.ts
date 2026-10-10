@@ -1,8 +1,9 @@
 import { $ } from "bun";
 import { expect, setDefaultTimeout, test } from "bun:test";
 import { mkdir, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { parseWorkflow, stepNamed } from "../lib/workflow.ts";
+import { fakeActions, type FakeRun } from "./lib/fake-actions.ts";
 import { CHECKOUT, fixtureRepos, ran, scratchDirs, type FixtureRepo, type Ran } from "./lib/fixture-repo.ts";
 
 // Scratch git repos and the scope script run past bun's 5s default on a loaded machine.
@@ -186,29 +187,6 @@ test("a changed source scopes directly, and an added one only at the head", asyn
   expect(scope["BASE_SCOPE"]).toBe("src/kept.ts");
 });
 
-// Answers `gh run list` from runs-<event>.json up to its --limit, the artifact lookup and `gh run download` from artifacts/<id>/<name>, and fails a list whose fail-<event> exists.
-const FAKE_GH = `#!/bin/sh
-here="$(dirname "$0")"
-case "$1 $2" in
-  "run list")
-    while [ $# -gt 0 ]; do case "$1" in --event) event="$2"; shift;; --limit) limit="$2"; shift;; esac; shift; done
-    if [ -f "$here/fail-$event" ]; then echo "gh: HTTP 502 listing $event runs" >&2; exit 1; fi
-    if [ -f "$here/runs-$event.json" ]; then jq -c ".[:$limit]" "$here/runs-$event.json"; else echo "[]"; fi;;
-  "api "*)
-    id="$(echo "$2" | sed -E 's|.*/runs/([0-9]+)/artifacts.*|\\1|')"
-    name="\${2##*name=}"
-    if [ -d "$here/artifacts/$id/$name" ]; then
-      echo "{\\"artifacts\\":[{\\"id\\":$id,\\"name\\":\\"$name\\",\\"expired\\":false,\\"workflow_run\\":{\\"repository_id\\":1}}]}"
-    else echo '{"artifacts":[]}'; fi;;
-  "run download")
-    id="$3"
-    while [ $# -gt 0 ]; do case "$1" in --name) name="$2"; shift;; --dir) dir="$2"; shift;; esac; shift; done
-    if [ ! -d "$here/artifacts/$id/$name" ]; then echo "no valid artifacts found to download" >&2; exit 1; fi
-    mkdir -p "$dir" && cp -R "$here/artifacts/$id/$name/." "$dir/";;
-  *) echo "fake gh: unknown call $*" >&2; exit 1;;
-esac
-`;
-
 const WORKFLOW = join(CHECKOUT, ".github/workflows/mutation.yml");
 
 async function runStep(name: string, cwd: string, env: Readonly<Record<string, string>>): Promise<Ran> {
@@ -216,37 +194,31 @@ async function runStep(name: string, cwd: string, env: Readonly<Record<string, s
   return ran($`bash -e -c ${step.run}`.cwd(cwd).env({ ...process.env, ...step.env, ...env }));
 }
 
-// A full run uploads its report and state under both artifacts; a run from before full baselines uploads only the incremental one.
+// A full run uploads the report alone as its full artifact; a run from before full baselines uploads only the incremental one.
 type DispatchedRun = { readonly id: number; readonly report: string; readonly full: boolean };
 
-function artifactsOf({ report, full }: DispatchedRun): Readonly<Record<string, string>> {
-  const uploaded = (name: string) => ({ [`${name}/mutation/mutation.json`]: report, [`${name}/stryker-incremental.json`]: "{}" });
-  return full ? { ...uploaded("mutation-baseline"), ...uploaded("mutation-baseline-full") } : uploaded("mutation-baseline");
+function artifactsOf({ id, report, full }: DispatchedRun): FakeRun["artifacts"] {
+  const incremental = { id: id * 10, name: "mutation-baseline", expired: false, files: { "mutation/mutation.json": report, "stryker-incremental.json": "{}" } };
+  const fullOnly = { id: id * 10 + 1, name: "mutation-baseline-full", expired: false, files: { "mutation.json": report } };
+  return full ? [incremental, fullOnly] : [incremental];
 }
 
 async function selectScopeStep(repo: FixtureRepo, newestFirst: readonly DispatchedRun[], listFails = false): Promise<Ran & { readonly env: string }> {
-  const bin = await scratch("checks-mutation-scope-gh-");
-  await writeFile(join(bin, "gh"), FAKE_GH, { mode: 0o755 });
+  const home = await scratch("checks-mutation-scope-runner-");
   const createdAt = (index: number): string => new Date(Date.UTC(2026, 9, 10 - index)).toISOString();
-  await writeFile(join(bin, "runs-workflow_dispatch.json"), JSON.stringify(newestFirst.map(({ id }, index) => ({ databaseId: id, event: "workflow_dispatch", createdAt: createdAt(index) }))));
-  for (const run of newestFirst) {
-    for (const [path, content] of Object.entries(artifactsOf(run))) {
-      await mkdir(dirname(join(bin, "artifacts", `${run.id}`, path)), { recursive: true });
-      await writeFile(join(bin, "artifacts", `${run.id}`, path), content);
-    }
-  }
-  if (listFails) await writeFile(join(bin, "fail-workflow_dispatch"), "");
+  const runs = newestFirst.map((run, index) => ({ databaseId: run.id, event: "workflow_dispatch", createdAt: createdAt(index), artifacts: artifactsOf(run) }));
+  const fake = await fakeActions(home, 1, runs, { listFails });
   await symlink(join(CHECKOUT, "scripts"), join(repo.dir, "scripts"));
   await mkdir(join(repo.dir, "src", "testing"), { recursive: true });
   await symlink(join(CHECKOUT, "src", "testing", "mutation-baseline.ts"), join(repo.dir, "src", "testing", "mutation-baseline.ts"));
-  const githubEnv = join(bin, "github-env");
+  const githubEnv = join(home, "github-env");
   await writeFile(githubEnv, "");
   const done = await runStep("Select mutation scope", repo.dir, {
-    PATH: `${bin}:${process.env["PATH"] ?? ""}`,
+    ...fake.env,
     GITHUB_BASE_REF: "main",
     GITHUB_ENV: githubEnv,
-    HOME: bin,
-    RUNNER_TEMP: bin,
+    HOME: home,
+    RUNNER_TEMP: home,
   });
   return { ...done, env: await readFile(githubEnv, "utf8") };
 }
@@ -301,7 +273,7 @@ test("the scope step fails when the baseline query fails rather than scoping wit
   const done = await selectScopeStep(repo, [{ id: 3, report: full, full: true }], true);
 
   expect(done.exitCode).not.toBe(0);
-  expect(done.text).toContain("gh: HTTP 502 listing workflow_dispatch runs");
+  expect(done.text).toContain("gh: HTTP 502 listing runs");
   expect(done.env).not.toContain("SCOPE=");
 });
 

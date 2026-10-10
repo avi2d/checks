@@ -75,14 +75,11 @@ jobs:
             reports/stryker-incremental.json
           retention-days: 90
       # Only a run that restored nothing lists every covering test, so only it uploads the report the scope step reads.
-      # The state rides along because checks-mutation-baseline counts an artifact without it as no baseline.
       - if: github.event_name != 'push'
         uses: actions/upload-artifact@v4
         with:
           name: mutation-baseline-full
-          path: |
-            reports/mutation/mutation.json
-            reports/stryker-incremental.json
+          path: reports/mutation/mutation.json
           retention-days: 90
 
   compare:
@@ -117,9 +114,9 @@ jobs:
         run: |
           base="$(git merge-base HEAD "origin/$GITHUB_BASE_REF")"
           echo "BASE_SHA=$base" >> "$GITHUB_ENV"
-          baseline="$RUNNER_TEMP/baseline-full"
-          bun src/testing/mutation-baseline.ts --full "$baseline/stryker-incremental.json" "$baseline/mutation.json"
-          scripts/mutation-scope.sh "$base" "$baseline/mutation.json" >> "$GITHUB_ENV"
+          baseline="$RUNNER_TEMP/baseline-full/mutation.json"
+          bun src/testing/mutation-baseline.ts --full "$baseline"
+          scripts/mutation-scope.sh "$base" "$baseline" >> "$GITHUB_ENV"
       - name: Report empty scope
         if: env.SCOPE == ''
         run: "echo 'mutation: no source files changed, nothing to mutate'"

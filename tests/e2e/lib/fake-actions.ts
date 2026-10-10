@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { Schema } from "effect";
 
@@ -20,6 +20,8 @@ const Run = Schema.Struct({
 const State = Schema.Struct({
   repositoryId: Schema.Int,
   runs: Schema.Array(Run),
+  listFails: Schema.Boolean,
+  downloadsMeet: Schema.Int,
   calls: Schema.Array(Schema.String),
 });
 
@@ -33,13 +35,16 @@ export type FakeActions = {
   readonly downloads: () => Promise<readonly string[]>;
 };
 
+// `downloadsMeet` holds each download until that many have started, so jobs sharing a runner miss its cache together.
+export type FakeOptions = { readonly listFails?: boolean; readonly downloadsMeet?: number };
+
 // Puts a `gh` on PATH that answers the run list, artifact and download calls from successful runs of mutation.yml on main.
-export async function fakeActions(home: string, repositoryId: number, runs: readonly FakeRun[]): Promise<FakeActions> {
+export async function fakeActions(home: string, repositoryId: number, runs: readonly FakeRun[], options: FakeOptions = {}): Promise<FakeActions> {
   const bin = join(home, "bin");
   await mkdir(bin, { recursive: true });
   await writeFile(join(bin, "gh"), `#!/bin/sh\nexec bun ${import.meta.path} "$@"\n`, { mode: 0o755 });
   const statePath = join(home, "actions.json");
-  await writeFile(statePath, JSON.stringify({ repositoryId, runs, calls: [] } satisfies FakeState));
+  await writeFile(statePath, JSON.stringify({ repositoryId, runs, listFails: options.listFails ?? false, downloadsMeet: options.downloadsMeet ?? 0, calls: [] } satisfies FakeState));
   return {
     env: { PATH: `${bin}:${process.env["PATH"] ?? ""}`, FAKE_ACTIONS_STATE: statePath },
     downloads: async () => decodeState(await readFile(statePath, "utf8")).calls.filter((call) => call.startsWith("run download")),
@@ -73,6 +78,13 @@ function listArtifacts(state: FakeState, endpoint: string): string | undefined {
   return JSON.stringify({ total_count: artifacts.length, artifacts });
 }
 
+async function meet(state: FakeState, statePath: string): Promise<void> {
+  const arrivals = join(dirname(statePath), "downloads-started");
+  await mkdir(arrivals, { recursive: true });
+  await writeFile(join(arrivals, String(process.pid)), "");
+  while ((await readdir(arrivals)).length < state.downloadsMeet) await Bun.sleep(20);
+}
+
 async function download(state: FakeState, args: readonly string[]): Promise<boolean> {
   const [runId = ""] = args;
   const name = flag(args, "--name");
@@ -99,6 +111,11 @@ async function main(): Promise<number> {
   const statePath = process.env["FAKE_ACTIONS_STATE"] ?? "";
   const recorded = decodeState(await readFile(statePath, "utf8"));
   await writeFile(statePath, JSON.stringify({ ...recorded, calls: [...recorded.calls, args.join(" ")] }));
+  if (recorded.listFails && args[0] === "run" && args[1] === "list") {
+    process.stderr.write("gh: HTTP 502 listing runs\n");
+    return 1;
+  }
+  if (args[0] === "run" && args[1] === "download") await meet(recorded, statePath);
   const out = await answer(recorded, args);
   if (out === undefined) {
     process.stderr.write(`fake gh: no answer for ${args.join(" ")}\n`);
