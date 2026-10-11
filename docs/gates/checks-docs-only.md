@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-docs-only
 
-`checks-docs-only` tells whether a change touches only top-level Markdown and Markdown under `docs/`, so a docs-only change skips the full `ci` run.
+`checks-docs-only` tells whether a change touches only top-level Markdown and Markdown under `docs/`, so a docs-only change skips typecheck and test.
 
 ## What it checks
 
