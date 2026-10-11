@@ -4,7 +4,8 @@ audience: consumers
 ---
 # checks-mutation-baseline
 
-`checks-mutation-baseline` restores the newest mutation baseline that `main` published, deletes superseded baselines after a `main` upload, and on a self-hosted runner it keeps each baseline it downloads so the next job copies it instead.
+`checks-mutation-baseline` restores the newest mutation baseline that `main` published, and deletes superseded baselines after a `main` upload.
+On a self-hosted runner it keeps each baseline it downloads, so the next job copies it instead.
 
 ## What it checks
 
@@ -24,8 +25,10 @@ It creates the directories each destination needs.
 
 With `--prune` it deletes the repository's superseded baselines instead of restoring one.
 It keeps the newest unexpired `mutation-baseline` among the runs the restore reads, and the newest unexpired `mutation-baseline-full` the restore takes first.
-It also keeps the unexpired baselines of the run it runs in, which `GITHUB_RUN_ID` names, since the restore reads only successful runs and takes them once that run succeeds.
-A failed artifact lookup while it picks what to keep stops it before it deletes anything, since treating the artifact as absent would delete the one the restore takes.
+It also keeps the unexpired baselines of the run it runs in, which `GITHUB_RUN_ID` names.
+The restore reads only successful runs, so it takes them once that run succeeds.
+A failed artifact lookup while it picks what to keep stops it before it deletes anything.
+Treating that artifact as absent would delete the one the restore takes.
 It deletes only artifacts with exactly those two names in the repository it runs in.
 It deletes only unexpired artifacts, since the restore never reads an expired one.
 With `--dry-run` it prints what it would delete and what it would keep, and deletes nothing.
@@ -75,9 +78,11 @@ checks-mutation-baseline --prune [--dry-run]
 | 2 | the arguments do not parse, `gh` cannot list the runs, the cache cannot be written, or another job removed the entry before it was copied |
 
 A failed artifact lookup or download prints the `gh` error and moves on, as a missing artifact does.
-With `--prune`, `0` means it deleted the superseded artifacts, found none, or could not delete some, and `2` means the arguments do not parse or `gh` cannot list the runs, a run's artifacts or the repository's artifacts.
+With `--prune`, `0` means it deleted the superseded artifacts, found none, or could not delete some.
+`2` means the arguments do not parse, or `gh` cannot list the runs, a run's artifacts or the repository's artifacts.
 A failed delete prints a `::warning::` annotation naming the artifact and the `gh` error, moves on, and the summary names the artifacts it could not delete.
-A failed delete still exits `0`, since a failed step fails the `main` run, and the restore then passes over the baseline that run uploaded, while the next `main` run's prune deletes what this one missed.
+A failed delete still exits `0`, since a failed step fails the `main` run and the restore then skips the baseline that run uploaded.
+The next `main` run's prune deletes what this one missed.
 
 ## Sample output
 
@@ -123,7 +128,8 @@ A baseline job uploads the state the incremental run wrote, then on `main` prune
 ```
 
 The incremental upload keeps 7 days of retention, since the restore reads only the newest `main` run.
-The full upload keeps 30 days, since full runs start weekly and a pull request's scope step loses its coverage when no full baseline outlives the gap.
+The full upload keeps 30 days, since full runs start weekly.
+A pull request's scope step loses its coverage when no full baseline outlives the gap.
 
 A pull request's scope step restores the full report with `--full`:
 
