@@ -15,6 +15,7 @@ type Runner = {
   readonly home: string;
   readonly run: (args: readonly string[], env?: Readonly<Record<string, string | undefined>>) => Promise<Ran>;
   readonly downloads: () => Promise<readonly string[]>;
+  readonly calls: () => Promise<readonly string[]>;
   readonly read: (file: string) => Promise<string | undefined>;
   readonly shelf: (artifact: string) => Promise<readonly string[]>;
 };
@@ -42,6 +43,7 @@ async function selfHosted(runs: readonly FakeRun[], options: FakeOptions = {}): 
     home,
     run: (args, env = {}) => ran($`bun ${SCRIPT} ${args}`.cwd(work).env({ ...process.env, RUNNER_ENVIRONMENT: "self-hosted", ...fake.env, HOME: home, ...env })),
     downloads: fake.downloads,
+    calls: fake.calls,
     read: (file) => readFile(join(work, file), "utf8").catch(() => undefined),
     shelf: async (artifact) => (await readdir(join(home, SHELVES, artifact)).catch(() => [])).filter((entry) => !entry.startsWith(".")).sort(),
   };
@@ -222,6 +224,74 @@ test("a missing destination prints the usage and exits 2", async () => {
   const runner = await selfHosted(MAIN_RUNS);
   expect(await runner.run(["--full"])).toEqual({
     exitCode: 2,
-    text: "checks-mutation-baseline: usage: checks-mutation-baseline <incremental-dest> [mutation-json-dest] | --full <mutation-json-dest>\n",
+    text: "checks-mutation-baseline: usage: checks-mutation-baseline <incremental-dest> [mutation-json-dest] | --full <mutation-json-dest> | --prune [--dry-run]\n",
   });
+}, 30_000);
+
+// The restore takes run 20's baseline and run 35's full report, so the prune keeps artifacts 200 and 350.
+const PRUNE_RUNS = [
+  run(35, "workflow_dispatch", "2026-10-04T00:00:00Z", [fullReport(350, "newest full")]),
+  run(30, "pull_request", "2026-10-03T00:00:00Z", [baseline(300, "mutation-baseline", "pull request")]),
+  run(25, "schedule", "2026-10-02T12:00:00Z", [fullReport(250, "older full")]),
+  run(20, "push", "2026-10-02T00:00:00Z", [baseline(200, "mutation-baseline", "newest push")]),
+  run(10, "push", "2026-10-01T00:00:00Z", [baseline(100, "mutation-baseline", "older push"), { id: 999, name: "other", expired: false, files: {} }]),
+];
+
+function deleted(calls: readonly string[]): readonly number[] {
+  return calls
+    .flatMap((call) => {
+      const matched = /artifacts\/(\d+)$/.exec(call);
+      return matched === null ? [] : [Number(matched[1])];
+    })
+    .sort((one, other) => one - other);
+}
+
+test("--prune deletes every superseded baseline but the newest of each, and never another name", async () => {
+  const runner = await selfHosted(PRUNE_RUNS);
+
+  const pruned = await runner.run(["--prune"]);
+
+  expect(pruned).toEqual({
+    exitCode: 0,
+    text: "mutation-baseline: deleted artifacts 100, 250, 300; kept mutation-baseline artifact 200 from run 20, mutation-baseline-full artifact 350 from run 35\n",
+  });
+  expect(deleted(await runner.calls())).toEqual([100, 250, 300]);
+  const again = await runner.run(["--prune", "--dry-run"]);
+  expect(again.text).toBe("mutation-baseline: dry run, nothing to delete; would keep mutation-baseline artifact 200 from run 20, mutation-baseline-full artifact 350 from run 35\n");
+}, 30_000);
+
+test("--prune --dry-run lists what would go and deletes nothing", async () => {
+  const runner = await selfHosted(PRUNE_RUNS);
+
+  const dried = await runner.run(["--prune", "--dry-run"]);
+
+  expect(dried).toEqual({
+    exitCode: 0,
+    text: "mutation-baseline: dry run, would delete artifacts 100, 250, 300; would keep mutation-baseline artifact 200 from run 20, mutation-baseline-full artifact 350 from run 35\n",
+  });
+  expect(deleted(await runner.calls())).toEqual([]);
+}, 30_000);
+
+test("--prune with nothing superseded deletes nothing", async () => {
+  const runner = await selfHosted([
+    run(35, "workflow_dispatch", "2026-10-04T00:00:00Z", [fullReport(350, "newest full")]),
+    run(20, "push", "2026-10-02T00:00:00Z", [baseline(200, "mutation-baseline", "newest push")]),
+  ]);
+
+  const pruned = await runner.run(["--prune"]);
+
+  expect(pruned).toEqual({
+    exitCode: 0,
+    text: "mutation-baseline: nothing to delete; kept mutation-baseline artifact 200 from run 20, mutation-baseline-full artifact 350 from run 35\n",
+  });
+  expect(deleted(await runner.calls())).toEqual([]);
+}, 30_000);
+
+test("--prune with no baselines at all deletes nothing", async () => {
+  const runner = await selfHosted([run(20, "push", "2026-10-02T00:00:00Z", [])]);
+
+  const pruned = await runner.run(["--prune"]);
+
+  expect(pruned).toEqual({ exitCode: 0, text: "mutation-baseline: nothing to delete; kept no baseline artifacts\n" });
+  expect(deleted(await runner.calls())).toEqual([]);
 }, 30_000);

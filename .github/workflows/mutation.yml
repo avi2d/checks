@@ -73,14 +73,19 @@ jobs:
           path: |
             reports/mutation/mutation.json
             reports/stryker-incremental.json
-          retention-days: 90
+          retention-days: 7
       # Only a run that restored nothing lists every covering test, so only it uploads the report the scope step reads.
       - if: github.event_name != 'push'
         uses: actions/upload-artifact@v4
         with:
           name: mutation-baseline-full
           path: reports/mutation/mutation.json
-          retention-days: 90
+          retention-days: 30
+      # The prune keeps the newest baseline of each name, so older uploads never pile up.
+      - name: Prune superseded baselines
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun src/testing/mutation-baseline.ts --prune
 
   compare:
     if: github.event_name == 'pull_request'

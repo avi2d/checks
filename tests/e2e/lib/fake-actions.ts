@@ -33,6 +33,7 @@ const decodeState = Schema.decodeUnknownSync(Schema.fromJsonString(State));
 export type FakeActions = {
   readonly env: Readonly<Record<string, string>>;
   readonly downloads: () => Promise<readonly string[]>;
+  readonly calls: () => Promise<readonly string[]>;
 };
 
 // `downloadsMeet` holds each download until that many have started, so jobs sharing a runner miss its cache together.
@@ -45,9 +46,11 @@ export async function fakeActions(home: string, repositoryId: number, runs: read
   await writeFile(join(bin, "gh"), `#!/bin/sh\nexec bun ${import.meta.path} "$@"\n`, { mode: 0o755 });
   const statePath = join(home, "actions.json");
   await writeFile(statePath, JSON.stringify({ repositoryId, runs, listFails: options.listFails ?? false, downloadsMeet: options.downloadsMeet ?? 0, calls: [] } satisfies FakeState));
+  const calls = async () => decodeState(await readFile(statePath, "utf8")).calls;
   return {
     env: { PATH: `${bin}:${process.env["PATH"] ?? ""}`, FAKE_ACTIONS_STATE: statePath },
-    downloads: async () => decodeState(await readFile(statePath, "utf8")).calls.filter((call) => call.startsWith("run download")),
+    downloads: async () => (await calls()).filter((call) => call.startsWith("run download")),
+    calls,
   };
 }
 
@@ -98,10 +101,30 @@ async function download(state: FakeState, args: readonly string[]): Promise<bool
   return true;
 }
 
+function listRepoArtifacts(state: FakeState, endpoint: string): string | undefined {
+  const matched = /^repos\/\{owner\}\/\{repo\}\/actions\/artifacts(\?(.*))?$/.exec(endpoint);
+  if (matched === null) return undefined;
+  const params = new URLSearchParams(matched[2] ?? "");
+  const perPage = Number(params.get("per_page") ?? "30");
+  const page = Number(params.get("page") ?? "1");
+  const all = state.runs.flatMap((run) =>
+    run.artifacts.map(({ id, name, expired }) => ({ id, name, expired, workflow_run: { id: run.databaseId, repository_id: state.repositoryId } })),
+  );
+  return JSON.stringify({ total_count: all.length, artifacts: all.slice((page - 1) * perPage, page * perPage) });
+}
+
+function erase(state: FakeState, endpoint: string): FakeState | undefined {
+  const matched = /^repos\/\{owner\}\/\{repo\}\/actions\/artifacts\/(\d+)$/.exec(endpoint);
+  if (matched === null) return undefined;
+  const id = Number(matched[1]);
+  if (!state.runs.some((run) => run.artifacts.some((artifact) => artifact.id === id))) return undefined;
+  return { ...state, runs: state.runs.map((run) => ({ ...run, artifacts: run.artifacts.filter((artifact) => artifact.id !== id) })) };
+}
+
 async function answer(state: FakeState, args: readonly string[]): Promise<string | undefined> {
   const [command, subcommand, ...rest] = args;
   if (command === "run" && subcommand === "list") return listRuns(state, rest);
-  if (command === "api" && subcommand !== undefined) return listArtifacts(state, subcommand);
+  if (command === "api" && subcommand !== undefined) return listArtifacts(state, subcommand) ?? listRepoArtifacts(state, subcommand);
   if (command === "run" && subcommand === "download") return (await download(state, rest)) ? "" : undefined;
   return undefined;
 }
@@ -110,6 +133,16 @@ async function main(): Promise<number> {
   const args = process.argv.slice(2);
   const statePath = process.env["FAKE_ACTIONS_STATE"] ?? "";
   const recorded = decodeState(await readFile(statePath, "utf8"));
+  if ((flag(args, "-X") ?? flag(args, "--method")) === "DELETE") {
+    const target = args.find((arg) => arg.startsWith("repos/"));
+    const erased = target === undefined ? undefined : erase(recorded, target);
+    if (erased === undefined) {
+      process.stderr.write(`fake gh: no answer for ${args.join(" ")}\n`);
+      return 1;
+    }
+    await writeFile(statePath, JSON.stringify({ ...erased, calls: [...erased.calls, args.join(" ")] }));
+    return 0;
+  }
   await writeFile(statePath, JSON.stringify({ ...recorded, calls: [...recorded.calls, args.join(" ")] }));
   if (recorded.listFails && args[0] === "run" && args[1] === "list") {
     process.stderr.write("gh: HTTP 502 listing runs\n");
