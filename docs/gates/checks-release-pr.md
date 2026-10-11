@@ -115,7 +115,7 @@ jobs:
       - name: open or refresh the release pull request
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ./node_modules/.bin/checks-release-pr ci.yml commitlint.yml
+        run: ./node_modules/.bin/checks-release-pr ci.yml
   tag:
     if: "github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: release ')"
     runs-on: ubuntu-latest

@@ -8,7 +8,7 @@ audience: consumers
 
 ## What it checks
 
-It reads the subject of `HEAD`, and does nothing unless the subject is `chore: release <version>`, with or without the ` (#N)` a squash merge adds.
+It reads the subject of `HEAD`, and does nothing unless the subject is `chore: release <version>`, with or without the pull request number a squash merge appends.
 It refuses a release commit whose `package.json` holds another version.
 It tags `HEAD` as `v<version>` and pushes the tag to `origin`.
 A tag the workflow token pushes starts no `push` workflow, so it then dispatches the workflow its argument names on the tag.

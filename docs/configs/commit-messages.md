@@ -21,7 +21,7 @@ The workflow lints with the installed kit's `commitlint.config.js`, so every rep
 
 It lints the pull request title and nothing else.
 The title is the enforced subject because a squash merge uses it as the main commit subject, and per-commit messages are not linted.
-GitHub appends ` (#N)` to the squashed subject, so the workflow lints the title with that suffix attached, and the header length limit applies to the landed subject, not the bare title.
+GitHub appends the pull request number to the squashed subject, so the bin lints the title with ` (#0000)` attached, and the header length limit applies to the landed subject, not the bare title.
 The bin moves the git comment character off `#`, so a title starting with `#` is linted like any other.
 The `ci` job also triggers on `workflow_dispatch`, since GitHub holds the `pull_request` runs of a release pull request the workflow token opens until a maintainer approves them, as [checks-release-pr](../gates/checks-release-pr.md) says.
 A dispatched run carries no pull request, so the bin reads the title of the one open pull request its branch heads, and fails when there is none.
