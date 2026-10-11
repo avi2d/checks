@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.38.1
+
+Released 2026-10-11.
+
+### Fixes
+
+- **docs:** derive README what-you-see line from source, make Where things are optional [#142](https://github.com/avi2d/checks/pull/142)
+
 ## 0.38.0
 
 Released 2026-10-10.
