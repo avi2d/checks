@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.39.0
+
+Released 2026-10-11.
+
+### Features
+
+- **testing:** prune superseded mutation baselines after main uploads [#144](https://github.com/avi2d/checks/pull/144)
+
 ## 0.38.1
 
 Released 2026-10-11.
