@@ -27,10 +27,12 @@ The title is the enforced subject because a squash merge uses it as the main com
 GitHub appends the pull request number to the squashed subject, so the bin lints the title with ` (#0000)` attached.
 The header length limit applies to the landed subject, not the bare title.
 The bin moves the git comment character off `#`, so a title starting with `#` is linted like any other.
-The `ci` job also triggers on `workflow_dispatch`, since GitHub holds the `pull_request` runs of a release pull request the workflow token opens until a maintainer approves them, as [checks-release-pr](../gates/checks-release-pr.md) says.
-A dispatched run carries no pull request, so the bin reads the title of the one open pull request its branch heads, and fails when there is none.
+The `ci` job also triggers on `workflow_dispatch`, as [checks-release-pr](../gates/checks-release-pr.md) says.
+GitHub holds the `pull_request` runs of a release pull request the workflow token opens until a maintainer approves them.
+A dispatched run carries no pull request, so the bin reads the title of the one open pull request its branch heads.
+It fails when there is none.
 That lookup needs the workflow's `pull-requests: read` permission.
-It reports a dispatched run's result on the head commit through the job's own status, since GitHub keeps a dispatched run's check off the pull request.
+The `commitlint` status covers a dispatched run too, since GitHub keeps a dispatched run's check off the pull request.
 The kit's own `.github/workflows/ci.yml` shows the step.
 
 It never sees a commit's author or committer fields, nor the `Co-authored-by` trailer GitHub writes from a foreign author when it squashes, so it cannot enforce who a commit belongs to.

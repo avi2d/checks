@@ -10,7 +10,8 @@ audience: consumers
 
 It lints the pull request title and nothing else.
 The title comes from `PR_TITLE` when the event carries one.
-A dispatched run carries no pull request, so the bin reads the title of the one open pull request its branch heads, and fails when there is none.
+A dispatched run carries no pull request, so the bin reads the title of the one open pull request its branch heads.
+It fails when there is none.
 A run with no title to lint passes and says so.
 The bin lints the title with ` (#0000)` attached, since GitHub appends the pull request number to the squashed subject.
 It moves the git comment character off `#`, so a title starting with `#` is linted like any other.
