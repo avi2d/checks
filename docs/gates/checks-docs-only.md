@@ -41,7 +41,8 @@ docs-only=true
 
 ## When it runs
 
-The `ci` job has a filter step that appends the verdict to `GITHUB_OUTPUT`, and each gate step skips when the verdict reads `true`.
+The `ci` job has a filter step that appends the verdict to `GITHUB_OUTPUT`, and the typecheck and test steps skip when the verdict reads `true`.
+The build, its `git diff --exit-code` and `bun run lint` still run, so `checks-docs` and the generated blocks hold on a docs-only change.
 The job itself always runs and reports, so every required check stays green on a docs-only change.
 
 ## Related topics

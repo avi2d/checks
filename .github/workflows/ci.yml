@@ -34,12 +34,10 @@ jobs:
       # Path filters would leave this required check unreported, so steps gate on the filter instead.
       - id: filter
         run: bun src/delivery/docs-only.ts ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} >> "$GITHUB_OUTPUT"
-      - if: steps.filter.outputs.docs-only != 'true'
-        run: bun run build
-      - if: steps.filter.outputs.docs-only != 'true'
-        run: git diff --exit-code
-      - if: steps.filter.outputs.docs-only != 'true'
-        run: bun run lint
+      - run: bun run build
+      - run: git diff --exit-code
+      # A docs-only change still runs lint, since checks-docs checks only the range it is given.
+      - run: bun run lint
       - if: steps.filter.outputs.docs-only != 'true'
         run: bun run typecheck
       - if: steps.filter.outputs.docs-only != 'true'
