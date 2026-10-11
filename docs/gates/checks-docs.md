@@ -201,7 +201,7 @@ With one it is that commit against its parent, or against the empty tree for a r
 
 ```
 docs: 6 violation(s):
-  README.md:1: lacks `## Where things are`
+  README.md:1: lacks `## Before you begin`
   README.md:12: carries `;`, a semicolon. Use two sentences
   README.md:14: carries `former`, a report about the past. Say what is true now, and leave what changed to the changelog, a commit message or a decision record
   README.md:20: names `scripts/bild.ts`, which is not in the repository
