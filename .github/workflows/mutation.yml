@@ -74,13 +74,13 @@ jobs:
             reports/mutation/mutation.json
             reports/stryker-incremental.json
           retention-days: 7
-      # Only a run that restored nothing lists every covering test, so only it uploads the report the scope step reads.
+      # This repository is public so its artifacts do not count against the storage quota and its full runs start by hand.
       - if: github.event_name != 'push'
         uses: actions/upload-artifact@v4
         with:
           name: mutation-baseline-full
           path: reports/mutation/mutation.json
-          retention-days: 30
+          retention-days: 90
       # The prune keeps the baselines the restore takes and this run's uploads, so older uploads never pile up.
       - name: Prune superseded baselines
         if: github.ref == 'refs/heads/main'
