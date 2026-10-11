@@ -48,6 +48,7 @@ The bin takes no arguments.
 ## When it runs
 
 The `ci` job runs it on `pull_request` and `workflow_dispatch`, as [checks-ci-wiring](checks-ci-wiring.md) requires.
+The job then posts its outcome as a `commitlint` status, as [The commit message lint](../configs/commit-messages.md) says.
 
 ## Related topics
 

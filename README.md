@@ -120,12 +120,30 @@ To consume the kit from a repository:
 Lint the pull request title in the same job with one step:
 
    ```yaml
-         - name: lint the title
+         - id: title
+           name: lint the title
            env:
              PR_TITLE: ${{ github.event.pull_request.title }}
              GH_TOKEN: ${{ github.token }}
            run: bunx checks-commit-title
    ```
+
+A repository whose branch protection requires `commitlint` keeps that required status name while `commitlint.yml` goes away.
+The same job reports the title step's outcome under that name on every run, which needs `statuses: write`:
+
+   ```yaml
+         - name: report the title as commitlint
+           if: always()
+           env:
+             GH_TOKEN: ${{ github.token }}
+             HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+             OUTCOME: ${{ steps.title.outcome }}
+           run: |
+             state=failure
+             if [ "$OUTCOME" = success ]; then state=success; fi
+             gh api "repos/$GITHUB_REPOSITORY/statuses/${HEAD_SHA:-$GITHUB_SHA}" -f state="$state" -f context=commitlint -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --silent
+   ```
+
 A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on each job, as [checks-ci-wiring](docs/gates/checks-ci-wiring.md#runners) requires.
 `checks-effect-scope` writes the Effect paths of `oxlint.config.ts` and the kit's severities into `tsconfig.json`, as [The Effect rules](docs/configs/effect-rules.md#language-service) says.
 `bun run lint` then ends with `checks-lint: <count> gate(s) pass`.

@@ -116,3 +116,93 @@ test(
   },
   60_000,
 );
+
+type Scenario = {
+  readonly event: string;
+  readonly headSha: string | undefined;
+  readonly outcome: string;
+  readonly posted: { readonly sha: string; readonly state: string };
+};
+
+const GITHUB_SHA = "2222222222222222222222222222222222222222";
+const HEAD_SHA = "1111111111111111111111111111111111111111";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function contextValue(contexts: unknown, path: string): string {
+  const found = path.split(".").reduce<unknown>((node, key) => (isRecord(node) ? node[key] : undefined), contexts);
+  return typeof found === "string" ? found : "";
+}
+
+function contextPath(value: unknown): string | undefined {
+  return /^\$\{\{\s*([\w.-]+)\s*\}\}$/.exec(String(value))?.[1];
+}
+
+function resolved(env: Record<string, unknown>, contexts: unknown): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(env).map(([name, value]) => {
+      const path = contextPath(value);
+      if (path === undefined) throw new Error(`${name} is not a plain context lookup: ${String(value)}`);
+      return [name, contextValue(contexts, path)];
+    }),
+  );
+}
+
+async function titleStatusSteps(): Promise<readonly Record<string, unknown>[]> {
+  const workflow: unknown = Bun.YAML.parse(await Bun.file(join(CHECKOUT, ".github", "workflows", "ci.yml")).text());
+  const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
+  const checks = isRecord(jobs) ? jobs["checks"] : undefined;
+  const steps = isRecord(checks) && Array.isArray(checks["steps"]) ? checks["steps"] : [];
+  return steps.filter(
+    (step): step is Record<string, unknown> =>
+      isRecord(step) && isRecord(step["env"]) && Object.values(step["env"]).some((value) => contextPath(value) === "steps.title.outcome"),
+  );
+}
+
+test(
+  "the ci job always posts the title outcome as a commitlint status on pull_request and dispatch alike",
+  async () => {
+    const [step, ...others] = await titleStatusSteps();
+    expect(others).toEqual([]);
+    if (step === undefined || !isRecord(step["env"]) || typeof step["run"] !== "string") throw new Error("no step reports the title outcome");
+    expect(step["if"]).toBe("always()");
+
+    const scenarios: readonly Scenario[] = [
+      { event: "pull_request", headSha: HEAD_SHA, outcome: "success", posted: { sha: HEAD_SHA, state: "success" } },
+      { event: "pull_request", headSha: HEAD_SHA, outcome: "failure", posted: { sha: HEAD_SHA, state: "failure" } },
+      { event: "workflow_dispatch", headSha: undefined, outcome: "success", posted: { sha: GITHUB_SHA, state: "success" } },
+      { event: "workflow_dispatch", headSha: undefined, outcome: "failure", posted: { sha: GITHUB_SHA, state: "failure" } },
+      { event: "workflow_dispatch", headSha: undefined, outcome: "skipped", posted: { sha: GITHUB_SHA, state: "failure" } },
+    ];
+    const dir = await scratch("commitlint-status-");
+    await Bun.write(join(dir, "gh"), '#!/bin/sh\nprintf "%s\\n" "$@" > "$GH_ARGS"\n');
+    await $`chmod +x ${join(dir, "gh")}`.quiet();
+    for (const { event, headSha, outcome, posted } of scenarios) {
+      const contexts = {
+        github: { token: "token", event: headSha === undefined ? {} : { pull_request: { head: { sha: headSha } } } },
+        steps: { title: { outcome } },
+      };
+      const argsFile = join(dir, `${event}-${outcome}.args`);
+      const env = {
+        ...resolved(step["env"], contexts),
+        PATH: `${dir}:${process.env["PATH"] ?? ""}`,
+        GH_ARGS: argsFile,
+        GITHUB_EVENT_NAME: event,
+        GITHUB_SHA,
+        GITHUB_REPOSITORY: "acme/widget",
+        GITHUB_SERVER_URL: "https://github.com",
+        GITHUB_RUN_ID: "7",
+      };
+      const reported = await ran($`bash --noprofile --norc -eo pipefail -c ${step["run"]}`.env(env));
+      expect(reported).toEqual({ exitCode: 0, text: "" });
+      const args = (await Bun.file(argsFile).text()).trimEnd().split("\n");
+      expect(args.slice(0, 2)).toEqual(["api", `repos/acme/widget/statuses/${posted.sha}`]);
+      const fields = args.flatMap((arg, index) => (args[index - 1] === "-f" ? [arg] : []));
+      expect(fields).toContain(`state=${posted.state}`);
+      expect(fields).toContain("context=commitlint");
+    }
+  },
+  60_000,
+);
