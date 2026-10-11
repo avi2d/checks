@@ -1,16 +1,17 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { symlink, writeFile } from "node:fs/promises";
+import { symlink } from "node:fs/promises";
 import { join } from "node:path";
-import { parseWorkflow, stepNamed } from "../lib/workflow.ts";
-import { CHECKOUT, ran, type Ran, scratchDirs } from "./lib/fixture-repo.ts";
+import { withoutPullRequestEvent } from "../lib/env.ts";
+import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
 
 const scratch = scratchDirs();
+const BIN = join(CHECKOUT, "src", "delivery", "commit-title.ts");
 
 function lint(message: string): Promise<Ran> {
   const binary = join(CHECKOUT, "node_modules", ".bin", "commitlint");
   const config = join(CHECKOUT, "commitlint.config.js");
-  return ran($`printf '%s' ${message} | ${binary} --config ${config}`);
+  return ran($`printf "%s" ${message} | ${binary} --config ${config}`);
 }
 
 test(
@@ -65,49 +66,143 @@ test(
   120_000,
 );
 
-async function titleLinter(prefix: string, path: string): Promise<(title: string) => Promise<Ran>> {
-  const step = stepNamed(parseWorkflow(await Bun.file(join(CHECKOUT, ".github/workflows/commitlint.yml")).text()), "lint the title");
-  const runnerTemp = await scratch(prefix);
-  return async (title) => {
-    await writeFile(join(runnerTemp, "pr-title"), title);
-    return ran($`${{ raw: step.run }}`.cwd(CHECKOUT).env({ ...process.env, ...step.env, PATH: path, RUNNER_TEMP: runnerTemp }));
-  };
+function titleLinter(path: string): (title: string) => Promise<Ran> {
+  return (title) =>
+    ran($`bun ${BIN}`.cwd(CHECKOUT).env({ ...withoutPullRequestEvent(), PR_TITLE: title, GITHUB_EVENT_NAME: "pull_request", PATH: path }));
 }
 
 test(
-  "the generated title-lint step rejects a title that starts with git's comment character",
+  "the title bin rejects a title that opens with the git comment character",
   async () => {
-    const lintTitle = await titleLinter("checks-commitlint-hash-guard-", process.env["PATH"] ?? "");
+    const lintTitle = titleLinter(process.env["PATH"] ?? "");
 
-    const red = await lintTitle("# feat(lint): add x (#0000)");
+    const red = await lintTitle("# feat(lint): add x");
     expect(red.exitCode).not.toBe(0);
     expect(red.text).toContain("[type-empty]");
     expect(red.text).toContain("[subject-empty]");
 
-    const green = await lintTitle("feat(lint): add x (#0000)");
+    const green = await lintTitle("feat(lint): add x");
     expect(green.exitCode).toBe(0);
+    expect(green.text).toBe("");
   },
   60_000,
 );
 
 test(
-  "the generated title-lint step lints under bun on a runner with no node on PATH",
+  "the title bin lints without node on PATH",
   async () => {
-    const bin = await scratch("checks-commitlint-nodeless-bin-");
-    const git = Bun.which("git");
-    if (git === null) throw new Error("git is not on PATH");
-    await symlink(process.execPath, join(bin, "bun"));
-    await symlink(git, join(bin, "git"));
-    expect(Bun.which("node", { PATH: bin })).toBeNull();
-    const lintTitle = await titleLinter("checks-commitlint-nodeless-", bin);
+    const dir = await scratch("commit-title-bin-");
+    for (const name of ["bun", "git", "env"]) {
+      const found = Bun.which(name);
+      if (found === null) throw new Error(`${name} is missing from PATH`);
+      await symlink(found, join(dir, name));
+    }
+    const lintTitle = titleLinter(dir);
+    if (Bun.which("node", { PATH: dir }) !== null) throw new Error("node leaked onto the test PATH");
+    expect((await lintTitle("feat(lint): add x")).text).toBe("");
+    expect((await lintTitle("# feat(lint): add x")).exitCode).not.toBe(0);
+  },
+  60_000,
+);
 
-    const red = await lintTitle("update stuff");
-    expect(red.exitCode).not.toBe(0);
-    expect(red.text).toContain("[type-empty]");
+test(
+  "the title bin passes a push run with nothing to lint",
+  async () => {
+    const pushed = await ran(
+      $`bun ${BIN}`.cwd(CHECKOUT).env({ ...withoutPullRequestEvent(), GITHUB_EVENT_NAME: "push", PATH: process.env["PATH"] ?? "" }),
+    );
+    expect(pushed.exitCode).toBe(0);
+    expect(pushed.text).toContain("nothing to lint");
+  },
+  60_000,
+);
 
-    const green = await lintTitle("feat(lint): add x (#0000)");
-    expect(green.text).toBe("");
-    expect(green.exitCode).toBe(0);
+type Scenario = {
+  readonly event: string;
+  readonly headSha: string | undefined;
+  readonly outcome: string;
+  readonly posted: { readonly sha: string; readonly state: string };
+};
+
+const GITHUB_SHA = "2222222222222222222222222222222222222222";
+const HEAD_SHA = "1111111111111111111111111111111111111111";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function contextValue(contexts: unknown, path: string): string {
+  const found = path.split(".").reduce<unknown>((node, key) => (isRecord(node) ? node[key] : undefined), contexts);
+  return typeof found === "string" ? found : "";
+}
+
+function contextPath(value: unknown): string | undefined {
+  return /^\$\{\{\s*([\w.-]+)\s*\}\}$/.exec(String(value))?.[1];
+}
+
+function resolved(env: Record<string, unknown>, contexts: unknown): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(env).map(([name, value]) => {
+      const path = contextPath(value);
+      if (path === undefined) throw new Error(`${name} is not a plain context lookup: ${String(value)}`);
+      return [name, contextValue(contexts, path)];
+    }),
+  );
+}
+
+async function titleStatusSteps(): Promise<readonly Record<string, unknown>[]> {
+  const workflow: unknown = Bun.YAML.parse(await Bun.file(join(CHECKOUT, ".github", "workflows", "ci.yml")).text());
+  const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
+  const checks = isRecord(jobs) ? jobs["checks"] : undefined;
+  const steps = isRecord(checks) && Array.isArray(checks["steps"]) ? checks["steps"] : [];
+  return steps.filter(
+    (step): step is Record<string, unknown> =>
+      isRecord(step) && isRecord(step["env"]) && Object.values(step["env"]).some((value) => contextPath(value) === "steps.title.outcome"),
+  );
+}
+
+test(
+  "the ci job always posts the title outcome as a commitlint status on pull_request and dispatch alike",
+  async () => {
+    const [step, ...others] = await titleStatusSteps();
+    expect(others).toEqual([]);
+    if (step === undefined || !isRecord(step["env"]) || typeof step["run"] !== "string") throw new Error("no step reports the title outcome");
+    expect(step["if"]).toBe("always()");
+
+    const scenarios: readonly Scenario[] = [
+      { event: "pull_request", headSha: HEAD_SHA, outcome: "success", posted: { sha: HEAD_SHA, state: "success" } },
+      { event: "pull_request", headSha: HEAD_SHA, outcome: "failure", posted: { sha: HEAD_SHA, state: "failure" } },
+      { event: "workflow_dispatch", headSha: undefined, outcome: "success", posted: { sha: GITHUB_SHA, state: "success" } },
+      { event: "workflow_dispatch", headSha: undefined, outcome: "failure", posted: { sha: GITHUB_SHA, state: "failure" } },
+      { event: "workflow_dispatch", headSha: undefined, outcome: "skipped", posted: { sha: GITHUB_SHA, state: "failure" } },
+    ];
+    const dir = await scratch("commitlint-status-");
+    await Bun.write(join(dir, "gh"), '#!/bin/sh\nprintf "%s\\n" "$@" > "$GH_ARGS"\n');
+    await $`chmod +x ${join(dir, "gh")}`.quiet();
+    for (const { event, headSha, outcome, posted } of scenarios) {
+      const contexts = {
+        github: { token: "token", event: headSha === undefined ? {} : { pull_request: { head: { sha: headSha } } } },
+        steps: { title: { outcome } },
+      };
+      const argsFile = join(dir, `${event}-${outcome}.args`);
+      const env = {
+        ...resolved(step["env"], contexts),
+        PATH: `${dir}:${process.env["PATH"] ?? ""}`,
+        GH_ARGS: argsFile,
+        GITHUB_EVENT_NAME: event,
+        GITHUB_SHA,
+        GITHUB_REPOSITORY: "acme/widget",
+        GITHUB_SERVER_URL: "https://github.com",
+        GITHUB_RUN_ID: "7",
+      };
+      const reported = await ran($`bash --noprofile --norc -eo pipefail -c ${step["run"]}`.env(env));
+      expect(reported).toEqual({ exitCode: 0, text: "" });
+      const args = (await Bun.file(argsFile).text()).trimEnd().split("\n");
+      expect(args.slice(0, 2)).toEqual(["api", `repos/acme/widget/statuses/${posted.sha}`]);
+      const fields = args.flatMap((arg, index) => (args[index - 1] === "-f" ? [arg] : []));
+      expect(fields).toContain(`state=${posted.state}`);
+      expect(fields).toContain("context=commitlint");
+    }
   },
   60_000,
 );

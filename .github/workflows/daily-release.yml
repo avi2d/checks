@@ -32,7 +32,7 @@ jobs:
       - name: open or refresh the release pull request
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bun src/delivery/release-pr.ts ci.yml commitlint.yml
+        run: bun src/delivery/release-pr.ts ci.yml
 
   tag:
     if: "github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: release ')"

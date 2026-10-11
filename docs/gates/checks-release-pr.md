@@ -47,7 +47,7 @@ The repository needs **Allow GitHub Actions to create and approve pull requests*
 checks-release-pr <workflow>...
 ```
 
-Each argument names a workflow file under `.github/workflows/` whose jobs report the checks the default branch requires, such as `ci.yml` and `commitlint.yml`.
+Each argument names a workflow file under `.github/workflows/` whose jobs report the checks the default branch requires, such as `ci.yml`.
 Each named workflow triggers on `workflow_dispatch`.
 Name no workflow that runs something else on dispatch, such as a mutation baseline.
 
@@ -63,7 +63,7 @@ Name no workflow that runs something else on dispatch, such as a mutation baseli
 A run that opens the pull request prints the build's own output, then one line:
 
 ```
-release-pr: opened https://github.com/acme/widget/pull/12 to release 0.4.0, and dispatched ci.yml, commitlint.yml on release/main
+release-pr: opened https://github.com/acme/widget/pull/12 to release 0.4.0, and dispatched ci.yml on release/main
 ```
 
 A run on the same `HEAD` the next day prints one line:
@@ -115,7 +115,7 @@ jobs:
       - name: open or refresh the release pull request
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ./node_modules/.bin/checks-release-pr ci.yml commitlint.yml
+        run: ./node_modules/.bin/checks-release-pr ci.yml
   tag:
     if: "github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: release ')"
     runs-on: ubuntu-latest
@@ -150,8 +150,7 @@ Nothing requires them, and approving them runs the same checks again.
 
 The daily release needs the repository's other workflows to accept the dispatch:
 
-- `.github/workflows/ci.yml` and `.github/workflows/commitlint.yml` trigger on `workflow_dispatch`, grant `statuses: write`, and end each required job with the step below.
-  `commitlint.yml` also grants `pull-requests: read`, which the title lookup needs.
+- `.github/workflows/ci.yml` triggers on `workflow_dispatch`, grants `statuses: write` and `pull-requests: read`, and ends each required job with the step below.
 - The title lint reads the title of the one open pull request its branch heads when the event carries none, as [Commit messages](../configs/commit-messages.md) says.
 - `.github/workflows/release.yml` triggers on `workflow_dispatch` and refuses a ref that is not a tag, as [checks-release-notes](checks-release-notes.md) shows.
 - **Allow GitHub Actions to create and approve pull requests** is on, which the call after the step sets.
