@@ -13,7 +13,8 @@ To install <name>:
 1. <step>
 1. <step>
 
-<What you see when it worked.>
+<What you see when it worked, written only from what the source shows.>
+<Leave this line out when the source shows nothing.>
 
 ## <Everyday task, verb first, or what the reader looks up>
 
@@ -25,6 +26,8 @@ To <do the task>:
 <Or, for what the reader looks up, a table or a list with no steps.>
 
 ## Where things are
+
+<Leave this section out when there is no path worth mapping yet.>
 
 | Path | What it holds |
 | --- | --- |
