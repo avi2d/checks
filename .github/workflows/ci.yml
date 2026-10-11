@@ -1,36 +1,54 @@
 name: ci
+
 on:
   push:
     branches: [main]
   pull_request:
     types: [opened, edited, synchronize, reopened]
   workflow_dispatch:
+
 permissions:
   contents: read
   statuses: write
+  # A dispatched run carries no pull request, so the title lookup needs read access.
+  pull-requests: read
+
 jobs:
   checks:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     steps:
-      # The head, not GitHub's merge ref, so the tree the gates read is the commit the range ends at.
-      # The whole history, since the range starts where the head branched from the base branch.
       - uses: actions/checkout@v5
         with:
+          # The merge commit would hide the pull request head, so check out the head itself.
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      - run: bun run build
-      - run: git diff --exit-code
-      - run: bun run lint
-      - run: bun run typecheck
-      - run: bun run test
-      # GitHub keeps a dispatched run's check off the pull request, so the job reports its result there as a commit status.
+      - name: lint the title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          GH_TOKEN: ${{ github.token }}
+        run: bun src/delivery/commit-title.ts
+      # Path filters would leave this required check unreported, so steps gate on the filter instead.
+      - id: filter
+        run: bun src/delivery/docs-only.ts ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} >> "$GITHUB_OUTPUT"
+      - if: steps.filter.outputs.docs-only != 'true'
+        run: bun run build
+      - if: steps.filter.outputs.docs-only != 'true'
+        run: git diff --exit-code
+      - if: steps.filter.outputs.docs-only != 'true'
+        run: bun run lint
+      - if: steps.filter.outputs.docs-only != 'true'
+        run: bun run typecheck
+      - if: steps.filter.outputs.docs-only != 'true'
+        run: bun run test
       - name: report the result on the head commit
         if: always() && github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
-          STATE: ${{ job.status == 'success' && 'success' || 'failure' }}
-        run: gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" -f state="$STATE" -f context="$GITHUB_JOB" -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --silent
+        run: |
+          bun src/delivery/ci-wiring.ts --status-override "$GITHUB_JOB" "$HEAD_SHA" "$STATUS" <<'EOF'
+          ${{ toJSON(github.event.pull_request) }}
+          EOF

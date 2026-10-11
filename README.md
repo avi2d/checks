@@ -117,7 +117,15 @@ To consume the kit from a repository:
          - run: bun run test
    ```
 
-Add a pull request title lint step in another workflow using `./node_modules/.bin/commitlint`.
+Lint the pull request title in the same job with one step:
+
+   ```yaml
+         - name: lint the title
+           env:
+             PR_TITLE: ${{ github.event.pull_request.title }}
+             GH_TOKEN: ${{ github.token }}
+           run: bunx checks-commit-title
+   ```
 A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on each job, as [checks-ci-wiring](docs/gates/checks-ci-wiring.md#runners) requires.
 `checks-effect-scope` writes the Effect paths of `oxlint.config.ts` and the kit's severities into `tsconfig.json`, as [The Effect rules](docs/configs/effect-rules.md#language-service) says.
 `bun run lint` then ends with `checks-lint: <count> gate(s) pass`.
@@ -166,9 +174,11 @@ These bins run on their own:
 - [`checks-release-tag`](docs/gates/checks-release-tag.md) tags a landed release commit with its version and dispatches the release workflow on the tag.
 - [`checks-vendor`](docs/gates/checks-vendor.md) pins each library its `prepare` arguments name to a shared read-only clone and links it under `repos/`.
 - [`checks-browser`](docs/gates/checks-browser.md) opens a product's built pages in Chrome and fails on the layout, keyboard, motion, accessibility, nesting and asset checks its `browser-checks.json` declares.
+- [`checks-commit-title`](docs/gates/checks-commit-title.md) lints the pull request title in one step of the `ci` job.
+- [`checks-docs-only`](docs/gates/checks-docs-only.md) tells whether a change touches only Markdown and `docs/` paths, so a docs-only change skips the full run.
 
 `checks-lint` has [its own page](docs/gates/checks-lint.md), which says which range it resolves.
-oxlint and commitlint run through their own tools, as the pages under Related topics say.
+oxlint runs through its own tool, as the pages under Related topics say.
 
 ## Upgrade
 

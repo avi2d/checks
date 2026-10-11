@@ -1,16 +1,17 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { symlink, writeFile } from "node:fs/promises";
+import { symlink } from "node:fs/promises";
 import { join } from "node:path";
-import { parseWorkflow, stepNamed } from "../lib/workflow.ts";
-import { CHECKOUT, ran, type Ran, scratchDirs } from "./lib/fixture-repo.ts";
+import { withoutPullRequestEvent } from "../lib/env.ts";
+import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
 
 const scratch = scratchDirs();
+const BIN = join(CHECKOUT, "src", "delivery", "commit-title.ts");
 
 function lint(message: string): Promise<Ran> {
   const binary = join(CHECKOUT, "node_modules", ".bin", "commitlint");
   const config = join(CHECKOUT, "commitlint.config.js");
-  return ran($`printf '%s' ${message} | ${binary} --config ${config}`);
+  return ran($`printf "%s" ${message} | ${binary} --config ${config}`);
 }
 
 test(
@@ -65,49 +66,53 @@ test(
   120_000,
 );
 
-async function titleLinter(prefix: string, path: string): Promise<(title: string) => Promise<Ran>> {
-  const step = stepNamed(parseWorkflow(await Bun.file(join(CHECKOUT, ".github/workflows/commitlint.yml")).text()), "lint the title");
-  const runnerTemp = await scratch(prefix);
-  return async (title) => {
-    await writeFile(join(runnerTemp, "pr-title"), title);
-    return ran($`${{ raw: step.run }}`.cwd(CHECKOUT).env({ ...process.env, ...step.env, PATH: path, RUNNER_TEMP: runnerTemp }));
-  };
+function titleLinter(path: string): (title: string) => Promise<Ran> {
+  return (title) =>
+    ran($`bun ${BIN}`.cwd(CHECKOUT).env({ ...withoutPullRequestEvent(), PR_TITLE: title, GITHUB_EVENT_NAME: "pull_request", PATH: path }));
 }
 
 test(
-  "the generated title-lint step rejects a title that starts with git's comment character",
+  "the title bin rejects a title that opens with the git comment character",
   async () => {
-    const lintTitle = await titleLinter("checks-commitlint-hash-guard-", process.env["PATH"] ?? "");
+    const lintTitle = titleLinter(process.env["PATH"] ?? "");
 
-    const red = await lintTitle("# feat(lint): add x (#0000)");
+    const red = await lintTitle("# feat(lint): add x");
     expect(red.exitCode).not.toBe(0);
     expect(red.text).toContain("[type-empty]");
     expect(red.text).toContain("[subject-empty]");
 
-    const green = await lintTitle("feat(lint): add x (#0000)");
+    const green = await lintTitle("feat(lint): add x");
     expect(green.exitCode).toBe(0);
+    expect(green.text).toBe("");
   },
   60_000,
 );
 
 test(
-  "the generated title-lint step lints under bun on a runner with no node on PATH",
+  "the title bin lints without node on PATH",
   async () => {
-    const bin = await scratch("checks-commitlint-nodeless-bin-");
-    const git = Bun.which("git");
-    if (git === null) throw new Error("git is not on PATH");
-    await symlink(process.execPath, join(bin, "bun"));
-    await symlink(git, join(bin, "git"));
-    expect(Bun.which("node", { PATH: bin })).toBeNull();
-    const lintTitle = await titleLinter("checks-commitlint-nodeless-", bin);
+    const dir = await scratch("commit-title-bin-");
+    for (const name of ["bun", "git", "env"]) {
+      const found = Bun.which(name);
+      if (found === null) throw new Error(`${name} is missing from PATH`);
+      await symlink(found, join(dir, name));
+    }
+    const lintTitle = titleLinter(dir);
+    if (Bun.which("node", { PATH: dir }) !== null) throw new Error("node leaked onto the test PATH");
+    expect((await lintTitle("feat(lint): add x")).text).toBe("");
+    expect((await lintTitle("# feat(lint): add x")).exitCode).not.toBe(0);
+  },
+  60_000,
+);
 
-    const red = await lintTitle("update stuff");
-    expect(red.exitCode).not.toBe(0);
-    expect(red.text).toContain("[type-empty]");
-
-    const green = await lintTitle("feat(lint): add x (#0000)");
-    expect(green.text).toBe("");
-    expect(green.exitCode).toBe(0);
+test(
+  "the title bin passes a push run with nothing to lint",
+  async () => {
+    const pushed = await ran(
+      $`bun ${BIN}`.cwd(CHECKOUT).env({ ...withoutPullRequestEvent(), GITHUB_EVENT_NAME: "push", PATH: process.env["PATH"] ?? "" }),
+    );
+    expect(pushed.exitCode).toBe(0);
+    expect(pushed.text).toContain("nothing to lint");
   },
   60_000,
 );
