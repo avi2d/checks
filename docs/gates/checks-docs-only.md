@@ -4,11 +4,12 @@ audience: consumers
 ---
 # checks-docs-only
 
-`checks-docs-only` tells whether a change touches only Markdown and `docs/` paths, so a docs-only change skips the full `ci` run.
+`checks-docs-only` tells whether a change touches only top-level Markdown and Markdown under `docs/`, so a docs-only change skips the full `ci` run.
 
 ## What it checks
 
-A change is docs-only when every file it touches ends in `.md` or sits under `docs/`, and it touches at least one file.
+A change is docs-only when every file it touches is a `.md` file at the top level or under `docs/`, and it touches at least one file.
+Markdown anywhere else, such as a test fixture under `tests/` or a template under `dist/`, keeps the full run.
 A rename counts both sides.
 An empty change and a change with no range keep the full run.
 

@@ -22,6 +22,20 @@ test(
 );
 
 test(
+  "a change to a Markdown test fixture keeps the full run",
+  async () => {
+    const repo = await open({ "README.md": "# widget\n", "tests/fixtures/docs/readme.md": "## Install\n" });
+    const base = await repo.commit("feat: base");
+    await repo.write({ "tests/fixtures/docs/readme.md": "## Setup\n" });
+    const head = await repo.commit("test: rename the fixture heading");
+    const run = await docsOnly(repo, base, head);
+    expect(run.exitCode).toBe(0);
+    expect(run.text).toContain("docs-only=false");
+  },
+  60_000,
+);
+
+test(
   "a change outside Markdown and docs paths keeps the full run",
   async () => {
     const repo = await open({ "README.md": "# widget\n", "src/index.ts": "export const answer = 42;\n" });

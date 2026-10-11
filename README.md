@@ -175,7 +175,7 @@ These bins run on their own:
 - [`checks-vendor`](docs/gates/checks-vendor.md) pins each library its `prepare` arguments name to a shared read-only clone and links it under `repos/`.
 - [`checks-browser`](docs/gates/checks-browser.md) opens a product's built pages in Chrome and fails on the layout, keyboard, motion, accessibility, nesting and asset checks its `browser-checks.json` declares.
 - [`checks-commit-title`](docs/gates/checks-commit-title.md) lints the pull request title in one step of the `ci` job.
-- [`checks-docs-only`](docs/gates/checks-docs-only.md) tells whether a change touches only Markdown and `docs/` paths, so a docs-only change skips the full run.
+- [`checks-docs-only`](docs/gates/checks-docs-only.md) tells whether a change touches only top-level Markdown and Markdown under `docs/`, so a docs-only change skips the full run.
 
 `checks-lint` has [its own page](docs/gates/checks-lint.md), which says which range it resolves.
 oxlint runs through its own tool, as the pages under Related topics say.
