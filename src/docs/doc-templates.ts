@@ -67,13 +67,21 @@ export const TEMPLATES: Readonly<Record<Kind, Template>> = {
     lead: ["<The concept in two to four sentences: what this is, who it is for, why you would use it.>"],
     sections: [
       BEFORE_YOU_BEGIN,
-      fixed("Install", REQUIRED, ["To install <name>:", "", "1. <step>", "1. <step>", "", "<What you see when it worked.>"]),
+      fixed("Install", REQUIRED, [
+        "To install <name>:",
+        "",
+        "1. <step>",
+        "1. <step>",
+        "",
+        "<What you see when it worked, written only from what the source shows.>",
+        "<Leave this line out when the source shows nothing.>",
+      ]),
       open("<Everyday task, verb first, or what the reader looks up>", "any", REQUIRED, [
         ...STEPS,
         "",
         "<Or, for what the reader looks up, a table or a list with no steps.>",
       ]),
-      fixed("Where things are", REQUIRED, ["| Path | What it holds |", "| --- | --- |"]),
+      fixed("Where things are", optional("there is no path worth mapping yet"), ["| Path | What it holds |", "| --- | --- |"]),
       TROUBLESHOOTING,
       RELATED_TOPICS,
     ],

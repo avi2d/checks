@@ -18,8 +18,8 @@ const PLANTS: readonly Plant[] = [
   {
     kind: "readme",
     path: "README.md",
-    defect: (text) => text.replace("## Where things are", "## Layout"),
-    refusal: "README.md:1: lacks `## Where things are`",
+    defect: (text) => text.replace("## Install", "## Setup"),
+    refusal: "README.md:1: lacks `## Install`",
   },
   {
     kind: "changelog",
@@ -120,13 +120,13 @@ test(
 
     const quiet = await docs(base, unrelated);
     expect(quiet.text).toContain("docs: 0 doc file(s) the range touches hold to their templates");
-    expect(quiet.text).toContain("docs: advisory, 1 doc file(s) the range leaves alone do not hold to their templates yet:\n  README.md: 4 violation(s)");
+    expect(quiet.text).toContain("docs: advisory, 1 doc file(s) the range leaves alone do not hold to their templates yet:\n  README.md: 3 violation(s)");
     expect(quiet.exitCode).toBe(0);
 
     await put("README.md", "# widget\n\nIt builds bills, fast.\n");
     const touched = await commit("touch the README");
     const held = await docs(touched);
-    expect(held.text).toContain("docs: 4 violation(s):\n  README.md:1: lacks `## Before you begin`");
+    expect(held.text).toContain("docs: 3 violation(s):\n  README.md:1: lacks `## Before you begin`");
     expect(held.exitCode).toBe(1);
   },
   120_000,
