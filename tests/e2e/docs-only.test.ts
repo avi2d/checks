@@ -50,6 +50,20 @@ test(
 );
 
 test(
+  "an empty range keeps the full run and says it changes no file",
+  async () => {
+    const repo = await open({ "README.md": "# widget\n" });
+    const head = await repo.commit("feat: base");
+    const run = await docsOnly(repo, head, head);
+    expect(run.exitCode).toBe(0);
+    expect(run.text).toContain("docs-only=false");
+    expect(run.text).toContain("docs-only: the range changes no file, so the full run stays");
+    expect(run.text).not.toContain("need the full run");
+  },
+  60_000,
+);
+
+test(
   "a run with no range keeps the full run",
   async () => {
     const repo = await open({});

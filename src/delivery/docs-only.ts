@@ -22,7 +22,10 @@ const check = Effect.gen(function* () {
   const changes = yield* changedPaths(mergeBase, head, []);
   const paths = changes.flatMap((change) => (change.kind === "renamed" ? [change.from, change.path] : [change.path]));
   const full = paths.filter((path) => !isDocsPath(path));
-  if (paths.length > 0 && full.length === 0) {
+  if (paths.length === 0) {
+    yield* Console.error(`${NAME}: the range changes no file, so the full run stays`);
+    yield* Console.log("docs-only=false");
+  } else if (full.length === 0) {
     yield* Console.error(`${NAME}: ${paths.length} changed file(s) are all top-level or docs/ Markdown, so the full run can skip`);
     yield* Console.log("docs-only=true");
   } else {
