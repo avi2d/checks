@@ -8,7 +8,8 @@ audience: consumers
 
 ## What it checks
 
-The kit requires `./node_modules/.bin/commitlint` on every pull request.
+The kit requires `bunx checks-commit-title` on every pull request.
+A step that calls `bun src/delivery/commit-title.ts` or `./node_modules/.bin/commitlint` directly still satisfies the check.
 It requires `bun run lint`, `bun run build`, `bun run typecheck` and `bun run test` for each of those scripts that `package.json` defines.
 A `build` script also requires `git diff --exit-code`.
 The target branch is the pull request base in CI, else the branch `refs/remotes/origin/HEAD` names, else the default branch of the repository in GitHub's event, else `main`.

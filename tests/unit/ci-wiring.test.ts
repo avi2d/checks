@@ -10,13 +10,13 @@ function workflow(text: string) {
 }
 
 const prefix = `on:\n  pull_request:\n    types: [opened, synchronize]\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n`;
-const steps = ["bun run lint", "bun run build", "git diff --exit-code", "bun run typecheck", "bun run test", "./node_modules/.bin/commitlint"];
+const steps = ["bun run lint", "bun run build", "git diff --exit-code", "bun run typecheck", "bun run test", "bunx checks-commit-title"];
 const full = `${prefix}${steps.map((command) => `      - run: ${command}\n`).join("")}`;
 
 test("the kit requires title lint always and each command package.json can run", () => {
-  expect(requiredCommands([])).toEqual(["./node_modules/.bin/commitlint"]);
-  expect(requiredCommands(["lint", "test", "start"])).toEqual(["bun run lint", "bun run test", "./node_modules/.bin/commitlint"]);
-  expect(requiredCommands(["build"])).toEqual(["bun run build", "git diff --exit-code", "./node_modules/.bin/commitlint"]);
+  expect(requiredCommands([])).toEqual(["bunx checks-commit-title"]);
+  expect(requiredCommands(["lint", "test", "start"])).toEqual(["bun run lint", "bun run test", "bunx checks-commit-title"]);
+  expect(requiredCommands(["build"])).toEqual(["bun run build", "git diff --exit-code", "bunx checks-commit-title"]);
   expect(requiredCommands(scripts)).toEqual(steps);
 });
 
@@ -62,9 +62,22 @@ test("a pull_request trigger with no branch filter gates every default branch", 
 });
 
 test("a second active workflow can satisfy a missing title gate", () => {
-  const ci = workflow(full.replace("      - run: ./node_modules/.bin/commitlint\n", ""));
-  const title = Effect.runSync(parseWorkflow(".github/workflows/title.yml", `${prefix}      - run: ./node_modules/.bin/commitlint\n`));
+  const ci = workflow(full.replace("      - run: bunx checks-commit-title\n", ""));
+  const title = Effect.runSync(parseWorkflow(".github/workflows/title.yml", `${prefix}      - run: bunx checks-commit-title\n`));
   expect(findGaps(declaration, [...ci, title])).toEqual([]);
+});
+
+test("the folded title call, the own-repo call and the legacy direct call each satisfy the title gate", () => {
+  const ci = workflow(full.replace("      - run: bunx checks-commit-title\n", ""));
+  for (const call of ["bunx checks-commit-title", "bun src/delivery/commit-title.ts", "./node_modules/.bin/commitlint", "bun run ./node_modules/.bin/commitlint"]) {
+    const title = Effect.runSync(parseWorkflow(".github/workflows/title.yml", `${prefix}      - run: ${call}\n`));
+    expect(findGaps(declaration, [...ci, title])).toEqual([]);
+  }
+});
+
+test("gate steps gated on a filter step still run every gate", () => {
+  const gated = `on:\n  pull_request:\n    types: [opened, synchronize]\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun src/delivery/commit-title.ts\n      - id: filter\n        run: bun src/delivery/docs-only.ts base head >> "$GITHUB_OUTPUT"\n      - if: \${{ steps.filter.outputs.docs-only != 'true' }}\n        run: bun run lint\n      - if: \${{ steps.filter.outputs.docs-only != 'true' }}\n        run: bun run build\n      - if: \${{ steps.filter.outputs.docs-only != 'true' }}\n        run: git diff --exit-code\n      - if: \${{ steps.filter.outputs.docs-only != 'true' }}\n        run: bun run typecheck\n      - if: \${{ steps.filter.outputs.docs-only != 'true' }}\n        run: bun run test\n`;
+  expect(findGaps(declaration, workflow(gated))).toEqual([]);
 });
 
 const WINBOX = "[self-hosted, Linux, X64, winbox]";

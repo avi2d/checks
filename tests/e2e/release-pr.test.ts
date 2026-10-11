@@ -68,9 +68,9 @@ test(
     const widget = await consumer();
     const main = await head(widget.dir);
 
-    const opened = await widget.run(["ci.yml", "commitlint.yml"]);
+    const opened = await widget.run(["ci.yml"]);
     expect(opened.text).toContain(
-      "release-pr: opened https://github.com/acme/widget/pull/1 to release 0.1.1, and dispatched ci.yml, commitlint.yml on release/main\n",
+      "release-pr: opened https://github.com/acme/widget/pull/1 to release 0.1.1, and dispatched ci.yml on release/main\n",
     );
     expect(opened.exitCode).toBe(0);
 
@@ -89,7 +89,6 @@ test(
     ]);
     expect(state.dispatches).toEqual([
       { workflow: "ci.yml", ref: "release/main" },
-      { workflow: "commitlint.yml", ref: "release/main" },
     ]);
     expect((await $`git status --porcelain`.cwd(widget.dir).quiet()).stdout.toString()).toBe("");
     expect(await readFile(join(widget.dir, "package.json"), "utf8")).toBe(manifest("0.1.0"));

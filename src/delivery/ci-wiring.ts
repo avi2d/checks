@@ -11,6 +11,7 @@ export type { Command };
 export type Gate = {
   readonly command: string;
   readonly words: Command;
+  readonly alternatives: readonly Command[];
 };
 
 export type Declaration = {
@@ -63,7 +64,10 @@ export class WiringError extends Schema.TaggedError<WiringError>()("WiringError"
 const WORKFLOWS = ".github/workflows";
 const SCRIPTED = ["lint", "build", "typecheck", "test"];
 const BUILT_TREE = "git diff --exit-code";
-const TITLE_LINT = "./node_modules/.bin/commitlint";
+const TITLE_LINT = "bunx checks-commit-title";
+// The gate holds until every consumer migrates, so the direct commitlint call still counts.
+// The kit calls its own file through bun, since bunx never resolves the working tree.
+const TITLE_CALLS = ["bun src/delivery/commit-title.ts", "./node_modules/.bin/commitlint"];
 const Manifest = Schema.Struct({ scripts: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)) });
 // Without these a pull_request workflow never sees the commits a pull request pushes.
 const GATING_TYPES = ["opened", "synchronize"];
@@ -207,6 +211,7 @@ function gapsAmong(gates: readonly Gate[], steps: readonly RunStep[], lintGates:
     const entryPoint = entryPointCommand(gate.words, lintGates);
     const commands = [
       { command: gate.command, words: gate.words },
+      ...gate.alternatives.map((words) => ({ command: gate.command, words })),
       ...(entryPoint === undefined ? [] : [{ command: entryPoint.join(" "), words: entryPoint }]),
     ];
     const invoking = steps.flatMap(({ location, blocker, script }) => {
@@ -258,7 +263,11 @@ export function requiredCommands(scripts: readonly string[]): readonly string[] 
 
 export function declarationFor(scripts: readonly string[], branch: string): Declaration {
   return {
-    gates: requiredCommands(scripts).map((command) => ({ command, words: command.split(" ") })),
+    gates: requiredCommands(scripts).map((command) => ({
+      command,
+      words: command.split(" "),
+      alternatives: command === TITLE_LINT ? TITLE_CALLS.map((call) => call.split(" ")) : [],
+    })),
     defaultBranch: branch,
     lintGates: KIT_GATES,
   };
