@@ -24,6 +24,8 @@ It creates the directories each destination needs.
 
 With `--prune` it deletes the repository's superseded baselines instead of restoring one.
 It keeps the newest unexpired `mutation-baseline` among the runs the restore reads, and the newest unexpired `mutation-baseline-full` the restore takes first.
+It also keeps the unexpired baselines of the run it runs in, which `GITHUB_RUN_ID` names, since the restore reads only successful runs and takes them once that run succeeds.
+A failed artifact lookup while it picks what to keep stops it before it deletes anything, since treating the artifact as absent would delete the one the restore takes.
 It deletes only artifacts with exactly those two names in the repository it runs in.
 It deletes only unexpired artifacts, since the restore never reads an expired one.
 With `--dry-run` it prints what it would delete and what it would keep, and deletes nothing.
@@ -34,7 +36,7 @@ It deletes through `gh`, which needs a token that deletes the repository's Actio
 It reads the runs and their artifacts through `gh`, which needs a token that reads the repository's Actions, such as `GH_TOKEN: ${{ github.token }}` with `actions: read`.
 The `mutation-baseline` artifact holds `stryker-incremental.json` and `mutation/mutation.json`, which an upload of `reports/stryker-incremental.json` and `reports/mutation/mutation.json` writes.
 The `mutation-baseline-full` artifact holds `mutation.json` at its root, which an upload of `reports/mutation/mutation.json` alone writes.
-It reads `RUNNER_ENVIRONMENT` and `HOME` to place the runner cache.
+It reads `RUNNER_ENVIRONMENT` and `HOME` to place the runner cache, and `--prune` reads `GITHUB_RUN_ID`.
 
 ## The runner cache
 
@@ -73,8 +75,9 @@ checks-mutation-baseline --prune [--dry-run]
 | 2 | the arguments do not parse, `gh` cannot list the runs, the cache cannot be written, or another job removed the entry before it was copied |
 
 A failed artifact lookup or download prints the `gh` error and moves on, as a missing artifact does.
-With `--prune`, `0` means it deleted the superseded artifacts or found none, and `2` means the arguments do not parse or `gh` cannot list the runs or the artifacts.
-A failed delete prints the `gh` error and moves on, and the summary names the artifacts it could not delete.
+With `--prune`, `0` means it deleted the superseded artifacts, found none, or could not delete some, and `2` means the arguments do not parse or `gh` cannot list the runs, a run's artifacts or the repository's artifacts.
+A failed delete prints a `::warning::` annotation naming the artifact and the `gh` error, moves on, and the summary names the artifacts it could not delete.
+A failed delete still exits `0`, since a failed step fails the `main` run, and the restore then passes over the baseline that run uploaded, while the next `main` run's prune deletes what this one missed.
 
 ## Sample output
 
@@ -102,7 +105,7 @@ A baseline job restores the state the previous `main` run left before an increme
   run: bunx checks-mutation-baseline reports/stryker-incremental.json
 ```
 
-A baseline job uploads the state the incremental run wrote, then prunes the superseded baselines:
+A baseline job uploads the state the incremental run wrote, then on `main` prunes the superseded baselines:
 
 ```yaml
 - uses: actions/upload-artifact@v4
@@ -113,6 +116,7 @@ A baseline job uploads the state the incremental run wrote, then prunes the supe
       reports/stryker-incremental.json
     retention-days: 7
 - name: Prune superseded baselines
+  if: github.ref == 'refs/heads/main'
   env:
     GH_TOKEN: ${{ github.token }}
   run: bunx checks-mutation-baseline --prune

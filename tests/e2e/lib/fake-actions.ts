@@ -22,6 +22,8 @@ const State = Schema.Struct({
   runs: Schema.Array(Run),
   listFails: Schema.Boolean,
   downloadsMeet: Schema.Int,
+  inProgress: Schema.Array(Schema.Int),
+  failing: Schema.Array(Schema.String),
   calls: Schema.Array(Schema.String),
 });
 
@@ -37,7 +39,13 @@ export type FakeActions = {
 };
 
 // `downloadsMeet` holds each download until that many have started, so jobs sharing a runner miss its cache together.
-export type FakeOptions = { readonly listFails?: boolean; readonly downloadsMeet?: number };
+// `inProgress` names the runs a successful run list leaves out, and a call starting with an entry of `failing` fails with HTTP 502.
+export type FakeOptions = {
+  readonly listFails?: boolean;
+  readonly downloadsMeet?: number;
+  readonly inProgress?: readonly number[];
+  readonly failing?: readonly string[];
+};
 
 // Puts a `gh` on PATH that answers the run list, artifact and download calls from successful runs of mutation.yml on main.
 export async function fakeActions(home: string, repositoryId: number, runs: readonly FakeRun[], options: FakeOptions = {}): Promise<FakeActions> {
@@ -45,7 +53,16 @@ export async function fakeActions(home: string, repositoryId: number, runs: read
   await mkdir(bin, { recursive: true });
   await writeFile(join(bin, "gh"), `#!/bin/sh\nexec bun ${import.meta.path} "$@"\n`, { mode: 0o755 });
   const statePath = join(home, "actions.json");
-  await writeFile(statePath, JSON.stringify({ repositoryId, runs, listFails: options.listFails ?? false, downloadsMeet: options.downloadsMeet ?? 0, calls: [] } satisfies FakeState));
+  const initial = {
+    repositoryId,
+    runs,
+    listFails: options.listFails ?? false,
+    downloadsMeet: options.downloadsMeet ?? 0,
+    inProgress: options.inProgress ?? [],
+    failing: options.failing ?? [],
+    calls: [],
+  } satisfies FakeState;
+  await writeFile(statePath, JSON.stringify(initial));
   const calls = async () => decodeState(await readFile(statePath, "utf8")).calls;
   return {
     env: { PATH: `${bin}:${process.env["PATH"] ?? ""}`, FAKE_ACTIONS_STATE: statePath },
@@ -64,7 +81,7 @@ function listRuns(state: FakeState, args: readonly string[]): string | undefined
   if (flag(args, "--json") !== "databaseId,event,createdAt") return undefined;
   const event = flag(args, "--event");
   const listed = [...state.runs]
-    .filter((run) => event === undefined || run.event === event)
+    .filter((run) => !state.inProgress.includes(run.databaseId) && (event === undefined || run.event === event))
     .sort((one, other) => other.createdAt.localeCompare(one.createdAt))
     .slice(0, Number(flag(args, "--limit") ?? "20"))
     .map(({ databaseId, event: runEvent, createdAt }) => ({ databaseId, event: runEvent, createdAt }));
@@ -133,6 +150,10 @@ async function main(): Promise<number> {
   const args = process.argv.slice(2);
   const statePath = process.env["FAKE_ACTIONS_STATE"] ?? "";
   const recorded = decodeState(await readFile(statePath, "utf8"));
+  if (recorded.failing.some((prefix) => args.join(" ").startsWith(prefix))) {
+    process.stderr.write("gh: HTTP 502\n");
+    return 1;
+  }
   if ((flag(args, "-X") ?? flag(args, "--method")) === "DELETE") {
     const target = args.find((arg) => arg.startsWith("repos/"));
     const erased = target === undefined ? undefined : erase(recorded, target);

@@ -81,8 +81,9 @@ jobs:
           name: mutation-baseline-full
           path: reports/mutation/mutation.json
           retention-days: 30
-      # The prune keeps the newest baseline of each name, so older uploads never pile up.
+      # The prune keeps the baselines the restore takes and this run's uploads, so older uploads never pile up.
       - name: Prune superseded baselines
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: bun src/testing/mutation-baseline.ts --prune

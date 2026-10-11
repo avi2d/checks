@@ -34,7 +34,7 @@ const Artifact = Schema.Struct({
   id: Schema.Int,
   name: Schema.String,
   expired: Schema.Boolean,
-  workflow_run: Schema.Struct({ repository_id: Schema.Int }),
+  workflow_run: Schema.Struct({ id: Schema.Int, repository_id: Schema.Int }),
 });
 type Artifact = typeof Artifact.Type;
 
@@ -78,9 +78,10 @@ const fullCandidates = Effect.gen(function* () {
 });
 
 // A successful run uploaded the files, so the newest unexpired artifact is the one the restore takes.
+// A failed lookup aborts rather than counting as absent, since that would delete the artifact the restore takes.
 const keptArtifact = Effect.fn("keptArtifact")(function* (runs: readonly number[], name: string) {
   for (const run of runs) {
-    const artifact = yield* artifactOf(run, name).pipe(Effect.catch(warned(Option.none<Artifact>())));
+    const artifact = yield* artifactOf(run, name);
     if (Option.isSome(artifact)) return Option.some<Kept>({ run, id: artifact.value.id, name });
   }
   return Option.none<Kept>();
@@ -100,23 +101,27 @@ const everyArtifact = Effect.fn("everyArtifact")(function* () {
   }
 });
 
-const erased = Effect.fn("erased")(function* (artifact: Artifact) {
-  return yield* gh(["api", "-X", "DELETE", `repos/{owner}/{repo}/actions/artifacts/${artifact.id}`]).pipe(Effect.as(true), Effect.catch(warned(false)));
+const missedDeletion = Effect.fn("missedDeletion")(function* (artifact: Artifact) {
+  return yield* gh(["api", "-X", "DELETE", `repos/{owner}/{repo}/actions/artifacts/${artifact.id}`]).pipe(
+    Effect.as(Option.none<Missed>()),
+    Effect.catch((failure) => Effect.succeedSome<Missed>({ id: artifact.id, name: artifact.name, error: failure.message })),
+  );
 });
 
 const pruneBaselines = Effect.fn("pruneBaselines")(function* (dryRun: boolean) {
-  const keeping: Kept[] = [];
+  const running = yield* Config.Int("GITHUB_RUN_ID").pipe(Config.option);
   const latest = yield* keptArtifact(yield* latestRuns, LATEST_ARTIFACT);
-  if (Option.isSome(latest)) keeping.push(latest.value);
   const full = yield* keptArtifact(yield* fullCandidates, FULL_ARTIFACT);
-  if (Option.isSome(full)) keeping.push(full.value);
-  const victims = superseded(yield* everyArtifact(), new Set(keeping.map((keep) => keep.id)));
+  const artifacts = yield* everyArtifact();
+  const keeping = [...Option.toArray(latest), ...Option.toArray(full), ...uploadedBy(artifacts, running)];
+  const victims = superseded(artifacts, new Set(keeping.map((keep) => keep.id)));
   const removed: number[] = [];
-  const missed: number[] = [];
+  const missed: Missed[] = [];
   if (!dryRun) {
     for (const victim of victims) {
-      if (yield* erased(victim)) removed.push(victim.id);
-      else missed.push(victim.id);
+      const failed = yield* missedDeletion(victim);
+      if (Option.isSome(failed)) missed.push(failed.value);
+      else removed.push(victim.id);
     }
   }
   yield* Console.log(pruneReport(dryRun, dryRun ? victims.map((victim) => victim.id) : removed, missed, keeping));
@@ -150,18 +155,33 @@ const downloaded = Effect.fn("downloaded")(function* (run: number, artifact: Art
 
 export type Kept = { readonly run: number; readonly id: number; readonly name: string };
 
-export function superseded(artifacts: readonly Artifact[], kept: ReadonlySet<number>): readonly Artifact[] {
+export type Missed = { readonly id: number; readonly name: string; readonly error: string };
+
+const isBaseline = (artifact: Artifact): boolean => (artifact.name === LATEST_ARTIFACT || artifact.name === FULL_ARTIFACT) && !artifact.expired;
+
+// The restore reads only successful runs, so the running run's own uploads join the keepers rather than replace them.
+export function uploadedBy(artifacts: readonly Artifact[], running: Option.Option<number>): readonly Kept[] {
+  if (Option.isNone(running)) return [];
   return artifacts
-    .filter((artifact) => (artifact.name === LATEST_ARTIFACT || artifact.name === FULL_ARTIFACT) && !artifact.expired && !kept.has(artifact.id))
-    .sort((one, other) => one.id - other.id);
+    .filter((artifact) => isBaseline(artifact) && artifact.workflow_run.id === running.value)
+    .sort((one, other) => one.id - other.id)
+    .map((artifact) => ({ run: running.value, id: artifact.id, name: artifact.name }));
 }
 
-export function pruneReport(dryRun: boolean, removed: readonly number[], missed: readonly number[], keeping: readonly Kept[]): string {
+export function superseded(artifacts: readonly Artifact[], kept: ReadonlySet<number>): readonly Artifact[] {
+  return artifacts.filter((artifact) => isBaseline(artifact) && !kept.has(artifact.id)).sort((one, other) => one.id - other.id);
+}
+
+// A workflow command ends at a newline, so the error's own newlines and percent signs are escaped.
+const annotated = (text: string): string => text.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
+
+export function pruneReport(dryRun: boolean, removed: readonly number[], missed: readonly Missed[], keeping: readonly Kept[]): string {
   const kept = keeping.length === 0 ? "no baseline artifacts" : keeping.map((keep) => `${keep.name} artifact ${keep.id} from run ${keep.run}`).join(", ");
   const deleted = removed.length === 0 ? "nothing to delete" : `deleted artifacts ${removed.join(", ")}`;
   if (dryRun) return `mutation-baseline: dry run, ${removed.length === 0 ? "nothing to delete" : `would delete artifacts ${removed.join(", ")}`}; would keep ${kept}`;
-  if (missed.length > 0) return `mutation-baseline: ${deleted}; kept ${kept}; could not delete artifacts ${missed.join(", ")}`;
-  return `mutation-baseline: ${deleted}; kept ${kept}`;
+  if (missed.length === 0) return `mutation-baseline: ${deleted}; kept ${kept}`;
+  const warnings = missed.map((miss) => `::warning::mutation-baseline: could not delete ${miss.name} artifact ${miss.id}: ${annotated(miss.error)}`);
+  return [...warnings, `mutation-baseline: ${deleted}; kept ${kept}; could not delete artifacts ${missed.map((miss) => miss.id).join(", ")}`].join("\n");
 }
 
 export function pruned(entries: readonly string[], kept: number, restoring: string): readonly string[] {
