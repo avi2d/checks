@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.40.0
+
+Released 2026-10-11.
+
+### Features
+
+- **delivery:** fold title lint into the ci job and trim docs-only runs [#146](https://github.com/avi2d/checks/pull/146)
+
 ## 0.39.0
 
 Released 2026-10-11.
