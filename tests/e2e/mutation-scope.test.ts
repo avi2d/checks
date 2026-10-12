@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { expect, setDefaultTimeout, test } from "bun:test";
-import { mkdir, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseWorkflow, stepNamed } from "../lib/workflow.ts";
 import { fakeActions, type FakeRun } from "./lib/fake-actions.ts";
@@ -275,6 +275,54 @@ test("the scope step fails when the baseline query fails rather than scoping wit
   expect(done.exitCode).not.toBe(0);
   expect(done.text).toContain("gh: HTTP 502 listing runs");
   expect(done.env).not.toContain("SCOPE=");
+});
+
+async function worktreePaths(repo: FixtureRepo): Promise<string[]> {
+  const listed = (await $`git worktree list --porcelain`.cwd(repo.dir).quiet()).stdout.toString();
+  return listed
+    .split("\n")
+    .filter((line) => line.startsWith("worktree "))
+    .map((line) => line.slice("worktree ".length));
+}
+
+async function registeredBase(): Promise<{ repo: FixtureRepo; base: string; runnerTemp: string }> {
+  const { repo, base } = await repoWith({ "src/kept.ts": body("kept") });
+  const runnerTemp = await scratch("checks-mutation-runner-");
+  await $`git worktree add ${join(runnerTemp, "mutation-base")} ${base}`.cwd(repo.dir).quiet();
+  return { repo, base, runnerTemp };
+}
+
+test("the cleanup step leaves the checkout registering only itself, with no worktree pointing into the runner's temp", async () => {
+  const { repo, runnerTemp } = await registeredBase();
+
+  const done = await runStep("Remove mutation-base worktree", repo.dir, { RUNNER_TEMP: runnerTemp });
+
+  expect(done.exitCode).toBe(0);
+  expect(await worktreePaths(repo)).toEqual([await realpath(repo.dir)]);
+  expect(await Bun.file(join(runnerTemp, "mutation-base", ".git")).exists()).toBe(false);
+});
+
+test("the cleanup step passes when the job never added the worktree", async () => {
+  const { repo } = await repoWith({ "src/kept.ts": body("kept") });
+  const runnerTemp = await scratch("checks-mutation-runner-");
+
+  const done = await runStep("Remove mutation-base worktree", repo.dir, { RUNNER_TEMP: runnerTemp });
+
+  expect(done.exitCode).toBe(0);
+  expect(await worktreePaths(repo)).toEqual([await realpath(repo.dir)]);
+});
+
+test("the merge-base step adds its worktree over a registration a dead job left after the runner wiped its temp", async () => {
+  const { repo, base, runnerTemp } = await registeredBase();
+  await rm(join(runnerTemp, "mutation-base"), { recursive: true, force: true });
+  const githubEnv = join(runnerTemp, "github-env");
+  await writeFile(githubEnv, "");
+
+  const done = await runStep("Build scope report at merge base", repo.dir, { RUNNER_TEMP: runnerTemp, BASE_SHA: base, GITHUB_ENV: githubEnv });
+
+  expect(done.exitCode).toBe(0);
+  const paths = await worktreePaths(repo);
+  expect(await Promise.all(paths.map((path) => realpath(path)))).toHaveLength(2);
 });
 
 type HeadReport = { readonly files: Readonly<Record<string, { readonly mutants: ReadonlyArray<{ readonly replacement: string; readonly status: string }> }>> };
