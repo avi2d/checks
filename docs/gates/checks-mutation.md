@@ -97,8 +97,10 @@ jobs:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - run: bunx stryker run
-      - run: bunx checks-mutation-baseline --slim reports/mutation/mutation.json "$RUNNER_TEMP/report/mutation.json"
+      - if: always()
+        run: bunx checks-mutation-baseline --slim reports/mutation/mutation.json "$RUNNER_TEMP/report/mutation.json"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: mutation-report
           path: ${{ runner.temp }}/report/mutation.json

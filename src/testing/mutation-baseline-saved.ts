@@ -54,14 +54,15 @@ export const savedEntry = Effect.fn("savedEntry")(function* (shelf: string, run:
 });
 
 // GitHub numbers runs in the order it creates them, so a lower id is an older run the restore never reads again.
-export function outlived(entries: readonly string[], restoring: number, spares: number): readonly string[] {
-  return entries
+// Only a successful run's entry is a spare, since a failed run's is one no restore reads.
+export function outlived(entries: readonly string[], restoring: number, successful: readonly number[], spares: number): readonly string[] {
+  const older = entries
     .filter((entry) => /^\d+$/.test(entry))
     .map(Number)
     .filter((run) => run < restoring)
-    .sort((one, other) => other - one)
-    .slice(spares)
-    .map(String);
+    .sort((one, other) => other - one);
+  const kept = new Set(older.filter((run) => successful.includes(run)).slice(0, spares));
+  return older.filter((run) => !kept.has(run)).map(String);
 }
 
 const required = (name: string) =>
@@ -78,13 +79,16 @@ export const saveBaseline = Effect.fn("saveBaseline")(function* (incremental: st
   const root = yield* cacheRoot().pipe(Effect.mapError((cause) => new SaveFailure({ message: cause.message })));
   const shelf = yield* shelfOf(root, yield* required("GITHUB_REPOSITORY_ID"));
   const run = yield* required("GITHUB_RUN_ID");
+  const entry = yield* savedEntry(shelf, run);
+  // A re-run attempt runs the same commit, and a job sharing the runner may be copying from the entry an earlier attempt saved.
+  if (yield* fs.exists(entry)) {
+    yield* Console.log(`mutation-baseline: kept the ${LATEST_ARTIFACT} an earlier attempt of run ${run} saved on the runner's disk`);
+    return true;
+  }
   yield* fs.makeDirectory(shelf, { recursive: true });
   const staged = path.join(yield* fs.makeTempDirectoryScoped({ directory: shelf, prefix: ".staging-" }), "entry");
   yield* slimmed(incremental, path.join(staged, INCREMENTAL));
   if (Option.isSome(report)) yield* slimmed(report.value, path.join(staged, REPORT));
-  const entry = yield* savedEntry(shelf, run);
-  // A re-run attempt keeps the run's id, so its entry replaces the one an earlier attempt saved.
-  yield* fs.remove(entry, { recursive: true, force: true });
   yield* fs.rename(staged, entry);
   yield* Console.log(`mutation-baseline: saved the ${LATEST_ARTIFACT} of run ${run} on the runner's disk`);
   return true;

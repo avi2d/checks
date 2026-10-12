@@ -388,7 +388,8 @@ test("--save keeps the run's baseline on the runner's disk without statusReason,
   expect(await runner.downloads()).toEqual([]);
 }, 30_000);
 
-test("--save run again in the same run replaces the entry an earlier attempt saved", async () => {
+// A job sharing the runner may be copying the earlier attempt's entry, so a re-run of the same commit leaves it in place.
+test("--save run again in the same run keeps the entry an earlier attempt saved", async () => {
   const runner = await selfHosted(MAIN_RUNS);
   await written(runner, "reports/stryker-incremental.json", { attempt: 1 });
   await runner.run(["--save", "reports/stryker-incremental.json"], { GITHUB_RUN_ID: "20" });
@@ -396,14 +397,15 @@ test("--save run again in the same run replaces the entry an earlier attempt sav
 
   const saved = await runner.run(["--save", "reports/stryker-incremental.json"], { GITHUB_RUN_ID: "20" });
 
-  expect(saved.exitCode).toBe(0);
+  expect(saved).toEqual({ exitCode: 0, text: "mutation-baseline: kept the mutation-baseline an earlier attempt of run 20 saved on the runner's disk\n" });
   expect(await runner.run(["next/stryker-incremental.json"])).toEqual({ exitCode: 0, text: "mutation-baseline: restored it from the runner's disk, mutation-baseline saved by run 20\n" });
-  expect(await runner.read("next/stryker-incremental.json")).toBe('{"attempt":2}');
+  expect(await runner.read("next/stryker-incremental.json")).toBe('{"attempt":1}');
 }, 30_000);
 
-test("a restore from the disk removes the entries of runs older than the one it read but one, and keeps a newer run's", async () => {
+// Run 15 is in no successful run list, so it stands for a run that saved and then failed.
+test("a restore from the disk keeps the newest older successful run's entry and a newer run's, and removes the rest", async () => {
   const runner = await selfHosted(MAIN_RUNS);
-  for (const runId of [5, 10, 20, 25]) await writeFile(await savedEntry(runner, runId, "stryker-incremental.json"), `{"run":${runId}}`);
+  for (const runId of [5, 10, 15, 20, 25]) await writeFile(await savedEntry(runner, runId, "stryker-incremental.json"), `{"run":${runId}}`);
 
   const restored = await runner.run(["reports/stryker-incremental.json"]);
 

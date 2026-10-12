@@ -17,7 +17,7 @@ const WORKFLOW = "mutation.yml";
 const BRANCH = "main";
 const REPORT_ALONE = "mutation.json";
 const KEPT_PER_ARTIFACT = 2;
-// One entry older than the restored one stays, since a job that listed the runs a moment earlier may still be copying from it.
+// The newest successful run's entry older than the restored one stays, since a job that listed the runs a moment earlier may still be copying from it.
 const SAVED_SPARES = 1;
 const FULL_ARTIFACT = "mutation-baseline-full";
 const LATEST_LIMIT = 20;
@@ -63,11 +63,6 @@ const listed = Effect.fn("listed")(function* (event: string | undefined, limit: 
 export function newestFirst(runs: readonly Run[]): readonly number[] {
   return [...runs].sort((one, other) => other.createdAt.localeCompare(one.createdAt)).map((run) => run.databaseId);
 }
-
-const latestCandidates = Effect.gen(function* () {
-  const newest = (yield* listed(undefined, LATEST_LIMIT)).find((run) => run.event !== "pull_request");
-  return newest === undefined ? [] : [newest.databaseId];
-});
 
 // All non-pull-request runs newest first: a newer full run holds no baseline, and the newest baseline must survive it.
 const latestRuns = listed(undefined, LATEST_LIMIT).pipe(Effect.map((runs) => newestFirst(runs.filter((run) => run.event !== "pull_request"))));
@@ -280,13 +275,13 @@ const runnerCache = Effect.gen(function* () {
   );
 });
 
-const restoredFromSaved = Effect.fn("restoredFromSaved")(function* (shelf: string, run: number, request: Request) {
+const restoredFromSaved = Effect.fn("restoredFromSaved")(function* (shelf: string, run: number, successful: readonly number[], request: Request) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const entry = yield* savedEntry(shelf, run);
   if (!(yield* holds(entry, request.needed))) return false;
   yield* restore(entry, request.needed, request.optional);
-  for (const older of outlived(yield* fs.readDirectory(shelf), run, SAVED_SPARES)) {
+  for (const older of outlived(yield* fs.readDirectory(shelf), run, successful, SAVED_SPARES)) {
     yield* fs.remove(path.join(shelf, older), { recursive: true, force: true });
   }
   yield* Console.log(`mutation-baseline: restored it from the runner's disk, ${LATEST_ARTIFACT} saved by run ${run}`);
@@ -346,8 +341,9 @@ const restoreBaseline = Effect.fn("restoreBaseline")(function* (request: Request
   const name = request.full ? FULL_ARTIFACT : LATEST_ARTIFACT;
   const root = yield* runnerCache;
   const shelf = request.full ? Option.none<string>() : yield* savedShelf(root);
-  for (const run of yield* request.full ? fullCandidates : latestCandidates) {
-    if (Option.isSome(shelf) && (yield* restoredFromSaved(shelf.value, run, request))) return true;
+  const runs = yield* request.full ? fullCandidates : latestRuns;
+  for (const run of request.full ? runs : runs.slice(0, 1)) {
+    if (Option.isSome(shelf) && (yield* restoredFromSaved(shelf.value, run, runs, request))) return true;
     const artifact = yield* artifactOf(run, name).pipe(Effect.catch(warned(Option.none<Artifact>())));
     if (Option.isSome(artifact) && (yield* restoredFrom(run, artifact.value, root, request))) return true;
   }

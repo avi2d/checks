@@ -77,7 +77,7 @@ jobs:
           retention-days: 7
 ```
 
-The job summary already holds every run's seeds, so a passing run uploads nothing.
+A passing run's job summary holds all its seeds, so a passing run uploads nothing.
 In a private repository every upload counts against the account's Actions storage, and GitHub refuses each one once that storage is used up.
 A run that only uploads on failure stays green through that refusal, and a failing run is red for its tests either way.
 
