@@ -162,3 +162,8 @@ jobs:
       - name: Compare scope reports
         if: env.SCOPE != '' && env.SKIP_COMPARE != 'true'
         run: bun src/testing/mutation-compare.ts --advisory "$RUNNER_TEMP/mutation-base/reports/mutation/mutation.json" reports/mutation/mutation.json
+      - name: Remove mutation-base worktree
+        if: always()
+        run: |
+          git worktree remove --force "$RUNNER_TEMP/mutation-base" 2>/dev/null || rm -rf "$RUNNER_TEMP/mutation-base" || true
+          git worktree prune
