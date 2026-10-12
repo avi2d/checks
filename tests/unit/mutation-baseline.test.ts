@@ -81,16 +81,9 @@ test("pruneReport names the deleted, the missed and the kept artifacts", () => {
 });
 
 // GitHub numbers runs in the order it creates them, so an entry below the restored run belongs to an older run.
-test("outlived names the saved entries older than the restored one past the spares, and never a newer run's", () => {
-  expect(outlived(["10", "20", "30", "40", ".staging-ab12", "50"], 40, [40, 30, 20, 10], 1)).toEqual(["20", "10"]);
-  expect(outlived(["10", "40"], 40, [40, 10], 1)).toEqual([]);
-  expect(outlived(["10", "20", "40"], 40, [40, 20, 10], 0)).toEqual(["20", "10"]);
-});
-
-// A failed run's entry is one no restore reads, so it never stands in for the successful run a concurrent reader may be copying.
-test("outlived keeps the newest older successful run's entry over a newer failed run's", () => {
-  expect(outlived(["10", "15", "20"], 20, [20, 10], 1)).toEqual(["15"]);
-  expect(outlived(["10", "15", "20"], 20, [20], 1)).toEqual(["15", "10"]);
+test("outlived names the saved entries older than the restored one, and never a newer run's or a staging directory", () => {
+  expect(outlived(["9.json", "10.json", "40.json", ".staging-ab12", "50.json"], 40)).toEqual(["9.json", "10.json"]);
+  expect(outlived(["40.json"], 40)).toEqual([]);
 });
 
 // The mutation-testing-report-schema makes statusReason optional on a mutant, so a report without it still validates.

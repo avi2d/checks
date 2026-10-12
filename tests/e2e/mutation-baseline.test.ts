@@ -367,10 +367,9 @@ async function written(runner: Runner, file: string, content: unknown): Promise<
   await writeFile(target, JSON.stringify(content));
 }
 
-async function savedEntry(runner: Runner, runId: number, file: string): Promise<string> {
-  const entry = join(runner.home, SAVED_SHELF, String(runId), file);
-  await mkdir(join(entry, ".."), { recursive: true });
-  return entry;
+async function savedEntry(runner: Runner, runId: number, files: Readonly<Record<string, unknown>>): Promise<void> {
+  await mkdir(join(runner.home, SAVED_SHELF), { recursive: true });
+  await writeFile(join(runner.home, SAVED_SHELF, `${runId}.json`), JSON.stringify(files));
 }
 
 test("--save keeps the run's baseline on the runner's disk without statusReason, and the next restore copies it instead of downloading", async () => {
@@ -388,8 +387,7 @@ test("--save keeps the run's baseline on the runner's disk without statusReason,
   expect(await runner.downloads()).toEqual([]);
 }, 30_000);
 
-// A job sharing the runner may be copying the earlier attempt's entry, so a re-run of the same commit leaves it in place.
-test("--save run again in the same run keeps the entry an earlier attempt saved", async () => {
+test("--save run again in the same run replaces the entry an earlier attempt saved", async () => {
   const runner = await selfHosted(MAIN_RUNS);
   await written(runner, "reports/stryker-incremental.json", { attempt: 1 });
   await runner.run(["--save", "reports/stryker-incremental.json"], { GITHUB_RUN_ID: "20" });
@@ -397,30 +395,20 @@ test("--save run again in the same run keeps the entry an earlier attempt saved"
 
   const saved = await runner.run(["--save", "reports/stryker-incremental.json"], { GITHUB_RUN_ID: "20" });
 
-  expect(saved).toEqual({ exitCode: 0, text: "mutation-baseline: kept the mutation-baseline an earlier attempt of run 20 saved on the runner's disk\n" });
+  expect(saved).toEqual({ exitCode: 0, text: "mutation-baseline: saved the mutation-baseline of run 20 on the runner's disk\n" });
   expect(await runner.run(["next/stryker-incremental.json"])).toEqual({ exitCode: 0, text: "mutation-baseline: restored it from the runner's disk, mutation-baseline saved by run 20\n" });
-  expect(await runner.read("next/stryker-incremental.json")).toBe('{"attempt":1}');
+  expect(await runner.read("next/stryker-incremental.json")).toBe('{"attempt":2}');
 }, 30_000);
 
-// Run 15 is in no successful run list, so it stands for a run that saved and then failed.
-test("a restore from the disk keeps the newest older successful run's entry and a newer run's, and removes the rest", async () => {
+test("a restore from the disk removes the entries of older runs and keeps a newer run's", async () => {
   const runner = await selfHosted(MAIN_RUNS);
-  for (const runId of [5, 10, 15, 20, 25]) await writeFile(await savedEntry(runner, runId, "stryker-incremental.json"), `{"run":${runId}}`);
+  for (const runId of [5, 10, 15, 20, 25]) await savedEntry(runner, runId, { "stryker-incremental.json": { run: runId } });
 
   const restored = await runner.run(["reports/stryker-incremental.json"]);
 
   expect(restored.text).toBe("mutation-baseline: restored it from the runner's disk, mutation-baseline saved by run 20\n");
   expect(await runner.read("reports/stryker-incremental.json")).toBe('{"run":20}');
-  expect((await readdir(join(runner.home, SAVED_SHELF))).sort()).toEqual(["10", "20", "25"]);
-}, 30_000);
-
-test("a disk entry without the state file counts as none, so the restore downloads the run's artifact", async () => {
-  const runner = await selfHosted(MAIN_RUNS);
-  await writeFile(await savedEntry(runner, 20, "mutation/mutation.json"), '{"report":"left behind"}');
-
-  const restored = await runner.run(["reports/stryker-incremental.json"]);
-
-  expect(restored.text).toBe("mutation-baseline: downloaded it into the runner's cache, mutation-baseline artifact 200 from run 20\n");
+  expect((await readdir(join(runner.home, SAVED_SHELF))).sort()).toEqual(["20.json", "25.json"]);
 }, 30_000);
 
 test("--save on a GitHub-hosted runner refuses, since its disk ends with the job, and writes nothing", async () => {
@@ -460,7 +448,7 @@ test("--slim writes the report without statusReason for an upload and prints bot
 
 test("--prune deletes the artifact of an older run once the newest successful run's baseline is on the disk", async () => {
   const runner = await selfHosted([run(40, "push", "2026-10-05T00:00:00Z", []), ...PRUNE_RUNS]);
-  await writeFile(await savedEntry(runner, 40, "stryker-incremental.json"), '{"run":40}');
+  await savedEntry(runner, 40, { "stryker-incremental.json": { run: 40 } });
 
   const pruned = await runner.run(["--prune"]);
 

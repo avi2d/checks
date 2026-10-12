@@ -64,18 +64,19 @@ When `HOME` is unset it works the same way, and prints to stderr that the runner
 
 ## The saved baselines
 
-`--save` writes the run's baseline to `$HOME/.cache/avi2dg-checks/mutation-baseline/<repository id>/saved/mutation-baseline/<run id>/`.
-The entry holds `stryker-incremental.json` and, when given, `mutation/mutation.json`, the layout of a `mutation-baseline` artifact.
+`--save` writes the run's baseline to `$HOME/.cache/avi2dg-checks/mutation-baseline/<repository id>/saved/mutation-baseline/<run id>.json`.
+The entry is one JSON file that holds `stryker-incremental.json` and, when given, `mutation/mutation.json`, keyed by those names.
 It writes both files without each mutant's `statusReason`.
 Stryker puts the test runner's failure message there, which no reader of a baseline uses, and which makes up most of a large report.
 A report of about 280 MB comes out at about 5 MB.
 The entry lands through a rename beside it, so a job sharing the runner sees it whole or not at all.
-A re-run attempt keeps its run's id and commit, so the entry an earlier attempt saved stays, since a job sharing the runner may be copying from it.
+A re-run attempt keeps its run's id, so its entry replaces the one an earlier attempt saved.
 
 The restore reads only the successful runs, so a run that saves and then fails leaves an entry no restore reads.
-A restore from the disk removes the entries of runs older than the one it read, except the newest from a successful run.
-A job that listed the runs a moment earlier may still be copying from that one.
-It keeps the entries of newer runs, which may still be running.
+A re-run attempt that succeeds replaces it first.
+A restore reads the entry in one open, so a job that removes or replaces it afterwards changes nothing the restore copies.
+A restore from the disk removes the entries of runs older than the one it read, and keeps the entries of newer runs, which may still be running.
+A job that picked one of the removed entries and had not opened it yet finds none, and falls back to the artifact.
 
 Every job that restores the baseline must run on the machine that saved it, as the same user.
 A job on another machine finds no entry and falls back to the artifact, which the prune deletes once a saved baseline supersedes it.
@@ -105,7 +106,7 @@ checks-mutation-baseline --prune [--dry-run]
 
 | Code | When |
 | --- | --- |
-| 0 | it restored a baseline, found none to restore, saved or kept the baseline, or wrote the slim report |
+| 0 | it restored a baseline, found none to restore, saved the baseline or wrote the slim report |
 | 2 | the arguments do not parse, `gh` cannot list the runs, the cache cannot be written, another job removed the entry before it was copied, a file to save or slim does not parse, or `--save` runs where it refuses |
 
 A failed artifact lookup or download prints the `gh` error and moves on, as a missing artifact does.
@@ -125,7 +126,6 @@ A miss prints `downloaded it into the runner's cache` instead, and a hosted runn
 
 ```
 mutation-baseline: saved the mutation-baseline of run 38058558974 on the runner's disk
-mutation-baseline: kept the mutation-baseline an earlier attempt of run 38058558974 saved on the runner's disk
 mutation-baseline: restored it from the runner's disk, mutation-baseline saved by run 38058558974
 mutation-baseline: wrote full/mutation.json without statusReason, 4788924 bytes from 272879455
 ```
