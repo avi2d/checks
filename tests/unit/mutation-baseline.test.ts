@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { Option } from "effect";
 import { newestFirst, pruneReport, pruned, superseded, uploadedBy } from "../../src/testing/mutation-baseline.ts";
+import { outlived, withoutReasons } from "../../src/testing/mutation-baseline-saved.ts";
 
 // GitHub numbers artifacts in the order it creates them, so a higher id is a newer artifact.
 test("pruning keeps the highest artifact ids and the one being restored, and passes over a name that is no id", () => {
@@ -55,23 +56,67 @@ test("pruneReport names the deleted, the missed and the kept artifacts", () => {
     { run: 20, id: 200, name: "mutation-baseline" },
     { run: 35, id: 350, name: "mutation-baseline-full" },
   ];
-  expect(pruneReport(false, [100, 250, 300], [], keeping)).toBe(
+  expect(pruneReport(false, [100, 250, 300], [], keeping, Option.none())).toBe(
     "mutation-baseline: deleted artifacts 100, 250, 300; kept mutation-baseline artifact 200 from run 20, mutation-baseline-full artifact 350 from run 35",
   );
   const missed = [
     { id: 250, name: "mutation-baseline-full", error: "gh api -X DELETE repos/{owner}/{repo}/actions/artifacts/250: HTTP 403: Resource not accessible" },
     { id: 300, name: "mutation-baseline", error: "gh api -X DELETE repos/{owner}/{repo}/actions/artifacts/300: HTTP 502: 100% down\r\nretry later" },
   ];
-  expect(pruneReport(false, [100], missed, keeping).split("\n")).toEqual([
+  expect(pruneReport(false, [100], missed, keeping, Option.none()).split("\n")).toEqual([
     "::warning::mutation-baseline: could not delete mutation-baseline-full artifact 250: gh api -X DELETE repos/{owner}/{repo}/actions/artifacts/250: HTTP 403: Resource not accessible",
     "::warning::mutation-baseline: could not delete mutation-baseline artifact 300: gh api -X DELETE repos/{owner}/{repo}/actions/artifacts/300: HTTP 502: 100%25 down%0D%0Aretry later",
     "mutation-baseline: deleted artifacts 100; kept mutation-baseline artifact 200 from run 20, mutation-baseline-full artifact 350 from run 35; could not delete artifacts 250, 300",
   ]);
-  expect(pruneReport(false, [], [], keeping)).toBe(
+  expect(pruneReport(false, [], [], keeping, Option.none())).toBe(
     "mutation-baseline: nothing to delete; kept mutation-baseline artifact 200 from run 20, mutation-baseline-full artifact 350 from run 35",
   );
-  expect(pruneReport(true, [100, 250, 300], [], keeping)).toBe(
+  expect(pruneReport(true, [100, 250, 300], [], keeping, Option.none())).toBe(
     "mutation-baseline: dry run, would delete artifacts 100, 250, 300; would keep mutation-baseline artifact 200 from run 20, mutation-baseline-full artifact 350 from run 35",
   );
-  expect(pruneReport(true, [], [], [])).toBe("mutation-baseline: dry run, nothing to delete; would keep no baseline artifacts");
+  expect(pruneReport(true, [], [], [], Option.none())).toBe("mutation-baseline: dry run, nothing to delete; would keep no baseline artifacts");
+  expect(pruneReport(false, [200], [], keeping.slice(1), Option.some(40))).toBe(
+    "mutation-baseline: deleted artifacts 200; kept mutation-baseline-full artifact 350 from run 35, the mutation-baseline run 40 saved on the runner's disk",
+  );
+});
+
+// GitHub numbers runs in the order it creates them, so an entry below the restored run belongs to an older run.
+test("outlived names the saved entries older than the restored one past the spares, and never a newer run's", () => {
+  expect(outlived(["10", "20", "30", "40", ".staging-ab12", "50"], 40, 1)).toEqual(["20", "10"]);
+  expect(outlived(["10", "40"], 40, 1)).toEqual([]);
+  expect(outlived(["10", "20", "40"], 40, 0)).toEqual(["20", "10"]);
+});
+
+// The mutation-testing-report-schema makes statusReason optional on a mutant, so a report without it still validates.
+test("withoutReasons drops each mutant's statusReason and keeps every other key of the report", () => {
+  const report = {
+    schemaVersion: "2",
+    thresholds: { high: 80, low: 60 },
+    testFiles: { "tests/unit/a.test.ts": { tests: [{ id: "0", name: "a" }] } },
+    files: {
+      "src/a.ts": {
+        language: "typescript",
+        source: "export const a = 1;",
+        mutants: [
+          { id: "1", status: "Killed", statusReason: "expect(received).toBe(expected)", killedBy: ["0"], coveredBy: ["0"] },
+          { id: "2", status: "Survived", coveredBy: ["0"] },
+        ],
+      },
+      "src/b.ts": { language: "typescript", source: "", mutants: [] },
+    },
+  };
+  expect(withoutReasons(report)).toEqual({
+    ...report,
+    files: {
+      ...report.files,
+      "src/a.ts": {
+        ...report.files["src/a.ts"],
+        mutants: [
+          { id: "1", status: "Killed", killedBy: ["0"], coveredBy: ["0"] },
+          { id: "2", status: "Survived", coveredBy: ["0"] },
+        ],
+      },
+    },
+  });
+  expect(withoutReasons({ files: [] })).toEqual({ files: [] });
 });
