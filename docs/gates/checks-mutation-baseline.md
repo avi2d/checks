@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-mutation-baseline
 
-`checks-mutation-baseline` restores the newest mutation baseline that `main` published, and deletes superseded baselines after a `main` upload.
+`checks-mutation-baseline` restores the newest mutation baseline that `main` published, and deletes superseded baselines after a `main` run.
 On a self-hosted runner it keeps each baseline it downloads, so the next job copies it instead.
 There it also saves a run's baseline on the runner's disk, so the baseline never counts against the account's Actions storage.
 
@@ -75,7 +75,8 @@ A re-run attempt keeps its run's id, so its entry replaces the one an earlier at
 The restore reads only the successful runs, so a run that saves and then fails leaves an entry no restore reads.
 A re-run attempt that succeeds replaces it first.
 A restore reads the entry in one open, so a job that removes or replaces it afterwards changes nothing the restore copies.
-A restore from the disk removes the entries of runs older than the one it read, and keeps the entries of newer runs, which may still be running.
+A restore from the disk removes the entries of runs older than the one it read.
+It keeps the entries of newer runs, which may still be running.
 A job that picked one of the removed entries and had not opened it yet finds none, and falls back to the artifact.
 
 Every job that restores the baseline must run on the machine that saved it, as the same user.
@@ -98,8 +99,8 @@ checks-mutation-baseline --prune [--dry-run]
 
 `--full` restores only the report of a run that started with no state.
 `--save` keeps this run's baseline on the runner's disk in place of an upload.
-`--slim` writes a report without `statusReason` to `<dest>`, for a baseline that still goes up as an artifact.
-`--prune` deletes superseded baselines after an upload.
+`--slim` writes a report without `statusReason` to `<dest>`, for a report that still goes up as an artifact.
+`--prune` deletes superseded baselines after a save or an upload.
 `--dry-run` lists what `--prune` would delete, and deletes nothing.
 
 ## Exit codes
