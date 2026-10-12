@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.41.0
+
+Released 2026-10-12.
+
+### Features
+
+- **testing:** keep mutation baselines and flake reports out of Actions artifact storage [#150](https://github.com/avi2d/checks/pull/150)
+
 ## 0.40.0
 
 Released 2026-10-11.
