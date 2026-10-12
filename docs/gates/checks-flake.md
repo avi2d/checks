@@ -54,7 +54,7 @@ Only a schedule the repository writes runs it.
 
 ## Running it on a schedule
 
-A repository runs it on a schedule and keeps the record as an artifact:
+A repository runs it on a schedule and keeps the record of a failed run as an artifact:
 
 ```yaml
 on:
@@ -70,11 +70,16 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bunx checks-flake --runs 10 --report flake-report.json
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: failure()
         with:
           name: flake-report
           path: flake-report.json
+          retention-days: 7
 ```
+
+A passing run's job summary holds all its seeds, so a passing run uploads nothing.
+In a private repository every upload counts against the account's Actions storage, and GitHub refuses each one once that storage is used up.
+A run that only uploads on failure stays green through that refusal, and a failing run is red for its tests either way.
 
 A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on the job, as [checks-ci-wiring](checks-ci-wiring.md#runners) requires.
 

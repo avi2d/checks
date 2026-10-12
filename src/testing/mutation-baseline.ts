@@ -4,20 +4,19 @@ import { ChildProcessSpawner } from "effect/process";
 import { collect } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { cacheRoot } from "../dependencies/cache-root.ts";
+import { INCREMENTAL, LATEST_ARTIFACT, outlived, REPORT, saveBaseline, savedFiles, savedShelf, slimmed } from "./mutation-baseline-saved.ts";
 
 class BaselineFailure extends Schema.TaggedError<BaselineFailure>()("BaselineFailure", {
   message: Schema.String,
 }) {}
 
 const NAME = "checks-mutation-baseline";
-const USAGE = "usage: checks-mutation-baseline <incremental-dest> [mutation-json-dest] | --full <mutation-json-dest> | --prune [--dry-run]";
+const USAGE =
+  "usage: checks-mutation-baseline <incremental-dest> [mutation-json-dest] | --full <mutation-json-dest> | --save <incremental-src> [mutation-json-src] | --slim <mutation-json-src> <dest> | --prune [--dry-run]";
 const WORKFLOW = "mutation.yml";
 const BRANCH = "main";
-const INCREMENTAL = "stryker-incremental.json";
-const REPORT = "mutation/mutation.json";
 const REPORT_ALONE = "mutation.json";
 const KEPT_PER_ARTIFACT = 2;
-const LATEST_ARTIFACT = "mutation-baseline";
 const FULL_ARTIFACT = "mutation-baseline-full";
 const LATEST_LIMIT = 20;
 const FULL_LIMIT = 50;
@@ -63,12 +62,12 @@ export function newestFirst(runs: readonly Run[]): readonly number[] {
   return [...runs].sort((one, other) => other.createdAt.localeCompare(one.createdAt)).map((run) => run.databaseId);
 }
 
+// All non-pull-request runs newest first: a newer full run holds no baseline, and the newest baseline must survive it.
 const latestCandidates = Effect.gen(function* () {
   const newest = (yield* listed(undefined, LATEST_LIMIT)).find((run) => run.event !== "pull_request");
   return newest === undefined ? [] : [newest.databaseId];
 });
 
-// All non-pull-request runs newest first: a newer full run holds no baseline, and the newest baseline must survive it.
 const latestRuns = listed(undefined, LATEST_LIMIT).pipe(Effect.map((runs) => newestFirst(runs.filter((run) => run.event !== "pull_request"))));
 
 // Each full event is listed on its own, because one shared window lets push runs crowd out every full run.
@@ -108,12 +107,22 @@ const missedDeletion = Effect.fn("missedDeletion")(function* (artifact: Artifact
   );
 });
 
+// A run whose baseline the runner's disk holds supersedes every older artifact, since the restore reads that run's entry first.
+const keptLatest = Effect.fn("keptLatest")(function* (runs: readonly number[], shelf: Option.Option<string>) {
+  for (const run of runs) {
+    if (Option.isSome(shelf) && Option.isSome(yield* savedFiles(shelf.value, run))) return { saved: Option.some(run), kept: Option.none<Kept>() };
+    const artifact = yield* artifactOf(run, LATEST_ARTIFACT);
+    if (Option.isSome(artifact)) return { saved: Option.none<number>(), kept: Option.some<Kept>({ run, id: artifact.value.id, name: LATEST_ARTIFACT }) };
+  }
+  return { saved: Option.none<number>(), kept: Option.none<Kept>() };
+});
+
 const pruneBaselines = Effect.fn("pruneBaselines")(function* (dryRun: boolean) {
   const running = yield* Config.Int("GITHUB_RUN_ID").pipe(Config.option);
-  const latest = yield* keptArtifact(yield* latestRuns, LATEST_ARTIFACT);
+  const latest = yield* keptLatest(yield* latestRuns, yield* savedShelf(yield* runnerCache));
   const full = yield* keptArtifact(yield* fullCandidates, FULL_ARTIFACT);
   const artifacts = yield* everyArtifact();
-  const keeping = [...Option.toArray(latest), ...Option.toArray(full), ...uploadedBy(artifacts, running)];
+  const keeping = [...Option.toArray(latest.kept), ...Option.toArray(full), ...uploadedBy(artifacts, running)];
   const victims = superseded(artifacts, new Set(keeping.map((keep) => keep.id)));
   const removed: number[] = [];
   const missed: Missed[] = [];
@@ -124,7 +133,7 @@ const pruneBaselines = Effect.fn("pruneBaselines")(function* (dryRun: boolean) {
       else removed.push(victim.id);
     }
   }
-  yield* Console.log(pruneReport(dryRun, dryRun ? victims.map((victim) => victim.id) : removed, missed, keeping));
+  yield* Console.log(pruneReport(dryRun, dryRun ? victims.map((victim) => victim.id) : removed, missed, keeping, latest.saved));
   return true;
 });
 
@@ -175,8 +184,12 @@ export function superseded(artifacts: readonly Artifact[], kept: ReadonlySet<num
 // A workflow command ends at a newline, so the error's own newlines and percent signs are escaped.
 const annotated = (text: string): string => text.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
 
-export function pruneReport(dryRun: boolean, removed: readonly number[], missed: readonly Missed[], keeping: readonly Kept[]): string {
-  const kept = keeping.length === 0 ? "no baseline artifacts" : keeping.map((keep) => `${keep.name} artifact ${keep.id} from run ${keep.run}`).join(", ");
+export function pruneReport(dryRun: boolean, removed: readonly number[], missed: readonly Missed[], keeping: readonly Kept[], saved: Option.Option<number>): string {
+  const holdings = [
+    ...keeping.map((keep) => `${keep.name} artifact ${keep.id} from run ${keep.run}`),
+    ...Option.toArray(saved).map((run) => `the ${LATEST_ARTIFACT} run ${run} saved on the runner's disk`),
+  ];
+  const kept = holdings.length === 0 ? "no baseline artifacts" : holdings.join(", ");
   const deleted = removed.length === 0 ? "nothing to delete" : `deleted artifacts ${removed.join(", ")}`;
   if (dryRun) return `mutation-baseline: dry run, ${removed.length === 0 ? "nothing to delete" : `would delete artifacts ${removed.join(", ")}`}; would keep ${kept}`;
   if (missed.length === 0) return `mutation-baseline: ${deleted}; kept ${kept}`;
@@ -265,41 +278,94 @@ const runnerCache = Effect.gen(function* () {
   );
 });
 
-// An artifact that lacks `needed` counts as no baseline, and `optional` copies only what the artifact holds.
-type Request = { readonly full: boolean; readonly needed: Copy; readonly optional: readonly Copy[] };
+const restoredFromSaved = Effect.fn("restoredFromSaved")(function* (shelf: string, run: number, request: Request) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const files = yield* savedFiles(shelf, run);
+  if (Option.isNone(files)) return false;
+  const stored = new Map(Object.entries(files.value));
+  for (const copy of [request.needed, ...request.optional]) {
+    const name = copy.from.find((from) => stored.has(from));
+    if (name === undefined) continue;
+    yield* fs.makeDirectory(path.dirname(copy.to), { recursive: true });
+    yield* fs.writeFileString(copy.to, JSON.stringify(stored.get(name)));
+  }
+  for (const older of outlived(yield* fs.readDirectory(shelf), run)) {
+    yield* fs.remove(path.join(shelf, older), { force: true });
+  }
+  yield* Console.log(`mutation-baseline: restored it from the runner's disk, ${LATEST_ARTIFACT} saved by run ${run}`);
+  return true;
+});
 
-type PruneRequest = { readonly prune: true; readonly dryRun: boolean };
+const slimReport = Effect.fn("slimReport")(function* (from: string, to: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const before = (yield* fs.stat(from)).size;
+  yield* slimmed(from, to);
+  const after = (yield* fs.stat(to)).size;
+  yield* Console.log(`mutation-baseline: wrote ${to} without statusReason, ${after} bytes from ${before}`);
+  return true;
+});
+
+// An artifact that lacks `needed` counts as no baseline, and `optional` copies only what the artifact holds.
+type Request = { readonly kind: "restore"; readonly full: boolean; readonly needed: Copy; readonly optional: readonly Copy[] };
+
+type Command =
+  | Request
+  | { readonly kind: "prune"; readonly dryRun: boolean }
+  | { readonly kind: "save"; readonly incremental: string; readonly report: Option.Option<string> }
+  | { readonly kind: "slim"; readonly from: string; readonly to: string };
 
 const isDestination = (arg: string | undefined): arg is string => arg !== undefined && !arg.startsWith("-");
 
-function parsed(args: readonly string[]): Request | PruneRequest | undefined {
-  if (args[0] === "--prune") {
-    const [flag, ...extra] = args.slice(1);
-    if ((flag === undefined || flag === "--dry-run") && extra.length === 0) return { prune: true, dryRun: flag !== undefined };
-    return undefined;
-  }
-  if (args[0] === "--full") {
-    const [report, ...extra] = args.slice(1);
-    if (!isDestination(report) || extra.length > 0) return undefined;
-    return { full: true, needed: { from: [REPORT_ALONE, REPORT], to: report }, optional: [] };
-  }
-  const [incremental, report, ...extra] = args;
+function restoreRequest(incremental: string | undefined, report: string | undefined, extra: readonly string[]): Command | undefined {
   if (!isDestination(incremental) || extra.length > 0) return undefined;
-  return { full: false, needed: { from: [INCREMENTAL], to: incremental }, optional: report === undefined ? [] : [{ from: [REPORT], to: report }] };
+  return { kind: "restore", full: false, needed: { from: [INCREMENTAL], to: incremental }, optional: report === undefined ? [] : [{ from: [REPORT], to: report }] };
 }
 
-const mutationBaseline = Effect.gen(function* () {
-  const request = parsed(process.argv.slice(2));
-  if (request === undefined) return yield* new Usage({ message: USAGE });
-  if ("prune" in request) return yield* pruneBaselines(request.dryRun);
+const FLAGS = new Map<string, (rest: readonly string[]) => Command | undefined>([
+  ["--prune", ([flag, ...extra]) => ((flag === undefined || flag === "--dry-run") && extra.length === 0 ? { kind: "prune", dryRun: flag !== undefined } : undefined)],
+  [
+    "--save",
+    ([incremental, report, ...extra]) =>
+      isDestination(incremental) && (report === undefined || isDestination(report)) && extra.length === 0
+        ? { kind: "save", incremental, report: Option.fromNullishOr(report) }
+        : undefined,
+  ],
+  ["--slim", ([from, to, ...extra]) => (isDestination(from) && isDestination(to) && extra.length === 0 ? { kind: "slim", from, to } : undefined)],
+  [
+    "--full",
+    ([report, ...extra]) =>
+      isDestination(report) && extra.length === 0 ? { kind: "restore", full: true, needed: { from: [REPORT_ALONE, REPORT], to: report }, optional: [] } : undefined,
+  ],
+]);
+
+function parsed([first, ...rest]: readonly string[]): Command | undefined {
+  const flag = first === undefined ? undefined : FLAGS.get(first);
+  if (flag !== undefined) return flag(rest);
+  const [report, ...extra] = rest;
+  return restoreRequest(first, report, extra);
+}
+
+const restoreBaseline = Effect.fn("restoreBaseline")(function* (request: Request) {
   const name = request.full ? FULL_ARTIFACT : LATEST_ARTIFACT;
   const root = yield* runnerCache;
+  const shelf = request.full ? Option.none<string>() : yield* savedShelf(root);
   for (const run of yield* request.full ? fullCandidates : latestCandidates) {
+    if (Option.isSome(shelf) && (yield* restoredFromSaved(shelf.value, run, request))) return true;
     const artifact = yield* artifactOf(run, name).pipe(Effect.catch(warned(Option.none<Artifact>())));
     if (Option.isSome(artifact) && (yield* restoredFrom(run, artifact.value, root, request))) return true;
   }
   yield* Console.log(`mutation-baseline: no successful ${BRANCH} run holds a ${name} artifact, so nothing was restored`);
   return true;
+});
+
+const mutationBaseline = Effect.gen(function* () {
+  const command = parsed(process.argv.slice(2));
+  if (command === undefined) return yield* new Usage({ message: USAGE });
+  if (command.kind === "prune") return yield* pruneBaselines(command.dryRun);
+  if (command.kind === "save") return yield* saveBaseline(command.incremental, command.report);
+  if (command.kind === "slim") return yield* slimReport(command.from, command.to);
+  return yield* restoreBaseline(command);
 });
 
 if (import.meta.main) runMain(NAME, mutationBaseline);

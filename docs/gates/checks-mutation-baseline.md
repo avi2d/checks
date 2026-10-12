@@ -4,14 +4,16 @@ audience: consumers
 ---
 # checks-mutation-baseline
 
-`checks-mutation-baseline` restores the newest mutation baseline that `main` published, and deletes superseded baselines after a `main` upload.
+`checks-mutation-baseline` restores the newest mutation baseline that `main` published, and deletes superseded baselines after a `main` run.
 On a self-hosted runner it keeps each baseline it downloads, so the next job copies it instead.
+There it also saves a run's baseline on the runner's disk, so the baseline never counts against the account's Actions storage.
 
 ## What it checks
 
 It reads the successful runs of `mutation.yml` on `main`.
 Without `--full` it takes the newest of the 20 newest of those runs that a pull request did not start.
-It restores that run's `mutation-baseline` artifact, and takes the run whether or not it holds one.
+It restores the baseline that run saved on the runner's disk, as [The saved baselines](#the-saved-baselines) says.
+Without one there, it restores that run's `mutation-baseline` artifact, and takes the run whether or not it holds one.
 It tries no older run, so a newest run without the artifact restores nothing.
 An artifact without `stryker-incremental.json` counts as no baseline.
 It copies `stryker-incremental.json` to the first destination, and `mutation/mutation.json` to the second destination when the artifact holds it.
@@ -25,6 +27,7 @@ It creates the directories each destination needs.
 
 With `--prune` it deletes the repository's superseded baselines instead of restoring one.
 It keeps the newest unexpired `mutation-baseline` among the runs the restore reads, and the newest unexpired `mutation-baseline-full` the restore takes first.
+A run whose baseline the runner's disk holds stops that search, and every older `mutation-baseline` goes, since the restore reads that run's saved baseline first.
 It also keeps the unexpired baselines of the run it runs in, which `GITHUB_RUN_ID` names.
 The restore reads only successful runs, so it takes them once that run succeeds.
 A failed artifact lookup while it picks what to keep stops it before it deletes anything.
@@ -39,7 +42,8 @@ It deletes through `gh`, which needs a token that deletes the repository's Actio
 It reads the runs and their artifacts through `gh`, which needs a token that reads the repository's Actions, such as `GH_TOKEN: ${{ github.token }}` with `actions: read`.
 The `mutation-baseline` artifact holds `stryker-incremental.json` and `mutation/mutation.json`, which an upload of `reports/stryker-incremental.json` and `reports/mutation/mutation.json` writes.
 The `mutation-baseline-full` artifact holds `mutation.json` at its root, which an upload of `reports/mutation/mutation.json` alone writes.
-It reads `RUNNER_ENVIRONMENT` and `HOME` to place the runner cache, and `--prune` reads `GITHUB_RUN_ID`.
+It reads `RUNNER_ENVIRONMENT` and `HOME` to place the runner cache, and `GITHUB_REPOSITORY_ID` to find the saved baselines.
+`--save` and `--prune` read `GITHUB_RUN_ID`.
 
 ## The runner cache
 
@@ -58,24 +62,53 @@ A 100 MB baseline zip can unpack to about 500 MB, so a repository restoring both
 When `RUNNER_ENVIRONMENT` is `github-hosted`, it downloads into a temporary directory and writes no cache, since a hosted runner starts every job on a fresh machine.
 When `HOME` is unset it works the same way, and prints to stderr that the runner cache is disabled.
 
+## The saved baselines
+
+`--save` writes the run's baseline to `$HOME/.cache/avi2dg-checks/mutation-baseline/<repository id>/saved/mutation-baseline/<run id>.json`.
+The entry is one JSON file that holds `stryker-incremental.json` and, when given, `mutation/mutation.json`, keyed by those names.
+It writes both files without each mutant's `statusReason`.
+Stryker puts the test runner's failure message there, which no reader of a baseline uses, and which makes up most of a large report.
+A report of about 280 MB comes out at about 5 MB.
+The entry lands through a rename beside it, so a job sharing the runner sees it whole or not at all.
+A re-run attempt keeps its run's id, so its entry replaces the one an earlier attempt saved.
+
+The restore reads only the successful runs, so a run that saves and then fails leaves an entry no restore reads.
+A re-run attempt that succeeds replaces it first.
+A restore reads the entry in one open, so a job that removes or replaces it afterwards changes nothing the restore copies.
+A restore from the disk removes the entries of runs older than the one it read.
+It keeps the entries of newer runs, which may still be running.
+A job that picked one of the removed entries and had not opened it yet finds none, and falls back to the artifact.
+
+Every job that restores the baseline must run on the machine that saved it, as the same user.
+A job on another machine finds no entry and falls back to the artifact, which the prune deletes once a saved baseline supersedes it.
+Losing the disk costs the next `main` run a fresh baseline, since an incremental run with no state tests every mutant.
+
+`--save` refuses on a GitHub-hosted runner, since its disk ends with the job.
+There a repository uploads the baseline as an artifact.
+It also refuses when `HOME`, `GITHUB_REPOSITORY_ID` or `GITHUB_RUN_ID` is unset.
+
 ## Arguments
 
 ```sh
 checks-mutation-baseline <incremental-dest> [mutation-json-dest]
 checks-mutation-baseline --full <mutation-json-dest>
+checks-mutation-baseline --save <incremental-src> [mutation-json-src]
+checks-mutation-baseline --slim <mutation-json-src> <dest>
 checks-mutation-baseline --prune [--dry-run]
 ```
 
 `--full` restores only the report of a run that started with no state.
-`--prune` deletes superseded baselines after an upload.
+`--save` keeps this run's baseline on the runner's disk in place of an upload.
+`--slim` writes a report without `statusReason` to `<dest>`, for a report that still goes up as an artifact.
+`--prune` deletes superseded baselines after a save or an upload.
 `--dry-run` lists what `--prune` would delete, and deletes nothing.
 
 ## Exit codes
 
 | Code | When |
 | --- | --- |
-| 0 | it restored a baseline, or found none to restore |
-| 2 | the arguments do not parse, `gh` cannot list the runs, the cache cannot be written, or another job removed the entry before it was copied |
+| 0 | it restored a baseline, found none to restore, saved the baseline or wrote the slim report |
+| 2 | the arguments do not parse, `gh` cannot list the runs, the cache cannot be written, another job removed the entry before it was copied, a file to save or slim does not parse, or `--save` runs where it refuses |
 
 A failed artifact lookup or download prints the `gh` error and moves on, as a missing artifact does.
 With `--prune`, `0` means it deleted the superseded artifacts, found none, or could not delete some.
@@ -91,6 +124,12 @@ mutation-baseline: restored it from the runner's cache, mutation-baseline artifa
 ```
 
 A miss prints `downloaded it into the runner's cache` instead, and a hosted runner prints `downloaded it`.
+
+```
+mutation-baseline: saved the mutation-baseline of run 38058558974 on the runner's disk
+mutation-baseline: restored it from the runner's disk, mutation-baseline saved by run 38058558974
+mutation-baseline: wrote full/mutation.json without statusReason, 4788924 bytes from 272879455
+```
 
 ```
 mutation-baseline: deleted artifacts 11542133901, 11553708473, 11632727585; kept mutation-baseline artifact 11670749656 from run 38055231501
@@ -110,16 +149,12 @@ A baseline job restores the state the previous `main` run left before an increme
   run: bunx checks-mutation-baseline reports/stryker-incremental.json
 ```
 
-A baseline job uploads the state the incremental run wrote, then on `main` prunes the superseded baselines:
+A baseline job on a self-hosted runner saves the state the incremental run wrote, then on `main` prunes the superseded baselines:
 
 ```yaml
-- uses: actions/upload-artifact@v4
-  with:
-    name: mutation-baseline
-    path: |
-      reports/mutation/mutation.json
-      reports/stryker-incremental.json
-    retention-days: 7
+- name: Save baseline state
+  if: github.ref == 'refs/heads/main'
+  run: bunx checks-mutation-baseline --save reports/stryker-incremental.json reports/mutation/mutation.json
 - name: Prune superseded baselines
   if: github.ref == 'refs/heads/main'
   env:
@@ -127,8 +162,23 @@ A baseline job uploads the state the incremental run wrote, then on `main` prune
   run: bunx checks-mutation-baseline --prune
 ```
 
-The incremental upload keeps 7 days of retention, since the restore reads only the newest `main` run.
-The full upload keeps 30 days, since full runs start weekly.
+The saved baseline uses none of the account's Actions storage, which every private repository's artifacts share.
+That storage accrues by the hour over the month, so an artifact deleted early still counts until the month ends.
+A baseline job on a GitHub-hosted runner uploads the same two files as a `mutation-baseline` artifact with `retention-days: 7` instead, since the restore reads only the newest `main` run.
+
+A full run uploads its report as the `mutation-baseline-full` artifact, which a pull request's scope step reads on any runner.
+It slims the report first, so the artifact holds about 0.5 MB in place of about 100 MB:
+
+```yaml
+- run: bunx checks-mutation-baseline --slim reports/mutation/mutation.json "$RUNNER_TEMP/full/mutation.json"
+- uses: actions/upload-artifact@v4
+  with:
+    name: mutation-baseline-full
+    path: ${{ runner.temp }}/full/mutation.json
+    retention-days: 30
+```
+
+The full upload keeps 30 days, so the newest full baseline outlives the gap between full runs.
 A pull request's scope step loses its coverage when no full baseline outlives the gap.
 
 A pull request's scope step restores the full report with `--full`:

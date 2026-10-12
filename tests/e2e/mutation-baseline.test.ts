@@ -41,7 +41,7 @@ async function selfHosted(runs: readonly FakeRun[], options: FakeOptions = {}): 
   await mkdir(work);
   return {
     home,
-    run: (args, env = {}) => ran($`bun ${SCRIPT} ${args}`.cwd(work).env({ ...process.env, RUNNER_ENVIRONMENT: "self-hosted", GITHUB_RUN_ID: undefined, ...fake.env, HOME: home, ...env })),
+    run: (args, env = {}) => ran($`bun ${SCRIPT} ${args}`.cwd(work).env({ ...process.env, RUNNER_ENVIRONMENT: "self-hosted", GITHUB_RUN_ID: undefined, GITHUB_REPOSITORY_ID: String(REPOSITORY_ID), ...fake.env, HOME: home, ...env })),
     downloads: fake.downloads,
     calls: fake.calls,
     read: (file) => readFile(join(work, file), "utf8").catch(() => undefined),
@@ -224,7 +224,9 @@ test("a missing destination prints the usage and exits 2", async () => {
   const runner = await selfHosted(MAIN_RUNS);
   expect(await runner.run(["--full"])).toEqual({
     exitCode: 2,
-    text: "checks-mutation-baseline: usage: checks-mutation-baseline <incremental-dest> [mutation-json-dest] | --full <mutation-json-dest> | --prune [--dry-run]\n",
+    text:
+      "checks-mutation-baseline: usage: checks-mutation-baseline <incremental-dest> [mutation-json-dest] | --full <mutation-json-dest> | " +
+      "--save <incremental-src> [mutation-json-src] | --slim <mutation-json-src> <dest> | --prune [--dry-run]\n",
   });
 }, 30_000);
 
@@ -351,4 +353,108 @@ test("--prune with no baselines at all deletes nothing", async () => {
 
   expect(pruned).toEqual({ exitCode: 0, text: "mutation-baseline: nothing to delete; kept no baseline artifacts\n" });
   expect(deleted(await runner.calls())).toEqual([]);
+}, 30_000);
+
+const SAVED_SHELF = join(SHELVES, "saved", "mutation-baseline");
+
+// Stryker writes the test runner's failure message into statusReason, and the saved entry keeps every other field.
+const STATE = { files: { "src/a.ts": { mutants: [{ id: "1", status: "Killed", statusReason: "expected 1 to be 2", killedBy: ["0"] }] } }, testFiles: {} };
+const SLIM_STATE = { files: { "src/a.ts": { mutants: [{ id: "1", status: "Killed", killedBy: ["0"] }] } }, testFiles: {} };
+
+async function written(runner: Runner, file: string, content: unknown): Promise<void> {
+  const target = join(runner.home, "work", file);
+  await mkdir(join(target, ".."), { recursive: true });
+  await writeFile(target, JSON.stringify(content));
+}
+
+async function savedEntry(runner: Runner, runId: number, files: Readonly<Record<string, unknown>>): Promise<void> {
+  await mkdir(join(runner.home, SAVED_SHELF), { recursive: true });
+  await writeFile(join(runner.home, SAVED_SHELF, `${runId}.json`), JSON.stringify(files));
+}
+
+test("--save keeps the run's baseline on the runner's disk without statusReason, and the next restore copies it instead of downloading", async () => {
+  const runner = await selfHosted(MAIN_RUNS);
+  await written(runner, "reports/stryker-incremental.json", STATE);
+  await written(runner, "reports/mutation/mutation.json", STATE);
+
+  const saved = await runner.run(["--save", "reports/stryker-incremental.json", "reports/mutation/mutation.json"], { GITHUB_RUN_ID: "20" });
+  const restored = await runner.run(["next/stryker-incremental.json", "next/mutation.json"]);
+
+  expect(saved).toEqual({ exitCode: 0, text: "mutation-baseline: saved the mutation-baseline of run 20 on the runner's disk\n" });
+  expect(restored).toEqual({ exitCode: 0, text: "mutation-baseline: restored it from the runner's disk, mutation-baseline saved by run 20\n" });
+  expect(JSON.parse((await runner.read("next/stryker-incremental.json")) ?? "")).toEqual(SLIM_STATE);
+  expect(JSON.parse((await runner.read("next/mutation.json")) ?? "")).toEqual(SLIM_STATE);
+  expect(await runner.downloads()).toEqual([]);
+}, 30_000);
+
+test("--save run again in the same run replaces the entry an earlier attempt saved", async () => {
+  const runner = await selfHosted(MAIN_RUNS);
+  await written(runner, "reports/stryker-incremental.json", { attempt: 1 });
+  await runner.run(["--save", "reports/stryker-incremental.json"], { GITHUB_RUN_ID: "20" });
+  await written(runner, "reports/stryker-incremental.json", { attempt: 2 });
+
+  const saved = await runner.run(["--save", "reports/stryker-incremental.json"], { GITHUB_RUN_ID: "20" });
+
+  expect(saved).toEqual({ exitCode: 0, text: "mutation-baseline: saved the mutation-baseline of run 20 on the runner's disk\n" });
+  expect(await runner.run(["next/stryker-incremental.json"])).toEqual({ exitCode: 0, text: "mutation-baseline: restored it from the runner's disk, mutation-baseline saved by run 20\n" });
+  expect(await runner.read("next/stryker-incremental.json")).toBe('{"attempt":2}');
+}, 30_000);
+
+test("a restore from the disk removes the entries of older runs and keeps a newer run's", async () => {
+  const runner = await selfHosted(MAIN_RUNS);
+  for (const runId of [5, 10, 15, 20, 25]) await savedEntry(runner, runId, { "stryker-incremental.json": { run: runId } });
+
+  const restored = await runner.run(["reports/stryker-incremental.json"]);
+
+  expect(restored.text).toBe("mutation-baseline: restored it from the runner's disk, mutation-baseline saved by run 20\n");
+  expect(await runner.read("reports/stryker-incremental.json")).toBe('{"run":20}');
+  expect((await readdir(join(runner.home, SAVED_SHELF))).sort()).toEqual(["20.json", "25.json"]);
+}, 30_000);
+
+test("--save on a GitHub-hosted runner refuses, since its disk ends with the job, and writes nothing", async () => {
+  const runner = await selfHosted(MAIN_RUNS);
+  await written(runner, "reports/stryker-incremental.json", STATE);
+
+  const saved = await runner.run(["--save", "reports/stryker-incremental.json"], { GITHUB_RUN_ID: "20", RUNNER_ENVIRONMENT: "github-hosted" });
+
+  expect(saved).toEqual({
+    exitCode: 2,
+    text: "checks-mutation-baseline: a GitHub-hosted runner discards its disk when the job ends, so upload the baseline as an artifact there\n",
+  });
+  expect(await readdir(join(runner.home, ".cache")).catch(() => [])).toEqual([]);
+}, 30_000);
+
+test("--save outside a GitHub Actions job names the run id it lacks and exits 2", async () => {
+  const runner = await selfHosted(MAIN_RUNS);
+  await written(runner, "reports/stryker-incremental.json", STATE);
+
+  expect(await runner.run(["--save", "reports/stryker-incremental.json"])).toEqual({
+    exitCode: 2,
+    text: "checks-mutation-baseline: GITHUB_RUN_ID is unset, so --save runs only inside a GitHub Actions job\n",
+  });
+}, 30_000);
+
+test("--slim writes the report without statusReason for an upload and prints both sizes", async () => {
+  const runner = await selfHosted(MAIN_RUNS);
+  await written(runner, "reports/mutation/mutation.json", STATE);
+
+  const slimmed = await runner.run(["--slim", "reports/mutation/mutation.json", "upload/mutation.json"]);
+
+  const before = JSON.stringify(STATE).length;
+  const after = JSON.stringify(SLIM_STATE).length;
+  expect(slimmed).toEqual({ exitCode: 0, text: `mutation-baseline: wrote upload/mutation.json without statusReason, ${after} bytes from ${before}\n` });
+  expect(JSON.parse((await runner.read("upload/mutation.json")) ?? "")).toEqual(SLIM_STATE);
+}, 30_000);
+
+test("--prune deletes the artifact of an older run once the newest successful run's baseline is on the disk", async () => {
+  const runner = await selfHosted([run(40, "push", "2026-10-05T00:00:00Z", []), ...PRUNE_RUNS]);
+  await savedEntry(runner, 40, { "stryker-incremental.json": { run: 40 } });
+
+  const pruned = await runner.run(["--prune"]);
+
+  expect(pruned).toEqual({
+    exitCode: 0,
+    text: "mutation-baseline: deleted artifacts 100, 200, 250, 300; kept mutation-baseline-full artifact 350 from run 35, the mutation-baseline run 40 saved on the runner's disk\n",
+  });
+  expect(deleted(await runner.calls())).toEqual([100, 200, 250, 300]);
 }, 30_000);

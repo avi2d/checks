@@ -97,12 +97,17 @@ jobs:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - run: bunx stryker run
+      - if: always()
+        run: bunx checks-mutation-baseline --slim reports/mutation/mutation.json "$RUNNER_TEMP/report/mutation.json"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: mutation-report
-          path: reports/mutation/mutation.json
+          path: ${{ runner.temp }}/report/mutation.json
+          retention-days: 7
 ```
+
+The upload holds the report without each mutant's `statusReason`, as [checks-mutation-baseline](checks-mutation-baseline.md#the-saved-baselines) says, since the full report of a large repository passes 100 MB as an artifact.
 
 The job runs on the fleet's self-hosted Linux runner labelled `winbox`, which is where a repository sends its full sweeps.
 It never reads `CI_RUNS_ON`, so an override that moves a repository's other jobs during a runner outage leaves the sweep waiting for `winbox`.
