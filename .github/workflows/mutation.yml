@@ -135,6 +135,7 @@ jobs:
       - name: Build scope report at merge base
         if: env.SCOPE != ''
         run: |
+          git worktree prune
           git worktree add "$RUNNER_TEMP/mutation-base" "$BASE_SHA"
           report="$RUNNER_TEMP/mutation-base/reports/mutation/mutation.json"
           if [ ! -f "$RUNNER_TEMP/mutation-base/stryker.conf.mjs" ]; then
@@ -165,5 +166,5 @@ jobs:
       - name: Remove mutation-base worktree
         if: always()
         run: |
-          git worktree remove --force "$RUNNER_TEMP/mutation-base" 2>/dev/null || rm -rf "$RUNNER_TEMP/mutation-base" || true
+          git worktree remove --force "$RUNNER_TEMP/mutation-base" 2>/dev/null || true
           git worktree prune
