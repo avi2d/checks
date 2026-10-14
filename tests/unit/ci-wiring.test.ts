@@ -339,6 +339,22 @@ test("a checks-release-pr argument must name a workflow the repository holds", (
   );
 });
 
+test("a checks-release-tag argument must name a workflow the repository holds", () => {
+  const tag = (run: string) =>
+    named({
+      "ci.yml": held,
+      "daily-release.yml": `name: daily-release\non:\n  push:\njobs:\n  tag:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ${run}\n`,
+    });
+  expect(findMissingWorkflows(tag("bunx checks-release-tag ci.yml"))).toEqual([]);
+  expect(findMissingWorkflows(tag("echo checks-release-tag release.yml"))).toEqual([]);
+  expect(findMissingWorkflows(tag("bunx checks-release-tag release.yml"))).toEqual([
+    { location: ".github/workflows/daily-release.yml line 8", fault: "names missing workflow release.yml" },
+  ]);
+  expect(findMissingWorkflows(tag("bun src/delivery/release-tag.ts release.yml")).map(({ fault }) => fault)).toEqual([
+    "names missing workflow release.yml",
+  ]);
+});
+
 test("a workflow_run entry must name a workflow in the repository", () => {
   const nightly = (watched: string) =>
     named({

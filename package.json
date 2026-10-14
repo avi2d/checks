@@ -51,6 +51,7 @@
     "src/testing/subsumed-tests.ts",
     "src/delivery/ci-wiring.ts",
     "src/delivery/shell-command.ts",
+    "src/delivery/workflow-references.ts",
     "src/delivery/mutation-job.ts",
     "src/delivery/secrets.ts",
     "src/delivery/gitleaks.ts",

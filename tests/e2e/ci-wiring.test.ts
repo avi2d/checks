@@ -140,6 +140,7 @@ test("a daily release that names a removed workflow fails until the name is gone
     "package.json": scripts(["lint", "test"]),
     ".github/workflows/ci.yml": workflow,
     ".github/workflows/daily-release.yml": broken,
+    ".github/workflows/release.yml": "name: release\non:\n  workflow_dispatch:\njobs:\n  publish:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo publish\n",
   });
   await repo.commit("start");
   const red = await wiring(repo);

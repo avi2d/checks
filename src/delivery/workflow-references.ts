@@ -24,20 +24,20 @@ export function names(value: unknown): readonly string[] | undefined {
 type Locator = (needle: string, from: number, fallback: string, scoped?: (line: string) => boolean) => string;
 
 const WORKFLOWS = ".github/workflows";
-const RELEASE_BIN = "checks-release-pr";
-const RELEASE_SOURCE = "release-pr.ts";
+const RELEASE_BINS = ["checks-release-pr", "checks-release-tag"];
+const RELEASE_SOURCES = ["release-pr.ts", "release-tag.ts"];
 const REUSABLE_PREFIX = "./.github/workflows/";
 
+function isPathTo(word: string, files: readonly string[]): boolean {
+  return files.some((file) => word.endsWith(`/${file}`));
+}
+
 function releaseArguments(program: Command): readonly string[] {
-  if (program[0] === RELEASE_BIN) return program.slice(1);
-  if (
-    program[0] === "bun" &&
-    program[1] !== undefined &&
-    (program[1] === RELEASE_SOURCE || program[1].endsWith(`/${RELEASE_SOURCE}`) || program[1].endsWith(`/${RELEASE_BIN}`))
-  ) {
+  const [head, target] = program;
+  if (head !== undefined && (RELEASE_BINS.includes(head) || isPathTo(head, RELEASE_BINS))) return program.slice(1);
+  if (head === "bun" && target !== undefined && (RELEASE_SOURCES.includes(target) || isPathTo(target, [...RELEASE_SOURCES, ...RELEASE_BINS]))) {
     return program.slice(2);
   }
-  if (program[0] !== undefined && program[0] !== RELEASE_SOURCE && program[0].endsWith(`/${RELEASE_BIN}`)) return program.slice(1);
   return [];
 }
 
@@ -93,7 +93,7 @@ function missingTarget(uses: string, paths: ReadonlySet<string>, at: Locator, fr
 }
 
 function releaseLine(line: string): boolean {
-  return line.includes(RELEASE_BIN) || line.includes(RELEASE_SOURCE);
+  return [...RELEASE_BINS, ...RELEASE_SOURCES].some((release) => line.includes(release));
 }
 
 function missingJobRefs(
