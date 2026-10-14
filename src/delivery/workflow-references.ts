@@ -15,6 +15,11 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+export function workflowJobs(workflow: Workflow): readonly (readonly [string, Readonly<Record<string, unknown>>])[] {
+  const jobs = isRecord(workflow.document) ? workflow.document["jobs"] : undefined;
+  return isRecord(jobs) ? Object.entries(jobs).flatMap(([id, job]) => (isRecord(job) ? [[id, job] as const] : [])) : [];
+}
+
 export function names(value: unknown): readonly string[] | undefined {
   if (typeof value === "string") return [value];
   if (!Array.isArray(value)) return undefined;

@@ -49,9 +49,29 @@ In a private repository each mutation job carries exactly the labels `[self-host
 A public repository may keep `runs-on: ubuntu-latest` on every job, because a pull request from a fork runs its own code on the runner.
 The check knows a repository is private only from GitHub's event, so a run outside CI judges only the rules that hold in either.
 
+### Bun version
+
+It also judges every step that uses `oven-sh/setup-bun` at any ref.
+It resolves the effective version in the order setup-bun v2 reads it.
+The step input `with.bun-version` wins when it names a version.
+Else the file the step input `with.bun-version-file` names decides by its basename.
+A `package.json` file reads `packageManager` after `bun@` and then `engines.bun`.
+A `.tool-versions` file reads the version on the `bun` line.
+A `.bun-version` or `.bumrc` file reads the whole trimmed file.
+Else the `package.json` at the workspace root reads `packageManager` and then `engines.bun`.
+Else setup-bun installs latest.
+The step fails the check when the version is missing or differs from the fleet bun version.
+A range fails because it differs from the fleet version.
+A version built from an expression fails because it cannot be shown equal before the run.
+This rule skips a repository with no setup-bun step.
+The fleet bun version equals the dotfiles mise pin.
+A bump moves both together, so a kit release that moves the fleet version turns each consumer red until its pin follows.
+Each refusal names the workflow file and line, the version found and where it was read, and the fleet version.
+
 ## What it reads
 
 The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts` in `package.json` and the shell scripts those steps and scripts run from the working tree.
+It reads each file a setup-bun step names for its version.
 It reads the target branch from `GITHUB_BASE_REF`, then from `refs/remotes/origin/HEAD` and then from the event file `GITHUB_EVENT_PATH` names.
 It reads whether the repository is private from `repository.private` in that event file.
 It parses the workflows with `Bun.YAML` without executing them.
@@ -65,7 +85,7 @@ It takes no arguments.
 | Code | Result |
 | --- | --- |
 | 0 | Every required command has a reachable step. |
-| 1 | A required command is missing or blocked, a job runs on the wrong runner, or a workflow names a missing workflow or job. |
+| 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, or a setup-bun step drifts from the fleet bun version. |
 | 2 | A workflow or `package.json` cannot be decoded. |
 
 ## Sample output

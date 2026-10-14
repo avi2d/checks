@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
-import { declarationFor, findGaps, findRunnerFaults, formatReport, formatRunnerReport, parseWorkflow, requiredCommands } from "../../src/delivery/ci-wiring.ts";
+import { declarationFor, findBunPinFaults, findGaps, findRunnerFaults, FLEET_BUN_VERSION, formatBunPinReport, formatReport, formatRunnerReport, parseWorkflow, requiredCommands, type BunPinFault, type BunPinPolicy } from "../../src/delivery/ci-wiring.ts";
 import { findMissingWorkflows, formatMissingReport } from "../../src/delivery/workflow-references.ts";
 
 const scripts = ["lint", "build", "typecheck", "test"];
@@ -443,4 +443,121 @@ test("a needs entry must name a job in the same workflow", () => {
   expect(findMissingWorkflows(pipe)).toEqual([
     { location: ".github/workflows/pipe.yml line 9", fault: "job test needs missing job checks" },
   ]);
+});
+
+function bunSteps(withBlock: string): string {
+  return `on: pull_request\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: oven-sh/setup-bun@v2\n${withBlock}      - run: bun run lint\n`;
+}
+
+function bunPolicy(files: Record<string, string> = {}, manifests: Record<string, unknown> = {}): BunPinPolicy {
+  return { files: new Map(Object.entries(files)), manifests: new Map(Object.entries(manifests)) };
+}
+
+function bunFaults(text: string, policy: BunPinPolicy): readonly BunPinFault[] {
+  return findBunPinFaults(policy, workflow(text));
+}
+
+const drifted = "1.3.13";
+
+test("a setup-bun step pinned to the fleet version passes (oracle: setup-bun v2 with.bun-version input first)", () => {
+  expect(bunFaults(bunSteps(`        with:\n          bun-version: ${FLEET_BUN_VERSION}\n`), bunPolicy())).toEqual([]);
+});
+
+test("a setup-bun step pinned to the pre-move dotfiles pin fails (oracle: dotfiles .bun-version 1.3.13 before PR 232)", () => {
+  const faults = bunFaults(bunSteps(`        with:\n          bun-version: ${drifted}\n`), bunPolicy());
+  expect(faults).toHaveLength(1);
+  expect(faults[0]?.location).toBe(".github/workflows/ci.yml line 6");
+  expect(faults[0]?.fault).toBe(`requests bun ${drifted} from with.bun-version, want ${FLEET_BUN_VERSION}`);
+});
+
+test("a range never equals the fleet version (oracle: setup-bun v2 reuses the runner binary only on an exact match)", () => {
+  for (const version of ["1.4", `^${FLEET_BUN_VERSION}`, `v${FLEET_BUN_VERSION}`]) {
+    const faults = bunFaults(bunSteps(`        with:\n          bun-version: ${version}\n`), bunPolicy());
+    expect(faults).toHaveLength(1);
+    expect(faults[0]?.fault).toContain(`want ${FLEET_BUN_VERSION}`);
+  }
+  {
+    const version = `>=${FLEET_BUN_VERSION}`;
+    const faults = bunFaults(bunSteps(`        with:\n          bun-version: "${version}"\n`), bunPolicy());
+    expect(faults).toHaveLength(1);
+    expect(faults[0]?.fault).toContain(`want ${FLEET_BUN_VERSION}`);
+  }
+});
+
+test("an expression cannot be shown equal before the run (oracle: setup-bun v2 substitutes with.bun-version at run time)", () => {
+  const faults = bunFaults(bunSteps("        with:\n          bun-version: ${{ vars.BUN_VERSION }}\n"), bunPolicy());
+  expect(faults).toHaveLength(1);
+  expect(faults[0]?.fault).toContain("cannot be shown equal");
+  expect(faults[0]?.fault).toContain(FLEET_BUN_VERSION);
+});
+
+test("a .bun-version file decides the pin (oracle: setup-bun v2 reads .bun-version as the whole trimmed file)", () => {
+  const text = bunSteps("        with:\n          bun-version-file: .bun-version\n");
+  expect(bunFaults(text, bunPolicy({ ".bun-version": `${FLEET_BUN_VERSION}\n` }))).toEqual([]);
+  const faults = bunFaults(text, bunPolicy({ ".bun-version": `${drifted}\n` }));
+  expect(faults).toHaveLength(1);
+  expect(faults[0]?.fault).toBe(`requests bun ${drifted} from with.bun-version-file .bun-version, want ${FLEET_BUN_VERSION}`);
+});
+
+test("a .bumrc file decides the pin (oracle: setup-bun v2 reads .bumrc as the whole trimmed file)", () => {
+  const text = bunSteps("        with:\n          bun-version-file: .bumrc\n");
+  expect(bunFaults(text, bunPolicy({ ".bumrc": FLEET_BUN_VERSION }))).toEqual([]);
+  expect(bunFaults(text, bunPolicy({ ".bumrc": drifted }))).toHaveLength(1);
+});
+
+test("a .tool-versions file reads the bun line (oracle: setup-bun v2 takes the bun line of .tool-versions)", () => {
+  const text = bunSteps("        with:\n          bun-version-file: .tool-versions\n");
+  expect(bunFaults(text, bunPolicy({ ".tool-versions": `nodejs 22.0.0\nbun ${FLEET_BUN_VERSION}\n` }))).toEqual([]);
+  const faults = bunFaults(text, bunPolicy({ ".tool-versions": `bun ${drifted}\nnodejs 22.0.0\n` }));
+  expect(faults).toHaveLength(1);
+  expect(faults[0]?.fault).toContain(`requests bun ${drifted} from with.bun-version-file .tool-versions`);
+});
+
+test("a package.json version file reads packageManager then engines (oracle: setup-bun v2 reads packageManager after bun@, then engines.bun)", () => {
+  const text = bunSteps("        with:\n          bun-version-file: apps/web/package.json\n");
+  const key = "apps/web/package.json";
+  expect(bunFaults(text, bunPolicy({}, { [key]: { packageManager: `bun@${FLEET_BUN_VERSION}` } }))).toEqual([]);
+  expect(bunFaults(text, bunPolicy({}, { [key]: { engines: { bun: FLEET_BUN_VERSION } } }))).toEqual([]);
+  expect(bunFaults(text, bunPolicy({}, { [key]: { packageManager: "pnpm@9.0.0", engines: { bun: FLEET_BUN_VERSION } } }))).toEqual([]);
+  const faults = bunFaults(text, bunPolicy({}, { [key]: { packageManager: `bun@${drifted}`, engines: { bun: FLEET_BUN_VERSION } } }));
+  expect(faults).toHaveLength(1);
+  expect(faults[0]?.fault).toContain(`requests bun ${drifted} from with.bun-version-file ${key}`);
+});
+
+test("the inputs win in setup-bun order (oracle: setup-bun v2 tries with.bun-version, then with.bun-version-file, then the root package.json, then latest)", () => {
+  const both = bunSteps(`        with:\n          bun-version: ${FLEET_BUN_VERSION}\n          bun-version-file: .bun-version\n`);
+  expect(bunFaults(both, bunPolicy({ ".bun-version": drifted }))).toEqual([]);
+  const versioned = bunSteps("        with:\n          bun-version-file: .bun-version\n");
+  expect(bunFaults(versioned, bunPolicy({ ".bun-version": FLEET_BUN_VERSION }, { "package.json": { packageManager: `bun@${drifted}` } }))).toEqual([]);
+  expect(bunFaults(bunSteps(""), bunPolicy({}, { "package.json": { engines: { bun: FLEET_BUN_VERSION } } }))).toEqual([]);
+});
+
+test("nothing pinned means latest, which fails (oracle: setup-bun v2 installs latest when no source pins a version)", () => {
+  const faults = bunFaults(bunSteps(""), bunPolicy());
+  expect(faults).toHaveLength(1);
+  expect(faults[0]?.fault).toBe(`pins no bun version from package.json, so setup-bun installs latest, want ${FLEET_BUN_VERSION}`);
+  const missing = bunFaults(bunSteps("        with:\n          bun-version-file: .bun-version\n"), bunPolicy());
+  expect(missing).toHaveLength(1);
+  expect(missing[0]?.fault).toContain("installs latest");
+});
+
+test("a repository with no setup-bun step is not judged (oracle: the rule names only setup-bun steps)", () => {
+  expect(bunFaults(full, bunPolicy())).toEqual([]);
+  expect(findBunPinFaults(bunPolicy(), [])).toEqual([]);
+});
+
+test("any setup-bun ref is judged and any other action is not (oracle: the rule matches oven-sh/setup-bun at any ref)", () => {
+  for (const uses of ["oven-sh/setup-bun@v2", "oven-sh/setup-bun@v1", "oven-sh/setup-bun@main"]) {
+    const text = `on: pull_request\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: ${uses}\n        with:\n          bun-version: ${drifted}\n`;
+    expect(bunFaults(text, bunPolicy())).toHaveLength(1);
+  }
+  const other = `on: pull_request\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 22\n`;
+  expect(bunFaults(other, bunPolicy())).toEqual([]);
+});
+
+test("the bun pin report names each step and the fleet version", () => {
+  const faults = bunFaults(bunSteps(`        with:\n          bun-version: ${drifted}\n`), bunPolicy());
+  expect(formatBunPinReport(faults)).toBe(
+    `ci-wiring: 1 setup-bun step(s) drift from the fleet bun version:\n  .github/workflows/ci.yml line 6: requests bun ${drifted} from with.bun-version, want ${FLEET_BUN_VERSION}`,
+  );
 });

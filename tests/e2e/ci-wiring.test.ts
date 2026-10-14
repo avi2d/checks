@@ -2,6 +2,7 @@ import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { join } from "node:path";
 import { withoutPullRequestEvent } from "../lib/env.ts";
+import { FLEET_BUN_VERSION } from "../../src/delivery/ci-wiring.ts";
 import { CHECKOUT, fixtureRepos, ran, type FixtureRepo, type Ran } from "./lib/fixture-repo.ts";
 
 const open = fixtureRepos("checks-ci-wiring-");
@@ -137,7 +138,7 @@ test("a private repository's mutation job through a repository shell script in i
 test("a daily release that names a removed workflow fails until the name is gone", async () => {
   const broken = await Bun.file(join(CHECKOUT, "tests", "fixtures", "socials-daily-release-broken.yml")).text();
   const repo = await open({
-    "package.json": scripts(["lint", "test"]),
+    "package.json": JSON.stringify({ name: "consumer", scripts: { lint: "lint", test: "test" }, engines: { bun: FLEET_BUN_VERSION } }),
     ".github/workflows/ci.yml": workflow,
     ".github/workflows/daily-release.yml": broken,
     ".github/workflows/release.yml": "name: release\non:\n  workflow_dispatch:\njobs:\n  publish:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo publish\n",
@@ -148,5 +149,47 @@ test("a daily release that names a removed workflow fails until the name is gone
   expect(red.text).toContain(".github/workflows/daily-release.yml line 31");
   expect(red.text).toContain("commitlint.yml");
   await repo.write({ ".github/workflows/daily-release.yml": broken.replace(" ci.yml commitlint.yml", " ci.yml") });
+  expect((await wiring(repo)).exitCode).toBe(0);
+});
+
+test("a drifted bun pin fails and the fleet pin passes", async () => {
+  const setup = workflow.replace(
+    "    steps:\n",
+    "    steps:\n      - uses: oven-sh/setup-bun@v2\n        with:\n          bun-version-file: .bun-version\n",
+  );
+  const repo = await open({
+    "package.json": scripts(["lint", "test"]),
+    "src/index.ts": "export const answer = 42;\n",
+    ".github/workflows/ci.yml": setup,
+    ".bun-version": "1.3.13\n",
+  });
+  await repo.commit("start");
+  const red = await wiring(repo);
+  expect(red.exitCode).toBe(1);
+  expect(red.text).toContain("drift from the fleet bun version");
+  expect(red.text).toContain("requests bun 1.3.13 from with.bun-version-file .bun-version");
+  await repo.write({ ".bun-version": `${FLEET_BUN_VERSION}\n` });
+  const green = await wiring(repo);
+  expect(green.exitCode).toBe(0);
+  expect(green.text).toContain("3 gate(s) run");
+});
+
+test("a setup-bun step with no pinned version fails until the root package.json pins the fleet version", async () => {
+  const setup = workflow.replace(
+    "    steps:\n",
+    "    steps:\n      - uses: oven-sh/setup-bun@v2\n",
+  );
+  const repo = await open({
+    "package.json": scripts(["lint", "test"]),
+    "src/index.ts": "export const answer = 42;\n",
+    ".github/workflows/ci.yml": setup,
+  });
+  await repo.commit("start");
+  const red = await wiring(repo);
+  expect(red.exitCode).toBe(1);
+  expect(red.text).toContain("installs latest");
+  await repo.write({
+    "package.json": JSON.stringify({ name: "consumer", scripts: { lint: "lint", test: "test" }, engines: { bun: FLEET_BUN_VERSION } }),
+  });
   expect((await wiring(repo)).exitCode).toBe(0);
 });

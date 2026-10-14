@@ -3,9 +3,13 @@ import { Config, Console, Effect, FileSystem, Path, Schema } from "effect";
 import { defaultBranch, git } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { ENTRY_POINT, KIT_GATES, type KitGate } from "../core/gates.ts";
+import { findBunPinFaults, formatBunPinReport, readBunPinPolicy } from "./bun-pin.ts";
 import { readShellFiles, runsMutation, within, type Run } from "./mutation-job.ts";
 import { invokes, mentions, plainCommand, type Command } from "./shell-command.ts";
-import { findMissingWorkflows, formatMissingReport, isRecord, names, type Workflow } from "./workflow-references.ts";
+import { findMissingWorkflows, formatMissingReport, isRecord, names, workflowJobs, type Workflow } from "./workflow-references.ts";
+
+export { FLEET_BUN_VERSION, findBunPinFaults, formatBunPinReport } from "./bun-pin.ts";
+export type { BunPinFault, BunPinPolicy } from "./bun-pin.ts";
 
 export type { Command };
 
@@ -297,11 +301,6 @@ function jobRuns(workflow: Workflow, job: Readonly<Record<string, unknown>>): re
   return steps.flatMap((step: unknown) => (isRecord(step) && typeof step["run"] === "string" ? [{ script: step["run"], dir: stepDirectory(step["working-directory"], dir) }] : []));
 }
 
-function workflowJobs(workflow: Workflow): readonly (readonly [string, Readonly<Record<string, unknown>>])[] {
-  const jobs = isRecord(workflow.document) ? workflow.document["jobs"] : undefined;
-  return isRecord(jobs) ? Object.entries(jobs).flatMap(([id, job]) => (isRecord(job) ? [[id, job] as const] : [])) : [];
-}
-
 export function findRunnerFaults(policy: RunnerPolicy, workflows: readonly Workflow[]): readonly RunnerFault[] {
   return workflows.flatMap((workflow) =>
     workflowJobs(workflow).flatMap(([id, job]) => {
@@ -378,7 +377,9 @@ const wiring = Effect.gen(function* () {
   const runs = workflows.flatMap((workflow) => workflowJobs(workflow).flatMap(([, job]) => jobRuns(workflow, job)));
   const faults = findRunnerFaults({ visibility: yield* readVisibility, scripts, files: yield* readShellFiles(root, scripts, runs) }, workflows);
   if (faults.length > 0) yield* Console.error(formatRunnerReport(faults));
-  return gaps.length === 0 && faults.length === 0 && missing.length === 0;
+  const bunFaults = findBunPinFaults(yield* readBunPinPolicy(root, workflows), workflows);
+  if (bunFaults.length > 0) yield* Console.error(formatBunPinReport(bunFaults));
+  return gaps.length === 0 && faults.length === 0 && missing.length === 0 && bunFaults.length === 0;
 });
 
 if (import.meta.main) runMain("ci-wiring", wiring);
