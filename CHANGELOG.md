@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.41.1
+
+Released 2026-10-14.
+
+### Fixes
+
+- **delivery:** refuse workflow references to missing workflows or jobs in ci-wiring [#153](https://github.com/avi2d/checks/pull/153)
+
 ## 0.41.0
 
 Released 2026-10-12.
