@@ -49,9 +49,33 @@ In a private repository each mutation job carries exactly the labels `[self-host
 A public repository may keep `runs-on: ubuntu-latest` on every job, because a pull request from a fork runs its own code on the runner.
 The check knows a repository is private only from GitHub's event, so a run outside CI judges only the rules that hold in either.
 
+### Bun version
+
+It also judges every step that uses `oven-sh/setup-bun`.
+A step at ref `v2`, `v2.<minor>` or `v2.<minor>.<patch>` resolves its effective version in the order setup-bun v2 reads it.
+A step at any other ref or at none fails, because the check knows only setup-bun v2's version resolution.
+An input name matches in any case, as GitHub reads it.
+The step input `with.bun-version` wins when it names a version, and an unquoted number counts as the text GitHub passes.
+Else the file the step input `with.bun-version-file` names decides by its basename, when it yields a version.
+A `package.json` file reads `packageManager` after `bun@`, and reads `engines.bun` only when `packageManager` is absent or holds no `bun@`.
+A `.tool-versions` file reads the rest of the first line that starts with `bun`.
+A `.bun-version` or `.bumrc` file reads the whole trimmed file.
+Else the `package.json` at the workspace root reads the same way.
+Else setup-bun installs latest.
+A blank version counts as none.
+A repository passes by writing the fleet version to `.bun-version` and naming that file in each step's `with.bun-version-file`.
+The step fails the check when the version is missing or differs from the fleet bun version.
+A range fails because it differs from the fleet version.
+A version built from an expression fails because it cannot be shown equal before the run.
+This rule skips a repository with no setup-bun step.
+The fleet bun version equals the dotfiles mise pin.
+A bump moves both together, so a kit release that moves the fleet version turns each consumer red until its pin follows.
+Each refusal names the workflow file and line, the version found and where it was read, and the fleet version.
+
 ## What it reads
 
 The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts` in `package.json` and the shell scripts those steps and scripts run from the working tree.
+It reads each file a setup-bun step names for its version.
 It reads the target branch from `GITHUB_BASE_REF`, then from `refs/remotes/origin/HEAD` and then from the event file `GITHUB_EVENT_PATH` names.
 It reads whether the repository is private from `repository.private` in that event file.
 It parses the workflows with `Bun.YAML` without executing them.
@@ -65,7 +89,7 @@ It takes no arguments.
 | Code | Result |
 | --- | --- |
 | 0 | Every required command has a reachable step. |
-| 1 | A required command is missing or blocked, a job runs on the wrong runner, or a workflow names a missing workflow or job. |
+| 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, or a setup-bun step drifts from the fleet bun version. |
 | 2 | A workflow or `package.json` cannot be decoded. |
 
 ## Sample output

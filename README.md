@@ -96,6 +96,8 @@ To consume the kit from a repository:
    "test": "checks-test"
    ```
 
+1. Write the Bun version [Before you begin](#before-you-begin) names to `.bun-version`, which [checks-ci-wiring](docs/gates/checks-ci-wiring.md#bun-version) holds every setup-bun step to.
+
 1. Run the scripts on every pull request in `.github/workflows/ci.yml`, fetching the whole history the range needs:
 
    ```yaml
@@ -109,6 +111,8 @@ To consume the kit from a repository:
            with:
              fetch-depth: 0
          - uses: oven-sh/setup-bun@v2
+           with:
+             bun-version-file: .bun-version
          - run: bun install --frozen-lockfile
          - run: bun run build
          - run: git diff --exit-code

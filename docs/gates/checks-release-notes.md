@@ -69,6 +69,8 @@ jobs:
       - name: ref is a tag
         run: test "$GITHUB_REF_TYPE" = tag
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - run: bun run build
       - run: git diff --exit-code
@@ -89,6 +91,8 @@ jobs:
         with:
           fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - name: extract release notes
         run: ./node_modules/.bin/checks-release-notes "${GITHUB_REF_NAME#v}" "$RUNNER_TEMP/release-notes.md"
@@ -120,6 +124,8 @@ jobs:
       - name: ref is a tag
         run: test "$GITHUB_REF_TYPE" = tag
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - run: bun run build
       - run: git diff --exit-code
