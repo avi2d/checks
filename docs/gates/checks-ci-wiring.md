@@ -51,8 +51,10 @@ The check knows a repository is private only from GitHub's event, so a run outsi
 
 ### Bun version
 
-It also judges every step that uses `oven-sh/setup-bun` at any ref.
-It resolves the effective version in the order setup-bun v2 reads it.
+It also judges every step that uses `oven-sh/setup-bun`.
+A step at ref `v2`, `v2.<minor>` or `v2.<minor>.<patch>` resolves its effective version in the order setup-bun v2 reads it.
+A step at any other ref or at none fails, because the check knows only setup-bun v2's version resolution.
+An input name matches in any case, as GitHub reads it.
 The step input `with.bun-version` wins when it names a version, and an unquoted number counts as the text GitHub passes.
 Else the file the step input `with.bun-version-file` names decides by its basename, when it yields a version.
 A `package.json` file reads `packageManager` after `bun@`, and reads `engines.bun` only when `packageManager` is absent or holds no `bun@`.

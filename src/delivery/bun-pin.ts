@@ -15,8 +15,12 @@ export type BunPinFault = {
   readonly fault: string;
 };
 
-function setupBun(uses: string): boolean {
-  return /^oven-sh\/setup-bun(@|$)/i.test(uses.trim());
+const SETUP_BUN = /^oven-sh\/setup-bun(?:@(?<ref>.*))?$/i;
+const V2_REF = /^v2(?:\.\d+){0,2}$/;
+
+function setupBunRef(uses: unknown): string | undefined {
+  const match = typeof uses === "string" ? SETUP_BUN.exec(uses.trim()) : null;
+  return match === null ? undefined : (match.groups?.["ref"] ?? "");
 }
 
 function isExpression(value: string): boolean {
@@ -28,7 +32,8 @@ function baseName(name: string): string {
 }
 
 function actionInput(step: Readonly<Record<string, unknown>>, name: string): string {
-  const value = isRecord(step["with"]) ? step["with"][name] : undefined;
+  const inputs = isRecord(step["with"]) ? step["with"] : {};
+  const value = Object.entries(inputs).find(([key]) => key.toLowerCase() === name)?.[1];
   return typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value).trim() : "";
 }
 
@@ -97,6 +102,10 @@ function bunPinFault(policy: BunPinPolicy, step: Readonly<Record<string, unknown
   return request.version === FLEET_BUN_VERSION ? undefined : `requests bun ${request.version} from ${request.source}, want ${FLEET_BUN_VERSION}`;
 }
 
+function unknownRefFault(ref: string): string {
+  return `uses oven-sh/setup-bun at ${ref === "" ? "no ref" : ref}, but the check knows only setup-bun v2's version resolution, so the step must use oven-sh/setup-bun@v2`;
+}
+
 export function findBunPinFaults(policy: BunPinPolicy, workflows: readonly Workflow[]): readonly BunPinFault[] {
   return workflows.flatMap((workflow) => {
     const at = locate(workflow.path, workflow.text.split("\n"));
@@ -104,10 +113,10 @@ export function findBunPinFaults(policy: BunPinPolicy, workflows: readonly Workf
       const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
       return steps.flatMap((step: unknown, index: number) => {
         if (!isRecord(step)) return [];
-        const uses = step["uses"];
-        if (typeof uses !== "string" || !setupBun(uses)) return [];
-        const fault = bunPinFault(policy, step);
-        return fault === undefined ? [] : [{ location: at(["jobs", id, "steps", index, "uses"], uses, `job ${id} step ${index + 1}`), fault }];
+        const ref = setupBunRef(step["uses"]);
+        if (ref === undefined) return [];
+        const fault = V2_REF.test(ref) ? bunPinFault(policy, step) : unknownRefFault(ref);
+        return fault === undefined ? [] : [{ location: at(["jobs", id, "steps", index, "uses"], String(step["uses"]), `job ${id} step ${index + 1}`), fault }];
       });
     });
   });
@@ -121,7 +130,7 @@ function versionFileKeys(job: Readonly<Record<string, unknown>>): readonly strin
   const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
   const keys: string[] = [];
   for (const step of steps) {
-    if (!isRecord(step) || typeof step["uses"] !== "string" || !setupBun(step["uses"])) continue;
+    if (!isRecord(step) || !V2_REF.test(setupBunRef(step["uses"]) ?? "")) continue;
     const file = actionInput(step, "bun-version-file");
     if (file === "" || isExpression(file)) continue;
     const key = within("", file);

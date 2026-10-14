@@ -147,11 +147,36 @@ test("a repository with no setup-bun step is not judged (oracle: the rule names 
   expect(findBunPinFaults(bunPolicy(), [])).toEqual([]);
 });
 
-test("any setup-bun ref is judged and any other action is not (oracle: the rule matches oven-sh/setup-bun at any ref)", () => {
-  for (const uses of ["oven-sh/setup-bun@v2", "oven-sh/setup-bun@v1", "oven-sh/setup-bun@main"]) {
-    const text = `on: pull_request\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: ${uses}\n        with:\n          bun-version: ${drifted}\n`;
-    expect(bunFaults(text, bunPolicy())).toHaveLength(1);
+function usesStep(uses: string, version: string): string {
+  return `on: pull_request\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: ${uses}\n        with:\n          bun-version: ${version}\n`;
+}
+
+test("a setup-bun step at a ref other than v2 is refused even with the fleet pin (oracle: the recorded decision that the check knows only setup-bun v2's resolution)", () => {
+  for (const [uses, ref] of [["oven-sh/setup-bun@v1", "v1"], ["oven-sh/setup-bun@v3", "v3"], ["oven-sh/setup-bun@main", "main"], ["oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5", "4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5"], ["oven-sh/setup-bun", "no ref"]]) {
+    expect(bunFaults(usesStep(uses ?? "", FLEET_BUN_VERSION), bunPolicy())).toEqual([
+      { location: ".github/workflows/ci.yml line 6", fault: `uses oven-sh/setup-bun at ${ref}, but the check knows only setup-bun v2's version resolution, so the step must use oven-sh/setup-bun@v2` },
+    ]);
   }
+});
+
+test("a setup-bun step at v2.2.0 is judged by its version (oracle: the recorded decision that v2, v2.<minor> and v2.<minor>.<patch> are v2)", () => {
+  expect(bunFaults(usesStep("oven-sh/setup-bun@v2.2.0", FLEET_BUN_VERSION), bunPolicy())).toEqual([]);
+  expect(bunFaults(usesStep("oven-sh/setup-bun@v2.2.0", drifted), bunPolicy())).toEqual([
+    { location: ".github/workflows/ci.yml line 6", fault: `requests bun ${drifted} from with.bun-version, want ${FLEET_BUN_VERSION}` },
+  ]);
+});
+
+test("an input name in another case still decides the version (oracle: the GitHub runner reads step inputs into an OrdinalIgnoreCase dictionary)", () => {
+  const root = { "package.json": { engines: { bun: FLEET_BUN_VERSION } } };
+  expect(bunFaults(bunSteps(`        with:\n          BUN-VERSION: ${drifted}\n`), bunPolicy({}, root))).toEqual([
+    { location: ".github/workflows/ci.yml line 6", fault: `requests bun ${drifted} from with.bun-version, want ${FLEET_BUN_VERSION}` },
+  ]);
+  expect(bunFaults(bunSteps("        with:\n          Bun-Version-File: .bun-version\n"), bunPolicy({ ".bun-version": drifted }, root))).toEqual([
+    { location: ".github/workflows/ci.yml line 6", fault: `requests bun ${drifted} from with.bun-version-file .bun-version, want ${FLEET_BUN_VERSION}` },
+  ]);
+});
+
+test("another action is not judged (oracle: the rule names only setup-bun steps)", () => {
   const other = `on: pull_request\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 22\n`;
   expect(bunFaults(other, bunPolicy())).toEqual([]);
 });

@@ -174,6 +174,23 @@ test("a drifted bun pin fails and the fleet pin passes", async () => {
   expect(green.text).toContain("3 gate(s) run");
 });
 
+test("a version file named in another case is read and its drifted pin fails over a fleet-pinned root", async () => {
+  const setup = workflow.replace(
+    "    steps:\n",
+    "    steps:\n      - uses: oven-sh/setup-bun@v2\n        with:\n          Bun-Version-File: .bun-version\n",
+  );
+  const repo = await open({
+    "package.json": JSON.stringify({ name: "consumer", scripts: { lint: "lint", test: "test" }, engines: { bun: FLEET_BUN_VERSION } }),
+    "src/index.ts": "export const answer = 42;\n",
+    ".github/workflows/ci.yml": setup,
+    ".bun-version": "1.3.13\n",
+  });
+  await repo.commit("start");
+  const red = await wiring(repo);
+  expect(red.exitCode).toBe(1);
+  expect(red.text).toContain("requests bun 1.3.13 from with.bun-version-file .bun-version");
+});
+
 test("a setup-bun step with no pinned version fails until the root package.json pins the fleet version", async () => {
   const setup = workflow.replace(
     "    steps:\n",
