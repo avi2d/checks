@@ -5,6 +5,7 @@ import { runMain } from "../core/main.ts";
 import { ENTRY_POINT, KIT_GATES, type KitGate } from "../core/gates.ts";
 import { readShellFiles, runsMutation, within, type Run } from "./mutation-job.ts";
 import { invokes, mentions, plainCommand, type Command } from "./shell-command.ts";
+import { findMissingWorkflows, formatMissingReport, isRecord, names, type Workflow } from "./workflow-references.ts";
 
 export type { Command };
 
@@ -18,11 +19,6 @@ export type Declaration = {
   readonly gates: readonly Gate[];
   readonly defaultBranch: string;
   readonly lintGates: readonly KitGate[];
-};
-
-export type Workflow = {
-  readonly path: string;
-  readonly document: unknown;
 };
 
 export type BlockedInvocation = {
@@ -83,16 +79,6 @@ const HOSTED_OVERRIDE = new RegExp(String.raw`^\$\{\{\s*${OVERRIDE_ACCESS}\s*\|\
 const MUTATION_RUNNER = ["self-hosted", "Linux", "X64", "winbox"];
 const HOSTED_DEFAULT = "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}";
 const EventRepository = Schema.fromJsonString(Schema.Struct({ repository: Schema.Struct({ private: Schema.Boolean }) }));
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function names(value: unknown): readonly string[] | undefined {
-  if (typeof value === "string") return [value];
-  if (!Array.isArray(value)) return undefined;
-  return value.filter((entry): entry is string => typeof entry === "string");
-}
 
 function constant(value: unknown): boolean | undefined {
   if (typeof value === "boolean") return value;
@@ -333,7 +319,7 @@ export function formatRunnerReport(faults: readonly RunnerFault[]): string {
 
 export const parseWorkflow = (path: string, text: string): Effect.Effect<Workflow, WiringError> =>
   Effect.try({
-    try: () => ({ path, document: Bun.YAML.parse(text) }),
+    try: () => ({ path, document: Bun.YAML.parse(text), text }),
     catch: (error) => new WiringError({ message: `cannot parse ${path}: ${String(error)}` }),
   });
 
@@ -386,11 +372,13 @@ const wiring = Effect.gen(function* () {
   const gaps = findGaps(declaration, workflows);
   const gapReport = formatReport(declaration, gaps);
   yield* gaps.length > 0 ? Console.error(gapReport) : Console.log(gapReport);
+  const missing = findMissingWorkflows(workflows);
+  if (missing.length > 0) yield* Console.error(formatMissingReport(missing));
   const scripts = yield* readScripts(root);
   const runs = workflows.flatMap((workflow) => workflowJobs(workflow).flatMap(([, job]) => jobRuns(workflow, job)));
   const faults = findRunnerFaults({ visibility: yield* readVisibility, scripts, files: yield* readShellFiles(root, scripts, runs) }, workflows);
   if (faults.length > 0) yield* Console.error(formatRunnerReport(faults));
-  return gaps.length === 0 && faults.length === 0;
+  return gaps.length === 0 && faults.length === 0 && missing.length === 0;
 });
 
 if (import.meta.main) runMain("ci-wiring", wiring);

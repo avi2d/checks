@@ -21,6 +21,12 @@ The check follows local reusable workflows but not remote reusable workflows.
 It refuses a step or job with `if: false` or `continue-on-error: true`.
 It also refuses a workflow that does not trigger on both `opened` and `synchronize` pull requests to the target branch.
 A path filter cannot cover every pull request and therefore cannot satisfy the check.
+It refuses a reference to a workflow or job the repository does not hold.
+Each `checks-release-pr` argument names a workflow file, so every one must match a file under `.github/workflows/`.
+Each `on.workflow_run.workflows` entry names a workflow by its `name`, so every one must match a name in the repository.
+A local reusable `uses` must name a file under `.github/workflows/` that the repository holds.
+Each `needs` entry names a job in the same workflow, so every one must match a job id in that file.
+Each refusal names the file, the line and the missing workflow or job.
 
 ### Runners
 
@@ -57,7 +63,7 @@ It takes no arguments.
 | Code | Result |
 | --- | --- |
 | 0 | Every required command has a reachable step. |
-| 1 | A required command is missing or blocked, or a job runs on the wrong runner. |
+| 1 | A required command is missing or blocked, a job runs on the wrong runner, or a workflow names a missing workflow or job. |
 | 2 | A workflow or `package.json` cannot be decoded. |
 
 ## Sample output
@@ -75,6 +81,13 @@ A mutation job that names `CI_RUNS_ON` in `runs-on` produces a report like this:
 ```
 ci-wiring: 1 job(s) run on the wrong runner:
   .github/workflows/mutation-compare.yml job mutation-compare: a mutation job reads CI_RUNS_ON, so an override moves its full sweeps off winbox; set runs-on: [self-hosted, Linux, X64, winbox]
+```
+
+A reference to a missing workflow produces a report like this:
+
+```
+ci-wiring: 1 reference(s) name a missing workflow or job:
+  .github/workflows/daily-release.yml line 31: names missing workflow commitlint.yml
 ```
 
 ## When it runs
