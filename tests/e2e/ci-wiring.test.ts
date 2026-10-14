@@ -133,3 +133,20 @@ test("a private repository's mutation job through a repository shell script in i
   expect(green.text).not.toContain("wrong runner");
   expect(green.exitCode).toBe(0);
 });
+
+test("a daily release that names a removed workflow fails until the name is gone", async () => {
+  const broken = await Bun.file(join(CHECKOUT, "tests", "fixtures", "socials-daily-release-broken.yml")).text();
+  const repo = await open({
+    "package.json": scripts(["lint", "test"]),
+    ".github/workflows/ci.yml": workflow,
+    ".github/workflows/daily-release.yml": broken,
+    ".github/workflows/release.yml": "name: release\non:\n  workflow_dispatch:\njobs:\n  publish:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo publish\n",
+  });
+  await repo.commit("start");
+  const red = await wiring(repo);
+  expect(red.exitCode).toBe(1);
+  expect(red.text).toContain(".github/workflows/daily-release.yml line 31");
+  expect(red.text).toContain("commitlint.yml");
+  await repo.write({ ".github/workflows/daily-release.yml": broken.replace(" ci.yml commitlint.yml", " ci.yml") });
+  expect((await wiring(repo)).exitCode).toBe(0);
+});
