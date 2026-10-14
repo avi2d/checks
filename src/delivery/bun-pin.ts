@@ -1,8 +1,9 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
 import { within } from "./mutation-job.ts";
-import { isRecord, workflowJobs, type Workflow } from "./workflow-references.ts";
+import { isRecord, locate, workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export const FLEET_BUN_VERSION = "1.4.3";
+const ROOT_MANIFEST = "package.json";
 
 export type BunPinPolicy = {
   readonly files: ReadonlyMap<string, string>;
@@ -14,8 +15,8 @@ export type BunPinFault = {
   readonly fault: string;
 };
 
-function setupBun(uses: unknown): boolean {
-  return typeof uses === "string" && /^oven-sh\/setup-bun(@|$)/i.test(uses.trim());
+function setupBun(uses: string): boolean {
+  return /^oven-sh\/setup-bun(@|$)/i.test(uses.trim());
 }
 
 function isExpression(value: string): boolean {
@@ -26,39 +27,36 @@ function baseName(name: string): string {
   return name.slice(name.lastIndexOf("/") + 1);
 }
 
+function actionInput(step: Readonly<Record<string, unknown>>, name: string): string {
+  const value = isRecord(step["with"]) ? step["with"][name] : undefined;
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value).trim() : "";
+}
+
+function nonEmpty(version: string | undefined): string | undefined {
+  const trimmed = version?.trim();
+  return trimmed === "" ? undefined : trimmed;
+}
+
 function manifestBunVersion(manifest: unknown): string | undefined {
   if (!isRecord(manifest)) return undefined;
   const manager = manifest["packageManager"];
-  if (typeof manager === "string") {
-    const pinned = /^bun@(.+)$/.exec(manager.trim())?.[1]?.trim();
-    if (pinned !== undefined && pinned !== "") return pinned;
-  }
   const engines = manifest["engines"];
-  const bun = isRecord(engines) ? engines["bun"] : undefined;
-  return typeof bun === "string" && bun.trim() !== "" ? bun.trim() : undefined;
+  const engine = isRecord(engines) ? engines["bun"] : undefined;
+  const version = manager === undefined || manager === null ? engine : typeof manager === "string" ? (manager.split("bun@")[1] ?? engine) : undefined;
+  return typeof version === "string" ? nonEmpty(version) : undefined;
 }
 
-function toolVersionsBun(text: string): string | undefined {
-  for (const line of text.split("\n")) {
-    const [name, ...rest] = line.trim().split(/\s+/);
-    if (name === "bun") {
-      const version = rest.join(" ").trim();
-      return version === "" ? undefined : version;
-    }
-  }
-  return undefined;
-}
+const FILE_READERS = new Map<string, (text: string) => string | undefined>([
+  [".tool-versions", (text) => /^bun\s*(?<version>.*?)$/m.exec(text)?.groups?.["version"]],
+  [".bumrc", (text) => text],
+  [".bun-version", (text) => text],
+]);
 
-function fileBunVersion(name: string, text: string | undefined, manifest: unknown): string | undefined {
-  if (baseName(name) === "package.json") {
-    return manifest === undefined ? undefined : manifestBunVersion(manifest);
-  }
-  if (text === undefined) return undefined;
-  if (baseName(name) === ".tool-versions") return toolVersionsBun(text);
-  if (baseName(name) === ".bun-version" || baseName(name) === ".bumrc") {
-    return text.trim() === "" ? undefined : text.trim();
-  }
-  return undefined;
+function fileBunVersion(policy: BunPinPolicy, key: string): string | undefined {
+  if (baseName(key) === "package.json") return manifestBunVersion(policy.manifests.get(key));
+  const text = policy.files.get(key);
+  const read = FILE_READERS.get(baseName(key));
+  return text === undefined || read === undefined ? undefined : nonEmpty(read(text));
 }
 
 type BunPinRequest = {
@@ -67,26 +65,25 @@ type BunPinRequest = {
   readonly expression: string | undefined;
 };
 
+function rootRequest(policy: BunPinPolicy, consulted: string): BunPinRequest {
+  const version = manifestBunVersion(policy.manifests.get(ROOT_MANIFEST));
+  return { version, source: version === undefined ? consulted : ROOT_MANIFEST, expression: undefined };
+}
+
 function bunPinRequest(policy: BunPinPolicy, step: Readonly<Record<string, unknown>>): BunPinRequest {
-  const inputs = isRecord(step["with"]) ? step["with"] : {};
-  const pinned = inputs["bun-version"];
-  if (typeof pinned === "string" && pinned.trim() !== "") {
+  const pinned = actionInput(step, "bun-version");
+  if (pinned !== "") {
     return isExpression(pinned)
-      ? { version: undefined, source: "with.bun-version", expression: pinned.trim() }
-      : { version: pinned.trim(), source: "with.bun-version", expression: undefined };
+      ? { version: undefined, source: "with.bun-version", expression: pinned }
+      : { version: pinned, source: "with.bun-version", expression: undefined };
   }
-  const file = inputs["bun-version-file"];
-  if (typeof file === "string" && file.trim() !== "") {
-    const source = `with.bun-version-file ${file.trim()}`;
-    if (isExpression(file)) return { version: undefined, source, expression: file.trim() };
-    const key = within("", file.trim());
-    return {
-      version: key === undefined ? undefined : fileBunVersion(key, policy.files.get(key), policy.manifests.get(key)),
-      source,
-      expression: undefined,
-    };
-  }
-  return { version: manifestBunVersion(policy.manifests.get("package.json")), source: "package.json", expression: undefined };
+  const file = actionInput(step, "bun-version-file");
+  if (file === "") return rootRequest(policy, ROOT_MANIFEST);
+  const source = `with.bun-version-file ${file}`;
+  if (isExpression(file)) return { version: undefined, source, expression: file };
+  const key = within("", file);
+  const version = key === undefined ? undefined : fileBunVersion(policy, key);
+  return version === undefined ? rootRequest(policy, `${source} or ${ROOT_MANIFEST}`) : { version, source, expression: undefined };
 }
 
 function bunPinFault(policy: BunPinPolicy, step: Readonly<Record<string, unknown>>): string | undefined {
@@ -102,19 +99,15 @@ function bunPinFault(policy: BunPinPolicy, step: Readonly<Record<string, unknown
 
 export function findBunPinFaults(policy: BunPinPolicy, workflows: readonly Workflow[]): readonly BunPinFault[] {
   return workflows.flatMap((workflow) => {
-    const lines = workflow.text
-      .split("\n")
-      .flatMap((line, index) => (line.toLowerCase().includes("uses") && line.toLowerCase().includes("setup-bun") ? [index + 1] : []));
-    let seen = 0;
+    const at = locate(workflow.path, workflow.text.split("\n"));
     return workflowJobs(workflow).flatMap(([id, job]) => {
       const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
       return steps.flatMap((step: unknown, index: number) => {
-        if (!isRecord(step) || !setupBun(step["uses"])) return [];
-        const line = lines[seen];
-        seen += 1;
-        const location = line === undefined ? `${workflow.path} job ${id} step ${index + 1}` : `${workflow.path} line ${line}`;
+        if (!isRecord(step)) return [];
+        const uses = step["uses"];
+        if (typeof uses !== "string" || !setupBun(uses)) return [];
         const fault = bunPinFault(policy, step);
-        return fault === undefined ? [] : [{ location, fault }];
+        return fault === undefined ? [] : [{ location: at(["jobs", id, "steps", index, "uses"], uses, `job ${id} step ${index + 1}`), fault }];
       });
     });
   });
@@ -128,17 +121,17 @@ function versionFileKeys(job: Readonly<Record<string, unknown>>): readonly strin
   const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
   const keys: string[] = [];
   for (const step of steps) {
-    if (!isRecord(step) || !setupBun(step["uses"]) || !isRecord(step["with"])) continue;
-    const file = step["with"]["bun-version-file"];
-    if (typeof file !== "string" || isExpression(file.trim())) continue;
-    const key = within("", file.trim());
+    if (!isRecord(step) || typeof step["uses"] !== "string" || !setupBun(step["uses"])) continue;
+    const file = actionInput(step, "bun-version-file");
+    if (file === "" || isExpression(file)) continue;
+    const key = within("", file);
     if (key !== undefined) keys.push(key);
   }
   return keys;
 }
 
 function wantedBunPinFiles(workflows: readonly Workflow[]): ReadonlySet<string> {
-  const wanted = new Set<string>(["package.json"]);
+  const wanted = new Set<string>([ROOT_MANIFEST]);
   for (const workflow of workflows) {
     for (const [, job] of workflowJobs(workflow)) {
       for (const key of versionFileKeys(job)) wanted.add(key);

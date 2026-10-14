@@ -67,6 +67,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - run: bunx checks-flake --runs 10 --report flake-report.json
       - uses: actions/upload-artifact@v4

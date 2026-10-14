@@ -113,7 +113,7 @@ function nodeAt(lines: readonly string[], keys: readonly Key[]): Node | undefine
   );
 }
 
-function locate(path: string, lines: readonly string[]): Locator {
+export function locate(path: string, lines: readonly string[]): Locator {
   const used = new Map<string, number>();
   return (keys, needle, fallback) => {
     const node = nodeAt(lines, keys);

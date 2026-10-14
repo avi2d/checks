@@ -53,13 +53,15 @@ The check knows a repository is private only from GitHub's event, so a run outsi
 
 It also judges every step that uses `oven-sh/setup-bun` at any ref.
 It resolves the effective version in the order setup-bun v2 reads it.
-The step input `with.bun-version` wins when it names a version.
-Else the file the step input `with.bun-version-file` names decides by its basename.
-A `package.json` file reads `packageManager` after `bun@` and then `engines.bun`.
-A `.tool-versions` file reads the version on the `bun` line.
+The step input `with.bun-version` wins when it names a version, and an unquoted number counts as the text GitHub passes.
+Else the file the step input `with.bun-version-file` names decides by its basename, when it yields a version.
+A `package.json` file reads `packageManager` after `bun@`, and reads `engines.bun` only when `packageManager` is absent or holds no `bun@`.
+A `.tool-versions` file reads the rest of the first line that starts with `bun`.
 A `.bun-version` or `.bumrc` file reads the whole trimmed file.
-Else the `package.json` at the workspace root reads `packageManager` and then `engines.bun`.
+Else the `package.json` at the workspace root reads the same way.
 Else setup-bun installs latest.
+A blank version counts as none.
+A repository passes by writing the fleet version to `.bun-version` and naming that file in each step's `with.bun-version-file`.
 The step fails the check when the version is missing or differs from the fleet bun version.
 A range fails because it differs from the fleet version.
 A version built from an expression fails because it cannot be shown equal before the run.
