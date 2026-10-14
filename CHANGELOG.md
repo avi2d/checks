@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.42.0
+
+Released 2026-10-14.
+
+### Features
+
+- **delivery:** fail a setup-bun step whose Bun version drifts from the fleet pin [#156](https://github.com/avi2d/checks/pull/156)
+
 ## 0.41.1
 
 Released 2026-10-14.
