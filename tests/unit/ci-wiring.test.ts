@@ -330,6 +330,9 @@ test("a checks-release-pr argument must name a workflow the repository holds", (
   expect(findMissingWorkflows(release("bunx checks-release-pr ci.yml commitlint")).map(({ fault }) => fault)).toEqual([
     "names missing workflow commitlint",
   ]);
+  expect(findMissingWorkflows(release("bunx checks-release-pr ci.yml -removed.yml")).map(({ fault }) => fault)).toEqual([
+    "names missing workflow -removed.yml",
+  ]);
   const missing = findMissingWorkflows(release("bunx checks-release-pr ci.yml commitlint.yml"));
   expect(missing).toEqual([
     { location: ".github/workflows/daily-release.yml line 8", fault: "names missing workflow commitlint.yml" },
@@ -352,6 +355,20 @@ test("a checks-release-tag argument must name a workflow the repository holds", 
   ]);
   expect(findMissingWorkflows(tag("bun src/delivery/release-tag.ts release.yml")).map(({ fault }) => fault)).toEqual([
     "names missing workflow release.yml",
+  ]);
+});
+
+test("a release target the shell or GitHub fills in at run time is not judged", () => {
+  const release = (run: string) =>
+    named({
+      "ci.yml": held,
+      "daily-release.yml": `name: daily-release\non:\n  workflow_dispatch:\njobs:\n  release:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ${run}\n`,
+    });
+  expect(findMissingWorkflows(release('WORKFLOW=ci.yml bunx checks-release-pr "$WORKFLOW"'))).toEqual([]);
+  expect(findMissingWorkflows(release("bunx checks-release-tag ${{ inputs.workflow }}"))).toEqual([]);
+  expect(findMissingWorkflows(release("bunx checks-release-pr ci.yml-${{ inputs.suffix }}"))).toEqual([]);
+  expect(findMissingWorkflows(release("bunx checks-release-pr ${{ inputs.workflow }} gone.yml")).map(({ fault }) => fault)).toEqual([
+    "names missing workflow gone.yml",
   ]);
 });
 
@@ -390,6 +407,18 @@ test("a refusal names the reference line rather than an earlier substring", () =
   });
   expect(findMissingWorkflows(scoped)).toEqual([
     { location: ".github/workflows/pipe.yml line 9", fault: "job check needs missing job test" },
+  ]);
+});
+
+test("a refusal names the field that holds the reference, not a name above it", () => {
+  const report = named({
+    "ci.yml": held,
+    "pipe.yml":
+      "name: pipe\non: push\njobs:\n  report:\n    name: integration-test\n    needs: test\n    runs-on: ubuntu-latest\n    steps:\n      - name: checks-release-pr gone.yml\n        run: |\n          echo start\n          bunx checks-release-pr gone.yml\n",
+  });
+  expect(findMissingWorkflows(report)).toEqual([
+    { location: ".github/workflows/pipe.yml line 6", fault: "job report needs missing job test" },
+    { location: ".github/workflows/pipe.yml line 12", fault: "names missing workflow gone.yml" },
   ]);
 });
 
