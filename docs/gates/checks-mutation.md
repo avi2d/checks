@@ -96,17 +96,20 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      - run: bunx stryker run
-      - if: always()
-        run: bunx checks-mutation-baseline --slim reports/mutation/mutation.json "$RUNNER_TEMP/report/mutation.json"
+      - run: bunx stryker run --disableBail
+      - run: bunx checks-mutation-baseline --slim reports/mutation/mutation.json "$RUNNER_TEMP/full/mutation.json"
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: mutation-report
-          path: ${{ runner.temp }}/report/mutation.json
-          retention-days: 7
+          name: mutation-baseline-full
+          path: ${{ runner.temp }}/full/mutation.json
+          retention-days: 30
 ```
 
+The run restores no state and passes `--disableBail`, so its report names every test that covers or kills each mutant.
+The upload is the `mutation-baseline-full` artifact that a pull request's scope step restores with `checks-mutation-baseline --full`.
+[checks-mutation-scope](checks-mutation-scope.md) reads it to bring in the sources a changed unit test covers or kills.
+The restore reads only a successful run of `mutation.yml` on `main`, so a sweep that fails publishes nothing a pull request reads.
+The artifact keeps 30 days, so the newest full baseline outlives the week between full runs.
 The upload holds the report without each mutant's `statusReason`, as [checks-mutation-baseline](checks-mutation-baseline.md#the-saved-baselines) says, since the full report of a large repository passes 100 MB as an artifact.
 
 The job runs on the fleet's self-hosted Linux runner labelled `winbox`, which is where a repository sends its full sweeps.
@@ -118,4 +121,5 @@ GitHub sets `CI=true` on every runner, so the preset lets the full run through t
 ## Related topics
 
 - [checks-mutation-compare](checks-mutation-compare.md)
+- [checks-mutation-scope](checks-mutation-scope.md)
 - [checks-subsumed-tests](checks-subsumed-tests.md)
