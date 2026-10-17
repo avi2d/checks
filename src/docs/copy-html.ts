@@ -8,6 +8,8 @@ const RULE = `${PLUGIN}/separators`;
 const UNREAD: ReadonlySet<string> = new Set(["script", "style", "template", "pre"]);
 const CODE: ReadonlySet<string> = new Set(["code", "kbd", "samp", "var"]);
 const TEXT_ATTRIBUTES = ["alt", "title", "placeholder", "aria-label", "aria-description"] as const;
+const BUTTON_TYPES: ReadonlySet<string> = new Set(["submit", "button", "reset"]);
+const LABELLED: ReadonlySet<string> = new Set(["option", "optgroup"]);
 const META_COPY: ReadonlySet<string> = new Set(["description", "og:title", "og:description", "twitter:title", "twitter:description"]);
 
 // Code stands in as one character that is neither a letter nor a space, so a hyphen after it still reads as spaced.
@@ -50,6 +52,9 @@ function readAttributes(element: HtmlElement, attributes: Collector): void {
   for (const key of TEXT_ATTRIBUTES) addAttribute(element, key, attributes);
   const named = element.getAttributeValue("name") ?? element.getAttributeValue("property");
   if (element.tagName === "meta" && named !== null && META_COPY.has(named)) addAttribute(element, "content", attributes);
+  const type = element.getAttributeValue("type")?.toLowerCase();
+  if (element.tagName === "input" && type !== undefined && BUTTON_TYPES.has(type)) addAttribute(element, "value", attributes);
+  if (LABELLED.has(element.tagName)) addAttribute(element, "label", attributes);
 }
 
 function readElement(element: HtmlElement, text: Collector, attributes: Collector): void {

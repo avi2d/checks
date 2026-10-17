@@ -74,6 +74,15 @@ test("a textarea, noscript, SVG text and MathML text are copy a visitor reads", 
   expect(await html("<math><mtext>hexn.io - платформа</mtext></math>")).toEqual([{ line: 1, column: 22, message: HYPHEN }]);
 });
 
+test("the label a button input, an option and an optgroup show is copy, while what a visitor types into a text input is not", async () => {
+  expect(await html('<input type="submit" value="hexn.io - платформа">')).toEqual([{ line: 1, column: 37, message: HYPHEN }]);
+  expect(await html('<input type="button" value="a - b">')).toEqual([{ line: 1, column: 31, message: HYPHEN }]);
+  expect(await html('<input type="RESET" value="a — b">')).toEqual([{ line: 1, column: 30, message: EM_DASH }]);
+  expect(await html('<select><option label="a - b">a</option></select>')).toEqual([{ line: 1, column: 26, message: HYPHEN }]);
+  expect(await html('<select><optgroup label="a – b"><option>a</option></optgroup></select>')).toEqual([{ line: 1, column: 28, message: EN_DASH }]);
+  expect(await html('<input type="text" value="a - b"><input value="a - b">')).toEqual([]);
+});
+
 test("text breaks at a block and at a line break, so a hyphen that opens one passes", async () => {
   expect(await html("<ul><li>Coffee</li><li>- milk</li></ul><p>Coffee<br>- milk</p><p>Coffee</p>- milk")).toEqual([]);
   expect(await html("<p>Coffee <strong>-</strong> milk</p>")).toEqual([{ line: 1, column: 19, message: HYPHEN }]);

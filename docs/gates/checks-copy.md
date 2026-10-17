@@ -29,6 +29,8 @@ Each paragraph and each list item is read whole across its lines, while a headin
 
 In an HTML file it reads the page through html-validate, with one rule of the kit's own named `copy/separators`.
 It reads the text of the page, with `<title>` included, and each `alt`, `title`, `placeholder`, `aria-label` and `aria-description` attribute.
+It reads the `value` of an `<input>` whose `type` is `submit`, `button` or `reset`, and the `label` of an `<option>` or an `<optgroup>`, since each shows as a control's label.
+It does not read the `value` of any other `<input>`, which holds what a visitor types.
 It reads the `content` of a `<meta>` whose `name` or `property` is `description`, `og:title`, `og:description`, `twitter:title` or `twitter:description`.
 It decodes a numeric character reference and `&mdash;`, `&ndash;` and `&nbsp;`, so `a &mdash; b` fails as an em dash.
 Text runs across an inline element such as `<a>` or `<strong>`, as `<a href="https://example.com">Example</a> - about` shows, and breaks at a block such as `<p>` or `<li>` and at `<br>`.
