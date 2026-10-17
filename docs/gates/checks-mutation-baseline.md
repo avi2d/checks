@@ -181,13 +181,15 @@ It slims the report first, so the artifact holds about 0.5 MB in place of about 
 The full upload keeps 30 days, so the newest full baseline outlives the gap between full runs.
 A pull request's scope step loses its coverage when no full baseline outlives the gap.
 
-A pull request's scope step restores the full report with `--full`:
+A pull request's scope step restores the full report with `--full`, and [checks-mutation-scope](checks-mutation-scope.md) reads it:
 
 ```yaml
 - name: Select mutation scope
   env:
     GH_TOKEN: ${{ github.token }}
-  run: bunx checks-mutation-baseline --full "$RUNNER_TEMP/baseline-full/mutation.json"
+  run: |
+    bunx checks-mutation-baseline --full "$RUNNER_TEMP/baseline-full/mutation.json"
+    bunx checks-mutation-scope "$(git merge-base HEAD origin/main)" "$RUNNER_TEMP/baseline-full/mutation.json" >> "$GITHUB_ENV"
 ```
 
 ## Related topics

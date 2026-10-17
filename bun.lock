@@ -12,6 +12,7 @@
         "@total-typescript/ts-reset": "0.6.1",
         "commonmark": "0.31.2",
         "knip": "6.38.0",
+        "minimatch": "10.2.6",
       },
       "devDependencies": {
         "@axe-core/playwright": "4.13.0",
