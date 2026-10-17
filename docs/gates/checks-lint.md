@@ -13,6 +13,7 @@ Gates requiring tracked TypeScript files begin running when the repository track
 `checks-lint-coverage` and `checks-unused` also begin running when the repository tracks an `.astro` file.
 `checks-advisories` begins running when the repository tracks `bun.lock`.
 `checks-frontend-syntax` begins running when the repository tracks `frontend-syntax.json` at its root.
+`checks-copy` begins running when the repository tracks `copy.json` at its root.
 All other gates run for every repository.
 
 ## What it reads

@@ -40,6 +40,8 @@ const OXLINT_CONFIG: TrackedContent = { pathspecs: ["oxlint.config.ts"], content
 
 const FRONTEND_SYNTAX_DECLARATION: TrackedContent = { pathspecs: ["frontend-syntax.json"], content: "a frontend syntax declaration" };
 
+const COPY_DECLARATION: TrackedContent = { pathspecs: ["copy.json"], content: "a copy declaration" };
+
 export const KIT_GATES = [
   { bin: "checks-lint-coverage", vector: "quality", file: "lint-coverage.sh", reads: "tree", appliesTo: LINTED_SOURCE },
   { bin: "checks-test-layout", vector: "testing", file: "test-layout.ts", reads: "tree", appliesTo: TYPESCRIPT_SOURCE },
@@ -52,6 +54,7 @@ export const KIT_GATES = [
   { bin: "checks-ci-wiring", vector: "delivery", file: "ci-wiring.ts", reads: "tree", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-secrets", vector: "delivery", file: "secrets.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-docs", vector: "docs", file: "docs.ts", reads: "range", alsoReads: "every agent file at the head commit", appliesTo: EVERY_REPOSITORY },
+  { bin: "checks-copy", vector: "docs", file: "copy.ts", reads: "tree", appliesTo: COPY_DECLARATION },
   { bin: "checks-repetition", vector: "complexity", file: "repetition.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE },
   { bin: "checks-unused", vector: "complexity", file: "unused.ts", reads: "tree", appliesTo: LINTED_SOURCE },
   { bin: "checks-exports", vector: "complexity", file: "exports.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE },

@@ -78,6 +78,21 @@ test("a workflow omission makes the lint gate fail and restoring it makes it pas
   expect(green.exitCode).toBe(0);
 }, 60_000);
 
+test("tracking copy.json opts a repository into checks-copy, which fails lint on a hyphen used as a dash in the declared copy", async () => {
+  const { repo } = await repository();
+  await repo.write({ "copy.json": JSON.stringify({ inputs: ["content/*.md"] }), "content/home.md": "Example - a site.\n" });
+  await commit(repo, "feat: declare the copy");
+  const red = await lint(repo);
+  expect(red.text).toContain("content/home.md:1:9 carries `-`, a hyphen used as a dash");
+  expect(red.text).toContain("checks-lint: 1 of 14 gate(s) failed: checks-copy");
+  expect(red.exitCode).toBe(1);
+  await repo.write({ "content/home.md": "Example, a site.\n" });
+  await commit(repo, "fix: use a comma");
+  const green = await lint(repo);
+  expect(green.text).toContain("checks-lint: 14 gate(s) pass");
+  expect(green.exitCode).toBe(0);
+}, 60_000);
+
 test("tracking frontend-syntax.json opts a repository into checks-frontend-syntax, which fails lint on a seeded transition all", async () => {
   const { repo } = await repository();
   await repo.write({ "frontend-syntax.json": JSON.stringify({ inputs: ["styles/*.css"] }), "styles/site.css": "a { transition: all 1s; }\n" });

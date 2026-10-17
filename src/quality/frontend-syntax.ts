@@ -1,11 +1,10 @@
 #!/usr/bin/env bun
-import { Console, Effect, FileSystem, Path, Schema } from "effect";
+import { Effect, Path, Schema } from "effect";
 import type { LintResult } from "stylelint";
-import { runMain, Usage } from "../core/main.ts";
+import { emptyInputs, inputsReport, runDeclaredGate, violationLine, type Declared, type Input, type Violation } from "../core/declared-inputs.ts";
+import { Usage } from "../core/main.ts";
 
-const NAME = "frontend-syntax";
-
-const DECLARATION = "frontend-syntax.json";
+const DECLARED: Declared = { name: "frontend-syntax", file: "frontend-syntax.json", declares: "inputs" };
 
 const TRANSITION_ALL = "declaration-property-value-disallowed-list";
 const BODY_WIDE_USER_SELECT = "rule-selector-property-disallowed-list";
@@ -23,22 +22,6 @@ const ADVICE: Readonly<Record<string, string>> = {
 };
 
 const MARKUP = ["**/*.html", "**/*.astro", "**/*.vue", "**/*.svelte"];
-
-const Declaration = Schema.Struct({ inputs: Schema.NonEmptyArray(Schema.NonEmptyString) });
-
-const decodeDeclaration = Schema.decodeUnknownEffect(Schema.fromJsonString(Declaration));
-
-export type Violation = {
-  readonly file: string;
-  readonly line: number;
-  readonly column: number;
-  readonly text: string;
-};
-
-export type Input = {
-  readonly glob: string;
-  readonly files: readonly string[];
-};
 
 export type Scan = {
   readonly inputs: readonly Input[];
@@ -59,19 +42,8 @@ const loadPeer = <A>(name: string, load: () => Promise<A>) =>
   Effect.tryPromise({
     try: load,
     catch: () =>
-      new Usage({ message: `cannot load ${name}, which a repository that declares ${DECLARATION} installs beside the kit as an optional peer` }),
+      new Usage({ message: `cannot load ${name}, which a repository that declares ${DECLARED.file} installs beside the kit as an optional peer` }),
   });
-
-const readDeclaration = Effect.fn("readDeclaration")(function* (root: string) {
-  const fs = yield* FileSystem.FileSystem;
-  const file = (yield* Path.Path).join(root, DECLARATION);
-  if (!(yield* fs.exists(file))) {
-    return yield* new Usage({ message: `${DECLARATION} is missing, and a repository opts in to this gate by declaring its inputs there` });
-  }
-  return yield* decodeDeclaration(yield* fs.readFileString(file)).pipe(
-    Effect.mapError(({ message }) => new Usage({ message: `${DECLARATION} does not decode: ${message}` })),
-  );
-});
 
 function violationsOf(result: LintResult, relative: (file: string) => string): readonly Violation[] {
   const file = relative(result.source ?? "");
@@ -112,27 +84,12 @@ export const scanInputs = Effect.fn("scanInputs")(function* (root: string, globs
 });
 
 export function passes({ inputs, violations }: Scan): boolean {
-  return violations.length === 0 && inputs.every(({ files }) => files.length > 0);
+  return violations.length === 0 && emptyInputs(inputs).length === 0;
 }
 
 export function report({ inputs, violations }: Scan): string {
-  const files = new Set(inputs.flatMap((input) => input.files)).size;
-  const scanned = `${files} file(s) from ${inputs.length} declared input(s)`;
-  const empty = inputs.filter((input) => input.files.length === 0);
-  if (violations.length === 0 && empty.length === 0) return `${NAME}: no violation in ${scanned}`;
-  return [
-    `${NAME}: ${violations.length + empty.length} problem(s) in ${scanned}:`,
-    ...empty.map(({ glob }) => `  ${glob}: the declared input matches no file`),
-    ...violations.map(({ file, line, column, text }) => `  ${file}:${line}:${column} ${text}`),
-  ].join("\n");
+  const empty = emptyInputs(inputs).map(({ glob }) => `${glob}: the declared input matches no file`);
+  return inputsReport(DECLARED.name, inputs, [...empty, ...violations.map(violationLine)]);
 }
 
-const gate = Effect.gen(function* () {
-  const root = (yield* Path.Path).resolve(process.argv[2] ?? ".");
-  const { inputs } = yield* readDeclaration(root);
-  const scan = yield* scanInputs(root, inputs);
-  yield* Console.log(report(scan));
-  return passes(scan);
-});
-
-if (import.meta.main) runMain(NAME, gate);
+if (import.meta.main) runDeclaredGate(DECLARED, scanInputs, { report, passes });
