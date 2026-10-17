@@ -197,7 +197,7 @@ test(
       const result = await $`bun ${CHECK} ${bare}`.cwd(bare).nothrow().quiet();
       const text = result.stdout.toString() + result.stderr.toString();
       expect(result.exitCode).toBe(1);
-      expect(text).toContain('scripts.test must be exactly "checks-test"');
+      expect(text).toContain('scripts.test must be "checks-test", optionally with --parallel=<workers>');
       expect(text).toContain("scripts.lint must run the layout check");
       expect(text).toContain("bunfig.toml is missing");
     } finally {
