@@ -24,6 +24,7 @@
     "src/core/main.ts",
     "src/core/git.ts",
     "src/core/gates.ts",
+    "src/core/declared-inputs.ts",
     "src/core/lint.ts",
     "src/delivery/changelog.ts",
     "src/delivery/changelog-write.ts",
