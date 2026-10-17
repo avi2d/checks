@@ -49,7 +49,9 @@ It counts a run as `ci` when `CI` is true and as `local` otherwise.
 
 The command takes no arguments for the default suite.
 Use `checks-test --tier=live` or `checks-test --tier=pixel` for a named test tier.
-A tier run clears Bun's ignored paths, runs only `./tests/live` or `./tests/pixel`, and still checks each skip.
+Use `checks-test --tier=unit` or `checks-test --tier=e2e` to run only one level of the default suite.
+A live or pixel run clears Bun's ignored paths, runs only `./tests/live` or `./tests/pixel`, and still checks each skip.
+A unit or e2e run keeps Bun's ignored paths, runs only `./tests/unit` or `./tests/e2e`, and still checks each skip.
 
 Files under `tests/quarantine/` are not run or judged, as [checks-test-layout](checks-test-layout.md) says.
 
@@ -75,7 +77,7 @@ Bun ignores both directories during the default run.
 ## Arguments
 
 The default command takes no arguments.
-Its named tier options are `--tier=live` and `--tier=pixel`.
+Its named tier options are `--tier=live`, `--tier=pixel`, `--tier=unit` and `--tier=e2e`.
 It refuses test filters because every test excluded by a filter would look skipped.
 
 ## Exit codes

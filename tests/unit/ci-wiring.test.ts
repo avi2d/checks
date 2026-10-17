@@ -81,6 +81,22 @@ test("gate steps gated on a filter step still run every gate", () => {
   expect(findGaps(declaration, workflow(gated))).toEqual([]);
 });
 
+test("a test:unit and test:e2e pair replaces the single test requirement", () => {
+  const split = [...scripts, "test:unit", "test:e2e"];
+  expect(requiredCommands(split)).toEqual([...steps.slice(0, 4), "bun run test:unit", "bun run test:e2e", ...steps.slice(5)]);
+  expect(requiredCommands([...scripts, "test:unit"])).toEqual(steps);
+  const splitDeclaration = declarationFor(split, "main");
+  const tiered = full.replace(
+    "      - run: bun run test\n",
+    "      - run: bun run test:unit\n      - run: bun run test:e2e\n",
+  );
+  expect(findGaps(splitDeclaration, workflow(tiered))).toEqual([]);
+  expect(findGaps(splitDeclaration, workflow(full)).map(({ gate }) => gate)).toEqual([
+    "bun run test:unit",
+    "bun run test:e2e",
+  ]);
+});
+
 const WINBOX = "[self-hosted, Linux, X64, winbox]";
 const HOSTED = "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}";
 const OLD_DEFAULT = `\${{ vars.CI_RUNS_ON || fromJSON('["self-hosted","Linux","X64","winbox"]') }}`;

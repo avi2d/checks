@@ -63,6 +63,7 @@ export class WiringError extends Schema.TaggedError<WiringError>()("WiringError"
 
 const WORKFLOWS = ".github/workflows";
 const SCRIPTED = ["lint", "build", "typecheck", "test"];
+const SPLIT_SUITE = ["test:unit", "test:e2e"];
 const BUILT_TREE = "git diff --exit-code";
 const TITLE_LINT = "bunx checks-commit-title";
 // The gate holds until every consumer migrates, so the direct commitlint call still counts.
@@ -243,10 +244,13 @@ export function formatReport(declaration: Declaration, gaps: readonly Gap[]): st
 }
 
 export function requiredCommands(scripts: readonly string[]): readonly string[] {
+  // The two tiers partition the default suite, so the pair replaces the single test requirement.
+  const split = SPLIT_SUITE.every((name) => scripts.includes(name));
   return [
-    ...SCRIPTED.filter((name) => scripts.includes(name)).flatMap((name) =>
+    ...SCRIPTED.filter((name) => scripts.includes(name) && !(split && name === "test")).flatMap((name) =>
       name === "build" ? [`bun run ${name}`, BUILT_TREE] : [`bun run ${name}`],
     ),
+    ...(split ? SPLIT_SUITE.map((name) => `bun run ${name}`) : []),
     TITLE_LINT,
   ];
 }

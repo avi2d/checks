@@ -14,7 +14,43 @@ permissions:
   pull-requests: read
 
 jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The merge commit would hide the pull request head, so check out the head itself.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      # Path filters would leave this required check unreported, so steps gate on the filter instead.
+      - id: filter
+        run: bun src/delivery/docs-only.ts ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} >> "$GITHUB_OUTPUT"
+      - if: steps.filter.outputs.docs-only != 'true'
+        run: bun run test:unit
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The merge commit would hide the pull request head, so check out the head itself.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      # Path filters would leave this required check unreported, so steps gate on the filter instead.
+      - id: filter
+        run: bun src/delivery/docs-only.ts ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} >> "$GITHUB_OUTPUT"
+      - if: steps.filter.outputs.docs-only != 'true'
+        run: bun run test:e2e
   checks:
+    # Branch protection requires the checks context alone, so this job needs both tiers and stays green only when every tier passed.
+    needs: [unit, e2e]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -52,8 +88,6 @@ jobs:
       - run: bun run lint
       - if: steps.filter.outputs.docs-only != 'true'
         run: bun run typecheck
-      - if: steps.filter.outputs.docs-only != 'true'
-        run: bun run test
       # GitHub keeps a dispatched run's check off the pull request, so the job reports its result there as a commit status.
       - name: report the result on the head commit
         if: always() && github.event_name == 'workflow_dispatch'

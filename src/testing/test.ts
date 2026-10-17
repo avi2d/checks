@@ -21,10 +21,12 @@ export class SkipGateError extends Schema.TaggedError<SkipGateError>()("SkipGate
 }) {}
 
 const NAME = TEST_ENTRY_POINT.bin;
-const USAGE = `usage: ${NAME} takes no arguments except --tier=live or --tier=pixel`;
+const USAGE = `usage: ${NAME} takes no arguments except --tier=live, --tier=pixel, --tier=unit or --tier=e2e`;
 const TIERS = new Map<string, TestTier>([
   ["--tier=live", "live"],
   ["--tier=pixel", "pixel"],
+  ["--tier=unit", "unit"],
+  ["--tier=e2e", "e2e"],
 ]);
 
 function matches(declaration: SkipDeclaration, result: TestResult): boolean {
@@ -113,10 +115,16 @@ const environmentOf = Config.Boolean("CI").pipe(
   Effect.mapError((cause) => new SkipGateError({ message: `cannot tell a ci run from a local one: ${cause.message}` })),
 );
 
+function tierArgs(tier: TestTier | undefined): readonly string[] {
+  if (tier === undefined) return [];
+  // The preset ignores tests/live and tests/pixel, so only those tiers clear the ignore list.
+  if (tier === "live" || tier === "pixel") return ["--path-ignore-patterns", "", `./tests/${tier}`];
+  return [`./tests/${tier}`];
+}
+
 const runSuite = Effect.fn("runSuite")(function* (outfile: string, tier: TestTier | undefined) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const tierArgs = tier === undefined ? [] : ["--path-ignore-patterns", "", `./tests/${tier}`];
-  const args = ["test", "--randomize", ...tierArgs, ...reporterArgs(outfile)];
+  const args = ["test", "--randomize", ...tierArgs(tier), ...reporterArgs(outfile)];
   return yield* spawner.exitCode(
     ChildProcess.make(process.execPath, args, {
       stdin: "ignore",
