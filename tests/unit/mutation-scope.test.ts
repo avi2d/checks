@@ -26,7 +26,7 @@ test("a later glob brings back what an earlier negated glob dropped", () => {
 
 const written = (path: string): Change => ({ kind: "written", path });
 
-test("the diff scopes changed sources, marks the ones the base lacks as added, and keeps tests and test tree apart", () => {
+test("the diff scopes changed sources, and keeps tests and test tree apart", () => {
   const picked = pickFromDiff(
     [
       written("packages/ui/src/layout.ts"),
@@ -39,16 +39,14 @@ test("the diff scopes changed sources, marks the ones the base lacks as added, a
       { kind: "deleted", path: "tests/unit/ui/gone.test.ts" },
     ],
     mutatedBy(TUI_DASH_MUTATE),
-    new Set(["packages/ui/src/layout.ts", "packages/quota/src/live/layer.ts"]),
   );
 
   expect([...picked.scope]).toEqual(["packages/ui/src/layout.ts", "packages/ui/src/sources.ts"]);
-  expect([...picked.added]).toEqual(["packages/ui/src/sources.ts"]);
   expect([...picked.tests]).toEqual(["tests/unit/ui/layout.test.ts", "tests/unit/ui/gone.test.ts"]);
   expect([...picked.touched]).toEqual(["tests/unit/ui/layout.test.ts", "tests/e2e/ui.test.ts", "tests/lib/session-fixture.ts", "tests/unit/ui/gone.test.ts"]);
 });
 
-test("a rename between sources scopes both names, one into the sources scopes the new name as added, and one out of them scopes nothing", () => {
+test("a rename between sources scopes both names, one into the sources scopes the new name, and one out of them scopes nothing", () => {
   const picked = pickFromDiff(
     [
       { kind: "renamed", from: "src/old.ts", path: "src/new.ts", edited: false },
@@ -57,12 +55,9 @@ test("a rename between sources scopes both names, one into the sources scopes th
       { kind: "renamed", from: "tests/unit/a.test.ts", path: "tests/unit/b.test.ts", edited: false },
     ],
     mutatedBy(["src/**/*.ts"]),
-    new Set(["src/old.ts", "lib/outside.ts", "src/leaving.ts"]),
   );
 
   expect([...picked.scope]).toEqual(["src/old.ts", "src/new.ts", "src/inside.ts"]);
-  expect([...picked.added]).toEqual(["src/inside.ts"]);
-  expect(picked.renamed).toEqual(["src/old.ts:src/new.ts"]);
   expect([...picked.tests]).toEqual(["tests/unit/a.test.ts", "tests/unit/b.test.ts"]);
 });
 
@@ -143,9 +138,13 @@ test("a source no changed test covers or kills stays out", () => {
 });
 
 test("the lines name each list sorted and comma separated, an empty one included", () => {
-  expect(envLines({ scope: ["src/b.ts", "src/a.ts"], added: [], renamed: ["src/old.ts:src/new.ts"], tests: ["tests/unit/a.test.ts"], staleTests: [] })).toBe(
-    ["SCOPE=src/a.ts,src/b.ts", "ADDED=", "RENAMED=src/old.ts:src/new.ts", "TESTS=tests/unit/a.test.ts", "STALE_TESTS="].join("\n"),
-  );
+  expect(envLines({ scope: ["src/b.ts", "src/a.ts"], staleTests: [] })).toBe(["SCOPE=src/a.ts,src/b.ts", "STALE_TESTS="].join("\n"));
+});
+
+test("the scope escapes each glob character in a path, and the stale tests stay literal", () => {
+  const lines = envLines({ scope: ["src/routes/[id].ts", "src/{a}/(group)/*?.ts"], staleTests: ["tests/unit/[id].test.ts"] });
+
+  expect(lines).toBe(["SCOPE=src/routes/[[]id[]].ts,src/[{]a[}]/[(]group[)]/[*][?].ts", "STALE_TESTS=tests/unit/[id].test.ts"].join("\n"));
 });
 
 test("the arguments are a base and an optional report, and nothing else", async () => {

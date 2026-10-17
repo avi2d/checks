@@ -2,48 +2,21 @@ import { $ } from "bun";
 import { expect, setDefaultTimeout, test } from "bun:test";
 import { mkdir, readFile, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { parseWorkflow, stepNamed } from "../lib/workflow.ts";
 import { fakeActions, type FakeRun } from "./lib/fake-actions.ts";
-import { CHECKOUT, fixtureRepos, ran, scratchDirs, type FixtureRepo, type Ran } from "./lib/fixture-repo.ts";
+import { CHECKOUT, scratchDirs, type FixtureRepo, type Ran } from "./lib/fixture-repo.ts";
+import { body, committedRepos, runStep, scopeOf, scopeRun } from "./lib/mutation-scope.ts";
 
 // Scratch git repos and the scope bin run past bun's 5s default on a loaded machine.
 setDefaultTimeout(30_000);
 
-const open = fixtureRepos("checks-mutation-scope-");
+const repoWith = committedRepos("checks-mutation-scope-");
 const scratch = scratchDirs();
-const SCOPE = join(CHECKOUT, "src", "testing", "mutation-scope.ts");
-const NOTHING = { SCOPE: "", ADDED: "", RENAMED: "", TESTS: "", STALE_TESTS: "" };
+const NOTHING = { SCOPE: "", STALE_TESTS: "" };
 const TUI_DASH_CONFIG = 'export default { mutate: ["packages/*/src/**/*.ts", "!packages/*/src/live/**", "!packages/*/src/bin.ts"] };\n';
-
-const body = (name: string): string => Array.from({ length: 20 }, (_, line) => `export const ${name}${line} = ${line};\n`).join("");
-
-async function repoWith(files: Readonly<Record<string, string>>): Promise<{ repo: FixtureRepo; base: string }> {
-  const repo = await open({});
-  await repo.write(files);
-  const base = await repo.commit("base");
-  return { repo, base };
-}
-
-async function scopeRun(repo: FixtureRepo, base: string, baseline?: string): Promise<Ran> {
-  await repo.commit("head");
-  return ran($`bun ${SCOPE} ${[base, ...(baseline === undefined ? [] : [baseline])]}`.cwd(repo.dir));
-}
-
-async function scopeOf(repo: FixtureRepo, base: string, baseline?: string): Promise<Record<string, string>> {
-  const done = await scopeRun(repo, base, baseline);
-  expect(done.exitCode).toBe(0);
-  return Object.fromEntries(
-    done.text
-      .trim()
-      .split("\n")
-      .filter((line) => /^[A-Z_]+=/.test(line))
-      .map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]),
-  );
-}
 
 type Link = { readonly testFile: string; readonly sources: string[]; readonly killsOnly?: boolean };
 
-async function coverageBaseline(repo: FixtureRepo, links: readonly Link[]): Promise<string> {
+async function coverageBaseline(repo: FixtureRepo, links: readonly Link[], uncovered: readonly string[] = []): Promise<string> {
   const ids = new Map(links.map(({ testFile }, index) => [testFile, `${index}`] as const));
   const testFiles = Object.fromEntries([...ids].map(([testFile, id]) => [testFile, { tests: [{ id, name: testFile }] }]));
   const bySource = new Map<string, Array<{ coveredBy: string[]; killedBy: string[] }>>();
@@ -55,6 +28,7 @@ async function coverageBaseline(repo: FixtureRepo, links: readonly Link[]): Prom
       bySource.set(source, mutants);
     }
   }
+  for (const source of uncovered) bySource.set(source, [{ coveredBy: [], killedBy: [] }]);
   const files = Object.fromEntries([...bySource].map(([source, mutants]) => [source, { source: body("value"), mutants }]));
   const path = join(repo.dir, "baseline.json");
   await repo.write({ "baseline.json": JSON.stringify({ files, testFiles }) });
@@ -91,7 +65,7 @@ test("a pull request that changes nothing the mutate globs match has an empty sc
   expect(await scopeOf(repo, base)).toEqual(NOTHING);
 });
 
-test("a renamed source is scoped under both names, a deleted one not at all, and an added one is marked added", async () => {
+test("a renamed source is scoped under both names, a deleted one not at all, and an added one under its own name", async () => {
   const { repo, base } = await repoWith({
     "stryker.conf.json": JSON.stringify({ mutate: ["src/**/*.ts"] }),
     "src/edited.ts": body("edited"),
@@ -108,8 +82,6 @@ test("a renamed source is scoped under both names, a deleted one not at all, and
   const scope = await scopeOf(repo, base);
 
   expect(sorted(scope["SCOPE"])).toEqual(["src/edited.ts", "src/fresh.ts", "src/inside.ts", "src/new.ts", "src/old.ts"]);
-  expect(sorted(scope["ADDED"])).toEqual(["src/fresh.ts", "src/inside.ts"]);
-  expect(scope["RENAMED"]).toBe("src/old.ts:src/new.ts");
 });
 
 test("a source the config's negated globs exclude stays out of scope, as src/live and bin.ts do in tui-dash", async () => {
@@ -129,7 +101,6 @@ test("a source the config's negated globs exclude stays out of scope, as src/liv
   const scope = await scopeOf(repo, base);
 
   expect(sorted(scope["SCOPE"])).toEqual(["packages/quota/src/quotas.ts", "packages/ui/src/sources.ts"]);
-  expect(scope["ADDED"]).toBe("packages/ui/src/sources.ts");
 });
 
 test("a test change alone brings in an unchanged source whose kills it holds, as layout.ts lost two in tui-dash PR 11", async () => {
@@ -166,6 +137,9 @@ function testedRepo(): Promise<{ repo: FixtureRepo; base: string }> {
   });
 }
 
+const testedBaseline = (repo: FixtureRepo, killsOnly = false): Promise<string> =>
+  coverageBaseline(repo, [{ testFile: "tests/unit/covered.test.ts", sources: ["src/covered.ts"], killsOnly }], ["src/other.ts"]);
+
 test("a changed test with no baseline report fails rather than scoping nothing", async () => {
   const { repo, base } = await testedRepo();
   await repo.write({ "tests/unit/covered.test.ts": body("weakened") });
@@ -180,15 +154,15 @@ test("a changed test with no baseline report fails rather than scoping nothing",
 test("a changed test pulls its covered source into scope", async () => {
   const { repo, base } = await testedRepo();
   await repo.write({ "tests/unit/covered.test.ts": body("weakened") });
-  const baseline = await coverageBaseline(repo, [{ testFile: "tests/unit/covered.test.ts", sources: ["src/covered.ts"] }]);
+  const baseline = await testedBaseline(repo);
 
-  expect(await scopeOf(repo, base, baseline)).toEqual({ ...NOTHING, SCOPE: "src/covered.ts", TESTS: "tests/unit/covered.test.ts" });
+  expect(await scopeOf(repo, base, baseline)).toEqual({ ...NOTHING, SCOPE: "src/covered.ts" });
 });
 
 test("a kill names the covering test where restored coverage no longer does", async () => {
   const { repo, base } = await testedRepo();
   await repo.write({ "tests/unit/covered.test.ts": body("weakened") });
-  const baseline = await coverageBaseline(repo, [{ testFile: "tests/unit/covered.test.ts", sources: ["src/covered.ts"], killsOnly: true }]);
+  const baseline = await testedBaseline(repo, true);
 
   expect((await scopeOf(repo, base, baseline))["SCOPE"]).toBe("src/covered.ts");
 });
@@ -204,7 +178,7 @@ test("a source covered by a changed test but killed first by another test stays 
   ]);
   await repo.write({ "tests/unit/second.test.ts": body("weakened") });
 
-  expect(await scopeOf(repo, base, baseline)).toEqual({ ...NOTHING, SCOPE: "src/shared.ts", TESTS: "tests/unit/second.test.ts" });
+  expect(await scopeOf(repo, base, baseline)).toEqual({ ...NOTHING, SCOPE: "src/shared.ts" });
 });
 
 test("a source with only static mutants stays in scope through every test a no-bail run lists as killing them", async () => {
@@ -223,7 +197,7 @@ test("a source with only static mutants stays in scope through every test a no-b
 
 test("a deleted test still pulls its covered source into scope", async () => {
   const { repo, base } = await testedRepo();
-  const baseline = await coverageBaseline(repo, [{ testFile: "tests/unit/covered.test.ts", sources: ["src/covered.ts"] }]);
+  const baseline = await testedBaseline(repo);
   await rm(join(repo.dir, "tests/unit/covered.test.ts"));
 
   expect((await scopeOf(repo, base, baseline))["SCOPE"]).toBe("src/covered.ts");
@@ -231,15 +205,48 @@ test("a deleted test still pulls its covered source into scope", async () => {
 
 test("a test the baseline never saw leaves the scope empty", async () => {
   const { repo, base } = await testedRepo();
-  const baseline = await coverageBaseline(repo, [{ testFile: "tests/unit/covered.test.ts", sources: ["src/covered.ts"] }]);
+  const baseline = await testedBaseline(repo);
   await repo.write({ "tests/unit/fresh.test.ts": body("fresh") });
 
-  expect(await scopeOf(repo, base, baseline)).toEqual({ ...NOTHING, TESTS: "tests/unit/fresh.test.ts" });
+  expect(await scopeOf(repo, base, baseline)).toEqual(NOTHING);
+});
+
+test("a changed test the merge base holds but an older baseline report lacks fails rather than scoping nothing", async () => {
+  const { repo, base } = await repoWith({
+    "src/monday.ts": body("monday"),
+    "src/tuesday.ts": body("tuesday"),
+    "tests/unit/monday.test.ts": body("test"),
+    "tests/unit/tuesday.test.ts": body("test"),
+  });
+  const baseline = await coverageBaseline(repo, [{ testFile: "tests/unit/monday.test.ts", sources: ["src/monday.ts"] }]);
+  await repo.write({ "tests/unit/tuesday.test.ts": body("weakened") });
+
+  const done = await scopeRun(repo, base, baseline);
+
+  expect(done.exitCode).toBe(2);
+  expect(done.text).toContain("mutation-scope: tests/unit/tuesday.test.ts changed, but the baseline report at");
+  expect(done.text).not.toContain("SCOPE=");
+});
+
+test("a source an older baseline report holds no mutant of enters when a test changes", async () => {
+  const { repo, base } = await repoWith({
+    "src/monday.ts": body("monday"),
+    "src/tuesday.ts": body("tuesday"),
+    "tests/unit/monday.test.ts": body("test"),
+  });
+  const baseline = await coverageBaseline(repo, [{ testFile: "tests/unit/monday.test.ts", sources: ["src/monday.ts"] }]);
+  await repo.write({ "tests/unit/monday.test.ts": body("weakened") });
+
+  const done = await scopeRun(repo, base, baseline);
+
+  expect(done.exitCode).toBe(0);
+  expect(done.text).toContain("SCOPE=src/monday.ts,src/tuesday.ts\n");
+  expect(done.text).toContain("mutation-scope: src/tuesday.ts enter, as the baseline report holds no mutant of them");
 });
 
 test("a changed test and a changed source scope together without doubling", async () => {
   const { repo, base } = await testedRepo();
-  const baseline = await coverageBaseline(repo, [{ testFile: "tests/unit/covered.test.ts", sources: ["src/covered.ts"] }]);
+  const baseline = await testedBaseline(repo);
   await repo.write({
     "tests/unit/covered.test.ts": body("weakened"),
     "src/covered.ts": body("covered") + "export const more = 1;\n",
@@ -291,7 +298,6 @@ test("a changed helper pulls in the covered sources of every unit test that impo
   const scope = await scopeOf(repo, base, baseline);
 
   expect(sorted(scope["SCOPE"])).toEqual(["src/covered.ts", "src/other.ts"]);
-  expect(sorted(scope["TESTS"])).toEqual(["tests/unit/covered.test.ts", "tests/unit/other.test.ts"]);
   expect(sorted(scope["STALE_TESTS"])).toEqual(["tests/unit/covered.test.ts", "tests/unit/other.test.ts"]);
 });
 
@@ -349,7 +355,7 @@ test("a changed preload pulls in the covered sources of every unit test that sti
   const scope = await scopeOf(repo, base, baseline);
 
   expect(scope["SCOPE"]).toBe("src/covered.ts,src/other.ts");
-  expect(sorted(scope["TESTS"])).toEqual(EVERY_UNIT_TEST);
+  expect(sorted(scope["STALE_TESTS"])).toEqual(EVERY_UNIT_TEST);
 });
 
 test("a changed helper the preload imports pulls in the covered sources of every unit test", async () => {
@@ -375,13 +381,6 @@ test("an e2e test beside a changed source scopes the source alone and marks no t
 
   expect(await scopeOf(repo, base)).toEqual({ ...NOTHING, SCOPE: "src/kept.ts" });
 });
-
-const WORKFLOW = join(CHECKOUT, ".github/workflows/mutation.yml");
-
-async function runStep(name: string, cwd: string, env: Readonly<Record<string, string>>): Promise<Ran> {
-  const step = stepNamed(parseWorkflow(await Bun.file(WORKFLOW).text()), name);
-  return ran($`bash -e -c ${step.run}`.cwd(cwd).env({ ...process.env, ...step.env, ...env }));
-}
 
 // A full run uploads the report alone as its full artifact; a run from before full baselines uploads only the incremental one.
 type DispatchedRun = { readonly id: number; readonly report: string; readonly full: boolean };
@@ -512,57 +511,3 @@ test("the merge-base step adds its worktree over a registration a dead job left 
   const paths = await worktreePaths(repo);
   expect(await Promise.all(paths.map((path) => realpath(path)))).toHaveLength(2);
 });
-
-type HeadReport = { readonly files: Readonly<Record<string, { readonly mutants: ReadonlyArray<{ readonly replacement: string; readonly status: string }> }>> };
-
-const names = (input: readonly string[]): string => `${JSON.stringify({ input, expected: ["ab"] })}\n`;
-
-async function fixtureReadingRepo(): Promise<{ repo: FixtureRepo; base: string }> {
-  const { repo, base } = await repoWith({
-    ".gitignore": "node_modules\nreports\n.stryker-tmp\n",
-    "package.json": '{"name":"fixture-reader","type":"module","private":true}\n',
-    "stryker.conf.mjs": `export default ${JSON.stringify({
-      plugins: ["@stryker-mutator/*", "@hughescr/stryker-bun-runner"],
-      testRunner: "bun",
-      coverageAnalysis: "perTest",
-      reporters: ["json"],
-      bun: { testFiles: ["tests/unit/kept.test.ts"] },
-      concurrency: 1,
-    })};\n`,
-    "src/kept.ts": 'export const kept = (names: string[]) => names.filter((name) => name.startsWith("a"));\n',
-    "tests/fixtures/kept/names.json": names(["ab", "cd"]),
-    "tests/unit/kept.test.ts": [
-      'import { expect, test } from "bun:test";',
-      'import { join } from "node:path";',
-      'import { kept } from "../../src/kept.ts";',
-      "",
-      'const names = await Bun.file(join(import.meta.dir, "..", "fixtures", "kept", "names.json")).json();',
-      "",
-      'test("kept names start with a", () => {',
-      "  expect(kept(names.input)).toEqual(names.expected);",
-      "});",
-      "",
-    ].join("\n"),
-  });
-  await symlink(join(CHECKOUT, "node_modules"), join(repo.dir, "node_modules"));
-  return { repo, base };
-}
-
-test("the head run retests a mutant whose killing test reads a fixture the pull request weakens", async () => {
-  const { repo, base } = await fixtureReadingRepo();
-  const stryker = $`bunx stryker run --incremental --ignoreStatic --mutate src/kept.ts`.cwd(repo.dir);
-  expect((await ran(stryker)).exitCode).toBe(0);
-  const runnerTemp = await scratch("checks-mutation-runner-");
-  await mkdir(join(runnerTemp, "mutation-base"));
-  await rename(join(repo.dir, "reports"), join(runnerTemp, "mutation-base", "reports"));
-  const baseline = join(runnerTemp, "mutation-base", "reports", "mutation", "mutation.json");
-  await repo.write({ "tests/fixtures/kept/names.json": names(["ab"]) });
-
-  const scope = await scopeOf(repo, base, baseline);
-  const head = await runStep("Build scope report at head", repo.dir, { ...scope, RUNNER_TEMP: runnerTemp });
-
-  expect(head.exitCode).toBe(0);
-  const report: HeadReport = await Bun.file(join(repo.dir, "reports", "mutation", "mutation.json")).json();
-  const unfiltered = report.files["src/kept.ts"]?.mutants.find((mutant) => mutant.replacement === "names");
-  expect(unfiltered?.status).toBe("Survived");
-}, 120_000);

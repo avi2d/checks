@@ -24,6 +24,10 @@ A unit test also reads a changed fixture under `tests/fixtures/` when it names t
 Each source whose mutants a changed unit test covers or kills in the full baseline report then enters the scope, when it still exists at `HEAD`.
 So a kill lost through a test change alone still shows in the comparison, in a source the pull request leaves alone.
 A changed unit test with no baseline report fails the run rather than reading incomplete coverage.
+A changed unit test the merge base holds but the report's `testFiles` lacks fails the run too, since the report predates it.
+A unit test the pull request adds is new to every report, so it needs no entry.
+Stryker writes no source without mutants into the report, so a mutated source the report lacks may be newer than it.
+When a unit test changed, each such source that exists at `HEAD` enters the scope.
 A change under `tests/e2e/` changes no unit test, so it needs no baseline report.
 
 ## What it reads
@@ -55,10 +59,12 @@ It prints one line for each list, as `NAME=a,b`, with each list sorted by path:
 | Line | What it lists |
 | --- | --- |
 | `SCOPE` | the files the base and head runs both mutate, empty when nothing in mutation scope changed |
-| `ADDED` | the scoped files the merge base lacks, including a source renamed in from outside the globs |
-| `RENAMED` | each source renamed within the globs, as `old:new` |
-| `TESTS` | every changed unit test |
 | `STALE_TESTS` | the unit tests that count as changed only because they read a changed file |
+
+Stryker reads each `--mutate` entry as a glob and turns each backslash into a `/`.
+So `SCOPE` wraps each glob character in a path in a class of its own.
+`src/routes/[id].ts` prints as `src/routes/[[]id[]].ts`, which matches that file and not `src/routes/i.ts`.
+`STALE_TESTS` names each test by its literal path, as the incremental state keys it.
 
 Stryker compares only a test file's own source when it resumes from incremental state.
 A run that resumes from the merge base's state drops each `STALE_TESTS` entry from that state first, so Stryker retests the mutants those tests cover.
@@ -70,7 +76,7 @@ On stderr it names each unit test that reads a changed file, and each source a c
 | Code | When |
 | --- | --- |
 | 0 | it printed the scope, an empty one included |
-| 2 | the arguments do not parse, git fails, the Stryker config, `bunfig.toml` or the baseline report does not load, or a unit test changed with no baseline report |
+| 2 | the arguments do not parse, git fails, the Stryker config, `bunfig.toml` or the baseline report does not load, or a unit test changed with no baseline report or one that predates it |
 
 ## Sample output
 
@@ -80,9 +86,6 @@ A helper change that reaches a source the pull request leaves alone:
 mutation-scope: tests/unit/dashboard/snapshot.test.ts reads tests/lib/session-fixture.ts
 mutation-scope: packages/ui/src/layout.ts enters through tests/unit/dashboard/snapshot.test.ts
 SCOPE=packages/session-quota/src/notes.ts,packages/ui/src/layout.ts
-ADDED=
-RENAMED=
-TESTS=tests/unit/dashboard/snapshot.test.ts
 STALE_TESTS=tests/unit/dashboard/snapshot.test.ts
 ```
 
@@ -90,6 +93,12 @@ A changed unit test with no full baseline on `main`, on stderr:
 
 ```
 mutation-scope: tests/unit/dashboard/snapshot.test.ts changed, but no baseline report at /runner/temp/baseline-full/mutation.json says which sources they cover
+```
+
+A changed unit test that landed on `main` after its newest full baseline, on stderr:
+
+```
+mutation-scope: tests/unit/dashboard/snapshot.test.ts changed, but the baseline report at /runner/temp/baseline-full/mutation.json predates them, so it cannot say which sources they cover
 ```
 
 ## When it runs

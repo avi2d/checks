@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
-import { minimatch } from "minimatch";
+import { escape, minimatch } from "minimatch";
 import { changedPaths, pathsAt, rangeEnds, type Change } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 
@@ -56,21 +56,9 @@ const decodeBunfig = Schema.decodeUnknownEffect(
   }),
 );
 
-export type MutationScope = {
-  readonly scope: readonly string[];
-  readonly added: readonly string[];
-  readonly renamed: readonly string[];
-  readonly tests: readonly string[];
-  readonly staleTests: readonly string[];
-};
+export type MutationScope = { readonly scope: readonly string[]; readonly staleTests: readonly string[] };
 
-export type Picked = {
-  readonly scope: ReadonlySet<string>;
-  readonly added: ReadonlySet<string>;
-  readonly renamed: readonly string[];
-  readonly tests: ReadonlySet<string>;
-  readonly touched: ReadonlySet<string>;
-};
+export type Picked = { readonly scope: ReadonlySet<string>; readonly tests: ReadonlySet<string>; readonly touched: ReadonlySet<string> };
 
 const isUnitTest = (path: string): boolean => path.startsWith(UNIT_TESTS) && TEST_FILE.test(path);
 
@@ -83,29 +71,18 @@ export function mutatedBy(patterns: readonly string[]): (file: string) => boolea
   return (file) => rules.reduce((mutated, rule) => (minimatch(file, rule.glob) ? rule.mutated : mutated), false);
 }
 
-type SourcePick = { readonly scoped: readonly string[]; readonly added: readonly string[]; readonly renamed: readonly string[] };
-
-const UNPICKED: SourcePick = { scoped: [], added: [], renamed: [] };
-
-function sourcePick(change: Change, mutated: (file: string) => boolean, atBase: ReadonlySet<string>): SourcePick {
-  if (change.kind === "deleted") return UNPICKED;
-  if (change.kind === "renamed" && mutated(change.from) && mutated(change.path)) {
-    return { scoped: [change.from, change.path], added: [], renamed: [`${change.from}:${change.path}`] };
-  }
-  if (!mutated(change.path)) return UNPICKED;
-  const fresh = change.kind === "renamed" || !atBase.has(change.path);
-  return { scoped: [change.path], added: fresh ? [change.path] : [], renamed: [] };
+function scopedNames(change: Change, mutated: (file: string) => boolean): readonly string[] {
+  if (change.kind === "deleted") return [];
+  if (change.kind === "renamed" && mutated(change.from) && mutated(change.path)) return [change.from, change.path];
+  return mutated(change.path) ? [change.path] : [];
 }
 
 const pathsOf = (change: Change): readonly string[] => (change.kind === "renamed" ? [change.from, change.path] : [change.path]);
 
-export function pickFromDiff(changes: readonly Change[], mutated: (file: string) => boolean, atBase: ReadonlySet<string>): Picked {
-  const picks = changes.map((change) => sourcePick(change, mutated, atBase));
+export function pickFromDiff(changes: readonly Change[], mutated: (file: string) => boolean): Picked {
   const paths = changes.flatMap(pathsOf);
   return {
-    scope: new Set(picks.flatMap(({ scoped }) => scoped)),
-    added: new Set(picks.flatMap(({ added }) => added)),
-    renamed: picks.flatMap(({ renamed }) => renamed),
+    scope: new Set(changes.flatMap((change) => scopedNames(change, mutated))),
     tests: new Set(paths.filter(isUnitTest)),
     touched: new Set(paths.filter((path) => path.startsWith(TEST_TREE))),
   };
@@ -204,9 +181,10 @@ export function coveringTests(baseline: Baseline, tests: ReadonlySet<string>, mu
   return covering;
 }
 
-export function envLines({ scope, added, renamed, tests, staleTests }: MutationScope): string {
-  const line = (name: string, values: readonly string[]): string => `${name}=${values.toSorted().join(",")}`;
-  return [line("SCOPE", scope), line("ADDED", added), line("RENAMED", renamed), line("TESTS", tests), line("STALE_TESTS", staleTests)].join("\n");
+// Stryker reads each --mutate entry as a glob whose backslashes are separators, and the incremental state keys each test by its literal path.
+export function envLines({ scope, staleTests }: MutationScope): string {
+  const globs = scope.toSorted().map((file) => escape(file, { windowsPathsNoEscape: true, magicalBraces: true }));
+  return [`SCOPE=${globs.join(",")}`, `STALE_TESTS=${staleTests.toSorted().join(",")}`].join("\n");
 }
 
 export const parseArgs = Effect.fnUntraced(function* (argv: readonly string[]): Effect.fn.Return<{ readonly base: string; readonly baseline: string | undefined }, Usage> {
@@ -272,11 +250,28 @@ const unitReaders = Effect.fn("unitReaders")(function* (touched: ReadonlySet<str
   return [...readers].filter(([reader]) => isUnitTest(reader)).toSorted(([a], [b]) => (a < b ? -1 : 1));
 });
 
-const enteringSources = Effect.fn("enteringSources")(function* (report: string | undefined, tests: ReadonlySet<string>, mutated: (file: string) => boolean, eligible: (source: string) => boolean) {
+type Snapshots = { readonly atBase: ReadonlySet<string>; readonly atHead: ReadonlySet<string> };
+
+// Stryker reports no source without mutants, so a source the report lacks may be newer than it and enters.
+const enteringSources = Effect.fn("enteringSources")(function* (
+  report: string | undefined,
+  tests: ReadonlySet<string>,
+  mutated: (file: string) => boolean,
+  { atBase, atHead }: Snapshots,
+  scoped: ReadonlySet<string>,
+) {
   if (tests.size === 0) return [];
-  const entering = [...coveringTests(yield* loadBaseline(report, tests), tests, mutated)].filter(([source]) => eligible(source));
+  const baseline = yield* loadBaseline(report, tests);
+  const unseen = [...tests].filter((test) => atBase.has(test) && !Object.hasOwn(baseline.testFiles, test)).toSorted();
+  if (unseen.length > 0) {
+    return yield* new ScopeError({ message: `${unseen.join(",")} changed, but the baseline report at ${report} predates them, so it cannot say which sources they cover` });
+  }
+  const eligible = (source: string): boolean => !scoped.has(source) && atHead.has(source);
+  const entering = [...coveringTests(baseline, tests, mutated)].filter(([source]) => eligible(source));
   for (const [source, via] of entering) yield* Console.error(`${NAME}: ${source} enters through ${via.join(" ")}`);
-  return entering.map(([source]) => source);
+  const unknown = [...atHead].filter((source) => mutated(source) && eligible(source) && !Object.hasOwn(baseline.files, source)).toSorted();
+  if (unknown.length > 0) yield* Console.error(`${NAME}: ${unknown.join(" ")} enter, as the baseline report holds no mutant of them`);
+  return [...entering.map(([source]) => source), ...unknown];
 });
 
 const selectScope = Effect.gen(function* () {
@@ -284,17 +279,16 @@ const selectScope = Effect.gen(function* () {
   const range = yield* rangeEnds(base, "HEAD");
   const mutated = mutatedBy(yield* mutatePatterns);
   const atHead = new Set(yield* pathsAt(range.head, []));
-  const picked = pickFromDiff(yield* changedPaths(range.base, range.head, []), mutated, new Set(yield* pathsAt(range.base, [])));
+  const atBase = new Set(yield* pathsAt(range.base, []));
+  const picked = pickFromDiff(yield* changedPaths(range.base, range.head, []), mutated);
   const readers = yield* unitReaders(picked.touched, atHead);
   const tests = new Set(picked.tests);
   for (const [reader, via] of readers.filter(([file]) => !picked.tests.has(file))) {
     tests.add(reader);
     yield* Console.error(`${NAME}: ${reader} reads ${via}`);
   }
-  const entering = yield* enteringSources(baseline, tests, mutated, (source) => !picked.scope.has(source) && atHead.has(source));
-  yield* Console.log(
-    envLines({ scope: [...picked.scope, ...entering], added: [...picked.added], renamed: picked.renamed, tests: [...tests], staleTests: readers.map(([reader]) => reader) }),
-  );
+  const entering = yield* enteringSources(baseline, tests, mutated, { atBase, atHead }, picked.scope);
+  yield* Console.log(envLines({ scope: [...picked.scope, ...entering], staleTests: readers.map(([reader]) => reader) }));
   return true;
 });
 
