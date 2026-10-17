@@ -170,9 +170,11 @@ The table groups the gates by vector, the part of a repository each one judges.
 | quality | [`checks-comment-gate`](docs/gates/checks-comment-gate.md) | the range | every repository |
 | quality | [`checks-effect-scope`](docs/gates/checks-effect-scope.md) | the working tree | a repository tracking `oxlint.config.ts` |
 | quality | [`checks-frontend-syntax`](docs/gates/checks-frontend-syntax.md) | the working tree | a repository tracking `frontend-syntax.json` |
+| quality | [`checks-no-plain-js`](docs/gates/checks-no-plain-js.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
 | testing | [`checks-test-layout`](docs/gates/checks-test-layout.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
 | testing | [`checks-quarantine-clock`](docs/gates/checks-quarantine-clock.md) | the range | every repository |
 | docs | [`checks-docs`](docs/gates/checks-docs.md) | the range, and every agent file at the head commit | every repository |
+| docs | [`checks-copy`](docs/gates/checks-copy.md) | the working tree | a repository tracking `copy.json` |
 | delivery | [`checks-commit-identity`](docs/gates/checks-commit-identity.md) | the range | every repository |
 | delivery | [`checks-ci-wiring`](docs/gates/checks-ci-wiring.md) | the working tree | every repository |
 | delivery | [`checks-secrets`](docs/gates/checks-secrets.md) | the range | every repository |
@@ -207,7 +209,7 @@ oxlint runs through its own tool, as the pages under Related topics say.
 To move a repository to a newer release of the kit:
 
 1. Run the install line again, which moves the kit to its newest release and the peers to the versions it pins.
-   A repository that opted in to `checks-browser` or `checks-frontend-syntax` also reruns the `bun add` line on its page.
+   A repository that opted in to `checks-browser`, `checks-frontend-syntax` or `checks-copy` also reruns the `bun add` line on its page.
 1. Run `bun run build`, whose `checks-effect-scope` rewrites the Effect override and the kit's severities in `tsconfig.json` when a release changes them.
    A severity key the release drops stays in `tsconfig.json` until the repository removes it.
 1. Copy `node_modules/@avi2dg/checks/bunfig.toml` over `bunfig.toml` again, since `checks-test-layout` compares the copy with the installed preset.
@@ -227,7 +229,7 @@ Every path is relative to the installed package, `node_modules/@avi2dg/checks/`.
 | `CHANGELOG.md` | every release, and what it changed |
 | `docs/` | a reference page per bin and per shared config, and why the kit is shaped this way |
 | `bunfig.toml` | the bunfig preset a repository copies |
-| `commitlint.config.js` | the shared commitlint config |
+| `commitlint.config.ts` | the shared commitlint config |
 | `dependency-cruiser.config.js` | the kit's dependency-cruiser rules as a base a `.dependency-cruiser.cjs` extends by path, which the build writes |
 | `knip-base.json` | the Knip `include` setting, for a configuration that spreads it |
 | `src/` | every bin, which a package script calls by its `checks-` name, the modules the bins import, and the Effect language service severities under `src/quality/presets/` |

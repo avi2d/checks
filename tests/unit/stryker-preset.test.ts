@@ -24,7 +24,7 @@ test("the preset carries exactly the agreed rollout settings, the full-run guard
     plugins: [
       "@stryker-mutator/*",
       "@hughescr/stryker-bun-runner",
-      fileURLToPath(new URL("../../src/testing/mutation-guard-plugin.js", import.meta.url)),
+      fileURLToPath(new URL("../../dist/mutation/mutation-guard-plugin.js", import.meta.url)),
     ],
     ignorers: ["checks-incremental-report-guard"],
     testRunner: "bun",
@@ -110,6 +110,5 @@ test("the preset ships the way every other shared artifact is exposed", async ()
   );
   expect(manifest.files).toContain("stryker.preset.js");
   expect(manifest.exports["./stryker.preset.js"]).toBe("./stryker.preset.js");
-  expect(manifest.files).toContain("src/testing/mutation-guard-plugin.js");
-  expect(manifest.files).toContain("src/testing/mutation-scope.js");
+  expect(manifest.files).toContain("dist/mutation/");
 });

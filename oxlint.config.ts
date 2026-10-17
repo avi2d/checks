@@ -13,6 +13,8 @@ export default defineConfig({
       "src/quality/presets/dependency-cruiser.ts",
       // Bun loads the flake preload into the fresh global of every test file under --parallel, so an Effect import there would load into each file.
       "src/testing/flake-preload.ts",
+      // Stryker loads this plugin synchronously and stops the run on a throw, so it cannot run an Effect.
+      "src/testing/mutation-guard-plugin.ts",
     ],
   },
   ignorePatterns: ["node_modules/**", "dist/**/*.js"],

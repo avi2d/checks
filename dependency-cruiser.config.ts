@@ -2,13 +2,7 @@ import { defineConfig } from "./dist/presets/dependency-cruiser.js";
 
 export default defineConfig({
   // Consumers load each plugin through its dist bundle, checks-imports hands the kit's defaults to dependency-cruiser by path, and checks-flake hands its preload to bun by path, so no source file here imports them.
-  orphans: [
-    "(^|/)effect-channel/index[.]ts$",
-    "(^|/)readability/index[.]ts$",
-    "(^|/)data-shape/index[.]ts$",
-    "^src/dependencies/kit-defaults[.]ts$",
-    "^src/testing/flake-preload[.]ts$",
-  ],
+  orphans: ["(^|/)effect-channel/index[.]ts$", "(^|/)readability/index[.]ts$", "(^|/)data-shape/index[.]ts$", "^src/testing/mutation-guard-plugin[.]ts$", "^src/dependencies/kit-defaults[.]ts$", "^src/testing/flake-preload[.]ts$"],
   forbidden: [
     {
       name: "host-loaded-imports-nothing",

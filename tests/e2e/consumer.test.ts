@@ -438,7 +438,7 @@ test(
         ...Object.values(manifest.bin),
         ...Object.values(manifest.exports).flatMap((exported) => (typeof exported === "string" ? [exported] : [exported.types, exported.default])),
         ...oxlintrc.jsPlugins,
-        "commitlint.config.js",
+        "commitlint.config.ts",
         // checks-imports hands this file to dependency-cruiser and checks-flake hands its preload to bun by path, and --production follows only an entry marked with !.
         "src/dependencies/kit-defaults.ts!",
         "src/testing/flake-preload.ts!",
@@ -538,7 +538,7 @@ test(
     const kit = await runScript("kit", withoutPullRequestEvent());
     expect(kit.text).toContain("from HEAD against origin/main");
     expect(kit.text).toContain("commit-identity: 1 commit(s)");
-    expect(kit.text).toContain("checks-lint: 14 gate(s) pass");
+    expect(kit.text).toContain("checks-lint: 15 gate(s) pass");
     expect(kit.exitCode).toBe(0);
   },
   180_000,

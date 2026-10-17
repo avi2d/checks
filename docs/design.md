@@ -98,6 +98,7 @@ npm adds `package.json`, `README.md` and `LICENSE` whatever `files` says.
 `bun pm pack` builds the same tarball the registry serves, and the consumer e2e test installs that tarball.
 
 Each oxlint plugin and each config builder ships compiled under `dist/`, because Node refuses to strip types from a `.ts` file under `node_modules`.
+Stryker loads its config under Node too, so the guard plugin and run-scope helpers the Stryker preset imports ship compiled under `dist/mutation/`.
 oxlint loads `oxlint.config.ts` under Node, so the builders ship as JavaScript beside a `.d.ts` that `tsc` reads.
 `@oxlint/plugins` ships no RuleTester, so each `effect-channel`, `readability` and `data-shape` rule is proven red and green against an installed consumer in `tests/e2e/consumer.test.ts`, except `readability/thin-astro`, which `tests/e2e/astro-consumer.test.ts` proves against a consumer tree linked to the checkout.
 `dist/` is committed, with the doc templates in `dist/templates/`, and so is `CHANGELOG.md`, which the same build writes.
@@ -314,6 +315,25 @@ So the runner calls the product's hooks at each visit and holds them to the same
 
 The runner drives the Chrome a machine already has through `playwright-core`, since Playwright's own browser builds are a separate download of their own.
 GitHub's hosted Ubuntu runners carry Chrome, and `CHROME_PATH` names any other build.
+
+## Copy is judged in the files a site renders
+
+`checks-copy` takes the three separator rules from `src/docs/prose-matchers.ts`, so a doc and a page refuse the same characters in the same words.
+Its Markdown goes through the scanner `checks-docs` uses, so the two gates never disagree about what is code.
+Its HTML goes through html-validate, which the `nesting` check already runs, with one rule of the kit's own.
+No rule html-validate or markdownlint ships refuses a spaced hyphen between words.
+textlint and Vale could each carry the rule, but each adds a package or a binary.
+Each would also hold a second copy of patterns the kit already holds.
+
+The gate reads files rather than strings in source.
+An oxlint rule over string literals and JSX text was run across the repositories that consume the kit.
+It found mostly code inside a string, test fixtures and error messages.
+The few hits that were copy, such as a line a CLI prints, look to a program like `scrollHeight - innerHeight` in a test script.
+A site's strings all reach its built pages, so a glob over the built HTML judges each one where a visitor reads it.
+
+Only a repository knows which of its files are copy, so it opts in by declaring them in `copy.json`.
+The gate judges every line of each declared file, unlike the prose rules in `checks-docs`, which judge only the lines a change edits.
+A visitor reads the whole page, so a dash on a line the change left alone is as wrong as one it added.
 
 ## Related topics
 
