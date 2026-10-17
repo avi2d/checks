@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { judgeSkips, passes, report } from "../../src/testing/test.ts";
+import { judgeSkips, passes, report, testOptions } from "../../src/testing/test.ts";
 import { skipReason, type SkipDeclaration } from "../../src/testing/test-skips.ts";
 import type { TestResult } from "../../src/testing/test-report.ts";
 
@@ -78,4 +78,26 @@ test("a declaration for one environment is not stale in the other", () => {
   const local = judgeSkips([], [ciOnly], "local");
   expect(passes(local)).toBe(true);
   expect(report(local)).toContain("1 declaration(s) for ci not judged in this local run");
+});
+
+test("checks-test takes a tier and a worker count for bun test --parallel, each at most once", () => {
+  expect(testOptions([])).toEqual({});
+  expect(testOptions(["--tier=live"])).toEqual({ tier: "live" });
+  expect(testOptions(["--parallel=4"])).toEqual({ workers: 4 });
+  expect(testOptions(["--parallel=6", "--tier=pixel"])).toEqual({ tier: "pixel", workers: 6 });
+});
+
+test("checks-test refuses a test filter, a missing or zero worker count and a repeated option", () => {
+  for (const args of [
+    ["tests/unit"],
+    ["-t", "rounds"],
+    ["--parallel"],
+    ["--parallel=0"],
+    ["--parallel=four"],
+    ["--parallel=4", "--parallel=6"],
+    ["--tier=live", "--tier=pixel"],
+    ["--tier=e2e"],
+  ]) {
+    expect(testOptions(args)).toBeUndefined();
+  }
 });

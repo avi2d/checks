@@ -20,12 +20,35 @@ export class SkipGateError extends Schema.TaggedError<SkipGateError>()("SkipGate
   message: Schema.String,
 }) {}
 
+export type TestOptions = {
+  readonly tier?: TestTier;
+  readonly workers?: number;
+};
+
 const NAME = TEST_ENTRY_POINT.bin;
-const USAGE = `usage: ${NAME} takes no arguments except --tier=live or --tier=pixel`;
+const USAGE = `usage: ${NAME} [--tier=live | --tier=pixel] [--parallel=<workers>], and it refuses test filters`;
 const TIERS = new Map<string, TestTier>([
   ["--tier=live", "live"],
   ["--tier=pixel", "pixel"],
 ]);
+const PARALLEL = /^--parallel=([1-9][0-9]*)$/;
+
+function optionOf(arg: string): TestOptions | undefined {
+  const tier = TIERS.get(arg);
+  if (tier !== undefined) return { tier };
+  const workers = PARALLEL.exec(arg)?.[1];
+  return workers === undefined ? undefined : { workers: Number(workers) };
+}
+
+export function testOptions(args: readonly string[]): TestOptions | undefined {
+  let options: TestOptions = {};
+  for (const arg of args) {
+    const option = optionOf(arg);
+    if (option === undefined || Object.keys(option).some((key) => key in options)) return undefined;
+    options = { ...options, ...option };
+  }
+  return options;
+}
 
 function matches(declaration: SkipDeclaration, result: TestResult): boolean {
   const { name } = declaration;
@@ -113,10 +136,11 @@ const environmentOf = Config.Boolean("CI").pipe(
   Effect.mapError((cause) => new SkipGateError({ message: `cannot tell a ci run from a local one: ${cause.message}` })),
 );
 
-const runSuite = Effect.fn("runSuite")(function* (outfile: string, tier: TestTier | undefined) {
+const runSuite = Effect.fn("runSuite")(function* (outfile: string, { tier, workers }: TestOptions) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const tierArgs = tier === undefined ? [] : ["--path-ignore-patterns", "", `./tests/${tier}`];
-  const args = ["test", "--randomize", ...tierArgs, ...reporterArgs(outfile)];
+  const parallelArgs = workers === undefined ? [] : [`--parallel=${workers}`];
+  const args = ["test", "--randomize", ...parallelArgs, ...tierArgs, ...reporterArgs(outfile)];
   return yield* spawner.exitCode(
     ChildProcess.make(process.execPath, args, {
       stdin: "ignore",
@@ -129,15 +153,14 @@ const runSuite = Effect.fn("runSuite")(function* (outfile: string, tier: TestTie
 });
 
 const testEntry = Effect.gen(function* () {
-  const args = process.argv.slice(2);
-  const tier = args.length === 0 ? undefined : args.length === 1 ? TIERS.get(args[0] ?? "") : undefined;
-  if (args.length > 0 && tier === undefined) return yield* new Usage({ message: USAGE });
+  const options = testOptions(process.argv.slice(2));
+  if (options === undefined) return yield* new Usage({ message: USAGE });
   const fs = yield* FileSystem.FileSystem;
-  const declarations = yield* readSkipDeclarations(process.cwd(), tier);
+  const declarations = yield* readSkipDeclarations(process.cwd(), options.tier);
   const environment = yield* environmentOf;
 
   const outfile = (yield* Path.Path).join(yield* fs.makeTempDirectoryScoped({ prefix: "checks-test-" }), "junit.xml");
-  const suitePassed = (yield* runSuite(outfile, tier)) === ChildProcessSpawner.ExitCode(0);
+  const suitePassed = (yield* runSuite(outfile, options)) === ChildProcessSpawner.ExitCode(0);
   if (!(yield* fs.exists(outfile))) {
     if (!suitePassed) {
       yield* Console.error(`${NAME}: bun test failed before it wrote a report, so no skip was judged`);
@@ -146,9 +169,12 @@ const testEntry = Effect.gen(function* () {
     return yield* new ReportError({ message: `bun test passed but wrote no report to ${outfile}` });
   }
 
-  const verdict = judgeSkips(yield* parseReport(yield* fs.readFileString(outfile)), declarations, environment);
+  const { results, crashedFiles } = yield* parseReport(yield* fs.readFileString(outfile));
+  for (const file of crashedFiles) yield* Console.error(`${NAME}: the worker running ${file} crashed, so its skips were not judged`);
+  const judged = declarations.filter((declaration) => !crashedFiles.includes(declaration.file));
+  const verdict = judgeSkips(results, judged, environment);
   yield* passes(verdict) ? Console.log(report(verdict)) : Console.error(report(verdict));
-  return suitePassed && passes(verdict);
+  return suitePassed && crashedFiles.length === 0 && passes(verdict);
 }).pipe(Effect.scoped);
 
 if (import.meta.main) runMain(NAME, testEntry);

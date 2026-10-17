@@ -9,6 +9,11 @@ export type TestResult = {
   readonly outcome: Outcome;
 };
 
+type Report = {
+  readonly results: readonly TestResult[];
+  readonly crashedFiles: readonly string[];
+};
+
 export class ReportError extends Schema.TaggedError<ReportError>()("ReportError", {
   message: Schema.String,
 }) {}
@@ -36,6 +41,7 @@ const decodeSuite = Schema.decodeUnknownEffect(Schema.Struct({ name: Schema.Stri
 const decodeCase = Schema.decodeUnknownEffect(
   Schema.Struct({ name: Schema.String, file: Schema.String, line: Schema.NumberFromString.check(Schema.isInt()) }),
 );
+const decodeCrash = Schema.decodeUnknownEffect(Schema.Struct({ file: Schema.String }));
 
 function unescape(text: string): string {
   return text.replace(ENTITY, (_, named: string | undefined, decimal: string | undefined, hex: string | undefined) => {
@@ -91,20 +97,28 @@ function outcomeOf(testcase: Element): Outcome {
   return testcase.children.some((child) => child.tag === "failure" || child.tag === "error") ? "failed" : "passed";
 }
 
+// bun's parallel coordinator replaces every result of a file whose worker crashed with one failure that has no line.
+function crashed(testcase: Element): boolean {
+  return testcase.attributes["line"] === undefined && outcomeOf(testcase) === "failed";
+}
+
 const collect = Effect.fnUntraced(function* (
   suite: Element,
   describes: readonly string[],
-  results: TestResult[],
+  report: { readonly results: TestResult[]; readonly crashedFiles: string[] },
 ): Effect.fn.Return<void, ReportError> {
   const unreadable = (tag: string) => (cause: { readonly message: string }) =>
     new ReportError({ message: `the junit report holds a <${tag}> bun never writes: ${cause.message}` });
   for (const child of suite.children) {
     if (child.tag === "testsuite") {
       const { name } = yield* decodeSuite(child.attributes).pipe(Effect.mapError(unreadable(child.tag)));
-      yield* collect(child, [...describes, name], results);
+      yield* collect(child, [...describes, name], report);
+    } else if (child.tag === "testcase" && crashed(child)) {
+      const { file } = yield* decodeCrash(child.attributes).pipe(Effect.mapError(unreadable(child.tag)));
+      report.crashedFiles.push(file);
     } else if (child.tag === "testcase") {
       const { name, file, line } = yield* decodeCase(child.attributes).pipe(Effect.mapError(unreadable(child.tag)));
-      results.push({ file, name: [...describes, name].join(NAME_SEPARATOR), line, outcome: outcomeOf(child) });
+      report.results.push({ file, name: [...describes, name].join(NAME_SEPARATOR), line, outcome: outcomeOf(child) });
     }
   }
 });
@@ -113,8 +127,9 @@ const collect = Effect.fnUntraced(function* (
 export const parseReport = Effect.fn("parseReport")(function* (xml: string) {
   const root = yield* parseElements(xml);
   const results: TestResult[] = [];
+  const crashedFiles: string[] = [];
   for (const fileSuite of root.children) {
-    if (fileSuite.tag === "testsuite") yield* collect(fileSuite, [], results);
+    if (fileSuite.tag === "testsuite") yield* collect(fileSuite, [], { results, crashedFiles });
   }
-  return results;
+  return { results, crashedFiles } satisfies Report;
 });
