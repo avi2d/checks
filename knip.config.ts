@@ -6,6 +6,8 @@ export default defineConfig({
     "src/complexity/readability/index.ts",
     "src/quality/data-shape/index.ts",
     "src/quality/presets/*.ts",
+    "src/testing/mutation-guard-plugin.ts",
+    "dist/mutation/mutation-refusal.js",
     "src/dependencies/kit-defaults.ts",
   ],
 });

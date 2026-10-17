@@ -1,8 +1,8 @@
 import { readdirSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { fileURLToPath } from "node:url";
-import { GUARD_IGNORER } from "./src/testing/mutation-guard-plugin.js";
-import { fullRunRefusal } from "./src/testing/mutation-refusal.js";
+import { GUARD_IGNORER } from "./dist/mutation/mutation-guard-plugin.js";
+import { fullRunRefusal } from "./dist/mutation/mutation-refusal.js";
 
 const [, , command, ...args] = process.argv;
 const refusal = command === "run" ? fullRunRefusal(args, process.env.CI ?? "") : undefined;
@@ -22,7 +22,7 @@ export default {
   plugins: [
     "@stryker-mutator/*",
     "@hughescr/stryker-bun-runner",
-    fileURLToPath(new URL("./src/testing/mutation-guard-plugin.js", import.meta.url)),
+    fileURLToPath(new URL("./dist/mutation/mutation-guard-plugin.js", import.meta.url)),
   ],
   ignorers: [GUARD_IGNORER],
   testRunner: "bun",

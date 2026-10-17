@@ -155,26 +155,26 @@ test(
   async () => {
     const { dir, write, commit, lint } = await open({
       ...lintWiring(),
-      "knip.json": JSON.stringify({ entry: ["widget.ts"], include: ["files"] }),
+      "knip.json": JSON.stringify({ entry: ["dependency-cruiser.config.ts", "widget.ts"], include: ["files"] }),
       "widget.ts": `export const widget = 42;\n`,
     });
     await commit("feat: base");
 
     const green = await lint();
-    expect(green.text).toContain("checks-lint: 13 gate(s) pass");
+    expect(green.text).toContain("checks-lint: 14 gate(s) pass");
     expect(green.exitCode).toBe(0);
 
     await write({ "dead.ts": `export const dead = 1;\n` });
     await commit("feat: dead");
     const red = await lint();
-    expect(red.text).toContain("1 of 13 gate(s) failed: checks-unused");
+    expect(red.text).toContain("1 of 14 gate(s) failed: checks-unused");
     expect(red.text).toContain("unused: 1 unreferenced file(s):\n  dead.ts");
     expect(red.exitCode).toBe(1);
 
     await $`rm dead.ts && git add -A`.cwd(dir).quiet();
     await commit("refactor: drop the dead file");
     const clean = await lint();
-    expect(clean.text).toContain("checks-lint: 13 gate(s) pass");
+    expect(clean.text).toContain("checks-lint: 14 gate(s) pass");
     expect(clean.exitCode).toBe(0);
   },
   180_000,

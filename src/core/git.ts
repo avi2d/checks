@@ -29,6 +29,15 @@ export const collect = Effect.fn("collect")(
   Effect.scoped,
 );
 
+export const workingTreeFiles = Effect.fn("workingTreeFiles")(function* (root: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const listed = yield* git(["ls-files", "-z", "--cached", "--others", "--exclude-standard"], root);
+  return yield* Effect.filter(listed.split("\0").filter(Boolean), (file) => fs.exists(path.join(root, file)), {
+    concurrency: "unbounded",
+  });
+});
+
 export const git = Effect.fn("git")(function* (args: readonly string[], cwd?: string, feed?: Feed) {
   const failed = (reason: string): GitFailure => new GitFailure({ message: `git ${args.join(" ")}: ${reason.trim()}` });
   const { stdout, stderr, exitCode } = yield* collect("git", args, cwd, feed).pipe(
