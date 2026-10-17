@@ -84,12 +84,12 @@ test("tracking copy.json opts a repository into checks-copy, which fails lint on
   await commit(repo, "feat: declare the copy");
   const red = await lint(repo);
   expect(red.text).toContain("content/home.md:1:9 carries `-`, a hyphen used as a dash");
-  expect(red.text).toContain("checks-lint: 1 of 14 gate(s) failed: checks-copy");
+  expect(red.text).toContain("checks-lint: 1 of 15 gate(s) failed: checks-copy");
   expect(red.exitCode).toBe(1);
   await repo.write({ "content/home.md": "Example, a site.\n" });
   await commit(repo, "fix: use a comma");
   const green = await lint(repo);
-  expect(green.text).toContain("checks-lint: 14 gate(s) pass");
+  expect(green.text).toContain("checks-lint: 15 gate(s) pass");
   expect(green.exitCode).toBe(0);
 }, 60_000);
 
