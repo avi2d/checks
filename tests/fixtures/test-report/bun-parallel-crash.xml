@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="bun test" tests="4" assertions="1" failures="2" skipped="1" time="0.322458827">
+  <testsuite name="tests/c.test.ts" file="tests/c.test.ts" tests="1" assertions="1" failures="1" skipped="0" time="0.302085465">
+    <testcase name="c fails" classname="" time="0.300953" file="tests/c.test.ts" line="2" assertions="1">
+      <failure type="AssertionError" message="expect(received).toBe(expected)&#10;&#10;Expected: 2&#10;Received: 1&#10;">AssertionError: expect(received).toBe(expected)&#10;&#10;Expected: 2&#10;Received: 1&#10;&#10;      at tests/c.test.ts:2:63&#10;</failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="tests/d.test.ts" file="tests/d.test.ts" tests="1" assertions="0" failures="1" skipped="0" time="0.202">
+    <testcase name="(worker crashed)" classname="" time="0" file="tests/d.test.ts" assertions="0">
+      <failure type="Error" message="worker process crashed before reporting results" />
+    </testcase>
+  </testsuite>
+  <testsuite name="tests/b.test.ts" file="tests/b.test.ts" tests="2" assertions="0" failures="0" skipped="1" time="0.301126779">
+    <testcase name="b pass" classname="" time="0.300472" file="tests/b.test.ts" line="2" assertions="0" />
+    <testcase name="b skipped" classname="" time="0" file="tests/b.test.ts" line="3" assertions="0">
+      <skipped />
+    </testcase>
+  </testsuite>
+</testsuites>

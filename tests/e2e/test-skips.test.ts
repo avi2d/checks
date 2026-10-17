@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { mkdir, symlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
 
@@ -259,12 +259,83 @@ test("a tier run never runs the other tier's files", async () => {
   expect(unit.exitCode).toBe(1);
 });
 
-test("a focused test fails even without CI set", async () => {
+test("a focused test fails even without CI set, serially and across parallel workers", async () => {
   await consumer(
     'import { expect, test } from "bun:test";\ntest.only("focused passes", () => expect(1).toBe(1));\ntest("failing skipped by only", () => expect(1).toBe(2));\n',
+    { "tests/other.test.ts": 'import { expect, test } from "bun:test";\ntest("other passes", () => expect(1).toBe(1));\n' },
   );
 
-  const refused = await checksTest(false);
+  for (const args of [[], ["--parallel=2"]]) {
+    const refused = await checksTest(false, args);
+    expect(refused.exitCode).toBe(1);
+    expect(refused.text).toContain(".only is disabled");
+  }
+});
+
+// Each file waits long enough that bun starts a second worker, and records the worker that ran it.
+function workerFile(body: string): string {
+  return [
+    'import { expect, test } from "bun:test";',
+    'import { appendFileSync } from "node:fs";',
+    'import { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";',
+    "test(\"records its worker\", async () => {",
+    '  appendFileSync(new URL("../workers.txt", import.meta.url), `${process.env["BUN_TEST_WORKER_ID"]}\\n`);',
+    "  await Bun.sleep(500);",
+    "});",
+    body,
+    "",
+  ].join("\n");
+}
+
+async function workersUsed(): Promise<number> {
+  return new Set((await readFile(join(dir, "workers.txt"), "utf8")).split("\n").filter(Boolean)).size;
+}
+
+test("a declared skip in one parallel worker is judged at its test site", async () => {
+  const skip = (condition: boolean) =>
+    workerFile(`test.skipIf(${condition})(skipReason("waits for the rounding fix", "rounds half to even"), () => expect(1).toBe(1));`);
+  await consumer(workerFile(""), { "tests/pricing.test.ts": skip(true) });
+
+  const declared = await checksTest(true, ["--parallel=2"]);
+  expect(declared.exitCode).toBe(0);
+  expect(declared.text).toContain("2x PARALLEL");
+  expect(declared.text).toContain("checks-test: 1 skipped test(s), each declared at its test site");
+  expect(await workersUsed()).toBe(2);
+
+  await writeFile(join(dir, "tests", "pricing.test.ts"), skip(false));
+  const stale = await checksTest(true, ["--parallel=2"]);
+  expect(stale.exitCode).toBe(1);
+  expect(stale.text).toContain("tests/pricing.test.ts:8: no test skipped with this declaration; reason: waits for the rounding fix");
+});
+
+test("an undeclared skip in one parallel worker fails the run", async () => {
+  await consumer(workerFile(""), {
+    "tests/pricing.test.ts": workerFile('test.skip("rounds half to even", () => expect(1).toBe(1));'),
+  });
+
+  const refused = await checksTest(true, ["--parallel=2"]);
   expect(refused.exitCode).toBe(1);
-  expect(refused.text).toContain(".only is disabled");
+  expect(refused.text).toContain("tests/pricing.test.ts:8 rounds half to even: skipped with no reason at its test site");
+  expect(await workersUsed()).toBe(2);
+});
+
+test("a file whose parallel worker crashed fails the run and leaves its declarations unjudged", async () => {
+  await consumer(workerFile(""), {
+    "tests/crash.test.ts": workerFile(
+      'test.skip(skipReason("needs the external fixture", "loads the fixture"), () => expect(1).toBe(1));\ntest("exits", () => process.exit(3));',
+    ),
+  });
+
+  const crashed = await checksTest(true, ["--parallel=2"]);
+  expect(crashed.exitCode).toBe(1);
+  expect(crashed.text).toContain("checks-test: the worker running tests/crash.test.ts crashed, so its skips were not judged");
+  expect(crashed.text).not.toContain("no test skipped with this declaration");
+});
+
+test("a test filter is refused before the suite runs", async () => {
+  await consumer('import { expect, test } from "bun:test";\ntest("passes", () => expect(1).toBe(1));\n');
+
+  const refused = await checksTest(false, ["--parallel=2", "tests/suite.test.ts"]);
+  expect(refused.exitCode).toBe(2);
+  expect(refused.text).toContain("refuses test filters");
 });

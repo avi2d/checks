@@ -47,7 +47,7 @@ A skipped test or a todo without `skipReason` fails in every environment.
 It does not read a skip list from `package.json`.
 It counts a run as `ci` when `CI` is true and as `local` otherwise.
 
-The command takes no arguments for the default suite.
+The command takes no arguments for the default suite, except the worker count of [Parallel runs](#parallel-runs).
 Use `checks-test --tier=live` or `checks-test --tier=pixel` for a named test tier.
 Use `checks-test --tier=unit` or `checks-test --tier=e2e` to run only one level of the default suite.
 A live or pixel run clears Bun's ignored paths, runs only `./tests/live` or `./tests/pixel`, and still checks each skip.
@@ -74,10 +74,36 @@ Add the matching package scripts when either directory contains tests:
 Bun ignores both directories during the default run.
 `checks-test-layout` requires each tier script when its directory contains a test file.
 
+## Parallel runs
+
+A repository runs its test files in parallel by passing a worker count in its `test` script:
+
+```json
+{
+  "scripts": {
+    "test": "checks-test --parallel=4"
+  }
+}
+```
+
+`checks-test --parallel=<workers>` runs `bun test --randomize --parallel=<workers>`, so Bun hands each test file to one of that many worker processes.
+Each file then runs in a fresh global, so a file cannot lean on state another file left behind.
+The count is a whole number from 1 up, and without the option the suite runs serially in one process.
+Tests still run in random order, and `test.only` still fails the run.
+Bun merges every worker's results into the one JUnit report, so each skipped test and each todo is judged as in a serial run.
+A tier script takes the same option, as in `checks-test --tier=live --parallel=4`.
+
+A file whose worker crashes, for example when a test calls `process.exit`, fails the run.
+Bun reports no result from that file, so its skips are not judged and its declarations are not reported as stale.
+
+`checks-test` takes no timings file, because Bun ignores the order a timings file sets whenever `--randomize` is on.
+A timings option waits for Bun to honour timings under random order.
+
 ## Arguments
 
-The default command takes no arguments.
-Its named tier options are `--tier=live`, `--tier=pixel`, `--tier=unit` and `--tier=e2e`.
+The default command takes no arguments except `--parallel=<workers>`, as [Parallel runs](#parallel-runs) says.
+Its named tier options are `--tier=live`, `--tier=pixel`, `--tier=unit` and `--tier=e2e`, and a tier run takes `--parallel=<workers>` too.
+Each option appears at most once.
 It refuses test filters because every test excluded by a filter would look skipped.
 
 ## Exit codes
@@ -85,8 +111,8 @@ It refuses test filters because every test excluded by a filter would look skipp
 | Code | When |
 | --- | --- |
 | 0 | every test passed and every skip has a matching site reason |
-| 1 | a test failed, a skip lacks a site reason or a declaration is stale in CI |
-| 2 | a declaration cannot be read, `CI` is not a boolean or Bun wrote no report |
+| 1 | a test failed, a parallel worker crashed, a skip lacks a site reason or a declaration is stale in CI |
+| 2 | an argument is not one it takes, a declaration cannot be read, `CI` is not a boolean or Bun wrote no report |
 
 ## Sample output
 
