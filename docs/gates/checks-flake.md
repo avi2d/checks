@@ -43,7 +43,8 @@ A run whose worker crashed gets a replay of that worker's files up to the crashe
 
 It reads bun's JUnit report of each run.
 It reads the worker count from the `test` script in `package.json`, as [checks-test-layout](checks-test-layout.md) validates that script, and hunts serially when the file is missing.
-Under workers it reads the record its preload writes of which worker ran each file, and for each replay the order Bun ran its placeholder files.
+Under workers it reads the record its preload writes of which worker ran each file.
+For each replay it reads the order Bun ran its placeholder files.
 Under GitHub Actions it appends its summary to the file `GITHUB_STEP_SUMMARY` names, which is the job summary.
 
 ## Arguments
