@@ -98,7 +98,7 @@ To place a change:
    | `docs/gates/` | one reference page per bin |
    | `docs/configs/` | one reference page per shipped config a bin does not own |
    | `docs/design.md` | why the kit is shaped the way it is |
-   | the root configs | `tsconfig.effect.json` with the `ts-reset.d.ts` it lists, `bunfig.toml`, `commitlint.config.js` and `stryker.preset.js`, which a consuming repository extends or copies, and `oxlintrc.json` and `dependency-cruiser.config.js`, which the build writes for a repository that extends them by path |
+   | the root configs | `tsconfig.effect.json` with the `ts-reset.d.ts` it lists, `bunfig.toml`, `commitlint.config.ts` and `stryker.preset.js`, which a consuming repository extends or copies, and `oxlintrc.json` and `dependency-cruiser.config.js`, which the build writes for a repository that extends them by path |
 
 1. Change the page under `docs/` that describes the behaviour in the same commit as the behaviour.
    A new bin gets its page under `docs/gates/`, and the suite fails until it has one.

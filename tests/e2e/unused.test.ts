@@ -161,20 +161,20 @@ test(
     await commit("feat: base");
 
     const green = await lint();
-    expect(green.text).toContain("checks-lint: 13 gate(s) pass");
+    expect(green.text).toContain("checks-lint: 14 gate(s) pass");
     expect(green.exitCode).toBe(0);
 
     await write({ "dead.ts": `export const dead = 1;\n` });
     await commit("feat: dead");
     const red = await lint();
-    expect(red.text).toContain("1 of 13 gate(s) failed: checks-unused");
+    expect(red.text).toContain("1 of 14 gate(s) failed: checks-unused");
     expect(red.text).toContain("unused: 1 unreferenced file(s):\n  dead.ts");
     expect(red.exitCode).toBe(1);
 
     await $`rm dead.ts && git add -A`.cwd(dir).quiet();
     await commit("refactor: drop the dead file");
     const clean = await lint();
-    expect(clean.text).toContain("checks-lint: 13 gate(s) pass");
+    expect(clean.text).toContain("checks-lint: 14 gate(s) pass");
     expect(clean.exitCode).toBe(0);
   },
   180_000,

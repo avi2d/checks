@@ -10,7 +10,7 @@ const BIN = join(CHECKOUT, "src", "delivery", "commit-title.ts");
 
 function lint(message: string): Promise<Ran> {
   const binary = join(CHECKOUT, "node_modules", ".bin", "commitlint");
-  const config = join(CHECKOUT, "commitlint.config.js");
+  const config = join(CHECKOUT, "commitlint.config.ts");
   return ran($`printf "%s" ${message} | ${binary} --config ${config}`);
 }
 
