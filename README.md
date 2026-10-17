@@ -188,6 +188,7 @@ These bins run on their own:
 - [`checks-mutation`](docs/gates/checks-mutation.md) runs Stryker for scoped checks and refuses a full run outside CI.
 - [`checks-mutation-compare`](docs/gates/checks-mutation-compare.md) compares the mutants of two reports and lists each one that regresses.
 - [`checks-mutation-baseline`](docs/gates/checks-mutation-baseline.md) restores the newest mutation baseline from `main`, saves it on a self-hosted runner's disk in place of an artifact, and deletes superseded baselines after a `main` run.
+- [`checks-mutation-scope`](docs/gates/checks-mutation-scope.md) turns a pull request's diff into the files its mutation runs mutate.
 - [`checks-subsumed-tests`](docs/gates/checks-subsumed-tests.md) lists each test another test subsumes in a mutation run.
 - [`checks-changelog`](docs/gates/checks-changelog.md) writes the pending release into `CHANGELOG.md` from the conventional commits since the last release.
 - [`checks-release-notes`](docs/gates/checks-release-notes.md) writes one `CHANGELOG.md` section to a file for a GitHub release.

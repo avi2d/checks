@@ -46,6 +46,7 @@
     "src/testing/mutation-refusal.js",
     "src/testing/mutation-guard-plugin.js",
     "src/testing/mutation-compare.ts",
+    "src/testing/mutation-scope.ts",
     "src/testing/mutation-baseline.ts",
     "src/testing/mutation-baseline-saved.ts",
     "src/testing/subsumed-tests.ts",
@@ -142,6 +143,7 @@
     "checks-mutation": "src/testing/mutation.ts",
     "checks-mutation-compare": "src/testing/mutation-compare.ts",
     "checks-mutation-baseline": "src/testing/mutation-baseline.ts",
+    "checks-mutation-scope": "src/testing/mutation-scope.ts",
     "checks-subsumed-tests": "src/testing/subsumed-tests.ts",
     "checks-ci-wiring": "src/delivery/ci-wiring.ts",
     "checks-comment-gate": "src/quality/comment-gate.ts",
@@ -227,7 +229,8 @@
     "@effect/platform-node-shared": "4.0.0",
     "@total-typescript/ts-reset": "0.6.1",
     "commonmark": "0.31.2",
-    "knip": "6.38.0"
+    "knip": "6.38.0",
+    "minimatch": "10.2.6"
   },
   "overrides": {
     "qs": "6.16.0",
