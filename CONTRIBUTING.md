@@ -19,7 +19,7 @@ To check a change the way CI does:
 Declare each skip with `skipReason(reason, name)` beside the native Bun test call, as [checks-test](docs/gates/checks-test.md) says.
 A test that spawns `checks-lint` passes it `withoutPullRequestEvent()` from `tests/lib/env.ts`, so the CI event cannot decide the range.
 
-CI runs the commands in `.github/workflows/ci.yml` and lints the pull request title in its `checks` job.
+CI runs the commands in `.github/workflows/ci.yml` and lints the pull request title in its `static` job.
 `.github/workflows/mutation.yml` runs Stryker, with `stryker.conf.mjs`, as a baseline on `main` or on any branch by hand, and as an advisory comparison scoped to the sources a pull request changes or reaches through a changed test, helper or fixture.
 The workflow has no schedule: the weekly full baseline starts with `gh workflow run mutation`.
 A hand-started run restores no state and passes `--disableBail`, so its report lists every covering and killing test.
