@@ -43,7 +43,7 @@
     "src/delivery/commit-title.ts",
     "src/delivery/docs-only.ts",
     "src/testing/mutation.ts",
-    "src/testing/mutation-scope.js",
+    "src/testing/mutation-refusal.js",
     "src/testing/mutation-guard-plugin.js",
     "src/testing/mutation-compare.ts",
     "src/testing/mutation-baseline.ts",

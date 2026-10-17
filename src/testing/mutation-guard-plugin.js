@@ -1,4 +1,4 @@
-import { missingReportRefusal } from "./mutation-scope.js";
+import { missingReportRefusal } from "./mutation-refusal.js";
 
 export const GUARD_IGNORER = "checks-incremental-report-guard";
 

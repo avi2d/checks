@@ -2,7 +2,7 @@
 import { Config, Effect, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { runMain } from "../core/main.ts";
-import { fullRunRefusal } from "./mutation-scope.js";
+import { fullRunRefusal } from "./mutation-refusal.js";
 
 export class MutationError extends Schema.TaggedError<MutationError>()("MutationError", {
   message: Schema.String,

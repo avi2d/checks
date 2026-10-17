@@ -2,7 +2,7 @@ import { readdirSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { fileURLToPath } from "node:url";
 import { GUARD_IGNORER } from "./src/testing/mutation-guard-plugin.js";
-import { fullRunRefusal } from "./src/testing/mutation-scope.js";
+import { fullRunRefusal } from "./src/testing/mutation-refusal.js";
 
 const [, , command, ...args] = process.argv;
 const refusal = command === "run" ? fullRunRefusal(args, process.env.CI ?? "") : undefined;

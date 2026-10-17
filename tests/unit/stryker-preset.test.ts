@@ -111,5 +111,5 @@ test("the preset ships the way every other shared artifact is exposed", async ()
   expect(manifest.files).toContain("stryker.preset.js");
   expect(manifest.exports["./stryker.preset.js"]).toBe("./stryker.preset.js");
   expect(manifest.files).toContain("src/testing/mutation-guard-plugin.js");
-  expect(manifest.files).toContain("src/testing/mutation-scope.js");
+  expect(manifest.files).toContain("src/testing/mutation-refusal.js");
 });
