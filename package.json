@@ -40,6 +40,7 @@
     "src/core/swc.ts",
     "src/testing/test-report.ts",
     "src/testing/flake.ts",
+    "src/testing/flake-preload.ts",
     "src/delivery/commit-identity.ts",
     "src/delivery/commit-title.ts",
     "src/delivery/docs-only.ts",
