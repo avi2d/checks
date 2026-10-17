@@ -49,8 +49,9 @@ jobs:
       - if: steps.filter.outputs.docs-only != 'true'
         run: bun run test:e2e
   checks:
-    # Branch protection requires the checks context alone, so this job needs both tiers and stays green only when every tier passed.
+    # Branch protection requires the checks context alone and passes a skipped one, so the job runs after a failed tier and fails on it.
     needs: [unit, e2e]
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -88,6 +89,11 @@ jobs:
       - run: bun run lint
       - if: steps.filter.outputs.docs-only != 'true'
         run: bun run typecheck
+      - name: require both test tiers
+        env:
+          UNIT: ${{ needs.unit.result }}
+          E2E: ${{ needs.e2e.result }}
+        run: test "$UNIT" = success && test "$E2E" = success
       # GitHub keeps a dispatched run's check off the pull request, so the job reports its result there as a commit status.
       - name: report the result on the head commit
         if: always() && github.event_name == 'workflow_dispatch'

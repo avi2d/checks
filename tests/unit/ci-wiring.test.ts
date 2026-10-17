@@ -81,20 +81,20 @@ test("gate steps gated on a filter step still run every gate", () => {
   expect(findGaps(declaration, workflow(gated))).toEqual([]);
 });
 
-test("a test:unit and test:e2e pair replaces the single test requirement", () => {
+test("a test:unit and test:e2e pair satisfies the test gate, which the whole suite still satisfies alone", () => {
   const split = [...scripts, "test:unit", "test:e2e"];
-  expect(requiredCommands(split)).toEqual([...steps.slice(0, 4), "bun run test:unit", "bun run test:e2e", ...steps.slice(5)]);
-  expect(requiredCommands([...scripts, "test:unit"])).toEqual(steps);
+  expect(requiredCommands(split)).toEqual(steps);
   const splitDeclaration = declarationFor(split, "main");
-  const tiered = full.replace(
-    "      - run: bun run test\n",
-    "      - run: bun run test:unit\n      - run: bun run test:e2e\n",
-  );
+  const tiered = full.replace("      - run: bun run test\n", "      - run: bun run test:unit\n      - run: bun run test:e2e\n");
   expect(findGaps(splitDeclaration, workflow(tiered))).toEqual([]);
-  expect(findGaps(splitDeclaration, workflow(full)).map(({ gate }) => gate)).toEqual([
-    "bun run test:unit",
-    "bun run test:e2e",
+  expect(findGaps(splitDeclaration, workflow(full))).toEqual([]);
+  const unitOnly = full.replace("      - run: bun run test\n", "      - run: bun run test:unit\n");
+  expect(findGaps(splitDeclaration, workflow(unitOnly)).map(({ gate }) => gate)).toEqual(["bun run test"]);
+  const disabled = tiered.replace("      - run: bun run test:e2e\n", "      - run: bun run test:e2e\n        if: false\n");
+  expect(findGaps(splitDeclaration, workflow(disabled))).toEqual([
+    { gate: "bun run test", blocked: [{ location: ".github/workflows/ci.yml job checks step 6", blocker: "the step sets if: false" }] },
   ]);
+  expect(findGaps(declarationFor([...scripts, "test:unit"], "main"), workflow(tiered)).map(({ gate }) => gate)).toEqual(["bun run test"]);
 });
 
 const WINBOX = "[self-hosted, Linux, X64, winbox]";

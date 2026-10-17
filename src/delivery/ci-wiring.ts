@@ -17,6 +17,7 @@ export type Gate = {
   readonly command: string;
   readonly words: Command;
   readonly alternatives: readonly Command[];
+  readonly partition: readonly Command[];
 };
 
 export type Declaration = {
@@ -63,6 +64,7 @@ export class WiringError extends Schema.TaggedError<WiringError>()("WiringError"
 
 const WORKFLOWS = ".github/workflows";
 const SCRIPTED = ["lint", "build", "typecheck", "test"];
+const WHOLE_SUITE = "bun run test";
 const SPLIT_SUITE = ["test:unit", "test:e2e"];
 const BUILT_TREE = "git diff --exit-code";
 const TITLE_LINT = "bunx checks-commit-title";
@@ -197,6 +199,21 @@ function entryPointCommand(gate: Command, lintGates: readonly KitGate[]): Comman
   return index === -1 ? undefined : [...gate.slice(0, index), ENTRY_POINT.bin];
 }
 
+type Invocation = Omit<RunStep, "script">;
+
+function invocations(commands: readonly { command: string; words: Command }[], steps: readonly RunStep[]): readonly Invocation[] {
+  return steps.flatMap(({ location, blocker, script }) => {
+    const plain = plainCommand(script);
+    if (commands.some(({ words }) => invokes(plain, words))) return [{ location, blocker }];
+    const mentioned = commands.find(({ words }) => mentions(script, words));
+    if (mentioned === undefined) return [];
+    const alone = `the step runs more than ${mentioned.command}; give it its own step with nothing else in it`;
+    return [{ location, blocker: blocker ?? alone }];
+  });
+}
+
+const runsUnblocked = (invoking: readonly Invocation[]): boolean => invoking.some((step) => step.blocker === undefined);
+
 function gapsAmong(gates: readonly Gate[], steps: readonly RunStep[], lintGates: readonly KitGate[]): readonly Gap[] {
   return gates.flatMap((gate) => {
     const entryPoint = entryPointCommand(gate.words, lintGates);
@@ -205,16 +222,10 @@ function gapsAmong(gates: readonly Gate[], steps: readonly RunStep[], lintGates:
       ...gate.alternatives.map((words) => ({ command: gate.command, words })),
       ...(entryPoint === undefined ? [] : [{ command: entryPoint.join(" "), words: entryPoint }]),
     ];
-    const invoking = steps.flatMap(({ location, blocker, script }) => {
-      const plain = plainCommand(script);
-      if (commands.some(({ words }) => invokes(plain, words))) return [{ location, blocker }];
-      const mentioned = commands.find(({ words }) => mentions(script, words));
-      if (mentioned === undefined) return [];
-      const alone = `the step runs more than ${mentioned.command}; give it its own step with nothing else in it`;
-      return [{ location, blocker: blocker ?? alone }];
-    });
-    if (invoking.some((step) => step.blocker === undefined)) return [];
-    const blocked = invoking.flatMap(({ location, blocker }) =>
+    const invoking = invocations(commands, steps);
+    const parts = gate.partition.map((words) => invocations([{ command: words.join(" "), words }], steps));
+    if (runsUnblocked(invoking) || (parts.length > 0 && parts.every(runsUnblocked))) return [];
+    const blocked = [...invoking, ...parts.flat()].flatMap(({ location, blocker }) =>
       blocker === undefined ? [] : [{ location, blocker }],
     );
     return [{ gate: gate.command, ...(entryPoint === undefined ? {} : { entryPoint: entryPoint.join(" ") }), blocked }];
@@ -244,23 +255,22 @@ export function formatReport(declaration: Declaration, gaps: readonly Gap[]): st
 }
 
 export function requiredCommands(scripts: readonly string[]): readonly string[] {
-  // The two tiers partition the default suite, so the pair replaces the single test requirement.
-  const split = SPLIT_SUITE.every((name) => scripts.includes(name));
   return [
-    ...SCRIPTED.filter((name) => scripts.includes(name) && !(split && name === "test")).flatMap((name) =>
+    ...SCRIPTED.filter((name) => scripts.includes(name)).flatMap((name) =>
       name === "build" ? [`bun run ${name}`, BUILT_TREE] : [`bun run ${name}`],
     ),
-    ...(split ? SPLIT_SUITE.map((name) => `bun run ${name}`) : []),
     TITLE_LINT,
   ];
 }
 
 export function declarationFor(scripts: readonly string[], branch: string): Declaration {
+  const tiers = SPLIT_SUITE.every((name) => scripts.includes(name)) ? SPLIT_SUITE.map((name) => ["bun", "run", name]) : [];
   return {
     gates: requiredCommands(scripts).map((command) => ({
       command,
       words: command.split(" "),
       alternatives: command === TITLE_LINT ? TITLE_CALLS.map((call) => call.split(" ")) : [],
+      partition: command === WHOLE_SUITE ? tiers : [],
     })),
     defaultBranch: branch,
     lintGates: KIT_GATES,
