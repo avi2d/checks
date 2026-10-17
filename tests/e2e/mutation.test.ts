@@ -32,7 +32,7 @@ test("loading the preset for a scoped run, a CI run or another command lets it t
   expect((await ran($`bun ${PRESET} init`.env(withoutCi))).exitCode).toBe(0);
 });
 
-const PLUGIN = join(CHECKOUT, "src", "testing", "mutation-guard-plugin.ts");
+const PLUGIN = join(CHECKOUT, "dist", "mutation", "mutation-guard-plugin.js");
 const buildGuard = `const { strykerPlugins } = await import(${JSON.stringify(PLUGIN)}); strykerPlugins[0].factory({ incrementalFile: "reports/custom.json" });`;
 
 test("the preset's guard plugin checks the incremental report the resolved options name", async () => {

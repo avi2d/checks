@@ -98,6 +98,7 @@ npm adds `package.json`, `README.md` and `LICENSE` whatever `files` says.
 `bun pm pack` builds the same tarball the registry serves, and the consumer e2e test installs that tarball.
 
 Each oxlint plugin and each config builder ships compiled under `dist/`, because Node refuses to strip types from a `.ts` file under `node_modules`.
+Stryker loads its config under Node too, so the guard plugin and run-scope helpers the Stryker preset imports ship compiled under `dist/mutation/`.
 oxlint loads `oxlint.config.ts` under Node, so the builders ship as JavaScript beside a `.d.ts` that `tsc` reads.
 `@oxlint/plugins` ships no RuleTester, so each `effect-channel`, `readability` and `data-shape` rule is proven red and green against an installed consumer in `tests/e2e/consumer.test.ts`, except `readability/thin-astro`, which `tests/e2e/astro-consumer.test.ts` proves against a consumer tree linked to the checkout.
 `dist/` is committed, with the doc templates in `dist/templates/`, and so is `CHANGELOG.md`, which the same build writes.
