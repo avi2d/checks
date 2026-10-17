@@ -155,7 +155,7 @@ test(
   async () => {
     const { dir, write, commit, lint } = await open({
       ...lintWiring(),
-      "knip.json": JSON.stringify({ entry: ["widget.ts"], include: ["files"] }),
+      "knip.json": JSON.stringify({ entry: ["dependency-cruiser.config.ts", "widget.ts"], include: ["files"] }),
       "widget.ts": `export const widget = 42;\n`,
     });
     await commit("feat: base");

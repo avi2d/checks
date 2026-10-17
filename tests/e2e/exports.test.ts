@@ -154,7 +154,7 @@ function baselineLines(entries: readonly object[]): string {
 async function pullRequestMergeCheckout(pr: Readonly<Record<string, string>>): Promise<Ran> {
   const { dir, write, commit } = await open({
     ...lintWiring(),
-    "knip.json": JSON.stringify({ entry: ["index.ts"] }),
+    "knip.json": JSON.stringify({ entry: ["dependency-cruiser.config.ts", "index.ts"] }),
     "index.ts": `import { helper } from "./helper.ts";\nimport { kept } from "./legacy.ts";\nimport { used } from "./used.ts";\n\nexport const index = used + helper + kept;\n`,
     "used.ts": `export const used = 1;\n`,
     "helper.ts": `export const helper = 1;\n`,
@@ -344,7 +344,7 @@ test(
   async () => {
     const { write, commit, lint } = await open({
       ...lintWiring(),
-      "knip.json": JSON.stringify({ entry: ["widget.ts"], include: ["files"] }),
+      "knip.json": JSON.stringify({ entry: ["dependency-cruiser.config.ts", "widget.ts"], include: ["files"] }),
       "widget.ts": `import { used } from "./used.ts";\n\nexport const widget = used;\n`,
       "used.ts": `export const used = 1;\nexport const unusedExport = 2;\n`,
     });
