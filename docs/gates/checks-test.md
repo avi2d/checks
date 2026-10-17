@@ -49,7 +49,9 @@ It counts a run as `ci` when `CI` is true and as `local` otherwise.
 
 The command takes no arguments for the default suite, except the worker count of [Parallel runs](#parallel-runs).
 Use `checks-test --tier=live` or `checks-test --tier=pixel` for a named test tier.
-A tier run clears Bun's ignored paths, runs only `./tests/live` or `./tests/pixel`, and still checks each skip.
+Use `checks-test --tier=unit` or `checks-test --tier=e2e` to run only one level of the default suite.
+A live or pixel run clears Bun's ignored paths, runs only `./tests/live` or `./tests/pixel`, and still checks each skip.
+A unit or e2e run keeps Bun's ignored paths, runs only `./tests/unit` or `./tests/e2e`, and still checks each skip.
 
 Files under `tests/quarantine/` are not run or judged, as [checks-test-layout](checks-test-layout.md) says.
 
@@ -101,7 +103,7 @@ A timings option waits for Bun to honour timings under random order.
 ## Arguments
 
 The default command takes no arguments except `--parallel=<workers>`, as [Parallel runs](#parallel-runs) says.
-Its named tier options are `--tier=live` and `--tier=pixel`, and a tier run takes `--parallel=<workers>` too.
+Its named tier options are `--tier=live`, `--tier=pixel`, `--tier=unit` and `--tier=e2e`, and a tier run takes `--parallel=<workers>` too.
 Each option appears at most once.
 It refuses test filters because every test excluded by a filter would look skipped.
 

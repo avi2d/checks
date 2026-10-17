@@ -2,7 +2,7 @@ import { Effect, FileSystem, Path, Schema } from "effect";
 import { identifierName, isRecord, lineOf, parseTypeScript, spanStart, stringValue } from "../core/swc.ts";
 
 export type Environment = "ci" | "local";
-export type TestTier = "live" | "pixel";
+export type TestTier = "live" | "pixel" | "unit" | "e2e";
 export type SkipDeclaration = {
   readonly file: string;
   readonly line: number;

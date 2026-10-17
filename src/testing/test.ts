@@ -26,10 +26,12 @@ export type TestOptions = {
 };
 
 const NAME = TEST_ENTRY_POINT.bin;
-const USAGE = `usage: ${NAME} [--tier=live | --tier=pixel] [--parallel=<workers>], and it refuses test filters`;
+const USAGE = `usage: ${NAME} [--tier=live | --tier=pixel | --tier=unit | --tier=e2e] [--parallel=<workers>], and it refuses test filters`;
 const TIERS = new Map<string, TestTier>([
   ["--tier=live", "live"],
   ["--tier=pixel", "pixel"],
+  ["--tier=unit", "unit"],
+  ["--tier=e2e", "e2e"],
 ]);
 const PARALLEL = /^--parallel=([1-9][0-9]*)$/;
 
@@ -144,11 +146,17 @@ const environmentOf = Config.Boolean("CI").pipe(
   Effect.mapError((cause) => new SkipGateError({ message: `cannot tell a ci run from a local one: ${cause.message}` })),
 );
 
+function tierArgs(tier: TestTier | undefined): readonly string[] {
+  if (tier === undefined) return [];
+  // The preset ignores tests/live and tests/pixel, so only those tiers clear the ignore list.
+  if (tier === "live" || tier === "pixel") return ["--path-ignore-patterns", "", `./tests/${tier}`];
+  return [`./tests/${tier}`];
+}
+
 const runSuite = Effect.fn("runSuite")(function* (outfile: string, { tier, workers }: TestOptions) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const tierArgs = tier === undefined ? [] : ["--path-ignore-patterns", "", `./tests/${tier}`];
   const parallelArgs = workers === undefined ? [] : [`--parallel=${workers}`];
-  const args = ["test", "--randomize", ...parallelArgs, ...tierArgs, ...reporterArgs(outfile)];
+  const args = ["test", "--randomize", ...parallelArgs, ...tierArgs(tier), ...reporterArgs(outfile)];
   return yield* spawner.exitCode(
     ChildProcess.make(process.execPath, args, {
       stdin: "ignore",

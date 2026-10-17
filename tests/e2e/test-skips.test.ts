@@ -229,6 +229,36 @@ test("the default run excludes live tests and the live and pixel tiers judge onl
   expect(pixelRun.text).toContain("checks-test: 1 skipped test(s), each declared at its test site");
 });
 
+test("the unit and e2e tiers each run and judge only their own directory", async () => {
+  await consumer('import { expect, test } from "bun:test";\ntest("default test", () => expect(1).toBe(1));\n', {
+    "tests/unit/widget.test.ts":
+      'import { expect, test } from "bun:test";\nimport { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";\ntest.skipIf(true)(skipReason("waits for the split fix", "rounds half to even"), () => expect(1).toBe(1));\n',
+    "tests/e2e/flow.test.ts":
+      'import { expect, test } from "bun:test";\nimport { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";\ntest.skipIf(true)(skipReason("waits for the split fix", "reaches the daemon"), () => expect(1).toBe(1));\n',
+  });
+
+  const unit = await checksTest(true, ["--tier=unit"]);
+  expect(unit.exitCode).toBe(0);
+  expect(unit.text).toContain("checks-test: 1 skipped test(s), each declared at its test site");
+
+  const e2e = await checksTest(true, ["--tier=e2e"]);
+  expect(e2e.exitCode).toBe(0);
+  expect(e2e.text).toContain("checks-test: 1 skipped test(s), each declared at its test site");
+});
+
+test("a tier run never runs the other tier's files", async () => {
+  await consumer('import { expect, test } from "bun:test";\ntest("default test", () => expect(1).toBe(1));\n', {
+    "tests/unit/widget.test.ts": 'import { expect, test } from "bun:test";\ntest("breaks the unit tier", () => expect(1).toBe(2));\n',
+    "tests/e2e/flow.test.ts": 'import { expect, test } from "bun:test";\ntest("passes the e2e tier", () => expect(1).toBe(1));\n',
+  });
+
+  const e2e = await checksTest(true, ["--tier=e2e"]);
+  expect(e2e.exitCode).toBe(0);
+
+  const unit = await checksTest(true, ["--tier=unit"]);
+  expect(unit.exitCode).toBe(1);
+});
+
 test("a focused test fails even without CI set, serially and across parallel workers", async () => {
   await consumer(
     'import { expect, test } from "bun:test";\ntest.only("focused passes", () => expect(1).toBe(1));\ntest("failing skipped by only", () => expect(1).toBe(2));\n',

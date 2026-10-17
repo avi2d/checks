@@ -153,8 +153,7 @@ function resolved(env: Record<string, unknown>, contexts: unknown): Record<strin
 async function titleStatusSteps(): Promise<readonly Record<string, unknown>[]> {
   const workflow: unknown = Bun.YAML.parse(await Bun.file(join(CHECKOUT, ".github", "workflows", "ci.yml")).text());
   const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
-  const checks = isRecord(jobs) ? jobs["checks"] : undefined;
-  const steps = isRecord(checks) && Array.isArray(checks["steps"]) ? checks["steps"] : [];
+  const steps = isRecord(jobs) ? Object.values(jobs).flatMap((job) => (isRecord(job) && Array.isArray(job["steps"]) ? job["steps"] : [])) : [];
   return steps.filter(
     (step): step is Record<string, unknown> =>
       isRecord(step) && isRecord(step["env"]) && Object.values(step["env"]).some((value) => contextPath(value) === "steps.title.outcome"),

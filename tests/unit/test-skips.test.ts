@@ -96,7 +96,7 @@ test("checks-test refuses a test filter, a missing or zero worker count and a re
     ["--parallel=four"],
     ["--parallel=4", "--parallel=6"],
     ["--tier=live", "--tier=pixel"],
-    ["--tier=e2e"],
+    ["--tier=smoke"],
   ]) {
     expect(testOptions(args)).toBeUndefined();
   }
