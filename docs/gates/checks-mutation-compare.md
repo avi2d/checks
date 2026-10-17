@@ -131,7 +131,7 @@ Both runs take the same `--mutate "$SCOPE"`, so the two reports hold the same fi
 A scope file the merge base lacks matches nothing there, and Stryker still writes a report.
 An empty scope skips both runs and the comparison, and the notice names the skip on the run's summary.
 A changed unit test with no full baseline on `main` fails the scope step, since no report then says which sources the test covers.
-So does a changed unit test the merge base holds and that baseline predates.
+A changed unit test that `main` edited after that baseline widens the scope to every file the `mutate` globs match.
 Start a full baseline with `gh workflow run mutation`, as [checks-mutation](checks-mutation.md#running-it-in-ci) shows.
 A run with `--mutate` is scoped, so the preset lets it through without `CI=true`.
 The base worktree's path carries the run's id and attempt, and the last step removes it even when a run fails, so a runner kept between jobs starts each job clean.

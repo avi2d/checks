@@ -18,13 +18,18 @@ A unit test is a `.test.ts` or `.test.tsx` file under `tests/unit/`, the files t
 A unit test the pull request adds, edits, deletes or renames is changed.
 A unit test that reads a changed file under `tests/` is changed too.
 It reads a file when it imports it, directly or through another file under `tests/`.
-Each `[test] preload` in `bunfig.toml` counts as imported by every test file.
 A unit test also reads a changed fixture under `tests/fixtures/` when it names the fixture's path or a directory above it.
+Bun loads each `[test] preload` in `bunfig.toml` before every test file.
+So every unit test is changed when the preload list differs between the merge base and `HEAD`.
+The same holds when the pull request changes a preload or a file a preload imports, wherever that file lives.
 
 Each source whose mutants a changed unit test covers or kills in the full baseline report then enters the scope, when it still exists at `HEAD`.
 So a kill lost through a test change alone still shows in the comparison, in a source the pull request leaves alone.
 A changed unit test with no baseline report fails the run rather than reading incomplete coverage.
-A changed unit test the merge base holds but the report's `testFiles` lacks fails the run too, since the report predates it.
+Stryker records each test file's source in the report's `testFiles`.
+A changed unit test the merge base holds must have that recorded source match its content at the merge base.
+Otherwise the report ran an older test, so its coverage cannot say what the test covers now.
+The scope then widens to every file at `HEAD` the `mutate` globs match.
 A unit test the pull request adds is new to every report, so it needs no entry.
 Stryker writes no source without mutants into the report, so a mutated source the report lacks may be newer than it.
 When a unit test changed, each such source that exists at `HEAD` enters the scope.
@@ -36,8 +41,10 @@ A change under `tests/e2e/` changes no unit test, so it needs no baseline report
 - The Stryker config file `stryker run` loads from the working directory, such as `stryker.conf.mjs`, for its `mutate` globs.
   It imports a JavaScript config, so the step runs after `bun install`.
   With no config file, or a config with no `mutate`, it takes Stryker's default globs.
-- `bunfig.toml` for its `[test] preload` entries.
+- `bunfig.toml` at the merge base and at `HEAD`, for its `[test] preload` entries.
+- Each preload at `HEAD`, and each file it imports through a relative path, for the files the preloads load.
 - Each tracked `.ts` and `.tsx` file under `tests/` from the working tree, for its relative imports and the fixture paths it names.
+- Each changed unit test at the merge base, to match it against the source the report recorded.
 - The full baseline report that `checks-mutation-baseline --full` restores, for each mutant's `coveredBy` and `killedBy` and the `testFiles` that own those tests.
 
 Stryker leaves `coveredBy` empty on a static mutant, so only `killedBy` names its tests.
@@ -70,13 +77,14 @@ Stryker compares only a test file's own source when it resumes from incremental 
 A run that resumes from the merge base's state drops each `STALE_TESTS` entry from that state first, so Stryker retests the mutants those tests cover.
 
 On stderr it names each unit test that reads a changed file, and each source a changed unit test brings in.
+It also names each stale test that widens the scope.
 
 ## Exit codes
 
 | Code | When |
 | --- | --- |
 | 0 | it printed the scope, an empty one included |
-| 2 | the arguments do not parse, git fails, the Stryker config, `bunfig.toml` or the baseline report does not load, or a unit test changed with no baseline report or one that predates it |
+| 2 | the arguments do not parse, git fails, the Stryker config, `bunfig.toml` or the baseline report does not load, or a unit test changed with no baseline report |
 
 ## Sample output
 
@@ -95,10 +103,10 @@ A changed unit test with no full baseline on `main`, on stderr:
 mutation-scope: tests/unit/dashboard/snapshot.test.ts changed, but no baseline report at /runner/temp/baseline-full/mutation.json says which sources they cover
 ```
 
-A changed unit test that landed on `main` after its newest full baseline, on stderr:
+A changed unit test that `main` edited after its newest full baseline, on stderr:
 
 ```
-mutation-scope: tests/unit/dashboard/snapshot.test.ts changed, but the baseline report at /runner/temp/baseline-full/mutation.json predates them, so it cannot say which sources they cover
+mutation-scope: the baseline report did not run tests/unit/dashboard/snapshot.test.ts as the merge base holds it, so every mutated source enters
 ```
 
 ## When it runs

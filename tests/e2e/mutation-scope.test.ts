@@ -14,11 +14,23 @@ const scratch = scratchDirs();
 const NOTHING = { SCOPE: "", STALE_TESTS: "" };
 const TUI_DASH_CONFIG = 'export default { mutate: ["packages/*/src/**/*.ts", "!packages/*/src/live/**", "!packages/*/src/bin.ts"] };\n';
 
+// A Stryker report records each test file's source as the run read it, here the base commit's.
+async function recorded(repo: FixtureRepo, testFiles: Iterable<readonly [string, string | undefined]>): Promise<Record<string, unknown>> {
+  const entries = await Promise.all(
+    [...testFiles].map(async ([testFile, id]) => {
+      const shown = await $`git show HEAD:${testFile}`.cwd(repo.dir).quiet().nothrow();
+      const source = shown.exitCode === 0 ? { source: shown.stdout.toString() } : {};
+      return [testFile, { ...source, tests: [{ id, name: testFile }] }] as const;
+    }),
+  );
+  return Object.fromEntries(entries);
+}
+
 type Link = { readonly testFile: string; readonly sources: string[]; readonly killsOnly?: boolean };
 
 async function coverageBaseline(repo: FixtureRepo, links: readonly Link[], uncovered: readonly string[] = []): Promise<string> {
   const ids = new Map(links.map(({ testFile }, index) => [testFile, `${index}`] as const));
-  const testFiles = Object.fromEntries([...ids].map(([testFile, id]) => [testFile, { tests: [{ id, name: testFile }] }]));
+  const testFiles = await recorded(repo, ids);
   const bySource = new Map<string, Array<{ coveredBy: string[]; killedBy: string[] }>>();
   for (const { testFile, sources, killsOnly } of links) {
     const id = ids.get(testFile) ?? "";
@@ -40,7 +52,7 @@ type SharedMutant = { readonly source: string; readonly coveredBy: string[]; rea
 async function sharedMutantBaseline(repo: FixtureRepo, mutants: readonly SharedMutant[]): Promise<string> {
   const order = [...new Set(mutants.flatMap((mutant) => [...mutant.coveredBy, ...mutant.killedBy]))].sort();
   const ids = new Map(order.map((testFile, index) => [testFile, `${index}`] as const));
-  const testFiles = Object.fromEntries(order.map((testFile) => [testFile, { tests: [{ id: ids.get(testFile), name: testFile }] }]));
+  const testFiles = await recorded(repo, ids);
   const bySource = new Map<string, Array<{ coveredBy: string[]; killedBy: string[] }>>();
   for (const mutant of mutants) {
     const listed = bySource.get(mutant.source) ?? [];
@@ -211,21 +223,43 @@ test("a test the baseline never saw leaves the scope empty", async () => {
   expect(await scopeOf(repo, base, baseline)).toEqual(NOTHING);
 });
 
-test("a changed test the merge base holds but an older baseline report lacks fails rather than scoping nothing", async () => {
-  const { repo, base } = await repoWith({
-    "src/monday.ts": body("monday"),
-    "src/tuesday.ts": body("tuesday"),
-    "tests/unit/monday.test.ts": body("test"),
-    "tests/unit/tuesday.test.ts": body("test"),
-  });
-  const baseline = await coverageBaseline(repo, [{ testFile: "tests/unit/monday.test.ts", sources: ["src/monday.ts"] }]);
+async function mondayRepo(): Promise<{ repo: FixtureRepo; base: string; baseline: string }> {
+  const { repo, base } = await repoWith({ "src/monday.ts": body("monday"), "src/tuesday.ts": body("tuesday"), "tests/unit/monday.test.ts": body("test") });
+  const baseline = await coverageBaseline(repo, [{ testFile: "tests/unit/monday.test.ts", sources: ["src/monday.ts"] }], ["src/tuesday.ts"]);
+  return { repo, base, baseline };
+}
+
+test("a changed test the merge base holds but an older baseline report lacks widens the scope to every mutated source", async () => {
+  const { repo, baseline } = await mondayRepo();
+  await repo.write({ "tests/unit/tuesday.test.ts": body("test") });
+  const tuesday = await repo.commit("tuesday test");
   await repo.write({ "tests/unit/tuesday.test.ts": body("weakened") });
 
-  const done = await scopeRun(repo, base, baseline);
+  const done = await scopeRun(repo, tuesday, baseline);
 
-  expect(done.exitCode).toBe(2);
-  expect(done.text).toContain("mutation-scope: tests/unit/tuesday.test.ts changed, but the baseline report at");
-  expect(done.text).not.toContain("SCOPE=");
+  expect(done.exitCode).toBe(0);
+  expect(done.text).toContain("SCOPE=src/monday.ts,src/tuesday.ts\n");
+  expect(done.text).toContain("mutation-scope: the baseline report did not run tests/unit/tuesday.test.ts as the merge base holds it");
+});
+
+test("a changed test whose merge-base source differs from the one the baseline report ran widens the scope to every mutated source", async () => {
+  const { repo, baseline } = await mondayRepo();
+  await repo.write({ "tests/unit/monday.test.ts": body("tuesday") });
+  const tuesday = await repo.commit("tuesday assertion");
+  await repo.write({ "tests/unit/monday.test.ts": body("weakened") });
+
+  const done = await scopeRun(repo, tuesday, baseline);
+
+  expect(done.exitCode).toBe(0);
+  expect(done.text).toContain("SCOPE=src/monday.ts,src/tuesday.ts\n");
+  expect(done.text).toContain("mutation-scope: the baseline report did not run tests/unit/monday.test.ts as the merge base holds it");
+});
+
+test("a changed test whose merge-base source the baseline report ran scopes only the sources it covers", async () => {
+  const { repo, base, baseline } = await mondayRepo();
+  await repo.write({ "tests/unit/monday.test.ts": body("weakened") });
+
+  expect(await scopeOf(repo, base, baseline)).toEqual({ ...NOTHING, SCOPE: "src/monday.ts" });
 });
 
 test("a source an older baseline report holds no mutant of enters when a test changes", async () => {
@@ -366,6 +400,34 @@ test("a changed helper the preload imports pulls in the covered sources of every
 
   expect(scope["SCOPE"]).toBe("src/covered.ts,src/other.ts");
   expect(sorted(scope["STALE_TESTS"])).toEqual(EVERY_UNIT_TEST);
+});
+
+test("dropping a preload from the list pulls in the covered sources of every unit test", async () => {
+  const { repo, base, baseline } = await preloadedRepo();
+  await repo.write({ "bunfig.toml": '[test]\nroot = "tests"\n' });
+
+  const scope = await scopeOf(repo, base, baseline);
+
+  expect(scope["SCOPE"]).toBe("src/covered.ts,src/other.ts");
+  expect(sorted(scope["STALE_TESTS"])).toEqual(EVERY_UNIT_TEST);
+});
+
+async function preloadedOutsideTests(changed: string): Promise<Record<string, string>> {
+  const { repo, base } = await repoWith({
+    "src/covered.ts": body("covered"),
+    "src/clock.ts": body("clock"),
+    "bunfig.toml": '[test]\npreload = "./test-setup.ts"\n',
+    "test-setup.ts": `import { clock0 } from "./src/clock.ts";\n${body("setup")}`,
+    "tests/unit/covered.test.ts": body("test"),
+  });
+  const baseline = await coverageBaseline(repo, [{ testFile: "tests/unit/covered.test.ts", sources: ["src/covered.ts"] }], ["src/clock.ts"]);
+  await repo.write({ [changed]: body("weakened") });
+  return scopeOf(repo, base, baseline);
+}
+
+test("a preload outside tests, and a source file it imports, each pull in the covered sources of every unit test", async () => {
+  expect(await preloadedOutsideTests("test-setup.ts")).toEqual({ SCOPE: "src/covered.ts", STALE_TESTS: "tests/unit/covered.test.ts" });
+  expect(await preloadedOutsideTests("src/clock.ts")).toEqual({ SCOPE: "src/clock.ts,src/covered.ts", STALE_TESTS: "tests/unit/covered.test.ts" });
 });
 
 test("an e2e-only pull request has an empty scope even with no baseline report", async () => {

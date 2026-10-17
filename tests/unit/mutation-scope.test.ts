@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
 import type { Change } from "../../src/core/git.ts";
-import { coveringTests, envLines, mutatedBy, parseArgs, pickFromDiff, readersOf, STRYKER_DEFAULT_MUTATE } from "../../src/testing/mutation-scope.ts";
+import { coveringTests, envLines, mutatedBy, parseArgs, pickFromDiff, preloadChange, readersOf, STRYKER_DEFAULT_MUTATE } from "../../src/testing/mutation-scope.ts";
 
 const TUI_DASH_MUTATE = ["packages/*/src/**/*.ts", "!packages/*/src/live/**", "!packages/*/src/bin.ts"];
 
@@ -61,7 +61,7 @@ test("a rename between sources scopes both names, one into the sources scopes th
   expect([...picked.tests]).toEqual(["tests/unit/a.test.ts", "tests/unit/b.test.ts"]);
 });
 
-test("a reader reaches a changed helper through each import form, and through a preload when it is a test file", () => {
+test("a reader reaches a changed helper through each import form, and an index file through its directory", () => {
   const sources = new Map([
     ["tests/lib/tree.ts", 'import { effect0 } from "./effect";\n'],
     ["tests/lib/preload.ts", 'const { setup0 } = await import("./setup/index.ts");\n'],
@@ -71,19 +71,25 @@ test("a reader reaches a changed helper through each import form, and through a 
     ["tests/lib/effect.ts", "export {};\n"],
   ]);
 
-  expect(readersOf(sources, ["tests/lib/effect.ts"], ["./tests/lib/preload.ts"])).toEqual(
+  expect(readersOf(sources, ["tests/lib/effect.ts"])).toEqual(
     new Map([
       ["tests/lib/tree.ts", "tests/lib/effect.ts"],
       ["tests/unit/a.test.ts", "tests/lib/effect.ts"],
     ]),
   );
-  expect(readersOf(sources, ["tests/lib/setup/index.ts"], ["./tests/lib/preload.ts"])).toEqual(
-    new Map([
-      ["tests/lib/preload.ts", "tests/lib/setup/index.ts"],
-      ["tests/unit/a.test.ts", "tests/lib/setup/index.ts"],
-      ["tests/unit/b.test.ts", "tests/lib/setup/index.ts"],
-    ]),
-  );
+  expect(readersOf(sources, ["tests/lib/setup/index.ts"])).toEqual(new Map([["tests/lib/preload.ts", "tests/lib/setup/index.ts"]]));
+});
+
+test("every unit test reads a change to the preload list, to a preload, or to a file a preload loads, and to nothing else", () => {
+  const preloads = { atBase: ["test-setup.ts", "tests/lib/assertions.ts"], atHead: ["test-setup.ts", "tests/lib/assertions.ts"] };
+  const loaded = new Set(["test-setup.ts", "src/clock.ts"]);
+  const changeTo = (paths: readonly string[], lists = preloads) => preloadChange(new Set(paths), lists, loaded);
+
+  expect(changeTo(["test-setup.ts"])).toBe("test-setup.ts");
+  expect(changeTo(["tests/lib/assertions.ts"])).toBe("tests/lib/assertions.ts");
+  expect(changeTo(["src/clock.ts"])).toBe("src/clock.ts");
+  expect(changeTo([], { atBase: preloads.atBase, atHead: ["test-setup.ts"] })).toBe("the [test] preload list in bunfig.toml");
+  expect(changeTo(["src/other.ts", "tests/lib/helper.ts"])).toBeUndefined();
 });
 
 test("a reader reaches a changed fixture by its path, its directory in segments or with a trailing slash, and not a sibling directory sharing its prefix", () => {
@@ -95,7 +101,7 @@ test("a reader reaches a changed fixture by its path, its directory in segments 
     ["tests/unit/sibling.test.ts", 'const runs = new URL("../fixtures/evaluated/", import.meta.url);\n'],
   ]);
 
-  expect([...readersOf(sources, ["tests/fixtures/eval/run.json"], []).keys()].sort()).toEqual([
+  expect([...readersOf(sources, ["tests/fixtures/eval/run.json"]).keys()].sort()).toEqual([
     "tests/unit/file.test.ts",
     "tests/unit/joined.test.ts",
     "tests/unit/slashed.test.ts",
@@ -106,7 +112,7 @@ test("a reader reaches a changed fixture by its path, its directory in segments 
 test("a changed file never reads as a reader of another changed file", () => {
   const sources = new Map([["tests/unit/a.test.ts", 'import { effect0 } from "../lib/effect";\n']]);
 
-  expect(readersOf(sources, ["tests/lib/effect.ts", "tests/unit/a.test.ts"], [])).toEqual(new Map());
+  expect(readersOf(sources, ["tests/lib/effect.ts", "tests/unit/a.test.ts"])).toEqual(new Map());
 });
 
 const baseline = {

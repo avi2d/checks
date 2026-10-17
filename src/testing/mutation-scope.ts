@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { escape, minimatch } from "minimatch";
-import { changedPaths, pathsAt, rangeEnds, type Change } from "../core/git.ts";
+import { changedPaths, git, pathsAt, rangeEnds, type Change } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 
 const NAME = "mutation-scope";
@@ -43,7 +43,10 @@ const BaselineSchema = Schema.Struct({
       ),
     }),
   ),
-  testFiles: Schema.Record(Schema.String, Schema.Struct({ tests: Schema.Array(Schema.Struct({ id: Schema.String })) })),
+  testFiles: Schema.Record(
+    Schema.String,
+    Schema.Struct({ source: Schema.optionalKey(Schema.String), tests: Schema.Array(Schema.Struct({ id: Schema.String })) }),
+  ),
 });
 
 export type Baseline = typeof BaselineSchema.Type;
@@ -58,7 +61,12 @@ const decodeBunfig = Schema.decodeUnknownEffect(
 
 export type MutationScope = { readonly scope: readonly string[]; readonly staleTests: readonly string[] };
 
-export type Picked = { readonly scope: ReadonlySet<string>; readonly tests: ReadonlySet<string>; readonly touched: ReadonlySet<string> };
+export type Picked = {
+  readonly scope: ReadonlySet<string>;
+  readonly tests: ReadonlySet<string>;
+  readonly touched: ReadonlySet<string>;
+  readonly paths: ReadonlySet<string>;
+};
 
 const isUnitTest = (path: string): boolean => path.startsWith(UNIT_TESTS) && TEST_FILE.test(path);
 
@@ -85,6 +93,7 @@ export function pickFromDiff(changes: readonly Change[], mutated: (file: string)
     scope: new Set(changes.flatMap((change) => scopedNames(change, mutated))),
     tests: new Set(paths.filter(isUnitTest)),
     touched: new Set(paths.filter((path) => path.startsWith(TEST_TREE))),
+    paths: new Set(paths),
   };
 }
 
@@ -125,11 +134,12 @@ function mentions(line: string, { text, kind }: Needle): boolean {
 
 type Edge = { readonly importer: string; readonly imported: string };
 
-function edgesOf(file: string, text: string, preloaded: readonly string[]): readonly Edge[] {
-  const directory = file.slice(0, file.lastIndexOf("/"));
-  const imported = [...text.matchAll(IMPORT)].map(([, spec = ""]) => moduleOf(resolved(directory, spec)));
-  return (TEST_FILE.test(file) ? [...preloaded, ...imported] : imported).map((module) => ({ importer: file, imported: module }));
+function importsOf(file: string, text: string): readonly string[] {
+  const directory = file.slice(0, Math.max(file.lastIndexOf("/"), 0));
+  return [...text.matchAll(IMPORT)].map(([, spec = ""]) => moduleOf(resolved(directory, spec)));
 }
+
+const edgesOf = (file: string, text: string): readonly Edge[] => importsOf(file, text).map((module) => ({ importer: file, imported: module }));
 
 function fixtureNamedIn(text: string, needles: readonly Needle[]): string | undefined {
   if (needles.length === 0) return undefined;
@@ -155,17 +165,26 @@ function spread(reached: Map<string, string>, edges: readonly Edge[]): void {
   }
 }
 
-// Maps each file that reads a changed path, through an import, a bunfig preload or the fixture's path, to that changed path.
-export function readersOf(sources: ReadonlyMap<string, string>, changed: readonly string[], preloads: readonly string[]): Map<string, string> {
+// Maps each file that reads a changed path, through an import or the fixture's path, to that changed path.
+export function readersOf(sources: ReadonlyMap<string, string>, changed: readonly string[]): Map<string, string> {
   const reached = new Map(changed.map((path) => [path, path]));
   const needles = fixtureNeedles(changed);
   for (const [file, text] of sources) {
     const fixture = reached.has(file) ? undefined : fixtureNamedIn(text, needles);
     if (fixture !== undefined) reached.set(file, fixture);
   }
-  const preloaded = preloads.map((preload) => moduleOf(resolved("", preload)));
-  spread(reached, [...sources].flatMap(([file, text]) => edgesOf(file, text, preloaded)));
+  spread(reached, [...sources].flatMap(([file, text]) => edgesOf(file, text)));
   return new Map([...reached].filter(([file, via]) => file !== via));
+}
+
+// Names what every unit test loads that the pull request changes: the preload list, a preload, or a file a preload imports.
+export function preloadChange(
+  changed: ReadonlySet<string>,
+  preloads: { readonly atBase: readonly string[]; readonly atHead: readonly string[] },
+  loaded: ReadonlySet<string>,
+): string | undefined {
+  if (preloads.atBase.join("\n") !== preloads.atHead.join("\n")) return `the [test] preload list in ${BUNFIG}`;
+  return [...preloads.atBase, ...loaded].find((path) => changed.has(path));
 }
 
 // Stryker leaves coveredBy empty on a static mutant, so only killedBy names its tests, and all of them only from a run without bail.
@@ -217,14 +236,25 @@ const mutatePatterns = Effect.gen(function* () {
   return STRYKER_DEFAULT_MUTATE;
 });
 
-const bunPreloads = Effect.gen(function* () {
-  const fs = yield* FileSystem.FileSystem;
-  if (!(yield* fs.exists(BUNFIG))) return [];
-  const text = yield* fs.readFileString(BUNFIG);
-  const unparsed = () => new ScopeError({ message: `${BUNFIG} does not parse as TOML whose [test] preload is a path or a list of paths` });
+const preloadsAt = Effect.fn("preloadsAt")(function* (rev: string, paths: ReadonlySet<string>) {
+  if (!paths.has(BUNFIG)) return [];
+  const text = yield* git(["show", `${rev}:${BUNFIG}`]);
+  const unparsed = () => new ScopeError({ message: `${BUNFIG} at ${rev} does not parse as TOML whose [test] preload is a path or a list of paths` });
   const bunfig = yield* Effect.try({ try: (): unknown => Bun.TOML.parse(text), catch: unparsed }).pipe(Effect.flatMap(decodeBunfig), Effect.mapError(unparsed));
   const preload = bunfig.test?.preload ?? [];
-  return typeof preload === "string" ? [preload] : preload;
+  return (typeof preload === "string" ? [preload] : preload).map((entry) => resolved("", entry));
+});
+
+const loadedByPreloads = Effect.fn("loadedByPreloads")(function* (rev: string, preloads: readonly string[], paths: ReadonlySet<string>) {
+  const files = new Map([...paths].map((file) => [moduleOf(file), file]));
+  const loaded = new Set<string>();
+  for (let next = preloads.flatMap((preload) => files.get(moduleOf(preload)) ?? []); next.length > 0; ) {
+    for (const file of next) loaded.add(file);
+    const read = (file: string) => git(["show", `${rev}:${file}`]).pipe(Effect.map((text) => importsOf(file, text)));
+    const imported = (yield* Effect.forEach(next, read, { concurrency: 16 })).flat();
+    next = [...new Set(imported.flatMap((module) => files.get(module) ?? []))].filter((file) => !loaded.has(file));
+  }
+  return loaded;
 });
 
 const readTestTree = Effect.fn("readTestTree")(function* (paths: Iterable<string>) {
@@ -244,32 +274,49 @@ const loadBaseline = Effect.fn("loadBaseline")(function* (report: string | undef
   return yield* fs.readFileString(report).pipe(Effect.flatMap(decodeBaseline), Effect.mapError(unparsed));
 });
 
-const unitReaders = Effect.fn("unitReaders")(function* (touched: ReadonlySet<string>, atHead: ReadonlySet<string>) {
-  if (touched.size === 0) return [];
-  const readers = readersOf(yield* readTestTree(atHead), [...touched], yield* bunPreloads);
-  return [...readers].filter(([reader]) => isUnitTest(reader)).toSorted(([a], [b]) => (a < b ? -1 : 1));
+type Snapshots = { readonly base: string; readonly head: string; readonly atBase: ReadonlySet<string>; readonly atHead: ReadonlySet<string> };
+
+// Every unit test loads each preload, so a change to one makes every unit test read it.
+const unitReaders = Effect.fn("unitReaders")(function* (picked: Picked, { base, head, atBase, atHead }: Snapshots) {
+  const preloads = { atBase: yield* preloadsAt(base, atBase), atHead: yield* preloadsAt(head, atHead) };
+  const everyTestReads = preloadChange(picked.paths, preloads, yield* loadedByPreloads(head, preloads.atHead, atHead));
+  if (everyTestReads !== undefined) {
+    yield* Console.error(`${NAME}: every unit test reads ${everyTestReads}`);
+    return [...atHead].filter((test) => isUnitTest(test) && !picked.tests.has(test)).map((test) => [test, everyTestReads] as const);
+  }
+  if (picked.touched.size === 0) return [];
+  const readers = [...readersOf(yield* readTestTree(atHead), [...picked.touched])].filter(([reader]) => isUnitTest(reader));
+  for (const [reader, via] of readers) yield* Console.error(`${NAME}: ${reader} reads ${via}`);
+  return readers;
 });
 
-type Snapshots = { readonly atBase: ReadonlySet<string>; readonly atHead: ReadonlySet<string> };
+// An absent coverage edge holds only for a test whose merge-base source is the one the report ran.
+const staleIn = Effect.fn("staleIn")(function* (baseline: Baseline, tests: readonly string[], base: string) {
+  const recorded = new Map(Object.entries(baseline.testFiles).map(([file, { source }]) => [file, source]));
+  const atBase = yield* Effect.forEach(tests, (test) => git(["show", `${base}:${test}`]), { concurrency: 16 });
+  return tests.filter((test, index) => recorded.get(test) !== atBase[index]).toSorted();
+});
 
 // Stryker reports no source without mutants, so a source the report lacks may be newer than it and enters.
 const enteringSources = Effect.fn("enteringSources")(function* (
   report: string | undefined,
   tests: ReadonlySet<string>,
   mutated: (file: string) => boolean,
-  { atBase, atHead }: Snapshots,
+  { base, atBase, atHead }: Snapshots,
   scoped: ReadonlySet<string>,
 ) {
   if (tests.size === 0) return [];
   const baseline = yield* loadBaseline(report, tests);
-  const unseen = [...tests].filter((test) => atBase.has(test) && !Object.hasOwn(baseline.testFiles, test)).toSorted();
-  if (unseen.length > 0) {
-    return yield* new ScopeError({ message: `${unseen.join(",")} changed, but the baseline report at ${report} predates them, so it cannot say which sources they cover` });
+  const eligible = (source: string): boolean => mutated(source) && !scoped.has(source) && atHead.has(source);
+  const candidates = [...atHead].filter(eligible).toSorted();
+  const stale = yield* staleIn(baseline, [...tests].filter((test) => atBase.has(test)), base);
+  if (stale.length > 0) {
+    yield* Console.error(`${NAME}: the baseline report did not run ${stale.join(" ")} as the merge base holds it, so every mutated source enters`);
+    return candidates;
   }
-  const eligible = (source: string): boolean => !scoped.has(source) && atHead.has(source);
   const entering = [...coveringTests(baseline, tests, mutated)].filter(([source]) => eligible(source));
   for (const [source, via] of entering) yield* Console.error(`${NAME}: ${source} enters through ${via.join(" ")}`);
-  const unknown = [...atHead].filter((source) => mutated(source) && eligible(source) && !Object.hasOwn(baseline.files, source)).toSorted();
+  const unknown = candidates.filter((source) => !Object.hasOwn(baseline.files, source));
   if (unknown.length > 0) yield* Console.error(`${NAME}: ${unknown.join(" ")} enter, as the baseline report holds no mutant of them`);
   return [...entering.map(([source]) => source), ...unknown];
 });
@@ -278,17 +325,12 @@ const selectScope = Effect.gen(function* () {
   const { base, baseline } = yield* parseArgs(process.argv.slice(2));
   const range = yield* rangeEnds(base, "HEAD");
   const mutated = mutatedBy(yield* mutatePatterns);
-  const atHead = new Set(yield* pathsAt(range.head, []));
-  const atBase = new Set(yield* pathsAt(range.base, []));
+  const snapshots: Snapshots = { ...range, atBase: new Set(yield* pathsAt(range.base, [])), atHead: new Set(yield* pathsAt(range.head, [])) };
   const picked = pickFromDiff(yield* changedPaths(range.base, range.head, []), mutated);
-  const readers = yield* unitReaders(picked.touched, atHead);
-  const tests = new Set(picked.tests);
-  for (const [reader, via] of readers.filter(([file]) => !picked.tests.has(file))) {
-    tests.add(reader);
-    yield* Console.error(`${NAME}: ${reader} reads ${via}`);
-  }
-  const entering = yield* enteringSources(baseline, tests, mutated, { atBase, atHead }, picked.scope);
-  yield* Console.log(envLines({ scope: [...picked.scope, ...entering], staleTests: readers.map(([reader]) => reader) }));
+  const readers = (yield* unitReaders(picked, snapshots)).map(([reader]) => reader);
+  const tests = new Set([...picked.tests, ...readers]);
+  const entering = yield* enteringSources(baseline, tests, mutated, snapshots, picked.scope);
+  yield* Console.log(envLines({ scope: [...picked.scope, ...entering], staleTests: readers }));
   return true;
 });
 
