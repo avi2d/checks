@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
-import { git } from "../core/git.ts";
+import { workingTreeFiles } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { ENTRY_POINT, TEST_ENTRY_POINT } from "../core/gates.ts";
 import { identifierName, isRecord, lineOf, parseTypeScript, spanStart, stringValue } from "../core/swc.ts";
@@ -307,15 +307,6 @@ export function bunfigViolations(consumer: unknown, preset: unknown): readonly V
   }
   return violations;
 }
-
-const workingTreeFiles = Effect.fn("workingTreeFiles")(function* (root: string) {
-  const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  const listed = yield* git(["ls-files", "-z", "--cached", "--others", "--exclude-standard"], root);
-  return yield* Effect.filter(listed.split("\0").filter(Boolean), (file) => fs.exists(path.join(root, file)), {
-    concurrency: "unbounded",
-  });
-});
 
 const parsedToml = Effect.fn("parsedToml")(function* (file: string) {
   const text = yield* (yield* FileSystem.FileSystem).readFileString(file);

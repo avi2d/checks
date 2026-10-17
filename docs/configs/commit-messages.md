@@ -8,14 +8,14 @@ The shared commitlint config holds each pull request title to the conventional c
 
 ## Config
 
-Commits follow `@commitlint/config-conventional` plus the house prefixes `commitlint.config.js` lists, shared from `node_modules/@avi2dg/checks/commitlint.config.js`.
+Commits follow `@commitlint/config-conventional` plus the house prefixes `commitlint.config.ts` lists, shared from `node_modules/@avi2dg/checks/commitlint.config.ts`.
 It arrives with the kit, since `@commitlint/cli` and `@commitlint/config-conventional` are dependencies, not peers.
 
 ## Workflow
 
 The lint runs in CI on pull requests, because `jj` never fires a git hook.
 Each repository lints the title in one step of its `ci` job with `bunx checks-commit-title`.
-The workflow lints with the installed kit's `commitlint.config.js`, so every repository holds titles to the same rules.
+The workflow lints with the installed kit's `commitlint.config.ts`, so every repository holds titles to the same rules.
 The `ci` job reports the title step's outcome as a `commitlint` status on every run, so a required `commitlint` status stays while `commitlint.yml` goes away.
 That post needs the workflow's `statuses: write` permission.
 The title lint runs before the docs-only filter, so a change to top-level Markdown and `docs/` Markdown alone still lints its title.

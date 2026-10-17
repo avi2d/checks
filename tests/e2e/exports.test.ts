@@ -154,7 +154,7 @@ function baselineLines(entries: readonly object[]): string {
 async function pullRequestMergeCheckout(pr: Readonly<Record<string, string>>): Promise<Ran> {
   const { dir, write, commit } = await open({
     ...lintWiring(),
-    "knip.json": JSON.stringify({ entry: ["index.ts"] }),
+    "knip.json": JSON.stringify({ entry: ["dependency-cruiser.config.ts", "index.ts"] }),
     "index.ts": `import { helper } from "./helper.ts";\nimport { kept } from "./legacy.ts";\nimport { used } from "./used.ts";\n\nexport const index = used + helper + kept;\n`,
     "used.ts": `export const used = 1;\n`,
     "helper.ts": `export const helper = 1;\n`,
@@ -193,7 +193,7 @@ test(
       "index.ts": `import { helper } from "./helper.ts";\nimport { kept } from "./legacy.ts";\nimport { used } from "./used.ts";\n\nexport const index = used + helper + kept + 1;\n`,
     });
     expect(green.text).toContain("exports: 3 unused export(s) in exports-baseline.json, and no new ones");
-    expect(green.text).toContain("checks-lint: 13 gate(s) pass");
+    expect(green.text).toContain("checks-lint: 14 gate(s) pass");
     expect(green.exitCode).toBe(0);
   },
   180_000,
@@ -209,7 +209,7 @@ test(
     expect(red.text).toContain(
       "exports: 1 exports-baseline.json export(s) the range adds that its base did not leave unused, remove the export instead:\n  used.ts: fresh (export)\n",
     );
-    expect(red.text).toContain("1 of 13 gate(s) failed: checks-exports");
+    expect(red.text).toContain("1 of 14 gate(s) failed: checks-exports");
     expect(red.exitCode).toBe(1);
   },
   180_000,
@@ -344,21 +344,21 @@ test(
   async () => {
     const { write, commit, lint } = await open({
       ...lintWiring(),
-      "knip.json": JSON.stringify({ entry: ["widget.ts"], include: ["files"] }),
+      "knip.json": JSON.stringify({ entry: ["dependency-cruiser.config.ts", "widget.ts"], include: ["files"] }),
       "widget.ts": `import { used } from "./used.ts";\n\nexport const widget = used;\n`,
       "used.ts": `export const used = 1;\nexport const unusedExport = 2;\n`,
     });
     await commit("feat: base");
 
     const red = await lint();
-    expect(red.text).toContain("1 of 13 gate(s) failed: checks-exports");
+    expect(red.text).toContain("1 of 14 gate(s) failed: checks-exports");
     expect(red.text).toContain("exports: 1 unused export(s) not in exports-baseline.json:\n  used.ts: unusedExport (export)");
     expect(red.exitCode).toBe(1);
 
     await write({ "used.ts": `export const used = 1;\n` });
     await commit("refactor: use every export");
     const clean = await lint();
-    expect(clean.text).toContain("checks-lint: 13 gate(s) pass");
+    expect(clean.text).toContain("checks-lint: 14 gate(s) pass");
     expect(clean.exitCode).toBe(0);
   },
   180_000,
