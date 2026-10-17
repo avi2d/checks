@@ -75,7 +75,7 @@ const runOnce = Effect.fn("runOnce")(function* (seed: number, outfile: string) {
     if (passed) return yield* new ReportError({ message: `bun test passed with seed ${seed} but wrote no report` });
     return { seed, passed, tests: 0, failed: [] } satisfies Run;
   }
-  const results = yield* parseReport(yield* fs.readFileString(outfile));
+  const { results } = yield* parseReport(yield* fs.readFileString(outfile));
   return { seed, passed, tests: results.length, failed: results.filter((result) => result.outcome === "failed") } satisfies Run;
 });
 

@@ -4,7 +4,9 @@ import { join } from "node:path";
 import { Effect, Exit } from "effect";
 import { parseReport } from "../../src/testing/test-report.ts";
 
-const REPORT = join(import.meta.dir, "..", "fixtures", "test-report", "bun.xml");
+const FIXTURES = join(import.meta.dir, "..", "fixtures", "test-report");
+const REPORT = join(FIXTURES, "bun.xml");
+const CRASH_REPORT = join(FIXTURES, "bun-parallel-crash.xml");
 
 function failureOf(xml: string): string {
   const exit = Effect.runSyncExit(parseReport(xml));
@@ -13,7 +15,8 @@ function failureOf(xml: string): string {
 }
 
 test("a report bun wrote reads as one result per test, named as bun's console names it", async () => {
-  const results = Effect.runSync(parseReport(await readFile(REPORT, "utf8")));
+  const { results, crashedFiles } = Effect.runSync(parseReport(await readFile(REPORT, "utf8")));
+  expect(crashedFiles).toEqual([]);
   expect(results).toEqual([
     { file: "tests/b.test.ts", name: "throws", line: 2, outcome: "failed" },
     { file: "tests/b.test.ts", name: "plain skip", line: 3, outcome: "skipped" },
@@ -29,6 +32,22 @@ test("a report bun wrote reads as one result per test, named as bun's console na
   ]);
 });
 
+test("a file whose parallel worker crashed reads as crashed, and the other files' results stay", async () => {
+  const { results, crashedFiles } = Effect.runSync(parseReport(await readFile(CRASH_REPORT, "utf8")));
+  expect(crashedFiles).toEqual(["tests/d.test.ts"]);
+  expect(results).toEqual([
+    { file: "tests/c.test.ts", name: "c fails", line: 2, outcome: "failed" },
+    { file: "tests/b.test.ts", name: "b pass", line: 2, outcome: "passed" },
+    { file: "tests/b.test.ts", name: "b skipped", line: 3, outcome: "skipped" },
+  ]);
+});
+
+test("a lineless testcase that did not fail is refused", () => {
+  expect(failureOf('<testsuites><testsuite name="f"><testcase name="t" file="f"/></testsuite></testsuites>')).toContain(
+    "holds a <testcase> bun never writes",
+  );
+});
+
 test("a report bun did not write whole is refused rather than read as fewer tests", () => {
   expect(failureOf("")).toContain("the root is not one <testsuites>");
   expect(failureOf("<testsuites><testsuite name=\"f\">")).toContain("<testsuite> never closes");
@@ -42,5 +61,5 @@ test("a report bun did not write whole is refused rather than read as fewer test
 
 test("character references decode in names", () => {
   const xml = '<testsuites><testsuite name="f"><testcase name="a&#10;b&#x41;&apos;" file="f" line="1"/></testsuite></testsuites>';
-  expect(Effect.runSync(parseReport(xml))).toEqual([{ file: "f", name: "a\nbA'", line: 1, outcome: "passed" }]);
+  expect(Effect.runSync(parseReport(xml)).results).toEqual([{ file: "f", name: "a\nbA'", line: 1, outcome: "passed" }]);
 });

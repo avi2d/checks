@@ -180,13 +180,27 @@ test("scripts.test must be the test entry point and scripts.lint must run the ch
   ]) {
     expect(scriptViolations({ scripts: { test: "checks-test", lint } })).toHaveLength(1);
   }
-  for (const testScript of ["bun test --randomize", "checks-test && echo", "bunx checks-test"]) {
+  for (const testScript of ["checks-test --parallel=4", "checks-test  --parallel=6", "bun src/testing/test.ts --parallel=4"]) {
+    expect(scriptViolations({ scripts: { test: testScript, lint: "checks-lint" } })).toBeEmpty();
+  }
+  for (const testScript of [
+    "bun test --randomize",
+    "checks-test && echo",
+    "bunx checks-test",
+    "checks-test --tier=live",
+    "checks-test --parallel=0",
+    "checks-test --parallel",
+    "checks-test --parallel=4 tests/unit",
+    "checks-test--parallel=4",
+  ]) {
     expect(scriptViolations({ scripts: { test: testScript, lint: "checks-lint" } })).toHaveLength(1);
   }
 
   const violations = scriptViolations({ scripts: { test: "bun test", lint: "oxlint" } });
   expect(violations).toHaveLength(2);
-  expect(violations[0]?.message).toContain('must be exactly "checks-test", which runs bun test --randomize and judges its skips');
+  expect(violations[0]?.message).toContain(
+    'must be "checks-test", optionally with --parallel=<workers>, which runs bun test --randomize and judges its skips',
+  );
   expect(violations[1]?.message).toContain("must run the layout check");
 });
 
@@ -196,9 +210,12 @@ test("a live or pixel test tier requires its named checks-test script", () => {
     const files = [`tests/${tier}/screen.test.ts`];
     const violation = scriptViolations({ scripts }, files).find((candidate) => candidate.message.includes(`test:${tier}`));
     expect(violation?.message ?? "").toContain(`test:${tier} must be "checks-test --tier=${tier}"`);
-    expect(
-      scriptViolations({ scripts: { ...scripts, [`test:${tier}`]: `checks-test --tier=${tier}` } }, files),
-    ).toBeEmpty();
+    for (const accepted of [`checks-test --tier=${tier}`, `checks-test --parallel=4 --tier=${tier}`]) {
+      expect(scriptViolations({ scripts: { ...scripts, [`test:${tier}`]: accepted } }, files)).toBeEmpty();
+    }
+    for (const refused of ["checks-test", "checks-test --parallel=4", `checks-test --tier=${tier === "live" ? "pixel" : "live"}`]) {
+      expect(scriptViolations({ scripts: { ...scripts, [`test:${tier}`]: refused } }, files)).toHaveLength(1);
+    }
   }
 });
 
