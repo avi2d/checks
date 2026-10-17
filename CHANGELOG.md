@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.43.0
+
+Released 2026-10-17.
+
+### Features
+
+- **testing:** run checks-test files in parallel on opt-in [#158](https://github.com/avi2d/checks/pull/158)
+
 ## 0.42.0
 
 Released 2026-10-14.
