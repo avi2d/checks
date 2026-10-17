@@ -173,6 +173,7 @@ The table groups the gates by vector, the part of a repository each one judges.
 | testing | [`checks-test-layout`](docs/gates/checks-test-layout.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
 | testing | [`checks-quarantine-clock`](docs/gates/checks-quarantine-clock.md) | the range | every repository |
 | docs | [`checks-docs`](docs/gates/checks-docs.md) | the range, and every agent file at the head commit | every repository |
+| docs | [`checks-copy`](docs/gates/checks-copy.md) | the working tree | a repository tracking `copy.json` |
 | delivery | [`checks-commit-identity`](docs/gates/checks-commit-identity.md) | the range | every repository |
 | delivery | [`checks-ci-wiring`](docs/gates/checks-ci-wiring.md) | the working tree | every repository |
 | delivery | [`checks-secrets`](docs/gates/checks-secrets.md) | the range | every repository |
@@ -207,7 +208,7 @@ oxlint runs through its own tool, as the pages under Related topics say.
 To move a repository to a newer release of the kit:
 
 1. Run the install line again, which moves the kit to its newest release and the peers to the versions it pins.
-   A repository that opted in to `checks-browser` or `checks-frontend-syntax` also reruns the `bun add` line on its page.
+   A repository that opted in to `checks-browser`, `checks-frontend-syntax` or `checks-copy` also reruns the `bun add` line on its page.
 1. Run `bun run build`, whose `checks-effect-scope` rewrites the Effect override and the kit's severities in `tsconfig.json` when a release changes them.
    A severity key the release drops stays in `tsconfig.json` until the repository removes it.
 1. Copy `node_modules/@avi2dg/checks/bunfig.toml` over `bunfig.toml` again, since `checks-test-layout` compares the copy with the installed preset.

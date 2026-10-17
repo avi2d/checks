@@ -20,7 +20,7 @@ export type ProseRule = {
   readonly instead: string;
 };
 
-type MatchedRule = ProseRule & { readonly find: RegExp };
+export type MatchedRule = ProseRule & { readonly find: RegExp };
 
 export const ADR_DIRECTORY = "docs/adr/";
 export const DOCS_DIRECTORY = "docs/";
@@ -268,9 +268,15 @@ const code = (text: string): string => `\`${text}\``;
 const EVERY_READER: readonly Reader[] = ["people", "agents"];
 const PEOPLE: readonly Reader[] = ["people"];
 
+const EM_DASH: MatchedRule = { readers: EVERY_READER, refuses: "an em dash", example: code("—"), instead: SEPARATOR_INSTEAD, find: /—/g };
+const EN_DASH: MatchedRule = { readers: EVERY_READER, refuses: "an en dash", example: code("–"), instead: SEPARATOR_INSTEAD, find: /–/g };
+const HYPHEN_AS_DASH: MatchedRule = { readers: EVERY_READER, refuses: "a hyphen used as a dash", example: `${code("a - b")} or ${code("a -- b")}`,
+  instead: SEPARATOR_INSTEAD, find: /(?<=[^\s|]) -{1,3} (?=[^\s|])/g };
+export const SEPARATORS: readonly MatchedRule[] = [EM_DASH, EN_DASH, HYPHEN_AS_DASH];
+
 const RULES: readonly MatchedRule[] = [
-  { readers: EVERY_READER, refuses: "an em dash", example: code("—"), instead: SEPARATOR_INSTEAD, find: /—/g },
-  { readers: EVERY_READER, refuses: "an en dash", example: code("–"), instead: SEPARATOR_INSTEAD, find: /–/g },
+  EM_DASH,
+  EN_DASH,
   {
     readers: EVERY_READER,
     refuses: "a parenthesis other than the plural `(s)`",
@@ -278,13 +284,7 @@ const RULES: readonly MatchedRule[] = [
     instead: "Make the aside its own sentence, or set it off with commas",
     find: /\((?!s\))/g,
   },
-  {
-    readers: EVERY_READER,
-    refuses: "a hyphen used as a dash",
-    example: `${code("a - b")} or ${code("a -- b")}`,
-    instead: SEPARATOR_INSTEAD,
-    find: /(?<=[^\s|]) -{1,3} (?=[^\s|])/g,
-  },
+  HYPHEN_AS_DASH,
   { readers: EVERY_READER, refuses: "a semicolon", example: code(";"), instead: "Use two sentences", find: /;/g },
   {
     readers: PEOPLE,
@@ -328,11 +328,11 @@ export const PROSE_RULES: readonly ProseRule[] = [
 
 const JUDGED_KINDS: ReadonlySet<LineKind> = new Set(["prose", "heading", "table", "html"]);
 
+export const carries = (match: string, { refuses, instead }: ProseRule): string => `carries \`${match.trim()}\`, ${refuses}. ${instead}`;
+
 function ruleFindings(line: MarkdownLine, reader: Reader): ProseFinding[] {
   const body = bodyOf(line);
-  return RULES.filter(({ readers }) => readers.includes(reader)).flatMap(({ refuses, instead, find }) =>
-    [...body.matchAll(find)].map(([match]) => ({ line: line.line, message: `carries \`${match.trim()}\`, ${refuses}. ${instead}` })),
-  );
+  return RULES.filter(({ readers }) => readers.includes(reader)).flatMap((rule) => [...body.matchAll(rule.find)].map(([match]) => ({ line: line.line, message: carries(match, rule) })));
 }
 
 const SENTENCE_BREAK = /(?<=[^\s.!?])[.!?]["'”’»)\]*_]*\s+(?=[\p{Lu}"“«*_[\0])/gu;
@@ -364,7 +364,7 @@ function endsMidSentence(line: MarkdownLine, next: MarkdownLine): boolean {
   return !body.endsWith(HIDDEN) || OPENS_LOWERCASE.test(bodyOf(next));
 }
 
-function continues(earlier: MarkdownLine | undefined, later: MarkdownLine | undefined): boolean {
+export function continues(earlier: MarkdownLine | undefined, later: MarkdownLine | undefined): boolean {
   if (earlier?.kind !== "prose" || later?.kind !== "prose" || LIST_ITEM.test(later.raw)) return false;
   return QUOTE_DEPTH.exec(earlier.raw)?.[0].split(">").length === QUOTE_DEPTH.exec(later.raw)?.[0].split(">").length;
 }
