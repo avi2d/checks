@@ -23,7 +23,9 @@ export type Failure = {
 
 export type RunRecord = Omit<Run, "failed" | "crashedFiles" | "assignment"> & { readonly failed: readonly string[] };
 
-export type Replay = { readonly seed: number; readonly files: readonly string[] };
+export type FailingWorker = { readonly seed: number; readonly files: readonly string[] };
+
+export type Replay = FailingWorker & { readonly command: string };
 
 export type FlakeRecord = {
   readonly runs: readonly RunRecord[];
@@ -45,6 +47,7 @@ const MAX_SEED = 2 ** 32 - 1;
 const WORKER_LOG = "CHECKS_FLAKE_WORKER_LOG";
 const PRELOAD = "flake-preload.ts";
 const SHELL_SAFE = /^[\w./-]+$/;
+const SILENT = { stdin: "ignore", stdout: "ignore", stderr: "ignore" } as const;
 
 const wholeBetween = (minimum: number, maximum: number) =>
   Schema.decodeUnknownEffect(Schema.NumberFromString.check(Schema.isInt(), Schema.isBetween({ minimum, maximum })));
@@ -110,12 +113,11 @@ const seedsOf = (plan: Plan) =>
 const spawnSuite = Effect.fn("spawnSuite")(function* (seed: number, outfile: string, workers: number | undefined, log: string) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const args = ["test", "--randomize", `--seed=${seed}`];
-  const silent = { stdin: "ignore", stdout: "ignore", stderr: "ignore" } as const;
-  if (workers === undefined) return yield* spawner.exitCode(ChildProcess.make(process.execPath, [...args, ...reporterArgs(outfile)], silent));
+  if (workers === undefined) return yield* spawner.exitCode(ChildProcess.make(process.execPath, [...args, ...reporterArgs(outfile)], SILENT));
   const preload = (yield* Path.Path).join(import.meta.dir, PRELOAD);
   const parallelArgs = [`--parallel=${workers}`, "--preload", preload, ...reporterArgs(outfile)];
   return yield* spawner.exitCode(
-    ChildProcess.make(process.execPath, [...args, ...parallelArgs], { ...silent, env: { [WORKER_LOG]: log }, extendEnv: true }),
+    ChildProcess.make(process.execPath, [...args, ...parallelArgs], { ...SILENT, env: { [WORKER_LOG]: log }, extendEnv: true }),
   );
 });
 
@@ -142,7 +144,7 @@ function nameOf(result: TestResult): string {
   return `${result.file}${NAME_SEPARATOR}${result.name}`;
 }
 
-function replaysOf(run: Run): readonly Replay[] {
+export function failingWorkersOf(run: Run): readonly FailingWorker[] {
   if (run.passed) return [];
   const failing = new Set([...run.failed.map((result) => result.file), ...run.crashedFiles]);
   return run.assignment.flatMap((files) => {
@@ -151,7 +153,7 @@ function replaysOf(run: Run): readonly Replay[] {
   });
 }
 
-export function recordOf(runs: readonly Run[], workers?: number): FlakeRecord {
+export function recordOf(runs: readonly Run[], parallel?: FlakeRecord["parallel"]): FlakeRecord {
   const failures = new Map<string, { file: string; test: string; line: number; seeds: number[] }>();
   for (const run of runs) {
     const failing = new Map(run.failed.map((result) => [nameOf(result), result]));
@@ -165,7 +167,7 @@ export function recordOf(runs: readonly Run[], workers?: number): FlakeRecord {
     runs: runs.map(({ seed, passed, tests, failed }) => ({ seed, passed, tests, failed: failed.map(nameOf) })),
     failures: [...failures.values()].sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line),
     outsideTests: runs.filter((run) => !run.passed && run.failed.length === 0).map((run) => run.seed),
-    ...(workers === undefined ? {} : { parallel: { workers, replays: runs.flatMap(replaysOf) } }),
+    ...(parallel === undefined ? {} : { parallel }),
   };
 }
 
@@ -174,9 +176,35 @@ function shellWord(file: string): string {
   return SHELL_SAFE.test(word) ? word : `'${word.replaceAll("'", "'\\''")}'`;
 }
 
-export function replayCommand(replay: Replay): string {
-  return ["bun test --isolate", ...replay.files.map(shellWord)].join(" ");
+function replayFlags(seed: number): readonly string[] {
+  return ["--isolate", "--randomize", `--seed=${seed}`];
 }
+
+export function replayCommand(seed: number, listed: readonly string[]): string {
+  return ["bun test", ...replayFlags(seed), ...listed.map(shellWord)].join(" ");
+}
+
+function probeFile(log: string, slot: number): string {
+  return `import { test } from "bun:test";\nimport { appendFileSync } from "node:fs";\nappendFileSync(${JSON.stringify(log)}, "${slot}\\n");\ntest("probe", () => {});\n`;
+}
+
+// Bun shuffles the listed files too, by a permutation of their positions that the seed and their count fix.
+const replayOf = Effect.fn("replayOf")(function* (worker: FailingWorker, dir: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const probe = yield* fs.makeTempDirectory({ directory: dir, prefix: "replay-" });
+  const log = path.join(probe, "order");
+  const slots = worker.files.map((_, slot) => `./${slot}.test.ts`);
+  yield* Effect.forEach(slots, (name, slot) => fs.writeFileString(path.join(probe, name), probeFile(log, slot)));
+  yield* spawner.exitCode(ChildProcess.make(process.execPath, ["test", ...replayFlags(worker.seed), ...slots], { ...SILENT, cwd: probe }));
+  const ran = (yield* fs.readFileString(log)).split("\n").filter((entry) => entry !== "").map(Number);
+  const listed = slots.map((_, slot) => worker.files[ran.indexOf(slot)]);
+  if (ran.length !== slots.length || !listed.every((file): file is string => file !== undefined)) {
+    return yield* new ReportError({ message: `bun ran the replay probe for seed ${worker.seed} in the order ${ran.join(", ")}` });
+  }
+  return { ...worker, command: replayCommand(worker.seed, listed) } satisfies Replay;
+});
 
 function replayLines({ workers, replays }: NonNullable<FlakeRecord["parallel"]>): readonly string[] {
   const lines =
@@ -184,9 +212,9 @@ function replayLines({ workers, replays }: NonNullable<FlakeRecord["parallel"]>)
       ? []
       : [
           "",
-          "Reproduce a failing run with the files its failing worker ran, in that order:",
+          "Reproduce a failing run with the files its failing worker ran, listed so the seed runs them in that order:",
           "",
-          ...replays.map((replay) => `- seed ${replay.seed}: \`${replayCommand(replay)}\``),
+          ...replays.map((replay) => `- seed ${replay.seed}: \`${replay.command}\``),
         ];
   return [
     ...lines,
@@ -233,7 +261,11 @@ const flake = Effect.gen(function* () {
       Effect.tap((run) => Console.log(`${NAME}: run ${index + 1} of ${seeds.length}, seed ${seed}: ${outcomeOf(run)}`)),
     ),
   );
-  const record = recordOf(runs, workers);
+  const parallel =
+    workers === undefined
+      ? undefined
+      : { workers, replays: yield* Effect.forEach(runs.flatMap(failingWorkersOf), (worker) => replayOf(worker, dir)) };
+  const record = recordOf(runs, parallel);
   const text = summary(record);
   yield* Console.log(text);
 

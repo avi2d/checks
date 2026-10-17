@@ -38,7 +38,7 @@ const FlakeRecord = Schema.fromJsonString(
     parallel: Schema.optionalKey(
       Schema.Struct({
         workers: Schema.Int,
-        replays: Schema.Array(Schema.Struct({ seed: Schema.Int, files: Schema.Array(Schema.String) })),
+        replays: Schema.Array(Schema.Struct({ seed: Schema.Int, files: Schema.Array(Schema.String), command: Schema.String })),
       }),
     ),
   }),
@@ -65,10 +65,10 @@ const scratch = scratchDirs();
 
 let dir = "";
 
-async function consumer(cache: string): Promise<void> {
+async function consumer(cache: string, scripts: Record<string, string> = {}): Promise<void> {
   dir = await scratch("checks-flake-");
   await mkdir(join(dir, "tests"));
-  await writeFile(join(dir, "package.json"), JSON.stringify({ name: "consumer" }));
+  await writeFile(join(dir, "package.json"), JSON.stringify({ name: "consumer", scripts }));
   await writeFile(join(dir, "tests", "cache.test.ts"), cache);
   await writeFile(join(dir, "tests", "steady.test.ts"), `import { test } from "bun:test";\ntest("holds", () => {});\n`);
 }
@@ -94,6 +94,23 @@ async function flake(summaryFile: string): Promise<{ exitCode: number; text: str
     .quiet();
   const record = Schema.decodeSync(FlakeRecord)(await readFile(join(dir, "flake-report.json"), "utf8"));
   return { exitCode: result.exitCode, text: result.stdout.toString() + result.stderr.toString(), record };
+}
+
+async function expectEachReplayFails(caught: Awaited<ReturnType<typeof flake>>, seeds: readonly number[]): Promise<void> {
+  const printed = [...caught.text.matchAll(/^- seed (\d+): `(.+)`$/gm)];
+  expect(printed.map(([, seed, command]) => [Number(seed), command])).toEqual(
+    (caught.record.parallel?.replays ?? []).map((replay) => [replay.seed, replay.command]),
+  );
+  expect(printed.map(([, seed]) => Number(seed))).toEqual([...seeds]);
+  for (const [, seed, command] of printed) {
+    const failing = caught.record.failures.filter((failure) => failure.seeds.includes(Number(seed)));
+    expect(failing).toHaveLength(1);
+    for (const attempt of [1, 2, 3]) {
+      const replay = await $`bash -c ${command ?? ""}`.cwd(dir).nothrow().quiet();
+      expect({ attempt, exitCode: replay.exitCode }).toEqual({ attempt, exitCode: 1 });
+      expect(replay.stderr.toString()).toContain(`(fail) ${failing[0]?.test}`);
+    }
+  }
 }
 
 async function failsWithSeed(seed: number): Promise<boolean> {
@@ -155,18 +172,22 @@ test(
     expect(caught.record.failures.map((failure) => failure.file).sort()).toEqual(["tests/a.test.ts", "tests/b.test.ts"]);
     expect(caught.record.runs.every((run) => run.tests === 3 && run.failed.length === 1)).toBe(true);
 
-    const printed = [...caught.text.matchAll(/^- seed (\d+): `(.+)`$/gm)];
-    expect(printed.map(([, seed]) => Number(seed))).toEqual(SEEDS);
-    expect(caught.record.parallel?.replays.map((replay) => replay.seed)).toEqual(SEEDS);
-    for (const [, seed, command] of printed) {
-      const failing = caught.record.failures.filter((failure) => failure.seeds.includes(Number(seed)));
-      expect(failing).toHaveLength(1);
-      for (const attempt of [1, 2, 3]) {
-        const replay = await $`bash -c ${command ?? ""}`.cwd(dir).nothrow().quiet();
-        expect({ attempt, exitCode: replay.exitCode }).toEqual({ attempt, exitCode: 1 });
-        expect(replay.stderr.toString()).toContain(`(fail) ${failing[0]?.test}`);
-      }
-    }
+    await expectEachReplayFails(caught, SEEDS);
+  },
+  120_000,
+);
+
+test(
+  "under the test script's workers, a replay keeps the seed's order inside each file and fails an order-dependent test every time",
+  async () => {
+    await consumer(ORDER_DEPENDENT, { test: "checks-test --parallel=1" });
+    const caught = await flake(join(dir, "step-summary.md"));
+    expect(caught.exitCode).toBe(1);
+    const [failure, ...others] = caught.record.failures;
+    expect(others).toEqual([]);
+    expect(failure).toMatchObject({ file: "tests/cache.test.ts", test: "reads the cache", line: 6 });
+    expect(failure?.seeds.length).toBeGreaterThan(0);
+    await expectEachReplayFails(caught, failure?.seeds ?? []);
   },
   120_000,
 );

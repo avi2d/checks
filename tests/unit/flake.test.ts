@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { recordOf, replayCommand, summary, type Run } from "../../src/testing/flake.ts";
+import { failingWorkersOf, recordOf, replayCommand, summary, type Replay, type Run } from "../../src/testing/flake.ts";
 import type { TestResult } from "../../src/testing/test-report.ts";
 
 function failed(file: string, line: number, name: string): TestResult {
@@ -66,18 +66,19 @@ test("a serial hunt records no workers and no replays", () => {
   expect(Object.keys(recordOf(RUNS))).toEqual(["runs", "failures", "outsideTests"]);
 });
 
+const REPLAYS: readonly Replay[] = [
+  {
+    seed: 1,
+    files: files("f2", "f4", "f5", "a", "b"),
+    command: "bun test --isolate --randomize --seed=1 ./tests/a.test.ts ./tests/f2.test.ts ./tests/b.test.ts ./tests/f5.test.ts ./tests/f4.test.ts",
+  },
+  { seed: 4, files: files("b", "a"), command: "bun test --isolate --randomize --seed=4 ./tests/a.test.ts ./tests/b.test.ts" },
+];
+
 test("a failing parallel run replays the files its failing worker ran, in order, up to the failing one", () => {
-  const { parallel } = recordOf(PARALLEL_RUNS, 2);
-  expect(parallel).toEqual({
-    workers: 2,
-    replays: [
-      { seed: 1, files: files("f2", "f4", "f5", "a", "b") },
-      { seed: 4, files: files("b", "a") },
-    ],
-  });
-  expect(parallel?.replays.map(replayCommand)).toEqual([
-    "bun test --isolate ./tests/f2.test.ts ./tests/f4.test.ts ./tests/f5.test.ts ./tests/a.test.ts ./tests/b.test.ts",
-    "bun test --isolate ./tests/b.test.ts ./tests/a.test.ts",
+  expect(PARALLEL_RUNS.flatMap(failingWorkersOf)).toEqual([
+    { seed: 1, files: files("f2", "f4", "f5", "a", "b") },
+    { seed: 4, files: files("b", "a") },
   ]);
 });
 
@@ -88,18 +89,18 @@ test("a run whose worker crashed replays that worker's files up to the crashed f
     crashedFiles: files("exits"),
     assignment: [files("f1"), files("f2", "exits")],
   };
-  expect(recordOf([crashed], 2).parallel?.replays).toEqual([{ seed: 3, files: files("f2", "exits") }]);
+  expect(failingWorkersOf(crashed)).toEqual([{ seed: 3, files: files("f2", "exits") }]);
 });
 
-test("a replay quotes a path the shell would split", () => {
-  expect(replayCommand({ seed: 1, files: ["tests/it's here.test.ts", "tests/a.test.ts"] })).toBe(
-    "bun test --isolate './tests/it'\\''s here.test.ts' ./tests/a.test.ts",
+test("a replay keeps the seed and quotes a path the shell would split", () => {
+  expect(replayCommand(1, ["tests/it's here.test.ts", "tests/a.test.ts"])).toBe(
+    "bun test --isolate --randomize --seed=1 './tests/it'\\''s here.test.ts' ./tests/a.test.ts",
   );
 });
 
 test("the parallel summary names the worker count and says a rerun seed reproduces only sometimes", () => {
   const rerun = "Rerunning a seed with bun test --randomize --seed=<seed> --parallel=2 reproduces a failing run only some of the time, because which worker takes each file is a race.";
-  expect(summary(recordOf(PARALLEL_RUNS, 2))).toBe(
+  expect(summary(recordOf(PARALLEL_RUNS, { workers: 2, replays: REPLAYS }))).toBe(
     [
       "checks-flake: 2 of 3 run(s) failed on 2 worker(s), 2 test(s) failing in them",
       "",
@@ -108,15 +109,15 @@ test("the parallel summary names the worker count and says a rerun seed reproduc
       `| tests/a.test.ts:5 ${SHARED_WORKER} | 1 of 3 runs | 4 |`,
       `| tests/b.test.ts:5 ${SHARED_WORKER} | 1 of 3 runs | 1 |`,
       "",
-      "Reproduce a failing run with the files its failing worker ran, in that order:",
+      "Reproduce a failing run with the files its failing worker ran, listed so the seed runs them in that order:",
       "",
-      "- seed 1: `bun test --isolate ./tests/f2.test.ts ./tests/f4.test.ts ./tests/f5.test.ts ./tests/a.test.ts ./tests/b.test.ts`",
-      "- seed 4: `bun test --isolate ./tests/b.test.ts ./tests/a.test.ts`",
+      "- seed 1: `bun test --isolate --randomize --seed=1 ./tests/a.test.ts ./tests/f2.test.ts ./tests/b.test.ts ./tests/f5.test.ts ./tests/f4.test.ts`",
+      "- seed 4: `bun test --isolate --randomize --seed=4 ./tests/a.test.ts ./tests/b.test.ts`",
       "",
       rerun,
     ].join("\n"),
   );
-  expect(summary(recordOf(PARALLEL_RUNS.slice(1, 2), 2))).toBe("checks-flake: 1 run(s) passed on 2 worker(s), with seeds 1");
+  expect(summary(recordOf(PARALLEL_RUNS.slice(1, 2), { workers: 2, replays: [] }))).toBe("checks-flake: 1 run(s) passed on 2 worker(s), with seeds 1");
 });
 
 test("a seed replayed twice counts each run it failed in", () => {
