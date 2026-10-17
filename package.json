@@ -45,8 +45,9 @@
     "src/delivery/commit-title.ts",
     "src/delivery/docs-only.ts",
     "src/testing/mutation.ts",
-    "src/testing/mutation-scope.ts",
+    "src/testing/mutation-refusal.ts",
     "src/testing/mutation-compare.ts",
+    "src/testing/mutation-scope.ts",
     "src/testing/mutation-baseline.ts",
     "src/testing/mutation-baseline-saved.ts",
     "src/testing/subsumed-tests.ts",
@@ -147,6 +148,7 @@
     "checks-mutation": "src/testing/mutation.ts",
     "checks-mutation-compare": "src/testing/mutation-compare.ts",
     "checks-mutation-baseline": "src/testing/mutation-baseline.ts",
+    "checks-mutation-scope": "src/testing/mutation-scope.ts",
     "checks-subsumed-tests": "src/testing/subsumed-tests.ts",
     "checks-ci-wiring": "src/delivery/ci-wiring.ts",
     "checks-comment-gate": "src/quality/comment-gate.ts",
@@ -168,7 +170,7 @@
   },
   "scripts": {
     "prepare": "bun src/dependencies/vendor.ts --library effect --package effect --repository https://github.com/Effect-TS/effect.git --tag 'effect@{version}' --path packages/effect/package.json",
-    "build": "bun build src/quality/effect-channel/index.ts --outdir dist/effect-channel --target node --format esm && bun build src/complexity/readability/index.ts --outdir dist/readability --target node --format esm && bun build src/quality/data-shape/index.ts --outdir dist/data-shape --target node --format esm && bun build src/testing/mutation-guard-plugin.ts src/testing/mutation-scope.ts --outdir dist/mutation --target node --format esm && bun build src/quality/presets/oxlint.ts src/quality/presets/knip.ts src/quality/presets/dependency-cruiser.ts --outdir dist/presets --target node --format esm && tsc -p tsconfig.presets.json && bun scripts/configs-write.ts && bun src/quality/effect-scope.ts && bun scripts/doc-templates-write.ts && bun src/delivery/changelog-write.ts && bun scripts/doc-blocks-write.ts",
+    "build": "bun build src/quality/effect-channel/index.ts --outdir dist/effect-channel --target node --format esm && bun build src/complexity/readability/index.ts --outdir dist/readability --target node --format esm && bun build src/quality/data-shape/index.ts --outdir dist/data-shape --target node --format esm && bun build src/testing/mutation-guard-plugin.ts src/testing/mutation-refusal.ts --outdir dist/mutation --target node --format esm && bun build src/quality/presets/oxlint.ts src/quality/presets/knip.ts src/quality/presets/dependency-cruiser.ts --outdir dist/presets --target node --format esm && tsc -p tsconfig.presets.json && bun scripts/configs-write.ts && bun src/quality/effect-scope.ts && bun scripts/doc-templates-write.ts && bun src/delivery/changelog-write.ts && bun scripts/doc-blocks-write.ts",
     "lint": "oxlint && bun src/core/lint.ts",
     "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
     "test": "bun src/testing/test.ts",
@@ -234,7 +236,8 @@
     "@effect/platform-node-shared": "4.0.0",
     "@total-typescript/ts-reset": "0.6.1",
     "commonmark": "0.31.2",
-    "knip": "6.38.0"
+    "knip": "6.38.0",
+    "minimatch": "10.2.6"
   },
   "overrides": {
     "qs": "6.16.0",

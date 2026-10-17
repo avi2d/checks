@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { missingReportRefusal } from "./mutation-scope.ts";
+import { missingReportRefusal } from "./mutation-refusal.ts";
 
 export const GUARD_IGNORER = "checks-incremental-report-guard";
 
