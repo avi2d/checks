@@ -7,5 +7,6 @@ export default defineConfig({
     "src/quality/data-shape/index.ts",
     "src/quality/presets/*.ts",
     "src/dependencies/kit-defaults.ts",
+    "src/testing/flake-preload.ts",
   ],
 });

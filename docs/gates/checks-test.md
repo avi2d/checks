@@ -90,6 +90,7 @@ The count is a whole number from 1 up, and without the option the suite runs ser
 Tests still run in random order, and `test.only` still fails the run.
 Bun merges every worker's results into the one JUnit report, so each skipped test and each todo is judged as in a serial run.
 A tier script takes the same option, as in `checks-test --tier=live --parallel=4`.
+[checks-flake](checks-flake.md#parallel-hunts) hunts with the worker count the `test` script sets.
 
 A file whose worker crashes, for example when a test calls `process.exit`, fails the run.
 Bun reports no result from that file, so its skips are not judged and its declarations are not reported as stale.

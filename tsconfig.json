@@ -30,8 +30,19 @@
         },
         "overrides": [
           {
-            "include": ["src/**/*.ts", "scripts/**/*.ts"],
-            "exclude": ["src/quality/effect-channel/**", "src/complexity/readability/**", "src/quality/data-shape/**", "src/quality/presets/oxlint.ts", "src/quality/presets/knip.ts", "src/quality/presets/dependency-cruiser.ts"],
+            "include": [
+              "src/**/*.ts",
+              "scripts/**/*.ts"
+            ],
+            "exclude": [
+              "src/quality/effect-channel/**",
+              "src/complexity/readability/**",
+              "src/quality/data-shape/**",
+              "src/quality/presets/oxlint.ts",
+              "src/quality/presets/knip.ts",
+              "src/quality/presets/dependency-cruiser.ts",
+              "src/testing/flake-preload.ts"
+            ],
             "options": {
               "diagnosticSeverity": {
                 "nodeBuiltinImport": "error",
