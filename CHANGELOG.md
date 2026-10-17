@@ -2,6 +2,17 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.44.0
+
+Released 2026-10-17.
+
+### Features
+
+- **testing:** hunt flakes with parallel test workers and replay failing workers [#164](https://github.com/avi2d/checks/pull/164)
+- **mutation:** add checks-mutation-scope to limit PR mutation runs to the change [#161](https://github.com/avi2d/checks/pull/161)
+- **quality:** add checks-no-plain-js gate refusing plain JavaScript sources [#163](https://github.com/avi2d/checks/pull/163)
+- **docs:** add checks-copy gate to refuse dashes in declared copy [#160](https://github.com/avi2d/checks/pull/160)
+
 ## 0.43.0
 
 Released 2026-10-17.
