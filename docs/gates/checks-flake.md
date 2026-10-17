@@ -36,7 +36,7 @@ bun test --isolate --randomize --seed=2170533150 ./tests/unit/cache.test.ts ./te
 The seed orders the tests inside each file as the worker ran them, whichever other files run with it.
 Bun also shuffles the files it lists, by a permutation of their positions that the seed and their count fix.
 So `checks-flake` learns that permutation from a run of placeholder files and lists the files so the seed runs them in the worker's order.
-The summary still names the seed and the worker count, and says that rerunning them reproduces only some of the time.
+On more than one worker the summary still names the seed and the worker count, and says that rerunning them reproduces only some of the time.
 A run whose worker crashed gets a replay of that worker's files up to the crashed one.
 
 ## What it reads

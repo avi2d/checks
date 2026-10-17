@@ -120,6 +120,10 @@ test("the parallel summary names the worker count and says a rerun seed reproduc
   expect(summary(recordOf(PARALLEL_RUNS.slice(1, 2), { workers: 2, replays: [] }))).toBe("checks-flake: 1 run(s) passed on 2 worker(s), with seeds 1");
 });
 
+test("on one worker no file can go to another worker, so the summary does not call a rerun seed a race", () => {
+  expect(summary(recordOf(PARALLEL_RUNS, { workers: 1, replays: REPLAYS }))).not.toContain("race");
+});
+
 test("a seed replayed twice counts each run it failed in", () => {
   const replayed: readonly Run[] = [serial(7, 1, [failed("tests/a.test.ts", 5, "a")]), serial(7, 1, [failed("tests/a.test.ts", 5, "a")])];
   expect(recordOf(replayed).failures).toEqual([{ file: "tests/a.test.ts", test: "a", line: 5, seeds: [7, 7] }]);

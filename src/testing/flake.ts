@@ -216,6 +216,7 @@ function replayLines({ workers, replays }: NonNullable<FlakeRecord["parallel"]>)
           "",
           ...replays.map((replay) => `- seed ${replay.seed}: \`${replay.command}\``),
         ];
+  if (workers === 1) return lines;
   return [
     ...lines,
     "",

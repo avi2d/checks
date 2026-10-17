@@ -168,7 +168,7 @@ test(
     const caught = await flake(join(dir, "step-summary.md"));
     expect(caught.exitCode).toBe(1);
     expect(caught.text).toContain(`checks-flake: ${SEEDS.length} of ${SEEDS.length} run(s) failed on 1 worker(s), `);
-    expect(caught.text).toContain("bun test --randomize --seed=<seed> --parallel=1 reproduces a failing run only some of the time");
+    expect(caught.text).not.toContain("only some of the time");
     expect(caught.record.failures.map((failure) => failure.file).sort()).toEqual(["tests/a.test.ts", "tests/b.test.ts"]);
     expect(caught.record.runs.every((run) => run.tests === 3 && run.failed.length === 1)).toBe(true);
 
