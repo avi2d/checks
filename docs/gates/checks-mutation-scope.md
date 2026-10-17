@@ -75,7 +75,7 @@ It prints one line for each list, as `NAME=a,b`, with each list sorted by path:
 
 Stryker reads each `--mutate` entry as a glob and turns each backslash into a `/`.
 So `SCOPE` wraps each glob character in a path in a class of its own.
-`src/routes/[id].ts` prints as `src/routes/[[]id[]].ts`, which matches that file and not `src/routes/i.ts`.
+`app/routes/[id].ts` prints as `app/routes/[[]id[]].ts`, which matches that file and not `app/routes/i.ts`.
 `STALE_TESTS` names each test by its literal path, as the incremental state keys it.
 
 Stryker compares only a test file's own source when it resumes from incremental state.
