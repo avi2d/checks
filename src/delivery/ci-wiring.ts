@@ -291,7 +291,7 @@ function readsOverride(runsOn: unknown): boolean {
 function runnerFault(runsOn: unknown, mutation: boolean, visibility: Visibility): string | undefined {
   const overridden = readsOverride(runsOn);
   const pin = `set runs-on: [${MUTATION_RUNNER.join(", ")}]`;
-  if (mutation && overridden) return `a mutation job reads CI_RUNS_ON, so an override moves its full sweeps off winbox; ${pin}`;
+  if (mutation && overridden) return `a mutation job reads CI_RUNS_ON, so an override moves its mutation runs off winbox; ${pin}`;
   if (mutation) return visibility === "private" && !sameLabels(runsOn, MUTATION_RUNNER) ? `a mutation job in a private repository runs off winbox; ${pin}` : undefined;
   const hosted = typeof runsOn === "string" && HOSTED_OVERRIDE.test(runsOn.trim());
   if (hosted || (visibility !== "private" && !overridden)) return undefined;

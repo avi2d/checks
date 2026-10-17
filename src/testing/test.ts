@@ -52,6 +52,14 @@ export function testOptions(args: readonly string[]): TestOptions | undefined {
   return options;
 }
 
+const TEST_SCRIPTS: readonly string[] = [NAME, `bun src/${TEST_ENTRY_POINT.script}`];
+
+export function scriptOptions(script: unknown): TestOptions | undefined {
+  if (typeof script !== "string") return undefined;
+  const entry = TEST_SCRIPTS.find((candidate) => script === candidate || script.startsWith(`${candidate} `));
+  return entry === undefined ? undefined : testOptions(script.slice(entry.length).split(" ").filter((arg) => arg !== ""));
+}
+
 function matches(declaration: SkipDeclaration, result: TestResult): boolean {
   const { name } = declaration;
   return (

@@ -4,7 +4,7 @@ import { workingTreeFiles } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { ENTRY_POINT, TEST_ENTRY_POINT } from "../core/gates.ts";
 import { identifierName, isRecord, lineOf, parseTypeScript, spanStart, stringValue } from "../core/swc.ts";
-import { testOptions, type TestOptions } from "./test.ts";
+import { scriptOptions } from "./test.ts";
 
 export type Violation = {
   readonly file: string;
@@ -61,7 +61,6 @@ const ACCEPTED_IGNORES: readonly (readonly string[])[] = [
 export const LAYOUT_CHECK_MARK = "src/testing/test-layout.ts";
 export const LAYOUT_CHECK_BIN = "checks-test-layout";
 const OWN_ENTRY_POINT = `src/${ENTRY_POINT.script}`;
-const TEST_SCRIPTS: readonly string[] = [TEST_ENTRY_POINT.bin, `bun src/${TEST_ENTRY_POINT.script}`];
 const PARALLEL_OPTION = "optionally with --parallel=<workers>";
 
 export class LayoutError extends Schema.TaggedError<LayoutError>()("LayoutError", {
@@ -231,12 +230,6 @@ export const isolationViolations = Effect.fn("isolationViolations")(function* (f
   return violations;
 });
 
-function entryOptions(script: unknown): TestOptions | undefined {
-  if (typeof script !== "string") return undefined;
-  const entry = TEST_SCRIPTS.find((candidate) => script === candidate || script.startsWith(`${candidate} `));
-  return entry === undefined ? undefined : testOptions(script.slice(entry.length).split(" ").filter((arg) => arg !== ""));
-}
-
 function tierScriptViolation(scripts: unknown, files: readonly string[], tier: (typeof TEST_TIERS)[number]): Violation | undefined {
   const file = "package.json";
   const key = `test:${tier}`;
@@ -244,7 +237,7 @@ function tierScriptViolation(scripts: unknown, files: readonly string[], tier: (
   const expected = `${TEST_ENTRY_POINT.bin} --tier=${tier}`;
   const hasTests = files.some((candidate) => candidate.startsWith(`tests/${tier}/`) && TEST_FILE.test(candidate));
   if (!hasTests && found === undefined) return undefined;
-  if (entryOptions(found)?.tier === tier) return undefined;
+  if (scriptOptions(found)?.tier === tier) return undefined;
   return {
     file,
     line: undefined,
@@ -258,7 +251,7 @@ export function scriptViolations(manifest: unknown, files: readonly string[] = [
   const test = isRecord(scripts) ? scripts["test"] : undefined;
   const lint = isRecord(scripts) ? scripts["lint"] : undefined;
   const violations: Violation[] = [];
-  const options = entryOptions(test);
+  const options = scriptOptions(test);
   if (options === undefined || options.tier !== undefined) {
     violations.push({
       file,

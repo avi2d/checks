@@ -107,6 +107,7 @@ This repository holds itself to the kit through its own `oxlint.config.ts`, `kni
 
 - Its `oxlint.config.ts` lifts `effect-channel/no-throw` from `src/quality/comment-matchers.ts`, whose synchronous `refused()` a host loads without `node_modules`.
 - It keeps the oxlint plugins and the oxlint, Knip and dependency-cruiser builders outside its Effect paths, since a tool loads each synchronously.
+- It keeps the `checks-flake` preload outside its Effect paths, since Bun loads it into every test file.
 - Its `dependency-cruiser.config.ts` names each plugin entry in `orphans`, and adds `host-loaded-imports-nothing`.
 
 ## Related topics

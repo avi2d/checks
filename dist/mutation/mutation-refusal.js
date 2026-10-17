@@ -1,4 +1,4 @@
-// src/testing/mutation-scope.ts
+// src/testing/mutation-refusal.ts
 var NON_RUNS = ["--help", "-h", "--version"];
 var MUTATE_FLAGS = ["--mutate", "-m"];
 function namesGlob(args) {

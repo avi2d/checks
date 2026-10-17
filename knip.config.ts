@@ -7,7 +7,8 @@ export default defineConfig({
     "src/quality/data-shape/index.ts",
     "src/quality/presets/*.ts",
     "src/testing/mutation-guard-plugin.ts",
-    "dist/mutation/mutation-scope.js",
+    "dist/mutation/mutation-refusal.js",
     "src/dependencies/kit-defaults.ts",
+    "src/testing/flake-preload.ts",
   ],
 });
