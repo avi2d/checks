@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
 
 const SCRIPT = join(CHECKOUT, "src", "testing", "test.ts");
-const RUN_MS = 30_000;
 const BUNFIG = '[test]\npathIgnorePatterns = ["**/tests/quarantine/**", "**/tests/live/**", "**/tests/pixel/**"]\n';
 
 const scratch = scratchDirs();
@@ -48,7 +47,7 @@ test("a reason at the test site passes without a package declaration", async () 
   const declared = await checksTest(false);
   expect(declared.exitCode).toBe(0);
   expect(declared.text).toContain("checks-test: 1 skipped test(s), each declared at its test site");
-}, RUN_MS);
+});
 
 test("a dynamic skip reason is refused before the suite runs", async () => {
   await consumer(
@@ -58,7 +57,7 @@ test("a dynamic skip reason is refused before the suite runs", async () => {
   const refused = await checksTest(false);
   expect(refused.exitCode).toBe(2);
   expect(refused.text).toContain("skipReason needs a non-empty literal reason and a literal test name");
-}, RUN_MS);
+});
 
 test("test.skip can declare its reason at the test site", async () => {
   await consumer(
@@ -68,7 +67,7 @@ test("test.skip can declare its reason at the test site", async () => {
   const declared = await checksTest(false);
   expect(declared.exitCode).toBe(0);
   expect(declared.text).toContain("checks-test: 1 skipped test(s), each declared at its test site");
-}, RUN_MS);
+});
 
 test("a skip wrapped across lines is declared at the line Bun reports", async () => {
   await consumer(
@@ -93,7 +92,7 @@ test("a skip wrapped across lines is declared at the line Bun reports", async ()
   const declared = await checksTest(true);
   expect(declared.exitCode).toBe(0);
   expect(declared.text).toContain("checks-test: 3 skipped test(s), each declared at its test site");
-}, RUN_MS);
+});
 
 test("a skipReason on a describe is refused before the suite runs", async () => {
   await consumer(
@@ -112,7 +111,7 @@ test("a skipReason on a describe is refused before the suite runs", async () => 
   expect(refused.text).toContain(
     "tests/suite.test.ts: line 3: skipReason cannot declare a describe; declare each test inside it with its own skipReason",
   );
-}, RUN_MS);
+});
 
 test("a declared test inside an undeclared skipped describe passes, and an undeclared one fails", async () => {
   const suite = (inner: string) =>
@@ -134,7 +133,7 @@ test("a declared test inside an undeclared skipped describe passes, and an undec
   const refused = await checksTest(true);
   expect(refused.exitCode).toBe(1);
   expect(refused.text).toContain("tests/suite.test.ts:5 screen > scrolls: skipped with no reason at its test site");
-}, RUN_MS);
+});
 
 test("a declared todo passes", async () => {
   await consumer(
@@ -144,7 +143,7 @@ test("a declared todo passes", async () => {
   const declared = await checksTest(true);
   expect(declared.exitCode).toBe(0);
   expect(declared.text).toContain("checks-test: 1 skipped test(s), each declared at its test site");
-}, RUN_MS);
+});
 
 test("a native skip without a reason and an undeclared todo fail", async () => {
   await consumer(
@@ -155,7 +154,7 @@ test("a native skip without a reason and an undeclared todo fail", async () => {
   expect(refused.exitCode).toBe(1);
   expect(refused.text).toContain("uses the unavailable daemon: skipped with no reason at its test site");
   expect(refused.text).toContain("refunds a partial order: a todo with no reason at its test site");
-}, RUN_MS);
+});
 
 test("a declaration whose test stopped skipping fails in CI and warns locally", async () => {
   await consumer(
@@ -168,7 +167,7 @@ test("a declaration whose test stopped skipping fails in CI and warns locally", 
   const local = await checksTest(false);
   expect(local.exitCode).toBe(0);
   expect(local.text).toContain("warning: 1 declaration(s) matching no skipped test");
-}, RUN_MS);
+});
 
 test("a declaration whose registration no longer exists fails in CI and warns locally", async () => {
   await consumer(
@@ -181,7 +180,7 @@ test("a declaration whose registration no longer exists fails in CI and warns lo
   const local = await checksTest(false);
   expect(local.exitCode).toBe(0);
   expect(local.text).toContain("warning: 1 declaration(s) matching no skipped test");
-}, RUN_MS);
+});
 
 test("a ci declaration gated on a missing resource skips in CI and is not judged locally", async () => {
   await consumer(
@@ -196,7 +195,7 @@ test("a ci declaration gated on a missing resource skips in CI and is not judged
   const local = await checksTest(false);
   expect(local.exitCode).toBe(0);
   expect(local.text).toContain("1 declaration(s) for ci not judged in this local run");
-}, RUN_MS);
+});
 
 test("a ci skip gated on process.env.CI fails a local run as undeclared", async () => {
   await consumer(
@@ -208,7 +207,7 @@ test("a ci skip gated on process.env.CI fails a local run as undeclared", async 
   const local = await checksTest(false);
   expect(local.exitCode).toBe(1);
   expect(local.text).toContain("1 skipped test(s) undeclared in this local run");
-}, RUN_MS);
+});
 
 test("the default run excludes live tests and the live and pixel tiers judge only their own directory", async () => {
   await consumer('import { expect, test } from "bun:test";\ntest("default test", () => expect(1).toBe(1));\n', {
@@ -228,7 +227,7 @@ test("the default run excludes live tests and the live and pixel tiers judge onl
   const pixelRun = await checksTest(false, ["--tier=pixel"]);
   expect(pixelRun.exitCode).toBe(0);
   expect(pixelRun.text).toContain("checks-test: 1 skipped test(s), each declared at its test site");
-}, RUN_MS);
+});
 
 test("the unit and e2e tiers each run and judge only their own directory", async () => {
   await consumer('import { expect, test } from "bun:test";\ntest("default test", () => expect(1).toBe(1));\n', {
@@ -245,7 +244,7 @@ test("the unit and e2e tiers each run and judge only their own directory", async
   const e2e = await checksTest(true, ["--tier=e2e"]);
   expect(e2e.exitCode).toBe(0);
   expect(e2e.text).toContain("checks-test: 1 skipped test(s), each declared at its test site");
-}, RUN_MS);
+});
 
 test("a tier run never runs the other tier's files", async () => {
   await consumer('import { expect, test } from "bun:test";\ntest("default test", () => expect(1).toBe(1));\n', {
@@ -258,7 +257,7 @@ test("a tier run never runs the other tier's files", async () => {
 
   const unit = await checksTest(true, ["--tier=unit"]);
   expect(unit.exitCode).toBe(1);
-}, RUN_MS);
+});
 
 test("a focused test fails even without CI set, serially and across parallel workers", async () => {
   await consumer(
@@ -271,7 +270,7 @@ test("a focused test fails even without CI set, serially and across parallel wor
     expect(refused.exitCode).toBe(1);
     expect(refused.text).toContain(".only is disabled");
   }
-}, RUN_MS);
+});
 
 // Each file waits long enough that bun starts a second worker, and records the worker that ran it.
 function workerFile(body: string): string {
@@ -307,7 +306,7 @@ test("a declared skip in one parallel worker is judged at its test site", async 
   const stale = await checksTest(true, ["--parallel=2"]);
   expect(stale.exitCode).toBe(1);
   expect(stale.text).toContain("tests/pricing.test.ts:8: no test skipped with this declaration; reason: waits for the rounding fix");
-}, RUN_MS);
+});
 
 test("an undeclared skip in one parallel worker fails the run", async () => {
   await consumer(workerFile(""), {
@@ -318,7 +317,7 @@ test("an undeclared skip in one parallel worker fails the run", async () => {
   expect(refused.exitCode).toBe(1);
   expect(refused.text).toContain("tests/pricing.test.ts:8 rounds half to even: skipped with no reason at its test site");
   expect(await workersUsed()).toBe(2);
-}, RUN_MS);
+});
 
 test("a file whose parallel worker crashed fails the run and leaves its declarations unjudged", async () => {
   await consumer(workerFile(""), {
@@ -331,7 +330,7 @@ test("a file whose parallel worker crashed fails the run and leaves its declarat
   expect(crashed.exitCode).toBe(1);
   expect(crashed.text).toContain("checks-test: the worker running tests/crash.test.ts crashed, so its skips were not judged");
   expect(crashed.text).not.toContain("no test skipped with this declaration");
-}, RUN_MS);
+});
 
 test("a test filter is refused before the suite runs", async () => {
   await consumer('import { expect, test } from "bun:test";\ntest("passes", () => expect(1).toBe(1));\n');
@@ -339,4 +338,4 @@ test("a test filter is refused before the suite runs", async () => {
   const refused = await checksTest(false, ["--parallel=2", "tests/suite.test.ts"]);
   expect(refused.exitCode).toBe(2);
   expect(refused.text).toContain("refuses test filters");
-}, RUN_MS);
+});

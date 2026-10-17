@@ -7,7 +7,6 @@ import { CHECKOUT, fixtureRepos, ran, type FixtureRepo, type Ran } from "./lib/f
 
 const open = fixtureRepos("checks-ci-wiring-");
 const SCRIPT = join(CHECKOUT, "src", "delivery", "ci-wiring.ts");
-const WIRING_MS = 30_000;
 const workflow = `on:\n  pull_request:\n    types: [opened, synchronize]\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n      - run: bun run build\n      - run: git diff --exit-code\n      - run: bun run typecheck\n      - run: bun run test\n      - run: ./node_modules/.bin/commitlint\n`;
 const scripts = (names: readonly string[]): string => JSON.stringify({ name: "consumer", scripts: Object.fromEntries(names.map((name) => [name, name])) });
 
@@ -29,7 +28,7 @@ test("the installed bin refuses an omitted gate and accepts its restored step", 
   const green = await wiring(repo);
   expect(green.exitCode).toBe(0);
   expect(green.text).toContain("3 gate(s) run");
-}, WIRING_MS);
+});
 
 test("a build script requires its step and a clean git diff after it", async () => {
   const repo = await open({ "package.json": scripts(["lint"]), ".github/workflows/ci.yml": workflow.replace(/ {6}- run: (bun run build|git diff --exit-code)\n/g, "") });
@@ -40,7 +39,7 @@ test("a build script requires its step and a clean git diff after it", async () 
   expect(red.exitCode).toBe(1);
   expect(red.text).toContain("2 of 4 gate(s) do not run");
   expect(red.text).toContain("git diff --exit-code");
-}, WIRING_MS);
+});
 
 test("false if and continue-on-error cannot make a required step green", async () => {
   const repo = await open({ "package.json": scripts(["lint", "test"]), "src/index.ts": "export const answer = 42;\n", ".github/workflows/ci.yml": workflow });
@@ -53,7 +52,7 @@ test("false if and continue-on-error cannot make a required step green", async (
   }
   await repo.write({ ".github/workflows/ci.yml": workflow });
   expect((await wiring(repo)).exitCode).toBe(0);
-}, WIRING_MS);
+});
 
 test("the default branch comes from origin HEAD, the pull request base or GitHub's event, never the workflow", async () => {
   const master = workflow.replace("    types: [opened, synchronize]\n", "    branches: [master]\n");
@@ -73,7 +72,7 @@ test("the default branch comes from origin HEAD, the pull request base or GitHub
   const release = await wiring(repo, { GITHUB_BASE_REF: "release" });
   expect(release.exitCode).toBe(1);
   expect(release.text).toContain("limits pull_request to branches other than release");
-}, WIRING_MS);
+});
 
 test("a private repository's event holds mutation jobs to winbox and every other job to a hosted default", async () => {
   const old = `\${{ vars.CI_RUNS_ON || fromJSON('["self-hosted","Linux","X64","winbox"]') }}`;
@@ -105,7 +104,7 @@ test("a private repository's event holds mutation jobs to winbox and every other
   const green = await wiring(repo, privateEvent);
   expect(green.exitCode).toBe(0);
   expect(green.text).toContain("3 gate(s) run on pull requests to main");
-}, WIRING_MS);
+});
 
 test("a private repository's mutation job through a repository shell script in its run directory runs on winbox and a non-shell script does not count", async () => {
   const hosted = "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}";
@@ -134,7 +133,7 @@ test("a private repository's mutation job through a repository shell script in i
   const green = await wiring(repo, privateEvent);
   expect(green.text).not.toContain("wrong runner");
   expect(green.exitCode).toBe(0);
-}, WIRING_MS);
+});
 
 test("a daily release that names a removed workflow fails until the name is gone", async () => {
   const broken = await Bun.file(join(CHECKOUT, "tests", "fixtures", "socials-daily-release-broken.yml")).text();
@@ -151,7 +150,7 @@ test("a daily release that names a removed workflow fails until the name is gone
   expect(red.text).toContain("commitlint.yml");
   await repo.write({ ".github/workflows/daily-release.yml": broken.replace(" ci.yml commitlint.yml", " ci.yml") });
   expect((await wiring(repo)).exitCode).toBe(0);
-}, WIRING_MS);
+});
 
 test("a drifted bun pin fails and the fleet pin passes", async () => {
   const setup = workflow.replace(
@@ -173,7 +172,7 @@ test("a drifted bun pin fails and the fleet pin passes", async () => {
   const green = await wiring(repo);
   expect(green.exitCode).toBe(0);
   expect(green.text).toContain("3 gate(s) run");
-}, WIRING_MS);
+});
 
 test("a version file named in another case is read and its drifted pin fails over a fleet-pinned root", async () => {
   const setup = workflow.replace(
@@ -190,7 +189,7 @@ test("a version file named in another case is read and its drifted pin fails ove
   const red = await wiring(repo);
   expect(red.exitCode).toBe(1);
   expect(red.text).toContain("requests bun 1.3.13 from with.bun-version-file .bun-version");
-}, WIRING_MS);
+});
 
 test("a setup-bun step with no pinned version fails until the root package.json pins the fleet version", async () => {
   const setup = workflow.replace(
@@ -210,4 +209,4 @@ test("a setup-bun step with no pinned version fails until the root package.json 
     "package.json": JSON.stringify({ name: "consumer", scripts: { lint: "lint", test: "test" }, engines: { bun: FLEET_BUN_VERSION } }),
   });
   expect((await wiring(repo)).exitCode).toBe(0);
-}, WIRING_MS);
+});
