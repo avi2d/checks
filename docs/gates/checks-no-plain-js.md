@@ -8,7 +8,7 @@ audience: consumers
 
 ## What it checks
 
-It fails on every `.js` or `.mjs` file in the working tree that is neither generated output, a vendored tree, a served asset, fixture data, nor a tool entry its loader cannot read as TypeScript.
+It fails on every `.js` or `.mjs` file in the working tree that none of the exemptions below covers.
 Each line names the file and tells its writer to convert it to TypeScript.
 `dist/` holds the committed build output, so the check passes over it.
 `dependency-cruiser.config.js` at the repository root is written by `bun run build` from the TypeScript builder, so the check passes over that one path.
@@ -17,12 +17,13 @@ Each line names the file and tells its writer to convert it to TypeScript.
 `tests/fixtures/` holds data the suite never parses, so the check passes over it.
 Stryker loads its config only as JSON or JavaScript, so the check passes over a config file carrying a Stryker config name, such as `stryker.conf.mjs`.
 The Stryker preset ships as `stryker.preset.js` under its documented import path, so the check passes over that name.
-A config file its tool loads as TypeScript fails, such as a commitlint config or a dependency-cruiser config in JavaScript, since each loader reads TypeScript too.
+A JavaScript config whose tool also loads TypeScript fails, such as a commitlint or dependency-cruiser config.
 
 ## What it reads
 
 It reads the working tree.
-It scans the tracked and untracked files that `git ls-files --exclude-standard` reports, so `node_modules/` and every gitignored tree are out of reach, and a local run agrees with CI before `git add`.
+It scans the tracked and untracked files that `git ls-files --exclude-standard` reports, so `node_modules/` and every gitignored tree are out of reach.
+A local run agrees with CI before `git add`.
 
 ## Arguments
 
