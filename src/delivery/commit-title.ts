@@ -23,8 +23,8 @@ const cliOf = Effect.fn("cliOf")(function* () {
 // The config ships with the kit, so it sits two levels above this file wherever the kit is installed.
 const configOf = Effect.fn("configOf")(function* () {
   const file = yield* Effect.try({
-    try: () => new URL("../../commitlint.config.js", import.meta.url),
-    catch: () => setup("cannot resolve commitlint.config.js from the installed kit"),
+    try: () => new URL("../../commitlint.config.ts", import.meta.url),
+    catch: () => setup("cannot resolve commitlint.config.ts from the installed kit"),
   });
   return yield* (yield* Path.Path).fromFileUrl(file);
 });

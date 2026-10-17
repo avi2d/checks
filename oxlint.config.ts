@@ -11,6 +11,8 @@ export default defineConfig({
       "src/quality/presets/oxlint.ts",
       "src/quality/presets/knip.ts",
       "src/quality/presets/dependency-cruiser.ts",
+      // Stryker loads this plugin synchronously and stops the run on a throw, so it cannot run an Effect.
+      "src/testing/mutation-guard-plugin.ts",
     ],
   },
   ignorePatterns: ["node_modules/**", "dist/**/*.js"],

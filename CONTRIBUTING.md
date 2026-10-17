@@ -90,7 +90,7 @@ To place a change:
    | `src/delivery/` | the gates and bins for how a change reaches `main` and a release, and what a commit may not carry |
    | `src/dependencies/` | what code may import, which library sources an agent reads, which locked package versions carry a known advisory, and the pinned download of each scanner a gate runs |
    | `scripts/` | the kit's own build and CI tooling, which nothing ships |
-   | `dist/` | the committed oxlint plugin bundles, and the config builders compiled under `dist/presets/` |
+   | `dist/` | the committed oxlint plugin bundles, the config builders compiled under `dist/presets/`, and the Stryker preset's helpers compiled under `dist/mutation/` |
    | `dist/templates/` | one template per kind of doc file, which `bun run build` renders |
    | `src/quality/presets/` | the oxlint, Knip and dependency-cruiser config builders, and the Effect language service severities |
    | `CHANGELOG.md` | every release, which `bun run build` writes from the conventional commits |
@@ -98,7 +98,7 @@ To place a change:
    | `docs/gates/` | one reference page per bin |
    | `docs/configs/` | one reference page per shipped config a bin does not own |
    | `docs/design.md` | why the kit is shaped the way it is |
-   | the root configs | `tsconfig.effect.json` with the `ts-reset.d.ts` it lists, `bunfig.toml`, `commitlint.config.js` and `stryker.preset.js`, which a consuming repository extends or copies, and `oxlintrc.json` and `dependency-cruiser.config.js`, which the build writes for a repository that extends them by path |
+   | the root configs | `tsconfig.effect.json` with the `ts-reset.d.ts` it lists, `bunfig.toml`, `commitlint.config.ts` and `stryker.preset.js`, which a consuming repository extends or copies, and `oxlintrc.json` and `dependency-cruiser.config.js`, which the build writes for a repository that extends them by path |
 
 1. Change the page under `docs/` that describes the behaviour in the same commit as the behaviour.
    A new bin gets its page under `docs/gates/`, and the suite fails until it has one.

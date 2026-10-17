@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { fullRunRefusal, missingReportRefusal } from "../../src/testing/mutation-scope.js";
+import { fullRunRefusal, missingReportRefusal } from "../../src/testing/mutation-scope.ts";
 
 test("a full run outside CI is refused and names the CI command", () => {
   expect(fullRunRefusal([], "")).toContain("gh workflow run mutation");
