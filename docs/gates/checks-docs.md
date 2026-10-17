@@ -113,6 +113,8 @@ Readability scores and word choice, such as easy, are not checked.
 A sentence over the trial length cap is listed as advisory and never fails the run.
 The cap is 20 words in an ordered list item and 25 words elsewhere.
 
+[checks-copy](checks-copy.md) holds every line of the copy a repository declares to the three separator rules.
+
 `src/docs/prose-matchers.ts` holds the rules and a synchronous `proseRefused()`, and imports nothing.
 The package exports it as `@avi2dg/checks/scripts/prose-matchers.ts`.
 A host such as a write-time hook can copy that one file into a directory with no `node_modules`, and refuse the same lines.
@@ -225,4 +227,5 @@ A name the range removes fails wherever a doc still carries it, because the remo
 ## Related topics
 
 - [Why it is shaped this way](../design.md)
+- [checks-copy](checks-copy.md)
 - [checks-lint](checks-lint.md)

@@ -173,6 +173,7 @@ The table groups the gates by vector, the part of a repository each one judges.
 | testing | [`checks-test-layout`](docs/gates/checks-test-layout.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
 | testing | [`checks-quarantine-clock`](docs/gates/checks-quarantine-clock.md) | the range | every repository |
 | docs | [`checks-docs`](docs/gates/checks-docs.md) | the range, and every agent file at the head commit | every repository |
+| docs | [`checks-copy`](docs/gates/checks-copy.md) | the working tree | a repository tracking `copy.json` |
 | delivery | [`checks-commit-identity`](docs/gates/checks-commit-identity.md) | the range | every repository |
 | delivery | [`checks-ci-wiring`](docs/gates/checks-ci-wiring.md) | the working tree | every repository |
 | delivery | [`checks-secrets`](docs/gates/checks-secrets.md) | the range | every repository |
