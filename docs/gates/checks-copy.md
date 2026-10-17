@@ -33,7 +33,7 @@ It reads the `content` of a `<meta>` whose `name` or `property` is `description`
 It decodes a numeric character reference and `&mdash;`, `&ndash;` and `&nbsp;`, so `a &mdash; b` fails as an em dash.
 Text runs across an inline element such as `<a>` or `<strong>`, as `<a href="https://example.com">Example</a> - about` shows, and breaks at a block such as `<p>` or `<li>` and at `<br>`.
 Each of `<code>`, `<kbd>`, `<samp>` and `<var>` stands in as one character the rules never refuse, so a hyphen used as a dash after it still fails.
-It does not read `<script>`, `<style>`, `<template>`, `<noscript>`, `<pre>`, `<textarea>`, `<svg>` or `<math>`.
+It does not read `<script>`, `<style>`, `<template>` or `<pre>`, and reads the text of `<textarea>`, `<noscript>`, `<svg>` and `<math>` like any other.
 It reports a file that does not parse as HTML, since it cannot judge one.
 It fails on each declared input that matches no Markdown or HTML file.
 So an input that a renamed directory or a skipped build leaves empty never passes.

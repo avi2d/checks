@@ -62,9 +62,16 @@ test("a page's title, its meta description and its alt text are copy, with each 
   ]);
 });
 
-test("code stands in as text, while script, style and preformatted text are not read", async () => {
+test("code stands in as text, while script, style, a template and preformatted text are not read", async () => {
   expect(await html("<p>Pass <code>--flag</code> - it sets the mode.</p>")).toEqual([{ line: 1, column: 29, message: HYPHEN }]);
-  expect(await html("<script>a - b</script><style>a::after { content: '—'; }</style><pre>a - b</pre><svg><text>a - b</text></svg>")).toEqual([]);
+  expect(await html("<script>a - b</script><style>a::after { content: '—'; }</style><template><p>a - b</p></template><pre>a - b</pre>")).toEqual([]);
+});
+
+test("a textarea, noscript, SVG text and MathML text are copy a visitor reads", async () => {
+  expect(await html("<textarea>hexn.io - платформа</textarea>")).toEqual([{ line: 1, column: 19, message: HYPHEN }]);
+  expect(await html("<noscript><p>hexn.io - платформа</p></noscript>")).toEqual([{ line: 1, column: 22, message: HYPHEN }]);
+  expect(await html("<svg><text>hexn.io - платформа</text></svg>")).toEqual([{ line: 1, column: 20, message: HYPHEN }]);
+  expect(await html("<math><mtext>hexn.io - платформа</mtext></math>")).toEqual([{ line: 1, column: 22, message: HYPHEN }]);
 });
 
 test("text breaks at a block and at a line break, so a hyphen that opens one passes", async () => {

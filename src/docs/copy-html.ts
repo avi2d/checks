@@ -5,7 +5,7 @@ import { collecting, separatorFindings, type Collector, type CopyFinding, type P
 const PLUGIN = "copy";
 const RULE = `${PLUGIN}/separators`;
 
-const UNREAD: ReadonlySet<string> = new Set(["script", "style", "template", "noscript", "pre", "textarea", "svg", "math"]);
+const UNREAD: ReadonlySet<string> = new Set(["script", "style", "template", "pre"]);
 const CODE: ReadonlySet<string> = new Set(["code", "kbd", "samp", "var"]);
 const TEXT_ATTRIBUTES = ["alt", "title", "placeholder", "aria-label", "aria-description"] as const;
 const META_COPY: ReadonlySet<string> = new Set(["description", "og:title", "og:description", "twitter:title", "twitter:description"]);
@@ -84,7 +84,12 @@ class Separators extends Rule {
 const plugin: Plugin = { name: PLUGIN, rules: { [RULE]: Separators } };
 
 const validator = new HtmlValidate(
-  new StaticConfigLoader([staticResolver({ plugins: { [PLUGIN]: plugin } })], { root: true, plugins: [PLUGIN], rules: { [RULE]: "error" } }),
+  new StaticConfigLoader([staticResolver({ plugins: { [PLUGIN]: plugin } })], {
+    root: true,
+    elements: ["html5", { svg: { foreign: false }, math: { foreign: false } }],
+    plugins: [PLUGIN],
+    rules: { [RULE]: "error" },
+  }),
 );
 
 class CopyHtmlError extends Schema.TaggedError<CopyHtmlError>()("CopyHtmlError", { message: Schema.String }) {}
