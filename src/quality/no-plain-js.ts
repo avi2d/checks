@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-import { Console, Effect, FileSystem, Path, Schema } from "effect";
-import { git } from "../core/git.ts";
+import { Console, Effect, Schema } from "effect";
+import { workingTreeFiles } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 
 export type Violation = {
@@ -47,21 +47,12 @@ class NoPlainJsError extends Schema.TaggedError<NoPlainJsError>()("NoPlainJsErro
   message: Schema.String,
 }) {}
 
-const workingTreeFiles = Effect.fn("workingTreeFiles")(function* (root: string) {
-  const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  const listed = yield* git(["ls-files", "-z", "--cached", "--others", "--exclude-standard"], root).pipe(
-    Effect.mapError((cause) => new NoPlainJsError({ message: cause.message })),
-  );
-  return yield* Effect.filter(listed.split("\0").filter(Boolean), (file) => fs.exists(path.join(root, file)), {
-    concurrency: "unbounded",
-  });
-});
-
 export type Result = { readonly files: number; readonly violations: readonly Violation[] };
 
 export const run = Effect.fn("run")(function* (root: string) {
-  const files = yield* workingTreeFiles(root);
+  const files = yield* workingTreeFiles(root).pipe(
+    Effect.mapError((cause) => new NoPlainJsError({ message: cause.message })),
+  );
   return { files: files.length, violations: violationsOf(files) } satisfies Result;
 });
 
