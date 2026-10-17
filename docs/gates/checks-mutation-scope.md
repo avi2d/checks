@@ -11,6 +11,8 @@ audience: consumers
 It picks a scope rather than judging one, so it fails only when it cannot pick one.
 It reads `git diff --name-status -M` from the merge base of `<base>` and `HEAD` to `HEAD`.
 A changed source enters the scope when the repository's own Stryker `mutate` globs match it, with each negated glob applied in order.
+It resolves each glob and each path against the working directory, as Stryker does, so an absolute glob matches too.
+A `mutate` entry with a mutation range, such as `src/a.ts:1-10`, fails the run, since a scope of whole files cannot keep the range.
 `--mutate` replaces those globs, so a path the config excludes, such as `packages/*/src/live/**` or `packages/*/src/bin.ts`, stays out of the scope.
 A renamed source enters under both names, and a deleted source does not enter.
 
@@ -18,6 +20,7 @@ A unit test is a `.test.ts` or `.test.tsx` file under `tests/unit/`, the files t
 A unit test the pull request adds, edits, deletes or renames is changed.
 A unit test that reads a changed file under `tests/` is changed too.
 It reads a file when it imports it, directly or through another file under `tests/`.
+An import resolves as Bun resolves it, to the file it names, then with an extension added, and only then to the directory's `index`.
 A unit test also reads a changed fixture under `tests/fixtures/` when it names the fixture's path or a directory above it.
 Bun loads each `[test] preload` in `bunfig.toml` before every test file.
 So every unit test is changed when the preload list differs between the merge base and `HEAD`.
@@ -34,6 +37,8 @@ A unit test the pull request adds is new to every report, so it needs no entry.
 Stryker writes no source without mutants into the report, so a mutated source the report lacks may be newer than it.
 When a unit test changed, each such source that exists at `HEAD` enters the scope.
 A change under `tests/e2e/` changes no unit test, so it needs no baseline report.
+The scope trusts the coverage edges of the latest full baseline.
+So a helper, fixture or preload changed on `main` since that baseline can hide a lost kill until the scheduled full baseline refreshes.
 
 ## What it reads
 
@@ -84,7 +89,7 @@ It also names each stale test that widens the scope.
 | Code | When |
 | --- | --- |
 | 0 | it printed the scope, an empty one included |
-| 2 | the arguments do not parse, git fails, the Stryker config, `bunfig.toml` or the baseline report does not load, or a unit test changed with no baseline report |
+| 2 | the arguments do not parse, git fails, the Stryker config, `bunfig.toml` or the baseline report does not load, a `mutate` entry names a mutation range, or a unit test changed with no baseline report |
 
 ## Sample output
 

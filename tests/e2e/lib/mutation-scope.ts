@@ -41,3 +41,36 @@ export async function runStep(name: string, cwd: string, env: Readonly<Record<st
   const step = stepNamed(parseWorkflow(await Bun.file(WORKFLOW).text()), name);
   return ran($`bash -e -c ${step.run}`.cwd(cwd).env({ ...process.env, ...step.env, ...env }));
 }
+
+// A Stryker report records each test file's source as the run read it, here the base commit's.
+export async function recorded(repo: FixtureRepo, testFiles: Iterable<readonly [string, string | undefined]>): Promise<Record<string, unknown>> {
+  const entries = await Promise.all(
+    [...testFiles].map(async ([testFile, id]) => {
+      const shown = await $`git show HEAD:${testFile}`.cwd(repo.dir).quiet().nothrow();
+      const source = shown.exitCode === 0 ? { source: shown.stdout.toString() } : {};
+      return [testFile, { ...source, tests: [{ id, name: testFile }] }] as const;
+    }),
+  );
+  return Object.fromEntries(entries);
+}
+
+export type Link = { readonly testFile: string; readonly sources: string[]; readonly killsOnly?: boolean };
+
+export async function coverageBaseline(repo: FixtureRepo, links: readonly Link[], uncovered: readonly string[] = []): Promise<string> {
+  const ids = new Map(links.map(({ testFile }, index) => [testFile, `${index}`] as const));
+  const testFiles = await recorded(repo, ids);
+  const bySource = new Map<string, Array<{ coveredBy: string[]; killedBy: string[] }>>();
+  for (const { testFile, sources, killsOnly } of links) {
+    const id = ids.get(testFile) ?? "";
+    for (const source of sources) {
+      const mutants = bySource.get(source) ?? [];
+      mutants.push(killsOnly === true ? { coveredBy: [], killedBy: [id] } : { coveredBy: [id], killedBy: [id] });
+      bySource.set(source, mutants);
+    }
+  }
+  for (const source of uncovered) bySource.set(source, [{ coveredBy: [], killedBy: [] }]);
+  const files = Object.fromEntries([...bySource].map(([source, mutants]) => [source, { source: body("value"), mutants }]));
+  const path = join(repo.dir, "baseline.json");
+  await repo.write({ "baseline.json": JSON.stringify({ files, testFiles }) });
+  return path;
+}

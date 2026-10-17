@@ -12,6 +12,8 @@ const FIXTURES = "tests/fixtures/";
 const TEST_FILE = /\.test\.tsx?$/;
 const READ_FILE = /\.tsx?$/;
 const BUNFIG = "bunfig.toml";
+const MUTATION_RANGE = /:\d+(?::\d+)?-\d+(?::\d+)?$/;
+const IMPORTED_EXTENSIONS = [".tsx", ".ts", ".mts", ".mjs", ".js"];
 
 export const STRYKER_DEFAULT_MUTATE = [
   "{src,lib}/**/!(*.+(s|S)pec|*.+(t|T)est).+(cjs|mjs|js|ts|mts|cts|jsx|tsx|html|vue|svelte)",
@@ -70,13 +72,15 @@ export type Picked = {
 
 const isUnitTest = (path: string): boolean => path.startsWith(UNIT_TESTS) && TEST_FILE.test(path);
 
-// --mutate replaces the config's globs, so the scope applies the negated ones itself.
-export function mutatedBy(patterns: readonly string[]): (file: string) => boolean {
+const absolute = (root: string, path: string): string => `/${resolved(path.startsWith("/") ? "" : root, path)}`;
+
+// --mutate replaces the config's globs, so the scope applies the negated ones itself, resolving each against root as Stryker does.
+export function mutatedBy(patterns: readonly string[], root: string): (file: string) => boolean {
   const rules = patterns.map((pattern) => {
     const negated = pattern.startsWith("!");
-    return { glob: (negated ? pattern.slice(1) : pattern).replace(/^\.\//, ""), mutated: !negated };
+    return { glob: absolute(root, negated ? pattern.slice(1) : pattern), mutated: !negated };
   });
-  return (file) => rules.reduce((mutated, rule) => (minimatch(file, rule.glob) ? rule.mutated : mutated), false);
+  return (file) => rules.reduce((mutated, rule) => (minimatch(absolute(root, file), rule.glob) ? rule.mutated : mutated), false);
 }
 
 function scopedNames(change: Change, mutated: (file: string) => boolean): readonly string[] {
@@ -112,7 +116,12 @@ function resolved(directory: string, spec: string): string {
   return parts.join("/");
 }
 
-const moduleOf = (path: string): string => path.replace(/\.(?:ts|tsx|mts|js|mjs)$/, "").replace(/\/index$/, "");
+// Bun takes the file a specifier names, then one with an extension added, and only then the directory's index.
+function importedFile(path: string, files: ReadonlySet<string>): string | undefined {
+  const bare = path.replace(/\.m?js$/, "");
+  const tried = [path, ...IMPORTED_EXTENSIONS.map((extension) => bare + extension), ...IMPORTED_EXTENSIONS.map((extension) => `${path}/index${extension}`)];
+  return tried.find((file) => files.has(file));
+}
 
 function fixtureNeedles(changed: readonly string[]): readonly Needle[] {
   const needles = new Map<string, Needle>();
@@ -134,12 +143,13 @@ function mentions(line: string, { text, kind }: Needle): boolean {
 
 type Edge = { readonly importer: string; readonly imported: string };
 
-function importsOf(file: string, text: string): readonly string[] {
+function importsOf(file: string, text: string, files: ReadonlySet<string>): readonly string[] {
   const directory = file.slice(0, Math.max(file.lastIndexOf("/"), 0));
-  return [...text.matchAll(IMPORT)].map(([, spec = ""]) => moduleOf(resolved(directory, spec)));
+  return [...text.matchAll(IMPORT)].flatMap(([, spec = ""]) => importedFile(resolved(directory, spec), files) ?? []);
 }
 
-const edgesOf = (file: string, text: string): readonly Edge[] => importsOf(file, text).map((module) => ({ importer: file, imported: module }));
+const edgesOf = (file: string, text: string, files: ReadonlySet<string>): readonly Edge[] =>
+  importsOf(file, text, files).map((imported) => ({ importer: file, imported }));
 
 function fixtureNamedIn(text: string, needles: readonly Needle[]): string | undefined {
   if (needles.length === 0) return undefined;
@@ -152,14 +162,12 @@ function fixtureNamedIn(text: string, needles: readonly Needle[]): string | unde
 }
 
 function spread(reached: Map<string, string>, edges: readonly Edge[]): void {
-  const reachedModules = new Map([...reached].map(([file, via]) => [moduleOf(file), via]));
   for (let grew = true; grew; ) {
     grew = false;
     for (const { importer, imported } of edges) {
-      const via = reachedModules.get(imported);
+      const via = reached.get(imported);
       if (via === undefined || reached.has(importer)) continue;
       reached.set(importer, via);
-      reachedModules.set(moduleOf(importer), via);
       grew = true;
     }
   }
@@ -173,7 +181,8 @@ export function readersOf(sources: ReadonlyMap<string, string>, changed: readonl
     const fixture = reached.has(file) ? undefined : fixtureNamedIn(text, needles);
     if (fixture !== undefined) reached.set(file, fixture);
   }
-  spread(reached, [...sources].flatMap(([file, text]) => edgesOf(file, text)));
+  const files = new Set([...sources.keys(), ...changed]);
+  spread(reached, [...sources].flatMap(([file, text]) => edgesOf(file, text, files)));
   return new Map([...reached].filter(([file, via]) => file !== via));
 }
 
@@ -228,12 +237,21 @@ const loadConfig = Effect.fn("loadConfig")(function* (file: string) {
   return config;
 });
 
-const mutatePatterns = Effect.gen(function* () {
+const configuredMutate = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   for (const file of STRYKER_CONFIGS) {
     if (yield* fs.exists(file)) return (yield* loadConfig(file)).mutate ?? STRYKER_DEFAULT_MUTATE;
   }
   return STRYKER_DEFAULT_MUTATE;
+});
+
+const mutatePatterns = Effect.gen(function* () {
+  const patterns = yield* configuredMutate;
+  const ranged = patterns.filter((pattern) => MUTATION_RANGE.test(pattern));
+  if (ranged.length > 0) {
+    return yield* new ScopeError({ message: `the Stryker mutate entries ${ranged.join(" ")} name a mutation range, which a scope of whole files cannot keep` });
+  }
+  return patterns;
 });
 
 const preloadsAt = Effect.fn("preloadsAt")(function* (rev: string, paths: ReadonlySet<string>) {
@@ -246,13 +264,12 @@ const preloadsAt = Effect.fn("preloadsAt")(function* (rev: string, paths: Readon
 });
 
 const loadedByPreloads = Effect.fn("loadedByPreloads")(function* (rev: string, preloads: readonly string[], paths: ReadonlySet<string>) {
-  const files = new Map([...paths].map((file) => [moduleOf(file), file]));
   const loaded = new Set<string>();
-  for (let next = preloads.flatMap((preload) => files.get(moduleOf(preload)) ?? []); next.length > 0; ) {
+  for (let next = preloads.flatMap((preload) => importedFile(preload, paths) ?? []); next.length > 0; ) {
     for (const file of next) loaded.add(file);
-    const read = (file: string) => git(["show", `${rev}:${file}`]).pipe(Effect.map((text) => importsOf(file, text)));
+    const read = (file: string) => git(["show", `${rev}:${file}`]).pipe(Effect.map((text) => importsOf(file, text, paths)));
     const imported = (yield* Effect.forEach(next, read, { concurrency: 16 })).flat();
-    next = [...new Set(imported.flatMap((module) => files.get(module) ?? []))].filter((file) => !loaded.has(file));
+    next = [...new Set(imported)].filter((file) => !loaded.has(file));
   }
   return loaded;
 });
@@ -324,7 +341,7 @@ const enteringSources = Effect.fn("enteringSources")(function* (
 const selectScope = Effect.gen(function* () {
   const { base, baseline } = yield* parseArgs(process.argv.slice(2));
   const range = yield* rangeEnds(base, "HEAD");
-  const mutated = mutatedBy(yield* mutatePatterns);
+  const mutated = mutatedBy(yield* mutatePatterns, (yield* Path.Path).resolve("."));
   const snapshots: Snapshots = { ...range, atBase: new Set(yield* pathsAt(range.base, [])), atHead: new Set(yield* pathsAt(range.head, [])) };
   const picked = pickFromDiff(yield* changedPaths(range.base, range.head, []), mutated);
   const readers = (yield* unitReaders(picked, snapshots)).map(([reader]) => reader);

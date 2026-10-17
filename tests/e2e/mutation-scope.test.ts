@@ -4,7 +4,7 @@ import { mkdir, readFile, realpath, rename, rm, symlink, writeFile } from "node:
 import { join } from "node:path";
 import { fakeActions, type FakeRun } from "./lib/fake-actions.ts";
 import { CHECKOUT, scratchDirs, type FixtureRepo, type Ran } from "./lib/fixture-repo.ts";
-import { body, committedRepos, runStep, scopeOf, scopeRun } from "./lib/mutation-scope.ts";
+import { body, committedRepos, coverageBaseline, recorded, runStep, scopeOf, scopeRun } from "./lib/mutation-scope.ts";
 
 // Scratch git repos and the scope bin run past bun's 5s default on a loaded machine.
 setDefaultTimeout(30_000);
@@ -13,39 +13,6 @@ const repoWith = committedRepos("checks-mutation-scope-");
 const scratch = scratchDirs();
 const NOTHING = { SCOPE: "", STALE_TESTS: "" };
 const TUI_DASH_CONFIG = 'export default { mutate: ["packages/*/src/**/*.ts", "!packages/*/src/live/**", "!packages/*/src/bin.ts"] };\n';
-
-// A Stryker report records each test file's source as the run read it, here the base commit's.
-async function recorded(repo: FixtureRepo, testFiles: Iterable<readonly [string, string | undefined]>): Promise<Record<string, unknown>> {
-  const entries = await Promise.all(
-    [...testFiles].map(async ([testFile, id]) => {
-      const shown = await $`git show HEAD:${testFile}`.cwd(repo.dir).quiet().nothrow();
-      const source = shown.exitCode === 0 ? { source: shown.stdout.toString() } : {};
-      return [testFile, { ...source, tests: [{ id, name: testFile }] }] as const;
-    }),
-  );
-  return Object.fromEntries(entries);
-}
-
-type Link = { readonly testFile: string; readonly sources: string[]; readonly killsOnly?: boolean };
-
-async function coverageBaseline(repo: FixtureRepo, links: readonly Link[], uncovered: readonly string[] = []): Promise<string> {
-  const ids = new Map(links.map(({ testFile }, index) => [testFile, `${index}`] as const));
-  const testFiles = await recorded(repo, ids);
-  const bySource = new Map<string, Array<{ coveredBy: string[]; killedBy: string[] }>>();
-  for (const { testFile, sources, killsOnly } of links) {
-    const id = ids.get(testFile) ?? "";
-    for (const source of sources) {
-      const mutants = bySource.get(source) ?? [];
-      mutants.push(killsOnly === true ? { coveredBy: [], killedBy: [id] } : { coveredBy: [id], killedBy: [id] });
-      bySource.set(source, mutants);
-    }
-  }
-  for (const source of uncovered) bySource.set(source, [{ coveredBy: [], killedBy: [] }]);
-  const files = Object.fromEntries([...bySource].map(([source, mutants]) => [source, { source: body("value"), mutants }]));
-  const path = join(repo.dir, "baseline.json");
-  await repo.write({ "baseline.json": JSON.stringify({ files, testFiles }) });
-  return path;
-}
 
 type SharedMutant = { readonly source: string; readonly coveredBy: string[]; readonly killedBy: string[] };
 

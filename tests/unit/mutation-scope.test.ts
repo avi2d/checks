@@ -3,25 +3,33 @@ import { Effect } from "effect";
 import type { Change } from "../../src/core/git.ts";
 import { coveringTests, envLines, mutatedBy, parseArgs, pickFromDiff, preloadChange, readersOf, STRYKER_DEFAULT_MUTATE } from "../../src/testing/mutation-scope.ts";
 
+const ROOT = "/runner/work/repo";
 const TUI_DASH_MUTATE = ["packages/*/src/**/*.ts", "!packages/*/src/live/**", "!packages/*/src/bin.ts"];
 
 test("Stryker's default globs mutate the code under src and lib, and no test, spec or __tests__ file", () => {
-  const mutated = mutatedBy(STRYKER_DEFAULT_MUTATE);
+  const mutated = mutatedBy(STRYKER_DEFAULT_MUTATE, ROOT);
 
   expect(["src/a.ts", "lib/b/c.mjs", "src/view.tsx"].filter(mutated)).toEqual(["src/a.ts", "lib/b/c.mjs", "src/view.tsx"]);
   expect(["src/a.test.ts", "src/a.spec.ts", "src/__tests__/a.ts", "tests/unit/a.test.ts", "scripts/a.ts", "src/notes.md"].filter(mutated)).toEqual([]);
 });
 
 test("a negated glob drops what an earlier glob matched, and a leading ./ matches as the bare path", () => {
-  const mutated = mutatedBy(["./packages/*/src/**/*.ts", "!packages/*/src/live/**", "!packages/*/src/bin.ts"]);
+  const mutated = mutatedBy(["./packages/*/src/**/*.ts", "!packages/*/src/live/**", "!packages/*/src/bin.ts"], ROOT);
 
   expect(["packages/ui/src/layout.ts", "packages/quota/src/live/layer.ts", "packages/quota/src/bin.ts", "packages/quota/bin.ts"].filter(mutated)).toEqual([
     "packages/ui/src/layout.ts",
   ]);
 });
 
+test("a glob resolves against the working directory as Stryker's FileMatcher resolves it, absolute or relative", () => {
+  const mutated = mutatedBy([`${ROOT}/src/**/*.ts`, "!../repo/src/live/**"], ROOT);
+
+  expect(["src/a.ts", "src/live/layer.ts", "lib/a.ts", "src/.hidden/a.ts"].filter(mutated)).toEqual(["src/a.ts"]);
+  expect(mutatedBy(["/elsewhere/src/**/*.ts"], ROOT)("src/a.ts")).toBe(false);
+});
+
 test("a later glob brings back what an earlier negated glob dropped", () => {
-  expect(mutatedBy(["src/**/*.ts", "!src/live/**", "src/live/kept.ts"])("src/live/kept.ts")).toBe(true);
+  expect(mutatedBy(["src/**/*.ts", "!src/live/**", "src/live/kept.ts"], ROOT)("src/live/kept.ts")).toBe(true);
 });
 
 const written = (path: string): Change => ({ kind: "written", path });
@@ -38,7 +46,7 @@ test("the diff scopes changed sources, and keeps tests and test tree apart", () 
       { kind: "deleted", path: "packages/ui/src/gone.ts" },
       { kind: "deleted", path: "tests/unit/ui/gone.test.ts" },
     ],
-    mutatedBy(TUI_DASH_MUTATE),
+    mutatedBy(TUI_DASH_MUTATE, ROOT),
   );
 
   expect([...picked.scope]).toEqual(["packages/ui/src/layout.ts", "packages/ui/src/sources.ts"]);
@@ -54,7 +62,7 @@ test("a rename between sources scopes both names, one into the sources scopes th
       { kind: "renamed", from: "src/leaving.ts", path: "lib/left.ts", edited: false },
       { kind: "renamed", from: "tests/unit/a.test.ts", path: "tests/unit/b.test.ts", edited: false },
     ],
-    mutatedBy(["src/**/*.ts"]),
+    mutatedBy(["src/**/*.ts"], ROOT),
   );
 
   expect([...picked.scope]).toEqual(["src/old.ts", "src/new.ts", "src/inside.ts"]);
@@ -109,6 +117,19 @@ test("a reader reaches a changed fixture by its path, its directory in segments 
   ]);
 });
 
+test("an import naming a file reaches that file and not the index of a directory sharing its name, and a bare one reaches the file first", () => {
+  const sources = new Map([
+    ["tests/unit/named.test.ts", 'import { a } from "../lib/assertions.ts";\n'],
+    ["tests/unit/bare.test.ts", 'import { a } from "../lib/assertions";\n'],
+    ["tests/unit/indexed.test.ts", 'import { a } from "../lib/assertions/index.ts";\n'],
+    ["tests/lib/assertions.ts", "export {};\n"],
+    ["tests/lib/assertions/index.ts", "export {};\n"],
+  ]);
+
+  expect([...readersOf(sources, ["tests/lib/assertions.ts"]).keys()].sort()).toEqual(["tests/unit/bare.test.ts", "tests/unit/named.test.ts"]);
+  expect([...readersOf(sources, ["tests/lib/assertions/index.ts"]).keys()]).toEqual(["tests/unit/indexed.test.ts"]);
+});
+
 test("a changed file never reads as a reader of another changed file", () => {
   const sources = new Map([["tests/unit/a.test.ts", 'import { effect0 } from "../lib/effect";\n']]);
 
@@ -129,7 +150,7 @@ const baseline = {
 };
 
 test("a source enters through each changed test that covers or kills one of its mutants, in the mutate scope only", () => {
-  const covering = coveringTests(baseline, new Set(["tests/unit/a.test.ts", "tests/unit/b.test.ts"]), mutatedBy(["src/**/*.ts", "!src/live/**"]));
+  const covering = coveringTests(baseline, new Set(["tests/unit/a.test.ts", "tests/unit/b.test.ts"]), mutatedBy(["src/**/*.ts", "!src/live/**"], ROOT));
 
   expect(covering).toEqual(
     new Map([
@@ -140,7 +161,7 @@ test("a source enters through each changed test that covers or kills one of its 
 });
 
 test("a source no changed test covers or kills stays out", () => {
-  expect(coveringTests(baseline, new Set(["tests/unit/c.test.ts"]), mutatedBy(["src/**/*.ts"]))).toEqual(new Map());
+  expect(coveringTests(baseline, new Set(["tests/unit/c.test.ts"]), mutatedBy(["src/**/*.ts"], ROOT))).toEqual(new Map());
 });
 
 test("the lines name each list sorted and comma separated, an empty one included", () => {
