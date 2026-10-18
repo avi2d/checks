@@ -1,7 +1,7 @@
 # checks
 
 `@avi2dg/checks` is the kit of deterministic checks a TypeScript repository installs to hold its code, tests, commits, CI wiring and docs to one shared standard.
-It ships the lint gates `checks-lint` runs over each pull request, the test runners, and a `defineConfig` for oxlint, Knip and dependency-cruiser.
+It ships the lint gates `checks-lint` runs over each pull request, the test runners, and a `defineConfig` for oxlint, Knip, dependency-cruiser and stylelint.
 It also ships the configs a repository extends for tsc, commitlint, bun and Stryker.
 Each repository owns its workflows and native tool configs, as [Native settings](docs/configs/native-settings.md) maps.
 

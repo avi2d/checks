@@ -9,12 +9,13 @@ audience: consumers
 ## What it checks
 
 It runs stylelint twice over each declared input.
-The first run holds the kit's two rules, under no repository config, so no `stylelint.config.ts` turns them off.
-The second run holds the families the repository's `stylelint.config.ts` sets.
+The repository run holds the families the repository's `stylelint.config.ts` sets, and applies `--fix`.
+The kit run then holds the kit's two rules over each file the repository run matched.
+It reads no repository config and no count in `stylelint-suppressions.json`, so neither turns those rules off.
 
 ### The kit's two rules
 
-The first run refuses two CSS constraints a program can decide, a transition over `all` and a body-wide `user-select`:
+The kit run refuses two CSS constraints a program can decide, a transition over `all` and a body-wide `user-select`:
 
 | Rule | What it refuses | Why |
 | --- | --- | --- |
@@ -29,14 +30,14 @@ A control that needs selection off sets it on its own selector, such as `.drag-h
 
 ### The rule families
 
-`defineConfig` from `@avi2dg/checks/stylelint` builds the config the second run holds:
+`defineConfig` from `@avi2dg/checks/stylelint` builds the config the repository run holds:
 
 | Family | Rules | Default |
 | --- | --- | --- |
 | G1 correctness | `stylelint-config-recommended`, the stylelint team's rules for likely mistakes, such as `font-variant-numeric: oldstyle-num` for `oldstyle-nums` | on |
 | G2 conventions | `stylelint-config-standard`, which extends G1 with the stylelint team's notation and spacing rules | on |
 | G3 selector complexity | `selector-max-specificity` at `0,3,2` and `selector-max-compound-selectors` at 3 | on |
-| G4 design tokens | `color-no-hex`, `color-named: "never"`, `function-disallowed-list` over `rgb`, `rgba`, `hsl`, `hsla`, `hwb`, `lab`, `lch`, `oklab`, `oklch` and `color`, and `font-size` only as a `var(--…)` or `inherit` | off until `tokens` names the token files, and off in those files |
+| G4 design tokens | `color-no-hex`, `color-named: "never"`, `function-disallowed-list` over `rgb`, `rgba`, `hsl`, `hsla`, `hwb`, `lab`, `lch`, `oklab`, `oklch` and `color`, and `font-size` only as one `var(--…)` with no fallback, or `inherit` | off until `tokens` names the token files, and off in those files |
 | G5 Baseline target | `plugin/use-baseline` from `stylelint-plugin-use-baseline`, which judges each property, value, function, at-rule, selector and unit against the Baseline data, and passes a property inside an `@supports` block | on, at the target `baseline` sets |
 
 The builder changes three of the shared config's rules:
@@ -44,7 +45,7 @@ The builder changes three of the shared config's rules:
 - `no-descending-specificity` is off, since it compares only the last compound selector and has no access to the DOM.
   It reports components that never match one element.
 - `property-no-vendor-prefix` keeps reporting without a fix, and passes `-webkit-user-select`, since its fix deletes the prefix Safari still needs.
-- In an `.html`, `.astro`, `.vue` or `.svelte` file, `declaration-block-single-line-max-declarations` is off, since a `style` attribute is one line, and `selector-pseudo-class-no-unknown` passes `:global()`, `:deep()` and `:slotted()`.
+- In an `.html` or `.astro` file, `declaration-block-single-line-max-declarations` is off, since a `style` attribute is one line.
 
 CSS repetition is not a family of this gate: a repository adds `"css"` to `format` in `.jscpd.json`, and [checks-repetition](checks-repetition.md) then fails when a stylesheet's repeated lines grow.
 
@@ -53,7 +54,7 @@ CSS repetition is not a family of this gate: a repository adds `"css"` to `forma
 It sets stylelint's `ignoreDisables`, so a `stylelint-disable` comment silences nothing in either run, and [checks-comment-gate](checks-comment-gate.md) refuses one on the line that adds it.
 A repository adopts a family over existing problems by counting them in `stylelint-suppressions.json` with `--suppress`.
 stylelint lets a file and rule through while its problems stay within the count, and [checks-suppressions-ratchet](checks-suppressions-ratchet.md) fails a change that raises a count.
-`--suppress` counts only what the second run reports.
+`--suppress` counts only what the repository run reports, and a file that does not parse still fails in the kit run.
 
 ### Files
 
@@ -114,7 +115,7 @@ rules: { "plugin/use-baseline": [true, { available: "widely", ignoreProperties: 
 The builder owns `extends` and `plugins`.
 It resolves the shared config, the plugin and `postcss-html` beside the kit, so they need not sit under the directory the gate runs in.
 stylelint cannot load `stylelint.config.ts` itself under TypeScript 7, so a bare `stylelint --fix` finds no config, and the gate's `--fix` stands in for it.
-A config not built with `defineConfig` names its own `customSyntax` for markup, or each `.html` or `.astro` file fails to parse in the second run.
+A config not built with `defineConfig` names its own `customSyntax` for markup, or each `.html` or `.astro` file fails to parse in the repository run.
 
 The repository installs the optional peers the gate loads, at the versions the kit pins:
 

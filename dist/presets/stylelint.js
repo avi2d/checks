@@ -1,7 +1,7 @@
 // src/quality/presets/stylelint.ts
 import { fileURLToPath } from "node:url";
-var MARKUP = ["**/*.html", "**/*.astro", "**/*.vue", "**/*.svelte"];
-var SCOPED_STYLE_PSEUDO_CLASSES = ["global", "deep", "slotted"];
+var HTML_AND_ASTRO = ["**/*.html", "**/*.astro"];
+var MARKUP = [...HTML_AND_ASTRO, "**/*.vue", "**/*.svelte"];
 function peer(name) {
   return fileURLToPath(import.meta.resolve(name));
 }
@@ -18,7 +18,7 @@ var DESIGN_TOKENS = {
   "color-no-hex": true,
   "color-named": "never",
   "function-disallowed-list": [...COLOUR_FUNCTIONS],
-  "declaration-property-value-allowed-list": { "font-size": ["/var\\(--/", "inherit"] }
+  "declaration-property-value-allowed-list": { "/^font-size$/i": ["/^var\\(\\s*--[^\\s,()]+\\s*\\)$/i", "/^inherit$/i"] }
 };
 var REFUSED_BASELINE = '@avi2dg/checks/stylelint: set baseline to "widely", "newly" or a year such as 2024';
 var REFUSED_TOKENS = "@avi2dg/checks/stylelint: set tokens to the globs of the token files, or false to leave the design token rules off";
@@ -60,14 +60,8 @@ function defineConfig({ baseline, tokens, rules, overrides = [], ...rest }) {
       ...rules
     },
     overrides: [
-      {
-        files: [...MARKUP],
-        customSyntax: peer("postcss-html"),
-        rules: {
-          "declaration-block-single-line-max-declarations": null,
-          "selector-pseudo-class-no-unknown": [true, { ignorePseudoClasses: [...SCOPED_STYLE_PSEUDO_CLASSES] }]
-        }
-      },
+      { files: [...MARKUP], customSyntax: peer("postcss-html") },
+      { files: [...HTML_AND_ASTRO], rules: { "declaration-block-single-line-max-declarations": null } },
       ...tokenRules.overrides,
       ...overrides
     ]

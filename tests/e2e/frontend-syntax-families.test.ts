@@ -74,6 +74,20 @@ const FAMILIES = [
     reported: "src/site.css:1:16 Disallowed value \"12px\" for property \"font-size\" (declaration-property-value-allowed-list)",
   },
   {
+    family: "G4 design tokens, a literal font size under a property name in capitals",
+    options: '{ baseline: "widely", tokens: ["src/tokens.css"] }',
+    red: "p { FONT-SIZE: 12px; }\n",
+    green: "p { font-size: inherit; }\n",
+    reported: "src/site.css:1:16 Disallowed value \"12px\" for property \"FONT-SIZE\" (declaration-property-value-allowed-list)",
+  },
+  {
+    family: "G4 design tokens, a literal font size added to a token",
+    options: '{ baseline: "widely", tokens: ["src/tokens.css"] }',
+    red: "p { font-size: calc(var(--text-s) + 12px); }\n",
+    green: "p { font-size: var(--text-s); }\n",
+    reported: "(declaration-property-value-allowed-list)",
+  },
+  {
     family: "G5 Baseline, scrollbar-gutter, newly available in 2024, against a widely available target",
     options: WIDELY,
     red: "html { scrollbar-gutter: stable; }\n",
@@ -166,6 +180,27 @@ test("--suppress counts what the config reports into stylelint-suppressions.json
 
   await write({ "src/site.css": ".a.b.c.d { top: 0; }\n" });
   expect(await script(GATE)).toEqual({ exitCode: 0, text: expect.stringContaining("frontend-syntax: no violation in 1 file(s) from 1 declared input(s)\n") });
+}, 60_000);
+
+test("a count in stylelint-suppressions.json under a kit rule's name lets no kit violation through", async () => {
+  const { write, script } = await repository('{ baseline: "widely", tokens: false, rules: { "declaration-property-value-disallowed-list": { display: ["block"] } } }', {
+    "src/site.css": "a { display: block; }\n",
+  });
+  expect((await script(GATE, "--suppress")).exitCode).toBe(0);
+
+  await write({ "src/site.css": "a { display: block; }\n\nb { transition: all 1s; }\n" });
+  const red = await script(GATE);
+  expect(red.text).toContain('src/site.css:3:17 Disallowed value "all 1s" for property "transition". Name the properties the transition animates.');
+  expect(red.exitCode).toBe(1);
+}, 60_000);
+
+test("--suppress lets no file through that does not parse", async () => {
+  const { script } = await repository(WIDELY, { "src/site.css": "a { top: 0;\n" });
+  for (const flags of [["--suppress"], []]) {
+    const red = await script(GATE, ...flags);
+    expect(red.text, flags.join(" ")).toContain("src/site.css:1:1 Unclosed block");
+    expect(red.exitCode, flags.join(" ")).toBe(1);
+  }
 }, 60_000);
 
 test("a declaration without stylelint.config.ts, a config that does not load, and an unknown flag are refused", async () => {

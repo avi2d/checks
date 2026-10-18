@@ -12,9 +12,9 @@ export type ChecksStylelintConfig = Omit<Config, "extends" | "plugins"> & {
 
 type Rules = NonNullable<Config["rules"]>;
 
-export const MARKUP = ["**/*.html", "**/*.astro", "**/*.vue", "**/*.svelte"] as const;
+const HTML_AND_ASTRO = ["**/*.html", "**/*.astro"] as const;
 
-const SCOPED_STYLE_PSEUDO_CLASSES = ["global", "deep", "slotted"] as const;
+export const MARKUP = [...HTML_AND_ASTRO, "**/*.vue", "**/*.svelte"] as const;
 
 // stylelint resolves a name from the repository, and the kit's peers sit beside the kit rather than under every repository it lints.
 function peer(name: string): string {
@@ -37,7 +37,7 @@ const DESIGN_TOKENS = {
   "color-no-hex": true,
   "color-named": "never",
   "function-disallowed-list": [...COLOUR_FUNCTIONS],
-  "declaration-property-value-allowed-list": { "font-size": ["/var\\(--/", "inherit"] },
+  "declaration-property-value-allowed-list": { "/^font-size$/i": ["/^var\\(\\s*--[^\\s,()]+\\s*\\)$/i", "/^inherit$/i"] },
 } as const satisfies Rules;
 
 const REFUSED_BASELINE = '@avi2dg/checks/stylelint: set baseline to "widely", "newly" or a year such as 2024';
@@ -82,14 +82,8 @@ export function defineConfig({ baseline, tokens, rules, overrides = [], ...rest 
       ...rules,
     },
     overrides: [
-      {
-        files: [...MARKUP],
-        customSyntax: peer("postcss-html"),
-        rules: {
-          "declaration-block-single-line-max-declarations": null,
-          "selector-pseudo-class-no-unknown": [true, { ignorePseudoClasses: [...SCOPED_STYLE_PSEUDO_CLASSES] }],
-        },
-      },
+      { files: [...MARKUP], customSyntax: peer("postcss-html") },
+      { files: [...HTML_AND_ASTRO], rules: { "declaration-block-single-line-max-declarations": null } },
       ...tokenRules.overrides,
       ...overrides,
     ],

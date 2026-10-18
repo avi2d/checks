@@ -97,11 +97,25 @@ const lintWith = (root: string, pass: Pass, options: Partial<LinterOptions>) =>
       Effect.map(({ results }) => results),
       Effect.catchTag("NoFilesFound", () => Effect.succeed([])),
     );
-    const results = linted.filter(({ ignored }) => ignored !== true);
-    const invalid = results.flatMap(({ invalidOptionWarnings }) => invalidOptionWarnings.map(({ text }) => text));
+    const invalid = linted.flatMap(({ invalidOptionWarnings }) => invalidOptionWarnings.map(({ text }) => text));
     if (invalid.length > 0) return yield* new FrontendSyntaxError({ message: `stylelint refuses ${pass.refuses}: ${[...new Set(invalid)].join("; ")}` });
-    return results;
+    return linted;
   });
+
+// stylelint applies stylelint-suppressions.json to every file it reads itself, and to no code it is handed.
+const lintUnsuppressed = (root: string, pass: Pass, files: readonly string[]) =>
+  Effect.forEach(files, (file) =>
+    Effect.gen(function* () {
+      const code = yield* (yield* FileSystem.FileSystem).readFileString(file).pipe(
+        Effect.mapError((cause) => new FrontendSyntaxError({ message: `cannot read ${file}: ${String(cause)}` })),
+      );
+      return yield* lintWith(root, pass, { code, codeFilename: file });
+    }),
+  ).pipe(Effect.map((results) => results.flat()));
+
+function isJudged({ ignored }: LintResult): boolean {
+  return ignored !== true;
+}
 
 const passesFor = Effect.fn("passesFor")(function* (root: string) {
   const html = (yield* loadPeer("postcss-html", () => import("postcss-html"))).default;
@@ -124,8 +138,9 @@ export const scanInputs = Effect.fn("scanInputs")(function* (root: string, globs
   const inputs: Input[] = [];
   const violations = new Map<string, Violation>();
   for (const glob of globs) {
-    const judged = yield* lintWith(root, repository, { files: glob, fix });
-    const ruled = yield* lintWith(root, kit, { files: glob });
+    const matched = yield* lintWith(root, repository, { files: glob, fix });
+    const judged = matched.filter(isJudged);
+    const ruled = yield* lintUnsuppressed(root, kit, matched.flatMap(({ source }) => (source === undefined ? [] : [source])));
     inputs.push({ glob, files: judged.map((result) => relative(result.source ?? "")).toSorted() });
     const found = [...ruled.flatMap((result) => violationsOf(result, relative, kit.advice)), ...judged.flatMap((result) => violationsOf(result, relative, repository.advice))];
     for (const violation of found) violations.set(`${violation.file}:${violation.line}:${violation.column}:${violation.text}`, violation);
