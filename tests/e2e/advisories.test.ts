@@ -255,7 +255,11 @@ test(
     const cached = join(box.home, ".cache", "avi2dg-checks", "osv-scanner", OSV_SCANNER_VERSION, build.asset);
     await mkdir(dirname(cached), { recursive: true });
     await copyFile(box.scanner, cached);
-    const lint = await ran($`${process.execPath} ${join(CHECKOUT, "src", "core", "lint.ts")}`.cwd(repo.dir).env(box.env));
+    const lint = await ran(
+      $`${process.execPath} ${join(CHECKOUT, "src", "core", "lint.ts")}`
+        .cwd(repo.dir)
+        .env({ ...box.env, PATH: `${join(CHECKOUT, "node_modules", ".bin")}:${process.env["PATH"] ?? ""}` }),
+    );
     expect(lint.exitCode).toBe(2);
     expect(lint.text).toContain(`${cached} has SHA-256 `);
     expect(lint.text).toContain(`not the pinned ${build.sha256}; delete it and rerun`);
