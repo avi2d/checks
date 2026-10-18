@@ -24,6 +24,11 @@ const CRUISE_CONFIG = `import { defineConfig } from "@avi2dg/checks/dependency-c
 export default defineConfig();
 `;
 
+const STYLELINT_CONFIG = `import { defineConfig } from "@avi2dg/checks/stylelint";
+
+export default defineConfig({ baseline: "widely", tokens: ["src/tokens.css"] });
+`;
+
 const TREE: Readonly<Record<string, string>> = {
   ".gitignore": "node_modules/\n",
   "src/index.ts": `import { Effect } from "effect";\nimport { double } from "./double.ts";\n\nexport const program = Effect.succeed(double(21));\n`,
@@ -32,6 +37,10 @@ const TREE: Readonly<Record<string, string>> = {
   "oxlint.config.ts": OXLINT_CONFIG,
   "knip.config.ts": KNIP_CONFIG,
   "dependency-cruiser.config.ts": CRUISE_CONFIG,
+  "stylelint.config.ts": STYLELINT_CONFIG,
+  "frontend-syntax.json": JSON.stringify({ inputs: ["src/**/*.css"] }),
+  "src/tokens.css": ":root {\n  --ink: #1c1d20;\n}\n",
+  "src/site.css": "a {\n  color: var(--ink);\n}\n",
   "tsconfig.json": JSON.stringify({
     extends: "@avi2dg/checks/tsconfig.effect.json",
     compilerOptions: { target: "esnext", module: "preserve", moduleResolution: "bundler", strict: true, noEmit: true, skipLibCheck: true, allowImportingTsExtensions: true, types: ["bun"] },
@@ -56,6 +65,13 @@ const REFUSED_TYPES: Readonly<Record<string, readonly [config: string, code: str
     `import { defineConfig } from "@avi2dg/checks/dependency-cruiser";\nexport default defineConfig({ forbidden: [{ name: "x", severity: "fatal", from: {}, to: {} }] });\n`,
     "TS2322",
   ],
+  "stylelint-missing-baseline.ts": [`import { defineConfig } from "@avi2dg/checks/stylelint";\nexport default defineConfig({ tokens: false });\n`, "TS2345"],
+  "stylelint-baseline-string-year.ts": [`import { defineConfig } from "@avi2dg/checks/stylelint";\nexport default defineConfig({ baseline: "2024", tokens: false });\n`, "TS2322"],
+  "stylelint-empty-tokens.ts": [`import { defineConfig } from "@avi2dg/checks/stylelint";\nexport default defineConfig({ baseline: "widely", tokens: [] });\n`, "TS2322"],
+  "stylelint-kit-owned-extends.ts": [
+    `import { defineConfig } from "@avi2dg/checks/stylelint";\nexport default defineConfig({ baseline: "widely", tokens: false, extends: ["stylelint-config-recommended"] });\n`,
+    "TS2353",
+  ],
 };
 
 let packDir = "";
@@ -78,6 +94,10 @@ beforeAll(async () => {
         "dependency-cruiser": "18.4.0",
         oxlint: "1.83.0",
         "oxlint-tsgolint": "7.0.2002",
+        "postcss-html": "2.0.0",
+        stylelint: "17.16.0",
+        "stylelint-config-standard": "40.0.0",
+        "stylelint-plugin-use-baseline": "1.4.7",
         typescript: "7.0.2",
       },
     }),
@@ -206,6 +226,22 @@ test(
     await put({ "oxlint.config.ts": OXLINT_CONFIG, "knip.config.ts": KNIP_CONFIG });
     expect((await oxlint()).exitCode).toBe(0);
     expect((await bin("checks-unused")).exitCode).toBe(0);
+  },
+  180_000,
+);
+
+test(
+  "checks-frontend-syntax loads stylelint.config.ts through the installed kit and its peers: red on a hex colour outside the token file, green once it reads the token",
+  async () => {
+    const green = await bin("checks-frontend-syntax");
+    expect(green.text).toBe("frontend-syntax: no violation in 2 file(s) from 1 declared input(s)\n");
+    expect(green.exitCode).toBe(0);
+
+    await put({ "src/site.css": "a {\n  color: #1c1d20;\n}\n" });
+    const red = await bin("checks-frontend-syntax");
+    expect(red.text).toBe('frontend-syntax: 1 problem(s) in 2 file(s) from 1 declared input(s):\n  src/site.css:2:10 Disallowed hex color "#1c1d20" (color-no-hex)\n');
+    expect(red.exitCode).toBe(1);
+    await put({ "src/site.css": TREE["src/site.css"] ?? "" });
   },
   180_000,
 );

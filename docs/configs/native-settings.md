@@ -13,9 +13,11 @@ A consuming repository puts each setting in the file its tool reads, and no mani
 | `.github/workflows/*.yml` | Pull request commands, scheduled commands, runner labels | GitHub Actions and `checks-ci-wiring` |
 | `oxlint.config.ts` | Effect paths and their exemptions, ignore patterns, and any rule or budget the repository sets over the kit's defaults | oxlint and `checks-effect-scope` |
 | `oxlint-suppressions.json` | The existing violations oxlint suppresses, per file and rule | oxlint and `checks-suppressions-ratchet` |
+| `stylelint-suppressions.json` | The existing violations stylelint suppresses, per file and rule | stylelint, `checks-frontend-syntax` and `checks-suppressions-ratchet` |
 | `exports-baseline.json` | The existing unused exports and types, per file, kind and name | `checks-exports` |
 | `.jscpd.json` | The `path` and `ignore` globs of the files repetition is measured in | jscpd and `checks-repetition` |
 | `knip.config.ts` | The `entry` globs Knip traces unreferenced files from | Knip, `checks-unused` and `checks-exports` |
+| `stylelint.config.ts` | The Baseline target, the token files, and any stylelint rule the repository sets over the kit's families | `checks-frontend-syntax` |
 | `dependency-cruiser.config.ts` | Entry points nothing imports, paths that may import dev dependencies, and import boundaries, when the kit's defaults do not fit | `checks-imports` |
 | `tsconfig.json` | Compiler options, and the Effect language service plugin whose `overrides` and kit severities `checks-effect-scope` writes, keeping every other key | TypeScript and Effect language service |
 | `package.json` | `scripts` with the `checks-vendor` arguments in `prepare`, `author` and `contributors` | Bun, `checks-commit-identity` and `checks-vendor` |
@@ -29,7 +31,7 @@ A page whose front matter sets `audience: consumers` names commands that a consu
 
 ## The config builders
 
-The kit ships a `defineConfig` for oxlint, Knip and dependency-cruiser.
+The kit ships a `defineConfig` for oxlint, Knip, dependency-cruiser and stylelint.
 Each takes the tool's own config type, less the keys the kit owns, and returns the whole config with a default for every kit rule.
 A key only the repository knows has no default, so `tsc` refuses a config that leaves it out.
 The builder throws when the tool loads such a config anyway.
@@ -39,6 +41,7 @@ The builder throws when the tool loads such a config anyway.
 | `@avi2dg/checks/oxlint` | `effect` | `extends`, `plugins`, `jsPlugins` and `categories` |
 | `@avi2dg/checks/knip` | `entry`, where `[]` means the package scripts and tests name every entry | `include` |
 | `@avi2dg/checks/dependency-cruiser` | nothing | `extends` |
+| `@avi2dg/checks/stylelint` | `baseline` and `tokens`, where `false` leaves the design token rules off | `extends` and `plugins` |
 
 A repository whose sources are Effect programs writes `oxlint.config.ts`:
 
@@ -75,7 +78,16 @@ export default defineConfig({ devOnly: ["^(?:evals|tests)/"] });
 ```
 
 [The dependency rules](dependency-rules.md) lists its keys.
-`tsconfig.json` keeps the three config files in its program, so `bun run typecheck` holds them to the builders' types.
+
+A repository that declares `frontend-syntax.json` writes `stylelint.config.ts`, which [checks-frontend-syntax](../gates/checks-frontend-syntax.md) loads and describes:
+
+```ts
+import { defineConfig } from "@avi2dg/checks/stylelint";
+
+export default defineConfig({ baseline: "widely", tokens: false });
+```
+
+`tsconfig.json` keeps the config files in its program, so `bun run typecheck` holds them to the builders' types.
 
 ## Size limits
 
@@ -108,4 +120,5 @@ overrides: [{ files: ["src/lib/server.ts"], rules: { "max-lines": ["error", { ma
 - [The dependency rules](dependency-rules.md)
 - [checks-ci-wiring](../gates/checks-ci-wiring.md)
 - [checks-suppressions-ratchet](../gates/checks-suppressions-ratchet.md)
+- [checks-frontend-syntax](../gates/checks-frontend-syntax.md)
 - [checks-docs](../gates/checks-docs.md)

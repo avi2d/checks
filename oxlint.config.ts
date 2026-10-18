@@ -7,10 +7,11 @@ export default defineConfig({
       "src/quality/effect-channel/**",
       "src/complexity/readability/**",
       "src/quality/data-shape/**",
-      // oxlint, knip and dependency-cruiser take a config's default export as a plain value, so these builders cannot run an Effect.
+      // Each tool takes a config's default export as a plain value, so these builders cannot run an Effect.
       "src/quality/presets/oxlint.ts",
       "src/quality/presets/knip.ts",
       "src/quality/presets/dependency-cruiser.ts",
+      "src/quality/presets/stylelint.ts",
       // Bun loads the flake preload into the fresh global of every test file under --parallel, so an Effect import there would load into each file.
       "src/testing/flake-preload.ts",
       // Stryker loads this plugin synchronously and stops the run on a throw, so it cannot run an Effect.

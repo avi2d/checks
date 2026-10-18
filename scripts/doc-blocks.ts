@@ -31,7 +31,7 @@ const SHIPPED = {
   "stryker.preset.js": "the Stryker mutation-testing preset, which refuses a full run outside CI",
   "tsconfig.effect.json": "the tsconfig fragment with the shared compiler options and the Effect language-service block",
   "ts-reset.d.ts": "the two ts-reset rules `tsconfig.effect.json` lists in `files`",
-  "dist/": "the compiled oxlint plugins, the config builders `@avi2dg/checks/oxlint`, `@avi2dg/checks/knip` and `@avi2dg/checks/dependency-cruiser` resolve to, and the doc templates, one template per kind of doc file",
+  "dist/": "the compiled oxlint plugins, the config builders `@avi2dg/checks/oxlint`, `@avi2dg/checks/knip`, `@avi2dg/checks/dependency-cruiser` and `@avi2dg/checks/stylelint` resolve to, and the doc templates, one template per kind of doc file",
 } as const;
 
 type ShippedPath = keyof typeof SHIPPED;

@@ -23,6 +23,8 @@ A `path` entry the base revision lacks reads as empty there, so a newly measured
 { "path": ["src"], "format": ["typescript"], "ignore": ["**/*.d.ts"] }
 ```
 
+A repository that lists `"css"` in `format` measures its stylesheets the same way, and [checks-frontend-syntax](checks-frontend-syntax.md) leaves CSS repetition to this gate.
+
 The gate sets the 50 tokens and 5 lines itself, over any the file names.
 A `threshold` the file names never fails the gate, which reads jscpd's report once the scan finishes.
 The bin reads the base and head commits rather than the working tree's file contents.
@@ -56,5 +58,6 @@ When the head holds no `.jscpd.json`, the gate reports that no file was measured
 
 ## Related topics
 
+- [checks-frontend-syntax](checks-frontend-syntax.md)
 - [Native settings](../configs/native-settings.md)
 - [checks-suppressions-ratchet](checks-suppressions-ratchet.md)

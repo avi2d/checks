@@ -370,7 +370,7 @@ test(
     const manifest = Schema.decodeSync(Manifest)(await readFile(join(CHECKOUT, "package.json"), "utf8"));
     expect(Object.keys(manifest.exports).toSorted()).toEqual([
       ...["./browser-hooks.ts", "./dependency-cruiser", "./dependency-cruiser.config.js", "./knip", "./knip-base.json", "./oxlint"],
-      ...["./scripts/comment-matchers.ts", "./scripts/prose-matchers.ts", "./scripts/test-skips.ts", "./stryker.preset.js", "./templates/*", "./tsconfig.effect.json"],
+      ...["./scripts/comment-matchers.ts", "./scripts/prose-matchers.ts", "./scripts/test-skips.ts", "./stryker.preset.js", "./stylelint", "./templates/*", "./tsconfig.effect.json"],
     ]);
     const resolved = Object.entries(manifest.exports).map(([key, exported]) => {
       const target = typeof exported === "string" ? exported : exported.default;
@@ -379,7 +379,7 @@ test(
       return [key, realpathSync(Bun.resolveSync(specifier, dir)) === realpathSync(file)];
     });
     expect(resolved.filter(([, found]) => !found)).toEqual([]);
-    const shipped = ["ts-reset.d.ts", "dist/templates/readme.md", "dist/presets/oxlint.d.ts", "LICENSE", "CHANGELOG.md", "knip-base.json", "dist/data-shape/index.js", "src/quality/browser/hooks.ts", "src/quality/frontend-syntax.ts"];
+    const shipped = ["ts-reset.d.ts", "dist/templates/readme.md", "dist/presets/oxlint.d.ts", "LICENSE", "CHANGELOG.md", "knip-base.json", "dist/data-shape/index.js", "src/quality/browser/hooks.ts", "src/quality/frontend-syntax.ts", "src/quality/presets/stylelint.ts", "dist/presets/stylelint.js"];
     const unshipped = ["templates", "presets", "src/quality/effect-channel", "src/complexity/readability", "src/quality/data-shape", "tests", "AGENTS.md"];
     expect(shipped.filter((path) => !existsSync(join(installed, path)))).toEqual([]);
     expect(unshipped.filter((path) => existsSync(join(installed, path)))).toEqual([]);
@@ -526,7 +526,7 @@ test(
       ["wiring", "3 gate(s) run on pull requests to main"],
       ["repetition", "repetition: the head holds no .jscpd.json, so no file is measured"],
       ["docs", "docs: 0 doc file(s) the range touches hold to their templates"],
-      ["ratchet", "no count in oxlint-suppressions.json rose or appeared"],
+      ["ratchet", "no count in oxlint-suppressions.json or stylelint-suppressions.json rose or appeared"],
       ["clock", "no test in tests/quarantine/ is past 30 days"],
     ] as const) {
       const guardrail = await runScript(script);

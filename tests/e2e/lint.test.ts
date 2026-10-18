@@ -95,7 +95,11 @@ test("tracking copy.json opts a repository into checks-copy, which fails lint on
 
 test("tracking frontend-syntax.json opts a repository into checks-frontend-syntax, which fails lint on a seeded transition all", async () => {
   const { repo } = await repository();
-  await repo.write({ "frontend-syntax.json": JSON.stringify({ inputs: ["styles/*.css"] }), "styles/site.css": "a { transition: all 1s; }\n" });
+  await repo.write({
+    "frontend-syntax.json": JSON.stringify({ inputs: ["styles/*.css"] }),
+    "stylelint.config.ts": `import { defineConfig } from ${JSON.stringify(join(CHECKOUT, "src", "quality", "presets", "stylelint.ts"))};\n\nexport default defineConfig({ baseline: "widely", tokens: false });\n`,
+    "styles/site.css": "a { transition: all 1s; }\n",
+  });
   await commit(repo, "feat: declare the stylesheets");
   const red = await lint(repo);
   expect(red.text).toContain('styles/site.css:1:17 Disallowed value "all 1s" for property "transition"');

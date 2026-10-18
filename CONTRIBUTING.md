@@ -92,7 +92,7 @@ To place a change:
    | `scripts/` | the kit's own build and CI tooling, which nothing ships |
    | `dist/` | the committed oxlint plugin bundles, the config builders compiled under `dist/presets/`, and the Stryker preset's helpers compiled under `dist/mutation/` |
    | `dist/templates/` | one template per kind of doc file, which `bun run build` renders |
-   | `src/quality/presets/` | the oxlint, Knip and dependency-cruiser config builders, and the Effect language service severities |
+   | `src/quality/presets/` | the oxlint, Knip, dependency-cruiser and stylelint config builders, and the Effect language service severities |
    | `CHANGELOG.md` | every release, which `bun run build` writes from the conventional commits |
    | `tests/` | the suite, with the in-process tests under `tests/unit/` and the tests that spawn a process under `tests/e2e/` |
    | `docs/gates/` | one reference page per bin |
@@ -106,7 +106,7 @@ To place a change:
 This repository holds itself to the kit through its own `oxlint.config.ts`, `knip.config.ts` and `dependency-cruiser.config.ts`, with these exceptions:
 
 - Its `oxlint.config.ts` lifts `effect-channel/no-throw` from `src/quality/comment-matchers.ts`, whose synchronous `refused()` a host loads without `node_modules`.
-- It keeps the oxlint plugins and the oxlint, Knip and dependency-cruiser builders outside its Effect paths, since a tool loads each synchronously.
+- It keeps the oxlint plugins and the oxlint, Knip, dependency-cruiser and stylelint builders outside its Effect paths, since a tool loads each synchronously.
 - It keeps the `checks-flake` preload outside its Effect paths, since Bun loads it into every test file.
 - Its `dependency-cruiser.config.ts` names each plugin entry in `orphans`, and adds `host-loaded-imports-nothing`.
 

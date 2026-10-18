@@ -10,6 +10,8 @@ audience: consumers
 
 It fails when an added line carries a banned comment.
 It refuses a machine-read directive, a record or ticket pointer, a doc block, and a file opening with a rationale block over three lines, licence headers excepted.
+The directives are `@ts-expect-error`, `@ts-ignore`, `biome-ignore`, `prettier-ignore`, and every directive that begins `eslint-disable` or `stylelint-disable`, such as `stylelint-disable-next-line`.
+A stylesheet keeps its count of existing stylelint problems in `stylelint-suppressions.json` instead, as [checks-frontend-syntax](checks-frontend-syntax.md) says.
 Each refusal says what to write instead.
 Only added lines are checked, so a violation in a file the diff never touches stays silent.
 A refusal counts when any line of the comment carrying it was added.

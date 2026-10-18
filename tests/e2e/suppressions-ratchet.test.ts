@@ -7,6 +7,7 @@ import { CHECKOUT, fixtureRepos, ran, type Ran } from "./lib/fixture-repo.ts";
 
 const SCRIPT = join(CHECKOUT, "src", "complexity", "suppressions-ratchet.ts");
 const OXLINT = join(CHECKOUT, "node_modules", ".bin", "oxlint");
+const STYLELINT = join(CHECKOUT, "node_modules", ".bin", "stylelint");
 const RULES = JSON.stringify({ rules: { "eslint/no-debugger": "error" } });
 const open = fixtureRepos("checks-suppressions-ratchet-");
 const repository = () => open({ ".oxlintrc.json": RULES });
@@ -36,15 +37,15 @@ test(
     const raised = await commit("raise a count");
     const rose = await ratchet(dir, [base, raised]);
     expect(rose.exitCode).toBe(1);
-    expect(rose.text).toContain("suppressions-ratchet: 1 count(s) in oxlint-suppressions.json rose or appeared");
-    expect(rose.text).toContain("  counted.ts no-debugger rose from 1 to 2");
+    expect(rose.text).toContain("suppressions-ratchet: 1 count(s) rose or appeared");
+    expect(rose.text).toContain("  oxlint-suppressions.json counted.ts no-debugger rose from 1 to 2");
 
     await debuggers(dir, "added.ts", 1);
     await oxlint(dir, "--suppress-all");
     const added = await commit("add a new entry");
     const appeared = await ratchet(dir, [added]);
     expect(appeared.exitCode).toBe(1);
-    expect(appeared.text).toContain("  added.ts no-debugger appeared with 1");
+    expect(appeared.text).toContain("  oxlint-suppressions.json added.ts no-debugger appeared with 1");
     expect(appeared.text).not.toContain("counted.ts");
 
     await debuggers(dir, "counted.ts", 0);
@@ -53,7 +54,26 @@ test(
     const lowered = await commit("fix every new site and one old one");
     const green = await ratchet(dir, [added, lowered]);
     expect(green.exitCode).toBe(0);
-    expect(green.text).toContain("no count in oxlint-suppressions.json rose or appeared (0 at the head, 2 lowered)");
+    expect(green.text).toContain("no count in oxlint-suppressions.json or stylelint-suppressions.json rose or appeared (0 at the head, 2 lowered)");
+  },
+  120_000,
+);
+
+test(
+  "stylelint's own baseline goes red on a raised count, and names its file apart from oxlint's",
+  async () => {
+    const { dir, write, commit } = await open({ ".stylelintrc.json": JSON.stringify({ rules: { "color-no-hex": true } }) });
+    const hexes = (count: number) => write({ "site.css": Array.from({ length: count }, (_, i) => `.a${i} { color: #fff; }\n`).join("") });
+    await hexes(1);
+    await $`${STYLELINT} site.css --suppress`.cwd(dir).quiet();
+    const base = await commit("baseline");
+
+    await hexes(2);
+    await $`${STYLELINT} site.css --suppress`.cwd(dir).quiet();
+    const raised = await commit("raise a count");
+    const rose = await ratchet(dir, [base, raised]);
+    expect(rose.exitCode).toBe(1);
+    expect(rose.text).toContain("  stylelint-suppressions.json site.css color-no-hex rose from 1 to 2");
   },
   120_000,
 );
@@ -75,7 +95,7 @@ test(
     const introduced = await commit("introduce the baseline");
     const red = await ratchet(dir, [introduced]);
     expect(red.exitCode).toBe(1);
-    expect(red.text).toContain("  counted.ts no-debugger appeared with 3");
+    expect(red.text).toContain("  oxlint-suppressions.json counted.ts no-debugger appeared with 3");
   },
   120_000,
 );
@@ -106,7 +126,7 @@ test(
     const raised = await commit("feature raises the count");
     const red = await ratchet(dir, ["main", raised]);
     expect(red.exitCode).toBe(1);
-    expect(red.text).toContain("  counted.ts no-debugger rose from 2 to 3");
+    expect(red.text).toContain("  oxlint-suppressions.json counted.ts no-debugger rose from 2 to 3");
   },
   120_000,
 );
@@ -127,7 +147,7 @@ test(
     const raised = await commit("package raises its count");
     const fromPackage = await ratchet(pkg, [base, raised]);
     expect(fromPackage.exitCode).toBe(1);
-    expect(fromPackage.text).toContain("  counted.ts no-debugger rose from 1 to 2");
+    expect(fromPackage.text).toContain("  oxlint-suppressions.json counted.ts no-debugger rose from 1 to 2");
 
     const fromRoot = await ratchet(dir, [base, raised]);
     expect(fromRoot.exitCode).toBe(0);
@@ -151,7 +171,7 @@ test(
     const suppressed = await commit("root with a baseline");
     const red = await ratchet(dir, [suppressed]);
     expect(red.exitCode).toBe(1);
-    expect(red.text).toContain("  counted.ts no-debugger appeared with 2");
+    expect(red.text).toContain("  oxlint-suppressions.json counted.ts no-debugger appeared with 2");
   },
   120_000,
 );

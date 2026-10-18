@@ -94,6 +94,7 @@
     "src/quality/presets/effect.language-service.json",
     "src/quality/presets/oxlint.ts",
     "src/quality/presets/dependency-cruiser.ts",
+    "src/quality/presets/stylelint.ts",
     "src/quality/effect-scope.ts",
     "src/quality/jsonc-patch.ts",
     "src/dependencies/imports.ts",
@@ -129,6 +130,10 @@
     "./dependency-cruiser": {
       "types": "./dist/presets/dependency-cruiser.d.ts",
       "default": "./dist/presets/dependency-cruiser.js"
+    },
+    "./stylelint": {
+      "types": "./dist/presets/stylelint.d.ts",
+      "default": "./dist/presets/stylelint.js"
     }
   },
   "bin": {
@@ -170,7 +175,7 @@
   },
   "scripts": {
     "prepare": "bun src/dependencies/vendor.ts --library effect --package effect --repository https://github.com/Effect-TS/effect.git --tag 'effect@{version}' --path packages/effect/package.json",
-    "build": "bun build src/quality/effect-channel/index.ts --outdir dist/effect-channel --target node --format esm && bun build src/complexity/readability/index.ts --outdir dist/readability --target node --format esm && bun build src/quality/data-shape/index.ts --outdir dist/data-shape --target node --format esm && bun build src/testing/mutation-guard-plugin.ts src/testing/mutation-refusal.ts --outdir dist/mutation --target node --format esm && bun build src/quality/presets/oxlint.ts src/quality/presets/knip.ts src/quality/presets/dependency-cruiser.ts --outdir dist/presets --target node --format esm && tsc -p tsconfig.presets.json && bun scripts/configs-write.ts && bun src/quality/effect-scope.ts && bun scripts/doc-templates-write.ts && bun src/delivery/changelog-write.ts && bun scripts/doc-blocks-write.ts",
+    "build": "bun build src/quality/effect-channel/index.ts --outdir dist/effect-channel --target node --format esm && bun build src/complexity/readability/index.ts --outdir dist/readability --target node --format esm && bun build src/quality/data-shape/index.ts --outdir dist/data-shape --target node --format esm && bun build src/testing/mutation-guard-plugin.ts src/testing/mutation-refusal.ts --outdir dist/mutation --target node --format esm && bun build src/quality/presets/oxlint.ts src/quality/presets/knip.ts src/quality/presets/dependency-cruiser.ts src/quality/presets/stylelint.ts --outdir dist/presets --target node --format esm && tsc -p tsconfig.presets.json && bun scripts/configs-write.ts && bun src/quality/effect-scope.ts && bun scripts/doc-templates-write.ts && bun src/delivery/changelog-write.ts && bun scripts/doc-blocks-write.ts",
     "lint": "oxlint && bun src/core/lint.ts",
     "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
     "test": "bun src/testing/test.ts",
@@ -192,6 +197,8 @@
     "playwright-core": "1.63.0",
     "postcss-html": "2.0.0",
     "stylelint": "17.16.0",
+    "stylelint-config-standard": "40.0.0",
+    "stylelint-plugin-use-baseline": "1.4.7",
     "typescript": "7.0.2"
   },
   "peerDependenciesMeta": {
@@ -208,6 +215,12 @@
       "optional": true
     },
     "stylelint": {
+      "optional": true
+    },
+    "stylelint-config-standard": {
+      "optional": true
+    },
+    "stylelint-plugin-use-baseline": {
       "optional": true
     }
   },
@@ -229,6 +242,8 @@
     "playwright-core": "1.63.0",
     "postcss-html": "2.0.0",
     "stylelint": "17.16.0",
+    "stylelint-config-standard": "40.0.0",
+    "stylelint-plugin-use-baseline": "1.4.7",
     "typescript": "7.0.2"
   },
   "dependencies": {
