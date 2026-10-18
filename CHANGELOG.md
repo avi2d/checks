@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.45.0
+
+Released 2026-10-18.
+
+### Breaking changes
+
+- **quality:** hold CSS to the stylelint rule families set in stylelint.config.ts [#167](https://github.com/avi2d/checks/pull/167)
+
 ## 0.44.0
 
 Released 2026-10-18.
