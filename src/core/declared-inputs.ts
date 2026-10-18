@@ -56,12 +56,13 @@ export function inputsReport(name: string, inputs: readonly Input[], problems: r
   return [`${name}: ${problems.length} problem(s) in ${scanned}:`, ...problems.map((problem) => `  ${problem}`)].join("\n");
 }
 
-const declaredGate = Effect.fn("declaredGate")(function* <S, E>(
+export const declaredGate = Effect.fn("declaredGate")(function* <S, E>(
   declared: Declared,
   scanInputs: (root: string, globs: readonly string[]) => Effect.Effect<S, E, BunServices.BunServices>,
   { report, passes }: Verdict<S>,
+  directory: string | undefined,
 ) {
-  const root = (yield* Path.Path).resolve(process.argv[2] ?? ".");
+  const root = (yield* Path.Path).resolve(directory ?? ".");
   const scan = yield* scanInputs(root, yield* readInputs(root, declared));
   yield* Console.log(report(scan));
   return passes(scan);
@@ -72,5 +73,5 @@ export function runDeclaredGate<S, E extends { readonly message: string }>(
   scanInputs: (root: string, globs: readonly string[]) => Effect.Effect<S, E, BunServices.BunServices>,
   verdict: Verdict<S>,
 ): void {
-  runMain(declared.name, declaredGate(declared, scanInputs, verdict));
+  runMain(declared.name, declaredGate(declared, scanInputs, verdict, process.argv[2]));
 }

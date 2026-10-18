@@ -302,7 +302,12 @@ So a product opts in by declaring `browser-checks.json`, `checks-lint` never sta
 `checks-frontend-syntax` needs no browser and runs inside `checks-lint`, but only where `frontend-syntax.json` declares its inputs, since a repository with no interface has no CSS to hold to it.
 
 Each check wraps a detector that already works rather than a rule of the kit's own.
-The syntax gate runs two of stylelint's built-in rules, `axe` runs axe-core and `nesting` runs one html-validate rule.
+The syntax gate runs two of stylelint's built-in rules and the stylelint team's shared configs, `axe` runs axe-core and `nesting` runs one html-validate rule.
+Its Baseline family runs `stylelint-plugin-use-baseline`, the one stylelint rule that judges against the Baseline data rather than a browser list.
+Its design token family is stylelint's own colour and value rules, applied outside the files a repository names as its tokens.
+A check of the rendered page against declared tokens would need a token format of the kit's own.
+The repository's `stylelint.config.ts` sets the Baseline target and the token files, since only the repository knows either.
+The gate imports that file itself, because stylelint's config loader calls `typescript.findConfigFile`, which TypeScript 7 lacks, and a JavaScript config is what [checks-no-plain-js](gates/checks-no-plain-js.md) refuses.
 The `layout`, `keyboard` and `motion` probes are the website's own browser tests, generalized after they held on its English and Russian pages.
 A zoom-disabling viewport is judged by axe on the rendered page, because stylelint reads only CSS and html-validate has no rule for the viewport's content.
 

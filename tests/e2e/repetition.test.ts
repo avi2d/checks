@@ -32,6 +32,34 @@ function repository(files: Readonly<Record<string, string>>): Promise<FixtureRep
   return open({ ".jscpd.json": JSCPD, ...files });
 }
 
+const RULESET = [
+  ".ledger-card {",
+  "  display: grid;",
+  "  grid-template-columns: minmax(0, 1fr) auto;",
+  "  gap: 0.75rem 1.5rem;",
+  "  padding: 1rem 1.25rem 1.5rem;",
+  "  border: 1px solid var(--line);",
+  "  border-radius: 0.5rem;",
+  "  background: var(--surface);",
+  "  box-shadow: 0 1px 2px var(--shade), 0 4px 12px var(--shade);",
+  "}",
+  "",
+].join("\n");
+
+test(
+  "a repository that adds css to format in .jscpd.json fails when a stylesheet's repeated lines grow",
+  async () => {
+    const { write, commit, script } = await open({ ".jscpd.json": JSON.stringify({ path: ["src"], format: ["css"] }), "src/ledger.css": RULESET });
+    const first = await commit("feat: base");
+    await write({ "src/invoice.css": RULESET.replace(".ledger-card", ".invoice-card") });
+    const head = await commit("feat: copy the card");
+    const red = await script("complexity/repetition.ts", first, head);
+    expect(red.text).toContain(`repetition: 2 ${ROSE}  src/invoice.css: `);
+    expect(red.exitCode).toBe(1);
+  },
+  60_000,
+);
+
 test(
   "without jscpd to run it cannot decide, and exits 2",
   async () => {

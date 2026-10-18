@@ -4,11 +4,17 @@ audience: consumers
 ---
 # checks-frontend-syntax
 
-`checks-frontend-syntax` is the opt-in gate that refuses two CSS constraints a program can decide: a transition over `all` and a body-wide `user-select`.
+`checks-frontend-syntax` is the opt-in gate that holds a repository's CSS to stylelint, under the kit's two rules of its own and the rule families of `@avi2dg/checks/stylelint`.
 
 ## What it checks
 
-It runs stylelint with two of stylelint's own rules, and with no other rule and no repository config:
+It runs stylelint twice over each declared input.
+The first run holds the kit's two rules, under no repository config, so no `stylelint.config.ts` turns them off.
+The second run holds the families the repository's `stylelint.config.ts` sets.
+
+### The kit's two rules
+
+The first run refuses two CSS constraints a program can decide, a transition over `all` and a body-wide `user-select`:
 
 | Rule | What it refuses | Why |
 | --- | --- | --- |
@@ -19,7 +25,37 @@ The second rule refuses any value on those selectors, so `body { user-select: te
 It matches each item of the selector list as a whole.
 So it does not follow `:is()`, `:where()` or `:not()`, nor a compound such as `html body` or `body *`.
 A nested rule is judged by its own selector, so `.card { * { user-select: none; } }` fails as `*`.
-A control that needs selection off sets it on its own selector, such as `.drag-handle { user-select: none; }`, which passes.
+A control that needs selection off sets it on its own selector, such as `.drag-handle { user-select: none; }`, which this rule passes and the Baseline family reports.
+
+### The rule families
+
+`defineConfig` from `@avi2dg/checks/stylelint` builds the config the second run holds:
+
+| Family | Rules | Default |
+| --- | --- | --- |
+| G1 correctness | `stylelint-config-recommended`, the stylelint team's rules for likely mistakes, such as `font-variant-numeric: oldstyle-num` for `oldstyle-nums` | on |
+| G2 conventions | `stylelint-config-standard`, which extends G1 with the stylelint team's notation and spacing rules | on |
+| G3 selector complexity | `selector-max-specificity` at `0,3,2` and `selector-max-compound-selectors` at 3 | on |
+| G4 design tokens | `color-no-hex`, `color-named: "never"`, `function-disallowed-list` over `rgb`, `rgba`, `hsl`, `hsla`, `hwb`, `lab`, `lch`, `oklab`, `oklch` and `color`, and `font-size` only as a `var(--…)` or `inherit` | off until `tokens` names the token files, and off in those files |
+| G5 Baseline target | `plugin/use-baseline` from `stylelint-plugin-use-baseline`, which judges each property, value, function, at-rule, selector and unit against the Baseline data, and passes a property inside an `@supports` block | on, at the target `baseline` sets |
+
+The builder changes three of the shared config's rules:
+
+- `no-descending-specificity` is off, since it compares only the last compound selector and has no access to the DOM.
+  It reports components that never match one element.
+- `property-no-vendor-prefix` keeps reporting without a fix, and passes `-webkit-user-select`, since its fix deletes the prefix Safari still needs.
+- In an `.html`, `.astro`, `.vue` or `.svelte` file, `declaration-block-single-line-max-declarations` is off, since a `style` attribute is one line, and `selector-pseudo-class-no-unknown` passes `:global()`, `:deep()` and `:slotted()`.
+
+CSS repetition is not a family of this gate: a repository adds `"css"` to `format` in `.jscpd.json`, and [checks-repetition](checks-repetition.md) then fails when a stylesheet's repeated lines grow.
+
+### What no comment turns off
+
+It sets stylelint's `ignoreDisables`, so a `stylelint-disable` comment silences nothing in either run, and [checks-comment-gate](checks-comment-gate.md) refuses one on the line that adds it.
+A repository adopts a family over existing problems by counting them in `stylelint-suppressions.json` with `--suppress`.
+stylelint lets a file and rule through while its problems stay within the count, and [checks-suppressions-ratchet](checks-suppressions-ratchet.md) fails a change that raises a count.
+`--suppress` counts only what the second run reports.
+
+### Files
 
 It judges each `.css` file, and each `<style>` block and `style` attribute in an `.html`, `.astro`, `.vue` or `.svelte` file, through `postcss-html`.
 It reports a file that does not parse, since it cannot judge one.
@@ -28,7 +64,7 @@ It fails on each declared input that matches no file, so an input that a renamed
 These are outside what it decides:
 
 - A `transition` shorthand that names no property, such as `transition: 200ms`, which the browser reads as `all`.
-- A value it cannot see, such as `transition: var(--motion)` or a style a script sets.
+- A value it cannot see, such as `transition: var(--motion)`, a style a script sets, or a colour a build writes into CSS outside the declared inputs.
 - `user-select: none` in a `style` attribute on `<body>`, which has no selector to judge.
 - A viewport that disables zoom, since stylelint reads only CSS.
   A repository that runs only this gate gets no viewport check, and [checks-browser](checks-browser.md) refuses one on the rendered page through axe's `meta-viewport` rule.
@@ -49,35 +85,69 @@ A glob over built output, such as `dist/**/*.html`, judges the styles a framewor
 stylelint resolves each glob from that directory, skips `node_modules/` and honours `.stylelintignore`.
 It reads the working tree, so an uncommitted file is judged like a committed one.
 
-The repository installs the two optional peers the gate loads, at the versions the kit pins:
+It imports `stylelint.config.ts` from the same directory, and passes its default export to stylelint:
+
+```ts
+import { defineConfig } from "@avi2dg/checks/stylelint";
+
+export default defineConfig({
+  baseline: "widely",
+  tokens: ["src/styles/tokens.css"],
+});
+```
+
+`baseline` and `tokens` have no default, since only the repository knows them, so `tsc` refuses a config that leaves either out.
+The builder throws when the gate loads such a config anyway.
+
+| Key | Takes |
+| --- | --- |
+| `baseline` | `"widely"`, `"newly"` or a year such as `2024`, which allows what became Baseline newly available in that year or earlier |
+| `tokens` | the globs of the files that declare the design tokens, which turns G4 on in every other file, or `false` |
+
+`rules`, `overrides`, `ignoreFiles` and the other keys mean what they mean in stylelint's own docs, and land after the kit's.
+An accepted exception lives there rather than in a comment, such as a property the Baseline rule passes:
+
+```ts
+rules: { "plugin/use-baseline": [true, { available: "widely", ignoreProperties: { "user-select": ["none"] } }] },
+```
+
+The builder owns `extends` and `plugins`.
+It resolves the shared config, the plugin and `postcss-html` beside the kit, so they need not sit under the directory the gate runs in.
+stylelint cannot load `stylelint.config.ts` itself under TypeScript 7, so a bare `stylelint --fix` finds no config, and the gate's `--fix` stands in for it.
+A config not built with `defineConfig` names its own `customSyntax` for markup, or each `.html` or `.astro` file fails to parse in the second run.
+
+The repository installs the optional peers the gate loads, at the versions the kit pins:
 
 ```sh
-bun add -d stylelint@17.16.0 postcss-html@2.0.0
+bun add -d stylelint@17.16.0 postcss-html@2.0.0 stylelint-config-standard@40.0.0 stylelint-plugin-use-baseline@1.4.7
 ```
 
 ## Arguments
 
 ```sh
-checks-frontend-syntax [<directory>]
+checks-frontend-syntax [--fix] [--suppress] [<directory>]
 ```
 
 It checks the directory it runs in, or the directory it is given.
+`--fix` rewrites what a rule of the config fixes, such as `#ffffff` to `#fff`, and reports what is left.
+`--suppress` writes each problem the config reports into `stylelint-suppressions.json`, and drops a count whose problems are gone.
 
 ## Exit codes
 
 | Code | When |
 | --- | --- |
-| 0 | every declared input matches a file, and no file holds a refused declaration |
-| 1 | a file holds a refused declaration or does not parse, or a declared input matches no file |
-| 2 | `frontend-syntax.json` is missing or does not decode, its input list is empty, or stylelint or `postcss-html` cannot load |
+| 0 | every declared input matches a file, and no file holds a problem beyond its suppressed count |
+| 1 | a file holds a problem or does not parse, or a declared input matches no file |
+| 2 | `frontend-syntax.json` is missing or does not decode, its input list is empty, `stylelint.config.ts` is missing or does not load, stylelint refuses an option, a peer cannot load, or an argument is unknown |
 
 ## Sample output
 
 ```
-frontend-syntax: 3 problem(s) in 2 file(s) from 3 declared input(s):
+frontend-syntax: 4 problem(s) in 2 file(s) from 3 declared input(s):
   dist/**/*.html: the declared input matches no file
   src/layouts/Base.astro:4:15 Disallowed property "user-select" for selector "body". Leave text selectable across the page, and turn selection off only on the control that needs it.
   src/styles/site.css:1:17 Disallowed value "all 200ms" for property "transition". Name the properties the transition animates.
+  src/styles/site.css:9:1 Too high specificity in ".nav .item.is-open > a:hover", maximum "0,3,2" (selector-max-specificity)
 ```
 
 A passing run counts what it judged:
@@ -89,9 +159,13 @@ frontend-syntax: no violation in 2 file(s) from 2 declared input(s)
 ## When it runs
 
 `checks-lint` runs it when the repository tracks `frontend-syntax.json` at its root.
-A repository without that file never runs it and needs neither stylelint nor `postcss-html`.
+A repository without that file never runs it and needs neither `stylelint.config.ts` nor the peers.
 
 ## Related topics
 
 - [checks-browser](checks-browser.md)
 - [checks-lint](checks-lint.md)
+- [checks-comment-gate](checks-comment-gate.md)
+- [checks-suppressions-ratchet](checks-suppressions-ratchet.md)
+- [checks-repetition](checks-repetition.md)
+- [Native settings](../configs/native-settings.md)

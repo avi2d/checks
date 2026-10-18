@@ -5,6 +5,7 @@ import type { OxlintOverride } from "oxlint";
 import { base as builtBase } from "../../dist/presets/oxlint.js";
 import { DEV_ONLY, base as cruiseBase, defineConfig as defineCruise } from "../../src/quality/presets/dependency-cruiser.ts";
 import { DEFAULT_ENTRY, defineConfig as defineKnip } from "../../src/quality/presets/knip.ts";
+import { defineConfig as defineStylelint } from "../../src/quality/presets/stylelint.ts";
 import {
   base,
   defineConfig,
@@ -142,4 +143,34 @@ test("the built base names each plugin bundle by an absolute path that exists, a
   expect(bundles.filter((bundle) => !bundle.startsWith(`${CHECKOUT}/dist/`) || !Bun.file(bundle).size)).toEqual([]);
   const shipped: unknown = JSON.parse(readFileSync(resolve(CHECKOUT, "oxlintrc.json"), "utf8"));
   expect(shipped).toEqual({ ...builtBase, jsPlugins: bundles.map((bundle) => `./${relative(CHECKOUT, bundle)}`) });
+});
+
+const DESIGN_TOKEN_RULES = ["color-no-hex", "color-named", "function-disallowed-list", "declaration-property-value-allowed-list"];
+
+test("the stylelint builder turns on the correctness, convention, selector and Baseline families, and leaves design tokens off without token files", () => {
+  const config = defineStylelint({ baseline: "widely", tokens: false });
+  expect(config.extends).toEqual([expect.stringContaining("stylelint-config-standard")]);
+  expect(config.plugins).toEqual([expect.stringContaining("stylelint-plugin-use-baseline")]);
+  expect(config.rules).toMatchObject({
+    "selector-max-specificity": "0,3,2",
+    "selector-max-compound-selectors": 3,
+    "plugin/use-baseline": [true, { available: "widely" }],
+    "no-descending-specificity": null,
+  });
+  for (const rule of DESIGN_TOKEN_RULES) expect(config.rules, rule).not.toHaveProperty(rule);
+});
+
+test("token files turn the design token rules on everywhere but in those files, and the repository's own rules land last", () => {
+  const config = defineStylelint({ baseline: 2024, tokens: ["src/tokens.css"], rules: { "color-no-hex": null } });
+  expect(config.rules).toMatchObject({ "plugin/use-baseline": [true, { available: 2024 }], "color-no-hex": null, "color-named": "never" });
+  expect(config.overrides).toContainEqual({ files: ["src/tokens.css"], rules: Object.fromEntries(DESIGN_TOKEN_RULES.map((rule) => [rule, null])) });
+});
+
+test("the stylelint builder throws on a baseline or tokens a config no typecheck reads gets wrong", () => {
+  for (const baseline of ["baseline", 2024.5, undefined]) {
+    expect(loaded(defineStylelint, { baseline, tokens: false }), String(baseline)).toThrow('set baseline to "widely", "newly" or a year such as 2024');
+  }
+  for (const tokens of [[], "src/tokens.css", [""], undefined, true]) {
+    expect(loaded(defineStylelint, { baseline: "newly", tokens }), JSON.stringify(tokens)).toThrow("set tokens to the globs of the token files");
+  }
 });

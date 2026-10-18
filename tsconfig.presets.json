@@ -7,6 +7,6 @@
     "rootDir": "src/quality/presets",
     "outDir": "dist/presets"
   },
-  "files": ["src/quality/presets/oxlint.ts", "src/quality/presets/knip.ts", "src/quality/presets/dependency-cruiser.ts"],
+  "files": ["src/quality/presets/oxlint.ts", "src/quality/presets/knip.ts", "src/quality/presets/dependency-cruiser.ts", "src/quality/presets/stylelint.ts"],
   "include": []
 }

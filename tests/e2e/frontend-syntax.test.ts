@@ -1,12 +1,14 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { fixtureRepos } from "./lib/fixture-repo.ts";
+import { CHECKOUT, fixtureRepos } from "./lib/fixture-repo.ts";
 
 const open = fixtureRepos("checks-frontend-syntax-");
 
 const GATE = "quality/frontend-syntax.ts";
 
-const DECLARED = { "frontend-syntax.json": JSON.stringify({ inputs: ["src/**/*.css", "src/**/*.astro"] }) };
+const RULES_OFF = `export default { rules: {}, overrides: [{ files: ["**/*.html", "**/*.astro"], customSyntax: ${JSON.stringify(Bun.resolveSync("postcss-html", CHECKOUT))} }] };\n`;
+
+const DECLARED = { "frontend-syntax.json": JSON.stringify({ inputs: ["src/**/*.css", "src/**/*.astro"] }), "stylelint.config.ts": RULES_OFF };
 
 const CLEAN = {
   ...DECLARED,
@@ -60,7 +62,7 @@ const SEEDED = [
 ] as const;
 
 for (const seeded of SEEDED) {
-  test(`red on ${seeded.rule} and green once it is removed`, async () => {
+  test(`red on ${seeded.rule} whatever stylelint.config.ts turns off, and green once it is removed`, async () => {
     const { write, script } = await open(CLEAN);
     const green = await script(GATE);
     expect(green.text).toBe("frontend-syntax: no violation in 2 file(s) from 2 declared input(s)\n");

@@ -26,6 +26,8 @@ Each repository owns its workflows and native tool configs, as [Native settings]
   - `playwright-core` 1.63.0
   - `postcss-html` 2.0.0
   - `stylelint` 17.16.0
+  - `stylelint-config-standard` 40.0.0
+  - `stylelint-plugin-use-baseline` 1.4.7
 
 <!-- end generated prerequisites -->
 
@@ -234,7 +236,7 @@ Every path is relative to the installed package, `node_modules/@avi2dg/checks/`.
 | `dependency-cruiser.config.js` | the kit's dependency-cruiser rules as a base a `.dependency-cruiser.cjs` extends by path, which the build writes |
 | `knip-base.json` | the Knip `include` setting, for a configuration that spreads it |
 | `src/` | every bin, which a package script calls by its `checks-` name, the modules the bins import, and the Effect language service severities under `src/quality/presets/` |
-| `dist/` | the compiled oxlint plugins, the config builders `@avi2dg/checks/oxlint`, `@avi2dg/checks/knip` and `@avi2dg/checks/dependency-cruiser` resolve to, and the doc templates, one template per kind of doc file |
+| `dist/` | the compiled oxlint plugins, the config builders `@avi2dg/checks/oxlint`, `@avi2dg/checks/knip`, `@avi2dg/checks/dependency-cruiser` and `@avi2dg/checks/stylelint` resolve to, and the doc templates, one template per kind of doc file |
 | `oxlintrc.json` | the oxlint `base` as a config a `.oxlintrc.json` extends by path, which the build writes |
 | `stryker.preset.js` | the Stryker mutation-testing preset, which refuses a full run outside CI |
 | `tsconfig.effect.json` | the tsconfig fragment with the shared compiler options and the Effect language-service block |
