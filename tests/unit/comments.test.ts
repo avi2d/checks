@@ -67,7 +67,18 @@ test("every refused directive name is refused, and a name outside the list is no
   for (const name of Matchers.REFUSED_DIRECTIVES) {
     expect(Effect.runSync(refused("src/probe.ts", `// ${name}\n`)), name).not.toEqual([]);
   }
-  expect(Effect.runSync(refused("src/probe.ts", "// stylelint-disable\n"))).toEqual([]);
+  expect(Effect.runSync(refused("src/probe.ts", "// stylelint-enable\n"))).toEqual([]);
+});
+
+test("a stylesheet's comments are read, and each stylelint disable form is refused in one", () => {
+  const source = ['a::before { content: "/* stylelint-disable */"; }', "/* the rule order matters here */", "b { color: red; }"].join("\n");
+  expect(Effect.runSync(comments("src/site.css", source))).toEqual([{ line: 2, text: "/* the rule order matters here */" }]);
+  expect(Effect.runSync(refused("src/site.css", source))).toEqual([]);
+  for (const directive of ["stylelint-disable", "stylelint-disable-line color-no-hex", "stylelint-disable-next-line color-no-hex"]) {
+    expect(Effect.runSync(refused("src/site.css", `a { color: #fff; } /* ${directive} */\n`)), directive).toEqual([
+      `src/site.css:1 carries the machine-read directive \`${directive.split(" ")[0]}\`. Fix what the tool is reporting, or stop running the tool on this file`,
+    ]);
+  }
 });
 
 test("a record or a ticket in a comment is refused, and the pointer is named", () => {

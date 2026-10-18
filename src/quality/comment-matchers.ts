@@ -40,6 +40,7 @@ const SQL: Syntax = { line: DASHES, block: SLASHES, quotes: STRINGS, regexLitera
 const LUA: Syntax = { line: DASHES, block: [["--[[", "]]"]], quotes: STRINGS, regexLiterals: false };
 const HASKELL: Syntax = { line: DASHES, block: [["{-", "-}"]], quotes: [escaping('"')], regexLiterals: false };
 const ML: Syntax = { line: [], block: [["(*", "*)"]], quotes: [escaping('"')], regexLiterals: false };
+const CSS: Syntax = { line: [], block: SLASHES, quotes: STRINGS, regexLiterals: false };
 
 export const SYNTAXES: Readonly<Record<string, Syntax>> = {
   ts: JS,
@@ -78,6 +79,7 @@ export const SYNTAXES: Readonly<Record<string, Syntax>> = {
   yml: YAML,
   toml: HASH,
   ml: ML,
+  css: CSS,
 };
 
 const extensionOf = (path: string): string => path.slice(path.lastIndexOf(".") + 1);
@@ -247,13 +249,14 @@ export const REFUSED_DIRECTIVES = [
   "biome-ignore",
   "eslint-disable",
   "prettier-ignore",
+  "stylelint-disable",
 ] as const satisfies readonly string[];
 
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const directiveSource = (name: string): string => {
   const escaped = escapeRegExp(name);
-  if (name === "eslint-disable") return `\\b${escaped}[\\w-]*`;
+  if (name.endsWith("-disable")) return `\\b${escaped}[\\w-]*`;
   return /^[\w]/.test(name) ? `\\b${escaped}\\b` : escaped;
 };
 
