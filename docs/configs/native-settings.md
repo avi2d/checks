@@ -13,6 +13,7 @@ A consuming repository puts each setting in the file its tool reads, and no mani
 | `.github/workflows/*.yml` | Pull request commands, scheduled commands, runner labels | GitHub Actions and `checks-ci-wiring` |
 | `oxlint.config.ts` | Effect paths and their exemptions, ignore patterns, and any rule or budget the repository sets over the kit's defaults | oxlint and `checks-effect-scope` |
 | `oxlint-suppressions.json` | The existing violations oxlint suppresses, per file and rule | oxlint and `checks-suppressions-ratchet` |
+| `stylelint-suppressions.json` | The existing violations stylelint suppresses, per file and rule | stylelint, `checks-frontend-syntax` and `checks-suppressions-ratchet` |
 | `exports-baseline.json` | The existing unused exports and types, per file, kind and name | `checks-exports` |
 | `.jscpd.json` | The `path` and `ignore` globs of the files repetition is measured in | jscpd and `checks-repetition` |
 | `knip.config.ts` | The `entry` globs Knip traces unreferenced files from | Knip, `checks-unused` and `checks-exports` |

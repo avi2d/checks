@@ -526,7 +526,7 @@ test(
       ["wiring", "3 gate(s) run on pull requests to main"],
       ["repetition", "repetition: the head holds no .jscpd.json, so no file is measured"],
       ["docs", "docs: 0 doc file(s) the range touches hold to their templates"],
-      ["ratchet", "no count in oxlint-suppressions.json rose or appeared"],
+      ["ratchet", "no count in oxlint-suppressions.json or stylelint-suppressions.json rose or appeared"],
       ["clock", "no test in tests/quarantine/ is past 30 days"],
     ] as const) {
       const guardrail = await runScript(script);
