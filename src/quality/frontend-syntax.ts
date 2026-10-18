@@ -14,6 +14,7 @@ const USAGE = "usage: frontend-syntax.ts [--fix] [--suppress] [<directory>]";
 const TRANSITION_ALL = "declaration-property-value-disallowed-list";
 const BODY_WIDE_USER_SELECT = "rule-selector-property-disallowed-list";
 const UNPARSED = "CssSyntaxError";
+const UNPARSED_PART = "parseError";
 
 const RULES = {
   [TRANSITION_ALL]: [{ "/^(?:-[a-z]+-)?transition(?:-property)?$/": ["/(?:^|[\\s,])all(?:[\\s,]|$)/i"] }],
@@ -22,7 +23,9 @@ const RULES = {
 
 type Advice = Readonly<Record<string, string>>;
 
-const UNPARSED_ADVICE: Advice = { [UNPARSED]: "The gate judges only what parses." };
+const JUDGES_ONLY_WHAT_PARSES = "The gate judges only what parses.";
+
+const UNPARSED_ADVICE: Advice = { [UNPARSED]: JUDGES_ONLY_WHAT_PARSES, [UNPARSED_PART]: JUDGES_ONLY_WHAT_PARSES };
 
 const KIT_ADVICE: Advice = {
   [TRANSITION_ALL]: "Name the properties the transition animates.",
@@ -80,7 +83,8 @@ const loadRepositoryConfig = Effect.fn("loadRepositoryConfig")(function* (root: 
 
 function violationsOf(result: LintResult, relative: (file: string) => string, advice: Advice): readonly Violation[] {
   const file = relative(result.source ?? "");
-  return result.warnings.map(({ line, column, rule, text }) => {
+  const unparsed = result.parseErrors.map(({ line, column, stylelintType, text }) => ({ line, column, rule: stylelintType, text }));
+  return [...result.warnings, ...unparsed].map(({ line, column, rule, text }) => {
     const advised = advice[rule];
     return { file, line, column, text: advised === undefined ? text : `${text.replace(` (${rule})`, "")}. ${advised}` };
   });
@@ -141,7 +145,8 @@ export const scanInputs = Effect.fn("scanInputs")(function* (root: string, globs
     const matched = yield* lintWith(root, repository, { files: glob, fix });
     const judged = matched.filter(isJudged);
     const ruled = yield* lintUnsuppressed(root, kit, matched.flatMap(({ source }) => (source === undefined ? [] : [source])));
-    inputs.push({ glob, files: judged.map((result) => relative(result.source ?? "")).toSorted() });
+    const files = new Set([...judged, ...ruled.filter(isJudged)].map((result) => relative(result.source ?? "")));
+    inputs.push({ glob, files: [...files].toSorted() });
     const found = [...ruled.flatMap((result) => violationsOf(result, relative, kit.advice)), ...judged.flatMap((result) => violationsOf(result, relative, repository.advice))];
     for (const violation of found) violations.set(`${violation.file}:${violation.line}:${violation.column}:${violation.text}`, violation);
   }

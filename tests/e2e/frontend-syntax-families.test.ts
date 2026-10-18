@@ -203,6 +203,23 @@ test("--suppress lets no file through that does not parse", async () => {
   }
 }, 60_000);
 
+test("a selector that does not parse fails, whatever bulk suppression counts", async () => {
+  const { script } = await repository(WIDELY, { "src/site.css": "a] { top: 0; }\n" });
+  for (const flags of [["--suppress"], []]) {
+    const red = await script(GATE, ...flags);
+    expect(red.text, flags.join(" ")).toContain("src/site.css:1:1 Cannot parse selector");
+    expect(red.exitCode, flags.join(" ")).toBe(1);
+  }
+}, 60_000);
+
+test("a file the config ignores is counted among the files the kit's rules judged", async () => {
+  const { write, script } = await repository('{ baseline: "widely", tokens: false, ignoreFiles: ["src/vendor.css"] }', { "src/vendor.css": "a { top: 0; }\n" });
+  expect(await script(GATE)).toEqual({ exitCode: 0, text: "frontend-syntax: no violation in 1 file(s) from 1 declared input(s)\n" });
+
+  await write({ "src/site.css": "a { top: 0; }\n" });
+  expect(await script(GATE)).toEqual({ exitCode: 0, text: "frontend-syntax: no violation in 2 file(s) from 1 declared input(s)\n" });
+}, 60_000);
+
 test("a declaration without stylelint.config.ts, a config that does not load, and an unknown flag are refused", async () => {
   const { dir, write, script } = await repository(WIDELY, { "src/site.css": "a { top: 0; }\n" });
   await Bun.$`rm stylelint.config.ts`.cwd(dir).quiet();
