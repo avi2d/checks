@@ -36,7 +36,7 @@ const COLOUR_FUNCTIONS = ["rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "ok
 const DESIGN_TOKENS = {
   "color-no-hex": true,
   "color-named": "never",
-  "function-disallowed-list": [...COLOUR_FUNCTIONS],
+  "function-disallowed-list": COLOUR_FUNCTIONS.map((name) => `/^${name}$/i`),
   "declaration-property-value-allowed-list": { "/^font-size$/i": ["/^var\\(\\s*--[^\\s,()]+\\s*\\)$/i", "/^inherit$/i"] },
 } as const satisfies Rules;
 

@@ -203,6 +203,16 @@ test("--suppress lets no file through that does not parse", async () => {
   }
 }, 60_000);
 
+test("a colour function in capitals fails the design token rules once tokens are set, whatever the convention count suppresses", async () => {
+  const { write, script } = await repository(WIDELY, { "src/site.css": "a { color: RGB(0 0 0); }\n", "src/tokens.css": ":root {\n  --ink: #000;\n}\n" });
+  expect((await script(GATE, "--suppress")).exitCode).toBe(0);
+
+  await write({ "stylelint.config.ts": stylelintConfig('{ baseline: "widely", tokens: ["src/tokens.css"] }') });
+  const red = await script(GATE);
+  expect(red.text).toContain('src/site.css:1:12 Disallowed function "RGB" (function-disallowed-list)');
+  expect(red.exitCode).toBe(1);
+}, 60_000);
+
 test("a selector that does not parse fails, whatever bulk suppression counts", async () => {
   const { script } = await repository(WIDELY, { "src/site.css": "a] { top: 0; }\n" });
   for (const flags of [["--suppress"], []]) {
