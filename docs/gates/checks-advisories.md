@@ -102,7 +102,7 @@ A range that leaves `bun.lock` unchanged runs in under a second, and one that ch
 ## Running it on a schedule
 
 A range never fails on an advisory published after its package landed, so a scheduled `--all` run finds those.
-A consuming repository takes its own 30 minute night window by its tier, with this job at minute 17 of it, so repositories do not start together:
+A repository schedules it at minute 17 of its tier's 30 minute night window, so repositories do not start together:
 
 ```yaml
 on:
