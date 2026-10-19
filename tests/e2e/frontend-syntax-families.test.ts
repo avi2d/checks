@@ -193,6 +193,13 @@ const FAMILIES = [
     reported: "src/site.css:1:1 Disallowed selector \":root:has(.hero)\" (selector-disallowed-list)",
   },
   {
+    family: "G10 page-wide :has(), judged per selector of a list so a component :has() beside :root passes",
+    options: '{ baseline: "widely", tokens: false, noPageHas: true }',
+    red: ":root:has(.hero), .card { top: 0; }\n",
+    green: ":root, .card:has(.icon) { top: 0; }\n",
+    reported: "src/site.css:1:1 Disallowed selector \":root:has(.hero)\" (selector-disallowed-list)",
+  },
+  {
     family: "G10 page-wide :has(), html with its :has() broken across lines",
     options: '{ baseline: "widely", tokens: false, noPageHas: true }',
     red: "html:has(\n  .hero\n) {\n  top: 0;\n}\n",
@@ -225,6 +232,19 @@ test("flatSelectors fails a website rule on its compound selectors beside its ty
   expect(red.text).toContain("(selector-max-compound-selectors)");
   expect(red.text).toContain("(selector-max-type)");
   expect(red.exitCode).toBe(1);
+}, 60_000);
+
+test("flatSelectors refuses native nesting, so a nested chain cannot pass three compounds or a page :has() past noPageHas", async () => {
+  const options = '{ baseline: "newly", tokens: false, bem: true, flatSelectors: true, noPageHas: true }';
+  const { write, script } = await repository(options, { "src/site.css": ".page .hero__name { top: 0; }\n" });
+  expect(await script(GATE)).toEqual({ exitCode: 0, text: "frontend-syntax: no violation in 1 file(s) from 1 declared input(s)\n" });
+
+  for (const nested of [".page { .hero { .hero__name { top: 0; } } }\n", ":root { &:has(.hero) { top: 0; } }\n"]) {
+    await write({ "src/site.css": nested });
+    const red = await script(GATE);
+    expect(red.text, nested).toContain("(max-nesting-depth)");
+    expect(red.exitCode, nested).toBe(1);
+  }
 }, 60_000);
 
 test("all three options fail one website menu rule on four families, and pass its marker-class rewrite", async () => {

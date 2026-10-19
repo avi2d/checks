@@ -69,6 +69,7 @@ const FLAT_SELECTORS = {
   "selector-max-id": 0,
   "selector-max-universal": 0,
   "selector-max-compound-selectors": 2,
+  "max-nesting-depth": 0,
   "selector-max-attribute": 0,
   "selector-pseudo-class-disallowed-list": POSITIONAL_PSEUDO_CLASSES,
 } as const satisfies Rules;
@@ -122,7 +123,7 @@ function designTokens(files: readonly string[]): Required<Pick<Config, "rules" |
 }
 
 function disallowedSelectors(noPageHas: boolean | undefined): Rules {
-  if (noPageHas === true) return { "selector-disallowed-list": [...LANGUAGE_FREE_SELECTORS["selector-disallowed-list"], PAGE_HAS] };
+  if (noPageHas === true) return { "selector-disallowed-list": [[...LANGUAGE_FREE_SELECTORS["selector-disallowed-list"], PAGE_HAS], { splitList: true }] };
   return LANGUAGE_FREE_SELECTORS;
 }
 

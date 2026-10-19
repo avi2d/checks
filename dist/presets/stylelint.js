@@ -40,6 +40,7 @@ var FLAT_SELECTORS = {
   "selector-max-id": 0,
   "selector-max-universal": 0,
   "selector-max-compound-selectors": 2,
+  "max-nesting-depth": 0,
   "selector-max-attribute": 0,
   "selector-pseudo-class-disallowed-list": POSITIONAL_PSEUDO_CLASSES
 };
@@ -87,7 +88,7 @@ function designTokens(files) {
 }
 function disallowedSelectors(noPageHas) {
   if (noPageHas === true)
-    return { "selector-disallowed-list": [...LANGUAGE_FREE_SELECTORS["selector-disallowed-list"], PAGE_HAS] };
+    return { "selector-disallowed-list": [[...LANGUAGE_FREE_SELECTORS["selector-disallowed-list"], PAGE_HAS], { splitList: true }] };
   return LANGUAGE_FREE_SELECTORS;
 }
 function defineConfig({ baseline, tokens, bem, flatSelectors, noPageHas, rules, overrides = [], ...rest }) {
