@@ -184,6 +184,7 @@
     "lint": "oxlint && bun src/core/lint.ts",
     "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
     "test": "bun src/testing/test.ts",
+    "test:fast": "bun scripts/test-fast.ts",
     "test:unit": "bun src/testing/test.ts --tier=unit",
     "test:e2e": "bun src/testing/test.ts --tier=e2e --parallel=4",
     "mutate": "bunx stryker run",
