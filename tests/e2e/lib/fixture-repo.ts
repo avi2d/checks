@@ -12,6 +12,33 @@ export const CHECKOUT = resolve(import.meta.dir, "..", "..", "..");
 const AUTHOR = { name: "Wren Fixture", email: "wren@example.com" };
 const KIT_PATH = `${join(CHECKOUT, "node_modules", ".bin")}:${process.env["PATH"] ?? ""}`;
 
+// The machine injects its hooksPath through the environment, which outranks every
+// config file, so a fixture repo cannot switch those hooks off in its own config.
+function isolateFixtureGit(): void {
+  const kept: Array<readonly [string, string]> = [];
+  for (let index = 0; ; index += 1) {
+    const key = process.env[`GIT_CONFIG_KEY_${index}`];
+    if (key === undefined) break;
+    const value = process.env[`GIT_CONFIG_VALUE_${index}`];
+    delete process.env[`GIT_CONFIG_KEY_${index}`];
+    delete process.env[`GIT_CONFIG_VALUE_${index}`];
+    if (key.toLowerCase() !== "core.hookspath" && value !== undefined) kept.push([key, value]);
+  }
+  if (kept.length === 0) {
+    delete process.env.GIT_CONFIG_COUNT;
+  } else {
+    kept.forEach(([key, value], index) => {
+      process.env[`GIT_CONFIG_KEY_${index}`] = key;
+      process.env[`GIT_CONFIG_VALUE_${index}`] = value;
+    });
+    process.env.GIT_CONFIG_COUNT = String(kept.length);
+  }
+  process.env.GIT_CONFIG_NOSYSTEM = "1";
+  process.env.GIT_CONFIG_GLOBAL = "/dev/null";
+}
+
+isolateFixtureGit();
+
 export type Ran = { readonly exitCode: number; readonly text: string };
 
 export type FixtureRepo = {
