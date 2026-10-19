@@ -1,6 +1,7 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import { Schema } from "effect";
 import { CHECKOUT, scratchDirs } from "./lib/fixture-repo.ts";
@@ -192,8 +193,17 @@ test(
   120_000,
 );
 
-test("a test script without workers hunts serially, where the module loads once and the suite passes", async () => {
-  await sharedSingleton("checks-test");
+test("a test script without a worker count hunts on one worker per core, as checks-test runs it", async () => {
+  await consumer(ORDER_FREE, { test: "checks-test" });
+  const workers = availableParallelism();
+  const hunted = await flake(join(dir, "step-summary.md"));
+  expect(hunted.exitCode).toBe(0);
+  expect(hunted.text).toContain(`checks-flake: ${SEEDS.length} run(s) passed on ${workers} worker(s), with seeds ${SEEDS.join(", ")}`);
+  expect(hunted.record.parallel).toEqual({ workers, replays: [] });
+}, 120_000);
+
+test("a test script that does not run checks-test hunts serially", async () => {
+  await consumer(ORDER_FREE, { test: "bun test" });
   const serial = await flake(join(dir, "step-summary.md"));
   expect(serial.exitCode).toBe(0);
   expect(serial.text).toContain(`checks-flake: ${SEEDS.length} run(s) passed, with seeds ${SEEDS.join(", ")}`);

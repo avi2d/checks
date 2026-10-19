@@ -1,6 +1,7 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { mkdir, readFile, symlink, writeFile } from "node:fs/promises";
+import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
 
@@ -270,7 +271,7 @@ test("--junit keeps the report of a failing run at the path it names", async () 
   expect(kept).toContain("<failure");
 });
 
-test("a focused test fails even without CI set, serially and across parallel workers", async () => {
+test("a focused test fails even without CI set, on the default and on an explicit worker count", async () => {
   await consumer(
     'import { expect, test } from "bun:test";\ntest.only("focused passes", () => expect(1).toBe(1));\ntest("failing skipped by only", () => expect(1).toBe(2));\n',
     { "tests/other.test.ts": 'import { expect, test } from "bun:test";\ntest("other passes", () => expect(1).toBe(1));\n' },
@@ -301,6 +302,15 @@ function workerFile(body: string): string {
 async function workersUsed(): Promise<number> {
   return new Set((await readFile(join(dir, "workers.txt"), "utf8")).split("\n").filter(Boolean)).size;
 }
+
+test("without --parallel the suite runs on one worker per core", async () => {
+  await consumer(workerFile(""), { "tests/pricing.test.ts": workerFile("") });
+
+  const run = await checksTest(true);
+  expect(run.exitCode).toBe(0);
+  expect(run.text).toContain(`${availableParallelism()}x PARALLEL`);
+  expect(await workersUsed()).toBe(Math.min(2, availableParallelism()));
+});
 
 test("a declared skip in one parallel worker is judged at its test site", async () => {
   const skip = (condition: boolean) =>

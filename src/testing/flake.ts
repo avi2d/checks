@@ -3,7 +3,7 @@ import { Config, Console, Effect, FileSystem, Option, Path, Random, Schema } fro
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { runMain, Usage } from "../core/main.ts";
 import { NAME_SEPARATOR, parseReport, ReportError, reporterArgs, type TestResult } from "./test-report.ts";
-import { scriptOptions } from "./test.ts";
+import { scriptOptions, workerCount } from "./test.ts";
 
 export type Run = {
   readonly seed: number;
@@ -90,7 +90,8 @@ const workersOf = Effect.fn("workersOf")(function* (root: string) {
     Effect.flatMap(decodeManifest),
     Effect.mapError((cause) => new ManifestError({ message: `cannot read ${file}: ${cause.message}` })),
   );
-  return scriptOptions(scripts?.["test"])?.workers;
+  const options = scriptOptions(scripts?.["test"]);
+  return options === undefined ? undefined : workerCount(options.workers);
 });
 
 const assignmentOf = Effect.fn("assignmentOf")(function* (log: string) {
