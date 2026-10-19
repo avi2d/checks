@@ -116,20 +116,20 @@ mutation-scope: the baseline report did not run tests/unit/dashboard/snapshot.te
 
 ## When it runs
 
-Only a CI step the repository writes runs it, in the pull request's mutation comparison, before either Stryker run:
+Only a CI step the repository writes runs it, in a branch's mutation comparison, before either Stryker run:
 
 ```yaml
 - name: Select mutation scope
   env:
     GH_TOKEN: ${{ github.token }}
   run: |
-    base="$(git merge-base HEAD "origin/$GITHUB_BASE_REF")"
+    base="$(git merge-base HEAD origin/main)"
     echo "BASE_SHA=$base" >> "$GITHUB_ENV"
     bunx checks-mutation-baseline --full "$RUNNER_TEMP/baseline-full/mutation.json"
     bunx checks-mutation-scope "$base" "$RUNNER_TEMP/baseline-full/mutation.json" >> "$GITHUB_ENV"
 ```
 
-Each later step reads `$SCOPE` from the environment, and a failed scope step adds nothing to it.
+Each later step reads `SCOPE` from the environment, and a failed scope step adds nothing to it.
 [checks-mutation-compare](checks-mutation-compare.md#running-it-in-ci) shows the whole job.
 The full baseline comes from the `mutation` workflow, as [checks-mutation](checks-mutation.md#running-it-in-ci) shows.
 

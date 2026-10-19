@@ -11,26 +11,13 @@ on:
       - package.json
       - bun.lock
       - .github/workflows/mutation.yml
-  pull_request:
-    paths:
-      - src/**
-      - tests/**
-      - stryker.conf.mjs
-      - stryker.preset.js
-      - package.json
-      - bun.lock
-      - .github/workflows/mutation.yml
   workflow_dispatch:
-
-# Advisory on purpose: the comparator's --advisory flag keeps a regression from
-# failing the job, so a failure here still means the run itself broke.
 
 permissions:
   contents: read
 
 jobs:
   baseline:
-    if: github.event_name != 'pull_request'
     # Queue rather than cancel: a baseline must finish to upload, and the queued run resumes from it.
     concurrency:
       group: mutation-baseline
@@ -87,79 +74,3 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bun src/testing/mutation-baseline.ts --prune
-
-  compare:
-    if: github.event_name == 'pull_request'
-    # Cancel here and never on main: a newer push obsoletes this comparison, while a baseline must run to upload.
-    concurrency:
-      group: mutation-${{ github.ref }}
-      cancel-in-progress: true
-    # Scoped to the files the pull request changes, so minutes track the diff, not the suite.
-    timeout-minutes: 60
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      actions: read
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-      # The scope step restores the baseline through the kit's own bin, so bun and the install come first.
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-      - run: bun install --frozen-lockfile
-      # Changed src files mutate directly; changed tests add the src files they
-      # cover in main's baseline, so a test-only pull request is measured too.
-      # A unit test that imports a changed helper or names a changed fixture
-      # counts as changed, so a weakened helper is measured too.
-      - name: Select mutation scope
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          base="$(git merge-base HEAD "origin/$GITHUB_BASE_REF")"
-          echo "BASE_SHA=$base" >> "$GITHUB_ENV"
-          baseline="$RUNNER_TEMP/baseline-full/mutation.json"
-          bun src/testing/mutation-baseline.ts --full "$baseline"
-          bun src/testing/mutation-scope.ts "$base" "$baseline" >> "$GITHUB_ENV"
-      - name: Report empty scope
-        if: env.SCOPE == ''
-        run: "echo 'mutation: no source files changed, nothing to mutate'"
-      - uses: actions/setup-node@v5
-        if: env.SCOPE != ''
-        with:
-          node-version: 24
-      # Both builds skip static mutants: each one reruns the whole suite, and the full baseline still scores them.
-      # The base build writes the incremental state the head build resumes from.
-      - name: Build scope report at merge base
-        if: env.SCOPE != ''
-        run: |
-          git worktree prune
-          git worktree add "$RUNNER_TEMP/mutation-base" "$BASE_SHA"
-          if [ ! -f "$RUNNER_TEMP/mutation-base/stryker.conf.mjs" ]; then
-            echo 'mutation: merge base predates mutation testing, skipping comparison'
-            echo 'SKIP_COMPARE=true' >> "$GITHUB_ENV"
-          else
-            (cd "$RUNNER_TEMP/mutation-base" && bun install --frozen-lockfile && time bunx stryker run --incremental --ignoreStatic --mutate "$SCOPE")
-          fi
-      # Resumed even when a test changed: Stryker reruns every mutant a changed test covers, and only a static mutant hides its coverage.
-      # Stryker diffs a test file's own source only, so a test that reads a changed helper or fixture enters the state as removed.
-      - name: Build scope report at head
-        if: env.SCOPE != '' && env.SKIP_COMPARE != 'true'
-        run: |
-          state="$RUNNER_TEMP/mutation-base/reports/stryker-incremental.json"
-          if [ -f "$state" ]; then
-            mkdir -p reports
-            jq --arg stale "$STALE_TESTS" '($stale | split(",")) as $stale | .testFiles |= with_entries(select(.key | IN($stale[]) | not))' "$state" > reports/stryker-incremental.json
-            echo "mutation: head resumes from the merge base's incremental state"
-          fi
-          time bunx stryker run --incremental --ignoreStatic --mutate "$SCOPE"
-      - name: Compare scope reports
-        if: env.SCOPE != '' && env.SKIP_COMPARE != 'true'
-        run: bun src/testing/mutation-compare.ts --advisory "$RUNNER_TEMP/mutation-base/reports/mutation/mutation.json" reports/mutation/mutation.json
-      - name: Remove mutation-base worktree
-        if: always()
-        run: |
-          git worktree remove --force "$RUNNER_TEMP/mutation-base" 2>/dev/null || true
-          git worktree prune

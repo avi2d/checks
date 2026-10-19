@@ -81,7 +81,7 @@ export class ReportError extends Schema.TaggedError<ReportError>()("ReportError"
   message: Schema.String,
 }) {}
 
-const OUTCOME = {
+export const OUTCOME = {
   Killed: "detected",
   Timeout: "detected",
   Survived: "undetected",

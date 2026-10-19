@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="bun test" tests="1" assertions="1" failures="0" skipped="0" time="0.1">
+  <testsuite name="tests/unit/cart.test.ts" file="tests/unit/cart.test.ts" tests="1" assertions="1" failures="0" skipped="0" time="0.1">
+    <testcase name="adds the tax" classname="" time="0.1" file="tests/unit/cart.test.ts" line="4" assertions="1" />
+  </testsuite>
+</testsuites>

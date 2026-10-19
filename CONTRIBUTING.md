@@ -20,15 +20,15 @@ Declare each skip with `skipReason(reason, name)` beside the native Bun test cal
 A test that spawns `checks-lint` passes it `withoutPullRequestEvent()` from `tests/lib/env.ts`, so the CI event cannot decide the range.
 
 CI runs the commands in `.github/workflows/ci.yml` and lints the pull request title in its `static` job.
-`.github/workflows/mutation.yml` runs Stryker, with `stryker.conf.mjs`, as a baseline on `main` or on any branch by hand, and as an advisory comparison scoped to the sources a pull request changes or reaches through a changed test, helper or fixture.
+`.github/workflows/mutation.yml` runs Stryker, with `stryker.conf.mjs`, as a baseline on `main` or on any branch by hand, and no pull request runs it.
 The workflow has no schedule: the weekly full baseline starts with `gh workflow run mutation`.
 A hand-started run restores no state and passes `--disableBail`, so its report lists every covering and killing test.
 That run uploads the report again as the `mutation-baseline-full` artifact.
-Both jobs restore a baseline through [checks-mutation-baseline](docs/gates/checks-mutation-baseline.md), and the scope step passes `--full` to read that artifact.
-The comparison passes `--ignoreStatic` to both of its Stryker runs, so it never scores a static mutant, and the full baseline still does.
-The head run resumes from the merge-base run's incremental state, even when the pull request changes a test.
-Stryker reruns each mutant whose covering test file changed, and it compares only the test file's own source.
-So the state the head run resumes from drops each unit test that reads a changed helper or fixture.
+A push run restores the previous baseline through [checks-mutation-baseline](docs/gates/checks-mutation-baseline.md).
+`.github/workflows/night-run.yml` runs at 22:37 UTC, and `gh workflow run night-run` starts it by hand.
+It runs a full Stryker run and the unit and e2e levels of the suite, and keeps each JUnit report.
+[checks-night-run](docs/gates/checks-night-run.md) then opens or comments on one issue labelled `night-run` for each file whose mutation score fell since the previous night and for each failing test.
+Each issue is fixed in a pull request of its own, so no pull request waits for a mutation run.
 Run `bun run mutate -- --mutate <file>` to mutate one source file locally, since the preset refuses a full run outside CI.
 The patch under `patches/` makes `@hughescr/stryker-bun-runner` honour Stryker's hit limit, so a mutant whose code loops endlessly ends as a `Timeout` within seconds.
 A static mutant, evaluated once when its module loads, never reaches that limit and still waits for `timeoutMS`.

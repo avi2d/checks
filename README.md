@@ -194,6 +194,7 @@ These bins run on their own:
 - [`checks-mutation-baseline`](docs/gates/checks-mutation-baseline.md) restores the newest mutation baseline from `main`, saves it on a self-hosted runner's disk in place of an artifact, and deletes superseded baselines after a `main` run.
 - [`checks-mutation-scope`](docs/gates/checks-mutation-scope.md) turns a pull request's diff into the files its mutation runs mutate.
 - [`checks-subsumed-tests`](docs/gates/checks-subsumed-tests.md) lists each test another test subsumes in a mutation run.
+- [`checks-night-run`](docs/gates/checks-night-run.md) opens or comments on one GitHub issue per finding of a night run on `main`, each file whose mutation score fell and each failing test.
 - [`checks-changelog`](docs/gates/checks-changelog.md) writes the pending release into `CHANGELOG.md` from the conventional commits since the last release.
 - [`checks-release-notes`](docs/gates/checks-release-notes.md) writes one `CHANGELOG.md` section to a file for a GitHub release.
 - [`checks-release-report`](docs/gates/checks-release-report.md) tells whether the history holds unreleased features or fixes since the last tag.

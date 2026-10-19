@@ -17,8 +17,19 @@ const Run = Schema.Struct({
   artifacts: Schema.Array(Artifact),
 });
 
+const Issue = Schema.Struct({
+  number: Schema.Int,
+  title: Schema.String,
+  body: Schema.String,
+  labels: Schema.Array(Schema.String),
+  comments: Schema.Array(Schema.String),
+});
+
 const State = Schema.Struct({
   repositoryId: Schema.Int,
+  workflow: Schema.String,
+  issues: Schema.Array(Issue),
+  labels: Schema.Array(Schema.String),
   runs: Schema.Array(Run),
   listFails: Schema.Boolean,
   downloadsMeet: Schema.Int,
@@ -28,14 +39,19 @@ const State = Schema.Struct({
 });
 
 export type FakeRun = typeof Run.Type;
+type FakeIssue = typeof Issue.Type;
 type FakeState = typeof State.Type;
 
 const decodeState = Schema.decodeUnknownSync(Schema.fromJsonString(State));
+const decodeNewIssue = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Struct({ title: Schema.String, body: Schema.String, labels: Schema.Array(Schema.String) })));
+const decodeComment = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Struct({ body: Schema.String })));
 
 export type FakeActions = {
   readonly env: Readonly<Record<string, string>>;
   readonly downloads: () => Promise<readonly string[]>;
   readonly calls: () => Promise<readonly string[]>;
+  readonly issues: () => Promise<readonly FakeIssue[]>;
+  readonly labels: () => Promise<readonly string[]>;
 };
 
 // `downloadsMeet` holds each download until that many have started, so jobs sharing a runner miss its cache together.
@@ -45,9 +61,11 @@ export type FakeOptions = {
   readonly downloadsMeet?: number;
   readonly inProgress?: readonly number[];
   readonly failing?: readonly string[];
+  readonly workflow?: string;
+  readonly issues?: readonly FakeIssue[];
 };
 
-// Puts a `gh` on PATH that answers the run list, artifact and download calls from successful runs of mutation.yml on main.
+// Puts a `gh` on PATH that answers the run list, artifact and download calls from successful runs of a workflow on main, mutation.yml unless named, and the issue and label calls.
 export async function fakeActions(home: string, repositoryId: number, runs: readonly FakeRun[], options: FakeOptions = {}): Promise<FakeActions> {
   const bin = join(home, "bin");
   await mkdir(bin, { recursive: true });
@@ -55,6 +73,9 @@ export async function fakeActions(home: string, repositoryId: number, runs: read
   const statePath = join(home, "actions.json");
   const initial = {
     repositoryId,
+    workflow: options.workflow ?? "mutation.yml",
+    issues: options.issues ?? [],
+    labels: [],
     runs,
     listFails: options.listFails ?? false,
     downloadsMeet: options.downloadsMeet ?? 0,
@@ -63,8 +84,11 @@ export async function fakeActions(home: string, repositoryId: number, runs: read
     calls: [],
   } satisfies FakeState;
   await writeFile(statePath, JSON.stringify(initial));
-  const calls = async () => decodeState(await readFile(statePath, "utf8")).calls;
+  const state = async () => decodeState(await readFile(statePath, "utf8"));
+  const calls = async () => (await state()).calls;
   return {
+    issues: async () => (await state()).issues,
+    labels: async () => (await state()).labels,
     env: { PATH: `${bin}:${process.env["PATH"] ?? ""}`, FAKE_ACTIONS_STATE: statePath },
     downloads: async () => (await calls()).filter((call) => call.startsWith("run download")),
     calls,
@@ -77,7 +101,7 @@ function flag(args: readonly string[], name: string): string | undefined {
 }
 
 function listRuns(state: FakeState, args: readonly string[]): string | undefined {
-  if (flag(args, "--workflow") !== "mutation.yml" || flag(args, "--branch") !== "main" || flag(args, "--status") !== "success") return undefined;
+  if (flag(args, "--workflow") !== state.workflow || flag(args, "--branch") !== "main" || flag(args, "--status") !== "success") return undefined;
   if (flag(args, "--json") !== "databaseId,event,createdAt") return undefined;
   const event = flag(args, "--event");
   const listed = [...state.runs]
@@ -138,6 +162,44 @@ function erase(state: FakeState, endpoint: string): FakeState | undefined {
   return { ...state, runs: state.runs.map((run) => ({ ...run, artifacts: run.artifacts.filter((artifact) => artifact.id !== id) })) };
 }
 
+type Answer = { readonly state: FakeState; readonly out: string };
+
+const ISSUES = "repos/{owner}/{repo}/issues";
+
+function issueCall(state: FakeState, method: string, endpoint: string, input: string): Answer | undefined {
+  const [path, query = ""] = endpoint.split("?");
+  if (method === "GET" && path === ISSUES) {
+    const label = new URLSearchParams(query).get("labels");
+    const listed = state.issues.filter((issue) => label === null || issue.labels.includes(label)).map(({ number, title, body }) => ({ number, title, body }));
+    return { state, out: JSON.stringify(listed) };
+  }
+  if (method === "POST" && path === ISSUES) {
+    const issue = { number: 100 + state.issues.length, ...decodeNewIssue(input), comments: [] };
+    return { state: { ...state, issues: [...state.issues, issue] }, out: JSON.stringify({ number: issue.number }) };
+  }
+  const commented = Number(/^repos\/\{owner\}\/\{repo\}\/issues\/(\d+)\/comments$/.exec(path ?? "")?.[1]);
+  if (method !== "POST" || !state.issues.some((issue) => issue.number === commented)) return undefined;
+  const { body } = decodeComment(input);
+  const issues = state.issues.map((issue) => (issue.number === commented ? { ...issue, comments: [...issue.comments, body] } : issue));
+  return { state: { ...state, issues }, out: JSON.stringify({ id: 1 }) };
+}
+
+// `gh label create --force` creates the label or updates the one already there.
+function labelCall(state: FakeState, args: readonly string[]): Answer | undefined {
+  const [command, subcommand, name] = args;
+  if (command !== "label" || subcommand !== "create" || name === undefined || !args.includes("--force")) return undefined;
+  return { state: { ...state, labels: [...new Set([...state.labels, name])] }, out: "" };
+}
+
+async function changed(state: FakeState, args: readonly string[]): Promise<Answer | undefined> {
+  const method = flag(args, "--method");
+  const endpoint = args.find((arg) => arg.startsWith("repos/"));
+  if (args[0] === "api" && method !== undefined && endpoint !== undefined) {
+    return issueCall(state, method, endpoint, args.includes("--input") ? await Bun.stdin.text() : "");
+  }
+  return labelCall(state, args);
+}
+
 async function answer(state: FakeState, args: readonly string[]): Promise<string | undefined> {
   const [command, subcommand, ...rest] = args;
   if (command === "run" && subcommand === "list") return listRuns(state, rest);
@@ -170,6 +232,13 @@ async function main(): Promise<number> {
     return 1;
   }
   if (args[0] === "run" && args[1] === "download") await meet(recorded, statePath);
+  const logged = { ...recorded, calls: [...recorded.calls, args.join(" ")] };
+  const change = await changed(logged, args);
+  if (change !== undefined) {
+    await writeFile(statePath, JSON.stringify(change.state));
+    process.stdout.write(change.out);
+    return 0;
+  }
   const out = await answer(recorded, args);
   if (out === undefined) {
     process.stderr.write(`fake gh: no answer for ${args.join(" ")}\n`);

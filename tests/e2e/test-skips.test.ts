@@ -259,6 +259,17 @@ test("a tier run never runs the other tier's files", async () => {
   expect(unit.exitCode).toBe(1);
 });
 
+test("--junit keeps the report of a failing run at the path it names", async () => {
+  await consumer('import { expect, test } from "bun:test";\ntest("breaks on purpose", () => expect(1).toBe(2));\n');
+
+  const failed = await checksTest(true, ["--junit=reports/night/suite.xml"]);
+
+  expect(failed.exitCode).toBe(1);
+  const kept = await readFile(join(dir, "reports", "night", "suite.xml"), "utf8");
+  expect(kept).toContain('<testcase name="breaks on purpose"');
+  expect(kept).toContain("<failure");
+});
+
 test("a focused test fails even without CI set, serially and across parallel workers", async () => {
   await consumer(
     'import { expect, test } from "bun:test";\ntest.only("focused passes", () => expect(1).toBe(1));\ntest("failing skipped by only", () => expect(1).toBe(2));\n',

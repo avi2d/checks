@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { Config, Console, Effect, FileSystem, Path, Schema } from "effect";
+import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { TEST_ENTRY_POINT } from "../core/gates.ts";
 import { runMain, Usage } from "../core/main.ts";
@@ -26,7 +26,7 @@ export type TestOptions = {
 };
 
 const NAME = TEST_ENTRY_POINT.bin;
-const USAGE = `usage: ${NAME} [--tier=live | --tier=pixel | --tier=unit | --tier=e2e] [--parallel=<workers>], and it refuses test filters`;
+const USAGE = `usage: ${NAME} [--tier=live | --tier=pixel | --tier=unit | --tier=e2e] [--parallel=<workers>] [--junit=<file>], and it refuses test filters`;
 const TIERS = new Map<string, TestTier>([
   ["--tier=live", "live"],
   ["--tier=pixel", "pixel"],
@@ -34,6 +34,7 @@ const TIERS = new Map<string, TestTier>([
   ["--tier=e2e", "e2e"],
 ]);
 const PARALLEL = /^--parallel=([1-9][0-9]*)$/;
+const JUNIT = /^--junit=(.+)$/;
 
 function optionOf(arg: string): TestOptions | undefined {
   const tier = TIERS.get(arg);
@@ -50,6 +51,16 @@ export function testOptions(args: readonly string[]): TestOptions | undefined {
     options = { ...options, ...option };
   }
   return options;
+}
+
+export type EntryOptions = { readonly options: TestOptions; readonly junit: Option.Option<string> };
+
+// Kept out of testOptions, so checks-test-layout still holds a package.json test script to --parallel alone.
+export function entryOptions(args: readonly string[]): EntryOptions | undefined {
+  const junit = args.flatMap((arg) => JUNIT.exec(arg)?.[1] ?? []);
+  const options = testOptions(args.filter((arg) => !JUNIT.test(arg)));
+  if (options === undefined || junit.length > 1) return undefined;
+  return { options, junit: Option.fromNullishOr(junit[0]) };
 }
 
 const TEST_SCRIPTS: readonly string[] = [NAME, `bun src/${TEST_ENTRY_POINT.script}`];
@@ -169,15 +180,22 @@ const runSuite = Effect.fn("runSuite")(function* (outfile: string, { tier, worke
 });
 
 const testEntry = Effect.gen(function* () {
-  const options = testOptions(process.argv.slice(2));
-  if (options === undefined) return yield* new Usage({ message: USAGE });
+  const entry = entryOptions(process.argv.slice(2));
+  if (entry === undefined) return yield* new Usage({ message: USAGE });
+  const { options, junit } = entry;
   const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
   const declarations = yield* readSkipDeclarations(process.cwd(), options.tier);
   const environment = yield* environmentOf;
 
-  const outfile = (yield* Path.Path).join(yield* fs.makeTempDirectoryScoped({ prefix: "checks-test-" }), "junit.xml");
+  const outfile = path.join(yield* fs.makeTempDirectoryScoped({ prefix: "checks-test-" }), "junit.xml");
   const suitePassed = (yield* runSuite(outfile, options)) === ChildProcessSpawner.ExitCode(0);
-  if (!(yield* fs.exists(outfile))) {
+  const written = yield* fs.exists(outfile);
+  if (written && Option.isSome(junit)) {
+    yield* fs.makeDirectory(path.dirname(junit.value), { recursive: true });
+    yield* fs.copyFile(outfile, junit.value);
+  }
+  if (!written) {
     if (!suitePassed) {
       yield* Console.error(`${NAME}: bun test failed before it wrote a report, so no skip was judged`);
       return false;

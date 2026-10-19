@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="bun test" tests="4" assertions="2" failures="3" skipped="0" time="0.5">
+  <testsuite name="tests/unit/cart.test.ts" file="tests/unit/cart.test.ts" tests="2" assertions="2" failures="1" skipped="0" time="0.2">
+    <testsuite name="totals" file="tests/unit/cart.test.ts" line="3" tests="2" assertions="2" failures="1" skipped="0" time="0.2">
+      <testcase name="adds the tax" classname="" time="0.1" file="tests/unit/cart.test.ts" line="4" assertions="1" />
+      <testcase name="rounds half to even" classname="" time="0.1" file="tests/unit/cart.test.ts" line="8" assertions="1">
+        <failure type="AssertionError" message="expect(received).toBe(expected)" />
+      </testcase>
+    </testsuite>
+  </testsuite>
+  <testsuite name="tests/unit/session.test.ts" file="tests/unit/session.test.ts" tests="1" assertions="0" failures="1" skipped="0" time="0.2">
+    <testcase name="(worker crashed)" classname="" time="0" file="tests/unit/session.test.ts" assertions="0">
+      <failure type="Error" message="worker process crashed before reporting results" />
+    </testcase>
+  </testsuite>
+</testsuites>
