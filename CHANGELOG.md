@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.46.0
+
+Released 2026-10-19.
+
+### Features
+
+- **quality:** refuse CSS comments, non-ASCII selectors and stylesheets over 400 lines [#172](https://github.com/avi2d/checks/pull/172)
+
 ## 0.45.1
 
 Released 2026-10-19.
