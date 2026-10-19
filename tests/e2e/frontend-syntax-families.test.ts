@@ -140,6 +140,12 @@ test("an @property rule passes the widely target, since a browser without it kee
   expect(await script(GATE)).toEqual({ exitCode: 0, text: "frontend-syntax: no violation in 1 file(s) from 1 declared input(s)\n" });
 }, 60_000);
 
+test("an @property rule still passes when the repository sets its own Baseline rule for an exception", async () => {
+  const options = '{ baseline: "widely", tokens: false, rules: { "plugin/use-baseline": [true, { available: "widely", ignoreProperties: { "user-select": ["none"] } }] } }';
+  const { script } = await repository(options, { "src/site.css": "@property --brand { syntax: \"<color>\"; inherits: false; initial-value: red; }\na { user-select: none; }\n" });
+  expect(await script(GATE)).toEqual({ exitCode: 0, text: "frontend-syntax: no violation in 1 file(s) from 1 declared input(s)\n" });
+}, 60_000);
+
 test("an @view-transition rule still fails the widely target, so the @property pass stays narrow", async () => {
   const { write, script } = await repository(WIDELY, { "src/site.css": "a { top: 0; }\n" });
   expect(await script(GATE)).toEqual({ exitCode: 0, text: "frontend-syntax: no violation in 1 file(s) from 1 declared input(s)\n" });

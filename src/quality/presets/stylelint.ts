@@ -60,6 +60,17 @@ function tokenFiles(tokens: unknown): readonly string[] {
   throw new TypeError(REFUSED_TOKENS);
 }
 
+const BASELINE_RULE = "plugin/use-baseline";
+
+// A repository's Baseline entry replaces the kit's option object whole, so the @property pass goes into whichever entry lands.
+function passProperty(entry: Rules[string]): Rules[string] {
+  if (entry === null || entry === undefined) return entry;
+  const [primary, options = {}] = Array.isArray(entry) ? entry : [entry];
+  const ignored: unknown = Reflect.get(options, "ignoreAtRules") ?? [];
+  if (!Array.isArray(ignored)) return entry;
+  return [primary, { ...options, ignoreAtRules: ["property", ...ignored] }];
+}
+
 function designTokens(files: readonly string[]): Required<Pick<Config, "rules" | "overrides">> {
   if (files.length === 0) return { rules: {}, overrides: [] };
   const off = Object.fromEntries(Object.keys(DESIGN_TOKENS).map((rule) => [rule, null]));
@@ -70,17 +81,18 @@ function designTokens(files: readonly string[]): Required<Pick<Config, "rules" |
 export function defineConfig({ baseline, tokens, rules, overrides = [], ...rest }: ChecksStylelintConfig): Config {
   const available = baselineTarget(baseline);
   const tokenRules = designTokens(tokenFiles(tokens));
+  const merged: Rules = {
+    ...CONVENTION_CHANGES,
+    ...SELECTOR_COMPLEXITY,
+    [BASELINE_RULE]: [true, { available }],
+    ...tokenRules.rules,
+    ...rules,
+  };
   return {
     ...rest,
     extends: [peer("stylelint-config-standard")],
     plugins: [peer("stylelint-plugin-use-baseline")],
-    rules: {
-      ...CONVENTION_CHANGES,
-      ...SELECTOR_COMPLEXITY,
-      "plugin/use-baseline": [true, { available, ignoreAtRules: ["property"] }],
-      ...tokenRules.rules,
-      ...rules,
-    },
+    rules: { ...merged, [BASELINE_RULE]: passProperty(merged[BASELINE_RULE]) },
     overrides: [
       { files: [...MARKUP], customSyntax: peer("postcss-html") },
       { files: [...HTML_AND_ASTRO], rules: { "declaration-block-single-line-max-declarations": null } },

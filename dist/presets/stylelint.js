@@ -39,6 +39,16 @@ function tokenFiles(tokens) {
     return tokens;
   throw new TypeError(REFUSED_TOKENS);
 }
+var BASELINE_RULE = "plugin/use-baseline";
+function passProperty(entry) {
+  if (entry === null || entry === undefined)
+    return entry;
+  const [primary, options = {}] = Array.isArray(entry) ? entry : [entry];
+  const ignored = Reflect.get(options, "ignoreAtRules") ?? [];
+  if (!Array.isArray(ignored))
+    return entry;
+  return [primary, { ...options, ignoreAtRules: ["property", ...ignored] }];
+}
 function designTokens(files) {
   if (files.length === 0)
     return { rules: {}, overrides: [] };
@@ -48,17 +58,18 @@ function designTokens(files) {
 function defineConfig({ baseline, tokens, rules, overrides = [], ...rest }) {
   const available = baselineTarget(baseline);
   const tokenRules = designTokens(tokenFiles(tokens));
+  const merged = {
+    ...CONVENTION_CHANGES,
+    ...SELECTOR_COMPLEXITY,
+    [BASELINE_RULE]: [true, { available }],
+    ...tokenRules.rules,
+    ...rules
+  };
   return {
     ...rest,
     extends: [peer("stylelint-config-standard")],
     plugins: [peer("stylelint-plugin-use-baseline")],
-    rules: {
-      ...CONVENTION_CHANGES,
-      ...SELECTOR_COMPLEXITY,
-      "plugin/use-baseline": [true, { available, ignoreAtRules: ["property"] }],
-      ...tokenRules.rules,
-      ...rules
-    },
+    rules: { ...merged, [BASELINE_RULE]: passProperty(merged[BASELINE_RULE]) },
     overrides: [
       { files: [...MARKUP], customSyntax: peer("postcss-html") },
       { files: [...HTML_AND_ASTRO], rules: { "declaration-block-single-line-max-declarations": null } },

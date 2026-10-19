@@ -112,7 +112,7 @@ An accepted exception lives there rather than in a comment, such as a property t
 rules: { "plugin/use-baseline": [true, { available: "widely", ignoreProperties: { "user-select": ["none"] } }] },
 ```
 
-`@property` needs no such exception, since the kit passes it at every target.
+`@property` needs no such exception, since the kit passes it at every target, and adds it to the `ignoreAtRules` of a `plugin/use-baseline` entry the repository sets.
 
 The builder owns `extends` and `plugins`.
 It resolves the shared config, the plugin and `postcss-html` beside the kit, so they need not sit under the directory the gate runs in.
