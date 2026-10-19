@@ -107,7 +107,10 @@ function fullTitleOf(finding: Finding): string {
 
 export function titleOf(finding: Finding): string {
   const title = fullTitleOf(finding);
-  return title.length <= GITHUB_TITLE_LIMIT ? title : `${title.slice(0, GITHUB_TITLE_LIMIT - 1).toWellFormed()}…`;
+  if (title.length <= GITHUB_TITLE_LIMIT) return title;
+  const end = GITHUB_TITLE_LIMIT - 1;
+  const splitsPair = /[\uD800-\uDBFF]/.test(title.charAt(end - 1));
+  return `${title.slice(0, splitsPair ? end - 1 : end)}…`;
 }
 
 export function findingText(finding: Finding, run: string): string {

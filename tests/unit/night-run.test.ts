@@ -164,9 +164,13 @@ test("a test name too long for GitHub's 256-character title keeps the title with
 
 test("a title within GitHub's 256 characters stays whole, and a cut never splits a character", () => {
   expect(titleOf({ kind: "crash", file: "tests/unit/session.test.ts" })).toBe("Night run: tests/unit/session.test.ts crashed its test worker");
+  const full = `Night run: tests/unit/emoji.test.ts > ${"😀".repeat(200)} fails`;
   const cut = titleOf({ kind: "test", file: "tests/unit/emoji.test.ts", name: "😀".repeat(200) });
   expect(cut.length).toBeLessThanOrEqual(256);
   expect(cut.isWellFormed()).toBe(true);
+  expect(cut).not.toContain("\uFFFD");
+  expect(cut.endsWith("…")).toBe(true);
+  expect(full.startsWith(cut.slice(0, -1))).toBe(true);
 });
 
 test("checks-night-run takes at most one mutation report and any number of test reports", async () => {
