@@ -2,7 +2,7 @@ import { $ } from "bun";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { existsSync, realpathSync } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { availableParallelism, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { Schema } from "effect";
 import { withoutPullRequestEvent } from "../lib/env.ts";
@@ -519,7 +519,7 @@ test(
 
     const { GITHUB_STEP_SUMMARY: _summary, ...withoutStepSummary } = process.env;
     const flake = await runScript("flake", withoutStepSummary);
-    expect(flake.stdout).toContain("checks-flake: 2 run(s) passed, with seeds ");
+    expect(flake.stdout).toContain(`checks-flake: 2 run(s) passed on ${availableParallelism()} worker(s), with seeds `);
     expect(flake.exitCode).toBe(0);
 
     for (const [script, report] of [
