@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { Config, Console, Effect, FileSystem, Path } from "effect";
+import { Config, Console, Effect, FileSystem, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { changedPaths, defaultBranch, git, rangeEnds, type Change } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
@@ -27,11 +27,19 @@ export function touchedE2eFiles(paths: readonly string[]): readonly string[] {
   return [...picked].sort();
 }
 
+class BaseUnresolved extends Schema.TaggedError<BaseUnresolved>()("BaseUnresolved", {
+  message: Schema.String,
+}) {}
+
 const splitZero = (output: string): readonly string[] => output.split("\0").filter((line) => line !== "");
 
 const touchedFiles = Effect.fn("touchedFiles")(function* (root: string) {
-  const target = yield* defaultBranch(root);
-  const range = yield* rangeEnds(target, "HEAD", root);
+  const target = "origin/" + (yield* defaultBranch(root));
+  const range = yield* rangeEnds(target, "HEAD", root).pipe(
+    Effect.mapError((cause) => new BaseUnresolved({
+      message: "cannot find where HEAD branched from " + target + ", so the e2e files the change touches are unknown; fetch " + target + " and run again: " + cause.message,
+    })),
+  );
   const committed = keptPaths(yield* changedPaths(range.base, range.head, [], root));
   const working = splitZero(yield* git(["diff", "--name-only", "-z", "HEAD", "--"], root));
   const untracked = splitZero(yield* git(["ls-files", "--others", "--exclude-standard", "-z"], root));
@@ -94,8 +102,8 @@ const runE2eFiles = Effect.fn("runE2eFiles")(function* (root: string, files: rea
 const fastEntry = Effect.gen(function* () {
   if (process.argv.slice(2).length > 0) return yield* new Usage({ message: USAGE });
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
-  if ((yield* runUnitTier(root)) !== ChildProcessSpawner.ExitCode(0)) return false;
   const files = yield* touchedFiles(root);
+  if ((yield* runUnitTier(root)) !== ChildProcessSpawner.ExitCode(0)) return false;
   if (files.length === 0) {
     yield* Console.log(NAME + ": the change touches no e2e test files, so only the unit tier ran");
     return true;
