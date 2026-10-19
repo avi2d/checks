@@ -8,7 +8,7 @@ audience: consumers
 
 ## What it checks
 
-It runs the default suite with `bun test --randomize` and reads Bun's JUnit report from that run.
+It runs the default suite with `bun test --randomize --parallel=<workers>`, as [Parallel runs](#parallel-runs) says, and reads Bun's JUnit report from that run.
 It runs Bun with `CI=true`, so `test.only` fails the run in every environment.
 Bun exits zero when tests skip, so `checks-test` checks every skipped test against its source declaration.
 A test that `test.skip`, `test.skipIf`, `test.if`, `test.todo` or an enclosing `describe.skip` skips fails unless the test declares its reason.
@@ -77,7 +77,7 @@ Bun ignores both directories during the default run.
 ## Parallel runs
 
 `checks-test` runs `bun test --randomize --parallel=<workers>`, so Bun hands each test file to one of that many worker processes.
-Without the option the count is one worker per core, as `os.availableParallelism()` reports it, so a local run never oversubscribes the machine.
+Without `--parallel=<workers>`, the count is one worker per core, as `os.availableParallelism()` reports it, so a local run never oversubscribes the machine.
 A repository sets its own count by passing `--parallel=<workers>` in its `test` script:
 
 ```json
