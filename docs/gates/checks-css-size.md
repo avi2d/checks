@@ -10,13 +10,13 @@ audience: consumers
 
 It fails on every `*.css` file in the working tree that holds more than 400 lines.
 It counts every line, blank lines and comments included, the way `max-lines` counts code with blank lines and comments kept.
-`dist/` holds the committed build output, so the check passes over that directory.
 Each line names the file and its line count, and tells its writer to split the stylesheet into smaller files.
 
 ## What it reads
 
 It reads the working tree.
-It scans the tracked and untracked files that `git ls-files --exclude-standard` reports, so `node_modules/` and every gitignored tree are out of reach.
+It scans the tracked and untracked files that `git ls-files --cached --others --exclude-standard` reports.
+Ignore rules leave out untracked files only, so an untracked `node_modules/` is out of reach while a tracked stylesheet under an ignored directory is still measured.
 A local run agrees with CI before `git add`.
 
 ## Arguments
@@ -33,7 +33,7 @@ It checks the directory it runs in, or the directory it is given.
 | --- | --- |
 | 0 | every stylesheet holds 400 lines or fewer |
 | 1 | a stylesheet holds more than 400 lines |
-| 2 | git does not list the working tree |
+| 2 | git does not list the working tree, or a listed stylesheet cannot be read |
 
 ## Sample output
 

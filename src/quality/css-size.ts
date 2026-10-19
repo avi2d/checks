@@ -16,13 +16,6 @@ const LIMIT = SOURCE_LIMITS["max-lines"];
 
 const STYLESHEET = /\.css$/;
 
-const GENERATED = "dist/";
-
-export function isExempt(file: string): boolean {
-  if (!STYLESHEET.test(file)) return true;
-  return file.startsWith(GENERATED);
-}
-
 export function lineCount(source: string): number {
   if (source === "") return 0;
   const parts = source.split("\n");
@@ -50,7 +43,7 @@ const listJudged = Effect.fn("listJudged")(function* (root: string) {
   const listed = yield* workingTreeFiles(root).pipe(
     Effect.mapError((cause) => new CssSizeError({ message: cause.message })),
   );
-  return listed.filter((file) => !isExempt(file)).toSorted();
+  return listed.filter((file) => STYLESHEET.test(file)).toSorted();
 });
 
 const measure = Effect.fn("measure")(function* (root: string, file: string) {

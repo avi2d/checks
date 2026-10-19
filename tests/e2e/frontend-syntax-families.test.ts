@@ -116,6 +116,13 @@ const FAMILIES = [
     reported: "(selector-disallowed-list)",
   },
   {
+    family: "G7 language-free selectors, the C1 control character U+0085 in an attribute value",
+    options: WIDELY,
+    red: ".block[data-section=\"a\u0085b\"] { top: 0; }\n",
+    green: ".block[data-section=\"ab\"] { top: 0; }\n",
+    reported: "(selector-disallowed-list)",
+  },
+  {
     family: "G5 Baseline, scrollbar-gutter, newly available in 2024, against a widely available target",
     options: WIDELY,
     red: "html { scrollbar-gutter: stable; }\n",

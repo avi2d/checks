@@ -1,10 +1,5 @@
 import { expect, test } from "bun:test";
-import { isExempt, lineCount, report, violationsOf } from "../../src/quality/css-size.ts";
-
-test("a stylesheet anywhere in the sources is judged, and generated output and other extensions pass over", () => {
-  for (const file of ["src/site.css", "styles/main.css", "a.css"]) expect(isExempt(file)).toBe(false);
-  for (const file of ["dist/site.css", "src/site.ts", "styles.css.map", "notes.md"]) expect(isExempt(file)).toBe(true);
-});
+import { lineCount, report, violationsOf } from "../../src/quality/css-size.ts";
 
 test("the count holds every line, blank lines and comments included", () => {
   expect(lineCount("")).toBe(0);
