@@ -38,7 +38,7 @@ A control that needs selection off sets it on its own selector, such as `.drag-h
 | G2 conventions | `stylelint-config-standard`, which extends G1 with the stylelint team's notation and spacing rules | on |
 | G3 selector complexity | `selector-max-specificity` at `0,3,2` and `selector-max-compound-selectors` at 3 | on |
 | G4 design tokens | `color-no-hex`, `color-named: "never"`, `function-disallowed-list` over `rgb`, `rgba`, `hsl`, `hsla`, `hwb`, `lab`, `lch`, `oklab`, `oklch` and `color`, and `font-size` only as one `var(--…)` with no fallback, or `inherit` | off until `tokens` names the token files, and off in those files |
-| G5 Baseline target | `plugin/use-baseline` from `stylelint-plugin-use-baseline`, which judges each property, value, function, at-rule, selector and unit against the Baseline data, and passes a property inside an `@supports` block | on, at the target `baseline` sets |
+| G5 Baseline target | `plugin/use-baseline` from `stylelint-plugin-use-baseline`, which judges each property, value, function, at-rule, selector and unit against the Baseline data, and passes a property inside an `@supports` block. It passes `@property` at every target, since a browser without `@property` treats the declaration as an unregistered custom property | on, at the target `baseline` sets |
 
 The builder changes three of the shared config's rules:
 
@@ -111,6 +111,8 @@ An accepted exception lives there rather than in a comment, such as a property t
 ```ts
 rules: { "plugin/use-baseline": [true, { available: "widely", ignoreProperties: { "user-select": ["none"] } }] },
 ```
+
+`@property` needs no such exception, since the kit passes it at every target, and adds it to the `ignoreAtRules` of a `plugin/use-baseline` entry the repository sets.
 
 The builder owns `extends` and `plugins`.
 It resolves the shared config, the plugin and `postcss-html` beside the kit, so they need not sit under the directory the gate runs in.

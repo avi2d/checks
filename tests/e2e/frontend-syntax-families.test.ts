@@ -7,7 +7,7 @@ const open = fixtureRepos("checks-frontend-syntax-families-");
 
 const GATE = "quality/frontend-syntax.ts";
 
-const BUILDER = join(CHECKOUT, "src", "quality", "presets", "stylelint.ts");
+const BUILDER = join(CHECKOUT, "dist", "presets", "stylelint.js");
 
 function stylelintConfig(options: string): string {
   return `import { defineConfig } from ${JSON.stringify(BUILDER)};\n\nexport default defineConfig(${options});\n`;
@@ -133,6 +133,27 @@ test("the design token rules stay off without token globs, and hold nothing in a
 
   await write({ "stylelint.config.ts": stylelintConfig('{ baseline: "widely", tokens: ["src/site.css"] }') });
   expect(await script(GATE)).toEqual({ exitCode: 0, text: "frontend-syntax: no violation in 1 file(s) from 1 declared input(s)\n" });
+}, 60_000);
+
+test("an @property rule passes the widely target, since a browser without it keeps the unregistered custom property", async () => {
+  const { script } = await repository(WIDELY, { "src/site.css": "@property --brand { syntax: \"<color>\"; inherits: false; initial-value: red; }\n" });
+  expect(await script(GATE)).toEqual({ exitCode: 0, text: "frontend-syntax: no violation in 1 file(s) from 1 declared input(s)\n" });
+}, 60_000);
+
+test("an @property rule still passes when the repository sets its own Baseline rule for an exception", async () => {
+  const options = '{ baseline: "widely", tokens: false, rules: { "plugin/use-baseline": [true, { available: "widely", ignoreProperties: { "user-select": ["none"] } }] } }';
+  const { script } = await repository(options, { "src/site.css": "@property --brand { syntax: \"<color>\"; inherits: false; initial-value: red; }\na { user-select: none; }\n" });
+  expect(await script(GATE)).toEqual({ exitCode: 0, text: "frontend-syntax: no violation in 1 file(s) from 1 declared input(s)\n" });
+}, 60_000);
+
+test("an @view-transition rule still fails the widely target, so the @property pass stays narrow", async () => {
+  const { write, script } = await repository(WIDELY, { "src/site.css": "a { top: 0; }\n" });
+  expect(await script(GATE)).toEqual({ exitCode: 0, text: "frontend-syntax: no violation in 1 file(s) from 1 declared input(s)\n" });
+
+  await write({ "src/site.css": "@view-transition { navigation: auto; }\n" });
+  const failing = await script(GATE);
+  expect(failing.text).toContain('At-rule "@view-transition" is not a widely available baseline feature. (plugin/use-baseline)');
+  expect(failing.exitCode).toBe(1);
 }, 60_000);
 
 test("a scrollbar-gutter newly available in 2024 passes a 2024 target and a newly available one", async () => {
