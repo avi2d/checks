@@ -8,13 +8,13 @@ Whoever changes the kit follows these steps in a clone of this repository, befor
 
 ## Check a change
 
-To check a change the way CI does:
+To check a change before opening a pull request:
 
 1. Run `bun install`.
 1. Run `bun run build`, which rewrites the files it generates, as Regenerate what is committed lists.
 1. Run `bun run lint`, which runs oxlint and then the kit's own gates through `src/core/lint.ts`, the dependency cruise among them.
 1. Run `bun run typecheck`.
-1. Run `bun run test`, which runs the suite through `src/testing/test.ts`.
+1. Run `bun run test:fast`, which runs the unit tier and the e2e files the change touches.
 
 Declare each skip with `skipReason(reason, name)` beside the native Bun test call, as [checks-test](docs/gates/checks-test.md) says.
 A test that spawns `checks-lint` passes it `withoutPullRequestEvent()` from `tests/lib/env.ts`, so the CI event cannot decide the range.

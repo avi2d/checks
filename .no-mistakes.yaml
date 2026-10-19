@@ -1,5 +1,7 @@
 commands:
   prepare: "bun install --frozen-lockfile"
+  # Local validation stays targeted while CI keeps the full suite.
+  test: "bun run test:fast"
 
 review:
   path_instructions:
