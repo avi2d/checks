@@ -1,11 +1,11 @@
 #!/usr/bin/env bun
 import { Config, Console, Effect, FileSystem, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
-import { changedPaths, defaultBranch, git, rangeEnds, type Change } from "../core/git.ts";
-import { runMain, Usage } from "../core/main.ts";
-import { parseReport, reporterArgs, ReportError } from "./test-report.ts";
-import { judgeSkips, passes, report, SkipGateError } from "./test.ts";
-import { readSkipDeclarations, type Environment } from "./test-skips.ts";
+import { changedPaths, defaultBranch, git, rangeEnds, type Change } from "../src/core/git.ts";
+import { runMain, Usage } from "../src/core/main.ts";
+import { parseReport, reporterArgs, ReportError } from "../src/testing/test-report.ts";
+import { judgeSkips, passes, report, SkipGateError } from "../src/testing/test.ts";
+import { readSkipDeclarations, type Environment } from "../src/testing/test-skips.ts";
 
 const NAME = "test-fast";
 const USAGE = "usage: test-fast, which runs the unit tier and the e2e test files the change touches, and it takes no arguments";
@@ -59,7 +59,7 @@ const runUnitTier = Effect.fn("runUnitTier")(function* (root: string) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const path = yield* Path.Path;
   return yield* spawner.exitCode(
-    ChildProcess.make(process.execPath, [path.join(import.meta.dir, "test.ts"), "--tier=unit"], {
+    ChildProcess.make(process.execPath, [path.join(import.meta.dir, "..", "src", "testing", "test.ts"), "--tier=unit"], {
       stdin: "ignore",
       stdout: "inherit",
       stderr: "inherit",

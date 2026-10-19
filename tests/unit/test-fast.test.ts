@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { keptPaths, touchedE2eFiles } from "../../src/testing/test-fast.ts";
+import { keptPaths, touchedE2eFiles } from "../../scripts/test-fast.ts";
 import type { Change } from "../../src/core/git.ts";
 
 const written = (path: string): Change => ({ kind: "written", path });

@@ -17,7 +17,7 @@ async function repository(): Promise<FixtureRepo> {
 }
 
 function testFast(repo: FixtureRepo): Promise<Ran> {
-  return ran($`bun ${CHECKOUT}/src/testing/test-fast.ts`.cwd(repo.dir).env(withoutPullRequestEvent()));
+  return ran($`bun ${CHECKOUT}/scripts/test-fast.ts`.cwd(repo.dir).env(withoutPullRequestEvent()));
 }
 
 test("a clone without the remote-tracking default branch fails before any tier runs", async () => {
