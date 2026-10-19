@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.47.0
+
+Released 2026-10-19.
+
+### Features
+
+- **testing:** file night-run regressions as GitHub issues instead of gating pull requests [#174](https://github.com/avi2d/checks/pull/174)
+
 ## 0.46.0
 
 Released 2026-10-19.
