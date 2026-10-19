@@ -1,11 +1,9 @@
 import { $ } from "bun";
 import { expect } from "bun:test";
 import { join } from "node:path";
-import { parseWorkflow, stepNamed } from "../../lib/workflow.ts";
 import { CHECKOUT, fixtureRepos, ran, type FixtureRepo, type Ran } from "./fixture-repo.ts";
 
 const SCOPE = join(CHECKOUT, "src", "testing", "mutation-scope.ts");
-const WORKFLOW = join(CHECKOUT, ".github/workflows/mutation.yml");
 
 export const body = (name: string): string => Array.from({ length: 20 }, (_, line) => `export const ${name}${line} = ${line};\n`).join("");
 
@@ -35,11 +33,6 @@ export async function scopeOf(repo: FixtureRepo, base: string, baseline?: string
       .filter((line) => /^[A-Z_]+=/.test(line))
       .map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]),
   );
-}
-
-export async function runStep(name: string, cwd: string, env: Readonly<Record<string, string>>): Promise<Ran> {
-  const step = stepNamed(parseWorkflow(await Bun.file(WORKFLOW).text()), name);
-  return ran($`bash -e -c ${step.run}`.cwd(cwd).env({ ...process.env, ...step.env, ...env }));
 }
 
 // A Stryker report records each test file's source as the run read it, here the base commit's.

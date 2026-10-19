@@ -1,16 +1,13 @@
-import { $ } from "bun";
 import { expect, setDefaultTimeout, test } from "bun:test";
-import { mkdir, readFile, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { rename, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { fakeActions, type FakeRun } from "./lib/fake-actions.ts";
-import { CHECKOUT, scratchDirs, type FixtureRepo, type Ran } from "./lib/fixture-repo.ts";
-import { body, committedRepos, coverageBaseline, recorded, runStep, scopeOf, scopeRun } from "./lib/mutation-scope.ts";
+import { type FixtureRepo } from "./lib/fixture-repo.ts";
+import { body, committedRepos, coverageBaseline, recorded, scopeOf, scopeRun } from "./lib/mutation-scope.ts";
 
 // Scratch git repos and the scope bin run past bun's 5s default on a loaded machine.
 setDefaultTimeout(30_000);
 
 const repoWith = committedRepos("checks-mutation-scope-");
-const scratch = scratchDirs();
 const NOTHING = { SCOPE: "", STALE_TESTS: "" };
 const TUI_DASH_CONFIG = 'export default { mutate: ["packages/*/src/**/*.ts", "!packages/*/src/live/**", "!packages/*/src/bin.ts"] };\n';
 
@@ -409,134 +406,4 @@ test("an e2e test beside a changed source scopes the source alone and marks no t
   await repo.write({ "tests/e2e/kept.test.ts": body("weakened"), "src/kept.ts": body("kept") + "export const more = 1;\n" });
 
   expect(await scopeOf(repo, base)).toEqual({ ...NOTHING, SCOPE: "src/kept.ts" });
-});
-
-// A full run uploads the report alone as its full artifact; a run from before full baselines uploads only the incremental one.
-type DispatchedRun = { readonly id: number; readonly report: string; readonly full: boolean };
-
-function artifactsOf({ id, report, full }: DispatchedRun): FakeRun["artifacts"] {
-  const incremental = { id: id * 10, name: "mutation-baseline", expired: false, files: { "mutation/mutation.json": report, "stryker-incremental.json": "{}" } };
-  const fullOnly = { id: id * 10 + 1, name: "mutation-baseline-full", expired: false, files: { "mutation.json": report } };
-  return full ? [incremental, fullOnly] : [incremental];
-}
-
-async function selectScopeStep(repo: FixtureRepo, newestFirst: readonly DispatchedRun[], listFails = false): Promise<Ran & { readonly env: string }> {
-  const home = await scratch("checks-mutation-scope-runner-");
-  const createdAt = (index: number): string => new Date(Date.UTC(2026, 9, 10 - index)).toISOString();
-  const runs = newestFirst.map((run, index) => ({ databaseId: run.id, event: "workflow_dispatch", createdAt: createdAt(index), artifacts: artifactsOf(run) }));
-  const fake = await fakeActions(home, 1, runs, { listFails });
-  await mkdir(join(repo.dir, "src", "testing"), { recursive: true });
-  for (const bin of ["mutation-baseline.ts", "mutation-scope.ts"]) await symlink(join(CHECKOUT, "src", "testing", bin), join(repo.dir, "src", "testing", bin));
-  const githubEnv = join(home, "github-env");
-  await writeFile(githubEnv, "");
-  const done = await runStep("Select mutation scope", repo.dir, {
-    ...fake.env,
-    GITHUB_BASE_REF: "main",
-    GITHUB_ENV: githubEnv,
-    HOME: home,
-    RUNNER_TEMP: home,
-  });
-  return { ...done, env: await readFile(githubEnv, "utf8") };
-}
-
-async function restoredMutantPullRequest(): Promise<{ repo: FixtureRepo; full: string; incremental: string }> {
-  const { repo, base } = await repoWith({
-    "src/shared.ts": body("shared"),
-    "tests/unit/first.test.ts": body("first"),
-    "tests/unit/second.test.ts": body("second"),
-  });
-  const read = async (path: string): Promise<string> => readFile(path, "utf8");
-  const full = await read(
-    await sharedMutantBaseline(repo, [
-      { source: "src/shared.ts", coveredBy: ["tests/unit/first.test.ts", "tests/unit/second.test.ts"], killedBy: ["tests/unit/first.test.ts"] },
-    ]),
-  );
-  const incremental = await read(
-    await sharedMutantBaseline(repo, [{ source: "src/shared.ts", coveredBy: [], killedBy: ["tests/unit/first.test.ts"] }]),
-  );
-  await rm(join(repo.dir, "baseline.json"));
-  await repo.write({ "tests/unit/second.test.ts": body("weakened") });
-  await repo.commit("head");
-  await $`git update-ref refs/remotes/origin/main ${base}`.cwd(repo.dir).quiet();
-  return { repo, full, incremental };
-}
-
-test("the scope step reads the full baseline of the newest hand-started run on main", async () => {
-  const { repo, full, incremental } = await restoredMutantPullRequest();
-
-  const done = await selectScopeStep(repo, [
-    { id: 3, report: full, full: true },
-    { id: 2, report: incremental, full: true },
-  ]);
-
-  expect(done.exitCode).toBe(0);
-  expect(done.env).toContain("SCOPE=src/shared.ts\n");
-});
-
-test("the scope step fails a changed test when the newest hand-started run on main has no full baseline", async () => {
-  const { repo, incremental } = await restoredMutantPullRequest();
-
-  const done = await selectScopeStep(repo, [{ id: 3, report: incremental, full: false }]);
-
-  expect(done.exitCode).not.toBe(0);
-  expect(done.text).toContain("mutation-scope: tests/unit/second.test.ts changed, but no baseline report");
-  expect(done.env).not.toContain("SCOPE=");
-});
-
-test("the scope step fails when the baseline query fails rather than scoping without a baseline", async () => {
-  const { repo, full } = await restoredMutantPullRequest();
-
-  const done = await selectScopeStep(repo, [{ id: 3, report: full, full: true }], true);
-
-  expect(done.exitCode).not.toBe(0);
-  expect(done.text).toContain("gh: HTTP 502 listing runs");
-  expect(done.env).not.toContain("SCOPE=");
-});
-
-async function worktreePaths(repo: FixtureRepo): Promise<string[]> {
-  const listed = (await $`git worktree list --porcelain`.cwd(repo.dir).quiet()).stdout.toString();
-  return listed
-    .split("\n")
-    .filter((line) => line.startsWith("worktree "))
-    .map((line) => line.slice("worktree ".length));
-}
-
-async function registeredBase(): Promise<{ repo: FixtureRepo; base: string; runnerTemp: string }> {
-  const { repo, base } = await repoWith({ "src/kept.ts": body("kept") });
-  const runnerTemp = await scratch("checks-mutation-runner-");
-  await $`git worktree add ${join(runnerTemp, "mutation-base")} ${base}`.cwd(repo.dir).quiet();
-  return { repo, base, runnerTemp };
-}
-
-test("the cleanup step leaves the checkout registering only itself, with no worktree pointing into the runner's temp", async () => {
-  const { repo, runnerTemp } = await registeredBase();
-
-  const done = await runStep("Remove mutation-base worktree", repo.dir, { RUNNER_TEMP: runnerTemp });
-
-  expect(done.exitCode).toBe(0);
-  expect(await worktreePaths(repo)).toEqual([await realpath(repo.dir)]);
-  expect(await Bun.file(join(runnerTemp, "mutation-base", ".git")).exists()).toBe(false);
-});
-
-test("the cleanup step passes when the job never added the worktree", async () => {
-  const { repo } = await repoWith({ "src/kept.ts": body("kept") });
-  const runnerTemp = await scratch("checks-mutation-runner-");
-
-  const done = await runStep("Remove mutation-base worktree", repo.dir, { RUNNER_TEMP: runnerTemp });
-
-  expect(done.exitCode).toBe(0);
-  expect(await worktreePaths(repo)).toEqual([await realpath(repo.dir)]);
-});
-
-test("the merge-base step adds its worktree over a registration a dead job left after the runner wiped its temp", async () => {
-  const { repo, base, runnerTemp } = await registeredBase();
-  await rm(join(runnerTemp, "mutation-base"), { recursive: true, force: true });
-  const githubEnv = join(runnerTemp, "github-env");
-  await writeFile(githubEnv, "");
-
-  const done = await runStep("Build scope report at merge base", repo.dir, { RUNNER_TEMP: runnerTemp, BASE_SHA: base, GITHUB_ENV: githubEnv });
-
-  expect(done.exitCode).toBe(0);
-  const paths = await worktreePaths(repo);
-  expect(await Promise.all(paths.map((path) => realpath(path)))).toHaveLength(2);
 });

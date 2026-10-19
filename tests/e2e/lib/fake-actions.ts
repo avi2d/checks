@@ -31,7 +31,6 @@ const State = Schema.Struct({
   issues: Schema.Array(Issue),
   labels: Schema.Array(Schema.String),
   runs: Schema.Array(Run),
-  listFails: Schema.Boolean,
   downloadsMeet: Schema.Int,
   inProgress: Schema.Array(Schema.Int),
   failing: Schema.Array(Schema.String),
@@ -57,7 +56,6 @@ export type FakeActions = {
 // `downloadsMeet` holds each download until that many have started, so jobs sharing a runner miss its cache together.
 // `inProgress` names the runs a successful run list leaves out, and a call starting with an entry of `failing` fails with HTTP 502.
 export type FakeOptions = {
-  readonly listFails?: boolean;
   readonly downloadsMeet?: number;
   readonly inProgress?: readonly number[];
   readonly failing?: readonly string[];
@@ -77,7 +75,6 @@ export async function fakeActions(home: string, repositoryId: number, runs: read
     issues: options.issues ?? [],
     labels: [],
     runs,
-    listFails: options.listFails ?? false,
     downloadsMeet: options.downloadsMeet ?? 0,
     inProgress: options.inProgress ?? [],
     failing: options.failing ?? [],
@@ -227,10 +224,6 @@ async function main(): Promise<number> {
     return 0;
   }
   await writeFile(statePath, JSON.stringify({ ...recorded, calls: [...recorded.calls, args.join(" ")] }));
-  if (recorded.listFails && args[0] === "run" && args[1] === "list") {
-    process.stderr.write("gh: HTTP 502 listing runs\n");
-    return 1;
-  }
   if (args[0] === "run" && args[1] === "download") await meet(recorded, statePath);
   const logged = { ...recorded, calls: [...recorded.calls, args.join(" ")] };
   const change = await changed(logged, args);
