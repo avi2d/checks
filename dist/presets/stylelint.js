@@ -55,7 +55,7 @@ function defineConfig({ baseline, tokens, rules, overrides = [], ...rest }) {
     rules: {
       ...CONVENTION_CHANGES,
       ...SELECTOR_COMPLEXITY,
-      "plugin/use-baseline": [true, { available }],
+      "plugin/use-baseline": [true, { available, ignoreAtRules: ["property"] }],
       ...tokenRules.rules,
       ...rules
     },

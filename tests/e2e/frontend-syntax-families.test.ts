@@ -7,7 +7,7 @@ const open = fixtureRepos("checks-frontend-syntax-families-");
 
 const GATE = "quality/frontend-syntax.ts";
 
-const BUILDER = join(CHECKOUT, "src", "quality", "presets", "stylelint.ts");
+const BUILDER = join(CHECKOUT, "dist", "presets", "stylelint.js");
 
 function stylelintConfig(options: string): string {
   return `import { defineConfig } from ${JSON.stringify(BUILDER)};\n\nexport default defineConfig(${options});\n`;

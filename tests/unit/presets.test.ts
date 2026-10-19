@@ -5,7 +5,7 @@ import type { OxlintOverride } from "oxlint";
 import { base as builtBase } from "../../dist/presets/oxlint.js";
 import { DEV_ONLY, base as cruiseBase, defineConfig as defineCruise } from "../../src/quality/presets/dependency-cruiser.ts";
 import { DEFAULT_ENTRY, defineConfig as defineKnip } from "../../src/quality/presets/knip.ts";
-import { defineConfig as defineStylelint } from "../../src/quality/presets/stylelint.ts";
+import { defineConfig as defineStylelint } from "../../dist/presets/stylelint.js";
 import {
   base,
   defineConfig,
