@@ -102,12 +102,12 @@ A range that leaves `bun.lock` unchanged runs in under a second, and one that ch
 ## Running it on a schedule
 
 A range never fails on an advisory published after its package landed, so a scheduled `--all` run finds those.
-A repository schedules it at minute 17 of its tier's 30 minute night window, so repositories do not start together:
+A consuming repository pins advisories between 05:00 and 06:00 UTC at a minute chosen so repositories do not start together, and a package repository released on push keeps no daily-release schedule:
 
 ```yaml
 on:
   schedule:
-    - cron: "17 22 * * *"
+    - cron: "15 5 * * *"
   workflow_dispatch:
 jobs:
   advisories:
