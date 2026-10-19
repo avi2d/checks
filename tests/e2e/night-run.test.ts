@@ -25,7 +25,7 @@ type Night = FakeActions & {
 };
 
 function lastNight(scores: Readonly<Record<string, { readonly detected: number; readonly valid: number }>>): FakeRun {
-  return { databaseId: 11, event: "schedule", createdAt: "2026-10-18T22:37:00Z", artifacts: [{ id: 110, name: "night-run", expired: false, files: { "night-run.json": JSON.stringify({ scores }) } }] };
+  return { databaseId: 11, event: "schedule", createdAt: "2026-10-18T22:07:00Z", artifacts: [{ id: 110, name: "night-run", expired: false, files: { "night-run.json": JSON.stringify({ scores }) } }] };
 }
 
 async function night(runs: readonly FakeRun[]): Promise<Night> {

@@ -2,7 +2,7 @@ name: night-run
 
 on:
   schedule:
-    - cron: "37 22 * * *"
+    - cron: "7 22 * * *"
   workflow_dispatch:
 
 permissions:

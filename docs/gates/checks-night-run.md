@@ -91,7 +91,7 @@ A repository runs it from a workflow named `night-run` on a schedule, and starts
 name: night-run
 on:
   schedule:
-    - cron: "37 22 * * *"
+    - cron: "7 22 * * *"
   workflow_dispatch:
 permissions:
   contents: read
@@ -164,8 +164,8 @@ jobs:
           retention-days: 90
 ```
 
-The cron starts the run at 22:37 UTC, the night window of the kit's own repository.
-A repository takes minute 37 of its own night window, so the fleet's night runs never start in the same minute.
+The cron starts the run at 22:07 UTC, inside the kit's own night window from 22:00 to 22:30 UTC.
+A repository takes minute 7 of its own tier's 30 minute night window, so repositories do not start together.
 The tests job runs each long tier the repository holds, `live` and `pixel` as [checks-test](checks-test.md#test-tiers) names them, and keeps each JUnit report.
 Each `|| true` lets the job go on to the upload after a failing test, since that test becomes an issue.
 A tier that writes no report fails the report job, because `checks-night-run` cannot read it.
