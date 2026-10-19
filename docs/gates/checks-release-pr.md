@@ -74,14 +74,17 @@ release-pr: https://github.com/acme/widget/pull/12 releases 0.4.0 from 3f2a9c81d
 
 ## When it runs
 
-The daily release workflow below runs it once a day on the default branch, and a package repository runs it on every push to `main` other than a release commit.
+The daily release workflow below runs it once a day on the default branch.
+A package repository runs it on every push to `main` other than a release commit.
 Run the workflow by hand with `gh workflow run daily-release` to refresh the release pull request sooner.
 
 ## Running it in CI
 
 A repository takes the daily release as `.github/workflows/daily-release.yml`.
 A consuming repository pins daily-release between 03:00 and 04:00 UTC at a minute chosen so repositories do not start together.
-A package repository released on push drops the `schedule` trigger and sets the `pull-request` job's `if` to `"github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore: release ')"`, so every push to `main` but a release commit opens or refreshes the release pull request.
+A package repository released on push drops the `schedule` trigger, so every push to `main` but a release commit opens or refreshes the release pull request.
+Its `pull-request` job's `if` reads `"github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore: release ')"`.
+The `pull-request` job checks out its branch's tip when it starts, so a run that starts late never rebuilds the release on an older commit.
 The `pull-request` job runs on the schedule, and the `tag` job runs when a release commit lands on `main`, as [checks-release-tag](checks-release-tag.md) says:
 
 ```yaml
@@ -109,6 +112,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
+          ref: ${{ github.ref }}
           fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:

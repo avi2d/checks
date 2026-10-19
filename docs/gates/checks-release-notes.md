@@ -140,7 +140,8 @@ jobs:
 ```
 
 A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on each job in either workflow, as [checks-ci-wiring](checks-ci-wiring.md#runners) requires.
-A release is a pull request that holds only the version bump and the built changelog, which [checks-release-pr](checks-release-pr.md) opens on the daily release's schedule, or on every push to `main` in a package repository.
+A release is a pull request that holds only the version bump and the built changelog.
+[checks-release-pr](checks-release-pr.md) opens it on the daily release's schedule, or on every push to `main` in a package repository.
 When it lands, [checks-release-tag](checks-release-tag.md) tags the merge commit and dispatches this workflow on the tag.
 A tag the workflow token pushes starts no `push` run, so the workflow triggers on `workflow_dispatch` as well, and refuses a dispatch on a ref that is not a tag.
 A tag a person pushes starts the same workflow through its `push` trigger.

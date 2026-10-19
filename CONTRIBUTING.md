@@ -52,7 +52,8 @@ A release is a tag on `main`.
 The `release` workflow publishes it through npm trusted publishing.
 GitHub mints the publish credential for each run, so no npm token is stored anywhere.
 
-Every push to `main` other than a release commit runs the `daily-release` workflow, which opens or refreshes a `chore: release <version>` pull request when `main` holds a feature or a fix since the last tag, as [checks-release-pr](docs/gates/checks-release-pr.md) says.
+Every push to `main` other than a release commit runs the `daily-release` workflow.
+It opens or refreshes a `chore: release <version>` pull request when `main` holds a feature or a fix since the last tag, as [checks-release-pr](docs/gates/checks-release-pr.md) says.
 It needs the repository's **Allow GitHub Actions to create and approve pull requests** setting.
 
 To release a version:
