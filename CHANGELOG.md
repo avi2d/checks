@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.45.1
+
+Released 2026-10-19.
+
+### Fixes
+
+- **quality:** pass @property in the Baseline CSS gate at every target [#169](https://github.com/avi2d/checks/pull/169)
+
 ## 0.45.0
 
 Released 2026-10-18.
