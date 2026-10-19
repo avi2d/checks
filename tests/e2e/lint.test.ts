@@ -103,11 +103,11 @@ test("tracking frontend-syntax.json opts a repository into checks-frontend-synta
   await commit(repo, "feat: declare the stylesheets");
   const red = await lint(repo);
   expect(red.text).toContain('styles/site.css:1:17 Disallowed value "all 1s" for property "transition"');
-  expect(red.text).toContain("checks-lint: 1 of 15 gate(s) failed: checks-frontend-syntax");
+  expect(red.text).toContain("checks-lint: 1 of 16 gate(s) failed: checks-frontend-syntax");
   expect(red.exitCode).toBe(1);
   await repo.write({ "styles/site.css": "a { transition: color 1s; }\n" });
   await commit(repo, "fix: name the property");
   const green = await lint(repo);
-  expect(green.text).toContain("checks-lint: 15 gate(s) pass");
+  expect(green.text).toContain("checks-lint: 16 gate(s) pass");
   expect(green.exitCode).toBe(0);
 }, 60_000);

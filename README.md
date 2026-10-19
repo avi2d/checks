@@ -172,6 +172,7 @@ The table groups the gates by vector, the part of a repository each one judges.
 | quality | [`checks-comment-gate`](docs/gates/checks-comment-gate.md) | the range | every repository |
 | quality | [`checks-effect-scope`](docs/gates/checks-effect-scope.md) | the working tree | a repository tracking `oxlint.config.ts` |
 | quality | [`checks-frontend-syntax`](docs/gates/checks-frontend-syntax.md) | the working tree | a repository tracking `frontend-syntax.json` |
+| quality | [`checks-css-size`](docs/gates/checks-css-size.md) | the working tree | a repository tracking `*.css` |
 | quality | [`checks-no-plain-js`](docs/gates/checks-no-plain-js.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
 | testing | [`checks-test-layout`](docs/gates/checks-test-layout.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
 | testing | [`checks-quarantine-clock`](docs/gates/checks-quarantine-clock.md) | the range | every repository |
