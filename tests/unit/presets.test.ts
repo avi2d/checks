@@ -154,7 +154,7 @@ test("the stylelint builder turns on the correctness, convention, selector and B
   expect(config.rules).toMatchObject({
     "selector-max-specificity": "0,3,2",
     "selector-max-compound-selectors": 3,
-    "plugin/use-baseline": [true, { available: "widely" }],
+    "plugin/use-baseline": [true, { available: "widely", ignoreAtRules: ["property"] }],
     "no-descending-specificity": null,
   });
   for (const rule of DESIGN_TOKEN_RULES) expect(config.rules, rule).not.toHaveProperty(rule);
@@ -162,7 +162,7 @@ test("the stylelint builder turns on the correctness, convention, selector and B
 
 test("token files turn the design token rules on everywhere but in those files, and the repository's own rules land last", () => {
   const config = defineStylelint({ baseline: 2024, tokens: ["src/tokens.css"], rules: { "color-no-hex": null } });
-  expect(config.rules).toMatchObject({ "plugin/use-baseline": [true, { available: 2024 }], "color-no-hex": null, "color-named": "never" });
+  expect(config.rules).toMatchObject({ "plugin/use-baseline": [true, { available: 2024, ignoreAtRules: ["property"] }], "color-no-hex": null, "color-named": "never" });
   expect(config.overrides).toContainEqual({ files: ["src/tokens.css"], rules: Object.fromEntries(DESIGN_TOKEN_RULES.map((rule) => [rule, null])) });
 });
 
