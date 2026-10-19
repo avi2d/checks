@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
-import { Console, Effect, Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { workingTreeFiles } from "../core/git.ts";
-import { runMain } from "../core/main.ts";
+import { runTreeGate } from "../core/main.ts";
 
 export type Violation = {
   readonly file: string;
@@ -61,11 +61,4 @@ export function report({ files, violations }: Result): string {
   return [`${NAME}: ${violations.length} violation(s)`, ...violations.map(({ file, message }) => `  ${file}: ${message}`)].join("\n");
 }
 
-const noPlainJs = Effect.gen(function* () {
-  const root = process.argv[2] ?? process.cwd();
-  const result = yield* run(root);
-  yield* Console.log(report(result));
-  return result.violations.length === 0;
-});
-
-if (import.meta.main) runMain(NAME, noPlainJs);
+if (import.meta.main) runTreeGate(NAME, run, report);

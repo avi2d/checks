@@ -13,6 +13,12 @@ var SELECTOR_COMPLEXITY = {
   "selector-max-specificity": "0,3,2",
   "selector-max-compound-selectors": 3
 };
+var COMMENT_REFUSAL = {
+  "comment-word-disallowed-list": ["/^[\\s\\S]*$/"]
+};
+var LANGUAGE_FREE_SELECTORS = {
+  "selector-disallowed-list": ["/[^\\x00-\\x7F]/"]
+};
 var COLOUR_FUNCTIONS = ["rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color"];
 var DESIGN_TOKENS = {
   "color-no-hex": true,
@@ -61,6 +67,8 @@ function defineConfig({ baseline, tokens, rules, overrides = [], ...rest }) {
   const merged = {
     ...CONVENTION_CHANGES,
     ...SELECTOR_COMPLEXITY,
+    ...COMMENT_REFUSAL,
+    ...LANGUAGE_FREE_SELECTORS,
     [BASELINE_RULE]: [true, { available }],
     ...tokenRules.rules,
     ...rules
