@@ -225,9 +225,7 @@ The repository's lockfile pins the kit, so a repository moves only when it runs 
 
 ## Turn on the CSS families a repository needs
 
-A repository that declares `frontend-syntax.json` writes `stylelint.config.ts` with the families it needs.
-`baseline` and `tokens` have no default, so every config names them.
-`bem`, `flatSelectors` and `noPageHas` stay off until a config names them.
+A repository that declares `frontend-syntax.json` writes `stylelint.config.ts` with the families it needs:
 
 ```ts
 import { defineConfig } from "@avi2dg/checks/stylelint";
@@ -241,14 +239,7 @@ export default defineConfig({
 });
 ```
 
-| Option | What it turns on |
-| --- | --- |
-| `baseline` | `"widely"`, `"newly"` or a year such as `2024` |
-| `tokens` | the globs of the files that declare the design tokens, or `false` to leave the design token rules off |
-| `bem` | `true` to hold every class to one lowercase block with kebab `__element` and `--modifier` parts |
-| `flatSelectors` | `true` to hold every selector to class names alone, with no universal or positional selector and no nesting, in at most two compound selectors |
-| `noPageHas` | `true` to refuse a `:has` beside `html`, `body`, `main` or `:root` in one selector of a list, or in a compound of pseudo-classes alone, such as `:has(.hero)` or `:scope:has(.hero)` |
-
+[checks-frontend-syntax](docs/gates/checks-frontend-syntax.md#what-it-reads) says what each key takes and which family it turns on.
 `noPageHas` sees a `:has` nested under a page selector only together with `flatSelectors`, which refuses the nesting.
 
 ## Where things are
