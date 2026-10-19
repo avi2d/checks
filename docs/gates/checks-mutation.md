@@ -25,7 +25,12 @@ The preset also registers an ignore plugin that checks the incremental report on
 A config that replaces `plugins` or `ignorers` must keep the preset's entries, or that check does not run.
 The preset also exports `unitTestFiles`, which lists every `.test.ts` and `.test.tsx` file under `tests/unit` at config load.
 A repository sets `bun.testFiles` to its result, so a covered, non-static mutant loads only the test files that cover it.
-A static mutant has no per-test coverage, so it still loads every listed file.
+A static mutant has no per-test coverage, so it still loads every listed file, and with bail it stops at the first test that fails.
+So when a `stryker run` without `--ignoreStatic` loads the preset, the preset first runs the listed files once with `bun test` and times each file.
+`unitTestFiles` then lists each file with a leading `./`, fastest first, and Bun runs such paths in the order given.
+It then lists each path again without the `./`, the spelling the runner matches a covering test against.
+Bun loads a file once however often the list names it.
+When that timing run fails, the preset prints why on stderr and `unitTestFiles` keeps the path order.
 The config then reads:
 
 ```js
@@ -96,7 +101,7 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      - run: bunx stryker run --disableBail
+      - run: bunx stryker run
       - run: bunx checks-mutation-baseline --slim reports/mutation/mutation.json "$RUNNER_TEMP/full/mutation.json"
       - uses: actions/upload-artifact@v4
         with:
@@ -105,7 +110,8 @@ jobs:
           retention-days: 30
 ```
 
-The run restores no state and passes `--disableBail`, so its report names every test that covers or kills each mutant.
+The run restores no state, so its report names every test that covers each covered mutant and the first test that killed each killed mutant.
+[checks-mutation-scope](checks-mutation-scope.md#what-it-reads) says why that one killer is enough.
 The upload is the `mutation-baseline-full` artifact that a branch comparison's scope step restores with `checks-mutation-baseline --full`.
 [checks-mutation-scope](checks-mutation-scope.md) reads it to bring in the sources a changed unit test covers or kills.
 The restore reads only a successful run of `mutation.yml` on `main`, so a sweep that fails publishes nothing a scope step reads.

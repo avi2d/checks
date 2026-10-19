@@ -8,6 +8,8 @@ export default defineConfig({
     "src/quality/presets/*.ts",
     "src/testing/mutation-guard-plugin.ts",
     "dist/mutation/mutation-refusal.js",
+    "src/testing/unit-test-order.ts",
+    "dist/mutation/unit-test-order.js",
     "src/dependencies/kit-defaults.ts",
     "src/testing/flake-preload.ts",
   ],

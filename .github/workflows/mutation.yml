@@ -22,8 +22,6 @@ jobs:
     concurrency:
       group: mutation-baseline
       cancel-in-progress: false
-    # A no-bail full run takes about 30 minutes on hosted runners; a push
-    # is incremental from the uploaded state and takes minutes.
     timeout-minutes: ${{ github.event_name == 'push' && 60 || 45 }}
     runs-on: ubuntu-latest
     permissions:
@@ -48,11 +46,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bun src/testing/mutation-baseline.ts reports/stryker-incremental.json
       # Incremental with no prior state runs everything, and writes the state the next main run reuses.
-      - if: github.event_name == 'push'
-        run: time bun run mutate:incremental
-      # Bail records only a mutant's first killer, and a static mutant has no coverage, so a full run keeps every killing test.
-      - if: github.event_name != 'push'
-        run: time bun run mutate:incremental --disableBail
+      - run: time bun run mutate:incremental
       # Every run uploads; readers take only main's, so a manual run elsewhere leaves main's baseline in place.
       - uses: actions/upload-artifact@v4
         with:

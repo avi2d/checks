@@ -42,6 +42,7 @@ const decodeCase = Schema.decodeUnknownEffect(
   Schema.Struct({ name: Schema.String, file: Schema.String, line: Schema.NumberFromString.check(Schema.isInt()) }),
 );
 const decodeCrash = Schema.decodeUnknownEffect(Schema.Struct({ file: Schema.String }));
+const decodeTimed = Schema.decodeUnknownEffect(Schema.Struct({ file: Schema.String, time: Schema.FiniteFromString }));
 
 function unescape(text: string): string {
   return text.replace(ENTITY, (_, named: string | undefined, decimal: string | undefined, hex: string | undefined) => {
@@ -132,4 +133,18 @@ export const parseReport = Effect.fn("parseReport")(function* (xml: string) {
     if (fileSuite.tag === "testsuite") yield* collect(fileSuite, [], { results, crashedFiles });
   }
   return { results, crashedFiles } satisfies Report;
+});
+
+// Bun names a file's top-level <testsuite> by its path with no leading ./ whatever spelling ran it, and times the whole file there.
+export const fileSeconds = Effect.fn("fileSeconds")(function* (xml: string) {
+  const root = yield* parseElements(xml);
+  const seconds = new Map<string, number>();
+  for (const fileSuite of root.children) {
+    if (fileSuite.tag !== "testsuite") continue;
+    const { file, time } = yield* decodeTimed(fileSuite.attributes).pipe(
+      Effect.mapError((cause) => new ReportError({ message: `the junit report holds a <testsuite> with no file or time: ${cause.message}` })),
+    );
+    seconds.set(file, time);
+  }
+  return seconds;
 });

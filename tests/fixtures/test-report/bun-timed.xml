@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="bun test" tests="2" assertions="0" failures="0" skipped="0" time="0.307612364">
+  <testsuite name="tests/unit/g/a.test.ts" file="tests/unit/g/a.test.ts" tests="1" assertions="0" failures="0" skipped="0" time="0.302154459" hostname="runner">
+    <testcase name="slow" classname="" time="0.300638" file="tests/unit/g/a.test.ts" line="2" assertions="0" />
+  </testsuite>
+  <testsuite name="tests/unit/b.test.ts" file="tests/unit/b.test.ts" tests="1" assertions="0" failures="0" skipped="0" time="0.000615409" hostname="runner">
+    <testsuite name="d" file="tests/unit/b.test.ts" line="2" tests="1" assertions="0" failures="0" skipped="0" time="0" hostname="runner">
+      <testcase name="fast" classname="d" time="0.000006" file="tests/unit/b.test.ts" line="2" assertions="0" />
+    </testsuite>
+  </testsuite>
+</testsuites>

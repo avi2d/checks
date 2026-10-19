@@ -2,11 +2,12 @@ import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Effect, Exit } from "effect";
-import { parseReport } from "../../src/testing/test-report.ts";
+import { fileSeconds, parseReport } from "../../src/testing/test-report.ts";
 
 const FIXTURES = join(import.meta.dir, "..", "fixtures", "test-report");
 const REPORT = join(FIXTURES, "bun.xml");
 const CRASH_REPORT = join(FIXTURES, "bun-parallel-crash.xml");
+const TIMED_REPORT = join(FIXTURES, "bun-timed.xml");
 
 function failureOf(xml: string): string {
   const exit = Effect.runSyncExit(parseReport(xml));
@@ -57,6 +58,19 @@ test("a report bun did not write whole is refused rather than read as fewer test
   expect(failureOf('<testsuites><testsuite name="f"><testcase name="t" file="f" line="x"/></testsuite></testsuites>')).toContain(
     "holds a <testcase> bun never writes",
   );
+});
+
+test("each file's seconds come from the top-level testsuite bun wrote for it, under the path it names with no leading ./", async () => {
+  const seconds = Effect.runSync(fileSeconds(await readFile(TIMED_REPORT, "utf8")));
+  expect([...seconds]).toEqual([
+    ["tests/unit/g/a.test.ts", 0.302154459],
+    ["tests/unit/b.test.ts", 0.000615409],
+  ]);
+});
+
+test("a file testsuite with no time is refused rather than read as instant", () => {
+  const exit = Effect.runSyncExit(fileSeconds('<testsuites><testsuite name="f" file="f"></testsuite></testsuites>'));
+  expect(Exit.isFailure(exit) && String(exit.cause)).toContain("a <testsuite> with no file or time");
 });
 
 test("character references decode in names", () => {
