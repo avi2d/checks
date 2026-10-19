@@ -223,6 +223,25 @@ To move a repository to a newer release of the kit:
 The repository's lockfile pins the kit, so a repository moves only when it runs these steps.
 [CHANGELOG.md](CHANGELOG.md), shipped in the package, lists what each release changed.
 
+## Turn on the CSS families a repository needs
+
+A repository that declares `frontend-syntax.json` writes `stylelint.config.ts` with the families it needs:
+
+```ts
+import { defineConfig } from "@avi2dg/checks/stylelint";
+
+export default defineConfig({
+  baseline: "widely",
+  tokens: ["src/styles/tokens.css"],
+  bem: true,
+  flatSelectors: true,
+  noPageHas: true,
+});
+```
+
+[checks-frontend-syntax](docs/gates/checks-frontend-syntax.md#what-it-reads) says what each key takes and which family it turns on.
+`noPageHas` sees a `:has` nested under a page selector only together with `flatSelectors`, which refuses the nesting.
+
 ## Where things are
 
 Every path is relative to the installed package, `node_modules/@avi2dg/checks/`.

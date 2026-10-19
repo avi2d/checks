@@ -8,6 +8,9 @@ export type BaselineTarget = "widely" | "newly" | number;
 export type ChecksStylelintConfig = Omit<Config, "extends" | "plugins"> & {
   readonly baseline: BaselineTarget;
   readonly tokens: Globs | false;
+  readonly bem?: boolean;
+  readonly flatSelectors?: boolean;
+  readonly noPageHas?: boolean;
 };
 
 type Rules = NonNullable<Config["rules"]>;
@@ -42,6 +45,47 @@ const LANGUAGE_FREE_SELECTORS = {
 } as const satisfies Rules;
 
 const COLOUR_FUNCTIONS = ["rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color"] as const;
+
+// selector-class-pattern builds a RegExp from the string itself, so slashes would match literal slashes.
+const BEM_NAMES = {
+  "selector-class-pattern": "^[a-z][a-z0-9]*(__[a-z0-9]+(-[a-z0-9]+)*)?(--[a-z0-9]+(-[a-z0-9]+)*)?$",
+} as const satisfies Rules;
+
+const POSITIONAL_PSEUDO_CLASSES = [
+  "first-child",
+  "last-child",
+  "only-child",
+  "nth-child",
+  "nth-last-child",
+  "first-of-type",
+  "last-of-type",
+  "only-of-type",
+  "nth-of-type",
+  "nth-last-of-type",
+] as const;
+
+const FLAT_SELECTORS = {
+  "selector-max-type": 0,
+  "selector-max-id": 0,
+  "selector-max-universal": 0,
+  "selector-max-compound-selectors": 2,
+  "max-nesting-depth": 0,
+  "selector-max-attribute": 0,
+  "selector-pseudo-class-disallowed-list": POSITIONAL_PSEUDO_CLASSES,
+} as const satisfies Rules;
+
+// The ban needs both a page element and :has( in one selector, in either order, and a class such as .block-body holds neither.
+// The rule tests the raw selector, newlines included, so [\s\S] stands where . would stop at a line break.
+const PAGE_HAS = "/^(?=[\\s\\S]*:has\\()(?=[\\s\\S]*(?:(?:^|[\\s>+~,([])(?:html|body|main)|:root)(?![\\w-]))[\\s\\S]*$/i";
+
+const PSEUDO_ARGUMENT = "(?:[^()]|\\([^()]*\\))*";
+
+const PSEUDO_CLASS = `::?[\\w-]+(?:\\(${PSEUDO_ARGUMENT}\\))?`;
+
+const HAS_IN_PSEUDO_CLASS = `(?::has\\(${PSEUDO_ARGUMENT}\\)|::?[\\w-]+\\(${PSEUDO_ARGUMENT}:has\\([^()]*\\)${PSEUDO_ARGUMENT}\\))`;
+
+// A compound of pseudo-classes alone, :scope and :not(.card) among them, can match the root element, so its :has() reads page state.
+const CLASSLESS_HAS = `/(?:^|[\\s>+~,])(?:${PSEUDO_CLASS})*${HAS_IN_PSEUDO_CLASS}(?:${PSEUDO_CLASS})*(?=[\\s>+~,]|$)/i`;
 
 const DESIGN_TOKENS = {
   "color-no-hex": true,
@@ -87,17 +131,24 @@ function designTokens(files: readonly string[]): Required<Pick<Config, "rules" |
   return { rules: DESIGN_TOKENS, overrides: [{ files: [...files], rules: off }] };
 }
 
+function disallowedSelectors(noPageHas: boolean | undefined): Rules {
+  if (noPageHas === true) return { "selector-disallowed-list": [[...LANGUAGE_FREE_SELECTORS["selector-disallowed-list"], PAGE_HAS, CLASSLESS_HAS], { splitList: true }] };
+  return LANGUAGE_FREE_SELECTORS;
+}
+
 // The types refuse a missing or malformed baseline or tokens, and the guards repeat it for a config no typecheck reads.
-export function defineConfig({ baseline, tokens, rules, overrides = [], ...rest }: ChecksStylelintConfig): Config {
+export function defineConfig({ baseline, tokens, bem, flatSelectors, noPageHas, rules, overrides = [], ...rest }: ChecksStylelintConfig): Config {
   const available = baselineTarget(baseline);
   const tokenRules = designTokens(tokenFiles(tokens));
   const merged: Rules = {
     ...CONVENTION_CHANGES,
     ...SELECTOR_COMPLEXITY,
     ...COMMENT_REFUSAL,
-    ...LANGUAGE_FREE_SELECTORS,
+    ...disallowedSelectors(noPageHas),
     [BASELINE_RULE]: [true, { available }],
     ...tokenRules.rules,
+    ...(bem === true ? BEM_NAMES : null),
+    ...(flatSelectors === true ? FLAT_SELECTORS : null),
     ...rules,
   };
   return {

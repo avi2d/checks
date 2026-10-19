@@ -41,12 +41,16 @@ A control that needs selection off sets it on its own selector, such as `.drag-h
 | G5 Baseline target | `plugin/use-baseline` from `stylelint-plugin-use-baseline`, which judges each property, value, function, at-rule, selector and unit against the Baseline data, and passes a property inside an `@supports` block. It passes `@property` at every target, since a browser without `@property` treats the declaration as an unregistered custom property | on, at the target `baseline` sets |
 | G6 comments refused | `comment-word-disallowed-list` over `/^[\s\S]*$/`, which refuses every comment, including an empty `/* */` | on |
 | G7 language-free selectors | `selector-disallowed-list` over `/[^\x00-\x7F]/`, which refuses any selector holding a non-ASCII character, in attribute values, class names and ids alike | on |
+| G8 BEM names | `selector-class-pattern` over one lowercase block with kebab `__element` and `--modifier` parts | off until `bem` is `true` |
+| G9 class-only flat selectors | `selector-max-type` at 0, `selector-max-id` at 0, `selector-max-universal` at 0, `selector-max-compound-selectors` at 2, `max-nesting-depth` at 0, `selector-max-attribute` at 0, and `selector-pseudo-class-disallowed-list` over the positional pseudo-classes, from `:first-child` to `:nth-last-of-type` | off until `flatSelectors` is `true` |
+| G10 page-wide has refused | `selector-disallowed-list` with `splitList` over a pattern that refuses a `:has` beside `html`, `body`, `main` or `:root` in one selector of a list, across line breaks in the selector, and one that refuses a `:has` in a compound of pseudo-classes alone, such as `:has(.hero)`, `:scope:has(.hero)` or `:not(.card):has(.hero)`, whose subject can be the root. A nested `:has` escapes it unless G9 refuses the nesting | off until `noPageHas` is `true` |
 
-The builder changes three of the shared config's rules:
+The builder changes four of the shared config's rules:
 
 - `no-descending-specificity` is off, since it compares only the last compound selector and has no access to the DOM.
   It reports components that never match one element.
 - `property-no-vendor-prefix` keeps reporting without a fix, and passes `-webkit-user-select`, since its fix deletes the prefix Safari still needs.
+- `selector-class-pattern` holds BEM names while `bem` is `true`, since the shared kebab case refuses `__` and `--`.
 - In an `.html` or `.astro` file, `declaration-block-single-line-max-declarations` is off, since a `style` attribute is one line.
 
 The comment rule refuses every comment but a sourcemap `/*# */` one, which stylelint passes to keep the map.
@@ -108,6 +112,9 @@ The builder throws when the gate loads such a config anyway.
 | --- | --- |
 | `baseline` | `"widely"`, `"newly"` or a year such as `2024`, which allows what became Baseline newly available in that year or earlier |
 | `tokens` | the globs of the files that declare the design tokens, which turns G4 on in every other file, or `false` |
+| `bem` | `true` to turn G8 on, left out to leave it off |
+| `flatSelectors` | `true` to turn G9 on, left out to leave it off |
+| `noPageHas` | `true` to turn G10 on, left out to leave it off |
 
 `rules`, `overrides`, `ignoreFiles` and the other keys mean what they mean in stylelint's own docs, and land after the kit's.
 An accepted exception lives there rather than in a comment, such as a property the Baseline rule passes:

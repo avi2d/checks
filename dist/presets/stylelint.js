@@ -20,6 +20,35 @@ var LANGUAGE_FREE_SELECTORS = {
   "selector-disallowed-list": ["/[^\\x00-\\x7F]/"]
 };
 var COLOUR_FUNCTIONS = ["rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color"];
+var BEM_NAMES = {
+  "selector-class-pattern": "^[a-z][a-z0-9]*(__[a-z0-9]+(-[a-z0-9]+)*)?(--[a-z0-9]+(-[a-z0-9]+)*)?$"
+};
+var POSITIONAL_PSEUDO_CLASSES = [
+  "first-child",
+  "last-child",
+  "only-child",
+  "nth-child",
+  "nth-last-child",
+  "first-of-type",
+  "last-of-type",
+  "only-of-type",
+  "nth-of-type",
+  "nth-last-of-type"
+];
+var FLAT_SELECTORS = {
+  "selector-max-type": 0,
+  "selector-max-id": 0,
+  "selector-max-universal": 0,
+  "selector-max-compound-selectors": 2,
+  "max-nesting-depth": 0,
+  "selector-max-attribute": 0,
+  "selector-pseudo-class-disallowed-list": POSITIONAL_PSEUDO_CLASSES
+};
+var PAGE_HAS = "/^(?=[\\s\\S]*:has\\()(?=[\\s\\S]*(?:(?:^|[\\s>+~,([])(?:html|body|main)|:root)(?![\\w-]))[\\s\\S]*$/i";
+var PSEUDO_ARGUMENT = "(?:[^()]|\\([^()]*\\))*";
+var PSEUDO_CLASS = `::?[\\w-]+(?:\\(${PSEUDO_ARGUMENT}\\))?`;
+var HAS_IN_PSEUDO_CLASS = `(?::has\\(${PSEUDO_ARGUMENT}\\)|::?[\\w-]+\\(${PSEUDO_ARGUMENT}:has\\([^()]*\\)${PSEUDO_ARGUMENT}\\))`;
+var CLASSLESS_HAS = `/(?:^|[\\s>+~,])(?:${PSEUDO_CLASS})*${HAS_IN_PSEUDO_CLASS}(?:${PSEUDO_CLASS})*(?=[\\s>+~,]|$)/i`;
 var DESIGN_TOKENS = {
   "color-no-hex": true,
   "color-named": "never",
@@ -61,16 +90,23 @@ function designTokens(files) {
   const off = Object.fromEntries(Object.keys(DESIGN_TOKENS).map((rule) => [rule, null]));
   return { rules: DESIGN_TOKENS, overrides: [{ files: [...files], rules: off }] };
 }
-function defineConfig({ baseline, tokens, rules, overrides = [], ...rest }) {
+function disallowedSelectors(noPageHas) {
+  if (noPageHas === true)
+    return { "selector-disallowed-list": [[...LANGUAGE_FREE_SELECTORS["selector-disallowed-list"], PAGE_HAS, CLASSLESS_HAS], { splitList: true }] };
+  return LANGUAGE_FREE_SELECTORS;
+}
+function defineConfig({ baseline, tokens, bem, flatSelectors, noPageHas, rules, overrides = [], ...rest }) {
   const available = baselineTarget(baseline);
   const tokenRules = designTokens(tokenFiles(tokens));
   const merged = {
     ...CONVENTION_CHANGES,
     ...SELECTOR_COMPLEXITY,
     ...COMMENT_REFUSAL,
-    ...LANGUAGE_FREE_SELECTORS,
+    ...disallowedSelectors(noPageHas),
     [BASELINE_RULE]: [true, { available }],
     ...tokenRules.rules,
+    ...bem === true ? BEM_NAMES : null,
+    ...flatSelectors === true ? FLAT_SELECTORS : null,
     ...rules
   };
   return {

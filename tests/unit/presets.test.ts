@@ -168,6 +168,51 @@ test("token files turn the design token rules on everywhere but in those files, 
   expect(config.overrides).toContainEqual({ files: ["src/tokens.css"], rules: Object.fromEntries(DESIGN_TOKEN_RULES.map((rule) => [rule, null])) });
 });
 
+test("the stylelint builder leaves the BEM, flat selector and page :has rules off without their options", () => {
+  const config = defineStylelint({ baseline: "widely", tokens: false });
+  expect(config.rules).not.toHaveProperty("selector-class-pattern");
+  expect(config.rules).not.toHaveProperty("selector-max-type");
+  expect(config.rules).not.toHaveProperty("selector-max-id");
+  expect(config.rules).not.toHaveProperty("selector-max-attribute");
+  expect(config.rules).toMatchObject({ "selector-max-compound-selectors": 3, "selector-disallowed-list": ["/[^\\x00-\\x7F]/"] });
+});
+
+test("bem: true holds every class to one block with kebab elements and modifiers, and the repository's own pattern still wins", () => {
+  const config = defineStylelint({ baseline: "widely", tokens: false, bem: true });
+  expect(config.rules?.["selector-class-pattern"]).toBe("^[a-z][a-z0-9]*(__[a-z0-9]+(-[a-z0-9]+)*)?(--[a-z0-9]+(-[a-z0-9]+)*)?$");
+  const own = defineStylelint({ baseline: "widely", tokens: false, bem: true, rules: { "selector-class-pattern": null } });
+  expect(own.rules?.["selector-class-pattern"]).toBeNull();
+});
+
+test("flatSelectors: true bans type, id, universal, attribute and positional selectors and holds every selector to two compound selectors", () => {
+  const config = defineStylelint({ baseline: "widely", tokens: false, flatSelectors: true });
+  expect(config.rules).toMatchObject({
+    "selector-max-type": 0,
+    "selector-max-id": 0,
+    "selector-max-universal": 0,
+    "selector-max-compound-selectors": 2,
+    "max-nesting-depth": 0,
+    "selector-max-attribute": 0,
+    "selector-pseudo-class-disallowed-list": [
+      "first-child",
+      "last-child",
+      "only-child",
+      "nth-child",
+      "nth-last-child",
+      "first-of-type",
+      "last-of-type",
+      "only-of-type",
+      "nth-of-type",
+      "nth-last-of-type",
+    ],
+  });
+});
+
+test("noPageHas: true refuses :has() beside a page element or in a classless compound, and keeps the language rule beside it", () => {
+  const on = defineStylelint({ baseline: "widely", tokens: false, noPageHas: true });
+  expect(on.rules?.["selector-disallowed-list"]).toEqual([["/[^\\x00-\\x7F]/", expect.any(String), expect.any(String)], { splitList: true }]);
+});
+
 test("the stylelint builder throws on a baseline or tokens a config no typecheck reads gets wrong", () => {
   for (const baseline of ["baseline", 2024.5, undefined]) {
     expect(loaded(defineStylelint, { baseline, tokens: false }), String(baseline)).toThrow('set baseline to "widely", "newly" or a year such as 2024');
