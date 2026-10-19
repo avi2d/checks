@@ -68,22 +68,23 @@ mutation-compare: REGRESSION (1 mutant(s))
 ## When it runs
 
 Only a CI step the repository writes runs it.
-A repository runs it with `--advisory`, so the comparison stays advisory and never blocks a pull request.
+A person starts that step by hand on a branch, and no pull request triggers it or waits for it.
+[checks-night-run](checks-night-run.md) judges the mutation score of `main` each night and opens an issue for each file whose score fell.
+A repository runs it with `--advisory`, so the comparison stays advisory.
 Its lines land only in the CI log.
-A repository that wants a reviewer to answer each regression line puts the lines in front of that reviewer with its own CI step.
-That step can post them as a pull request comment.
 A full sweep runs in CI and never on a laptop.
 Start a baseline with `gh workflow run mutation` and keep its report as an artifact.
 The shared preset refuses a full `stryker run` outside CI and names that workflow command instead, as [checks-mutation](checks-mutation.md) says.
 
 ## Running it in CI
 
-It runs on pull requests from a workflow named `mutation-compare`, comparing the head report against a report built at the merge-base over the same scope:
+A person starts a workflow named `mutation-compare` on a branch with `gh workflow run mutation-compare --ref <branch>`.
+It compares the head report against a report built at the merge-base with `main` over the same scope:
 
 ```yaml
 name: mutation-compare
 on:
-  pull_request:
+  workflow_dispatch:
 jobs:
   mutation-compare:
     runs-on: ubuntu-latest
@@ -102,7 +103,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          base="$(git merge-base HEAD "origin/$GITHUB_BASE_REF")"
+          base="$(git merge-base HEAD origin/main)"
           echo "BASE_SHA=$base" >> "$GITHUB_ENV"
           bunx checks-mutation-baseline --full "$RUNNER_TEMP/baseline-full/mutation.json"
           bunx checks-mutation-scope "$base" "$RUNNER_TEMP/baseline-full/mutation.json" >> "$GITHUB_ENV"
@@ -125,7 +126,7 @@ jobs:
           git worktree prune
 ```
 
-The scope step picks the files the pull request changes and the sources its changed unit tests cover or kill, as [checks-mutation-scope](checks-mutation-scope.md) says.
+The scope step picks the files the branch changes and the sources its changed unit tests cover or kill, as [checks-mutation-scope](checks-mutation-scope.md) says.
 Neither run mutates a file outside that scope, so the job's time follows the size of the change and not the size of the repository.
 Both runs take the same `--mutate "$SCOPE"`, so the two reports hold the same files.
 A scope file the merge base lacks matches nothing there, and Stryker still writes a report.
@@ -135,7 +136,7 @@ A changed unit test that `main` edited after that baseline widens the scope to e
 Start a full baseline with `gh workflow run mutation`, as [checks-mutation](checks-mutation.md#running-it-in-ci) shows.
 A run with `--mutate` is scoped, so the preset lets it through without `CI=true`.
 The base worktree's path carries the run's id and attempt, and the last step removes it even when a run fails, so a runner kept between jobs starts each job clean.
-A public repository keeps `runs-on: ubuntu-latest`, because a pull request from a fork runs its own code on the runner.
+A public repository keeps `runs-on: ubuntu-latest`, as [checks-ci-wiring](checks-ci-wiring.md#runners) allows a public repository on every job.
 A private repository sets `runs-on: [self-hosted, Linux, X64, winbox]` instead, which is the fleet's self-hosted Linux runner where it sends its mutation runs.
 The job never reads `CI_RUNS_ON`, so an override that moves a repository's other jobs during a runner outage leaves the comparison waiting for `winbox`.
 [checks-ci-wiring](checks-ci-wiring.md#runners) refuses a mutation job that names it in `runs-on`.
@@ -144,4 +145,5 @@ The job never reads `CI_RUNS_ON`, so an override that moves a repository's other
 
 - [checks-mutation](checks-mutation.md)
 - [checks-mutation-scope](checks-mutation-scope.md)
+- [checks-night-run](checks-night-run.md)
 - [checks-test-layout](checks-test-layout.md)

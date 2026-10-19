@@ -186,7 +186,7 @@ export function readersOf(sources: ReadonlyMap<string, string>, changed: readonl
   return new Map([...reached].filter(([file, via]) => file !== via));
 }
 
-// Names what every unit test loads that the pull request changes: the preload list, a preload, or a file a preload imports.
+// Names what every unit test loads that the branch changes: the preload list, a preload, or a file a preload imports.
 export function preloadChange(
   changed: ReadonlySet<string>,
   preloads: { readonly atBase: readonly string[]; readonly atHead: readonly string[] },

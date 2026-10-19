@@ -47,7 +47,7 @@ A skipped test or a todo without `skipReason` fails in every environment.
 It does not read a skip list from `package.json`.
 It counts a run as `ci` when `CI` is true and as `local` otherwise.
 
-The command takes no arguments for the default suite, except the worker count of [Parallel runs](#parallel-runs).
+The command takes no arguments for the default suite, except the worker count of [Parallel runs](#parallel-runs) and the file `--junit` keeps the report at.
 Use `checks-test --tier=live` or `checks-test --tier=pixel` for a named test tier.
 Use `checks-test --tier=unit` or `checks-test --tier=e2e` to run only one level of the default suite.
 A live or pixel run clears Bun's ignored paths, runs only `./tests/live` or `./tests/pixel`, and still checks each skip.
@@ -102,8 +102,10 @@ A timings option waits for Bun to honour timings under random order.
 
 ## Arguments
 
-The default command takes no arguments except `--parallel=<workers>`, as [Parallel runs](#parallel-runs) says.
+The default command takes no arguments except `--parallel=<workers>`, as [Parallel runs](#parallel-runs) says, and `--junit=<file>`.
 Its named tier options are `--tier=live`, `--tier=pixel`, `--tier=unit` and `--tier=e2e`, and a tier run takes `--parallel=<workers>` too.
+`--junit=<file>` keeps the JUnit report Bun wrote at `<file>`, whether the tests passed or failed, so a night run hands it to [checks-night-run](checks-night-run.md).
+A `package.json` script never takes `--junit`, as [checks-test-layout](checks-test-layout.md) says of `scripts.test`.
 Each option appears at most once.
 It refuses test filters because every test excluded by a filter would look skipped.
 
@@ -138,3 +140,4 @@ A repository that tracks no TypeScript source does not need it, as [checks-test-
 - [checks-test-layout](checks-test-layout.md)
 - [checks-flake](checks-flake.md)
 - [checks-quarantine-clock](checks-quarantine-clock.md)
+- [checks-night-run](checks-night-run.md)

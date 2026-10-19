@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { judgeSkips, passes, report, testOptions } from "../../src/testing/test.ts";
+import { Option } from "effect";
+import { entryOptions, judgeSkips, passes, report, scriptOptions, testOptions } from "../../src/testing/test.ts";
 import { skipReason, type SkipDeclaration } from "../../src/testing/test-skips.ts";
 import type { TestResult } from "../../src/testing/test-report.ts";
 
@@ -85,6 +86,14 @@ test("checks-test takes a tier and a worker count for bun test --parallel, each 
   expect(testOptions(["--tier=live"])).toEqual({ tier: "live" });
   expect(testOptions(["--parallel=4"])).toEqual({ workers: 4 });
   expect(testOptions(["--parallel=6", "--tier=pixel"])).toEqual({ tier: "pixel", workers: 6 });
+});
+
+test("checks-test takes one --junit file beside its other options on the command line, and a test script never takes it", () => {
+  expect(entryOptions(["--tier=live", "--junit=reports/live.xml"])).toEqual({ options: { tier: "live" }, junit: Option.some("reports/live.xml") });
+  expect(entryOptions(["--parallel=4"])).toEqual({ options: { workers: 4 }, junit: Option.none() });
+  expect(entryOptions(["--junit=one.xml", "--junit=two.xml"])).toBeUndefined();
+  expect(entryOptions(["--junit="])).toBeUndefined();
+  expect(scriptOptions("checks-test --junit=reports/suite.xml")).toBeUndefined();
 });
 
 test("checks-test refuses a test filter, a missing or zero worker count and a repeated option", () => {

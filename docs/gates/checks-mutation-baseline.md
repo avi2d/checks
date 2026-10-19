@@ -166,7 +166,7 @@ The saved baseline uses none of the account's Actions storage, which every priva
 That storage accrues by the hour over the month, so an artifact deleted early still counts until the month ends.
 A baseline job on a GitHub-hosted runner uploads the same two files as a `mutation-baseline` artifact with `retention-days: 7` instead, since the restore reads only the newest `main` run.
 
-A full run uploads its report as the `mutation-baseline-full` artifact, which a pull request's scope step reads on any runner.
+A full run uploads its report as the `mutation-baseline-full` artifact, which a branch comparison's scope step reads on any runner.
 It slims the report first, so the artifact holds about 0.5 MB in place of about 100 MB:
 
 ```yaml
@@ -179,9 +179,9 @@ It slims the report first, so the artifact holds about 0.5 MB in place of about 
 ```
 
 The full upload keeps 30 days, so the newest full baseline outlives the gap between full runs.
-A pull request's scope step loses its coverage when no full baseline outlives the gap.
+A branch comparison's scope step loses its coverage when no full baseline outlives the gap.
 
-A pull request's scope step restores the full report with `--full`, and [checks-mutation-scope](checks-mutation-scope.md) reads it:
+A branch comparison's scope step restores the full report with `--full`, and [checks-mutation-scope](checks-mutation-scope.md) reads it:
 
 ```yaml
 - name: Select mutation scope

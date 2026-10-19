@@ -12,7 +12,7 @@ It refuses a full mutation run when `CI` is not `true`.
 A full run is one with no `--mutate <glob>` and no `--incremental` flag.
 A `--mutate` without a glob, `--incrementalFile` alone or `--incremental` with `--force` is still a full run.
 Its refusal names `gh workflow run mutation` as the command that starts the same run in CI.
-A run scoped with `--mutate <glob>`, `--mutate=<glob>` or `-m <glob>` stays allowed locally, because pull request comparisons scope to named files.
+A run scoped with `--mutate <glob>`, `--mutate=<glob>` or `-m <glob>` stays allowed locally, because a branch comparison scopes to named files.
 An incremental run stays allowed locally only when its incremental report exists, because it reuses the results of mutants that did not change.
 That report is the `incrementalFile` Stryker resolves from the command line and the config file, else `reports/stryker-incremental.json`.
 With no report there, the refusal says to pass `--mutate <glob>`, or to start the full baseline in CI with `gh workflow run mutation`.
@@ -75,7 +75,7 @@ An `--incremental` run with no report stops before instrumenting with the missin
 ## When it runs
 
 A repository runs full baselines from the mutation workflow on `workflow_dispatch`.
-A repository that picks a pull request scope from a baseline starts that workflow weekly with `gh workflow run mutation`, because a GitHub schedule can start hours late.
+A repository that picks a branch scope from a baseline starts that workflow weekly with `gh workflow run mutation`, because a GitHub schedule can start hours late.
 Run scoped checks locally during development.
 Each baseline costs a full Stryker run.
 
@@ -106,9 +106,9 @@ jobs:
 ```
 
 The run restores no state and passes `--disableBail`, so its report names every test that covers or kills each mutant.
-The upload is the `mutation-baseline-full` artifact that a pull request's scope step restores with `checks-mutation-baseline --full`.
+The upload is the `mutation-baseline-full` artifact that a branch comparison's scope step restores with `checks-mutation-baseline --full`.
 [checks-mutation-scope](checks-mutation-scope.md) reads it to bring in the sources a changed unit test covers or kills.
-The restore reads only a successful run of `mutation.yml` on `main`, so a sweep that fails publishes nothing a pull request reads.
+The restore reads only a successful run of `mutation.yml` on `main`, so a sweep that fails publishes nothing a scope step reads.
 The artifact keeps 30 days, so the newest full baseline outlives the week between full runs.
 The upload holds the report without each mutant's `statusReason`, as [checks-mutation-baseline](checks-mutation-baseline.md#the-saved-baselines) says, since the full report of a large repository passes 100 MB as an artifact.
 

@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-mutation-scope
 
-`checks-mutation-scope` turns a pull request's diff into the files its mutation runs mutate, and prints them as lines for `GITHUB_ENV`.
+`checks-mutation-scope` turns a branch's diff into the files its mutation runs mutate, and prints them as `NAME=a,b` lines a CI step appends to its environment file.
 
 ## What it checks
 
@@ -17,23 +17,23 @@ A `mutate` entry with a mutation range, such as `src/a.ts:1-10`, fails the run, 
 A renamed source enters under both names, and a deleted source does not enter.
 
 A unit test is a `.test.ts` or `.test.tsx` file under `tests/unit/`, the files the preset's `unitTestFiles` lists.
-A unit test the pull request adds, edits, deletes or renames is changed.
+A unit test the branch adds, edits, deletes or renames is changed.
 A unit test that reads a changed file under `tests/` is changed too.
 It reads a file when it imports it, directly or through another file under `tests/`.
 An import resolves as Bun resolves it, to the file it names, then with an extension added, and only then to the directory's `index`.
 A unit test also reads a changed fixture under `tests/fixtures/` when it names the fixture's path or a directory above it.
 Bun loads each `[test] preload` in `bunfig.toml` before every test file.
 So every unit test is changed when the preload list differs between the merge base and `HEAD`.
-The same holds when the pull request changes a preload or a file a preload imports, wherever that file lives.
+The same holds when the branch changes a preload or a file a preload imports, wherever that file lives.
 
 Each source whose mutants a changed unit test covers or kills in the full baseline report then enters the scope, when it still exists at `HEAD`.
-So a kill lost through a test change alone still shows in the comparison, in a source the pull request leaves alone.
+So a kill lost through a test change alone still shows in the comparison, in a source the branch leaves alone.
 A changed unit test with no baseline report fails the run rather than reading incomplete coverage.
 Stryker records each test file's source in the report's `testFiles`.
 A changed unit test the merge base holds must have that recorded source match its content at the merge base.
 Otherwise the report ran an older test, so its coverage cannot say what the test covers now.
 The scope then widens to every file at `HEAD` the `mutate` globs match.
-A unit test the pull request adds is new to every report, so it needs no entry.
+A unit test the branch adds is new to every report, so it needs no entry.
 Stryker writes no source without mutants into the report, so a mutated source the report lacks may be newer than it.
 When a unit test changed, each such source that exists at `HEAD` enters the scope.
 A change under `tests/e2e/` changes no unit test, so it needs no baseline report.
@@ -61,7 +61,7 @@ The report must come from a run that restored no state and passed `--disableBail
 checks-mutation-scope <base> [<full-baseline-report>]
 ```
 
-`<base>` is the branch the pull request merges into, such as `origin/main`, or the merge base itself.
+`<base>` is the target branch, such as `origin/main`, or the merge base itself.
 `<full-baseline-report>` is the path the full baseline was restored to, and a path with no file reads as no report.
 
 ## Output
@@ -93,7 +93,7 @@ It also names each stale test that widens the scope.
 
 ## Sample output
 
-A helper change that reaches a source the pull request leaves alone:
+A helper change that reaches a source the branch leaves alone:
 
 ```
 mutation-scope: tests/unit/dashboard/snapshot.test.ts reads tests/lib/session-fixture.ts
@@ -116,20 +116,20 @@ mutation-scope: the baseline report did not run tests/unit/dashboard/snapshot.te
 
 ## When it runs
 
-Only a CI step the repository writes runs it, in the pull request's mutation comparison, before either Stryker run:
+Only a CI step the repository writes runs it, in a branch's mutation comparison, before either Stryker run:
 
 ```yaml
 - name: Select mutation scope
   env:
     GH_TOKEN: ${{ github.token }}
   run: |
-    base="$(git merge-base HEAD "origin/$GITHUB_BASE_REF")"
+    base="$(git merge-base HEAD origin/main)"
     echo "BASE_SHA=$base" >> "$GITHUB_ENV"
     bunx checks-mutation-baseline --full "$RUNNER_TEMP/baseline-full/mutation.json"
     bunx checks-mutation-scope "$base" "$RUNNER_TEMP/baseline-full/mutation.json" >> "$GITHUB_ENV"
 ```
 
-Each later step reads `$SCOPE` from the environment, and a failed scope step adds nothing to it.
+Each later step reads `SCOPE` from the environment, and a failed scope step adds nothing to it.
 [checks-mutation-compare](checks-mutation-compare.md#running-it-in-ci) shows the whole job.
 The full baseline comes from the `mutation` workflow, as [checks-mutation](checks-mutation.md#running-it-in-ci) shows.
 
