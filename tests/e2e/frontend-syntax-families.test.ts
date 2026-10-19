@@ -247,6 +247,21 @@ test("flatSelectors refuses native nesting, so a nested chain cannot pass three 
   }
 }, 60_000);
 
+test("noPageHas refuses a :has() whose compound holds no class, since its subject can be the root element", async () => {
+  const options = '{ baseline: "widely", tokens: false, bem: true, flatSelectors: true, noPageHas: true }';
+  const { write, script } = await repository(options, { "src/site.css": ".card:has(.card__icon) .menu__toggle, .card:not(:has(.card__icon)) { top: 0; }\n" });
+  expect(await script(GATE)).toEqual({ exitCode: 0, text: "frontend-syntax: no violation in 1 file(s) from 1 declared input(s)\n" });
+
+  for (const page of [":has(.hero)", ":scope:has(.hero)", ":not(.card):has(.hero)", ":is(:has(.hero))"]) {
+    const selector = `${page} .menu__toggle`;
+    await write({ "src/site.css": `${selector} { top: 0; }\n` });
+    expect(await script(GATE), selector).toEqual({
+      exitCode: 1,
+      text: `frontend-syntax: 1 problem(s) in 1 file(s) from 1 declared input(s):\n  src/site.css:1:1 Disallowed selector "${selector}" (selector-disallowed-list)\n`,
+    });
+  }
+}, 60_000);
+
 test("all three options fail one website menu rule on four families, and pass its marker-class rewrite", async () => {
   const options = '{ baseline: "widely", tokens: false, bem: true, flatSelectors: true, noPageHas: true }';
   const { write, script } = await repository(options, { "src/site.css": ".page--past-hero .menu__toggle { top: 0; }\n" });

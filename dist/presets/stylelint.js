@@ -45,6 +45,10 @@ var FLAT_SELECTORS = {
   "selector-pseudo-class-disallowed-list": POSITIONAL_PSEUDO_CLASSES
 };
 var PAGE_HAS = "/^(?=[\\s\\S]*:has\\()(?=[\\s\\S]*(?:(?:^|[\\s>+~,([])(?:html|body|main)|:root)(?![\\w-]))[\\s\\S]*$/i";
+var PSEUDO_ARGUMENT = "(?:[^()]|\\([^()]*\\))*";
+var PSEUDO_CLASS = `::?[\\w-]+(?:\\(${PSEUDO_ARGUMENT}\\))?`;
+var HAS_IN_PSEUDO_CLASS = `(?::has\\(${PSEUDO_ARGUMENT}\\)|::?[\\w-]+\\(${PSEUDO_ARGUMENT}:has\\([^()]*\\)${PSEUDO_ARGUMENT}\\))`;
+var CLASSLESS_HAS = `/(?:^|[\\s>+~,])(?:${PSEUDO_CLASS})*${HAS_IN_PSEUDO_CLASS}(?:${PSEUDO_CLASS})*(?=[\\s>+~,]|$)/i`;
 var DESIGN_TOKENS = {
   "color-no-hex": true,
   "color-named": "never",
@@ -88,7 +92,7 @@ function designTokens(files) {
 }
 function disallowedSelectors(noPageHas) {
   if (noPageHas === true)
-    return { "selector-disallowed-list": [[...LANGUAGE_FREE_SELECTORS["selector-disallowed-list"], PAGE_HAS], { splitList: true }] };
+    return { "selector-disallowed-list": [[...LANGUAGE_FREE_SELECTORS["selector-disallowed-list"], PAGE_HAS, CLASSLESS_HAS], { splitList: true }] };
   return LANGUAGE_FREE_SELECTORS;
 }
 function defineConfig({ baseline, tokens, bem, flatSelectors, noPageHas, rules, overrides = [], ...rest }) {

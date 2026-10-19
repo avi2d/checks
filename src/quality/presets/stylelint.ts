@@ -78,6 +78,15 @@ const FLAT_SELECTORS = {
 // The rule tests the raw selector, newlines included, so [\s\S] stands where . would stop at a line break.
 const PAGE_HAS = "/^(?=[\\s\\S]*:has\\()(?=[\\s\\S]*(?:(?:^|[\\s>+~,([])(?:html|body|main)|:root)(?![\\w-]))[\\s\\S]*$/i";
 
+const PSEUDO_ARGUMENT = "(?:[^()]|\\([^()]*\\))*";
+
+const PSEUDO_CLASS = `::?[\\w-]+(?:\\(${PSEUDO_ARGUMENT}\\))?`;
+
+const HAS_IN_PSEUDO_CLASS = `(?::has\\(${PSEUDO_ARGUMENT}\\)|::?[\\w-]+\\(${PSEUDO_ARGUMENT}:has\\([^()]*\\)${PSEUDO_ARGUMENT}\\))`;
+
+// A compound of pseudo-classes alone, :scope and :not(.card) among them, can match the root element, so its :has() reads page state.
+const CLASSLESS_HAS = `/(?:^|[\\s>+~,])(?:${PSEUDO_CLASS})*${HAS_IN_PSEUDO_CLASS}(?:${PSEUDO_CLASS})*(?=[\\s>+~,]|$)/i`;
+
 const DESIGN_TOKENS = {
   "color-no-hex": true,
   "color-named": "never",
@@ -123,7 +132,7 @@ function designTokens(files: readonly string[]): Required<Pick<Config, "rules" |
 }
 
 function disallowedSelectors(noPageHas: boolean | undefined): Rules {
-  if (noPageHas === true) return { "selector-disallowed-list": [[...LANGUAGE_FREE_SELECTORS["selector-disallowed-list"], PAGE_HAS], { splitList: true }] };
+  if (noPageHas === true) return { "selector-disallowed-list": [[...LANGUAGE_FREE_SELECTORS["selector-disallowed-list"], PAGE_HAS, CLASSLESS_HAS], { splitList: true }] };
   return LANGUAGE_FREE_SELECTORS;
 }
 

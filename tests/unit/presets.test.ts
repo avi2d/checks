@@ -208,9 +208,9 @@ test("flatSelectors: true bans type, id, universal, attribute and positional sel
   });
 });
 
-test("noPageHas: true refuses :has() beside a page element and keeps the language rule beside it", () => {
+test("noPageHas: true refuses :has() beside a page element or in a classless compound, and keeps the language rule beside it", () => {
   const on = defineStylelint({ baseline: "widely", tokens: false, noPageHas: true });
-  expect(on.rules?.["selector-disallowed-list"]).toEqual([["/[^\\x00-\\x7F]/", expect.any(String)], { splitList: true }]);
+  expect(on.rules?.["selector-disallowed-list"]).toEqual([["/[^\\x00-\\x7F]/", expect.any(String), expect.any(String)], { splitList: true }]);
 });
 
 test("the stylelint builder throws on a baseline or tokens a config no typecheck reads gets wrong", () => {
