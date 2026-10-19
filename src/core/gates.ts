@@ -40,6 +40,8 @@ const OXLINT_CONFIG: TrackedContent = { pathspecs: ["oxlint.config.ts"], content
 
 const FRONTEND_SYNTAX_DECLARATION: TrackedContent = { pathspecs: ["frontend-syntax.json"], content: "a frontend syntax declaration" };
 
+const STYLESHEET: TrackedContent = { pathspecs: ["*.css"], content: "a stylesheet" };
+
 const COPY_DECLARATION: TrackedContent = { pathspecs: ["copy.json"], content: "a copy declaration" };
 
 export const KIT_GATES = [
@@ -49,6 +51,7 @@ export const KIT_GATES = [
   { bin: "checks-comment-gate", vector: "quality", file: "comment-gate.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-effect-scope", vector: "quality", file: "effect-scope.ts", reads: "tree", args: ["--check"], appliesTo: OXLINT_CONFIG },
   { bin: "checks-frontend-syntax", vector: "quality", file: "frontend-syntax.ts", reads: "tree", appliesTo: FRONTEND_SYNTAX_DECLARATION },
+  { bin: "checks-css-size", vector: "quality", file: "css-size.ts", reads: "tree", appliesTo: STYLESHEET },
   { bin: "checks-no-plain-js", vector: "quality", file: "no-plain-js.ts", reads: "tree", appliesTo: TYPESCRIPT_SOURCE },
   { bin: "checks-suppressions-ratchet", vector: "complexity", file: "suppressions-ratchet.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-ci-wiring", vector: "delivery", file: "ci-wiring.ts", reads: "tree", appliesTo: EVERY_REPOSITORY },

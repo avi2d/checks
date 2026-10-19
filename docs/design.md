@@ -145,13 +145,17 @@ The violation it catches is a deleted workflow step, so it has to fail in the lo
 It parses workflows with `Bun.YAML`, which the `bun` shebang already provides, so it adds no dependency.
 It reads `on` as a string key, not as the YAML 1.1 boolean.
 
-## Size and repetition only fail on growth
+## TypeScript size and repetition only fail on growth
 
-The size limits are oxlint's own rules at `error`, not a script of the kit's.
+The TypeScript size limits are oxlint's own rules at `error`, not a script of the kit's.
 A script of the kit's own would restate how oxlint reads its config and compares sites, and each restatement adds cases oxlint itself does not have.
 A repository records its existing violations with `oxlint --suppress-all`, and `checks-suppressions-ratchet` refuses any count that rises.
 The cost is that a file or function already over its limit can grow without adding a site the count sees.
 Each repository works its counts down to zero.
+
+`checks-css-size` holds each stylesheet to the same 400 lines as an absolute budget, with no count to ratchet.
+oxlint does not read CSS, and no maintained stylelint rule or plugin limits lines per file, so the budget is a kit script.
+A stylesheet already over 400 lines fails until it is split, whatever the suppression counts hold.
 
 `checks-repetition` runs jscpd at both ends of the range with the head's `.jscpd.json`, so the same `path` and `ignore` globs pick the files at both ends.
 It compares each file's count of repeated lines, and does not use jscpd's `--baseline-from-ref`.

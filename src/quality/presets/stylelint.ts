@@ -31,6 +31,16 @@ const SELECTOR_COMPLEXITY = {
   "selector-max-compound-selectors": 3,
 } as const satisfies Rules;
 
+// [\s\S] without anchors passes an empty /**/, so the anchors refuse every comment text there is.
+const COMMENT_REFUSAL = {
+  "comment-word-disallowed-list": ["/^[\\s\\S]*$/"],
+} as const satisfies Rules;
+
+// A non-ASCII class refuses every language at once, where naming scripts would chase each one.
+const LANGUAGE_FREE_SELECTORS = {
+  "selector-disallowed-list": ["/[^\\x00-\\x7F]/"],
+} as const satisfies Rules;
+
 const COLOUR_FUNCTIONS = ["rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color"] as const;
 
 const DESIGN_TOKENS = {
@@ -84,6 +94,8 @@ export function defineConfig({ baseline, tokens, rules, overrides = [], ...rest 
   const merged: Rules = {
     ...CONVENTION_CHANGES,
     ...SELECTOR_COMPLEXITY,
+    ...COMMENT_REFUSAL,
+    ...LANGUAGE_FREE_SELECTORS,
     [BASELINE_RULE]: [true, { available }],
     ...tokenRules.rules,
     ...rules,

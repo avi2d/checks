@@ -1,6 +1,6 @@
 {
   "name": "@avi2dg/checks",
-  "version": "0.45.1",
+  "version": "0.46.0",
   "description": "Deterministic checks shared across a set of TypeScript repositories",
   "license": "MIT",
   "repository": {
@@ -65,6 +65,7 @@
     "src/docs/prose-matchers.ts",
     "src/quality/comments.ts",
     "src/quality/comment-gate.ts",
+    "src/quality/css-size.ts",
     "src/quality/frontend-syntax.ts",
     "src/quality/browser/",
     "src/complexity/suppressions-ratchet.ts",
@@ -160,6 +161,7 @@
     "checks-night-run": "src/testing/night-run.ts",
     "checks-ci-wiring": "src/delivery/ci-wiring.ts",
     "checks-comment-gate": "src/quality/comment-gate.ts",
+    "checks-css-size": "src/quality/css-size.ts",
     "checks-suppressions-ratchet": "src/complexity/suppressions-ratchet.ts",
     "checks-repetition": "src/complexity/repetition.ts",
     "checks-unused": "src/complexity/unused.ts",

@@ -26,3 +26,17 @@ export function runMain<E extends { readonly message: string }>(
   );
   BunRuntime.runMain(program, { teardown: (exit, onExit) => onExit(statusOf(exit)) });
 }
+
+export function runTreeGate<Outcome extends { readonly violations: readonly unknown[] }>(
+  name: string,
+  check: (root: string) => Effect.Effect<Outcome, { readonly message: string }, BunServices.BunServices>,
+  format: (result: Outcome) => string,
+): void {
+  const gate = Effect.gen(function* () {
+    const root = process.argv[2] ?? process.cwd();
+    const result = yield* check(root);
+    yield* Console.log(format(result));
+    return result.violations.length === 0;
+  });
+  runMain(name, gate);
+}

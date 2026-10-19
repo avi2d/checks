@@ -39,6 +39,8 @@ A control that needs selection off sets it on its own selector, such as `.drag-h
 | G3 selector complexity | `selector-max-specificity` at `0,3,2` and `selector-max-compound-selectors` at 3 | on |
 | G4 design tokens | `color-no-hex`, `color-named: "never"`, `function-disallowed-list` over `rgb`, `rgba`, `hsl`, `hsla`, `hwb`, `lab`, `lch`, `oklab`, `oklch` and `color`, and `font-size` only as one `var(--…)` with no fallback, or `inherit` | off until `tokens` names the token files, and off in those files |
 | G5 Baseline target | `plugin/use-baseline` from `stylelint-plugin-use-baseline`, which judges each property, value, function, at-rule, selector and unit against the Baseline data, and passes a property inside an `@supports` block. It passes `@property` at every target, since a browser without `@property` treats the declaration as an unregistered custom property | on, at the target `baseline` sets |
+| G6 comments refused | `comment-word-disallowed-list` over `/^[\s\S]*$/`, which refuses every comment, including an empty `/* */` | on |
+| G7 language-free selectors | `selector-disallowed-list` over `/[^\x00-\x7F]/`, which refuses any selector holding a non-ASCII character, in attribute values, class names and ids alike | on |
 
 The builder changes three of the shared config's rules:
 
@@ -47,7 +49,9 @@ The builder changes three of the shared config's rules:
 - `property-no-vendor-prefix` keeps reporting without a fix, and passes `-webkit-user-select`, since its fix deletes the prefix Safari still needs.
 - In an `.html` or `.astro` file, `declaration-block-single-line-max-declarations` is off, since a `style` attribute is one line.
 
+The comment rule refuses every comment but a sourcemap `/*# */` one, which stylelint passes to keep the map.
 CSS repetition is not a family of this gate: a repository adds `"css"` to `format` in `.jscpd.json`, and [checks-repetition](checks-repetition.md) then fails when a stylesheet's repeated lines grow.
+A stylesheet's length is not a family of this gate either, and [checks-css-size](checks-css-size.md) fails one that holds more than 400 lines.
 
 ### What no comment turns off
 
@@ -169,6 +173,7 @@ A repository without that file never runs it and needs neither `stylelint.config
 - [checks-browser](checks-browser.md)
 - [checks-lint](checks-lint.md)
 - [checks-comment-gate](checks-comment-gate.md)
+- [checks-css-size](checks-css-size.md)
 - [checks-suppressions-ratchet](checks-suppressions-ratchet.md)
 - [checks-repetition](checks-repetition.md)
 - [Native settings](../configs/native-settings.md)

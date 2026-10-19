@@ -147,13 +147,15 @@ test("the built base names each plugin bundle by an absolute path that exists, a
 
 const DESIGN_TOKEN_RULES = ["color-no-hex", "color-named", "function-disallowed-list", "declaration-property-value-allowed-list"];
 
-test("the stylelint builder turns on the correctness, convention, selector and Baseline families, and leaves design tokens off without token files", () => {
+test("the stylelint builder turns on the correctness, convention, selector, comment, language and Baseline families, and leaves design tokens off without token files", () => {
   const config = defineStylelint({ baseline: "widely", tokens: false });
   expect(config.extends).toEqual([expect.stringContaining("stylelint-config-standard")]);
   expect(config.plugins).toEqual([expect.stringContaining("stylelint-plugin-use-baseline")]);
   expect(config.rules).toMatchObject({
     "selector-max-specificity": "0,3,2",
     "selector-max-compound-selectors": 3,
+    "comment-word-disallowed-list": ["/^[\\s\\S]*$/"],
+    "selector-disallowed-list": ["/[^\\x00-\\x7F]/"],
     "plugin/use-baseline": [true, { available: "widely", ignoreAtRules: ["property"] }],
     "no-descending-specificity": null,
   });
