@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { Effect, Layer, Option } from "effect";
 import { readFile } from "node:fs/promises";
 import { parseReport as parseMutationReport } from "../../src/testing/mutation-compare.ts";
-import { fileFindings, Issues, issueBody, markedKey, marker, parseArgs, type OpenIssue } from "../../src/testing/night-run.ts";
+import { fileFindings, Issues, issueBody, markedKey, marker, parseArgs, titleOf, type OpenIssue } from "../../src/testing/night-run.ts";
 import { type Finding, findingsOf, keyOf, type NightRecord, type PreviousNight, scoresOf, type TestReport } from "../../src/testing/night-run-findings.ts";
 import { parseReport as parseTestReport } from "../../src/testing/test-report.ts";
 import { Usage } from "../../src/core/main.ts";
@@ -146,9 +146,33 @@ test("an issue body carries its key back, even a key holding quotes and a commen
   expect(markedKey(null)).toEqual(Option.none());
 });
 
-test("checks-night-run takes one mutation report and any number of test reports", async () => {
-  expect(await Effect.runPromise(parseArgs(["--mutation", "m.json", "--tests", "unit.xml", "--tests", "e2e.xml"]))).toEqual({ mutation: "m.json", tests: ["unit.xml", "e2e.xml"] });
-  for (const argv of [[], ["--tests", "unit.xml"], ["--mutation"], ["--mutation", "a.json", "--mutation", "b.json"], ["--mutation", "--tests"], ["--report", "x"]]) {
+test("a test name too long for GitHub's 256-character title keeps the title within it and the full name and key in the body", async () => {
+  const name = `renders ${"a very long scenario name ".repeat(10)}`.trim();
+  const finding: Finding = { kind: "test", file: "tests/e2e/browser.test.ts", name };
+  const issues = recordingIssues([]);
+
+  await Effect.runPromise(fileFindings([finding], RUN).pipe(Effect.provide(issues.layer)));
+
+  const [, , create] = issues.calls;
+  const [title, body] = create?.args ?? [];
+  expect(title).toHaveLength(256);
+  expect(String(title).startsWith("Night run: tests/e2e/browser.test.ts > renders a very long scenario name")).toBe(true);
+  expect(body).toContain(name);
+  expect(body).toContain("tests/e2e/browser.test.ts");
+  expect(body).toContain(`Finding key: \`test:tests/e2e/browser.test.ts > ${name}\``);
+});
+
+test("a title within GitHub's 256 characters stays whole, and a cut never splits a character", () => {
+  expect(titleOf({ kind: "crash", file: "tests/unit/session.test.ts" })).toBe("Night run: tests/unit/session.test.ts crashed its test worker");
+  const cut = titleOf({ kind: "test", file: "tests/unit/emoji.test.ts", name: "😀".repeat(200) });
+  expect(cut.length).toBeLessThanOrEqual(256);
+  expect(cut.isWellFormed()).toBe(true);
+});
+
+test("checks-night-run takes at most one mutation report and any number of test reports", async () => {
+  expect(await Effect.runPromise(parseArgs(["--mutation", "m.json", "--tests", "unit.xml", "--tests", "e2e.xml"]))).toEqual({ mutation: Option.some("m.json"), tests: ["unit.xml", "e2e.xml"] });
+  expect(await Effect.runPromise(parseArgs(["--tests", "unit.xml"]))).toEqual({ mutation: Option.none(), tests: ["unit.xml"] });
+  for (const argv of [[], ["--mutation"], ["--mutation", "a.json", "--mutation", "b.json"], ["--mutation", "--tests"], ["--report", "x"]]) {
     expect(await Effect.runPromise(Effect.flip(parseArgs(argv)))).toBeInstanceOf(Usage);
   }
 });

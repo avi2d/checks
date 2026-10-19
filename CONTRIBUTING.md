@@ -25,9 +25,11 @@ The workflow has no schedule: the weekly full baseline starts with `gh workflow 
 A hand-started run restores no state and passes `--disableBail`, so its report lists every covering and killing test.
 That run uploads the report again as the `mutation-baseline-full` artifact.
 A push run restores the previous baseline through [checks-mutation-baseline](docs/gates/checks-mutation-baseline.md).
-`.github/workflows/night-run.yml` runs at 22:37 UTC, and `gh workflow run night-run` starts it by hand.
+`.github/workflows/night-run.yml` runs at 22:37 UTC, and `gh workflow run night-run` starts it by hand, queued behind any night run already going.
 It runs a full Stryker run and the unit and e2e levels of the suite, and keeps each JUnit report.
 [checks-night-run](docs/gates/checks-night-run.md) then opens or comments on one issue labelled `night-run` for each file whose mutation score fell since the previous night and for each failing test.
+A failed mutation run still leaves each failing test filed, and records no score.
+A run started on a branch other than `main` lists its findings in the log and files no issue.
 Each issue is fixed in a pull request of its own, so no pull request waits for a mutation run.
 Run `bun run mutate -- --mutate <file>` to mutate one source file locally, since the preset refuses a full run outside CI.
 The patch under `patches/` makes `@hughescr/stryker-bun-runner` honour Stryker's hit limit, so a mutant whose code loops endlessly ends as a `Timeout` within seconds.

@@ -9,7 +9,7 @@ import { type Finding, findingsOf, keyOf, NightRecordSchema, type NightRecord, p
 import { parseReport as parseTestReport } from "./test-report.ts";
 
 const NAME = "checks-night-run";
-const USAGE = `usage: ${NAME} --mutation <mutation-report> [--tests <junit-report>]...`;
+const USAGE = `usage: ${NAME} [--mutation <mutation-report>] [--tests <junit-report>]...`;
 export const LABEL = "night-run";
 const LABEL_COLOR = "5319e7";
 const LABEL_DESCRIPTION = "A regression a night run on main found";
@@ -17,12 +17,13 @@ const ARTIFACT = "night-run";
 const RECORD_NAME = "night-run.json";
 export const RECORD = `reports/${RECORD_NAME}`;
 const PAGE_SIZE = 100;
+const GITHUB_TITLE_LIMIT = 256;
 
 class NightRunFailure extends Schema.TaggedError<NightRunFailure>()("NightRunFailure", {
   message: Schema.String,
 }) {}
 
-export type Options = { readonly mutation: string; readonly tests: readonly string[] };
+export type Options = { readonly mutation: Option.Option<string>; readonly tests: readonly string[] };
 
 export const parseArgs = Effect.fnUntraced(function* (argv: readonly string[]): Effect.fn.Return<Options, Usage> {
   const mutation: string[] = [];
@@ -33,9 +34,8 @@ export const parseArgs = Effect.fnUntraced(function* (argv: readonly string[]): 
     if (into === undefined || value === undefined || value.startsWith("--")) return yield* new Usage({ message: USAGE });
     into.push(value);
   }
-  const [only, ...extra] = mutation;
-  if (only === undefined || extra.length > 0) return yield* new Usage({ message: USAGE });
-  return { mutation: only, tests };
+  if (mutation.length > 1 || mutation.length + tests.length === 0) return yield* new Usage({ message: USAGE });
+  return { mutation: Option.fromNullishOr(mutation[0]), tests };
 });
 
 export type OpenIssue = { readonly number: number; readonly key: string };
@@ -99,10 +99,15 @@ const openIssues = Effect.gen(function* () {
   }
 });
 
-export function titleOf(finding: Finding): string {
+function fullTitleOf(finding: Finding): string {
   if (finding.kind === "mutation") return `Night run: mutation score fell in ${finding.file}`;
   if (finding.kind === "test") return `Night run: ${finding.file} > ${finding.name} fails`;
   return `Night run: ${finding.file} crashed its test worker`;
+}
+
+export function titleOf(finding: Finding): string {
+  const title = fullTitleOf(finding);
+  return title.length <= GITHUB_TITLE_LIMIT ? title : `${title.slice(0, GITHUB_TITLE_LIMIT - 1).toWellFormed()}…`;
 }
 
 export function findingText(finding: Finding, run: string): string {
@@ -151,14 +156,14 @@ const required = (name: string) =>
 
 const WORKFLOW_FILE = /\/\.github\/workflows\/([^/@]+)@/;
 
-type Actions = { readonly runs: string; readonly run: string; readonly workflow: string };
+type Actions = { readonly runs: string; readonly run: string; readonly workflow: string; readonly ref: string };
 
 const actionsRun = Effect.gen(function* () {
   const runs = `${yield* required("GITHUB_SERVER_URL")}/${yield* required("GITHUB_REPOSITORY")}/actions/runs`;
   const reference = yield* required("GITHUB_WORKFLOW_REF");
   const workflow = WORKFLOW_FILE.exec(reference)?.[1];
   if (workflow === undefined) return yield* new NightRunFailure({ message: `GITHUB_WORKFLOW_REF ${reference} names no workflow file` });
-  return { runs, run: `${runs}/${yield* required("GITHUB_RUN_ID")}`, workflow } satisfies Actions;
+  return { runs, run: `${runs}/${yield* required("GITHUB_RUN_ID")}`, workflow, ref: yield* required("GITHUB_REF") } satisfies Actions;
 });
 
 const decodeRuns = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Array(Schema.Struct({ databaseId: Schema.Int }))));
@@ -203,28 +208,38 @@ const writeRecord = Effect.fn("writeRecord")(function* (record: NightRecord) {
   yield* fs.writeFileString(RECORD, `${JSON.stringify(record, null, 2)}\n`);
 });
 
-export function report(run: string, previous: Option.Option<PreviousNight>, filed: readonly Filed[], scored: number): string {
-  const against = Option.isSome(previous)
-    ? `compared with the night run ${previous.value.url}`
-    : `found no earlier successful run on ${DEFAULT_BRANCH} holding a ${ARTIFACT} artifact, so it compared no score`;
-  const verdict = filed.length === 0 ? "no finding" : `${filed.length} finding(s)`;
-  return [
-    `${NAME}: the night run ${run} ${against}; ${verdict}`,
-    ...filed.map((one) => `  ${one.action} #${one.issue} for ${one.key}`),
-    `${NAME}: recorded ${scored} file score(s) in ${RECORD}`,
-  ].join("\n");
+const tonightScores = Effect.fn("tonightScores")(function* (file: string) {
+  return scoresOf(yield* parseMutationReport(file, yield* readText(file)));
+});
+
+type Filing = { readonly onMain: true; readonly filed: readonly Filed[] } | { readonly onMain: false; readonly ref: string };
+
+export function report(run: string, scored: Option.Option<number>, previous: Option.Option<PreviousNight>, findings: readonly Finding[], filing: Filing): string {
+  const against = Option.isNone(scored)
+    ? "had no mutation report, so it compared no score"
+    : Option.isSome(previous)
+      ? `compared with the night run ${previous.value.url}`
+      : `found no earlier successful run on ${DEFAULT_BRANCH} holding a ${ARTIFACT} artifact, so it compared no score`;
+  const verdict = findings.length === 0 ? "no finding" : `${findings.length} finding(s)`;
+  const listed = filing.onMain ? filing.filed.map((one) => `  ${one.action} #${one.issue} for ${one.key}`) : findings.map((finding) => `  found ${keyOf(finding)}`);
+  const recorded = !filing.onMain
+    ? `${NAME}: the run is on ${filing.ref}, not ${DEFAULT_BRANCH}, so it filed no issue and recorded no score`
+    : Option.isSome(scored)
+      ? `${NAME}: recorded ${scored.value} file score(s) in ${RECORD}`
+      : `${NAME}: recorded no score, since it had no mutation report`;
+  return [`${NAME}: the night run ${run} ${against}; ${verdict}`, ...listed, recorded].join("\n");
 }
 
 const nightRun = Effect.gen(function* () {
   const options = yield* parseArgs(process.argv.slice(2));
   const actions = yield* actionsRun;
-  const mutation = yield* parseMutationReport(options.mutation, yield* readText(options.mutation));
+  const scores = Option.isSome(options.mutation) ? Option.some(yield* tonightScores(options.mutation.value)) : Option.none<NightRecord["scores"]>();
   const tests: TestReport[] = yield* Effect.forEach(options.tests, testReport);
-  const tonight = { scores: scoresOf(mutation), tests };
-  const previous = yield* previousNight(actions);
-  const filed = yield* fileFindings(findingsOf(previous, tonight), actions.run);
-  yield* writeRecord({ scores: tonight.scores });
-  yield* Console.log(report(actions.run, previous, filed, Object.keys(tonight.scores).length));
+  const previous = Option.isSome(scores) ? yield* previousNight(actions) : Option.none<PreviousNight>();
+  const findings = findingsOf(previous, { scores: Option.getOrElse(scores, () => ({})), tests });
+  const filing: Filing = actions.ref === `refs/heads/${DEFAULT_BRANCH}` ? { onMain: true, filed: yield* fileFindings(findings, actions.run) } : { onMain: false, ref: actions.ref };
+  if (filing.onMain && Option.isSome(scores)) yield* writeRecord({ scores: scores.value });
+  yield* Console.log(report(actions.run, Option.map(scores, (tonight) => Object.keys(tonight).length), previous, findings, filing));
   return true;
 });
 

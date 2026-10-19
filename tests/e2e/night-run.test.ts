@@ -13,11 +13,16 @@ const ACTIONS_ENV = {
   GITHUB_REPOSITORY: "acme/widget",
   GITHUB_RUN_ID: "12",
   GITHUB_WORKFLOW_REF: "acme/widget/.github/workflows/night-run.yml@refs/heads/main",
+  GITHUB_REF: "refs/heads/main",
 };
 
 const scratch = scratchDirs();
 
-type Night = FakeActions & { readonly work: string; readonly run: (tests: readonly string[]) => Promise<Ran> };
+type Night = FakeActions & {
+  readonly work: string;
+  readonly run: (tests: readonly string[]) => Promise<Ran>;
+  readonly runWith: (args: readonly string[], env: Readonly<Record<string, string>>) => Promise<Ran>;
+};
 
 function lastNight(scores: Readonly<Record<string, { readonly detected: number; readonly valid: number }>>): FakeRun {
   return { databaseId: 11, event: "schedule", createdAt: "2026-10-18T22:37:00Z", artifacts: [{ id: 110, name: "night-run", expired: false, files: { "night-run.json": JSON.stringify({ scores }) } }] };
@@ -28,10 +33,14 @@ async function night(runs: readonly FakeRun[]): Promise<Night> {
   const fake = await fakeActions(home, 4242, runs, { workflow: "night-run.yml" });
   const work = join(home, "work");
   await mkdir(work);
-  const run = (tests: readonly string[]) =>
-    ran($`bun ${SCRIPT} --mutation ${join(FIXTURES, "mutation.json")} ${tests.flatMap((file) => ["--tests", join(FIXTURES, file)])}`.cwd(work).env({ ...process.env, ...ACTIONS_ENV, ...fake.env }));
-  return { ...fake, work, run };
+  const runWith = (args: readonly string[], env: Readonly<Record<string, string>>) => ran($`bun ${SCRIPT} ${args}`.cwd(work).env({ ...process.env, ...ACTIONS_ENV, ...env, ...fake.env }));
+  const run = (tests: readonly string[]) => runWith(["--mutation", join(FIXTURES, "mutation.json"), ...testArgs(tests)], {});
+  return { ...fake, work, run, runWith };
 }
+
+const testArgs = (tests: readonly string[]): readonly string[] => tests.flatMap((file) => ["--tests", join(FIXTURES, file)]);
+
+const recorded = (work: string): Promise<boolean> => Bun.file(join(work, "reports", "night-run.json")).exists();
 
 const record = async (work: string): Promise<unknown> => JSON.parse(await readFile(join(work, "reports", "night-run.json"), "utf8"));
 
@@ -91,6 +100,47 @@ test("with no previous night it files each failing test and no score", async () 
     "Night run: tests/unit/cart.test.ts > totals > rounds half to even fails",
     "Night run: tests/unit/session.test.ts crashed its test worker",
   ]);
+}, 30_000);
+
+test("with no mutation report it files each failing test, compares no score and records none", async () => {
+  const runner = await night([lastNight({ "src/mixed.ts": { detected: 3, valid: 4 } })]);
+
+  const unscored = await runner.runWith(testArgs(["failing.xml"]), {});
+
+  expect(unscored).toEqual({
+    exitCode: 0,
+    text: [
+      `checks-night-run: the night run ${RUNS}/12 had no mutation report, so it compared no score; 2 finding(s)`,
+      "  opened #100 for test:tests/unit/cart.test.ts > totals > rounds half to even",
+      "  opened #101 for test:tests/unit/session.test.ts",
+      "checks-night-run: recorded no score, since it had no mutation report",
+      "",
+    ].join("\n"),
+  });
+  expect((await runner.calls()).filter((call) => call.startsWith("run "))).toEqual([]);
+  expect(await recorded(runner.work)).toBe(false);
+}, 30_000);
+
+test("a run on a branch lists each finding in its log, files no issue and records no score", async () => {
+  const runner = await night([lastNight({ "src/mixed.ts": { detected: 3, valid: 4 } })]);
+  const branch = { GITHUB_REF: "refs/heads/feature", GITHUB_WORKFLOW_REF: "acme/widget/.github/workflows/night-run.yml@refs/heads/feature" };
+
+  const dispatched = await runner.runWith(["--mutation", join(FIXTURES, "mutation.json"), ...testArgs(["failing.xml"])], branch);
+
+  expect(dispatched).toEqual({
+    exitCode: 0,
+    text: [
+      `checks-night-run: the night run ${RUNS}/12 compared with the night run ${RUNS}/11; 3 finding(s)`,
+      "  found mutation:src/mixed.ts",
+      "  found test:tests/unit/cart.test.ts > totals > rounds half to even",
+      "  found test:tests/unit/session.test.ts",
+      "checks-night-run: the run is on refs/heads/feature, not main, so it filed no issue and recorded no score",
+      "",
+    ].join("\n"),
+  });
+  expect((await runner.calls()).filter((call) => call.startsWith("label") || call.includes("/issues"))).toEqual([]);
+  expect(await runner.issues()).toEqual([]);
+  expect(await recorded(runner.work)).toBe(false);
 }, 30_000);
 
 test("outside a GitHub Actions job it names the variable it lacks", async () => {

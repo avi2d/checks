@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: night-run
+  cancel-in-progress: false
+
 jobs:
   mutation:
     timeout-minutes: 60
@@ -51,6 +55,7 @@ jobs:
 
   report:
     needs: [mutation, tests]
+    if: ${{ !cancelled() && needs.tests.result == 'success' }}
     runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     permissions:
       contents: read
@@ -62,7 +67,8 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      - uses: actions/download-artifact@v4
+      - if: needs.mutation.result == 'success'
+        uses: actions/download-artifact@v4
         with:
           name: night-run-mutation
           path: reports/mutation
@@ -72,9 +78,10 @@ jobs:
           path: reports/night-run-tests
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: bun src/testing/night-run.ts --mutation reports/mutation/mutation.json --tests reports/night-run-tests/unit.xml --tests reports/night-run-tests/e2e.xml
+        run: bun src/testing/night-run.ts ${{ needs.mutation.result == 'success' && '--mutation reports/mutation/mutation.json' || '' }} --tests reports/night-run-tests/unit.xml --tests reports/night-run-tests/e2e.xml
       - uses: actions/upload-artifact@v4
         with:
           name: night-run
           path: reports/night-run.json
+          if-no-files-found: ignore
           retention-days: 90
