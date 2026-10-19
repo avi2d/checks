@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-mutation-scope
 
-`checks-mutation-scope` turns a branch's diff into the files its mutation runs mutate, and prints them as lines for `GITHUB_ENV`.
+`checks-mutation-scope` turns a branch's diff into the files its mutation runs mutate, and prints them as `NAME=a,b` lines a CI step appends to its environment file.
 
 ## What it checks
 
