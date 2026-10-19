@@ -165,13 +165,13 @@ function tierArgs(tier: TestTier | undefined): readonly string[] {
   return [`./tests/${tier}`];
 }
 
-export function parallelArgs(workers: number | undefined): readonly string[] {
-  return [`--parallel=${workers ?? availableParallelism()}`];
+export function workerCount(workers: number | undefined): number {
+  return workers ?? availableParallelism();
 }
 
 const runSuite = Effect.fn("runSuite")(function* (outfile: string, { tier, workers }: TestOptions) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const args = ["test", "--randomize", ...parallelArgs(workers), ...tierArgs(tier), ...reporterArgs(outfile)];
+  const args = ["test", "--randomize", `--parallel=${workerCount(workers)}`, ...tierArgs(tier), ...reporterArgs(outfile)];
   return yield* spawner.exitCode(
     ChildProcess.make(process.execPath, args, {
       stdin: "ignore",

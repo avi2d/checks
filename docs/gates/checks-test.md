@@ -76,7 +76,9 @@ Bun ignores both directories during the default run.
 
 ## Parallel runs
 
-A repository runs its test files in parallel by passing a worker count in its `test` script:
+`checks-test` runs `bun test --randomize --parallel=<workers>`, so Bun hands each test file to one of that many worker processes.
+Without the option the count is one worker per core, as `os.availableParallelism()` reports it, so a local run never oversubscribes the machine.
+A repository sets its own count by passing `--parallel=<workers>` in its `test` script:
 
 ```json
 {
@@ -86,14 +88,12 @@ A repository runs its test files in parallel by passing a worker count in its `t
 }
 ```
 
-`checks-test --parallel=<workers>` runs `bun test --randomize --parallel=<workers>`, so Bun hands each test file to one of that many worker processes.
-Each file then runs in a fresh global, so a file cannot lean on state another file left behind.
 The count is a whole number from 1 up.
-Without the option the suite passes the machine core count to Bun.
+Each file runs in a fresh global, so a file cannot lean on state another file left behind.
 Tests still run in random order, and `test.only` still fails the run.
-Bun merges every worker's results into the one JUnit report, so each skipped test and each todo is judged as in a serial run.
+Bun merges every worker's results into the one JUnit report, so each skipped test and each todo is judged across the whole suite.
 A tier script takes the same option, as in `checks-test --tier=live --parallel=4`.
-[checks-flake](checks-flake.md#parallel-hunts) hunts with the worker count the `test` script sets.
+[checks-flake](checks-flake.md#parallel-hunts) hunts with the same worker count.
 
 A file whose worker crashes, for example when a test calls `process.exit`, fails the run.
 Bun reports no result from that file, so its skips are not judged and its declarations are not reported as stale.

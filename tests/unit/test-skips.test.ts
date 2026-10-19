@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { availableParallelism } from "node:os";
 import { Option } from "effect";
-import { entryOptions, judgeSkips, parallelArgs, passes, report, scriptOptions, testOptions } from "../../src/testing/test.ts";
+import { entryOptions, judgeSkips, passes, report, scriptOptions, testOptions, workerCount } from "../../src/testing/test.ts";
 import { skipReason, type SkipDeclaration } from "../../src/testing/test-skips.ts";
 import type { TestResult } from "../../src/testing/test-report.ts";
 
@@ -97,9 +97,9 @@ test("checks-test takes one --junit file beside its other options on the command
   expect(scriptOptions("checks-test --junit=reports/suite.xml")).toBeUndefined();
 });
 
-test("checks-test defaults --parallel to the machine core count and keeps an explicit count", () => {
-  expect(parallelArgs(undefined)).toEqual([`--parallel=${availableParallelism()}`]);
-  expect(parallelArgs(2)).toEqual(["--parallel=2"]);
+test("checks-test runs one worker per core by default and keeps an explicit count", () => {
+  expect(workerCount(undefined)).toBe(availableParallelism());
+  expect(workerCount(2)).toBe(2);
 });
 
 test("checks-test refuses a test filter, a missing or zero worker count and a repeated option", () => {

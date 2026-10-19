@@ -270,7 +270,7 @@ test("--junit keeps the report of a failing run at the path it names", async () 
   expect(kept).toContain("<failure");
 });
 
-test("a focused test fails even without CI set, serially and across parallel workers", async () => {
+test("a focused test fails even without CI set, on the default and on an explicit worker count", async () => {
   await consumer(
     'import { expect, test } from "bun:test";\ntest.only("focused passes", () => expect(1).toBe(1));\ntest("failing skipped by only", () => expect(1).toBe(2));\n',
     { "tests/other.test.ts": 'import { expect, test } from "bun:test";\ntest("other passes", () => expect(1).toBe(1));\n' },
