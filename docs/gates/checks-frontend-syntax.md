@@ -42,8 +42,8 @@ A control that needs selection off sets it on its own selector, such as `.drag-h
 | G6 comments refused | `comment-word-disallowed-list` over `/^[\s\S]*$/`, which refuses every comment, including an empty `/* */` | on |
 | G7 language-free selectors | `selector-disallowed-list` over `/[^\x00-\x7F]/`, which refuses any selector holding a non-ASCII character, in attribute values, class names and ids alike | on |
 | G8 BEM names | `selector-class-pattern` over one lowercase block with kebab `__element` and `--modifier` parts | off until `bem` is `true` |
-| G9 class-only flat selectors | `selector-max-type` at 0, `selector-max-id` at 0, `selector-max-compound-selectors` at 2 and `selector-max-attribute` at 0 | off until `flatSelectors` is `true` |
-| G10 page-wide has refused | `selector-disallowed-list` over a pattern that refuses a `:has` beside `html`, `body` or `main` | off until `noPageHas` is `true` |
+| G9 class-only flat selectors | `selector-max-type` at 0, `selector-max-id` at 0, `selector-max-universal` at 0, `selector-max-compound-selectors` at 2, `selector-max-attribute` at 0, and `selector-pseudo-class-disallowed-list` over the positional pseudo-classes, from `:first-child` to `:nth-last-of-type` | off until `flatSelectors` is `true` |
+| G10 page-wide has refused | `selector-disallowed-list` over a pattern that refuses a `:has` beside `html`, `body`, `main` or `:root`, across line breaks in the selector | off until `noPageHas` is `true` |
 
 The builder changes four of the shared config's rules:
 

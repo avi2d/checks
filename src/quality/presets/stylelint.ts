@@ -51,15 +51,31 @@ const BEM_NAMES = {
   "selector-class-pattern": "^[a-z][a-z0-9]*(__[a-z0-9]+(-[a-z0-9]+)*)?(--[a-z0-9]+(-[a-z0-9]+)*)?$",
 } as const satisfies Rules;
 
+const POSITIONAL_PSEUDO_CLASSES = [
+  "first-child",
+  "last-child",
+  "only-child",
+  "nth-child",
+  "nth-last-child",
+  "first-of-type",
+  "last-of-type",
+  "only-of-type",
+  "nth-of-type",
+  "nth-last-of-type",
+] as const;
+
 const FLAT_SELECTORS = {
   "selector-max-type": 0,
   "selector-max-id": 0,
+  "selector-max-universal": 0,
   "selector-max-compound-selectors": 2,
   "selector-max-attribute": 0,
+  "selector-pseudo-class-disallowed-list": POSITIONAL_PSEUDO_CLASSES,
 } as const satisfies Rules;
 
 // The ban needs both a page element and :has( in one selector, in either order, and a class such as .block-body holds neither.
-const PAGE_HAS = "/^(?=.*:has\\()(?=.*(?:^|[\\s>+~,([])(?:html|body|main)(?![\\w-])).*$/";
+// The rule tests the raw selector, newlines included, so [\s\S] stands where . would stop at a line break.
+const PAGE_HAS = "/^(?=[\\s\\S]*:has\\()(?=[\\s\\S]*(?:(?:^|[\\s>+~,([])(?:html|body|main)|:root)(?![\\w-]))[\\s\\S]*$/i";
 
 const DESIGN_TOKENS = {
   "color-no-hex": true,

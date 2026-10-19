@@ -23,13 +23,27 @@ var COLOUR_FUNCTIONS = ["rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "okla
 var BEM_NAMES = {
   "selector-class-pattern": "^[a-z][a-z0-9]*(__[a-z0-9]+(-[a-z0-9]+)*)?(--[a-z0-9]+(-[a-z0-9]+)*)?$"
 };
+var POSITIONAL_PSEUDO_CLASSES = [
+  "first-child",
+  "last-child",
+  "only-child",
+  "nth-child",
+  "nth-last-child",
+  "first-of-type",
+  "last-of-type",
+  "only-of-type",
+  "nth-of-type",
+  "nth-last-of-type"
+];
 var FLAT_SELECTORS = {
   "selector-max-type": 0,
   "selector-max-id": 0,
+  "selector-max-universal": 0,
   "selector-max-compound-selectors": 2,
-  "selector-max-attribute": 0
+  "selector-max-attribute": 0,
+  "selector-pseudo-class-disallowed-list": POSITIONAL_PSEUDO_CLASSES
 };
-var PAGE_HAS = "/^(?=.*:has\\()(?=.*(?:^|[\\s>+~,([])(?:html|body|main)(?![\\w-])).*$/";
+var PAGE_HAS = "/^(?=[\\s\\S]*:has\\()(?=[\\s\\S]*(?:(?:^|[\\s>+~,([])(?:html|body|main)|:root)(?![\\w-]))[\\s\\S]*$/i";
 var DESIGN_TOKENS = {
   "color-no-hex": true,
   "color-named": "never",

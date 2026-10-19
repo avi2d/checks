@@ -246,8 +246,8 @@ export default defineConfig({
 | `baseline` | `"widely"`, `"newly"` or a year such as `2024` |
 | `tokens` | the globs of the files that declare the design tokens, or `false` to leave the design token rules off |
 | `bem` | `true` to hold every class to one lowercase block with kebab `__element` and `--modifier` parts |
-| `flatSelectors` | `true` to hold every selector to class names alone in at most two compound selectors |
-| `noPageHas` | `true` to refuse a `:has` beside `html`, `body` or `main` |
+| `flatSelectors` | `true` to hold every selector to class names alone, with no universal or positional selector, in at most two compound selectors |
+| `noPageHas` | `true` to refuse a `:has` beside `html`, `body`, `main` or `:root` |
 
 ## Where things are
 

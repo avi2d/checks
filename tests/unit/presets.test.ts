@@ -184,13 +184,26 @@ test("bem: true holds every class to one block with kebab elements and modifiers
   expect(own.rules?.["selector-class-pattern"]).toBeNull();
 });
 
-test("flatSelectors: true bans type, id and attribute selectors and holds every selector to two compound selectors", () => {
+test("flatSelectors: true bans type, id, universal, attribute and positional selectors and holds every selector to two compound selectors", () => {
   const config = defineStylelint({ baseline: "widely", tokens: false, flatSelectors: true });
   expect(config.rules).toMatchObject({
     "selector-max-type": 0,
     "selector-max-id": 0,
+    "selector-max-universal": 0,
     "selector-max-compound-selectors": 2,
     "selector-max-attribute": 0,
+    "selector-pseudo-class-disallowed-list": [
+      "first-child",
+      "last-child",
+      "only-child",
+      "nth-child",
+      "nth-last-child",
+      "first-of-type",
+      "last-of-type",
+      "only-of-type",
+      "nth-of-type",
+      "nth-last-of-type",
+    ],
   });
 });
 

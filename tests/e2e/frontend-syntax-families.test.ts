@@ -165,10 +165,38 @@ const FAMILIES = [
     reported: "(selector-max-attribute)",
   },
   {
+    family: "G9 class-only selectors, a positional pseudo-class on a class",
+    options: '{ baseline: "widely", tokens: false, flatSelectors: true }',
+    red: ".hero-name:first-child { top: 0; }\n",
+    green: ".hero-name-first { top: 0; }\n",
+    reported: "Disallowed pseudo-class \":first-child\" (selector-pseudo-class-disallowed-list)",
+  },
+  {
+    family: "G9 class-only selectors, the universal selector",
+    options: '{ baseline: "widely", tokens: false, flatSelectors: true }',
+    red: "* { top: 0; }\n",
+    green: ".hero { top: 0; }\n",
+    reported: "src/site.css:1:1 Too many universal selectors in \"*\", maximum 0 (selector-max-universal)",
+  },
+  {
     family: "G10 page-wide :has(), the contacts rule the website stylesheet writes",
     options: '{ baseline: "widely", tokens: false, noPageHas: true }',
     red: "main:has(> .block[data-section=\"contacts\"]:last-of-type) + footer { top: 0; }\n",
     green: ".contact-end .site-footer { top: 0; }\n",
+    reported: "(selector-disallowed-list)",
+  },
+  {
+    family: "G10 page-wide :has(), the root pseudo-class in place of html",
+    options: '{ baseline: "widely", tokens: false, noPageHas: true }',
+    red: ":root:has(.hero) { top: 0; }\n",
+    green: ".page-hero { top: 0; }\n",
+    reported: "src/site.css:1:1 Disallowed selector \":root:has(.hero)\" (selector-disallowed-list)",
+  },
+  {
+    family: "G10 page-wide :has(), html with its :has() broken across lines",
+    options: '{ baseline: "widely", tokens: false, noPageHas: true }',
+    red: "html:has(\n  .hero\n) {\n  top: 0;\n}\n",
+    green: ".page-hero {\n  top: 0;\n}\n",
     reported: "(selector-disallowed-list)",
   },
 ] as const;
