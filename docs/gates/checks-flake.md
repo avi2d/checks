@@ -101,12 +101,13 @@ Only a schedule the repository writes runs it.
 
 ## Running it on a schedule
 
-A repository runs it on a schedule and keeps the record of a failed run as an artifact:
+A repository runs it on a schedule and keeps the record of a failed run as an artifact.
+A repository schedules it at minute 27 of its tier's 30 minute night window, so repositories do not start together:
 
 ```yaml
 on:
   schedule:
-    - cron: "17 5 * * *"
+    - cron: "27 22 * * *"
   workflow_dispatch:
 jobs:
   flake:

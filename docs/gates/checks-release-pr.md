@@ -80,13 +80,14 @@ Run the workflow by hand with `gh workflow run daily-release` to refresh the rel
 ## Running it in CI
 
 A repository takes the daily release as `.github/workflows/daily-release.yml`.
+A repository schedules it at minute 7 of its tier's 30 minute night window, so repositories do not start together.
 The `pull-request` job runs on the schedule, and the `tag` job runs when a release commit lands on `main`, as [checks-release-tag](checks-release-tag.md) says:
 
 ```yaml
 name: daily-release
 on:
   schedule:
-    - cron: "29 3 * * *"
+    - cron: "7 22 * * *"
   workflow_dispatch:
   push:
     branches: [main]
