@@ -63,7 +63,7 @@ function tokenFiles(tokens: unknown): readonly string[] {
 const BASELINE_RULE = "plugin/use-baseline";
 
 // A repository's Baseline entry replaces the kit's option object whole, so the @property pass goes into whichever entry lands.
-function passProperty(entry: Rules[string]): Rules[string] {
+function passProperty(entry: Rules[string]): unknown {
   if (entry === null || entry === undefined) return entry;
   const [primary, options = {}] = Array.isArray(entry) ? entry : [entry];
   const ignored: unknown = Reflect.get(options, "ignoreAtRules") ?? [];
