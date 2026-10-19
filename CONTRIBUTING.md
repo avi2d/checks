@@ -25,7 +25,7 @@ The workflow has no schedule: the weekly full baseline starts with `gh workflow 
 A hand-started run restores no state and passes `--disableBail`, so its report lists every covering and killing test.
 That run uploads the report again as the `mutation-baseline-full` artifact.
 A push run restores the previous baseline through [checks-mutation-baseline](docs/gates/checks-mutation-baseline.md).
-`.github/workflows/night-run.yml` runs at 22:07 UTC, and `gh workflow run night-run` starts it by hand, queued behind any night run already going.
+`.github/workflows/night-run.yml` runs at 02:07 UTC, and `gh workflow run night-run` starts it by hand, queued behind any night run already going.
 It runs a full Stryker run and the unit and e2e levels of the suite, and keeps each JUnit report.
 [checks-night-run](docs/gates/checks-night-run.md) then opens or comments on one issue labelled `night-run` for each file whose mutation score fell since the previous night and for each failing test.
 A failed mutation run still leaves each failing test filed, and records no score.
