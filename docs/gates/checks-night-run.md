@@ -34,7 +34,8 @@ It reads every open issue labelled `night-run`, and reads the key each one carri
 A finding whose key an open issue carries gets one comment on that issue, so a regression that lasts two nights stays one issue.
 Any other finding opens one issue labelled `night-run`.
 The issue and the comment name tonight's run, the file and either the test or the score of both nights.
-The body holds the file, the full test name and the finding key, and a title longer than GitHub's 256 characters is cut to 256.
+The body holds the file, the full test name and the finding key.
+A title longer than GitHub's 256 characters is cut to at most 256 and ends in `…`.
 A night with no finding makes no call to GitHub's issues or labels at all.
 Closing an issue ends it, and the same finding on a later night opens a new one.
 Agents and people fix each issue as a task of its own, so no pull request waits for a night run.
