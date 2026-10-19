@@ -247,7 +247,7 @@ export default defineConfig({
 | `tokens` | the globs of the files that declare the design tokens, or `false` to leave the design token rules off |
 | `bem` | `true` to hold every class to one lowercase block with kebab `__element` and `--modifier` parts |
 | `flatSelectors` | `true` to hold every selector to class names alone, with no universal or positional selector and no nesting, in at most two compound selectors |
-| `noPageHas` | `true` to refuse a `:has` beside `html`, `body`, `main` or `:root` in one selector of a list, or in a compound with no class, such as `:has(.hero)` or `:scope:has(.hero)` |
+| `noPageHas` | `true` to refuse a `:has` beside `html`, `body`, `main` or `:root` in one selector of a list, or in a compound of pseudo-classes alone, such as `:has(.hero)` or `:scope:has(.hero)` |
 
 `noPageHas` sees a `:has` nested under a page selector only together with `flatSelectors`, which refuses the nesting.
 
