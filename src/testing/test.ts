@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { availableParallelism } from "node:os";
 import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { TEST_ENTRY_POINT } from "../core/gates.ts";
@@ -164,10 +165,13 @@ function tierArgs(tier: TestTier | undefined): readonly string[] {
   return [`./tests/${tier}`];
 }
 
+export function parallelArgs(workers: number | undefined): readonly string[] {
+  return [`--parallel=${workers ?? availableParallelism()}`];
+}
+
 const runSuite = Effect.fn("runSuite")(function* (outfile: string, { tier, workers }: TestOptions) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const parallelArgs = workers === undefined ? [] : [`--parallel=${workers}`];
-  const args = ["test", "--randomize", ...parallelArgs, ...tierArgs(tier), ...reporterArgs(outfile)];
+  const args = ["test", "--randomize", ...parallelArgs(workers), ...tierArgs(tier), ...reporterArgs(outfile)];
   return yield* spawner.exitCode(
     ChildProcess.make(process.execPath, args, {
       stdin: "ignore",

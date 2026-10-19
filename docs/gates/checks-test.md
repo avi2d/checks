@@ -88,7 +88,8 @@ A repository runs its test files in parallel by passing a worker count in its `t
 
 `checks-test --parallel=<workers>` runs `bun test --randomize --parallel=<workers>`, so Bun hands each test file to one of that many worker processes.
 Each file then runs in a fresh global, so a file cannot lean on state another file left behind.
-The count is a whole number from 1 up, and without the option the suite runs serially in one process.
+The count is a whole number from 1 up.
+Without the option the suite passes the machine core count to Bun.
 Tests still run in random order, and `test.only` still fails the run.
 Bun merges every worker's results into the one JUnit report, so each skipped test and each todo is judged as in a serial run.
 A tier script takes the same option, as in `checks-test --tier=live --parallel=4`.
