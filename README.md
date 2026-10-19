@@ -223,6 +223,32 @@ To move a repository to a newer release of the kit:
 The repository's lockfile pins the kit, so a repository moves only when it runs these steps.
 [CHANGELOG.md](CHANGELOG.md), shipped in the package, lists what each release changed.
 
+## Turn on the CSS families a repository needs
+
+A repository that declares `frontend-syntax.json` writes `stylelint.config.ts` with the families it needs.
+`baseline` and `tokens` have no default, so every config names them.
+`bem`, `flatSelectors` and `noPageHas` stay off until a config names them.
+
+```ts
+import { defineConfig } from "@avi2dg/checks/stylelint";
+
+export default defineConfig({
+  baseline: "widely",
+  tokens: ["src/styles/tokens.css"],
+  bem: true,
+  flatSelectors: true,
+  noPageHas: true,
+});
+```
+
+| Option | What it turns on |
+| --- | --- |
+| `baseline` | `"widely"`, `"newly"` or a year such as `2024` |
+| `tokens` | the globs of the files that declare the design tokens, or `false` to leave the design token rules off |
+| `bem` | `true` to hold every class to one lowercase block with kebab `__element` and `--modifier` parts |
+| `flatSelectors` | `true` to hold every selector to class names alone in at most two compound selectors |
+| `noPageHas` | `true` to refuse a `:has` beside `html`, `body` or `main` |
+
 ## Where things are
 
 Every path is relative to the installed package, `node_modules/@avi2dg/checks/`.

@@ -17,7 +17,7 @@ A consuming repository puts each setting in the file its tool reads, and no mani
 | `exports-baseline.json` | The existing unused exports and types, per file, kind and name | `checks-exports` |
 | `.jscpd.json` | The `path` and `ignore` globs of the files repetition is measured in | jscpd and `checks-repetition` |
 | `knip.config.ts` | The `entry` globs Knip traces unreferenced files from | Knip, `checks-unused` and `checks-exports` |
-| `stylelint.config.ts` | The Baseline target, the token files, and any stylelint rule the repository sets over the kit's families | `checks-frontend-syntax` |
+| `stylelint.config.ts` | The Baseline target, the token files, the CSS families the repository turns on, and any stylelint rule the repository sets over the kit's families | `checks-frontend-syntax` |
 | `dependency-cruiser.config.ts` | Entry points nothing imports, paths that may import dev dependencies, and import boundaries, when the kit's defaults do not fit | `checks-imports` |
 | `tsconfig.json` | Compiler options, and the Effect language service plugin whose `overrides` and kit severities `checks-effect-scope` writes, keeping every other key | TypeScript and Effect language service |
 | `package.json` | `scripts` with the `checks-vendor` arguments in `prepare`, `author` and `contributors` | Bun, `checks-commit-identity` and `checks-vendor` |
@@ -41,7 +41,7 @@ The builder throws when the tool loads such a config anyway.
 | `@avi2dg/checks/oxlint` | `effect` | `extends`, `plugins`, `jsPlugins` and `categories` |
 | `@avi2dg/checks/knip` | `entry`, where `[]` means the package scripts and tests name every entry | `include` |
 | `@avi2dg/checks/dependency-cruiser` | nothing | `extends` |
-| `@avi2dg/checks/stylelint` | `baseline` and `tokens`, where `false` leaves the design token rules off | `extends` and `plugins` |
+| `@avi2dg/checks/stylelint` | `baseline` and `tokens`, where `false` leaves the design token rules off, with `bem`, `flatSelectors` and `noPageHas` turning on their families | `extends` and `plugins` |
 
 A repository whose sources are Effect programs writes `oxlint.config.ts`:
 

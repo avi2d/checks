@@ -8,6 +8,9 @@ export type BaselineTarget = "widely" | "newly" | number;
 export type ChecksStylelintConfig = Omit<Config, "extends" | "plugins"> & {
   readonly baseline: BaselineTarget;
   readonly tokens: Globs | false;
+  readonly bem?: boolean;
+  readonly flatSelectors?: boolean;
+  readonly noPageHas?: boolean;
 };
 
 type Rules = NonNullable<Config["rules"]>;
@@ -42,6 +45,21 @@ const LANGUAGE_FREE_SELECTORS = {
 } as const satisfies Rules;
 
 const COLOUR_FUNCTIONS = ["rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color"] as const;
+
+// selector-class-pattern builds a RegExp from the string itself, so slashes would match literal slashes.
+const BEM_NAMES = {
+  "selector-class-pattern": "^[a-z][a-z0-9]*(__[a-z0-9]+(-[a-z0-9]+)*)?(--[a-z0-9]+(-[a-z0-9]+)*)?$",
+} as const satisfies Rules;
+
+const FLAT_SELECTORS = {
+  "selector-max-type": 0,
+  "selector-max-id": 0,
+  "selector-max-compound-selectors": 2,
+  "selector-max-attribute": 0,
+} as const satisfies Rules;
+
+// The ban needs both a page element and :has( in one selector, in either order, and a class such as .block-body holds neither.
+const PAGE_HAS = "/^(?=.*:has\\()(?=.*(?:^|[\\s>+~,([])(?:html|body|main)(?![\\w-])).*$/";
 
 const DESIGN_TOKENS = {
   "color-no-hex": true,
@@ -87,17 +105,24 @@ function designTokens(files: readonly string[]): Required<Pick<Config, "rules" |
   return { rules: DESIGN_TOKENS, overrides: [{ files: [...files], rules: off }] };
 }
 
+function disallowedSelectors(noPageHas: boolean | undefined): Rules {
+  if (noPageHas === true) return { "selector-disallowed-list": [...LANGUAGE_FREE_SELECTORS["selector-disallowed-list"], PAGE_HAS] };
+  return LANGUAGE_FREE_SELECTORS;
+}
+
 // The types refuse a missing or malformed baseline or tokens, and the guards repeat it for a config no typecheck reads.
-export function defineConfig({ baseline, tokens, rules, overrides = [], ...rest }: ChecksStylelintConfig): Config {
+export function defineConfig({ baseline, tokens, bem, flatSelectors, noPageHas, rules, overrides = [], ...rest }: ChecksStylelintConfig): Config {
   const available = baselineTarget(baseline);
   const tokenRules = designTokens(tokenFiles(tokens));
   const merged: Rules = {
     ...CONVENTION_CHANGES,
     ...SELECTOR_COMPLEXITY,
     ...COMMENT_REFUSAL,
-    ...LANGUAGE_FREE_SELECTORS,
+    ...disallowedSelectors(noPageHas),
     [BASELINE_RULE]: [true, { available }],
     ...tokenRules.rules,
+    ...(bem === true ? BEM_NAMES : null),
+    ...(flatSelectors === true ? FLAT_SELECTORS : null),
     ...rules,
   };
   return {

@@ -143,6 +143,34 @@ const FAMILIES = [
     green: ".handle { cursor: grab; }\n",
     reported: "src/site.css:1:11 Property \"user-select\" is not a newly available baseline feature. (plugin/use-baseline)",
   },
+  {
+    family: "G8 BEM names, the joined element name the website stylesheet writes",
+    options: '{ baseline: "widely", tokens: false, bem: true }',
+    red: ".hero-name { top: 0; }\n",
+    green: ".hero__name { top: 0; }\n",
+    reported: "(selector-class-pattern)",
+  },
+  {
+    family: "G9 class-only selectors, the heading type selector the website stylesheet writes",
+    options: '{ baseline: "widely", tokens: false, flatSelectors: true }',
+    red: ".hero h1 { grid-area: title; }\n",
+    green: ".hero-title { grid-area: title; }\n",
+    reported: "(selector-max-type)",
+  },
+  {
+    family: "G9 class-only selectors, the section attribute selector the website stylesheet writes",
+    options: '{ baseline: "widely", tokens: false, flatSelectors: true }',
+    red: ".block[data-section=\"about\"] { top: 0; }\n",
+    green: ".block-about { top: 0; }\n",
+    reported: "(selector-max-attribute)",
+  },
+  {
+    family: "G10 page-wide :has(), the contacts rule the website stylesheet writes",
+    options: '{ baseline: "widely", tokens: false, noPageHas: true }',
+    red: "main:has(> .block[data-section=\"contacts\"]:last-of-type) + footer { top: 0; }\n",
+    green: ".contact-end .site-footer { top: 0; }\n",
+    reported: "(selector-disallowed-list)",
+  },
 ] as const;
 
 for (const { family, options, red, green, reported } of FAMILIES) {
@@ -159,6 +187,30 @@ for (const { family, options, red, green, reported } of FAMILIES) {
     expect(failing.exitCode).toBe(1);
   }, 60_000);
 }
+
+test("flatSelectors fails a website rule on its compound selectors beside its type selectors, and passes its one-class rewrite", async () => {
+  const { write, script } = await repository('{ baseline: "widely", tokens: false, flatSelectors: true }', { "src/site.css": ".block-item { top: 0; }\n" });
+  expect(await script(GATE)).toEqual({ exitCode: 0, text: "frontend-syntax: no violation in 1 file(s) from 1 declared input(s)\n" });
+
+  await write({ "src/site.css": ".block-body > ul:not(:has(a)) > li { top: 0; }\n" });
+  const red = await script(GATE);
+  expect(red.text).toContain("(selector-max-compound-selectors)");
+  expect(red.text).toContain("(selector-max-type)");
+  expect(red.exitCode).toBe(1);
+}, 60_000);
+
+test("all three options fail one website menu rule on four families, and pass its marker-class rewrite", async () => {
+  const options = '{ baseline: "widely", tokens: false, bem: true, flatSelectors: true, noPageHas: true }';
+  const { write, script } = await repository(options, { "src/site.css": ".page--past-hero .menu__toggle { top: 0; }\n" });
+  expect(await script(GATE)).toEqual({ exitCode: 0, text: "frontend-syntax: no violation in 1 file(s) from 1 declared input(s)\n" });
+
+  await write({ "src/site.css": "html:has(.hero) .menu-toggle:not([data-past-hero]) { top: 0; }\n" });
+  const red = await script(GATE);
+  for (const rule of ["selector-class-pattern", "selector-max-type", "selector-max-attribute", "selector-disallowed-list"]) {
+    expect(red.text).toContain(`(${rule})`);
+  }
+  expect(red.exitCode).toBe(1);
+}, 60_000);
 
 test("the design token rules stay off without token globs, and hold nothing in a declared token file", async () => {
   const { write, script } = await repository(WIDELY, { "src/site.css": "a { color: #000; font-size: 12px; }\n" });

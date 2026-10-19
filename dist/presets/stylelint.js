@@ -20,6 +20,16 @@ var LANGUAGE_FREE_SELECTORS = {
   "selector-disallowed-list": ["/[^\\x00-\\x7F]/"]
 };
 var COLOUR_FUNCTIONS = ["rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color"];
+var BEM_NAMES = {
+  "selector-class-pattern": "^[a-z][a-z0-9]*(__[a-z0-9]+(-[a-z0-9]+)*)?(--[a-z0-9]+(-[a-z0-9]+)*)?$"
+};
+var FLAT_SELECTORS = {
+  "selector-max-type": 0,
+  "selector-max-id": 0,
+  "selector-max-compound-selectors": 2,
+  "selector-max-attribute": 0
+};
+var PAGE_HAS = "/^(?=.*:has\\()(?=.*(?:^|[\\s>+~,([])(?:html|body|main)(?![\\w-])).*$/";
 var DESIGN_TOKENS = {
   "color-no-hex": true,
   "color-named": "never",
@@ -61,16 +71,23 @@ function designTokens(files) {
   const off = Object.fromEntries(Object.keys(DESIGN_TOKENS).map((rule) => [rule, null]));
   return { rules: DESIGN_TOKENS, overrides: [{ files: [...files], rules: off }] };
 }
-function defineConfig({ baseline, tokens, rules, overrides = [], ...rest }) {
+function disallowedSelectors(noPageHas) {
+  if (noPageHas === true)
+    return { "selector-disallowed-list": [...LANGUAGE_FREE_SELECTORS["selector-disallowed-list"], PAGE_HAS] };
+  return LANGUAGE_FREE_SELECTORS;
+}
+function defineConfig({ baseline, tokens, bem, flatSelectors, noPageHas, rules, overrides = [], ...rest }) {
   const available = baselineTarget(baseline);
   const tokenRules = designTokens(tokenFiles(tokens));
   const merged = {
     ...CONVENTION_CHANGES,
     ...SELECTOR_COMPLEXITY,
     ...COMMENT_REFUSAL,
-    ...LANGUAGE_FREE_SELECTORS,
+    ...disallowedSelectors(noPageHas),
     [BASELINE_RULE]: [true, { available }],
     ...tokenRules.rules,
+    ...bem === true ? BEM_NAMES : null,
+    ...flatSelectors === true ? FLAT_SELECTORS : null,
     ...rules
   };
   return {
