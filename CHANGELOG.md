@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.50.1
+
+Released 2026-10-20.
+
+### Fixes
+
+- **delivery:** admit the self-hosted iphone runner in private-repo ci-wiring [#193](https://github.com/avi2d/checks/pull/193)
+
 ## 0.50.0
 
 Released 2026-10-20.
