@@ -2,6 +2,16 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.48.1
+
+Released 2026-10-20.
+
+### Fixes
+
+- **quality:** hold font shorthand and local size custom properties to the tokens option [#185](https://github.com/avi2d/checks/pull/185)
+- **testing:** compare checks-night-run against the latest night that recorded scores [#184](https://github.com/avi2d/checks/pull/184)
+- **testing:** default checks-test --parallel to the machine's core count [#182](https://github.com/avi2d/checks/pull/182)
+
 ## 0.48.0
 
 Released 2026-10-19.
