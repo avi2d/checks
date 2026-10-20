@@ -89,8 +89,11 @@ const LAUNCHER_OPERANDS = new Map<string, ReadonlySet<string>>([
 
 function substitutionEnd(script: string, start: number): number {
   if (script.charAt(start) === "`") {
-    const close = script.indexOf("`", start + 1);
-    return close === -1 ? script.length : close;
+    for (let index = start + 1; index < script.length; index += 1) {
+      if (script.charAt(index) === "\\") index += 1;
+      else if (script.charAt(index) === "`") return index;
+    }
+    return script.length;
   }
   let depth = 0;
   for (let index = start + 1; index < script.length; index += 1) {
@@ -153,7 +156,7 @@ type Heredoc = {
 };
 
 type ShellParse = {
-  readonly commands: Word[][];
+  readonly commands: (readonly Word[])[];
   readonly substitutions: Word[];
   readonly heredocs: Heredoc[];
   words: Word[];
@@ -171,7 +174,7 @@ function endWord(parse: ShellParse): void {
 
 function endCommand(parse: ShellParse): void {
   endWord(parse);
-  parse.commands.push(parse.words);
+  parse.commands.push(...parse.substitutions.splice(0).flatMap(nested), parse.words);
   parse.words = [];
   parse.redirecting = false;
 }
@@ -283,7 +286,7 @@ export function shellWords(script: string): readonly (readonly Word[])[] {
     }
   }
   endCommand(parse);
-  return [...parse.commands, ...parse.substitutions.flatMap(nested)].filter((command) => command.length > 0);
+  return parse.commands.filter((command) => command.length > 0);
 }
 
 export function shellCommands(script: string): readonly Command[] {

@@ -322,6 +322,9 @@ test("a repository file resolves from the directory its command runs in", () => 
   expect(sweep(step("./mutate.sh", "        working-directory: .\n"), "defaults:\n  run:\n    working-directory: tools\n")).toEqual([]);
   mutation(step("cd tools && ./mutate.sh"));
   expect(sweep(step("cd tools; cd ..; ./mutate.sh"))).toEqual([]);
+  mutation(step("cd tools; output=`./mutate.sh`; cd .."));
+  mutation(step('cd tools; output="$(./mutate.sh)"; cd ..'));
+  expect(sweep(step("cd tools; cd ..; output=`./mutate.sh`"))).toEqual([]);
   mutation(step("bun --cwd=tools run ./mutate.sh"));
   mutation(step("./report.sh", tools));
   expect(sweep(step("bun --cwd=tools run ../mutate.sh"))).toEqual([]);
@@ -559,6 +562,12 @@ test("an unquoted backtick substitution leaves the release target unresolved", (
     { location: ".github/workflows/daily-release.yml line 8", fault: "names missing workflow gone.yml" },
   ]);
   expect(findMissingWorkflows(release("echo `bun run src/delivery/release-pr.ts gone.yml`"))).toEqual([
+    { location: ".github/workflows/daily-release.yml line 8", fault: "names missing workflow gone.yml" },
+  ]);
+  expect(findMissingWorkflows(release("echo `printf '\\`'`; bunx checks-release-pr gone.yml"))).toEqual([
+    { location: ".github/workflows/daily-release.yml line 8", fault: "names missing workflow gone.yml" },
+  ]);
+  expect(findMissingWorkflows(release("echo \"`printf '\\`'`\"; bunx checks-release-tag gone.yml"))).toEqual([
     { location: ".github/workflows/daily-release.yml line 8", fault: "names missing workflow gone.yml" },
   ]);
 });
