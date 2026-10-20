@@ -49,6 +49,7 @@ It counts a run as `ci` when `CI` is true and as `local` otherwise.
 A local run covers `./tests/unit` plus the smoke list the repository declares.
 The smoke list lives in `package.json` under `checks.smoke` as an array of test file paths.
 A repository with no smoke list runs the unit tier alone outside CI.
+A local run with no unit test and no smoke list runs nothing and passes.
 A `ci` run covers the full default suite.
 A smoke entry that names no test file fails the run.
 A smoke entry under `tests/quarantine/`, `tests/live/` or `tests/pixel/` fails the run, since Bun's ignored paths would drop it.

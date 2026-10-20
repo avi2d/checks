@@ -211,5 +211,5 @@ export const readSmokeDeclarations = Effect.fn("readSmokeDeclarations")(function
 ) {
   const scoped = smokeFiles(yield* scanTestFiles(root), smoke);
   if (scoped.kind === "invalid") return yield* new SkipDeclarationError({ message: scoped.message });
-  return yield* readDeclarationsIn(root, scoped.files);
+  return { files: scoped.files, declarations: yield* readDeclarationsIn(root, scoped.files) };
 });

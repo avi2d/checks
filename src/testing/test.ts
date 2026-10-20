@@ -241,10 +241,18 @@ const testEntry = Effect.gen(function* () {
   const environment = yield* environmentOf;
   const selection = selectSuite(options, environment);
   const smoke = selection.kind === "smoke" ? yield* readSmokeList(process.cwd()) : [];
-  const declarations =
+  const scope =
     selection.kind === "smoke"
       ? yield* readSmokeDeclarations(process.cwd(), smoke)
-      : yield* readSkipDeclarations(process.cwd(), selection.kind === "tier" ? selection.tier : undefined);
+      : {
+          files: undefined,
+          declarations: yield* readSkipDeclarations(process.cwd(), selection.kind === "tier" ? selection.tier : undefined),
+        };
+  if (scope.files?.length === 0) {
+    yield* Console.log(`${NAME}: no unit test and no smoke list, so this local run ran nothing; declare checks.smoke or pass ${FULL}`);
+    return true;
+  }
+  const { declarations } = scope;
 
   const outfile = path.join(yield* fs.makeTempDirectoryScoped({ prefix: "checks-test-" }), "junit.xml");
   const suitePassed =

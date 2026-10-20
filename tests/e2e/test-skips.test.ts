@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { mkdir, readFile, symlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
@@ -289,6 +289,21 @@ test("a local run covers the unit tier and the declared smoke file alone, and CI
   expect(full.exitCode).toBe(1);
   expect(full.text).toContain("tests/e2e/checkout.test.tsx:");
   expect(full.text).toContain("tests/e2e/search.test.ts:");
+});
+
+test("a local run with no unit test and no smoke list runs nothing and passes", async () => {
+  await consumer('import { expect, test } from "bun:test";\ntest("default test", () => expect(1).toBe(1));\n', {
+    "tests/e2e/search.test.ts": 'import { expect, test } from "bun:test";\ntest("breaks outside the local scope", () => expect(1).toBe(2));\n',
+  });
+  await rm(join(dir, "tests", "unit"), { recursive: true });
+
+  const local = await checksTest(false);
+  expect(local.exitCode).toBe(0);
+  expect(local.text).not.toContain("breaks outside the local scope");
+
+  const ci = await checksTest(true);
+  expect(ci.exitCode).toBe(1);
+  expect(ci.text).toContain("tests/e2e/search.test.ts:");
 });
 
 test("a smoke entry Bun's ignored paths would drop is refused before the suite runs", async () => {
