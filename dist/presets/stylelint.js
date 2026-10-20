@@ -49,19 +49,54 @@ var PSEUDO_ARGUMENT = "(?:[^()]|\\([^()]*\\))*";
 var PSEUDO_CLASS = `::?[\\w-]+(?:\\(${PSEUDO_ARGUMENT}\\))?`;
 var HAS_IN_PSEUDO_CLASS = `(?::has\\(${PSEUDO_ARGUMENT}\\)|::?[\\w-]+\\(${PSEUDO_ARGUMENT}:has\\([^()]*\\)${PSEUDO_ARGUMENT}\\))`;
 var CLASSLESS_HAS = `/(?:^|[\\s>+~,])(?:${PSEUDO_CLASS})*${HAS_IN_PSEUDO_CLASS}(?:${PSEUDO_CLASS})*(?=[\\s>+~,]|$)/i`;
-var TOKEN_VAR = "/^var\\(\\s*--[^\\s,()]+\\s*\\)$/i";
-var LITERAL_LENGTH = "/-?\\d*\\.?\\d+(?:px|r?em|r?ex|r?cap|r?ch|r?ic|r?lh|[sld]?vw|[sld]?vh|[sld]?vi|[sld]?vb|[sld]?vmin|[sld]?vmax|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pc|pt|%)/i";
-var LITERAL_NAMED_SIZE = "/\\b(?:xxx-large|xx-large|x-large|xx-small|x-small|small|medium|large|larger|smaller)\\b/i";
-var FONT_WITHOUT_TOKEN = "/^(?!inherit$)(?![\\s\\S]*var\\(\\s*--[^\\s,()]+\\s*\\))[\\s\\S]*$/i";
+var SIZE_TOKEN = "var\\(\\s*(--[^\\s,()]+)\\s*\\)";
+var FONT_SIZE_VALUE = new RegExp(`^${SIZE_TOKEN}$`, "i");
+var FONT_STYLE_VARIANT_WEIGHT_OR_WIDTH = "(?:normal|italic|oblique(?:\\s+-?[\\d.]+(?:deg|grad|rad|turn))?|small-caps|bold|bolder|lighter|[1-9]\\d*|(?:ultra-|extra-|semi-)?(?:condensed|expanded))";
+var FONT_VALUE = new RegExp(`^(?:${FONT_STYLE_VARIANT_WEIGHT_OR_WIDTH}\\s+)*${SIZE_TOKEN}(?:\\s*\\/\\s*\\S+)?(?:\\s+\\S[\\s\\S]*)?$`, "i");
+var FONT_SIZE_RULE = "checks/font-size-from-tokens";
+function sizeToken(property, value) {
+  const name = property.toLowerCase();
+  if (name === "font-size")
+    return FONT_SIZE_VALUE.exec(value)?.[1];
+  if (name === "font")
+    return FONT_VALUE.exec(value)?.[1];
+  return;
+}
+function fromTokens(token, declared, seen) {
+  const values = declared.get(token);
+  if (values === undefined)
+    return true;
+  return values.every((value) => {
+    const alias = FONT_SIZE_VALUE.exec(value)?.[1];
+    return alias !== undefined && !seen.has(alias) && fromTokens(alias, declared, new Set([...seen, alias]));
+  });
+}
+var fontSizeFromTokens = () => async (root, result) => {
+  const { utils } = (await import("stylelint")).default;
+  const declared = new Map;
+  root.walkDecls(/^--/, ({ prop, value }) => {
+    declared.set(prop, [...declared.get(prop) ?? [], value]);
+  });
+  root.walkDecls((node) => {
+    const token = sizeToken(node.prop, node.value);
+    if (token === undefined || fromTokens(token, declared, new Set([token])))
+      return;
+    utils.report({ ruleName: FONT_SIZE_RULE, result, node, word: token, message: `Expected "${token}" from the token files rather than set in this file` });
+  });
+};
+var FONT_SIZE_PLUGIN = {
+  ruleName: FONT_SIZE_RULE,
+  rule: Object.assign(fontSizeFromTokens, { ruleName: FONT_SIZE_RULE, messages: {} })
+};
 var DESIGN_TOKENS = {
   "color-no-hex": true,
   "color-named": "never",
   "function-disallowed-list": COLOUR_FUNCTIONS.map((name) => `/^${name}$/i`),
-  "declaration-property-value-allowed-list": { "/^font-size$/i": [TOKEN_VAR, "/^inherit$/i"] },
-  "declaration-property-value-disallowed-list": {
-    "/^font$/i": [LITERAL_LENGTH, LITERAL_NAMED_SIZE, FONT_WITHOUT_TOKEN],
-    "/^--/": [LITERAL_LENGTH, LITERAL_NAMED_SIZE]
-  }
+  "declaration-property-value-allowed-list": {
+    "/^font-size$/i": [String(FONT_SIZE_VALUE), "/^inherit$/i"],
+    "/^font$/i": [String(FONT_VALUE), "/^inherit$/i"]
+  },
+  [FONT_SIZE_RULE]: true
 };
 var REFUSED_BASELINE = '@avi2dg/checks/stylelint: set baseline to "widely", "newly" or a year such as 2024';
 var REFUSED_TOKENS = "@avi2dg/checks/stylelint: set tokens to the globs of the token files, or false to leave the design token rules off";
@@ -120,7 +155,7 @@ function defineConfig({ baseline, tokens, bem, flatSelectors, noPageHas, rules, 
   return {
     ...rest,
     extends: [peer("stylelint-config-standard")],
-    plugins: [peer("stylelint-plugin-use-baseline")],
+    plugins: [peer("stylelint-plugin-use-baseline"), FONT_SIZE_PLUGIN],
     rules: { ...merged, [BASELINE_RULE]: passProperty(merged[BASELINE_RULE]) },
     overrides: [
       { files: [...MARKUP], customSyntax: peer("postcss-html") },

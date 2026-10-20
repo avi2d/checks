@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import type { Config } from "stylelint";
+import type { Config, Plugin, RuleBase } from "stylelint";
 
 type Globs = readonly [string, ...string[]];
 
@@ -87,25 +87,60 @@ const HAS_IN_PSEUDO_CLASS = `(?::has\\(${PSEUDO_ARGUMENT}\\)|::?[\\w-]+\\(${PSEU
 // A compound of pseudo-classes alone, :scope and :not(.card) among them, can match the root element, so its :has() reads page state.
 const CLASSLESS_HAS = `/(?:^|[\\s>+~,])(?:${PSEUDO_CLASS})*${HAS_IN_PSEUDO_CLASS}(?:${PSEUDO_CLASS})*(?=[\\s>+~,]|$)/i`;
 
-const TOKEN_VAR = "/^var\\(\\s*--[^\\s,()]+\\s*\\)$/i";
+const SIZE_TOKEN = "var\\(\\s*(--[^\\s,()]+)\\s*\\)";
 
-const LITERAL_LENGTH = "/-?\\d*\\.?\\d+(?:px|r?em|r?ex|r?cap|r?ch|r?ic|r?lh|[sld]?vw|[sld]?vh|[sld]?vi|[sld]?vb|[sld]?vmin|[sld]?vmax|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pc|pt|%)/i";
+const FONT_SIZE_VALUE = new RegExp(`^${SIZE_TOKEN}$`, "i");
 
-const LITERAL_NAMED_SIZE = "/\\b(?:xxx-large|xx-large|x-large|xx-small|x-small|small|medium|large|larger|smaller)\\b/i";
+const FONT_STYLE_VARIANT_WEIGHT_OR_WIDTH = "(?:normal|italic|oblique(?:\\s+-?[\\d.]+(?:deg|grad|rad|turn))?|small-caps|bold|bolder|lighter|[1-9]\\d*|(?:ultra-|extra-|semi-)?(?:condensed|expanded))";
 
-// The shorthand packs style, size and family around the token, so the refusal names any font value without one.
-const FONT_WITHOUT_TOKEN = "/^(?!inherit$)(?![\\s\\S]*var\\(\\s*--[^\\s,()]+\\s*\\))[\\s\\S]*$/i";
+// A family name or a token name can hold a size word, so the token is required in the size slot rather than size words refused anywhere.
+const FONT_VALUE = new RegExp(`^(?:${FONT_STYLE_VARIANT_WEIGHT_OR_WIDTH}\\s+)*${SIZE_TOKEN}(?:\\s*\\/\\s*\\S+)?(?:\\s+\\S[\\s\\S]*)?$`, "i");
+
+const FONT_SIZE_RULE = "checks/font-size-from-tokens";
+
+function sizeToken(property: string, value: string): string | undefined {
+  const name = property.toLowerCase();
+  if (name === "font-size") return FONT_SIZE_VALUE.exec(value)?.[1];
+  if (name === "font") return FONT_VALUE.exec(value)?.[1];
+  return undefined;
+}
+
+function fromTokens(token: string, declared: ReadonlyMap<string, readonly string[]>, seen: ReadonlySet<string>): boolean {
+  const values = declared.get(token);
+  if (values === undefined) return true;
+  return values.every((value) => {
+    const alias = FONT_SIZE_VALUE.exec(value)?.[1];
+    return alias !== undefined && !seen.has(alias) && fromTokens(alias, declared, new Set([...seen, alias]));
+  });
+}
+
+const fontSizeFromTokens: RuleBase = () => async (root, result) => {
+  const { utils } = (await import("stylelint")).default;
+  const declared = new Map<string, string[]>();
+  root.walkDecls(/^--/, ({ prop, value }) => {
+    declared.set(prop, [...(declared.get(prop) ?? []), value]);
+  });
+  root.walkDecls((node) => {
+    const token = sizeToken(node.prop, node.value);
+    if (token === undefined || fromTokens(token, declared, new Set([token]))) return;
+    utils.report({ ruleName: FONT_SIZE_RULE, result, node, word: token, message: `Expected "${token}" from the token files rather than set in this file` });
+  });
+};
+
+const FONT_SIZE_PLUGIN = {
+  ruleName: FONT_SIZE_RULE,
+  rule: Object.assign(fontSizeFromTokens, { ruleName: FONT_SIZE_RULE, messages: {} }),
+} satisfies Plugin;
 
 const DESIGN_TOKENS = {
   "color-no-hex": true,
   "color-named": "never",
   "function-disallowed-list": COLOUR_FUNCTIONS.map((name) => `/^${name}$/i`),
-  "declaration-property-value-allowed-list": { "/^font-size$/i": [TOKEN_VAR, "/^inherit$/i"] },
-  // A local custom property can smuggle a size past the font-size check, so a literal size fails there everywhere but the token files.
-  "declaration-property-value-disallowed-list": {
-    "/^font$/i": [LITERAL_LENGTH, LITERAL_NAMED_SIZE, FONT_WITHOUT_TOKEN],
-    "/^--/": [LITERAL_LENGTH, LITERAL_NAMED_SIZE],
+  "declaration-property-value-allowed-list": {
+    "/^font-size$/i": [String(FONT_SIZE_VALUE), "/^inherit$/i"],
+    "/^font$/i": [String(FONT_VALUE), "/^inherit$/i"],
   },
+  [FONT_SIZE_RULE]: true,
 } as const satisfies Rules;
 
 const REFUSED_BASELINE = '@avi2dg/checks/stylelint: set baseline to "widely", "newly" or a year such as 2024';
@@ -168,7 +203,7 @@ export function defineConfig({ baseline, tokens, bem, flatSelectors, noPageHas, 
   return {
     ...rest,
     extends: [peer("stylelint-config-standard")],
-    plugins: [peer("stylelint-plugin-use-baseline")],
+    plugins: [peer("stylelint-plugin-use-baseline"), FONT_SIZE_PLUGIN],
     rules: { ...merged, [BASELINE_RULE]: passProperty(merged[BASELINE_RULE]) },
     overrides: [
       { files: [...MARKUP], customSyntax: peer("postcss-html") },

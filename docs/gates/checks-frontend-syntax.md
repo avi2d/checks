@@ -37,7 +37,7 @@ A control that needs selection off sets it on its own selector, such as `.drag-h
 | G1 correctness | `stylelint-config-recommended`, the stylelint team's rules for likely mistakes, such as `font-variant-numeric: oldstyle-num` for `oldstyle-nums` | on |
 | G2 conventions | `stylelint-config-standard`, which extends G1 with the stylelint team's notation and spacing rules | on |
 | G3 selector complexity | `selector-max-specificity` at `0,3,2` and `selector-max-compound-selectors` at 3 | on |
-| G4 design tokens | `color-no-hex`, `color-named: "never"`, `function-disallowed-list` over `rgb`, `rgba`, `hsl`, `hsla`, `hwb`, `lab`, `lch`, `oklab`, `oklch` and `color`, and `font-size` or `font` only as `inherit` or with a token `var(--…)` and no literal size, and no literal size in a custom property outside the token files | off until `tokens` names the token files, and off in those files |
+| G4 design tokens | `color-no-hex`, `color-named: "never"`, `function-disallowed-list` over `rgb`, `rgba`, `hsl`, `hsla`, `hwb`, `lab`, `lch`, `oklab`, `oklch` and `color`, `font-size` only as one `var(--…)` with no fallback, or `inherit`, `font` only as `inherit` or with such a `var(--…)` as its size after any style, variant, weight or width, and `checks/font-size-from-tokens`, which refuses a size `var(--…)` naming a custom property the same file sets, unless the file sets it only to another such `var(--…)` | off until `tokens` names the token files, and off in those files |
 | G5 Baseline target | `plugin/use-baseline` from `stylelint-plugin-use-baseline`, which judges each property, value, function, at-rule, selector and unit against the Baseline data, and passes a property inside an `@supports` block. It passes `@property` at every target, since a browser without `@property` treats the declaration as an unregistered custom property | on, at the target `baseline` sets |
 | G6 comments refused | `comment-word-disallowed-list` over `/^[\s\S]*$/`, which refuses every comment, including an empty `/* */` | on |
 | G7 language-free selectors | `selector-disallowed-list` over `/[^\x00-\x7F]/`, which refuses any selector holding a non-ASCII character, in attribute values, class names and ids alike | on |
@@ -74,6 +74,7 @@ These are outside what it decides:
 
 - A `transition` shorthand that names no property, such as `transition: 200ms`, which the browser reads as `all`.
 - A value it cannot see, such as `transition: var(--motion)`, a style a script sets, or a colour a build writes into CSS outside the declared inputs.
+- A font size custom property that one stylesheet outside the token files sets and another reads.
 - `user-select: none` in a `style` attribute on `<body>`, which has no selector to judge.
 - A viewport that disables zoom, since stylelint reads only CSS.
   A repository that runs only this gate gets no viewport check, and [checks-browser](checks-browser.md) refuses one on the rendered page through axe's `meta-viewport` rule.

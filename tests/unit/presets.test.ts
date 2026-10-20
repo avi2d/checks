@@ -150,13 +150,13 @@ const DESIGN_TOKEN_RULES = [
   "color-named",
   "function-disallowed-list",
   "declaration-property-value-allowed-list",
-  "declaration-property-value-disallowed-list",
+  "checks/font-size-from-tokens",
 ];
 
 test("the stylelint builder turns on the correctness, convention, selector, comment, language and Baseline families, and leaves design tokens off without token files", () => {
   const config = defineStylelint({ baseline: "widely", tokens: false });
   expect(config.extends).toEqual([expect.stringContaining("stylelint-config-standard")]);
-  expect(config.plugins).toEqual([expect.stringContaining("stylelint-plugin-use-baseline")]);
+  expect(config.plugins).toEqual([expect.stringContaining("stylelint-plugin-use-baseline"), expect.objectContaining({ ruleName: "checks/font-size-from-tokens" })]);
   expect(config.rules).toMatchObject({
     "selector-max-specificity": "0,3,2",
     "selector-max-compound-selectors": 3,
