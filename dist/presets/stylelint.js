@@ -1,5 +1,6 @@
 // src/quality/presets/stylelint.ts
 import { fileURLToPath } from "node:url";
+import valueParser from "postcss-value-parser";
 var HTML_AND_ASTRO = ["**/*.html", "**/*.astro"];
 var MARKUP = [...HTML_AND_ASTRO, "**/*.vue", "**/*.svelte"];
 function peer(name) {
@@ -56,36 +57,81 @@ var FONT_STYLE_VARIANT_WEIGHT_OR_WIDTH = "(?:normal|italic|oblique(?:\\s+-?[\\d.
 var FONT_FAMILY = `(?:"[^"]*"|'[^']*'|${VAR}|-?[a-z_][\\w-]*(?:\\s+-?[a-z_][\\w-]*)*)`;
 var FONT_FAMILIES = `${FONT_FAMILY}(?:\\s*,\\s*${FONT_FAMILY})*`;
 var FONT_FAMILY_VALUE = new RegExp(`^${FONT_FAMILIES}$`, "i");
-var FONT_VALUE = new RegExp(`^(?:${FONT_STYLE_VARIANT_WEIGHT_OR_WIDTH}\\s+)*(?<size>${VAR})(?:\\s*\\/\\s*(?:${VAR}|[\\w.%-]+))?(?:\\s+(?<families>${FONT_FAMILIES}))?$`, "i");
+var NAMED_FONT_SIZES = new Set([
+  "xx-small",
+  "x-small",
+  "small",
+  "medium",
+  "large",
+  "x-large",
+  "xx-large",
+  "xxx-large",
+  "larger",
+  "smaller",
+  "math"
+]);
+var SIZE_PRECEDER = new RegExp(`^${FONT_STYLE_VARIANT_WEIGHT_OR_WIDTH}$`, "i");
+var FONT_VALUE = new RegExp(`^(?:${FONT_STYLE_VARIANT_WEIGHT_OR_WIDTH}\\s+)*(?<size>${VAR})(?<lineHeight>\\s*\\/\\s*(?:${VAR}|[\\w.%-]+))?(?:\\s+(?<families>${FONT_FAMILIES}))?$`, "i");
 var FONT_SIZE_RULE = "checks/font-size-from-tokens";
 function varNames(value) {
   return [...value.matchAll(VAR_NAMES)].map(([, name]) => name).filter((name) => name !== undefined);
 }
+function sizePosition(families) {
+  const position = valueParser(families).nodes.find(({ type, value }) => type !== "space" && !(type === "word" && SIZE_PRECEDER.test(value)));
+  return position === undefined ? "" : valueParser.stringify(position);
+}
+function fontSizePosition(font) {
+  return font.lineHeight === undefined ? sizePosition(font.families ?? "") : "";
+}
+function namedSize(position) {
+  return NAMED_FONT_SIZES.has(position.toLowerCase()) ? position : undefined;
+}
 function sizeCarriers(property, value) {
   const name = property.toLowerCase();
   if (name === "font-size" && FONT_SIZE_VALUE.test(value))
-    return varNames(value).map((token) => ({ token, setTo: FONT_SIZE_VALUE }));
+    return varNames(value).map((token) => ({ token, setTo: FONT_SIZE_VALUE, atSize: false }));
   const font = name === "font" ? FONT_VALUE.exec(value)?.groups : undefined;
   if (font?.size === undefined)
     return [];
+  const atSize = varNames(fontSizePosition(font));
   return [
-    ...varNames(font.size).map((token) => ({ token, setTo: FONT_SIZE_VALUE })),
-    ...varNames(font.families ?? "").map((token) => ({ token, setTo: FONT_FAMILY_VALUE }))
+    ...varNames(font.size).map((token) => ({ token, setTo: FONT_SIZE_VALUE, atSize: false })),
+    ...varNames(font.families ?? "").map((token) => ({ token, setTo: FONT_FAMILY_VALUE, atSize: atSize.includes(token) }))
   ];
 }
-function fromTokens({ token, setTo }, declared, seen) {
+function literalSize(property, value) {
+  const font = property.toLowerCase() === "font" ? FONT_VALUE.exec(value)?.groups : undefined;
+  return font?.size === undefined ? undefined : namedSize(fontSizePosition(font));
+}
+function fromTokens({ token, setTo, atSize }, declared, seen) {
   const values = declared.get(token);
   if (values === undefined)
     return true;
-  return values.every((value) => setTo.test(value) && varNames(value).every((alias) => !seen.has(alias) && fromTokens({ token: alias, setTo }, declared, new Set([...seen, alias]))));
+  return values.every((value) => {
+    const position = atSize ? sizePosition(value) : "";
+    return setTo.test(value) && namedSize(position) === undefined && varNames(value).every((alias) => !seen.has(alias) && fromTokens({ token: alias, setTo, atSize: varNames(position).includes(alias) }, declared, new Set([...seen, alias])));
+  });
+}
+var declaredByFile = new WeakMap;
+function fileDeclarations(document) {
+  const cached = declaredByFile.get(document);
+  if (cached !== undefined)
+    return cached;
+  const fresh = new Map;
+  document.walkDecls(/^--/, ({ prop, value }) => {
+    fresh.set(prop, [...fresh.get(prop) ?? [], value]);
+  });
+  declaredByFile.set(document, fresh);
+  return fresh;
 }
 var fontSizeFromTokens = () => async (root, result) => {
   const { utils } = (await import("stylelint")).default;
-  const declared = new Map;
-  result.root.walkDecls(/^--/, ({ prop, value }) => {
-    declared.set(prop, [...declared.get(prop) ?? [], value]);
-  });
+  const declared = fileDeclarations(result.root);
   root.walkDecls((node) => {
+    const literal = literalSize(node.prop, node.value);
+    if (literal !== undefined) {
+      utils.report({ ruleName: FONT_SIZE_RULE, result, node, word: literal, message: `Expected the font size from the token files rather than the literal "${literal}"` });
+    }
     for (const carrier of sizeCarriers(node.prop, node.value)) {
       if (fromTokens(carrier, declared, new Set([carrier.token])))
         continue;

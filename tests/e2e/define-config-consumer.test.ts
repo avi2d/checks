@@ -95,6 +95,7 @@ beforeAll(async () => {
         oxlint: "1.83.0",
         "oxlint-tsgolint": "7.0.2002",
         "postcss-html": "2.0.0",
+        "postcss-value-parser": "4.2.0",
         stylelint: "17.16.0",
         "stylelint-config-standard": "40.0.0",
         "stylelint-plugin-use-baseline": "1.4.7",

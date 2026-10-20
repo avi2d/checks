@@ -25,6 +25,7 @@ Each repository owns its workflows and native tool configs, as [Native settings]
   - `html-validate` 11.16.0
   - `playwright-core` 1.63.0
   - `postcss-html` 2.0.0
+  - `postcss-value-parser` 4.2.0
   - `stylelint` 17.16.0
   - `stylelint-config-standard` 40.0.0
   - `stylelint-plugin-use-baseline` 1.4.7
