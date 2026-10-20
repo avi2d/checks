@@ -64,7 +64,9 @@ export function plainCommand(script: string): Command | undefined {
   return words.length === 0 ? undefined : words;
 }
 
-type ShellPart = Span & { readonly substitutions: readonly string[] };
+export type Word = { readonly text: string; readonly start: number };
+
+type ShellPart = Span & { readonly substitutions: readonly Word[] };
 
 const COMMAND_BREAKS = new Set(["\n", ";", "&", "|", "(", ")", "`"]);
 const WORD_BREAKS = new Set([" ", "\t"]);
@@ -106,13 +108,14 @@ function doubleQuotedPart(script: string, index: number): ShellPart {
   if (char === "\\" && DOUBLE_QUOTE_ESCAPES.has(next)) return { text: next, end: index + 2, substitutions: [] };
   if (char !== "`" && !(char === "$" && next === "(")) return { text: char, end: index + 1, substitutions: [] };
   const end = substitutionEnd(script, index);
+  const start = index + (char === "`" ? 1 : 2);
   // An unresolved expansion never becomes an empty literal.
-  return { text: "$", end: end + 1, substitutions: [script.slice(index + (char === "`" ? 1 : 2), end)] };
+  return { text: "$", end: end + 1, substitutions: [{ text: script.slice(start, end), start }] };
 }
 
 function shellDoubleQuoted(script: string, open: number): ShellPart {
   let text = "";
-  const substitutions: string[] = [];
+  const substitutions: Word[] = [];
   let index = open + 1;
   while (index < script.length && script.charAt(index) !== '"') {
     const part = doubleQuotedPart(script, index);
@@ -150,17 +153,18 @@ type Heredoc = {
 };
 
 type ShellParse = {
-  readonly commands: string[][];
-  readonly substitutions: string[];
+  readonly commands: Word[][];
+  readonly substitutions: Word[];
   readonly heredocs: Heredoc[];
-  words: string[];
+  words: Word[];
   word: string | undefined;
+  wordStart: number;
   redirecting: boolean;
 };
 
 function endWord(parse: ShellParse): void {
   if (parse.word === undefined) return;
-  if (!parse.redirecting) parse.words.push(parse.word);
+  if (!parse.redirecting) parse.words.push({ text: parse.word, start: parse.wordStart });
   parse.redirecting = false;
   parse.word = undefined;
 }
@@ -192,7 +196,7 @@ function startHeredoc(parse: ShellParse, script: string, from: number): number {
     delimiter += part.text;
     end = part.end;
   }
-  parse.heredocs.push({ consumer: parse.words, delimiter, tabs, literal: /['"\\]/.test(script.slice(start, end)) });
+  parse.heredocs.push({ consumer: texts(parse.words), delimiter, tabs, literal: /['"\\]/.test(script.slice(start, end)) });
   return end;
 }
 
@@ -207,8 +211,8 @@ function heredocBody(script: string, from: number, { delimiter, tabs }: Heredoc)
   return { text: script.slice(from), end: script.length };
 }
 
-function bodySubstitutions(body: string): readonly string[] {
-  const substitutions: string[] = [];
+function bodySubstitutions(body: string): readonly Word[] {
+  const substitutions: Word[] = [];
   let index = 0;
   while (index < body.length) {
     const part = doubleQuotedPart(body, index);
@@ -223,15 +227,32 @@ function skipHeredocs(parse: ShellParse, script: string, from: number): number {
   for (const heredoc of parse.heredocs.splice(0)) {
     const body = heredocBody(script, index, heredoc);
     const [program = ""] = fromProgram(heredoc.consumer);
-    if (SHELLS.includes(program.slice(program.lastIndexOf("/") + 1))) parse.substitutions.push(body.text);
-    else if (!heredoc.literal) parse.substitutions.push(...bodySubstitutions(body.text));
+    if (SHELLS.includes(program.slice(program.lastIndexOf("/") + 1))) parse.substitutions.push({ text: body.text, start: index });
+    else if (!heredoc.literal) parse.substitutions.push(...bodySubstitutions(body.text).map(({ text, start }) => ({ text, start: start + index })));
     index = body.end;
   }
   return index;
 }
 
-export function shellCommands(script: string): readonly Command[] {
-  const parse: ShellParse = { commands: [], substitutions: [], heredocs: [], words: [], word: undefined, redirecting: false };
+function extendWord(parse: ShellParse, script: string, index: number): number {
+  const part = shellPart(script, index);
+  if (parse.word === undefined) parse.wordStart = index;
+  parse.word = (parse.word ?? "") + part.text;
+  parse.substitutions.push(...part.substitutions);
+  return part.end;
+}
+
+function texts(words: readonly Word[]): Command {
+  return words.map(({ text }) => text);
+}
+
+function nested({ text, start }: Word): readonly (readonly Word[])[] {
+  return shellWords(text).map((words) => words.map((word) => ({ text: word.text, start: word.start + start })));
+}
+
+// Each word starts at its offset in the script.
+export function shellWords(script: string): readonly (readonly Word[])[] {
+  const parse: ShellParse = { commands: [], substitutions: [], heredocs: [], words: [], word: undefined, wordStart: 0, redirecting: false };
   let index = 0;
   while (index < script.length) {
     const char = script.charAt(index);
@@ -248,14 +269,15 @@ export function shellCommands(script: string): readonly Command[] {
       endWord(parse);
       index += 1;
     } else {
-      const part = shellPart(script, index);
-      parse.word = (parse.word ?? "") + part.text;
-      parse.substitutions.push(...part.substitutions);
-      index = part.end;
+      index = extendWord(parse, script, index);
     }
   }
   endCommand(parse);
-  return [...parse.commands, ...parse.substitutions.flatMap(shellCommands)].filter((command) => command.length > 0);
+  return [...parse.commands, ...parse.substitutions.flatMap(nested)].filter((command) => command.length > 0);
+}
+
+export function shellCommands(script: string): readonly Command[] {
+  return shellWords(script).map(texts);
 }
 
 export function withoutOptions(words: Command, operands: ReadonlySet<string>): Command {

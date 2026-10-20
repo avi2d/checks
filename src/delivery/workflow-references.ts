@@ -1,4 +1,4 @@
-import { fromProgram, shellCommands, type Command } from "./shell-command.ts";
+import { fromProgram, shellWords, type Command, type Word } from "./shell-command.ts";
 
 export type Workflow = {
   readonly path: string;
@@ -56,10 +56,15 @@ function releaseArguments(program: Command): readonly string[] {
   return [];
 }
 
-function literalTargets(run: string): readonly string[] {
-  return shellCommands(run.replace(EXPRESSION, "$EXPRESSION"))
-    .flatMap((command) => releaseArguments(fromProgram(command)))
-    .filter((target) => !target.includes("$"));
+// The stand-in for an expression keeps its length, so each target starts at its offset in run.
+function literalTargets(run: string): readonly Word[] {
+  return shellWords(run.replace(EXPRESSION, (expression) => `$${"_".repeat(expression.length - 1)}`))
+    .flatMap((words) => {
+      // fromProgram and releaseArguments each keep a suffix of the words.
+      const targets = releaseArguments(fromProgram(words.map(({ text }) => text)));
+      return words.slice(words.length - targets.length);
+    })
+    .filter(({ text }) => !text.includes("$"));
 }
 
 function escapeRegExp(text: string): string {
@@ -116,32 +121,32 @@ function nodeAt(lines: readonly string[], keys: readonly Key[]): Node | undefine
   );
 }
 
-const RELEASE_MARKERS = ["checks-release-pr", "checks-release-tag", "release-pr.ts", "release-tag.ts"];
+const BLOCK_HEADER = /^[|>][1-9+-]*\s*(#.*)?$/;
 
-function releaseLine(run: string, target: string, seen: number): number | undefined {
-  const body = run.split("\n");
-  if (body.length <= 1) return undefined;
-  const holding = body.flatMap((line, index) => (line.includes(target) ? [index] : []));
-  const invoking = holding.filter((index) => RELEASE_MARKERS.some((marker) => body[index]?.includes(marker)));
-  return (invoking.length > 0 ? invoking : holding)[seen];
+// A block or plain scalar keeps each physical line's text, in order, in its value; a quoted one need not, so it names the key line.
+function scalarLine(lines: readonly string[], node: Node, value: string, offset: number): number {
+  const head = lines[node.from] ?? "";
+  const keyColumn = /^\s*(?:-\s+)?/.exec(head)?.[0].length ?? 0;
+  const inline = head.slice(head.indexOf(":") + 1).trim();
+  const pieces = [
+    { at: node.from, text: BLOCK_HEADER.test(inline) ? "" : inline },
+    ...lines.slice(node.from + 1, node.to).map((line, index) => ({ at: node.from + 1 + index, text: indentOf(line) > keyColumn ? line.trim() : "" })),
+  ];
+  const starts: { readonly at: number; readonly start: number }[] = [];
+  let cursor = 0;
+  for (const { at, text } of pieces) {
+    if (text === "") continue;
+    const start = value.indexOf(text, cursor);
+    if (start === -1) return node.from;
+    starts.push({ at, start });
+    cursor = start + text.length;
+  }
+  return starts.findLast(({ start }) => start <= offset)?.at ?? node.from;
 }
 
-function releaseLocation(
-  path: string,
-  lines: readonly string[],
-  keys: readonly Key[],
-  run: string,
-  target: string,
-  seen: number,
-  at: Locator,
-  fallback: string,
-): string {
+function releaseLocation(path: string, lines: readonly string[], keys: readonly Key[], run: string, target: Word, fallback: string): string {
   const node = nodeAt(lines, keys);
-  if (node === undefined) return at(keys, target, fallback);
-  if (run.split("\n").length <= 1) return `${path} line ${node.from + 1}`;
-  const index = releaseLine(run, target, seen);
-  if (index === undefined) return at(keys, target, fallback);
-  return `${path} line ${node.from + 2 + index}`;
+  return node === undefined ? `${path} ${fallback}` : `${path} line ${scalarLine(lines, node, run, target.start) + 1}`;
 }
 
 export function locate(path: string, lines: readonly string[]): Locator {
@@ -199,14 +204,10 @@ function missingJobRefs(
       if (used !== undefined) missing.push(used);
     }
     if (typeof step["run"] !== "string") return;
-    const occurrences = new Map<string, number>();
     for (const target of literalTargets(step["run"])) {
-      if (!paths.has(`${WORKFLOWS}/${target}`)) {
-        const seen = occurrences.get(target) ?? 0;
-        occurrences.set(target, seen + 1);
-        const keys: readonly Key[] = ["jobs", id, "steps", index, "run"];
-        const location = releaseLocation(path, lines, keys, step["run"], target, seen, at, fallback);
-        missing.push({ location, fault: `names missing workflow ${target}` });
+      if (!paths.has(`${WORKFLOWS}/${target.text}`)) {
+        const location = releaseLocation(path, lines, ["jobs", id, "steps", index, "run"], step["run"], target, fallback);
+        missing.push({ location, fault: `names missing workflow ${target.text}` });
       }
     }
   });
