@@ -419,6 +419,17 @@ test("a release target built by command substitution is not judged", () => {
   expect(findMissingWorkflows(release('bunx checks-release-tag "$(printf release.yml)"'))).toEqual([]);
 });
 
+test("an explicitly empty release target is refused", () => {
+  const release = (run: string) =>
+    named({
+      "ci.yml": held,
+      "daily-release.yml": `name: daily-release\non:\n  workflow_dispatch:\njobs:\n  release:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ${run}\n`,
+    });
+  expect(findMissingWorkflows(release('bunx checks-release-pr ""'))).toEqual([
+    { location: ".github/workflows/daily-release.yml line 8", fault: "names missing workflow " },
+  ]);
+});
+
 test("a workflow_run entry must name a workflow in the repository", () => {
   const nightly = (watched: string) =>
     named({

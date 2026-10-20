@@ -59,7 +59,7 @@ function releaseArguments(program: Command): readonly string[] {
 function literalTargets(run: string): readonly string[] {
   return shellCommands(run.replace(EXPRESSION, "$EXPRESSION"))
     .flatMap((command) => releaseArguments(fromProgram(command)))
-    .filter((target) => target !== "" && !target.includes("$"));
+    .filter((target) => !target.includes("$"));
 }
 
 function escapeRegExp(text: string): string {
@@ -116,9 +116,32 @@ function nodeAt(lines: readonly string[], keys: readonly Key[]): Node | undefine
   );
 }
 
-function invokingLines(lines: readonly string[], hits: readonly number[], needle: string): readonly number[] {
-  const invoking = hits.filter((line) => literalTargets(lines[line] ?? "").includes(needle));
-  return invoking.length > 0 ? invoking : hits;
+const RELEASE_MARKERS = ["checks-release-pr", "checks-release-tag", "release-pr.ts", "release-tag.ts"];
+
+function releaseLine(run: string, target: string, seen: number): number | undefined {
+  const body = run.split("\n");
+  if (body.length <= 1) return undefined;
+  const holding = body.flatMap((line, index) => (line.includes(target) ? [index] : []));
+  const invoking = holding.filter((index) => RELEASE_MARKERS.some((marker) => body[index]?.includes(marker)));
+  return (invoking.length > 0 ? invoking : holding)[seen];
+}
+
+function releaseLocation(
+  path: string,
+  lines: readonly string[],
+  keys: readonly Key[],
+  run: string,
+  target: string,
+  seen: number,
+  at: Locator,
+  fallback: string,
+): string {
+  const node = nodeAt(lines, keys);
+  if (node === undefined) return at(keys, target, fallback);
+  if (run.split("\n").length <= 1) return `${path} line ${node.from + 1}`;
+  const index = releaseLine(run, target, seen);
+  if (index === undefined) return at(keys, target, fallback);
+  return `${path} line ${node.from + 2 + index}`;
 }
 
 export function locate(path: string, lines: readonly string[]): Locator {
@@ -127,8 +150,7 @@ export function locate(path: string, lines: readonly string[]): Locator {
     const node = nodeAt(lines, keys);
     if (node === undefined) return `${path} ${fallback}`;
     const hits = lines.slice(node.from, node.to).flatMap((line, offset) => (line.includes(needle) ? [node.from + offset] : []));
-    const pool = invokingLines(lines, hits, needle);
-    const at = pool.find((line) => line > (used.get(needle) ?? -1)) ?? pool[0] ?? node.from;
+    const at = hits.find((line) => line > (used.get(needle) ?? -1)) ?? hits[0] ?? node.from;
     used.set(needle, at);
     return `${path} line ${at + 1}`;
   };
@@ -153,7 +175,14 @@ function missingTarget(uses: string, paths: ReadonlySet<string>, at: Locator, ke
     : undefined;
 }
 
-function missingJobRefs(id: string, job: unknown, paths: ReadonlySet<string>, at: Locator): readonly MissingReference[] {
+function missingJobRefs(
+  id: string,
+  job: unknown,
+  paths: ReadonlySet<string>,
+  at: Locator,
+  path: string,
+  lines: readonly string[],
+): readonly MissingReference[] {
   if (!isRecord(job)) return [];
   const missing: MissingReference[] = [];
   if (typeof job["uses"] === "string") {
@@ -170,9 +199,14 @@ function missingJobRefs(id: string, job: unknown, paths: ReadonlySet<string>, at
       if (used !== undefined) missing.push(used);
     }
     if (typeof step["run"] !== "string") return;
+    const occurrences = new Map<string, number>();
     for (const target of literalTargets(step["run"])) {
       if (!paths.has(`${WORKFLOWS}/${target}`)) {
-        missing.push({ location: at(["jobs", id, "steps", index, "run"], target, fallback), fault: `names missing workflow ${target}` });
+        const seen = occurrences.get(target) ?? 0;
+        occurrences.set(target, seen + 1);
+        const keys: readonly Key[] = ["jobs", id, "steps", index, "run"];
+        const location = releaseLocation(path, lines, keys, step["run"], target, seen, at, fallback);
+        missing.push({ location, fault: `names missing workflow ${target}` });
       }
     }
   });
@@ -185,11 +219,12 @@ export function findMissingWorkflows(workflows: readonly Workflow[]): readonly M
   const titles = new Set(workflows.map((workflow) => workflowTitle(workflow.document) ?? workflow.path));
   return workflows.flatMap((workflow) => {
     const missing: MissingReference[] = [];
-    const at = locate(workflow.path, workflow.text.split("\n"));
+    const lines = workflow.text.split("\n");
+    const at = locate(workflow.path, lines);
     const jobs = isRecord(workflow.document) ? workflow.document["jobs"] : undefined;
     if (isRecord(jobs)) {
       missing.push(...missingNeeds(jobs, at));
-      for (const [id, job] of Object.entries(jobs)) missing.push(...missingJobRefs(id, job, paths, at));
+      for (const [id, job] of Object.entries(jobs)) missing.push(...missingJobRefs(id, job, paths, at, workflow.path, lines));
     }
     const on = isRecord(workflow.document) ? workflow.document["on"] : undefined;
     const watched = isRecord(on) ? on["workflow_run"] : undefined;
