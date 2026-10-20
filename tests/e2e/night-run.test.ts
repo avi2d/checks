@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fakeActions, type FakeActions, type FakeRun } from "./lib/fake-actions.ts";
 import { CHECKOUT, ran, type Ran, scratchDirs } from "./lib/fixture-repo.ts";
@@ -150,4 +150,56 @@ test("outside a GitHub Actions job it names the variable it lacks", async () => 
   const refused = await ran($`bun ${SCRIPT} --mutation ${join(FIXTURES, "mutation.json")}`.cwd(runner.work).env(env));
 
   expect(refused).toEqual({ exitCode: 2, text: "checks-night-run: GITHUB_RUN_ID is unset, so checks-night-run runs only inside a GitHub Actions job\n" });
+}, 30_000);
+
+function sixtyPercentReport(): string {
+  const mutants = [
+    ...Array.from({ length: 6 }, (_, at) => ({
+      id: String(at + 1),
+      mutatorName: "ConditionalExpression",
+      replacement: "true",
+      location: { start: { line: at + 1, column: 1 }, end: { line: at + 1, column: 5 } },
+      status: "Killed",
+    })),
+    ...Array.from({ length: 4 }, (_, at) => ({
+      id: String(at + 7),
+      mutatorName: "ConditionalExpression",
+      replacement: "true",
+      location: { start: { line: at + 7, column: 1 }, end: { line: at + 7, column: 5 } },
+      status: "Survived",
+    })),
+  ];
+  return JSON.stringify({
+    schemaVersion: "2",
+    thresholds: { high: 85, low: 70 },
+    files: {
+      "src/mixed.ts": {
+        language: "typescript",
+        source: Array.from({ length: 10 }, (_, at) => `line${at + 1}`).join("\n"),
+        mutants,
+      },
+    },
+  });
+}
+
+test("a skipped night between two scored nights compares tonight with the earlier score", async () => {
+  const runner = await night([
+    {
+      databaseId: 10,
+      event: "schedule",
+      createdAt: "2026-10-18T22:07:00Z",
+      artifacts: [{ id: 100, name: "night-run", expired: false, files: { "night-run.json": JSON.stringify({ scores: { "src/mixed.ts": { detected: 9, valid: 10 } } }) } }],
+    },
+    { databaseId: 11, event: "schedule", createdAt: "2026-10-19T22:07:00Z", artifacts: [] },
+  ]);
+  const tonight = join(runner.work, "tonight.json");
+  await writeFile(tonight, sixtyPercentReport());
+
+  const scored = await runner.runWith(["--mutation", tonight, ...testArgs(["passing.xml"])], {});
+
+  expect(scored.exitCode).toBe(0);
+  expect(scored.text).toContain(`the night run ${RUNS}/12 compared with the night run ${RUNS}/10; 1 finding(s)`);
+  const issues = await runner.issues();
+  expect(issues.map((issue) => issue.title)).toEqual(["Night run: mutation score fell in src/mixed.ts"]);
+  expect(issues[0]?.body).toContain("| `src/mixed.ts` | 90.00%, 9 of 10 mutants detected | 60.00%, 6 of 10 mutants detected |");
 }, 30_000);

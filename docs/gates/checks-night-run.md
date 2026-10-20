@@ -44,8 +44,10 @@ A run on any ref but `refs/heads/main` files no issue and records no score, and 
 ## What it reads
 
 It reads tonight's Stryker `mutation.json` report, when the mutation run left one, and any number of JUnit reports, such as the ones `checks-test --junit=<file>` keeps, as [checks-test](checks-test.md#arguments) says.
-It reads the previous night from the `night-run` artifact of the newest successful run of the same workflow on `main`.
-That artifact holds `night-run.json`, the scores the run recorded, and a newest run without it counts as no previous night.
+It scans the newest 30 successful runs of the same workflow on `main` from newest to oldest.
+It takes the first run whose `night-run` artifact still exists as the previous night.
+That artifact holds `night-run.json`, the scores the run recorded.
+When no scanned run holds the artifact it compares no score.
 A run on another branch never becomes the previous night.
 On `main` with a mutation report it writes tonight's scores to `reports/night-run.json`, and the workflow uploads that file as the `night-run` artifact.
 It reads the run from `GITHUB_SERVER_URL`, `GITHUB_REPOSITORY`, `GITHUB_RUN_ID`, `GITHUB_WORKFLOW_REF` and `GITHUB_REF`, so it runs only inside a GitHub Actions job.
