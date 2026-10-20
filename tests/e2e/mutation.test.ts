@@ -27,9 +27,10 @@ test("loading the preset for an unscoped stryker run outside CI refuses it", asy
 });
 
 test("loading the preset for a scoped run, a CI run or another command lets it through", async () => {
-  expect((await ran($`bun ${PRESET} run --mutate src/billing.ts`.env(withoutCi))).exitCode).toBe(0);
-  expect((await ran($`bun ${PRESET} run`.env({ ...withoutCi, CI: "true" }))).exitCode).toBe(0);
-  expect((await ran($`bun ${PRESET} init`.env(withoutCi))).exitCode).toBe(0);
+  const repo = await open({ "tests/unit/one.test.ts": 'import { test } from "bun:test";\n\ntest("one", () => {});\n' });
+  expect((await ran($`bun ${PRESET} run --mutate src/billing.ts`.cwd(repo.dir).env(withoutCi))).exitCode).toBe(0);
+  expect((await ran($`bun ${PRESET} run`.cwd(repo.dir).env({ ...withoutCi, CI: "true" }))).exitCode).toBe(0);
+  expect((await ran($`bun ${PRESET} init`.cwd(repo.dir).env(withoutCi))).exitCode).toBe(0);
 });
 
 const PLUGIN = join(CHECKOUT, "dist", "mutation", "mutation-guard-plugin.js");
