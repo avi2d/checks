@@ -175,24 +175,26 @@ const decodeRecord = Schema.decodeUnknownEffect(Schema.fromJsonString(NightRecor
 
 const unreadable = (source: string) => (cause: { readonly message: string }) => new NightRunFailure({ message: `cannot read ${source}: ${cause.message}` });
 
-// Only the newest successful run on main counts, so a branch dispatch never becomes the night a later run compares with.
+// A skipped night records no artifact, so the newest successful run can carry no baseline.
 const previousNight = Effect.fn("previousNight")(
   function* ({ runs, workflow }: Actions) {
-    const listed = ["run", "list", "--workflow", workflow, "--branch", DEFAULT_BRANCH, "--status", "success", "--limit", "1", "--json", "databaseId,event,createdAt"];
-    const [newest] = yield* gh(listed).pipe(Effect.flatMap(decodeRuns), Effect.mapError(unreadable(`the runs of ${workflow}`)));
-    if (newest === undefined) return Option.none<PreviousNight>();
-    const run = newest.databaseId;
-    const { artifacts } = yield* gh(["api", `${REPOSITORY}/actions/runs/${run}/artifacts?name=${ARTIFACT}`]).pipe(
-      Effect.flatMap(decodeArtifacts),
-      Effect.mapError(unreadable(`the artifacts of run ${run}`)),
-    );
-    if (!artifacts.some((artifact) => artifact.name === ARTIFACT && !artifact.expired)) return Option.none<PreviousNight>();
-    const fs = yield* FileSystem.FileSystem;
-    const dir = yield* fs.makeTempDirectoryScoped({ prefix: "checks-night-run-" });
-    yield* gh(["run", "download", String(run), "--name", ARTIFACT, "--dir", dir]);
-    const file = (yield* Path.Path).join(dir, RECORD_NAME);
-    const record = yield* fs.readFileString(file).pipe(Effect.flatMap(decodeRecord), Effect.mapError(unreadable(`the ${ARTIFACT} artifact of run ${run}`)));
-    return Option.some<PreviousNight>({ url: `${runs}/${run}`, record });
+    const listed = ["run", "list", "--workflow", workflow, "--branch", DEFAULT_BRANCH, "--status", "success", "--limit", "30", "--json", "databaseId,event,createdAt"];
+    const candidates = yield* gh(listed).pipe(Effect.flatMap(decodeRuns), Effect.mapError(unreadable(`the runs of ${workflow}`)));
+    for (const candidate of candidates) {
+      const run = candidate.databaseId;
+      const { artifacts } = yield* gh(["api", `${REPOSITORY}/actions/runs/${run}/artifacts?name=${ARTIFACT}`]).pipe(
+        Effect.flatMap(decodeArtifacts),
+        Effect.mapError(unreadable(`the artifacts of run ${run}`)),
+      );
+      if (!artifacts.some((artifact) => artifact.name === ARTIFACT && !artifact.expired)) continue;
+      const fs = yield* FileSystem.FileSystem;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "checks-night-run-" });
+      yield* gh(["run", "download", String(run), "--name", ARTIFACT, "--dir", dir]);
+      const file = (yield* Path.Path).join(dir, RECORD_NAME);
+      const record = yield* fs.readFileString(file).pipe(Effect.flatMap(decodeRecord), Effect.mapError(unreadable(`the ${ARTIFACT} artifact of run ${run}`)));
+      return Option.some<PreviousNight>({ url: `${runs}/${run}`, record });
+    }
+    return Option.none<PreviousNight>();
   },
   Effect.scoped,
 );
