@@ -540,9 +540,7 @@ test("a refusal names the call when the quoted scalar starts below the run key",
     });
   const at = (line: number, fault = "names missing workflow gone.yml") => [{ location: `.github/workflows/daily-release.yml line ${line}`, fault }];
   expect(findMissingWorkflows(release("      - run:\n          'bunx checks-release-pr gone.yml'\n"))).toEqual(at(9));
-  expect(findMissingWorkflows(release('      - run:\n          "bunx checks-release-tag gone.yml"\n'))).toEqual([
-    { location: ".github/workflows/daily-release.yml line 9", fault: "names missing workflow gone.yml" },
-  ]);
+  expect(findMissingWorkflows(release('      - run:\n          "bunx checks-release-tag gone.yml"\n'))).toEqual(at(9));
   expect(findMissingWorkflows(release("      - run:\n          'echo gone.yml;\n          bunx checks-release-pr gone.yml'\n"))).toEqual(at(10));
   expect(findMissingWorkflows(release('      - run: # release\n          "echo gone.yml;\n          bunx checks-release-pr gone.yml"\n'))).toEqual(at(10));
   expect(findMissingWorkflows(release('      - run:\n          "echo a\\nbunx checks-release-pr gone.yml"\n'))).toEqual(at(9));
@@ -556,20 +554,13 @@ test("an unquoted backtick substitution leaves the release target unresolved", (
       "ci.yml": held,
       "daily-release.yml": `name: daily-release\non:\n  workflow_dispatch:\njobs:\n  release:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ${run}\n`,
     });
+  const atRun = [{ location: ".github/workflows/daily-release.yml line 8", fault: "names missing workflow gone.yml" }];
   expect(findMissingWorkflows(release("bunx checks-release-pr ci`printf .yml`"))).toEqual([]);
   expect(findMissingWorkflows(release("bunx checks-release-tag `echo release.yml`"))).toEqual([]);
-  expect(findMissingWorkflows(release("echo `bunx checks-release-pr gone.yml`"))).toEqual([
-    { location: ".github/workflows/daily-release.yml line 8", fault: "names missing workflow gone.yml" },
-  ]);
-  expect(findMissingWorkflows(release("echo `bun run src/delivery/release-pr.ts gone.yml`"))).toEqual([
-    { location: ".github/workflows/daily-release.yml line 8", fault: "names missing workflow gone.yml" },
-  ]);
-  expect(findMissingWorkflows(release("echo `printf '\\`'`; bunx checks-release-pr gone.yml"))).toEqual([
-    { location: ".github/workflows/daily-release.yml line 8", fault: "names missing workflow gone.yml" },
-  ]);
-  expect(findMissingWorkflows(release("echo \"`printf '\\`'`\"; bunx checks-release-tag gone.yml"))).toEqual([
-    { location: ".github/workflows/daily-release.yml line 8", fault: "names missing workflow gone.yml" },
-  ]);
+  expect(findMissingWorkflows(release("echo `bunx checks-release-pr gone.yml`"))).toEqual(atRun);
+  expect(findMissingWorkflows(release("echo `bun run src/delivery/release-pr.ts gone.yml`"))).toEqual(atRun);
+  expect(findMissingWorkflows(release("echo `printf '\\`'`; bunx checks-release-pr gone.yml"))).toEqual(atRun);
+  expect(findMissingWorkflows(release("echo \"`printf '\\`'`\"; bunx checks-release-tag gone.yml"))).toEqual(atRun);
 });
 
 test("repeated arguments on one invocation name the invocation line", () => {
