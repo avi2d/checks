@@ -185,14 +185,21 @@ function quotedPieces(pieces: readonly Piece[], quote: "'" | '"'): readonly Piec
   return decoded;
 }
 
+function quoteOf(text: string): "'" | '"' | undefined {
+  return text.startsWith("'") ? "'" : text.startsWith('"') ? '"' : undefined;
+}
+
 // Each piece holds what its physical line adds to the value, without the folding between lines.
 function scalarPieces(lines: readonly string[], node: Node): readonly Piece[] {
   const [head, ...body] = rawPieces(lines, node);
   if (head === undefined) return [];
   if (BLOCK_HEADER.test(head.text)) return body;
-  if (head.text.startsWith("'")) return quotedPieces([head, ...body], "'");
-  if (head.text.startsWith('"')) return quotedPieces([head, ...body], '"');
-  return plainPieces([head, ...body]);
+  const open = quoteOf(head.text);
+  if (open !== undefined) return quotedPieces([head, ...body], open);
+  if (head.text !== "" && !head.text.startsWith("#")) return plainPieces([head, ...body]);
+  const first = body.findIndex((piece) => piece.text !== "" && !piece.text.startsWith("#"));
+  const token = first === -1 ? undefined : quoteOf(body[first]?.text ?? "");
+  return token === undefined ? plainPieces([head, ...body]) : quotedPieces(body.slice(first), token);
 }
 
 function scalarLine(lines: readonly string[], node: Node, value: string, offset: number): number {

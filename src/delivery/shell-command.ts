@@ -242,6 +242,14 @@ function extendWord(parse: ShellParse, script: string, index: number): number {
   return part.end;
 }
 
+function extendBacktick(parse: ShellParse, script: string, index: number): number {
+  const end = substitutionEnd(script, index);
+  if (parse.word === undefined) parse.wordStart = index;
+  parse.word = (parse.word ?? "") + "$";
+  parse.substitutions.push({ text: script.slice(index + 1, end), start: index + 1 });
+  return end + 1;
+}
+
 function texts(words: readonly Word[]): Command {
   return words.map(({ text }) => text);
 }
@@ -262,6 +270,8 @@ export function shellWords(script: string): readonly (readonly Word[])[] {
       index = commentEnd(script, index);
     } else if (REDIRECTS.has(char)) {
       index = startRedirect(parse, script, index);
+    } else if (char === "`") {
+      index = extendBacktick(parse, script, index);
     } else if (COMMAND_BREAKS.has(char)) {
       endCommand(parse);
       index = char === "\n" ? skipHeredocs(parse, script, index + 1) : index + 1;
