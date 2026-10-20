@@ -2,6 +2,20 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.49.0
+
+Released 2026-10-20.
+
+### Features
+
+- **testing:** build the full mutation baseline with bail, fastest unit tests first [#190](https://github.com/avi2d/checks/pull/190)
+
+### Fixes
+
+- **delivery:** name the parsed invocation's line in CI wiring refusals [#189](https://github.com/avi2d/checks/pull/189)
+- **quality:** refuse named font sizes in font shorthand and build token map once per file [#188](https://github.com/avi2d/checks/pull/188)
+- **delivery:** judge shell-shaped release references in checks-ci-wiring [#186](https://github.com/avi2d/checks/pull/186)
+
 ## 0.48.1
 
 Released 2026-10-20.
