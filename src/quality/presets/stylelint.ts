@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import type { Config } from "stylelint";
+import type { Config, Plugin, RuleBase } from "stylelint";
 
 type Globs = readonly [string, ...string[]];
 
@@ -87,11 +87,83 @@ const HAS_IN_PSEUDO_CLASS = `(?::has\\(${PSEUDO_ARGUMENT}\\)|::?[\\w-]+\\(${PSEU
 // A compound of pseudo-classes alone, :scope and :not(.card) among them, can match the root element, so its :has() reads page state.
 const CLASSLESS_HAS = `/(?:^|[\\s>+~,])(?:${PSEUDO_CLASS})*${HAS_IN_PSEUDO_CLASS}(?:${PSEUDO_CLASS})*(?=[\\s>+~,]|$)/i`;
 
+const VAR = "var\\(\\s*--[^\\s,()]+\\s*\\)";
+
+const VAR_NAMES = /var\(\s*(--[^\s,()]+)\s*\)/gi;
+
+const FONT_SIZE_VALUE = new RegExp(`^${VAR}$`, "i");
+
+const FONT_STYLE_VARIANT_WEIGHT_OR_WIDTH = "(?:normal|italic|oblique(?:\\s+-?[\\d.]+(?:deg|grad|rad|turn))?|small-caps|bold|bolder|lighter|[1-9]\\d*(?:\\.\\d+)?|(?:ultra-|extra-|semi-)?(?:condensed|expanded))";
+
+const FONT_FAMILY = `(?:"[^"]*"|'[^']*'|${VAR}|-?[a-z_][\\w-]*(?:\\s+-?[a-z_][\\w-]*)*)`;
+
+const FONT_FAMILIES = `${FONT_FAMILY}(?:\\s*,\\s*${FONT_FAMILY})*`;
+
+const FONT_FAMILY_VALUE = new RegExp(`^${FONT_FAMILIES}$`, "i");
+
+// A family name or a token name can hold a size word, so the token is required in the size slot rather than size words refused anywhere.
+const FONT_VALUE = new RegExp(
+  `^(?:${FONT_STYLE_VARIANT_WEIGHT_OR_WIDTH}\\s+)*(?<size>${VAR})(?:\\s*\\/\\s*(?:${VAR}|[\\w.%-]+))?(?:\\s+(?<families>${FONT_FAMILIES}))?$`,
+  "i",
+);
+
+const FONT_SIZE_RULE = "checks/font-size-from-tokens";
+
+function varNames(value: string): string[] {
+  return [...value.matchAll(VAR_NAMES)].map(([, name]) => name).filter((name) => name !== undefined);
+}
+
+type SizeCarrier = { readonly token: string; readonly setTo: RegExp };
+
+// A var() before the size var can be a weight, which leaves a family var() free to hold the size.
+function sizeCarriers(property: string, value: string): SizeCarrier[] {
+  const name = property.toLowerCase();
+  if (name === "font-size" && FONT_SIZE_VALUE.test(value)) return varNames(value).map((token) => ({ token, setTo: FONT_SIZE_VALUE }));
+  const font = name === "font" ? FONT_VALUE.exec(value)?.groups : undefined;
+  if (font?.size === undefined) return [];
+  return [
+    ...varNames(font.size).map((token) => ({ token, setTo: FONT_SIZE_VALUE })),
+    ...varNames(font.families ?? "").map((token) => ({ token, setTo: FONT_FAMILY_VALUE })),
+  ];
+}
+
+function fromTokens({ token, setTo }: SizeCarrier, declared: ReadonlyMap<string, readonly string[]>, seen: ReadonlySet<string>): boolean {
+  const values = declared.get(token);
+  if (values === undefined) return true;
+  return values.every(
+    (value) => setTo.test(value) && varNames(value).every((alias) => !seen.has(alias) && fromTokens({ token: alias, setTo }, declared, new Set([...seen, alias]))),
+  );
+}
+
+// postcss-html hands the rule one root per style block or attribute, so the file's declarations sit on the result's document.
+const fontSizeFromTokens: RuleBase = () => async (root, result) => {
+  const { utils } = (await import("stylelint")).default;
+  const declared = new Map<string, string[]>();
+  result.root.walkDecls(/^--/, ({ prop, value }) => {
+    declared.set(prop, [...(declared.get(prop) ?? []), value]);
+  });
+  root.walkDecls((node) => {
+    for (const carrier of sizeCarriers(node.prop, node.value)) {
+      if (fromTokens(carrier, declared, new Set([carrier.token]))) continue;
+      utils.report({ ruleName: FONT_SIZE_RULE, result, node, word: carrier.token, message: `Expected "${carrier.token}" from the token files rather than set in this file` });
+    }
+  });
+};
+
+const FONT_SIZE_PLUGIN = {
+  ruleName: FONT_SIZE_RULE,
+  rule: Object.assign(fontSizeFromTokens, { ruleName: FONT_SIZE_RULE, messages: {} }),
+} satisfies Plugin;
+
 const DESIGN_TOKENS = {
   "color-no-hex": true,
   "color-named": "never",
   "function-disallowed-list": COLOUR_FUNCTIONS.map((name) => `/^${name}$/i`),
-  "declaration-property-value-allowed-list": { "/^font-size$/i": ["/^var\\(\\s*--[^\\s,()]+\\s*\\)$/i", "/^inherit$/i"] },
+  "declaration-property-value-allowed-list": {
+    "/^font-size$/i": [String(FONT_SIZE_VALUE), "/^inherit$/i"],
+    "/^font$/i": [String(FONT_VALUE), "/^inherit$/i"],
+  },
+  [FONT_SIZE_RULE]: true,
 } as const satisfies Rules;
 
 const REFUSED_BASELINE = '@avi2dg/checks/stylelint: set baseline to "widely", "newly" or a year such as 2024';
@@ -154,7 +226,7 @@ export function defineConfig({ baseline, tokens, bem, flatSelectors, noPageHas, 
   return {
     ...rest,
     extends: [peer("stylelint-config-standard")],
-    plugins: [peer("stylelint-plugin-use-baseline")],
+    plugins: [peer("stylelint-plugin-use-baseline"), FONT_SIZE_PLUGIN],
     rules: { ...merged, [BASELINE_RULE]: passProperty(merged[BASELINE_RULE]) },
     overrides: [
       { files: [...MARKUP], customSyntax: peer("postcss-html") },
