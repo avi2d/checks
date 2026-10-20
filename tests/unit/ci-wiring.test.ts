@@ -103,9 +103,7 @@ const OLD_DEFAULT = `\${{ vars.CI_RUNS_ON || fromJSON('["self-hosted","Linux","X
 const noScripts = new Map<string, string>();
 
 function jobs(mutationRunsOn: string, checksRunsOn: string) {
-  return workflow(
-    `on: pull_request\njobs:\n  mutation:\n    runs-on: ${mutationRunsOn}\n    steps:\n      - run: bunx stryker run\n  checks:\n    runs-on: ${checksRunsOn}\n    steps:\n      - run: bun run lint\n`,
-  );
+  return workflow(`on: pull_request\njobs:\n  mutation:\n    runs-on: ${mutationRunsOn}\n    steps:\n      - run: bunx stryker run\n  checks:\n    runs-on: ${checksRunsOn}\n    steps:\n      - run: bun run lint\n`);
 }
 
 test("a private repository pins mutation jobs to winbox and defaults every other job to a hosted runner", () => {
@@ -116,6 +114,19 @@ test("a private repository pins mutation jobs to winbox and defaults every other
   expect(old[1]?.fault).toContain(HOSTED);
   const plain = findRunnerFaults({ visibility: "private", scripts: noScripts }, jobs("ubuntu-latest", "ubuntu-latest"));
   expect(plain.map(({ fault }) => fault)).toEqual([expect.stringContaining(WINBOX), expect.stringContaining(HOSTED)]);
+});
+
+test("a private repository admits a non-mutation job on the self-hosted iphone device labels", () => {
+  const device = workflow(`on: pull_request\njobs:\n  iphone:\n    runs-on: [self-hosted, macOS, iphone]\n    steps:\n      - run: bun run lint\n`);
+  expect(findRunnerFaults({ visibility: "private", scripts: noScripts }, device)).toEqual([]);
+});
+
+test("a private repository still refuses other fixed self-hosted runs-on", () => {
+  for (const runsOn of ["[self-hosted, macOS]", "[self-hosted]"]) {
+    const faults = findRunnerFaults({ visibility: "private", scripts: noScripts }, jobs(WINBOX, runsOn));
+    expect(faults).toHaveLength(1);
+    expect(faults[0]?.fault).toContain(HOSTED);
+  }
 });
 
 test("any repository refuses a mutation job that reads CI_RUNS_ON and an override without the hosted default", () => {
@@ -129,10 +140,7 @@ test("any repository refuses a mutation job that reads CI_RUNS_ON and an overrid
 test("a package script, a kit bin or a prefixed stryker run marks the job as a mutation job", () => {
   const mutating = new Map([["mutate", "bunx stryker run --incremental"], ["loop", "bun run loop"]]);
   for (const step of ["bun run mutate", "time bunx stryker run --mutate src", "./node_modules/.bin/checks-mutation-compare a b", "bun run checks-mutation"]) {
-    const faults = findRunnerFaults(
-      { visibility: "private", scripts: mutating },
-      workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${HOSTED}\n    steps:\n      - run: ${step}\n`),
-    );
+    const faults = findRunnerFaults({ visibility: "private", scripts: mutating }, workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${HOSTED}\n    steps:\n      - run: ${step}\n`));
     expect(faults[0]?.fault).toContain(WINBOX);
   }
   const looping = workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${HOSTED}\n    steps:\n      - run: bun run loop\n`);
@@ -141,11 +149,7 @@ test("a package script, a kit bin or a prefixed stryker run marks the job as a m
 
 test("quoted words and line continuations still mark a mutation job, and a shell comment does not", () => {
   const mutating = new Map([["mutate", "bunx 'stryker' \\\n  run"]]);
-  const sweep = (run: string) =>
-    findRunnerFaults(
-      { visibility: "private", scripts: mutating },
-      workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${HOSTED}\n    steps:\n      - run: ${JSON.stringify(run)}\n`),
-    );
+  const sweep = (run: string) => findRunnerFaults({ visibility: "private", scripts: mutating }, workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${HOSTED}\n    steps:\n      - run: ${JSON.stringify(run)}\n`));
   for (const run of ['bun run "mutate"', "bun run mutate", '"./node_modules/.bin/checks-mutation"', "bunx stryker \\\n  run", "echo start\nbunx stryker run"]) {
     expect(sweep(run)[0]?.fault).toContain(WINBOX);
   }
@@ -180,11 +184,7 @@ test("bracket access or any case of CI_RUNS_ON still reads the override", () => 
 
 test("bun reaches a package script with or without run and past its own options", () => {
   const mutating = new Map([["mutate", "bunx stryker run"], ["test", "bunx stryker run"]]);
-  const sweep = (run: string) =>
-    findRunnerFaults(
-      { visibility: "private", scripts: mutating },
-      workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${HOSTED}\n    steps:\n      - run: ${JSON.stringify(run)}\n`),
-    );
+  const sweep = (run: string) => findRunnerFaults({ visibility: "private", scripts: mutating }, workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on: ${HOSTED}\n    steps:\n      - run: ${JSON.stringify(run)}\n`));
   for (const run of ["bun mutate", "bun --cwd . run mutate", "bun run --cwd . mutate", "bun --cwd . x stryker run", "env -u HOME bun run mutate", "bun run test"]) {
     expect(sweep(run)[0]?.fault).toContain(WINBOX);
   }

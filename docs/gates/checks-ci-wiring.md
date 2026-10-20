@@ -49,6 +49,7 @@ The text of any other here-document is data, so a call there counts only inside 
 A mutation job never names `CI_RUNS_ON` directly in `runs-on`, as `vars.CI_RUNS_ON` or `vars['CI_RUNS_ON']`, so an override for an outage cannot send its mutation runs to hosted runners.
 Any other job that names `CI_RUNS_ON` in `runs-on` carries exactly the hosted-default expression `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
 In a private repository each mutation job carries exactly the labels `[self-hosted, Linux, X64, winbox]` and every other job exactly the hosted-default expression.
+A private repository also admits a non-mutation job on exactly the labels `[self-hosted, macOS, iphone]` for the Mac CI runner that holds the iPhone Simulator.
 A public repository may keep `runs-on: ubuntu-latest` on every job, because a pull request from a fork runs its own code on the runner.
 The check knows a repository is private only from GitHub's event, so a run outside CI judges only the rules that hold in either.
 

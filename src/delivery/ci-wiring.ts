@@ -84,6 +84,7 @@ const OVERRIDE_ACCESS = String.raw`vars\s*(?:\.\s*CI_RUNS_ON\b|\[\s*'CI_RUNS_ON'
 const RUNNER_OVERRIDE = new RegExp(String.raw`\b${OVERRIDE_ACCESS}`, "i");
 const HOSTED_OVERRIDE = new RegExp(String.raw`^\$\{\{\s*${OVERRIDE_ACCESS}\s*\|\|\s*'ubuntu-latest'\s*\}\}$`, "i");
 const MUTATION_RUNNER = ["self-hosted", "Linux", "X64", "winbox"];
+const DEVICE_RUNNER = ["self-hosted", "macOS", "iphone"];
 const HOSTED_DEFAULT = "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}";
 const EventRepository = Schema.fromJsonString(Schema.Struct({ repository: Schema.Struct({ private: Schema.Boolean }) }));
 
@@ -294,7 +295,7 @@ function runnerFault(runsOn: unknown, mutation: boolean, visibility: Visibility)
   if (mutation && overridden) return `a mutation job reads CI_RUNS_ON, so an override moves its mutation runs off winbox; ${pin}`;
   if (mutation) return visibility === "private" && !sameLabels(runsOn, MUTATION_RUNNER) ? `a mutation job in a private repository runs off winbox; ${pin}` : undefined;
   const hosted = typeof runsOn === "string" && HOSTED_OVERRIDE.test(runsOn.trim());
-  if (hosted || (visibility !== "private" && !overridden)) return undefined;
+  if (hosted || sameLabels(runsOn, DEVICE_RUNNER) || (visibility !== "private" && !overridden)) return undefined;
   return `the job is not on a hosted runner CI_RUNS_ON can override; set runs-on: ${HOSTED_DEFAULT}`;
 }
 
