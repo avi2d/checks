@@ -194,9 +194,12 @@ export type SmokeScope =
 export function smokeFiles(scanned: readonly string[], smoke: readonly string[]): SmokeScope {
   const missing = smoke.filter((file) => !scanned.includes(file));
   if (missing.length > 0) return { kind: "invalid", message: "checks.smoke names no test file at " + missing.join(", ") };
-  const quarantined = smoke.filter((file) => file.startsWith("tests/quarantine/"));
-  if (quarantined.length > 0) {
-    return { kind: "invalid", message: "checks.smoke cannot name a quarantined test at " + quarantined.join(", ") };
+  const ignored = smoke.filter((file) => !selectedTierFile(file, undefined));
+  if (ignored.length > 0) {
+    return {
+      kind: "invalid",
+      message: "checks.smoke cannot name a quarantined, live or pixel test at " + ignored.join(", "),
+    };
   }
   const wanted = new Set(smoke);
   return { kind: "valid", files: scanned.filter((file) => selectedTierFile(file, "unit") || wanted.has(file)) };

@@ -190,7 +190,7 @@ export function smokeList(manifest: unknown): readonly string[] | undefined {
 
 export function suiteArgs(selection: SuiteSelection, smoke: readonly string[]): readonly string[] {
   if (selection.kind === "tier") return tierArgs(selection.tier);
-  if (selection.kind === "smoke") return ["./tests/unit", ...smoke];
+  if (selection.kind === "smoke") return ["./tests/unit", ...smoke.map((file) => `./${file}`)];
   return [];
 }
 

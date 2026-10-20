@@ -14,7 +14,7 @@ test("outside CI the default run is the unit tier plus the smoke list", () => {
   expect(selectSuite({}, "local")).toEqual({ kind: "smoke" });
   expect(suiteArgs({ kind: "smoke" }, ["tests/e2e/checkout.test.ts"])).toEqual([
     "./tests/unit",
-    "tests/e2e/checkout.test.ts",
+    "./tests/e2e/checkout.test.ts",
   ]);
 });
 
@@ -90,11 +90,13 @@ test("a smoke entry that names no test file is refused", () => {
   });
 });
 
-test("a smoke entry never names a quarantined test", () => {
-  expect(smokeFiles(["tests/quarantine/unit/q.test.ts"], ["tests/quarantine/unit/q.test.ts"])).toEqual({
-    kind: "invalid",
-    message: "checks.smoke cannot name a quarantined test at tests/quarantine/unit/q.test.ts",
-  });
+test("a smoke entry never names a test Bun's ignored paths drop", () => {
+  for (const file of ["tests/quarantine/unit/q.test.ts", "tests/live/l.test.ts", "tests/pixel/p.test.ts"]) {
+    expect(smokeFiles([file], [file])).toEqual({
+      kind: "invalid",
+      message: `checks.smoke cannot name a quarantined, live or pixel test at ${file}`,
+    });
+  }
 });
 
 test("scripts.test never forces the full suite, so a local run stays capped", () => {

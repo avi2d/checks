@@ -51,6 +51,7 @@ The smoke list lives in `package.json` under `checks.smoke` as an array of test 
 A repository with no smoke list runs the unit tier alone outside CI.
 A `ci` run covers the full default suite.
 A smoke entry that names no test file fails the run.
+A smoke entry under `tests/quarantine/`, `tests/live/` or `tests/pixel/` fails the run, since Bun's ignored paths would drop it.
 
 ```json
 {
