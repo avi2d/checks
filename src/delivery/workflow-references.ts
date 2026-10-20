@@ -1,4 +1,4 @@
-import { fromProgram, shellCommands, type Command } from "./shell-command.ts";
+import { fromProgram, shellWords, type Command } from "./shell-command.ts";
 
 export type Workflow = {
   readonly path: string;
@@ -28,6 +28,10 @@ export function names(value: unknown): readonly string[] | undefined {
 
 type Key = string | number;
 
+type Target = { readonly name: string; readonly invocation: number };
+
+type Piece = { readonly at: number; readonly text: string };
+
 type Locator = (keys: readonly Key[], needle: string, fallback: string) => string;
 
 // Lines from..to hold the node, and its child keys start at column.
@@ -45,18 +49,25 @@ function isPathTo(word: string, files: readonly string[]): boolean {
 }
 
 function releaseArguments(program: Command): readonly string[] {
-  const [head, target] = program;
+  const [head, target, entry] = program;
   if (head !== undefined && (RELEASE_BINS.includes(head) || isPathTo(head, RELEASE_BINS))) return program.slice(1);
+  if (head === "bun" && target === "run" && entry !== undefined && (RELEASE_SOURCES.includes(entry) || isPathTo(entry, [...RELEASE_SOURCES, ...RELEASE_BINS]))) {
+    return program.slice(3);
+  }
   if (head === "bun" && target !== undefined && (RELEASE_SOURCES.includes(target) || isPathTo(target, [...RELEASE_SOURCES, ...RELEASE_BINS]))) {
     return program.slice(2);
   }
   return [];
 }
 
-function literalTargets(run: string): readonly string[] {
-  return shellCommands(run.replace(EXPRESSION, "$EXPRESSION"))
-    .flatMap((command) => releaseArguments(fromProgram(command)))
-    .filter((target) => !target.includes("$"));
+// The stand-in for an expression keeps its length, so each invocation starts at its offset in run.
+function literalTargets(run: string): readonly Target[] {
+  return shellWords(run.replace(EXPRESSION, (expression) => `$${"_".repeat(expression.length - 1)}`)).flatMap((words) => {
+    const invocation = words[0]?.start ?? 0;
+    return releaseArguments(fromProgram(words.map(({ text }) => text)))
+      .filter((name) => !name.includes("$"))
+      .map((name) => ({ name, invocation }));
+  });
 }
 
 function escapeRegExp(text: string): string {
@@ -113,6 +124,95 @@ function nodeAt(lines: readonly string[], keys: readonly Key[]): Node | undefine
   );
 }
 
+const BLOCK_HEADER = /^[|>][1-9+-]*\s*(#.*)?$/;
+const PLAIN_COMMENT = /(^|\s)#/;
+const ESCAPES = new Map([
+  ["0", "\0"], ["a", "\x07"], ["b", "\b"], ["t", "\t"], ["\t", "\t"], ["n", "\n"], ["v", "\v"], ["f", "\f"], ["r", "\r"], ["e", "\x1b"],
+  [" ", " "], ['"', '"'], ["/", "/"], ["\\", "\\"], ["N", "\x85"], ["_", "\xa0"], ["L", "\u2028"], ["P", "\u2029"],
+]);
+const HEX_ESCAPES = new Map([["x", 2], ["u", 4], ["U", 8]]);
+
+function rawPieces(lines: readonly string[], node: Node): readonly Piece[] {
+  const head = lines[node.from] ?? "";
+  const keyColumn = /^\s*(?:-\s+)?/.exec(head)?.[0].length ?? 0;
+  return [
+    { at: node.from, text: head.slice(head.indexOf(":") + 1).trim() },
+    ...lines.slice(node.from + 1, node.to).map((line, index) => ({ at: node.from + 1 + index, text: indentOf(line) > keyColumn ? line.trim() : "" })),
+  ];
+}
+
+function plainPieces(pieces: readonly Piece[]): readonly Piece[] {
+  const decoded: Piece[] = [];
+  for (const { at, text } of pieces) {
+    const comment = PLAIN_COMMENT.exec(text);
+    const content = comment === null ? text : text.slice(0, comment.index).trimEnd();
+    decoded.push({ at, text: content });
+    if (comment !== null && decoded.some((piece) => piece.text !== "")) break;
+  }
+  return decoded;
+}
+
+function escaped(text: string, at: number): { readonly text: string; readonly end: number } {
+  const code = text.charAt(at + 1);
+  const width = HEX_ESCAPES.get(code);
+  if (width !== undefined) return { text: String.fromCodePoint(Number.parseInt(text.slice(at + 2, at + 2 + width), 16)), end: at + 2 + width };
+  return { text: ESCAPES.get(code) ?? code, end: at + 2 };
+}
+
+function quotedPieces(pieces: readonly Piece[], quote: "'" | '"'): readonly Piece[] {
+  const decoded: Piece[] = [];
+  for (const [position, { at, text }] of pieces.entries()) {
+    let content = "";
+    let index = position === 0 ? 1 : 0;
+    while (index < text.length) {
+      const char = text.charAt(index);
+      if (quote === "'" && char === "'" && text.charAt(index + 1) === "'") {
+        content += "'";
+        index += 2;
+      } else if (char === quote) {
+        return [...decoded, { at, text: content }];
+      } else if (quote === '"' && char === "\\") {
+        const escape = escaped(text, index);
+        content += escape.text;
+        index = escape.end;
+      } else {
+        content += char;
+        index += 1;
+      }
+    }
+    decoded.push({ at, text: content });
+  }
+  return decoded;
+}
+
+// Each piece holds what its physical line adds to the value, without the folding between lines.
+function scalarPieces(lines: readonly string[], node: Node): readonly Piece[] {
+  const [head, ...body] = rawPieces(lines, node);
+  if (head === undefined) return [];
+  if (BLOCK_HEADER.test(head.text)) return body;
+  if (head.text.startsWith("'")) return quotedPieces([head, ...body], "'");
+  if (head.text.startsWith('"')) return quotedPieces([head, ...body], '"');
+  return plainPieces([head, ...body]);
+}
+
+function scalarLine(lines: readonly string[], node: Node, value: string, offset: number): number {
+  let line = node.from;
+  let cursor = 0;
+  for (const { at, text } of scalarPieces(lines, node)) {
+    const start = text === "" ? -1 : value.indexOf(text, cursor);
+    if (start === -1) continue;
+    if (start > offset) break;
+    line = at;
+    cursor = start + text.length;
+  }
+  return line;
+}
+
+function releaseLocation(path: string, lines: readonly string[], keys: readonly Key[], run: string, target: Target, fallback: string): string {
+  const node = nodeAt(lines, keys);
+  return node === undefined ? `${path} ${fallback}` : `${path} line ${scalarLine(lines, node, run, target.invocation) + 1}`;
+}
+
 export function locate(path: string, lines: readonly string[]): Locator {
   const used = new Map<string, number>();
   return (keys, needle, fallback) => {
@@ -144,7 +244,14 @@ function missingTarget(uses: string, paths: ReadonlySet<string>, at: Locator, ke
     : undefined;
 }
 
-function missingJobRefs(id: string, job: unknown, paths: ReadonlySet<string>, at: Locator): readonly MissingReference[] {
+function missingJobRefs(
+  id: string,
+  job: unknown,
+  paths: ReadonlySet<string>,
+  at: Locator,
+  path: string,
+  lines: readonly string[],
+): readonly MissingReference[] {
   if (!isRecord(job)) return [];
   const missing: MissingReference[] = [];
   if (typeof job["uses"] === "string") {
@@ -162,8 +269,9 @@ function missingJobRefs(id: string, job: unknown, paths: ReadonlySet<string>, at
     }
     if (typeof step["run"] !== "string") return;
     for (const target of literalTargets(step["run"])) {
-      if (!paths.has(`${WORKFLOWS}/${target}`)) {
-        missing.push({ location: at(["jobs", id, "steps", index, "run"], target, fallback), fault: `names missing workflow ${target}` });
+      if (!paths.has(`${WORKFLOWS}/${target.name}`)) {
+        const location = releaseLocation(path, lines, ["jobs", id, "steps", index, "run"], step["run"], target, fallback);
+        missing.push({ location, fault: `names missing workflow ${target.name}` });
       }
     }
   });
@@ -176,11 +284,12 @@ export function findMissingWorkflows(workflows: readonly Workflow[]): readonly M
   const titles = new Set(workflows.map((workflow) => workflowTitle(workflow.document) ?? workflow.path));
   return workflows.flatMap((workflow) => {
     const missing: MissingReference[] = [];
-    const at = locate(workflow.path, workflow.text.split("\n"));
+    const lines = workflow.text.split("\n");
+    const at = locate(workflow.path, lines);
     const jobs = isRecord(workflow.document) ? workflow.document["jobs"] : undefined;
     if (isRecord(jobs)) {
       missing.push(...missingNeeds(jobs, at));
-      for (const [id, job] of Object.entries(jobs)) missing.push(...missingJobRefs(id, job, paths, at));
+      for (const [id, job] of Object.entries(jobs)) missing.push(...missingJobRefs(id, job, paths, at, workflow.path, lines));
     }
     const on = isRecord(workflow.document) ? workflow.document["on"] : undefined;
     const watched = isRecord(on) ? on["workflow_run"] : undefined;
