@@ -53,7 +53,11 @@ So a helper, fixture or preload changed on `main` since that baseline can hide a
 - The full baseline report that `checks-mutation-baseline --full` restores, for each mutant's `coveredBy` and `killedBy` and the `testFiles` that own those tests.
 
 Stryker leaves `coveredBy` empty on a static mutant, so only `killedBy` names its tests.
-The report must come from a run that restored no state and passed `--disableBail`, which lists every killing test.
+The report must come from a run that restored no state, so each mutant's tests are the ones it ran against.
+With bail, Stryker's default, `killedBy` names the one test that killed the mutant first.
+One killer is enough, since a branch loses a kill through its tests only when it changes every test that made the kill.
+A test left alone, whose sources the branch also leaves alone, still kills the mutant at `HEAD`.
+So whichever killer the report names is a changed test, and a deleted test counts as changed.
 
 ## Arguments
 

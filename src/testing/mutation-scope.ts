@@ -196,7 +196,8 @@ export function preloadChange(
   return [...preloads.atBase, ...loaded].find((path) => changed.has(path));
 }
 
-// Stryker leaves coveredBy empty on a static mutant, so only killedBy names its tests, and all of them only from a run without bail.
+// Stryker leaves coveredBy empty on a static mutant, so only killedBy names its tests.
+// A kill is lost only when every test that made it changed, so the one killer a run with bail records is enough.
 export function coveringTests(baseline: Baseline, tests: ReadonlySet<string>, mutated: (file: string) => boolean): Map<string, readonly string[]> {
   const owners = new Map(Object.entries(baseline.testFiles).flatMap(([file, { tests: listed }]) => listed.map(({ id }) => [id, file] as const)));
   const covering = new Map<string, readonly string[]>();

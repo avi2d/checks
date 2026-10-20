@@ -157,7 +157,7 @@ test("a source covered by a changed test but killed first by another test stays 
   expect(await scopeOf(repo, base, baseline)).toEqual({ ...NOTHING, SCOPE: "src/shared.ts" });
 });
 
-test("a source with only static mutants stays in scope through every test a no-bail run lists as killing them", async () => {
+test("a source with only static mutants stays in scope through each test the report lists as killing them", async () => {
   const { repo, base } = await repoWith({
     "src/table.ts": body("table"),
     "tests/unit/table-a.test.ts": body("test"),
@@ -169,6 +169,22 @@ test("a source with only static mutants stays in scope through every test a no-b
   await repo.write({ "tests/unit/table-a.test.ts": body("weakened") });
 
   expect((await scopeOf(repo, base, baseline))["SCOPE"]).toBe("src/table.ts");
+});
+
+test("a static mutant whose one recorded killer the pull request leaves alone keeps that kill, so a change to another test leaves its source out", async () => {
+  const { repo, base } = await repoWith({
+    "src/table.ts": body("table"),
+    "src/row.ts": body("row"),
+    "tests/unit/table-a.test.ts": body("test"),
+    "tests/unit/table-b.test.ts": body("test"),
+  });
+  const baseline = await sharedMutantBaseline(repo, [
+    { source: "src/table.ts", coveredBy: [], killedBy: ["tests/unit/table-b.test.ts"] },
+    { source: "src/row.ts", coveredBy: ["tests/unit/table-a.test.ts"], killedBy: ["tests/unit/table-a.test.ts"] },
+  ]);
+  await repo.write({ "tests/unit/table-a.test.ts": body("weakened") });
+
+  expect((await scopeOf(repo, base, baseline))["SCOPE"]).toBe("src/row.ts");
 });
 
 test("a deleted test still pulls its covered source into scope", async () => {
