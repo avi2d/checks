@@ -4,7 +4,13 @@ import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effec
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { TEST_ENTRY_POINT } from "../core/gates.ts";
 import { runMain, Usage } from "../core/main.ts";
-import { readSkipDeclarations, type Environment, type SkipDeclaration, type TestTier } from "./test-skips.ts";
+import {
+  readSkipDeclarations,
+  readSmokeDeclarations,
+  type Environment,
+  type SkipDeclaration,
+  type TestTier,
+} from "./test-skips.ts";
 import { NAME_SEPARATOR, parseReport, ReportError, reporterArgs, type TestResult } from "./test-report.ts";
 
 export type { Environment, SkipDeclaration } from "./test-skips.ts";
@@ -24,10 +30,12 @@ export class SkipGateError extends Schema.TaggedError<SkipGateError>()("SkipGate
 export type TestOptions = {
   readonly tier?: TestTier;
   readonly workers?: number;
+  readonly full?: boolean;
 };
 
 const NAME = TEST_ENTRY_POINT.bin;
-const USAGE = `usage: ${NAME} [--tier=live | --tier=pixel | --tier=unit | --tier=e2e] [--parallel=<workers>] [--junit=<file>], and it refuses test filters`;
+const USAGE = `usage: ${NAME} [--tier=live | --tier=pixel | --tier=unit | --tier=e2e] [--parallel=<workers>] [--full] [--junit=<file>], and it refuses test filters`;
+const FULL = "--full";
 const TIERS = new Map<string, TestTier>([
   ["--tier=live", "live"],
   ["--tier=pixel", "pixel"],
@@ -40,6 +48,7 @@ const JUNIT = /^--junit=(.+)$/;
 function optionOf(arg: string): TestOptions | undefined {
   const tier = TIERS.get(arg);
   if (tier !== undefined) return { tier };
+  if (arg === FULL) return { full: true };
   const workers = PARALLEL.exec(arg)?.[1];
   return workers === undefined ? undefined : { workers: Number(workers) };
 }
@@ -51,6 +60,7 @@ export function testOptions(args: readonly string[]): TestOptions | undefined {
     if (option === undefined || Object.keys(option).some((key) => key in options)) return undefined;
     options = { ...options, ...option };
   }
+  if (options.tier !== undefined && options.full === true) return undefined;
   return options;
 }
 
@@ -158,6 +168,32 @@ const environmentOf = Config.Boolean("CI").pipe(
   Effect.mapError((cause) => new SkipGateError({ message: `cannot tell a ci run from a local one: ${cause.message}` })),
 );
 
+export type SuiteSelection =
+  | { readonly kind: "full" }
+  | { readonly kind: "tier"; readonly tier: TestTier }
+  | { readonly kind: "smoke" };
+
+export function selectSuite(options: TestOptions, environment: Environment): SuiteSelection {
+  if (options.tier !== undefined) return { kind: "tier", tier: options.tier };
+  if (options.full === true || environment === "ci") return { kind: "full" };
+  return { kind: "smoke" };
+}
+
+const SmokeManifest = Schema.Struct({
+  checks: Schema.optional(Schema.Struct({ smoke: Schema.optional(Schema.Array(Schema.NonEmptyString)) })),
+});
+
+export function smokeList(manifest: unknown): readonly string[] | undefined {
+  if (!Schema.is(SmokeManifest)(manifest)) return undefined;
+  return manifest.checks?.smoke ?? [];
+}
+
+export function suiteArgs(selection: SuiteSelection, smoke: readonly string[]): readonly string[] {
+  if (selection.kind === "tier") return tierArgs(selection.tier);
+  if (selection.kind === "smoke") return ["./tests/unit", ...smoke];
+  return [];
+}
+
 function tierArgs(tier: TestTier | undefined): readonly string[] {
   if (tier === undefined) return [];
   // The preset ignores tests/live and tests/pixel, so only those tiers clear the ignore list.
@@ -169,11 +205,24 @@ export function workerCount(workers: number | undefined): number {
   return workers ?? availableParallelism();
 }
 
-const runSuite = Effect.fn("runSuite")(function* (outfile: string, { tier, workers }: TestOptions) {
+const readSmokeList = Effect.fn("readSmokeList")(function* (root: string) {
+  const file = (yield* Path.Path).join(root, "package.json");
+  const text = yield* (yield* FileSystem.FileSystem).readFileString(file);
+  const manifest = yield* Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown))(text).pipe(
+    Effect.mapError((cause) => new SkipGateError({ message: "cannot read " + file + " as JSON: " + cause.message })),
+  );
+  const smoke = smokeList(manifest);
+  if (smoke === undefined) {
+    return yield* new SkipGateError({ message: file + ": checks.smoke must be an array of test file paths" });
+  }
+  return smoke;
+});
+
+const runSuite = Effect.fn("runSuite")(function* (outfile: string, args: readonly string[], workers: number | undefined) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const args = ["test", "--randomize", `--parallel=${workerCount(workers)}`, ...tierArgs(tier), ...reporterArgs(outfile)];
+  const command = ["test", "--randomize", `--parallel=${workerCount(workers)}`, ...args, ...reporterArgs(outfile)];
   return yield* spawner.exitCode(
-    ChildProcess.make(process.execPath, args, {
+    ChildProcess.make(process.execPath, command, {
       stdin: "ignore",
       stdout: "inherit",
       stderr: "inherit",
@@ -189,11 +238,17 @@ const testEntry = Effect.gen(function* () {
   const { options, junit } = entry;
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const declarations = yield* readSkipDeclarations(process.cwd(), options.tier);
   const environment = yield* environmentOf;
+  const selection = selectSuite(options, environment);
+  const smoke = selection.kind === "smoke" ? yield* readSmokeList(process.cwd()) : [];
+  const declarations =
+    selection.kind === "smoke"
+      ? yield* readSmokeDeclarations(process.cwd(), smoke)
+      : yield* readSkipDeclarations(process.cwd(), selection.kind === "tier" ? selection.tier : undefined);
 
   const outfile = path.join(yield* fs.makeTempDirectoryScoped({ prefix: "checks-test-" }), "junit.xml");
-  const suitePassed = (yield* runSuite(outfile, options)) === ChildProcessSpawner.ExitCode(0);
+  const suitePassed =
+    (yield* runSuite(outfile, suiteArgs(selection, smoke), options.workers)) === ChildProcessSpawner.ExitCode(0);
   const written = yield* fs.exists(outfile);
   if (written && Option.isSome(junit)) {
     yield* fs.makeDirectory(path.dirname(junit.value), { recursive: true });
