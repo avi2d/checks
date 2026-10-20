@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import valueParser from "postcss-value-parser";
 import type { Config, Plugin, RuleBase } from "stylelint";
 
 type Globs = readonly [string, ...string[]];
@@ -101,7 +102,19 @@ const FONT_FAMILIES = `${FONT_FAMILY}(?:\\s*,\\s*${FONT_FAMILY})*`;
 
 const FONT_FAMILY_VALUE = new RegExp(`^${FONT_FAMILIES}$`, "i");
 
-// A family name or a token name can hold a size word, so the token is required in the size slot rather than size words refused anywhere.
+const NAMED_FONT_SIZES = new Set([
+  "xx-small",
+  "x-small",
+  "small",
+  "medium",
+  "large",
+  "x-large",
+  "xx-large",
+  "xxx-large",
+  "larger",
+  "smaller",
+]);
+
 const FONT_VALUE = new RegExp(
   `^(?:${FONT_STYLE_VARIANT_WEIGHT_OR_WIDTH}\\s+)*(?<size>${VAR})(?:\\s*\\/\\s*(?:${VAR}|[\\w.%-]+))?(?:\\s+(?<families>${FONT_FAMILIES}))?$`,
   "i",
@@ -127,23 +140,54 @@ function sizeCarriers(property: string, value: string): SizeCarrier[] {
   ];
 }
 
+function namedSize(value: string): string | undefined {
+  let found: string | undefined;
+  valueParser(value).walk((node) => {
+    if (node.type === "word" && NAMED_FONT_SIZES.has(node.value.toLowerCase())) found ??= node.value;
+    return undefined;
+  });
+  return found;
+}
+
 function fromTokens({ token, setTo }: SizeCarrier, declared: ReadonlyMap<string, readonly string[]>, seen: ReadonlySet<string>): boolean {
   const values = declared.get(token);
   if (values === undefined) return true;
   return values.every(
-    (value) => setTo.test(value) && varNames(value).every((alias) => !seen.has(alias) && fromTokens({ token: alias, setTo }, declared, new Set([...seen, alias]))),
+    (value) =>
+      setTo.test(value) &&
+      namedSize(value) === undefined &&
+      varNames(value).every((alias) => !seen.has(alias) && fromTokens({ token: alias, setTo }, declared, new Set([...seen, alias]))),
   );
+}
+
+const declaredByFile = new WeakMap<object, Map<string, string[]>>();
+
+type DeclarationDocument = {
+  walkDecls(filter: RegExp, visit: (decl: { readonly prop: string; readonly value: string }) => void): void;
+};
+
+function fileDeclarations(document: DeclarationDocument): Map<string, string[]> {
+  const cached = declaredByFile.get(document);
+  if (cached !== undefined) return cached;
+  const fresh = new Map<string, string[]>();
+  document.walkDecls(/^--/, ({ prop, value }) => {
+    fresh.set(prop, [...(fresh.get(prop) ?? []), value]);
+  });
+  declaredByFile.set(document, fresh);
+  return fresh;
 }
 
 // postcss-html hands the rule one root per style block or attribute, so the file's declarations sit on the result's document.
 const fontSizeFromTokens: RuleBase = () => async (root, result) => {
   const { utils } = (await import("stylelint")).default;
-  const declared = new Map<string, string[]>();
-  result.root.walkDecls(/^--/, ({ prop, value }) => {
-    declared.set(prop, [...(declared.get(prop) ?? []), value]);
-  });
+  const declared = fileDeclarations(result.root);
   root.walkDecls((node) => {
-    for (const carrier of sizeCarriers(node.prop, node.value)) {
+    const carriers = sizeCarriers(node.prop, node.value);
+    const literal = node.prop.toLowerCase() === "font" && carriers.length > 0 ? namedSize(node.value) : undefined;
+    if (literal !== undefined) {
+      utils.report({ ruleName: FONT_SIZE_RULE, result, node, word: literal, message: `Expected the font size from the token files rather than the literal "${literal}"` });
+    }
+    for (const carrier of carriers) {
       if (fromTokens(carrier, declared, new Set([carrier.token]))) continue;
       utils.report({ ruleName: FONT_SIZE_RULE, result, node, word: carrier.token, message: `Expected "${carrier.token}" from the token files rather than set in this file` });
     }
