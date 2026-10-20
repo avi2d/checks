@@ -67,39 +67,50 @@ var NAMED_FONT_SIZES = new Set([
   "xx-large",
   "xxx-large",
   "larger",
-  "smaller"
+  "smaller",
+  "math"
 ]);
-var FONT_VALUE = new RegExp(`^(?:${FONT_STYLE_VARIANT_WEIGHT_OR_WIDTH}\\s+)*(?<size>${VAR})(?:\\s*\\/\\s*(?:${VAR}|[\\w.%-]+))?(?:\\s+(?<families>${FONT_FAMILIES}))?$`, "i");
+var SIZE_PRECEDER = new RegExp(`^${FONT_STYLE_VARIANT_WEIGHT_OR_WIDTH}$`, "i");
+var FONT_VALUE = new RegExp(`^(?:${FONT_STYLE_VARIANT_WEIGHT_OR_WIDTH}\\s+)*(?<size>${VAR})(?<lineHeight>\\s*\\/\\s*(?:${VAR}|[\\w.%-]+))?(?:\\s+(?<families>${FONT_FAMILIES}))?$`, "i");
 var FONT_SIZE_RULE = "checks/font-size-from-tokens";
 function varNames(value) {
   return [...value.matchAll(VAR_NAMES)].map(([, name]) => name).filter((name) => name !== undefined);
 }
+function sizePosition(families) {
+  const position = valueParser(families).nodes.find(({ type, value }) => type !== "space" && !(type === "word" && SIZE_PRECEDER.test(value)));
+  return position === undefined ? "" : valueParser.stringify(position);
+}
+function fontSizePosition(font) {
+  return font.lineHeight === undefined ? sizePosition(font.families ?? "") : "";
+}
+function namedSize(position) {
+  return NAMED_FONT_SIZES.has(position.toLowerCase()) ? position : undefined;
+}
 function sizeCarriers(property, value) {
   const name = property.toLowerCase();
   if (name === "font-size" && FONT_SIZE_VALUE.test(value))
-    return varNames(value).map((token) => ({ token, setTo: FONT_SIZE_VALUE }));
+    return varNames(value).map((token) => ({ token, setTo: FONT_SIZE_VALUE, atSize: false }));
   const font = name === "font" ? FONT_VALUE.exec(value)?.groups : undefined;
   if (font?.size === undefined)
     return [];
+  const atSize = varNames(fontSizePosition(font));
   return [
-    ...varNames(font.size).map((token) => ({ token, setTo: FONT_SIZE_VALUE })),
-    ...varNames(font.families ?? "").map((token) => ({ token, setTo: FONT_FAMILY_VALUE }))
+    ...varNames(font.size).map((token) => ({ token, setTo: FONT_SIZE_VALUE, atSize: false })),
+    ...varNames(font.families ?? "").map((token) => ({ token, setTo: FONT_FAMILY_VALUE, atSize: atSize.includes(token) }))
   ];
 }
-function namedSize(value) {
-  let found;
-  valueParser(value).walk((node) => {
-    if (node.type === "word" && NAMED_FONT_SIZES.has(node.value.toLowerCase()))
-      found ??= node.value;
-    return;
-  });
-  return found;
+function literalSize(property, value) {
+  const font = property.toLowerCase() === "font" ? FONT_VALUE.exec(value)?.groups : undefined;
+  return font?.size === undefined ? undefined : namedSize(fontSizePosition(font));
 }
-function fromTokens({ token, setTo }, declared, seen) {
+function fromTokens({ token, setTo, atSize }, declared, seen) {
   const values = declared.get(token);
   if (values === undefined)
     return true;
-  return values.every((value) => setTo.test(value) && namedSize(value) === undefined && varNames(value).every((alias) => !seen.has(alias) && fromTokens({ token: alias, setTo }, declared, new Set([...seen, alias]))));
+  return values.every((value) => {
+    const position = atSize ? sizePosition(value) : "";
+    return setTo.test(value) && namedSize(position) === undefined && varNames(value).every((alias) => !seen.has(alias) && fromTokens({ token: alias, setTo, atSize: varNames(position).includes(alias) }, declared, new Set([...seen, alias])));
+  });
 }
 var declaredByFile = new WeakMap;
 function fileDeclarations(document) {
@@ -117,12 +128,11 @@ var fontSizeFromTokens = () => async (root, result) => {
   const { utils } = (await import("stylelint")).default;
   const declared = fileDeclarations(result.root);
   root.walkDecls((node) => {
-    const carriers = sizeCarriers(node.prop, node.value);
-    const literal = node.prop.toLowerCase() === "font" && carriers.length > 0 ? namedSize(node.value) : undefined;
+    const literal = literalSize(node.prop, node.value);
     if (literal !== undefined) {
       utils.report({ ruleName: FONT_SIZE_RULE, result, node, word: literal, message: `Expected the font size from the token files rather than the literal "${literal}"` });
     }
-    for (const carrier of carriers) {
+    for (const carrier of sizeCarriers(node.prop, node.value)) {
       if (fromTokens(carrier, declared, new Set([carrier.token])))
         continue;
       utils.report({ ruleName: FONT_SIZE_RULE, result, node, word: carrier.token, message: `Expected "${carrier.token}" from the token files rather than set in this file` });

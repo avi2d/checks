@@ -280,6 +280,28 @@ test("a named size in the font shorthand fails, directly and through a local ali
   expect(aliased.exitCode).toBe(1);
 }, 60_000);
 
+test("a named size fails only where the font size can stand, so a family name holding one passes", async () => {
+  const { write, script } = await open({
+    "frontend-syntax.json": JSON.stringify({ inputs: ["src/**/*.css"] }),
+    "stylelint.config.ts": stylelintConfig('{ baseline: "widely", tokens: ["src/tokens.css"] }'),
+    "src/tokens.css": ":root {\n  --ink: #000;\n  --text-s: 0.875rem;\n  --weight: 400;\n}\n",
+    "src/site.css": ":root { --face: roboto medium, serif; }\np { font: var(--text-s) var(--face); }\nh1 { font: var(--text-s) / 1.5 large type, serif; }\n",
+  });
+  expect(await script(GATE)).toEqual({ exitCode: 0, text: "frontend-syntax: no violation in 2 file(s) from 1 declared input(s)\n" });
+
+  await write({ "src/site.css": "p { font: var(--weight) italic math serif; }\n" });
+  const direct = await script(GATE);
+  expect(direct.text).toStartWith("frontend-syntax: 1 problem(s) in 2 file(s) from 1 declared input(s):\n  src/site.css:1:");
+  expect(direct.text).toContain('Expected the font size from the token files rather than the literal "math" (checks/font-size-from-tokens)');
+  expect(direct.exitCode).toBe(1);
+
+  await write({ "src/site.css": "p { font: var(--weight) var(--rest); }\n:root { --rest: math serif; }\n" });
+  const aliased = await script(GATE);
+  expect(aliased.text).toStartWith("frontend-syntax: 1 problem(s) in 2 file(s) from 1 declared input(s):\n  src/site.css:1:");
+  expect(aliased.text).toContain('Expected "--rest" from the token files rather than set in this file (checks/font-size-from-tokens)');
+  expect(aliased.exitCode).toBe(1);
+}, 60_000);
+
 test("a size custom property one style block of a page sets fails where another block or a style attribute reads it", async () => {
   const { write, script } = await open({
     "frontend-syntax.json": JSON.stringify({ inputs: ["src/**/*.html"] }),

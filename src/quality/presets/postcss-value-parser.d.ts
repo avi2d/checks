@@ -5,10 +5,14 @@ declare module "postcss-value-parser" {
   }
 
   interface ParsedValue {
-    walk(visit: (node: ValueNode) => false | undefined): void;
+    readonly nodes: readonly ValueNode[];
   }
 
   function parse(value: string): ParsedValue;
+
+  namespace parse {
+    function stringify(node: ValueNode): string;
+  }
 
   export default parse;
 }
