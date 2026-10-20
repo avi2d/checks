@@ -144,21 +144,21 @@ function selectedTierFile(file: string, tier: TestTier | undefined): boolean {
   return file.startsWith(`tests/${tier}/`);
 }
 
-export const readSkipDeclarations = Effect.fn("readSkipDeclarations")(function* (
-  root: string,
-  tier: TestTier | undefined,
-) {
-  const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  const files = yield* Effect.tryPromise({
+const scanTestFiles = Effect.fn("scanTestFiles")(function* (root: string) {
+  return yield* Effect.tryPromise({
     try: () =>
       Promise.all(
         TEST_FILES.map((pattern) =>
           Array.fromAsync(new Bun.Glob(pattern).scan({ cwd: root, onlyFiles: true })),
         ),
-      ).then((groups) => groups.flat().filter((file) => selectedTierFile(file, tier)).sort()),
-    catch: (cause) => new SkipDeclarationError({ message: `cannot find test files: ${String(cause)}` }),
+      ).then((groups) => groups.flat().sort()),
+    catch: (cause) => new SkipDeclarationError({ message: "cannot find test files: " + String(cause) }),
   });
+});
+
+const readDeclarationsIn = Effect.fn("readDeclarationsIn")(function* (root: string, files: readonly string[]) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
   const declarations: SkipDeclaration[] = [];
   for (const file of files) {
     const source = yield* fs.readFileString(path.join(root, file)).pipe(
@@ -177,4 +177,39 @@ export const readSkipDeclarations = Effect.fn("readSkipDeclarations")(function* 
     declarations.push(...parsed.declarations);
   }
   return declarations;
+});
+
+export const readSkipDeclarations = Effect.fn("readSkipDeclarations")(function* (
+  root: string,
+  tier: TestTier | undefined,
+) {
+  const files = (yield* scanTestFiles(root)).filter((file) => selectedTierFile(file, tier));
+  return yield* readDeclarationsIn(root, files);
+});
+
+export type SmokeScope =
+  | { readonly kind: "valid"; readonly files: readonly string[] }
+  | { readonly kind: "invalid"; readonly message: string };
+
+export function smokeFiles(scanned: readonly string[], smoke: readonly string[]): SmokeScope {
+  const missing = smoke.filter((file) => !scanned.includes(file));
+  if (missing.length > 0) return { kind: "invalid", message: "checks.smoke names no test file at " + missing.join(", ") };
+  const ignored = smoke.filter((file) => !selectedTierFile(file, undefined));
+  if (ignored.length > 0) {
+    return {
+      kind: "invalid",
+      message: "checks.smoke cannot name a quarantined, live or pixel test at " + ignored.join(", "),
+    };
+  }
+  const wanted = new Set(smoke);
+  return { kind: "valid", files: scanned.filter((file) => selectedTierFile(file, "unit") || wanted.has(file)) };
+}
+
+export const readSmokeDeclarations = Effect.fn("readSmokeDeclarations")(function* (
+  root: string,
+  smoke: readonly string[],
+) {
+  const scoped = smokeFiles(yield* scanTestFiles(root), smoke);
+  if (scoped.kind === "invalid") return yield* new SkipDeclarationError({ message: scoped.message });
+  return { files: scoped.files, declarations: yield* readDeclarationsIn(root, scoped.files) };
 });

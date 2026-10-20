@@ -27,6 +27,7 @@ It fails unless the repository holds this shape, and names the file and the path
   A test at the `e2e`, `live` or `pixel` level may do all of it, under `tests/quarantine/` as well.
   Helpers in `tests/lib/**` answer to the same rule, since an in-process test reaches them.
 - `scripts.test` is `checks-test`, optionally with `--parallel=<workers>`, which runs `bun test --randomize --parallel=<workers>` as [checks-test](checks-test.md#parallel-runs) says.
+  It refuses `--full`, so a local run stays capped.
 - `scripts.lint` runs this check, itself or through `checks-lint` called by its bare bin name.
 - `bunfig.toml` carries every `[test]` key of the shipped preset with the same value.
   `[test].pathIgnorePatterns` is the preset's `["**/tests/quarantine/**", "**/tests/live/**", "**/tests/pixel/**", "repos/**"]`, which the check pins itself, so the kit's own repository, whose bunfig is the preset, cannot drift it either.

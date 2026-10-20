@@ -252,7 +252,7 @@ export function scriptViolations(manifest: unknown, files: readonly string[] = [
   const lint = isRecord(scripts) ? scripts["lint"] : undefined;
   const violations: Violation[] = [];
   const options = scriptOptions(test);
-  if (options === undefined || options.tier !== undefined) {
+  if (options === undefined || options.tier !== undefined || options.full === true) {
     violations.push({
       file,
       line: undefined,
