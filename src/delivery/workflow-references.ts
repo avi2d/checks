@@ -45,8 +45,11 @@ function isPathTo(word: string, files: readonly string[]): boolean {
 }
 
 function releaseArguments(program: Command): readonly string[] {
-  const [head, target] = program;
+  const [head, target, entry] = program;
   if (head !== undefined && (RELEASE_BINS.includes(head) || isPathTo(head, RELEASE_BINS))) return program.slice(1);
+  if (head === "bun" && target === "run" && entry !== undefined && (RELEASE_SOURCES.includes(entry) || isPathTo(entry, [...RELEASE_SOURCES, ...RELEASE_BINS]))) {
+    return program.slice(3);
+  }
   if (head === "bun" && target !== undefined && (RELEASE_SOURCES.includes(target) || isPathTo(target, [...RELEASE_SOURCES, ...RELEASE_BINS]))) {
     return program.slice(2);
   }
@@ -56,7 +59,7 @@ function releaseArguments(program: Command): readonly string[] {
 function literalTargets(run: string): readonly string[] {
   return shellCommands(run.replace(EXPRESSION, "$EXPRESSION"))
     .flatMap((command) => releaseArguments(fromProgram(command)))
-    .filter((target) => !target.includes("$"));
+    .filter((target) => target !== "" && !target.includes("$"));
 }
 
 function escapeRegExp(text: string): string {
@@ -113,13 +116,19 @@ function nodeAt(lines: readonly string[], keys: readonly Key[]): Node | undefine
   );
 }
 
+function invokingLines(lines: readonly string[], hits: readonly number[], needle: string): readonly number[] {
+  const invoking = hits.filter((line) => literalTargets(lines[line] ?? "").includes(needle));
+  return invoking.length > 0 ? invoking : hits;
+}
+
 export function locate(path: string, lines: readonly string[]): Locator {
   const used = new Map<string, number>();
   return (keys, needle, fallback) => {
     const node = nodeAt(lines, keys);
     if (node === undefined) return `${path} ${fallback}`;
     const hits = lines.slice(node.from, node.to).flatMap((line, offset) => (line.includes(needle) ? [node.from + offset] : []));
-    const at = hits.find((line) => line > (used.get(needle) ?? -1)) ?? hits[0] ?? node.from;
+    const pool = invokingLines(lines, hits, needle);
+    const at = pool.find((line) => line > (used.get(needle) ?? -1)) ?? pool[0] ?? node.from;
     used.set(needle, at);
     return `${path} line ${at + 1}`;
   };

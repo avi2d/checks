@@ -25,6 +25,7 @@ A path filter cannot cover every pull request and therefore cannot satisfy the c
 It refuses a reference to a workflow or job the repository does not hold.
 Each literal `checks-release-pr` and `checks-release-tag` argument names a workflow file, so every one must match a file under `.github/workflows/`.
 An argument built from a variable or an expression is known only when the job runs, so the check passes over it.
+An argument built by command substitution is known only when the job runs, so the check passes over it.
 Each `on.workflow_run.workflows` entry names a workflow by its `name`, so every one must match a name in the repository.
 A workflow without a `name` answers to its path from the repository root.
 A local reusable `uses` must name a file under `.github/workflows/` that the repository holds.

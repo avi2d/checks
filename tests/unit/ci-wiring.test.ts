@@ -374,6 +374,27 @@ test("a checks-release-tag argument must name a workflow the repository holds", 
   ]);
 });
 
+test("a bun run release call names a workflow the repository holds", () => {
+  const release = (run: string) =>
+    named({
+      "ci.yml": held,
+      "daily-release.yml": `name: daily-release\non:\n  workflow_dispatch:\njobs:\n  release:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ${run}\n`,
+    });
+  expect(findMissingWorkflows(release("bun run ./node_modules/.bin/checks-release-pr ci.yml"))).toEqual([]);
+  expect(findMissingWorkflows(release("bun run ./node_modules/.bin/checks-release-pr gone.yml"))).toEqual([
+    { location: ".github/workflows/daily-release.yml line 8", fault: "names missing workflow gone.yml" },
+  ]);
+  expect(findMissingWorkflows(release("bun run src/delivery/release-pr.ts gone.yml"))).toEqual([
+    { location: ".github/workflows/daily-release.yml line 8", fault: "names missing workflow gone.yml" },
+  ]);
+  expect(findMissingWorkflows(release("bun run ./node_modules/.bin/checks-release-tag release.yml"))).toEqual([
+    { location: ".github/workflows/daily-release.yml line 8", fault: "names missing workflow release.yml" },
+  ]);
+  expect(findMissingWorkflows(release("bun run src/delivery/release-tag.ts release.yml"))).toEqual([
+    { location: ".github/workflows/daily-release.yml line 8", fault: "names missing workflow release.yml" },
+  ]);
+});
+
 test("a release target the shell or GitHub fills in at run time is not judged", () => {
   const release = (run: string) =>
     named({
@@ -386,6 +407,16 @@ test("a release target the shell or GitHub fills in at run time is not judged", 
   expect(findMissingWorkflows(release("bunx checks-release-pr ${{ inputs.workflow }} gone.yml")).map(({ fault }) => fault)).toEqual([
     "names missing workflow gone.yml",
   ]);
+});
+
+test("a release target built by command substitution is not judged", () => {
+  const release = (run: string) =>
+    named({
+      "ci.yml": held,
+      "daily-release.yml": `name: daily-release\non:\n  workflow_dispatch:\njobs:\n  release:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ${run}\n`,
+    });
+  expect(findMissingWorkflows(release('bunx checks-release-pr "$(printf ci.yml)"'))).toEqual([]);
+  expect(findMissingWorkflows(release('bunx checks-release-tag "$(printf release.yml)"'))).toEqual([]);
 });
 
 test("a workflow_run entry must name a workflow in the repository", () => {
@@ -447,6 +478,20 @@ test("repeated targets each name their own line", () => {
   expect(findMissingWorkflows(twice)).toEqual([
     { location: ".github/workflows/daily-release.yml line 8", fault: "names missing workflow gone.yml" },
     { location: ".github/workflows/daily-release.yml line 9", fault: "names missing workflow gone.yml" },
+  ]);
+});
+
+test("a refusal names the invocation line rather than an earlier echo or comment", () => {
+  const pipe = (first: string) =>
+    named({
+      "ci.yml": held,
+      "pipe.yml": `name: pipe\non: push\njobs:\n  report:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          ${first}\n          bunx checks-release-pr gone.yml\n`,
+    });
+  expect(findMissingWorkflows(pipe("echo gone.yml"))).toEqual([
+    { location: ".github/workflows/pipe.yml line 9", fault: "names missing workflow gone.yml" },
+  ]);
+  expect(findMissingWorkflows(pipe("# gone.yml"))).toEqual([
+    { location: ".github/workflows/pipe.yml line 9", fault: "names missing workflow gone.yml" },
   ]);
 });
 

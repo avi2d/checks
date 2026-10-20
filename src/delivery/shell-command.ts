@@ -106,7 +106,8 @@ function doubleQuotedPart(script: string, index: number): ShellPart {
   if (char === "\\" && DOUBLE_QUOTE_ESCAPES.has(next)) return { text: next, end: index + 2, substitutions: [] };
   if (char !== "`" && !(char === "$" && next === "(")) return { text: char, end: index + 1, substitutions: [] };
   const end = substitutionEnd(script, index);
-  return { text: "", end: end + 1, substitutions: [script.slice(index + (char === "`" ? 1 : 2), end)] };
+  // An unresolved expansion never becomes an empty literal.
+  return { text: "$", end: end + 1, substitutions: [script.slice(index + (char === "`" ? 1 : 2), end)] };
 }
 
 function shellDoubleQuoted(script: string, open: number): ShellPart {
