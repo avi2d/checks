@@ -87,43 +87,66 @@ const HAS_IN_PSEUDO_CLASS = `(?::has\\(${PSEUDO_ARGUMENT}\\)|::?[\\w-]+\\(${PSEU
 // A compound of pseudo-classes alone, :scope and :not(.card) among them, can match the root element, so its :has() reads page state.
 const CLASSLESS_HAS = `/(?:^|[\\s>+~,])(?:${PSEUDO_CLASS})*${HAS_IN_PSEUDO_CLASS}(?:${PSEUDO_CLASS})*(?=[\\s>+~,]|$)/i`;
 
-const SIZE_TOKEN = "var\\(\\s*(--[^\\s,()]+)\\s*\\)";
+const VAR = "var\\(\\s*--[^\\s,()]+\\s*\\)";
 
-const FONT_SIZE_VALUE = new RegExp(`^${SIZE_TOKEN}$`, "i");
+const VAR_NAMES = /var\(\s*(--[^\s,()]+)\s*\)/gi;
 
-const FONT_STYLE_VARIANT_WEIGHT_OR_WIDTH = "(?:normal|italic|oblique(?:\\s+-?[\\d.]+(?:deg|grad|rad|turn))?|small-caps|bold|bolder|lighter|[1-9]\\d*|(?:ultra-|extra-|semi-)?(?:condensed|expanded))";
+const FONT_SIZE_VALUE = new RegExp(`^${VAR}$`, "i");
+
+const FONT_STYLE_VARIANT_WEIGHT_OR_WIDTH = "(?:normal|italic|oblique(?:\\s+-?[\\d.]+(?:deg|grad|rad|turn))?|small-caps|bold|bolder|lighter|[1-9]\\d*(?:\\.\\d+)?|(?:ultra-|extra-|semi-)?(?:condensed|expanded))";
+
+const FONT_FAMILY = `(?:"[^"]*"|'[^']*'|${VAR}|-?[a-z_][\\w-]*(?:\\s+-?[a-z_][\\w-]*)*)`;
+
+const FONT_FAMILIES = `${FONT_FAMILY}(?:\\s*,\\s*${FONT_FAMILY})*`;
+
+const FONT_FAMILY_VALUE = new RegExp(`^${FONT_FAMILIES}$`, "i");
 
 // A family name or a token name can hold a size word, so the token is required in the size slot rather than size words refused anywhere.
-const FONT_VALUE = new RegExp(`^(?:${FONT_STYLE_VARIANT_WEIGHT_OR_WIDTH}\\s+)*${SIZE_TOKEN}(?:\\s*\\/\\s*\\S+)?(?:\\s+\\S[\\s\\S]*)?$`, "i");
+const FONT_VALUE = new RegExp(
+  `^(?:${FONT_STYLE_VARIANT_WEIGHT_OR_WIDTH}\\s+)*(?<size>${VAR})(?:\\s*\\/\\s*(?:${VAR}|[\\w.%-]+))?(?:\\s+(?<families>${FONT_FAMILIES}))?$`,
+  "i",
+);
 
 const FONT_SIZE_RULE = "checks/font-size-from-tokens";
 
-function sizeToken(property: string, value: string): string | undefined {
-  const name = property.toLowerCase();
-  if (name === "font-size") return FONT_SIZE_VALUE.exec(value)?.[1];
-  if (name === "font") return FONT_VALUE.exec(value)?.[1];
-  return undefined;
+function varNames(value: string): string[] {
+  return [...value.matchAll(VAR_NAMES)].map(([, name]) => name).filter((name) => name !== undefined);
 }
 
-function fromTokens(token: string, declared: ReadonlyMap<string, readonly string[]>, seen: ReadonlySet<string>): boolean {
+type SizeCarrier = { readonly token: string; readonly setTo: RegExp };
+
+// A var() before the size var can be a weight, which leaves a family var() free to hold the size.
+function sizeCarriers(property: string, value: string): SizeCarrier[] {
+  const name = property.toLowerCase();
+  if (name === "font-size" && FONT_SIZE_VALUE.test(value)) return varNames(value).map((token) => ({ token, setTo: FONT_SIZE_VALUE }));
+  const font = name === "font" ? FONT_VALUE.exec(value)?.groups : undefined;
+  if (font?.size === undefined) return [];
+  return [
+    ...varNames(font.size).map((token) => ({ token, setTo: FONT_SIZE_VALUE })),
+    ...varNames(font.families ?? "").map((token) => ({ token, setTo: FONT_FAMILY_VALUE })),
+  ];
+}
+
+function fromTokens({ token, setTo }: SizeCarrier, declared: ReadonlyMap<string, readonly string[]>, seen: ReadonlySet<string>): boolean {
   const values = declared.get(token);
   if (values === undefined) return true;
-  return values.every((value) => {
-    const alias = FONT_SIZE_VALUE.exec(value)?.[1];
-    return alias !== undefined && !seen.has(alias) && fromTokens(alias, declared, new Set([...seen, alias]));
-  });
+  return values.every(
+    (value) => setTo.test(value) && varNames(value).every((alias) => !seen.has(alias) && fromTokens({ token: alias, setTo }, declared, new Set([...seen, alias]))),
+  );
 }
 
+// postcss-html hands the rule one root per style block or attribute, so the file's declarations sit on the result's document.
 const fontSizeFromTokens: RuleBase = () => async (root, result) => {
   const { utils } = (await import("stylelint")).default;
   const declared = new Map<string, string[]>();
-  root.walkDecls(/^--/, ({ prop, value }) => {
+  result.root.walkDecls(/^--/, ({ prop, value }) => {
     declared.set(prop, [...(declared.get(prop) ?? []), value]);
   });
   root.walkDecls((node) => {
-    const token = sizeToken(node.prop, node.value);
-    if (token === undefined || fromTokens(token, declared, new Set([token]))) return;
-    utils.report({ ruleName: FONT_SIZE_RULE, result, node, word: token, message: `Expected "${token}" from the token files rather than set in this file` });
+    for (const carrier of sizeCarriers(node.prop, node.value)) {
+      if (fromTokens(carrier, declared, new Set([carrier.token]))) continue;
+      utils.report({ ruleName: FONT_SIZE_RULE, result, node, word: carrier.token, message: `Expected "${carrier.token}" from the token files rather than set in this file` });
+    }
   });
 };
 
