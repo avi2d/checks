@@ -145,7 +145,13 @@ test("the built base names each plugin bundle by an absolute path that exists, a
   expect(shipped).toEqual({ ...builtBase, jsPlugins: bundles.map((bundle) => `./${relative(CHECKOUT, bundle)}`) });
 });
 
-const DESIGN_TOKEN_RULES = ["color-no-hex", "color-named", "function-disallowed-list", "declaration-property-value-allowed-list"];
+const DESIGN_TOKEN_RULES = [
+  "color-no-hex",
+  "color-named",
+  "function-disallowed-list",
+  "declaration-property-value-allowed-list",
+  "declaration-property-value-disallowed-list",
+];
 
 test("the stylelint builder turns on the correctness, convention, selector, comment, language and Baseline families, and leaves design tokens off without token files", () => {
   const config = defineStylelint({ baseline: "widely", tokens: false });

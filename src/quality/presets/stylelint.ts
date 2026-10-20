@@ -87,11 +87,25 @@ const HAS_IN_PSEUDO_CLASS = `(?::has\\(${PSEUDO_ARGUMENT}\\)|::?[\\w-]+\\(${PSEU
 // A compound of pseudo-classes alone, :scope and :not(.card) among them, can match the root element, so its :has() reads page state.
 const CLASSLESS_HAS = `/(?:^|[\\s>+~,])(?:${PSEUDO_CLASS})*${HAS_IN_PSEUDO_CLASS}(?:${PSEUDO_CLASS})*(?=[\\s>+~,]|$)/i`;
 
+const TOKEN_VAR = "/^var\\(\\s*--[^\\s,()]+\\s*\\)$/i";
+
+const LITERAL_LENGTH = "/-?\\d*\\.?\\d+(?:px|r?em|r?ex|r?cap|r?ch|r?ic|r?lh|[sld]?vw|[sld]?vh|[sld]?vi|[sld]?vb|[sld]?vmin|[sld]?vmax|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pc|pt|%)/i";
+
+const LITERAL_NAMED_SIZE = "/\\b(?:xxx-large|xx-large|x-large|xx-small|x-small|small|medium|large|larger|smaller)\\b/i";
+
+// The shorthand packs style, size and family around the token, so the refusal names any font value without one.
+const FONT_WITHOUT_TOKEN = "/^(?!inherit$)(?![\\s\\S]*var\\(\\s*--[^\\s,()]+\\s*\\))[\\s\\S]*$/i";
+
 const DESIGN_TOKENS = {
   "color-no-hex": true,
   "color-named": "never",
   "function-disallowed-list": COLOUR_FUNCTIONS.map((name) => `/^${name}$/i`),
-  "declaration-property-value-allowed-list": { "/^font-size$/i": ["/^var\\(\\s*--[^\\s,()]+\\s*\\)$/i", "/^inherit$/i"] },
+  "declaration-property-value-allowed-list": { "/^font-size$/i": [TOKEN_VAR, "/^inherit$/i"] },
+  // A local custom property can smuggle a size past the font-size check, so a literal size fails there everywhere but the token files.
+  "declaration-property-value-disallowed-list": {
+    "/^font$/i": [LITERAL_LENGTH, LITERAL_NAMED_SIZE, FONT_WITHOUT_TOKEN],
+    "/^--/": [LITERAL_LENGTH, LITERAL_NAMED_SIZE],
+  },
 } as const satisfies Rules;
 
 const REFUSED_BASELINE = '@avi2dg/checks/stylelint: set baseline to "widely", "newly" or a year such as 2024';

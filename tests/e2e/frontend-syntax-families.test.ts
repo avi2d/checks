@@ -88,6 +88,27 @@ const FAMILIES = [
     reported: "(declaration-property-value-allowed-list)",
   },
   {
+    family: "G4 design tokens, a literal size in the font shorthand",
+    options: '{ baseline: "widely", tokens: ["src/tokens.css"] }',
+    red: "p { font: 12px serif; }\n",
+    green: "p { font: var(--text-s) serif; }\n",
+    reported: "(declaration-property-value-disallowed-list)",
+  },
+  {
+    family: "G4 design tokens, a size smuggled through a local custom property",
+    options: '{ baseline: "widely", tokens: ["src/tokens.css"] }',
+    red: ":root { --size: 12px; }\np { font-size: var(--size); }\n",
+    green: "p { font-size: var(--text-s); }\n",
+    reported: "(declaration-property-value-disallowed-list)",
+  },
+  {
+    family: "G4 design tokens, a local custom property size inside the font shorthand",
+    options: '{ baseline: "widely", tokens: ["src/tokens.css"] }',
+    red: ":root { --size: 12px; }\np { font: var(--size) serif; }\n",
+    green: "p { font: inherit; }\n",
+    reported: "(declaration-property-value-disallowed-list)",
+  },
+  {
     family: "G6 comments refused, a real comment from the website stylesheet",
     options: WIDELY,
     red: "/* 100vw counts a classic scrollbar, so a name measures the content box of its band: use this only inside the hero, an inline-size container. */\na { top: 0; }\n",

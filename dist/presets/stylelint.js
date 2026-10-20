@@ -49,11 +49,19 @@ var PSEUDO_ARGUMENT = "(?:[^()]|\\([^()]*\\))*";
 var PSEUDO_CLASS = `::?[\\w-]+(?:\\(${PSEUDO_ARGUMENT}\\))?`;
 var HAS_IN_PSEUDO_CLASS = `(?::has\\(${PSEUDO_ARGUMENT}\\)|::?[\\w-]+\\(${PSEUDO_ARGUMENT}:has\\([^()]*\\)${PSEUDO_ARGUMENT}\\))`;
 var CLASSLESS_HAS = `/(?:^|[\\s>+~,])(?:${PSEUDO_CLASS})*${HAS_IN_PSEUDO_CLASS}(?:${PSEUDO_CLASS})*(?=[\\s>+~,]|$)/i`;
+var TOKEN_VAR = "/^var\\(\\s*--[^\\s,()]+\\s*\\)$/i";
+var LITERAL_LENGTH = "/-?\\d*\\.?\\d+(?:px|r?em|r?ex|r?cap|r?ch|r?ic|r?lh|[sld]?vw|[sld]?vh|[sld]?vi|[sld]?vb|[sld]?vmin|[sld]?vmax|cqw|cqh|cqi|cqb|cqmin|cqmax|cm|mm|q|in|pc|pt|%)/i";
+var LITERAL_NAMED_SIZE = "/\\b(?:xxx-large|xx-large|x-large|xx-small|x-small|small|medium|large|larger|smaller)\\b/i";
+var FONT_WITHOUT_TOKEN = "/^(?!inherit$)(?![\\s\\S]*var\\(\\s*--[^\\s,()]+\\s*\\))[\\s\\S]*$/i";
 var DESIGN_TOKENS = {
   "color-no-hex": true,
   "color-named": "never",
   "function-disallowed-list": COLOUR_FUNCTIONS.map((name) => `/^${name}$/i`),
-  "declaration-property-value-allowed-list": { "/^font-size$/i": ["/^var\\(\\s*--[^\\s,()]+\\s*\\)$/i", "/^inherit$/i"] }
+  "declaration-property-value-allowed-list": { "/^font-size$/i": [TOKEN_VAR, "/^inherit$/i"] },
+  "declaration-property-value-disallowed-list": {
+    "/^font$/i": [LITERAL_LENGTH, LITERAL_NAMED_SIZE, FONT_WITHOUT_TOKEN],
+    "/^--/": [LITERAL_LENGTH, LITERAL_NAMED_SIZE]
+  }
 };
 var REFUSED_BASELINE = '@avi2dg/checks/stylelint: set baseline to "widely", "newly" or a year such as 2024';
 var REFUSED_TOKENS = "@avi2dg/checks/stylelint: set tokens to the globs of the token files, or false to leave the design token rules off";
