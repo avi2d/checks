@@ -1,4 +1,4 @@
-import { fromProgram, shellWords, type Command, type Word } from "./shell-command.ts";
+import { fromProgram, shellWords, type Command } from "./shell-command.ts";
 
 export type Workflow = {
   readonly path: string;
@@ -28,6 +28,10 @@ export function names(value: unknown): readonly string[] | undefined {
 
 type Key = string | number;
 
+type Target = { readonly name: string; readonly invocation: number };
+
+type Piece = { readonly at: number; readonly text: string };
+
 type Locator = (keys: readonly Key[], needle: string, fallback: string) => string;
 
 // Lines from..to hold the node, and its child keys start at column.
@@ -56,15 +60,14 @@ function releaseArguments(program: Command): readonly string[] {
   return [];
 }
 
-// The stand-in for an expression keeps its length, so each target starts at its offset in run.
-function literalTargets(run: string): readonly Word[] {
-  return shellWords(run.replace(EXPRESSION, (expression) => `$${"_".repeat(expression.length - 1)}`))
-    .flatMap((words) => {
-      // fromProgram and releaseArguments each keep a suffix of the words.
-      const targets = releaseArguments(fromProgram(words.map(({ text }) => text)));
-      return words.slice(words.length - targets.length);
-    })
-    .filter(({ text }) => !text.includes("$"));
+// The stand-in for an expression keeps its length, so each invocation starts at its offset in run.
+function literalTargets(run: string): readonly Target[] {
+  return shellWords(run.replace(EXPRESSION, (expression) => `$${"_".repeat(expression.length - 1)}`)).flatMap((words) => {
+    const invocation = words[0]?.start ?? 0;
+    return releaseArguments(fromProgram(words.map(({ text }) => text)))
+      .filter((name) => !name.includes("$"))
+      .map((name) => ({ name, invocation }));
+  });
 }
 
 function escapeRegExp(text: string): string {
@@ -122,31 +125,92 @@ function nodeAt(lines: readonly string[], keys: readonly Key[]): Node | undefine
 }
 
 const BLOCK_HEADER = /^[|>][1-9+-]*\s*(#.*)?$/;
+const PLAIN_COMMENT = /(^|\s)#/;
+const ESCAPES = new Map([
+  ["0", "\0"], ["a", "\x07"], ["b", "\b"], ["t", "\t"], ["\t", "\t"], ["n", "\n"], ["v", "\v"], ["f", "\f"], ["r", "\r"], ["e", "\x1b"],
+  [" ", " "], ['"', '"'], ["/", "/"], ["\\", "\\"], ["N", "\x85"], ["_", "\xa0"], ["L", "\u2028"], ["P", "\u2029"],
+]);
+const HEX_ESCAPES = new Map([["x", 2], ["u", 4], ["U", 8]]);
 
-// A block or plain scalar keeps each physical line's text, in order, in its value; a quoted one need not, so it names the key line.
-function scalarLine(lines: readonly string[], node: Node, value: string, offset: number): number {
+function rawPieces(lines: readonly string[], node: Node): readonly Piece[] {
   const head = lines[node.from] ?? "";
   const keyColumn = /^\s*(?:-\s+)?/.exec(head)?.[0].length ?? 0;
-  const inline = head.slice(head.indexOf(":") + 1).trim();
-  const pieces = [
-    { at: node.from, text: BLOCK_HEADER.test(inline) ? "" : inline },
+  return [
+    { at: node.from, text: head.slice(head.indexOf(":") + 1).trim() },
     ...lines.slice(node.from + 1, node.to).map((line, index) => ({ at: node.from + 1 + index, text: indentOf(line) > keyColumn ? line.trim() : "" })),
   ];
-  const starts: { readonly at: number; readonly start: number }[] = [];
-  let cursor = 0;
-  for (const { at, text } of pieces) {
-    if (text === "") continue;
-    const start = value.indexOf(text, cursor);
-    if (start === -1) return node.from;
-    starts.push({ at, start });
-    cursor = start + text.length;
-  }
-  return starts.findLast(({ start }) => start <= offset)?.at ?? node.from;
 }
 
-function releaseLocation(path: string, lines: readonly string[], keys: readonly Key[], run: string, target: Word, fallback: string): string {
+function plainPieces(pieces: readonly Piece[]): readonly Piece[] {
+  const decoded: Piece[] = [];
+  for (const { at, text } of pieces) {
+    const comment = PLAIN_COMMENT.exec(text);
+    const content = comment === null ? text : text.slice(0, comment.index).trimEnd();
+    decoded.push({ at, text: content });
+    if (comment !== null && decoded.some((piece) => piece.text !== "")) break;
+  }
+  return decoded;
+}
+
+function escaped(text: string, at: number): { readonly text: string; readonly end: number } {
+  const code = text.charAt(at + 1);
+  const width = HEX_ESCAPES.get(code);
+  if (width !== undefined) return { text: String.fromCodePoint(Number.parseInt(text.slice(at + 2, at + 2 + width), 16)), end: at + 2 + width };
+  return { text: ESCAPES.get(code) ?? code, end: at + 2 };
+}
+
+function quotedPieces(pieces: readonly Piece[], quote: "'" | '"'): readonly Piece[] {
+  const decoded: Piece[] = [];
+  for (const [position, { at, text }] of pieces.entries()) {
+    let content = "";
+    let index = position === 0 ? 1 : 0;
+    while (index < text.length) {
+      const char = text.charAt(index);
+      if (quote === "'" && char === "'" && text.charAt(index + 1) === "'") {
+        content += "'";
+        index += 2;
+      } else if (char === quote) {
+        return [...decoded, { at, text: content }];
+      } else if (quote === '"' && char === "\\") {
+        const escape = escaped(text, index);
+        content += escape.text;
+        index = escape.end;
+      } else {
+        content += char;
+        index += 1;
+      }
+    }
+    decoded.push({ at, text: content });
+  }
+  return decoded;
+}
+
+// Each piece holds what its physical line adds to the value, without the folding between lines.
+function scalarPieces(lines: readonly string[], node: Node): readonly Piece[] {
+  const [head, ...body] = rawPieces(lines, node);
+  if (head === undefined) return [];
+  if (BLOCK_HEADER.test(head.text)) return body;
+  if (head.text.startsWith("'")) return quotedPieces([head, ...body], "'");
+  if (head.text.startsWith('"')) return quotedPieces([head, ...body], '"');
+  return plainPieces([head, ...body]);
+}
+
+function scalarLine(lines: readonly string[], node: Node, value: string, offset: number): number {
+  let line = node.from;
+  let cursor = 0;
+  for (const { at, text } of scalarPieces(lines, node)) {
+    const start = text === "" ? -1 : value.indexOf(text, cursor);
+    if (start === -1) continue;
+    if (start > offset) break;
+    line = at;
+    cursor = start + text.length;
+  }
+  return line;
+}
+
+function releaseLocation(path: string, lines: readonly string[], keys: readonly Key[], run: string, target: Target, fallback: string): string {
   const node = nodeAt(lines, keys);
-  return node === undefined ? `${path} ${fallback}` : `${path} line ${scalarLine(lines, node, run, target.start) + 1}`;
+  return node === undefined ? `${path} ${fallback}` : `${path} line ${scalarLine(lines, node, run, target.invocation) + 1}`;
 }
 
 export function locate(path: string, lines: readonly string[]): Locator {
@@ -205,9 +269,9 @@ function missingJobRefs(
     }
     if (typeof step["run"] !== "string") return;
     for (const target of literalTargets(step["run"])) {
-      if (!paths.has(`${WORKFLOWS}/${target.text}`)) {
+      if (!paths.has(`${WORKFLOWS}/${target.name}`)) {
         const location = releaseLocation(path, lines, ["jobs", id, "steps", index, "run"], step["run"], target, fallback);
-        missing.push({ location, fault: `names missing workflow ${target.text}` });
+        missing.push({ location, fault: `names missing workflow ${target.name}` });
       }
     }
   });

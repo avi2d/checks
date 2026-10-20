@@ -297,6 +297,10 @@ test("a here-document a shell reads is its script, quoted or not", () => {
     expect(sweep(`/bin/sh -s <<-${delimiter} >&2\n\tbunx stryker run\n\tEOF\n`)[0]?.fault).toContain(WINBOX);
   }
   expect(sweep("cat <<'EOF'\nbunx stryker run\nEOF\n")).toEqual([]);
+  for (const delimiter of ["'EOF'", "EOF"]) {
+    expect(sweep(`<<${delimiter} bash\nbunx stryker run\nEOF\n`)[0]?.fault).toContain(WINBOX);
+    expect(sweep(`env <<${delimiter} bash\nbunx stryker run\nEOF\n`)[0]?.fault).toContain(WINBOX);
+  }
 });
 
 test("a repository file resolves from the directory its command runs in", () => {
@@ -519,6 +523,10 @@ test("a refusal names the physical line of the call in each scalar style", () =>
   expect(findMissingWorkflows(release('"echo gone.yml\\nbunx checks-release-pr gone.yml"'))).toEqual(at(8));
   expect(findMissingWorkflows(release("'echo gone.yml; bun run src/delivery/release-tag.ts gone.yml'"))).toEqual(at(8));
   expect(findMissingWorkflows(release(">\n          echo gone.yml\n\n          bunx checks-release-tag gone.yml"))).toEqual(at(11));
+  expect(findMissingWorkflows(release("'echo gone.yml;\n          bunx checks-release-pr gone.yml'"))).toEqual(at(9));
+  expect(findMissingWorkflows(release('"echo \\"gone.yml\\";\n          bun run ./node_modules/.bin/checks-release-tag gone.yml"'))).toEqual(at(9));
+  expect(findMissingWorkflows(release("# release\n          bun run src/delivery/release-pr.ts gone.yml"))).toEqual(at(9));
+  expect(findMissingWorkflows(release("|\n          echo gone.yml\n          bunx checks-release-tag \\\n            gone.yml"))).toEqual(at(10));
 });
 
 test("a refusal inside a heredoc or substitution names the line of the call", () => {
@@ -530,6 +538,8 @@ test("a refusal inside a heredoc or substitution names the line of the call", ()
   const at = (line: number) => [{ location: `.github/workflows/daily-release.yml line ${line}`, fault: "names missing workflow gone.yml" }];
   expect(findMissingWorkflows(release("          bash <<'EOF'\n          bunx checks-release-pr gone.yml\n          EOF\n"))).toEqual(at(11));
   expect(findMissingWorkflows(release('          echo "$(bun run src/delivery/release-pr.ts gone.yml)"\n'))).toEqual(at(10));
+  expect(findMissingWorkflows(release("          <<'EOF' bash\n          bunx checks-release-pr gone.yml\n          EOF\n"))).toEqual(at(11));
+  expect(findMissingWorkflows(release("          env <<EOF bash\n          bun run src/delivery/release-tag.ts gone.yml\n          EOF\n"))).toEqual(at(11));
 });
 
 test("a needs entry must name a job in the same workflow", () => {

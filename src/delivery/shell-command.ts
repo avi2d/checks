@@ -146,7 +146,7 @@ function commentEnd(script: string, from: number): number {
 export const SHELLS = ["sh", "bash", "dash", "ksh", "zsh"];
 
 type Heredoc = {
-  readonly consumer: Command;
+  readonly consumer: readonly Word[];
   readonly delimiter: string;
   readonly tabs: boolean;
   readonly literal: boolean;
@@ -196,7 +196,7 @@ function startHeredoc(parse: ShellParse, script: string, from: number): number {
     delimiter += part.text;
     end = part.end;
   }
-  parse.heredocs.push({ consumer: texts(parse.words), delimiter, tabs, literal: /['"\\]/.test(script.slice(start, end)) });
+  parse.heredocs.push({ consumer: parse.words, delimiter, tabs, literal: /['"\\]/.test(script.slice(start, end)) });
   return end;
 }
 
@@ -226,7 +226,7 @@ function skipHeredocs(parse: ShellParse, script: string, from: number): number {
   let index = from;
   for (const heredoc of parse.heredocs.splice(0)) {
     const body = heredocBody(script, index, heredoc);
-    const [program = ""] = fromProgram(heredoc.consumer);
+    const [program = ""] = fromProgram(texts(heredoc.consumer));
     if (SHELLS.includes(program.slice(program.lastIndexOf("/") + 1))) parse.substitutions.push({ text: body.text, start: index });
     else if (!heredoc.literal) parse.substitutions.push(...bodySubstitutions(body.text).map(({ text, start }) => ({ text, start: start + index })));
     index = body.end;
