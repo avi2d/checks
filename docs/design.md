@@ -305,10 +305,10 @@ A browser check needs a built site and a browser, and a backend repository has n
 So a product opts in by declaring `browser-checks.json`, `checks-lint` never starts a browser, and the browser libraries are optional peers a backend never installs.
 `checks-frontend-syntax` needs no browser and runs inside `checks-lint`, but only where `frontend-syntax.json` declares its inputs, since a repository with no interface has no CSS to hold to it.
 
-Each check wraps a detector that already works rather than a rule of the kit's own.
+Each check wraps a detector that already works, and the kit writes a rule of its own only where none decides the constraint.
 The syntax gate runs two of stylelint's built-in rules and the stylelint team's shared configs, `axe` runs axe-core and `nesting` runs one html-validate rule.
 Its Baseline family runs `stylelint-plugin-use-baseline`, the one stylelint rule that judges against the Baseline data rather than a browser list.
-Its design token family is stylelint's own colour and value rules, applied outside the files a repository names as its tokens.
+Its design token family is stylelint's own colour and value rules and the kit's `checks/font-size-from-tokens`, applied outside the files a repository names as its tokens.
 A check of the rendered page against declared tokens would need a token format of the kit's own.
 The repository's `stylelint.config.ts` sets the Baseline target and the token files, since only the repository knows either.
 The gate imports that file itself, because stylelint's config loader calls `typescript.findConfigFile`, which TypeScript 7 lacks, and a JavaScript config is what [checks-no-plain-js](gates/checks-no-plain-js.md) refuses.

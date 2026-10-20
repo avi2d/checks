@@ -88,6 +88,41 @@ const FAMILIES = [
     reported: "(declaration-property-value-allowed-list)",
   },
   {
+    family: "G4 design tokens, a literal size in the font shorthand",
+    options: '{ baseline: "widely", tokens: ["src/tokens.css"] }',
+    red: "p { font: 12px serif; }\n",
+    green: "p { font: small-caps var(--text-small)/1.5 \"Roboto Medium\", serif; }\n",
+    reported: "src/site.css:1:11 Disallowed value \"12px serif\" for property \"font\" (declaration-property-value-allowed-list)",
+  },
+  {
+    family: "G4 design tokens, a size smuggled through a local custom property",
+    options: '{ baseline: "widely", tokens: ["src/tokens.css"] }',
+    red: "p { font-size: var(--size); }\n:root { --size: 12px; }\n",
+    green: ".card { gap: var(--gap); }\n:root { --gap: 12px; }\n",
+    reported: "src/site.css:1:20 Expected \"--size\" from the token files rather than set in this file (checks/font-size-from-tokens)",
+  },
+  {
+    family: "G4 design tokens, a local custom property size inside the font shorthand",
+    options: '{ baseline: "widely", tokens: ["src/tokens.css"] }',
+    red: "p { font: var(--size) serif; }\n:root { --size: 12px; }\n",
+    green: ".card { --card-text: var(--text-small); }\n.card p { font: var(--card-text) serif; }\n",
+    reported: "(checks/font-size-from-tokens)",
+  },
+  {
+    family: "G4 design tokens, a literal size after a token weight in the font shorthand",
+    options: '{ baseline: "widely", tokens: ["src/tokens.css"] }',
+    red: "p { font: var(--weight) 12px serif; }\n",
+    green: "p { font: 450.5 var(--text-s) serif; }\n",
+    reported: "(declaration-property-value-allowed-list)",
+  },
+  {
+    family: "G4 design tokens, a local size and family after a token weight in the font shorthand",
+    options: '{ baseline: "widely", tokens: ["src/tokens.css"] }',
+    red: "p { font: var(--weight) var(--rest); }\n:root { --rest: 12px serif; }\n",
+    green: ".code { font: var(--text-s) var(--mono); }\n:root { --mono: ui-monospace, monospace; }\n",
+    reported: "src/site.css:1:29 Expected \"--rest\" from the token files rather than set in this file (checks/font-size-from-tokens)",
+  },
+  {
     family: "G6 comments refused, a real comment from the website stylesheet",
     options: WIDELY,
     red: "/* 100vw counts a classic scrollbar, so a name measures the content box of its band: use this only inside the hero, an inline-size container. */\na { top: 0; }\n",
@@ -222,6 +257,23 @@ for (const { family, options, red, green, reported } of FAMILIES) {
     expect(failing.exitCode).toBe(1);
   }, 60_000);
 }
+
+test("a size custom property one style block of a page sets fails where another block or a style attribute reads it", async () => {
+  const { write, script } = await open({
+    "frontend-syntax.json": JSON.stringify({ inputs: ["src/**/*.html"] }),
+    "stylelint.config.ts": stylelintConfig('{ baseline: "widely", tokens: ["src/tokens.css"] }'),
+    "src/page.html": '<style>:root { --gap: 12px; }</style>\n<p style="font-size: var(--text-s)"></p>\n',
+  });
+  expect(await script(GATE)).toEqual({ exitCode: 0, text: "frontend-syntax: no violation in 1 file(s) from 1 declared input(s)\n" });
+
+  for (const page of ['<style>:root { --size: 12px; }</style>\n<p style="font-size: var(--size)"></p>\n', "<style>:root { --size: 12px; }</style>\n<style>p { font: var(--size) serif; }</style>\n"]) {
+    await write({ "src/page.html": page });
+    const red = await script(GATE);
+    expect(red.text, page).toStartWith("frontend-syntax: 1 problem(s) in 1 file(s) from 1 declared input(s):\n  src/page.html:2:");
+    expect(red.text, page).toContain('Expected "--size" from the token files rather than set in this file (checks/font-size-from-tokens)');
+    expect(red.exitCode, page).toBe(1);
+  }
+}, 60_000);
 
 test("flatSelectors fails a website rule on its compound selectors beside its type selectors, and passes its one-class rewrite", async () => {
   const { write, script } = await repository('{ baseline: "widely", tokens: false, flatSelectors: true }', { "src/site.css": ".block-item { top: 0; }\n" });
