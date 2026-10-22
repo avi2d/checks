@@ -33,6 +33,19 @@ test("${name}", async () => {
 });
 `;
 
+const operandTest = (name: string) => `import { expect, test } from "bun:test";
+import { ${name} } from "../../${name}.ts";
+
+test("${name}", () => {
+  expect(${name}).toBe(42);
+});
+`;
+
+const reusedOf = (text: string): readonly [reused: number, total: number] | undefined => {
+  const matched = /(\d+) of (\d+) mutant result\(s\) are reused/.exec(text);
+  return matched === null ? undefined : [Number(matched[1]), Number(matched[2])];
+};
+
 type Report = {
   readonly files: Readonly<Record<string, { readonly mutants: ReadonlyArray<{ readonly static?: boolean; readonly status: string; readonly killedBy?: ReadonlyArray<string> }> }>>;
   readonly testFiles: Readonly<Record<string, { readonly tests: ReadonlyArray<{ readonly id: string }> }>>;
@@ -106,4 +119,41 @@ test(
     }
   },
   180_000,
+);
+
+test(
+  "an incremental baseline reuses the unchanged file results and reruns only the changed file, counted from the fixture full run",
+  async () => {
+    await writeFile(join(dir, "bunfig.toml"), UNVENDORED_BUNFIG);
+    await writeFile(join(dir, "stryker.conf.mjs"), STRYKER_CONFIG);
+    await rm(join(dir, "widget.ts"), { force: true });
+    await rm(join(dir, "tests", "unit"), { recursive: true, force: true });
+    await rm(join(dir, "reports"), { recursive: true, force: true });
+    await writeFile(join(dir, "alpha.ts"), "export const alpha = 40 + 2;\n");
+    await writeFile(join(dir, "beta.ts"), "export const beta = 20 + 22;\n");
+    await mkdir(join(dir, "tests", "unit"), { recursive: true });
+    await writeFile(join(dir, "tests", "unit", "alpha.test.ts"), operandTest("alpha"));
+    await writeFile(join(dir, "tests", "unit", "beta.test.ts"), operandTest("beta"));
+    const ci = { ...process.env, CI: "true" };
+
+    const full = await ran($`bunx stryker run --incremental --reporters json --mutate "*.ts"`.cwd(dir).env(ci));
+    expect(full.exitCode).toBe(0);
+    expect(full.text).not.toContain("mutant result(s) are reused");
+    const counted: Report = await Bun.file(join(dir, "reports", "mutation", "mutation.json")).json();
+    const alphaMutants = counted.files["alpha.ts"]?.mutants ?? [];
+    const betaMutants = counted.files["beta.ts"]?.mutants ?? [];
+    expect(alphaMutants.length).toBeGreaterThan(0);
+    expect(betaMutants.length).toBeGreaterThan(0);
+    const total = alphaMutants.length + betaMutants.length;
+
+    const same = await ran($`bunx stryker run --incremental --reporters json --mutate "*.ts"`.cwd(dir).env(ci));
+    expect(same.exitCode).toBe(0);
+    expect(reusedOf(same.text)).toEqual([total, total]);
+
+    await writeFile(join(dir, "alpha.ts"), "export const alpha = 41 + 1;\n");
+    const changed = await ran($`bunx stryker run --incremental --reporters json --mutate "*.ts"`.cwd(dir).env(ci));
+    expect(changed.exitCode).toBe(0);
+    expect(reusedOf(changed.text)).toEqual([betaMutants.length, total]);
+  },
+  480_000,
 );

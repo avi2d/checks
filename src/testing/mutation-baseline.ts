@@ -12,7 +12,7 @@ class BaselineFailure extends Schema.TaggedError<BaselineFailure>()("BaselineFai
 
 const NAME = "checks-mutation-baseline";
 const USAGE =
-  "usage: checks-mutation-baseline <incremental-dest> [mutation-json-dest] | --full <mutation-json-dest> | --save <incremental-src> [mutation-json-src] | --slim <mutation-json-src> <dest> | --prune [--dry-run]";
+  "usage: checks-mutation-baseline <incremental-dest> [mutation-json-dest] | --full <mutation-json-dest> [incremental-dest] | --save <incremental-src> [mutation-json-src] | --slim <mutation-json-src> <dest> | --prune [--dry-run]";
 const WORKFLOW = "mutation.yml";
 const BRANCH = "main";
 const REPORT_ALONE = "mutation.json";
@@ -334,8 +334,15 @@ const FLAGS = new Map<string, (rest: readonly string[]) => Command | undefined>(
   ["--slim", ([from, to, ...extra]) => (isDestination(from) && isDestination(to) && extra.length === 0 ? { kind: "slim", from, to } : undefined)],
   [
     "--full",
-    ([report, ...extra]) =>
-      isDestination(report) && extra.length === 0 ? { kind: "restore", full: true, needed: { from: [REPORT_ALONE, REPORT], to: report }, optional: [] } : undefined,
+    ([report, incremental, ...extra]) =>
+      isDestination(report) && (incremental === undefined || isDestination(incremental)) && extra.length === 0
+        ? {
+            kind: "restore",
+            full: true,
+            needed: { from: [REPORT_ALONE, REPORT], to: report },
+            optional: incremental === undefined ? [] : [{ from: [INCREMENTAL], to: incremental }],
+          }
+        : undefined,
   ],
 ]);
 

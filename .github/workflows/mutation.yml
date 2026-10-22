@@ -38,13 +38,17 @@ jobs:
         with:
           node-version: 24
       - run: bun install --frozen-lockfile
-      # Only pushes reuse state, so a hand-started run tests every mutant afresh.
-      # The previous baseline's incremental state turns every push after the first into the mutants main changed.
+      # Every run restores state, so a full baseline retests only the mutants its changes touch and fits the timeout.
       - name: Restore previous baseline state
         if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: bun src/testing/mutation-baseline.ts reports/stryker-incremental.json
+      - name: Restore previous full baseline state
+        if: github.event_name != 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun src/testing/mutation-baseline.ts --full reports/mutation/mutation.json reports/stryker-incremental.json
       # Incremental with no prior state runs everything, and writes the state the next main run reuses.
       - run: time bun run mutate:incremental
       # Every run uploads; readers take only main's, so a manual run elsewhere leaves main's baseline in place.
@@ -60,7 +64,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mutation-baseline-full
-          path: reports/mutation/mutation.json
+          path: |
+            reports/mutation/mutation.json
+            reports/stryker-incremental.json
           retention-days: 90
       # The prune keeps the baselines the restore takes and this run's uploads, so older uploads never pile up.
       - name: Prune superseded baselines

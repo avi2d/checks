@@ -22,6 +22,8 @@ With `--full` it lists up to 50 `schedule` runs and up to 50 `workflow_dispatch`
 It tries those runs newest first, and restores the first `mutation-baseline-full` artifact that has not expired, downloads and holds the report.
 It tries no run after that one.
 It takes the report from `mutation.json` at the artifact's root, or else from `mutation/mutation.json`, and copies it to the destination.
+With an incremental destination it also copies `stryker-incremental.json` when the artifact holds one, so the next full run retests only the mutants its changes touch.
+Without the state file the report still restores.
 
 It creates the directories each destination needs.
 
@@ -41,7 +43,8 @@ It deletes through `gh`, which needs a token that deletes the repository's Actio
 
 It reads the runs and their artifacts through `gh`, which needs a token that reads the repository's Actions, such as `GH_TOKEN: ${{ github.token }}` with `actions: read`.
 The `mutation-baseline` artifact holds `stryker-incremental.json` and `mutation/mutation.json`, which an upload of `reports/stryker-incremental.json` and `reports/mutation/mutation.json` writes.
-The `mutation-baseline-full` artifact holds `mutation.json` at its root, which an upload of `reports/mutation/mutation.json` alone writes.
+The `mutation-baseline-full` artifact holds the report and `stryker-incremental.json`, which an upload of `reports/mutation/mutation.json` and `reports/stryker-incremental.json` writes.
+An older artifact holds `mutation.json` at its root, which an upload of `reports/mutation/mutation.json` alone writes.
 It reads `RUNNER_ENVIRONMENT` and `HOME` to place the runner cache, and `GITHUB_REPOSITORY_ID` to find the saved baselines.
 `--save` and `--prune` read `GITHUB_RUN_ID`.
 
@@ -91,13 +94,13 @@ It also refuses when `HOME`, `GITHUB_REPOSITORY_ID` or `GITHUB_RUN_ID` is unset.
 
 ```sh
 checks-mutation-baseline <incremental-dest> [mutation-json-dest]
-checks-mutation-baseline --full <mutation-json-dest>
+checks-mutation-baseline --full <mutation-json-dest> [incremental-dest]
 checks-mutation-baseline --save <incremental-src> [mutation-json-src]
 checks-mutation-baseline --slim <mutation-json-src> <dest>
 checks-mutation-baseline --prune [--dry-run]
 ```
 
-`--full` restores only the report of a run that started with no state.
+`--full` restores the report of a full run, and its incremental state when given an incremental destination.
 `--save` keeps this run's baseline on the runner's disk in place of an upload.
 `--slim` writes a report without `statusReason` to `<dest>`, for a report that still goes up as an artifact.
 `--prune` deletes superseded baselines after a save or an upload.
@@ -166,7 +169,16 @@ The saved baseline uses none of the account's Actions storage, which every priva
 That storage accrues by the hour over the month, so an artifact deleted early still counts until the month ends.
 A baseline job on a GitHub-hosted runner uploads the same two files as a `mutation-baseline` artifact with `retention-days: 7` instead, since the restore reads only the newest `main` run.
 
-A full run uploads its report as the `mutation-baseline-full` artifact, which a branch comparison's scope step reads on any runner.
+A full baseline job restores the previous full state before its incremental Stryker run, so it retests only the mutants its changes touch:
+
+```yaml
+- name: Restore previous full baseline state
+  env:
+    GH_TOKEN: ${{ github.token }}
+  run: bunx checks-mutation-baseline --full reports/mutation/mutation.json reports/stryker-incremental.json
+```
+
+A full run uploads its report and its incremental state as the `mutation-baseline-full` artifact, which a branch comparison's scope step reads on any runner.
 It slims the report first, so the artifact holds about 0.5 MB in place of about 100 MB:
 
 ```yaml
@@ -174,7 +186,9 @@ It slims the report first, so the artifact holds about 0.5 MB in place of about 
 - uses: actions/upload-artifact@v4
   with:
     name: mutation-baseline-full
-    path: ${{ runner.temp }}/full/mutation.json
+    path: |
+      ${{ runner.temp }}/full/mutation.json
+      reports/stryker-incremental.json
     retention-days: 30
 ```
 

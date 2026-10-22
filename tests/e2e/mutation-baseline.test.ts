@@ -24,9 +24,19 @@ function baseline(id: number, name: string, tag: string, expired = false) {
   return { id, name, expired, files: { "stryker-incremental.json": `{"state":"${tag}"}`, "mutation/mutation.json": `{"report":"${tag}"}` } };
 }
 
-// The full artifact as upload-artifact writes it from the one path reports/mutation/mutation.json: the file at its root.
+// A full artifact uploaded from the one path reports/mutation/mutation.json holds the report at its root and no state beside it.
 function fullReport(id: number, tag: string) {
   return { id, name: "mutation-baseline-full", expired: false, files: { "mutation.json": `{"report":"${tag}"}` } };
+}
+
+// A full artifact uploaded from both baseline paths holds the report under mutation/ with the incremental state beside it.
+function fullBaseline(id: number, tag: string) {
+  return {
+    id,
+    name: "mutation-baseline-full",
+    expired: false,
+    files: { "mutation/mutation.json": `{"report":"${tag}"}`, "stryker-incremental.json": `{"state":"${tag}"}` },
+  };
 }
 
 function run(databaseId: number, event: string, createdAt: string, artifacts: FakeRun["artifacts"]): FakeRun {
@@ -142,6 +152,31 @@ test("--full restores the report a full artifact holds at its root, with no incr
   expect(await runner.downloads()).toHaveLength(1);
 }, 30_000);
 
+test("--full with an incremental destination restores the report and the state, and then from the cache", async () => {
+  const runner = await selfHosted([run(35, "workflow_dispatch", "2026-10-03T12:00:00Z", [fullBaseline(350, "with state")])]);
+
+  const downloaded = await runner.run(["--full", "full/mutation.json", "full/stryker-incremental.json"]);
+  const cached = await runner.run(["--full", "again/mutation.json", "again/stryker-incremental.json"]);
+
+  expect(downloaded).toEqual({ exitCode: 0, text: "mutation-baseline: downloaded it into the runner's cache, mutation-baseline-full artifact 350 from run 35\n" });
+  expect(await runner.read("full/mutation.json")).toBe('{"report":"with state"}');
+  expect(await runner.read("full/stryker-incremental.json")).toBe('{"state":"with state"}');
+  expect(cached).toEqual({ exitCode: 0, text: "mutation-baseline: restored it from the runner's cache, mutation-baseline-full artifact 350 from run 35\n" });
+  expect(await runner.read("again/mutation.json")).toBe('{"report":"with state"}');
+  expect(await runner.read("again/stryker-incremental.json")).toBe('{"state":"with state"}');
+  expect(await runner.downloads()).toHaveLength(1);
+}, 30_000);
+
+test("--full with an incremental destination still restores the report when the artifact holds no state", async () => {
+  const runner = await selfHosted([run(35, "workflow_dispatch", "2026-10-03T12:00:00Z", [fullReport(350, "root layout")])]);
+
+  const restored = await runner.run(["--full", "full/mutation.json", "full/stryker-incremental.json"]);
+
+  expect(restored.exitCode).toBe(0);
+  expect(await runner.read("full/mutation.json")).toBe('{"report":"root layout"}');
+  expect(await runner.read("full/stryker-incremental.json")).toBeUndefined();
+}, 30_000);
+
 test("--full passes over an artifact without the report and downloads no run after the first that holds one", async () => {
   const runner = await selfHosted([
     run(40, "workflow_dispatch", "2026-10-04T00:00:00Z", [{ id: 400, name: "mutation-baseline-full", expired: false, files: { "stryker-incremental.json": "{}" } }]),
@@ -225,7 +260,13 @@ test("a missing destination prints the usage and exits 2", async () => {
   expect(await runner.run(["--full"])).toEqual({
     exitCode: 2,
     text:
-      "checks-mutation-baseline: usage: checks-mutation-baseline <incremental-dest> [mutation-json-dest] | --full <mutation-json-dest> | " +
+      "checks-mutation-baseline: usage: checks-mutation-baseline <incremental-dest> [mutation-json-dest] | --full <mutation-json-dest> [incremental-dest] | " +
+      "--save <incremental-src> [mutation-json-src] | --slim <mutation-json-src> <dest> | --prune [--dry-run]\n",
+  });
+  expect(await runner.run(["--full", "full/mutation.json", "full/stryker-incremental.json", "extra"])).toEqual({
+    exitCode: 2,
+    text:
+      "checks-mutation-baseline: usage: checks-mutation-baseline <incremental-dest> [mutation-json-dest] | --full <mutation-json-dest> [incremental-dest] | " +
       "--save <incremental-src> [mutation-json-src] | --slim <mutation-json-src> <dest> | --prune [--dry-run]\n",
   });
 }, 30_000);

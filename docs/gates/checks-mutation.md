@@ -82,7 +82,7 @@ An `--incremental` run with no report stops before instrumenting with the missin
 A repository runs full baselines from the mutation workflow on `workflow_dispatch`.
 A repository that picks a branch scope from a baseline starts that workflow weekly with `gh workflow run mutation`, because a GitHub schedule can start hours late.
 Run scoped checks locally during development.
-Each baseline costs a full Stryker run.
+A first baseline with no state costs a full Stryker run, and each later one retests only the mutants its changes touch.
 
 ## Running it in CI
 
@@ -101,16 +101,21 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      - run: bunx stryker run
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: bunx checks-mutation-baseline --full reports/mutation/mutation.json reports/stryker-incremental.json
+      - run: bunx stryker run --incremental
       - run: bunx checks-mutation-baseline --slim reports/mutation/mutation.json "$RUNNER_TEMP/full/mutation.json"
       - uses: actions/upload-artifact@v4
         with:
           name: mutation-baseline-full
-          path: ${{ runner.temp }}/full/mutation.json
+          path: |
+            ${{ runner.temp }}/full/mutation.json
+            reports/stryker-incremental.json
           retention-days: 30
 ```
 
-The run restores no state, so its report names every test that covers each covered mutant and the first test that killed each killed mutant.
+A run that restores no state tests every mutant, so its report names every test that covers each covered mutant and the first test that killed each killed mutant.
 [checks-mutation-scope](checks-mutation-scope.md#what-it-reads) says why that one killer is enough.
 The upload is the `mutation-baseline-full` artifact that a branch comparison's scope step restores with `checks-mutation-baseline --full`.
 [checks-mutation-scope](checks-mutation-scope.md) reads it to bring in the sources a changed unit test covers or kills.
