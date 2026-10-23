@@ -118,20 +118,24 @@ function resolved(directory: string, spec: string): string {
 }
 
 // Bun takes the file a specifier names, then one with an extension added, and only then the directory's index.
-function importedFile(path: string, files: ReadonlySet<string>, mains: ReadonlyMap<string, string> = new Map(), isRequire = false): string | undefined {
+function importedFile(path: string, files: ReadonlySet<string>, mains: ReadonlyMap<string, string> = new Map(), isRequire = false): readonly string[] {
   const extensions = isRequire ? REQUIRE_EXTENSIONS : IMPORT_EXTENSIONS;
   const probe = (target: string): string | undefined => {
     const bare = target.replace(/\.m?js$/, "");
     return [target, ...extensions.map((extension) => bare + extension)].find((file) => files.has(file));
   };
+  const index = (target: string): string | undefined =>
+    extensions.map((extension) => `${target}/index${extension}`).find((file) => files.has(file));
   const file = probe(path);
-  if (file !== undefined) return file;
+  if (file !== undefined) return [file];
   const main = mains.get(path);
-  if (main !== undefined) {
-    const entry = probe(main);
-    if (entry !== undefined) return entry;
+  if (main === undefined) {
+    const directory = index(path);
+    return directory === undefined ? [] : [directory];
   }
-  return extensions.map((extension) => `${path}/index${extension}`).find((file) => files.has(file));
+  const manifest = path === "" ? "package.json" : `${path}/package.json`;
+  const entry = probe(main) ?? index(main);
+  return entry === undefined ? [manifest] : [manifest, entry];
 }
 
 function fixtureNeedles(changed: readonly string[]): readonly Needle[] {
@@ -156,7 +160,7 @@ type Edge = { readonly importer: string; readonly imported: string };
 
 function importsOf(file: string, text: string, files: ReadonlySet<string>, mains: ReadonlyMap<string, string> = new Map()): readonly string[] {
   const directory = file.slice(0, Math.max(file.lastIndexOf("/"), 0));
-  return [...text.matchAll(IMPORT)].flatMap(([, throughImport = "", throughRequire = ""]) => importedFile(resolved(directory, throughImport || throughRequire), files, mains, throughImport === "") ?? []);
+  return [...text.matchAll(IMPORT)].flatMap(([, throughImport = "", throughRequire = ""]) => importedFile(resolved(directory, throughImport || throughRequire), files, mains, throughImport === ""));
 }
 
 const edgesOf = (file: string, text: string, files: ReadonlySet<string>, mains: ReadonlyMap<string, string> = new Map()): readonly Edge[] =>
@@ -287,7 +291,7 @@ const transitivelyImported = Effect.fn("transitivelyImported")(function* (rev: s
 });
 
 const loadedByPreloads = Effect.fn("loadedByPreloads")(function* (rev: string, preloads: readonly string[], paths: ReadonlySet<string>, mains: ReadonlyMap<string, string> = new Map()) {
-  return yield* transitivelyImported(rev, preloads.flatMap((preload) => importedFile(preload, paths) ?? []), paths, mains);
+  return yield* transitivelyImported(rev, preloads.flatMap((preload) => importedFile(preload, paths, mains)), paths, mains);
 });
 
 function mainOf(text: string): string | undefined {
