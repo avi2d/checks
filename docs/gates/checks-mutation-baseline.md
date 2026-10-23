@@ -51,6 +51,11 @@ The `mutation-baseline` artifact holds `stryker-incremental.json` and `mutation/
 The `mutation-baseline-full` artifact holds `mutation.json` and `stryker-incremental.json` at its root, which an upload of `${{ runner.temp }}/full/` writes.
 It reads `RUNNER_ENVIRONMENT` and `HOME` to place the runner cache, and `GITHUB_REPOSITORY_ID` to find the saved baselines.
 `--save` and `--prune` read `GITHUB_RUN_ID`.
+With `--full` and an incremental destination it reads the run's head through `gh run view <run> --json headSha`.
+It diffs that head against `HEAD`, which needs the checkout's full history.
+It shows `bunfig.toml`, `package.json`, every tracked `package.json`, and the files the active Stryker config imports at both revisions.
+It reads every tracked `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, and `.cjs` file from the working tree for their relative imports.
+Inputs a test reads at runtime without a static import, such as markdown files, escape invalidation as a known limitation.
 
 ## The runner cache
 
