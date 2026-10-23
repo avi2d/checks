@@ -150,7 +150,7 @@ var timedFiles = Effect2.fn("timedFiles")(function* (listed) {
   return fastestFirst(yield* fileSeconds(yield* fs.readFileString(outfile)));
 }, Effect2.scoped);
 var NodeServices = NodeChildProcessSpawner.layer.pipe(Layer.provideMerge(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)));
-var runOrder = (listed) => Effect2.runPromise(timedFiles(listed).pipe(Effect2.map((timed) => inRunOrder(listed, timed)), Effect2.catch((failure) => Console.error(`checks: ${failure.message}, so each static mutant runs the unit tests in path order`).pipe(Effect2.as(listed))), Effect2.provide(NodeServices)));
+var runOrder = (listed) => Effect2.runPromise(timedFiles(listed).pipe(Effect2.map((timed) => inRunOrder(listed, timed)), Effect2.catch((failure) => Console.error(`checks: ${failure.message}, so each static mutant runs the unit tests in Bun's default directory order`).pipe(Effect2.as(listed))), Effect2.provide(NodeServices)));
 export {
   fastestFirst,
   inRunOrder,
