@@ -123,11 +123,17 @@ function allows(allowed: readonly Identity[], identity: Identity): boolean {
   );
 }
 
+// GitHub authors a web merge under the account's display name, which the owner's git name need not match.
+function allowsEmail(allowed: readonly Identity[], identity: Identity): boolean {
+  return allowed.some((entry) => entry.email.toLowerCase() === identity.email.toLowerCase());
+}
+
 function inspect(commit: Commit, allowed: readonly Identity[]): Offence | undefined {
   const reasons: string[] = [];
   const release = releasedVersionOf(commit.subject) !== undefined;
   const authors = release ? [...allowed, RELEASE_AUTHOR] : allowed;
-  if (!allows(authors, commit.author)) {
+  const madeByGitHub = allows([SQUASH_COMMITTER], commit.committer);
+  if (!(madeByGitHub ? allowsEmail(authors, commit.author) : allows(authors, commit.author))) {
     reasons.push(`author ${render(commit.author)}`);
   }
   if (!allows([...allowed, SQUASH_COMMITTER], commit.committer)) {
@@ -158,7 +164,7 @@ const check = Effect.gen(function* () {
       for (const reason of reasons) lines.push(`    ${reason}`);
     }
     lines.push(`  allowed: ${allowed.map(render).join(", ")}`);
-    lines.push(`  allowed as committer only: ${render(SQUASH_COMMITTER)}`);
+    lines.push(`  allowed as committer only: ${render(SQUASH_COMMITTER)}, which also lets an allowed email author under any name`);
     lines.push(`  allowed as release author only: ${render(RELEASE_AUTHOR)}`);
     yield* Console.error(lines.join("\n"));
     return false;
