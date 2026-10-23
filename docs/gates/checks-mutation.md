@@ -30,7 +30,7 @@ So when a `stryker run` without `--ignoreStatic` loads the preset, the preset fi
 `unitTestFiles` then lists each file with a leading `./`, fastest first, and Bun runs such paths in the order given.
 It then lists each path again without the `./`, the spelling the runner matches a covering test against.
 Bun loads a file once however often the list names it.
-When that timing run fails, the preset prints why on stderr and `unitTestFiles` keeps the path order.
+When that timing run fails, the preset prints why on stderr and `unitTestFiles` keeps Bun's default directory order.
 The config then reads:
 
 ```js
