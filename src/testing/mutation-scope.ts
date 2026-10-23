@@ -102,7 +102,7 @@ export function pickFromDiff(changes: readonly Change[], mutated: (file: string)
   };
 }
 
-const IMPORT = /(?:from|import)[ \t]*\(?[ \t]*["'](\.[^"']*)["']|require\([ \t]*["'](\.[^"']*)["'][ \t]*\)/g;
+const IMPORT = /(?:from|import)\s*\(?\s*["'](\.[^"']*)["']|require\s*\(\s*["'](\.[^"']*)["']\s*\)/g;
 const LISTED_SEGMENTS = /["'`][ \t]*,[ \t]*["'`]/g;
 const DIRECTORY_ENDS = ['"', "'", "`", '/"', "/'", "/`", "/${"];
 
@@ -287,7 +287,11 @@ const transitivelyImported = Effect.fn("transitivelyImported")(function* (rev: s
   const loaded = new Set<string>();
   for (let next = [...roots]; next.length > 0; ) {
     for (const file of next) loaded.add(file);
-    const read = (file: string) => git(["show", `${rev}:${file}`]).pipe(Effect.map((text) => importsOf(file, text, paths, mains)));
+    const read = (file: string) =>
+      git(["show", `${rev}:${file}`]).pipe(
+        Effect.map((text) => importsOf(file, text, paths, mains)),
+        Effect.catch(() => Effect.succeed([] as readonly string[])),
+      );
     const imported = (yield* Effect.forEach(next, read, { concurrency: 16 })).flat();
     next = [...new Set(imported)].filter((file) => !loaded.has(file));
   }
@@ -378,7 +382,7 @@ export const stalenessSince = Effect.fn("stalenessSince")(function* (base: strin
   const atBase = new Set(yield* pathsAt(base, []));
   const atHead = new Set(yield* pathsAt(head, []));
   const preloads = { atBase: yield* preloadsAt(base, atBase), atHead: yield* preloadsAt(head, atHead) };
-  const mains = yield* readMains(head, atHead);
+  const mains = new Map([...(yield* readMains(base, atBase)), ...(yield* readMains(head, atHead))]);
   const preload = preloadChange(picked.paths, preloads, yield* loadedByPreloads(head, preloads.atHead, atHead, mains));
   const active = STRYKER_CONFIGS.find((name) => atHead.has(name));
   const config = yield* transitivelyImported(head, active === undefined ? [] : [active], atHead, mains);

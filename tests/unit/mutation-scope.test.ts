@@ -180,6 +180,19 @@ test("a directory require follows a dropped main and an invalid main to the pack
   expect([...readersOf(sources, ["broken/index.js"], mains).keys()]).toEqual(["stryker.conf.cjs"]);
 });
 
+test("multiline requires and imports reach their targets", () => {
+  const sources = new Map([
+    ["stryker.conf.cjs", 'const { ABS } = require(\n  "./settings.cjs"\n);\nconst { other } = require\n  ("./other.cjs");\n'],
+    ["settings.cjs", "module.exports = {};\n"],
+    ["other.cjs", "module.exports = {};\n"],
+    ["tests/unit/a.test.ts", 'import { a } from\n  "../lib/a.ts";\n'],
+    ["tests/lib/a.ts", "export {};\n"],
+  ]);
+  expect([...readersOf(sources, ["settings.cjs"]).keys()]).toEqual(["stryker.conf.cjs"]);
+  expect([...readersOf(sources, ["other.cjs"]).keys()]).toEqual(["stryker.conf.cjs"]);
+  expect([...readersOf(sources, ["tests/lib/a.ts"]).keys()]).toEqual(["tests/unit/a.test.ts"]);
+});
+
 test("a changed file never reads as a reader of another changed file", () => {
   const sources = new Map([["tests/unit/a.test.ts", 'import { effect0 } from "../lib/effect";\n']]);
 
