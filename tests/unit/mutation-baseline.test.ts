@@ -73,6 +73,22 @@ test("withoutStale drops stale tests, changed sources, and static non-killed res
   expect(withoutStale("not a state", { tests: new Set(["tests/unit/a.test.ts"]), sources: new Set([]) }).state).toBe("not a state");
 });
 
+test("withoutStale drops static non-killed results when the stale test is new to the state", () => {
+  const killed = { status: "Killed", coveredBy: ["0"], killedBy: ["0"] };
+  const state = {
+    files: { "src/other.ts": { mutants: [{ status: "Survived", static: true, coveredBy: [] }, killed] } },
+    testFiles: { "tests/unit/a.test.ts": { tests: [{ id: "0" }] } },
+  };
+  expect(withoutStale(state, { tests: new Set(["tests/unit/b.test.ts"]), sources: new Set([]) })).toEqual({
+    state: {
+      files: { "src/other.ts": { mutants: [killed] } },
+      testFiles: { "tests/unit/a.test.ts": { tests: [{ id: "0" }] } },
+    },
+    tests: [],
+    sources: ["src/other.ts"],
+  });
+});
+
 // GitHub's workflow command syntax reads one annotation per line and decodes %25, %0D and %0A in its message.
 test("pruneReport names the deleted, the missed and the kept artifacts", () => {
   const keeping = [

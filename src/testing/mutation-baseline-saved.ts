@@ -63,7 +63,7 @@ export function withoutStale(state: unknown, invalidation: Invalidation): Invali
         continue;
       }
       const before: unknown[] = file["mutants"];
-      const mutants = invalidation.sources.has(name) ? [] : tests.length === 0 ? before : before.filter((mutant) => !isStaleStatic(mutant));
+      const mutants = invalidation.sources.has(name) ? [] : invalidation.tests.size === 0 ? before : before.filter((mutant) => !isStaleStatic(mutant));
       if (mutants.length < before.length) sources.push(name);
       if (mutants.length > 0) nextFiles[name] = { ...file, mutants };
     }

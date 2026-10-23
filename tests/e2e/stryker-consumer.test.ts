@@ -245,6 +245,88 @@ test(
 );
 
 test(
+  "a pruned full state reruns a static mutant when an added test asserts what it would kill",
+  async () => {
+    await rm(join(dir, ".git"), { recursive: true, force: true });
+    await writeFile(join(dir, "bunfig.toml"), UNVENDORED_BUNFIG);
+    await writeFile(join(dir, "stryker.conf.mjs"), STRYKER_CONFIG);
+    await writeFile(join(dir, "widget.ts"), "export const widget = 40 + 2;\n");
+    await writeFile(join(dir, "helper.ts"), "export const check = (n: number): boolean => n > 0;\n");
+    await rm(join(dir, "f.ts"), { force: true });
+    await rm(join(dir, "src"), { recursive: true, force: true });
+    await rm(join(dir, "tests", "unit"), { recursive: true, force: true });
+    await mkdir(join(dir, "tests", "unit"), { recursive: true });
+    await writeFile(join(dir, "tests", "unit", "widget.test.ts"), PROBE_TEST);
+    await rm(join(dir, "reports"), { recursive: true, force: true });
+    const sha = await committedBase(["bunfig.toml", "stryker.conf.mjs", "package.json", "widget.ts", "helper.ts", "tests/unit/widget.test.ts"]);
+    const ci = { ...process.env, CI: "true" };
+
+    const full = await ran($`bunx stryker run --incremental --reporters json --mutate widget.ts`.cwd(dir).env(ci));
+    expect(full.exitCode).toBe(0);
+    const report = await Bun.file(join(dir, "reports", "mutation", "mutation.json")).text();
+    const state = await Bun.file(join(dir, "reports", "stryker-incremental.json")).text();
+    const probe = JSON.parse(state) as Report;
+    expect((probe.files["widget.ts"]?.mutants ?? []).filter((mutant) => mutant.status === "Survived")).not.toHaveLength(0);
+
+    await rm(join(dir, "reports"), { recursive: true, force: true });
+    await writeFile(join(dir, "tests", "unit", "exact.test.ts"), `import { expect, test } from "bun:test";\nimport { widget } from "../../widget.ts";\n\ntest("exact widget", () => {\n  expect(widget).toBe(42);\n});\n`);
+    await $`git add tests/unit/exact.test.ts && git -c user.email=fixture@example.com -c user.name=Fixture commit -qm exact`.cwd(dir).quiet();
+    await restoredFull(report, state, sha);
+
+    const rerun = await ran($`bunx stryker run --incremental --reporters json --mutate widget.ts`.cwd(dir).env(ci));
+    expect(rerun.exitCode).toBe(0);
+    const rerunReport: Report = await Bun.file(join(dir, "reports", "mutation", "mutation.json")).json();
+    const mutants = rerunReport.files["widget.ts"]?.mutants ?? [];
+    expect(mutants.length).toBeGreaterThan(0);
+    for (const mutant of mutants) expect(mutant.status).toBe("Killed");
+  },
+  480_000,
+);
+
+test(
+  "a pruned full state reruns a mutant whose test reads the changed file through another source",
+  async () => {
+    await rm(join(dir, ".git"), { recursive: true, force: true });
+    await writeFile(join(dir, "bunfig.toml"), UNVENDORED_BUNFIG);
+    await writeFile(join(dir, "stryker.conf.mjs"), STRYKER_CONFIG);
+    await rm(join(dir, "widget.ts"), { force: true });
+    await rm(join(dir, "helper.ts"), { force: true });
+    await rm(join(dir, "f.ts"), { force: true });
+    await rm(join(dir, "src"), { recursive: true, force: true });
+    await mkdir(join(dir, "src"), { recursive: true });
+    await writeFile(join(dir, "src", "a.ts"), `import { normalize } from "./b.ts";\n\nexport function f(x: number): number {\n  const v = x + 2;\n  return normalize(v);\n}\n`);
+    await writeFile(join(dir, "src", "b.ts"), "export const normalize = (v: number): number => v;\n");
+    await rm(join(dir, "tests", "unit"), { recursive: true, force: true });
+    await mkdir(join(dir, "tests", "unit"), { recursive: true });
+    await writeFile(join(dir, "tests", "unit", "f.test.ts"), `import { expect, test } from "bun:test";\nimport { f } from "../../src/a.ts";\n\ntest("f", () => {\n  expect(f(0)).toBe(2);\n});\n`);
+    await rm(join(dir, "reports"), { recursive: true, force: true });
+    const sha = await committedBase(["bunfig.toml", "stryker.conf.mjs", "package.json", "src/a.ts", "src/b.ts", "tests/unit/f.test.ts"]);
+    const ci = { ...process.env, CI: "true" };
+
+    const full = await ran($`bunx stryker run --incremental --reporters json --mutate "src/*.ts"`.cwd(dir).env(ci));
+    expect(full.exitCode).toBe(0);
+    const report = await Bun.file(join(dir, "reports", "mutation", "mutation.json")).text();
+    const state = await Bun.file(join(dir, "reports", "stryker-incremental.json")).text();
+    const probe = JSON.parse(state) as Report;
+    expect((probe.files["src/a.ts"]?.mutants ?? []).filter((mutant) => mutant.status === "Killed")).not.toHaveLength(0);
+
+    await rm(join(dir, "reports"), { recursive: true, force: true });
+    await writeFile(join(dir, "src", "b.ts"), "export const normalize = (v: number): number => Math.abs(v);\n");
+    await $`git add src/b.ts && git -c user.email=fixture@example.com -c user.name=Fixture commit -qm absolute`.cwd(dir).quiet();
+    await restoredFull(report, state, sha);
+
+    const rerun = await ran($`bunx stryker run --incremental --reporters json --mutate "src/*.ts"`.cwd(dir).env(ci));
+    expect(rerun.exitCode).toBe(0);
+    const rerunReport: Report = await Bun.file(join(dir, "reports", "mutation", "mutation.json")).json();
+    const mutants = rerunReport.files["src/a.ts"]?.mutants ?? [];
+    const arithmetic = mutants.filter((mutant) => mutant.replacement === "x - 2");
+    expect(arithmetic.length).toBeGreaterThan(0);
+    for (const mutant of arithmetic) expect(mutant.status).toBe("Survived");
+  },
+  480_000,
+);
+
+test(
   "a pruned full state reruns a changed source file instead of reusing its killer",
   async () => {
     await rm(join(dir, ".git"), { recursive: true, force: true });

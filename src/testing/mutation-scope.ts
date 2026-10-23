@@ -282,6 +282,13 @@ const readTestTree = Effect.fn("readTestTree")(function* (paths: Iterable<string
   return new Map(yield* Effect.forEach(files, read, { concurrency: 16 }));
 });
 
+const readImportGraph = Effect.fn("readImportGraph")(function* (paths: Iterable<string>) {
+  const fs = yield* FileSystem.FileSystem;
+  const files = [...paths].filter((path) => READ_FILE.test(path));
+  const read = (file: string) => fs.readFileString(file).pipe(Effect.map((text) => [file, text] as const));
+  return new Map(yield* Effect.forEach(files, read, { concurrency: 16 }));
+});
+
 const loadBaseline = Effect.fn("loadBaseline")(function* (report: string | undefined, tests: ReadonlySet<string>) {
   const fs = yield* FileSystem.FileSystem;
   if (report === undefined || !(yield* fs.exists(report))) {
@@ -318,7 +325,7 @@ export const stalenessSince = Effect.fn("stalenessSince")(function* (base: strin
   const preload = preloadChange(picked.paths, preloads, yield* loadedByPreloads(head, preloads.atHead, atHead));
   if (preload !== undefined) return { paths: picked.paths, preload, stale: [] };
   if (picked.paths.size === 0) return { paths: picked.paths, preload: undefined, stale: [] };
-  const readers = [...readersOf(yield* readTestTree(atHead), [...picked.paths])]
+  const readers = [...readersOf(yield* readImportGraph(atHead), [...picked.paths])]
     .filter(([reader]) => isUnitTest(reader))
     .map(([reader]) => reader);
   const stale = [...new Set([...[...picked.paths].filter(isUnitTest), ...readers])].toSorted();
