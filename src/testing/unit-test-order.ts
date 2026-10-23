@@ -44,7 +44,7 @@ export const runOrder = (listed: readonly string[]): Promise<readonly string[]> 
   Effect.runPromise(
     timedFiles(listed).pipe(
       Effect.map((timed) => inRunOrder(listed, timed)),
-      Effect.catch((failure) => Console.error(`checks: ${failure.message}, so each static mutant runs the unit tests in path order`).pipe(Effect.as(listed))),
+      Effect.catch((failure) => Console.error(`checks: ${failure.message}, so each static mutant runs the unit tests in Bun's default directory order`).pipe(Effect.as(listed))),
       Effect.provide(NodeServices),
     ),
   );
