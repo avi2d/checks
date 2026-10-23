@@ -134,7 +134,11 @@ function importedFile(path: string, files: ReadonlySet<string>, mains: ReadonlyM
     return directory === undefined ? [] : [directory];
   }
   const manifest = path === "" ? "package.json" : `${path}/package.json`;
-  const entry = probe(main) ?? index(main);
+  if (main === manifest) {
+    const directory = index(path);
+    return directory === undefined ? [manifest] : [manifest, directory];
+  }
+  const entry = probe(main) ?? index(main) ?? index(path);
   return entry === undefined ? [manifest] : [manifest, entry];
 }
 
@@ -319,9 +323,8 @@ const readMains = Effect.fn("readMains")(function* (rev: string, paths: Readonly
     if (entry === undefined) continue;
     const [file, text] = entry;
     const main = mainOf(text);
-    if (main === undefined) continue;
     const directory = file.includes("/") ? file.slice(0, file.lastIndexOf("/")) : "";
-    mains.set(directory, resolved(directory, main));
+    mains.set(directory, main === undefined ? file : resolved(directory, main));
   }
   return mains;
 });

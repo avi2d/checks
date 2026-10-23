@@ -162,6 +162,24 @@ test("a directory require depends on its manifest and on a main directory's inde
   expect([...readersOf(sources, ["settings/mode.cjs"], mains).keys()]).toEqual(["stryker.conf.cjs"]);
 });
 
+test("a directory require follows a dropped main and an invalid main to the package index", () => {
+  const sources = new Map([
+    ["stryker.conf.cjs", 'const { ABS } = require("./plain");\nconst { bad } = require("./broken");\n'],
+    ["plain/package.json", "{}\n"],
+    ["plain/index.js", "module.exports = {};\n"],
+    ["broken/package.json", '{ "main": "missing.cjs" }\n'],
+    ["broken/index.js", "module.exports = {};\n"],
+  ]);
+  const mains = new Map([
+    ["plain", "plain/package.json"],
+    ["broken", "broken/missing.cjs"],
+  ]);
+  expect([...readersOf(sources, ["plain/package.json"], mains).keys()]).toEqual(["stryker.conf.cjs"]);
+  expect([...readersOf(sources, ["plain/index.js"], mains).keys()]).toEqual(["stryker.conf.cjs"]);
+  expect([...readersOf(sources, ["broken/package.json"], mains).keys()]).toEqual(["stryker.conf.cjs"]);
+  expect([...readersOf(sources, ["broken/index.js"], mains).keys()]).toEqual(["stryker.conf.cjs"]);
+});
+
 test("a changed file never reads as a reader of another changed file", () => {
   const sources = new Map([["tests/unit/a.test.ts", 'import { effect0 } from "../lib/effect";\n']]);
 
