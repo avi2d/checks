@@ -85,6 +85,7 @@ test(
     await mkdir(join(dir, "tests", "unit"), { recursive: true });
     await writeFile(join(dir, "tests", "unit", "alpha.test.ts"), operandTest("alpha"));
     await writeFile(join(dir, "tests", "unit", "beta.test.ts"), operandTest("beta"));
+    const sha = await committedBase(dir, ["bunfig.toml", "stryker.conf.mjs", "package.json", "alpha.ts", "beta.ts", "tests/unit/alpha.test.ts", "tests/unit/beta.test.ts"]);
     const ci = { ...process.env, CI: "true" };
 
     const full = await ran($`bunx stryker run --incremental --reporters json --mutate "*.ts"`.cwd(dir).env(ci));
@@ -96,12 +97,19 @@ test(
     expect(alphaMutants.length).toBeGreaterThan(0);
     expect(betaMutants.length).toBeGreaterThan(0);
     const total = alphaMutants.length + betaMutants.length;
+    const report = await Bun.file(join(dir, "reports", "mutation", "mutation.json")).text();
+    const state = await Bun.file(join(dir, "reports", "stryker-incremental.json")).text();
 
+    await rm(join(dir, "reports"), { recursive: true, force: true });
+    await restoredFull(dir, report, state, sha);
     const same = await ran($`bunx stryker run --incremental --reporters json --mutate "*.ts"`.cwd(dir).env(ci));
     expect(same.exitCode).toBe(0);
     expect(reusedOf(same.text)).toEqual([total, total]);
 
+    await rm(join(dir, "reports"), { recursive: true, force: true });
     await writeFile(join(dir, "alpha.ts"), "export const alpha = 41 + 1;\n");
+    await $`git add alpha.ts && git -c user.email=fixture@example.com -c user.name=Fixture commit -qm alpha`.cwd(dir).quiet();
+    await restoredFull(dir, report, state, sha);
     const changed = await ran($`bunx stryker run --incremental --reporters json --mutate "*.ts"`.cwd(dir).env(ci));
     expect(changed.exitCode).toBe(0);
     expect(reusedOf(changed.text)).toEqual([betaMutants.length, total]);
