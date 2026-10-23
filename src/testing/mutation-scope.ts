@@ -13,7 +13,8 @@ const TEST_FILE = /\.test\.tsx?$/;
 const READ_FILE = /\.tsx?$/;
 const BUNFIG = "bunfig.toml";
 const MUTATION_RANGE = /:\d+(?::\d+)?-\d+(?::\d+)?$/;
-const IMPORTED_EXTENSIONS = [".tsx", ".ts", ".mts", ".mjs", ".js", ".json"];
+const IMPORT_EXTENSIONS = [".tsx", ".ts", ".mts", ".mjs", ".js", ".json"];
+const REQUIRE_EXTENSIONS = [".js", ".json", ".node", ".tsx", ".ts", ".mts", ".mjs"];
 
 export const STRYKER_DEFAULT_MUTATE = [
   "{src,lib}/**/!(*.+(s|S)pec|*.+(t|T)est).+(cjs|mjs|js|ts|mts|cts|jsx|tsx|html|vue|svelte)",
@@ -117,10 +118,20 @@ function resolved(directory: string, spec: string): string {
 }
 
 // Bun takes the file a specifier names, then one with an extension added, and only then the directory's index.
-function importedFile(path: string, files: ReadonlySet<string>): string | undefined {
-  const bare = path.replace(/\.m?js$/, "");
-  const tried = [path, ...IMPORTED_EXTENSIONS.map((extension) => bare + extension), ...IMPORTED_EXTENSIONS.map((extension) => `${path}/index${extension}`)];
-  return tried.find((file) => files.has(file));
+function importedFile(path: string, files: ReadonlySet<string>, mains: ReadonlyMap<string, string> = new Map(), isRequire = false): string | undefined {
+  const extensions = isRequire ? REQUIRE_EXTENSIONS : IMPORT_EXTENSIONS;
+  const probe = (target: string): string | undefined => {
+    const bare = target.replace(/\.m?js$/, "");
+    return [target, ...extensions.map((extension) => bare + extension)].find((file) => files.has(file));
+  };
+  const file = probe(path);
+  if (file !== undefined) return file;
+  const main = mains.get(path);
+  if (main !== undefined) {
+    const entry = probe(main);
+    if (entry !== undefined) return entry;
+  }
+  return extensions.map((extension) => `${path}/index${extension}`).find((file) => files.has(file));
 }
 
 function fixtureNeedles(changed: readonly string[]): readonly Needle[] {
@@ -143,13 +154,13 @@ function mentions(line: string, { text, kind }: Needle): boolean {
 
 type Edge = { readonly importer: string; readonly imported: string };
 
-function importsOf(file: string, text: string, files: ReadonlySet<string>): readonly string[] {
+function importsOf(file: string, text: string, files: ReadonlySet<string>, mains: ReadonlyMap<string, string> = new Map()): readonly string[] {
   const directory = file.slice(0, Math.max(file.lastIndexOf("/"), 0));
-  return [...text.matchAll(IMPORT)].flatMap(([, throughImport = "", throughRequire = ""]) => importedFile(resolved(directory, throughImport || throughRequire), files) ?? []);
+  return [...text.matchAll(IMPORT)].flatMap(([, throughImport = "", throughRequire = ""]) => importedFile(resolved(directory, throughImport || throughRequire), files, mains, throughImport === "") ?? []);
 }
 
-const edgesOf = (file: string, text: string, files: ReadonlySet<string>): readonly Edge[] =>
-  importsOf(file, text, files).map((imported) => ({ importer: file, imported }));
+const edgesOf = (file: string, text: string, files: ReadonlySet<string>, mains: ReadonlyMap<string, string> = new Map()): readonly Edge[] =>
+  importsOf(file, text, files, mains).map((imported) => ({ importer: file, imported }));
 
 function fixtureNamedIn(text: string, needles: readonly Needle[]): string | undefined {
   if (needles.length === 0) return undefined;
@@ -174,7 +185,7 @@ function spread(reached: Map<string, string>, edges: readonly Edge[]): void {
 }
 
 // Maps each file that reads a changed path, through an import or the fixture's path, to that changed path.
-export function readersOf(sources: ReadonlyMap<string, string>, changed: readonly string[]): Map<string, string> {
+export function readersOf(sources: ReadonlyMap<string, string>, changed: readonly string[], mains: ReadonlyMap<string, string> = new Map()): Map<string, string> {
   const reached = new Map(changed.map((path) => [path, path]));
   const needles = fixtureNeedles(changed);
   for (const [file, text] of sources) {
@@ -182,7 +193,7 @@ export function readersOf(sources: ReadonlyMap<string, string>, changed: readonl
     if (fixture !== undefined) reached.set(file, fixture);
   }
   const files = new Set([...sources.keys(), ...changed]);
-  spread(reached, [...sources].flatMap(([file, text]) => edgesOf(file, text, files)));
+  spread(reached, [...sources].flatMap(([file, text]) => edgesOf(file, text, files, mains)));
   return new Map([...reached].filter(([file, via]) => file !== via));
 }
 
@@ -264,19 +275,51 @@ const preloadsAt = Effect.fn("preloadsAt")(function* (rev: string, paths: Readon
   return (typeof preload === "string" ? [preload] : preload).map((entry) => resolved("", entry));
 });
 
-const transitivelyImported = Effect.fn("transitivelyImported")(function* (rev: string, roots: readonly string[], paths: ReadonlySet<string>) {
+const transitivelyImported = Effect.fn("transitivelyImported")(function* (rev: string, roots: readonly string[], paths: ReadonlySet<string>, mains: ReadonlyMap<string, string> = new Map()) {
   const loaded = new Set<string>();
   for (let next = [...roots]; next.length > 0; ) {
     for (const file of next) loaded.add(file);
-    const read = (file: string) => git(["show", `${rev}:${file}`]).pipe(Effect.map((text) => importsOf(file, text, paths)));
+    const read = (file: string) => git(["show", `${rev}:${file}`]).pipe(Effect.map((text) => importsOf(file, text, paths, mains)));
     const imported = (yield* Effect.forEach(next, read, { concurrency: 16 })).flat();
     next = [...new Set(imported)].filter((file) => !loaded.has(file));
   }
   return loaded;
 });
 
-const loadedByPreloads = Effect.fn("loadedByPreloads")(function* (rev: string, preloads: readonly string[], paths: ReadonlySet<string>) {
-  return yield* transitivelyImported(rev, preloads.flatMap((preload) => importedFile(preload, paths) ?? []), paths);
+const loadedByPreloads = Effect.fn("loadedByPreloads")(function* (rev: string, preloads: readonly string[], paths: ReadonlySet<string>, mains: ReadonlyMap<string, string> = new Map()) {
+  return yield* transitivelyImported(rev, preloads.flatMap((preload) => importedFile(preload, paths) ?? []), paths, mains);
+});
+
+function mainOf(text: string): string | undefined {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (typeof parsed === "object" && parsed !== null && typeof (parsed as Record<string, unknown>)["main"] === "string") {
+      const main = (parsed as Record<string, unknown>)["main"] as string;
+      return main.trim() === "" ? undefined : main;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+const readMains = Effect.fn("readMains")(function* (rev: string, paths: ReadonlySet<string>) {
+  const packages = [...paths].filter((path) => path === "package.json" || path.endsWith("/package.json"));
+  const entries = yield* Effect.forEach(
+    packages,
+    (file) => git(["show", `${rev}:${file}`]).pipe(Effect.map((text): readonly [string, string] => [file, text]), Effect.catch(() => Effect.succeed(undefined))),
+    { concurrency: 16 },
+  );
+  const mains = new Map<string, string>();
+  for (const entry of entries) {
+    if (entry === undefined) continue;
+    const [file, text] = entry;
+    const main = mainOf(text);
+    if (main === undefined) continue;
+    const directory = file.includes("/") ? file.slice(0, file.lastIndexOf("/")) : "";
+    mains.set(directory, resolved(directory, main));
+  }
+  return mains;
 });
 
 const readTestTree = Effect.fn("readTestTree")(function* (paths: Iterable<string>) {
@@ -328,12 +371,13 @@ export const stalenessSince = Effect.fn("stalenessSince")(function* (base: strin
   const atBase = new Set(yield* pathsAt(base, []));
   const atHead = new Set(yield* pathsAt(head, []));
   const preloads = { atBase: yield* preloadsAt(base, atBase), atHead: yield* preloadsAt(head, atHead) };
-  const preload = preloadChange(picked.paths, preloads, yield* loadedByPreloads(head, preloads.atHead, atHead));
+  const mains = yield* readMains(head, atHead);
+  const preload = preloadChange(picked.paths, preloads, yield* loadedByPreloads(head, preloads.atHead, atHead, mains));
   const active = STRYKER_CONFIGS.find((name) => atHead.has(name));
-  const config = yield* transitivelyImported(head, active === undefined ? [] : [active], atHead);
+  const config = yield* transitivelyImported(head, active === undefined ? [] : [active], atHead, mains);
   if (preload !== undefined) return { paths: picked.paths, preload, stale: [], config };
   if (picked.paths.size === 0) return { paths: picked.paths, preload: undefined, stale: [], config };
-  const readers = [...readersOf(yield* readImportGraph(atHead), [...picked.paths])]
+  const readers = [...readersOf(yield* readImportGraph(atHead), [...picked.paths], mains)]
     .filter(([reader]) => isUnitTest(reader))
     .map(([reader]) => reader);
   const stale = [...new Set([...[...picked.paths].filter(isUnitTest), ...readers])].toSorted();

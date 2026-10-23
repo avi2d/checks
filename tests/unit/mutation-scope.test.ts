@@ -130,6 +130,20 @@ test("an import naming a file reaches that file and not the index of a directory
   expect([...readersOf(sources, ["tests/lib/assertions/index.ts"]).keys()]).toEqual(["tests/unit/indexed.test.ts"]);
 });
 
+test("a require through a directory entry reaches the package main, and prefers .js over .ts", () => {
+  const sources = new Map([
+    ["stryker.conf.cjs", 'const { ABS } = require("./settings");\nconst { dual } = require("./dual");\n'],
+    ["settings/mode.cjs", "module.exports = {};\n"],
+    ["dual.js", "module.exports = {};\n"],
+    ["dual.ts", "export {};\n"],
+  ]);
+  const mains = new Map([["settings", "settings/mode.cjs"]]);
+  expect([...readersOf(sources, ["settings/mode.cjs"], mains).keys()]).toEqual(["stryker.conf.cjs"]);
+  expect(readersOf(sources, ["settings/mode.cjs"]).size).toBe(0);
+  expect([...readersOf(sources, ["dual.js"], mains).keys()]).toEqual(["stryker.conf.cjs"]);
+  expect(readersOf(sources, ["dual.ts"], mains).size).toBe(0);
+});
+
 test("a changed file never reads as a reader of another changed file", () => {
   const sources = new Map([["tests/unit/a.test.ts", 'import { effect0 } from "../lib/effect";\n']]);
 
