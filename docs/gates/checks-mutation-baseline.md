@@ -22,7 +22,7 @@ With `--full` it lists up to 50 `schedule` runs and up to 50 `workflow_dispatch`
 It tries those runs newest first, and restores the first `mutation-baseline-full` artifact that has not expired, downloads and holds the report.
 It tries no run after that one.
 It takes the report from `mutation.json` at the artifact's root, or else from `mutation/mutation.json`, and copies it to the destination.
-With an incremental destination it also copies `stryker-incremental.json` when the artifact holds one, so the next full run retests the mutants its changes reach.
+With an incremental destination it also copies `stryker-incremental.json` when the artifact holds one, so the next full run retests the mutants its changes reach, while inputs a test reads at runtime stay untracked.
 The restore then drops each test that reads a changed file and each mutant result for a changed source from the copied state.
 It drops non-killed results when any test goes stale.
 It drops the whole state when a Stryker config, stryker.preset.js, the lockfile, the Bun version, package.json apart from its version, a patch its patchedDependencies names, a file the active config loads at either revision, or the bunfig preload set or a file it loads changed.
@@ -178,7 +178,7 @@ The saved baseline uses none of the account's Actions storage, which every priva
 That storage accrues by the hour over the month, so an artifact deleted early still counts until the month ends.
 A baseline job on a GitHub-hosted runner uploads the same two files as a `mutation-baseline` artifact with `retention-days: 7` instead, since the restore reads only the newest `main` run.
 
-A full baseline job restores the previous full state before its incremental Stryker run, so it retests the mutants its changes reach.
+A full baseline job restores the previous full state before its incremental Stryker run, so it retests the mutants its changes reach, while inputs a test reads at runtime stay untracked.
 The checkout behind that step fetches the full history, so the restore can diff the restored run against `HEAD`:
 
 ```yaml

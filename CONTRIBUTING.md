@@ -22,7 +22,7 @@ A test that spawns `checks-lint` passes it `withoutPullRequestEvent()` from `tes
 CI runs the commands in `.github/workflows/ci.yml` and lints the pull request title in its `static` job.
 `.github/workflows/mutation.yml` runs Stryker, with `stryker.conf.mjs`, as a baseline on `main` or on any branch by hand, and no pull request runs it.
 The workflow has no schedule: the weekly full baseline starts with `gh workflow run mutation`.
-A hand-started run restores the previous full baseline state, so it retests the mutants its changes reach and fits the job timeout.
+A hand-started run restores the previous full baseline state, so it retests the mutants its changes reach and fits the job timeout, while inputs a test reads at runtime stay untracked.
 That run uploads the report and the incremental state again as the `mutation-baseline-full` artifact.
 A push run restores the previous baseline through [checks-mutation-baseline](docs/gates/checks-mutation-baseline.md).
 `.github/workflows/night-run.yml` runs at 02:07 UTC, and `gh workflow run night-run` starts it by hand, queued behind any night run already going.

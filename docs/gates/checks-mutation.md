@@ -82,7 +82,7 @@ An `--incremental` run with no report stops before instrumenting with the missin
 A repository runs full baselines from the mutation workflow on `workflow_dispatch`.
 A repository that picks a branch scope from a baseline starts that workflow weekly with `gh workflow run mutation`, because a GitHub schedule can start hours late.
 Run scoped checks locally during development.
-A first baseline with no state costs a full Stryker run, and each later one retests the mutants its changes reach.
+A first baseline with no state costs a full Stryker run, and each later one retests the mutants its changes reach, while inputs a test reads at runtime stay untracked.
 
 ## Running it in CI
 
@@ -121,7 +121,7 @@ jobs:
 
 A first baseline with no state tests every mutant.
 Each later restore drops the tests that read a changed file and the mutant results for a changed source from the restored state, and drops non-killed results when any test goes stale.
-It drops the whole state when a Stryker config, stryker.preset.js, the lockfile, the Bun version, package.json apart from its version, a patch its patchedDependencies names, a file the active config loads at either revision, or the bunfig preload set or a file it loads changed, and fails the restore when the state does not parse, so the run retests every mutant those changes reach and reuses the rest.
+It drops the whole state when a Stryker config, stryker.preset.js, the lockfile, the Bun version, package.json apart from its version, a patch its patchedDependencies names, a file the active config loads at either revision, or the bunfig preload set or a file it loads changed, and fails the restore when the state does not parse, so the run retests every mutant those changes reach and reuses the rest, while inputs a test reads at runtime stay untracked.
 The checkout fetches the full history, so the restore can tell which files changed since the previous full run.
 Its report names every test that covers each covered mutant and the first test that killed each killed mutant.
 [checks-mutation-scope](checks-mutation-scope.md#what-it-reads) says why that one killer is enough.
