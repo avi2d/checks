@@ -1,15 +1,9 @@
 #!/usr/bin/env bun
 import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
-import { ChildProcessSpawner } from "effect/process";
-import { collect } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { cacheRoot } from "../dependencies/cache-root.ts";
-import { INCREMENTAL, LATEST_ARTIFACT, outlived, REPORT, saveBaseline, savedFiles, savedShelf, slimmed, withoutStale } from "./mutation-baseline-saved.ts";
-import { STRYKER_CONFIGS, stalenessSince } from "./mutation-scope.ts";
-
-class BaselineFailure extends Schema.TaggedError<BaselineFailure>()("BaselineFailure", {
-  message: Schema.String,
-}) {}
+import { BaselineFailure, gh, pruneFullState } from "./mutation-baseline-full.ts";
+import { INCREMENTAL, LATEST_ARTIFACT, outlived, REPORT, saveBaseline, savedFiles, savedShelf, slimmed } from "./mutation-baseline-saved.ts";
 
 const NAME = "checks-mutation-baseline";
 const USAGE =
@@ -40,13 +34,6 @@ type Artifact = typeof Artifact.Type;
 
 const decodeRuns = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Array(Run)));
 const decodeArtifacts = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ artifacts: Schema.Array(Artifact) })));
-
-const gh = Effect.fn("gh")(function* (args: readonly string[]) {
-  const failed = (reason: string): BaselineFailure => new BaselineFailure({ message: `gh ${args.join(" ")}: ${reason.trim()}` });
-  const { stdout, stderr, exitCode } = yield* collect("gh", args).pipe(Effect.mapError((cause) => failed(cause.message)));
-  if (exitCode !== ChildProcessSpawner.ExitCode(0)) return yield* failed(stderr);
-  return stdout;
-});
 
 const warned = <A>(fallback: A) => (failure: BaselineFailure) => Console.error(`mutation-baseline: ${failure.message}`).pipe(Effect.as(fallback));
 
@@ -157,79 +144,6 @@ const held = Effect.fn("held")(function* (dir: string, names: readonly string[])
 });
 
 const holds = (dir: string, needed: Copy) => held(dir, needed.from).pipe(Effect.map(Option.isSome));
-
-const FULL_CONFIGS = [...STRYKER_CONFIGS, "stryker.preset.js", "bun.lock", ".bun-version"];
-
-const withoutVersion = (text: string): string | undefined => {
-  try {
-    const parsed: unknown = JSON.parse(text);
-    if (typeof parsed !== "object" || parsed === null) return undefined;
-    delete (parsed as Record<string, unknown>)["version"];
-    return JSON.stringify(parsed);
-  } catch {
-    return undefined;
-  }
-};
-
-const patchedPaths = (text: string | undefined): readonly string[] => {
-  if (text === undefined) return [];
-  try {
-    const parsed: unknown = JSON.parse(text);
-    if (typeof parsed !== "object" || parsed === null) return [];
-    const listed = (parsed as Record<string, unknown>)["patchedDependencies"];
-    if (typeof listed !== "object" || listed === null) return [];
-    return Object.values(listed as Record<string, unknown>).flatMap((value) =>
-      typeof value === "string" ? [value.replace(/^\.\//, "")] : [],
-    );
-  } catch {
-    return [];
-  }
-};
-
-const shownAt = (rev: string, path: string) =>
-  collect("git", ["show", `${rev}:${path}`]).pipe(
-    Effect.map(({ stdout, exitCode }) => (exitCode === ChildProcessSpawner.ExitCode(0) ? (stdout as string) : undefined)),
-    Effect.catch(() => Effect.succeed(undefined as string | undefined)),
-  );
-
-const packageInputs = Effect.fn("packageInputs")(function* (base: string, head: string, paths: ReadonlySet<string>) {
-  const inputs = new Set<string>();
-  const [before, after] = yield* Effect.all([shownAt(base, "package.json"), shownAt(head, "package.json")]);
-  if (paths.has("package.json") && (before === undefined || after === undefined || withoutVersion(before) !== withoutVersion(after)))
-    inputs.add("package.json");
-  for (const text of [before, after]) for (const path of patchedPaths(text)) if (paths.has(path)) inputs.add(path);
-  return inputs;
-});
-
-const decodeHeadSha = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ headSha: Schema.String })));
-
-const viewedHead = Effect.fn("viewedHead")(function* (run: number) {
-  return (yield* gh(["run", "view", String(run), "--json", "headSha"]).pipe(Effect.flatMap(decodeHeadSha))).headSha;
-});
-
-const pruneFullState = Effect.fn("pruneFullState")(function* (run: number, state: string) {
-  const fs = yield* FileSystem.FileSystem;
-  if (!(yield* fs.exists(state))) return;
-  const base = yield* viewedHead(run);
-  const { paths, preload, stale, config } = yield* stalenessSince(base, "HEAD");
-  const inputs = yield* packageInputs(base, "HEAD", paths);
-  const changed = [...paths].filter((path) => FULL_CONFIGS.includes(path) || inputs.has(path) || config.has(path)).toSorted();
-  if (changed.length > 0 || preload !== undefined) {
-    yield* fs.remove(state);
-    yield* Console.log(`mutation-baseline: dropped the restored full state, ${preload ?? changed.join(" ")} changed since run ${run}`);
-    return;
-  }
-  const text = yield* fs.readFileString(state);
-  const parsed: unknown = yield* Effect.try({
-    try: () => JSON.parse(text) as unknown,
-    catch: () => new BaselineFailure({ message: `${state} is not a Stryker incremental state with its test files` }),
-  });
-  const stripped = withoutStale(parsed, { tests: new Set(stale), sources: paths });
-  if (stripped.tests.length === 0 && stripped.sources.length === 0) return;
-  yield* fs.writeFileString(state, JSON.stringify(stripped.state));
-  const dropped = [...stripped.tests, ...stripped.sources.map((source) => `${source} results`)].join(" ");
-  yield* Console.log(`mutation-baseline: dropped ${dropped} from the restored full state`);
-});
 
 const downloaded = Effect.fn("downloaded")(function* (run: number, artifact: Artifact, dir: string, needed: Copy) {
   const fetched = yield* gh(["run", "download", String(run), "--name", artifact.name, "--dir", dir]).pipe(Effect.as(true), Effect.catch(warned(false)));
@@ -427,18 +341,21 @@ function parsed([first, ...rest]: readonly string[]): Command | undefined {
   return restoreRequest(first, report, extra);
 }
 
+const restoredRun = Effect.fn("restoredRun")(function* (run: number, name: string, root: Option.Option<string>, shelf: Option.Option<string>, request: Request) {
+  if (Option.isSome(shelf) && (yield* restoredFromSaved(shelf.value, run, request))) return true;
+  const artifact = yield* artifactOf(run, name).pipe(Effect.catch(warned(Option.none<Artifact>())));
+  if (Option.isNone(artifact) || !(yield* restoredFrom(run, artifact.value, root, request))) return false;
+  const incremental = request.full ? request.optional[0] : undefined;
+  if (incremental !== undefined) yield* pruneFullState(run, incremental.to);
+  return true;
+});
+
 const restoreBaseline = Effect.fn("restoreBaseline")(function* (request: Request) {
   const name = request.full ? FULL_ARTIFACT : LATEST_ARTIFACT;
   const root = yield* runnerCache;
   const shelf = request.full ? Option.none<string>() : yield* savedShelf(root);
   for (const run of yield* request.full ? fullCandidates : latestCandidates) {
-    if (Option.isSome(shelf) && (yield* restoredFromSaved(shelf.value, run, request))) return true;
-    const artifact = yield* artifactOf(run, name).pipe(Effect.catch(warned(Option.none<Artifact>())));
-    if (Option.isSome(artifact) && (yield* restoredFrom(run, artifact.value, root, request))) {
-      const incremental = request.full ? request.optional[0] : undefined;
-      if (incremental !== undefined) yield* pruneFullState(run, incremental.to);
-      return true;
-    }
+    if (yield* restoredRun(run, name, root, shelf, request)) return true;
   }
   yield* Console.log(`mutation-baseline: no successful ${BRANCH} run holds a ${name} artifact, so nothing was restored`);
   return true;
