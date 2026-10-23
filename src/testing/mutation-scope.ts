@@ -101,7 +101,7 @@ export function pickFromDiff(changes: readonly Change[], mutated: (file: string)
   };
 }
 
-const IMPORT = /(?:from|import)[ \t]*\(?[ \t]*["'](\.[^"']*)["']/g;
+const IMPORT = /(?:from|import)[ \t]*\(?[ \t]*["'](\.[^"']*)["']|require\([ \t]*["'](\.[^"']*)["'][ \t]*\)/g;
 const LISTED_SEGMENTS = /["'`][ \t]*,[ \t]*["'`]/g;
 const DIRECTORY_ENDS = ['"', "'", "`", '/"', "/'", "/`", "/${"];
 
@@ -145,7 +145,7 @@ type Edge = { readonly importer: string; readonly imported: string };
 
 function importsOf(file: string, text: string, files: ReadonlySet<string>): readonly string[] {
   const directory = file.slice(0, Math.max(file.lastIndexOf("/"), 0));
-  return [...text.matchAll(IMPORT)].flatMap(([, spec = ""]) => importedFile(resolved(directory, spec), files) ?? []);
+  return [...text.matchAll(IMPORT)].flatMap(([, throughImport = "", throughRequire = ""]) => importedFile(resolved(directory, throughImport || throughRequire), files) ?? []);
 }
 
 const edgesOf = (file: string, text: string, files: ReadonlySet<string>): readonly Edge[] =>

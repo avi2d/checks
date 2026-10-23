@@ -50,25 +50,6 @@ export function withoutStale(state: unknown, invalidation: Invalidation): Invali
   const testFiles = isRecord(state["testFiles"]) ? state["testFiles"] : undefined;
   const files = isRecord(state["files"]) ? state["files"] : undefined;
   if (testFiles === undefined && files === undefined) return kept;
-  const owners = new Map<string, string>();
-  if (testFiles !== undefined) {
-    for (const [file, entry] of Object.entries(testFiles)) {
-      const listed = isRecord(entry) && Array.isArray(entry["tests"]) ? entry["tests"] : [];
-      for (const one of listed) {
-        if (isRecord(one) && typeof one["id"] === "string") owners.set(one["id"], file);
-      }
-    }
-  }
-  const freshTest = (id: unknown): boolean => {
-    if (typeof id !== "string") return false;
-    const owner = owners.get(id);
-    return owner !== undefined && !invalidation.tests.has(owner);
-  };
-  const coveredFresh = (mutant: unknown): boolean => {
-    if (!isRecord(mutant)) return false;
-    const refs = [...(Array.isArray(mutant["coveredBy"]) ? mutant["coveredBy"] : []), ...(Array.isArray(mutant["killedBy"]) ? mutant["killedBy"] : [])];
-    return refs.length > 0 && refs.every(freshTest);
-  };
   const isKilled = (mutant: unknown): boolean => isRecord(mutant) && mutant["status"] === "Killed";
   const tests = testFiles === undefined ? [] : Object.keys(testFiles).filter((file) => invalidation.tests.has(file));
   const sources: string[] = [];
@@ -81,7 +62,7 @@ export function withoutStale(state: unknown, invalidation: Invalidation): Invali
         continue;
       }
       const before: unknown[] = file["mutants"];
-      const mutants = invalidation.sources.has(name) ? [] : invalidation.tests.size === 0 ? before : before.filter((mutant) => isKilled(mutant) || coveredFresh(mutant));
+      const mutants = invalidation.sources.has(name) ? [] : invalidation.tests.size === 0 ? before : before.filter(isKilled);
       if (mutants.length < before.length) sources.push(name);
       if (mutants.length > 0) nextFiles[name] = { ...file, mutants };
     }
