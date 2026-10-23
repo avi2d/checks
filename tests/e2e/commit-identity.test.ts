@@ -9,6 +9,7 @@ const SCRIPT = join(CHECKOUT, "src", "delivery", "commit-identity.ts");
 const OWNER = { name: "avi2d", email: "avi2dg@gmail.com" };
 const STRANGER = { name: "Pat Stranger", email: "stranger@example.com" };
 const SQUASH = { name: "GitHub", email: "noreply@github.com" };
+const DISPLAY_NAME = { name: "David Guseinov", email: "avi2dg@gmail.com" };
 const INTRUDER = { name: "Ivy Intruder", email: "intruder@example.com" };
 const ACTIONS_BOT = { name: "github-actions[bot]", email: "41898282+github-actions[bot]@users.noreply.github.com" };
 
@@ -125,6 +126,28 @@ test(
 
     const single = await check("HEAD");
     expect(single.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
+  "commit-identity accepts the GitHub display name on a commit GitHub made, and only there",
+  async () => {
+    await initRepo();
+    const base = await commit({ message: "feat: base" });
+    await commit({ message: "feat: merge (#57)", author: DISPLAY_NAME, committer: SQUASH });
+
+    const green = await check(base, "HEAD");
+    expect(green.text).toContain("1 commit(s)");
+    expect(green.exitCode).toBe(0);
+
+    const pushed = await commit({ message: "feat: pushed", author: DISPLAY_NAME });
+    const strangerMerge = await commit({ message: "feat: merge (#58)", author: STRANGER, committer: SQUASH });
+    const red = await check(base, "HEAD");
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain("2 of 3 commit(s)");
+    expect(red.text).toContain(`${pushed.slice(0, 12)} feat: pushed\n    author David Guseinov <avi2dg@gmail.com>`);
+    expect(red.text).toContain(`${strangerMerge.slice(0, 12)} feat: merge (#58)\n    author Pat Stranger <stranger@example.com>`);
   },
   60_000,
 );
