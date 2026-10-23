@@ -128,6 +128,18 @@ test(
     await writeFile(join(dir, "bunfig.toml"), UNVENDORED_BUNFIG);
     await writeFile(join(dir, "stryker.conf.mjs"), STRYKER_CONFIG);
     await rm(join(dir, "widget.ts"), { force: true });
+    await rm(join(dir, "helper.ts"), { force: true });
+    await rm(join(dir, "f.ts"), { force: true });
+    await rm(join(dir, "h.ts"), { force: true });
+    await rm(join(dir, "dual.ts"), { force: true });
+    await rm(join(dir, "dual.js"), { force: true });
+    await rm(join(dir, "settings.js"), { force: true });
+    await rm(join(dir, "settings.json"), { force: true });
+    await rm(join(dir, "settings"), { recursive: true, force: true });
+    await rm(join(dir, "src"), { recursive: true, force: true });
+    await rm(join(dir, ".git"), { recursive: true, force: true });
+    await rm(join(dir, "stryker.conf.js"), { force: true });
+    await rm(join(dir, "stryker.conf.cjs"), { force: true });
     await rm(join(dir, "tests", "unit"), { recursive: true, force: true });
     await rm(join(dir, "reports"), { recursive: true, force: true });
     await writeFile(join(dir, "alpha.ts"), "export const alpha = 40 + 2;\n");
