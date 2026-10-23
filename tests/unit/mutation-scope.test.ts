@@ -88,6 +88,20 @@ test("a reader reaches a changed helper through each import form, and an index f
   expect(readersOf(sources, ["tests/lib/setup/index.ts"])).toEqual(new Map([["tests/lib/preload.ts", "tests/lib/setup/index.ts"]]));
 });
 
+test("a reader reaches the .cjs file Bun loads for an extensionless import, and each twin a require could load", () => {
+  const sources = new Map([
+    ["tests/unit/a.test.ts", 'import { b } from "../lib/b";\n'],
+    ["tests/unit/c.test.ts", 'const { x } = require("../lib/x");\n'],
+    ["tests/lib/b.cjs", "export {};\n"],
+    ["tests/lib/x.js", "export {};\n"],
+    ["tests/lib/x.ts", "export {};\n"],
+  ]);
+
+  expect(readersOf(sources, ["tests/lib/b.cjs"])).toEqual(new Map([["tests/unit/a.test.ts", "tests/lib/b.cjs"]]));
+  expect(readersOf(sources, ["tests/lib/x.js"])).toEqual(new Map([["tests/unit/c.test.ts", "tests/lib/x.js"]]));
+  expect(readersOf(sources, ["tests/lib/x.ts"])).toEqual(new Map([["tests/unit/c.test.ts", "tests/lib/x.ts"]]));
+});
+
 test("every unit test reads a change to the preload list, to a preload, or to a file a preload loads, and to nothing else", () => {
   const preloads = { atBase: ["test-setup.ts", "tests/lib/assertions.ts"], atHead: ["test-setup.ts", "tests/lib/assertions.ts"] };
   const loaded = new Set(["test-setup.ts", "src/clock.ts"]);
@@ -128,6 +142,69 @@ test("an import naming a file reaches that file and not the index of a directory
 
   expect([...readersOf(sources, ["tests/lib/assertions.ts"]).keys()].sort()).toEqual(["tests/unit/bare.test.ts", "tests/unit/named.test.ts"]);
   expect([...readersOf(sources, ["tests/lib/assertions/index.ts"]).keys()]).toEqual(["tests/unit/indexed.test.ts"]);
+});
+
+test("a require through a directory entry reaches the package main, and each twin of a required file", () => {
+  const sources = new Map([
+    ["stryker.conf.cjs", 'const { ABS } = require("./settings");\nconst { dual } = require("./dual");\n'],
+    ["settings/mode.cjs", "module.exports = {};\n"],
+    ["dual.js", "module.exports = {};\n"],
+    ["dual.ts", "export {};\n"],
+  ]);
+  const mains = new Map([["settings", "settings/mode.cjs"]]);
+  expect([...readersOf(sources, ["settings/mode.cjs"], mains).keys()]).toEqual(["stryker.conf.cjs"]);
+  expect(readersOf(sources, ["settings/mode.cjs"]).size).toBe(0);
+  expect([...readersOf(sources, ["dual.js"], mains).keys()]).toEqual(["stryker.conf.cjs"]);
+  expect([...readersOf(sources, ["dual.ts"], mains).keys()]).toEqual(["stryker.conf.cjs"]);
+});
+
+test("a directory require depends on its manifest and on a main directory's index", () => {
+  const sources = new Map([
+    ["stryker.conf.cjs", 'const { ABS } = require("./settings");\nconst { other } = require("./other");\n'],
+    ["settings/mode.cjs", "module.exports = {};\n"],
+    ["settings/package.json", '{ "main": "mode.cjs" }\n'],
+    ["other/mode/index.json", '{ "ABS": "false" }\n'],
+    ["other/package.json", '{ "main": "mode" }\n'],
+  ]);
+  const mains = new Map([
+    ["settings", "settings/mode.cjs"],
+    ["other", "other/mode"],
+  ]);
+  expect([...readersOf(sources, ["settings/package.json"], mains).keys()]).toEqual(["stryker.conf.cjs"]);
+  expect([...readersOf(sources, ["other/mode/index.json"], mains).keys()]).toEqual(["stryker.conf.cjs"]);
+  expect([...readersOf(sources, ["other/package.json"], mains).keys()]).toEqual(["stryker.conf.cjs"]);
+  expect([...readersOf(sources, ["settings/mode.cjs"], mains).keys()]).toEqual(["stryker.conf.cjs"]);
+});
+
+test("a directory require follows a dropped main and an invalid main to the package index", () => {
+  const sources = new Map([
+    ["stryker.conf.cjs", 'const { ABS } = require("./plain");\nconst { bad } = require("./broken");\n'],
+    ["plain/package.json", "{}\n"],
+    ["plain/index.js", "module.exports = {};\n"],
+    ["broken/package.json", '{ "main": "missing.cjs" }\n'],
+    ["broken/index.js", "module.exports = {};\n"],
+  ]);
+  const mains = new Map([
+    ["plain", "plain/package.json"],
+    ["broken", "broken/missing.cjs"],
+  ]);
+  expect([...readersOf(sources, ["plain/package.json"], mains).keys()]).toEqual(["stryker.conf.cjs"]);
+  expect([...readersOf(sources, ["plain/index.js"], mains).keys()]).toEqual(["stryker.conf.cjs"]);
+  expect([...readersOf(sources, ["broken/package.json"], mains).keys()]).toEqual(["stryker.conf.cjs"]);
+  expect([...readersOf(sources, ["broken/index.js"], mains).keys()]).toEqual(["stryker.conf.cjs"]);
+});
+
+test("multiline requires and imports reach their targets", () => {
+  const sources = new Map([
+    ["stryker.conf.cjs", 'const { ABS } = require(\n  "./settings.cjs"\n);\nconst { other } = require\n  ("./other.cjs");\n'],
+    ["settings.cjs", "module.exports = {};\n"],
+    ["other.cjs", "module.exports = {};\n"],
+    ["tests/unit/a.test.ts", 'import { a } from\n  "../lib/a.ts";\n'],
+    ["tests/lib/a.ts", "export {};\n"],
+  ]);
+  expect([...readersOf(sources, ["settings.cjs"]).keys()]).toEqual(["stryker.conf.cjs"]);
+  expect([...readersOf(sources, ["other.cjs"]).keys()]).toEqual(["stryker.conf.cjs"]);
+  expect([...readersOf(sources, ["tests/lib/a.ts"]).keys()]).toEqual(["tests/unit/a.test.ts"]);
 });
 
 test("a changed file never reads as a reader of another changed file", () => {

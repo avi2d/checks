@@ -1,18 +1,13 @@
 #!/usr/bin/env bun
 import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
-import { ChildProcessSpawner } from "effect/process";
-import { collect } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { cacheRoot } from "../dependencies/cache-root.ts";
+import { BaselineFailure, gh, pruneFullState } from "./mutation-baseline-full.ts";
 import { INCREMENTAL, LATEST_ARTIFACT, outlived, REPORT, saveBaseline, savedFiles, savedShelf, slimmed } from "./mutation-baseline-saved.ts";
-
-class BaselineFailure extends Schema.TaggedError<BaselineFailure>()("BaselineFailure", {
-  message: Schema.String,
-}) {}
 
 const NAME = "checks-mutation-baseline";
 const USAGE =
-  "usage: checks-mutation-baseline <incremental-dest> [mutation-json-dest] | --full <mutation-json-dest> | --save <incremental-src> [mutation-json-src] | --slim <mutation-json-src> <dest> | --prune [--dry-run]";
+  "usage: checks-mutation-baseline <incremental-dest> [mutation-json-dest] | --full <mutation-json-dest> [incremental-dest] | --save <incremental-src> [mutation-json-src] | --slim <mutation-json-src> <dest> | --prune [--dry-run]";
 const WORKFLOW = "mutation.yml";
 const BRANCH = "main";
 const REPORT_ALONE = "mutation.json";
@@ -39,13 +34,6 @@ type Artifact = typeof Artifact.Type;
 
 const decodeRuns = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Array(Run)));
 const decodeArtifacts = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ artifacts: Schema.Array(Artifact) })));
-
-const gh = Effect.fn("gh")(function* (args: readonly string[]) {
-  const failed = (reason: string): BaselineFailure => new BaselineFailure({ message: `gh ${args.join(" ")}: ${reason.trim()}` });
-  const { stdout, stderr, exitCode } = yield* collect("gh", args).pipe(Effect.mapError((cause) => failed(cause.message)));
-  if (exitCode !== ChildProcessSpawner.ExitCode(0)) return yield* failed(stderr);
-  return stdout;
-});
 
 const warned = <A>(fallback: A) => (failure: BaselineFailure) => Console.error(`mutation-baseline: ${failure.message}`).pipe(Effect.as(fallback));
 
@@ -334,8 +322,15 @@ const FLAGS = new Map<string, (rest: readonly string[]) => Command | undefined>(
   ["--slim", ([from, to, ...extra]) => (isDestination(from) && isDestination(to) && extra.length === 0 ? { kind: "slim", from, to } : undefined)],
   [
     "--full",
-    ([report, ...extra]) =>
-      isDestination(report) && extra.length === 0 ? { kind: "restore", full: true, needed: { from: [REPORT_ALONE, REPORT], to: report }, optional: [] } : undefined,
+    ([report, incremental, ...extra]) =>
+      isDestination(report) && (incremental === undefined || isDestination(incremental)) && extra.length === 0
+        ? {
+            kind: "restore",
+            full: true,
+            needed: { from: [REPORT_ALONE, REPORT], to: report },
+            optional: incremental === undefined ? [] : [{ from: [INCREMENTAL], to: incremental }],
+          }
+        : undefined,
   ],
 ]);
 
@@ -346,14 +341,21 @@ function parsed([first, ...rest]: readonly string[]): Command | undefined {
   return restoreRequest(first, report, extra);
 }
 
+const restoredRun = Effect.fn("restoredRun")(function* (run: number, name: string, root: Option.Option<string>, shelf: Option.Option<string>, request: Request) {
+  if (Option.isSome(shelf) && (yield* restoredFromSaved(shelf.value, run, request))) return true;
+  const artifact = yield* artifactOf(run, name).pipe(Effect.catch(warned(Option.none<Artifact>())));
+  if (Option.isNone(artifact) || !(yield* restoredFrom(run, artifact.value, root, request))) return false;
+  const incremental = request.full ? request.optional[0] : undefined;
+  if (incremental !== undefined) yield* pruneFullState(run, incremental.to);
+  return true;
+});
+
 const restoreBaseline = Effect.fn("restoreBaseline")(function* (request: Request) {
   const name = request.full ? FULL_ARTIFACT : LATEST_ARTIFACT;
   const root = yield* runnerCache;
   const shelf = request.full ? Option.none<string>() : yield* savedShelf(root);
   for (const run of yield* request.full ? fullCandidates : latestCandidates) {
-    if (Option.isSome(shelf) && (yield* restoredFromSaved(shelf.value, run, request))) return true;
-    const artifact = yield* artifactOf(run, name).pipe(Effect.catch(warned(Option.none<Artifact>())));
-    if (Option.isSome(artifact) && (yield* restoredFrom(run, artifact.value, root, request))) return true;
+    if (yield* restoredRun(run, name, root, shelf, request)) return true;
   }
   yield* Console.log(`mutation-baseline: no successful ${BRANCH} run holds a ${name} artifact, so nothing was restored`);
   return true;

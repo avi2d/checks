@@ -3,17 +3,16 @@ import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { escape, minimatch } from "minimatch";
 import { changedPaths, git, pathsAt, rangeEnds, type Change } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
+import { isRecord } from "./mutation-baseline-saved.ts";
+import { importedFile, importsOf, readersOf, resolved, TEST_TREE } from "./mutation-scope-graph.ts";
 
 const NAME = "mutation-scope";
 const USAGE = "usage: mutation-scope.ts <base> [full-baseline-report]";
-const TEST_TREE = "tests/";
 const UNIT_TESTS = "tests/unit/";
-const FIXTURES = "tests/fixtures/";
 const TEST_FILE = /\.test\.tsx?$/;
 const READ_FILE = /\.tsx?$/;
 const BUNFIG = "bunfig.toml";
 const MUTATION_RANGE = /:\d+(?::\d+)?-\d+(?::\d+)?$/;
-const IMPORTED_EXTENSIONS = [".tsx", ".ts", ".mts", ".mjs", ".js"];
 
 export const STRYKER_DEFAULT_MUTATE = [
   "{src,lib}/**/!(*.+(s|S)pec|*.+(t|T)est).+(cjs|mjs|js|ts|mts|cts|jsx|tsx|html|vue|svelte)",
@@ -21,7 +20,7 @@ export const STRYKER_DEFAULT_MUTATE = [
 ];
 
 // Stryker loads the first of these that exists, in this order.
-const STRYKER_CONFIGS = ["", "."].flatMap((dot) =>
+export const STRYKER_CONFIGS = ["", "."].flatMap((dot) =>
   [".conf", ".config"].flatMap((kind) => ["json", "js", "mjs", "cjs"].map((extension) => `${dot}stryker${kind}.${extension}`)),
 );
 
@@ -101,90 +100,7 @@ export function pickFromDiff(changes: readonly Change[], mutated: (file: string)
   };
 }
 
-const IMPORT = /(?:from|import)[ \t]*\(?[ \t]*["'](\.[^"']*)["']/g;
-const LISTED_SEGMENTS = /["'`][ \t]*,[ \t]*["'`]/g;
-const DIRECTORY_ENDS = ['"', "'", "`", '/"', "/'", "/`", "/${"];
-
-type Needle = { readonly text: string; readonly kind: "file" | "directory"; readonly fixture: string };
-
-function resolved(directory: string, spec: string): string {
-  const parts: string[] = [];
-  for (const part of `${directory}/${spec}`.split("/")) {
-    if (part === "..") parts.pop();
-    else if (part !== "." && part !== "") parts.push(part);
-  }
-  return parts.join("/");
-}
-
-// Bun takes the file a specifier names, then one with an extension added, and only then the directory's index.
-function importedFile(path: string, files: ReadonlySet<string>): string | undefined {
-  const bare = path.replace(/\.m?js$/, "");
-  const tried = [path, ...IMPORTED_EXTENSIONS.map((extension) => bare + extension), ...IMPORTED_EXTENSIONS.map((extension) => `${path}/index${extension}`)];
-  return tried.find((file) => files.has(file));
-}
-
-function fixtureNeedles(changed: readonly string[]): readonly Needle[] {
-  const needles = new Map<string, Needle>();
-  for (const fixture of changed.filter((path) => path.startsWith(FIXTURES))) {
-    const text = fixture.slice(TEST_TREE.length);
-    needles.set(text, { text, kind: "file", fixture });
-    for (let end = text.lastIndexOf("/"); end > 0; end = text.lastIndexOf("/", end - 1)) {
-      const directory = text.slice(0, end);
-      if (!needles.has(directory)) needles.set(directory, { text: directory, kind: "directory", fixture });
-    }
-  }
-  return [...needles.values()];
-}
-
-function mentions(line: string, { text, kind }: Needle): boolean {
-  if (kind === "file") return line.includes(text);
-  return DIRECTORY_ENDS.some((end) => line.includes(text + end));
-}
-
-type Edge = { readonly importer: string; readonly imported: string };
-
-function importsOf(file: string, text: string, files: ReadonlySet<string>): readonly string[] {
-  const directory = file.slice(0, Math.max(file.lastIndexOf("/"), 0));
-  return [...text.matchAll(IMPORT)].flatMap(([, spec = ""]) => importedFile(resolved(directory, spec), files) ?? []);
-}
-
-const edgesOf = (file: string, text: string, files: ReadonlySet<string>): readonly Edge[] =>
-  importsOf(file, text, files).map((imported) => ({ importer: file, imported }));
-
-function fixtureNamedIn(text: string, needles: readonly Needle[]): string | undefined {
-  if (needles.length === 0) return undefined;
-  for (const line of text.split("\n")) {
-    const joined = line.replaceAll(LISTED_SEGMENTS, "/");
-    const needle = needles.find((each) => mentions(joined, each));
-    if (needle !== undefined) return needle.fixture;
-  }
-  return undefined;
-}
-
-function spread(reached: Map<string, string>, edges: readonly Edge[]): void {
-  for (let grew = true; grew; ) {
-    grew = false;
-    for (const { importer, imported } of edges) {
-      const via = reached.get(imported);
-      if (via === undefined || reached.has(importer)) continue;
-      reached.set(importer, via);
-      grew = true;
-    }
-  }
-}
-
-// Maps each file that reads a changed path, through an import or the fixture's path, to that changed path.
-export function readersOf(sources: ReadonlyMap<string, string>, changed: readonly string[]): Map<string, string> {
-  const reached = new Map(changed.map((path) => [path, path]));
-  const needles = fixtureNeedles(changed);
-  for (const [file, text] of sources) {
-    const fixture = reached.has(file) ? undefined : fixtureNamedIn(text, needles);
-    if (fixture !== undefined) reached.set(file, fixture);
-  }
-  const files = new Set([...sources.keys(), ...changed]);
-  spread(reached, [...sources].flatMap(([file, text]) => edgesOf(file, text, files)));
-  return new Map([...reached].filter(([file, via]) => file !== via));
-}
+export { readersOf };
 
 // Names what every unit test loads that the branch changes: the preload list, a preload, or a file a preload imports.
 export function preloadChange(
@@ -264,22 +180,70 @@ const preloadsAt = Effect.fn("preloadsAt")(function* (rev: string, paths: Readon
   return (typeof preload === "string" ? [preload] : preload).map((entry) => resolved("", entry));
 });
 
-const loadedByPreloads = Effect.fn("loadedByPreloads")(function* (rev: string, preloads: readonly string[], paths: ReadonlySet<string>) {
+const transitivelyImported = Effect.fn("transitivelyImported")(function* (rev: string, roots: readonly string[], paths: ReadonlySet<string>, mains: ReadonlyMap<string, string> = new Map()) {
   const loaded = new Set<string>();
-  for (let next = preloads.flatMap((preload) => importedFile(preload, paths) ?? []); next.length > 0; ) {
+  for (let next = [...roots]; next.length > 0; ) {
     for (const file of next) loaded.add(file);
-    const read = (file: string) => git(["show", `${rev}:${file}`]).pipe(Effect.map((text) => importsOf(file, text, paths)));
+    const read = (file: string) =>
+      git(["show", `${rev}:${file}`]).pipe(
+        Effect.map((text) => importsOf(file, text, paths, mains)),
+        Effect.catchTag("GitFailure", (): Effect.Effect<readonly string[]> => Effect.succeed([])),
+      );
     const imported = (yield* Effect.forEach(next, read, { concurrency: 16 })).flat();
     next = [...new Set(imported)].filter((file) => !loaded.has(file));
   }
   return loaded;
 });
 
-const readTestTree = Effect.fn("readTestTree")(function* (paths: Iterable<string>) {
+const loadedByPreloads = Effect.fn("loadedByPreloads")(function* (rev: string, preloads: readonly string[], paths: ReadonlySet<string>, mains: ReadonlyMap<string, string> = new Map()) {
+  return yield* transitivelyImported(rev, preloads.flatMap((preload) => importedFile(preload, paths, mains)), paths, mains);
+});
+
+const mainOf = (text: string) =>
+  Effect.try({
+    try: (): unknown => JSON.parse(text),
+    catch: () => new ScopeError({ message: "package.json does not parse as JSON holding a main entry" }),
+  }).pipe(
+    Effect.map((parsed) => {
+      if (!isRecord(parsed)) return undefined;
+      const main = parsed["main"];
+      return typeof main === "string" && main.trim() !== "" ? main : undefined;
+    }),
+    Effect.catchTag("ScopeError", () => Effect.succeed(undefined)),
+  );
+
+const readMains = Effect.fn("readMains")(function* (rev: string, paths: ReadonlySet<string>) {
+  const packages = [...paths].filter((path) => path === "package.json" || path.endsWith("/package.json"));
+  const entries = yield* Effect.forEach(
+    packages,
+    (file) => git(["show", `${rev}:${file}`]).pipe(Effect.map((text): readonly [string, string] => [file, text]), Effect.catchTag("GitFailure", () => Effect.succeed(undefined))),
+    { concurrency: 16 },
+  );
+  const mains = new Map<string, string>();
+  for (const entry of entries) {
+    if (entry === undefined) continue;
+    const [file, text] = entry;
+    const main = yield* mainOf(text);
+    const directory = file.includes("/") ? file.slice(0, file.lastIndexOf("/")) : "";
+    mains.set(directory, main === undefined ? file : resolved(directory, main));
+  }
+  return mains;
+});
+
+const readFiles = Effect.fn("readFiles")(function* (files: readonly string[]) {
   const fs = yield* FileSystem.FileSystem;
-  const files = [...paths].filter((path) => path.startsWith(TEST_TREE) && READ_FILE.test(path));
   const read = (file: string) => fs.readFileString(file).pipe(Effect.map((text) => [file, text] as const));
   return new Map(yield* Effect.forEach(files, read, { concurrency: 16 }));
+});
+
+const readTestTree = Effect.fn("readTestTree")(function* (paths: Iterable<string>) {
+  return yield* readFiles([...paths].filter((path) => path.startsWith(TEST_TREE) && READ_FILE.test(path)));
+});
+
+const GRAPH_FILE = /\.(?:tsx?|mts|cts|jsx?|mjs|cjs)$/;
+
+const readImportGraph = Effect.fn("readImportGraph")(function* (paths: Iterable<string>) {
+  return yield* readFiles([...paths].filter((path) => GRAPH_FILE.test(path)));
 });
 
 const loadBaseline = Effect.fn("loadBaseline")(function* (report: string | undefined, tests: ReadonlySet<string>) {
@@ -306,6 +270,30 @@ const unitReaders = Effect.fn("unitReaders")(function* (picked: Picked, { base, 
   const readers = [...readersOf(yield* readTestTree(atHead), [...picked.touched])].filter(([reader]) => isUnitTest(reader));
   for (const [reader, via] of readers) yield* Console.error(`${NAME}: ${reader} reads ${via}`);
   return readers;
+});
+
+export type Staleness = { readonly paths: ReadonlySet<string>; readonly preload: string | undefined; readonly stale: readonly string[]; readonly config: ReadonlySet<string> };
+
+export const stalenessSince = Effect.fn("stalenessSince")(function* (base: string, head: string) {
+  const picked = pickFromDiff(yield* changedPaths(base, head, []), () => false);
+  const atBase = new Set(yield* pathsAt(base, []));
+  const atHead = new Set(yield* pathsAt(head, []));
+  const preloads = { atBase: yield* preloadsAt(base, atBase), atHead: yield* preloadsAt(head, atHead) };
+  const mains = new Map([...(yield* readMains(base, atBase)), ...(yield* readMains(head, atHead))]);
+  const loaded = new Set([...(yield* loadedByPreloads(head, preloads.atHead, atHead, mains)), ...(yield* loadedByPreloads(base, preloads.atBase, atBase, mains))]);
+  const preload = preloadChange(picked.paths, preloads, loaded);
+  const active = { atBase: STRYKER_CONFIGS.find((name) => atBase.has(name)), atHead: STRYKER_CONFIGS.find((name) => atHead.has(name)) };
+  const config = new Set([
+    ...(yield* transitivelyImported(head, active.atHead === undefined ? [] : [active.atHead], atHead, mains)),
+    ...(yield* transitivelyImported(base, active.atBase === undefined ? [] : [active.atBase], atBase, mains)),
+  ]);
+  if (preload !== undefined) return { paths: picked.paths, preload, stale: [], config };
+  if (picked.paths.size === 0) return { paths: picked.paths, preload: undefined, stale: [], config };
+  const readers = [...readersOf(yield* readImportGraph(atHead), [...picked.paths], mains)]
+    .filter(([reader]) => isUnitTest(reader))
+    .map(([reader]) => reader);
+  const stale = [...new Set([...[...picked.paths].filter(isUnitTest), ...readers])].toSorted();
+  return { paths: picked.paths, preload: undefined, stale, config };
 });
 
 // An absent coverage edge holds only for a test whose merge-base source is the one the report ran.
