@@ -24,7 +24,7 @@ It tries no run after that one.
 It takes the report from `mutation.json` at the artifact's root, or else from `mutation/mutation.json`, and copies it to the destination.
 With an incremental destination it also copies `stryker-incremental.json` when the artifact holds one, so the next full run retests the mutants its changes reach.
 The restore then drops each test that reads a changed file and each mutant result for a changed source from the copied state.
-It drops non-killed results when any test goes stale, and drops the whole state when the Stryker config or the lockfile changed.
+It drops non-killed results when any test goes stale, and drops the whole state when the Stryker config, the lockfile, the Bun version, or a patch under patches/ changed.
 A state that does not parse fails the restore instead of running on unknown results.
 Without the state file the report still restores.
 

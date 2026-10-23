@@ -158,7 +158,7 @@ const held = Effect.fn("held")(function* (dir: string, names: readonly string[])
 
 const holds = (dir: string, needed: Copy) => held(dir, needed.from).pipe(Effect.map(Option.isSome));
 
-const FULL_CONFIGS = [...STRYKER_CONFIGS, "stryker.preset.js", "package.json", "bun.lock"];
+const FULL_CONFIGS = [...STRYKER_CONFIGS, "stryker.preset.js", "package.json", "bun.lock", ".bun-version"];
 
 const decodeHeadSha = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ headSha: Schema.String })));
 
@@ -170,7 +170,7 @@ const pruneFullState = Effect.fn("pruneFullState")(function* (run: number, state
   const fs = yield* FileSystem.FileSystem;
   if (!(yield* fs.exists(state))) return;
   const { paths, preload, stale, config } = yield* stalenessSince(yield* viewedHead(run), "HEAD");
-  const changed = [...paths].filter((path) => FULL_CONFIGS.includes(path) || config.has(path)).toSorted();
+  const changed = [...paths].filter((path) => FULL_CONFIGS.includes(path) || path.startsWith("patches/") || config.has(path)).toSorted();
   if (changed.length > 0 || preload !== undefined) {
     yield* fs.remove(state);
     yield* Console.log(`mutation-baseline: dropped the restored full state, ${preload ?? changed.join(" ")} changed since run ${run}`);

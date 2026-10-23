@@ -364,7 +364,11 @@ type Snapshots = { readonly base: string; readonly head: string; readonly atBase
 // Every unit test loads each preload, so a change to one makes every unit test read it.
 const unitReaders = Effect.fn("unitReaders")(function* (picked: Picked, { base, head, atBase, atHead }: Snapshots) {
   const preloads = { atBase: yield* preloadsAt(base, atBase), atHead: yield* preloadsAt(head, atHead) };
-  const everyTestReads = preloadChange(picked.paths, preloads, yield* loadedByPreloads(head, preloads.atHead, atHead));
+  const everyTestReads = preloadChange(
+    picked.paths,
+    preloads,
+    new Set([...(yield* loadedByPreloads(head, preloads.atHead, atHead)), ...(yield* loadedByPreloads(base, preloads.atBase, atBase))]),
+  );
   if (everyTestReads !== undefined) {
     yield* Console.error(`${NAME}: every unit test reads ${everyTestReads}`);
     return [...atHead].filter((test) => isUnitTest(test) && !picked.tests.has(test)).map((test) => [test, everyTestReads] as const);
@@ -383,9 +387,13 @@ export const stalenessSince = Effect.fn("stalenessSince")(function* (base: strin
   const atHead = new Set(yield* pathsAt(head, []));
   const preloads = { atBase: yield* preloadsAt(base, atBase), atHead: yield* preloadsAt(head, atHead) };
   const mains = new Map([...(yield* readMains(base, atBase)), ...(yield* readMains(head, atHead))]);
-  const preload = preloadChange(picked.paths, preloads, yield* loadedByPreloads(head, preloads.atHead, atHead, mains));
-  const active = STRYKER_CONFIGS.find((name) => atHead.has(name));
-  const config = yield* transitivelyImported(head, active === undefined ? [] : [active], atHead, mains);
+  const loaded = new Set([...(yield* loadedByPreloads(head, preloads.atHead, atHead, mains)), ...(yield* loadedByPreloads(base, preloads.atBase, atBase, mains))]);
+  const preload = preloadChange(picked.paths, preloads, loaded);
+  const active = { atBase: STRYKER_CONFIGS.find((name) => atBase.has(name)), atHead: STRYKER_CONFIGS.find((name) => atHead.has(name)) };
+  const config = new Set([
+    ...(yield* transitivelyImported(head, active.atHead === undefined ? [] : [active.atHead], atHead, mains)),
+    ...(yield* transitivelyImported(base, active.atBase === undefined ? [] : [active.atBase], atBase, mains)),
+  ]);
   if (preload !== undefined) return { paths: picked.paths, preload, stale: [], config };
   if (picked.paths.size === 0) return { paths: picked.paths, preload: undefined, stale: [], config };
   const readers = [...readersOf(yield* readImportGraph(atHead), [...picked.paths], mains)]

@@ -176,7 +176,7 @@ async function committedBase(files: readonly string[]): Promise<string> {
   return (await $`git rev-parse HEAD`.cwd(dir).quiet()).stdout.toString().trim();
 }
 
-async function restoredFull(report: string, state: string, sha: string): Promise<void> {
+async function restoredFull(report: string, state: string, sha: string): Promise<string> {
   const home = await mkdtemp(join(tmpdir(), "checks-stryker-restore-"));
   try {
     const fake = await fakeActions(home, 4242, [
@@ -200,6 +200,7 @@ async function restoredFull(report: string, state: string, sha: string): Promise
       }),
     );
     expect(restored.exitCode).toBe(0);
+    return restored.text;
   } finally {
     await rm(home, { recursive: true, force: true });
   }
@@ -855,7 +856,7 @@ test(
     await writeFile(join(dir, "bunfig.toml"), UNVENDORED_BUNFIG);
     await rm(join(dir, "stryker.conf.mjs"), { force: true });
     await rm(join(dir, "stryker.conf.js"), { force: true });
-    await writeFile(join(dir, "stryker.conf.cjs"), `const { ABS } = require("./settings");\n\nprocess.env.ABS = ABS;\n\nmodule.exports = {\n  packageManager: "npm",\n  plugins: ["@stryker-mutator/*", "@hughescr/stryker-bun-runner"],\n  testRunner: "bun",\n  coverageAnalysis: "perTest",\n  timeoutMS: 60000,\n  thresholds: { high: 85, low: 70, break: null },\n};\n`);
+    await writeFile(join(dir, "stryker.conf.cjs"), `const { ABS } = require("./settings");\nconst { TAG } = require("./settings/extra");\n\nprocess.env.ABS = ABS;\nprocess.env.TAG = TAG;\n\nmodule.exports = {\n  packageManager: "npm",\n  plugins: ["@stryker-mutator/*", "@hughescr/stryker-bun-runner"],\n  testRunner: "bun",\n  coverageAnalysis: "perTest",\n  timeoutMS: 60000,\n  thresholds: { high: 85, low: 70, break: null },\n};\n`);
     await rm(join(dir, "settings.js"), { force: true });
     await rm(join(dir, "settings.json"), { force: true });
     await rm(join(dir, "dual.js"), { force: true });
@@ -868,6 +869,8 @@ test(
     await writeFile(join(dir, "settings", "package.json"), `{ "main": "false.cjs" }\n`);
     await writeFile(join(dir, "settings", "false.cjs"), `module.exports = { ABS: "false" };\n`);
     await writeFile(join(dir, "settings", "index.js"), `module.exports = { ABS: "true" };\n`);
+    await writeFile(join(dir, "settings", "extra.js"), `module.exports = { TAG: "js" };\n`);
+    await writeFile(join(dir, "settings", "extra.json"), `{ "TAG": "json" }\n`);
     await writeFile(join(dir, "f.ts"), "const absolute = process.env.ABS === \"true\";\n\nexport function f(x: number): number {\n  const v = x + 2;\n  return absolute ? Math.abs(v) : v;\n}\n");
     await rm(join(dir, "widget.ts"), { force: true });
     await rm(join(dir, "helper.ts"), { force: true });
@@ -876,7 +879,7 @@ test(
     await mkdir(join(dir, "tests", "unit"), { recursive: true });
     await writeFile(join(dir, "tests", "unit", "f.test.ts"), `import { expect, test } from "bun:test";\nimport { f } from "../../f.ts";\n\ntest("f", () => {\n  expect(f(0)).toBe(2);\n});\n`);
     await rm(join(dir, "reports"), { recursive: true, force: true });
-    const sha = await committedBase(["bunfig.toml", "stryker.conf.cjs", "settings/package.json", "settings/false.cjs", "settings/index.js", "package.json", "f.ts", "tests/unit/f.test.ts"]);
+    const sha = await committedBase(["bunfig.toml", "stryker.conf.cjs", "settings/package.json", "settings/false.cjs", "settings/index.js", "settings/extra.js", "settings/extra.json", "package.json", "f.ts", "tests/unit/f.test.ts"]);
     const ci = { ...process.env, CI: "true" };
 
     const full = await ran($`bunx stryker run --incremental --reporters json --mutate f.ts`.cwd(dir).env(ci));
@@ -890,8 +893,10 @@ test(
 
     await rm(join(dir, "reports"), { recursive: true, force: true });
     await rm(join(dir, "settings", "package.json"));
-    await $`git rm -q settings/package.json && git -c user.email=fixture@example.com -c user.name=Fixture commit -qm flip`.cwd(dir).quiet();
-    await restoredFull(report, state, sha);
+    await rm(join(dir, "settings", "extra.js"));
+    await $`git rm -q settings/package.json settings/extra.js && git -c user.email=fixture@example.com -c user.name=Fixture commit -qm flip`.cwd(dir).quiet();
+    const dropped = await restoredFull(report, state, sha);
+    expect(dropped).toContain("settings/extra.js");
 
     const rerun = await ran($`bunx stryker run --incremental --reporters json --mutate f.ts`.cwd(dir).env(ci));
     expect(rerun.exitCode).toBe(0);
