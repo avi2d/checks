@@ -5,7 +5,7 @@ import { collect } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { cacheRoot } from "../dependencies/cache-root.ts";
 import { INCREMENTAL, LATEST_ARTIFACT, outlived, REPORT, saveBaseline, savedFiles, savedShelf, slimmed, withoutStale } from "./mutation-baseline-saved.ts";
-import { stalenessSince } from "./mutation-scope.ts";
+import { STRYKER_CONFIGS, stalenessSince } from "./mutation-scope.ts";
 
 class BaselineFailure extends Schema.TaggedError<BaselineFailure>()("BaselineFailure", {
   message: Schema.String,
@@ -158,7 +158,7 @@ const held = Effect.fn("held")(function* (dir: string, names: readonly string[])
 
 const holds = (dir: string, needed: Copy) => held(dir, needed.from).pipe(Effect.map(Option.isSome));
 
-const FULL_CONFIGS = ["stryker.conf.mjs", "stryker.preset.js", "package.json", "bun.lock"];
+const FULL_CONFIGS = [...STRYKER_CONFIGS, "stryker.preset.js", "package.json", "bun.lock"];
 
 const decodeHeadSha = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ headSha: Schema.String })));
 
@@ -169,8 +169,8 @@ const viewedHead = Effect.fn("viewedHead")(function* (run: number) {
 const pruneFullState = Effect.fn("pruneFullState")(function* (run: number, state: string) {
   const fs = yield* FileSystem.FileSystem;
   if (!(yield* fs.exists(state))) return;
-  const { paths, preload, stale } = yield* stalenessSince(yield* viewedHead(run), "HEAD");
-  const changed = [...paths].filter((path) => FULL_CONFIGS.includes(path)).toSorted();
+  const { paths, preload, stale, config } = yield* stalenessSince(yield* viewedHead(run), "HEAD");
+  const changed = [...paths].filter((path) => FULL_CONFIGS.includes(path) || config.has(path)).toSorted();
   if (changed.length > 0 || preload !== undefined) {
     yield* fs.remove(state);
     yield* Console.log(`mutation-baseline: dropped the restored full state, ${preload ?? changed.join(" ")} changed since run ${run}`);

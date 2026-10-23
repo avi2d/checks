@@ -181,6 +181,8 @@ The checkout behind that step fetches the full history, so the restore can diff 
   run: bunx checks-mutation-baseline --full reports/mutation/mutation.json reports/stryker-incremental.json
 ```
 
+The restore reads the repository's Actions through `gh`, so the job that holds it grants `contents: read` and `actions: read`.
+
 A full run uploads its slimmed report and its slimmed state as the `mutation-baseline-full` artifact, which a branch comparison's scope step reads on any runner.
 It slims the report and the state first, so the one directory holds about 10 MB in place of about 500 MB:
 

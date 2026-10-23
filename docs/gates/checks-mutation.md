@@ -94,6 +94,9 @@ on:
   workflow_dispatch:
 jobs:
   mutation:
+    permissions:
+      contents: read
+      actions: read
     runs-on: [self-hosted, Linux, X64, winbox]
     steps:
       - uses: actions/checkout@v5

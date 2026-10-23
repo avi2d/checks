@@ -21,7 +21,7 @@ export const STRYKER_DEFAULT_MUTATE = [
 ];
 
 // Stryker loads the first of these that exists, in this order.
-const STRYKER_CONFIGS = ["", "."].flatMap((dot) =>
+export const STRYKER_CONFIGS = ["", "."].flatMap((dot) =>
   [".conf", ".config"].flatMap((kind) => ["json", "js", "mjs", "cjs"].map((extension) => `${dot}stryker${kind}.${extension}`)),
 );
 
@@ -264,15 +264,19 @@ const preloadsAt = Effect.fn("preloadsAt")(function* (rev: string, paths: Readon
   return (typeof preload === "string" ? [preload] : preload).map((entry) => resolved("", entry));
 });
 
-const loadedByPreloads = Effect.fn("loadedByPreloads")(function* (rev: string, preloads: readonly string[], paths: ReadonlySet<string>) {
+const transitivelyImported = Effect.fn("transitivelyImported")(function* (rev: string, roots: readonly string[], paths: ReadonlySet<string>) {
   const loaded = new Set<string>();
-  for (let next = preloads.flatMap((preload) => importedFile(preload, paths) ?? []); next.length > 0; ) {
+  for (let next = [...roots]; next.length > 0; ) {
     for (const file of next) loaded.add(file);
     const read = (file: string) => git(["show", `${rev}:${file}`]).pipe(Effect.map((text) => importsOf(file, text, paths)));
     const imported = (yield* Effect.forEach(next, read, { concurrency: 16 })).flat();
     next = [...new Set(imported)].filter((file) => !loaded.has(file));
   }
   return loaded;
+});
+
+const loadedByPreloads = Effect.fn("loadedByPreloads")(function* (rev: string, preloads: readonly string[], paths: ReadonlySet<string>) {
+  return yield* transitivelyImported(rev, preloads.flatMap((preload) => importedFile(preload, paths) ?? []), paths);
 });
 
 const readTestTree = Effect.fn("readTestTree")(function* (paths: Iterable<string>) {
@@ -317,7 +321,7 @@ const unitReaders = Effect.fn("unitReaders")(function* (picked: Picked, { base, 
   return readers;
 });
 
-export type Staleness = { readonly paths: ReadonlySet<string>; readonly preload: string | undefined; readonly stale: readonly string[] };
+export type Staleness = { readonly paths: ReadonlySet<string>; readonly preload: string | undefined; readonly stale: readonly string[]; readonly config: ReadonlySet<string> };
 
 export const stalenessSince = Effect.fn("stalenessSince")(function* (base: string, head: string) {
   const picked = pickFromDiff(yield* changedPaths(base, head, []), () => false);
@@ -325,13 +329,15 @@ export const stalenessSince = Effect.fn("stalenessSince")(function* (base: strin
   const atHead = new Set(yield* pathsAt(head, []));
   const preloads = { atBase: yield* preloadsAt(base, atBase), atHead: yield* preloadsAt(head, atHead) };
   const preload = preloadChange(picked.paths, preloads, yield* loadedByPreloads(head, preloads.atHead, atHead));
-  if (preload !== undefined) return { paths: picked.paths, preload, stale: [] };
-  if (picked.paths.size === 0) return { paths: picked.paths, preload: undefined, stale: [] };
+  const active = STRYKER_CONFIGS.find((name) => atHead.has(name));
+  const config = yield* transitivelyImported(head, active === undefined ? [] : [active], atHead);
+  if (preload !== undefined) return { paths: picked.paths, preload, stale: [], config };
+  if (picked.paths.size === 0) return { paths: picked.paths, preload: undefined, stale: [], config };
   const readers = [...readersOf(yield* readImportGraph(atHead), [...picked.paths])]
     .filter(([reader]) => isUnitTest(reader))
     .map(([reader]) => reader);
   const stale = [...new Set([...[...picked.paths].filter(isUnitTest), ...readers])].toSorted();
-  return { paths: picked.paths, preload: undefined, stale };
+  return { paths: picked.paths, preload: undefined, stale, config };
 });
 
 // An absent coverage edge holds only for a test whose merge-base source is the one the report ran.
