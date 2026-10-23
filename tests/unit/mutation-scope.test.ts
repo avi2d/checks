@@ -88,6 +88,20 @@ test("a reader reaches a changed helper through each import form, and an index f
   expect(readersOf(sources, ["tests/lib/setup/index.ts"])).toEqual(new Map([["tests/lib/preload.ts", "tests/lib/setup/index.ts"]]));
 });
 
+test("a reader reaches the .cjs file Bun loads for an extensionless import, and each twin a require could load", () => {
+  const sources = new Map([
+    ["tests/unit/a.test.ts", 'import { b } from "../lib/b";\n'],
+    ["tests/unit/c.test.ts", 'const { x } = require("../lib/x");\n'],
+    ["tests/lib/b.cjs", "export {};\n"],
+    ["tests/lib/x.js", "export {};\n"],
+    ["tests/lib/x.ts", "export {};\n"],
+  ]);
+
+  expect(readersOf(sources, ["tests/lib/b.cjs"])).toEqual(new Map([["tests/unit/a.test.ts", "tests/lib/b.cjs"]]));
+  expect(readersOf(sources, ["tests/lib/x.js"])).toEqual(new Map([["tests/unit/c.test.ts", "tests/lib/x.js"]]));
+  expect(readersOf(sources, ["tests/lib/x.ts"])).toEqual(new Map([["tests/unit/c.test.ts", "tests/lib/x.ts"]]));
+});
+
 test("every unit test reads a change to the preload list, to a preload, or to a file a preload loads, and to nothing else", () => {
   const preloads = { atBase: ["test-setup.ts", "tests/lib/assertions.ts"], atHead: ["test-setup.ts", "tests/lib/assertions.ts"] };
   const loaded = new Set(["test-setup.ts", "src/clock.ts"]);
@@ -130,7 +144,7 @@ test("an import naming a file reaches that file and not the index of a directory
   expect([...readersOf(sources, ["tests/lib/assertions/index.ts"]).keys()]).toEqual(["tests/unit/indexed.test.ts"]);
 });
 
-test("a require through a directory entry reaches the package main, and prefers .js over .ts", () => {
+test("a require through a directory entry reaches the package main, and each twin of a required file", () => {
   const sources = new Map([
     ["stryker.conf.cjs", 'const { ABS } = require("./settings");\nconst { dual } = require("./dual");\n'],
     ["settings/mode.cjs", "module.exports = {};\n"],
@@ -141,7 +155,7 @@ test("a require through a directory entry reaches the package main, and prefers 
   expect([...readersOf(sources, ["settings/mode.cjs"], mains).keys()]).toEqual(["stryker.conf.cjs"]);
   expect(readersOf(sources, ["settings/mode.cjs"]).size).toBe(0);
   expect([...readersOf(sources, ["dual.js"], mains).keys()]).toEqual(["stryker.conf.cjs"]);
-  expect(readersOf(sources, ["dual.ts"], mains).size).toBe(0);
+  expect([...readersOf(sources, ["dual.ts"], mains).keys()]).toEqual(["stryker.conf.cjs"]);
 });
 
 test("a directory require depends on its manifest and on a main directory's index", () => {

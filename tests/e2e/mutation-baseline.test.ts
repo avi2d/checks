@@ -266,6 +266,53 @@ test("--full drops the restored state when the config changed since the full run
   expect(await runner.read("full/stryker-incremental.json")).toBeUndefined();
 }, 30_000);
 
+test("--full keeps the restored state when only the package.json version changed since the full run", async () => {
+  const runner = await gitRunner({ "package.json": '{"name":"fixture","version":"1.0.0"}\n' }, (sha) => [
+    run(35, "workflow_dispatch", "2026-10-03T12:00:00Z", [fullState(350, '{"testFiles":{}}')], sha),
+  ]);
+  await writeFile(join(runner.work, "package.json"), '{"name":"fixture","version":"1.0.1"}\n');
+  await $`git add -A && git commit -qm release`.cwd(runner.work).quiet();
+
+  const restored = await runner.run(["--full", "full/mutation.json", "full/stryker-incremental.json"]);
+
+  expect(restored.exitCode).toBe(0);
+  expect(restored.text).not.toContain("dropped the restored full state");
+  expect(await runner.read("full/mutation.json")).toBe('{"report":"with state"}');
+  expect(await runner.read("full/stryker-incremental.json")).toBe('{"testFiles":{}}');
+}, 30_000);
+
+test("--full drops the restored state when a package.json dependency changed since the full run", async () => {
+  const runner = await gitRunner({ "package.json": '{"name":"fixture","version":"1.0.0"}\n' }, (sha) => [
+    run(35, "workflow_dispatch", "2026-10-03T12:00:00Z", [fullState(350, '{"testFiles":{}}')], sha),
+  ]);
+  await writeFile(join(runner.work, "package.json"), '{"name":"fixture","version":"1.0.0","dependencies":{"left-pad":"1.0.0"}}\n');
+  await $`git add -A && git commit -qm depend`.cwd(runner.work).quiet();
+
+  const restored = await runner.run(["--full", "full/mutation.json", "full/stryker-incremental.json"]);
+
+  expect(restored.exitCode).toBe(0);
+  expect(restored.text).toContain("mutation-baseline: dropped the restored full state, package.json changed since run 35\n");
+  expect(await runner.read("full/stryker-incremental.json")).toBeUndefined();
+}, 30_000);
+
+test("--full drops the restored state when a patch its patchedDependencies names changed since the full run", async () => {
+  const runner = await gitRunner(
+    {
+      "package.json": '{"name":"fixture","patchedDependencies":{"left-pad@1.0.0":"vendor/left-pad.patch"}}\n',
+      "vendor/left-pad.patch": "--- a/index.js\n",
+    },
+    (sha) => [run(35, "workflow_dispatch", "2026-10-03T12:00:00Z", [fullState(350, '{"testFiles":{}}')], sha)],
+  );
+  await writeFile(join(runner.work, "vendor/left-pad.patch"), "--- a/index.js\n+++ b/index.js\n");
+  await $`git add -A && git commit -qm patch`.cwd(runner.work).quiet();
+
+  const restored = await runner.run(["--full", "full/mutation.json", "full/stryker-incremental.json"]);
+
+  expect(restored.exitCode).toBe(0);
+  expect(restored.text).toContain("mutation-baseline: dropped the restored full state, vendor/left-pad.patch changed since run 35\n");
+  expect(await runner.read("full/stryker-incremental.json")).toBeUndefined();
+}, 30_000);
+
 test("--full drops the restored state when the test preload changed since the full run", async () => {
   const runner = await gitRunner(
     { "bunfig.toml": '[test]\npreload = "./setup.ts"\n', "setup.ts": "export {};\n" },

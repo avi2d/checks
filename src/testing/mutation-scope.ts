@@ -13,8 +13,7 @@ const TEST_FILE = /\.test\.tsx?$/;
 const READ_FILE = /\.tsx?$/;
 const BUNFIG = "bunfig.toml";
 const MUTATION_RANGE = /:\d+(?::\d+)?-\d+(?::\d+)?$/;
-const IMPORT_EXTENSIONS = [".tsx", ".ts", ".mts", ".mjs", ".js", ".json"];
-const REQUIRE_EXTENSIONS = [".js", ".json", ".node", ".tsx", ".ts", ".mts", ".mjs"];
+const CANDIDATE_EXTENSIONS = [".tsx", ".ts", ".mts", ".cts", ".jsx", ".js", ".mjs", ".cjs", ".json", ".node"];
 
 export const STRYKER_DEFAULT_MUTATE = [
   "{src,lib}/**/!(*.+(s|S)pec|*.+(t|T)est).+(cjs|mjs|js|ts|mts|cts|jsx|tsx|html|vue|svelte)",
@@ -118,28 +117,20 @@ function resolved(directory: string, spec: string): string {
 }
 
 // Bun takes the file a specifier names, then one with an extension added, and only then the directory's index.
-function importedFile(path: string, files: ReadonlySet<string>, mains: ReadonlyMap<string, string> = new Map(), isRequire = false): readonly string[] {
-  const extensions = isRequire ? REQUIRE_EXTENSIONS : IMPORT_EXTENSIONS;
-  const probe = (target: string): string | undefined => {
+function importedFile(path: string, files: ReadonlySet<string>, mains: ReadonlyMap<string, string> = new Map()): readonly string[] {
+  const probe = (target: string): readonly string[] => {
     const bare = target.replace(/\.m?js$/, "");
-    return [target, ...extensions.map((extension) => bare + extension)].find((file) => files.has(file));
+    return [target, ...CANDIDATE_EXTENSIONS.map((extension) => bare + extension)].filter((file) => files.has(file));
   };
-  const index = (target: string): string | undefined =>
-    extensions.map((extension) => `${target}/index${extension}`).find((file) => files.has(file));
-  const file = probe(path);
-  if (file !== undefined) return [file];
+  const index = (target: string): readonly string[] =>
+    CANDIDATE_EXTENSIONS.map((extension) => `${target}/index${extension}`).filter((file) => files.has(file));
+  const direct = probe(path);
+  if (direct.length > 0) return direct;
   const main = mains.get(path);
-  if (main === undefined) {
-    const directory = index(path);
-    return directory === undefined ? [] : [directory];
-  }
+  if (main === undefined) return index(path);
   const manifest = path === "" ? "package.json" : `${path}/package.json`;
-  if (main === manifest) {
-    const directory = index(path);
-    return directory === undefined ? [manifest] : [manifest, directory];
-  }
-  const entry = probe(main) ?? index(main) ?? index(path);
-  return entry === undefined ? [manifest] : [manifest, entry];
+  if (main === manifest) return [manifest, ...index(path)];
+  return [manifest, ...probe(main), ...index(main), ...index(path)];
 }
 
 function fixtureNeedles(changed: readonly string[]): readonly Needle[] {
@@ -164,7 +155,7 @@ type Edge = { readonly importer: string; readonly imported: string };
 
 function importsOf(file: string, text: string, files: ReadonlySet<string>, mains: ReadonlyMap<string, string> = new Map()): readonly string[] {
   const directory = file.slice(0, Math.max(file.lastIndexOf("/"), 0));
-  return [...text.matchAll(IMPORT)].flatMap(([, throughImport = "", throughRequire = ""]) => importedFile(resolved(directory, throughImport || throughRequire), files, mains, throughImport === ""));
+  return [...text.matchAll(IMPORT)].flatMap(([, throughImport = "", throughRequire = ""]) => importedFile(resolved(directory, throughImport || throughRequire), files, mains));
 }
 
 const edgesOf = (file: string, text: string, files: ReadonlySet<string>, mains: ReadonlyMap<string, string> = new Map()): readonly Edge[] =>
@@ -364,11 +355,7 @@ type Snapshots = { readonly base: string; readonly head: string; readonly atBase
 // Every unit test loads each preload, so a change to one makes every unit test read it.
 const unitReaders = Effect.fn("unitReaders")(function* (picked: Picked, { base, head, atBase, atHead }: Snapshots) {
   const preloads = { atBase: yield* preloadsAt(base, atBase), atHead: yield* preloadsAt(head, atHead) };
-  const everyTestReads = preloadChange(
-    picked.paths,
-    preloads,
-    new Set([...(yield* loadedByPreloads(head, preloads.atHead, atHead)), ...(yield* loadedByPreloads(base, preloads.atBase, atBase))]),
-  );
+  const everyTestReads = preloadChange(picked.paths, preloads, yield* loadedByPreloads(head, preloads.atHead, atHead));
   if (everyTestReads !== undefined) {
     yield* Console.error(`${NAME}: every unit test reads ${everyTestReads}`);
     return [...atHead].filter((test) => isUnitTest(test) && !picked.tests.has(test)).map((test) => [test, everyTestReads] as const);

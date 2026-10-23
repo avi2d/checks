@@ -158,7 +158,48 @@ const held = Effect.fn("held")(function* (dir: string, names: readonly string[])
 
 const holds = (dir: string, needed: Copy) => held(dir, needed.from).pipe(Effect.map(Option.isSome));
 
-const FULL_CONFIGS = [...STRYKER_CONFIGS, "stryker.preset.js", "package.json", "bun.lock", ".bun-version"];
+const FULL_CONFIGS = [...STRYKER_CONFIGS, "stryker.preset.js", "bun.lock", ".bun-version"];
+
+const withoutVersion = (text: string): string | undefined => {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (typeof parsed !== "object" || parsed === null) return undefined;
+    delete (parsed as Record<string, unknown>)["version"];
+    return JSON.stringify(parsed);
+  } catch {
+    return undefined;
+  }
+};
+
+const patchedPaths = (text: string | undefined): readonly string[] => {
+  if (text === undefined) return [];
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (typeof parsed !== "object" || parsed === null) return [];
+    const listed = (parsed as Record<string, unknown>)["patchedDependencies"];
+    if (typeof listed !== "object" || listed === null) return [];
+    return Object.values(listed as Record<string, unknown>).flatMap((value) =>
+      typeof value === "string" ? [value.replace(/^\.\//, "")] : [],
+    );
+  } catch {
+    return [];
+  }
+};
+
+const shownAt = (rev: string, path: string) =>
+  collect("git", ["show", `${rev}:${path}`]).pipe(
+    Effect.map(({ stdout, exitCode }) => (exitCode === ChildProcessSpawner.ExitCode(0) ? (stdout as string) : undefined)),
+    Effect.catch(() => Effect.succeed(undefined as string | undefined)),
+  );
+
+const packageInputs = Effect.fn("packageInputs")(function* (base: string, head: string, paths: ReadonlySet<string>) {
+  const inputs = new Set<string>();
+  const [before, after] = yield* Effect.all([shownAt(base, "package.json"), shownAt(head, "package.json")]);
+  if (paths.has("package.json") && (before === undefined || after === undefined || withoutVersion(before) !== withoutVersion(after)))
+    inputs.add("package.json");
+  for (const text of [before, after]) for (const path of patchedPaths(text)) if (paths.has(path)) inputs.add(path);
+  return inputs;
+});
 
 const decodeHeadSha = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ headSha: Schema.String })));
 
@@ -169,8 +210,10 @@ const viewedHead = Effect.fn("viewedHead")(function* (run: number) {
 const pruneFullState = Effect.fn("pruneFullState")(function* (run: number, state: string) {
   const fs = yield* FileSystem.FileSystem;
   if (!(yield* fs.exists(state))) return;
-  const { paths, preload, stale, config } = yield* stalenessSince(yield* viewedHead(run), "HEAD");
-  const changed = [...paths].filter((path) => FULL_CONFIGS.includes(path) || path.startsWith("patches/") || config.has(path)).toSorted();
+  const base = yield* viewedHead(run);
+  const { paths, preload, stale, config } = yield* stalenessSince(base, "HEAD");
+  const inputs = yield* packageInputs(base, "HEAD", paths);
+  const changed = [...paths].filter((path) => FULL_CONFIGS.includes(path) || inputs.has(path) || config.has(path)).toSorted();
   if (changed.length > 0 || preload !== undefined) {
     yield* fs.remove(state);
     yield* Console.log(`mutation-baseline: dropped the restored full state, ${preload ?? changed.join(" ")} changed since run ${run}`);

@@ -24,7 +24,9 @@ It tries no run after that one.
 It takes the report from `mutation.json` at the artifact's root, or else from `mutation/mutation.json`, and copies it to the destination.
 With an incremental destination it also copies `stryker-incremental.json` when the artifact holds one, so the next full run retests the mutants its changes reach.
 The restore then drops each test that reads a changed file and each mutant result for a changed source from the copied state.
-It drops non-killed results when any test goes stale, and drops the whole state when the Stryker config, the lockfile, the Bun version, or a patch under patches/ changed.
+It drops non-killed results when any test goes stale.
+It drops the whole state when a Stryker config, stryker.preset.js, the lockfile, the Bun version, package.json apart from its version, a patch its patchedDependencies names, a file the active config loads at either revision, or the bunfig preload set or a file it loads changed.
+It walks the config and preload dependencies at both revisions, so a file only the older revision resolved still drops the state when it changes.
 A state that does not parse fails the restore instead of running on unknown results.
 Without the state file the report still restores.
 
@@ -113,7 +115,7 @@ checks-mutation-baseline --prune [--dry-run]
 | Code | When |
 | --- | --- |
 | 0 | it restored a baseline, found none to restore, saved the baseline or wrote the slim report |
-| 2 | the arguments do not parse, `gh` cannot list the runs, the cache cannot be written, another job removed the entry before it was copied, a file to save or slim does not parse, or `--save` runs where it refuses |
+| 2 | the arguments do not parse, `gh` cannot list the runs, the cache cannot be written, another job removed the entry before it was copied, a file to save or slim does not parse, `--save` runs where it refuses, or `--full` with an incremental destination cannot read the run's head, diff it, or parse the restored state |
 
 A failed artifact lookup or download prints the `gh` error and moves on, as a missing artifact does.
 With `--prune`, `0` means it deleted the superseded artifacts, found none, or could not delete some.
