@@ -216,9 +216,13 @@ test("--full restores the report and the state a one-directory upload holds at t
   expect(await runner.read("full/stryker-incremental.json")).toBe('{"state":"root layout"}');
 }, 30_000);
 
-test("--full drops the tests that read a changed file from the restored state", async () => {
+test("--full drops stale tests, changed sources, and static results from the restored state", async () => {
+  const killed = { status: "Killed", coveredBy: ["0"], killedBy: ["1"] };
   const state = JSON.stringify({
-    files: { "src/a.ts": { mutants: [] } },
+    files: {
+      "src/changed.ts": { mutants: [killed] },
+      "src/other.ts": { mutants: [{ status: "Survived", static: true, coveredBy: [] }, killed] },
+    },
     testFiles: { "tests/unit/a.test.ts": { tests: [{ id: "0" }] }, "tests/unit/b.test.ts": { tests: [{ id: "1" }] } },
   });
   const runner = await gitRunner(
@@ -226,20 +230,25 @@ test("--full drops the tests that read a changed file from the restored state", 
       "tests/unit/a.test.ts": 'import { helper } from "../helper";\nimport { expect, test } from "bun:test";\ntest("a", () => expect(helper).toBe(1));\n',
       "tests/unit/b.test.ts": 'import { expect, test } from "bun:test";\ntest("b", () => expect(1).toBe(1));\n',
       "tests/helper.ts": "export const helper = 1;\n",
+      "src/changed.ts": "export const changed = 1;\n",
+      "src/other.ts": "export const other = 1;\n",
     },
     (sha) => [run(35, "workflow_dispatch", "2026-10-03T12:00:00Z", [fullState(350, state)], sha)],
   );
   await writeFile(join(runner.work, "tests/helper.ts"), "export const helper = 2;\n");
+  await writeFile(join(runner.work, "src/changed.ts"), "export const changed = 2;\n");
   await $`git add -A && git commit -qm weaken`.cwd(runner.work).quiet();
 
   const restored = await runner.run(["--full", "full/mutation.json", "full/stryker-incremental.json"]);
 
   expect(restored.exitCode).toBe(0);
   expect(restored.text).toContain("mutation-baseline: downloaded it into the runner's cache, mutation-baseline-full artifact 350 from run 35\n");
-  expect(restored.text).toContain("mutation-baseline: dropped tests/unit/a.test.ts from the restored full state\n");
+  expect(restored.text).toContain(
+    "mutation-baseline: dropped tests/unit/a.test.ts src/changed.ts results src/other.ts results from the restored full state\n",
+  );
   expect(await runner.read("full/mutation.json")).toBe('{"report":"with state"}');
   expect(JSON.parse((await runner.read("full/stryker-incremental.json")) ?? "")).toEqual({
-    files: { "src/a.ts": { mutants: [] } },
+    files: { "src/other.ts": { mutants: [killed] } },
     testFiles: { "tests/unit/b.test.ts": { tests: [{ id: "1" }] } },
   });
 }, 30_000);
@@ -272,19 +281,14 @@ test("--full drops the restored state when the test preload changed since the fu
   expect(await runner.read("full/stryker-incremental.json")).toBeUndefined();
 }, 30_000);
 
-test("--full keeps a restored state it cannot parse and names why", async () => {
-  const runner = await gitRunner(
-    { "tests/unit/a.test.ts": 'import { expect, test } from "bun:test";\ntest("a", () => expect(1).toBe(1));\n' },
-    (sha) => [run(35, "workflow_dispatch", "2026-10-03T12:00:00Z", [fullState(350, "not json")], sha)],
-  );
-  await writeFile(join(runner.work, "tests/unit/a.test.ts"), 'import { expect, test } from "bun:test";\ntest("a", () => expect(2).toBe(2));\n');
-  await $`git add -A && git commit -qm weaken`.cwd(runner.work).quiet();
+test("--full fails the restore when the restored state does not parse", async () => {
+  const runner = await gitRunner({}, (sha) => [run(35, "workflow_dispatch", "2026-10-03T12:00:00Z", [fullState(350, "not json")], sha)]);
 
   const restored = await runner.run(["--full", "full/mutation.json", "full/stryker-incremental.json"]);
 
-  expect(restored.exitCode).toBe(0);
-  expect(restored.text).toContain("mutation-baseline: kept the restored full state, full/stryker-incremental.json is not a Stryker incremental state with its test files\n");
-  expect(await runner.read("full/stryker-incremental.json")).toBe("not json");
+  expect(restored.exitCode).toBe(2);
+  expect(restored.text).toContain("mutation-baseline: full/stryker-incremental.json is not a Stryker incremental state with its test files\n");
+  expect(await runner.read("full/mutation.json")).toBe('{"report":"with state"}');
 }, 30_000);
 
 test("--full passes over an artifact without the report and downloads no run after the first that holds one", async () => {

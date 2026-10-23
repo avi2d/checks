@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { Option } from "effect";
 import { newestFirst, pruneReport, pruned, superseded, uploadedBy } from "../../src/testing/mutation-baseline.ts";
-import { outlived, withoutReasons, withoutStaleTests } from "../../src/testing/mutation-baseline-saved.ts";
+import { outlived, withoutReasons, withoutStale } from "../../src/testing/mutation-baseline-saved.ts";
 
 // GitHub numbers artifacts in the order it creates them, so a higher id is a newer artifact.
 test("pruning keeps the highest artifact ids and the one being restored, and passes over a name that is no id", () => {
@@ -50,17 +50,27 @@ test("uploadedBy keeps the running run's unexpired baselines and nothing without
   expect(uploadedBy(artifacts, Option.none())).toEqual([]);
 });
 
-test("withoutStaleTests drops only the stale test files from the incremental state", () => {
+test("withoutStale drops stale tests, changed sources, and static non-killed results from the incremental state", () => {
+  const killed = { status: "Killed", coveredBy: ["0"], killedBy: ["1"] };
   const state = {
-    files: { "src/a.ts": { mutants: [{ status: "Killed", coveredBy: ["0"], killedBy: ["1"] }] } },
+    files: {
+      "src/changed.ts": { mutants: [killed] },
+      "src/other.ts": { mutants: [{ status: "Survived", static: true, coveredBy: [] }, killed] },
+    },
     testFiles: { "tests/unit/a.test.ts": { tests: [{ id: "0" }] }, "tests/unit/b.test.ts": { tests: [{ id: "1" }] } },
   };
-  expect(withoutStaleTests(state, ["tests/unit/b.test.ts"])).toEqual({
-    files: { "src/a.ts": { mutants: [{ status: "Killed", coveredBy: ["0"], killedBy: ["1"] }] } },
-    testFiles: { "tests/unit/a.test.ts": { tests: [{ id: "0" }] } },
+  expect(withoutStale(state, { tests: new Set(["tests/unit/b.test.ts"]), sources: new Set(["src/changed.ts"]) })).toEqual({
+    state: {
+      files: { "src/other.ts": { mutants: [killed] } },
+      testFiles: { "tests/unit/a.test.ts": { tests: [{ id: "0" }] } },
+    },
+    tests: ["tests/unit/b.test.ts"],
+    sources: ["src/changed.ts", "src/other.ts"],
   });
-  expect(withoutStaleTests(state, [])).toBe(state);
-  expect(withoutStaleTests("not a state", ["tests/unit/a.test.ts"])).toBe("not a state");
+  const untouched = withoutStale(state, { tests: new Set([]), sources: new Set([]) });
+  expect(untouched).toEqual({ state, tests: [], sources: [] });
+  expect(untouched.state).toBe(state);
+  expect(withoutStale("not a state", { tests: new Set(["tests/unit/a.test.ts"]), sources: new Set([]) }).state).toBe("not a state");
 });
 
 // GitHub's workflow command syntax reads one annotation per line and decodes %25, %0D and %0A in its message.

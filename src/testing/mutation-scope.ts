@@ -317,11 +317,11 @@ export const stalenessSince = Effect.fn("stalenessSince")(function* (base: strin
   const preloads = { atBase: yield* preloadsAt(base, atBase), atHead: yield* preloadsAt(head, atHead) };
   const preload = preloadChange(picked.paths, preloads, yield* loadedByPreloads(head, preloads.atHead, atHead));
   if (preload !== undefined) return { paths: picked.paths, preload, stale: [] };
-  if (picked.touched.size === 0) return { paths: picked.paths, preload: undefined, stale: [] };
-  const readers = [...readersOf(yield* readTestTree(atHead), [...picked.touched])]
+  if (picked.paths.size === 0) return { paths: picked.paths, preload: undefined, stale: [] };
+  const readers = [...readersOf(yield* readTestTree(atHead), [...picked.paths])]
     .filter(([reader]) => isUnitTest(reader))
     .map(([reader]) => reader);
-  const stale = [...new Set([...[...picked.touched].filter(isUnitTest), ...readers])].toSorted();
+  const stale = [...new Set([...[...picked.paths].filter(isUnitTest), ...readers])].toSorted();
   return { paths: picked.paths, preload: undefined, stale };
 });
 

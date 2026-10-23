@@ -40,10 +40,46 @@ const slimOf = Effect.fn("slimOf")(function* (from: string) {
   return withoutReasons(report);
 });
 
-export function withoutStaleTests(state: unknown, stale: readonly string[]): unknown {
-  if (!isRecord(state) || !isRecord(state["testFiles"]) || stale.length === 0) return state;
-  const removed = new Set(stale);
-  return { ...state, testFiles: Object.fromEntries(Object.entries(state["testFiles"]).filter(([file]) => !removed.has(file))) };
+export type Invalidation = { readonly tests: ReadonlySet<string>; readonly sources: ReadonlySet<string> };
+
+export type Invalidated = { readonly state: unknown; readonly tests: readonly string[]; readonly sources: readonly string[] };
+
+const isStaleStatic = (mutant: unknown): boolean => isRecord(mutant) && mutant["static"] === true && mutant["status"] !== "Killed";
+
+export function withoutStale(state: unknown, invalidation: Invalidation): Invalidated {
+  const kept: Invalidated = { state, tests: [], sources: [] };
+  if (!isRecord(state)) return kept;
+  const testFiles = isRecord(state["testFiles"]) ? state["testFiles"] : undefined;
+  const files = isRecord(state["files"]) ? state["files"] : undefined;
+  if (testFiles === undefined && files === undefined) return kept;
+  const tests = testFiles === undefined ? [] : Object.keys(testFiles).filter((file) => invalidation.tests.has(file));
+  const sources: string[] = [];
+  let nextFiles: Record<string, unknown> | undefined;
+  if (files !== undefined) {
+    nextFiles = {};
+    for (const [name, file] of Object.entries(files)) {
+      if (!isRecord(file) || !Array.isArray(file["mutants"])) {
+        nextFiles[name] = file;
+        continue;
+      }
+      const before: unknown[] = file["mutants"];
+      const mutants = invalidation.sources.has(name) ? [] : tests.length === 0 ? before : before.filter((mutant) => !isStaleStatic(mutant));
+      if (mutants.length < before.length) sources.push(name);
+      if (mutants.length > 0) nextFiles[name] = { ...file, mutants };
+    }
+  }
+  if (tests.length === 0 && sources.length === 0) return kept;
+  return {
+    state: {
+      ...state,
+      ...(testFiles === undefined
+        ? {}
+        : { testFiles: Object.fromEntries(Object.entries(testFiles).filter(([file]) => !invalidation.tests.has(file))) }),
+      ...(nextFiles === undefined ? {} : { files: nextFiles }),
+    },
+    tests: tests.toSorted(),
+    sources: sources.toSorted(),
+  };
 }
 
 export const slimmed = Effect.fn("slimmed")(function* (from: string, to: string) {

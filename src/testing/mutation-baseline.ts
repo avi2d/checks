@@ -4,7 +4,7 @@ import { ChildProcessSpawner } from "effect/process";
 import { collect } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { cacheRoot } from "../dependencies/cache-root.ts";
-import { INCREMENTAL, LATEST_ARTIFACT, outlived, REPORT, saveBaseline, savedFiles, savedShelf, slimmed, withoutStaleTests } from "./mutation-baseline-saved.ts";
+import { INCREMENTAL, LATEST_ARTIFACT, outlived, REPORT, saveBaseline, savedFiles, savedShelf, slimmed, withoutStale } from "./mutation-baseline-saved.ts";
 import { stalenessSince } from "./mutation-scope.ts";
 
 class BaselineFailure extends Schema.TaggedError<BaselineFailure>()("BaselineFailure", {
@@ -166,11 +166,6 @@ const viewedHead = Effect.fn("viewedHead")(function* (run: number) {
   return (yield* gh(["run", "view", String(run), "--json", "headSha"]).pipe(Effect.flatMap(decodeHeadSha))).headSha;
 });
 
-const pruneFailed = (cause: unknown): BaselineFailure =>
-  new BaselineFailure({
-    message: typeof cause === "object" && cause !== null && "message" in cause ? String(cause.message) : String(cause),
-  });
-
 const pruneFullState = Effect.fn("pruneFullState")(function* (run: number, state: string) {
   const fs = yield* FileSystem.FileSystem;
   if (!(yield* fs.exists(state))) return;
@@ -181,14 +176,16 @@ const pruneFullState = Effect.fn("pruneFullState")(function* (run: number, state
     yield* Console.log(`mutation-baseline: dropped the restored full state, ${preload ?? changed.join(" ")} changed since run ${run}`);
     return;
   }
-  if (stale.length === 0) return;
   const text = yield* fs.readFileString(state);
-  const stripped = yield* Effect.try({
-    try: () => withoutStaleTests(JSON.parse(text) as unknown, stale),
+  const parsed: unknown = yield* Effect.try({
+    try: () => JSON.parse(text) as unknown,
     catch: () => new BaselineFailure({ message: `${state} is not a Stryker incremental state with its test files` }),
   });
-  yield* fs.writeFileString(state, JSON.stringify(stripped));
-  yield* Console.log(`mutation-baseline: dropped ${stale.join(" ")} from the restored full state`);
+  const stripped = withoutStale(parsed, { tests: new Set(stale), sources: paths });
+  if (stripped.tests.length === 0 && stripped.sources.length === 0) return;
+  yield* fs.writeFileString(state, JSON.stringify(stripped.state));
+  const dropped = [...stripped.tests, ...stripped.sources.map((source) => `${source} results`)].join(" ");
+  yield* Console.log(`mutation-baseline: dropped ${dropped} from the restored full state`);
 });
 
 const downloaded = Effect.fn("downloaded")(function* (run: number, artifact: Artifact, dir: string, needed: Copy) {
@@ -396,11 +393,7 @@ const restoreBaseline = Effect.fn("restoreBaseline")(function* (request: Request
     const artifact = yield* artifactOf(run, name).pipe(Effect.catch(warned(Option.none<Artifact>())));
     if (Option.isSome(artifact) && (yield* restoredFrom(run, artifact.value, root, request))) {
       const incremental = request.full ? request.optional[0] : undefined;
-      if (incremental !== undefined) {
-        yield* pruneFullState(run, incremental.to).pipe(
-          Effect.catch((cause) => Console.error(`mutation-baseline: kept the restored full state, ${pruneFailed(cause).message}`)),
-        );
-      }
+      if (incremental !== undefined) yield* pruneFullState(run, incremental.to);
       return true;
     }
   }

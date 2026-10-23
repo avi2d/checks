@@ -117,7 +117,8 @@ jobs:
 ```
 
 A first baseline with no state tests every mutant.
-Each later restore drops the tests that read a changed file from the restored state, and drops the whole state when the Stryker config or the lockfile changed, so the run retests every mutant those changes reach and reuses the rest.
+Each later restore drops the tests that read a changed file and the mutant results for a changed source from the restored state, and drops non-killed static results when any test goes stale.
+It drops the whole state when the Stryker config or the lockfile changed, and fails the restore when the state does not parse, so the run retests every mutant those changes reach and reuses the rest.
 The checkout fetches the full history, so the restore can tell which files changed since the previous full run.
 Its report names every test that covers each covered mutant and the first test that killed each killed mutant.
 [checks-mutation-scope](checks-mutation-scope.md#what-it-reads) says why that one killer is enough.
