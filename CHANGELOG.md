@@ -2,6 +2,19 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.51.0
+
+Released 2026-10-23.
+
+### Features
+
+- **testing:** reuse full baseline results for unchanged files [#197](https://github.com/avi2d/checks/pull/197)
+
+### Fixes
+
+- **delivery:** accept GitHub display name on commits GitHub made [#198](https://github.com/avi2d/checks/pull/198)
+- **testing:** correct unit test fallback order wording to Bun default directory order [#195](https://github.com/avi2d/checks/pull/195)
+
 ## 0.50.1
 
 Released 2026-10-20.
