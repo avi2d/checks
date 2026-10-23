@@ -13,7 +13,7 @@ const TEST_FILE = /\.test\.tsx?$/;
 const READ_FILE = /\.tsx?$/;
 const BUNFIG = "bunfig.toml";
 const MUTATION_RANGE = /:\d+(?::\d+)?-\d+(?::\d+)?$/;
-const IMPORTED_EXTENSIONS = [".tsx", ".ts", ".mts", ".mjs", ".js"];
+const IMPORTED_EXTENSIONS = [".tsx", ".ts", ".mts", ".mjs", ".js", ".json"];
 
 export const STRYKER_DEFAULT_MUTATE = [
   "{src,lib}/**/!(*.+(s|S)pec|*.+(t|T)est).+(cjs|mjs|js|ts|mts|cts|jsx|tsx|html|vue|svelte)",
