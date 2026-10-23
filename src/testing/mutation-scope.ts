@@ -282,9 +282,11 @@ const readTestTree = Effect.fn("readTestTree")(function* (paths: Iterable<string
   return new Map(yield* Effect.forEach(files, read, { concurrency: 16 }));
 });
 
+const GRAPH_FILE = /\.(?:tsx?|mts|cts|jsx?|mjs|cjs)$/;
+
 const readImportGraph = Effect.fn("readImportGraph")(function* (paths: Iterable<string>) {
   const fs = yield* FileSystem.FileSystem;
-  const files = [...paths].filter((path) => READ_FILE.test(path));
+  const files = [...paths].filter((path) => GRAPH_FILE.test(path));
   const read = (file: string) => fs.readFileString(file).pipe(Effect.map((text) => [file, text] as const));
   return new Map(yield* Effect.forEach(files, read, { concurrency: 16 }));
 });

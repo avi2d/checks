@@ -89,6 +89,35 @@ test("withoutStale drops static non-killed results when the stale test is new to
   });
 });
 
+test("withoutStale drops non-killed mutants covered only by stale tests and keeps those covered by fresh tests", () => {
+  const state = {
+    files: {
+      "src/mixed.ts": {
+        mutants: [
+          { status: "Survived", coveredBy: ["0"] },
+          { status: "Survived", coveredBy: ["1"] },
+          { status: "Survived", coveredBy: ["0", "1"] },
+          { status: "Killed", coveredBy: ["0"], killedBy: ["0"] },
+          { status: "Survived", coveredBy: [], killedBy: [] },
+        ],
+      },
+    },
+    testFiles: { "tests/unit/a.test.ts": { tests: [{ id: "0" }] }, "tests/unit/b.test.ts": { tests: [{ id: "1" }] } },
+  };
+  expect(withoutStale(state, { tests: new Set(["tests/unit/a.test.ts"]), sources: new Set([]) })).toEqual({
+    state: {
+      files: {
+        "src/mixed.ts": {
+          mutants: [{ status: "Survived", coveredBy: ["1"] }, { status: "Killed", coveredBy: ["0"], killedBy: ["0"] }],
+        },
+      },
+      testFiles: { "tests/unit/b.test.ts": { tests: [{ id: "1" }] } },
+    },
+    tests: ["tests/unit/a.test.ts"],
+    sources: ["src/mixed.ts"],
+  });
+});
+
 // GitHub's workflow command syntax reads one annotation per line and decodes %25, %0D and %0A in its message.
 test("pruneReport names the deleted, the missed and the kept artifacts", () => {
   const keeping = [
