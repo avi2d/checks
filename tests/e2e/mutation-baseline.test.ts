@@ -39,8 +39,33 @@ function fullBaseline(id: number, tag: string) {
   };
 }
 
-function run(databaseId: number, event: string, createdAt: string, artifacts: FakeRun["artifacts"]): FakeRun {
-  return { databaseId, event, createdAt, artifacts };
+function run(databaseId: number, event: string, createdAt: string, artifacts: FakeRun["artifacts"], headSha?: string): FakeRun {
+  return { databaseId, event, createdAt, ...(headSha === undefined ? {} : { headSha }), artifacts };
+}
+
+async function gitRunner(files: Readonly<Record<string, string>>, build: (sha: string) => readonly FakeRun[]): Promise<Runner & { readonly work: string }> {
+  const home = await scratch("checks-mutation-baseline-git-");
+  const work = join(home, "work");
+  await mkdir(work);
+  await $`git init -q -b main && git config user.email fixture@example.com && git config user.name Fixture`.cwd(work).quiet();
+  await writeFile(join(work, "tracked.txt"), "base\n");
+  for (const [name, content] of Object.entries(files)) {
+    await mkdir(join(work, name.slice(0, Math.max(name.lastIndexOf("/"), 0))), { recursive: true });
+    await writeFile(join(work, name), content);
+  }
+  await $`git add -A && git commit -qm base`.cwd(work).quiet();
+  const sha = (await $`git rev-parse HEAD`.cwd(work).quiet()).stdout.toString().trim();
+  const fake = await fakeActions(home, REPOSITORY_ID, build(sha));
+  return {
+    home,
+    work,
+    run: (args, env = {}) =>
+      ran($`bun ${SCRIPT} ${args}`.cwd(work).env({ ...process.env, RUNNER_ENVIRONMENT: "self-hosted", GITHUB_RUN_ID: undefined, GITHUB_REPOSITORY_ID: String(REPOSITORY_ID), ...fake.env, HOME: home, ...env })),
+    downloads: fake.downloads,
+    calls: fake.calls,
+    read: (file) => readFile(join(work, file), "utf8").catch(() => undefined),
+    shelf: async (artifact) => (await readdir(join(home, SHELVES, artifact)).catch(() => [])).filter((entry) => !entry.startsWith(".")).sort(),
+  };
 }
 
 // HOME holds the runner's cache, so each runner starts with an empty one.
@@ -153,7 +178,7 @@ test("--full restores the report a full artifact holds at its root, with no incr
 }, 30_000);
 
 test("--full with an incremental destination restores the report and the state, and then from the cache", async () => {
-  const runner = await selfHosted([run(35, "workflow_dispatch", "2026-10-03T12:00:00Z", [fullBaseline(350, "with state")])]);
+  const runner = await gitRunner({}, (sha) => [run(35, "workflow_dispatch", "2026-10-03T12:00:00Z", [fullBaseline(350, "with state")], sha)]);
 
   const downloaded = await runner.run(["--full", "full/mutation.json", "full/stryker-incremental.json"]);
   const cached = await runner.run(["--full", "again/mutation.json", "again/stryker-incremental.json"]);
@@ -175,6 +200,91 @@ test("--full with an incremental destination still restores the report when the 
   expect(restored.exitCode).toBe(0);
   expect(await runner.read("full/mutation.json")).toBe('{"report":"root layout"}');
   expect(await runner.read("full/stryker-incremental.json")).toBeUndefined();
+}, 30_000);
+
+function fullState(id: number, state: string, report = '{"report":"with state"}') {
+  return { id, name: "mutation-baseline-full", expired: false, files: { "mutation.json": report, "stryker-incremental.json": state } };
+}
+
+test("--full restores the report and the state a one-directory upload holds at the artifact root", async () => {
+  const runner = await gitRunner({}, (sha) => [run(35, "workflow_dispatch", "2026-10-03T12:00:00Z", [fullState(350, '{"state":"root layout"}', '{"report":"root layout"}')], sha)]);
+
+  const restored = await runner.run(["--full", "full/mutation.json", "full/stryker-incremental.json"]);
+
+  expect(restored).toEqual({ exitCode: 0, text: "mutation-baseline: downloaded it into the runner's cache, mutation-baseline-full artifact 350 from run 35\n" });
+  expect(await runner.read("full/mutation.json")).toBe('{"report":"root layout"}');
+  expect(await runner.read("full/stryker-incremental.json")).toBe('{"state":"root layout"}');
+}, 30_000);
+
+test("--full drops the tests that read a changed file from the restored state", async () => {
+  const state = JSON.stringify({
+    files: { "src/a.ts": { mutants: [] } },
+    testFiles: { "tests/unit/a.test.ts": { tests: [{ id: "0" }] }, "tests/unit/b.test.ts": { tests: [{ id: "1" }] } },
+  });
+  const runner = await gitRunner(
+    {
+      "tests/unit/a.test.ts": 'import { helper } from "../helper";\nimport { expect, test } from "bun:test";\ntest("a", () => expect(helper).toBe(1));\n',
+      "tests/unit/b.test.ts": 'import { expect, test } from "bun:test";\ntest("b", () => expect(1).toBe(1));\n',
+      "tests/helper.ts": "export const helper = 1;\n",
+    },
+    (sha) => [run(35, "workflow_dispatch", "2026-10-03T12:00:00Z", [fullState(350, state)], sha)],
+  );
+  await writeFile(join(runner.work, "tests/helper.ts"), "export const helper = 2;\n");
+  await $`git add -A && git commit -qm weaken`.cwd(runner.work).quiet();
+
+  const restored = await runner.run(["--full", "full/mutation.json", "full/stryker-incremental.json"]);
+
+  expect(restored.exitCode).toBe(0);
+  expect(restored.text).toContain("mutation-baseline: downloaded it into the runner's cache, mutation-baseline-full artifact 350 from run 35\n");
+  expect(restored.text).toContain("mutation-baseline: dropped tests/unit/a.test.ts from the restored full state\n");
+  expect(await runner.read("full/mutation.json")).toBe('{"report":"with state"}');
+  expect(JSON.parse((await runner.read("full/stryker-incremental.json")) ?? "")).toEqual({
+    files: { "src/a.ts": { mutants: [] } },
+    testFiles: { "tests/unit/b.test.ts": { tests: [{ id: "1" }] } },
+  });
+}, 30_000);
+
+test("--full drops the restored state when the config changed since the full run", async () => {
+  const runner = await gitRunner({}, (sha) => [run(35, "workflow_dispatch", "2026-10-03T12:00:00Z", [fullState(350, '{"testFiles":{}}')], sha)]);
+  await writeFile(join(runner.work, "package.json"), '{"name":"fixture"}\n');
+  await $`git add -A && git commit -qm config`.cwd(runner.work).quiet();
+
+  const restored = await runner.run(["--full", "full/mutation.json", "full/stryker-incremental.json"]);
+
+  expect(restored.exitCode).toBe(0);
+  expect(restored.text).toContain("mutation-baseline: dropped the restored full state, package.json changed since run 35\n");
+  expect(await runner.read("full/mutation.json")).toBe('{"report":"with state"}');
+  expect(await runner.read("full/stryker-incremental.json")).toBeUndefined();
+}, 30_000);
+
+test("--full drops the restored state when the test preload changed since the full run", async () => {
+  const runner = await gitRunner(
+    { "bunfig.toml": '[test]\npreload = "./setup.ts"\n', "setup.ts": "export {};\n" },
+    (sha) => [run(35, "workflow_dispatch", "2026-10-03T12:00:00Z", [fullState(350, '{"testFiles":{}}')], sha)],
+  );
+  await writeFile(join(runner.work, "bunfig.toml"), '[test]\npreload = "./other.ts"\n');
+  await $`git add -A && git commit -qm preload`.cwd(runner.work).quiet();
+
+  const restored = await runner.run(["--full", "full/mutation.json", "full/stryker-incremental.json"]);
+
+  expect(restored.exitCode).toBe(0);
+  expect(restored.text).toContain("mutation-baseline: dropped the restored full state, the [test] preload list in bunfig.toml changed since run 35\n");
+  expect(await runner.read("full/stryker-incremental.json")).toBeUndefined();
+}, 30_000);
+
+test("--full keeps a restored state it cannot parse and names why", async () => {
+  const runner = await gitRunner(
+    { "tests/unit/a.test.ts": 'import { expect, test } from "bun:test";\ntest("a", () => expect(1).toBe(1));\n' },
+    (sha) => [run(35, "workflow_dispatch", "2026-10-03T12:00:00Z", [fullState(350, "not json")], sha)],
+  );
+  await writeFile(join(runner.work, "tests/unit/a.test.ts"), 'import { expect, test } from "bun:test";\ntest("a", () => expect(2).toBe(2));\n');
+  await $`git add -A && git commit -qm weaken`.cwd(runner.work).quiet();
+
+  const restored = await runner.run(["--full", "full/mutation.json", "full/stryker-incremental.json"]);
+
+  expect(restored.exitCode).toBe(0);
+  expect(restored.text).toContain("mutation-baseline: kept the restored full state, full/stryker-incremental.json is not a Stryker incremental state with its test files\n");
+  expect(await runner.read("full/stryker-incremental.json")).toBe("not json");
 }, 30_000);
 
 test("--full passes over an artifact without the report and downloads no run after the first that holds one", async () => {

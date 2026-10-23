@@ -38,7 +38,7 @@ jobs:
         with:
           node-version: 24
       - run: bun install --frozen-lockfile
-      # Every run restores state, so a full baseline retests only the mutants its changes touch and fits the timeout.
+      # Every run restores state, so a full baseline retests the mutants its changes reach and fits the timeout.
       - name: Restore previous baseline state
         if: github.event_name == 'push'
         env:

@@ -308,6 +308,23 @@ const unitReaders = Effect.fn("unitReaders")(function* (picked: Picked, { base, 
   return readers;
 });
 
+export type Staleness = { readonly paths: ReadonlySet<string>; readonly preload: string | undefined; readonly stale: readonly string[] };
+
+export const stalenessSince = Effect.fn("stalenessSince")(function* (base: string, head: string) {
+  const picked = pickFromDiff(yield* changedPaths(base, head, []), () => false);
+  const atBase = new Set(yield* pathsAt(base, []));
+  const atHead = new Set(yield* pathsAt(head, []));
+  const preloads = { atBase: yield* preloadsAt(base, atBase), atHead: yield* preloadsAt(head, atHead) };
+  const preload = preloadChange(picked.paths, preloads, yield* loadedByPreloads(head, preloads.atHead, atHead));
+  if (preload !== undefined) return { paths: picked.paths, preload, stale: [] };
+  if (picked.touched.size === 0) return { paths: picked.paths, preload: undefined, stale: [] };
+  const readers = [...readersOf(yield* readTestTree(atHead), [...picked.touched])]
+    .filter(([reader]) => isUnitTest(reader))
+    .map(([reader]) => reader);
+  const stale = [...new Set([...[...picked.touched].filter(isUnitTest), ...readers])].toSorted();
+  return { paths: picked.paths, preload: undefined, stale };
+});
+
 // An absent coverage edge holds only for a test whose merge-base source is the one the report ran.
 const staleIn = Effect.fn("staleIn")(function* (baseline: Baseline, tests: readonly string[], base: string) {
   const recorded = new Map(Object.entries(baseline.testFiles).map(([file, { source }]) => [file, source]));

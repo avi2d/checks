@@ -40,6 +40,12 @@ const slimOf = Effect.fn("slimOf")(function* (from: string) {
   return withoutReasons(report);
 });
 
+export function withoutStaleTests(state: unknown, stale: readonly string[]): unknown {
+  if (!isRecord(state) || !isRecord(state["testFiles"]) || stale.length === 0) return state;
+  const removed = new Set(stale);
+  return { ...state, testFiles: Object.fromEntries(Object.entries(state["testFiles"]).filter(([file]) => !removed.has(file))) };
+}
+
 export const slimmed = Effect.fn("slimmed")(function* (from: string, to: string) {
   const fs = yield* FileSystem.FileSystem;
   const report = yield* slimOf(from);

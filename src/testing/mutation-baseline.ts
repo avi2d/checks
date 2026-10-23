@@ -4,7 +4,8 @@ import { ChildProcessSpawner } from "effect/process";
 import { collect } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { cacheRoot } from "../dependencies/cache-root.ts";
-import { INCREMENTAL, LATEST_ARTIFACT, outlived, REPORT, saveBaseline, savedFiles, savedShelf, slimmed } from "./mutation-baseline-saved.ts";
+import { INCREMENTAL, LATEST_ARTIFACT, outlived, REPORT, saveBaseline, savedFiles, savedShelf, slimmed, withoutStaleTests } from "./mutation-baseline-saved.ts";
+import { stalenessSince } from "./mutation-scope.ts";
 
 class BaselineFailure extends Schema.TaggedError<BaselineFailure>()("BaselineFailure", {
   message: Schema.String,
@@ -156,6 +157,39 @@ const held = Effect.fn("held")(function* (dir: string, names: readonly string[])
 });
 
 const holds = (dir: string, needed: Copy) => held(dir, needed.from).pipe(Effect.map(Option.isSome));
+
+const FULL_CONFIGS = ["stryker.conf.mjs", "stryker.preset.js", "package.json", "bun.lock"];
+
+const decodeHeadSha = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ headSha: Schema.String })));
+
+const viewedHead = Effect.fn("viewedHead")(function* (run: number) {
+  return (yield* gh(["run", "view", String(run), "--json", "headSha"]).pipe(Effect.flatMap(decodeHeadSha))).headSha;
+});
+
+const pruneFailed = (cause: unknown): BaselineFailure =>
+  new BaselineFailure({
+    message: typeof cause === "object" && cause !== null && "message" in cause ? String(cause.message) : String(cause),
+  });
+
+const pruneFullState = Effect.fn("pruneFullState")(function* (run: number, state: string) {
+  const fs = yield* FileSystem.FileSystem;
+  if (!(yield* fs.exists(state))) return;
+  const { paths, preload, stale } = yield* stalenessSince(yield* viewedHead(run), "HEAD");
+  const changed = [...paths].filter((path) => FULL_CONFIGS.includes(path)).toSorted();
+  if (changed.length > 0 || preload !== undefined) {
+    yield* fs.remove(state);
+    yield* Console.log(`mutation-baseline: dropped the restored full state, ${preload ?? changed.join(" ")} changed since run ${run}`);
+    return;
+  }
+  if (stale.length === 0) return;
+  const text = yield* fs.readFileString(state);
+  const stripped = yield* Effect.try({
+    try: () => withoutStaleTests(JSON.parse(text) as unknown, stale),
+    catch: () => new BaselineFailure({ message: `${state} is not a Stryker incremental state with its test files` }),
+  });
+  yield* fs.writeFileString(state, JSON.stringify(stripped));
+  yield* Console.log(`mutation-baseline: dropped ${stale.join(" ")} from the restored full state`);
+});
 
 const downloaded = Effect.fn("downloaded")(function* (run: number, artifact: Artifact, dir: string, needed: Copy) {
   const fetched = yield* gh(["run", "download", String(run), "--name", artifact.name, "--dir", dir]).pipe(Effect.as(true), Effect.catch(warned(false)));
@@ -360,7 +394,15 @@ const restoreBaseline = Effect.fn("restoreBaseline")(function* (request: Request
   for (const run of yield* request.full ? fullCandidates : latestCandidates) {
     if (Option.isSome(shelf) && (yield* restoredFromSaved(shelf.value, run, request))) return true;
     const artifact = yield* artifactOf(run, name).pipe(Effect.catch(warned(Option.none<Artifact>())));
-    if (Option.isSome(artifact) && (yield* restoredFrom(run, artifact.value, root, request))) return true;
+    if (Option.isSome(artifact) && (yield* restoredFrom(run, artifact.value, root, request))) {
+      const incremental = request.full ? request.optional[0] : undefined;
+      if (incremental !== undefined) {
+        yield* pruneFullState(run, incremental.to).pipe(
+          Effect.catch((cause) => Console.error(`mutation-baseline: kept the restored full state, ${pruneFailed(cause).message}`)),
+        );
+      }
+      return true;
+    }
   }
   yield* Console.log(`mutation-baseline: no successful ${BRANCH} run holds a ${name} artifact, so nothing was restored`);
   return true;

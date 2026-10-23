@@ -82,7 +82,7 @@ An `--incremental` run with no report stops before instrumenting with the missin
 A repository runs full baselines from the mutation workflow on `workflow_dispatch`.
 A repository that picks a branch scope from a baseline starts that workflow weekly with `gh workflow run mutation`, because a GitHub schedule can start hours late.
 Run scoped checks locally during development.
-A first baseline with no state costs a full Stryker run, and each later one retests only the mutants its changes touch.
+A first baseline with no state costs a full Stryker run, and each later one retests the mutants its changes reach.
 
 ## Running it in CI
 
@@ -97,6 +97,8 @@ jobs:
     runs-on: [self-hosted, Linux, X64, winbox]
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
@@ -106,22 +108,24 @@ jobs:
         run: bunx checks-mutation-baseline --full reports/mutation/mutation.json reports/stryker-incremental.json
       - run: bunx stryker run --incremental
       - run: bunx checks-mutation-baseline --slim reports/mutation/mutation.json "$RUNNER_TEMP/full/mutation.json"
+      - run: bunx checks-mutation-baseline --slim reports/stryker-incremental.json "$RUNNER_TEMP/full/stryker-incremental.json"
       - uses: actions/upload-artifact@v4
         with:
           name: mutation-baseline-full
-          path: |
-            ${{ runner.temp }}/full/mutation.json
-            reports/stryker-incremental.json
+          path: ${{ runner.temp }}/full/
           retention-days: 30
 ```
 
-A run that restores no state tests every mutant, so its report names every test that covers each covered mutant and the first test that killed each killed mutant.
+A first baseline with no state tests every mutant.
+Each later restore drops the tests that read a changed file from the restored state, and drops the whole state when the Stryker config or the lockfile changed, so the run retests every mutant those changes reach and reuses the rest.
+The checkout fetches the full history, so the restore can tell which files changed since the previous full run.
+Its report names every test that covers each covered mutant and the first test that killed each killed mutant.
 [checks-mutation-scope](checks-mutation-scope.md#what-it-reads) says why that one killer is enough.
 The upload is the `mutation-baseline-full` artifact that a branch comparison's scope step restores with `checks-mutation-baseline --full`.
 [checks-mutation-scope](checks-mutation-scope.md) reads it to bring in the sources a changed unit test covers or kills.
 The restore reads only a successful run of `mutation.yml` on `main`, so a sweep that fails publishes nothing a scope step reads.
 The artifact keeps 30 days, so the newest full baseline outlives the week between full runs.
-The upload holds the report without each mutant's `statusReason`, as [checks-mutation-baseline](checks-mutation-baseline.md#the-saved-baselines) says, since the full report of a large repository passes 100 MB as an artifact.
+The upload holds the slimmed report and the slimmed state without each mutant's `statusReason`, as [checks-mutation-baseline](checks-mutation-baseline.md#the-saved-baselines) says, so the one directory holds about 10 MB in place of about 500 MB.
 
 The job runs on the fleet's self-hosted Linux runner labelled `winbox`, which is where a repository sends its full sweeps.
 It never reads `CI_RUNS_ON`, so an override that moves a repository's other jobs during a runner outage leaves the sweep waiting for `winbox`.
