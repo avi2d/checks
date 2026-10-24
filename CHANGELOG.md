@@ -2,6 +2,15 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.51.1
+
+Released 2026-10-24.
+
+### Fixes
+
+- **delivery:** refuse fork-reachable self-hosted runners, read fleet pins from config [#204](https://github.com/avi2d/checks/pull/204)
+- upgrade fast-uri and zod past the October advisories [#202](https://github.com/avi2d/checks/pull/202)
+
 ## 0.51.0
 
 Released 2026-10-23.
