@@ -211,20 +211,32 @@ test("a ci skip gated on process.env.CI fails a local run as undeclared", async 
   expect(local.text).toContain("1 skipped test(s) undeclared in this local run");
 });
 
-test("the default run excludes live tests and the live and pixel tiers judge only their own directory", async () => {
+async function livePixelConsumer(): Promise<void> {
   await consumer('import { expect, test } from "bun:test";\ntest("default test", () => expect(1).toBe(1));\n', {
     "tests/live-reload.test.ts": 'import { expect, test } from "bun:test";\nimport { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";\ntest.skipIf(true)(skipReason("waits for the reload fix", "reloads the page"), () => expect(1).toBe(1));\n',
     "tests/live/machine.test.ts": 'import { expect, test } from "bun:test";\nimport { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";\ntest.skipIf(true)(skipReason("requires a local daemon", "connects to the daemon"), () => expect(1).toBe(1));\n',
     "tests/pixel/screen.test.ts": 'import { expect, test } from "bun:test";\nimport { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";\ntest.skipIf(true)(skipReason("requires a live display", "renders the screen"), () => expect(1).toBe(1));\n',
   });
+}
+
+test("the default run excludes live tests", async () => {
+  await livePixelConsumer();
 
   const defaultRun = await checksTest(true);
   expect(defaultRun.exitCode).toBe(0);
   expect(defaultRun.text).toContain("checks-test: 1 skipped test(s), each declared at its test site");
+});
+
+test("the live tier judges only its own directory", async () => {
+  await livePixelConsumer();
 
   const liveRun = await checksTest(false, ["--tier=live"]);
   expect(liveRun.exitCode).toBe(0);
   expect(liveRun.text).toContain("checks-test: 1 skipped test(s), each declared at its test site");
+});
+
+test("the pixel tier judges only its own directory", async () => {
+  await livePixelConsumer();
 
   const pixelRun = await checksTest(false, ["--tier=pixel"]);
   expect(pixelRun.exitCode).toBe(0);
@@ -369,18 +381,25 @@ test("without --parallel the suite runs on one worker per core", async () => {
   expect(await workersUsed()).toBe(Math.min(2, availableParallelism()));
 });
 
+function skippedWorker(condition: boolean): string {
+  return workerFile(
+    `test.skipIf(${condition})(skipReason("waits for the rounding fix", "rounds half to even"), () => expect(1).toBe(1));`,
+  );
+}
+
 test("a declared skip in one parallel worker is judged at its test site", async () => {
-  const skip = (condition: boolean) =>
-    workerFile(`test.skipIf(${condition})(skipReason("waits for the rounding fix", "rounds half to even"), () => expect(1).toBe(1));`);
-  await consumer(workerFile(""), { "tests/unit/pricing.test.ts": skip(true) });
+  await consumer(workerFile(""), { "tests/unit/pricing.test.ts": skippedWorker(true) });
 
   const declared = await checksTest(true, ["--parallel=2"]);
   expect(declared.exitCode).toBe(0);
   expect(declared.text).toContain("2x PARALLEL");
   expect(declared.text).toContain("checks-test: 1 skipped test(s), each declared at its test site");
   expect(await workersUsed()).toBe(2);
+});
 
-  await writeFile(join(dir, "tests", "unit", "pricing.test.ts"), skip(false));
+test("a stale declaration in one parallel worker fails the run", async () => {
+  await consumer(workerFile(""), { "tests/unit/pricing.test.ts": skippedWorker(false) });
+
   const stale = await checksTest(true, ["--parallel=2"]);
   expect(stale.exitCode).toBe(1);
   expect(stale.text).toContain("tests/unit/pricing.test.ts:8: no test skipped with this declaration; reason: waits for the rounding fix");
