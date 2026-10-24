@@ -112,7 +112,7 @@ A mutation job that names `CI_RUNS_ON` in `runs-on` produces a report like this:
 
 ```
 ci-wiring: 1 job(s) run on the wrong runner:
-  .github/workflows/mutation-compare.yml job mutation-compare: a mutation job reads CI_RUNS_ON, so an override moves its mutation runs off their configured labels; set runs-on from checks.mutationRunner in package.json
+  .github/workflows/mutation-compare.yml job mutation-compare: a mutation job reads CI_RUNS_ON, so an override moves its mutation runs off [self-hosted, gpu, x64]; set runs-on: [self-hosted, gpu, x64]
 ```
 
 A reference to a missing workflow produces a report like this:

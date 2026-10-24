@@ -28,7 +28,6 @@ const Runners = Schema.Struct({
   selfHostedRunners: Schema.optional(Schema.Array(Schema.NonEmptyArray(Schema.NonEmptyString))),
 });
 const Manifest = Schema.Struct({
-  scripts: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
   checks: Schema.optional(Runners),
 });
 // GitHub expressions match context and property names without regard to case.
@@ -48,11 +47,13 @@ function readsOverride(runsOn: unknown): boolean {
   return values.some(readsOverride);
 }
 
-// A fork reaches a job only through pull_request or pull_request_target, so only such a job can run untrusted code.
 function forkReachable(workflow: Workflow): boolean {
   const on = isRecord(workflow.document) ? workflow.document["on"] : undefined;
   const events = isRecord(on) ? Object.keys(on) : (names(on) ?? []);
-  return events.some((event) => event.toLowerCase() === "pull_request" || event.toLowerCase() === "pull_request_target");
+  return events.some((event) => {
+    const name = event.toLowerCase();
+    return name === "pull_request" || name === "pull_request_target" || name === "pull_request_review" || name === "pull_request_review_comment";
+  });
 }
 
 // An exact match would let a differently cased label slip past the refusal.
@@ -87,10 +88,35 @@ function otherFault(runsOn: unknown, runners: RunnerConfig, visibility: RunnerPo
   return `the job is not on a hosted runner CI_RUNS_ON can override; set runs-on: ${HOSTED_DEFAULT}`;
 }
 
+function runLabels(runsOn: unknown): readonly string[] | undefined {
+  if (Array.isArray(runsOn)) return runsOn.every((label) => typeof label === "string") ? runsOn : undefined;
+  if (isRecord(runsOn) && Array.isArray(runsOn["labels"])) {
+    const labels = runsOn["labels"];
+    return labels.every((label) => typeof label === "string") ? labels : undefined;
+  }
+  return undefined;
+}
+
+function matchesDeclared(runsOn: unknown, runners: RunnerConfig): boolean {
+  const labels = runLabels(runsOn);
+  if (labels === undefined) return false;
+  const declared = runners.mutation === undefined ? runners.selfHosted : [runners.mutation, ...runners.selfHosted];
+  return declared.some((allowed) => labels.length === allowed.length && allowed.every((label) => labels.includes(label)));
+}
+
+function isExpression(runsOn: unknown): boolean {
+  if (typeof runsOn === "string") return /^\$\{\{[\s\S]*\}\}$/.test(runsOn.trim());
+  if (Array.isArray(runsOn)) return runsOn.some(isExpression);
+  if (isRecord(runsOn)) return Object.values(runsOn).some(isExpression);
+  return false;
+}
+
 function runnerFault(runsOn: unknown, mutation: boolean, policy: RunnerPolicy, reachable: boolean): string | undefined {
-  // A fork pull request would run its own code on the runner.
-  if (policy.visibility === "public" && reachable && namesSelfHosted(runsOn)) {
-    return `a public repository runs a fork-reachable job on self-hosted labels, so a fork pull request would run its code there; set runs-on: ${HOSTED_DEFAULT}`;
+  if (policy.visibility === "public" && reachable) {
+    const hosted = typeof runsOn === "string" && HOSTED_OVERRIDE.test(runsOn.trim());
+    if (!hosted && (namesSelfHosted(runsOn) || matchesDeclared(runsOn, policy.runners) || (isRecord(runsOn) && runsOn["group"] !== undefined) || isExpression(runsOn))) {
+      return `a public repository runs a fork-reachable job on self-hosted labels, so a fork pull request would run its code there; set runs-on: ${HOSTED_DEFAULT}`;
+    }
   }
   return mutation ? mutationFault(runsOn, policy.runners.mutation, policy.visibility) : otherFault(runsOn, policy.runners, policy.visibility);
 }

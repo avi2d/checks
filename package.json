@@ -65,6 +65,7 @@
     "src/delivery/workflow-references.ts",
     "src/delivery/bun-pin.ts",
     "src/delivery/mutation-job.ts",
+    "src/delivery/runner-policy.ts",
     "src/delivery/secrets.ts",
     "src/delivery/gitleaks.ts",
     "src/delivery/gitleaks.toml",

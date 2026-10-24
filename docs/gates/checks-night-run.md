@@ -177,7 +177,7 @@ The concurrency group queues a run started by hand behind the scheduled one, so 
 A dispatch on a branch runs both jobs and lists its findings in the report job's log, and `if-no-files-found: ignore` lets that run upload no record.
 `issues: write` on the report job is the one permission beyond reading the repository and its runs.
 A public repository keeps `runs-on: ubuntu-latest` on the mutation job.
-A private repository sets `runs-on: [self-hosted, Linux, X64, winbox]` on the mutation job, and [checks-ci-wiring](checks-ci-wiring.md#runners) refuses a mutation job that names `CI_RUNS_ON`.
+A private repository sets `runs-on` on the mutation job to the labels declared under `checks.mutationRunner` in `package.json`, and [checks-ci-wiring](checks-ci-wiring.md#runners) refuses a mutation job that names `CI_RUNS_ON`.
 The report job reads `CI_RUNS_ON`, because it runs no mutant.
 A successful run uploads `night-run`, so the next night compares with it, and a failed run uploads nothing a later night reads.
 The artifact keeps 90 days, so a gap of nights still leaves a previous night to compare with.
