@@ -93,7 +93,8 @@ function otherFault(runsOn: unknown, runners: RunnerConfig, visibility: RunnerPo
 
 function declaredLabels(labels: readonly string[], runners: RunnerConfig): boolean {
   const declared = runners.mutation === undefined ? runners.selfHosted : [runners.mutation, ...runners.selfHosted];
-  return labels.length > 0 && declared.some((allowed) => labels.every((label) => allowed.includes(label)));
+  const wanted = labels.map((label) => label.toLowerCase());
+  return wanted.length > 0 && declared.some((allowed) => wanted.every((label) => allowed.some((candidate) => candidate.toLowerCase() === label)));
 }
 
 function matrixKey(expression: string): string | undefined {
@@ -139,12 +140,10 @@ function plainLabels(value: unknown): readonly string[] | undefined {
   return value.some(hasInterpolation) ? undefined : value;
 }
 
-function publicFault(job: Readonly<Record<string, unknown>>, runsOn: unknown, runners: RunnerConfig, mutation: boolean): string | undefined {
-  const advice = mutation ? "ubuntu-latest" : HOSTED_DEFAULT;
-  const selfHosted = "a public repository runs a fork-reachable job on self-hosted labels, so a fork pull request would run its code there; set runs-on: " + advice;
+function publicFault(job: Readonly<Record<string, unknown>>, runsOn: unknown, runners: RunnerConfig): string | undefined {
+  const selfHosted = "a public repository runs a fork-reachable job on self-hosted labels, so a fork pull request would run its code there; set runs-on: ubuntu-latest";
   const unresolvable = (shown: string) =>
-    "a public repository runs a fork-reachable job on " + shown + ", which cannot be shown to be a hosted runner before the run; set runs-on: " + advice;
-  if (typeof runsOn === "string" && HOSTED_OVERRIDE.test(runsOn.trim())) return undefined;
+    "a public repository runs a fork-reachable job on " + shown + ", which cannot be shown to be a hosted runner before the run; set runs-on: ubuntu-latest";
   if (namesSelfHosted(runsOn)) return selfHosted;
   if (typeof runsOn === "string") {
     const trimmed = runsOn.trim();
@@ -171,7 +170,7 @@ function publicFault(job: Readonly<Record<string, unknown>>, runsOn: unknown, ru
       const labels = plainLabels(runsOn["labels"]);
       if (labels !== undefined && (labels.some((label) => label.toLowerCase() === "self-hosted") || declaredLabels(labels, runners))) return selfHosted;
       const group = typeof runsOn["group"] === "string" ? runsOn["group"].trim() : "a runner group";
-      return "a public repository runs a fork-reachable job on runner group " + group + ", which cannot be shown to be hosted before the run; set runs-on: " + advice;
+      return "a public repository runs a fork-reachable job on runner group " + group + ", which cannot be shown to be hosted before the run; set runs-on: ubuntu-latest";
     }
     const labels = plainLabels(runsOn["labels"]);
     if (labels === undefined) return unresolvable("its runs-on expression");
@@ -193,7 +192,7 @@ function watchedWorkflows(workflow: Workflow): readonly string[] {
 
 function runnerFault(job: Readonly<Record<string, unknown>>, runsOn: unknown, mutation: boolean, policy: RunnerPolicy, reachable: boolean): string | undefined {
   if (policy.visibility === "public" && reachable) {
-    const fault = publicFault(job, runsOn, policy.runners, mutation);
+    const fault = publicFault(job, runsOn, policy.runners);
     if (fault !== undefined) return fault;
   }
   return mutation ? mutationFault(runsOn, policy.runners.mutation, policy.visibility, reachable) : otherFault(runsOn, policy.runners, policy.visibility);

@@ -93,8 +93,12 @@ test("only a command's program marks a mutation job, wherever the shell runs tha
 
 test("bracket access or any case of CI_RUNS_ON still reads the override", () => {
   for (const override of ["${{ vars['CI_RUNS_ON'] || 'ubuntu-latest' }}", "${{ VARS.ci_runs_on || 'ubuntu-latest' }}"]) {
+    expect(findRunnerFaults({ visibility: "unknown", scripts: noScripts, runners: RUNNERS }, jobs(override, "ubuntu-latest"))[0]?.fault).toContain("reads CI_RUNS_ON");
+    const refused = findRunnerFaults({ visibility: "public", scripts: noScripts, runners: RUNNERS }, jobs(override, "ubuntu-latest"));
+    expect(refused).toHaveLength(1);
+    expect(refused[0]?.location).toBe(".github/workflows/ci.yml job mutation");
+    expect(refused[0]?.fault).toContain("cannot be shown");
     for (const visibility of ["public", "unknown"] as const) {
-      expect(findRunnerFaults({ visibility, scripts: noScripts, runners: RUNNERS }, jobs(override, "ubuntu-latest"))[0]?.fault).toContain("reads CI_RUNS_ON");
       expect(findRunnerFaults({ visibility, scripts: noScripts, runners: RUNNERS }, jobs(MUTATION, override.replace("'ubuntu-latest'", "fromJSON('[\"self-hosted\"]')")))).toHaveLength(visibility === "public" ? 2 : 1);
     }
   }
@@ -141,7 +145,10 @@ test(`a public repository refuses any self-hosted label on a fork-reachable job 
   const claimedFaults = findRunnerFaults({ visibility: "public" as const, scripts: noScripts, runners: custom }, claimed);
   expect(claimedFaults).toHaveLength(1);
   expect(claimedFaults[0]?.fault).toContain("self-hosted labels");
-  expect(findRunnerFaults(policy, jobs("ubuntu-latest", HOSTED))).toEqual([]);
+  const hostedDefault = findRunnerFaults(policy, jobs("ubuntu-latest", HOSTED));
+  expect(hostedDefault).toHaveLength(1);
+  expect(hostedDefault[0]?.location).toBe(".github/workflows/ci.yml job checks");
+  expect(hostedDefault[0]?.fault).toContain("cannot be shown");
 });
 
 test("a public repository keeps self-hosted labels on jobs no fork reaches", () => {
@@ -177,8 +184,9 @@ test("the hosted default matches the override in any form the override check acc
   }
   for (const hosted of ["${{ vars['CI_RUNS_ON'] || 'ubuntu-latest' }}", "${{ VARS.ci_runs_on||'ubuntu-latest' }}"]) {
     const faults = findRunnerFaults({ visibility: "public", scripts: noScripts, runners: RUNNERS }, jobs(MUTATION, hosted));
-    expect(faults).toHaveLength(1);
+    expect(faults).toHaveLength(2);
     expect(faults[0]?.fault).toContain("self-hosted labels");
+    expect(faults[1]?.fault).toContain("cannot be shown");
   }
   expect(findRunnerFaults({ visibility: "public", scripts: noScripts, runners: RUNNERS }, jobs(MUTATION, "${{ vars.CI_RUNS_ON || 'ubuntu -latest' }}"))).toHaveLength(2);
 });
@@ -220,6 +228,17 @@ test(`a public fork-reachable job refuses a subset of a declared label set (orac
   const boxedFaults = findRunnerFaults({ visibility: "public" as const, scripts: noScripts, runners: boxed }, matrix);
   expect(boxedFaults).toHaveLength(1);
   expect(boxedFaults[0]?.fault).toContain("self-hosted labels");
+});
+
+test(`a public fork-reachable job refuses a declared label set in any case (oracle: GitHub's self-hosted runner labels https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/using-labels-with-self-hosted-runners)`, () => {
+  const runners: RunnerConfig = { mutation: ["self-hosted", "Linux", "X64", "winbox"], selfHosted: [] };
+  const loud = workflow("on: pull_request\njobs:\n  sweep:\n    runs-on: WINBOX\n    steps:\n      - run: bun run lint\n");
+  const loudFaults = findRunnerFaults({ visibility: "public" as const, scripts: noScripts, runners }, loud);
+  expect(loudFaults).toHaveLength(1);
+  expect(loudFaults[0]?.fault).toContain("self-hosted labels");
+  const boxed: RunnerConfig = { mutation: undefined, selfHosted: [["gpu-box"]] };
+  const matrix = workflow("on: pull_request\njobs:\n  sweep:\n    strategy:\n      matrix:\n        os: [ubuntu-latest, GPU-BOX]\n    runs-on: ${{ matrix.os }}\n    steps:\n      - run: bun run lint\n");
+  expect(findRunnerFaults({ visibility: "public" as const, scripts: noScripts, runners: boxed }, matrix)).toHaveLength(1);
 });
 
 test(`a public fork-reachable mutation job is told to use ubuntu-latest (oracle: GitHub's hardening guide ${GUIDE})`, () => {
