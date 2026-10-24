@@ -67,9 +67,12 @@ function namesSelfHosted(runsOn: unknown): boolean {
   return false;
 }
 
-function mutationFault(runsOn: unknown, labels: readonly string[] | undefined, visibility: RunnerPolicy["visibility"]): string | undefined {
+function mutationFault(runsOn: unknown, labels: readonly string[] | undefined, visibility: RunnerPolicy["visibility"], reachable: boolean): string | undefined {
   const pin = labels === undefined ? undefined : `[${labels.join(", ")}]`;
   if (readsOverride(runsOn)) {
+    if (visibility === "public" && reachable) {
+      return "a mutation job reads CI_RUNS_ON, so an override moves its mutation runs; set runs-on: ubuntu-latest";
+    }
     return pin === undefined
       ? "a mutation job reads CI_RUNS_ON, so an override moves its mutation runs; declare the mutation runner labels in package.json checks.mutationRunner"
       : `a mutation job reads CI_RUNS_ON, so an override moves its mutation runs off ${pin}; set runs-on: ${pin}`;
@@ -88,24 +91,14 @@ function otherFault(runsOn: unknown, runners: RunnerConfig, visibility: RunnerPo
   return `the job is not on a hosted runner CI_RUNS_ON can override; set runs-on: ${HOSTED_DEFAULT}`;
 }
 
-function runLabels(runsOn: unknown): readonly string[] | undefined {
-  if (Array.isArray(runsOn)) return runsOn.every((label) => typeof label === "string") ? runsOn : undefined;
-  if (isRecord(runsOn) && Array.isArray(runsOn["labels"])) {
-    const labels = runsOn["labels"];
-    return labels.every((label) => typeof label === "string") ? labels : undefined;
-  }
-  return undefined;
-}
-
-function matchesDeclared(runsOn: unknown, runners: RunnerConfig): boolean {
-  const labels = runLabels(runsOn);
-  if (labels === undefined) return false;
-  return declaredLabels(labels, runners);
-}
-
 function declaredLabels(labels: readonly string[], runners: RunnerConfig): boolean {
   const declared = runners.mutation === undefined ? runners.selfHosted : [runners.mutation, ...runners.selfHosted];
-  return declared.some((allowed) => labels.length === allowed.length && allowed.every((label) => labels.includes(label)));
+  return labels.length > 0 && declared.some((allowed) => labels.every((label) => allowed.includes(label)));
+}
+
+function matrixKey(expression: string): string | undefined {
+  const match = /^\$\{\{\s*matrix\s*\.\s*([\w-]+)\s*\}\}$/i.exec(expression.trim());
+  return match?.[1]?.toLowerCase();
 }
 
 function matrixValues(job: Readonly<Record<string, unknown>>, key: string): readonly string[] | undefined {
@@ -137,37 +130,6 @@ function isExpression(runsOn: unknown): boolean {
   return false;
 }
 
-function expandedLabels(job: Readonly<Record<string, unknown>>, runsOn: unknown): readonly string[] | undefined {
-  if (typeof runsOn === "string") {
-    const trimmed = runsOn.trim();
-    if (!isExpression(trimmed)) return [trimmed];
-    const refs = trimmed.match(/\bmatrix\s*\.\s*[\w-]+/gi) ?? [];
-    const keys = refs.map((ref) => ref.slice(ref.indexOf(".") + 1).trim().toLowerCase());
-    if (keys.length === 0) return undefined;
-    const values: string[] = [];
-    for (const key of keys) {
-      const resolved = matrixValues(job, key);
-      if (resolved === undefined) return undefined;
-      values.push(...resolved);
-    }
-    return values;
-  }
-  if (Array.isArray(runsOn)) {
-    const values: string[] = [];
-    for (const entry of runsOn) {
-      const resolved = expandedLabels(job, entry);
-      if (resolved === undefined) return undefined;
-      values.push(...resolved);
-    }
-    return values;
-  }
-  if (isRecord(runsOn)) {
-    if (runsOn["group"] !== undefined || runsOn["labels"] === undefined) return undefined;
-    return expandedLabels(job, runsOn["labels"]);
-  }
-  return undefined;
-}
-
 function mentionedSelfHosted(value: unknown): boolean {
   if (typeof value === "string") return /self-hosted/i.test(value);
   if (Array.isArray(value)) return value.some(mentionedSelfHosted);
@@ -175,31 +137,49 @@ function mentionedSelfHosted(value: unknown): boolean {
   return false;
 }
 
-function publicFault(job: Readonly<Record<string, unknown>>, runsOn: unknown, runners: RunnerConfig): string | undefined {
+function plainLabels(value: unknown): readonly string[] | undefined {
+  if (!Array.isArray(value) || !value.every((entry): entry is string => typeof entry === "string")) return undefined;
+  return value.some((entry) => isExpression(entry.trim())) ? undefined : value;
+}
+
+function publicFault(job: Readonly<Record<string, unknown>>, runsOn: unknown, runners: RunnerConfig, mutation: boolean): string | undefined {
+  const advice = mutation ? "ubuntu-latest" : HOSTED_DEFAULT;
+  const selfHosted = "a public repository runs a fork-reachable job on self-hosted labels, so a fork pull request would run its code there; set runs-on: " + advice;
+  const unresolvable = (shown: string) =>
+    "a public repository runs a fork-reachable job on " + shown + ", which cannot be shown to be a hosted runner before the run; set runs-on: " + advice;
   if (typeof runsOn === "string" && HOSTED_OVERRIDE.test(runsOn.trim())) return undefined;
-  if (namesSelfHosted(runsOn) || matchesDeclared(runsOn, runners)) {
-    return "a public repository runs a fork-reachable job on self-hosted labels, so a fork pull request would run its code there; set runs-on: " + HOSTED_DEFAULT;
-  }
-  if (isRecord(runsOn) && runsOn["group"] !== undefined) {
-    const labels = Array.isArray(runsOn["labels"]) ? expandedLabels(job, runsOn["labels"]) : undefined;
-    if (labels !== undefined && (labels.some((label) => label.toLowerCase() === "self-hosted") || declaredLabels(labels, runners))) {
-      return "a public repository runs a fork-reachable job on self-hosted labels, so a fork pull request would run its code there; set runs-on: " + HOSTED_DEFAULT;
+  if (namesSelfHosted(runsOn)) return selfHosted;
+  if (typeof runsOn === "string") {
+    const trimmed = runsOn.trim();
+    const key = matrixKey(trimmed);
+    if (key !== undefined) {
+      const values = matrixValues(job, key);
+      if (values === undefined) return unresolvable(trimmed);
+      for (const value of values) {
+        if (value.toLowerCase() === "self-hosted" || declaredLabels([value], runners)) return selfHosted;
+      }
+      return undefined;
     }
-    const group = typeof runsOn["group"] === "string" ? runsOn["group"].trim() : "a runner group";
-    return "a public repository runs a fork-reachable job on runner group " + group + ", which cannot be shown to be hosted before the run; set runs-on: " + HOSTED_DEFAULT;
+    if (isExpression(trimmed)) return mentionedSelfHosted(trimmed) ? selfHosted : unresolvable(trimmed);
+    return declaredLabels([trimmed], runners) ? selfHosted : undefined;
   }
-  const expanded = expandedLabels(job, runsOn);
-  if (expanded !== undefined) {
-    if (expanded.some((label) => label.toLowerCase() === "self-hosted") || declaredLabels(expanded, runners)) {
-      return "a public repository runs a fork-reachable job on self-hosted labels, so a fork pull request would run its code there; set runs-on: " + HOSTED_DEFAULT;
+  if (Array.isArray(runsOn)) {
+    const labels = plainLabels(runsOn);
+    if (labels === undefined) return mentionedSelfHosted(runsOn) ? selfHosted : unresolvable("its runs-on expression");
+    return declaredLabels(labels, runners) ? selfHosted : undefined;
+  }
+  if (isRecord(runsOn)) {
+    if (runsOn["group"] !== undefined) {
+      const labels = plainLabels(runsOn["labels"]);
+      if (labels !== undefined && (labels.some((label) => label.toLowerCase() === "self-hosted") || declaredLabels(labels, runners))) return selfHosted;
+      const group = typeof runsOn["group"] === "string" ? runsOn["group"].trim() : "a runner group";
+      return "a public repository runs a fork-reachable job on runner group " + group + ", which cannot be shown to be hosted before the run; set runs-on: " + advice;
     }
-    return undefined;
+    const labels = plainLabels(runsOn["labels"]);
+    if (labels === undefined) return unresolvable("its runs-on expression");
+    return labels.some((label) => label.toLowerCase() === "self-hosted") || declaredLabels(labels, runners) ? selfHosted : undefined;
   }
-  if (mentionedSelfHosted(runsOn)) {
-    return "a public repository runs a fork-reachable job on self-hosted labels, so a fork pull request would run its code there; set runs-on: " + HOSTED_DEFAULT;
-  }
-  const shown = typeof runsOn === "string" ? runsOn.trim() : "its runs-on expression";
-  return "a public repository runs a fork-reachable job on " + shown + ", which cannot be shown to be a hosted runner before the run; set runs-on: " + HOSTED_DEFAULT;
+  return unresolvable("its runs-on expression");
 }
 
 function calledWorkflow(job: Readonly<Record<string, unknown>>): string | undefined {
@@ -209,10 +189,10 @@ function calledWorkflow(job: Readonly<Record<string, unknown>>): string | undefi
 
 function runnerFault(job: Readonly<Record<string, unknown>>, runsOn: unknown, mutation: boolean, policy: RunnerPolicy, reachable: boolean): string | undefined {
   if (policy.visibility === "public" && reachable) {
-    const fault = publicFault(job, runsOn, policy.runners);
+    const fault = publicFault(job, runsOn, policy.runners, mutation);
     if (fault !== undefined) return fault;
   }
-  return mutation ? mutationFault(runsOn, policy.runners.mutation, policy.visibility) : otherFault(runsOn, policy.runners, policy.visibility);
+  return mutation ? mutationFault(runsOn, policy.runners.mutation, policy.visibility, reachable) : otherFault(runsOn, policy.runners, policy.visibility);
 }
 
 function stepDirectory(value: unknown, inherited: string | undefined): string | undefined {

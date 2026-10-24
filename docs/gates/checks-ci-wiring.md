@@ -50,8 +50,10 @@ A mutation job never names `CI_RUNS_ON` directly in `runs-on`, as `vars.CI_RUNS_
 Any other job that names `CI_RUNS_ON` in `runs-on` carries exactly the hosted-default expression `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
 A public repository carries no self-hosted runner on a job a fork can reach, because a pull request from a fork would run its own code on that runner.
 A fork reaches a job through `pull_request`, `pull_request_target`, `pull_request_review` or `pull_request_review_comment`, directly or through a local reusable workflow a reached job calls.
-Such a job refuses a literal `self-hosted` label, a label set declared under `checks.mutationRunner` or `checks.selfHostedRunners`, a runner `group` and any other expression than the hosted-default expression.
-An expression that reads only `matrix` passes when every value in that matrix is a hosted label, and any other unresolvable expression refuses.
+Such a job refuses a literal `self-hosted` label, a label in a set declared under `checks.mutationRunner` or `checks.selfHostedRunners`, a runner `group` and any other expression than the hosted-default expression.
+A `runs-on` that is exactly `${{ matrix.<key> }}` judges each matrix value as its own labels.
+It refuses a value that names `self-hosted` or falls inside a label set declared under `checks.mutationRunner` or `checks.selfHostedRunners`.
+Any other expression refuses as unresolvable.
 A job on `push` or another trigger no fork reaches may still name self-hosted labels.
 In a private repository each mutation job carries exactly the labels the consumer declares in `package.json` under `checks.mutationRunner`.
 Every other job there carries exactly the hosted-default expression, or exactly one of the label sets the consumer declares under `checks.selfHostedRunners`.
@@ -85,6 +87,7 @@ Each refusal names the workflow file and line, the version found and where it wa
 
 The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts` and `checks` runners in `package.json` and the shell scripts those steps and scripts run from the working tree.
 It reads each file a setup-bun step names for its version.
+It reads the fleet pin from the kit's own `.bun-version`.
 It reads the target branch from `GITHUB_BASE_REF`, then from `refs/remotes/origin/HEAD` and then from the event file `GITHUB_EVENT_PATH` names.
 It reads whether the repository is private from `repository.private` in that event file.
 It parses the workflows with `Bun.YAML` without executing them.
@@ -99,7 +102,7 @@ It takes no arguments.
 | --- | --- |
 | 0 | Every required command has a reachable step. |
 | 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, or a setup-bun step drifts from the fleet bun version. |
-| 2 | A workflow or `package.json` cannot be decoded. |
+| 2 | A workflow or `package.json` cannot be decoded, or the kit's own `.bun-version` is missing, unreadable or blank. |
 
 ## Sample output
 

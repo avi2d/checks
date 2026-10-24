@@ -197,6 +197,41 @@ test("a public repository resolves matrix runs-on and refuses only self-hosted o
   const opaque = findRunnerFaults(policy, workflow("on: pull_request\njobs:\n  sweep:\n    runs-on: ${{ github.event.inputs.runs-on }}\n    steps:\n      - run: bun run lint\n"));
   expect(opaque).toHaveLength(1);
   expect(opaque[0]?.fault).toContain("cannot be shown");
+  const fleet = workflow("on: pull_request\njobs:\n  sweep:\n    strategy:\n      matrix:\n        runner: ['[\"self-hosted\",\"gpu\"]']\n    runs-on: ${{ fromJSON(matrix.runner) }}\n    steps:\n      - run: bun run lint\n");
+  expect(findRunnerFaults(policy, fleet)).toHaveLength(1);
+  const picked = workflow("on: pull_request\njobs:\n  sweep:\n    strategy:\n      matrix:\n        os: [linux, mac]\n    runs-on: ${{ matrix.os == 'linux' && 'self-hosted' || 'ubuntu-latest' }}\n    steps:\n      - run: bun run lint\n");
+  const pickedFaults = findRunnerFaults(policy, picked);
+  expect(pickedFaults).toHaveLength(1);
+  expect(pickedFaults[0]?.fault).toContain("self-hosted labels");
+  const shadowed = workflow("on: pull_request\njobs:\n  sweep:\n    strategy:\n      matrix:\n        os: [ubuntu-latest]\n    runs-on: ${{ vars.RUNNER || matrix.os }}\n    steps:\n      - run: bun run lint\n");
+  const shadowedFaults = findRunnerFaults(policy, shadowed);
+  expect(shadowedFaults).toHaveLength(1);
+  expect(shadowedFaults[0]?.fault).toContain("cannot be shown");
+});
+
+test(`a public fork-reachable job refuses a subset of a declared label set (oracle: GitHub's hardening guide ${GUIDE})`, () => {
+  const runners: RunnerConfig = { mutation: ["self-hosted", "Linux", "X64", "winbox"], selfHosted: [] };
+  const job = workflow("on: pull_request\njobs:\n  sweep:\n    runs-on: winbox\n    steps:\n      - run: bun run lint\n");
+  const faults = findRunnerFaults({ visibility: "public" as const, scripts: noScripts, runners }, job);
+  expect(faults).toHaveLength(1);
+  expect(faults[0]?.fault).toContain("self-hosted labels");
+  const boxed: RunnerConfig = { mutation: undefined, selfHosted: [["gpu-box"]] };
+  const matrix = workflow("on: pull_request\njobs:\n  sweep:\n    strategy:\n      matrix:\n        os: [ubuntu-latest, gpu-box]\n    runs-on: ${{ matrix.os }}\n    steps:\n      - run: bun run lint\n");
+  const boxedFaults = findRunnerFaults({ visibility: "public" as const, scripts: noScripts, runners: boxed }, matrix);
+  expect(boxedFaults).toHaveLength(1);
+  expect(boxedFaults[0]?.fault).toContain("self-hosted labels");
+});
+
+test(`a public fork-reachable mutation job is told to use ubuntu-latest (oracle: GitHub's hardening guide ${GUIDE})`, () => {
+  const policy = { visibility: "public" as const, scripts: noScripts, runners: RUNNERS };
+  const hosted = findRunnerFaults(policy, jobs(HOSTED, "ubuntu-latest"));
+  expect(hosted).toHaveLength(1);
+  expect(hosted[0]?.location).toBe(".github/workflows/ci.yml job mutation");
+  expect(hosted[0]?.fault).toContain("set runs-on: ubuntu-latest");
+  const pinned = findRunnerFaults(policy, jobs(MUTATION, "ubuntu-latest"));
+  expect(pinned).toHaveLength(1);
+  expect(pinned[0]?.fault).toContain("set runs-on: ubuntu-latest");
+  expect(pinned[0]?.fault).not.toContain("CI_RUNS_ON");
 });
 
 test("a reusable workflow called from a fork-reachable workflow is fork-reachable (oracle: GitHub's hardening guide https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions)", () => {
