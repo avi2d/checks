@@ -223,6 +223,18 @@ test("a public repository resolves matrix runs-on and refuses only self-hosted o
   const keptFaults = findRunnerFaults(policy, kept);
   expect(keptFaults).toHaveLength(1);
   expect(keptFaults[0]?.fault).toContain("self-hosted labels");
+  const readded = workflow("on: pull_request\njobs:\n  sweep:\n    strategy:\n      matrix:\n        os: [ubuntu-latest, self-hosted]\n        exclude:\n          - os: self-hosted\n        include:\n          - os: self-hosted\n    runs-on: ${{ matrix.os }}\n    steps:\n      - run: bun run lint\n");
+  const readdedFaults = findRunnerFaults(policy, readded);
+  expect(readdedFaults).toHaveLength(1);
+  expect(readdedFaults[0]?.fault).toContain("self-hosted labels");
+  const cleared = workflow("on: pull_request\njobs:\n  sweep:\n    strategy:\n      matrix:\n        os: [ubuntu-latest, self-hosted]\n        arch: [x64, arm]\n        exclude:\n          - os: self-hosted\n            arch: x64\n          - os: self-hosted\n            arch: arm\n    runs-on: ${{ matrix.os }}\n    steps:\n      - run: bun run lint\n");
+  expect(findRunnerFaults(policy, cleared)).toEqual([]);
+  const scalar = workflow("on: pull_request\njobs:\n  sweep:\n    runs-on:\n      labels: ubuntu-latest\n    steps:\n      - run: bun run lint\n");
+  expect(findRunnerFaults(policy, scalar)).toEqual([]);
+  const scalarSelf = workflow("on: pull_request\njobs:\n  sweep:\n    runs-on:\n      labels: self-hosted\n    steps:\n      - run: bun run lint\n");
+  const scalarSelfFaults = findRunnerFaults(policy, scalarSelf);
+  expect(scalarSelfFaults).toHaveLength(1);
+  expect(scalarSelfFaults[0]?.fault).toContain("self-hosted labels");
 });
 
 test(`a public fork-reachable job refuses a subset of a declared label set (oracle: GitHub's hardening guide ${GUIDE})`, () => {
