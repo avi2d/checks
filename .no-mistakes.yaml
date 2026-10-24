@@ -10,10 +10,8 @@ review:
         Judge each changed Markdown file a person reads, README.md,
         CONTRIBUTING.md and the pages under docs/, against the
         technical-writing skill, and each changed AGENTS.md or CLAUDE.md
-        against the writing-for-agents skill. Read them at
-        ~/.agents/skills/technical-writing/SKILL.md and
-        ~/.agents/skills/writing-for-agents/SKILL.md on this host, and don't
-        restate them here. checks-docs already decides templates, one
+        against the writing-for-agents skill. Use those skills without
+        restating them here. checks-docs already decides templates, one
         sentence per line, dashes, parentheses, semicolons and broken
         references, so leave those to it. Flag history in a living doc, such
         as a former name, a migration table or what something used to do,

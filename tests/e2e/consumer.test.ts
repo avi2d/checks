@@ -47,6 +47,7 @@ function manifestFor(checks: string): Record<string, unknown> {
   return {
     name: "checks-consumer-fixture",
     type: "module",
+    author: "avi2d <avi2dg@gmail.com>",
     devDependencies: {
       "@avi2dg/checks": checks,
       effect: "4.0.0",

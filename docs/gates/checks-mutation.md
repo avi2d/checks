@@ -97,7 +97,7 @@ jobs:
     permissions:
       contents: read
       actions: read
-    runs-on: [self-hosted, Linux, X64, winbox]
+    runs-on: [self-hosted, gpu, x64]
     steps:
       - uses: actions/checkout@v5
         with:
@@ -131,8 +131,8 @@ The restore reads only a successful run of `mutation.yml` on `main`, so a sweep 
 The artifact keeps 30 days, so the newest full baseline outlives the week between full runs.
 The upload holds the slimmed report and the slimmed state without each mutant's `statusReason`, as [checks-mutation-baseline](checks-mutation-baseline.md#the-saved-baselines) says, so the one directory holds about 10 MB in place of about 500 MB.
 
-The job runs on the fleet's self-hosted Linux runner labelled `winbox`, which is where a repository sends its full sweeps.
-It never reads `CI_RUNS_ON`, so an override that moves a repository's other jobs during a runner outage leaves the sweep waiting for `winbox`.
+The job runs on the self-hosted labels the repository declares in `package.json` under `checks.mutationRunner`, which is where a repository sends its full sweeps.
+It never reads `CI_RUNS_ON`, so an override that moves a repository's other jobs during a runner outage leaves the sweep waiting for those labels.
 [checks-ci-wiring](checks-ci-wiring.md#runners) refuses a mutation job that names it in `runs-on`.
 The `name: mutation` line is what `gh workflow run mutation` looks up.
 GitHub sets `CI=true` on every runner, so the preset lets the full run through there.

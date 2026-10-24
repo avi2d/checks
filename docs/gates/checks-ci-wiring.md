@@ -47,10 +47,18 @@ The call counts as a command of its own or inside a command substitution, never 
 A here-document that `sh`, `bash`, `dash`, `ksh` or `zsh` reads is a script, and its calls count.
 The text of any other here-document is data, so a call there counts only inside a command substitution when the delimiter is unquoted.
 A mutation job never names `CI_RUNS_ON` directly in `runs-on`, as `vars.CI_RUNS_ON` or `vars['CI_RUNS_ON']`, so an override for an outage cannot send its mutation runs to hosted runners.
-Any other job that names `CI_RUNS_ON` in `runs-on` carries exactly the hosted-default expression `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
-In a private repository each mutation job carries exactly the labels `[self-hosted, Linux, X64, winbox]`.
-Every other job there carries exactly the hosted-default expression, or exactly the labels `[self-hosted, macOS, iphone]` of the Mac CI runner that holds the iPhone Simulator.
-A public repository may keep `runs-on: ubuntu-latest` on every job, because a pull request from a fork runs its own code on the runner.
+In a private repository any other job that names `CI_RUNS_ON` in `runs-on` carries exactly the hosted-default expression `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
+A public repository carries no self-hosted runner on a job a fork can reach, because a pull request from a fork would run its own code on that runner.
+A fork reaches a job through `pull_request`, `pull_request_target`, `pull_request_review`, `pull_request_review_comment` or `issue_comment`, directly, through a local reusable workflow a reached job calls, or through a `workflow_run` trigger that names a reached workflow.
+Such a job refuses a literal `self-hosted` label, a label that interpolates an expression, a label in a set declared under `checks.mutationRunner` or `checks.selfHostedRunners`, a runner `group` and any other expression.
+A `runs-on` that is exactly `${{ matrix.<key> }}` judges each matrix value as its own labels.
+The values for the key are the combinations its axis values form, without combinations an `exclude` entry removes, plus its `include` rows, which merge into the original combinations they match and otherwise run as their own combinations.
+It refuses a value that names `self-hosted` or falls inside a label set declared under `checks.mutationRunner` or `checks.selfHostedRunners`.
+Any other expression refuses as unresolvable.
+A job on `push` or another trigger no fork reaches may still name self-hosted labels.
+In a private repository each mutation job carries exactly the labels the consumer declares in `package.json` under `checks.mutationRunner`.
+Every other job there carries exactly the hosted-default expression, or exactly one of the label sets the consumer declares under `checks.selfHostedRunners`.
+A repository without those declarations fails each job they would pin until it declares them.
 The check knows a repository is private only from GitHub's event, so a run outside CI judges only the rules that hold in either.
 
 ### Bun version
@@ -68,18 +76,19 @@ Else the `package.json` at the workspace root reads the same way.
 Else setup-bun installs latest.
 A blank version counts as none.
 A repository passes by writing the fleet version to `.bun-version` and naming that file in each step's `with.bun-version-file`.
+The fleet version is the version the kit ships in its own `.bun-version`.
 The step fails the check when the version is missing or differs from the fleet bun version.
 A range fails because it differs from the fleet version.
 A version built from an expression fails because it cannot be shown equal before the run.
 This rule skips a repository with no setup-bun step.
-The fleet bun version equals the dotfiles mise pin.
-A bump moves both together, so a kit release that moves the fleet version turns each consumer red until its pin follows.
+A kit release that moves the fleet version turns each consumer red until its pin follows.
 Each refusal names the workflow file and line, the version found and where it was read, and the fleet version.
 
 ## What it reads
 
-The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts` in `package.json` and the shell scripts those steps and scripts run from the working tree.
+The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts` and `checks` runners in `package.json` and the shell scripts those steps and scripts run from the working tree.
 It reads each file a setup-bun step names for its version.
+It reads the fleet pin from the kit's own `.bun-version`.
 It reads the target branch from `GITHUB_BASE_REF`, then from `refs/remotes/origin/HEAD` and then from the event file `GITHUB_EVENT_PATH` names.
 It reads whether the repository is private from `repository.private` in that event file.
 It parses the workflows with `Bun.YAML` without executing them.
@@ -94,7 +103,7 @@ It takes no arguments.
 | --- | --- |
 | 0 | Every required command has a reachable step. |
 | 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, or a setup-bun step drifts from the fleet bun version. |
-| 2 | A workflow or `package.json` cannot be decoded. |
+| 2 | A workflow or `package.json` cannot be decoded, or the kit's own `.bun-version` is missing, unreadable or blank. |
 
 ## Sample output
 
@@ -110,7 +119,7 @@ A mutation job that names `CI_RUNS_ON` in `runs-on` produces a report like this:
 
 ```
 ci-wiring: 1 job(s) run on the wrong runner:
-  .github/workflows/mutation-compare.yml job mutation-compare: a mutation job reads CI_RUNS_ON, so an override moves its mutation runs off winbox; set runs-on: [self-hosted, Linux, X64, winbox]
+  .github/workflows/mutation-compare.yml job mutation-compare: a mutation job reads CI_RUNS_ON, so an override moves its mutation runs off [self-hosted, gpu, x64]; set runs-on: [self-hosted, gpu, x64]
 ```
 
 A reference to a missing workflow produces a report like this:

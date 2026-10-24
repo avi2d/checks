@@ -1,9 +1,12 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { withoutPullRequestEvent } from "../lib/env.ts";
-import { FLEET_BUN_VERSION } from "../../src/delivery/ci-wiring.ts";
 import { CHECKOUT, fixtureRepos, ran, type FixtureRepo, type Ran } from "./lib/fixture-repo.ts";
+
+// The oracle is the file the check reads, not a constant in the code.
+const FLEET_BUN_VERSION = readFileSync(join(CHECKOUT, ".bun-version"), "utf8").trim();
 
 const open = fixtureRepos("checks-ci-wiring-");
 const SCRIPT = join(CHECKOUT, "src", "delivery", "ci-wiring.ts");
@@ -74,11 +77,12 @@ test("the default branch comes from origin HEAD, the pull request base or GitHub
   expect(release.text).toContain("limits pull_request to branches other than release");
 }, 30_000);
 
-test("a private repository's event holds mutation jobs to winbox and every other job to a hosted default", async () => {
-  const old = `\${{ vars.CI_RUNS_ON || fromJSON('["self-hosted","Linux","X64","winbox"]') }}`;
+test("a private repository's event holds mutation jobs to its configured labels and every other job to a hosted default", async () => {
+  const old = `\${{ vars.CI_RUNS_ON || fromJSON('["self-hosted","gpu"]') }}`;
   const mutation = (runsOn: string) => `on: pull_request\njobs:\n  mutation-compare:\n    runs-on: ${runsOn}\n    steps:\n      - run: bun run mutate\n`;
+  const consumer = { name: "consumer", scripts: { lint: "lint", test: "test", mutate: "bunx stryker run" }, checks: { mutationRunner: ["self-hosted", "gpu", "x64"] } };
   const repo = await open({
-    "package.json": JSON.stringify({ name: "consumer", scripts: { lint: "lint", test: "test", mutate: "bunx stryker run" } }),
+    "package.json": JSON.stringify(consumer),
     ".github/workflows/ci.yml": workflow.replace("runs-on: ubuntu-latest", `runs-on: ${old}`),
     ".github/workflows/mutation-compare.yml": mutation(old),
     "event.json": JSON.stringify({ repository: { default_branch: "main", private: true } }),
@@ -91,29 +95,58 @@ test("a private repository's event holds mutation jobs to winbox and every other
   expect(red.text).toContain(".github/workflows/mutation-compare.yml job mutation-compare: a mutation job reads CI_RUNS_ON");
   expect(red.text).toContain(".github/workflows/ci.yml job checks: the job is not on a hosted runner");
   expect((await wiring(repo)).exitCode).toBe(1);
-  await repo.write({ ".github/workflows/ci.yml": workflow, ".github/workflows/mutation-compare.yml": mutation("ubuntu-latest") });
+  await repo.write({
+    "package.json": JSON.stringify({ name: "consumer", scripts: { lint: "lint", test: "test", mutate: "bunx stryker run" } }),
+    ".github/workflows/ci.yml": workflow,
+    ".github/workflows/mutation-compare.yml": mutation("ubuntu-latest"),
+  });
+  const undeclared = await wiring(repo, privateEvent);
+  expect(undeclared.exitCode).toBe(1);
+  expect(undeclared.text).toContain("job mutation-compare: a mutation job in a private repository names no checks.mutationRunner");
   expect((await wiring(repo)).exitCode).toBe(0);
+  await repo.write({
+    "package.json": JSON.stringify(consumer),
+    ".github/workflows/ci.yml": workflow,
+    ".github/workflows/mutation-compare.yml": mutation("ubuntu-latest"),
+  });
   const hosted = await wiring(repo, privateEvent);
   expect(hosted.exitCode).toBe(1);
-  expect(hosted.text).toContain("job mutation-compare: a mutation job in a private repository runs off winbox");
+  expect(hosted.text).toContain("job mutation-compare: a mutation job in a private repository runs off [self-hosted, gpu, x64]");
   expect(hosted.text).toContain("job checks: the job is not on a hosted runner");
   await repo.write({
     ".github/workflows/ci.yml": workflow.replace("runs-on: ubuntu-latest", "runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}"),
-    ".github/workflows/mutation-compare.yml": mutation("[self-hosted, Linux, X64, winbox]"),
+    ".github/workflows/mutation-compare.yml": mutation("[self-hosted, gpu, x64]"),
   });
   const green = await wiring(repo, privateEvent);
   expect(green.exitCode).toBe(0);
   expect(green.text).toContain("3 gate(s) run on pull requests to main");
 }, 30_000);
 
-test("a private repository's mutation job through a repository shell script in its run directory runs on winbox and a non-shell script does not count", async () => {
+test("a public repository refuses a self-hosted runner on a fork-reachable job", async () => {
+  const repo = await open({
+    "package.json": scripts(["lint", "test"]),
+    "src/index.ts": "export const answer = 42;\n",
+    ".github/workflows/ci.yml": workflow.replace("runs-on: ubuntu-latest", "runs-on: [self-hosted, gpu, x64]"),
+    "event.json": JSON.stringify({ repository: { default_branch: "main", private: false } }),
+  });
+  await repo.commit("start");
+  const publicEvent = { GITHUB_EVENT_PATH: join(repo.dir, "event.json") };
+  const red = await wiring(repo, publicEvent);
+  expect(red.exitCode).toBe(1);
+  expect(red.text).toContain("1 job(s) run on the wrong runner");
+  expect(red.text).toContain("job checks: a public repository runs a fork-reachable job on self-hosted labels");
+  await repo.write({ ".github/workflows/ci.yml": workflow });
+  expect((await wiring(repo, publicEvent)).exitCode).toBe(0);
+}, 30_000);
+
+test("a private repository's mutation job through a repository shell script in its run directory runs on its configured labels and a non-shell script does not count", async () => {
   const hosted = "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}";
-  const winbox = "[self-hosted, Linux, X64, winbox]";
+  const mutationRunner = "[self-hosted, gpu, x64]";
   const runs = ["bun run mutate:incremental", "./mutate.sh", "bun run ./scripts/mutate.sh", "cd tools && ./sweep.sh"];
   const mutation = (runsOn: string) =>
     `on: pull_request\njobs:\n${runs.map((run, index) => `  sweep-${index}:\n    runs-on: ${runsOn}\n    steps:\n      - run: ${run}\n`).join("")}  report:\n    runs-on: ${hosted}\n    steps:\n      - run: scripts/report.ts\n      - run: ./mutate.sh\n        working-directory: docs\n`;
   const repo = await open({
-    "package.json": JSON.stringify({ name: "consumer", scripts: { lint: "lint", test: "test", "mutate:incremental": "scripts/mutate.sh --incremental" } }),
+    "package.json": JSON.stringify({ name: "consumer", scripts: { lint: "lint", test: "test", "mutate:incremental": "scripts/mutate.sh --incremental" }, checks: { mutationRunner: ["self-hosted", "gpu", "x64"] } }),
     "scripts/mutate.sh": '#!/usr/bin/env bash\nset -euo pipefail\nexec ./node_modules/.bin/stryker run "$@"\n',
     "mutate.sh": "#!/bin/sh\nscripts/mutate.sh\n",
     "tools/sweep.sh": "#!/bin/sh\ncd .. && ./mutate.sh\n",
@@ -129,7 +162,7 @@ test("a private repository's mutation job through a repository shell script in i
   expect(red.exitCode).toBe(1);
   expect(red.text).toContain(`${runs.length} job(s) run on the wrong runner`);
   for (const index of runs.keys()) expect(red.text).toContain(`job sweep-${index}: a mutation job reads CI_RUNS_ON`);
-  await repo.write({ ".github/workflows/mutation.yml": mutation(winbox) });
+  await repo.write({ ".github/workflows/mutation.yml": mutation(mutationRunner) });
   const green = await wiring(repo, privateEvent);
   expect(green.text).not.toContain("wrong runner");
   expect(green.exitCode).toBe(0);
