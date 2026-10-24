@@ -144,6 +144,8 @@ function matrixValues(job: Readonly<Record<string, unknown>>, key: string): read
     }
   }
   combos = combos.filter((combo) => !blocks.some((terms) => terms.every(([name, value]) => combo.get(name) === value)));
+  const originals: Map<string, unknown>[] = axes.length === 0 ? [] : combos;
+  const appended: Map<string, unknown>[] = [];
   const extra = matrix["include"];
   if (Array.isArray(extra)) {
     for (const candidate of extra) {
@@ -158,13 +160,13 @@ function matrixValues(job: Readonly<Record<string, unknown>>, key: string): read
         entries.push([name.toLowerCase(), value]);
       }
       if (!usable) return undefined;
-      const matches = combos.filter((combo) => entries.every(([name, value]) => !names.has(name) || combo.get(name) === value));
-      if (matches.length === 0) combos.push(new Map(entries));
+      const matches = originals.filter((combo) => entries.every(([name, value]) => !names.has(name) || combo.get(name) === value));
+      if (matches.length === 0) appended.push(new Map(entries));
       else for (const combo of matches) for (const [name, value] of entries) combo.set(name, value);
     }
   }
   const used = new Set<string>();
-  for (const combo of combos) {
+  for (const combo of [...combos, ...appended]) {
     const value = combo.get(key);
     if (value === undefined) continue;
     if (typeof value !== "string") return undefined;
