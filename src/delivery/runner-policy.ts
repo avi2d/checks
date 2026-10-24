@@ -102,69 +102,95 @@ function matrixKey(expression: string): string | undefined {
   return match?.[1]?.toLowerCase();
 }
 
-function matrixValues(job: Readonly<Record<string, unknown>>, key: string): readonly string[] | undefined {
-  const strategy = job["strategy"];
-  if (!isRecord(strategy)) return undefined;
-  const matrix = strategy["matrix"];
-  if (!isRecord(matrix)) return undefined;
-  if (key === "include" || key === "exclude") return undefined;
-  const axes: [string, readonly unknown[]][] = [];
+type Scalar = string | number | boolean;
+
+type Combo = Map<string, unknown>;
+
+type Terms = readonly (readonly [string, unknown])[];
+
+function scalarList(value: unknown): readonly Scalar[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const kept = value.filter((entry): entry is Scalar => typeof entry === "string" || typeof entry === "number" || typeof entry === "boolean");
+  return kept.length === value.length ? kept : undefined;
+}
+
+function matrixAxes(matrix: Readonly<Record<string, unknown>>): readonly (readonly [string, readonly Scalar[]])[] | undefined {
+  const axes: (readonly [string, readonly Scalar[]])[] = [];
   for (const [name, axis] of Object.entries(matrix)) {
     const lowered = name.toLowerCase();
     if (lowered === "include" || lowered === "exclude") continue;
-    if (!Array.isArray(axis) || !axis.every((value) => typeof value === "string" || typeof value === "number" || typeof value === "boolean")) return undefined;
-    axes.push([lowered, axis]);
+    const values = scalarList(axis);
+    if (values === undefined) return undefined;
+    axes.push([lowered, values]);
   }
-  const axisNames = new Set(axes.map(([name]) => name));
-  let combos: Map<string, unknown>[] = [new Map()];
+  return axes;
+}
+
+function expandCombos(axes: readonly (readonly [string, readonly Scalar[]])[]): Combo[] | undefined {
+  let combos: Combo[] = [new Map()];
   for (const [name, axis] of axes) {
-    const next: Map<string, unknown>[] = [];
+    const next: Combo[] = [];
     for (const combo of combos) {
       for (const value of axis) next.push(new Map(combo).set(name, value));
     }
     combos = next;
     if (combos.length > 512) return undefined;
   }
-  const excluded = matrix["exclude"];
-  const blocks: [string, unknown][][] = [];
-  if (excluded !== undefined) {
-    if (!Array.isArray(excluded)) return undefined;
-    for (const candidate of excluded) {
-      if (!isRecord(candidate)) return undefined;
-      const terms: [string, unknown][] = [];
-      let usable = true;
-      for (const [name, value] of Object.entries(candidate)) {
-        if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
-          usable = false;
-          break;
-        }
-        terms.push([name.toLowerCase(), value]);
+  return combos;
+}
+
+function exclusionBlocks(excluded: unknown): readonly Terms[] | undefined {
+  if (excluded === undefined) return [];
+  if (!Array.isArray(excluded)) return undefined;
+  const blocks: Terms[] = [];
+  for (const candidate of excluded) {
+    if (!isRecord(candidate)) return undefined;
+    const terms: (readonly [string, unknown])[] = [];
+    let usable = true;
+    for (const [name, value] of Object.entries(candidate)) {
+      if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
+        usable = false;
+        break;
       }
-      if (usable) blocks.push(terms);
+      terms.push([name.toLowerCase(), value]);
     }
+    if (usable) blocks.push(terms);
   }
-  combos = combos.filter((combo) => !blocks.some((terms) => terms.every(([name, value]) => combo.get(name) === value)));
-  const originals: Map<string, unknown>[] = axes.length === 0 ? [] : combos;
-  const appended: Map<string, unknown>[] = [];
-  const extra = matrix["include"];
-  if (Array.isArray(extra)) {
-    for (const candidate of extra) {
-      if (!isRecord(candidate)) return undefined;
-      const entries: [string, unknown][] = [];
-      let usable = true;
-      for (const [name, value] of Object.entries(candidate)) {
-        if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
-          usable = false;
-          break;
-        }
-        entries.push([name.toLowerCase(), value]);
-      }
-      if (!usable) return undefined;
-      const matches = originals.filter((combo) => entries.every(([name, value]) => !axisNames.has(name) || combo.get(name) === value));
-      if (matches.length === 0) appended.push(new Map(entries));
-      else for (const combo of matches) for (const [name, value] of entries) combo.set(name, value);
-    }
+  return blocks;
+}
+
+function withoutExcluded(combos: readonly Combo[], blocks: readonly Terms[]): Combo[] {
+  return combos.filter((combo) => !blocks.some((terms) => terms.every(([name, value]) => combo.get(name) === value)));
+}
+
+function includeEntries(candidate: Readonly<Record<string, unknown>>): Terms | undefined {
+  const entries: (readonly [string, unknown])[] = [];
+  for (const [name, value] of Object.entries(candidate)) {
+    if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") return undefined;
+    entries.push([name.toLowerCase(), value]);
   }
+  return entries;
+}
+
+function mergeEntries(originals: readonly Combo[], axisNames: ReadonlySet<string>, entries: Terms, appended: Combo[]): void {
+  const matches = originals.filter((combo) => entries.every(([name, value]) => !axisNames.has(name) || combo.get(name) === value));
+  if (matches.length === 0) appended.push(new Map(entries));
+  else for (const combo of matches) for (const [name, value] of entries) combo.set(name, value);
+}
+
+function applyInclude(originals: readonly Combo[], axisNames: ReadonlySet<string>, extra: unknown): readonly Combo[] | undefined {
+  const appended: Combo[] = [];
+  if (!Array.isArray(extra)) return appended;
+  for (const candidate of extra) {
+    if (!isRecord(candidate)) return undefined;
+    const entries = includeEntries(candidate);
+    if (entries === undefined) return undefined;
+    mergeEntries(originals, axisNames, entries, appended);
+  }
+  return appended;
+}
+
+function runnerValues(combos: readonly Combo[], appended: readonly Combo[], key: string): readonly string[] | undefined {
   const used = new Set<string>();
   for (const combo of [...combos, ...appended]) {
     const value = combo.get(key);
@@ -173,6 +199,24 @@ function matrixValues(job: Readonly<Record<string, unknown>>, key: string): read
     used.add(value);
   }
   return used.size > 0 ? [...used] : undefined;
+}
+
+function matrixValues(job: Readonly<Record<string, unknown>>, key: string): readonly string[] | undefined {
+  const strategy = job["strategy"];
+  if (!isRecord(strategy)) return undefined;
+  const matrix = strategy["matrix"];
+  if (!isRecord(matrix)) return undefined;
+  if (key === "include" || key === "exclude") return undefined;
+  const axes = matrixAxes(matrix);
+  if (axes === undefined) return undefined;
+  const combos = expandCombos(axes);
+  if (combos === undefined) return undefined;
+  const blocks = exclusionBlocks(matrix["exclude"]);
+  if (blocks === undefined) return undefined;
+  const kept = withoutExcluded(combos, blocks);
+  const appended = applyInclude(axes.length === 0 ? [] : kept, new Set(axes.map(([name]) => name)), matrix["include"]);
+  if (appended === undefined) return undefined;
+  return runnerValues(kept, appended, key);
 }
 
 function hasInterpolation(value: string): boolean {
@@ -192,42 +236,70 @@ function plainLabels(value: unknown): readonly string[] | undefined {
   return value.some(hasInterpolation) ? undefined : value;
 }
 
+function matrixRefusal(
+  job: Readonly<Record<string, unknown>>,
+  shown: string,
+  key: string,
+  runners: RunnerConfig,
+  selfHosted: string,
+  unresolvable: (shown: string) => string,
+): string | undefined {
+  const values = matrixValues(job, key);
+  if (values === undefined) return unresolvable(shown);
+  for (const value of values) {
+    if (hasInterpolation(value)) return mentionedSelfHosted(value) ? selfHosted : unresolvable(shown);
+    if (value.toLowerCase() === "self-hosted" || declaredLabels([value], runners)) return selfHosted;
+  }
+  return undefined;
+}
+
+function stringFault(
+  job: Readonly<Record<string, unknown>>,
+  runsOn: string,
+  runners: RunnerConfig,
+  selfHosted: string,
+  unresolvable: (shown: string) => string,
+): string | undefined {
+  const trimmed = runsOn.trim();
+  const key = matrixKey(trimmed);
+  if (key !== undefined) return matrixRefusal(job, trimmed, key, runners, selfHosted, unresolvable);
+  if (hasInterpolation(trimmed)) return mentionedSelfHosted(trimmed) ? selfHosted : unresolvable(trimmed);
+  return declaredLabels([trimmed], runners) ? selfHosted : undefined;
+}
+
+function arrayFault(runsOn: unknown, runners: RunnerConfig, selfHosted: string, unresolvable: (shown: string) => string): string | undefined {
+  const labels = plainLabels(runsOn);
+  if (labels === undefined) return mentionedSelfHosted(runsOn) ? selfHosted : unresolvable("its runs-on expression");
+  return declaredLabels(labels, runners) ? selfHosted : undefined;
+}
+
+function scalarLabelsFault(runsOn: unknown, runners: RunnerConfig, selfHosted: string, unresolvable: (shown: string) => string): string | undefined {
+  const labels = plainLabels(runsOn);
+  if (labels === undefined) return unresolvable("its runs-on expression");
+  return labels.some((label) => label.toLowerCase() === "self-hosted") || declaredLabels(labels, runners) ? selfHosted : undefined;
+}
+
+function recordFault(
+  runsOn: Readonly<Record<string, unknown>>,
+  runners: RunnerConfig,
+  selfHosted: string,
+  unresolvable: (shown: string) => string,
+): string | undefined {
+  if (runsOn["group"] === undefined) return scalarLabelsFault(runsOn["labels"], runners, selfHosted, unresolvable);
+  const labels = plainLabels(runsOn["labels"]);
+  if (labels !== undefined && (labels.some((label) => label.toLowerCase() === "self-hosted") || declaredLabels(labels, runners))) return selfHosted;
+  const group = typeof runsOn["group"] === "string" ? runsOn["group"].trim() : "a runner group";
+  return "a public repository runs a fork-reachable job on runner group " + group + ", which cannot be shown to be hosted before the run; set runs-on: ubuntu-latest";
+}
+
 function publicFault(job: Readonly<Record<string, unknown>>, runsOn: unknown, runners: RunnerConfig): string | undefined {
   const selfHosted = "a public repository runs a fork-reachable job on self-hosted labels, so a fork pull request would run its code there; set runs-on: ubuntu-latest";
   const unresolvable = (shown: string) =>
     "a public repository runs a fork-reachable job on " + shown + ", which cannot be shown to be a hosted runner before the run; set runs-on: ubuntu-latest";
   if (namesSelfHosted(runsOn)) return selfHosted;
-  if (typeof runsOn === "string") {
-    const trimmed = runsOn.trim();
-    const key = matrixKey(trimmed);
-    if (key !== undefined) {
-      const values = matrixValues(job, key);
-      if (values === undefined) return unresolvable(trimmed);
-      for (const value of values) {
-        if (hasInterpolation(value)) return mentionedSelfHosted(value) ? selfHosted : unresolvable(trimmed);
-        if (value.toLowerCase() === "self-hosted" || declaredLabels([value], runners)) return selfHosted;
-      }
-      return undefined;
-    }
-    if (hasInterpolation(trimmed)) return mentionedSelfHosted(trimmed) ? selfHosted : unresolvable(trimmed);
-    return declaredLabels([trimmed], runners) ? selfHosted : undefined;
-  }
-  if (Array.isArray(runsOn)) {
-    const labels = plainLabels(runsOn);
-    if (labels === undefined) return mentionedSelfHosted(runsOn) ? selfHosted : unresolvable("its runs-on expression");
-    return declaredLabels(labels, runners) ? selfHosted : undefined;
-  }
-  if (isRecord(runsOn)) {
-    if (runsOn["group"] !== undefined) {
-      const labels = plainLabels(runsOn["labels"]);
-      if (labels !== undefined && (labels.some((label) => label.toLowerCase() === "self-hosted") || declaredLabels(labels, runners))) return selfHosted;
-      const group = typeof runsOn["group"] === "string" ? runsOn["group"].trim() : "a runner group";
-      return "a public repository runs a fork-reachable job on runner group " + group + ", which cannot be shown to be hosted before the run; set runs-on: ubuntu-latest";
-    }
-    const labels = plainLabels(runsOn["labels"]);
-    if (labels === undefined) return unresolvable("its runs-on expression");
-    return labels.some((label) => label.toLowerCase() === "self-hosted") || declaredLabels(labels, runners) ? selfHosted : undefined;
-  }
+  if (typeof runsOn === "string") return stringFault(job, runsOn, runners, selfHosted, unresolvable);
+  if (Array.isArray(runsOn)) return arrayFault(runsOn, runners, selfHosted, unresolvable);
+  if (isRecord(runsOn)) return recordFault(runsOn, runners, selfHosted, unresolvable);
   return unresolvable("its runs-on expression");
 }
 

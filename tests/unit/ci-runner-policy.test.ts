@@ -229,6 +229,10 @@ test("a public repository resolves matrix runs-on and refuses only self-hosted o
   expect(readdedFaults[0]?.fault).toContain("self-hosted labels");
   const cleared = workflow("on: pull_request\njobs:\n  sweep:\n    strategy:\n      matrix:\n        os: [ubuntu-latest, self-hosted]\n        arch: [x64, arm]\n        exclude:\n          - os: self-hosted\n            arch: x64\n          - os: self-hosted\n            arch: arm\n    runs-on: ${{ matrix.os }}\n    steps:\n      - run: bun run lint\n");
   expect(findRunnerFaults(policy, cleared)).toEqual([]);
+});
+
+test("a public repository resolves include-only rows, scalar axes and labels mappings (oracle: GitHub's hardening guide https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions)", () => {
+  const policy = { visibility: "public" as const, scripts: noScripts, runners: RUNNERS };
   const scalar = workflow("on: pull_request\njobs:\n  sweep:\n    runs-on:\n      labels: ubuntu-latest\n    steps:\n      - run: bun run lint\n");
   expect(findRunnerFaults(policy, scalar)).toEqual([]);
   const scalarSelf = workflow("on: pull_request\njobs:\n  sweep:\n    runs-on:\n      labels: self-hosted\n    steps:\n      - run: bun run lint\n");
