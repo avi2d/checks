@@ -235,6 +235,14 @@ test("a public repository resolves matrix runs-on and refuses only self-hosted o
   const scalarSelfFaults = findRunnerFaults(policy, scalarSelf);
   expect(scalarSelfFaults).toHaveLength(1);
   expect(scalarSelfFaults[0]?.fault).toContain("self-hosted labels");
+  const numbered = workflow("on: pull_request\njobs:\n  sweep:\n    strategy:\n      matrix:\n        os: [ubuntu-latest]\n        node: [20, 22]\n    runs-on: ${{ matrix.os }}\n    steps:\n      - run: bun run lint\n");
+  expect(findRunnerFaults(policy, numbered)).toEqual([]);
+  const merged = workflow("on: pull_request\njobs:\n  sweep:\n    strategy:\n      matrix:\n        version: ['20', '22']\n        include:\n          - os: self-hosted\n          - os: ubuntu-latest\n    runs-on: ${{ matrix.os }}\n    steps:\n      - run: bun run lint\n");
+  expect(findRunnerFaults(policy, merged)).toEqual([]);
+  const numberedKept = workflow("on: pull_request\njobs:\n  sweep:\n    strategy:\n      matrix:\n        os: [ubuntu-latest, self-hosted]\n        node: [20, 22]\n        exclude:\n          - os: self-hosted\n            node: 20\n    runs-on: ${{ matrix.os }}\n    steps:\n      - run: bun run lint\n");
+  const numberedKeptFaults = findRunnerFaults(policy, numberedKept);
+  expect(numberedKeptFaults).toHaveLength(1);
+  expect(numberedKeptFaults[0]?.fault).toContain("self-hosted labels");
 });
 
 test(`a public fork-reachable job refuses a subset of a declared label set (oracle: GitHub's hardening guide ${GUIDE})`, () => {

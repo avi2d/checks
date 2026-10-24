@@ -108,16 +108,17 @@ function matrixValues(job: Readonly<Record<string, unknown>>, key: string): read
   const matrix = strategy["matrix"];
   if (!isRecord(matrix)) return undefined;
   if (key === "include" || key === "exclude") return undefined;
-  const axes: [string, readonly string[]][] = [];
+  const axes: [string, readonly unknown[]][] = [];
   for (const [name, axis] of Object.entries(matrix)) {
     const lowered = name.toLowerCase();
     if (lowered === "include" || lowered === "exclude") continue;
-    if (!Array.isArray(axis) || !axis.every((value): value is string => typeof value === "string")) return undefined;
+    if (!Array.isArray(axis) || !axis.every((value) => typeof value === "string" || typeof value === "number" || typeof value === "boolean")) return undefined;
     axes.push([lowered, axis]);
   }
-  let combos: Map<string, string>[] = [new Map()];
+  const names = new Set(axes.map(([name]) => name));
+  let combos: Map<string, unknown>[] = [new Map()];
   for (const [name, axis] of axes) {
-    const next: Map<string, string>[] = [];
+    const next: Map<string, unknown>[] = [];
     for (const combo of combos) {
       for (const value of axis) next.push(new Map(combo).set(name, value));
     }
@@ -125,15 +126,15 @@ function matrixValues(job: Readonly<Record<string, unknown>>, key: string): read
     if (combos.length > 512) return undefined;
   }
   const excluded = matrix["exclude"];
-  const blocks: [string, string][][] = [];
+  const blocks: [string, unknown][][] = [];
   if (excluded !== undefined) {
     if (!Array.isArray(excluded)) return undefined;
     for (const candidate of excluded) {
       if (!isRecord(candidate)) return undefined;
-      const terms: [string, string][] = [];
+      const terms: [string, unknown][] = [];
       let usable = true;
       for (const [name, value] of Object.entries(candidate)) {
-        if (typeof value !== "string") {
+        if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
           usable = false;
           break;
         }
@@ -142,21 +143,32 @@ function matrixValues(job: Readonly<Record<string, unknown>>, key: string): read
       if (usable) blocks.push(terms);
     }
   }
-  const used = new Set<string>();
-  for (const combo of combos) {
-    if (blocks.some((terms) => terms.every(([name, value]) => combo.get(name) === value))) continue;
-    const value = combo.get(key);
-    if (value !== undefined) used.add(value);
-  }
+  combos = combos.filter((combo) => !blocks.some((terms) => terms.every(([name, value]) => combo.get(name) === value)));
   const extra = matrix["include"];
   if (Array.isArray(extra)) {
     for (const candidate of extra) {
       if (!isRecord(candidate)) return undefined;
-      const pick = Object.entries(candidate).find(([name]) => name.toLowerCase() === key);
-      if (pick === undefined) continue;
-      if (typeof pick[1] !== "string") return undefined;
-      used.add(pick[1]);
+      const entries: [string, unknown][] = [];
+      let usable = true;
+      for (const [name, value] of Object.entries(candidate)) {
+        if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
+          usable = false;
+          break;
+        }
+        entries.push([name.toLowerCase(), value]);
+      }
+      if (!usable) return undefined;
+      const matches = combos.filter((combo) => entries.every(([name, value]) => !names.has(name) || combo.get(name) === value));
+      if (matches.length === 0) combos.push(new Map(entries));
+      else for (const combo of matches) for (const [name, value] of entries) combo.set(name, value);
     }
+  }
+  const used = new Set<string>();
+  for (const combo of combos) {
+    const value = combo.get(key);
+    if (value === undefined) continue;
+    if (typeof value !== "string") return undefined;
+    used.add(value);
   }
   return used.size > 0 ? [...used] : undefined;
 }
