@@ -49,8 +49,8 @@ The text of any other here-document is data, so a call there counts only inside 
 A mutation job never names `CI_RUNS_ON` directly in `runs-on`, as `vars.CI_RUNS_ON` or `vars['CI_RUNS_ON']`, so an override for an outage cannot send its mutation runs to hosted runners.
 Any other job that names `CI_RUNS_ON` in `runs-on` carries exactly the hosted-default expression `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
 A public repository carries no self-hosted runner on a job a fork can reach, because a pull request from a fork would run its own code on that runner.
-A fork reaches a job through `pull_request`, `pull_request_target`, `pull_request_review` or `pull_request_review_comment`, directly or through a local reusable workflow a reached job calls.
-Such a job refuses a literal `self-hosted` label, a label in a set declared under `checks.mutationRunner` or `checks.selfHostedRunners`, a runner `group` and any other expression than the hosted-default expression.
+A fork reaches a job through `pull_request`, `pull_request_target`, `pull_request_review`, `pull_request_review_comment` or `issue_comment`, directly, through a local reusable workflow a reached job calls, or through a `workflow_run` trigger that names a reached workflow.
+Such a job refuses a literal `self-hosted` label, a label that interpolates an expression, a label in a set declared under `checks.mutationRunner` or `checks.selfHostedRunners`, a runner `group` and any other expression than the hosted-default expression.
 A `runs-on` that is exactly `${{ matrix.<key> }}` judges each matrix value as its own labels.
 It refuses a value that names `self-hosted` or falls inside a label set declared under `checks.mutationRunner` or `checks.selfHostedRunners`.
 Any other expression refuses as unresolvable.

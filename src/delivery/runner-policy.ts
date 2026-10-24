@@ -1,6 +1,6 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
 import { runsMutation, within, type Run } from "./mutation-job.ts";
-import { isRecord, names, workflowJobs, type Workflow } from "./workflow-references.ts";
+import { isRecord, names, workflowJobs, workflowTitle, type Workflow } from "./workflow-references.ts";
 
 export type RunnerConfig = {
   readonly mutation: readonly string[] | undefined;
@@ -52,7 +52,7 @@ function forkReachable(workflow: Workflow): boolean {
   const events = isRecord(on) ? Object.keys(on) : (names(on) ?? []);
   return events.some((event) => {
     const name = event.toLowerCase();
-    return name === "pull_request" || name === "pull_request_target" || name === "pull_request_review" || name === "pull_request_review_comment";
+    return name === "pull_request" || name === "pull_request_target" || name === "pull_request_review" || name === "pull_request_review_comment" || name === "issue_comment";
   });
 }
 
@@ -123,11 +123,8 @@ function matrixValues(job: Readonly<Record<string, unknown>>, key: string): read
   return values.length > 0 ? values : undefined;
 }
 
-function isExpression(runsOn: unknown): boolean {
-  if (typeof runsOn === "string") return /^\$\{\{[\s\S]*\}\}$/.test(runsOn.trim());
-  if (Array.isArray(runsOn)) return runsOn.some(isExpression);
-  if (isRecord(runsOn)) return Object.values(runsOn).some(isExpression);
-  return false;
+function hasInterpolation(value: string): boolean {
+  return value.includes("${{");
 }
 
 function mentionedSelfHosted(value: unknown): boolean {
@@ -139,7 +136,7 @@ function mentionedSelfHosted(value: unknown): boolean {
 
 function plainLabels(value: unknown): readonly string[] | undefined {
   if (!Array.isArray(value) || !value.every((entry): entry is string => typeof entry === "string")) return undefined;
-  return value.some((entry) => isExpression(entry.trim())) ? undefined : value;
+  return value.some(hasInterpolation) ? undefined : value;
 }
 
 function publicFault(job: Readonly<Record<string, unknown>>, runsOn: unknown, runners: RunnerConfig, mutation: boolean): string | undefined {
@@ -156,11 +153,12 @@ function publicFault(job: Readonly<Record<string, unknown>>, runsOn: unknown, ru
       const values = matrixValues(job, key);
       if (values === undefined) return unresolvable(trimmed);
       for (const value of values) {
+        if (hasInterpolation(value)) return mentionedSelfHosted(value) ? selfHosted : unresolvable(trimmed);
         if (value.toLowerCase() === "self-hosted" || declaredLabels([value], runners)) return selfHosted;
       }
       return undefined;
     }
-    if (isExpression(trimmed)) return mentionedSelfHosted(trimmed) ? selfHosted : unresolvable(trimmed);
+    if (hasInterpolation(trimmed)) return mentionedSelfHosted(trimmed) ? selfHosted : unresolvable(trimmed);
     return declaredLabels([trimmed], runners) ? selfHosted : undefined;
   }
   if (Array.isArray(runsOn)) {
@@ -185,6 +183,12 @@ function publicFault(job: Readonly<Record<string, unknown>>, runsOn: unknown, ru
 function calledWorkflow(job: Readonly<Record<string, unknown>>): string | undefined {
   const uses = job["uses"];
   return typeof uses === "string" && uses.startsWith("./.github/workflows/") ? uses.slice(2) : undefined;
+}
+
+function watchedWorkflows(workflow: Workflow): readonly string[] {
+  const on = isRecord(workflow.document) ? workflow.document["on"] : undefined;
+  const watched = isRecord(on) ? on["workflow_run"] : undefined;
+  return isRecord(watched) ? (names(watched["workflows"]) ?? []) : [];
 }
 
 function runnerFault(job: Readonly<Record<string, unknown>>, runsOn: unknown, mutation: boolean, policy: RunnerPolicy, reachable: boolean): string | undefined {
@@ -214,6 +218,7 @@ export function jobRuns(workflow: Workflow, job: Readonly<Record<string, unknown
 
 export function findRunnerFaults(policy: RunnerPolicy, workflows: readonly Workflow[]): readonly RunnerFault[] {
   const reachable = new Map(workflows.map((workflow) => [workflow.path, forkReachable(workflow)] as const));
+  const titleOf = new Map(workflows.map((workflow) => [workflow.path, workflowTitle(workflow.document) ?? workflow.path] as const));
   let changed = true;
   while (changed) {
     changed = false;
@@ -222,7 +227,10 @@ export function findRunnerFaults(policy: RunnerPolicy, workflows: readonly Workf
       const called = workflows.some(
         (other) => reachable.get(other.path) === true && workflowJobs(other).some(([, job]) => calledWorkflow(job) === workflow.path),
       );
-      if (called) {
+      const watched = watchedWorkflows(workflow).some((parent) =>
+        workflows.some((other) => reachable.get(other.path) === true && titleOf.get(other.path) === parent),
+      );
+      if (called || watched) {
         reachable.set(workflow.path, true);
         changed = true;
       }

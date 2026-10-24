@@ -232,7 +232,7 @@ export function locate(path: string, lines: readonly string[]): Locator {
   };
 }
 
-function workflowTitle(document: unknown): string | undefined {
+export function workflowTitle(document: unknown): string | undefined {
   return isRecord(document) && typeof document["name"] === "string" ? document["name"] : undefined;
 }
 

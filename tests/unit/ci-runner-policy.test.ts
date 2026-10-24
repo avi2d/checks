@@ -234,6 +234,33 @@ test(`a public fork-reachable mutation job is told to use ubuntu-latest (oracle:
   expect(pinned[0]?.fault).not.toContain("CI_RUNS_ON");
 });
 
+test(`a public fork-reachable job refuses labels that interpolate an expression (oracle: GitHub's hardening guide ${GUIDE})`, () => {
+  const policy = { visibility: "public" as const, scripts: noScripts, runners: RUNNERS };
+  const partial = workflow("on: pull_request\njobs:\n  sweep:\n    runs-on: self-${{ vars.KIND }}\n    steps:\n      - run: bun run lint\n");
+  const partialFaults = findRunnerFaults(policy, partial);
+  expect(partialFaults).toHaveLength(1);
+  expect(partialFaults[0]?.fault).toContain("cannot be shown");
+  const listed = workflow("on: pull_request\njobs:\n  sweep:\n    runs-on: [\"self-${{ vars.KIND }}\"]\n    steps:\n      - run: bun run lint\n");
+  expect(findRunnerFaults(policy, listed)).toHaveLength(1);
+  const viaMatrix = workflow("on: pull_request\njobs:\n  sweep:\n    strategy:\n      matrix:\n        os: ['${{ vars.RUNNER }}']\n    runs-on: ${{ matrix.os }}\n    steps:\n      - run: bun run lint\n");
+  const viaMatrixFaults = findRunnerFaults(policy, viaMatrix);
+  expect(viaMatrixFaults).toHaveLength(1);
+  expect(viaMatrixFaults[0]?.fault).toContain("cannot be shown");
+});
+
+test(`a workflow_run trigger on a fork-reachable workflow is fork-reachable (oracle: GitHub's hardening guide ${GUIDE})`, () => {
+  const policy = { visibility: "public" as const, scripts: noScripts, runners: RUNNERS };
+  const ci = named(".github/workflows/ci.yml", "name: CI\non: pull_request\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n");
+  const after = named(".github/workflows/after.yml", "on:\n  workflow_run:\n    workflows: [CI]\n    types: [completed]\njobs:\n  sweep:\n    runs-on: [self-hosted, gpu]\n    steps:\n      - run: bun run lint\n");
+  const faults = findRunnerFaults(policy, [ci, after]);
+  expect(faults).toHaveLength(1);
+  expect(faults[0]?.location).toBe(".github/workflows/after.yml job sweep");
+  const push = named(".github/workflows/ci.yml", "name: CI\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n");
+  expect(findRunnerFaults(policy, [push, after])).toEqual([]);
+  const comment = named(".github/workflows/comment.yml", "on: issue_comment\njobs:\n  sweep:\n    runs-on: [self-hosted, gpu]\n    steps:\n      - run: bun run lint\n");
+  expect(findRunnerFaults(policy, [comment])).toHaveLength(1);
+});
+
 test("a reusable workflow called from a fork-reachable workflow is fork-reachable (oracle: GitHub's hardening guide https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions)", () => {
   const policy = { visibility: "public" as const, scripts: noScripts, runners: RUNNERS };
   const caller = named(".github/workflows/ci.yml", "on: pull_request\njobs:\n  build:\n    uses: ./.github/workflows/build.yml\n");
