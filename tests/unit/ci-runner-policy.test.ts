@@ -7,6 +7,10 @@ function workflow(text: string) {
   return [Effect.runSync(parseWorkflow(".github/workflows/ci.yml", text))];
 }
 
+function named(path: string, text: string) {
+  return Effect.runSync(parseWorkflow(path, text));
+}
+
 
 const MUTATION = "[self-hosted, gpu, x64]";
 const DEVICE = "[self-hosted, macOS, device]";
@@ -118,6 +122,25 @@ test(`a public repository refuses any self-hosted label on a fork-reachable job 
   }
   const grouped = workflow(`on: pull_request\njobs:\n  sweep:\n    runs-on:\n      group: fleet\n      labels: [self-hosted, gpu]\n    steps:\n      - run: bunx stryker run\n`);
   expect(findRunnerFaults(policy, grouped)).toHaveLength(1);
+  for (const on of ["pull_request_review", "pull_request_review_comment"]) {
+    const review = workflow("on: " + on + "\njobs:\n  sweep:\n    runs-on: " + MUTATION + "\n    steps:\n      - run: bun run lint\n");
+    const reviewFaults = findRunnerFaults(policy, review);
+    expect(reviewFaults).toHaveLength(1);
+    expect(reviewFaults[0]?.fault).toContain("self-hosted labels");
+  }
+  const hidden = workflow("on: pull_request\njobs:\n  sweep:\n    runs-on: ${{ fromJSON('[\"self-hosted\",\"gpu\"]') }}\n    steps:\n      - run: bun run lint\n");
+  const hiddenFaults = findRunnerFaults(policy, hidden);
+  expect(hiddenFaults).toHaveLength(1);
+  expect(hiddenFaults[0]?.fault).toContain("self-hosted labels");
+  const bare = workflow("on: pull_request\njobs:\n  sweep:\n    runs-on:\n      group: fleet\n    steps:\n      - run: bun run lint\n");
+  const bareFaults = findRunnerFaults(policy, bare);
+  expect(bareFaults).toHaveLength(1);
+  expect(bareFaults[0]?.fault).toContain("runner group fleet");
+  const custom: RunnerConfig = { mutation: undefined, selfHosted: [["gpu", "custom"]] };
+  const claimed = workflow("on: pull_request\njobs:\n  sweep:\n    runs-on: [gpu, custom]\n    steps:\n      - run: bun run lint\n");
+  const claimedFaults = findRunnerFaults({ visibility: "public" as const, scripts: noScripts, runners: custom }, claimed);
+  expect(claimedFaults).toHaveLength(1);
+  expect(claimedFaults[0]?.fault).toContain("self-hosted labels");
   expect(findRunnerFaults(policy, jobs("ubuntu-latest", HOSTED))).toEqual([]);
 });
 
@@ -158,6 +181,37 @@ test("the hosted default matches the override in any form the override check acc
     expect(faults[0]?.fault).toContain("self-hosted labels");
   }
   expect(findRunnerFaults({ visibility: "public", scripts: noScripts, runners: RUNNERS }, jobs(MUTATION, "${{ vars.CI_RUNS_ON || 'ubuntu -latest' }}"))).toHaveLength(2);
+});
+
+test("a public repository resolves matrix runs-on and refuses only self-hosted or unresolvable values (oracle: GitHub's hardening guide https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions)", () => {
+  const policy = { visibility: "public" as const, scripts: noScripts, runners: RUNNERS };
+  const matrix = (os: string) =>
+    workflow("on: pull_request\njobs:\n  sweep:\n    strategy:\n      matrix:\n        os: [" + os + "]\n    runs-on: ${{ matrix.os }}\n    steps:\n      - run: bun run lint\n");
+  expect(findRunnerFaults(policy, matrix("ubuntu-latest, windows-latest"))).toEqual([]);
+  const hosted = findRunnerFaults(policy, matrix("self-hosted, linux"));
+  expect(hosted).toHaveLength(1);
+  expect(hosted[0]?.fault).toContain("self-hosted labels");
+  const bare = findRunnerFaults(policy, workflow("on: pull_request\njobs:\n  sweep:\n    runs-on: ${{ matrix.os }}\n    steps:\n      - run: bun run lint\n"));
+  expect(bare).toHaveLength(1);
+  expect(bare[0]?.fault).toContain("cannot be shown");
+  const opaque = findRunnerFaults(policy, workflow("on: pull_request\njobs:\n  sweep:\n    runs-on: ${{ github.event.inputs.runs-on }}\n    steps:\n      - run: bun run lint\n"));
+  expect(opaque).toHaveLength(1);
+  expect(opaque[0]?.fault).toContain("cannot be shown");
+});
+
+test("a reusable workflow called from a fork-reachable workflow is fork-reachable (oracle: GitHub's hardening guide https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions)", () => {
+  const policy = { visibility: "public" as const, scripts: noScripts, runners: RUNNERS };
+  const caller = named(".github/workflows/ci.yml", "on: pull_request\njobs:\n  build:\n    uses: ./.github/workflows/build.yml\n");
+  const called = named(".github/workflows/build.yml", "on: workflow_call\njobs:\n  sweep:\n    runs-on: " + MUTATION + "\n    steps:\n      - run: bun run lint\n");
+  const faults = findRunnerFaults(policy, [caller, called]);
+  expect(faults).toHaveLength(1);
+  expect(faults[0]?.location).toBe(".github/workflows/build.yml job sweep");
+  expect(findRunnerFaults(policy, [called])).toEqual([]);
+  const push = named(".github/workflows/ci.yml", "on: push\njobs:\n  build:\n    uses: ./.github/workflows/build.yml\n");
+  expect(findRunnerFaults(policy, [push, called])).toEqual([]);
+  const mid = named(".github/workflows/mid.yml", "on: workflow_call\njobs:\n  next:\n    uses: ./.github/workflows/build.yml\n");
+  const top = named(".github/workflows/ci.yml", "on: pull_request\njobs:\n  build:\n    uses: ./.github/workflows/mid.yml\n");
+  expect(findRunnerFaults(policy, [top, mid, called])).toHaveLength(1);
 });
 
 test("the runner report names each job and what to set", () => {

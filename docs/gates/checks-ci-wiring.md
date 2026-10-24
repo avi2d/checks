@@ -48,7 +48,10 @@ A here-document that `sh`, `bash`, `dash`, `ksh` or `zsh` reads is a script, and
 The text of any other here-document is data, so a call there counts only inside a command substitution when the delimiter is unquoted.
 A mutation job never names `CI_RUNS_ON` directly in `runs-on`, as `vars.CI_RUNS_ON` or `vars['CI_RUNS_ON']`, so an override for an outage cannot send its mutation runs to hosted runners.
 Any other job that names `CI_RUNS_ON` in `runs-on` carries exactly the hosted-default expression `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
-A public repository carries no self-hosted label on a job a fork can reach, because a pull request from a fork would run its own code on that runner.
+A public repository carries no self-hosted runner on a job a fork can reach, because a pull request from a fork would run its own code on that runner.
+A fork reaches a job through `pull_request`, `pull_request_target`, `pull_request_review` or `pull_request_review_comment`, directly or through a local reusable workflow a reached job calls.
+Such a job refuses a literal `self-hosted` label, a label set declared under `checks.mutationRunner` or `checks.selfHostedRunners`, a runner `group` and any other expression than the hosted-default expression.
+An expression that reads only `matrix` passes when every value in that matrix is a hosted label, and any other unresolvable expression refuses.
 A job on `push` or another trigger no fork reaches may still name self-hosted labels.
 In a private repository each mutation job carries exactly the labels the consumer declares in `package.json` under `checks.mutationRunner`.
 Every other job there carries exactly the hosted-default expression, or exactly one of the label sets the consumer declares under `checks.selfHostedRunners`.

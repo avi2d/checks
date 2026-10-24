@@ -100,8 +100,34 @@ function runLabels(runsOn: unknown): readonly string[] | undefined {
 function matchesDeclared(runsOn: unknown, runners: RunnerConfig): boolean {
   const labels = runLabels(runsOn);
   if (labels === undefined) return false;
+  return declaredLabels(labels, runners);
+}
+
+function declaredLabels(labels: readonly string[], runners: RunnerConfig): boolean {
   const declared = runners.mutation === undefined ? runners.selfHosted : [runners.mutation, ...runners.selfHosted];
   return declared.some((allowed) => labels.length === allowed.length && allowed.every((label) => labels.includes(label)));
+}
+
+function matrixValues(job: Readonly<Record<string, unknown>>, key: string): readonly string[] | undefined {
+  const strategy = job["strategy"];
+  if (!isRecord(strategy)) return undefined;
+  const matrix = strategy["matrix"];
+  if (!isRecord(matrix)) return undefined;
+  const entry = Object.entries(matrix).find(([name]) => name.toLowerCase() === key);
+  if (entry === undefined) return undefined;
+  if (!Array.isArray(entry[1]) || !entry[1].every((value): value is string => typeof value === "string")) return undefined;
+  const values = [...entry[1]];
+  const extra = matrix["include"];
+  if (Array.isArray(extra)) {
+    for (const candidate of extra) {
+      if (!isRecord(candidate)) return undefined;
+      const pick = Object.entries(candidate).find(([name]) => name.toLowerCase() === key);
+      if (pick === undefined) continue;
+      if (typeof pick[1] !== "string") return undefined;
+      values.push(pick[1]);
+    }
+  }
+  return values.length > 0 ? values : undefined;
 }
 
 function isExpression(runsOn: unknown): boolean {
@@ -111,12 +137,80 @@ function isExpression(runsOn: unknown): boolean {
   return false;
 }
 
-function runnerFault(runsOn: unknown, mutation: boolean, policy: RunnerPolicy, reachable: boolean): string | undefined {
-  if (policy.visibility === "public" && reachable) {
-    const hosted = typeof runsOn === "string" && HOSTED_OVERRIDE.test(runsOn.trim());
-    if (!hosted && (namesSelfHosted(runsOn) || matchesDeclared(runsOn, policy.runners) || (isRecord(runsOn) && runsOn["group"] !== undefined) || isExpression(runsOn))) {
-      return `a public repository runs a fork-reachable job on self-hosted labels, so a fork pull request would run its code there; set runs-on: ${HOSTED_DEFAULT}`;
+function expandedLabels(job: Readonly<Record<string, unknown>>, runsOn: unknown): readonly string[] | undefined {
+  if (typeof runsOn === "string") {
+    const trimmed = runsOn.trim();
+    if (!isExpression(trimmed)) return [trimmed];
+    const refs = trimmed.match(/\bmatrix\s*\.\s*[\w-]+/gi) ?? [];
+    const keys = refs.map((ref) => ref.slice(ref.indexOf(".") + 1).trim().toLowerCase());
+    if (keys.length === 0) return undefined;
+    const values: string[] = [];
+    for (const key of keys) {
+      const resolved = matrixValues(job, key);
+      if (resolved === undefined) return undefined;
+      values.push(...resolved);
     }
+    return values;
+  }
+  if (Array.isArray(runsOn)) {
+    const values: string[] = [];
+    for (const entry of runsOn) {
+      const resolved = expandedLabels(job, entry);
+      if (resolved === undefined) return undefined;
+      values.push(...resolved);
+    }
+    return values;
+  }
+  if (isRecord(runsOn)) {
+    if (runsOn["group"] !== undefined || runsOn["labels"] === undefined) return undefined;
+    return expandedLabels(job, runsOn["labels"]);
+  }
+  return undefined;
+}
+
+function mentionedSelfHosted(value: unknown): boolean {
+  if (typeof value === "string") return /self-hosted/i.test(value);
+  if (Array.isArray(value)) return value.some(mentionedSelfHosted);
+  if (isRecord(value)) return Object.values(value).some(mentionedSelfHosted);
+  return false;
+}
+
+function publicFault(job: Readonly<Record<string, unknown>>, runsOn: unknown, runners: RunnerConfig): string | undefined {
+  if (typeof runsOn === "string" && HOSTED_OVERRIDE.test(runsOn.trim())) return undefined;
+  if (namesSelfHosted(runsOn) || matchesDeclared(runsOn, runners)) {
+    return "a public repository runs a fork-reachable job on self-hosted labels, so a fork pull request would run its code there; set runs-on: " + HOSTED_DEFAULT;
+  }
+  if (isRecord(runsOn) && runsOn["group"] !== undefined) {
+    const labels = Array.isArray(runsOn["labels"]) ? expandedLabels(job, runsOn["labels"]) : undefined;
+    if (labels !== undefined && (labels.some((label) => label.toLowerCase() === "self-hosted") || declaredLabels(labels, runners))) {
+      return "a public repository runs a fork-reachable job on self-hosted labels, so a fork pull request would run its code there; set runs-on: " + HOSTED_DEFAULT;
+    }
+    const group = typeof runsOn["group"] === "string" ? runsOn["group"].trim() : "a runner group";
+    return "a public repository runs a fork-reachable job on runner group " + group + ", which cannot be shown to be hosted before the run; set runs-on: " + HOSTED_DEFAULT;
+  }
+  const expanded = expandedLabels(job, runsOn);
+  if (expanded !== undefined) {
+    if (expanded.some((label) => label.toLowerCase() === "self-hosted") || declaredLabels(expanded, runners)) {
+      return "a public repository runs a fork-reachable job on self-hosted labels, so a fork pull request would run its code there; set runs-on: " + HOSTED_DEFAULT;
+    }
+    return undefined;
+  }
+  if (mentionedSelfHosted(runsOn)) {
+    return "a public repository runs a fork-reachable job on self-hosted labels, so a fork pull request would run its code there; set runs-on: " + HOSTED_DEFAULT;
+  }
+  const shown = typeof runsOn === "string" ? runsOn.trim() : "its runs-on expression";
+  return "a public repository runs a fork-reachable job on " + shown + ", which cannot be shown to be a hosted runner before the run; set runs-on: " + HOSTED_DEFAULT;
+}
+
+function calledWorkflow(job: Readonly<Record<string, unknown>>): string | undefined {
+  const uses = job["uses"];
+  return typeof uses === "string" && uses.startsWith("./.github/workflows/") ? uses.slice(2) : undefined;
+}
+
+function runnerFault(job: Readonly<Record<string, unknown>>, runsOn: unknown, mutation: boolean, policy: RunnerPolicy, reachable: boolean): string | undefined {
+  if (policy.visibility === "public" && reachable) {
+    const fault = publicFault(job, runsOn, policy.runners);
+    if (fault !== undefined) return fault;
   }
   return mutation ? mutationFault(runsOn, policy.runners.mutation, policy.visibility) : otherFault(runsOn, policy.runners, policy.visibility);
 }
@@ -139,12 +233,27 @@ export function jobRuns(workflow: Workflow, job: Readonly<Record<string, unknown
 }
 
 export function findRunnerFaults(policy: RunnerPolicy, workflows: readonly Workflow[]): readonly RunnerFault[] {
+  const reachable = new Map(workflows.map((workflow) => [workflow.path, forkReachable(workflow)] as const));
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const workflow of workflows) {
+      if (reachable.get(workflow.path) === true) continue;
+      const called = workflows.some(
+        (other) => reachable.get(other.path) === true && workflowJobs(other).some(([, job]) => calledWorkflow(job) === workflow.path),
+      );
+      if (called) {
+        reachable.set(workflow.path, true);
+        changed = true;
+      }
+    }
+  }
   return workflows.flatMap((workflow) =>
     workflowJobs(workflow).flatMap(([id, job]) => {
       if (job["runs-on"] === undefined) return [];
       const mutation = jobRuns(workflow, job).some((run) => runsMutation(run, policy.scripts, (file) => policy.files?.get(file)));
-      const fault = runnerFault(job["runs-on"], mutation, policy, forkReachable(workflow));
-      return fault === undefined ? [] : [{ location: `${workflow.path} job ${id}`, fault }];
+      const fault = runnerFault(job, job["runs-on"], mutation, policy, reachable.get(workflow.path) ?? forkReachable(workflow));
+      return fault === undefined ? [] : [{ location: workflow.path + " job " + id, fault }];
     }),
   );
 }
