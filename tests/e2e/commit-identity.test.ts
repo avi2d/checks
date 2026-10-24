@@ -36,7 +36,7 @@ function identityEnv(author: Identity, committer: Identity) {
 }
 
 async function initRepo(manifest?: unknown): Promise<void> {
-  ({ dir } = await repository({ "package.json": JSON.stringify(manifest ?? { name: "commit-identity-fixture" }) }));
+  ({ dir } = await repository({ "package.json": JSON.stringify(manifest ?? { name: "commit-identity-fixture", author: OWNER }) }));
 }
 
 async function commit(options: Landing): Promise<string> {
@@ -241,17 +241,18 @@ test(
 );
 
 test(
-  "commit-identity falls back to the kit default for a bare author string without an email",
+  "commit-identity refuses every identity when package.json declares no authors",
   async () => {
     await initRepo({ author: "Pat Stranger" });
     await commit({ message: "feat: mine" });
-    expect((await check("HEAD")).exitCode).toBe(0);
+    const red = await check("HEAD");
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain("commit-identity: package.json declares no author or contributors");
 
     await commit({ message: "feat: theirs", author: STRANGER, committer: STRANGER });
-    const red = await check("HEAD");
-    expect(red.text).toContain("author Pat Stranger <stranger@example.com>");
-    expect(red.text).toContain("allowed: avi2d <avi2dg@gmail.com>\n");
-    expect(red.exitCode).toBe(1);
+    const range = await check("HEAD~1", "HEAD");
+    expect(range.exitCode).toBe(1);
+    expect(range.text).toContain("declares no author");
 
     await writeFile(join(dir, "package.json"), JSON.stringify({ author: "Pat Stranger (https://example.com/pat)" }));
     expect((await check("HEAD")).exitCode).toBe(1);
@@ -278,9 +279,9 @@ test(
       join(dir, "package.json"),
       JSON.stringify({ author: { name: "Pat Stranger", url: "https://example.com/pat" }, contributors: [{ name: STRANGER.name }] }),
     );
-    const fallback = await check("HEAD");
-    expect(fallback.text).toContain("1 commit(s) in HEAD carry only allowed identities");
-    expect(fallback.exitCode).toBe(0);
+    const undeclared = await check("HEAD");
+    expect(undeclared.exitCode).toBe(1);
+    expect(undeclared.text).toContain("commit-identity: package.json declares no author or contributors");
 
     await writeFile(join(dir, "package.json"), JSON.stringify({ author: { name: OWNER.name }, contributors: [STRANGER] }));
     const ignored = await check("HEAD");
@@ -326,17 +327,13 @@ test(
 );
 
 test(
-  "commit-identity holds a repository without package.json to the kit default",
+  "commit-identity holds a repository without package.json to no allowed identity",
   async () => {
     ({ dir } = await repository({ "README.md": "# fixture\n" }));
-    const base = await commit({ message: "feat: base" });
+    await commit({ message: "feat: base" });
     const owned = await check("HEAD");
-    expect(owned.exitCode).toBe(0);
-
-    await commit({ message: "feat: stolen", author: STRANGER });
-    const red = await check(base, "HEAD");
-    expect(red.exitCode).toBe(1);
-    expect(red.text).toContain("allowed: avi2d <avi2dg@gmail.com>");
+    expect(owned.exitCode).toBe(1);
+    expect(owned.text).toContain("commit-identity: package.json declares no author or contributors");
   },
   60_000,
 );

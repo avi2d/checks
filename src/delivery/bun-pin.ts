@@ -2,12 +2,12 @@ import { Effect, FileSystem, Path, Schema } from "effect";
 import { within } from "./mutation-job.ts";
 import { isRecord, locate, workflowJobs, type Workflow } from "./workflow-references.ts";
 
-export const FLEET_BUN_VERSION = "1.4.3";
 const ROOT_MANIFEST = "package.json";
 
 export type BunPinPolicy = {
   readonly files: ReadonlyMap<string, string>;
   readonly manifests: ReadonlyMap<string, unknown>;
+  readonly fleet: string;
 };
 
 export type BunPinFault = {
@@ -94,12 +94,12 @@ function bunPinRequest(policy: BunPinPolicy, step: Readonly<Record<string, unkno
 function bunPinFault(policy: BunPinPolicy, step: Readonly<Record<string, unknown>>): string | undefined {
   const request = bunPinRequest(policy, step);
   if (request.expression !== undefined) {
-    return `requests bun ${request.expression} from ${request.source}, which cannot be shown equal to ${FLEET_BUN_VERSION} before the run`;
+    return `requests bun ${request.expression} from ${request.source}, which cannot be shown equal to ${policy.fleet} before the run`;
   }
   if (request.version === undefined) {
-    return `pins no bun version from ${request.source}, so setup-bun installs latest, want ${FLEET_BUN_VERSION}`;
+    return `pins no bun version from ${request.source}, so setup-bun installs latest, want ${policy.fleet}`;
   }
-  return request.version === FLEET_BUN_VERSION ? undefined : `requests bun ${request.version} from ${request.source}, want ${FLEET_BUN_VERSION}`;
+  return request.version === policy.fleet ? undefined : `requests bun ${request.version} from ${request.source}, want ${policy.fleet}`;
 }
 
 function unknownRefFault(ref: string): string {
@@ -156,6 +156,20 @@ const readJsonFile = Effect.fn("readJsonFile")(function* (file: string) {
   );
 });
 
+export class BunPinError extends Schema.TaggedError<BunPinError>()("BunPinError", {
+  message: Schema.String,
+}) {}
+
+// The kit ships its own .bun-version, so the check reads the fleet pin from that file rather than a constant.
+const kitBunVersion = Effect.gen(function* () {
+  const file = (yield* Path.Path).join(import.meta.dir, "..", "..", ".bun-version");
+  const version = (yield* (yield* FileSystem.FileSystem).readFileString(file).pipe(
+    Effect.mapError((cause) => new BunPinError({ message: `cannot read the kit .bun-version at ${file}: ${cause.message}` })),
+  )).trim();
+  if (version === "") return yield* new BunPinError({ message: `the kit .bun-version at ${file} pins no version` });
+  return version;
+});
+
 export const readBunPinPolicy = Effect.fn("readBunPinPolicy")(function* (root: string, workflows: readonly Workflow[]) {
   const path = yield* Path.Path;
   const fs = yield* FileSystem.FileSystem;
@@ -170,5 +184,5 @@ export const readBunPinPolicy = Effect.fn("readBunPinPolicy")(function* (root: s
       if (text !== undefined) files.set(name, text);
     }
   }
-  return { files, manifests };
+  return { files, manifests, fleet: yield* kitBunVersion };
 });

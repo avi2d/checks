@@ -137,8 +137,8 @@ Start a full baseline with `gh workflow run mutation`, as [checks-mutation](chec
 A run with `--mutate` is scoped, so the preset lets it through without `CI=true`.
 The base worktree's path carries the run's id and attempt, and the last step removes it even when a run fails, so a runner kept between jobs starts each job clean.
 A public repository keeps `runs-on: ubuntu-latest`, as [checks-ci-wiring](checks-ci-wiring.md#runners) allows a public repository on every job.
-A private repository sets `runs-on: [self-hosted, Linux, X64, winbox]` instead, which is the fleet's self-hosted Linux runner where it sends its mutation runs.
-The job never reads `CI_RUNS_ON`, so an override that moves a repository's other jobs during a runner outage leaves the comparison waiting for `winbox`.
+A private repository sets `runs-on` to the labels it declares in `package.json` under `checks.mutationRunner` instead, which is where it sends its mutation runs.
+The job never reads `CI_RUNS_ON`, so an override that moves a repository's other jobs during a runner outage leaves the comparison waiting for those labels.
 [checks-ci-wiring](checks-ci-wiring.md#runners) refuses a mutation job that names it in `runs-on`.
 
 ## Related topics

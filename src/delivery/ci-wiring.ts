@@ -4,11 +4,13 @@ import { defaultBranch, git } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { ENTRY_POINT, KIT_GATES, type KitGate } from "../core/gates.ts";
 import { findBunPinFaults, formatBunPinReport, readBunPinPolicy } from "./bun-pin.ts";
-import { readShellFiles, runsMutation, within, type Run } from "./mutation-job.ts";
+import { readShellFiles } from "./mutation-job.ts";
+import { findRunnerFaults, formatRunnerReport, jobRuns, readRunnerConfig } from "./runner-policy.ts";
 import { invokes, mentions, plainCommand, type Command } from "./shell-command.ts";
 import { findMissingWorkflows, formatMissingReport, isRecord, names, workflowJobs, type Workflow } from "./workflow-references.ts";
 
-export { FLEET_BUN_VERSION, findBunPinFaults, formatBunPinReport } from "./bun-pin.ts";
+export { BunPinError, findBunPinFaults, formatBunPinReport } from "./bun-pin.ts";
+export { RunnerPolicyError } from "./runner-policy.ts";
 export type { BunPinFault, BunPinPolicy } from "./bun-pin.ts";
 
 export type { Command };
@@ -39,17 +41,6 @@ export type Gap = {
 
 export type Visibility = "private" | "public" | "unknown";
 
-export type RunnerPolicy = {
-  readonly visibility: Visibility;
-  readonly scripts: ReadonlyMap<string, string>;
-  readonly files?: ReadonlyMap<string, string>;
-};
-
-export type RunnerFault = {
-  readonly location: string;
-  readonly fault: string;
-};
-
 type RunStep = {
   readonly location: string;
   readonly blocker: string | undefined;
@@ -71,7 +62,9 @@ const TITLE_LINT = "bunx checks-commit-title";
 // The gate holds until every consumer migrates, so the direct commitlint call still counts.
 // The kit calls its own file through bun, since bunx never resolves the working tree.
 const TITLE_CALLS = ["bun src/delivery/commit-title.ts", "./node_modules/.bin/commitlint"];
-const Manifest = Schema.Struct({ scripts: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)) });
+const ScriptsManifest = Schema.Struct({
+  scripts: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
+});
 // Without these a pull_request workflow never sees the commits a pull request pushes.
 const GATING_TYPES = ["opened", "synchronize"];
 const CONSTANTS = new Map([
@@ -79,13 +72,6 @@ const CONSTANTS = new Map([
   ["false", false],
 ]);
 const STATUS_OVERRIDE = /\b(?:always|failure|cancelled)\s*\(/;
-// GitHub expressions match context and property names without regard to case.
-const OVERRIDE_ACCESS = String.raw`vars\s*(?:\.\s*CI_RUNS_ON\b|\[\s*'CI_RUNS_ON'\s*\])`;
-const RUNNER_OVERRIDE = new RegExp(String.raw`\b${OVERRIDE_ACCESS}`, "i");
-const HOSTED_OVERRIDE = new RegExp(String.raw`^\$\{\{\s*${OVERRIDE_ACCESS}\s*\|\|\s*'ubuntu-latest'\s*\}\}$`, "i");
-const MUTATION_RUNNER = ["self-hosted", "Linux", "X64", "winbox"];
-const DEVICE_RUNNER = ["self-hosted", "macOS", "iphone"];
-const HOSTED_DEFAULT = "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}";
 const EventRepository = Schema.fromJsonString(Schema.Struct({ repository: Schema.Struct({ private: Schema.Boolean }) }));
 
 function constant(value: unknown): boolean | undefined {
@@ -278,59 +264,6 @@ export function declarationFor(scripts: readonly string[], branch: string): Decl
   };
 }
 
-function sameLabels(runsOn: unknown, labels: readonly string[]): boolean {
-  const named = Array.isArray(runsOn) ? names(runsOn) : undefined;
-  return named?.length === labels.length && labels.every((label) => named.includes(label));
-}
-
-function readsOverride(runsOn: unknown): boolean {
-  if (typeof runsOn === "string") return RUNNER_OVERRIDE.test(runsOn);
-  const values = isRecord(runsOn) ? Object.values(runsOn) : Array.isArray(runsOn) ? runsOn : [];
-  return values.some(readsOverride);
-}
-
-function runnerFault(runsOn: unknown, mutation: boolean, visibility: Visibility): string | undefined {
-  const overridden = readsOverride(runsOn);
-  const pin = `set runs-on: [${MUTATION_RUNNER.join(", ")}]`;
-  if (mutation && overridden) return `a mutation job reads CI_RUNS_ON, so an override moves its mutation runs off winbox; ${pin}`;
-  if (mutation) return visibility === "private" && !sameLabels(runsOn, MUTATION_RUNNER) ? `a mutation job in a private repository runs off winbox; ${pin}` : undefined;
-  const hosted = typeof runsOn === "string" && HOSTED_OVERRIDE.test(runsOn.trim());
-  if (hosted || sameLabels(runsOn, DEVICE_RUNNER) || (visibility !== "private" && !overridden)) return undefined;
-  return `the job is not on a hosted runner CI_RUNS_ON can override; set runs-on: ${HOSTED_DEFAULT}`;
-}
-
-function stepDirectory(value: unknown, inherited: string | undefined): string | undefined {
-  if (value === undefined) return inherited;
-  return typeof value === "string" ? within("", value) : undefined;
-}
-
-function defaultDirectory(node: unknown, inherited: string | undefined): string | undefined {
-  const defaults = isRecord(node) ? node["defaults"] : undefined;
-  const run = isRecord(defaults) ? defaults["run"] : undefined;
-  return stepDirectory(isRecord(run) ? run["working-directory"] : undefined, inherited);
-}
-
-function jobRuns(workflow: Workflow, job: Readonly<Record<string, unknown>>): readonly Run[] {
-  const dir = defaultDirectory(job, defaultDirectory(workflow.document, ""));
-  const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
-  return steps.flatMap((step: unknown) => (isRecord(step) && typeof step["run"] === "string" ? [{ script: step["run"], dir: stepDirectory(step["working-directory"], dir) }] : []));
-}
-
-export function findRunnerFaults(policy: RunnerPolicy, workflows: readonly Workflow[]): readonly RunnerFault[] {
-  return workflows.flatMap((workflow) =>
-    workflowJobs(workflow).flatMap(([id, job]) => {
-      if (job["runs-on"] === undefined) return [];
-      const mutation = jobRuns(workflow, job).some((run) => runsMutation(run, policy.scripts, (file) => policy.files?.get(file)));
-      const fault = runnerFault(job["runs-on"], mutation, policy.visibility);
-      return fault === undefined ? [] : [{ location: `${workflow.path} job ${id}`, fault }];
-    }),
-  );
-}
-
-export function formatRunnerReport(faults: readonly RunnerFault[]): string {
-  return [`ci-wiring: ${faults.length} job(s) run on the wrong runner:`, ...faults.map(({ location, fault }) => `  ${location}: ${fault}`)].join("\n");
-}
-
 export const parseWorkflow = (path: string, text: string): Effect.Effect<Workflow, WiringError> =>
   Effect.try({
     try: () => ({ path, document: Bun.YAML.parse(text), text }),
@@ -342,10 +275,10 @@ const readScripts = Effect.fn("readScripts")(function* (root: string) {
   const file = (yield* Path.Path).join(root, "package.json");
   const { scripts = {} } = (yield* fs.exists(file))
     ? yield* fs.readFileString(file).pipe(
-        Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Manifest))),
+        Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(ScriptsManifest))),
         Effect.mapError((cause) => new WiringError({ message: `cannot read ${file}: ${cause.message}` })),
       )
-    : Manifest.make({});
+    : ScriptsManifest.make({});
   return new Map(Object.entries(scripts));
 });
 
@@ -390,7 +323,8 @@ const wiring = Effect.gen(function* () {
   if (missing.length > 0) yield* Console.error(formatMissingReport(missing));
   const scripts = yield* readScripts(root);
   const runs = workflows.flatMap((workflow) => workflowJobs(workflow).flatMap(([, job]) => jobRuns(workflow, job)));
-  const faults = findRunnerFaults({ visibility: yield* readVisibility, scripts, files: yield* readShellFiles(root, scripts, runs) }, workflows);
+  const runners = yield* readRunnerConfig(root);
+  const faults = findRunnerFaults({ visibility: yield* readVisibility, scripts, files: yield* readShellFiles(root, scripts, runs), runners }, workflows);
   if (faults.length > 0) yield* Console.error(formatRunnerReport(faults));
   const bunFaults = findBunPinFaults(yield* readBunPinPolicy(root, workflows), workflows);
   if (bunFaults.length > 0) yield* Console.error(formatBunPinReport(bunFaults));

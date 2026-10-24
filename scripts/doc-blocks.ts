@@ -23,6 +23,7 @@ const SHIPPED = {
   "CHANGELOG.md": "every release, and what it changed",
   "docs/": "a reference page per bin and per shared config, and why the kit is shaped this way",
   "bunfig.toml": "the bunfig preset a repository copies",
+  ".bun-version": "the fleet bun version the bun pin check reads",
   "commitlint.config.ts": "the shared commitlint config",
   "dependency-cruiser.config.js": "the kit's dependency-cruiser rules as a base a `.dependency-cruiser.cjs` extends by path, which the build writes",
   "knip-base.json": "the Knip `include` setting, for a configuration that spreads it",

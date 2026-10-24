@@ -16,8 +16,6 @@ type Commit = {
 
 type Offence = { readonly commit: Commit; readonly reasons: readonly string[] };
 
-const DEFAULT_AUTHORS: readonly Identity[] = [{ name: "avi2d", email: "avi2dg@gmail.com" }];
-
 // GitHub writes the squash commit, so it commits what the owner authored and never authors.
 const SQUASH_COMMITTER: Identity = { name: "GitHub", email: "noreply@github.com" };
 
@@ -74,13 +72,12 @@ const allowedAuthors = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const fs = yield* FileSystem.FileSystem;
   const file = (yield* Path.Path).join(root, "package.json");
-  if (!(yield* fs.exists(file))) return DEFAULT_AUTHORS;
+  if (!(yield* fs.exists(file))) return [];
   const manifest = yield* fs.readFileString(file).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Authors))));
-  const listed = [manifest.author, ...(manifest.contributors ?? [])]
+  return [manifest.author, ...(manifest.contributors ?? [])]
     .filter((entry) => entry !== undefined)
     .map(identityOf)
     .filter((entry) => entry !== undefined);
-  return listed.length === 0 ? DEFAULT_AUTHORS : listed;
 });
 
 const readCommits = Effect.fn("readCommits")(function* (revisions: readonly string[]) {
@@ -152,6 +149,10 @@ const check = Effect.gen(function* () {
   const revisions = second === undefined ? ["-1", range] : [range];
 
   const allowed = yield* allowedAuthors;
+  if (allowed.length === 0) {
+    yield* Console.error("commit-identity: package.json declares no author or contributors, so no identity is allowed; declare the owners there");
+    return false;
+  }
   const commits = yield* readCommits(revisions);
   const offences = commits
     .map((commit) => inspect(commit, allowed))

@@ -2,7 +2,6 @@ import configConventional from "@commitlint/config-conventional";
 
 const houseTypes: ReadonlyArray<string> = [
   "theme",
-  "herdr",
   "renamer",
   "shell",
   "pi",

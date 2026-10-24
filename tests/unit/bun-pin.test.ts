@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
-import { findBunPinFaults, FLEET_BUN_VERSION, formatBunPinReport, parseWorkflow, type BunPinFault, type BunPinPolicy } from "../../src/delivery/ci-wiring.ts";
+import { readFileSync } from "node:fs";
+import { findBunPinFaults, formatBunPinReport, parseWorkflow, type BunPinFault, type BunPinPolicy } from "../../src/delivery/ci-wiring.ts";
+
+// The oracle is the file the check reads, not a constant in the code.
+const FLEET_BUN_VERSION = readFileSync(new URL("../../.bun-version", import.meta.url), "utf8").trim();
 
 function workflow(text: string) {
   return [Effect.runSync(parseWorkflow(".github/workflows/ci.yml", text))];
@@ -10,8 +14,8 @@ function bunSteps(withBlock: string): string {
   return `on: pull_request\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: oven-sh/setup-bun@v2\n${withBlock}      - run: bun run lint\n`;
 }
 
-function bunPolicy(files: Record<string, string> = {}, manifests: Record<string, unknown> = {}): BunPinPolicy {
-  return { files: new Map(Object.entries(files)), manifests: new Map(Object.entries(manifests)) };
+function bunPolicy(files: Record<string, string> = {}, manifests: Record<string, unknown> = {}, fleet: string = FLEET_BUN_VERSION): BunPinPolicy {
+  return { files: new Map(Object.entries(files)), manifests: new Map(Object.entries(manifests)), fleet };
 }
 
 function bunFaults(text: string, policy: BunPinPolicy): readonly BunPinFault[] {
@@ -24,7 +28,14 @@ test("a setup-bun step pinned to the fleet version passes (oracle: setup-bun v2 
   expect(bunFaults(bunSteps(`        with:\n          bun-version: ${FLEET_BUN_VERSION}\n`), bunPolicy())).toEqual([]);
 });
 
-test("a setup-bun step pinned to the pre-move dotfiles pin fails (oracle: dotfiles .bun-version 1.3.13 before PR 232)", () => {
+test("the expected version comes from the policy, not a constant (oracle: an arbitrary policy fleet of 9.9.9)", () => {
+  expect(bunFaults(bunSteps(`        with:\n          bun-version: 9.9.9\n`), bunPolicy({}, {}, "9.9.9"))).toEqual([]);
+  const faults = bunFaults(bunSteps(`        with:\n          bun-version: ${FLEET_BUN_VERSION}\n`), bunPolicy({}, {}, "9.9.9"));
+  expect(faults).toHaveLength(1);
+  expect(faults[0]?.fault).toBe(`requests bun ${FLEET_BUN_VERSION} from with.bun-version, want 9.9.9`);
+});
+
+test("a setup-bun step pinned to an older version fails (oracle: a version below the fleet pin)", () => {
   const faults = bunFaults(bunSteps(`        with:\n          bun-version: ${drifted}\n`), bunPolicy());
   expect(faults).toHaveLength(1);
   expect(faults[0]?.location).toBe(".github/workflows/ci.yml line 6");
