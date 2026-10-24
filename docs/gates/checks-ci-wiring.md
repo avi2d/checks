@@ -52,6 +52,7 @@ A public repository carries no self-hosted runner on a job a fork can reach, bec
 A fork reaches a job through `pull_request`, `pull_request_target`, `pull_request_review`, `pull_request_review_comment` or `issue_comment`, directly, through a local reusable workflow a reached job calls, or through a `workflow_run` trigger that names a reached workflow.
 Such a job refuses a literal `self-hosted` label, a label that interpolates an expression, a label in a set declared under `checks.mutationRunner` or `checks.selfHostedRunners`, a runner `group` and any other expression.
 A `runs-on` that is exactly `${{ matrix.<key> }}` judges each matrix value as its own labels.
+The values for the key are its axis values and its `include` rows, without rows an `exclude` entry removes.
 It refuses a value that names `self-hosted` or falls inside a label set declared under `checks.mutationRunner` or `checks.selfHostedRunners`.
 Any other expression refuses as unresolvable.
 A job on `push` or another trigger no fork reaches may still name self-hosted labels.

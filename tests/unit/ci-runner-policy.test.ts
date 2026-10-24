@@ -215,6 +215,14 @@ test("a public repository resolves matrix runs-on and refuses only self-hosted o
   const shadowedFaults = findRunnerFaults(policy, shadowed);
   expect(shadowedFaults).toHaveLength(1);
   expect(shadowedFaults[0]?.fault).toContain("cannot be shown");
+  const added = workflow("on: pull_request\njobs:\n  sweep:\n    strategy:\n      matrix:\n        include:\n          - os: ubuntu-latest\n          - os: windows-latest\n    runs-on: ${{ matrix.os }}\n    steps:\n      - run: bun run lint\n");
+  expect(findRunnerFaults(policy, added)).toEqual([]);
+  const narrowed = workflow("on: pull_request\njobs:\n  sweep:\n    strategy:\n      matrix:\n        os: [ubuntu-latest, self-hosted]\n        exclude:\n          - os: self-hosted\n    runs-on: ${{ matrix.os }}\n    steps:\n      - run: bun run lint\n");
+  expect(findRunnerFaults(policy, narrowed)).toEqual([]);
+  const kept = workflow("on: pull_request\njobs:\n  sweep:\n    strategy:\n      matrix:\n        os: [ubuntu-latest, self-hosted]\n        arch: [x64, arm]\n        exclude:\n          - os: self-hosted\n            arch: arm\n    runs-on: ${{ matrix.os }}\n    steps:\n      - run: bun run lint\n");
+  const keptFaults = findRunnerFaults(policy, kept);
+  expect(keptFaults).toHaveLength(1);
+  expect(keptFaults[0]?.fault).toContain("self-hosted labels");
 });
 
 test(`a public fork-reachable job refuses a subset of a declared label set (oracle: GitHub's hardening guide ${GUIDE})`, () => {

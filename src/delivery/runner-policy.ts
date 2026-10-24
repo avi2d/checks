@@ -108,9 +108,9 @@ function matrixValues(job: Readonly<Record<string, unknown>>, key: string): read
   const matrix = strategy["matrix"];
   if (!isRecord(matrix)) return undefined;
   const entry = Object.entries(matrix).find(([name]) => name.toLowerCase() === key);
-  if (entry === undefined) return undefined;
-  if (!Array.isArray(entry[1]) || !entry[1].every((value): value is string => typeof value === "string")) return undefined;
-  const values = [...entry[1]];
+  const axis = entry === undefined ? [] : entry[1];
+  if (!Array.isArray(axis) || !axis.every((value): value is string => typeof value === "string")) return undefined;
+  const values = [...axis];
   const extra = matrix["include"];
   if (Array.isArray(extra)) {
     for (const candidate of extra) {
@@ -119,6 +119,20 @@ function matrixValues(job: Readonly<Record<string, unknown>>, key: string): read
       if (pick === undefined) continue;
       if (typeof pick[1] !== "string") return undefined;
       values.push(pick[1]);
+    }
+  }
+  const excluded = matrix["exclude"];
+  if (Array.isArray(excluded)) {
+    for (const candidate of excluded) {
+      if (!isRecord(candidate)) return undefined;
+      const names = Object.keys(candidate);
+      const name = names.length === 1 ? names[0] : undefined;
+      if (name === undefined || name.toLowerCase() !== key) continue;
+      const value = candidate[name];
+      if (typeof value !== "string") continue;
+      for (let index = values.length - 1; index >= 0; index--) {
+        if (values[index] === value) values.splice(index, 1);
+      }
     }
   }
   return values.length > 0 ? values : undefined;
