@@ -22,6 +22,13 @@ With `--full` it lists up to 50 `schedule` runs and up to 50 `workflow_dispatch`
 It tries those runs newest first, and restores the first `mutation-baseline-full` artifact that has not expired, downloads and holds the report.
 It tries no run after that one.
 It takes the report from `mutation.json` at the artifact's root, or else from `mutation/mutation.json`, and copies it to the destination.
+With an incremental destination it also copies `stryker-incremental.json` when the artifact holds one, so the next full run retests the mutants its changes reach, while inputs a test reads at runtime stay untracked.
+The restore then drops each test that reads a changed file and each mutant result for a changed source from the copied state.
+It drops non-killed results when any test goes stale.
+It drops the whole state when a Stryker config, stryker.preset.js, the lockfile, the Bun version, package.json apart from its version, a patch its patchedDependencies names, a file the active config loads at either revision, or the bunfig preload set or a file it loads changed.
+It walks the config and preload dependencies at both revisions, so a file only the older revision resolved still drops the state when it changes.
+A state that does not parse fails the restore instead of running on unknown results.
+Without the state file the report still restores.
 
 It creates the directories each destination needs.
 
@@ -41,9 +48,14 @@ It deletes through `gh`, which needs a token that deletes the repository's Actio
 
 It reads the runs and their artifacts through `gh`, which needs a token that reads the repository's Actions, such as `GH_TOKEN: ${{ github.token }}` with `actions: read`.
 The `mutation-baseline` artifact holds `stryker-incremental.json` and `mutation/mutation.json`, which an upload of `reports/stryker-incremental.json` and `reports/mutation/mutation.json` writes.
-The `mutation-baseline-full` artifact holds `mutation.json` at its root, which an upload of `reports/mutation/mutation.json` alone writes.
+The `mutation-baseline-full` artifact holds `mutation.json` and `stryker-incremental.json` at its root, which an upload of `${{ runner.temp }}/full/` writes.
 It reads `RUNNER_ENVIRONMENT` and `HOME` to place the runner cache, and `GITHUB_REPOSITORY_ID` to find the saved baselines.
 `--save` and `--prune` read `GITHUB_RUN_ID`.
+With `--full` and an incremental destination it reads the run's head through `gh run view <run> --json headSha`.
+It diffs that head against `HEAD`, which needs the checkout's full history.
+It shows `bunfig.toml`, `package.json`, every tracked `package.json`, and the files the active Stryker config imports at both revisions.
+It reads every tracked `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, and `.cjs` file from the working tree for their relative imports.
+Inputs a test reads at runtime without a static import, such as markdown files, escape invalidation as a known limitation.
 
 ## The runner cache
 
@@ -91,13 +103,13 @@ It also refuses when `HOME`, `GITHUB_REPOSITORY_ID` or `GITHUB_RUN_ID` is unset.
 
 ```sh
 checks-mutation-baseline <incremental-dest> [mutation-json-dest]
-checks-mutation-baseline --full <mutation-json-dest>
+checks-mutation-baseline --full <mutation-json-dest> [incremental-dest]
 checks-mutation-baseline --save <incremental-src> [mutation-json-src]
 checks-mutation-baseline --slim <mutation-json-src> <dest>
 checks-mutation-baseline --prune [--dry-run]
 ```
 
-`--full` restores only the report of a run that started with no state.
+`--full` restores the report of a full run, and its incremental state when given an incremental destination.
 `--save` keeps this run's baseline on the runner's disk in place of an upload.
 `--slim` writes a report without `statusReason` to `<dest>`, for a report that still goes up as an artifact.
 `--prune` deletes superseded baselines after a save or an upload.
@@ -108,7 +120,7 @@ checks-mutation-baseline --prune [--dry-run]
 | Code | When |
 | --- | --- |
 | 0 | it restored a baseline, found none to restore, saved the baseline or wrote the slim report |
-| 2 | the arguments do not parse, `gh` cannot list the runs, the cache cannot be written, another job removed the entry before it was copied, a file to save or slim does not parse, or `--save` runs where it refuses |
+| 2 | the arguments do not parse, `gh` cannot list the runs, the cache cannot be written, another job removed the entry before it was copied, a file to save or slim does not parse, `--save` runs where it refuses, or `--full` with an incremental destination cannot read the run's head, diff it, or parse the restored state |
 
 A failed artifact lookup or download prints the `gh` error and moves on, as a missing artifact does.
 With `--prune`, `0` means it deleted the superseded artifacts, found none, or could not delete some.
@@ -166,15 +178,28 @@ The saved baseline uses none of the account's Actions storage, which every priva
 That storage accrues by the hour over the month, so an artifact deleted early still counts until the month ends.
 A baseline job on a GitHub-hosted runner uploads the same two files as a `mutation-baseline` artifact with `retention-days: 7` instead, since the restore reads only the newest `main` run.
 
-A full run uploads its report as the `mutation-baseline-full` artifact, which a branch comparison's scope step reads on any runner.
-It slims the report first, so the artifact holds about 0.5 MB in place of about 100 MB:
+A full baseline job restores the previous full state before its incremental Stryker run, so it retests the mutants its changes reach, while inputs a test reads at runtime stay untracked.
+The checkout behind that step fetches the full history, so the restore can diff the restored run against `HEAD`:
+
+```yaml
+- name: Restore previous full baseline state
+  env:
+    GH_TOKEN: ${{ github.token }}
+  run: bunx checks-mutation-baseline --full reports/mutation/mutation.json reports/stryker-incremental.json
+```
+
+The restore reads the repository's Actions through `gh`, so the job that holds it grants `contents: read` and `actions: read`.
+
+A full run uploads its slimmed report and its slimmed state as the `mutation-baseline-full` artifact, which a branch comparison's scope step reads on any runner.
+It slims the report and the state first, so the one directory holds about 10 MB in place of about 500 MB:
 
 ```yaml
 - run: bunx checks-mutation-baseline --slim reports/mutation/mutation.json "$RUNNER_TEMP/full/mutation.json"
+- run: bunx checks-mutation-baseline --slim reports/stryker-incremental.json "$RUNNER_TEMP/full/stryker-incremental.json"
 - uses: actions/upload-artifact@v4
   with:
     name: mutation-baseline-full
-    path: ${{ runner.temp }}/full/mutation.json
+    path: ${{ runner.temp }}/full/
     retention-days: 30
 ```
 

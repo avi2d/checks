@@ -1,6 +1,6 @@
 {
   "name": "@avi2dg/checks",
-  "version": "0.50.1",
+  "version": "0.51.0",
   "description": "Deterministic checks shared across a set of TypeScript repositories",
   "license": "MIT",
   "repository": {
@@ -48,7 +48,9 @@
     "src/testing/mutation-refusal.ts",
     "src/testing/mutation-compare.ts",
     "src/testing/mutation-scope.ts",
+    "src/testing/mutation-scope-graph.ts",
     "src/testing/mutation-baseline.ts",
+    "src/testing/mutation-baseline-full.ts",
     "src/testing/mutation-baseline-saved.ts",
     "src/testing/subsumed-tests.ts",
     "src/testing/night-run.ts",

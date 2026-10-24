@@ -14,6 +14,7 @@ const Run = Schema.Struct({
   databaseId: Schema.Int,
   event: Schema.String,
   createdAt: Schema.String,
+  headSha: Schema.optionalKey(Schema.String),
   artifacts: Schema.Array(Artifact),
 });
 
@@ -126,6 +127,11 @@ async function meet(state: FakeState, statePath: string): Promise<void> {
   while ((await readdir(arrivals)).length < state.downloadsMeet) await Bun.sleep(20);
 }
 
+async function viewRun(state: FakeState, args: readonly string[]): Promise<string | undefined> {
+  const run = state.runs.find((one) => String(one.databaseId) === args[0]);
+  return run === undefined ? undefined : JSON.stringify({ headSha: run.headSha ?? "" });
+}
+
 async function download(state: FakeState, args: readonly string[]): Promise<boolean> {
   const [runId = ""] = args;
   const name = flag(args, "--name");
@@ -200,6 +206,7 @@ async function changed(state: FakeState, args: readonly string[]): Promise<Answe
 async function answer(state: FakeState, args: readonly string[]): Promise<string | undefined> {
   const [command, subcommand, ...rest] = args;
   if (command === "run" && subcommand === "list") return listRuns(state, rest);
+  if (command === "run" && subcommand === "view") return viewRun(state, rest);
   if (command === "api" && subcommand !== undefined) return listArtifacts(state, subcommand) ?? listRepoArtifacts(state, subcommand);
   if (command === "run" && subcommand === "download") return (await download(state, rest)) ? "" : undefined;
   return undefined;

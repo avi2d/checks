@@ -16,7 +16,7 @@ const SavedFiles = Schema.Struct({ [INCREMENTAL]: Schema.Unknown, [REPORT]: Sche
 export type SavedFiles = typeof SavedFiles.Type;
 const decodeSavedFiles = Schema.decodeUnknownEffect(Schema.fromJsonString(SavedFiles));
 
-const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> => typeof value === "object" && value !== null && !Array.isArray(value);
+export const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> => typeof value === "object" && value !== null && !Array.isArray(value);
 
 const withoutReason = (mutant: unknown): unknown => (isRecord(mutant) ? Object.fromEntries(Object.entries(mutant).filter(([key]) => key !== "statusReason")) : mutant);
 
@@ -39,6 +39,58 @@ const slimOf = Effect.fn("slimOf")(function* (from: string) {
   );
   return withoutReasons(report);
 });
+
+export type Invalidation = { readonly tests: ReadonlySet<string>; readonly sources: ReadonlySet<string> };
+
+export type Invalidated = { readonly state: unknown; readonly tests: readonly string[]; readonly sources: readonly string[] };
+
+const isKilled = (mutant: unknown): boolean => isRecord(mutant) && mutant["status"] === "Killed";
+
+const staleTests = (state: Readonly<Record<string, unknown>>, invalidation: Invalidation): readonly string[] => {
+  const testFiles = state["testFiles"];
+  return isRecord(testFiles) ? Object.keys(testFiles).filter((file) => invalidation.tests.has(file)) : [];
+};
+
+const keptEntry = (file: unknown, stale: boolean, dropStatic: boolean): { readonly entry: unknown; readonly dropped: boolean } => {
+  if (!isRecord(file) || !Array.isArray(file["mutants"])) return { entry: file, dropped: false };
+  const before: readonly unknown[] = file["mutants"];
+  const mutants = stale ? [] : dropStatic ? before : before.filter(isKilled);
+  return { entry: mutants.length > 0 ? { ...file, mutants } : undefined, dropped: mutants.length < before.length };
+};
+
+const prunedFiles = (
+  state: Readonly<Record<string, unknown>>,
+  invalidation: Invalidation,
+): { readonly files: Record<string, unknown> | undefined; readonly sources: readonly string[] } => {
+  const files = state["files"];
+  if (!isRecord(files)) return { files: undefined, sources: [] };
+  const next: Record<string, unknown> = {};
+  const sources: string[] = [];
+  for (const [name, file] of Object.entries(files)) {
+    const kept = keptEntry(file, invalidation.sources.has(name), invalidation.tests.size === 0);
+    if (kept.entry !== undefined) next[name] = kept.entry;
+    if (kept.dropped) sources.push(name);
+  }
+  return { files: next, sources };
+};
+
+export function withoutStale(state: unknown, invalidation: Invalidation): Invalidated {
+  if (!isRecord(state)) return { state, tests: [], sources: [] };
+  const tests = staleTests(state, invalidation);
+  const pruned = prunedFiles(state, invalidation);
+  if (tests.length === 0 && pruned.sources.length === 0) return { state, tests: [], sources: [] };
+  return {
+    state: {
+      ...state,
+      ...(isRecord(state["testFiles"])
+        ? { testFiles: Object.fromEntries(Object.entries(state["testFiles"]).filter(([file]) => !invalidation.tests.has(file))) }
+        : {}),
+      ...(pruned.files === undefined ? {} : { files: pruned.files }),
+    },
+    tests: tests.toSorted(),
+    sources: pruned.sources.toSorted(),
+  };
+}
 
 export const slimmed = Effect.fn("slimmed")(function* (from: string, to: string) {
   const fs = yield* FileSystem.FileSystem;
