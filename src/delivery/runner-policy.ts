@@ -115,7 +115,7 @@ function matrixValues(job: Readonly<Record<string, unknown>>, key: string): read
     if (!Array.isArray(axis) || !axis.every((value) => typeof value === "string" || typeof value === "number" || typeof value === "boolean")) return undefined;
     axes.push([lowered, axis]);
   }
-  const names = new Set(axes.map(([name]) => name));
+  const axisNames = new Set(axes.map(([name]) => name));
   let combos: Map<string, unknown>[] = [new Map()];
   for (const [name, axis] of axes) {
     const next: Map<string, unknown>[] = [];
@@ -160,7 +160,7 @@ function matrixValues(job: Readonly<Record<string, unknown>>, key: string): read
         entries.push([name.toLowerCase(), value]);
       }
       if (!usable) return undefined;
-      const matches = originals.filter((combo) => entries.every(([name, value]) => !names.has(name) || combo.get(name) === value));
+      const matches = originals.filter((combo) => entries.every(([name, value]) => !axisNames.has(name) || combo.get(name) === value));
       if (matches.length === 0) appended.push(new Map(entries));
       else for (const combo of matches) for (const [name, value] of entries) combo.set(name, value);
     }
