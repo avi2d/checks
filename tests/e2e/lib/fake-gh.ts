@@ -194,6 +194,9 @@ async function main(): Promise<number> {
   await writeFile(statePath, JSON.stringify(state));
   if (command !== "api" || !endpoint.startsWith(REPOSITORY)) return refuse(`fake gh: unknown call ${process.argv.slice(2).join(" ")}`);
   if (process.env["FAKE_GH_FAIL"] === `${method} ${endpoint}`) return refuse("gh: Resource not accessible by integration (HTTP 403)");
+  const failRunsTimes = Number(process.env["FAKE_GH_FAIL_RUNS_TIMES"] ?? "0");
+  if (method === "GET" && endpoint.startsWith(`${REPOSITORY}actions/runs`) && state.calls.filter((call) => call.startsWith("GET repos/{owner}/{repo}/actions/runs")).length <= failRunsTimes)
+    return refuse("gh: HTTP 502: Bad Gateway");
   const body = rest.includes("--input") ? decodeBody(await Bun.stdin.text()) : {};
   const route = endpoint.slice(REPOSITORY.length);
   if (await isForcedOver(origin, method, route, body)) return refuse("gh: Update is not a fast forward (HTTP 422)");

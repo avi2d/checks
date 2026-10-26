@@ -37,28 +37,55 @@ export function verdictOf(workflows: readonly string[], runs: readonly Run[]): V
   return waiting.length > 0 ? { kind: "pending", waiting } : { kind: "passed" };
 }
 
-const awaitChecks = Effect.fn("awaitChecks")(function* (workflows: readonly string[], sha: string) {
+const POLL_FAILURES = 4;
+
+const awaitWorkflows = Effect.fn("awaitWorkflows")(function* (
+  workflows: readonly string[],
+  sha: string,
+  failed: (failed: readonly string[]) => string,
+  unfinished: (waiting: readonly string[]) => string,
+) {
   const runs = `${REPOSITORY}/actions/runs?head_sha=${sha}&event=workflow_dispatch&per_page=100`;
   let waiting = workflows;
+  let failures = 0;
   for (let poll = 1; poll <= POLLS; poll += 1) {
-    const verdict = verdictOf(workflows, (yield* gitHubJson(decodeRuns, "GET", runs)).workflow_runs);
+    const read = yield* gitHubJson(decodeRuns, "GET", runs).pipe(
+      Effect.map((decoded) => ({ done: true as const, runs: decoded.workflow_runs })),
+      Effect.catchTag("GitHubFailure", (failure) =>
+        failures + 1 >= POLL_FAILURES ? Effect.fail(failure) : Effect.succeed({ done: false as const }),
+      ),
+    );
+    if (!read.done) {
+      failures += 1;
+      yield* Effect.sleep(POLL);
+      continue;
+    }
+    failures = 0;
+    const verdict = verdictOf(workflows, read.runs);
     if (verdict.kind === "passed") return;
-    if (verdict.kind === "failed") return yield* refused(`the checks failed on ${sha.slice(0, 12)}, so the release stays off the branch: ${verdict.failed.join(", ")}`);
+    if (verdict.kind === "failed") return yield* refused(failed(verdict.failed));
     waiting = verdict.waiting;
     yield* Effect.sleep(POLL);
   }
-  return yield* refused(`${waiting.join(", ")} did not finish on ${sha.slice(0, 12)} within ${Duration.format(Duration.times(POLL, POLLS))}, so the release stays off the branch`);
+  return yield* refused(unfinished(waiting));
+});
+
+const awaitChecks = Effect.fn("awaitChecks")(function* (workflows: readonly string[], sha: string) {
+  return yield* awaitWorkflows(
+    workflows,
+    sha,
+    (failed) => `the checks failed on ${sha.slice(0, 12)}, so the release stays off the branch: ${failed.join(", ")}`,
+    (waiting) => `${waiting.join(", ")} did not finish on ${sha.slice(0, 12)} within ${Duration.format(Duration.times(POLL, POLLS))}, so the release stays off the branch`,
+  );
 });
 
 const awaitReleaseWorkflow = Effect.fn("awaitReleaseWorkflow")(function* (workflow: string, sha: string) {
-  const runs = `${REPOSITORY}/actions/runs?head_sha=${sha}&event=workflow_dispatch&per_page=100`;
-  for (let poll = 1; poll <= POLLS; poll += 1) {
-    const verdict = verdictOf([workflow], (yield* gitHubJson(decodeRuns, "GET", runs)).workflow_runs);
-    if (verdict.kind === "passed") return;
-    if (verdict.kind === "failed") return yield* refused(`the release workflow failed on ${sha.slice(0, 12)}: ${verdict.failed.join(", ")}`);
-    yield* Effect.sleep(POLL);
-  }
-  return yield* refused(`${workflow} did not finish on ${sha.slice(0, 12)} within ${Duration.format(Duration.times(POLL, POLLS))}, though the branch already holds the release and the tag exists`);
+  return yield* awaitWorkflows(
+    [workflow],
+    sha,
+    (failed) => `the release workflow failed on ${sha.slice(0, 12)}: ${failed.join(", ")}`,
+    () => `${workflow} did not finish on ${sha.slice(0, 12)} within ${Duration.format(Duration.times(POLL, POLLS))}, though the branch already holds the release and the tag exists`,
+  );
 });
 
 type Landing = "landed" | "moved";

@@ -17,6 +17,10 @@ It commits both as `chore: release <version>` on top of `HEAD` through the GitHu
 It points the branch `release/<branch>` at that commit and dispatches every check workflow its arguments name there.
 It waits up to 45 minutes in all for those workflows to finish on the release commit.
 It reads the newest run of each, so a rerun stands in for the run it repeats.
+A failed read of the runs list does not end the wait.
+The wait retries the read at the same interval.
+A successful read resets the count of failed reads in a row.
+Past four failed reads in a row the run fails with the last read error.
 When any of them concludes short of success, it refuses and leaves `<branch>` and the tags alone.
 When all of them pass, it moves `<branch>` to the release commit without a force.
 GitHub refuses that update when `<branch>` moved while the checks ran.
@@ -124,6 +128,10 @@ jobs:
 
 The push the workflow token makes starts no run, so landing the release commit never starts the workflow again.
 The concurrency group holds from reading the branch until the release workflow it dispatched finishes, so releases cut by release-push publish one at a time, and a queued run the group cancels had cut nothing.
+That hold ends early in two cases.
+One is when the 45 minute wait times out.
+The other is when polling fails past the retry bound or the dispatch of the release workflow fails after GitHub accepted it.
+In those cases an unfinished publisher can overlap the next release, and if latest lands on the older version the fix is npm dist-tag add <package>@<newer version> latest.
 [checks-release-publish](checks-release-publish.md) stays the guard for a release workflow dispatched or rerun by hand.
 A run that waits behind it checks out the branch's tip when it starts, so it releases on top of what landed.
 The job waits on the checks it dispatched and on the release workflow, so a hosted runner bills the minutes those workflows take.

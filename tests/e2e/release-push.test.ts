@@ -220,6 +220,37 @@ test(
 );
 
 test(
+  "a runs poll that fails once still waits for the release workflow and tags the release instead of ending on the poll error",
+  async () => {
+    const pkg = await widget();
+    const retried = await pkg.run(["release.yml", "ci.yml"], { FAKE_GH_FAIL_RUNS_TIMES: "1" });
+    expect(retried.exitCode).toBe(0);
+    const release = await pkg.inOrigin("rev-parse", "main");
+    expect(await pkg.inOrigin("log", "-1", "--format=%s", "main")).toBe("chore: release 0.1.1");
+    expect(await pkg.inOrigin("rev-parse", "v0.1.1^{commit}")).toBe(release);
+    expect(retried.text).toContain(`release-push: released 0.1.1 as ${release.slice(0, 12)} on main, tagged it v0.1.1, and dispatched release.yml on it\n`);
+    expect(retried.text).toContain(`release-push: release.yml finished on v0.1.1\n`);
+    expect((await pkg.state()).calls.filter((call) => call.startsWith("GET repos/{owner}/{repo}/actions/runs")).length).toBeGreaterThan(1);
+  },
+  120_000,
+);
+
+test(
+  "runs polls that keep failing past the retry bound fail the run with the poll error instead of waiting out the checks",
+  async () => {
+    const pkg = await widget();
+    const main = await head(pkg.dir);
+    const failed = await pkg.run(["release.yml", "ci.yml"], { FAKE_GH_FAIL_RUNS_TIMES: "10" });
+    expect(failed.exitCode).toBe(2);
+    expect(failed.text).toContain("HTTP 502");
+    expect(await pkg.inOrigin("rev-parse", "main")).toBe(main);
+    expect(await pkg.inOrigin("tag", "--list")).toBe("v0.1.0");
+    expect((await pkg.state()).dispatches).toEqual([{ workflow: "ci.yml", ref: "release/main" }]);
+  },
+  120_000,
+);
+
+test(
   "nothing unreleased, a tag the next version already holds and a missing check workflow each release nothing",
   async () => {
     const pkg = await widget();
