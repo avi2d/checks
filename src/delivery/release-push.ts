@@ -73,14 +73,14 @@ const land = Effect.fn("land")(function* (root: string, base: string, head: stri
         Effect.flatMap((listed) =>
           Effect.gen(function* () {
             const now = listed.split("\t")[0];
-            if (now === release) return "landed" as Landing;
+            if (now === release) return "landed";
             if (now === head) return yield* Effect.fail(failure);
             yield* git(["fetch", "--quiet", "--no-tags", "origin", `refs/heads/${base}`], root);
             const ancestor = yield* git(["merge-base", "--is-ancestor", release, "FETCH_HEAD"], root).pipe(
               Effect.as(true),
               Effect.catchTag("GitFailure", () => Effect.succeed(false)),
             );
-            return (ancestor ? "landed" : "moved") as Landing;
+            return ancestor ? "landed" : "moved";
           }),
         ),
       ),
