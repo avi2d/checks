@@ -1,0 +1,80 @@
+import { $ } from "bun";
+import { expect, test } from "bun:test";
+import { copyFile, mkdir, readFile, symlink, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { CHECKOUT, scratchDirs } from "./lib/fixture-repo.ts";
+
+type HostLoaded = {
+  readonly path: string;
+  readonly entry: string;
+  readonly output: unknown;
+};
+
+const HOST_LOADED: readonly HostLoaded[] = [
+  {
+    path: "src/quality/comment-matchers.ts",
+    entry: `import { SYNTAXES, refused } from "./matchers";
+
+const refusals = refused("src/probe.ts", "const a = 1; // @ts-expect-error\\n");
+console.log(JSON.stringify({ reads: Object.hasOwn(SYNTAXES, "ts"), refusals }));
+`,
+    output: {
+      reads: true,
+      refusals: [
+        "src/probe.ts:1 carries the machine-read directive `@ts-expect-error`. Fix what the tool is reporting, or stop running the tool on this file",
+      ],
+    },
+  },
+  {
+    path: "src/docs/prose-matchers.ts",
+    entry: `import { isLivingDoc, proseRefused } from "./matchers";
+
+const refusals = proseRefused("docs/guide.md", "It builds; it ships.\\n", new Set([1]));
+console.log(JSON.stringify({ reads: isLivingDoc("README.md"), refusals }));
+`,
+    output: { reads: true, refusals: ["docs/guide.md:1 carries `;`, a semicolon. Use two sentences"] },
+  },
+];
+
+const scratch = scratchDirs();
+
+let dir = "";
+
+for (const { path, entry, output } of HOST_LOADED) {
+  test(`${path} runs synchronously alone in a directory with no node_modules, as a host links it`, async () => {
+    dir = await scratch("checks-host-load-");
+    await copyFile(join(CHECKOUT, path), join(dir, "matchers.ts"));
+    await writeFile(join(dir, "index.ts"), entry);
+
+    const ran = await $`${process.execPath} --no-install index.ts`.cwd(dir).nothrow().quiet();
+
+    expect(ran.stderr.toString()).toBe("");
+    expect(JSON.parse(ran.stdout.toString())).toEqual(output);
+    expect(ran.exitCode).toBe(0);
+  });
+
+  test(
+    `the repo cruise refuses ${path} an import of effect`,
+    async () => {
+      dir = await scratch("checks-host-cruise-");
+      await copyFile(join(CHECKOUT, "dependency-cruiser.config.ts"), join(dir, "dependency-cruiser.config.ts"));
+      for (const linked of ["node_modules", "dist"]) await symlink(join(CHECKOUT, linked), join(dir, linked));
+      await mkdir(join(dir, dirname(path)), { recursive: true });
+      const source = await readFile(join(CHECKOUT, path), "utf8");
+      const cruise = async (text: string): Promise<string> => {
+        await writeFile(join(dir, path), text);
+        const cruised = await $`${join(dir, "node_modules", ".bin", "depcruise")} --config dependency-cruiser.config.ts ${dirname(path)}`
+          .cwd(dir)
+          .nothrow()
+          .quiet();
+        return cruised.stdout.toString();
+      };
+
+      expect(await cruise(source)).not.toContain("host-loaded-imports-nothing");
+      expect(await cruise(`import { Effect } from "effect";\nexport const planted = Effect.void;\n${source}`)).toContain(
+        `error host-loaded-imports-nothing: ${path} → `,
+      );
+    },
+    60_000,
+  );
+}

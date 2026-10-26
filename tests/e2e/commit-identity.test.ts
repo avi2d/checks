@@ -1,0 +1,339 @@
+import { $ } from "bun";
+import { expect, test } from "bun:test";
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { CHECKOUT, fixtureRepos, ran, type Ran } from "./lib/fixture-repo.ts";
+
+const SCRIPT = join(CHECKOUT, "src", "delivery", "commit-identity.ts");
+
+const OWNER = { name: "avi2d", email: "avi2dg@gmail.com" };
+const STRANGER = { name: "Pat Stranger", email: "stranger@example.com" };
+const SQUASH = { name: "GitHub", email: "noreply@github.com" };
+const DISPLAY_NAME = { name: "Owner Display", email: "avi2dg@gmail.com" };
+const INTRUDER = { name: "Ivy Intruder", email: "intruder@example.com" };
+const ACTIONS_BOT = { name: "github-actions[bot]", email: "41898282+github-actions[bot]@users.noreply.github.com" };
+
+type Identity = { name: string; email: string };
+
+type Landing = {
+  readonly message: string;
+  readonly author?: Identity;
+  readonly committer?: Identity;
+};
+
+const repository = fixtureRepos("checks-commit-identity-");
+
+let dir = "";
+
+function identityEnv(author: Identity, committer: Identity) {
+  return {
+    ...process.env,
+    GIT_AUTHOR_NAME: author.name,
+    GIT_AUTHOR_EMAIL: author.email,
+    GIT_COMMITTER_NAME: committer.name,
+    GIT_COMMITTER_EMAIL: committer.email,
+  };
+}
+
+async function initRepo(manifest?: unknown): Promise<void> {
+  ({ dir } = await repository({ "package.json": JSON.stringify(manifest ?? { name: "commit-identity-fixture", author: OWNER }) }));
+}
+
+async function commit(options: Landing): Promise<string> {
+  const env = identityEnv(options.author ?? OWNER, options.committer ?? OWNER);
+  await writeFile(join(dir, "file.txt"), `${Math.random()}\n`);
+  await $`git add -A && git commit -q --no-gpg-sign -m ${options.message}`.cwd(dir).env(env).quiet();
+  const sha = await $`git rev-parse HEAD`.cwd(dir).quiet();
+  return sha.stdout.toString().trim();
+}
+
+function check(...args: readonly string[]): Promise<Ran> {
+  return ran($`bun ${SCRIPT} ${args}`.cwd(dir));
+}
+
+async function redOnForeign(foreign: Landing): Promise<Ran> {
+  await initRepo();
+  const base = await commit({ message: "feat: base" });
+  const landed = await commit(foreign);
+
+  const red = await check(base, "HEAD");
+  expect(red.exitCode).toBe(1);
+  expect(red.text).toContain(landed.slice(0, 12));
+  return red;
+}
+
+test(
+  "commit-identity goes red on a foreign author and names the commit",
+  async () => {
+    const red = await redOnForeign({ message: "feat: stolen", author: STRANGER });
+    expect(red.text).toContain("feat: stolen");
+    expect(red.text).toContain("author Pat Stranger <stranger@example.com>");
+    expect(red.text).toContain("allowed: avi2d <avi2dg@gmail.com>");
+  },
+  60_000,
+);
+
+test(
+  "commit-identity goes red on a foreign committer",
+  async () => {
+    const red = await redOnForeign({ message: "feat: relayed", committer: STRANGER });
+    expect(red.text).toContain("committer Pat Stranger <stranger@example.com>");
+  },
+  60_000,
+);
+
+test(
+  "commit-identity goes red only on a Co-authored-by trailer in the trailer block",
+  async () => {
+    await initRepo();
+    const base = await commit({ message: "feat: base" });
+    const coauthored = await commit({
+      message: "feat: helped\n\nCo-authored-by: Pat Stranger <stranger@example.com>\n",
+    });
+    const lowercase = await commit({
+      message: "feat: helped again\n\nco-authored-by: Pat Stranger <stranger@example.com>\n",
+    });
+    await commit({ message: "feat: signed\n\nSigned-off-by: avi2d <avi2dg@gmail.com>\n" });
+    await commit({ message: "feat: reviewed\n\nReviewed-by: Someone <someone@example.com>\n" });
+    await commit({ message: "fix: reject <foo@bar.com>\n\nError: expected <user@host> in the body.\n" });
+    await commit({
+      message:
+        "feat: quoted\n\nThe squash wrote Co-authored-by: Pat Stranger <stranger@example.com> in prose.\n\nSee the log.\n",
+    });
+
+    const red = await check(base, "HEAD");
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain(coauthored.slice(0, 12));
+    expect(red.text).toContain("trailer Co-authored-by: Pat Stranger <stranger@example.com>");
+    expect(red.text).toContain(lowercase.slice(0, 12));
+    expect(red.text).toContain("trailer co-authored-by: Pat Stranger <stranger@example.com>");
+    expect(red.text).toContain("2 of 6 commit(s)");
+  },
+  60_000,
+);
+
+test(
+  "commit-identity goes green on a clean history, including GitHub as squash committer",
+  async () => {
+    await initRepo();
+    const base = await commit({ message: "feat: base" });
+    await commit({ message: "feat: clean\n\nA body that mentions a trailerless fact.\n" });
+    await commit({ message: "fix: squashed (#12)", committer: SQUASH });
+
+    const green = await check(base, "HEAD");
+    expect(green.exitCode).toBe(0);
+    expect(green.text).toContain("2 commit(s)");
+
+    const single = await check("HEAD");
+    expect(single.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
+  "commit-identity accepts the GitHub display name on a commit GitHub made, and only there",
+  async () => {
+    await initRepo();
+    const base = await commit({ message: "feat: base" });
+    await commit({ message: "feat: merge (#57)", author: DISPLAY_NAME, committer: SQUASH });
+
+    const green = await check(base, "HEAD");
+    expect(green.text).toContain("1 commit(s)");
+    expect(green.exitCode).toBe(0);
+
+    const pushed = await commit({ message: "feat: pushed", author: DISPLAY_NAME });
+    const strangerMerge = await commit({ message: "feat: merge (#58)", author: STRANGER, committer: SQUASH });
+    const red = await check(base, "HEAD");
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain("2 of 3 commit(s)");
+    expect(red.text).toContain(`${pushed.slice(0, 12)} feat: pushed\n    author Owner Display <avi2dg@gmail.com>`);
+    expect(red.text).toContain(`${strangerMerge.slice(0, 12)} feat: merge (#58)\n    author Pat Stranger <stranger@example.com>`);
+  },
+  60_000,
+);
+
+test(
+  "commit-identity lets the Actions bot author a release commit and nothing else",
+  async () => {
+    await initRepo();
+    const base = await commit({ message: "feat: base" });
+    await commit({ message: "chore: release 0.2.0", author: ACTIONS_BOT, committer: SQUASH });
+    await commit({ message: "chore: release 0.2.0 (#12)", author: ACTIONS_BOT, committer: SQUASH });
+
+    const green = await check(base, "HEAD");
+    expect(green.text).toContain("2 commit(s)");
+    expect(green.exitCode).toBe(0);
+
+    const chore = await commit({ message: "chore: tidy", author: ACTIONS_BOT, committer: SQUASH });
+    const red = await check(base, "HEAD");
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain(`${chore.slice(0, 12)} chore: tidy\n    author github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>`);
+    expect(red.text).toContain("1 of 3 commit(s)");
+    expect(red.text).toContain("allowed as release author only: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>");
+  },
+  60_000,
+);
+
+test(
+  "commit-identity lets a release squash name the Actions bot as its co-author, and refuses every other trailer",
+  async () => {
+    await initRepo();
+    const base = await commit({ message: "feat: base" });
+    await commit({
+      message: "chore: release 0.2.0 (#12)\n\nRelease 0.2.0.\n\nCo-authored-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>\n",
+      author: ACTIONS_BOT,
+      committer: SQUASH,
+    });
+    const green = await check(base, "HEAD");
+    expect(green.text).toContain("1 commit(s)");
+    expect(green.exitCode).toBe(0);
+
+    const stranger = await commit({
+      message: "chore: release 0.2.1 (#13)\n\nCo-authored-by: Pat Stranger <stranger@example.com>\n",
+      author: ACTIONS_BOT,
+      committer: SQUASH,
+    });
+    const botOnFeature = await commit({
+      message: "feat: price a bill (#14)\n\nCo-authored-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>\n",
+    });
+    const red = await check(base, "HEAD");
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain("2 of 3 commit(s)");
+    expect(red.text).toContain(`${stranger.slice(0, 12)} chore: release 0.2.1 (#13)\n    trailer Co-authored-by: Pat Stranger <stranger@example.com>`);
+    expect(red.text).toContain(`${botOnFeature.slice(0, 12)} feat: price a bill (#14)\n    trailer Co-authored-by: github-actions[bot]`);
+  },
+  60_000,
+);
+
+test(
+  "commit-identity reads the standard author from package.json",
+  async () => {
+    await initRepo({
+      name: "commit-identity-fixture",
+      author: STRANGER,
+    });
+    const base = await commit({ message: "feat: base", author: STRANGER, committer: STRANGER });
+    await commit({ message: "feat: theirs", author: STRANGER, committer: STRANGER });
+
+    const green = await check(base, "HEAD");
+    expect(green.exitCode).toBe(0);
+
+    const red = await check(`${base}~1`, "HEAD");
+    expect(red.exitCode).toBe(2);
+    expect(red.text).toContain("git log");
+  },
+  60_000,
+);
+
+test(
+  "commit-identity accepts the npm person shorthand with and without a URL",
+  async () => {
+    await initRepo({ author: "Pat Stranger <stranger@example.com> (https://example.com/pat)" });
+    await commit({ message: "feat: theirs", author: STRANGER, committer: STRANGER });
+    expect((await check("HEAD")).exitCode).toBe(0);
+
+    await writeFile(join(dir, "package.json"), JSON.stringify({ contributors: ["Pat Stranger <stranger@example.com>"] }));
+    const green = await check("HEAD");
+    expect(green.text).toContain("1 commit(s) in HEAD carry only allowed identities");
+    expect(green.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
+  "commit-identity refuses every identity when package.json declares no authors",
+  async () => {
+    await initRepo({ author: "Pat Stranger" });
+    await commit({ message: "feat: mine" });
+    const red = await check("HEAD");
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain("commit-identity: package.json declares no author or contributors");
+
+    await commit({ message: "feat: theirs", author: STRANGER, committer: STRANGER });
+    const range = await check("HEAD~1", "HEAD");
+    expect(range.exitCode).toBe(1);
+    expect(range.text).toContain("declares no author");
+
+    await writeFile(join(dir, "package.json"), JSON.stringify({ author: "Pat Stranger (https://example.com/pat)" }));
+    expect((await check("HEAD")).exitCode).toBe(1);
+  },
+  60_000,
+);
+
+test(
+  "commit-identity reads contributors from package.json and ignores persons without an email",
+  async () => {
+    await initRepo();
+    await writeFile(join(dir, "package.json"), JSON.stringify({ contributors: [STRANGER] }));
+    await commit({ message: "feat: theirs", author: STRANGER, committer: STRANGER });
+    const green = await check("HEAD");
+    expect(green.text).toContain("1 commit(s) in HEAD carry only allowed identities");
+    expect(green.exitCode).toBe(0);
+
+    await commit({ message: "feat: mine" });
+    const red = await check("HEAD");
+    expect(red.text).toContain("author avi2d <avi2dg@gmail.com>");
+    expect(red.exitCode).toBe(1);
+
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({ author: { name: "Pat Stranger", url: "https://example.com/pat" }, contributors: [{ name: STRANGER.name }] }),
+    );
+    const undeclared = await check("HEAD");
+    expect(undeclared.exitCode).toBe(1);
+    expect(undeclared.text).toContain("commit-identity: package.json declares no author or contributors");
+
+    await writeFile(join(dir, "package.json"), JSON.stringify({ author: { name: OWNER.name }, contributors: [STRANGER] }));
+    const ignored = await check("HEAD");
+    expect(ignored.text).toContain("allowed: Pat Stranger <stranger@example.com>\n");
+    expect(ignored.exitCode).toBe(1);
+  },
+  60_000,
+);
+
+test(
+  "commit-identity judges a root commit in the one-argument form",
+  async () => {
+    await initRepo({ name: "commit-identity-fixture", author: STRANGER });
+    const root = await commit({ message: "feat: first", author: STRANGER, committer: STRANGER });
+    const green = await check(root);
+    expect(green.exitCode).toBe(0);
+    expect(green.text).toContain(`1 commit(s) in ${root} carry only allowed identities`);
+
+    await $`git checkout -q --orphan foreign`.cwd(dir).quiet();
+    const foreign = await commit({ message: "feat: other first", author: INTRUDER, committer: STRANGER });
+    const red = await check(foreign);
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain("author Ivy Intruder <intruder@example.com>");
+  },
+  60_000,
+);
+
+test(
+  "commit-identity refuses a malformed allowlist and a missing argument",
+  async () => {
+    await initRepo({ name: "commit-identity-fixture", author: 42 });
+    await commit({ message: "feat: base" });
+
+    const malformed = await check("HEAD");
+    expect(malformed.exitCode).toBe(2);
+    expect(malformed.text).toContain('at ["author"]');
+
+    const usage = await check();
+    expect(usage.exitCode).toBe(2);
+    expect(usage.text).toContain("usage: commit-identity.ts");
+  },
+  60_000,
+);
+
+test(
+  "commit-identity holds a repository without package.json to no allowed identity",
+  async () => {
+    ({ dir } = await repository({ "README.md": "# fixture\n" }));
+    await commit({ message: "feat: base" });
+    const owned = await check("HEAD");
+    expect(owned.exitCode).toBe(1);
+    expect(owned.text).toContain("commit-identity: package.json declares no author or contributors");
+  },
+  60_000,
+);

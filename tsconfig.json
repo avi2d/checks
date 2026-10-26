@@ -1,0 +1,64 @@
+{
+  "extends": ["./tsconfig.effect.json"],
+  "compilerOptions": {
+    "target": "esnext",
+    "lib": ["esnext"],
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "types": ["bun"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "diagnosticSeverity": {
+          "anyUnknownInErrorContext": "error",
+          "unsafeEffectTypeAssertion": "error",
+          "missingEffectError": "error",
+          "unknownInEffectCatch": "error",
+          "globalErrorInEffectCatch": "error",
+          "globalErrorInEffectFailure": "error",
+          "catchUnfailableEffect": "error",
+          "catchAllToMapError": "error",
+          "missingReturnYieldStar": "error",
+          "floatingEffect": "error",
+          "outdatedApi": "error"
+        },
+        "overrides": [
+          {
+            "include": [
+              "src/**/*.ts",
+              "scripts/**/*.ts"
+            ],
+            "exclude": [
+              "src/quality/effect-channel/**",
+              "src/complexity/readability/**",
+              "src/quality/data-shape/**",
+              "src/quality/presets/oxlint.ts",
+              "src/quality/presets/knip.ts",
+              "src/quality/presets/dependency-cruiser.ts",
+              "src/quality/presets/stylelint.ts",
+              "src/testing/flake-preload.ts",
+              "src/testing/mutation-guard-plugin.ts"
+            ],
+            "options": {
+              "diagnosticSeverity": {
+                "nodeBuiltinImport": "error",
+                "asyncFunction": "error",
+                "newPromise": "error",
+                "extendsNativeError": "error",
+                "processEnv": "error",
+                "processEnvInEffect": "error"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "oxlint.config.ts", "knip.config.ts", "dependency-cruiser.config.ts", "commitlint.config.ts"]
+}

@@ -1,0 +1,166 @@
+diff --git a/dist/coverage/preload-logic.js b/dist/coverage/preload-logic.js
+index b5bb852481f299890321adc67d249ac48e5dc906..b951095408dcc0c68e52541858c1e290cd5ffc6e 100644
+--- a/dist/coverage/preload-logic.js
++++ b/dist/coverage/preload-logic.js
+@@ -5,7 +5,8 @@ function getPreloadConfig() {
+   return {
+     syncPort: process.env.__STRYKER_SYNC_PORT__,
+     coverageFile: process.env.__STRYKER_COVERAGE_FILE__,
+-    activeMutant: process.env.__STRYKER_ACTIVE_MUTANT__
++    activeMutant: process.env.__STRYKER_ACTIVE_MUTANT__,
++    hitLimit: process.env.__STRYKER_HIT_LIMIT__ === undefined ? undefined : Number(process.env.__STRYKER_HIT_LIMIT__)
+   };
+ }
+ function shouldCollectCoverage(config) {
+@@ -19,8 +20,12 @@ function initializeStrykerNamespace(globalObj) {
+   g.__mutantCoverage__ = strykerGlobal.mutantCoverage;
+   return strykerGlobal;
+ }
+-function setActiveMutant(strykerNamespace, activeMutant) {
++function setActiveMutant(strykerNamespace, activeMutant, hitLimit) {
+   strykerNamespace.activeMutant = activeMutant;
++  if (hitLimit !== undefined) {
++    strykerNamespace.hitCount = 0;
++    strykerNamespace.hitLimit = hitLimit;
++  }
+ }
+ function detectGapWindowBleed(staticCountsAtLastBoundary, staticCoverageNow) {
+   if (!staticCoverageNow) {
+@@ -45,9 +50,14 @@ function formatCoverageData(mutantCoverage, counterToName, lateHits = []) {
+     perTest[actualName] = Object.keys(coverage);
+   }
+   const staticCoverage = Object.keys(mutantCoverage.static ?? {});
++  const perTestHits = {};
++  for (const [testId, coverage] of Object.entries(mutantCoverage.perTest ?? {})) {
++    perTestHits[counterToName.get(testId) ?? testId] = { ...coverage };
++  }
+   return {
+     perTest,
+     static: staticCoverage,
++    hits: { perTest: perTestHits, static: { ...mutantCoverage.static ?? {} } },
+     ...lateHits.length > 0 ? { lateHits: [...lateHits] } : {}
+   };
+ }
+diff --git a/dist/index.js b/dist/index.js
+index 53ceac152f18ca4b34f068b2f1cd8a3012caa5f6..9888968c6df5438285c5e95677f4a530f023bc9d 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -5584,13 +5584,29 @@ async function cleanupPreloadScript(preloadPath) {
+ }
+ // src/coverage/collector.ts
+ import { readFile as readFile2, unlink as unlink2 } from "node:fs/promises";
+-function arrayToCoverageData(mutantIds) {
++function arrayToCoverageData(mutantIds, hits = {}) {
+   const coverage = {};
+   for (const mutantId of mutantIds) {
+-    coverage[mutantId] = 1;
++    coverage[mutantId] = hits[mutantId] ?? 1;
+   }
+   return coverage;
+ }
++function mergeHits(into, hits) {
++  for (const [mutantId, count] of Object.entries(hits ?? {})) {
++    into[mutantId] = Math.max(into[mutantId] ?? 0, count);
++  }
++}
++function mergeHitCounts(dataList) {
++  const merged = { perTest: {}, static: {} };
++  for (const data of dataList) {
++    for (const [testId, hits] of Object.entries(data.hits?.perTest ?? {})) {
++      merged.perTest[testId] ??= {};
++      mergeHits(merged.perTest[testId], hits);
++    }
++    mergeHits(merged.static, data.hits?.static);
++  }
++  return merged;
++}
+ function mergeCoverageData(dataList) {
+   const merged = {
+     perTest: {},
+@@ -5644,11 +5660,12 @@ async function collectCoverage(coverageFile, logger) {
+       return;
+     }
+     const mergedData = mergeCoverageData(dataList);
++    const hitCounts = mergeHitCounts(dataList);
+     const perTest = {};
+     for (const [testId, mutantIds] of Object.entries(mergedData.perTest)) {
+-      perTest[testId] = arrayToCoverageData(mutantIds);
++      perTest[testId] = arrayToCoverageData(mutantIds, hitCounts.perTest[testId]);
+     }
+-    const staticCoverage = arrayToCoverageData(mergedData.static);
++    const staticCoverage = arrayToCoverageData(mergedData.static, hitCounts.static);
+     return {
+       perTest,
+       static: staticCoverage
+@@ -5768,8 +5785,16 @@ function buildFilteredPerTest(perTestEntries, staticIds) {
+ }
+ function stabilizeCoverage(coverage) {
+   const staticIds = new Set(Object.keys(coverage.static));
++  const staticCounts = { ...coverage.static };
++  for (const counts of Object.values(coverage.perTest)) {
++    for (const [mutantId, hitCount] of Object.entries(counts)) {
++      if (staticIds.has(mutantId)) {
++        staticCounts[mutantId] += hitCount;
++      }
++    }
++  }
+   return {
+-    static: coverage.static,
++    static: staticCounts,
+     perTest: buildFilteredPerTest(Object.entries(coverage.perTest), staticIds)
+   };
+ }
+@@ -6742,6 +6767,9 @@ async function spawnBunTests(options, spawnDepth) {
+   if (options.activeMutant) {
+     env.__STRYKER_ACTIVE_MUTANT__ = options.activeMutant;
+   }
++  if (options.hitLimit !== undefined) {
++    env.__STRYKER_HIT_LIMIT__ = String(options.hitLimit);
++  }
+   if (options.coverageFile) {
+     env.__STRYKER_COVERAGE_FILE__ = options.coverageFile;
+   }
+@@ -8921,6 +8949,7 @@ exit=%s timedOut=%s
+         bunArgs: this.bunArgs,
+         bunfigPath,
+         activeMutant: options.activeMutant.id,
++        hitLimit: options.hitLimit,
+         bail: !options.disableBail,
+         sequentialMode: true,
+         preloadScript: this.preloadScriptPath,
+@@ -8946,6 +8975,13 @@ exit=%s timedOut=%s
+         status: MutantRunStatus.Timeout
+       };
+     }
++    const hitLimitReached = /Stryker: Hit count limit reached \(\d+\)/.exec(result.stdout + result.stderr);
++    if (hitLimitReached) {
++      return {
++        status: MutantRunStatus.Timeout,
++        reason: `${hitLimitReached[0]}, limit ${options.hitLimit}`
++      };
++    }
+     const parsed = parseBunTestOutput(result.stdout, result.stderr);
+     this.logger.debug("Mutant run completed: %o", {
+       totalTests: parsed.totalTests,
+diff --git a/dist/templates/coverage-preload.ts b/dist/templates/coverage-preload.ts
+index c9fbae350e3731c22a00721cdc756f68451d5aaa..b930bf610a6740c431d67d5aeac37dcd396af5e5 100644
+--- a/dist/templates/coverage-preload.ts
++++ b/dist/templates/coverage-preload.ts
+@@ -68,7 +68,7 @@ const EAGER_MODULES: string[] = __EAGER_MODULES__;
+ // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call -- Placeholder import replaced at runtime
+ const config = getPreloadConfig();
+ // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Config from placeholder import
+-const { syncPort, coverageFile, activeMutant } = config;
++const { syncPort, coverageFile, activeMutant, hitLimit } = config;
+ 
+ // Skip coverage collection during mutant runs (only need pass/fail)
+ // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call -- Placeholder import replaced at runtime
+@@ -228,7 +228,7 @@ const mutantCoverage = strykerGlobal.mutantCoverage!;
+ // Set active mutant for mutant runs
+ if(activeMutant) {
+     // eslint-disable-next-line @typescript-eslint/no-unsafe-call -- Placeholder import replaced at runtime
+-    setActiveMutant(strykerGlobal, activeMutant);
++    setActiveMutant(strykerGlobal, activeMutant, hitLimit);
+ }
+ 
+ // ============================================================================

@@ -1,0 +1,193 @@
+import { expect, test } from "bun:test";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { docsRepos, GUIDE, OPENING, plantRedThenGreen, type Plant } from "./lib/docs-repo.ts";
+import { CHECKOUT } from "./lib/fixture-repo.ts";
+
+const FIXTURES = join(CHECKOUT, "tests", "fixtures", "docs");
+
+const PLANTS: readonly (Plant & { readonly rule: string })[] = [
+  { rule: "an em dash", red: "It builds — and ships.", refusal: "4: carries `—`, an em dash", green: "It builds and ships." },
+  { rule: "an en dash", red: "Pages 1–5 hold it.", refusal: "4: carries `–`, an en dash", green: "Pages 1 to 5 hold it." },
+  { rule: "a parenthesis", red: "It builds (fast).", refusal: "4: carries `(`, a parenthesis", green: "It builds fast." },
+  { rule: "a hyphen as a dash", red: "It builds - and ships.", refusal: "4: carries `-`, a hyphen used as a dash", green: "It builds and ships." },
+  { rule: "a semicolon", red: "It builds; it ships.", refusal: "4: carries `;`, a semicolon", green: "It builds and ships." },
+  {
+    rule: "a promise about the future",
+    red: "Windows support is planned.",
+    refusal: "4: carries `is planned`, a promise about the future",
+    green: "Windows is not supported.",
+  },
+  {
+    rule: "a self-referential opener",
+    red: "This page explains the tools.",
+    refusal: "4: carries `This page explains`, a sentence that opens by talking about the page",
+    green: "The tools build bills.",
+  },
+  {
+    rule: "a second sentence on a line",
+    red: "It builds. It ships.",
+    refusal: "4: carries a second sentence on one line, which opens with `It ships`",
+    green: "It builds.\nIt ships.",
+  },
+  {
+    rule: "a sentence across lines",
+    red: "It builds the bill and\nships it.",
+    refusal: "4: carries a sentence that runs across lines",
+    green: "It builds the bill and ships it.",
+  },
+];
+
+const repository = docsRepos();
+
+test(
+  "each prose rule goes red on a line a change adds to a living doc, and green once the line is rewritten",
+  async () => {
+    await plantRedThenGreen(
+      await repository(),
+      PLANTS,
+      ({ rule }) => [`plant ${rule}`, `rewrite ${rule}`],
+      "living doc(s) or agent file(s) hold to the prose rules",
+    );
+  },
+  120_000,
+);
+
+test(
+  "a report about the past goes red on a line a change adds, in a living doc and in an agent file",
+  async () => {
+    const { put, commit, docs } = await repository();
+    await put(GUIDE, OPENING);
+    const base = await commit("start");
+    await put(GUIDE, `${OPENING}It is the former home of the build.\n`);
+    await put("tools/AGENTS.md", "# Tools\n\nIt is the former home of the build.\n");
+    const head = await commit("report what the build changed");
+
+    const refused = await docs(base, head);
+    expect(refused.text).toContain(
+      `  ${GUIDE}:4: carries \`former\`, a report about the past. Say what is true now, and leave what changed to the changelog, a commit message or a decision record`,
+    );
+    expect(refused.text).toContain(
+      "  tools/AGENTS.md:3: carries `former`, a report about the past. Say what is true now, and leave what changed to the changelog, a commit message or a decision record",
+    );
+    expect(refused.exitCode).toBe(1);
+  },
+  120_000,
+);
+
+test(
+  "a violation on a line the range leaves alone does not fail it, and editing that line does",
+  async () => {
+    const { put, commit, docs } = await repository();
+    await put(GUIDE, `${OPENING}It builds; it ships.\n`);
+    const base = await commit("a semicolon before the gate");
+    await put(GUIDE, `${OPENING}It builds; it ships.\nIt reads the parts.\n`);
+    const added = await commit("add a clean line");
+
+    const untouched = await docs(base, added);
+    expect(untouched.text).toContain("docs: 1 line(s) the range adds or edits in 1 living doc(s) or agent file(s) hold to the prose rules");
+    expect(untouched.exitCode).toBe(0);
+
+    await put(GUIDE, `${OPENING}It builds; it ships fast.\nIt reads the parts.\n`);
+    const edited = await commit("edit the old line");
+    const refused = await docs(added, edited);
+    expect(refused.text).toContain(`  ${GUIDE}:4: carries \`;\`, a semicolon. Use two sentences`);
+    expect(refused.exitCode).toBe(1);
+  },
+  120_000,
+);
+
+test(
+  "a record, a changelog and fenced code take no prose rule",
+  async () => {
+    const { put, commit, docs } = await repository();
+    const base = await commit("start");
+    const record = await readFile(join(FIXTURES, "adr.md"), "utf8");
+    await put("docs/adr/0001-a-part-names-its-supplier.md", `${record}\nIt builds; it ships (fast) — twice.\n`);
+    await put("tools/CHANGELOG.md", "It builds; it ships (fast) — twice.\n");
+    await put(GUIDE, `${OPENING}\n\`\`\`sh\nbuild; ship (fast) — twice\n\`\`\`\n`);
+    const head = await commit("separators where the prose rules do not reach");
+
+    const held = await docs(base, head);
+    expect(held.text).toContain("living doc(s) or agent file(s) hold to the prose rules");
+    expect(held.exitCode).toBe(0);
+  },
+  120_000,
+);
+
+test(
+  "an agent file takes the separator rules and no sentence or people-doc rule",
+  async () => {
+    const { put, commit, docs } = await repository();
+    await put("tools/AGENTS.md", "# Tools\n");
+    const base = await commit("start");
+    await put("tools/AGENTS.md", "# Tools\n\nIt builds. It ships.\nThis page explains the tools, and Windows support is planned\nfor them.\n");
+    const sentences = await commit("sentences an agent file keeps");
+
+    const held = await docs(base, sentences);
+    expect(held.text).toContain("docs: 4 line(s) the range adds or edits in 1 living doc(s) or agent file(s) hold to the prose rules");
+    expect(held.exitCode).toBe(0);
+
+    await put("tools/AGENTS.md", "# Tools\n\nIt builds. It ships.\nThis page explains the tools, and Windows support is planned\nfor them — twice; fast.\n");
+    const separated = await commit("separators in an agent file");
+    const refused = await docs(sentences, separated);
+    expect(refused.text).toContain("docs: 2 violation(s):");
+    expect(refused.text).toContain("  tools/AGENTS.md:5: carries `—`, an em dash");
+    expect(refused.text).toContain("  tools/AGENTS.md:5: carries `;`, a semicolon");
+    expect(refused.exitCode).toBe(1);
+  },
+  120_000,
+);
+
+test(
+  "a changed line is judged in the doc it was changed in, whatever its path holds",
+  async () => {
+    const { put, commit, docs } = await repository();
+    await put("README.md", "# Widget\n\nIt builds; it ships.\n");
+    await put("b/README.md", "# B\n\nIt builds.\n");
+    await put("my tools/README.md", "# My tools\n\nIt builds.\n");
+    await put('say "hi"/README.md', "# Say hi\n\nIt builds.\n");
+    const base = await commit("start");
+    await put("b/README.md", "# B\n\nIt builds; it ships.\n");
+    await put("my tools/README.md", "# My tools\n\nIt builds; it ships.\n");
+    await put('say "hi"/README.md', "# Say hi\n\nIt builds; it ships.\n");
+    const head = await commit("semicolons under b/, under a path with a space and under one git quotes");
+
+    const refused = await docs(base, head);
+    expect(refused.text).toContain("docs: 3 violation(s):");
+    expect(refused.text).toContain('  say "hi"/README.md:3: carries `;`, a semicolon');
+    expect(refused.text).toContain("  b/README.md:3: carries `;`, a semicolon");
+    expect(refused.text).toContain("  my tools/README.md:3: carries `;`, a semicolon");
+    expect(refused.exitCode).toBe(1);
+  },
+  120_000,
+);
+
+test(
+  "a sentence over the trial length cap is advisory, and never fails the range",
+  async () => {
+    const { put, commit, docs } = await repository();
+    await put(GUIDE, OPENING);
+    const base = await commit("start");
+    await put(
+      GUIDE,
+      `${OPENING}Now the gate reads each Markdown file at the head commit and uses its path or front matter to choose which template its kind needs today.\n`,
+    );
+    const head = await commit("a sentence over the trial cap");
+
+    const reported = await docs(base, head);
+    expect(reported.text).toContain("docs: advisory, 1 sentence(s) over the trial length caps:");
+    expect(reported.text).toContain(`  ${GUIDE}:4: carries a 26-word descriptive sentence, over the 25-word cap`);
+    expect(reported.exitCode).toBe(0);
+
+    await put(
+      GUIDE,
+      `${OPENING}The gate reads each Markdown file at the head commit and uses its path or front matter to choose which template its kind needs today.\n`,
+    );
+    const held = await commit("a sentence within the trial cap");
+    const clean = await docs(head, held);
+    expect(clean.text).not.toContain("trial length caps");
+    expect(clean.exitCode).toBe(0);
+  },
+  120_000,
+);

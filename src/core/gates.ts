@@ -1,0 +1,67 @@
+export type Program = {
+  readonly bin: string;
+  readonly script: string;
+};
+
+export type TrackedContent = {
+  readonly pathspecs: readonly string[];
+  readonly content: string;
+};
+
+export const EVERY_REPOSITORY = "every repository";
+
+export const VECTORS = ["complexity", "quality", "testing", "docs", "delivery", "dependencies"] as const;
+
+type Vector = (typeof VECTORS)[number];
+
+export type KitGate = {
+  readonly bin: string;
+  readonly vector: Vector;
+  readonly file: string;
+  readonly reads: "tree" | "range";
+  readonly alsoReads?: string;
+  readonly args?: readonly string[];
+  readonly appliesTo: typeof EVERY_REPOSITORY | TrackedContent;
+};
+
+export const ENTRY_POINT: Program = { bin: "checks-lint", script: "core/lint.ts" };
+
+export const TEST_ENTRY_POINT: Program = { bin: "checks-test", script: "testing/test.ts" };
+
+export const DEFAULT_BRANCH = "main";
+
+export const TYPESCRIPT_SOURCE: TrackedContent = { pathspecs: ["*.ts", "*.tsx"], content: "TypeScript source" };
+
+export const LINTED_SOURCE: TrackedContent = { pathspecs: ["*.ts", "*.tsx", "*.astro"], content: "TypeScript or Astro source" };
+
+const BUN_LOCKFILE: TrackedContent = { pathspecs: ["bun.lock"], content: "a bun lockfile" };
+
+const OXLINT_CONFIG: TrackedContent = { pathspecs: ["oxlint.config.ts"], content: "an oxlint.config.ts" };
+
+const FRONTEND_SYNTAX_DECLARATION: TrackedContent = { pathspecs: ["frontend-syntax.json"], content: "a frontend syntax declaration" };
+
+const STYLESHEET: TrackedContent = { pathspecs: ["*.css"], content: "a stylesheet" };
+
+const COPY_DECLARATION: TrackedContent = { pathspecs: ["copy.json"], content: "a copy declaration" };
+
+export const KIT_GATES = [
+  { bin: "checks-lint-coverage", vector: "quality", file: "lint-coverage.sh", reads: "tree", appliesTo: LINTED_SOURCE },
+  { bin: "checks-test-layout", vector: "testing", file: "test-layout.ts", reads: "tree", appliesTo: TYPESCRIPT_SOURCE },
+  { bin: "checks-commit-identity", vector: "delivery", file: "commit-identity.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
+  { bin: "checks-comment-gate", vector: "quality", file: "comment-gate.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
+  { bin: "checks-effect-scope", vector: "quality", file: "effect-scope.ts", reads: "tree", args: ["--check"], appliesTo: OXLINT_CONFIG },
+  { bin: "checks-frontend-syntax", vector: "quality", file: "frontend-syntax.ts", reads: "tree", appliesTo: FRONTEND_SYNTAX_DECLARATION },
+  { bin: "checks-css-size", vector: "quality", file: "css-size.ts", reads: "tree", appliesTo: STYLESHEET },
+  { bin: "checks-no-plain-js", vector: "quality", file: "no-plain-js.ts", reads: "tree", appliesTo: TYPESCRIPT_SOURCE },
+  { bin: "checks-suppressions-ratchet", vector: "complexity", file: "suppressions-ratchet.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
+  { bin: "checks-ci-wiring", vector: "delivery", file: "ci-wiring.ts", reads: "tree", appliesTo: EVERY_REPOSITORY },
+  { bin: "checks-secrets", vector: "delivery", file: "secrets.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
+  { bin: "checks-docs", vector: "docs", file: "docs.ts", reads: "range", alsoReads: "every agent file at the head commit", appliesTo: EVERY_REPOSITORY },
+  { bin: "checks-copy", vector: "docs", file: "copy.ts", reads: "tree", appliesTo: COPY_DECLARATION },
+  { bin: "checks-repetition", vector: "complexity", file: "repetition.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE },
+  { bin: "checks-unused", vector: "complexity", file: "unused.ts", reads: "tree", appliesTo: LINTED_SOURCE },
+  { bin: "checks-exports", vector: "complexity", file: "exports.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE },
+  { bin: "checks-quarantine-clock", vector: "testing", file: "quarantine-clock.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
+  { bin: "checks-imports", vector: "dependencies", file: "imports.ts", reads: "tree", appliesTo: TYPESCRIPT_SOURCE },
+  { bin: "checks-advisories", vector: "dependencies", file: "advisories.ts", reads: "range", appliesTo: BUN_LOCKFILE },
+] as const satisfies readonly KitGate[];

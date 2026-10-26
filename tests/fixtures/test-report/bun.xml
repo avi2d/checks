@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="bun test" tests="11" assertions="2" failures="3" skipped="6" time="0.025999">
+  <testsuite name="tests/b.test.ts" file="tests/b.test.ts" tests="2" assertions="0" failures="1" skipped="1" time="0">
+    <testcase name="throws" classname="" time="0.00065" file="tests/b.test.ts" line="2" assertions="0">
+      <failure type="AssertionError" />
+    </testcase>
+    <testcase name="plain skip" classname="" time="0" file="tests/b.test.ts" line="3" assertions="0">
+      <skipped />
+    </testcase>
+  </testsuite>
+  <testsuite name="tests/a.test.ts" file="tests/a.test.ts" tests="9" assertions="2" failures="2" skipped="5" time="0">
+    <testcase name="passes" classname="" time="0.000028" file="tests/a.test.ts" line="2" assertions="1" />
+    <testcase name="plain skip" classname="" time="0" file="tests/a.test.ts" line="3" assertions="0">
+      <skipped />
+    </testcase>
+    <testcase name="skip if" classname="" time="0" file="tests/a.test.ts" line="4" assertions="0">
+      <skipped />
+    </testcase>
+    <testcase name="if false" classname="" time="0" file="tests/a.test.ts" line="5" assertions="0">
+      <skipped />
+    </testcase>
+    <testcase name="a todo" classname="" time="0" file="tests/a.test.ts" line="6" assertions="0">
+      <skipped message="TODO" />
+    </testcase>
+    <testsuite name="outer" file="tests/a.test.ts" line="7" tests="3" assertions="1" failures="2" skipped="1" time="0.011">
+      <testsuite name="inner" file="tests/a.test.ts" line="8" tests="1" assertions="0" failures="0" skipped="1" time="0">
+        <testcase name="in skipped describe" classname="inner &amp;gt; outer" time="0" file="tests/a.test.ts" line="9" assertions="0">
+          <skipped />
+        </testcase>
+      </testsuite>
+      <testcase name="fails &amp; &lt;weird&gt; &quot;name&quot;" classname="outer" time="0.000033" file="tests/a.test.ts" line="11" assertions="1">
+        <failure type="AssertionError" />
+      </testcase>
+      <testcase name="times out" classname="outer" time="0.011033" file="tests/a.test.ts" line="12" assertions="0">
+        <failure type="TimeoutError" />
+      </testcase>
+    </testsuite>
+    <testsuite name="a &gt; b" file="tests/a.test.ts" line="14" tests="1" assertions="0" failures="0" skipped="0" time="0">
+      <testcase name="c" classname="a &amp;gt; b" time="0.000151" file="tests/a.test.ts" line="14" assertions="0" />
+    </testsuite>
+  </testsuite>
+</testsuites>

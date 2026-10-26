@@ -1,0 +1,120 @@
+import { $ } from "bun";
+import { afterEach } from "bun:test";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { withoutPullRequestEvent } from "../../lib/env.ts";
+const SUITE_WORKFLOW = ".github/workflows/ci.yml";
+const COMMITLINT_WORKFLOW = ".github/workflows/commitlint.yml";
+
+export const CHECKOUT = resolve(import.meta.dir, "..", "..", "..");
+
+const AUTHOR = { name: "Wren Fixture", email: "wren@example.com" };
+const KIT_PATH = `${join(CHECKOUT, "node_modules", ".bin")}:${process.env["PATH"] ?? ""}`;
+
+// The machine injects its hooksPath through the environment, which outranks every
+// config file, so a fixture repo cannot switch those hooks off in its own config.
+function isolateFixtureGit(): void {
+  const kept: Array<readonly [string, string]> = [];
+  for (let index = 0; ; index += 1) {
+    const key = process.env[`GIT_CONFIG_KEY_${index}`];
+    if (key === undefined) break;
+    const value = process.env[`GIT_CONFIG_VALUE_${index}`];
+    delete process.env[`GIT_CONFIG_KEY_${index}`];
+    delete process.env[`GIT_CONFIG_VALUE_${index}`];
+    if (key.toLowerCase() !== "core.hookspath" && value !== undefined) kept.push([key, value]);
+  }
+  if (kept.length === 0) {
+    delete process.env.GIT_CONFIG_COUNT;
+  } else {
+    kept.forEach(([key, value], index) => {
+      process.env[`GIT_CONFIG_KEY_${index}`] = key;
+      process.env[`GIT_CONFIG_VALUE_${index}`] = value;
+    });
+    process.env.GIT_CONFIG_COUNT = String(kept.length);
+  }
+  process.env.GIT_CONFIG_NOSYSTEM = "1";
+  process.env.GIT_CONFIG_GLOBAL = "/dev/null";
+}
+
+isolateFixtureGit();
+
+export type Ran = { readonly exitCode: number; readonly text: string };
+
+export type FixtureRepo = {
+  readonly dir: string;
+  readonly write: (files: Readonly<Record<string, string>>) => Promise<void>;
+  readonly commit: (message: string) => Promise<string>;
+  readonly script: (name: string, ...args: readonly string[]) => Promise<Ran>;
+  readonly lint: () => Promise<Ran>;
+  readonly dispose: () => Promise<void>;
+};
+
+export async function ran(pending: $.ShellPromise): Promise<Ran> {
+  const result = await pending.nothrow().quiet();
+  return { exitCode: result.exitCode, text: result.stdout.toString() + result.stderr.toString() };
+}
+
+export async function fixtureRepo(prefix: string, files: Readonly<Record<string, string>>): Promise<FixtureRepo> {
+  const dir = await mkdtemp(join(tmpdir(), prefix));
+  // An octopus merge writes commits too, so every git command here needs an identity, not only a commit.
+  await $`git init -q -b main && git config user.name ${AUTHOR.name} && git config user.email ${AUTHOR.email}`.cwd(dir).quiet();
+  const write = async (written: Readonly<Record<string, string>>): Promise<void> => {
+    for (const [name, content] of Object.entries(written)) {
+      await mkdir(dirname(join(dir, name)), { recursive: true });
+      await writeFile(join(dir, name), content);
+    }
+  };
+  await write(files);
+  return {
+    dir,
+    write,
+    commit: async (message) => {
+      await $`git add -A && git commit -q --no-gpg-sign -m ${message}`.cwd(dir).quiet();
+      return (await $`git rev-parse HEAD`.cwd(dir).quiet()).stdout.toString().trim();
+    },
+    script: (name, ...args) => ran($`bun ${join(CHECKOUT, "src", name)} ${args}`.cwd(dir).env({ ...process.env, PATH: KIT_PATH })),
+    lint: () => ran($`bun ${join(CHECKOUT, "src", "core", "lint.ts")}`.cwd(dir).env({ ...withoutPullRequestEvent(), PATH: KIT_PATH })),
+    dispose: () => rm(dir, { recursive: true, force: true }),
+  };
+}
+
+// Called at a test file's top level, so afterEach releases what each test in the file opened.
+export function releasedAfterEach<A extends readonly unknown[], T>(
+  open: (...args: A) => Promise<T>,
+  release: (opened: T) => Promise<void>,
+): (...args: A) => Promise<T> {
+  const opened: T[] = [];
+  afterEach(async () => {
+    for (const one of opened.splice(0)) await release(one);
+  }, 60_000);
+  return async (...args) => {
+    const one = await open(...args);
+    opened.push(one);
+    return one;
+  };
+}
+
+export function fixtureRepos(prefix: string): (files?: Readonly<Record<string, string>>) => Promise<FixtureRepo> {
+  return releasedAfterEach((files: Readonly<Record<string, string>> = {}) => fixtureRepo(prefix, files), (repo) => repo.dispose());
+}
+
+export function scratchDirs(): (prefix: string) => Promise<string> {
+  return releasedAfterEach(
+    (prefix: string) => mkdtemp(join(tmpdir(), prefix)),
+    (dir) => rm(dir, { recursive: true, force: true }),
+  );
+}
+
+export const UNVENDORED_BUNFIG = '[test]\npathIgnorePatterns = ["**/tests/quarantine/**", "**/tests/live/**", "**/tests/pixel/**"]\n';
+
+export function lintWiring(): Readonly<Record<string, string>> {
+  return {
+    "package.json": JSON.stringify({ name: "lint-fixture", type: "module", author: AUTHOR, scripts: { lint: "checks-lint", test: "checks-test" } }),
+    "knip.json": JSON.stringify({ entry: ["**/*.ts"], include: ["files"] }),
+    "dependency-cruiser.config.ts": `import { defineConfig } from "${join(CHECKOUT, "dist", "presets", "dependency-cruiser.js")}";\n\nexport default defineConfig({ orphans: ["[.]ts$"] });\n`,
+    "bunfig.toml": UNVENDORED_BUNFIG,
+    [SUITE_WORKFLOW]: "on:\n  pull_request:\n    types: [opened, synchronize]\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n      - run: bun run build\n      - run: git diff --exit-code\n      - run: bun run typecheck\n      - run: bun run test\n",
+    [COMMITLINT_WORKFLOW]: "on:\n  pull_request:\n    types: [opened, synchronize]\njobs:\n  title:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ./node_modules/.bin/commitlint\n",
+  };
+}

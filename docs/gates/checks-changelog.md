@@ -1,0 +1,65 @@
+---
+kind: reference
+audience: consumers
+---
+# checks-changelog
+
+`checks-changelog` writes the pending release into `CHANGELOG.md` from the conventional commits since the last release.
+
+## What it checks
+
+It reads the version from `package.json` and treats that version as the release being prepared.
+It lists every conventional commit the release closes, grouped as Features, Fixes, Performance, Reverts and Breaking changes.
+It lists the commits a branch merged in after its bump under that bump, since the squash merge releases them there.
+It leaves out what the branch added past its bump, since the squash merge folds it into the release commit.
+Only a branch carrying its own unlanded bump lists the commits of an unlanded branch it merges, so such a branch takes in only main.
+CI must build the pull request head commit, the `actions/checkout` ref `github.event.pull_request.head.sha`, and not the GitHub merge ref, since the merge ref puts main first and the branch's own bump off the first-parent chain.
+It links each entry to its pull request under the repository address `package.json` names.
+It keeps the date a released section already carries and dates a new section today.
+It writes the whole file newest first, so the changelog is never edited by hand.
+A repository with no tag yet releases from its first commit.
+A version with no conventional commit worth listing writes no section.
+
+## What it reads
+
+It reads `package.json`, `CHANGELOG.md`, the `v*` tags and the git history from the repository root.
+It finds releases in the version bumps of `package.json` across all of `HEAD` ancestry, so a checkout without tags writes the same file when no release was reverted.
+It reads a commit whose `package.json` is missing or has no version as unversioned, so the commit that adds the version is the first release and a repository that adopts a version late still writes its changelog.
+A bump to a version no newer than the release before it is a revert.
+A revert cancels every release above the version it returns to, except a release a `v` tag marks as published.
+A version older than the newest in the committed `CHANGELOG.md` and absent from it was never published, so its commits go into the next release.
+It refuses a shallow checkout, since the releases reach back past its history.
+It refuses a `package.json` with no repository address, since each entry links its pull request under it.
+It refuses a repository address that is no `https` address once `git+`, a trailing slash and `.git` are dropped, since a pull request link needs one.
+
+## Arguments
+
+```sh
+checks-changelog
+```
+
+It takes no arguments.
+Run it through the build, as the release workflow in [checks-release-notes](checks-release-notes.md) shows.
+
+## Exit codes
+
+| Code | Result |
+| --- | --- |
+| 0 | The changelog was written. |
+| 2 | The checkout is shallow, or `package.json` has no `https` repository address. |
+
+## Sample output
+
+```
+checks-changelog: wrote 2 release(s) to CHANGELOG.md
+```
+
+## When it runs
+
+Only the build of a repository that keeps a changelog runs it.
+A repository with no versioned releases does not need it.
+
+## Related topics
+
+- [checks-release-notes](checks-release-notes.md)
+- [checks-release-report](checks-release-report.md)

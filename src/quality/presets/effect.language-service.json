@@ -1,0 +1,10 @@
+{
+  "diagnosticSeverity": {
+    "nodeBuiltinImport": "error",
+    "asyncFunction": "error",
+    "newPromise": "error",
+    "extendsNativeError": "error",
+    "processEnv": "error",
+    "processEnvInEffect": "error"
+  }
+}

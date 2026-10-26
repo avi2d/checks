@@ -1,0 +1,396 @@
+import { describe, expect, test } from "bun:test";
+import { isLivingDoc, PROSE_RULES, proseFindings, proseRefused, readerOf, scanMarkdown } from "../../src/docs/prose-matchers.ts";
+import { DESCRIPTIVE_WORD_CAP, longSentences, PROCEDURAL_WORD_CAP, sentenceLengths, type SentenceKind } from "../../src/docs/sentence-length.ts";
+
+function refusals(text: string, within?: ReadonlySet<number>): readonly string[] {
+  return proseFindings(text, "people", within).map(({ line, message }) => `${line}: ${message}`);
+}
+
+describe("each rule goes red on a planted line and green on its rewrite", () => {
+  const cases: readonly (readonly [rule: string, red: string, refusal: string, green: string])[] = [
+    ["em dash", "It builds — and ships.", "1: carries `—`, an em dash. End the sentence, or use a comma", "It builds, and ships."],
+    ["en dash", "Pages 1–5 hold it.", "1: carries `–`, an en dash. End the sentence, or use a comma", "Pages 1 to 5 hold it."],
+    [
+      "parenthesis",
+      "It builds (fast).",
+      "1: carries `(`, a parenthesis other than the plural `(s)`. Make the aside its own sentence, or set it off with commas",
+      "It builds, fast.",
+    ],
+    ["spaced hyphen", "It builds - and ships.", "1: carries `-`, a hyphen used as a dash. End the sentence, or use a comma", "It builds and ships."],
+    ["double hyphen", "It builds -- and ships.", "1: carries `--`, a hyphen used as a dash. End the sentence, or use a comma", "It builds and ships."],
+    ["semicolon", "It builds; it ships.", "1: carries `;`, a semicolon. Use two sentences", "It builds and ships."],
+    [
+      "future promise",
+      "Windows support is planned.",
+      "1: carries `is planned`, a promise about the future. Say what is true now",
+      "Windows is not supported.",
+    ],
+    [
+      "promise on an issue",
+      "It stays manual until #11 lands.",
+      "1: carries `until #11`, a promise about the future. Say what is true now",
+      "It stays manual.",
+    ],
+    [
+      "past report",
+      "It is the former home of the build.",
+      "1: carries `former`, a report about the past. Say what is true now, and leave what changed to the changelog, a commit message or a decision record",
+      "It builds bills.",
+    ],
+    [
+      "used to",
+      "It used to build bills.",
+      "1: carries `used to`, a report about the past. Say what is true now, and leave what changed to the changelog, a commit message or a decision record",
+      "It builds bills.",
+    ],
+    [
+      "self-reference",
+      "This page explains the gate.",
+      "1: carries `This page explains`, a sentence that opens by talking about the page. Talk directly about the subject",
+      "The gate refuses a banned comment.",
+    ],
+    [
+      "second sentence",
+      "It builds. It ships.",
+      "1: carries a second sentence on one line, which opens with `It ships`. Start it on its own line",
+      "It builds.\nIt ships.",
+    ],
+  ];
+
+  for (const [rule, red, refusal, green] of cases) {
+    test(rule, () => {
+      expect(refusals(red)).toEqual([refusal]);
+      expect(refusals(green)).toEqual([]);
+    });
+  }
+
+  test("a sentence wrapped across lines, on each line it spans", () => {
+    const wrapped = "It builds the bill and\nships it to the supplier.\n";
+    const runOn = "carries a sentence that runs across lines. Join the sentence onto one line";
+    expect(refusals(wrapped)).toEqual([`1: ${runOn}`, `2: ${runOn}`]);
+    expect(refusals("It builds the bill and ships it to the supplier.\n")).toEqual([]);
+  });
+
+  test("a second Russian sentence on one line is refused, in either language order", () => {
+    const second = (opening: string): string =>
+      `1: carries a second sentence on one line, which opens with \`${opening}\`. Start it on its own line`;
+    expect(refusals("Он собирает. Он поставляет.")).toEqual([second("Он поставляет")]);
+    expect(refusals("It builds. Он поставляет.")).toEqual([second("Он поставляет")]);
+    expect(refusals("Он собирает. It ships.")).toEqual([second("It ships")]);
+    expect(refusals("Он собирает.\nОн поставляет.")).toEqual([]);
+  });
+
+  test("a second Russian sentence on one line is refused across guillemets", () => {
+    const second = (opening: string): string =>
+      `1: carries a second sentence on one line, which opens with \`${opening}\`. Start it on its own line`;
+    expect(refusals("Он ушёл. «Да», сказал он.")).toEqual([second("«Да», сказал он")]);
+    expect(refusals("Он сказал «Стой.» Потом ушёл.")).toEqual([second("Потом ушёл")]);
+  });
+
+  test("a Russian line closing on a guillemet ends its sentence", () => {
+    expect(refusals("Он крикнул «Стой!»\nПотом ушёл.")).toEqual([]);
+  });
+
+  test("рис is the noun rice, so a sentence after it is refused", () => {
+    expect(refusals("Он ест рис. Потом спит.")).toEqual([
+      "1: carries a second sentence on one line, which opens with `Потом спит`. Start it on its own line",
+    ]);
+  });
+
+  test("a Russian abbreviation before a capital opens no sentence", () => {
+    expect(refusals("Читай замок, см. Сборка пишет один.")).toEqual([]);
+    expect(refusals("Читай замок, и т.д. Сборка пишет один.")).toEqual([]);
+  });
+
+  test("a spaced Russian abbreviation before a proper name opens no sentence", () => {
+    expect(refusals("Пишите имя полностью, т. е. Иван Иванов.")).toEqual([]);
+    expect(refusals("Пишите имя полностью, т.\u00a0е. Иван Иванов.")).toEqual([]);
+    expect(refusals("Читай замок, и т. д. Сборка пишет один.")).toEqual([]);
+    expect(refusals("Читай замок, и т. п. Сборка пишет один.")).toEqual([]);
+  });
+
+  test("a sentence that runs on in Russian lowercase past a closing code span", () => {
+    const wrapped = "Он читает `код`\nпоказывает его.\n";
+    const runOn = "carries a sentence that runs across lines. Join the sentence onto one line";
+    expect(refusals(wrapped)).toEqual([`1: ${runOn}`, `2: ${runOn}`]);
+  });
+
+  test("used to after a form of be is habit, not history", () => {
+    expect(refusals("It is used to build bills.")).toEqual([]);
+  });
+
+  test("used to after a contracted form of be is habit, not history", () => {
+    expect(refusals("It's used to build bills, and that's used to ship them.")).toEqual([]);
+  });
+
+  test("used to after a form of be and one adverb is habit, not history", () => {
+    expect(refusals("It is also used to build bills, and is typically used to ship them.")).toEqual([]);
+    expect(refusals("The key is not used to sign, and is never used to ship.")).toEqual([]);
+  });
+});
+
+describe("what a reader does not read as prose passes", () => {
+  test("fenced code, inline code, link destinations, URLs, HTML comments and entities", () => {
+    const text = [
+      "```sh",
+      "a; b — c (d) - e",
+      "```",
+      "Run `a; b (c) - d` to see [the page](docs/a(b).md).",
+      "It lives at https://example.com/a-(b)?c=d;e and <https://example.com/x;y>.",
+      "<!-- generated block; bun run build (writes it) -->",
+      "It builds&nbsp;fast.",
+      "~~~",
+      "It builds. It ships (twice); fast — slow",
+      "~~~",
+    ].join("\n");
+    expect(refusals(text)).toEqual([]);
+  });
+
+  test("a plural (s), a dash as a table cell, list markers and a hyphenated word", () => {
+    const text = ["Each file(s) is read.", "", "| Code | When |", "| --- | --- |", "| 0 | - |", "", "- A first item", "- A well-known second item"].join("\n");
+    expect(refusals(text)).toEqual([]);
+  });
+
+  test("a bold label that opens a line heads its sentence, and a second sentence after it still counts", () => {
+  expect(refusals("**Status.** Tested by `tests/x.test.ts`.\n- __Reclaim.__ On tmux it refuses.")).toEqual([]);
+  expect(refusals("**Status.** Tested by `x`. It ships.")).toEqual([
+    "1: carries a second sentence on one line, which opens with `It ships`. Start it on its own line",
+  ]);
+});
+
+test("an abbreviation before a capital, and a self-reference that does not open the sentence", () => {
+    expect(refusals("It reads the lockfile, e.g. Bun writes one.\nRead the guide this page names.")).toEqual([]);
+  });
+
+  test("a multi-line HTML block, and a line whose sentence may end in its closing code", () => {
+    const text = ['<a href="x">', "  <img", '      alt="Logo"', '      src="logo.svg"', "  /></a>", "", "Prompt: `List every tool.`", "Each variant ran alone."].join("\n");
+    expect(refusals(text)).toEqual([]);
+  });
+
+  test("front matter", () => {
+    expect(refusals("---\ntitle: a; b\n---\n# Title\n")).toEqual([]);
+  });
+});
+
+test("each example the checks-docs page shows is refused by its own rule", () => {
+  const unrefused = PROSE_RULES.flatMap(({ refuses, example }) => {
+    const spans = [...example.matchAll(/`([^`]+)`/g)].map(([, span = ""]) => span);
+    const texts = refuses.includes("runs across lines") ? [spans.join("\n")] : spans;
+    return texts.filter((text) => !proseFindings(text, "people").some(({ message }) => message.includes(refuses))).map((text) => `${refuses}: ${text}`);
+  });
+  expect(unrefused).toEqual([]);
+});
+
+test("only the lines a change adds or edits are judged", () => {
+  const text = "It builds; it ships.\nIt reads; it writes.\n";
+  expect(refusals(text, new Set([2]))).toEqual(["2: carries `;`, a semicolon. Use two sentences"]);
+  expect(refusals(text, new Set())).toEqual([]);
+});
+
+test("masking keeps each line's length, so a column in the prose is the column in the raw line", () => {
+  const [line] = scanMarkdown("🎉 run `x` and [y](z.md); fine");
+  expect(line?.prose.length).toBe(line?.raw.length);
+  expect(line?.code).toEqual(["x"]);
+  expect(line?.links).toEqual(["z.md"]);
+});
+
+test("living docs are READMEs, CONTRIBUTING.md and pages under docs/, but not records or agent files", () => {
+  const living = ["README.md", "home/.config/mise/README.md", "CONTRIBUTING.md", ".github/CONTRIBUTING.md", "docs/design.md", "docs/gates/checks-docs.md"];
+  const exempt = [
+    "docs/adr/0001-quality-gates.md",
+    "docs/adr/README.md",
+    "docs/probes/0001-a-probe.md",
+    "docs/plans/2026-05-08-a-plan.md",
+    "CHANGELOG.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "docs/AGENTS.md",
+    "notes.md",
+    "docs/diagram.png",
+  ];
+  expect(living.filter((path) => !isLivingDoc(path))).toEqual([]);
+  expect(exempt.filter(isLivingDoc)).toEqual([]);
+});
+
+test("the host entry names each refusal by path and line, and refuses nothing in a doc that is not living", () => {
+  expect(proseRefused("docs/guide.md", "It builds; it ships.\n")).toEqual(["docs/guide.md:1 carries `;`, a semicolon. Use two sentences"]);
+  expect(proseRefused("docs/adr/0001-a-record.md", "It builds; it ships.\n")).toEqual([]);
+});
+
+test("an agent file takes the separator rules and no other, and a changelog takes none", () => {
+  expect(["AGENTS.md", "CLAUDE.md", "tools/AGENTS.md"].map(readerOf)).toEqual(["agents", "agents", "agents"]);
+  expect(["CHANGELOG.md", "docs/adr/0001-a-record.md"].map(readerOf)).toEqual([undefined, undefined]);
+  const separators = PROSE_RULES.filter(({ readers }) => readers.includes("agents")).map(({ refuses }) => refuses);
+  expect(separators).toEqual(["an em dash", "an en dash", "a parenthesis other than the plural `(s)`", "a hyphen used as a dash", "a semicolon", "a report about the past"]);
+
+  const text = "It builds — fast; it ships (twice) - once.\nIt builds. It ships.\nThis page explains it, and support is planned\nand ships.\n";
+  expect(proseRefused("AGENTS.md", text).map((refusal) => refusal.split(",")[0])).toEqual([
+    "AGENTS.md:1 carries `—`",
+    "AGENTS.md:1 carries `(`",
+    "AGENTS.md:1 carries `-`",
+    "AGENTS.md:1 carries `;`",
+  ]);
+  expect(proseRefused("CHANGELOG.md", text)).toEqual([]);
+});
+
+describe("a trial sentence length cap, procedural at 20 words and descriptive at 25", () => {
+  const lengths = (text: string, within?: ReadonlySet<number>): readonly string[] =>
+    longSentences(text, within).map(({ line, message }) => `${line}: ${message}`);
+
+  test("20 words in an ordered list item holds, and 21 is reported", () => {
+    const twenty =
+      "1. Run the build, then lint, then typecheck, then the suite, and commit only when each gate passes without complaint today.";
+    const twentyOne =
+      "1. Run the build, then lint, then typecheck, then the full suite, and commit only when each gate passes without complaint today.";
+    expect(lengths(twenty)).toEqual([]);
+    expect(lengths(twentyOne)).toEqual([
+      `1: carries a 21-word procedural sentence, over the ${PROCEDURAL_WORD_CAP}-word cap (procedural means an ordered list item; descriptive caps at ${DESCRIPTIVE_WORD_CAP} words)`,
+    ]);
+  });
+
+  test("25 words outside an ordered list holds, and 26 is reported", () => {
+    const twentyFive =
+      "The gate reads each Markdown file at the head commit and uses its path or front matter to choose which template its kind needs today.";
+    const twentySix =
+      "Now the gate reads each Markdown file at the head commit and uses its path or front matter to choose which template its kind needs today.";
+    expect(lengths(twentyFive)).toEqual([]);
+    expect(lengths(twentySix)).toEqual([
+      `1: carries a 26-word descriptive sentence, over the ${DESCRIPTIVE_WORD_CAP}-word cap (procedural means an ordered list item, capped at ${PROCEDURAL_WORD_CAP} words)`,
+    ]);
+  });
+
+  test("25 Russian words outside an ordered list hold, and 26 are reported", () => {
+    const twentyFive =
+      "Теперь ворота читают каждый файл разметки в головном коммите и применяют его путь или начальную запись чтобы выбрать какой шаблон нужен виду сегодня утром строго";
+    const twentySix = `${twentyFive} сейчас`;
+    expect(lengths(twentyFive)).toEqual([]);
+    expect(lengths(twentySix)).toEqual([
+      `1: carries a 26-word descriptive sentence, over the ${DESCRIPTIVE_WORD_CAP}-word cap (procedural means an ordered list item, capped at ${PROCEDURAL_WORD_CAP} words)`,
+    ]);
+  });
+
+  test("mixed English and Russian words count together", () => {
+    const mixed =
+      "Now the gate reads каждый файл разметки в головном коммите and uses его путь or начальную запись to choose какой шаблон нужен виду today утром строго";
+    expect(sentenceLengths(mixed)).toEqual([{ line: 1, words: 26, kind: "descriptive" }]);
+    expect(lengths(mixed)).toEqual([
+      `1: carries a 26-word descriptive sentence, over the ${DESCRIPTIVE_WORD_CAP}-word cap (procedural means an ordered list item, capped at ${PROCEDURAL_WORD_CAP} words)`,
+    ]);
+  });
+
+  test("a real over-length sentence from the checks CONTRIBUTING is reported", () => {
+    const real =
+      "`.github/workflows/mutation.yml` runs Stryker, with `stryker.conf.mjs`, as a baseline on `main` or on any branch by hand, and as an advisory comparison scoped to the sources a pull request changes or reaches through a changed test, helper or fixture.";
+    expect(lengths(real)).toEqual([
+      `1: carries a 35-word descriptive sentence, over the ${DESCRIPTIVE_WORD_CAP}-word cap (procedural means an ordered list item, capped at ${PROCEDURAL_WORD_CAP} words)`,
+    ]);
+  });
+
+  test("a `1)` marker is procedural, and a bullet is descriptive", () => {
+    const procedural =
+      "1) Run the build, then lint, then typecheck, then the full suite, and commit only when each gate passes without complaint today.";
+    const bullet =
+      "- Now the gate reads each Markdown file at the head commit and uses its path or front matter to choose which template its kind needs today.";
+    expect(lengths(procedural)).toEqual([
+      `1: carries a 21-word procedural sentence, over the ${PROCEDURAL_WORD_CAP}-word cap (procedural means an ordered list item; descriptive caps at ${DESCRIPTIVE_WORD_CAP} words)`,
+    ]);
+    expect(lengths(bullet)).toEqual([
+      `1: carries a 26-word descriptive sentence, over the ${DESCRIPTIVE_WORD_CAP}-word cap (procedural means an ordered list item, capped at ${PROCEDURAL_WORD_CAP} words)`,
+    ]);
+  });
+
+  test("a sentence ending in a closing quote is split past the quote", () => {
+    const quoted = 'She said "hi." It builds.';
+    expect(sentenceLengths(quoted)).toEqual([
+      { line: 1, words: 3, kind: "descriptive" },
+      { line: 1, words: 2, kind: "descriptive" },
+    ]);
+    expect(lengths(quoted)).toEqual([]);
+  });
+
+  test("each sentence on a line is counted on its own", () => {
+    const two =
+      "It builds. Now the gate reads each Markdown file at the head commit and uses its path or front matter to choose which template its kind needs today.";
+    expect(lengths(two)).toEqual([
+      `1: carries a 26-word descriptive sentence, over the ${DESCRIPTIVE_WORD_CAP}-word cap (procedural means an ordered list item, capped at ${PROCEDURAL_WORD_CAP} words)`,
+    ]);
+  });
+
+  test("headings, tables, code and link targets hold no words", () => {
+    const heading = "# Now the gate reads each Markdown file at the head commit and uses its path or front matter to choose which template its kind needs today.";
+    const table = "| Now the gate reads each Markdown file at the head commit and uses its path or front matter to choose which template its kind needs today. |";
+    expect(lengths(`${heading}\n${table}\n`)).toEqual([]);
+    expect(lengths("It builds `now the gate reads each Markdown file at the head commit and uses its path or front matter to choose which template its kind needs today`.\n")).toEqual([]);
+    expect(lengths("It builds [now](now-the-gate-reads-each-markdown-file-at-the-head-commit-and-uses-its-path-or-front-matter-to-choose-which-template-its-kind-needs-today).\n")).toEqual([]);
+  });
+
+  test("only the lines a change adds or edits are counted", () => {
+    const text =
+      "Now the gate reads each Markdown file at the head commit and uses its path or front matter to choose which template its kind needs today.\nIt builds.\n";
+    expect(lengths(text, new Set([2]))).toEqual([]);
+    expect(lengths(text, new Set([1]))).toHaveLength(1);
+  });
+
+  test("a closing line without a terminator still counts as a sentence", () => {
+    expect(sentenceLengths("It builds\nand ships")).toEqual([
+      { line: 1, words: 2, kind: "descriptive" },
+      { line: 2, words: 2, kind: "descriptive" },
+    ]);
+  });
+
+  test("a lone code span or mark holds no word", () => {
+    expect(sentenceLengths("Run `x` or `y` now.")).toEqual([{ line: 1, words: 3, kind: "descriptive" }]);
+    expect(sentenceLengths("It holds / : @ marks.")).toEqual([{ line: 1, words: 3, kind: "descriptive" }]);
+  });
+
+  test("an indented or quoted ordered item stays procedural", () => {
+    const words = "Run the build, then lint, then typecheck, then the full suite, and commit only when each gate passes without complaint today.";
+    for (const line of [`   1. ${words}`, `> 1. ${words}`]) {
+      expect(lengths(line)).toEqual([
+        `1: carries a 21-word procedural sentence, over the ${PROCEDURAL_WORD_CAP}-word cap (procedural means an ordered list item; descriptive caps at ${DESCRIPTIVE_WORD_CAP} words)`,
+      ]);
+    }
+  });
+
+  test("only ASCII letters and digits make a word", () => {
+    expect(sentenceLengths("0 9 A Z a z / : @ [ { ~ _."))
+      .toEqual([{ line: 1, words: 6, kind: "descriptive" }]);
+  });
+
+  test("each closing mark ends a sentence past itself", () => {
+    for (const closer of ['"', "'", ")", "]", "*", "_", "”", "’"]) {
+      expect(sentenceLengths(`She said hi.${closer} It builds.`)).toEqual([
+        { line: 1, words: 3, kind: "descriptive" },
+        { line: 1, words: 2, kind: "descriptive" },
+      ]);
+    }
+  });
+
+  test("a closing guillemet ends a Russian sentence past itself", () => {
+    expect(sentenceLengths("«Да.» Он ушёл.")).toEqual([
+      { line: 1, words: 1, kind: "descriptive" },
+      { line: 1, words: 2, kind: "descriptive" },
+    ]);
+  });
+
+  test("leading space, a trailing space and a tab change no count", () => {
+    const one = [{ line: 1, words: 2, kind: "descriptive" }] as const;
+    expect(sentenceLengths("  It builds.")).toEqual(one);
+    expect(sentenceLengths("It builds. ")).toEqual(one);
+    expect(sentenceLengths("It\tbuilds.")).toEqual(one);
+  });
+
+  test("a period inside a token splits nothing", () => {
+    expect(sentenceLengths("a.b c")).toEqual([{ line: 1, words: 2, kind: "descriptive" }]);
+  });
+
+  test("sentenceLengths reports every sentence with its kind", () => {
+    const text = "It builds.\n\n1. Run the build, then lint, then typecheck, then the suite, and commit only when each gate passes without complaint today.\n";
+    expect(sentenceLengths(text)).toEqual([
+      { line: 1, words: 2, kind: "descriptive" },
+      { line: 3, words: 20, kind: "procedural" },
+    ]);
+    const kinds = (value: string): readonly SentenceKind[] => sentenceLengths(value).map(({ kind }) => kind);
+    expect(kinds(text)).toEqual(["descriptive", "procedural"]);
+  });
+});

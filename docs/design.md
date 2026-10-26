@@ -1,0 +1,351 @@
+---
+kind: explanation
+---
+# Why it is shaped this way
+
+Most of the kit's shape follows from a limit in a tool it runs on, such as oxlint, bun, npm, Stryker or GitHub Actions.
+Each section names the limit and what the obvious alternative would break.
+
+## Each tool reads its own config
+
+A repository keeps each setting in the file its tool reads, such as `oxlint.config.ts`, `tsconfig.json` or `.jscpd.json`.
+A developer then changes a rule where the tool reads it, and the tool's own docs describe that file.
+
+oxlint, Knip and dependency-cruiser each read a TypeScript config, so the kit ships a `defineConfig` for each over the tool's own config type.
+A repository writes the shape that tool's docs describe, and adds to the kit's rules through the tool's own keys.
+Each builder sets a default for every kit rule, and every glob in it covers the whole tree, so no unlisted directory escapes a rule.
+A rule set copied by hand would miss whatever the copy left out, and would fail on a path the copy forgot.
+A fact only the repository knows has no default, `effect` for oxlint and `entry` for Knip.
+Defaulting `effect` on fails a repository whose code is deliberately outside Effect, and defaulting it off leaves an Effect repository unchecked, so its type is required.
+Neither oxlint nor Knip typechecks the config it loads, so each builder also throws when it gets a config without that fact.
+Both tools read a config's default export synchronously, so a throw is the one refusal open to the builder.
+
+The Effect paths sit in `oxlint.config.ts` alone.
+`tsconfig.json` cannot import a TypeScript module, so `checks-effect-scope` writes the Effect language service override in `tsconfig.json` from them, and fails `checks-lint` when the two differ.
+
+oxlint does not pass `plugins` down an `extends` chain.
+A config in the chain that sets no `plugins` gets oxlint's default plugins, and the base's `categories` then turn on their rules across the tree.
+So `defineConfig` returns the whole root config with `plugins` set, and a repository adds its own keys rather than extending a kit object.
+oxlint reads a relative `jsPlugins` path against the consumer's config, so `base` names each plugin bundle by its absolute path in the installed kit.
+`.gitignore` keeps oxlint out of `node_modules/`, because oxlint still walks the installed package when only `ignorePatterns` names it.
+
+The base turns `data-shape/readonly-collection-param` on for every TypeScript file and `data-shape/schema-twin` on for production files only.
+`typescript/prefer-readonly-parameter-types` would flag every object parameter for deep `readonly`, so the kit rule stays with the collections a function never mutates.
+A test that declares its own schema as an oracle for a production type is reasonable, so the twin rule leaves `tests/` out.
+
+bun has no bunfig `extends`, and it ignores an unknown top-level key without a warning.
+So a repository copies the kit's `bunfig.toml`, and `checks-test-layout` compares the copy with the installed one key by key.
+An empty `--path-ignore-patterns` flag overrides the copied `[test] pathIgnorePatterns`, which is how a quarantined test still runs on demand.
+
+Stryker 10 does not resolve `extends` in a JSON config.
+So the Stryker preset is a JavaScript module that a repository's `stryker.conf.mjs` spreads, and a key set after the spread wins.
+
+The dependency-cruiser rules parse with swc, because TypeScript 7, which is tsgo, has no compiler API that dependency-cruiser can use.
+Without `@swc/core` installed, the cruise skips every `.ts` file without a warning, so the kit's own suite asserts that its TypeScript is cruised.
+The rules count `bun` as a built-in module.
+Only `@types/bun` resolves it, and that package is a dev dependency, so every runtime `bun` import would otherwise read as dev only.
+
+## The shared configs close gaps in the types
+
+The shared configs refuse four places where a value's type says less than the value does.
+Each sits in a file a consumer already extends or copies.
+
+The oxlint `base` turns on the five `typescript/no-unsafe-*` rules in an override for `.ts` and `.tsx` files outside `tests/`, so every config `defineConfig` returns carries them.
+`typescript/no-explicit-any` and `strict` already refuse an `any` someone writes, so the `any` left is one nobody wrote.
+`Array.isArray` narrows an `unknown` to `any[]`, `JSON.parse` returns `any`, `Object.entries` lists `any` values from an `object`, and a defaulted parameter in a generator passed to `Effect.fnUntraced` is typed `any`.
+Tests stay out because bun:test types its asymmetric matchers, such as `expect.arrayContaining`, as returning `any`.
+Those matchers made 22 of the 34 findings in the tests of the kit and its consumers.
+
+`tsconfig.effect.json` sets `exactOptionalPropertyTypes`, so every repository that extends it gets the option in the same release.
+`Schema.optionalKey` means the key is missing, never `undefined`.
+Without the option, a type derived from the schema accepts an `undefined` the schema rejects when it decodes.
+tsc keeps no baseline, and the only escape for one site is a `@ts-expect-error`, which `typescript/ban-ts-comment` refuses.
+So each error the option raises is fixed where it lands.
+
+The language service preset sets `processEnv` and `processEnvInEffect` at error, so code in a repository's Effect paths reads the environment through `Config`.
+`Config` decodes a variable and fails in the error channel when it is missing, where `process.env` hands back a `string | undefined` that each caller checks by hand.
+The language service keeps no baseline either, so each read the two diagnostics find moves to `Config` when a repository takes the preset.
+
+`tsconfig.effect.json` loads the `is-array` and `json-parse` rules of `@total-typescript/ts-reset`, so tsc refuses code that relied on the `any` that `Array.isArray` and `JSON.parse` hand out.
+The `no-unsafe-*` rules flag each place that `any` is used, and these two rules close it where it starts, in `tests/` as well.
+The other eight ts-reset rules stay out, because `set-has` breaks correct code in the kit and a consumer, and the rest find nothing.
+A global declaration reaches a program only when a root file, a `types` entry or an import names it, and a repository's own `files`, `include` or `types` replaces the fragment's list of the same name.
+So the fragment lists the rules in `files`, and in `include` beside every file under the repository's `tsconfig.json`, and one of the two lists survives unless a repository sets both.
+`types` cannot carry the rules, since every consumer sets its own `types` to reach `bun`.
+`checks-lint-coverage` fails the repository that sets both lists, because nothing in tsc would say the rules were gone.
+
+## The source is sorted by what it judges
+
+The source sits under `src/<vector>/`, one directory for each thing the kit judges a repository on: complexity, quality, testing, docs, delivery and dependencies.
+`src/core/` holds what every vector runs on.
+`scripts/` holds only the kit's own build and CI tooling, and nothing in it ships.
+Sorting files by what loads them would put both oxlint plugins at the root and every bin in one flat directory.
+Nothing would then say which gate a helper serves.
+A mutation runner's default scope covers `src/`, so the kit's own Stryker run mutates its source with no `mutate` list.
+The testing directory is named `testing` rather than `tests`, because a `src/tests/` beside the root `tests/` would read as a second suite.
+
+Five `exports` keys name a path the file does not sit at, because consumers resolve them by that name.
+`@avi2dg/checks/scripts/test-skips.ts`, `@avi2dg/checks/scripts/comment-matchers.ts` and `@avi2dg/checks/scripts/prose-matchers.ts` point at their files under `src/`.
+`@avi2dg/checks/browser-hooks.ts` points at `src/quality/browser/hooks.ts`, whose types a product's browser hooks import.
+`@avi2dg/checks/templates/*` points at `dist/templates/`.
+A path read without the resolver, such as `node_modules/@avi2dg/checks/scripts/test-skips.ts`, does not exist.
+
+## The package ships built plugins and runnable bins
+
+`files` in `package.json` lists what an install gets.
+`tests/`, `AGENTS.md` and the TypeScript source of the oxlint plugins never reach an install.
+npm adds `package.json`, `README.md` and `LICENSE` whatever `files` says.
+`bun pm pack` builds the same tarball the registry serves, and the consumer e2e test installs that tarball.
+
+Each oxlint plugin and each config builder ships compiled under `dist/`, because Node refuses to strip types from a `.ts` file under `node_modules`.
+Stryker loads its config under Node too, so the guard plugin and run-scope helpers the Stryker preset imports ship compiled under `dist/mutation/`.
+oxlint loads `oxlint.config.ts` under Node, so the builders ship as JavaScript beside a `.d.ts` that `tsc` reads.
+`@oxlint/plugins` ships no RuleTester, so each `effect-channel`, `readability` and `data-shape` rule is proven red and green against an installed consumer in `tests/e2e/consumer.test.ts`, except `readability/thin-astro`, which `tests/e2e/astro-consumer.test.ts` proves against a consumer tree linked to the checkout.
+`dist/` is committed, with the doc templates in `dist/templates/`, and so is `CHANGELOG.md`, which the same build writes.
+No `prepack` or `prepublishOnly` script rebuilds them, so a publish ships the committed files.
+CI runs `git diff --exit-code` over the whole tree after `bun run build`.
+A test that compares a generated file with its source cannot do this job, because it would read the copy the build just rewrote.
+
+Each runnable script ships as a `checks-` bin, so a consumer's `package.json` script calls it by the short name.
+The package manager puts a bin on `PATH` only inside a package script.
+A shell reaches it through `bun run`, which never falls back to the registry the way `bunx` does.
+The `.ts` bins keep a `bun` shebang and need no build step, unlike the oxlint plugins that Node loads.
+
+The bins are written in Effect.
+So `effect` is a peer dependency, and `@effect/platform-bun`, which only the bins use, is a dependency.
+The Stryker test order helper runs under Node, so it takes its services from `@effect/platform-node-shared`, which is a direct dependency.
+That dependency also pins its version.
+`@effect/platform-bun` asks for it with a `^` range, so a newer minor of it could resolve and peer on a newer `effect` than the exact version consumers install.
+So the three packages move together at one exact version.
+
+## checks-lint runs each gate as its own bin
+
+`checks-lint` runs each gate in a child process rather than importing it.
+A gate then behaves the same alone or through `checks-lint`, and `lint-coverage.sh` can stay a shell script.
+The gates run one at a time and pass their output straight through, so each report reads whole and in the order of the gate table.
+`checks-lint` picks the gates that apply from the tracked files, and a repository cannot select gates.
+A TypeScript gate runs as soon as the repository tracks TypeScript source, and `checks-lint-coverage` and `checks-unused` also run on tracked Astro source.
+
+dependency-cruiser runs as the `checks-imports` gate rather than as a script each repository adds to `lint`, so no repository can leave it out.
+A repository with no config of its own is cruised against the kit's defaults, since every rule has one.
+The gate cruises the tracked TypeScript, so a build output or a linked library outside git never reaches the cruise.
+It runs dependency-cruiser under Bun, which loads a TypeScript config wherever it sits, the kit's defaults under `node_modules` among them.
+
+GitHub authors the pull request merge commit it builds as `GitHub <noreply@github.com>`, and `checks-commit-identity` refuses that author.
+So `checks-lint` ends a pull request's range at the event's head commit, and the merge commit is never in it.
+A `lint` that calls `checks-commit-identity HEAD` directly checks out `github.event.pull_request.head.sha` rather than the default merge ref.
+
+## Workflows say how CI runs
+
+A repository's workflow YAML says how CI runs, and the kit says which commands must run.
+`checks-ci-wiring` holds a repository to title lint on every pull request and to the `bun run` commands its own `package.json` defines, so a repository with no `build` script is not asked to run one.
+The target branch comes from git's `refs/remotes/origin/HEAD`, or in CI from the pull request base or the default branch in GitHub's event.
+It never comes from the workflow files, and `checks-lint` starts its local range from the same branch.
+`checks-ci-wiring` runs inside `lint`, not in a workflow of its own.
+The violation it catches is a deleted workflow step, so it has to fail in the local `lint`.
+It parses workflows with `Bun.YAML`, which the `bun` shebang already provides, so it adds no dependency.
+It reads `on` as a string key, not as the YAML 1.1 boolean.
+
+## TypeScript size and repetition only fail on growth
+
+The TypeScript size limits are oxlint's own rules at `error`, not a script of the kit's.
+A script of the kit's own would restate how oxlint reads its config and compares sites, and each restatement adds cases oxlint itself does not have.
+A repository records its existing violations with `oxlint --suppress-all`, and `checks-suppressions-ratchet` refuses any count that rises.
+The cost is that a file or function already over its limit can grow without adding a site the count sees.
+Each repository works its counts down to zero.
+
+`checks-css-size` holds each stylesheet to the same 400 lines as an absolute budget, with no count to ratchet.
+oxlint does not read CSS, and no maintained stylelint rule or plugin limits lines per file, so the budget is a kit script.
+A stylesheet already over 400 lines fails until it is split, whatever the suppression counts hold.
+
+`checks-repetition` runs jscpd at both ends of the range with the head's `.jscpd.json`, so the same `path` and `ignore` globs pick the files at both ends.
+It compares each file's count of repeated lines, and does not use jscpd's `--baseline-from-ref`.
+That flag reports a repeated block as new once its text changes, so a change that shortens an existing repeated block would fail.
+
+## checks-test runs the suite itself
+
+`checks-test` runs bun itself rather than reading a report that another run left.
+A `"ci"` skip gated on a daemon or tool that CI lacks shows in CI's own run, and an earlier run's report may be stale or narrowed.
+When the same resource is also absent locally, the test skips there too, and its `"ci"` declaration leaves that skip undeclared, so the local run fails.
+It reads the JUnit report bun writes to a temporary directory, because bun has no other per-test output meant for a program.
+
+## Quarantine has one limit
+
+`checks-quarantine-clock` holds every quarantined test to one limit of 30 days.
+GitLab quarantines a flaky test for 3 days on its fast path, and for at most 3 months on its long path.
+It then opens a merge request that deletes the test.
+The kit's one limit falls between GitLab's two, so a flaky test gets a month to be fixed, and no path keeps it out of the run for 3 months.
+
+## The changelog comes from the commits
+
+`CHANGELOG.md` is generated from the commits, so the release commit carries it and the tarball ships it.
+The commit that bumps `version` in `package.json` closes a release, and the `v*` tag goes on that commit.
+Commits merged after the bump wait for the next release.
+Releases come from the version bumps across all of `HEAD`'s ancestry, not from tags.
+So a checkout without tags, a fork, and a branch that merged `main` in all write the same file when no release was reverted.
+A section keeps the date it was written, because the squash merge that lands the release commit may fall on another day.
+Entries come from commit subjects, which are the squash-merged pull request titles that commitlint holds to the conventional format.
+A commit body holds the branch's own messages, and nothing lints it, so no entry comes from a body.
+The changelog arrives in the release pull request, and no workflow pushes to a branch a person works on.
+
+## A release is cut every day
+
+A release waits for no quiet moment, since a busy repository always has work under way.
+The daily release opens the release pull request from `main` whenever it holds a feature or a fix since the last tag, and the pull request merges through the repository's usual merge path once its checks pass.
+`checks-release-pr` writes only to the `release/<branch>` branch it owns, and rebuilds that branch on `main` rather than merging `main` into it, so the changelog it carries is the one the build writes.
+`checks-release-tag` writes only the `v*` tag of a release commit that already landed.
+The `github-release` job's `contents: write` creates or updates the GitHub release from the tag's `CHANGELOG.md` section.
+
+Both jobs act with the workflow token.
+GitHub starts no run for a push that token makes, and holds the runs of a pull request it opens until a maintainer approves them.
+A GitHub App or a personal token would start them, but either is a credential each repository stores and someone rotates.
+So `checks-release-pr` dispatches the required checks on the release head, and `checks-release-tag` dispatches the release workflow on the tag, since a dispatch is the one run the token can start.
+GitHub keeps a dispatched run's checks off the pull request, and branch protection does not count them.
+So each dispatched job reports its result as a commit status named for the job, which a required check of that name counts.
+Where a status and a check share a name, branch protection requires both, so the status never passes a pull request whose own check failed.
+The cost is a `workflow_dispatch` trigger and a status step on each workflow a release needs, a title lint that reads its title from the open pull request, and the repository setting that lets the token open a pull request.
+
+## The docs gate judges what a change touches
+
+The templates in `dist/templates/` are rendered from `src/docs/doc-templates.ts`, which is the spec `checks-docs` reads.
+A template written by hand beside the check would agree with it only until someone edits one of them.
+A page's Diátaxis mode comes from `kind` front matter on the page, whatever directory holds it.
+The repository judges the mode beside the page, and the check holds the page to that mode's template.
+
+`checks-docs` holds a doc file to its template only when a change touches it, the way `checks-comment-gate` judges only the comments a change adds.
+A repository adopts the templates as its files change, and an untouched file is listed as advisory.
+The prose rules judge only the lines a change adds or edits.
+A report about the past is refused the way a promise about the future is, because history on a living page reads as current fact.
+Text nobody touched never breaks the templates or the prose rules, and a record keeps the words it was written in.
+A repository needs no cleanup pass before the gate runs, except on its agent files.
+The ceiling, the rule against a `## Maintaining this file` section and the entry rule judge every agent file at the head commit, because an agent reads the whole file every session, touched or not.
+Review, not the check, keeps a task heading verb first.
+No word list tells `Test layout` from `Test the layout`, and a check that passes the noun would be worse than none.
+
+A living doc takes one sentence per line, so a changed line is a changed sentence.
+Under a hard wrap, a one-word edit reflows a paragraph, and the gate would demand fixes to sentences the edit never touched.
+An agent file such as `AGENTS.md` takes the separator rules and the rule against a report about the past, and no other prose rule.
+An agent reads stale history as literally as a person, so the past rule judges agent files too.
+One sentence per line serves the people who review a doc's diffs.
+An agent file keeps each entry on one line, however many sentences it holds.
+The reference check reads agent files too, because a path they name goes stale the same way.
+Readability grades and words such as easy stay out of the prose rules.
+A score cannot fail a change without failing correct prose, and a suggestion that only an editor shows is never seen.
+
+`src/docs/prose-matchers.ts` imports nothing, so the gate and a write-time hook run one matcher and refuse in the same words.
+A hook bundle ships without `node_modules`, so a matcher that needed Vale or another package could not refuse at write time.
+
+The entry rule and the rule against a `## Maintaining this file` section take their list items and headings from `commonmark`, the CommonMark reference parser.
+A reader sees the blocks a renderer builds, and a line rule that guesses at blockquotes, HTML blocks and indented code misjudges each corner its guess misses.
+Only the gate runs these rules, so the parser costs no hook anything, and the line scan reads each entry's code spans and links from that entry's line alone.
+
+A path, link or command on a line the range leaves alone still fails when the range broke it, for example by deleting the file it names.
+A reference goes stale far more often because the code it names moves than because its own line is edited.
+So a gate on edited lines alone would miss the usual break.
+A name that is not a path goes stale the same way, and the reference check never reads it.
+So the range that removes such a name from every file outside the docs fails on each line that still carries it.
+A path under a top directory the repository lacks names a file in another repository, such as a consumer's.
+No program can tell such a path from a typo.
+A directory the range deletes still counts as this repository's, so a path under it reads as stale rather than foreign.
+The command check passes over a page whose front matter sets `audience: consumers`, because such a page names a consuming repository's scripts.
+
+## checks-vendor keeps a tree whose write bit came back
+
+The GitHub Actions runner clears the read only mode of each item before it deletes `$RUNNER_TEMP`.
+On a directory link, that change lands on the shared tree's top directory.
+Refusing the tree would fail every later job on the runner until a person cleared it.
+Cloning the tree again would need the network after every such job.
+A write bit is not a write.
+So `checks-vendor` strips an owner write bit and checks the tree against its recorded commit like any other tree.
+A write it finds there still fails the run.
+A group or other write bit fails the run, because another user could have edited `.git/config` through it before `git status` reads it.
+
+## Advisories fail only the range that adds them
+
+`checks-advisories` compares the advisories at both ends of a range instead of failing on every advisory at the head.
+An advisory published against a package that landed a month earlier would otherwise fail every open pull request, including one that touches only docs.
+The scheduled `--all` run finds those advisories, and `advisory-acks.json` carries the ones a repository accepts for a while.
+
+The gate runs OSV-Scanner rather than Trivy, Grype or `bun audit`.
+Trivy 0.74.0 reads a nested `bun.lock` entry such as `mkdirp/minimist` under a name no advisory carries, so it misses every package bun nests.
+Grype 0.119.0 drops the dev dependencies of `bun.lock` with no setting that keeps them.
+`bun audit` asks the npm registry on every run and has no offline mode.
+OSV.dev's npm export also holds OpenSSF's reports of malicious packages, which GitHub's reviewed advisories leave out.
+
+The kit pins the scanner by version and by the SHA-256 of each build, because a scanner release is code that runs on every runner.
+Trivy's own advisory GHSA-69fq-xp46-6x23 records a malicious release published with stolen credentials.
+The scan runs offline against a database refreshed once a day, so most runs need no network.
+
+The acknowledgement file belongs to the kit rather than to `osv-scanner.toml`.
+OSV-Scanner's `ignoreUntil` accepts any day, such as 2099-01-01, and measures it against the clock of the machine that runs the scan.
+The kit caps each entry at 30 days and measures a range from the head's dates, as `checks-quarantine-clock` does, so a commit gets the same verdict on every run.
+`--all` measures from the current time instead, because a head's dates never move in a repository that takes no commit, and an entry measured from them would never expire.
+The file is JSON because `Bun.TOML` cannot parse a TOML date.
+
+## Secrets fail in every commit of the range
+
+`checks-secrets` scans each commit in the range rather than the files at the head.
+A secret a commit adds stays in that commit after a later commit deletes it, and a pushed branch has already sent it to the forge.
+So the fix is to rewrite the commit that added it, and to rotate the secret once it has left the machine.
+
+In a merge commit the gate scans only the merge's own resolution, the difference from the merge git would make on its own.
+A diff against the first parent would also scan what the merge brings in from the other parent, so a branch that merges main would fail on a secret main already holds, from before the range.
+Git gives no such diff for an octopus merge and warns instead of failing, so the gate refuses to scan one rather than pass a commit it never read.
+
+The gate runs gitleaks rather than a hand-written pattern list, because its default config already holds over 200 rules for the token shapes of common services.
+The kit's own rules in `src/delivery/gitleaks.toml` add only the VPN keys and proxy links those rules miss.
+The kit pins gitleaks by version and SHA-256 for the reason it pins OSV-Scanner.
+
+No finding can be accepted.
+A secret has no false positive worth keeping in git, because a placeholder carries the same shape without the value.
+So the gate ignores a repository's `.gitleaks.toml`, `.gitleaksignore` and `gitleaks:allow` comments, which would each let one repository pass what another fails.
+
+## The frontend checks are opt-in
+
+A browser check needs a built site and a browser, and a backend repository has neither.
+So a product opts in by declaring `browser-checks.json`, `checks-lint` never starts a browser, and the browser libraries are optional peers a backend never installs.
+`checks-frontend-syntax` needs no browser and runs inside `checks-lint`, but only where `frontend-syntax.json` declares its inputs, since a repository with no interface has no CSS to hold to it.
+
+Each check wraps a detector that already works, and the kit writes a rule of its own only where none decides the constraint.
+The syntax gate runs two of stylelint's built-in rules and the stylelint team's shared configs, `axe` runs axe-core and `nesting` runs one html-validate rule.
+Its Baseline family runs `stylelint-plugin-use-baseline`, the one stylelint rule that judges against the Baseline data rather than a browser list.
+Its design token family is stylelint's own colour and value rules and the kit's `checks/font-size-from-tokens`, applied outside the files a repository names as its tokens.
+A check of the rendered page against declared tokens would need a token format of the kit's own.
+The repository's `stylelint.config.ts` sets the Baseline target and the token files, since only the repository knows either.
+The gate imports that file itself, because stylelint's config loader calls `typescript.findConfigFile`, which TypeScript 7 lacks, and a JavaScript config is what [checks-no-plain-js](gates/checks-no-plain-js.md) refuses.
+The `layout`, `keyboard` and `motion` probes are the website's own browser tests, generalized after they held on its English and Russian pages.
+A zoom-disabling viewport is judged by axe on the rendered page, because stylelint reads only CSS and html-validate has no rule for the viewport's content.
+
+A check that scans nothing would pass without judging anything, as some detectors do on an empty directory.
+So every run names what it scanned, and an empty input, an unserved route or a target that matches no visible element fails.
+A contrast axe cannot measure is listed as unverified, never counted as a pass.
+
+Valid choices and the order of async results depend on a product's own schema and requests, which no generic check knows.
+So the runner calls the product's hooks at each visit and holds them to the same inventory, rather than guessing at a product's domain.
+
+The runner drives the Chrome a machine already has through `playwright-core`, since Playwright's own browser builds are a separate download of their own.
+GitHub's hosted Ubuntu runners carry Chrome, and `CHROME_PATH` names any other build.
+
+## Copy is judged in the files a site renders
+
+`checks-copy` takes the three separator rules from `src/docs/prose-matchers.ts`, so a doc and a page refuse the same characters in the same words.
+Its Markdown goes through the scanner `checks-docs` uses, so the two gates never disagree about what is code.
+Its HTML goes through html-validate, which the `nesting` check already runs, with one rule of the kit's own.
+No rule html-validate or markdownlint ships refuses a spaced hyphen between words.
+textlint and Vale could each carry the rule, but each adds a package or a binary.
+Each would also hold a second copy of patterns the kit already holds.
+
+The gate reads files rather than strings in source.
+An oxlint rule over string literals and JSX text was run across the repositories that consume the kit.
+It found mostly code inside a string, test fixtures and error messages.
+The few hits that were copy, such as a line a CLI prints, look to a program like `scrollHeight - innerHeight` in a test script.
+A site's strings all reach its built pages, so a glob over the built HTML judges each one where a visitor reads it.
+
+Only a repository knows which of its files are copy, so it opts in by declaring them in `copy.json`.
+The gate judges every line of each declared file, unlike the prose rules in `checks-docs`, which judge only the lines a change edits.
+A visitor reads the whole page, so a dash on a line the change left alone is as wrong as one it added.
+
+## Related topics
+
+- [checks](../README.md)
+- [The dependency rules](configs/dependency-rules.md)

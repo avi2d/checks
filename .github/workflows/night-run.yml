@@ -1,0 +1,87 @@
+name: night-run
+
+on:
+  schedule:
+    - cron: "7 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: night-run
+  cancel-in-progress: false
+
+jobs:
+  mutation:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: bun install --frozen-lockfile
+      - run: time bun run mutate
+      - uses: actions/upload-artifact@v4
+        with:
+          name: night-run-mutation
+          path: reports/mutation/mutation.json
+          retention-days: 1
+
+  tests:
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      # The repository holds no live or pixel tier, so the night runs the unit and e2e levels of the suite.
+      # A failing test becomes an issue, so its exit leaves the job going on to the upload.
+      - run: |
+          bun src/testing/test.ts --tier=unit --junit=reports/night-run-tests/unit.xml || true
+          bun src/testing/test.ts --tier=e2e --parallel=4 --junit=reports/night-run-tests/e2e.xml || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: night-run-tests
+          path: reports/night-run-tests/
+          retention-days: 1
+
+  report:
+    needs: [mutation, tests]
+    if: ${{ !cancelled() && needs.tests.result == 'success' }}
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      - if: needs.mutation.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: night-run-mutation
+          path: reports/mutation
+      - uses: actions/download-artifact@v4
+        with:
+          name: night-run-tests
+          path: reports/night-run-tests
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun src/testing/night-run.ts ${{ needs.mutation.result == 'success' && '--mutation reports/mutation/mutation.json' || '' }} --tests reports/night-run-tests/unit.xml --tests reports/night-run-tests/e2e.xml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: night-run
+          path: reports/night-run.json
+          if-no-files-found: ignore
+          retention-days: 90
