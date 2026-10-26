@@ -220,7 +220,7 @@ test(
 );
 
 test(
-  "a runs poll that fails once still waits for the release workflow and tags the release instead of ending on the poll error",
+  "a runs poll that fails once in the checks wait and once in the release workflow wait still tags the release and waits for the release workflow",
   async () => {
     const pkg = await widget();
     const retried = await pkg.run(["release.yml", "ci.yml"], { FAKE_GH_FAIL_RUNS_TIMES: "1" });
@@ -230,7 +230,7 @@ test(
     expect(await pkg.inOrigin("rev-parse", "v0.1.1^{commit}")).toBe(release);
     expect(retried.text).toContain(`release-push: released 0.1.1 as ${release.slice(0, 12)} on main, tagged it v0.1.1, and dispatched release.yml on it\n`);
     expect(retried.text).toContain(`release-push: release.yml finished on v0.1.1\n`);
-    expect((await pkg.state()).calls.filter((call) => call.startsWith("GET repos/{owner}/{repo}/actions/runs")).length).toBeGreaterThan(1);
+    expect((await pkg.state()).calls.filter((call) => call.startsWith("GET repos/{owner}/{repo}/actions/runs")).length).toBe(4);
   },
   120_000,
 );

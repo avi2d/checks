@@ -21,7 +21,7 @@ Two uploads that overlap can still leave `latest` on the older version, since th
 That hold ends early in two cases.
 One is when the 45 minute wait times out.
 The other is when polling fails past the retry bound or the dispatch of the release workflow fails after GitHub accepted it.
-In those cases an unfinished publisher can overlap the next release, and if latest lands on the older version the fix is npm dist-tag add <package>@<newer version> latest.
+In those cases an unfinished publisher can overlap the next release, and if `latest` lands on the older version, `npm dist-tag add <package>@<newer version> latest` repairs it.
 
 ## What it reads
 
