@@ -59,11 +59,19 @@ const land = Effect.fn("land")(function* (root: string, base: string, head: stri
     Effect.as<Landing>("landed"),
     Effect.catchTag("GitHubFailure", (failure) =>
       git(["ls-remote", "origin", `refs/heads/${base}`], root).pipe(
-        Effect.flatMap((listed) => {
-          const now = listed.split("\t")[0];
-          if (now === release) return Effect.succeed<Landing>("landed");
-          return now === head ? Effect.fail(failure) : Effect.succeed<Landing>("moved");
-        }),
+        Effect.flatMap((listed) =>
+          Effect.gen(function* () {
+            const now = listed.split("\t")[0];
+            if (now === release) return "landed" as Landing;
+            if (now === head) return yield* Effect.fail(failure);
+            yield* git(["fetch", "--quiet", "--no-tags", "origin", `refs/heads/${base}`], root);
+            const ancestor = yield* git(["merge-base", "--is-ancestor", release, "FETCH_HEAD"], root).pipe(
+              Effect.as(true),
+              Effect.catchTag("GitFailure", () => Effect.succeed(false)),
+            );
+            return (ancestor ? "landed" : "moved") as Landing;
+          }),
+        ),
       ),
     ),
   );

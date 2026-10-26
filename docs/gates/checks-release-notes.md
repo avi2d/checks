@@ -47,7 +47,7 @@ Released 2026-09-27.
 
 Each consumer owns `.github/workflows/release.yml` and calls the kit bins from it.
 The version lives in `package.json`, and the tag names the same version with a leading `v`.
-The build writes the changelog, so the release pull request carries the notes before the tag exists.
+The build writes the changelog, so the release commit carries the notes before the tag exists.
 A repository that publishes a package to npm releases with this workflow:
 
 ```yaml

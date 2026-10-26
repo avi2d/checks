@@ -90,6 +90,7 @@ permissions:
   contents: read
 jobs:
   release:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     concurrency:
