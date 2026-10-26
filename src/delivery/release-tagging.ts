@@ -1,5 +1,6 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { dispatch, GitHubFailure } from "./github.ts";
+import { ChildProcessSpawner } from "effect/process";
 import { lastTag, releasedVersionOf, runBuild } from "./release.ts";
 import { git } from "../core/git.ts";
 
@@ -31,7 +32,13 @@ export const pushTag = Effect.fn("pushTag")(function* (root: string, sha: string
   );
 });
 
-export const tagHead = Effect.fn("tagHead")(function* (label: string, root: string, workflow: string, cuttingWorkflow: string) {
+export const tagHead = Effect.fn("tagHead")(function* (
+  label: string,
+  root: string,
+  workflow: string,
+  cuttingWorkflow: string,
+  awaitRelease?: (workflow: string, sha: string) => Effect.Effect<void, { readonly message: string }, ChildProcessSpawner.ChildProcessSpawner>,
+) {
   const [head = "", subject = ""] = (yield* git(["log", "-1", "--format=%H%n%s", "HEAD"], root)).split("\n");
   const version = releasedVersionOf(subject);
   if (version === undefined) {
@@ -59,5 +66,9 @@ export const tagHead = Effect.fn("tagHead")(function* (label: string, root: stri
   }
   yield* pushTag(root, head, tag, workflow);
   yield* Console.log(`${label}: tagged ${head.slice(0, 12)} as ${tag}, and dispatched ${workflow} on it`);
+  if (awaitRelease !== undefined) {
+    yield* awaitRelease(workflow, head);
+    yield* Console.log(`${label}: ${workflow} finished on ${tag}`);
+  }
   return true;
 });

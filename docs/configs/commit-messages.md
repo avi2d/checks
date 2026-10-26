@@ -22,8 +22,8 @@ The title lint runs before the docs-only filter, so a change to top-level Markdo
 
 ## What it lints
 
-It lints the pull request title and nothing else.
-The title is the enforced subject because a squash merge uses it as the main commit subject, and per-commit messages are not linted.
+It lints the pull request title, or the head subject when no open pull request heads the dispatched branch.
+The title is the enforced subject because a squash merge uses it as the main commit subject, and otherwise per-commit messages are not linted.
 GitHub appends the pull request number to the squashed subject, so the bin lints the title with ` (#0000)` attached.
 The header length limit applies to the landed subject, not the bare title.
 The bin moves the git comment character off `#`, so a title starting with `#` is linted like any other.

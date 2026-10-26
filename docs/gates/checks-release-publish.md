@@ -12,11 +12,12 @@ It reads the `latest` dist-tag of the package from npm.
 It runs `npm publish` when npm holds no version of the package yet, or when the version is above `latest`.
 It publishes nothing and ends cleanly when `latest` is the version, so a rerun of a release that published passes.
 It publishes nothing and ends cleanly when `latest` is above the version.
-npm moves `latest` to no lower version, and the release workflow refuses a tag off `main`, so the newer version already carries every change of the older one.
+npm checks the version order before the upload, and the release workflow refuses a tag off `main`, so the newer version already carries every change of the older one when the uploads do not overlap.
 When `npm publish` fails, it reads `latest` again.
 A newer version that published while it ran ends it cleanly as well, and any other failure fails it.
 
-So two releases whose workflows run at once never leave npm's `latest` on the older version, and the older one's GitHub release is still made.
+Two uploads that overlap can still leave `latest` on the older version, since the order check runs before either upload completes.
+`checks-release-push` holds its concurrency group until the release workflow it dispatched finishes for that reason, so releases it cuts publish one at a time, while a release workflow dispatched or rerun by hand relies on this bin alone.
 
 ## What it reads
 

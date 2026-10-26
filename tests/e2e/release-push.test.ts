@@ -68,6 +68,11 @@ test(
     const release = await pkg.inOrigin("rev-parse", "main");
     expect(released.text).toContain(`release-push: dispatched ci.yml on release/main to check 0.1.1 at ${release.slice(0, 12)}\n`);
     expect(released.text).toContain(`release-push: released 0.1.1 as ${release.slice(0, 12)} on main, tagged it v0.1.1, and dispatched release.yml on it\n`);
+    expect(released.text).toContain(`release-push: release.yml finished on v0.1.1\n`);
+    const calls = (await pkg.state()).calls;
+    const dispatched = calls.indexOf("POST repos/{owner}/{repo}/actions/workflows/release.yml/dispatches");
+    expect(dispatched).not.toBe(-1);
+    expect(calls.slice(dispatched + 1).some((call) => call.startsWith("GET repos/{owner}/{repo}/actions/runs"))).toBe(true);
 
     expect(await pkg.inOrigin("log", "-1", "--format=%s%n%P%n%an <%ae>", "main")).toBe(`chore: release 0.1.1\n${main}\n${ACTIONS_BOT}`);
     expect(await pkg.inOrigin("rev-parse", "v0.1.1^{commit}")).toBe(release);
@@ -99,6 +104,7 @@ test(
     const release = await pkg.inOrigin("rev-parse", "main");
     expect(await pkg.inOrigin("log", "-1", "--format=%s", "main")).toBe("chore: release 0.1.1");
     expect(lost.text).toContain(`release-push: released 0.1.1 as ${release.slice(0, 12)} on main, tagged it v0.1.1, and dispatched release.yml on it\n`);
+    expect(lost.text).toContain(`release-push: release.yml finished on v0.1.1\n`);
     expect(await pkg.inOrigin("rev-parse", "v0.1.1^{commit}")).toBe(release);
     expect((await pkg.state()).dispatches).toEqual([
       { workflow: "ci.yml", ref: "release/main" },
@@ -124,6 +130,28 @@ test(
     expect(await pkg.inOrigin("log", "-1", "--format=%s", "main")).toBe(race);
     expect(await pkg.inOrigin("log", "-1", "--format=%s", "v0.1.1")).toBe("chore: release 0.1.1");
     expect(lost.text).toContain(`release-push: released 0.1.1 as ${release.slice(0, 12)} on main, tagged it v0.1.1, and dispatched release.yml on it\n`);
+    expect(lost.text).toContain(`release-push: release.yml finished on v0.1.1\n`);
+    expect((await pkg.state()).dispatches).toEqual([
+      { workflow: "ci.yml", ref: "release/main" },
+      { workflow: "release.yml", ref: "v0.1.1" },
+    ]);
+  },
+  60_000,
+);
+
+test(
+  "a release workflow that concludes failure fails the run naming its run, though main holds the release and the tag exists",
+  async () => {
+    const pkg = await widget();
+    const failed = await pkg.run(["release.yml", "ci.yml"], { FAKE_GH_CONCLUSION_RELEASE_YML: "failure" });
+    expect(failed.exitCode).toBe(2);
+    const release = await pkg.inOrigin("rev-parse", "main");
+    expect(await pkg.inOrigin("log", "-1", "--format=%s", "main")).toBe("chore: release 0.1.1");
+    expect(await pkg.inOrigin("rev-parse", "v0.1.1^{commit}")).toBe(release);
+    expect(failed.text).toContain(
+      `checks-release-push: the release workflow failed on ${release.slice(0, 12)}: release.yml concluded failure at https://github.com/acme/widget/actions/runs/`,
+    );
+    expect(failed.text).not.toContain("stays off the branch");
     expect((await pkg.state()).dispatches).toEqual([
       { workflow: "ci.yml", ref: "release/main" },
       { workflow: "release.yml", ref: "v0.1.1" },
@@ -182,6 +210,7 @@ test(
     const tagged = await pkg.run(["release.yml", "ci.yml"]);
     expect(tagged.exitCode).toBe(0);
     expect(tagged.text).toContain(`release-push: tagged ${release.slice(0, 12)} as v0.1.1, and dispatched release.yml on it\n`);
+    expect(tagged.text).toContain(`release-push: release.yml finished on v0.1.1\n`);
     expect(await pkg.inOrigin("rev-parse", "v0.1.1^{commit}")).toBe(release);
 
     expect(await pkg.run(["release.yml", "ci.yml"])).toEqual({ exitCode: 0, text: `release-push: v0.1.1 already tags ${release.slice(0, 12)}\n` });

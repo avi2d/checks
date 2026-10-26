@@ -50,6 +50,17 @@ const awaitChecks = Effect.fn("awaitChecks")(function* (workflows: readonly stri
   return yield* refused(`${waiting.join(", ")} did not finish on ${sha.slice(0, 12)} within ${Duration.format(Duration.times(POLL, POLLS))}, so the release stays off the branch`);
 });
 
+const awaitReleaseWorkflow = Effect.fn("awaitReleaseWorkflow")(function* (workflow: string, sha: string) {
+  const runs = `${REPOSITORY}/actions/runs?head_sha=${sha}&event=workflow_dispatch&per_page=100`;
+  for (let poll = 1; poll <= POLLS; poll += 1) {
+    const verdict = verdictOf([workflow], (yield* gitHubJson(decodeRuns, "GET", runs)).workflow_runs);
+    if (verdict.kind === "passed") return;
+    if (verdict.kind === "failed") return yield* refused(`the release workflow failed on ${sha.slice(0, 12)}: ${verdict.failed.join(", ")}`);
+    yield* Effect.sleep(POLL);
+  }
+  return yield* refused(`${workflow} did not finish on ${sha.slice(0, 12)} within ${Duration.format(Duration.times(POLL, POLLS))}, though the branch already holds the release and the tag exists`);
+});
+
 type Landing = "landed" | "moved";
 
 // GitHub refuses a branch update that is no fast-forward, which is how a branch that moved during the checks shows.
@@ -81,7 +92,8 @@ const releasePush = Effect.gen(function* () {
   const [publish, ...checks] = process.argv.slice(2);
   if (publish === undefined || checks.length === 0) return yield* new Usage({ message: USAGE });
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
-  if (releasedVersionOf((yield* git(["log", "-1", "--format=%s", "HEAD"], root)).trim()) !== undefined) return yield* tagHead(LABEL, root, publish, LABEL);
+  if (releasedVersionOf((yield* git(["log", "-1", "--format=%s", "HEAD"], root)).trim()) !== undefined)
+    return yield* tagHead(LABEL, root, publish, LABEL, awaitReleaseWorkflow);
   const plan = yield* planRelease(LABEL, root, UNTAGGED);
   if (plan === undefined) return true;
   const { base, branch, head, next, bumped } = plan;
@@ -101,6 +113,8 @@ const releasePush = Effect.gen(function* () {
   yield* git(["fetch", "--quiet", "--no-tags", "origin", `refs/heads/${base}`], root);
   yield* pushTag(root, release, tag, publish);
   yield* Console.log(`${LABEL}: released ${next} as ${release.slice(0, 12)} on ${base}, tagged it ${tag}, and dispatched ${publish} on it`);
+  yield* awaitReleaseWorkflow(publish, release);
+  yield* Console.log(`${LABEL}: ${publish} finished on ${tag}`);
   return true;
 });
 

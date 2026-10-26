@@ -22,8 +22,9 @@ When all of them pass, it moves `<branch>` to the release commit without a force
 GitHub refuses that update when `<branch>` moved while the checks ran.
 The run then ends cleanly, since the run of the push that moved it releases the new head.
 When the update fails but `<branch>` already holds the release commit, the update landed and the run goes on.
-It then tags the release commit `v<version>`, pushes the tag and dispatches the release workflow on it.
-When `HEAD` is itself a release commit, it tags it as [checks-release-tag](checks-release-tag.md) does.
+It then tags the release commit `v<version>`, pushes the tag and dispatches the release workflow on it, and waits up to 45 minutes for that workflow's run on the release commit to finish.
+When that run concludes short of success, or does not finish in time, the bin fails, though `<branch>` already holds the release and the tag exists.
+When `HEAD` is itself a release commit, it tags it as [checks-release-tag](checks-release-tag.md) does, and waits for the release workflow it dispatches the same way.
 So a rerun after a failed tag push finishes the release.
 It leaves the working tree as it found it.
 
@@ -53,8 +54,8 @@ Name no check workflow that runs something else on dispatch, such as a mutation 
 
 | Code | When |
 | --- | --- |
-| 0 | nothing is unreleased, the branch moved while the checks ran, the release tag already tags `HEAD`, or the release landed and the release workflow is dispatched |
-| 2 | the arguments do not parse, a refusal above applies, a check fails or does not finish in time, the build fails, or the push or a GitHub API call fails |
+| 0 | nothing is unreleased, the branch moved while the checks ran, the release tag already tags `HEAD`, or the release landed and its release workflow finished |
+| 2 | the arguments do not parse, a refusal above applies, a check fails or does not finish in time, the build fails, the push or a GitHub API call fails, or the dispatched release workflow fails or does not finish in time |
 
 ## Sample output
 
@@ -63,6 +64,13 @@ A run that releases prints the build's own output, then two lines:
 ```
 release-push: dispatched ci.yml on release/main to check 0.4.0 at 3f2a9c81d0b4
 release-push: released 0.4.0 as 3f2a9c81d0b4 on main, tagged it v0.4.0, and dispatched release.yml on it
+release-push: release.yml finished on v0.4.0
+```
+
+A run whose release workflow fails refuses with the run that failed, though the branch already holds the release and the tag exists:
+
+```
+checks-release-push: the release workflow failed on 3f2a9c81d0b4: release.yml concluded failure at https://github.com/acme/widget/actions/runs/7
 ```
 
 A run whose checks fail refuses with the run that failed:
@@ -92,7 +100,7 @@ jobs:
   release:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     concurrency:
       group: release-push
       cancel-in-progress: false
@@ -115,11 +123,10 @@ jobs:
 ```
 
 The push the workflow token makes starts no run, so landing the release commit never starts the workflow again.
-The concurrency group runs one cut at a time, from reading the branch to dispatching the release workflow on the tag.
-It does not wait for that workflow, so two release workflows can publish at once.
-The release workflow publishes through [checks-release-publish](checks-release-publish.md), which leaves the older version off npm once a newer one published.
+The concurrency group holds from reading the branch until the release workflow it dispatched finishes, so releases cut by release-push publish one at a time, and a queued run the group cancels had cut nothing.
+[checks-release-publish](checks-release-publish.md) stays the guard for a release workflow dispatched or rerun by hand.
 A run that waits behind it checks out the branch's tip when it starts, so it releases on top of what landed.
-The job waits on the checks it dispatched, so a hosted runner bills the minutes those checks take.
+The job waits on the checks it dispatched and on the release workflow, so a hosted runner bills the minutes those workflows take.
 A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`, as [checks-ci-wiring](checks-ci-wiring.md#runners) requires of every job but a mutation job.
 
 The other workflows accept the dispatch the way [checks-release-pr](checks-release-pr.md#running-it-in-ci) lists:

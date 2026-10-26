@@ -138,7 +138,12 @@ function editPull(state: FakeState, number: string, body: Body): Answer | undefi
   return { state: { ...state, pulls: state.pulls.map((one) => (one === pull ? edited : one)) }, body: edited };
 }
 
-// A dispatched run finishes at once with FAKE_GH_CONCLUSION, and GitHub lists the newest run first.
+// A dispatched run finishes at once with FAKE_GH_CONCLUSION, or FAKE_GH_CONCLUSION_<WORKFLOW> for one workflow, and GitHub lists the newest run first.
+function conclusionOf(workflow: string): string {
+  const key = `FAKE_GH_CONCLUSION_${workflow.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`;
+  return process.env[key] ?? process.env["FAKE_GH_CONCLUSION"] ?? "success";
+}
+
 async function dispatchRun(origin: string, state: FakeState, workflow: string, body: Body): Promise<Answer> {
   const ref = decodeString(body["ref"]);
   const headSha = (await $`git rev-parse ${ref}^{commit}`.cwd(origin).quiet()).stdout.toString().trim();
@@ -146,7 +151,7 @@ async function dispatchRun(origin: string, state: FakeState, workflow: string, b
     path: `.github/workflows/${workflow}`,
     head_sha: headSha,
     status: "completed",
-    conclusion: process.env["FAKE_GH_CONCLUSION"] ?? "success",
+    conclusion: conclusionOf(workflow),
     html_url: `https://github.com/acme/widget/actions/runs/${state.runs.length + 1}`,
   };
   return { state: { ...state, dispatches: [...state.dispatches, { workflow, ref }], runs: [run, ...state.runs] }, body: undefined };
