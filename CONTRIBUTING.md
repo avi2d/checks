@@ -67,8 +67,9 @@ To release a version:
    A `main` that moved while `ci` ran keeps its new head, and the run of that push releases it.
 1. Watch the `release` workflow.
    The release workflow refuses a ref that is not a tag, a tag off `main` or one that disagrees with `package.json`.
-   It reruns the build, the check that the build changed no committed file, lint, typecheck and the suite before it publishes to npm.
-   After npm publish succeeds, the workflow creates or updates the GitHub release with the matching `CHANGELOG.md` section.
+   It reruns the build, the check that the build changed no committed file, lint, typecheck and the suite before it publishes to npm through [checks-release-publish](docs/gates/checks-release-publish.md).
+   That step leaves the version off npm when npm already holds a newer one.
+   Once it passes, the workflow creates or updates the GitHub release with the matching `CHANGELOG.md` section.
 
 `publishConfig.access` in `package.json` is what makes the scoped package public.
 The package's npm settings name the repository `avi2d/checks` and the workflow `release.yml` as its trusted publisher.

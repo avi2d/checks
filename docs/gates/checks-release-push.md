@@ -21,6 +21,7 @@ When any of them concludes short of success, it refuses and leaves `<branch>` an
 When all of them pass, it moves `<branch>` to the release commit without a force.
 GitHub refuses that update when `<branch>` moved while the checks ran.
 The run then ends cleanly, since the run of the push that moved it releases the new head.
+When the update fails but `<branch>` already holds the release commit, the update landed and the run goes on.
 It then tags the release commit `v<version>`, pushes the tag and dispatches the release workflow on it.
 When `HEAD` is itself a release commit, it tags it as [checks-release-tag](checks-release-tag.md) does.
 So a rerun after a failed tag push finishes the release.
@@ -113,7 +114,9 @@ jobs:
 ```
 
 The push the workflow token makes starts no run, so landing the release commit never starts the workflow again.
-The concurrency group runs one release at a time.
+The concurrency group runs one cut at a time, from reading the branch to dispatching the release workflow on the tag.
+It does not wait for that workflow, so two release workflows can publish at once.
+The release workflow publishes through [checks-release-publish](checks-release-publish.md), which leaves the older version off npm once a newer one published.
 A run that waits behind it checks out the branch's tip when it starts, so it releases on top of what landed.
 The job waits on the checks it dispatched, so a hosted runner bills the minutes those checks take.
 A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`, as [checks-ci-wiring](checks-ci-wiring.md#runners) requires of every job but a mutation job.
@@ -131,3 +134,4 @@ The other workflows accept the dispatch the way [checks-release-pr](checks-relea
 - [checks-release-pr](checks-release-pr.md)
 - [checks-release-tag](checks-release-tag.md)
 - [checks-release-notes](checks-release-notes.md)
+- [checks-release-publish](checks-release-publish.md)

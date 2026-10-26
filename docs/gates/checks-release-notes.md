@@ -80,7 +80,7 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-      - run: npm publish
+      - run: ./node_modules/.bin/checks-release-publish
   github-release:
     needs: publish
     runs-on: ubuntu-latest
@@ -157,3 +157,4 @@ A repository with no versioned releases does not need it.
 
 - [checks-changelog](checks-changelog.md)
 - [checks-release-report](checks-release-report.md)
+- [checks-release-publish](checks-release-publish.md)
