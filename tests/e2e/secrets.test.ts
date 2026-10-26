@@ -458,3 +458,29 @@ test(
   },
   SCAN_MS,
 );
+test(
+  "a pack name matches across an ASCII space and a nonbreaking space",
+  async () => {
+    const first = fake("Fakefirst");
+    const last = fake("Fakelast");
+    const dir = await scratch("checks-secrets-pack-");
+    const asciiPack = join(dir, "ascii-pack.json");
+    const nbspPack = join(dir, "nbsp-pack.json");
+    await writeFile(asciiPack, JSON.stringify({ names: [`${first} ${last}`] }));
+    await writeFile(nbspPack, JSON.stringify({ names: [`${first}\u00A0${last}`] }));
+    const { repo: firstRepo, base: firstBase } = await started();
+    await firstRepo.write({ "notes/team.md": `Reviewed by ${first}\u00A0${last}\n` });
+    const firstHead = await firstRepo.commit("docs: add team notes");
+    const firstFailed = await withPack(firstRepo, asciiPack, firstBase, firstHead);
+    expect(firstFailed.exitCode).toBe(1);
+    expect(rulesByPlace(firstFailed.text).get("notes/team.md:1")).toEqual(["private-name"]);
+    const { repo: secondRepo, base: secondBase } = await started();
+    await secondRepo.write({ "notes/team.md": `Reviewed by ${first} ${last}\n` });
+    const secondHead = await secondRepo.commit("docs: add team notes");
+    const secondFailed = await withPack(secondRepo, nbspPack, secondBase, secondHead);
+    expect(secondFailed.exitCode).toBe(1);
+    expect(rulesByPlace(secondFailed.text).get("notes/team.md:1")).toEqual(["private-name"]);
+  },
+  SCAN_MS,
+);
+

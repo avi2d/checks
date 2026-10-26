@@ -305,7 +305,10 @@ A rule that names them would publish them, so the owner keeps the terms in a pri
 The pack is a file rather than an inline variable, so one file serves the shell and the runner, and no workflow names a term.
 A pack that is set but cannot serve fails the gate, because a scan that quietly dropped it would pass what it exists to catch.
 An empty `CHECKS_SECRETS_PACK` counts as set, since a CI secret that is missing expands to an empty value.
-No report names a term or the pack's path, because the report lands in a public CI log.
+No report prints a matched term text or the pack path, because the report lands in a public CI log.
+A finding location prints as it stands, such as a file name or a link.
+So a term inside a file name or a repository name shows there.
+That location is already public in the scanned commit or the scanned pull request.
 
 A pull request's title, body and comments reach the forge without a commit, so [checks-pr-text](gates/checks-pr-text.md) scans them with the same rules and the same pack.
 

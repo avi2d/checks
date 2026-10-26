@@ -71,7 +71,7 @@ A pack with obviously fake terms reads like this:
 }
 ```
 
-A term matches in any case, and the spaces inside it match any run of whitespace.
+A term matches in any case, and the spaces inside it match any run of ASCII whitespace or Unicode space separators.
 A term's end that is an ASCII letter, digit or underscore matches only at a word boundary, so `pexample` does not match inside `pexamples`.
 An address matches only as a whole, so `192.0.2.0/24` does not match `1192.0.2.5`.
 An IPv6 range has no key, so a pack lists its prefix under `hosts` as its addresses are written, such as `2001:db8:`.
@@ -88,8 +88,11 @@ The gate exits 2, and scans nothing, when `CHECKS_SECRETS_PACK` is set but the p
 - a term is blank or holds a control character, or a range is not IPv4
 - the pack lists no term at all
 
-No report or error prints a term or the pack's path, because a public CI log would publish either.
+No report or error prints a matched term text or the pack path, because a public CI log would publish either.
 A finding names its file, its line and its rule, and the description of each pack rule says only which kind of term matched.
+A finding location prints as it stands, such as a file name or a link.
+So a term inside a file name or a repository name shows there.
+That location is already public in the scanned commit.
 
 The pack lives where only its owner reads it.
 On a laptop it is a file outside every checkout, and the shell profile exports its path:

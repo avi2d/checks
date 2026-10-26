@@ -55,7 +55,7 @@ const TERM_RULES = [
 const IP_RANGE_RULE: Rule = { id: "private-ip-range", description: "An address in an IP range the private pack lists" };
 
 function escaped(text: string): string {
-  return text.replace(/[\\^$.*+?()[\]{}|/-]/g, "\\$&");
+  return text.replace(/[\\^$.*+?()[\]{}|/]/g, "\\$&");
 }
 
 // RE2's \b is an ASCII word boundary, so it never holds beside a non-ASCII letter or a symbol.
@@ -65,7 +65,7 @@ function boundaryAt(character: string | undefined): string {
 
 function termPattern(term: string): string {
   const trimmed = term.trim();
-  return `${boundaryAt(trimmed[0])}${trimmed.split(/\s+/).map(escaped).join("\\s+")}${boundaryAt(trimmed.at(-1))}`;
+  return `${boundaryAt(trimmed[0])}${trimmed.split(/[\s\p{Zs}]+/u).map(escaped).join("[\\s\\p{Zs}]+")}${boundaryAt(trimmed.at(-1))}`;
 }
 
 function octetPattern(octet: number, fixedBits: number): string {

@@ -36,7 +36,7 @@ async function idsOf(pack: unknown): Promise<readonly { readonly id: string; rea
 // The kit's own rules use RE2 syntax JavaScript lacks, but a pack rule uses only a leading (?i), which JavaScript takes as the i flag.
 async function rulesOf(pack: unknown): Promise<ReadonlyMap<string, RegExp>> {
   return new Map(
-    (await idsOf(pack)).flatMap(({ id, regex }) => (id.startsWith("private-") && regex !== undefined ? [[id, new RegExp(regex.replace(/^\(\?i\)/, ""), "i")] as const] : [])),
+    (await idsOf(pack)).flatMap(({ id, regex }) => (id.startsWith("private-") && regex !== undefined ? [[id, new RegExp(regex.replace(/^\(\?i\)/, ""), "iu")] as const] : [])),
   );
 }
 

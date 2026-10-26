@@ -15,6 +15,9 @@ It adds the private pack when `CHECKS_SECRETS_PACK` names one, as [The private p
 With `CHECKS_SECRETS_PACK` set but the pack unable to serve, it exits 2 and scans nothing.
 It reads the text as it stands now, so a text edited clean passes on the next run.
 A finding names the text, its line and its rule, and never the matched text.
+A finding location prints as it stands, such as a link.
+So a term inside a repository name shows there.
+That location is already public in the scanned pull request.
 
 Deleting a finding from the current text leaves it in GitHub's edit history of that text, which the text's edit menu deletes revision by revision.
 The timeline keeps a renamed title's old text, and only GitHub Support removes it.
