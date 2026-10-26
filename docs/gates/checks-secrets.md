@@ -114,6 +114,7 @@ In GitHub Actions a repository or organisation secret holds the JSON, and the jo
 ```
 
 A fork's `pull_request` run gets no secret, so the file is empty and the gate exits 2 rather than pass without the pack.
+Unlike [checks-pr-text](checks-pr-text.md), this gate has no skip: a job that writes the pack from an unset secret exits 2.
 [checks-pr-text](checks-pr-text.md) scans a pull request's title, body and comments with the same pack.
 
 ## What it reads
