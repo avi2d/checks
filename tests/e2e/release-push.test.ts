@@ -109,6 +109,30 @@ test(
 );
 
 test(
+  "a lost reply with a newer head on main still tags the release commit and dispatches the release",
+  async () => {
+    const pkg = await widget();
+    const race = "feat: price a bill (#4)";
+    const lost = await pkg.run(["release.yml", "ci.yml"], {
+      FAKE_GH_LOSE_REPLY: "PATCH repos/{owner}/{repo}/git/refs/heads/main",
+      FAKE_GH_RACE_COMMIT: race,
+    });
+    expect(lost.exitCode).toBe(0);
+    const release = await pkg.inOrigin("rev-parse", "v0.1.1^{commit}");
+    const main = await pkg.inOrigin("rev-parse", "main");
+    expect(main).not.toBe(release);
+    expect(await pkg.inOrigin("log", "-1", "--format=%s", "main")).toBe(race);
+    expect(await pkg.inOrigin("log", "-1", "--format=%s", "v0.1.1")).toBe("chore: release 0.1.1");
+    expect(lost.text).toContain(`release-push: released 0.1.1 as ${release.slice(0, 12)} on main, tagged it v0.1.1, and dispatched release.yml on it\n`);
+    expect((await pkg.state()).dispatches).toEqual([
+      { workflow: "ci.yml", ref: "release/main" },
+      { workflow: "release.yml", ref: "v0.1.1" },
+    ]);
+  },
+  60_000,
+);
+
+test(
   "failed checks leave main, the tags and the release workflow alone",
   async () => {
     const pkg = await widget();

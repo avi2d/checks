@@ -196,7 +196,18 @@ async function main(): Promise<number> {
   const answer = fromGit === undefined ? await pullsApi(origin, state, method, route, body) : { state, body: fromGit };
   if (answer === undefined) return refuse(`fake gh: no route for ${method} ${endpoint}`);
   await writeFile(statePath, JSON.stringify(answer.state));
-  if (process.env["FAKE_GH_LOSE_REPLY"] === `${method} ${endpoint}`) return refuse("gh: HTTP 502: Bad Gateway");
+  if (process.env["FAKE_GH_LOSE_REPLY"] === `${method} ${endpoint}`) {
+    const race = process.env["FAKE_GH_RACE_COMMIT"] ?? "";
+    if (race !== "" && method === "PATCH" && route.startsWith("git/refs/")) {
+      const sha = decodeString(body["sha"]);
+      const tree = (await $`git rev-parse ${sha}^{tree}`.cwd(origin).quiet()).stdout.toString().trim();
+      const child = (
+        await $`git commit-tree ${tree} -p ${sha} -m ${race}`.cwd(origin).env({ ...process.env, ...ACTIONS_BOT }).quiet()
+      ).stdout.toString().trim();
+      await $`git update-ref ${route.slice("git/".length)} ${child}`.cwd(origin).quiet();
+    }
+    return refuse("gh: HTTP 502: Bad Gateway");
+  }
   if (answer.body !== undefined) process.stdout.write(JSON.stringify(answer.body));
   return 0;
 }

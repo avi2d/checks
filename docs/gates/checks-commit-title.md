@@ -8,12 +8,13 @@ audience: consumers
 
 ## What it checks
 
-It lints the pull request title and nothing else.
+It lints the pull request title, or the head subject when no open pull request heads the branch.
 The title comes from `PR_TITLE` when the event carries one.
 A dispatched run carries no pull request, so the bin reads the title of the one open pull request its branch heads.
-It fails when there is none.
+When none heads the branch, it lints the head subject as it stands and without ` (#0000)`.
+It fails when more than one heads the branch.
 A run with no title to lint passes and says so.
-The bin lints the title with ` (#0000)` attached, since GitHub appends the pull request number to the squashed subject.
+The bin lints a pull request title with ` (#0000)` attached, since GitHub appends the pull request number to the squashed subject.
 It moves the git comment character off `#`, so a title starting with `#` is linted like any other.
 
 ## What it reads
@@ -31,7 +32,7 @@ The bin takes no arguments.
 | Code | Result |
 | --- | --- |
 | 0 | The title lints clean, or there is no title to lint. |
-| 1 | The title breaks the rules, or no one open pull request heads the branch. |
+| 1 | The title or the head subject breaks the rules, or more than one open pull request heads the branch. |
 | 2 | The kit config or binary cannot be resolved, or a dispatched run misses its environment. |
 
 ## Sample output
