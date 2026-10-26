@@ -15,7 +15,7 @@ It refuses when `v<version>` of the next version already tags a commit, since a 
 It writes the next version into `package.json` and runs `bun run build`, which writes `CHANGELOG.md`.
 It commits both as `chore: release <version>` on top of `HEAD` through the GitHub API, as `checks-release-pr` does.
 It points the branch `release/<branch>` at that commit and dispatches every check workflow its arguments name there.
-It waits up to 45 minutes for each of those workflows to finish on the release commit.
+It waits up to 45 minutes in all for those workflows to finish on the release commit.
 It reads the newest run of each, so a rerun stands in for the run it repeats.
 When any of them concludes short of success, it refuses and leaves `<branch>` and the tags alone.
 When all of them pass, it moves `<branch>` to the release commit without a force.
@@ -59,7 +59,7 @@ Name no check workflow that runs something else on dispatch, such as a mutation 
 
 ## Sample output
 
-A run that releases prints the build's own output, then two lines:
+A run that releases prints the build's own output, then three lines:
 
 ```
 release-push: dispatched ci.yml on release/main to check 0.4.0 at 3f2a9c81d0b4

@@ -12,7 +12,7 @@ It reads the `latest` dist-tag of the package from npm.
 It runs `npm publish` when npm holds no version of the package yet, or when the version is above `latest`.
 It publishes nothing and ends cleanly when `latest` is the version, so a rerun of a release that published passes.
 It publishes nothing and ends cleanly when `latest` is above the version.
-npm checks the version order before the upload, and the release workflow refuses a tag off `main`, so the newer version already carries every change of the older one when the uploads do not overlap.
+The release workflow refuses a tag off `main`, so the newer version already carries every change of the older one.
 When `npm publish` fails, it reads `latest` again.
 A newer version that published while it ran ends it cleanly as well, and any other failure fails it.
 
