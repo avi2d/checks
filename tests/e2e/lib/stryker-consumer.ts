@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Schema } from "effect";
-import { CHECKOUT, ran } from "./fixture-repo.ts";
+import { CHECKOUT, ran, type Ran } from "./fixture-repo.ts";
 import { fakeActions } from "./fake-actions.ts";
 
 export const STRYKER_CONFIG = `import preset, { unitTestFiles } from "@avi2dg/checks/stryker.preset.js";
@@ -17,6 +17,10 @@ export default {
   },
 };
 `;
+
+export function expectStrykerExitsZero(result: Ran): void {
+  expect(result.exitCode).toBe(0);
+}
 
 export const WIDGET_TEST = `import { expect, test } from "bun:test";
 import { widget } from "../../widget.ts";

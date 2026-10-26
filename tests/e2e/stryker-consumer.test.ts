@@ -3,7 +3,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ran, UNVENDORED_BUNFIG } from "./lib/fixture-repo.ts";
-import { committedBase, operandTest, PROBE_TEST, readReport, readState, removeConsumer, restoredFull, reusedOf, STRYKER_CONFIG, unpackConsumer, widgetTest, WIDGET_TEST } from "./lib/stryker-consumer.ts";
+import { committedBase, expectStrykerExitsZero, operandTest, PROBE_TEST, readReport, readState, removeConsumer, restoredFull, reusedOf, STRYKER_CONFIG, unpackConsumer, widgetTest, WIDGET_TEST } from "./lib/stryker-consumer.ts";
 
 let packDir = "";
 let dir = "";
@@ -418,4 +418,14 @@ test(
     for (const mutant of arithmetic) expect(mutant.status).toBe("Survived");
   },
   480_000,
+);
+
+test(
+  "a failing Stryker run puts its own error text in the failure, not only the exit code",
+  async () => {
+    await writeFile(join(dir, "stryker.conf.mjs"), 'import "./missing-preset.js";\nexport default {};\n');
+    const result = await ran($`bunx stryker run --reporters clear-text`.cwd(dir));
+    expect(() => expectStrykerExitsZero(result)).toThrow('Invalid config file "stryker.conf.mjs"');
+  },
+  180_000,
 );
