@@ -68,10 +68,21 @@ on:
 ```
 
 The job writes the pack from a secret, as [The private pack](checks-secrets.md#the-private-pack) shows, then runs `bunx checks-pr-text` with the pull request's number.
+It skips the scan when the secret is unset, as [When no pack is configured](#when-no-pack-is-configured) says.
 `pull_request_target` runs the base branch's workflow with the repository's secrets, even for a fork's pull request.
 The job reads the text through the API and checks out none of the pull request's code, so a fork runs nothing there.
 A comment's run reports on no pull request, so the job posts its result as a `pr-text` status on the head commit.
 The kit's own `.github/workflows/pr-text.yml` is a complete example.
+
+## When no pack is configured
+
+The kit's workflow skips the scan when `CHECKS_SECRETS_PACK` is unset or empty, instead of failing.
+It writes a notice and a job summary line that say so, and posts a `pr-text` status of success whose description reads `scan skipped: no private pack is configured (CHECKS_SECRETS_PACK is unset)`.
+A skip is a coverage gap, not a pass: no private term was checked on that pull request.
+Only the repository secret decides a skip, so no input from a pull request's author can cause one.
+To scan with the pack, set the repository secret `CHECKS_SECRETS_PACK` to the pack's JSON, as [The private pack](checks-secrets.md#the-private-pack) describes.
+The next eligible run then scans the text with it.
+On a fork's pull request a review or a review comment still starts no run, so that text waits for another trigger.
 
 ## Related topics
 
