@@ -186,24 +186,34 @@ So a checkout without tags, a fork, and a branch that merged `main` in all write
 A section keeps the date it was written, because the squash merge that lands the release commit may fall on another day.
 Entries come from commit subjects, which are the squash-merged pull request titles that commitlint holds to the conventional format.
 A commit body holds the branch's own messages, and nothing lints it, so no entry comes from a body.
-The changelog arrives in the release pull request, and no workflow pushes to a branch a person works on.
+The changelog arrives in the release commit, and no workflow pushes to a branch a person works on.
 
-## A release is cut every day
+## A release is cut from every push
 
 A release waits for no quiet moment, since a busy repository always has work under way.
-The daily release opens the release pull request from `main` whenever it holds a feature or a fix since the last tag, and the pull request merges through the repository's usual merge path once its checks pass.
+A package published to npm releases from every push to `main` that holds a feature or a fix since the last tag.
+A version only reaches its users once it is published.
+A daily release pull request would leave each merged change unpublished until a person merged the release too.
+`checks-release-push` builds the release commit on top of `main` and runs the required checks on it from the `release/<branch>` branch it owns.
+Only then does it move `main` to it without a force, so `main` only ever gains a release commit whose checks passed.
+It tags the commit it landed and nothing else.
+A repository that is no package keeps the daily release pull request.
 `checks-release-pr` writes only to the `release/<branch>` branch it owns, and rebuilds that branch on `main` rather than merging `main` into it, so the changelog it carries is the one the build writes.
 `checks-release-tag` writes only the `v*` tag of a release commit that already landed.
 The `github-release` job's `contents: write` creates or updates the GitHub release from the tag's `CHANGELOG.md` section.
 
-Both jobs act with the workflow token.
+Every release bin acts with the workflow token.
 GitHub starts no run for a push that token makes, and holds the runs of a pull request it opens until a maintainer approves them.
 A GitHub App or a personal token would start them, but either is a credential each repository stores and someone rotates.
-So `checks-release-pr` dispatches the required checks on the release head, and `checks-release-tag` dispatches the release workflow on the tag, since a dispatch is the one run the token can start.
+A dispatch is the one run the token can start.
+So `checks-release-pr` and `checks-release-push` dispatch the required checks on the release head.
+`checks-release-tag` and `checks-release-push` dispatch the release workflow on the tag.
 GitHub keeps a dispatched run's checks off the pull request, and branch protection does not count them.
 So each dispatched job reports its result as a commit status named for the job, which a required check of that name counts.
 Where a status and a check share a name, branch protection requires both, so the status never passes a pull request whose own check failed.
-The cost is a `workflow_dispatch` trigger and a status step on each workflow a release needs, a title lint that reads its title from the open pull request, and the repository setting that lets the token open a pull request.
+The cost is a `workflow_dispatch` trigger and a status step on each workflow a release needs.
+The title lint reads its title from the open pull request, or lints the head subject when none is open.
+The daily release also needs the repository setting that lets the token open a pull request.
 
 ## The docs gate judges what a change touches
 

@@ -54,25 +54,22 @@ A release is a tag on `main`.
 The `release` workflow publishes it through npm trusted publishing.
 GitHub mints the publish credential for each run, so no npm token is stored anywhere.
 
-Every push to `main` other than a release commit runs the `daily-release` workflow.
-It opens or refreshes a `chore: release <version>` pull request when `main` holds a feature or a fix since the last tag, as [checks-release-pr](docs/gates/checks-release-pr.md) says.
-It needs the repository's **Allow GitHub Actions to create and approve pull requests** setting.
+Every push to `main` runs the `release-push` workflow, which releases the next version when `main` holds a feature or a fix since the last tag, as [checks-release-push](docs/gates/checks-release-push.md) says.
 
 To release a version:
 
-1. Find the open `chore: release <version>` pull request, or run `gh workflow run daily-release` to open it now.
-   It holds only the version bump and the section the build wrote into `CHANGELOG.md`, so the changelog is never edited by hand.
-1. If `main` moved under it, let the `daily-release` run of that push refresh it rather than updating the branch.
-   The job rebuilds the release on the new `main`, while a merge of `main` into the branch leaves the committed changelog short of the commits the merge brought, which fails the build check.
-1. Merge the pull request through the repository's usual merge path once its checks pass and it holds current `main`, and keep its title.
-   The squash merge lands the title as the commit's subject, and a `feat` or `fix` title would add an entry the committed changelog lacks.
-1. Watch the `release` workflow, which the `tag` job of `daily-release` dispatches once it tags the merge commit.
-   The `tag` job first reruns the build, and refuses to tag a merge whose `CHANGELOG.md` the build rewrites.
-   Its error says to open a `chore: cancel the unpublished <version>` pull request that returns `package.json` to the last tag's version and commits what `bun run build` then writes to `CHANGELOG.md`.
-   The build reads the returned version as a revert, so it drops the unpublished section, and the next `daily-release` run cuts the release again with every change since the last tag.
+1. Merge the feature or fix through the repository's usual merge path.
+   Nothing else is needed, and the changelog is never edited by hand.
+1. Watch the `release-push` run of that push, or run `gh workflow run release-push` to start one.
+   It commits the version bump and the section the build writes into `CHANGELOG.md` as `chore: release <version>` on top of `main`, and runs `ci` on that commit from the `release/main` branch.
+   Once `ci` passes, it moves `main` to the release commit, tags it and dispatches the `release` workflow on the tag.
+   A failed `ci` leaves `main` and the tags alone, and the run names the failed run.
+   A `main` that moved while `ci` ran keeps its new head, and the run of that push releases it.
+1. Watch the `release` workflow.
    The release workflow refuses a ref that is not a tag, a tag off `main` or one that disagrees with `package.json`.
-   It reruns the build, the check that the build changed no committed file, lint, typecheck and the suite before it publishes to npm.
-   After npm publish succeeds, the workflow creates or updates the GitHub release with the matching `CHANGELOG.md` section.
+   It reruns the build, the check that the build changed no committed file, lint, typecheck and the suite before it publishes to npm through [checks-release-publish](docs/gates/checks-release-publish.md).
+   That step leaves the version off npm when npm already holds a newer one.
+   Once it passes, the workflow creates or updates the GitHub release with the matching `CHANGELOG.md` section.
 
 `publishConfig.access` in `package.json` is what makes the scoped package public.
 The package's npm settings name the repository `avi2d/checks` and the workflow `release.yml` as its trusted publisher.

@@ -2,7 +2,7 @@ name: release
 on:
   push:
     tags: ["v*"]
-  # checks-release-tag pushes the tag with the workflow token, which starts no push run, so it dispatches this workflow on the tag.
+  # checks-release-push pushes the tag with the workflow token, which starts no push run, so it dispatches this workflow on the tag.
   workflow_dispatch:
 
 permissions:
@@ -35,7 +35,7 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-      - run: npm publish
+      - run: bun src/delivery/release-publish.ts
 
   github-release:
     needs: publish

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { releaseBranchOf, stagedOf } from "../../src/delivery/release-pr.ts";
+import { releaseBranchOf, stagedOf } from "../../src/delivery/release-commit.ts";
 
 const ZERO = "0".repeat(40);
 const OLD = "a".repeat(40);

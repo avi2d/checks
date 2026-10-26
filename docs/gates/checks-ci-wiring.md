@@ -23,7 +23,7 @@ It refuses a step or job with `if: false` or `continue-on-error: true`.
 It also refuses a workflow that does not trigger on both `opened` and `synchronize` pull requests to the target branch.
 A path filter cannot cover every pull request and therefore cannot satisfy the check.
 It refuses a reference to a workflow or job the repository does not hold.
-Each literal `checks-release-pr` and `checks-release-tag` argument names a workflow file, so every one must match a file under `.github/workflows/`.
+Each literal `checks-release-pr`, `checks-release-push` and `checks-release-tag` argument names a workflow file, so every one must match a file under `.github/workflows/`.
 A call counts directly, through `bunx`, or through `bun` or `bun run` with the bin's path or its source file.
 An argument built from a variable or an expression is known only when the job runs, so the check passes over it.
 An argument built by command substitution is known only when the job runs, so the check passes over it.
