@@ -38,21 +38,45 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
+      # Only the repository secret decides the skip, so nothing a pull request sets reaches this step.
+      - id: pack
+        name: decide whether a private pack is configured
+        env:
+          PACK: ${{ secrets.CHECKS_SECRETS_PACK }}
+        run: |
+          if [ -n "$PACK" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            message="pr-text scan skipped: no private pack is configured (CHECKS_SECRETS_PACK is unset), so this pull request's text was not scanned for private terms"
+            echo "::notice::$message"
+            echo "$message" >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: write the private pack
+        if: steps.pack.outputs.configured == 'true'
         env:
           PACK: ${{ secrets.CHECKS_SECRETS_PACK }}
         run: |
           printf '%s' "$PACK" > "$RUNNER_TEMP/secrets-pack.json"
           echo "CHECKS_SECRETS_PACK=$RUNNER_TEMP/secrets-pack.json" >> "$GITHUB_ENV"
       - id: scan
+        if: steps.pack.outputs.configured == 'true'
         run: bun src/delivery/pr-text.ts "$NUMBER"
       # A comment's run reports on no pull request, so the job reports its result on the head commit.
       - name: report the result on the head commit
         if: ${{ !cancelled() }}
         env:
+          CONFIGURED: ${{ steps.pack.outputs.configured }}
           OUTCOME: ${{ steps.scan.outcome }}
         run: |
           state=failure
-          if [ "$OUTCOME" = success ]; then state=success; fi
+          description="the scan failed or did not run"
+          if [ "$CONFIGURED" = false ]; then
+            state=success
+            description="scan skipped: no private pack is configured (CHECKS_SECRETS_PACK is unset)"
+          elif [ "$CONFIGURED" = true ] && [ "$OUTCOME" = success ]; then
+            state=success
+            description="the scan passed"
+          fi
           head=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$NUMBER" --jq .head.sha)
-          gh api "repos/$GITHUB_REPOSITORY/statuses/$head" -f state="$state" -f context=pr-text -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --silent
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$head" -f state="$state" -f description="$description" -f context=pr-text -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --silent
