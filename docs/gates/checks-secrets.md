@@ -5,6 +5,7 @@ audience: consumers
 # checks-secrets
 
 `checks-secrets` is the gate that fails a range whose commits add a secret, such as an API token, a private key, a VPN key or a proxy link that carries its credential.
+A private pack adds terms no public file may carry, such as a person's name, an employer's domain, host names and IP ranges.
 
 ## What it checks
 
@@ -39,12 +40,86 @@ These rules do not catch:
 No setting accepts a finding.
 It ignores a repository's `.gitleaks.toml`, its `.gitleaksignore` and every `gitleaks:allow` comment.
 It skips the paths gitleaks' default config skips, such as lockfiles, images and `node_modules/`.
+It scans what a commit adds to its files, and not its message or its author, which [checks-commit-identity](checks-commit-identity.md) judges.
+
+## The private pack
+
+The private pack is a JSON file of terms that lives outside every public repository, and `CHECKS_SECRETS_PACK` names its path.
+The kit ships no pack and no term, so a public repository can run the pack without carrying what it hides.
+With `CHECKS_SECRETS_PACK` unset the gate runs the kit's rules alone, exactly as it does without a pack, and its last line says so.
+With it set the gate adds a rule for each kind of term the pack lists, and fails a range that adds any of them.
+
+Each key is optional, and each holds a list of strings:
+
+| Key | Rule | What it matches |
+| --- | --- | --- |
+| `names` | `private-name` | a person's name form, such as a full name, a handle or a login |
+| `domains` | `private-domain` | an employer's or any other domain, also inside an email address or a subdomain |
+| `hosts` | `private-host` | a host name |
+| `runners` | `private-runner` | a CI runner's name |
+| `ipRanges` | `private-ip-range` | an IPv4 address inside a CIDR range, such as `192.0.2.0/24`, or a single IPv4 address |
+
+A pack with obviously fake terms reads like this:
+
+```json
+{
+  "names": ["Pat Example", "pexample"],
+  "domains": ["employer.example"],
+  "hosts": ["build-01.corp.example"],
+  "runners": ["runner-blue-7"],
+  "ipRanges": ["192.0.2.0/24", "198.51.100.7"]
+}
+```
+
+A term matches in any case, and the spaces inside it match any run of whitespace.
+A term's end that is an ASCII letter, digit or underscore matches only at a word boundary, so `pexample` does not match inside `pexamples`.
+An address matches only as a whole, so `192.0.2.0/24` does not match `1192.0.2.5`.
+An IPv6 range has no key, so a pack lists its prefix under `hosts` as its addresses are written, such as `2001:db8:`.
+The gitleaks default allowlist skips paths such as lockfiles, go.mod and go.sum, images and documents such as PDFs.
+It also skips node_modules and some Go and Ruby vendor paths, so the pack terms are not searched there.
+A lockfile's resolved URLs can carry a private registry host, so keep such a host out of lockfiles, go.mod and go.sum by other means.
+Commit messages are not scanned by the pack, and checks-commit-identity covers only the author, the committer and Co-authored-by trailers.
+
+The gate exits 2, and scans nothing, when `CHECKS_SECRETS_PACK` is set but the pack cannot serve:
+
+- the variable is set to an empty value, as a CI secret that is missing expands
+- the file is missing, unreadable or a directory
+- the file is not JSON or holds a key the table does not name
+- a term is blank or holds a control character, or a range is not IPv4
+- the pack lists no term at all
+
+No report or error prints a term or the pack's path, because a public CI log would publish either.
+A finding names its file, its line and its rule, and the description of each pack rule says only which kind of term matched.
+
+The pack lives where only its owner reads it.
+On a laptop it is a file outside every checkout, and the shell profile exports its path:
+
+```sh
+export CHECKS_SECRETS_PACK="$HOME/.config/checks/secrets-pack.json"
+```
+
+In GitHub Actions a repository or organisation secret holds the JSON, and the job writes it to a file before the gate runs:
+
+```yaml
+- name: write the private pack
+  env:
+    PACK: ${{ secrets.CHECKS_SECRETS_PACK }}
+  run: |
+    printf '%s' "$PACK" > "$RUNNER_TEMP/secrets-pack.json"
+    echo "CHECKS_SECRETS_PACK=$RUNNER_TEMP/secrets-pack.json" >> "$GITHUB_ENV"
+- run: bun run lint
+```
+
+A fork's `pull_request` run gets no secret, so the file is empty and the gate exits 2 rather than pass without the pack.
+[checks-pr-text](checks-pr-text.md) scans a pull request's title, body and comments with the same pack.
 
 ## What it reads
 
 It reads the commits of the range from git, not the working tree.
 It needs git 2.36 or newer, which diffs a merge against the merge git would make on its own, and it exits 2 on an older git.
 It reads its rules from `src/delivery/gitleaks.toml` in the installed package.
+It reads the path of the private pack from `CHECKS_SECRETS_PACK`.
+It writes the kit's rules and the pack's into one config in a temporary directory it deletes when the scan ends.
 
 It runs the gitleaks release `src/delivery/gitleaks.ts` pins, by the SHA-256 of each platform's archive and of the binary inside it.
 On first use it downloads the archive from the scanner's GitHub release and unpacks the binary into `~/.cache/avi2dg-checks/gitleaks/<version>/`.
@@ -69,7 +144,7 @@ With one it scans that commit alone.
 | --- | --- |
 | 0 | no commit in the range adds a secret |
 | 1 | a commit in the range adds a secret |
-| 2 | a ref does not resolve, or a commit it scans is an octopus merge, or no verified scanner is at hand, or git is older than 2.36, or gitleaks fails |
+| 2 | a ref does not resolve, or a commit it scans is an octopus merge, or no verified scanner is at hand, or git is older than 2.36, or gitleaks fails, or `CHECKS_SECRETS_PACK` is set and the pack cannot serve |
 
 ## Sample output
 
@@ -78,6 +153,15 @@ secrets: the range adds 3 secret(s); put a placeholder such as <private-key> in 
   vpn/links.txt:1 proxy-userinfo-link in e19e45c2: A proxy share link that carries its credential before the @, such as vless://, trojan://, socks5:// or wireguard://
   vpn/wg0.conf:2 wireguard-key in e19e45c2: A WireGuard or AmneziaWG private or pre-shared key
   vpn/wg0.conf:7 wireguard-key in e19e45c2: A WireGuard or AmneziaWG private or pre-shared key
+secrets: CHECKS_SECRETS_PACK is unset, so the kit's rules ran without a private pack
+```
+
+With a pack set, a finding of the pack names the kind of term and never the term:
+
+```
+secrets: the range adds 1 secret(s); put a placeholder such as <private-key> in its place in the commit that added it, and rotate any secret that left this machine:
+  docs/setup.md:12 private-domain in 4f1c09ab: A domain the private pack lists
+secrets: the kit's rules and the private pack CHECKS_SECRETS_PACK names ran
 ```
 
 The report never prints a secret.
@@ -90,4 +174,5 @@ A local `bun run lint` runs it over the commits the branch adds, so it fails bef
 ## Related topics
 
 - [checks-lint](checks-lint.md)
+- [checks-pr-text](checks-pr-text.md)
 - [Why it is shaped this way](../design.md)

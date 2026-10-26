@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
-import { Console, Effect, FileSystem, Path, Schema } from "effect";
+import { Console, Effect, FileSystem, Schema } from "effect";
 import { commitOf, git, refArgs } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { cacheRoot } from "../dependencies/cache-root.ts";
 import { pinnedGitleaks, scanCommits, type Leak } from "./gitleaks.ts";
+import { scanConfig } from "./secrets-pack.ts";
 
 const NAME = "secrets";
 const USAGE = "usage: secrets.ts <ref> | <base-ref> <head-ref>";
@@ -70,16 +71,16 @@ export function report(leaks: readonly Leak[]): string {
 
 const secrets = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const logOptions = yield* logOptionsOf(process.argv.slice(2), root);
-  const binary = yield* pinnedGitleaks(yield* cacheRoot());
-  const config = path.join(import.meta.dir, "gitleaks.toml");
   const ignoreDir = yield* fs.makeTempDirectoryScoped({ prefix: "checks-secrets-" });
+  const { config, notice } = yield* scanConfig(NAME, yield* fs.makeTempDirectoryScoped({ prefix: "checks-secrets-pack-" }));
+  const binary = yield* pinnedGitleaks(yield* cacheRoot());
   const gitDir = (yield* git(["rev-parse", "--absolute-git-dir"], root)).trim();
   const reported = yield* scanCommits({ binary, gitDir, logOptions, config, ignoreDir });
   const leaks = yield* Effect.forEach(reported, (leak) => atRepositoryPath(leak, root));
   yield* Console.log(report(leaks));
+  yield* Console.log(notice);
   return leaks.length === 0;
 }).pipe(Effect.scoped);
 

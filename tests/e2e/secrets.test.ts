@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CHECKOUT, fixtureRepos, lintWiring, ran, scratchDirs, type FixtureRepo } from "./lib/fixture-repo.ts";
@@ -18,6 +18,9 @@ const link = (scheme: string, rest: string) => `${scheme}://${rest}`;
 const withPadding = (text: string) => Buffer.from(text + " ".repeat((4 - (text.length % 3)) % 3)).toString("base64");
 const armor = (edge: string) => `-----${edge} OPENSSH PRIVATE KEY-----`;
 const HOST = "vpn.home-fixture.net";
+const UNSET = "secrets: CHECKS_SECRETS_PACK is unset, so the kit's rules ran without a private pack\n";
+const CLEAN = { exitCode: 0, text: `secrets: the range adds no secret\n${UNSET}` };
+const findings = (text: string) => text.split("\n").filter((line) => line.startsWith("  "));
 
 function planted(): Readonly<Record<string, string>> {
   return {
@@ -225,7 +228,7 @@ test(
     const clean = await started();
     await clean.repo.write(PLACEHOLDERS);
     const passed = await clean.repo.script(GATE, clean.base, await clean.repo.commit("feat: placeholders"));
-    expect(passed).toEqual({ exitCode: 0, text: "secrets: the range adds no secret\n" });
+    expect(passed).toEqual(CLEAN);
   },
   SCAN_MS,
 );
@@ -257,7 +260,7 @@ test(
     const range = await repo.script(GATE, base, removed);
     expect(range.exitCode).toBe(1);
     expect(range.text).toContain(`  vpn/wg0.conf:1 wireguard-key in ${added.slice(0, 8)}`);
-    expect(await repo.script(GATE, removed)).toEqual({ exitCode: 0, text: "secrets: the range adds no secret\n" });
+    expect(await repo.script(GATE, removed)).toEqual(CLEAN);
     expect((await repo.script(GATE, added)).exitCode).toBe(1);
   },
   SCAN_MS,
@@ -279,7 +282,7 @@ test(
     const inMerge = (place: string) => `  ${place} wireguard-key in ${merge.slice(0, 8)}: A WireGuard or AmneziaWG private or pre-shared key`;
     const failed = await resolved.repo.script(GATE, resolved.main, merge);
     expect(failed.exitCode).toBe(1);
-    expect(failed.text.split("\n").slice(1, -1)).toEqual([inMerge("b/peer.conf:1"), inMerge("b/wg0.conf:1"), inMerge("vpn/wg0.conf:1")]);
+    expect(findings(failed.text)).toEqual([inMerge("b/peer.conf:1"), inMerge("b/wg0.conf:1"), inMerge("vpn/wg0.conf:1")]);
     expect((await resolved.repo.script(GATE, merge)).text).toBe(failed.text);
 
     const inherited = await diverged({
@@ -288,7 +291,7 @@ test(
     });
     await inherited.repo.write({ "README.md": "# fixture\n" });
     const passed = await inherited.repo.script(GATE, inherited.main, await inherited.repo.commit("merge: main into topic"));
-    expect(passed).toEqual({ exitCode: 0, text: "secrets: the range adds no secret\n" });
+    expect(passed).toEqual(CLEAN);
   },
   SCAN_MS,
 );
@@ -313,7 +316,7 @@ test(
     const after = await repo.commit("feat: add a key after the octopus");
     const alone = await repo.script(GATE, after);
     expect(alone.exitCode).toBe(1);
-    expect(alone.text.split("\n").slice(1, -1)).toEqual([
+    expect(findings(alone.text)).toEqual([
       `  vpn/wg1.conf:1 wireguard-key in ${after.slice(0, 8)}: A WireGuard or AmneziaWG private or pre-shared key`,
     ]);
   },
@@ -368,6 +371,90 @@ test(
     const lint = await repo.lint();
     expect(lint.text).toContain("  vpn/links.txt:1 proxy-userinfo-link in ");
     expect(lint.text).toContain("checks-secrets");
+  },
+  SCAN_MS,
+);
+
+const fake = (prefix: string) => `${prefix}${randomBytes(4).toString("hex")}`;
+
+type PackTerms = {
+  readonly first: string;
+  readonly last: string;
+  readonly domain: string;
+  readonly host: string;
+  readonly runner: string;
+  readonly octets: readonly [number, number];
+};
+
+function packTerms(): PackTerms {
+  return {
+    first: fake("Fakefirst"),
+    last: fake("Fakelast"),
+    domain: `${fake("employer")}.example`,
+    host: `${fake("build-")}.lan`,
+    runner: fake("runner-"),
+    octets: [randomInt(1, 100), randomInt(0, 256)],
+  };
+}
+
+async function packFile(terms: PackTerms): Promise<string> {
+  const dir = await scratch("checks-secrets-pack-");
+  const file = join(dir, "pack.json");
+  const { first, last, domain, host, runner, octets } = terms;
+  await writeFile(file, JSON.stringify({ names: [`${first} ${last}`], domains: [domain], hosts: [host], runners: [runner], ipRanges: [`${octets.join(".")}.0.0/16`] }));
+  return file;
+}
+
+const withPack = (repo: FixtureRepo, pack: string, ...refs: readonly string[]) =>
+  ran($`bun ${join(CHECKOUT, "src", GATE)} ${refs}`.cwd(repo.dir).env({ ...process.env, CHECKS_SECRETS_PACK: pack }));
+
+test(
+  "a range adding a term of the private pack fails on its rule and never prints the term, and the same range passes with no pack",
+  async () => {
+    const terms = packTerms();
+    const { first, last, domain, host, runner, octets } = terms;
+    const pack = await packFile(terms);
+    const [a, b] = octets;
+    const lines = [
+      { line: `Reviewed by ${first.toUpperCase()}  ${last.toLowerCase()}`, rules: ["private-name"] },
+      { line: `mail pat@${domain} for access`, rules: ["private-domain"] },
+      { line: `ssh deploy@${host}`, rules: ["private-host"] },
+      { line: `runs-on: [${runner}]`, rules: ["private-runner"] },
+      { line: `peer = ${a}.${b}.${randomInt(0, 256)}.${randomInt(0, 256)}:51820`, rules: ["private-ip-range"] },
+      { line: `${first}${last} and ${runner}s and not${domain}`, rules: [] },
+      { line: `peer = ${a}.${(b + 1) % 256}.1.1 and 1${a}.${b}.1.1`, rules: [] },
+    ];
+    const { repo, base } = await started();
+    await repo.write({ "notes/team.md": `${lines.map(({ line }) => line).join("\n")}\n` });
+    const head = await repo.commit("docs: add team notes");
+
+    const failed = await withPack(repo, pack, base, head);
+    expect(failed.exitCode).toBe(1);
+    const found = rulesByPlace(failed.text);
+    expect(lines.map((_, index) => found.get(`notes/team.md:${index + 1}`) ?? [])).toEqual(lines.map(({ rules }) => rules));
+    expect(failed.text.split("\n").at(-2)).toBe("secrets: the kit's rules and the private pack CHECKS_SECRETS_PACK names ran");
+    for (const term of [first, last, domain, host, runner, `${a}.${b}.`, pack]) expect(failed.text.toLowerCase()).not.toContain(term.toLowerCase());
+
+    expect(await repo.script(GATE, base, head)).toEqual(CLEAN);
+  },
+  SCAN_MS,
+);
+
+test(
+  "a pack set but missing, empty or naming no term fails the gate rather than scanning without it",
+  async () => {
+    const { repo, base } = await started();
+    await repo.write({ "README.md": "# fixture\nplain text\n" });
+    const head = await repo.commit("docs: plain text");
+    const dir = await scratch("checks-secrets-pack-");
+    await writeFile(join(dir, "empty-lists.json"), JSON.stringify({ names: [], ipRanges: [] }));
+    const refused = (why: string) => ({ exitCode: 2, text: `secrets: the private pack CHECKS_SECRETS_PACK names ${why}, so the gate cannot scan for its terms\n` });
+    expect(await withPack(repo, join(dir, "missing.json"), base, head)).toEqual(refused("no file that exists"));
+    expect(await withPack(repo, "", base, head)).toEqual({
+      exitCode: 2,
+      text: "secrets: CHECKS_SECRETS_PACK is set but empty, so it names no private pack and the gate cannot scan for its terms\n",
+    });
+    expect(await withPack(repo, join(dir, "empty-lists.json"), base, head)).toEqual(refused("lists no term"));
   },
   SCAN_MS,
 );
