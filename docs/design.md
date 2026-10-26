@@ -300,6 +300,18 @@ No finding can be accepted.
 A secret has no false positive worth keeping in git, because a placeholder carries the same shape without the value.
 So the gate ignores a repository's `.gitleaks.toml`, `.gitleaksignore` and `gitleaks:allow` comments, which would each let one repository pass what another fails.
 
+A person's name, an employer's domain, host names and IP ranges are no secret to gitleaks, yet a public repository must not carry them.
+A rule that names them would publish them, so the owner keeps the terms in a private pack outside every repository.
+The pack is a file rather than an inline variable, so one file serves the shell and the runner, and no workflow names a term.
+A pack that is set but cannot serve fails the gate, because a scan that quietly dropped it would pass what it exists to catch.
+An empty `CHECKS_SECRETS_PACK` counts as set, since a CI secret that is missing expands to an empty value.
+No report prints a matched term text or the pack path, because the report lands in a public CI log.
+A finding location prints as it stands, such as a file name or a link.
+So a term inside a file name or a repository name shows there.
+That location is already public in the scanned commit or the scanned pull request.
+
+A pull request's title, body and comments reach the forge without a commit, so [checks-pr-text](gates/checks-pr-text.md) scans them with the same rules and the same pack.
+
 ## The frontend checks are opt-in
 
 A browser check needs a built site and a browser, and a backend repository has neither.

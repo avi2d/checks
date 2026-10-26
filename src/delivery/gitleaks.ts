@@ -65,23 +65,27 @@ export type Leak = typeof Leak.Type;
 
 const decodeGitleaksReport = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Array(Leak)));
 
-export type Scan = {
+type Scanner = {
   readonly binary: string;
-  readonly gitDir: string;
-  readonly logOptions: string;
   readonly config: string;
   readonly ignoreDir: string;
 };
 
+export type Scan = Scanner & {
+  readonly gitDir: string;
+  readonly logOptions: string;
+};
+
+export type DirectoryScan = Scanner & {
+  readonly dir: string;
+};
+
 // gitleaks exits 1 both on a leak and on a fatal error, so it exits 0 on a leak here and the report alone tells them apart.
 // It exits 0 with an empty report when git log fails, and logs only errors here, so any line it logs fails the scan.
-// It reads a .gitleaksignore at its source whatever --gitleaks-ignore-path says, so the source is the git directory, where no tracked file lands.
-export const scanCommits = Effect.fn("scanCommits")(function* ({ binary, gitDir, logOptions, config, ignoreDir }: Scan) {
+// It reads a .gitleaksignore at its source whatever --gitleaks-ignore-path says, so a source holds no file a repository or an author can name.
+const scanned = Effect.fn("scanned")(function* (source: readonly string[], { binary, config, ignoreDir }: Scanner) {
   const args = [
-    "git",
-    gitDir,
-    "--log-opts",
-    logOptions,
+    ...source,
     "--config",
     config,
     "--gitleaks-ignore-path",
@@ -109,3 +113,14 @@ export const scanCommits = Effect.fn("scanCommits")(function* ({ binary, gitDir,
     Effect.mapError((cause) => new GitleaksError({ message: `cannot read the report gitleaks wrote: ${cause.message}` })),
   );
 });
+
+type Scanned = ReturnType<typeof scanned>;
+
+// The source is the git directory, where no tracked file lands.
+export function scanCommits({ gitDir, logOptions, ...scanner }: Scan): Scanned {
+  return scanned(["git", gitDir, "--log-opts", logOptions], scanner);
+}
+
+export function scanDirectory({ dir, ...scanner }: DirectoryScan): Scanned {
+  return scanned(["dir", dir], scanner);
+}

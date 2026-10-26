@@ -38,6 +38,8 @@ function isolateFixtureGit(): void {
 }
 
 isolateFixtureGit();
+// A developer's own pack would add its terms to every scan a fixture runs.
+delete process.env["CHECKS_SECRETS_PACK"];
 
 export type Ran = { readonly exitCode: number; readonly text: string };
 
