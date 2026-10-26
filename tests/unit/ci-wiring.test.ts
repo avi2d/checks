@@ -146,6 +146,21 @@ test("a checks-release-tag argument must name a workflow the repository holds", 
   ]);
 });
 
+test("every checks-release-push argument must name a workflow the repository holds", () => {
+  const push = (run: string) =>
+    named({
+      "ci.yml": held,
+      "release-push.yml": `name: release-push\non:\n  push:\njobs:\n  release:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ${run}\n`,
+    });
+  expect(findMissingWorkflows(push("bunx checks-release-push release-push.yml ci.yml"))).toEqual([]);
+  expect(findMissingWorkflows(push("bunx checks-release-push release.yml ci.yml"))).toEqual([
+    { location: ".github/workflows/release-push.yml line 8", fault: "names missing workflow release.yml" },
+  ]);
+  expect(findMissingWorkflows(push("bun src/delivery/release-push.ts ci.yml gone.yml")).map(({ fault }) => fault)).toEqual([
+    "names missing workflow gone.yml",
+  ]);
+});
+
 test("a bun run release call names a workflow the repository holds", () => {
   const release = (run: string) =>
     named({

@@ -1,3 +1,16 @@
 # Changelog
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
+
+## 0.53.0
+
+Released 2026-10-26.
+
+### Features
+
+- **delivery:** release each push to main as a versioned npm release [#5](https://github.com/avi2d/checks/pull/5)
+- **delivery:** keep private terms out of commits and pull request text [#2](https://github.com/avi2d/checks/pull/2)
+
+### Fixes
+
+- **delivery:** skip pr-text scan when CHECKS_SECRETS_PACK is unset [#6](https://github.com/avi2d/checks/pull/6)

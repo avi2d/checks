@@ -38,8 +38,8 @@ type Locator = (keys: readonly Key[], needle: string, fallback: string) => strin
 type Node = { readonly from: number; readonly to: number; readonly column: number };
 
 const WORKFLOWS = ".github/workflows";
-const RELEASE_BINS = ["checks-release-pr", "checks-release-tag"];
-const RELEASE_SOURCES = ["release-pr.ts", "release-tag.ts"];
+const RELEASE_BINS = ["checks-release-pr", "checks-release-push", "checks-release-tag"];
+const RELEASE_SOURCES = ["release-pr.ts", "release-push.ts", "release-tag.ts"];
 const REUSABLE_PREFIX = "./.github/workflows/";
 // GitHub substitutes an expression into the script before the shell reads it.
 const EXPRESSION = /\$\{\{[\s\S]*?\}\}/g;
