@@ -117,7 +117,7 @@ jobs:
           path: reports/mutation/mutation.json
           retention-days: 1
   tests:
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -135,7 +135,7 @@ jobs:
   report:
     needs: [mutation, tests]
     if: ${{ !cancelled() && needs.tests.result == 'success' }}
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       actions: read
@@ -176,9 +176,9 @@ It passes `--mutation` only when the mutation job succeeded, and the failed muta
 The concurrency group queues a run started by hand behind the scheduled one, so two runs never file the same finding twice.
 A dispatch on a branch runs both jobs and lists its findings in the report job's log, and `if-no-files-found: ignore` lets that run upload no record.
 `issues: write` on the report job is the one permission beyond reading the repository and its runs.
-A public repository keeps `runs-on: ubuntu-latest` on the mutation job.
+A public repository keeps `runs-on: ubuntu-latest` on every job.
 A private repository sets `runs-on` on the mutation job to the labels declared under `checks.mutationRunner` in `package.json`, and [checks-ci-wiring](checks-ci-wiring.md#runners) refuses a mutation job that names `CI_RUNS_ON`.
-The report job reads `CI_RUNS_ON`, because it runs no mutant.
+A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on the tests and report jobs.
 A successful run uploads `night-run`, so the next night compares with it, and a failed run uploads nothing a later night reads.
 The artifact keeps 90 days, so a gap of nights still leaves a previous night to compare with.
 
