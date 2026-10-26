@@ -19,7 +19,7 @@ export default {
 `;
 
 export function expectStrykerExitsZero(result: Ran): void {
-  expect(result.exitCode).toBe(0);
+  if (result.exitCode !== 0) throw new Error(`stryker exited ${result.exitCode}:\n${result.text}`);
 }
 
 export const WIDGET_TEST = `import { expect, test } from "bun:test";
