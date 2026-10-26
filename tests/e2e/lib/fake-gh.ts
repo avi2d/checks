@@ -196,6 +196,7 @@ async function main(): Promise<number> {
   const answer = fromGit === undefined ? await pullsApi(origin, state, method, route, body) : { state, body: fromGit };
   if (answer === undefined) return refuse(`fake gh: no route for ${method} ${endpoint}`);
   await writeFile(statePath, JSON.stringify(answer.state));
+  if (process.env["FAKE_GH_LOSE_REPLY"] === `${method} ${endpoint}`) return refuse("gh: HTTP 502: Bad Gateway");
   if (answer.body !== undefined) process.stdout.write(JSON.stringify(answer.body));
   return 0;
 }

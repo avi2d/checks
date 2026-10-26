@@ -90,6 +90,25 @@ test(
 );
 
 test(
+  "an update of main that GitHub applied but whose reply was lost still tags and releases the version",
+  async () => {
+    const pkg = await widget();
+
+    const lost = await pkg.run(["release.yml", "ci.yml"], { FAKE_GH_LOSE_REPLY: "PATCH repos/{owner}/{repo}/git/refs/heads/main" });
+    expect(lost.exitCode).toBe(0);
+    const release = await pkg.inOrigin("rev-parse", "main");
+    expect(await pkg.inOrigin("log", "-1", "--format=%s", "main")).toBe("chore: release 0.1.1");
+    expect(lost.text).toContain(`release-push: released 0.1.1 as ${release.slice(0, 12)} on main, tagged it v0.1.1, and dispatched release.yml on it\n`);
+    expect(await pkg.inOrigin("rev-parse", "v0.1.1^{commit}")).toBe(release);
+    expect((await pkg.state()).dispatches).toEqual([
+      { workflow: "ci.yml", ref: "release/main" },
+      { workflow: "release.yml", ref: "v0.1.1" },
+    ]);
+  },
+  60_000,
+);
+
+test(
   "failed checks leave main, the tags and the release workflow alone",
   async () => {
     const pkg = await widget();

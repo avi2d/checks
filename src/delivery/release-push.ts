@@ -50,13 +50,20 @@ const awaitChecks = Effect.fn("awaitChecks")(function* (workflows: readonly stri
   return yield* refused(`${waiting.join(", ")} did not finish on ${sha.slice(0, 12)} within ${Duration.format(Duration.times(POLL, POLLS))}, so the release stays off the branch`);
 });
 
+type Landing = "landed" | "moved";
+
 // GitHub refuses a branch update that is no fast-forward, which is how a branch that moved during the checks shows.
+// A failed call may still have applied the update, so the branch's head decides what happened.
 const land = Effect.fn("land")(function* (root: string, base: string, head: string, release: string) {
   return yield* gitHubJson(decodeRef, "PATCH", `${REPOSITORY}/git/refs/heads/${base}`, { sha: release, force: false }).pipe(
-    Effect.as(true),
+    Effect.as<Landing>("landed"),
     Effect.catchTag("GitHubFailure", (failure) =>
       git(["ls-remote", "origin", `refs/heads/${base}`], root).pipe(
-        Effect.flatMap((listed) => (listed.split("\t")[0] === head ? Effect.fail(failure) : Effect.succeed(false))),
+        Effect.flatMap((listed) => {
+          const now = listed.split("\t")[0];
+          if (now === release) return Effect.succeed<Landing>("landed");
+          return now === head ? Effect.fail(failure) : Effect.succeed<Landing>("moved");
+        }),
       ),
     ),
   );
@@ -78,7 +85,7 @@ const releasePush = Effect.gen(function* () {
   yield* Effect.forEach(checks, (workflow) => dispatch(workflow, branch));
   yield* Console.log(`${LABEL}: dispatched ${checks.join(", ")} on ${branch} to check ${next} at ${release.slice(0, 12)}`);
   yield* awaitChecks(checks, release);
-  if (!(yield* land(root, base, head, release))) {
+  if ((yield* land(root, base, head, release)) === "moved") {
     yield* Console.log(`${LABEL}: ${base} moved past ${head.slice(0, 12)} while the checks ran, so the run on its new head releases it`);
     return true;
   }
