@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Config, Console, Effect, FileSystem, Path, Schema } from "effect";
-import { collect } from "../core/git.ts";
+import { collect, git } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 
 const NAME = "commit-title";
@@ -41,22 +41,29 @@ const dispatchedTitle = Effect.fn("dispatchedTitle")(function* () {
     "api",
     `repos/${repository}/pulls?head=${owner}:${ref}&state=open`,
     "--jq",
-    `if length == 1 then .[0].title else error("no one open pull request heads the branch") end`,
+    `if length == 1 then .[0].title elif length == 0 then empty else error("more than one open pull request heads the branch") end`,
   ]);
   const title = found.stdout.trim();
-  if (found.exitCode !== 0 || title === "" || title === "null") {
+  if (found.exitCode !== 0 || title === "null") {
     const report = found.stderr.trim() === "" ? found.stdout.trim() : found.stderr.trim();
     if (report !== "") yield* Console.error(report);
     return undefined;
   }
-  return title;
+  if (title !== "") return landedTitle(title);
+  // With no pull request the head commit lands as it is, so its own subject is the one to lint.
+  return (yield* git(["log", "-1", "--format=%s", "HEAD"])).trim();
 });
 
-const lintTitle = Effect.fn("lintTitle")(function* (title: string) {
+// GitHub appends the pull request number to the squashed subject.
+function landedTitle(title: string): string {
+  return `${title} (#0000)`;
+}
+
+const lintTitle = Effect.fn("lintTitle")(function* (subject: string) {
   const system = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const file = path.join(yield* system.makeTempDirectoryScoped({ prefix: "checks-commit-title-" }), "pr-title");
-  yield* system.writeFileString(file, `${title} (#0000)`);
+  yield* system.writeFileString(file, subject);
   // A title opening with the git comment character lints as empty without this: commentChar moves off the hash.
   const linted = yield* collect(process.execPath, [yield* cliOf(), "--config", yield* configOf(), "--edit", file], undefined, {
     env: { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.commentChar", GIT_CONFIG_VALUE_0: "\x01" },
@@ -68,7 +75,7 @@ const lintTitle = Effect.fn("lintTitle")(function* (title: string) {
 
 const check = Effect.scoped(Effect.gen(function* () {
   const direct = yield* Config.String("PR_TITLE").pipe(Config.withDefault(""));
-  if (direct !== "") return yield* lintTitle(direct);
+  if (direct !== "") return yield* lintTitle(landedTitle(direct));
   const event = yield* Config.String("GITHUB_EVENT_NAME").pipe(Config.withDefault(""));
   if (event === "workflow_dispatch") {
     const title = yield* dispatchedTitle();

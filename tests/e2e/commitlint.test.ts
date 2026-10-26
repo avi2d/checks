@@ -3,9 +3,10 @@ import { expect, test } from "bun:test";
 import { symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { withoutPullRequestEvent } from "../lib/env.ts";
-import { CHECKOUT, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
+import { CHECKOUT, fixtureRepos, ran, scratchDirs, type Ran } from "./lib/fixture-repo.ts";
 
 const scratch = scratchDirs();
+const repository = fixtureRepos("commit-title-dispatch-");
 const BIN = join(CHECKOUT, "src", "delivery", "commit-title.ts");
 
 function lint(message: string): Promise<Ran> {
@@ -112,6 +113,55 @@ test(
     );
     expect(pushed.exitCode).toBe(0);
     expect(pushed.text).toContain("nothing to lint");
+  },
+  60_000,
+);
+
+// The fake answers the pull request list with FAKE_PULLS and runs the caller's --jq filter through jq, as gh does.
+async function dispatchedLinter(subject: string): Promise<(pulls: readonly { readonly title: string }[]) => Promise<Ran>> {
+  const repo = await repository({ "notes.txt": "one\n" });
+  await repo.commit(subject);
+  const bin = await scratch("commit-title-gh-");
+  await Bun.write(join(bin, "gh"), '#!/bin/sh\nwhile [ "$1" != "--jq" ]; do shift; done\nprintf "%s" "$FAKE_PULLS" | jq -r "$2"\n');
+  await $`chmod +x ${join(bin, "gh")}`.quiet();
+  return (pulls) =>
+    ran(
+      $`bun ${BIN}`.cwd(repo.dir).env({
+        ...withoutPullRequestEvent(),
+        PR_TITLE: "",
+        GITHUB_EVENT_NAME: "workflow_dispatch",
+        GITHUB_REPOSITORY: "acme/widget",
+        GITHUB_REPOSITORY_OWNER: "acme",
+        GITHUB_REF_NAME: "release/main",
+        FAKE_PULLS: JSON.stringify(pulls),
+        PATH: `${bin}:${process.env["PATH"] ?? ""}`,
+      }),
+    );
+}
+
+test(
+  "a dispatched run lints the title of the one open pull request its branch heads, and the head subject when none does",
+  async () => {
+    const released = await dispatchedLinter("chore: release 0.1.1");
+    expect(await released([])).toEqual({ exitCode: 0, text: "" });
+    expect((await released([{ title: "update stuff" }])).exitCode).not.toBe(0);
+    expect(await released([{ title: "feat(lint): add x" }])).toEqual({ exitCode: 0, text: "" });
+
+    const unconventional = await dispatchedLinter("update stuff");
+    const refused = await unconventional([]);
+    expect(refused.exitCode).not.toBe(0);
+    expect(refused.text).toContain("[type-empty]");
+  },
+  60_000,
+);
+
+test(
+  "a dispatched run whose branch heads two open pull requests lints nothing and fails",
+  async () => {
+    const lintDispatched = await dispatchedLinter("chore: release 0.1.1");
+    const ambiguous = await lintDispatched([{ title: "feat(lint): add x" }, { title: "fix(lint): mend y" }]);
+    expect(ambiguous.exitCode).not.toBe(0);
+    expect(ambiguous.text).toContain("more than one open pull request heads the branch");
   },
   60_000,
 );

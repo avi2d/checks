@@ -52,6 +52,7 @@ These bins run on their own:
 - [`checks-release-notes`](gates/checks-release-notes.md) writes one `CHANGELOG.md` section to a file for a GitHub release.
 - [`checks-release-report`](gates/checks-release-report.md) tells whether the history holds unreleased features or fixes since the last tag.
 - [`checks-release-pr`](gates/checks-release-pr.md) opens or refreshes the pull request that releases the next version, and dispatches its checks.
+- [`checks-release-push`](gates/checks-release-push.md) releases a package's next version onto its branch once the checks pass, tags it and dispatches the release workflow on the tag.
 - [`checks-release-tag`](gates/checks-release-tag.md) tags a landed release commit with its version and dispatches the release workflow on the tag.
 - [`checks-vendor`](gates/checks-vendor.md) pins each library its `prepare` arguments name to a shared read-only clone and links it under `repos/`.
 - [`checks-browser`](gates/checks-browser.md) opens a product's built pages in Chrome and fails on the layout, keyboard, motion, accessibility, nesting and asset checks its `browser-checks.json` declares.

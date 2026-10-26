@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { taggedCommitOf } from "../../src/delivery/release-tag.ts";
+import { taggedCommitOf } from "../../src/delivery/release-tagging.ts";
 
 const TAG_OBJECT = "c".repeat(40);
 const COMMIT = "d".repeat(40);

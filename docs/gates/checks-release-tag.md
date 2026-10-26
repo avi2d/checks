@@ -56,8 +56,10 @@ release-tag: tagged 3f2a9c81d0b4 as v0.4.0, and dispatched release.yml on it
 ## When it runs
 
 The `tag` job of the daily release workflow runs it on each push to `main` whose head commit reads as a release, as [checks-release-pr](checks-release-pr.md#running-it-in-ci) shows.
+A package repository needs no `tag` job, since [checks-release-push](checks-release-push.md) tags the release it lands.
 
 ## Related topics
 
 - [checks-release-pr](checks-release-pr.md)
+- [checks-release-push](checks-release-push.md)
 - [checks-release-notes](checks-release-notes.md)

@@ -56,7 +56,7 @@ release-report: no unreleased changes since v0.1.0
 ## When it runs
 
 A person runs it to see what the next release holds.
-[checks-release-pr](checks-release-pr.md) reads the same changes before it opens the release pull request.
+[checks-release-pr](checks-release-pr.md) and [checks-release-push](checks-release-push.md) read the same changes before they cut a release.
 A repository with no versioned releases does not need it.
 
 ## Related topics
@@ -64,3 +64,4 @@ A repository with no versioned releases does not need it.
 - [checks-changelog](checks-changelog.md)
 - [checks-release-notes](checks-release-notes.md)
 - [checks-release-pr](checks-release-pr.md)
+- [checks-release-push](checks-release-push.md)
