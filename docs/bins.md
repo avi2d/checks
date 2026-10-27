@@ -18,8 +18,7 @@ The table groups the gates by vector, the part of a repository each one judges.
 | --- | --- | --- | --- |
 | complexity | [`checks-suppressions-ratchet`](gates/checks-suppressions-ratchet.md) | the range | every repository |
 | complexity | [`checks-repetition`](gates/checks-repetition.md) | the range | a repository tracking `*.ts` or `*.tsx` |
-| complexity | [`checks-unused`](gates/checks-unused.md) | the working tree | a repository tracking `*.ts` or `*.tsx` or `*.astro` |
-| complexity | [`checks-exports`](gates/checks-exports.md) | the range | a repository tracking `*.ts` or `*.tsx` |
+| complexity | [`checks-graphwalk`](gates/checks-graphwalk.md) | the range | a repository tracking `*.ts` or `*.tsx` or `*.astro` |
 | quality | [`checks-lint-coverage`](gates/checks-lint-coverage.md) | the working tree | a repository tracking `*.ts` or `*.tsx` or `*.astro` |
 | quality | [`checks-comment-gate`](gates/checks-comment-gate.md) | the range | every repository |
 | quality | [`checks-effect-scope`](gates/checks-effect-scope.md) | the working tree | a repository tracking `oxlint.config.ts` |
@@ -33,7 +32,6 @@ The table groups the gates by vector, the part of a repository each one judges.
 | delivery | [`checks-commit-identity`](gates/checks-commit-identity.md) | the range | every repository |
 | delivery | [`checks-ci-wiring`](gates/checks-ci-wiring.md) | the working tree | every repository |
 | delivery | [`checks-secrets`](gates/checks-secrets.md) | the range | every repository |
-| dependencies | [`checks-imports`](gates/checks-imports.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
 | dependencies | [`checks-advisories`](gates/checks-advisories.md) | the range | a repository tracking `bun.lock` |
 
 <!-- end generated gates -->

@@ -440,7 +440,7 @@ test(
         ...Object.values(manifest.exports).flatMap((exported) => (typeof exported === "string" ? [exported] : [exported.types, exported.default])),
         ...oxlintrc.jsPlugins,
         "commitlint.config.ts",
-        // checks-imports hands this file to dependency-cruiser and checks-flake hands its preload to bun by path, and --production follows only an entry marked with !.
+        // checks-graphwalk hands this file to dependency-cruiser and checks-flake hands its preload to bun by path, and --production follows only an entry marked with !.
         "src/dependencies/kit-defaults.ts!",
         "src/testing/flake-preload.ts!",
       ].map((target) => (target.startsWith("./") ? target.slice(2) : target));
@@ -539,7 +539,7 @@ test(
     const kit = await runScript("kit", withoutPullRequestEvent());
     expect(kit.text).toContain("from HEAD against origin/main");
     expect(kit.text).toContain("commit-identity: 1 commit(s)");
-    expect(kit.text).toContain("checks-lint: 15 gate(s) pass");
+    expect(kit.text).toContain("checks-lint: 13 gate(s) pass");
     expect(kit.exitCode).toBe(0);
   },
   180_000,
@@ -548,23 +548,25 @@ test(
 test(
   "packed-tarball consumer goes red on a dead file through the published knip builder, green once it is removed",
   async () => {
-    await useConsumer("tarball", { scripts: { unused: "checks-unused" } });
+    await useConsumer("tarball", { scripts: { graphwalk: "checks-graphwalk" } });
     await writeFile(join(dir, "knip.config.ts"), `import { defineConfig } from "@avi2dg/checks/knip";\nexport default defineConfig({ entry: ["index.ts"] });\n`);
     await writeFile(join(dir, "index.ts"), `import { used } from "./used.ts";\n\nexport const index = used;\n`);
-    await writeFile(join(dir, "used.ts"), `export const used = 1;\nexport const unusedExport = 2;\n`);
+    await writeFile(join(dir, "used.ts"), `export const used = 1;\n`);
+    await mkdir(join(dir, "tests", "unit"), { recursive: true });
+    await writeFile(join(dir, "tests", "unit", "index.test.ts"), `import { index } from "../../index.ts";\n\nexport const seen = index;\n`);
     await writeFile(join(dir, "dead.ts"), `export const dead = 1;\n`);
     await $`git init -q && git add -A`.cwd(dir).quiet();
 
-    const red = await runScript("unused");
+    const red = await runScript("graphwalk");
     expect(red.exitCode).toBe(1);
     expect(red.text).toContain("unused: 1 unreferenced file(s):\n  dead.ts");
-    expect(red.text).not.toContain("unusedExport");
+    expect(red.text).toContain("error no-orphans: dead.ts");
 
     await rm(join(dir, "dead.ts"));
     await $`git add -A`.cwd(dir).quiet();
-    const green = await runScript("unused");
+    const green = await runScript("graphwalk");
     expect(green.exitCode).toBe(0);
-    expect(green.text).toContain("unused: no unreferenced files among 3 tracked .ts/.tsx/.astro file(s)");
+    expect(green.text).toContain("unused: no unreferenced files among 4 tracked .ts/.tsx/.astro file(s)");
   },
   180_000,
 );

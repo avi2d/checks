@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
-import { baselineOf, driftOf, report, symbolsOf, type Baseline } from "../../src/complexity/exports.ts";
+import { baselineOf, driftOf, exportsReport, filesOf, symbolsOf, unusedReport, type Baseline } from "../../src/complexity/graphwalk.ts";
 
 const KNIP = JSON.stringify({
   issues: [
@@ -16,30 +16,39 @@ const KNIP = JSON.stringify({
   ],
 });
 
-test("symbolsOf names each unused export and type in Knip's JSON report, sorted, and nothing else", () => {
+test("filesOf names each unreferenced .ts, .tsx or .astro file in Knip JSON report, sorted, and nothing else", () => {
+  expect(Effect.runSync(filesOf(KNIP))).toEqual(["src/planted-dead.ts"]);
+  expect(Effect.runSync(filesOf("{\"issues\":[]}\n"))).toEqual([]);
+});
+
+test("filesOf fails on output that is not Knip JSON report", () => {
+  expect(Effect.runSync(Effect.flip(filesOf("Unused files (1)\nsrc/dead.ts\n"))).message).toContain("knip's JSON report does not decode");
+  expect(Effect.runSync(Effect.flip(filesOf("{\"files\":[\"src/dead.ts\"]}"))).message).toContain("knip's JSON report does not decode");
+});
+test("symbolsOf names each unused export and type in Knip JSON report, sorted, and nothing else", () => {
   expect(Effect.runSync(symbolsOf(KNIP))).toEqual([
     { file: "src/other.ts", kind: "export", name: "otherExport" },
     { file: "src/used.ts", kind: "export", name: "unusedExport" },
     { file: "src/used.ts", kind: "type", name: "UnusedOptions" },
   ]);
-  expect(Effect.runSync(symbolsOf(`{"issues":[]}\n`))).toEqual([]);
+  expect(Effect.runSync(symbolsOf("{\"issues\":[]}\n"))).toEqual([]);
 });
 
-test("symbolsOf fails on output that is not Knip's JSON report", () => {
+test("symbolsOf fails on output that is not Knip JSON report", () => {
   expect(Effect.runSync(Effect.flip(symbolsOf("Unused exports (1)\nsrc/used.ts"))).message).toContain("knip's JSON report does not decode");
-  expect(Effect.runSync(Effect.flip(symbolsOf(`{"files":["src/used.ts"]}`))).message).toContain("knip's JSON report does not decode");
+  expect(Effect.runSync(Effect.flip(symbolsOf("{\"files\":[\"src/used.ts\"]}"))).message).toContain("knip's JSON report does not decode");
 });
 
 test("baselineOf decodes the committed baseline and fails on what is not one", () => {
   const baseline: Baseline = [{ file: "src/used.ts", kind: "export", name: "unusedExport" }];
   expect(Effect.runSync(baselineOf(JSON.stringify(baseline), "exports-baseline.json"))).toEqual(baseline);
   expect(Effect.runSync(baselineOf("[]", "exports-baseline.json"))).toEqual([]);
-  expect(Effect.runSync(Effect.flip(baselineOf(`{"src/used.ts":["unusedExport"]}`, "exports-baseline.json"))).message).toContain(
+  expect(Effect.runSync(Effect.flip(baselineOf("{\"src/used.ts\":[\"unusedExport\"]}", "exports-baseline.json"))).message).toContain(
     "exports-baseline.json does not decode",
   );
 });
 
-test("driftOf refuses an unused export the head baseline does not hold, an added entry the base did not leave unused, and an entry Knip no longer reports", () => {
+test("driftOf refuses an unlisted symbol, an added entry its base left used, and a stale entry", () => {
   const reported: Baseline = [
     { file: "src/used.ts", kind: "export", name: "unusedExport" },
     { file: "src/used.ts", kind: "type", name: "UnusedOptions" },
@@ -67,14 +76,14 @@ test("driftOf refuses an unused export the head baseline does not hold, an added
   expect(driftOf({ reported: [], base, head: [], unusedAtBase: [] })).toEqual({ unlisted: [], added: [], stale: [] });
 });
 
-test("report holds a clean scan, counts a held baseline, and lists each drift", () => {
+test("exportsReport holds a clean scan, counts a held baseline, and lists each drift", () => {
   const none = { unlisted: [], added: [], stale: [] };
-  expect(report([], none)).toBe("exports: no unused exports or types");
-  expect(report([{ file: "src/used.ts", kind: "export", name: "unusedExport" }], none)).toBe(
+  expect(exportsReport([], none)).toBe("exports: no unused exports or types");
+  expect(exportsReport([{ file: "src/used.ts", kind: "export", name: "unusedExport" }], none)).toBe(
     "exports: 1 unused export(s) in exports-baseline.json, and no new ones",
   );
   expect(
-    report([], {
+    exportsReport([], {
       unlisted: [{ file: "src/used.ts", kind: "export", name: "unusedExport" }],
       added: [{ file: "src/new.ts", kind: "export", name: "listed" }],
       stale: [{ file: "src/gone.ts", kind: "type", name: "Removed" }],
@@ -89,4 +98,9 @@ test("report holds a clean scan, counts a held baseline, and lists each drift", 
       "  src/gone.ts: Removed (type)",
     ].join("\n"),
   );
+});
+
+test("unusedReport counts a clean scan and lists each dead file", () => {
+  expect(unusedReport({ tracked: 110, files: [] })).toBe("unused: no unreferenced files among 110 tracked .ts/.tsx/.astro file(s)");
+  expect(unusedReport({ tracked: 3, files: ["src/dead.ts", "src/other.ts"] })).toBe("unused: 2 unreferenced file(s):\n  src/dead.ts\n  src/other.ts");
 });

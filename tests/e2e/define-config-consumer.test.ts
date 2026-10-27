@@ -176,15 +176,13 @@ test(
 );
 
 test(
-  "knip and checks-imports read the kit's knip and dependency-cruiser builders, and neither config reads as unused",
+  "checks-graphwalk reads the kit's knip and dependency-cruiser builders, and neither config reads as unused",
   async () => {
-    const unused = await bin("checks-unused");
-    expect(unused.text).toContain("no unreferenced files");
-    expect(unused.exitCode).toBe(0);
-
-    const cruised = await bin("checks-imports");
-    expect(cruised.text).toContain("cruised against dependency-cruiser.config.ts, no violation");
-    expect(cruised.exitCode).toBe(0);
+    const walked = await bin("checks-graphwalk");
+    expect(walked.text).toContain("no unreferenced files");
+    expect(walked.text).toContain("no unused exports or types");
+    expect(walked.text).toContain("cruised against dependency-cruiser.config.ts, no violation");
+    expect(walked.exitCode).toBe(0);
   },
   180_000,
 );
@@ -220,13 +218,13 @@ test(
     const oxlintRefused = await oxlint();
     expect(oxlintRefused.text).toContain("@avi2dg/checks/oxlint: set effect to true, false, or { files, excludeFiles }");
     expect(oxlintRefused.exitCode).not.toBe(0);
-    const knipRefused = await bin("checks-unused");
+    const knipRefused = await bin("checks-graphwalk");
     expect(knipRefused.text).toContain("@avi2dg/checks/knip: set entry to the files nothing imports");
     expect(knipRefused.exitCode).toBe(2);
 
     await put({ "oxlint.config.ts": OXLINT_CONFIG, "knip.config.ts": KNIP_CONFIG });
     expect((await oxlint()).exitCode).toBe(0);
-    expect((await bin("checks-unused")).exitCode).toBe(0);
+    expect((await bin("checks-graphwalk")).exitCode).toBe(0);
   },
   180_000,
 );

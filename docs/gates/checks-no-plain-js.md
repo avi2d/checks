@@ -57,4 +57,4 @@ no-plain-js: 2 violation(s)
 
 - [checks-lint](checks-lint.md)
 - [checks-test-layout](checks-test-layout.md)
-- [checks-unused](checks-unused.md)
+- [checks-graphwalk](checks-graphwalk.md)

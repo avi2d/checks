@@ -17,27 +17,31 @@ function kitConfig(entry: readonly string[]): string {
 }
 
 test(
-  "red on an unreferenced TypeScript file and green once it is removed, while an unused export or a dead script outside TypeScript never fails",
+  "red on an unreferenced file in the scan and the cruise and green once it is removed, while a dead script outside TypeScript never fails",
   async () => {
     const { dir, commit, script } = await open(
       configured({
         "knip.config.ts": kitConfig(["src/index.ts"]),
-        "src/index.ts": `import { used } from "./used.ts";\n\nexport const index = used;\nexport const unusedExport = 1;\n`,
-        "src/used.ts": `export const used = 1;\nexport const unusedExport = 2;\n`,
+        "src/index.ts": `import { used } from "./used.ts";\n\nexport const index = used;\n`,
+        "src/used.ts": `export const used = 1;\n`,
         "src/dead.ts": `export const dead = 1;\n`,
+        "tests/unit/index.test.ts": `import { index } from "../../src/index.ts";\n\nexport const seen = index;\n`,
         "scripts/dead.mjs": `export const dead = 1;\n`,
       }),
     );
     await commit("feat: base");
 
-    const red = await script("complexity/unused.ts");
+    const red = await script("complexity/graphwalk.ts");
     expect(red.text).toContain("unused: 1 unreferenced file(s):\n  src/dead.ts\n");
-    expect(red.text).not.toContain("unusedExport");
+    expect(red.text).toContain("exports: no unused exports or types");
+    expect(red.text).toContain("error no-orphans: src/dead.ts");
     expect(red.exitCode).toBe(1);
 
     await $`rm src/dead.ts && git add -A`.cwd(dir).quiet();
-    const green = await script("complexity/unused.ts");
-    expect(green.text).toContain("unused: no unreferenced files among 3 tracked .ts/.tsx/.astro file(s)");
+    const green = await script("complexity/graphwalk.ts");
+    expect(green.text).toContain("unused: no unreferenced files among 4 tracked .ts/.tsx/.astro file(s)");
+    expect(green.text).toContain("exports: no unused exports or types");
+    expect(green.text).toContain("cruised against the kit's defaults, no violation");
     expect(green.exitCode).toBe(0);
   },
   120_000,
@@ -55,13 +59,13 @@ test(
     });
     await commit("feat: base");
 
-    const red = await script("complexity/unused.ts");
+    const red = await script("complexity/graphwalk.ts");
     expect(red.text).toContain("unused: 1 unreferenced file(s):\n  src/dead.astro\n");
     expect(red.text).not.toContain("greeting.ts");
     expect(red.exitCode).toBe(1);
 
     await $`rm src/dead.astro && git add -A`.cwd(dir).quiet();
-    const green = await script("complexity/unused.ts");
+    const green = await script("complexity/graphwalk.ts");
     expect(green.text).toContain("unused: no unreferenced files among 3 tracked .ts/.tsx/.astro file(s)");
     expect(green.exitCode).toBe(0);
   },
@@ -78,7 +82,7 @@ test(
     });
     await commit("feat: base");
 
-    const red = await script("complexity/unused.ts");
+    const red = await script("complexity/graphwalk.ts");
     expect(red.text).toContain("  dead.ts");
     expect(red.exitCode).toBe(1);
   },
@@ -90,7 +94,7 @@ test(
   async () => {
     const untracked = await open(configured({ "knip.json": JSON.stringify({ entry: ["index.ts"] }) }));
     await untracked.write({ "index.ts": `export const index = 1;\n` });
-    const empty = await untracked.script("complexity/unused.ts");
+    const empty = await untracked.script("complexity/graphwalk.ts");
     expect(empty.text).toContain("unused: no tracked TypeScript or Astro source to scan");
     expect(empty.exitCode).toBe(2);
   },
@@ -98,7 +102,7 @@ test(
 );
 
 test(
-  "forced colour still fails the gate on a dead file and names only that file",
+  "forced colour still fails the gate on a dead file",
   async () => {
     const { dir, commit } = await open(
       configured({
@@ -109,8 +113,9 @@ test(
     );
     await commit("feat: base");
 
-    const red = await ran($`bun ${join(CHECKOUT, "src", "complexity", "unused.ts")}`.cwd(dir).env({ ...process.env, FORCE_COLOR: "1" }));
-    expect(red.text).toBe("unused: 1 unreferenced file(s):\n  src/dead.ts\n");
+    const red = await ran($`bun ${join(CHECKOUT, "src", "complexity", "graphwalk.ts")}`.cwd(dir).env({ ...process.env, FORCE_COLOR: "1" }));
+    expect(red.text).toContain("unused: 1 unreferenced file(s):\n  src/dead.ts\n");
+    expect(red.text).toContain("not-to-unresolvable: src/index.ts \u2192 zod");
     expect(red.exitCode).toBe(1);
   },
   120_000,
@@ -129,8 +134,8 @@ test(
       );
       await commit("feat: base");
 
-      const red = await script("complexity/unused.ts");
-      expect(red.text).toBe("unused: 1 unreferenced file(s):\n  dead.ts\n");
+      const red = await script("complexity/graphwalk.ts");
+      expect(red.text).toContain("unused: 1 unreferenced file(s):\n  dead.ts\n");
       expect(red.exitCode).toBe(1);
     }
   },
@@ -145,12 +150,13 @@ test(
         "knip.config.ts": kitConfig(["src/index.ts"]),
         "oxlint.config.ts": `export default {};\n`,
         "src/index.ts": `export const index = 1;\n`,
+        "tests/unit/index.test.ts": `import { index } from "../../src/index.ts";\n\nexport const seen = index;\n`
       }),
     );
     await commit("feat: base");
 
-    const green = await script("complexity/unused.ts");
-    expect(green.text).toContain("unused: no unreferenced files among 3 tracked .ts/.tsx/.astro file(s)");
+    const green = await script("complexity/graphwalk.ts");
+    expect(green.text).toContain("unused: no unreferenced files among 4 tracked .ts/.tsx/.astro file(s)");
     expect(green.exitCode).toBe(0);
   },
   120_000,
@@ -162,7 +168,7 @@ test(
     const { commit, script } = await open(configured({ "index.ts": `export const index = 1;\n` }));
     await commit("feat: base");
 
-    const red = await script("complexity/unused.ts");
+    const red = await script("complexity/graphwalk.ts");
     expect(red.text).toContain("unused: no knip configuration names entry files");
     expect(red.exitCode).toBe(1);
   },
@@ -175,6 +181,7 @@ test(
     const repo = await open({
       ...lintWiring(),
       "knip.json": JSON.stringify({ entry: ["dependency-cruiser.config.ts", "widget.ts"], include: ["files"] }),
+      "dependency-cruiser.config.ts": `import { defineConfig } from "${CHECKOUT}/dist/presets/dependency-cruiser.js";\n\nexport default defineConfig({ orphans: ["^widget[.]ts$"] });\n`,
       "widget.ts": `export const widget = 42;\n`,
     });
     await withOwnInstall(repo);
@@ -182,20 +189,20 @@ test(
     await commit("feat: base");
 
     const green = await lint();
-    expect(green.text).toContain("checks-lint: 14 gate(s) pass");
+    expect(green.text).toContain("checks-lint: 12 gate(s) pass");
     expect(green.exitCode).toBe(0);
 
     await write({ "dead.ts": `export const dead = 1;\n` });
     await commit("feat: dead");
     const red = await lint();
-    expect(red.text).toContain("1 of 14 gate(s) failed: checks-unused");
+    expect(red.text).toContain("1 of 12 gate(s) failed: checks-graphwalk");
     expect(red.text).toContain("unused: 1 unreferenced file(s):\n  dead.ts");
     expect(red.exitCode).toBe(1);
 
     await $`rm dead.ts && git add -A`.cwd(dir).quiet();
     await commit("refactor: drop the dead file");
     const clean = await lint();
-    expect(clean.text).toContain("checks-lint: 14 gate(s) pass");
+    expect(clean.text).toContain("checks-lint: 12 gate(s) pass");
     expect(clean.exitCode).toBe(0);
   },
   180_000,

@@ -14,11 +14,11 @@ A consuming repository puts each setting in the file its tool reads, and no mani
 | `oxlint.config.ts` | Effect paths and their exemptions, ignore patterns, and any rule or budget the repository sets over the kit's defaults | oxlint and `checks-effect-scope` |
 | `oxlint-suppressions.json` | The existing violations oxlint suppresses, per file and rule | oxlint and `checks-suppressions-ratchet` |
 | `stylelint-suppressions.json` | The existing violations stylelint suppresses, per file and rule | stylelint, `checks-frontend-syntax` and `checks-suppressions-ratchet` |
-| `exports-baseline.json` | The existing unused exports and types, per file, kind and name | `checks-exports` |
+| `exports-baseline.json` | The existing unused exports and types, per file, kind and name | `checks-graphwalk` |
 | `.jscpd.json` | The `path` and `ignore` globs of the files repetition is measured in | jscpd and `checks-repetition` |
-| `knip.config.ts` | The `entry` globs Knip traces unreferenced files from | Knip, `checks-unused` and `checks-exports` |
+| `knip.config.ts` | The `entry` globs Knip traces unreferenced files from | Knip and `checks-graphwalk` |
 | `stylelint.config.ts` | The Baseline target, the token files, the CSS families the repository turns on, and any stylelint rule the repository sets over the kit's families | `checks-frontend-syntax` |
-| `dependency-cruiser.config.ts` | Entry points nothing imports, paths that may import dev dependencies, and import boundaries, when the kit's defaults do not fit | `checks-imports` |
+| `dependency-cruiser.config.ts` | Entry points nothing imports, paths that may import dev dependencies, and import boundaries, when the kit's defaults do not fit | `checks-graphwalk` |
 | `tsconfig.json` | Compiler options, and the Effect language service plugin whose `overrides` and kit severities `checks-effect-scope` writes, keeping every other key | TypeScript and Effect language service |
 | `package.json` | `scripts` with the `checks-vendor` arguments in `prepare`, `author` and `contributors` | Bun, `checks-commit-identity` and `checks-vendor` |
 | `bunfig.toml` | Test discovery and quarantine exclusion | Bun and `checks-test-layout` |
@@ -69,7 +69,7 @@ import { defineConfig } from "@avi2dg/checks/knip";
 export default defineConfig({ entry: ["src/index.ts"] });
 ```
 
-`dependency-cruiser.config.ts` is optional, since `checks-imports` cruises against the kit's defaults without one:
+`dependency-cruiser.config.ts` is optional, since `checks-graphwalk` cruises against the kit's defaults without one:
 
 ```ts
 import { defineConfig } from "@avi2dg/checks/dependency-cruiser";

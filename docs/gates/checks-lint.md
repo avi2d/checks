@@ -10,7 +10,7 @@ audience: consumers
 
 It runs the gates under [What runs](../bins.md#what-runs), each in its own process.
 Gates requiring tracked TypeScript files begin running when the repository tracks TypeScript.
-`checks-lint-coverage` and `checks-unused` also begin running when the repository tracks an `.astro` file.
+`checks-lint-coverage` and `checks-graphwalk` also begin running when the repository tracks an `.astro` file.
 `checks-advisories` begins running when the repository tracks `bun.lock`.
 `checks-frontend-syntax` begins running when the repository tracks `frontend-syntax.json` at its root.
 `checks-copy` begins running when the repository tracks `copy.json` at its root.
@@ -49,7 +49,7 @@ With two arguments, the base and head override range discovery.
 
 ```
 checks-lint: range 2504acf098d120e73a8ece3c96f22b934f35c6a8..10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD against origin/main
-checks-lint: 1 of 19 gate(s) failed: checks-comment-gate
+checks-lint: 1 of 17 gate(s) failed: checks-comment-gate
 ```
 
 <!-- end generated lint-sample -->
@@ -57,7 +57,7 @@ checks-lint: 1 of 19 gate(s) failed: checks-comment-gate
 ## When it runs
 
 A repository runs it from `bun run lint` in a pull request workflow that fetches the whole git history.
-It leaves out the TypeScript gates while the repository tracks no TypeScript file, except that `checks-lint-coverage` and `checks-unused` run when it tracks an `.astro` file.
+It leaves out the TypeScript gates while the repository tracks no TypeScript file, except that `checks-lint-coverage` and `checks-graphwalk` run when it tracks an `.astro` file.
 It never runs `checks-browser`, which a product runs after it builds its site.
 
 ## Related topics
