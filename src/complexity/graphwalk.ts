@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
-import { BunRuntime, BunServices } from "@effect/platform-bun";
-import { Cause, Console, Effect, Exit, FileSystem, Path, Schema } from "effect";
+import { BunServices } from "@effect/platform-bun";
+import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { LINTED_SOURCE, TYPESCRIPT_SOURCE, type TrackedContent } from "../core/gates.ts";
 import { checkoutFiles, collect, commitOf, git, pathsAt, rangeEnds, refArgs } from "../core/git.ts";
-import { Usage } from "../core/main.ts";
+import { PASSED, runExitMain, UNDECIDED, Usage, VIOLATED } from "../core/main.ts";
 import { knipReport } from "./knip.ts";
 
 const NAME = "graphwalk";
@@ -34,10 +34,6 @@ export const CRUISED = ["*.ts", "*.tsx", "*.mts", "*.cts"] as const;
 
 const KIT_DEFAULTS = "kit-defaults.ts";
 
-const PASSED = 0;
-const VIOLATED = 1;
-const UNDECIDED = 2;
-const INTERRUPTED = 130;
 
 export type Status = "passed" | "violated" | "undecided";
 
@@ -390,14 +386,6 @@ const gate = Effect.gen(function* () {
   ),
 );
 
-function statusOf<A, E>(exit: Exit.Exit<A, E>): number {
-  if (Exit.isSuccess(exit)) return typeof exit.value === "number" ? exit.value : UNDECIDED;
-  return Cause.hasInterruptsOnly(exit.cause) ? INTERRUPTED : UNDECIDED;
-}
-
-// runMain carries only pass or fail, so this gate returns its exit code from the program the runtime runs.
-const program = gate.pipe(Effect.provide(BunServices.layer));
-
 if (import.meta.main) {
-  BunRuntime.runMain(program, { teardown: (exit, onExit) => onExit(statusOf(exit)) });
+  runExitMain(gate);
 }

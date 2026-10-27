@@ -10,14 +10,18 @@ const KNIP = JSON.stringify({
       exports: [{ name: "unusedExport", line: 2, col: 14 }],
       types: [{ name: "UnusedOptions", line: 5, col: 13 }],
     },
-    { file: "src/planted-dead.ts", files: [{ name: "src/planted-dead.ts" }], exports: [], types: [] },
+    { file: "src/planted-dead2.ts", files: [{ name: "src/planted-dead2.ts" }] },
+    { file: "src/planted-dead.tsx", files: [{ name: "src/planted-dead.tsx" }] },
+    { file: "scripts/dead.mjs", files: [{ name: "scripts/dead.mjs" }] },
+    { file: "src/planted-dead.astro", files: [{ name: "src/planted-dead.astro" }] },
+    { file: "src/planted-dead.ts", files: [{ name: "src/planted-dead.ts" }] },
     { file: "package.json", dependencies: [{ name: "zod" }] },
     { file: "src/other.ts", exports: [{ name: "otherExport", line: 1, col: 14 }] },
   ],
 });
 
 test("filesOf names each unreferenced .ts, .tsx or .astro file in Knip JSON report, sorted, and nothing else", () => {
-  expect(Effect.runSync(filesOf(KNIP))).toEqual(["src/planted-dead.ts"]);
+  expect(Effect.runSync(filesOf(KNIP))).toEqual(["src/planted-dead.astro", "src/planted-dead.ts", "src/planted-dead.tsx", "src/planted-dead2.ts"]);
   expect(Effect.runSync(filesOf("{\"issues\":[]}\n"))).toEqual([]);
 });
 

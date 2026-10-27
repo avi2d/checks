@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-graphwalk
 
-`checks-graphwalk` is the gate that walks the module graph once and judges unreferenced files, unused exports and import violations together.
+`checks-graphwalk` is the gate that judges unreferenced files, unused exports and import violations together from one Knip run and one dependency-cruiser run in the same process.
 
 ## What it checks
 
