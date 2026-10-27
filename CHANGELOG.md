@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.57.0
+
+Released 2026-10-27.
+
+### Features
+
+- **testing:** run live tier and four lint gates at night [#13](https://github.com/avi2d/checks/pull/13)
+
 ## 0.56.1
 
 Released 2026-10-27.
