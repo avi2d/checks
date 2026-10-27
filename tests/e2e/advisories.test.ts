@@ -244,27 +244,58 @@ test(
 );
 
 test(
-  "checks-lint runs the gate in a repository that tracks bun.lock, which refuses a cached scanner that is not the pinned build",
+  "lint on a changed lockfile defers the advisory scan instead of fetching the database",
   async () => {
-    const build = Option.getOrThrow(buildFor(process.platform, process.arch));
     const repo = await open({ ...lintWiring(), "bun.lock": lockfile({ "left-pad": "1.3.0" }) });
     await withOwnInstall(repo);
     await repo.commit("chore: wire");
-    await repo.write({ "bun.lock": lockfile({ "left-pad": "1.3.0", minimist: "0.0.8" }) });
-    await repo.commit("build: add minimist");
+    await repo.write({ "bun.lock": lockfile({ "left-pad": "1.3.0", lodash: "4.17.20" }) });
+    await repo.commit("build: add lodash");
     const box = await sandbox();
-    const cached = join(box.home, ".cache", "avi2dg-checks", "osv-scanner", OSV_SCANNER_VERSION, build.asset);
-    await mkdir(dirname(cached), { recursive: true });
-    await copyFile(box.scanner, cached);
     const lint = await ran(
       $`${process.execPath} ${join(CHECKOUT, "src", "core", "lint.ts")}`
         .cwd(repo.dir)
         .env({ ...box.env, PATH: `${join(CHECKOUT, "node_modules", ".bin")}:${process.env["PATH"] ?? ""}` }),
     );
-    expect(lint.exitCode).toBe(2);
-    expect(lint.text).toContain(`${cached} has SHA-256 `);
-    expect(lint.text).toContain(`not the pinned ${build.sha256}; delete it and rerun`);
-    expect(lint.text).toContain("gate(s) failed: checks-advisories");
+    expect(lint.exitCode).toBe(0);
+    expect(lint.text).toContain("advisories: bun.lock changed in the range, so nothing was scanned; the scheduled --all run owns the verdict");
+    expect(await box.calls()).toEqual([]);
+  },
+  120_000,
+);
+
+test(
+  "the scheduled --all run on a fixture lockfile reports the known finding instead of deferring",
+  async () => {
+    const repo = await open({ "bun.lock": lockfile({ lodash: "4.17.20" }) });
+    await repo.commit("chore: lock");
+    const box = await sandbox();
+    const all = await gate(repo, box, "--all");
+    expect(all.exitCode).toBe(1);
+    expect(all.text).toContain("advisories: bun.lock at the head holds 1 unacknowledged advisory(ies)");
+    expect(all.text).toContain("  lodash@4.17.20 GHSA-35jh-r3h4-6jhm high: Command Injection in lodash");
+  },
+  120_000,
+);
+
+test(
+  "a direct range run refuses a cached scanner that is not the pinned build instead of scanning with it",
+  async () => {
+    const build = Option.getOrThrow(buildFor(process.platform, process.arch));
+    const repo = await open({ "bun.lock": lockfile({ "left-pad": "1.3.0" }) });
+    const base = await repo.commit("chore: lock");
+    await repo.write({ "bun.lock": lockfile({ "left-pad": "1.3.0", minimist: "0.0.8" }) });
+    const head = await repo.commit("build: add minimist");
+    const box = await sandbox();
+    const cached = join(box.home, ".cache", "avi2dg-checks", "osv-scanner", OSV_SCANNER_VERSION, build.asset);
+    await mkdir(dirname(cached), { recursive: true });
+    await copyFile(box.scanner, cached);
+    const red = await ran(
+      $`${process.execPath} ${join(CHECKOUT, "src", "dependencies", "advisories.ts")} ${base} ${head}`.cwd(repo.dir).env(box.env),
+    );
+    expect(red.exitCode).toBe(2);
+    expect(red.text).toContain(`${cached} has SHA-256 `);
+    expect(red.text).toContain(`not the pinned ${build.sha256}; delete it and rerun`);
     expect(await box.calls()).toEqual([]);
   },
   120_000,
