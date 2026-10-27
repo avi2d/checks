@@ -290,13 +290,13 @@ const exportsSection = (root: string, stdout: string, first: string, second: str
     Effect.gen(function* () {
       const head = yield* baselineInTree(root);
       const reported = yield* symbolsOf(stdout);
+      const baseRev = yield* judgedBase(first, second, root);
       // An empty baseline holds nothing, so nothing the range adds or drops needs the base to judge.
       if (head.length === 0) {
         const drift = { unlisted: reported, added: [], stale: [] };
         yield* Console.log(exportsReport(head, drift));
         return drift.unlisted.length === 0 ? "passed" : "violated";
       }
-      const baseRev = yield* judgedBase(first, second, root);
       const base = yield* baselineAt(baseRev, root);
       const unusedAtBase = outside(head, base).length === 0 ? [] : yield* unusedAt(baseRev, root);
       const drift = driftOf({ reported, base, head, unusedAtBase });
@@ -364,7 +364,19 @@ const gate = Effect.gen(function* () {
   }
   const { first, second } = args.length === 0 ? { first: "HEAD", second: undefined } : yield* refArgs(args, USAGE);
   const typescript = yield* trackedIn(root, TYPESCRIPT_SOURCE);
-  const reported = yield* knipReport(root, INCLUDED).pipe(Effect.mapError((cause) => new GraphwalkError({ message: cause.message })));
+  const knipOutcome = yield* knipReport(root, INCLUDED).pipe(
+    Effect.mapError((cause) => new GraphwalkError({ message: cause.message })),
+    Effect.map((reported) => ({ failed: false as const, reported })),
+    Effect.catch((cause: { readonly message: string }) => Effect.succeed({ failed: true as const, message: cause.message })),
+  );
+  if (knipOutcome.failed) {
+    yield* Console.error(`${UNUSED}: ${knipOutcome.message}`);
+    if (typescript.length === 0) return UNDECIDED;
+    yield* Console.error(`${EXPORTS}: ${knipOutcome.message}`);
+    const cruised = yield* importsSection(root);
+    return exitOf(["undecided", "undecided", cruised]);
+  }
+  const reported = knipOutcome.reported;
   if (reported.kind === "unconfigured") {
     yield* Console.log(unconfiguredLine(UNUSED));
     yield* Console.log(unconfiguredLine(EXPORTS));
@@ -392,4 +404,6 @@ function statusOf<A, E>(exit: Exit.Exit<A, E>): number {
 // runMain carries only pass or fail, so this gate returns its exit code from the program the runtime runs.
 const program = gate.pipe(Effect.provide(BunServices.layer));
 
-BunRuntime.runMain(program, { teardown: (exit, onExit) => onExit(statusOf(exit)) });
+if (import.meta.main) {
+  BunRuntime.runMain(program, { teardown: (exit, onExit) => onExit(statusOf(exit)) });
+}
