@@ -151,10 +151,11 @@ export function judge(base: readonly Finding[], head: readonly Finding[], clock:
 
 export type Outcome =
   | { readonly kind: "unchanged"; readonly problems: readonly AcknowledgementProblem[] }
+  | { readonly kind: "deferred"; readonly problems: readonly AcknowledgementProblem[] }
   | { readonly kind: "scanned"; readonly scope: Scope; readonly judged: Judged };
 
 export function passes(outcome: Outcome): boolean {
-  if (outcome.kind === "unchanged") return outcome.problems.length === 0;
+  if (outcome.kind === "unchanged" || outcome.kind === "deferred") return outcome.problems.length === 0;
   return outcome.judged.failing.length === 0 && outcome.judged.problems.length === 0;
 }
 
@@ -193,6 +194,12 @@ function scannedLines(scope: Scope, { failing, acknowledged, predating }: Judged
 export function report(outcome: Outcome): string {
   if (outcome.kind === "unchanged") {
     return [`advisories: ${LOCKFILE} is unchanged in the range, so nothing was scanned`, ...problemLines(outcome.problems)].join("\n");
+  }
+  if (outcome.kind === "deferred") {
+    return [
+      `advisories: ${LOCKFILE} changed in the range, so nothing was scanned; the scheduled --all run owns the verdict`,
+      ...problemLines(outcome.problems),
+    ].join("\n");
   }
   return [...scannedLines(outcome.scope, outcome.judged), ...problemLines(outcome.judged.problems)].join("\n");
 }

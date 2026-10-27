@@ -8,6 +8,9 @@ export type TrackedContent = {
   readonly content: string;
 };
 
+// checks-lint sets this when it spawns the advisories gate, so the desk and pull request runs leave the database fetch and the scan to the scheduled --all run.
+export const ADVISORIES_DEFER_SCAN = "CHECKS_ADVISORIES_DEFER_SCAN";
+
 export const EVERY_REPOSITORY = "every repository";
 
 export const VECTORS = ["complexity", "quality", "testing", "docs", "delivery", "dependencies"] as const;
@@ -21,6 +24,7 @@ export type KitGate = {
   readonly reads: "tree" | "range";
   readonly alsoReads?: string;
   readonly args?: readonly string[];
+  readonly env?: Readonly<Record<string, string>>;
   readonly appliesTo: typeof EVERY_REPOSITORY | TrackedContent;
 };
 
@@ -63,5 +67,12 @@ export const KIT_GATES = [
   { bin: "checks-exports", vector: "complexity", file: "exports.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE },
   { bin: "checks-quarantine-clock", vector: "testing", file: "quarantine-clock.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-imports", vector: "dependencies", file: "imports.ts", reads: "tree", appliesTo: TYPESCRIPT_SOURCE },
-  { bin: "checks-advisories", vector: "dependencies", file: "advisories.ts", reads: "range", appliesTo: BUN_LOCKFILE },
+  {
+    bin: "checks-advisories",
+    vector: "dependencies",
+    file: "advisories.ts",
+    reads: "range",
+    env: { [ADVISORIES_DEFER_SCAN]: "1" },
+    appliesTo: BUN_LOCKFILE,
+  },
 ] as const satisfies readonly KitGate[];

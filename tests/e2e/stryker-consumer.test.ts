@@ -3,7 +3,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ran, UNVENDORED_BUNFIG } from "./lib/fixture-repo.ts";
-import { committedBase, operandTest, PROBE_TEST, readReport, readState, removeConsumer, restoredFull, reusedOf, STRYKER_CONFIG, unpackConsumer, widgetTest, WIDGET_TEST } from "./lib/stryker-consumer.ts";
+import { committedBase, expectStrykerExitsZero, operandTest, PROBE_TEST, readReport, readState, removeConsumer, restoredFull, reusedOf, STRYKER_CONFIG, unpackConsumer, widgetTest, WIDGET_TEST } from "./lib/stryker-consumer.ts";
 
 let packDir = "";
 let dir = "";
@@ -30,7 +30,7 @@ test(
     const result = await ran($`bunx stryker run --mutate widget.ts --reporters clear-text`.cwd(dir));
     expect(result.text).not.toContain("ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING");
     expect(result.text).toMatch(/widget\.ts\s*\|\s*100\.00\s*\|/);
-    expect(result.exitCode).toBe(0);
+    expectStrykerExitsZero(result);
   },
   180_000,
 );
@@ -47,7 +47,7 @@ test(
     await writeFile(join(dir, "tests", "unit", "b-fast.test.ts"), widgetTest("fast widget", ""));
 
     const result = await ran($`bunx stryker run --mutate widget.ts --reporters json`.cwd(dir));
-    expect(result.exitCode).toBe(0);
+    expectStrykerExitsZero(result);
     const report = await readReport(join(dir, "reports", "mutation", "mutation.json"));
     const fastIds = report.testFiles["tests/unit/b-fast.test.ts"]?.tests.map((one) => one.id) ?? [];
     const mutants = report.files["widget.ts"]?.mutants ?? [];
@@ -89,7 +89,7 @@ test(
     const ci = { ...process.env, CI: "true" };
 
     const full = await ran($`bunx stryker run --incremental --reporters json --mutate "*.ts"`.cwd(dir).env(ci));
-    expect(full.exitCode).toBe(0);
+    expectStrykerExitsZero(full);
     expect(full.text).not.toContain("mutant result(s) are reused");
     const counted = await readReport(join(dir, "reports", "mutation", "mutation.json"));
     const alphaMutants = counted.files["alpha.ts"]?.mutants ?? [];
@@ -103,7 +103,7 @@ test(
     await rm(join(dir, "reports"), { recursive: true, force: true });
     await restoredFull(dir, report, state, sha);
     const same = await ran($`bunx stryker run --incremental --reporters json --mutate "*.ts"`.cwd(dir).env(ci));
-    expect(same.exitCode).toBe(0);
+    expectStrykerExitsZero(same);
     expect(reusedOf(same.text)).toEqual([total, total]);
 
     await rm(join(dir, "reports"), { recursive: true, force: true });
@@ -111,7 +111,7 @@ test(
     await $`git add alpha.ts && git -c user.email=fixture@example.com -c user.name=Fixture commit -qm alpha`.cwd(dir).quiet();
     await restoredFull(dir, report, state, sha);
     const changed = await ran($`bunx stryker run --incremental --reporters json --mutate "*.ts"`.cwd(dir).env(ci));
-    expect(changed.exitCode).toBe(0);
+    expectStrykerExitsZero(changed);
     expect(reusedOf(changed.text)).toEqual([betaMutants.length, total]);
   },
   480_000,
@@ -138,7 +138,7 @@ test(
     const ci = { ...process.env, CI: "true" };
 
     const full = await ran($`bunx stryker run --incremental --reporters json --mutate widget.ts`.cwd(dir).env(ci));
-    expect(full.exitCode).toBe(0);
+    expectStrykerExitsZero(full);
     const report = await Bun.file(join(dir, "reports", "mutation", "mutation.json")).text();
     const state = await Bun.file(join(dir, "reports", "stryker-incremental.json")).text();
     const probe = readState(state);
@@ -150,7 +150,7 @@ test(
     await restoredFull(dir, report, state, sha);
 
     const rerun = await ran($`bunx stryker run --incremental --reporters json --mutate widget.ts`.cwd(dir).env(ci));
-    expect(rerun.exitCode).toBe(0);
+    expectStrykerExitsZero(rerun);
     const rerunReport = await readReport(join(dir, "reports", "mutation", "mutation.json"));
     const mutants = rerunReport.files["widget.ts"]?.mutants ?? [];
     expect(mutants.length).toBeGreaterThan(0);
@@ -177,7 +177,7 @@ test(
     const ci = { ...process.env, CI: "true" };
 
     const full = await ran($`bunx stryker run --incremental --reporters json --mutate widget.ts`.cwd(dir).env(ci));
-    expect(full.exitCode).toBe(0);
+    expectStrykerExitsZero(full);
     const report = await Bun.file(join(dir, "reports", "mutation", "mutation.json")).text();
     const state = await Bun.file(join(dir, "reports", "stryker-incremental.json")).text();
     const probe = readState(state);
@@ -189,7 +189,7 @@ test(
     await restoredFull(dir, report, state, sha);
 
     const rerun = await ran($`bunx stryker run --incremental --reporters json --mutate widget.ts`.cwd(dir).env(ci));
-    expect(rerun.exitCode).toBe(0);
+    expectStrykerExitsZero(rerun);
     const rerunReport = await readReport(join(dir, "reports", "mutation", "mutation.json"));
     const mutants = rerunReport.files["widget.ts"]?.mutants ?? [];
     expect(mutants.length).toBeGreaterThan(0);
@@ -220,7 +220,7 @@ test(
     const ci = { ...process.env, CI: "true" };
 
     const full = await ran($`bunx stryker run --incremental --reporters json --mutate src/a.ts`.cwd(dir).env(ci));
-    expect(full.exitCode).toBe(0);
+    expectStrykerExitsZero(full);
     const report = await Bun.file(join(dir, "reports", "mutation", "mutation.json")).text();
     const state = await Bun.file(join(dir, "reports", "stryker-incremental.json")).text();
     const probe = readState(state);
@@ -232,7 +232,7 @@ test(
     await restoredFull(dir, report, state, sha);
 
     const rerun = await ran($`bunx stryker run --incremental --reporters json --mutate src/a.ts`.cwd(dir).env(ci));
-    expect(rerun.exitCode).toBe(0);
+    expectStrykerExitsZero(rerun);
     const rerunReport = await readReport(join(dir, "reports", "mutation", "mutation.json"));
     const mutants = rerunReport.files["src/a.ts"]?.mutants ?? [];
     const arithmetic = mutants.filter((mutant) => mutant.replacement === "x - 2");
@@ -260,7 +260,7 @@ test(
     const ci = { ...process.env, CI: "true" };
 
     const full = await ran($`bunx stryker run --incremental --reporters json --mutate f.ts`.cwd(dir).env(ci));
-    expect(full.exitCode).toBe(0);
+    expectStrykerExitsZero(full);
     const report = await Bun.file(join(dir, "reports", "mutation", "mutation.json")).text();
     const state = await Bun.file(join(dir, "reports", "stryker-incremental.json")).text();
     const probe = readState(state);
@@ -278,7 +278,7 @@ test(
     await restoredFull(dir, report, state, sha);
 
     const rerun = await ran($`bunx stryker run --incremental --reporters json --mutate f.ts`.cwd(dir).env(ci));
-    expect(rerun.exitCode).toBe(0);
+    expectStrykerExitsZero(rerun);
     const rerunReport = await readReport(join(dir, "reports", "mutation", "mutation.json"));
     const mutants = rerunReport.files["f.ts"]?.mutants ?? [];
     const arithmetic = mutants.filter((mutant) => mutant.replacement === "x - 2");
@@ -307,7 +307,7 @@ test(
     const ci = { ...process.env, CI: "true" };
 
     const full = await ran($`bunx stryker run --incremental --reporters json --mutate h.ts`.cwd(dir).env(ci));
-    expect(full.exitCode).toBe(0);
+    expectStrykerExitsZero(full);
     const report = await Bun.file(join(dir, "reports", "mutation", "mutation.json")).text();
     const state = await Bun.file(join(dir, "reports", "stryker-incremental.json")).text();
     const probe = readState(state);
@@ -324,7 +324,7 @@ test(
     await restoredFull(dir, report, state, sha);
 
     const rerun = await ran($`bunx stryker run --incremental --reporters json --mutate h.ts`.cwd(dir).env(ci));
-    expect(rerun.exitCode).toBe(0);
+    expectStrykerExitsZero(rerun);
     const rerunReport = await readReport(join(dir, "reports", "mutation", "mutation.json"));
     const mutants = rerunReport.files["h.ts"]?.mutants ?? [];
     const arithmetic = mutants.filter((mutant) => mutant.replacement === "x - 2");
@@ -353,7 +353,7 @@ test(
     const ci = { ...process.env, CI: "true" };
 
     const full = await ran($`bunx stryker run --incremental --reporters json --mutate f.ts`.cwd(dir).env(ci));
-    expect(full.exitCode).toBe(0);
+    expectStrykerExitsZero(full);
     const report = await Bun.file(join(dir, "reports", "mutation", "mutation.json")).text();
     const state = await Bun.file(join(dir, "reports", "stryker-incremental.json")).text();
     const probe = readState(state);
@@ -371,7 +371,7 @@ test(
     await restoredFull(dir, report, state, sha);
 
     const rerun = await ran($`bunx stryker run --incremental --reporters json --mutate f.ts`.cwd(dir).env(ci));
-    expect(rerun.exitCode).toBe(0);
+    expectStrykerExitsZero(rerun);
     const rerunReport = await readReport(join(dir, "reports", "mutation", "mutation.json"));
     const mutants = rerunReport.files["f.ts"]?.mutants ?? [];
     const arithmetic = mutants.filter((mutant) => mutant.replacement === "x - 2");
@@ -398,7 +398,7 @@ test(
     const ci = { ...process.env, CI: "true" };
 
     const full = await ran($`bunx stryker run --incremental --reporters json --mutate f.ts`.cwd(dir).env(ci));
-    expect(full.exitCode).toBe(0);
+    expectStrykerExitsZero(full);
     const report = await Bun.file(join(dir, "reports", "mutation", "mutation.json")).text();
     const state = await Bun.file(join(dir, "reports", "stryker-incremental.json")).text();
     const probe = readState(state);
@@ -410,7 +410,7 @@ test(
     await restoredFull(dir, report, state, sha);
 
     const rerun = await ran($`bunx stryker run --incremental --reporters json --mutate f.ts`.cwd(dir).env(ci));
-    expect(rerun.exitCode).toBe(0);
+    expectStrykerExitsZero(rerun);
     const rerunReport = await readReport(join(dir, "reports", "mutation", "mutation.json"));
     const mutants = rerunReport.files["f.ts"]?.mutants ?? [];
     const arithmetic = mutants.filter((mutant) => mutant.replacement === "x - 2");
@@ -418,4 +418,14 @@ test(
     for (const mutant of arithmetic) expect(mutant.status).toBe("Survived");
   },
   480_000,
+);
+
+test(
+  "a failing Stryker run puts its own error text in the failure, not only the exit code",
+  async () => {
+    await writeFile(join(dir, "stryker.conf.mjs"), 'import "./missing-preset.js";\nexport default {};\n');
+    const result = await ran($`bunx stryker run --reporters clear-text`.cwd(dir));
+    expect(() => expectStrykerExitsZero(result)).toThrow('Invalid config file "stryker.conf.mjs"');
+  },
+  180_000,
 );

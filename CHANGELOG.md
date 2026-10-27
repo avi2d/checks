@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.55.0
+
+Released 2026-10-27.
+
+### Features
+
+- **dependencies:** defer the advisory scan to the scheduled run [#10](https://github.com/avi2d/checks/pull/10)
+
 ## 0.54.1
 
 Released 2026-10-27.

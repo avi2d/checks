@@ -14,6 +14,7 @@ It ignores aliases, because two live advisories can list each other as aliases.
 An advisory published against a package the base already held shows at both ends, so it fails no range, and `--all` reports it instead.
 Each failure names the package, its version, the advisory id, its severity and its summary.
 A range that leaves `bun.lock` unchanged runs no scan.
+A run `checks-lint` starts defers the scan to the scheduled `--all` run instead, so the desk and the pull request neither fetch the database nor scan.
 It also holds `advisory-acks.json` to the rules in [The acknowledgement file](#the-acknowledgement-file) on every run.
 
 ## What it reads
@@ -62,6 +63,7 @@ An entry whose `until` falls more than 30 days after that moment fails the run a
 Once that moment passes `until`, the entry fails every run until it is deleted or renewed with a later `until`, whether or not the range touches `bun.lock`.
 Delete it once the package is upgraded.
 When a scan runs, an entry that matches no advisory at the head fails, so the file holds only live entries.
+A deferred run still holds each entry to its day, while an entry that matches nothing waits for the scheduled run.
 A file that does not decode as that list exits 2.
 
 ## Arguments
@@ -80,9 +82,9 @@ With `--all` it fails on every advisory in `bun.lock` at `HEAD` that no entry co
 
 | Code | When |
 | --- | --- |
-| 0 | the range adds no advisory to `bun.lock`, and every acknowledgement holds |
-| 1 | the range adds an advisory no acknowledgement covers, or an acknowledgement does not hold |
-| 2 | a ref does not resolve, `advisory-acks.json` does not decode, or no verified scanner or usable database is at hand |
+| 0 | the range adds no advisory on a direct scan or an unchanged range and every acknowledgement holds, or a deferred run holds every acknowledgement without a scan |
+| 1 | a direct scan adds an advisory no acknowledgement covers, or an acknowledgement does not hold on any run |
+| 2 | a ref does not resolve, `advisory-acks.json` does not decode, or a direct scan has no verified scanner or usable database at hand |
 
 ## Sample output
 
@@ -97,7 +99,8 @@ advisories: 1 acknowledgement(s) in advisory-acks.json do not hold:
 ## When it runs
 
 `checks-lint` runs it over each pull request's range in a repository that tracks `bun.lock`, as [checks-lint](checks-lint.md) says.
-A range that leaves `bun.lock` unchanged runs in under a second, and one that changes it scans for about 10 seconds on a warm cache.
+That run defers the scan to the scheduled run, so it fetches no database and reports the deferral instead of a verdict.
+A range that leaves `bun.lock` unchanged runs in under a second, and a direct run over a range that changes `bun.lock` scans for about 10 seconds on a warm cache.
 
 ## Running it on a schedule
 
