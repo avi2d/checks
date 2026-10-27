@@ -66,10 +66,8 @@ export const KIT_GATES = [
   { bin: "checks-docs", vector: "docs", file: "docs.ts", reads: "range", alsoReads: "every agent file at the head commit", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-copy", vector: "docs", file: "copy.ts", reads: "tree", appliesTo: COPY_DECLARATION },
   { bin: "checks-repetition", vector: "complexity", file: "repetition.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE, night: true },
-  { bin: "checks-unused", vector: "complexity", file: "unused.ts", reads: "tree", appliesTo: LINTED_SOURCE },
-  { bin: "checks-exports", vector: "complexity", file: "exports.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE },
+  { bin: "checks-graphwalk", vector: "complexity", file: "graphwalk.ts", reads: "range", appliesTo: LINTED_SOURCE },
   { bin: "checks-quarantine-clock", vector: "testing", file: "quarantine-clock.ts", reads: "range", appliesTo: EVERY_REPOSITORY, night: true },
-  { bin: "checks-imports", vector: "dependencies", file: "imports.ts", reads: "tree", appliesTo: TYPESCRIPT_SOURCE },
   {
     bin: "checks-advisories",
     vector: "dependencies",
@@ -77,7 +75,7 @@ export const KIT_GATES = [
     reads: "range",
     env: { [ADVISORIES_DEFER_SCAN]: "1" },
     appliesTo: BUN_LOCKFILE,
-  },
+  }
 ] as const satisfies readonly KitGate[];
 
 export const NIGHT_GATES: readonly KitGate[] = KIT_GATES.filter((gate) => "night" in gate);

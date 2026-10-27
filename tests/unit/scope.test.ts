@@ -42,10 +42,8 @@ const FULL_GATES = [
   "checks-docs",
   "checks-copy",
   "checks-repetition",
-  "checks-unused",
-  "checks-exports",
+  "checks-graphwalk",
   "checks-quarantine-clock",
-  "checks-imports",
   "checks-advisories",
 ];
 

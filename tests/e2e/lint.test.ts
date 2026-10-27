@@ -34,7 +34,7 @@ test("the local range starts at origin/HEAD, and explicit bad refs are refused",
   const head = await commit(repo, "feat: clean", ["-c", "user.name=Wren Fixture", "-c", "user.email=wren@example.com"]);
   const green = await lint(repo);
   expect(green.text).toContain(`checks-lint: range ${base}..${head} from HEAD against origin/main`);
-  expect(green.text).toContain("checks-lint: 10 gate(s) pass");
+  expect(green.text).toContain("checks-lint: 8 gate(s) pass");
   expect(green.exitCode).toBe(0);
   const missing = await lint(repo, [base, "missing"]);
   expect(missing.exitCode).toBe(2);
@@ -63,7 +63,7 @@ test("checks-lint finds oxlint and jscpd in the repository's own install when PA
   await commit(repo, "feat: base");
   const stripped = (process.env["PATH"] ?? "").split(":").filter((entry) => !entry.includes("node_modules")).join(":");
   const green = await lint(repo, [], { PATH: stripped });
-  expect(green.text).toContain("checks-lint: 10 gate(s) pass");
+  expect(green.text).toContain("checks-lint: 8 gate(s) pass");
   expect(green.exitCode).toBe(0);
 
   const manifest = Schema.decodeUnknownSync(Schema.Struct({ devDependencies: Schema.optional(Schema.Record(Schema.String, Schema.String)) }))(
@@ -100,7 +100,7 @@ test("a pull request event ends the range at its head rather than the checked-ou
   await writeFile(event, JSON.stringify({ pull_request: { number: 7, base: { ref: "main" }, head: { sha: head } } }));
   const green = await lint(repo, [], { GITHUB_EVENT_NAME: "pull_request", GITHUB_EVENT_PATH: event });
   expect(green.text).toContain(`checks-lint: range ${base}..${head} from pull request #7 into main`);
-  expect(green.text).toContain("checks-lint: 10 gate(s) pass");
+  expect(green.text).toContain("checks-lint: 8 gate(s) pass");
   expect(green.exitCode).toBe(0);
 }, 60_000);
 
@@ -142,12 +142,12 @@ test("tracking frontend-syntax.json opts a repository into checks-frontend-synta
   await commit(repo, "feat: declare the stylesheets");
   const red = await lint(repo);
   expect(red.text).toContain('styles/site.css:1:17 Disallowed value "all 1s" for property "transition"');
-  expect(red.text).toContain("checks-lint: 1 of 12 gate(s) failed: checks-frontend-syntax");
+  expect(red.text).toContain("checks-lint: 1 of 10 gate(s) failed: checks-frontend-syntax");
   expect(red.exitCode).toBe(1);
   await repo.write({ "styles/site.css": "a { transition: color 1s; }\n" });
   await commit(repo, "fix: name the property");
   const green = await lint(repo);
-  expect(green.text).toContain("checks-lint: 12 gate(s) pass");
+  expect(green.text).toContain("checks-lint: 10 gate(s) pass");
   expect(green.exitCode).toBe(0);
 }, 60_000);
 
