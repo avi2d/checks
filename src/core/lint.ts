@@ -178,7 +178,10 @@ const scopedGates = Effect.fn("scopedGates")(function* (range: Range, root: stri
   if (range.refs.length === 1) return { gates: undefined, detail: "the full run, since a lone tip scopes nothing" };
   const [base, head] = range.refs;
   const changes = yield* changedPaths(base, head, [], root);
-  const scope = selectScope(changes.flatMap((change) => (change.kind === "renamed" ? [change.from, change.path] : [change.path])));
+  const committed = changes.flatMap((change) => (change.kind === "renamed" ? [change.from, change.path] : [change.path]));
+  const working = (yield* git(["diff", "--name-only", "-z", "HEAD", "--"], root)).split("\0").filter(Boolean);
+  const untracked = (yield* git(["ls-files", "--others", "--exclude-standard", "-z"], root)).split("\0").filter(Boolean);
+  const scope = selectScope([...committed, ...working, ...untracked]);
   if (scope.full) return { gates: undefined, detail: "the full run, since the change reaches past a scoped shape" };
   return {
     gates: scope.gates,
@@ -199,7 +202,7 @@ const lint = Effect.gen(function* () {
   );
   const scoped = split.mode === "desk"
     ? {
-      bins: applicable.filter((gate) => gate.reads === "range" || FAST_TREE_GATES.includes(gate.bin)).map((gate) => gate.bin),
+      bins: applicable.filter((gate) => FAST_TREE_GATES.includes(gate.bin)).map((gate) => gate.bin),
       detail: "the desk run",
     }
     : split.mode === "full"

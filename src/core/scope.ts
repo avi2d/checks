@@ -52,6 +52,9 @@ const basenameOf = (path: string): string => path.slice(path.lastIndexOf("/") + 
 export function classifyPath(path: string): ChangeShape {
   const basename = basenameOf(path);
   if (basename === "bun.lock") return "lockfile";
+  if (path.startsWith(".github/") || CI_CONFIGS.has(basename) || /^tsconfig(\..*)?\.json$/.test(basename)) {
+    return "workflow";
+  }
   if (path.startsWith("tests/")) return "test";
   if ((SUPPRESSIONS as readonly string[]).includes(basename)) return "suppressions";
   if (basename === "copy.json") return "copy";
@@ -60,10 +63,7 @@ export function classifyPath(path: string): ChangeShape {
   if (basename === "gitleaks.toml" || basename.startsWith(".env") || SECRET_HINTS.some((hint) => lower.includes(hint))) {
     return "secrets";
   }
-  if (path.startsWith(".github/") || CI_CONFIGS.has(basename) || /^tsconfig(\..*)?\.json$/.test(basename)) {
-    return "workflow";
-  }
-  if (path.startsWith("docs/") || lower.endsWith(".md") || AGENT_FILES.has(basename)) return "docs";
+  if (lower.endsWith(".md") || AGENT_FILES.has(basename)) return "docs";
   return "unknown";
 }
 
@@ -73,9 +73,10 @@ export function selectScope(paths: readonly string[]): Scope {
   if (paths.length === 0) return fullScope();
   const shapes = new Set(paths.map(classifyPath));
   if (shapes.has("unknown") || shapes.has("workflow") || shapes.has("lockfile")) return fullScope();
+  const copyContent = shapes.has("copy") || paths.some((path) => path.endsWith(".md") || path.endsWith(".html"));
   const tree = shapes.has("typescript")
     ? TREE_GATES
-    : [...(shapes.has("copy") ? ["checks-copy"] : []), ...(shapes.has("test") ? ["checks-test-layout"] : [])];
+    : [...(copyContent ? ["checks-copy"] : []), ...(shapes.has("test") ? ["checks-test-layout"] : [])];
   return {
     full: false,
     gates: KIT_GATES.filter((gate) => gate.reads === "range" || tree.includes(gate.bin)).map((gate) => gate.bin),

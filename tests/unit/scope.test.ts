@@ -28,7 +28,9 @@ const TREE_GATES = [
 
 test("a docs-only change runs a tree gate", () => {
   const scope = selectScope(["README.md", "docs/gates/checks-lint.md", "AGENTS.md"]);
-  expect(scope).toEqual({ full: false, gates: RANGE_GATES, tests: "none" });
+  expect(scope.full).toBe(false);
+  expect(scope.gates).toContain("checks-copy");
+  expect(scope.tests).toBe("none");
 });
 
 test("a docs-only change runs the unit tier", () => {
@@ -129,4 +131,18 @@ test("an empty range runs the scoped matrix", () => {
 
 test("the desk run skips the two slowest tree gates", () => {
   expect(FAST_TREE_GATES).toEqual(TREE_GATES.filter((bin) => bin !== "checks-unused" && bin !== "checks-imports"));
+});
+
+test("a markdown content change keeps checks-copy instead of dropping it", () => {
+  expect(selectScope(["content/home.md"]).gates).toContain("checks-copy");
+});
+
+test("a docs stylesheet takes the full run instead of the docs subset", () => {
+  expect(classifyPath("docs/theme.css")).toBe("unknown");
+  expect(selectScope(["docs/theme.css"]).full).toBe(true);
+});
+
+test("a config typescript file takes the full run instead of the typescript subset", () => {
+  expect(classifyPath("oxlint.config.ts")).toBe("workflow");
+  expect(selectScope(["oxlint.config.ts"]).full).toBe(true);
 });

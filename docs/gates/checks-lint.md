@@ -10,7 +10,8 @@ audience: consumers
 
 It runs the gates under [What runs](../bins.md#what-runs), each in its own process.
 It scopes the run to the gates the change reaches, and the full run stays the fallback.
-A Markdown, docs or agent file change runs only the range gates, plus `checks-copy` when copy files change.
+Applicability below selects the full run, and a scoped or desk run selects a subset.
+A Markdown or agent file change runs the range gates plus `checks-copy`.
 A TypeScript source change runs every applicable gate.
 Gates requiring tracked TypeScript files begin running when the repository tracks TypeScript.
 `checks-lint-coverage` and `checks-unused` also begin running when the repository tracks an `.astro` file.
@@ -39,7 +40,7 @@ checks-lint [--full | --desk] <base-ref> <head-ref>
 
 With two arguments, the base and head override range discovery.
 `--full` forces the unscoped run.
-`--desk` runs the range gates plus the fast tree gates.
+`--desk` runs the fast tree gates.
 
 ## Exit codes
 
@@ -65,7 +66,7 @@ checks-lint: 1 of 19 gate(s) failed: checks-comment-gate
 A repository runs it from `bun run lint` in a pull request workflow that fetches the whole git history.
 It leaves out the TypeScript gates while the repository tracks no TypeScript file, except that `checks-lint-coverage` and `checks-unused` run when it tracks an `.astro` file.
 It never runs `checks-browser`, which a product runs after it builds its site.
-A pull request run scopes the gates to the change, and a scheduled run passes `--full`.
+A pull request run scopes the gates to the change.
 
 ## Related topics
 
