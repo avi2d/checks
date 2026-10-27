@@ -62,8 +62,8 @@ function artifactNames(path: string, jobId: string, direction: "upload-artifact"
   if (!Array.isArray(steps)) return [];
   return steps.flatMap((step) => {
     if (!isRecord(step) || typeof step["uses"] !== "string" || !step["uses"].startsWith(`actions/${direction}`)) return [];
-    const with_ = step["with"];
-    return isRecord(with_) && typeof with_["name"] === "string" ? [with_["name"]] : [];
+    const withValue = step["with"];
+    return isRecord(withValue) && typeof withValue["name"] === "string" ? [withValue["name"]] : [];
   });
 }
 
