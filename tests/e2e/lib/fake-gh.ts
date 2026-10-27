@@ -165,6 +165,12 @@ async function pullsApi(origin: string, state: FakeState, method: string, route:
   if (method === "PATCH" && edited !== undefined) return editPull(state, edited, body);
   const workflow = /^actions\/workflows\/([^/]+)\/dispatches$/.exec(path)?.[1];
   if (method === "POST" && workflow !== undefined) return dispatchRun(origin, state, workflow, body);
+  if (method === "GET" && path === "actions/permissions/workflow") {
+    return {
+      state,
+      body: { default_workflow_permissions: "read", can_approve_pull_request_reviews: process.env["FAKE_GH_APPROVE"] !== "0" },
+    };
+  }
   if (method === "GET" && path === "actions/runs") {
     const headSha = new URLSearchParams(query).get("head_sha");
     return { state, body: { workflow_runs: state.runs.filter((run) => run.head_sha === headSha) } };

@@ -10,7 +10,25 @@ permissions:
   id-token: write
 
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      - name: fail fast when the release cannot run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun src/delivery/release-preflight.ts release.yml
   publish:
+    needs: preflight
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

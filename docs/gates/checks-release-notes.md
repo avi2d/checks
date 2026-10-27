@@ -60,7 +60,25 @@ permissions:
   contents: read
   id-token: write
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      - name: fail fast when the release cannot run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./node_modules/.bin/checks-release-preflight release.yml
   publish:
+    needs: preflight
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -113,7 +131,25 @@ on:
 permissions:
   contents: read
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      - name: fail fast when the release cannot run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./node_modules/.bin/checks-release-preflight release.yml
   github-release:
+    needs: preflight
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -139,6 +175,7 @@ jobs:
         run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/release-notes.md"
 ```
 
+A `preflight` job runs `checks-release-preflight` before the release step, so a release the version, the publisher or a repository setting rules out fails before the build.
 A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on each job in either workflow, as [checks-ci-wiring](checks-ci-wiring.md#runners) requires.
 A release is one commit that holds only the version bump and the built changelog.
 A package repository lands it on every push to `main` through [checks-release-push](checks-release-push.md), which tags it and dispatches this workflow on the tag.
