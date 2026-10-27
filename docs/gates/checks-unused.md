@@ -57,7 +57,7 @@ unused: no unreferenced files among 110 tracked .ts/.tsx/.astro file(s)
 
 ## When it runs
 
-`checks-lint` runs it when the repository tracks a `.ts`, `.tsx` or `.astro` file.
+`checks-lint` runs it in the full run when the repository tracks a `.ts`, `.tsx` or `.astro` file, and never in the desk run.
 Such a repository names its entries in a Knip configuration.
 
 ## Related topics

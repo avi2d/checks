@@ -7,6 +7,7 @@ import {
   pullRequestEndsOf,
   rangeOf,
   selectEnds,
+  splitMode,
 } from "../../src/core/lint.ts";
 
 test("rangeOf collapses to a lone tip when merge-base found the head itself, or keeps the range otherwise", () => {
@@ -30,6 +31,17 @@ test("localEndsOf judges HEAD alone with no remote-tracking refs, otherwise HEAD
     head: "HEAD",
     source: "HEAD against origin/trunk",
   });
+});
+
+test("splitMode runs the scoped set with no flag and the named set with one", () => {
+  expect(splitMode([])).toEqual({ mode: "scoped", rest: [] });
+  expect(splitMode(["--full"])).toEqual({ mode: "full", rest: [] });
+  expect(splitMode(["--desk", "base", "head"])).toEqual({ mode: "desk", rest: ["base", "head"] });
+});
+
+test("a second flag runs the desk set", () => {
+  expect(splitMode(["--full", "--desk"])).toBeUndefined();
+  expect(splitMode(["--quiet"])).toBeUndefined();
 });
 
 test("selectEnds reads explicit refs, refuses one alone, and otherwise defers to the pull request event or local resolution", () => {

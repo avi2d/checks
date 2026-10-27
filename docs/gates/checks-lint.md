@@ -4,12 +4,17 @@ audience: consumers
 ---
 # checks-lint
 
-`checks-lint` runs every applicable per-PR gate over one range and reports each failure.
+`checks-lint` runs every applicable gate in the selected set and reports each failure.
 
 ## What it checks
 
-It runs the per-PR gates under [What runs](../bins.md#what-runs), each in its own process.
+It runs the gates under [What runs](../bins.md#what-runs), each in its own process.
 With `--night` it runs the four nightly gates instead.
+It scopes the run to the gates the change reaches, and the full run stays the fallback.
+Applicability below selects the full run, and a scoped or desk run selects a subset.
+A Markdown change runs the range gates plus `checks-copy`.
+A TypeScript source change runs every applicable gate.
+A test file classifies as TypeScript, so its change runs every applicable gate too.
 Gates requiring tracked TypeScript files begin running when the repository tracks TypeScript.
 `checks-unused` also begins running when the repository tracks an `.astro` file.
 `checks-advisories` begins running when the repository tracks `bun.lock`.
@@ -33,18 +38,21 @@ With `--night` the range gates read the whole tree at `HEAD` instead of a range.
 
 ```sh
 checks-lint
-checks-lint <base-ref> <head-ref>
+checks-lint [--full | --desk]
+checks-lint [--full | --desk] <base-ref> <head-ref>
 checks-lint --night
 ```
 
 With two arguments, the base and head override range discovery.
-With `--night`, it takes no range arguments and runs the four nightly gates over the whole tree.
+`--full` forces the unscoped run.
+`--desk` runs the fast tree gates.
+With `--night`, it takes no other arguments and runs the four nightly gates over the whole tree.
 
 ## Exit codes
 
 | Code | Result |
 | --- | --- |
-| 0 | Every applicable gate passed. |
+| 0 | Every gate that ran passed. |
 | 1 | At least one gate found a violation. |
 | 2 | The range could not resolve or no failed gate could decide. |
 
@@ -64,6 +72,7 @@ checks-lint: 1 of 15 gate(s) failed: checks-comment-gate
 A repository runs it from `bun run lint` in a pull request workflow that fetches the whole git history.
 It leaves out the TypeScript gates while the repository tracks no TypeScript file, except that `checks-unused` runs when it tracks an `.astro` file.
 It never runs `checks-browser`, which a product runs after it builds its site.
+A pull request run scopes the gates to the change.
 A repository runs the four nightly gates from its night-run workflow with `checks-lint --night` over the whole tree.
 
 ## Related topics

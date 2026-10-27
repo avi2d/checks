@@ -2,8 +2,9 @@
 import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { EVERY_REPOSITORY, NIGHT_GATES, PR_GATES, WHOLE_TREE, type KitGate } from "./gates.ts";
-import { defaultBranch, git } from "./git.ts";
+import { changedPaths, defaultBranch, git } from "./git.ts";
 import { runMain, Usage } from "./main.ts";
+import { FAST_TREE_GATES, selectScope } from "./scope.ts";
 
 type Range = {
   readonly refs: readonly [tip: string] | readonly [base: string, head: string];
@@ -21,7 +22,7 @@ class GatesUndecided extends Schema.TaggedError<GatesUndecided>()("GatesUndecide
 }) {}
 
 const NAME = "checks-lint";
-const USAGE = "usage: lint.ts [<base-ref> <head-ref>] | --night";
+const USAGE = "usage: lint.ts [--full | --desk] [<base-ref> <head-ref>] | --night";
 const NIGHT = "--night";
 const PULL_REQUEST_EVENT = "pull_request";
 const SHALLOW_HINT = "a CI checkout needs actions/checkout fetch-depth: 0";
@@ -141,6 +142,15 @@ const resolveRange = Effect.fn("resolveRange")(function* (args: readonly string[
   return { refs: rangeOf(base, head), source: ends.source } satisfies Range;
 });
 
+export type LintMode = "full" | "desk" | "scoped";
+
+export function splitMode(args: readonly string[]): { readonly mode: LintMode; readonly rest: readonly string[] } | undefined {
+  const flags = args.filter((arg) => arg.startsWith("--"));
+  const rest = args.filter((arg) => !arg.startsWith("--"));
+  if (flags.length > 1 || (flags.length === 1 && flags[0] !== "--full" && flags[0] !== "--desk")) return undefined;
+  return { mode: flags.length === 0 ? "scoped" : flags[0] === "--full" ? "full" : "desk", rest };
+}
+
 export function describe({ refs }: Range): string {
   return refs.length === 1 ? `tip ${refs[0]}` : `range ${refs[0]}..${refs[1]}`;
 }
@@ -176,19 +186,63 @@ const wholeTreeRange = Effect.fn("wholeTreeRange")(function* () {
   return { refs: [head], source: "the whole tree at HEAD" } satisfies Range;
 });
 
+const scopedGates = Effect.fn("scopedGates")(function* (range: Range, root: string) {
+  if (range.refs.length === 1) return { bins: undefined, detail: "the full run, since a lone tip scopes nothing" };
+  const [base, head] = range.refs;
+  const changes = yield* changedPaths(base, head, [], root);
+  const committed = changes.flatMap((change) => (change.kind === "renamed" ? [change.from, change.path] : [change.path]));
+  const working = (yield* git(["diff", "--no-renames", "--name-only", "-z", "HEAD", "--"], root)).split("\0").filter(Boolean);
+  const untracked = (yield* git(["ls-files", "--others", "--exclude-standard", "-z"], root)).split("\0").filter(Boolean);
+  const scope = selectScope([...committed, ...working, ...untracked]);
+  if (scope.full) return { bins: undefined, detail: "the full run, since the change reaches past a scoped shape" };
+  return { bins: scope.gates, detail: "" };
+});
+
+const pullRequestSelection = Effect.fn("pullRequestSelection")(function* (
+  split: { readonly mode: LintMode; readonly rest: readonly string[] },
+  range: Range,
+  root: string,
+  applicable: readonly KitGate[],
+) {
+  if (split.mode === "desk") {
+    return {
+      bins: applicable.filter((gate) => FAST_TREE_GATES.includes(gate.bin)).map((gate) => gate.bin),
+      detail: "the desk run",
+    };
+  }
+  if (split.mode === "full") {
+    return { bins: applicable.map((gate) => gate.bin), detail: "the full run (--full)" };
+  }
+  return yield* scopedGates(range, root);
+});
+
+function selectionDetail(night: boolean, mode: LintMode, scopeDetail: string, count: number): string | undefined {
+  if (night) return undefined;
+  if (mode === "scoped" && scopeDetail === "") return `${count} gate(s) for this change`;
+  return scopeDetail === "" ? undefined : scopeDetail;
+}
+
 const lint = Effect.gen(function* () {
-  const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const raw = process.argv.slice(2);
   const night = raw.includes(NIGHT);
-  const filtered = raw.filter((arg) => arg !== NIGHT);
-  if (night && filtered.length > 0) return yield* new Usage({ message: USAGE });
-  const range = night ? yield* wholeTreeRange() : yield* resolveRange(filtered);
+  if (night && raw.length > 1) return yield* new Usage({ message: USAGE });
+  const split = night ? { mode: "full" as const, rest: [] as readonly string[] } : splitMode(raw);
+  if (split === undefined) return yield* new Usage({ message: USAGE });
+  const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
+  const range = night ? yield* wholeTreeRange() : yield* resolveRange(split.rest);
   yield* Console.log(`${NAME}: ${describe(range)} from ${range.source}`);
-  const gates = yield* Effect.filter(night ? NIGHT_GATES : PR_GATES, (gate) =>
+  const applicable = yield* Effect.filter(night ? NIGHT_GATES : PR_GATES, (gate) =>
     gate.appliesTo === EVERY_REPOSITORY
       ? Effect.succeed(true)
       : git(["ls-files", "--", ...gate.appliesTo.pathspecs], root).pipe(Effect.map((files) => files.trim() !== "")),
   );
+  const scoped = night
+    ? { bins: applicable.map((gate) => gate.bin) as readonly string[] | undefined, detail: "" }
+    : yield* pullRequestSelection(split, range, root, applicable);
+  const bins = scoped.bins;
+  const gates = bins === undefined ? applicable : applicable.filter((gate) => bins.includes(gate.bin));
+  const detail = selectionDetail(night, split.mode, scoped.detail, gates.length);
+  if (detail !== undefined) yield* Console.log(`${NAME}: ${detail}`);
   const verdicts = yield* Effect.forEach(gates, (gate) => runGate(gate, range, night));
   const failed = verdicts.filter((verdict) => verdict.outcome !== "passed");
   if (failed.length === 0) {

@@ -54,6 +54,7 @@ lint-coverage: the program tsconfig.json builds holds the ts-reset rules is-arra
 ## When it runs
 
 `checks-lint --night` runs it nightly when the repository tracks a `.ts`, `.tsx` or `.astro` file.
+No pull request run selects it.
 
 ## Related topics
 
