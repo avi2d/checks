@@ -26,8 +26,8 @@ export function ownerRepoOf(url: string): string | undefined {
   return match === null ? undefined : `${match[1]}/${match[2]}`;
 }
 
-export function publishesToNpm(workflow: string): boolean {
-  return workflow.includes("release-publish") || workflow.includes("npm publish");
+export function publishesToNpm(command: string): boolean {
+  return command.includes("release-publish") || command.includes("npm publish");
 }
 
 const FlexiblePermissions = Schema.Union([Schema.String, Schema.Record(Schema.String, Schema.Unknown)]);
@@ -37,17 +37,37 @@ const WorkflowDocument = Schema.Struct({
   permissions: Schema.optional(FlexiblePermissions),
   jobs: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
 });
-const JobDocument = Schema.Struct({ permissions: Schema.optional(FlexiblePermissions) });
+const StepDocument = Schema.Struct({ run: Schema.optional(Schema.String) });
+const JobDocument = Schema.Struct({
+  permissions: Schema.optional(FlexiblePermissions),
+  steps: Schema.optional(Schema.Array(Schema.Unknown)),
+});
 
 const decodeDocument = Schema.decodeUnknownOption(WorkflowDocument);
 const decodeJob = Schema.decodeUnknownOption(JobDocument);
+const decodeStep = Schema.decodeUnknownOption(StepDocument);
 
 function grantsOidcValue(permissions: FlexiblePermissions | undefined): boolean {
   return permissions === "write-all" || (typeof permissions === "object" && permissions["id-token"] === "write");
 }
 
+function runsOf(job: unknown): string[] {
+  const decoded = decodeJob(job);
+  if (Option.isNone(decoded) || decoded.value.steps === undefined) return [];
+  return decoded.value.steps.flatMap((step) => {
+    const decodedStep = decodeStep(step);
+    return Option.isNone(decodedStep) || decodedStep.value.run === undefined ? [] : [decodedStep.value.run];
+  });
+}
+
 function jobPublishes(job: unknown): boolean {
-  return publishesToNpm(JSON.stringify(job));
+  return runsOf(job).some(publishesToNpm);
+}
+
+function documentPublishes(document: unknown): boolean {
+  const decoded = decodeDocument(document);
+  if (Option.isNone(decoded) || decoded.value.jobs === undefined) return false;
+  return Object.values(decoded.value.jobs).some(jobPublishes);
 }
 
 export function grantsOidc(document: unknown): boolean {
@@ -92,14 +112,14 @@ const checkPublisher = Effect.fn("checkPublisher")(function* (root: string, work
   const text = yield* (yield* FileSystem.FileSystem).readFileString(path).pipe(
     Effect.mapError(() => refused(`${WORKFLOWS}/${workflow} is missing, so the run cannot show the prerequisites npm's trusted publisher needs`)),
   );
-  if (!publishesToNpm(text)) {
-    yield* Console.log(`${LABEL}: ${workflow} publishes nothing to npm, so no trusted publisher has to match`);
-    return;
-  }
   const document = yield* Effect.try({
     try: () => Bun.YAML.parse(text),
     catch: () => refused(`${WORKFLOWS}/${workflow} does not parse, so the run cannot show the prerequisites npm's trusted publisher needs`),
   });
+  if (!documentPublishes(document)) {
+    yield* Console.log(`${LABEL}: ${workflow} publishes nothing to npm, so no trusted publisher has to match`);
+    return;
+  }
   const repository = yield* Config.String("GITHUB_REPOSITORY").pipe(Config.withDefault(""));
   if (repository === "") return yield* refused("GITHUB_REPOSITORY is not set, so the run has no repository to match; run this in the release workflow");
   const { name, repository: field } = yield* readManifest(root);

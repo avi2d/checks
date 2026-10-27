@@ -28,7 +28,12 @@ jobs:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - name: fail fast when the release cannot plan
-        run: bun src/delivery/release-preflight.ts release.yml
+        run: |
+          if git log -1 --format=%s HEAD | grep -qE '^chore: release [0-9]+\.[0-9]+\.[0-9]+( \(#[0-9]+\))?$'; then
+            echo "HEAD already holds the release commit, so release-push recovers its tag instead of planning"
+          else
+            bun src/delivery/release-preflight.ts release.yml
+          fi
       - name: release what main holds once its checks pass
         env:
           GH_TOKEN: ${{ github.token }}

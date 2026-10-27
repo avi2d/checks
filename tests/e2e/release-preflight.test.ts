@@ -24,10 +24,11 @@ function jobPermissions(oidc: boolean): string {
   return oidc ? "    permissions:\n      contents: read\n      id-token: write\n" : "    permissions:\n      contents: read\n";
 }
 
-function workflow(publish: string | undefined, topOidc: boolean, jobOidc?: boolean, extraJobs = ""): string {
+function workflow(publish: string | undefined, topOidc: boolean, jobOidc?: boolean, extraJobs = "", prefix = ""): string {
   const step = publish === undefined ? BUILD : publish;
   const job = jobOidc === undefined ? "" : `${jobPermissions(jobOidc)}\n`;
   return (
+    prefix +
     "name: release\non:\n  push:\n    tags: [\"v*\"]\n  workflow_dispatch:\npermissions:\n" +
     topPermissions(topOidc) +
     "jobs:\n  publish:\n    runs-on: ubuntu-latest\n" +
@@ -41,6 +42,8 @@ function workflow(publish: string | undefined, topOidc: boolean, jobOidc?: boole
 const LINT_JOB = "  lint:\n    runs-on: ubuntu-latest\n    permissions:\n      id-token: write\n    steps:\n      - run: bun run lint\n";
 
 const SECOND_PUBLISH_DENIED = "  second:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n    steps:\n      - run: bun src/delivery/release-publish.ts\n";
+
+const NAMED_LINT_JOB = "  validate:\n    name: Validate npm publish metadata\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n";
 
 type Ready = {
   readonly dir: string;
@@ -56,9 +59,10 @@ async function ready(
   topOidc = true,
   jobOidc?: boolean,
   extraJobs = "",
+  prefix = "",
 ): Promise<Ready> {
   const repo = await repository({});
-  await repo.write({ "package.json": manifest(tag === undefined ? version : tag.slice(1), repositoryUrl), ".github/workflows/release.yml": workflow(publish, topOidc, jobOidc, extraJobs) });
+  await repo.write({ "package.json": manifest(tag === undefined ? version : tag.slice(1), repositoryUrl), ".github/workflows/release.yml": workflow(publish, topOidc, jobOidc, extraJobs, prefix) });
   await repo.commit("chore: add the manifest");
   if (tag !== undefined) await $`git tag ${tag}`.cwd(repo.dir).quiet();
   await repo.write({ "package.json": manifest(version, repositoryUrl), "notes.txt": "bill\n" });
@@ -171,6 +175,32 @@ test(
     expect(refused.text).toContain(
       "checks-release-preflight: the checkout is shallow, so the tag it sees may not be the last one; fetch all of it\n",
     );
+  },
+  60_000,
+);
+
+test(
+  "a comment naming the publish never counts as publishing, so the check passes without the repository",
+  async () => {
+    const preflight = await ready("0.6.0", "v0.6.0", undefined, undefined, true, undefined, "", "# No npm publish is needed\n");
+
+    expect(await preflight.run()).toEqual({
+      exitCode: 0,
+      text: "release-preflight: package.json holds 0.6.0, which matches v0.6.0\nrelease-preflight: release.yml publishes nothing to npm, so no trusted publisher has to match\n",
+    });
+  },
+  60_000,
+);
+
+test(
+  "a job only named for publish metadata never counts as publishing, so the check passes on its other steps",
+  async () => {
+    const preflight = await ready("0.6.0", "v0.6.0", "git+https://github.com/acme/widget.git", undefined, true, undefined, NAMED_LINT_JOB);
+
+    expect(await preflight.run()).toEqual({
+      exitCode: 0,
+      text: "release-preflight: package.json holds 0.6.0, which matches v0.6.0\nrelease-preflight: release.yml publishes nothing to npm, so no trusted publisher has to match\n",
+    });
   },
   60_000,
 );

@@ -14,6 +14,8 @@ It reads the version `package.json` holds and the last `v*` tag.
 It refuses when the last tag names another version, since an untagged bump means a release landed that nothing published.
 It reads the release workflow its argument names.
 A workflow that publishes nothing to npm needs no trusted publisher, so that check passes it without reading the repository.
+Only a step whose run command invokes the publish counts as publishing.
+A comment, a job name or any other text that names the publish never counts.
 When the workflow publishes to npm, it compares the repository `package.json` names with the repository the run is in.
 It refuses when the two differ, since the run then cannot present the trusted publisher npm holds.
 It refuses when a publishing job holds no `id-token: write`, since the run then mints no OIDC token for the trusted publisher npm holds.
@@ -72,10 +74,16 @@ checks-release-preflight: .github/workflows/release.yml grants the publishing jo
 
 ## When it runs
 
-The release planning boundary runs it before `checks-release-pr` and `checks-release-push` plan, and the `preflight` job of the release workflow keeps it as the prerequisite of the job that publishes.
+The release planning boundary runs it before `checks-release-pr` plans and before `checks-release-push` plans a new release, and the `preflight` job of the release workflow keeps it as the prerequisite of the job that publishes.
+A checkout whose `HEAD` already holds the release commit skips it, so `checks-release-push` recovers the missing tag.
 A version the last tag does not name and a run missing the trusted publisher prerequisites then fail before the build, the lint, the typecheck and the suite.
 A wrong trusted publisher setting on npm itself surfaces only at the publish step, through the publish refusal.
-No endpoint the release token may read exposes the approval setting, so the bin cannot check it and `checks-release-pr` fails while opening the pull request when the setting is off.
+
+## Operator check
+
+No endpoint the release token may read exposes the approval setting, so the bin never checks it.
+Turn on **Allow GitHub Actions to create and approve pull requests** under the repository Actions settings before the daily release plans.
+`checks-release-pr` fails while opening the pull request when the setting is off.
 
 ## Related topics
 

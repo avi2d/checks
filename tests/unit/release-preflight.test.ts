@@ -21,10 +21,10 @@ test("anything but a GitHub owner and name has no repository to match", () => {
 });
 
 test("the publisher matters for the kit publish and for npm publish", () => {
-  expect(publishesToNpm("run: ./node_modules/.bin/checks-release-publish")).toBe(true);
-  expect(publishesToNpm("run: bun src/delivery/release-publish.ts")).toBe(true);
-  expect(publishesToNpm("run: npm publish --provenance")).toBe(true);
-  expect(publishesToNpm("run: bun run build")).toBe(false);
+  expect(publishesToNpm("./node_modules/.bin/checks-release-publish")).toBe(true);
+  expect(publishesToNpm("bun src/delivery/release-publish.ts")).toBe(true);
+  expect(publishesToNpm("npm publish --provenance")).toBe(true);
+  expect(publishesToNpm("bun run build")).toBe(false);
 });
 
 const kitStep = { run: "bun src/delivery/release-publish.ts" };
@@ -101,6 +101,15 @@ test("a document with no publishing job grants no token", () => {
   expect(grantsOidc({ permissions: { contents: "read", "id-token": "write" }, jobs: { lint: { steps: [lintStep] } } })).toBe(false);
 });
 
+test("a job only named for publish metadata with no publish step grants no token", () => {
+  expect(
+    grantsOidc({
+      permissions: { contents: "read", "id-token": "write" },
+      jobs: { validate: { name: "Validate npm publish metadata", steps: [{ run: "bun run lint" }] } },
+    }),
+  ).toBe(false);
+});
+
 test("no grant anywhere mints no token", () => {
   expect(grantsOidc({ permissions: { contents: "read" } })).toBe(false);
   expect(grantsOidc({ permissions: { contents: "read" }, jobs: { publish: { steps: [kitStep] } } })).toBe(false);
@@ -125,6 +134,7 @@ test("the release-push flow plans only after the preflight passes, so an untagge
   expect(preflight).toBeGreaterThanOrEqual(0);
   expect(plan).toBeGreaterThanOrEqual(0);
   expect(preflight).toBeLessThan(plan);
+  expect(runs[preflight] ?? "").toContain("chore: release");
 });
 
 test("the daily-release template plans only after the preflight passes, so an untagged bump fails before release-pr plans", async () => {
