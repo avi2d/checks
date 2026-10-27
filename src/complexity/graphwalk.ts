@@ -351,7 +351,13 @@ const gate = Effect.gen(function* () {
     );
   }
   const linted = yield* trackedIn(root, LINTED_SOURCE);
-  if (linted.length === 0) return yield* new GraphwalkError({ message: "no tracked TypeScript or Astro source to scan" });
+  if (linted.length === 0) {
+    if ((yield* trackedInTree(root)).length === 0)
+      return yield* new GraphwalkError({ message: "no tracked TypeScript or Astro source to scan" });
+    if (args.length > 0) yield* refArgs(args, USAGE);
+    const cruised = yield* importsSection(root);
+    return exitOf([cruised]);
+  }
   const { first, second } = args.length === 0 ? { first: "HEAD", second: undefined } : yield* refArgs(args, USAGE);
   const typescript = yield* trackedIn(root, TYPESCRIPT_SOURCE);
   const knipOutcome = yield* knipReport(root, INCLUDED).pipe(
@@ -361,7 +367,11 @@ const gate = Effect.gen(function* () {
   );
   if (knipOutcome.failed) {
     yield* Console.error(`${UNUSED}: ${knipOutcome.message}`);
-    if (typescript.length === 0) return UNDECIDED;
+    if (typescript.length === 0) {
+      if ((yield* trackedInTree(root)).length === 0) return UNDECIDED;
+      const cruised = yield* importsSection(root);
+      return exitOf(["undecided", cruised]);
+    }
     yield* Console.error(`${EXPORTS}: ${knipOutcome.message}`);
     const cruised = yield* importsSection(root);
     return exitOf(["undecided", "undecided", cruised]);
@@ -370,11 +380,16 @@ const gate = Effect.gen(function* () {
   if (reported.kind === "unconfigured") {
     yield* Console.log(unconfiguredLine(UNUSED));
     yield* Console.log(unconfiguredLine(EXPORTS));
-    const cruised = typescript.length === 0 ? "passed" : yield* importsSection(root);
+    const cruised =
+      typescript.length > 0 || (yield* trackedInTree(root)).length > 0 ? yield* importsSection(root) : "passed";
     return exitOf(["violated", "violated", cruised]);
   }
   const unlisted = yield* unusedSection(linted.length, reported.stdout);
-  if (typescript.length === 0) return exitOf([unlisted]);
+  if (typescript.length === 0) {
+    if ((yield* trackedInTree(root)).length === 0) return exitOf([unlisted]);
+    const cruised = yield* importsSection(root);
+    return exitOf([unlisted, cruised]);
+  }
   const drifted = yield* exportsSection(root, reported.stdout, first, second);
   const cruised = yield* importsSection(root);
   return exitOf([unlisted, drifted, cruised]);

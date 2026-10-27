@@ -19,7 +19,7 @@ It fails on any baseline entry the range adds unless Knip reports that same symb
 It fails on any baseline entry Knip no longer reports, so the baseline only shrinks.
 It runs dependency-cruiser over every tracked `.ts`, `.tsx`, `.mts` and `.cts` file and names each violation with its rule, the importing module and the module it reaches.
 It fails on a violation whose rule has `error` severity, and lists a `warn` or `info` violation without failing.
-It fails when the repository tracks no `.ts`, `.tsx` or `.astro` file, since an empty scan would pass without judging anything.
+It fails when the repository tracks no `.ts`, `.tsx`, `.astro`, `.mts` or `.cts` file, since an empty scan would pass without judging anything.
 It fails when the repository holds no Knip configuration, since Knip's default entries cannot tell a dead file from an entry point.
 
 In a repository whose `package.json` lists `astro` under `dependencies` or `devDependencies`, the kit's defaults leave `no-orphans` out.
@@ -85,8 +85,8 @@ A seed written after the range adds a dead export, or after it removes the last 
 
 The gate exits 1 when any section reports a violation, and exits 2 only when no section reports one and at least one section cannot decide.
 
-It also exits 2 when the repository tracks no `.ts`, `.tsx` or `.astro` file, or, with `--write`, when it tracks no TypeScript file.
-A repository that tracks `.astro` files but no TypeScript prints only the unreferenced-files section.
+It also exits 2 when the repository tracks no `.ts`, `.tsx`, `.astro`, `.mts` or `.cts` file, or, with `--write`, when it tracks no TypeScript file.
+A repository that tracks `.astro` files but no `.ts`, `.tsx`, `.mts` or `.cts` file prints only the unreferenced-files section.
 
 ## Sample output
 

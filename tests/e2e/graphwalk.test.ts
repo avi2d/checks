@@ -47,3 +47,23 @@ test(
   },
   120_000,
 );
+
+test(
+  "a repository with only .mts files still cruises its imports instead of reporting no tracked source",
+  async () => {
+    const { commit, script } = await open({
+      "package.json": JSON.stringify({ name: "graphwalk-mts-only", type: "module" }),
+      "src/a.mts": `import { b } from "./b.mts";\nexport const a = b;\n`,
+      "src/b.mts": `import { a } from "./a.mts";\nexport const b = a;\n`,
+    });
+    await commit("feat: cycle");
+
+    const red = await script("complexity/graphwalk.ts");
+    expect(red.text).toContain("imports:");
+    expect(red.text).toContain("violation(s)");
+    expect(red.text).toContain("no-circular");
+    expect(red.text).not.toContain("no tracked TypeScript or Astro source");
+    expect(red.exitCode).toBe(1);
+  },
+  120_000,
+);
