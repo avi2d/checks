@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     types: [opened, edited, synchronize, reopened]
+  schedule:
+    - cron: '23 3 * * *'
   workflow_dispatch:
 
 permissions:
@@ -46,7 +48,11 @@ jobs:
       # Path filters would leave this required check unreported, so steps gate on the filter instead.
       - id: filter
         run: bun src/delivery/docs-only.ts ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} >> "$GITHUB_OUTPUT"
-      - if: steps.filter.outputs.docs-only != 'true'
+      - id: scope
+        run: bun src/core/scope.ts ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} >> "$GITHUB_OUTPUT"
+      - if: steps.filter.outputs.docs-only != 'true' && steps.scope.outputs.full != 'true'
+        run: bun run test:fast
+      - if: steps.filter.outputs.docs-only != 'true' && steps.scope.outputs.full == 'true'
         run: bun run test:e2e
   static:
     runs-on: ubuntu-latest
@@ -83,7 +89,12 @@ jobs:
       - run: bun run build
       - run: git diff --exit-code
       # A docs-only change still runs lint, since checks-docs checks only the range it is given.
-      - run: bun run lint
+      - id: scope
+        run: bun src/core/scope.ts ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} >> "$GITHUB_OUTPUT"
+      - if: steps.scope.outputs.full != 'true'
+        run: bun run lint
+      - if: steps.scope.outputs.full == 'true'
+        run: bun run lint -- --full
       - if: steps.filter.outputs.docs-only != 'true'
         run: bun run typecheck
   checks:
