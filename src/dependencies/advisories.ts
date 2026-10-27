@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { Clock, Config, Console, Effect, FileSystem, type Layer, Option, Path, Schema } from "effect";
+import { ADVISORIES_DEFER_SCAN } from "../core/gates.ts";
 import { changedPaths, commitOf, git, pathsAt, rangeFromArgs, writtenAt } from "../core/git.ts";
 import type { BunServices } from "@effect/platform-bun";
 import { runMain, Usage } from "../core/main.ts";
@@ -80,10 +81,17 @@ const findingsOf = Effect.fn("findingsOf")(function* (lockfiles: Lockfiles) {
   return { base: findingsIn(scanned, at("base")), head: findingsIn(scanned, at("head")) };
 }, Effect.scoped);
 
-const outcomeOf = Effect.fn("outcomeOf")(function* (request: Request, root: string, clock: AcknowledgementClock) {
+const defersScan = Effect.fn("defersScan")(function* () {
+  const value = yield* Config.option(Config.String(ADVISORIES_DEFER_SCAN));
+  return Option.isSome(value) && value.value.trim() !== "";
+});
+
+const outcomeOf = Effect.fn("outcomeOf")(function* (request: Request, root: string, clock: AcknowledgementClock, deferred: boolean) {
   if (request.kind === "range" && (yield* changedPaths(request.base, request.head, [LOCKFILE], root)).length === 0) {
     return { kind: "unchanged", problems: clock.problems } satisfies Outcome;
   }
+  // The lint path leaves the verdict to the scheduled run, so a changed lockfile reports the deferral instead of scanning.
+  if (deferred && request.kind === "range") return { kind: "deferred", problems: clock.problems } satisfies Outcome;
   const head = yield* fileAt(request.head, LOCKFILE, root);
   const base = request.kind === "range" ? yield* fileAt(request.base, LOCKFILE, root) : Option.none<string>();
   const findings = Option.isNone(head) ? { base: [], head: [] } : yield* findingsOf({ base, head });
@@ -101,7 +109,7 @@ const advisories = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const dates = { head: (yield* writtenAt(request.head, root)) * 1000, now: yield* Clock.currentTimeMillis };
   const clock = clockOf(yield* acknowledgementsAt(request.head, root), { kind: request.kind }, dates);
-  const outcome = yield* outcomeOf(request, root, clock);
+  const outcome = yield* outcomeOf(request, root, clock, yield* defersScan());
   const text = report(outcome);
   yield* Console.log(text);
   if (request.kind === "head") yield* toStepSummary(text);

@@ -13,6 +13,7 @@ With `--night` it runs the four nightly gates instead.
 Gates requiring tracked TypeScript files begin running when the repository tracks TypeScript.
 `checks-lint-coverage` and `checks-unused` also begin running when the repository tracks an `.astro` file.
 `checks-advisories` begins running when the repository tracks `bun.lock`.
+`checks-lint` defers its scan to the scheduled run, so the desk and the pull request fetch no database.
 `checks-frontend-syntax` begins running when the repository tracks `frontend-syntax.json` at its root.
 `checks-copy` begins running when the repository tracks `copy.json` at its root.
 `checks-css-size` begins running when the repository tracks a `*.css` file.
