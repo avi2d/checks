@@ -74,11 +74,9 @@ test("a lockfile change runs the scoped matrix", () => {
   expect(scope.full).toBe(true);
 });
 
-test("a suppression change runs a tree gate", () => {
-  const scope = selectScope(["oxlint-suppressions.json"]);
-  expect(scope.full).toBe(false);
-  expect(scope.gates).toContain("checks-suppressions-ratchet");
-  expect(scope.gates.filter((bin) => TREE_GATES.includes(bin))).toEqual([]);
+test("a suppression change takes the full run instead of the range-only subset", () => {
+  expect(classifyPath("oxlint-suppressions.json")).toBe("unknown");
+  expect(selectScope(["oxlint-suppressions.json"]).full).toBe(true);
 });
 
 test("a secret-like filename takes the full run instead of the range-only subset", () => {
@@ -107,6 +105,13 @@ test("the desk run skips the two slowest tree gates", () => {
 
 test("a markdown content change keeps checks-copy instead of dropping it", () => {
   expect(selectScope(["content/home.md"]).gates).toContain("checks-copy");
+});
+
+test("a non-test file under tests takes the full run instead of the test subset", () => {
+  expect(classifyPath("tests/lib/helper.js")).toBe("unknown");
+  expect(classifyPath("tests/fixtures/site.css")).toBe("unknown");
+  expect(selectScope(["tests/lib/helper.js"]).full).toBe(true);
+  expect(selectScope(["tests/fixtures/site.css"]).full).toBe(true);
 });
 
 test("a docs stylesheet takes the full run instead of the docs subset", () => {

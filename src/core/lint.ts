@@ -179,7 +179,7 @@ const scopedGates = Effect.fn("scopedGates")(function* (range: Range, root: stri
   const [base, head] = range.refs;
   const changes = yield* changedPaths(base, head, [], root);
   const committed = changes.flatMap((change) => (change.kind === "renamed" ? [change.from, change.path] : [change.path]));
-  const working = (yield* git(["diff", "--name-only", "-z", "HEAD", "--"], root)).split("\0").filter(Boolean);
+  const working = (yield* git(["diff", "--no-renames", "--name-only", "-z", "HEAD", "--"], root)).split("\0").filter(Boolean);
   const untracked = (yield* git(["ls-files", "--others", "--exclude-standard", "-z"], root)).split("\0").filter(Boolean);
   const scope = selectScope([...committed, ...working, ...untracked]);
   if (scope.full) return { gates: undefined, detail: "the full run, since the change reaches past a scoped shape" };

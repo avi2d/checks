@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
 import { Console, Effect } from "effect";
-import { SUPPRESSIONS } from "../complexity/suppressions-ratchet.ts";
 import { changedPaths, git } from "./git.ts";
 import { KIT_GATES } from "./gates.ts";
 import { runMain, Usage } from "./main.ts";
@@ -20,7 +19,6 @@ export type ChangeShape =
   | "test"
   | "workflow"
   | "lockfile"
-  | "suppressions"
   | "unknown";
 
 const TREE_GATES = KIT_GATES.filter((gate) => gate.reads === "tree").map((gate) => gate.bin);
@@ -49,8 +47,7 @@ export function classifyPath(path: string): ChangeShape {
   if (path.startsWith(".github/") || CI_CONFIGS.has(basename) || /^tsconfig(\..*)?\.json$/.test(basename)) {
     return "workflow";
   }
-  if (path.startsWith("tests/")) return "test";
-  if ((SUPPRESSIONS as readonly string[]).includes(basename)) return "suppressions";
+  if (path.startsWith("tests/") && /\.test\.tsx?$/.test(path)) return "test";
   if (basename === "copy.json") return "copy";
   if (/\.(?:ts|tsx|mts|cts|astro)$/.test(path)) return "typescript";
   const lower = basename.toLowerCase();
