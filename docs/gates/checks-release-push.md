@@ -140,7 +140,7 @@ The concurrency group holds from reading the branch until the release workflow i
 That hold ends early in two cases.
 One is when the 45 minute wait times out.
 The other is when polling fails past the retry bound or the dispatch of the release workflow fails after GitHub accepted it.
-In those cases an unfinished publisher can overlap the next release, and if latest lands on the older version the fix is npm dist-tag add <package>@<newer version> latest.
+In those cases an unfinished publisher can overlap the next release, and if `latest` lands on the older version, `npm dist-tag add <package>@<newer version> latest` repairs it.
 [checks-release-publish](checks-release-publish.md) stays the guard for a release workflow dispatched or rerun by hand.
 A run that waits behind it checks out the branch's tip when it starts, so it releases on top of what landed.
 The job waits on the checks it dispatched and on the release workflow, so a hosted runner bills the minutes those workflows take.
