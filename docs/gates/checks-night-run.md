@@ -207,7 +207,7 @@ A dispatch on a branch runs both jobs and lists its findings in the report job's
 `issues: write` on the report job is the one permission beyond reading the repository and its runs.
 A public repository keeps `runs-on: ubuntu-latest` on every job.
 A private repository sets `runs-on` on the mutation job to the labels declared under `checks.mutationRunner` in `package.json`, and [checks-ci-wiring](checks-ci-wiring.md#runners) refuses a mutation job that names `CI_RUNS_ON`.
-A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on the tests and report jobs.
+A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on the tests, gates, and report jobs.
 A successful run uploads `night-run`, so the next night compares with it, and a failed run uploads nothing a later night reads.
 The artifact keeps 90 days, so a gap of nights still leaves a previous night to compare with.
 
