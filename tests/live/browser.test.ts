@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { browserSite, declaration, failuresOf, HOOK_TYPES, page, routesOf } from "./lib/browser-site.ts";
+import { browserSite, declaration, failuresOf, HOOK_TYPES, page, routesOf } from "../e2e/lib/browser-site.ts";
 
 const CLEAN_LINK = page(`<p><a href="/">Write to me</a></p>`);
 
@@ -403,7 +403,8 @@ async function heldSaves(page: Parameters<ProductCheck["run"]>[0], url: string):
   await page.goto(url);
   await page.click("#save-a");
   await page.click("#save-b");
-  while (held.size < 2) await page.waitForTimeout(10);
+  const deadline = Date.now() + 5_000;
+  while (held.size < 2 && Date.now() < deadline) await page.waitForTimeout(10);
   return held;
 }
 
@@ -413,8 +414,8 @@ export const checks: readonly ProductCheck[] = [
     run: async (page, visit) => {
       const held = await heldSaves(page, visit.url);
       await held.get("B")?.fulfill({ body: "B saved" });
-      await page.locator("#saved", { hasText: "B saved" }).waitFor();
-      await Promise.all([page.waitForResponse("**/api/save?value=A"), held.get("A")?.fulfill({ body: "A saved" })]);
+      await page.locator("#saved", { hasText: "B saved" }).waitFor({ timeout: 5_000 });
+      await Promise.all([page.waitForResponse("**/api/save?value=A", { timeout: 5_000 }), held.get("A")?.fulfill({ body: "A saved" })]);
       await shows(page, "A saved");
       const shown = await page.textContent("#saved");
       return { targets: ["saved result"], found: shown === "B saved" ? [] : [\`the saved result shows "\${shown}" once the late reply to A lands\`] };
@@ -424,9 +425,9 @@ export const checks: readonly ProductCheck[] = [
     name: "a rejected save shows as unsaved",
     run: async (page, visit) => {
       const held = await heldSaves(page, visit.url);
-      await Promise.all([page.waitForResponse("**/api/save?value=A"), held.get("A")?.fulfill({ body: "A saved" })]);
+      await Promise.all([page.waitForResponse("**/api/save?value=A", { timeout: 5_000 }), held.get("A")?.fulfill({ body: "A saved" })]);
       await shows(page, "A saved");
-      await Promise.all([page.waitForResponse("**/api/save?value=B"), held.get("B")?.fulfill({ status: 503, body: "" })]);
+      await Promise.all([page.waitForResponse("**/api/save?value=B", { timeout: 5_000 }), held.get("B")?.fulfill({ status: 503, body: "" })]);
       await shows(page, "B unsaved");
       const shown = await page.textContent("#saved");
       return { targets: ["saved result"], found: shown === "B unsaved" ? [] : [\`the saved result shows "\${shown}" after the save of B was refused\`] };
@@ -442,7 +443,7 @@ export const checks: readonly ProductCheck[] = [
       await page.goto(visit.url);
       await page.context().setOffline(true);
       await page.click("#save-b");
-      await page.locator("#saved", { hasText: "B unsaved" }).waitFor();
+      await page.locator("#saved", { hasText: "B unsaved" }).waitFor({ timeout: 5_000 });
       online = true;
       await page.context().setOffline(false);
       await shows(page, "B saved");
@@ -463,7 +464,7 @@ export const checks: readonly ProductCheck[] = [
       for (const value of offered) {
         await page.selectOption("#language", value);
         // A request fires before its route handles it, so each turn waits for the response too.
-        const [request] = await Promise.all([page.waitForRequest("**/api/language"), page.click("#language-form button")]);
+        const [request] = await Promise.all([page.waitForRequest("**/api/language", { timeout: 5_000 }), page.click("#language-form button")]);
         await request.response();
       }
       const refused = submitted.filter((value) => !Schema.is(Language)(value));

@@ -38,6 +38,10 @@ The table groups the gates by vector, the part of a repository each one judges.
 
 <!-- end generated gates -->
 
+Four of these gates run only at night.
+They are `checks-lint-coverage`, `checks-quarantine-clock`, `checks-repetition` and `checks-suppressions-ratchet`.
+The night-run workflow runs them with `checks-lint --night`.
+
 These bins run on their own:
 
 - [`checks-test`](gates/checks-test.md) runs the suite as `scripts.test` and refuses a skip without a reason at its test site.

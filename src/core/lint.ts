@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
-import { EVERY_REPOSITORY, KIT_GATES, type KitGate } from "./gates.ts";
+import { EVERY_REPOSITORY, NIGHT_GATES, PR_GATES, type KitGate } from "./gates.ts";
 import { defaultBranch, git } from "./git.ts";
 import { runMain, Usage } from "./main.ts";
 
@@ -21,7 +21,8 @@ class GatesUndecided extends Schema.TaggedError<GatesUndecided>()("GatesUndecide
 }) {}
 
 const NAME = "checks-lint";
-const USAGE = "usage: lint.ts [<base-ref> <head-ref>]";
+const USAGE = "usage: lint.ts [--night] [<base-ref> <head-ref>]";
+const NIGHT = "--night";
 const PULL_REQUEST_EVENT = "pull_request";
 const SHALLOW_HINT = "a CI checkout needs actions/checkout fetch-depth: 0";
 
@@ -166,9 +167,11 @@ const runGate = Effect.fn("runGate")(function* (gate: KitGate, range: Range) {
 
 const lint = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
-  const range = yield* resolveRange(process.argv.slice(2));
+  const raw = process.argv.slice(2);
+  const night = raw.includes(NIGHT);
+  const range = yield* resolveRange(raw.filter((arg) => arg !== NIGHT));
   yield* Console.log(`${NAME}: ${describe(range)} from ${range.source}`);
-  const gates = yield* Effect.filter(KIT_GATES, (gate) =>
+  const gates = yield* Effect.filter(night ? NIGHT_GATES : PR_GATES, (gate) =>
     gate.appliesTo === EVERY_REPOSITORY
       ? Effect.succeed(true)
       : git(["ls-files", "--", ...gate.appliesTo.pathspecs], root).pipe(Effect.map((files) => files.trim() !== "")),

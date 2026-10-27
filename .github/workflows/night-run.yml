@@ -32,6 +32,22 @@ jobs:
           path: reports/mutation/mutation.json
           retention-days: 1
 
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      # The nightly gates judge the day's merges, so the base is the commit from 24 hours ago.
+      - run: |
+          base=$(git rev-list -n 1 --before="24 hours ago" HEAD)
+          if [ -z "$base" ]; then base=$(git rev-list --max-parents=0 HEAD | tail -n 1); fi
+          bun src/core/lint.ts --night "$base" HEAD
+
   tests:
     runs-on: ubuntu-latest
     steps:
@@ -42,11 +58,12 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      # The repository holds no live or pixel tier, so the night runs the unit and e2e levels of the suite.
+      # The night runs the unit, e2e and live levels of the suite.
       # A failing test becomes an issue, so its exit leaves the job going on to the upload.
       - run: |
           bun src/testing/test.ts --tier=unit --junit=reports/night-run-tests/unit.xml || true
           bun src/testing/test.ts --tier=e2e --parallel=4 --junit=reports/night-run-tests/e2e.xml || true
+          bun src/testing/test.ts --tier=live --junit=reports/night-run-tests/live.xml || true
       - uses: actions/upload-artifact@v4
         with:
           name: night-run-tests
@@ -78,7 +95,7 @@ jobs:
           path: reports/night-run-tests
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: bun src/testing/night-run.ts ${{ needs.mutation.result == 'success' && '--mutation reports/mutation/mutation.json' || '' }} --tests reports/night-run-tests/unit.xml --tests reports/night-run-tests/e2e.xml
+        run: bun src/testing/night-run.ts ${{ needs.mutation.result == 'success' && '--mutation reports/mutation/mutation.json' || '' }} --tests reports/night-run-tests/unit.xml --tests reports/night-run-tests/e2e.xml --tests reports/night-run-tests/live.xml
       - uses: actions/upload-artifact@v4
         with:
           name: night-run

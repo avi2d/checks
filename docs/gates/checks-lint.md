@@ -8,7 +8,8 @@ audience: consumers
 
 ## What it checks
 
-It runs the gates under [What runs](../bins.md#what-runs), each in its own process.
+It runs the per-PR gates under [What runs](../bins.md#what-runs), each in its own process.
+With `--night` it runs the four nightly gates instead.
 Gates requiring tracked TypeScript files begin running when the repository tracks TypeScript.
 `checks-lint-coverage` and `checks-unused` also begin running when the repository tracks an `.astro` file.
 `checks-advisories` begins running when the repository tracks `bun.lock`.
@@ -31,9 +32,11 @@ Tree gates read the working tree rather than the range.
 ```sh
 checks-lint
 checks-lint <base-ref> <head-ref>
+checks-lint --night <base-ref> <head-ref>
 ```
 
 With two arguments, the base and head override range discovery.
+With `--night`, it runs the four nightly gates over the same range.
 
 ## Exit codes
 
@@ -57,8 +60,9 @@ checks-lint: 1 of 19 gate(s) failed: checks-comment-gate
 ## When it runs
 
 A repository runs it from `bun run lint` in a pull request workflow that fetches the whole git history.
-It leaves out the TypeScript gates while the repository tracks no TypeScript file, except that `checks-lint-coverage` and `checks-unused` run when it tracks an `.astro` file.
+It leaves out the TypeScript gates while the repository tracks no TypeScript file, except that `checks-unused` runs when it tracks an `.astro` file.
 It never runs `checks-browser`, which a product runs after it builds its site.
+A repository runs the four nightly gates from its night-run workflow with `checks-lint --night` over the day's merges.
 
 ## Related topics
 

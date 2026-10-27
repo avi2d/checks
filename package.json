@@ -212,6 +212,7 @@
     "test:fast": "bun scripts/test-fast.ts",
     "test:unit": "bun src/testing/test.ts --tier=unit",
     "test:e2e": "bun src/testing/test.ts --tier=e2e --parallel=4",
+    "test:live": "bun src/testing/test.ts --tier=live",
     "mutate": "bunx stryker run",
     "mutate:incremental": "bunx stryker run --incremental"
   },
