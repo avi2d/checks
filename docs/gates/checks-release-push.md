@@ -120,12 +120,21 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
+      - name: fail fast when the release cannot plan
+        run: |
+          if git log -1 --format=%s HEAD | grep -qE '^chore: release [0-9]+\.[0-9]+\.[0-9]+( \(#[0-9]+\))?$'; then
+            echo "HEAD already holds the release commit, so release-push recovers its tag instead of planning"
+          else
+            ./node_modules/.bin/checks-release-preflight release.yml
+          fi
       - name: release what main holds once its checks pass
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./node_modules/.bin/checks-release-push release.yml ci.yml
 ```
 
+The step before it runs `checks-release-preflight`, so a run missing the trusted publisher prerequisites fails before planning.
+A checkout whose `HEAD` already holds the release commit skips that step, so a rerun after a failed tag push recovers the tag.
 The push the workflow token makes starts no run, so landing the release commit never starts the workflow again.
 The concurrency group holds from reading the branch until the release workflow it dispatched finishes, so releases cut by release-push publish one at a time, and a queued run the group cancels had cut nothing.
 That hold ends early in two cases.

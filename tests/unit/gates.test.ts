@@ -8,6 +8,7 @@ const OUTSIDE_LINT = {
   "checks-release-notes": "src/delivery/release-notes.ts",
   "checks-release-report": "src/delivery/release-report.ts",
   "checks-release-pr": "src/delivery/release-pr.ts",
+  "checks-release-preflight": "src/delivery/release-preflight.ts",
   "checks-release-publish": "src/delivery/release-publish.ts",
   "checks-release-push": "src/delivery/release-push.ts",
   "checks-release-tag": "src/delivery/release-tag.ts",

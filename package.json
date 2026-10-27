@@ -1,6 +1,6 @@
 {
   "name": "@avi2dg/checks",
-  "version": "0.53.0",
+  "version": "0.54.0",
   "description": "Deterministic checks shared across a set of TypeScript repositories",
   "author": {
     "name": "avi2d",
@@ -41,6 +41,7 @@
     "src/delivery/release.ts",
     "src/delivery/release-commit.ts",
     "src/delivery/release-pr.ts",
+    "src/delivery/release-preflight.ts",
     "src/delivery/release-publish.ts",
     "src/delivery/release-push.ts",
     "src/delivery/release-tag.ts",
@@ -164,6 +165,7 @@
     "checks-release-notes": "src/delivery/release-notes.ts",
     "checks-release-report": "src/delivery/release-report.ts",
     "checks-release-pr": "src/delivery/release-pr.ts",
+    "checks-release-preflight": "src/delivery/release-preflight.ts",
     "checks-release-publish": "src/delivery/release-publish.ts",
     "checks-release-push": "src/delivery/release-push.ts",
     "checks-release-tag": "src/delivery/release-tag.ts",

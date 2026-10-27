@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.54.0
+
+Released 2026-10-27.
+
+### Features
+
+- **delivery:** fail fast when the release cannot run [#8](https://github.com/avi2d/checks/pull/8)
+
 ## 0.53.0
 
 Released 2026-10-26.
