@@ -6,7 +6,7 @@ import { Option } from "effect";
 import { buildFor, OSV_SCANNER_VERSION } from "../../src/dependencies/osv-scanner.ts";
 import { withoutPullRequestEvent } from "../lib/env.ts";
 import { FAKE_SCANNER_PATH, GATE_WITH_FAKE_SCANNER } from "./lib/advisories-gate.ts";
-import { CHECKOUT, fixtureRepos, lintWiring, ran, scratchDirs, type FixtureRepo, type Ran } from "./lib/fixture-repo.ts";
+import { CHECKOUT, fixtureRepos, lintWiring, ran, scratchDirs, withOwnInstall, type FixtureRepo, type Ran } from "./lib/fixture-repo.ts";
 
 const open = fixtureRepos("checks-advisories-");
 const scratch = scratchDirs();
@@ -248,6 +248,7 @@ test(
   async () => {
     const build = Option.getOrThrow(buildFor(process.platform, process.arch));
     const repo = await open({ ...lintWiring(), "bun.lock": lockfile({ "left-pad": "1.3.0" }) });
+    await withOwnInstall(repo);
     await repo.commit("chore: wire");
     await repo.write({ "bun.lock": lockfile({ "left-pad": "1.3.0", minimist: "0.0.8" }) });
     await repo.commit("build: add minimist");
