@@ -9,7 +9,7 @@ audience: consumers
 ## What it checks
 
 A change is docs-only when every file it touches is a `.md` file at the top level or under `docs/`, and it touches at least one file.
-Markdown anywhere else, such as a test fixture under `tests/` or a template under `dist/`, keeps the full run.
+Markdown anywhere else, such as a test fixture under `tests/` or a template under `dist/`, keeps the typecheck and unit test steps running.
 A rename counts both sides.
 An empty change and a change with no range keep the full run.
 
