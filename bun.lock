@@ -3,5 +3,6 @@
   "workspaces": { "": { "name": "fixture" } },
   "packages": {
     "left-pad": ["left-pad@1.3.0", "", {}, "sha512-0"],
+    "lodash": ["lodash@4.17.20", "", {}, "sha512-0"],
   }
 }
