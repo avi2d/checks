@@ -32,11 +32,11 @@ Tree gates read the working tree rather than the range.
 ```sh
 checks-lint
 checks-lint <base-ref> <head-ref>
-checks-lint --night <base-ref> <head-ref>
+checks-lint --night [<base-ref> <head-ref>]
 ```
 
 With two arguments, the base and head override range discovery.
-With `--night`, it runs the four nightly gates over the same range.
+With `--night` and no arguments, it runs the four nightly gates over the whole tree.
 
 ## Exit codes
 
@@ -52,7 +52,7 @@ With `--night`, it runs the four nightly gates over the same range.
 
 ```
 checks-lint: range 2504acf098d120e73a8ece3c96f22b934f35c6a8..10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD against origin/main
-checks-lint: 1 of 19 gate(s) failed: checks-comment-gate
+checks-lint: 1 of 15 gate(s) failed: checks-comment-gate
 ```
 
 <!-- end generated lint-sample -->
@@ -62,7 +62,7 @@ checks-lint: 1 of 19 gate(s) failed: checks-comment-gate
 A repository runs it from `bun run lint` in a pull request workflow that fetches the whole git history.
 It leaves out the TypeScript gates while the repository tracks no TypeScript file, except that `checks-unused` runs when it tracks an `.astro` file.
 It never runs `checks-browser`, which a product runs after it builds its site.
-A repository runs the four nightly gates from its night-run workflow with `checks-lint --night` over the day's merges.
+A repository runs the four nightly gates from its night-run workflow with `checks-lint --night` over the whole tree.
 
 ## Related topics
 

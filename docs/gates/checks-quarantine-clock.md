@@ -47,7 +47,7 @@ quarantine-clock: 1 test(s) in tests/quarantine/ is past 30 days; fix each and m
 
 ## When it runs
 
-`checks-lint` runs it over each pull request's range in every repository, as [checks-lint](checks-lint.md) says.
+`checks-lint --night` runs it nightly in every repository, as [checks-lint](checks-lint.md) says.
 A repository with no test file under `tests/quarantine/` passes with nothing checked.
 
 ## Related topics

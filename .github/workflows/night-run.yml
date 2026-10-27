@@ -42,11 +42,7 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      # The nightly gates judge the day's merges, so the base is the commit from 24 hours ago.
-      - run: |
-          base=$(git rev-list -n 1 --before="24 hours ago" HEAD)
-          if [ -z "$base" ]; then base=$(git rev-list --max-parents=0 HEAD | tail -n 1); fi
-          bun src/core/lint.ts --night "$base" HEAD
+      - run: bun src/core/lint.ts --night
 
   tests:
     runs-on: ubuntu-latest

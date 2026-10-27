@@ -141,6 +141,19 @@ const resolveRange = Effect.fn("resolveRange")(function* (args: readonly string[
   return { refs: rangeOf(base, head), source: ends.source } satisfies Range;
 });
 
+const resolveWholeTree = Effect.fn("resolveWholeTree")(function* () {
+  const head = yield* commitOf("HEAD");
+  const root = (yield* git(["rev-list", "--max-parents=0", "HEAD"])).split("\n").map((line) => line.trim()).filter((line) => line !== "")[0];
+  if (root === undefined) return yield* new RangeUnresolved({ message: `HEAD has no commit in this clone; ${SHALLOW_HINT}` });
+  const base = yield* git(["merge-base", root, head]).pipe(
+    Effect.map((sha) => sha.trim()),
+    Effect.mapError(
+      () => new RangeUnresolved({ message: `HEAD shares no commit with its root in this clone; ${SHALLOW_HINT}` }),
+    ),
+  );
+  return { refs: rangeOf(base, head), source: "the whole tree at HEAD" } satisfies Range;
+});
+
 export function describe({ refs }: Range): string {
   return refs.length === 1 ? `tip ${refs[0]}` : `range ${refs[0]}..${refs[1]}`;
 }
@@ -169,7 +182,8 @@ const lint = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const raw = process.argv.slice(2);
   const night = raw.includes(NIGHT);
-  const range = yield* resolveRange(raw.filter((arg) => arg !== NIGHT));
+  const filtered = raw.filter((arg) => arg !== NIGHT);
+  const range = yield* night && filtered.length === 0 ? resolveWholeTree() : resolveRange(filtered);
   yield* Console.log(`${NAME}: ${describe(range)} from ${range.source}`);
   const gates = yield* Effect.filter(night ? NIGHT_GATES : PR_GATES, (gate) =>
     gate.appliesTo === EVERY_REPOSITORY

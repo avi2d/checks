@@ -46,7 +46,7 @@ suppressions-ratchet: 2 count(s) rose or appeared; fix the site instead of suppr
 
 ## When it runs
 
-`checks-lint` runs it over each pull request's range in every repository, as [checks-lint](checks-lint.md) says.
+`checks-lint --night` runs it nightly in every repository, as [checks-lint](checks-lint.md) says.
 A repository with neither file passes, since both ends count as empty.
 
 ## Related topics
