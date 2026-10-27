@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.56.1
+
+Released 2026-10-27.
+
+### Fixes
+
+- **complexity:** merge unused, exports and imports walks into one pass [#12](https://github.com/avi2d/checks/pull/12)
+
 ## 0.56.0
 
 Released 2026-10-27.
