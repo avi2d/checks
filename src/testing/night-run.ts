@@ -5,11 +5,11 @@ import { DEFAULT_BRANCH } from "../core/gates.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { gh, type GitHubFailure, gitHubJson, REPOSITORY } from "../delivery/github.ts";
 import { parseReport as parseMutationReport } from "./mutation-compare.ts";
-import { type Finding, findingsOf, keyOf, NightRecordSchema, type NightRecord, percent, type PreviousNight, scoresOf, type TestReport } from "./night-run-findings.ts";
+import { type Finding, findingsOf, gatesOf, keyOf, NightRecordSchema, type NightRecord, percent, type PreviousNight, scoresOf, type TestReport } from "./night-run-findings.ts";
 import { parseReport as parseTestReport } from "./test-report.ts";
 
 const NAME = "checks-night-run";
-const USAGE = `usage: ${NAME} [--mutation <mutation-report>] [--tests <junit-report>]...`;
+const USAGE = `usage: ${NAME} [--mutation <mutation-report>] [--tests <junit-report>]... [--gates <lint-log>]`;
 export const LABEL = "night-run";
 const LABEL_COLOR = "5319e7";
 const LABEL_DESCRIPTION = "A regression a night run on main found";
@@ -23,19 +23,22 @@ class NightRunFailure extends Schema.TaggedError<NightRunFailure>()("NightRunFai
   message: Schema.String,
 }) {}
 
-export type Options = { readonly mutation: Option.Option<string>; readonly tests: readonly string[] };
+export type Options = { readonly mutation: Option.Option<string>; readonly tests: readonly string[]; readonly gates: Option.Option<string> };
 
 export const parseArgs = Effect.fnUntraced(function* (argv: readonly string[]): Effect.fn.Return<Options, Usage> {
   const mutation: string[] = [];
   const tests: string[] = [];
+  const gates: string[] = [];
   for (let at = 0; at < argv.length; at += 2) {
     const [flag, value] = [argv[at], argv[at + 1]];
-    const into = flag === "--mutation" ? mutation : flag === "--tests" ? tests : undefined;
+    const into = flag === "--mutation" ? mutation : flag === "--tests" ? tests : flag === "--gates" ? gates : undefined;
     if (into === undefined || value === undefined || value.startsWith("--")) return yield* new Usage({ message: USAGE });
     into.push(value);
   }
-  if (mutation.length > 1 || mutation.length + tests.length === 0) return yield* new Usage({ message: USAGE });
-  return { mutation: Option.fromNullishOr(mutation[0]), tests };
+  if (mutation.length > 1 || gates.length > 1 || mutation.length + tests.length + gates.length === 0) {
+    return yield* new Usage({ message: USAGE });
+  }
+  return { mutation: Option.fromNullishOr(mutation[0]), tests, gates: Option.fromNullishOr(gates[0]) };
 });
 
 export type OpenIssue = { readonly number: number; readonly key: string };
@@ -102,6 +105,7 @@ const openIssues = Effect.gen(function* () {
 function fullTitleOf(finding: Finding): string {
   if (finding.kind === "mutation") return `Night run: mutation score fell in ${finding.file}`;
   if (finding.kind === "test") return `Night run: ${finding.file} > ${finding.name} fails`;
+  if (finding.kind === "gates") return `Night run: nightly gate ${finding.file} failed`;
   return `Night run: ${finding.file} crashed its test worker`;
 }
 
@@ -125,6 +129,7 @@ export function findingText(finding: Finding, run: string): string {
     ].join("\n");
   }
   if (finding.kind === "test") return `The night run ${run} failed \`${finding.name}\` in \`${finding.file}\`.`;
+  if (finding.kind === "gates") return `The night run ${run} failed nightly gate \`${finding.file}\`.`;
   return `The night run ${run} lost every result of \`${finding.file}\`, because the worker running it crashed.`;
 }
 
@@ -240,8 +245,9 @@ const nightRun = Effect.gen(function* () {
   const actions = yield* actionsRun;
   const scores = Option.isSome(options.mutation) ? Option.some(yield* tonightScores(options.mutation.value)) : Option.none<NightRecord["scores"]>();
   const tests: TestReport[] = yield* Effect.forEach(options.tests, testReport);
+  const gates: readonly Finding[] = Option.isSome(options.gates) ? gatesOf(yield* readText(options.gates.value)) : [];
   const previous = Option.isSome(scores) ? yield* previousNight(actions) : Option.none<PreviousNight>();
-  const findings = findingsOf(previous, { scores: Option.getOrElse(scores, () => ({})), tests });
+  const findings = findingsOf(previous, { scores: Option.getOrElse(scores, () => ({})), tests }, gates);
   const filing: Filing = actions.ref === `refs/heads/${DEFAULT_BRANCH}` ? { onMain: true, filed: yield* fileFindings(findings, actions.run) } : { onMain: false, ref: actions.ref };
   if (filing.onMain && Option.isSome(scores)) yield* writeRecord({ scores: scores.value });
   yield* Console.log(report(actions.run, Option.map(scores, (tonight) => Object.keys(tonight).length), previous, findings, filing));

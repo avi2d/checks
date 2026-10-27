@@ -25,10 +25,12 @@ A rebase keeps the entry's author date and moves the head's committer date forwa
 ```sh
 checks-quarantine-clock <base-ref> <head-ref>
 checks-quarantine-clock <ref>
+checks-quarantine-clock --whole-tree <head-ref>
 ```
 
-With two arguments it judges the head, and the base only satisfies the range `checks-lint` hands every range gate.
+With two arguments it judges the head, and the base must resolve but changes nothing.
 With one it judges that commit, including a repository's first commit.
+With `--whole-tree` it judges the named head, which is the form `checks-lint --night` runs.
 
 ## Exit codes
 

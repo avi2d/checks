@@ -4,14 +4,14 @@ audience: consumers
 ---
 # checks-lint
 
-`checks-lint` runs every applicable kit lint gate over one range and reports each failure.
+`checks-lint` runs every applicable per-PR gate over one range and reports each failure.
 
 ## What it checks
 
 It runs the per-PR gates under [What runs](../bins.md#what-runs), each in its own process.
 With `--night` it runs the four nightly gates instead.
 Gates requiring tracked TypeScript files begin running when the repository tracks TypeScript.
-`checks-lint-coverage` and `checks-unused` also begin running when the repository tracks an `.astro` file.
+`checks-unused` also begins running when the repository tracks an `.astro` file.
 `checks-advisories` begins running when the repository tracks `bun.lock`.
 `checks-lint` defers its scan to the scheduled run, so the desk and the pull request fetch no database.
 `checks-frontend-syntax` begins running when the repository tracks `frontend-syntax.json` at its root.
@@ -27,6 +27,7 @@ A local run with `GITHUB_BASE_REF` set starts at that branch on `origin` instead
 A clone with no remote tracking refs checks `HEAD` alone.
 On a pull request the range ends at the event's head commit and starts at its merge base with the event's base branch.
 Tree gates read the working tree rather than the range.
+With `--night` the range gates read the whole tree at `HEAD` instead of a range.
 
 ## Arguments
 
@@ -49,7 +50,7 @@ With `--night`, it takes no range arguments and runs the four nightly gates over
 
 ## Sample output
 
-<!-- generated lint-sample: bun run build writes it from KIT_GATES in src/core/gates.ts and scripts/doc-blocks.ts -->
+<!-- generated lint-sample: bun run build writes it from PR_GATES in src/core/gates.ts and scripts/doc-blocks.ts -->
 
 ```
 checks-lint: range 2504acf098d120e73a8ece3c96f22b934f35c6a8..10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD against origin/main

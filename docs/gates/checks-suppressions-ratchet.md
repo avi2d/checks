@@ -11,6 +11,7 @@ audience: consumers
 oxlint accepts whatever `oxlint --suppress-all` writes to `oxlint-suppressions.json`, so raising a count to let a new site through passes the lint.
 stylelint accepts `stylelint-suppressions.json` the same way, and writes it in the same shape, a count per rule per file.
 The ratchet fails naming the suppressions file, the file and the rule of each count that rose or appeared.
+At night `checks-lint --night` compares the head against the empty tree, so every count still present is reported until it is removed.
 A count that fell and an entry that went both pass.
 
 ## What it reads
@@ -23,10 +24,12 @@ A commit without a file counts it as empty, so the commit that first adds a base
 ```sh
 checks-suppressions-ratchet <base-ref> <head-ref>
 checks-suppressions-ratchet <ref>
+checks-suppressions-ratchet --whole-tree <head-ref>
 ```
 
 With two arguments it reads the base where the head branched off, at their merge-base, so a count the base branch lowered since does not read as a rise at the head.
 With one it compares that commit with its parent, or with the empty tree for a repository's first commit.
+With `--whole-tree` it compares the named head with the empty tree, which is the form `checks-lint --night` runs.
 
 ## Exit codes
 
@@ -47,7 +50,7 @@ suppressions-ratchet: 2 count(s) rose or appeared; fix the site instead of suppr
 ## When it runs
 
 `checks-lint --night` runs it nightly in every repository, as [checks-lint](checks-lint.md) says.
-A repository with neither file passes, since both ends count as empty.
+A repository with neither file passes.
 
 ## Related topics
 

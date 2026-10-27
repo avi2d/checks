@@ -172,11 +172,16 @@ const runWholeTree = Effect.fn("runWholeTree")(function* (root: string, config: 
   return heldOf(sources, rises, after) satisfies Held;
 });
 
+function cloneLines(clones: readonly Clone[]): readonly string[] {
+  return clones.map(([own, other]) => `    ${own.file}:${own.start}-${own.end} repeats ${other.file}:${other.start}-${other.end}`);
+}
+
 export function describe({ file, before, after, clones }: Rise): readonly string[] {
-  return [
-    `  ${file}: ${after} repeated line(s), up from ${before}`,
-    ...clones.map(([own, other]) => `    ${own.file}:${own.start}-${own.end} repeats ${other.file}:${other.start}-${other.end}`),
-  ];
+  return [`  ${file}: ${after} repeated line(s), up from ${before}`, ...cloneLines(clones)];
+}
+
+function wholeTreeRise({ file, after, clones }: Rise): readonly string[] {
+  return [`  ${file}: ${after} repeated line(s)`, ...cloneLines(clones)];
 }
 
 const noticeOf = (advisory: Held["advisory"]): readonly string[] =>
@@ -195,12 +200,12 @@ export function report({ measured, rises, advisory }: Held): string {
   return [...verdict, ...noticeOf(advisory)].join("\n");
 }
 
-export function reportWholeTree({ measured, rises, advisory }: Held): string {
+export function reportWholeTree({ measured, rises }: Held): string {
   const verdict =
     rises.length === 0
       ? [`${NAME}: ${measured} file(s) ${CONFIG} holds repeat no lines at the head, ${MEASURE}`]
-      : [`${NAME}: ${rises.length} file(s) ${CONFIG} holds repeat lines at the head, ${MEASURE}:`, ...rises.flatMap(describe)];
-  return [...verdict, ...noticeOf(advisory)].join("\n");
+      : [`${NAME}: ${rises.length} file(s) ${CONFIG} holds repeat lines at the head, ${MEASURE}:`, ...rises.flatMap(wholeTreeRise)];
+  return verdict.join("\n");
 }
 
 const hold = Effect.gen(function* () {

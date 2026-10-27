@@ -3,7 +3,7 @@ import { Effect, Layer, Option } from "effect";
 import { readFile } from "node:fs/promises";
 import { parseReport as parseMutationReport } from "../../src/testing/mutation-compare.ts";
 import { fileFindings, Issues, issueBody, markedKey, marker, parseArgs, titleOf, type OpenIssue } from "../../src/testing/night-run.ts";
-import { type Finding, findingsOf, keyOf, type NightRecord, type PreviousNight, scoresOf, type TestReport } from "../../src/testing/night-run-findings.ts";
+import { type Finding, findingsOf, gatesOf, keyOf, type NightRecord, type PreviousNight, scoresOf, type TestReport } from "../../src/testing/night-run-findings.ts";
 import { parseReport as parseTestReport } from "../../src/testing/test-report.ts";
 import { Usage } from "../../src/core/main.ts";
 
@@ -174,9 +174,44 @@ test("a title within GitHub's 256 characters stays whole, and a cut never splits
 });
 
 test("checks-night-run takes at most one mutation report and any number of test reports", async () => {
-  expect(await Effect.runPromise(parseArgs(["--mutation", "m.json", "--tests", "unit.xml", "--tests", "e2e.xml"]))).toEqual({ mutation: Option.some("m.json"), tests: ["unit.xml", "e2e.xml"] });
-  expect(await Effect.runPromise(parseArgs(["--tests", "unit.xml"]))).toEqual({ mutation: Option.none(), tests: ["unit.xml"] });
-  for (const argv of [[], ["--mutation"], ["--mutation", "a.json", "--mutation", "b.json"], ["--mutation", "--tests"], ["--report", "x"]]) {
+  expect(await Effect.runPromise(parseArgs(["--mutation", "m.json", "--tests", "unit.xml", "--tests", "e2e.xml"]))).toEqual({ mutation: Option.some("m.json"), tests: ["unit.xml", "e2e.xml"], gates: Option.none() });
+  expect(await Effect.runPromise(parseArgs(["--tests", "unit.xml"]))).toEqual({ mutation: Option.none(), tests: ["unit.xml"], gates: Option.none() });
+  expect(await Effect.runPromise(parseArgs(["--gates", "gates.log"]))).toEqual({
+    mutation: Option.none(),
+    tests: [],
+    gates: Option.some("gates.log"),
+  });
+  for (const argv of [[], ["--mutation"], ["--mutation", "a.json", "--mutation", "b.json"], ["--mutation", "--tests"], ["--report", "x"], ["--gates"], ["--gates", "a.log", "--gates", "b.log"], ["--gates", "--tests"]]) {
     expect(await Effect.runPromise(Effect.flip(parseArgs(argv)))).toBeInstanceOf(Usage);
   }
+});
+
+test("a failed nightly gate is filed under its own key instead of dropped silently", () => {
+  const log = [
+    "checks-lint: tip 03da92c from the whole tree at HEAD",
+    "checks-lint: 2 of 4 gate(s) failed: checks-repetition, checks-suppressions-ratchet",
+  ].join("\n");
+  expect(gatesOf(log)).toEqual([
+    { kind: "gates", file: "checks-repetition" },
+    { kind: "gates", file: "checks-suppressions-ratchet" },
+  ]);
+  expect(findingsOf(Option.none(), { scores: {}, tests: [] }, gatesOf(log)).map(keyOf)).toEqual([
+    "gates:checks-repetition",
+    "gates:checks-suppressions-ratchet",
+  ]);
+});
+
+test("a passing lint log files no gate, and a log with no verdict files checks-lint itself", () => {
+  expect(gatesOf("checks-lint: 4 gate(s) pass")).toEqual([]);
+  expect(gatesOf("checks-lint: cannot run checks-repetition: boom")).toEqual([{ kind: "gates", file: "checks-lint" }]);
+});
+
+test("a gates finding opens one issue that names the run and the failed gate", async () => {
+  const issues = recordingIssues([]);
+  const filed = await Effect.runPromise(fileFindings([{ kind: "gates", file: "checks-repetition" }], RUN).pipe(Effect.provide(issues.layer)));
+  expect(filed).toEqual([{ key: "gates:checks-repetition", issue: 41, action: "opened" }]);
+  const [, , create] = issues.calls;
+  expect(create?.args[0]).toBe("Night run: nightly gate checks-repetition failed");
+  expect(create?.args[1]).toContain(RUN);
+  expect(create?.args[1]).toContain("Finding key: `gates:checks-repetition`");
 });

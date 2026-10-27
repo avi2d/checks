@@ -15,6 +15,8 @@ A file only one night holds is no finding, since it lacks one of the two scores.
 A file with no scored mutant has no score, so it is no finding either.
 An equal score is no finding, even when it counts other mutants.
 Each failing test in a JUnit report is a finding, whatever the previous night holds.
+Each nightly gate the lint log names as failed is a finding.
+A log with no passing run and no named gate files `checks-lint` itself, so a gate run that never finished still reaches an issue.
 A file whose test worker crashed is one finding, since Bun reports none of its tests.
 With no previous night it compares no score and still files each failing test.
 With no mutation report it compares and records no score and still files each failing test.
@@ -26,6 +28,7 @@ Each finding has a key that stays the same from night to night:
 | a file whose mutation score fell | `mutation:<file>` |
 | a failing test | `test:<file> > <describe> > <name>` |
 | a file whose test worker crashed | `test:<file>` |
+| a nightly gate that failed | `gates:<gate>` |
 
 ## How it files a finding
 
@@ -33,8 +36,8 @@ It creates the `night-run` label when the repository lacks it.
 It reads every open issue labelled `night-run`, and reads the key each one carries in a hidden marker in its body.
 A finding whose key an open issue carries gets one comment on that issue, so a regression that lasts two nights stays one issue.
 Any other finding opens one issue labelled `night-run`.
-The issue and the comment name tonight's run, the file and either the test or the score of both nights.
-The body holds the file, the full test name and the finding key.
+The issue and the comment name tonight's run, the file and the test, the score of both nights or the failed gate.
+The body holds the file, the full test name or the failed gate, and the finding key.
 A title longer than GitHub's 256 characters is cut to at most 256 and ends in `…`.
 A night with no finding makes no call to GitHub's issues or labels at all.
 Closing an issue ends it, and the same finding on a later night opens a new one.
@@ -44,6 +47,7 @@ A run on any ref but `refs/heads/main` files no issue and records no score, and 
 ## What it reads
 
 It reads tonight's Stryker `mutation.json` report, when the mutation run left one, and any number of JUnit reports, such as the ones `checks-test --junit=<file>` keeps, as [checks-test](checks-test.md#arguments) says.
+It reads the lint log `--gates` names for the `gate(s) failed:` line `checks-lint --night` prints.
 It scans the newest 30 successful runs of the same workflow on `main` from newest to oldest.
 It takes the first run whose `night-run` artifact still exists as the previous night.
 That artifact holds `night-run.json`, the scores the run recorded.
@@ -56,11 +60,12 @@ It calls `gh` with the job's `GH_TOKEN`, which needs `actions: read` for the pre
 ## Arguments
 
 ```sh
-checks-night-run [--mutation <mutation-report>] [--tests <junit-report>]...
+checks-night-run [--mutation <mutation-report>] [--tests <junit-report>]... [--gates <lint-log>]
 ```
 
 `--mutation` names tonight's Stryker report and is given at most once.
 `--tests` names one JUnit report and is given once per report.
+`--gates` names tonight's `checks-lint --night` log and is given at most once.
 At least one report is given.
 
 ## Exit codes
@@ -68,7 +73,7 @@ At least one report is given.
 | Code | When |
 | --- | --- |
 | 0 | it filed every finding and recorded tonight's scores, it found nothing to file, or the run is off `main` and it listed each finding |
-| 2 | an argument does not parse, a report does not decode, a GitHub Actions variable is unset or a `gh` call fails |
+| 2 | an argument does not parse, a report or the lint log does not decode, a GitHub Actions variable is unset or a `gh` call fails |
 
 It never exits 1, because a finding becomes an issue rather than a failed run.
 
@@ -83,7 +88,7 @@ checks-night-run: recorded 42 file score(s) in reports/night-run.json
 
 ## When it runs
 
-Only a night workflow the repository writes runs it, after that workflow's full mutation run and its long test tiers.
+Only a night workflow the repository writes runs it, after that workflow's full mutation run, its long test tiers and its nightly lint gates.
 
 ## Running it at night
 
@@ -132,8 +137,24 @@ jobs:
           name: night-run-tests
           path: reports/night-run-tests/
           retention-days: 1
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      - run: mkdir -p reports/night-run-gates && bunx checks-lint --night > reports/night-run-gates/gates.log 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: night-run-gates
+          path: reports/night-run-gates/
+          retention-days: 1
   report:
-    needs: [mutation, tests]
+    needs: [mutation, gates, tests]
     if: ${{ !cancelled() && needs.tests.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
@@ -153,11 +174,15 @@ jobs:
           path: reports/mutation
       - uses: actions/download-artifact@v4
         with:
+          name: night-run-gates
+          path: reports/night-run-gates
+      - uses: actions/download-artifact@v4
+        with:
           name: night-run-tests
           path: reports/night-run-tests
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: bunx checks-night-run ${{ needs.mutation.result == 'success' && '--mutation reports/mutation/mutation.json' || '' }} --tests reports/night-run-tests/live.xml --tests reports/night-run-tests/pixel.xml
+        run: bunx checks-night-run ${{ needs.mutation.result == 'success' && '--mutation reports/mutation/mutation.json' || '' }} --tests reports/night-run-tests/live.xml --tests reports/night-run-tests/pixel.xml --gates reports/night-run-gates/gates.log
       - uses: actions/upload-artifact@v4
         with:
           name: night-run
@@ -171,6 +196,7 @@ A repository takes minute 7 of its own tier's 30 minute night window, so reposit
 The tests job runs each long tier the repository holds, `live` and `pixel` as [checks-test](checks-test.md#test-tiers) names them, and keeps each JUnit report.
 Each `|| true` lets the job go on to the upload after a failing test, since that test becomes an issue.
 A tier that writes no report fails the report job, because `checks-night-run` cannot read it.
+The gates job runs the nightly lint gates and keeps the log, since a failing gate becomes an issue.
 The report job runs whenever the tests job succeeds, so a failing test that also stops Stryker still becomes an issue.
 It passes `--mutation` only when the mutation job succeeded, and the failed mutation job still fails the run.
 The concurrency group queues a run started by hand behind the scheduled one, so two runs never file the same finding twice.

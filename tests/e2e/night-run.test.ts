@@ -182,6 +182,16 @@ function sixtyPercentReport(): string {
   });
 }
 
+test("a failed nightly gate files that gate even when every test passes", async () => {
+  const runner = await night([lastNight({ "src/mixed.ts": { detected: 2, valid: 4 } })]);
+
+  const gated = await runner.runWith([...testArgs(["passing.xml"]), "--gates", join(FIXTURES, "gates-failed.log")], {});
+
+  expect(gated.exitCode).toBe(0);
+  expect(gated.text).toContain("opened #100 for gates:checks-repetition");
+  expect((await runner.issues()).map((issue) => issue.title)).toEqual(["Night run: nightly gate checks-repetition failed"]);
+}, 30_000);
+
 test("a skipped night between two scored nights compares tonight with the earlier score", async () => {
   const runner = await night([
     {

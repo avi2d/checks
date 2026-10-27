@@ -19,7 +19,8 @@ export type PreviousNight = { readonly url: string; readonly record: NightRecord
 export type Finding =
   | { readonly kind: "mutation"; readonly file: string; readonly before: Score; readonly after: Score; readonly since: string }
   | { readonly kind: "test"; readonly file: string; readonly name: string }
-  | { readonly kind: "crash"; readonly file: string };
+  | { readonly kind: "crash"; readonly file: string }
+  | { readonly kind: "gates"; readonly file: string };
 
 function scoreOf(file: ReportFile): Score {
   let detected = 0;
@@ -45,6 +46,7 @@ function fell(before: Score, after: Score): boolean {
 export function keyOf(finding: Finding): string {
   if (finding.kind === "mutation") return `mutation:${finding.file}`;
   if (finding.kind === "test") return `test:${finding.file}${NAME_SEPARATOR}${finding.name}`;
+  if (finding.kind === "gates") return `gates:${finding.file}`;
   return `test:${finding.file}`;
 }
 
@@ -65,8 +67,23 @@ function testFindings(reports: readonly TestReport[]): readonly Finding[] {
   return [...new Map(failing.map((finding) => [keyOf(finding), finding])).values()];
 }
 
-export function findingsOf(previous: Option.Option<PreviousNight>, tonight: Tonight): readonly Finding[] {
-  return [...scoreFindings(previous, tonight.scores), ...testFindings(tonight.tests)].sort((one, other) => keyOf(one).localeCompare(keyOf(other)));
+export function findingsOf(previous: Option.Option<PreviousNight>, tonight: Tonight, gates: readonly Finding[] = []): readonly Finding[] {
+  return [...scoreFindings(previous, tonight.scores), ...testFindings(tonight.tests), ...gates].sort((one, other) =>
+    keyOf(one).localeCompare(keyOf(other)),
+  );
+}
+
+const FAILED_GATES = /of \d+ gate\(s\) failed: (.+)/;
+const PASSED_GATES = /gate\(s\) pass/;
+
+export function gatesOf(log: string): readonly Finding[] {
+  const names = log
+    .split("\n")
+    .flatMap((line) => FAILED_GATES.exec(line)?.[1]?.split(",") ?? [])
+    .map((name) => name.trim())
+    .filter((name) => name !== "");
+  if (names.length > 0) return [...new Map(names.map((file): [string, Finding] => [file, { kind: "gates", file }])).values()];
+  return PASSED_GATES.test(log) ? [] : [{ kind: "gates", file: "checks-lint" }];
 }
 
 export function percent(score: Score): string {

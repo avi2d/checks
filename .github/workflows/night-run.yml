@@ -42,7 +42,12 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      - run: bun src/core/lint.ts --night
+      - run: mkdir -p reports/night-run-gates && bun src/core/lint.ts --night > reports/night-run-gates/gates.log 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: night-run-gates
+          path: reports/night-run-gates/
+          retention-days: 1
 
   tests:
     runs-on: ubuntu-latest
@@ -67,7 +72,7 @@ jobs:
           retention-days: 1
 
   report:
-    needs: [mutation, tests]
+    needs: [mutation, gates, tests]
     if: ${{ !cancelled() && needs.tests.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
@@ -87,11 +92,15 @@ jobs:
           path: reports/mutation
       - uses: actions/download-artifact@v4
         with:
+          name: night-run-gates
+          path: reports/night-run-gates
+      - uses: actions/download-artifact@v4
+        with:
           name: night-run-tests
           path: reports/night-run-tests
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: bun src/testing/night-run.ts ${{ needs.mutation.result == 'success' && '--mutation reports/mutation/mutation.json' || '' }} --tests reports/night-run-tests/unit.xml --tests reports/night-run-tests/e2e.xml --tests reports/night-run-tests/live.xml
+        run: bun src/testing/night-run.ts ${{ needs.mutation.result == 'success' && '--mutation reports/mutation/mutation.json' || '' }} --tests reports/night-run-tests/unit.xml --tests reports/night-run-tests/e2e.xml --tests reports/night-run-tests/live.xml --gates reports/night-run-gates/gates.log
       - uses: actions/upload-artifact@v4
         with:
           name: night-run

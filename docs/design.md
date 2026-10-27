@@ -162,6 +162,7 @@ A stylesheet already over 400 lines fails until it is split, whatever the suppre
 `checks-repetition` runs jscpd at both ends of the range with the head's `.jscpd.json`, so the same `path` and `ignore` globs pick the files at both ends.
 It compares each file's count of repeated lines, and does not use jscpd's `--baseline-from-ref`.
 That flag reports a repeated block as new once its text changes, so a change that shortens an existing repeated block would fail.
+At night `checks-lint --night` runs both ratchets over the whole tree with no base, so every suppression count and every repeated line still present fails until it is removed.
 
 ## checks-test runs the suite itself
 

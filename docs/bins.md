@@ -9,7 +9,7 @@ The kit ships one bin per check, each named `checks-` and called from a package 
 ## What runs
 
 `checks-lint` runs each of these gates that applies to the repository, and names every one that fails.
-A gate reads either the working tree or the range `checks-lint` resolves.
+A gate reads either the working tree or the range `checks-lint` resolves, or the whole tree at the head under `checks-lint --night`.
 The table groups the gates by vector, the part of a repository each one judges.
 
 <!-- generated gates: bun run build writes it from KIT_GATES in src/core/gates.ts and scripts/doc-blocks.ts -->
@@ -40,7 +40,7 @@ The table groups the gates by vector, the part of a repository each one judges.
 
 Four of these gates run only at night.
 They are `checks-lint-coverage`, `checks-quarantine-clock`, `checks-repetition` and `checks-suppressions-ratchet`.
-The night-run workflow runs them with `checks-lint --night`.
+The night-run workflow runs them with `checks-lint --night`, which hands each range gate `--whole-tree HEAD`, so the four judge the whole tree with no base.
 
 These bins run on their own:
 

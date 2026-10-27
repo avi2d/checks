@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Effect } from "effect";
 import { parseWorkflow } from "../../src/delivery/ci-wiring.ts";
@@ -45,6 +45,28 @@ function scheduledCommands(path: string, jobId: string): readonly (readonly stri
   });
 }
 
+function jobRecord(path: string, jobId: string): Record<string, unknown> | undefined {
+  const text = readFileSync(resolve(import.meta.dir, "..", "..", path), "utf8");
+  const workflow = Effect.runSync(parseWorkflow(path, text));
+  const job = new Map(workflowJobs(workflow)).get(jobId);
+  return isRecord(job) && !disabled(job) ? job : undefined;
+}
+
+function jobNeeds(path: string, jobId: string): readonly string[] {
+  const needs = jobRecord(path, jobId)?.["needs"];
+  return Array.isArray(needs) ? needs.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
+function artifactNames(path: string, jobId: string, direction: "upload-artifact" | "download-artifact"): readonly string[] {
+  const steps = jobRecord(path, jobId)?.["steps"];
+  if (!Array.isArray(steps)) return [];
+  return steps.flatMap((step) => {
+    if (!isRecord(step) || typeof step["uses"] !== "string" || !step["uses"].startsWith(`actions/${direction}`)) return [];
+    const with_ = step["with"];
+    return isRecord(with_) && typeof with_["name"] === "string" ? [with_["name"]] : [];
+  });
+}
+
 function scheduledJobIds(path: string): readonly string[] {
   const text = readFileSync(resolve(import.meta.dir, "..", "..", path), "utf8");
   const workflow = Effect.runSync(parseWorkflow(path, text));
@@ -74,6 +96,26 @@ test("rejects a night workflow whose tests job never executes the live tier", ()
   expect(runs.some((command) => invokes(command, ["bun", "src/testing/test.ts", "--tier=live"]))).toBe(true);
   expect(runs.some((command) => invokes(command, ["bun", "src/testing/test.ts", "--tier=unit"]))).toBe(true);
   expect(runs.some((command) => invokes(command, ["bun", "src/testing/test.ts", "--tier=e2e"]))).toBe(true);
+});
+
+test("rejects a report job that files the night without the gates job behind it", () => {
+  expect(jobNeeds(".github/workflows/night-run.yml", "report")).toEqual(["mutation", "gates", "tests"]);
+});
+
+test("rejects a gates log the report never files as a night-run issue", () => {
+  const path = ".github/workflows/night-run.yml";
+  expect(artifactNames(path, "gates", "upload-artifact")).toContain("night-run-gates");
+  expect(artifactNames(path, "report", "download-artifact")).toContain("night-run-gates");
+  const runs = scheduledCommands(path, "report");
+  expect(runs.some((command) => invokes(command, ["bun", "src/testing/night-run.ts"]))).toBe(true);
+  expect(runs.some((command) => command.includes("reports/night-run-gates/gates.log"))).toBe(true);
+});
+
+test("rejects a live tier with a moved suite filed back under e2e", () => {
+  for (const file of MOVED) {
+    expect(existsSync(resolve(import.meta.dir, "..", "..", "tests", "live", file))).toBe(true);
+    expect(existsSync(resolve(import.meta.dir, "..", "..", "tests", "e2e", file))).toBe(false);
+  }
 });
 
 test("rejects a live tier that resolves away from the moved suites", () => {
