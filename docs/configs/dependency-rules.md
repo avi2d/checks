@@ -61,7 +61,7 @@ A rule under `forbidden` that takes a kit rule's name replaces that rule whole, 
 
 ## Running it
 
-`checks-lint` runs [checks-graphwalk](../gates/checks-graphwalk.md), which cruises every tracked TypeScript file against `dependency-cruiser.config.ts`, or against the kit's defaults when the repository holds no config.
+`checks-lint` runs [checks-graphwalk](../gates/checks-graphwalk.md) in the full run, which cruises every tracked TypeScript file against `dependency-cruiser.config.ts`, or against the kit's defaults when the repository holds no config.
 
 ## Related topics
 

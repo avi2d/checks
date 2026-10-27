@@ -2,8 +2,9 @@
 import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { EVERY_REPOSITORY, KIT_GATES, type KitGate } from "./gates.ts";
-import { defaultBranch, git } from "./git.ts";
+import { changedPaths, defaultBranch, git } from "./git.ts";
 import { runMain, Usage } from "./main.ts";
+import { FAST_TREE_GATES, selectScope } from "./scope.ts";
 
 type Range = {
   readonly refs: readonly [tip: string] | readonly [base: string, head: string];
@@ -21,7 +22,7 @@ class GatesUndecided extends Schema.TaggedError<GatesUndecided>()("GatesUndecide
 }) {}
 
 const NAME = "checks-lint";
-const USAGE = "usage: lint.ts [<base-ref> <head-ref>]";
+const USAGE = "usage: lint.ts [--full | --desk] [<base-ref> <head-ref>]";
 const PULL_REQUEST_EVENT = "pull_request";
 const SHALLOW_HINT = "a CI checkout needs actions/checkout fetch-depth: 0";
 
@@ -140,6 +141,15 @@ const resolveRange = Effect.fn("resolveRange")(function* (args: readonly string[
   return { refs: rangeOf(base, head), source: ends.source } satisfies Range;
 });
 
+export type LintMode = "full" | "desk" | "scoped";
+
+export function splitMode(args: readonly string[]): { readonly mode: LintMode; readonly rest: readonly string[] } | undefined {
+  const flags = args.filter((arg) => arg.startsWith("--"));
+  const rest = args.filter((arg) => !arg.startsWith("--"));
+  if (flags.length > 1 || (flags.length === 1 && flags[0] !== "--full" && flags[0] !== "--desk")) return undefined;
+  return { mode: flags.length === 0 ? "scoped" : flags[0] === "--full" ? "full" : "desk", rest };
+}
+
 export function describe({ refs }: Range): string {
   return refs.length === 1 ? `tip ${refs[0]}` : `range ${refs[0]}..${refs[1]}`;
 }
@@ -165,15 +175,41 @@ const runGate = Effect.fn("runGate")(function* (gate: KitGate, range: Range) {
   return { gate, outcome: outcomeOf(exitCode) };
 });
 
+const scopedGates = Effect.fn("scopedGates")(function* (range: Range, root: string) {
+  if (range.refs.length === 1) return { bins: undefined, detail: "the full run, since a lone tip scopes nothing" };
+  const [base, head] = range.refs;
+  const changes = yield* changedPaths(base, head, [], root);
+  const committed = changes.flatMap((change) => (change.kind === "renamed" ? [change.from, change.path] : [change.path]));
+  const working = (yield* git(["diff", "--no-renames", "--name-only", "-z", "HEAD", "--"], root)).split("\0").filter(Boolean);
+  const untracked = (yield* git(["ls-files", "--others", "--exclude-standard", "-z"], root)).split("\0").filter(Boolean);
+  const scope = selectScope([...committed, ...working, ...untracked]);
+  if (scope.full) return { bins: undefined, detail: "the full run, since the change reaches past a scoped shape" };
+  return { bins: scope.gates, detail: "" };
+});
+
 const lint = Effect.gen(function* () {
+  const split = splitMode(process.argv.slice(2));
+  if (split === undefined) return yield* new Usage({ message: USAGE });
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
-  const range = yield* resolveRange(process.argv.slice(2));
+  const range = yield* resolveRange(split.rest);
   yield* Console.log(`${NAME}: ${describe(range)} from ${range.source}`);
-  const gates = yield* Effect.filter(KIT_GATES, (gate) =>
+  const applicable = yield* Effect.filter(KIT_GATES, (gate) =>
     gate.appliesTo === EVERY_REPOSITORY
       ? Effect.succeed(true)
       : git(["ls-files", "--", ...gate.appliesTo.pathspecs], root).pipe(Effect.map((files) => files.trim() !== "")),
   );
+  const scoped = split.mode === "desk"
+    ? {
+      bins: applicable.filter((gate) => FAST_TREE_GATES.includes(gate.bin)).map((gate) => gate.bin),
+      detail: "the desk run",
+    }
+    : split.mode === "full"
+      ? { bins: applicable.map((gate) => gate.bin), detail: "the full run (--full)" }
+      : yield* scopedGates(range, root);
+  const bins = scoped.bins;
+  const gates = bins === undefined ? applicable : applicable.filter((gate) => bins.includes(gate.bin));
+  const detail = split.mode === "scoped" && bins !== undefined ? `${gates.length} gate(s) for this change` : scoped.detail;
+  yield* Console.log(`${NAME}: ${detail}`);
   const verdicts = yield* Effect.forEach(gates, (gate) => runGate(gate, range));
   const failed = verdicts.filter((verdict) => verdict.outcome !== "passed");
   if (failed.length === 0) {

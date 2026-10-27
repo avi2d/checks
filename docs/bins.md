@@ -10,6 +10,7 @@ The kit ships one bin per check, each named `checks-` and called from a package 
 
 `checks-lint` runs each of these gates that applies to the repository, and names every one that fails.
 A gate reads either the working tree or the range `checks-lint` resolves.
+It scopes tree gates to the change unless `--full` forces the full run, and `--desk` runs the fast tree gates.
 The table groups the gates by vector, the part of a repository each one judges.
 
 <!-- generated gates: bun run build writes it from KIT_GATES in src/core/gates.ts and scripts/doc-blocks.ts -->

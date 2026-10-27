@@ -51,7 +51,7 @@ no-plain-js: 2 violation(s)
 
 ## When it runs
 
-`checks-lint` runs it when the repository tracks TypeScript.
+`checks-lint` runs it in the full run when the repository tracks TypeScript.
 
 ## Related topics
 

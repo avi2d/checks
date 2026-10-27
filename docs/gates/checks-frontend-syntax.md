@@ -177,7 +177,7 @@ frontend-syntax: no violation in 2 file(s) from 2 declared input(s)
 
 ## When it runs
 
-`checks-lint` runs it when the repository tracks `frontend-syntax.json` at its root.
+`checks-lint` runs it in the full run when the repository tracks `frontend-syntax.json` at its root.
 A repository without that file never runs it and needs neither `stylelint.config.ts` nor the peers.
 
 ## Related topics

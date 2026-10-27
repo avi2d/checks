@@ -55,7 +55,7 @@ effect-scope: the @effect/language-service entry in tsconfig.json differs from t
 ## When it runs
 
 A repository runs `checks-effect-scope` from its `build` script, so CI's `git diff --exit-code` after the build fails on a stale `tsconfig.json` too.
-`checks-lint` runs it with `--check` when the repository tracks `oxlint.config.ts`.
+`checks-lint` runs it with `--check` in the full run when the repository tracks `oxlint.config.ts`.
 
 ## Related topics
 
