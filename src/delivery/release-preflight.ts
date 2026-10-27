@@ -53,16 +53,15 @@ function jobPublishes(job: unknown): boolean {
 export function grantsOidc(document: unknown): boolean {
   const decoded = decodeDocument(document);
   if (Option.isNone(decoded)) return false;
-  const inherited = decoded.value.permissions;
   const jobs = decoded.value.jobs;
-  if (jobs === undefined) return grantsOidcValue(inherited);
+  if (jobs === undefined) return false;
   const publishing = Object.values(jobs).filter(jobPublishes);
-  if (publishing.length === 0) return grantsOidcValue(inherited);
-  return publishing.some((job) => {
+  if (publishing.length === 0) return false;
+  return publishing.every((job) => {
     const decodedJob = decodeJob(job);
     if (Option.isNone(decodedJob)) return false;
     const own = decodedJob.value.permissions;
-    return grantsOidcValue(own === undefined ? inherited : own);
+    return grantsOidcValue(own === undefined ? decoded.value.permissions : own);
   });
 }
 
@@ -75,6 +74,9 @@ const readManifest = Effect.fn("readManifest")(function* (root: string) {
 });
 
 const checkTag = Effect.fn("checkTag")(function* (root: string) {
+  if ((yield* git(["rev-parse", "--is-shallow-repository"], root)).trim() === "true") {
+    return yield* refused("the checkout is shallow, so the tag it sees may not be the last one; fetch all of it");
+  }
   const { version } = yield* readManifest(root);
   const since = yield* lastTag(root);
   if (since !== undefined && since !== `v${version}`) {

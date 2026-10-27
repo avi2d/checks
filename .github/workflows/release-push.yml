@@ -27,6 +27,8 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
+      - name: fail fast when the release cannot plan
+        run: bun src/delivery/release-preflight.ts release.yml
       - name: release what main holds once its checks pass
         env:
           GH_TOKEN: ${{ github.token }}

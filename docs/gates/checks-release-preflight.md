@@ -4,8 +4,9 @@ audience: consumers
 ---
 # checks-release-preflight
 
-`checks-release-preflight` fails the release workflow fast when the release cannot run.
-It runs before the release step, so a release that cannot publish never builds, lints or tests first.
+`checks-release-preflight` fails a release fast when local checks rule it out.
+A version the last tag does not name and a run missing the trusted publisher prerequisites fail before the build.
+A wrong trusted publisher setting on npm itself surfaces only at the publish step, through the publish refusal.
 
 ## What it checks
 
@@ -15,10 +16,10 @@ It reads the release workflow its argument names.
 A workflow that publishes nothing to npm needs no trusted publisher, so that check passes it without reading the repository.
 When the workflow publishes to npm, it compares the repository `package.json` names with the repository the run is in.
 It refuses when the two differ, since the run then cannot present the trusted publisher npm holds.
-It refuses when the publishing job holds no `id-token: write`, since the run then mints no OIDC token for the trusted publisher npm holds.
+It refuses when a publishing job holds no `id-token: write`, since the run then mints no OIDC token for the trusted publisher npm holds.
 A job with its own permissions replaces the workflow permissions, so a workflow grant alone never passes a publishing job that lists its own permissions without the token, and a grant on another job never passes the publishing job.
 The bin checks these prerequisites from local files only.
-Npm itself remains the authority at publish time, since no public registry field exposes the trusted publisher for a read only check.
+The trusted publisher setting itself cannot be verified without an npm credential, so a wrong setting surfaces at the publish step through the publish refusal.
 
 ## What it reads
 
@@ -71,10 +72,10 @@ checks-release-preflight: .github/workflows/release.yml grants the publishing jo
 
 ## When it runs
 
-The `preflight` job of the release workflow runs it, and the job that publishes needs that job.
-A release that cannot run then fails before the build, the lint, the typecheck and the suite.
-An untagged bump also fails earlier, since `checks-release-pr` and `checks-release-push` refuse to plan a release the last tag does not name.
-The approval setting has no read only check under the release token, so `checks-release-pr` fails while opening the pull request when the setting is off.
+The release planning boundary runs it before `checks-release-pr` and `checks-release-push` plan, and the `preflight` job of the release workflow keeps it as the prerequisite of the job that publishes.
+A version the last tag does not name and a run missing the trusted publisher prerequisites then fail before the build, the lint, the typecheck and the suite.
+A wrong trusted publisher setting on npm itself surfaces only at the publish step, through the publish refusal.
+No endpoint the release token may read exposes the approval setting, so the bin cannot check it and `checks-release-pr` fails while opening the pull request when the setting is off.
 
 ## Related topics
 

@@ -40,7 +40,10 @@ function workflow(publish: string | undefined, topOidc: boolean, jobOidc?: boole
 
 const LINT_JOB = "  lint:\n    runs-on: ubuntu-latest\n    permissions:\n      id-token: write\n    steps:\n      - run: bun run lint\n";
 
+const SECOND_PUBLISH_DENIED = "  second:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n    steps:\n      - run: bun src/delivery/release-publish.ts\n";
+
 type Ready = {
+  readonly dir: string;
   readonly run: (env?: Readonly<Record<string, string>>) => Promise<Ran>;
   readonly state: FakeGh["state"];
 };
@@ -63,6 +66,7 @@ async function ready(
   const home = await scratch("checks-release-preflight-home-");
   const fake = await fakeGh(home, repo.dir);
   return {
+    dir: repo.dir,
     run: (env = {}) =>
       ran($`bun ${SCRIPT} release.yml`.cwd(repo.dir).env({ ...process.env, ...fake.env, GITHUB_REPOSITORY: "acme/widget", ...env })),
     state: fake.state,
@@ -135,6 +139,37 @@ test(
     expect(refused.exitCode).toBe(2);
     expect(refused.text).toContain(
       "checks-release-preflight: .github/workflows/release.yml grants the publishing job no id-token: write, so the run mints no OIDC token for npm's trusted publisher; grant id-token: write where the release job runs\n",
+    );
+  },
+  60_000,
+);
+
+test(
+  "a second publishing job without the grant fails the check when the first publishing job holds it",
+  async () => {
+    const preflight = await ready("0.6.0", "v0.6.0", "git+https://github.com/acme/widget.git", KIT_PUBLISH, true, undefined, SECOND_PUBLISH_DENIED);
+
+    const refused = await preflight.run();
+    expect(refused.exitCode).toBe(2);
+    expect(refused.text).toContain(
+      "checks-release-preflight: .github/workflows/release.yml grants the publishing job no id-token: write, so the run mints no OIDC token for npm's trusted publisher; grant id-token: write where the release job runs\n",
+    );
+  },
+  60_000,
+);
+
+test(
+  "a shallow checkout fails before trusting the tag it sees, since the last tag may be missing",
+  async () => {
+    const preflight = await ready("0.6.0", "v0.6.0", "git+https://github.com/acme/widget.git", KIT_PUBLISH);
+    const home = await scratch("checks-release-preflight-shallow-");
+    await $`git clone --quiet --depth 1 file://${preflight.dir} checkout`.cwd(home).quiet();
+    const dir = join(home, "checkout");
+
+    const refused = await ran($`bun ${SCRIPT} release.yml`.cwd(dir).env({ ...process.env, GITHUB_REPOSITORY: "acme/widget" }));
+    expect(refused.exitCode).toBe(2);
+    expect(refused.text).toContain(
+      "checks-release-preflight: the checkout is shallow, so the tag it sees may not be the last one; fetch all of it\n",
     );
   },
   60_000,
