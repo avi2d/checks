@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.54.1
+
+Released 2026-10-27.
+
+### Fixes
+
+- resolve the lint gate tools from the repository's own install [#9](https://github.com/avi2d/checks/pull/9)
+
 ## 0.54.0
 
 Released 2026-10-27.
