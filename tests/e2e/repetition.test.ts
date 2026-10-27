@@ -102,28 +102,30 @@ test(
 );
 
 test(
-  "checks-lint runs the repetition hold over its range, red on an added copy and green once it is gone",
+  "checks-lint --night runs the repetition hold over the whole tree, red on an added copy and green once it is gone",
   async () => {
     const repo = await repository({ ...lintWiring(), "src/ledger.ts": block("ledger") });
     await withOwnInstall(repo);
-    const { dir, write, commit, lint } = repo;
+    const { write, commit, script } = repo;
     await commit("feat: base");
-    await $`git update-ref refs/remotes/origin/main HEAD && git checkout -q -b feature`.cwd(dir).quiet();
     await write({ "src/copy.ts": block("ledger") });
     await commit("feat: copy");
 
-    const red = await lint();
-    expect(red.text).toContain("  src/copy.ts: 10 repeated line(s), up from 0\n");
-    expect(red.text).toContain("checks-lint: 1 of 14 gate(s) failed: checks-repetition\n");
+    const red = await script("core/lint.ts", "--night");
+    expect(red.text).toContain("repetition: 2 file(s) .jscpd.json holds repeat lines at the head, at 50 tokens and 5 lines:");
+    expect(red.text).toContain("  src/copy.ts: 10 repeated line(s)\n");
+    expect(red.text).not.toContain("up from 0");
+    expect(red.text).toContain("checks-lint: 1 of 4 gate(s) failed: checks-repetition\n");
     expect(red.exitCode).toBe(1);
 
     await write({ "src/copy.ts": "export const copy = 1;\n" });
     await commit("fix: no copy");
-    const green = await lint();
-    expect(green.text).toContain("checks-lint: 14 gate(s) pass\n");
+    const green = await script("core/lint.ts", "--night");
+    expect(green.text).toContain("repetition: 1 file(s) .jscpd.json holds repeat no lines at the head, at 50 tokens and 5 lines");
+    expect(green.text).toContain("checks-lint: 4 gate(s) pass\n");
     expect(green.exitCode).toBe(0);
   },
-  60_000,
+  120_000,
 );
 
 test(

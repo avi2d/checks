@@ -108,14 +108,23 @@ test("rejects a gates log the report never files as a night-run issue", () => {
   expect(artifactNames(path, "report", "download-artifact")).toContain("night-run-gates");
   const runs = scheduledCommands(path, "report");
   expect(runs.some((command) => invokes(command, ["bun", "src/testing/night-run.ts"]))).toBe(true);
-  expect(runs.some((command) => command.some((word) => word.includes("reports/night-run-gates/gates.log")))).toBe(true);
+  const run = nightRunStep(path)?.["run"];
+  expect(typeof run === "string" ? expressionsOf(run) : []).toContain(GATES_EXPRESSION);
 });
 
-function runScripts(path: string, jobId: string): readonly string[] {
-  const steps = jobRecord(path, jobId)?.["steps"];
-  if (!Array.isArray(steps)) return [];
-  return steps.flatMap((step) => (isRecord(step) && typeof step["run"] === "string" ? [step["run"]] : []));
+function nightRunStep(path: string): Record<string, unknown> | undefined {
+  const steps = jobRecord(path, "report")?.["steps"];
+  if (!Array.isArray(steps)) return undefined;
+  const step = steps.find((entry) => isRecord(entry) && typeof entry["run"] === "string" && entry["run"].includes("src/testing/night-run.ts"));
+  return isRecord(step) ? step : undefined;
 }
+
+function expressionsOf(run: string): readonly string[] {
+  return [...run.matchAll(/\$\{\{\s*([\s\S]*?)\s*\}\}/g)].map((match) => (match[1] ?? "").trim());
+}
+
+const MUTATION_EXPRESSION = "needs.mutation.result == 'success' && '--mutation reports/mutation/mutation.json' || ''";
+const GATES_EXPRESSION = "needs.gates.result == 'success' && '--gates reports/night-run-gates/gates.log' || ''";
 
 function downloadCondition(path: string, jobId: string, artifact: string): unknown {
   const steps = jobRecord(path, jobId)?.["steps"];
@@ -131,17 +140,12 @@ function downloadCondition(path: string, jobId: string, artifact: string): unkno
   return isRecord(step) ? step["if"] : undefined;
 }
 
-test("rejects a report job a failed gates job stops from filing the night", () => {
+test("rejects a gates flag moved out of its result guard", () => {
   const path = ".github/workflows/night-run.yml";
   expect(downloadCondition(path, "report", "night-run-gates")).toBe("needs.gates.result == 'success'");
   expect(downloadCondition(path, "report", "night-run-mutation")).toBe("needs.mutation.result == 'success'");
-  const nightRun = runScripts(path, "report").filter((run) => run.includes("src/testing/night-run.ts"));
-  expect(
-    nightRun.some((run) => run.includes("needs.gates.result == 'success'") && run.includes("'--gates reports/night-run-gates/gates.log'")))
-    .toBe(true);
-  expect(
-    nightRun.some((run) => run.includes("needs.mutation.result == 'success'") && run.includes("'--mutation reports/mutation/mutation.json'")))
-    .toBe(true);
+  const run = nightRunStep(path)?.["run"];
+  expect(typeof run === "string" ? expressionsOf(run) : []).toEqual([MUTATION_EXPRESSION, GATES_EXPRESSION]);
 });
 
 test("rejects a live tier with a moved suite filed back under e2e", () => {
