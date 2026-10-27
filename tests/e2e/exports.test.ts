@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { withoutPullRequestEvent } from "../lib/env.ts";
-import { CHECKOUT, fixtureRepos, lintWiring, ran, type Ran } from "./lib/fixture-repo.ts";
+import { CHECKOUT, fixtureRepos, lintWiring, ran, withOwnInstall, type Ran } from "./lib/fixture-repo.ts";
 
 const open = fixtureRepos("checks-exports-");
 const GATE = "complexity/exports.ts";
@@ -152,7 +152,7 @@ function baselineLines(entries: readonly object[]): string {
 }
 
 async function pullRequestMergeCheckout(pr: Readonly<Record<string, string>>): Promise<Ran> {
-  const { dir, write, commit } = await open({
+  const repo = await open({
     ...lintWiring(),
     "knip.json": JSON.stringify({ entry: ["dependency-cruiser.config.ts", "index.ts"] }),
     "index.ts": `import { helper } from "./helper.ts";\nimport { kept } from "./legacy.ts";\nimport { used } from "./used.ts";\n\nexport const index = used + helper + kept;\n`,
@@ -161,6 +161,8 @@ async function pullRequestMergeCheckout(pr: Readonly<Record<string, string>>): P
     "legacy.ts": `export const kept = 0;\nexport const legacyA = 1;\nexport const legacyZ = 2;\n`,
     "exports-baseline.json": baselineLines([LEGACY_A, LEGACY_Z]),
   });
+  await withOwnInstall(repo);
+  const { dir, write, commit } = repo;
   await commit("feat: base");
   await $`git checkout -q -b pr`.cwd(dir);
   await write(pr);
@@ -342,12 +344,14 @@ test(
 test(
   "checks-lint runs the gate over its range, red on an added unused export and green once it is used",
   async () => {
-    const { write, commit, lint } = await open({
+    const fixture = await open({
       ...lintWiring(),
       "knip.json": JSON.stringify({ entry: ["dependency-cruiser.config.ts", "widget.ts"], include: ["files"] }),
       "widget.ts": `import { used } from "./used.ts";\n\nexport const widget = used;\n`,
       "used.ts": `export const used = 1;\nexport const unusedExport = 2;\n`,
     });
+    await withOwnInstall(fixture);
+    const { write, commit, lint } = fixture;
     await commit("feat: base");
 
     const red = await lint();

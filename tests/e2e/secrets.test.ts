@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { CHECKOUT, fixtureRepos, lintWiring, ran, scratchDirs, type FixtureRepo } from "./lib/fixture-repo.ts";
+import { CHECKOUT, fixtureRepos, lintWiring, ran, scratchDirs, withOwnInstall, type FixtureRepo } from "./lib/fixture-repo.ts";
 
 const open = fixtureRepos("checks-secrets-");
 const scratch = scratchDirs();
@@ -365,6 +365,7 @@ test(
   "checks-lint runs the gate in every repository",
   async () => {
     const repo = await open(lintWiring());
+    await withOwnInstall(repo);
     await repo.commit("chore: wire lint");
     await repo.write({ "vpn/links.txt": link("trojan", `${hex(12)}@${HOST}:443#home`) });
     await repo.commit("feat: add a link");

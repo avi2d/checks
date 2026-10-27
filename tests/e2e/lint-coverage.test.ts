@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { consumerTrees } from "./lib/consumer-tree.ts";
@@ -29,6 +29,10 @@ beforeAll(async () => {
   await writeFile(join(dir, PLANT), "export const b = 2;\n");
   await writeFile(join(dir, ".gitignore"), "");
   await $`git init -q && git add -A`.cwd(dir).quiet();
+  await $`mkdir -p node_modules/.bin`.cwd(dir).quiet();
+  for (const tool of ["oxlint", "tsc"]) {
+    await symlink(await realpath(join(BIN, tool)), join(dir, "node_modules", ".bin", tool));
+  }
 });
 
 afterAll(async () => {
@@ -54,12 +58,48 @@ test(
 );
 
 test(
-  "lint-coverage cannot decide without oxlint on PATH",
+  "lint-coverage cannot decide when the repository's own install lacks oxlint",
   async () => {
-    const undecided = await coverage(SYSTEM_PATH);
-    expect(undecided.exitCode).toBe(2);
-    expect(undecided.text).toContain("oxlint could not walk the tree");
-    expect(undecided.text).toContain("not found");
+    const bare = await mkdtemp(join(tmpdir(), "checks-lint-coverage-no-install-"));
+    try {
+      await $`mkdir -p src`.cwd(bare).quiet();
+      await writeFile(join(bare, "src", "linted.ts"), "export const a = 1;\n");
+      await $`git init -q && git add -A`.cwd(bare).quiet();
+      const undecided = await coverage(SYSTEM_PATH, bare);
+      expect(undecided.exitCode).toBe(2);
+      expect(undecided.text).toContain("oxlint could not walk the tree");
+      expect(undecided.text).toContain("not found");
+    } finally {
+      await rm(bare, { recursive: true, force: true });
+    }
+  },
+  60_000,
+);
+
+test(
+  "lint-coverage finds oxlint and tsc in the repository's own install when PATH lacks node_modules/.bin",
+  async () => {
+    const tree = await mkdtemp(join(tmpdir(), "checks-lint-coverage-own-install-"));
+    try {
+      await $`mkdir -p src node_modules/.bin`.cwd(tree).quiet();
+      await writeFile(join(tree, "src", "linted.ts"), "export const a = 1;\n");
+      await writeFile(join(tree, ".gitignore"), "node_modules/\n");
+      await writeFile(
+        join(tree, "tsconfig.json"),
+        JSON.stringify({ extends: join(CHECKOUT, "tsconfig.effect.json"), files: ["src/linted.ts"] }),
+      );
+      for (const tool of ["oxlint", "tsc"]) {
+        await symlink(await realpath(join(BIN, tool)), join(tree, "node_modules", ".bin", tool));
+      }
+      await $`git init -q && git add -A`.cwd(tree).quiet();
+      const stripped = (process.env["PATH"] ?? "").split(":").filter((entry) => !entry.includes("node_modules")).join(":");
+      const green = await ran($`${SCRIPT}`.cwd(tree).env({ ...process.env, PATH: stripped }));
+      expect(green.text).toContain("lint-coverage: 1/1 tracked .ts/.tsx/.astro files");
+      expect(green.text).toContain("holds the ts-reset rules is-array and json-parse");
+      expect(green.exitCode).toBe(0);
+    } finally {
+      await rm(tree, { recursive: true, force: true });
+    }
   },
   60_000,
 );
@@ -138,7 +178,10 @@ test(
       await $`mkdir -p src/pages`.cwd(astro).quiet();
       await writeFile(join(astro, "src", "pages", "index.astro"), "---\nconst { title } = Astro.props;\n---\n<h1>{title}</h1>\n");
       await writeFile(join(astro, "tsconfig.json"), JSON.stringify({ compilerOptions: { strict: true } }));
-      await $`git init -q && git add -A`.cwd(astro).quiet();
+      await $`git init -q && git add -A && mkdir -p node_modules/.bin`.cwd(astro).quiet();
+      for (const tool of ["oxlint", "tsc"]) {
+        await symlink(await realpath(join(BIN, tool)), join(astro, "node_modules", ".bin", tool));
+      }
 
       const green = await coverage(KIT_PATH, astro);
       expect(green.text).toContain("1/1 tracked .ts/.tsx/.astro files");

@@ -12,8 +12,12 @@ if ! [ -s "$tmp/expected" ]; then
   exit 0
 fi
 
+root="$(git rev-parse --show-toplevel)"
+oxlint="$root/node_modules/.bin/oxlint"
+tsc="$root/node_modules/.bin/tsc"
+
 # Explicit paths bypass ignore files, so only an unscoped walk proves coverage.
-if ! oxlint --debug=files > "$tmp/walk" 2> "$tmp/walk-error"; then
+if ! "$oxlint" --debug=files > "$tmp/walk" 2> "$tmp/walk-error"; then
   echo "lint-coverage: oxlint could not walk the tree:"
   cat "$tmp/walk" "$tmp/walk-error"
   exit 2
@@ -44,7 +48,7 @@ if ! [ -f tsconfig.json ]; then
   exit "$status"
 fi
 
-if ! tsc --listFilesOnly -p tsconfig.json > "$tmp/program" 2> "$tmp/program-error"; then
+if ! "$tsc" --listFilesOnly -p tsconfig.json > "$tmp/program" 2> "$tmp/program-error"; then
   echo "lint-coverage: tsc could not list the program tsconfig.json builds:"
   # tsc lists each file of the program as an absolute path beside its errors.
   grep -v '^/' "$tmp/program" || true
