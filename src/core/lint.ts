@@ -154,8 +154,9 @@ const runGate = Effect.fn("runGate")(function* (gate: KitGate, range: Range) {
   const script = (yield* Path.Path).join(import.meta.dir, "..", gate.vector, gate.file);
   const program = gate.file.endsWith(".sh") ? "sh" : process.execPath;
   const args = gate.reads === "range" ? [script, ...range.refs] : [script, ...(gate.args ?? [])];
+  const extra = gate.env === undefined ? {} : { env: gate.env, extendEnv: true };
   const exitCode = yield* spawner
-    .exitCode(ChildProcess.make(program, args, { stdin: "ignore", stdout: "inherit", stderr: "inherit" }))
+    .exitCode(ChildProcess.make(program, args, { stdin: "ignore", stdout: "inherit", stderr: "inherit", ...extra }))
     .pipe(
       Effect.catch((cause) =>
         Console.error(`${NAME}: cannot run ${gate.bin}: ${cause.message}`).pipe(Effect.as(ChildProcessSpawner.ExitCode(2))),
