@@ -7,6 +7,9 @@ const open = fixtureRepos("checks-imports-");
 
 const TREE: Readonly<Record<string, string>> = {
   "package.json": JSON.stringify({ name: "checks-imports-fixture", type: "module", devDependencies: { "fake-dev": "1.0.0" } }),
+  "knip.json": JSON.stringify({
+    entry: ["src/**/*.ts", "src/**/*.astro", "tests/**/*.ts", "dependency-cruiser.config.ts", ".dependency-cruiser.cjs"],
+  }),
   "src/index.ts": `export const answer: number = 42;\n`,
   "tests/unit/index.test.ts": `import { answer } from "../../src/index.ts";\nexport const checked: number = answer;\n`,
 };
@@ -20,7 +23,7 @@ async function repository(files: Readonly<Record<string, string>> = {}): Promise
   return repo;
 }
 
-const imports = (repo: FixtureRepo) => repo.script("dependencies/imports.ts");
+const imports = (repo: FixtureRepo) => repo.script("complexity/graphwalk.ts");
 
 test("with no config of its own a repository is cruised against the kit's defaults, red on an orphan and green once it is imported", async () => {
   const repo = await repository({ "src/lonely.ts": `export const lonely: number = 1;\n` });

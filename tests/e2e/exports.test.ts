@@ -7,7 +7,7 @@ import { withoutPullRequestEvent } from "../lib/env.ts";
 import { CHECKOUT, fixtureRepos, lintWiring, ran, withOwnInstall, type Ran } from "./lib/fixture-repo.ts";
 
 const open = fixtureRepos("checks-exports-");
-const GATE = "complexity/exports.ts";
+const GATE = "complexity/graphwalk.ts";
 
 function configured(files: Readonly<Record<string, string>>): Readonly<Record<string, string>> {
   return {
@@ -21,28 +21,29 @@ function kitConfig(entry: readonly string[]): string {
 }
 
 test(
-  "red on an unused export and an unused type and green once both are gone, while an unreferenced file never fails",
+  "red on an unused export and an unused type and green once both are gone, while the scan and the cruise stay green",
   async () => {
     const { write, commit, script } = await open(
       configured({
         "knip.config.ts": kitConfig(["src/index.ts"]),
         "src/index.ts": `import { used } from "./used.ts";\n\nexport const index = used;\n`,
         "src/used.ts": `export const used = 1;\nexport const unusedExport = 2;\nexport type UnusedOptions = { readonly flag: boolean };\n`,
-        "src/dead.ts": `export const dead = 1;\n`,
+        "tests/unit/index.test.ts": `import { index } from "../../src/index.ts";\n\nexport const seen = index;\n`,
       }),
     );
     const base = await commit("feat: base");
 
     const red = await script(GATE, base, "HEAD");
-    expect(red.text).toBe(
+    expect(red.text).toContain("unused: no unreferenced files among 4 tracked .ts/.tsx/.astro file(s)");
+    expect(red.text).toContain(
       "exports: 2 unused export(s) not in exports-baseline.json:\n  src/used.ts: unusedExport (export)\n  src/used.ts: UnusedOptions (type)\n",
     );
-    expect(red.text).not.toContain("dead.ts");
+    expect(red.text).toContain("cruised against the kit's defaults, no violation");
     expect(red.exitCode).toBe(1);
 
     await write({ "src/used.ts": `export const used = 1;\n` });
     const green = await script(GATE, base, "HEAD");
-    expect(green.text).toBe("exports: no unused exports or types\n");
+    expect(green.text).toContain("exports: no unused exports or types\n");
     expect(green.exitCode).toBe(0);
   },
   120_000,
@@ -61,24 +62,25 @@ test(
         "exports-baseline.json": JSON.stringify(held),
         "src/index.ts": `import { used } from "./used.ts";\n\nexport const index = used;\n`,
         "src/used.ts": `export const used = 1;\nexport const unusedExport = 2;\nexport type UnusedOptions = { readonly flag: boolean };\n`,
+        "tests/unit/index.test.ts": `import { index } from "../../src/index.ts";\n\nexport const seen = index;\n`,
       }),
     );
     const base = await commit("feat: base");
 
     const passing = await script(GATE, base, "HEAD");
-    expect(passing.text).toBe("exports: 2 unused export(s) in exports-baseline.json, and no new ones\n");
+    expect(passing.text).toContain("exports: 2 unused export(s) in exports-baseline.json, and no new ones\n");
     expect(passing.exitCode).toBe(0);
 
     await write({ "src/used.ts": `export const used = 1;\n` });
     const stale = await script(GATE, base, "HEAD");
-    expect(stale.text).toBe(
+    expect(stale.text).toContain(
       "exports: 2 exports-baseline.json export(s) no longer reported, remove them:\n  src/used.ts: unusedExport (export)\n  src/used.ts: UnusedOptions (type)\n",
     );
     expect(stale.exitCode).toBe(1);
 
     await write({ "exports-baseline.json": "[]\n" });
     const clean = await script(GATE, base, "HEAD");
-    expect(clean.text).toBe("exports: no unused exports or types\n");
+    expect(clean.text).toContain("exports: no unused exports or types\n");
     expect(clean.exitCode).toBe(0);
   },
   120_000,
@@ -108,10 +110,10 @@ test(
     const expected =
       "exports: 1 exports-baseline.json export(s) the range adds that its base did not leave unused, remove the export instead:\n  src/used.ts: foo (export)\n";
     const range = await script(GATE, base, added);
-    expect(range.text).toBe(expected);
+    expect(range.text).toContain(expected);
     expect(range.exitCode).toBe(1);
     const tip = await script(GATE, added);
-    expect(tip.text).toBe(expected);
+    expect(tip.text).toContain(expected);
     expect(tip.exitCode).toBe(1);
   },
   120_000,
@@ -136,7 +138,7 @@ test(
     await commit("refactor: stop importing helper and list it");
 
     const red = await script(GATE, base, "HEAD");
-    expect(red.text).toBe(
+    expect(red.text).toContain(
       "exports: 1 exports-baseline.json export(s) the range adds that its base did not leave unused, remove the export instead:\n  src/used.ts: helper (export)\n",
     );
     expect(red.exitCode).toBe(1);
@@ -155,6 +157,7 @@ async function pullRequestMergeCheckout(pr: Readonly<Record<string, string>>): P
   const repo = await open({
     ...lintWiring(),
     "knip.json": JSON.stringify({ entry: ["dependency-cruiser.config.ts", "index.ts"] }),
+    "dependency-cruiser.config.ts": `import { defineConfig } from "${CHECKOUT}/dist/presets/dependency-cruiser.js";\n\nexport default defineConfig({ orphans: ["^index[.]ts$"] });\n`,
     "index.ts": `import { helper } from "./helper.ts";\nimport { kept } from "./legacy.ts";\nimport { used } from "./used.ts";\n\nexport const index = used + helper + kept;\n`,
     "used.ts": `export const used = 1;\n`,
     "helper.ts": `export const helper = 1;\n`,
@@ -195,7 +198,7 @@ test(
       "index.ts": `import { helper } from "./helper.ts";\nimport { kept } from "./legacy.ts";\nimport { used } from "./used.ts";\n\nexport const index = used + helper + kept + 1;\n`,
     });
     expect(green.text).toContain("exports: 3 unused export(s) in exports-baseline.json, and no new ones");
-    expect(green.text).toContain("checks-lint: 14 gate(s) pass");
+    expect(green.text).toContain("checks-lint: 12 gate(s) pass");
     expect(green.exitCode).toBe(0);
   },
   180_000,
@@ -211,7 +214,7 @@ test(
     expect(red.text).toContain(
       "exports: 1 exports-baseline.json export(s) the range adds that its base did not leave unused, remove the export instead:\n  used.ts: fresh (export)\n",
     );
-    expect(red.text).toContain("1 of 14 gate(s) failed: checks-exports");
+    expect(red.text).toContain("1 of 12 gate(s) failed: checks-graphwalk");
     expect(red.exitCode).toBe(1);
   },
   180_000,
@@ -226,6 +229,7 @@ test(
         "knip.config.ts": `import { defineConfig } from "@avi2dg/checks/knip";\nexport default defineConfig({ entry: ["src/index.ts"] });\n`,
         "src/index.ts": `import { used } from "./used.ts";\n\nexport const index = used;\n`,
         "src/used.ts": `export const used = 1;\nexport const unusedExport = 2;\nexport type UnusedOptions = { readonly flag: boolean };\n`,
+        "tests/unit/index.test.ts": `import { index } from "../../src/index.ts";\n\nexport const seen = index;\n`,
       }),
     );
     await mkdir(join(dir, "node_modules", "@avi2dg"), { recursive: true });
@@ -244,14 +248,14 @@ test(
     const held = "exports: 2 unused export(s) in exports-baseline.json, and no new ones\n";
     for (const refs of [[seeding], [base, seeding]]) {
       const adopted = await script(GATE, ...refs);
-      expect(adopted.text).toBe(held);
+      expect(adopted.text).toContain(held);
       expect(adopted.exitCode).toBe(0);
     }
 
     await write({ "notes.md": "# notes\n" });
     await commit("docs: add notes");
     const next = await script(GATE, seeding, "HEAD");
-    expect(next.text).toBe(held);
+    expect(next.text).toContain(held);
     expect(next.exitCode).toBe(0);
   },
   120_000,
@@ -263,7 +267,7 @@ test(
     const untracked = await open(configured({ "knip.json": JSON.stringify({ entry: ["index.ts"] }) }));
     await untracked.write({ "index.ts": `export const index = 1;\n` });
     const empty = await untracked.script(GATE, "HEAD");
-    expect(empty.text).toContain("exports: no tracked TypeScript source to scan");
+    expect(empty.text).toContain("unused: no tracked TypeScript or Astro source to scan");
     expect(empty.exitCode).toBe(2);
   },
   120_000,
@@ -315,7 +319,7 @@ test(
       await commit("feat: base");
 
       const red = await script(GATE, "HEAD");
-      expect(red.text).toBe("exports: 1 unused export(s) not in exports-baseline.json:\n  used.ts: unusedExport (export)\n");
+      expect(red.text).toContain("exports: 1 unused export(s) not in exports-baseline.json:\n  used.ts: unusedExport (export)\n");
       expect(red.exitCode).toBe(1);
     }
   },
@@ -327,15 +331,16 @@ test(
   async () => {
     const { commit, script } = await open(
       configured({
-        "knip.json": JSON.stringify({ entry: ["index.ts"], rules: { exports: "off", types: "off" } }),
+        "knip.json": JSON.stringify({ entry: ["index.ts", "tests/**/*.test.ts"], rules: { exports: "off", types: "off" } }),
         "index.ts": `import { used } from "./used.ts";\n\nexport const index = used;\n`,
         "used.ts": `export const used = 1;\nexport const unusedExport = 2;\n`,
+        "tests/unit/index.test.ts": `import { index } from "../../index.ts";\n\nexport const seen = index;\n`,
       }),
     );
     await commit("feat: base");
 
     const passing = await script(GATE, "HEAD");
-    expect(passing.text).toBe("exports: no unused exports or types\n");
+    expect(passing.text).toContain("exports: no unused exports or types\n");
     expect(passing.exitCode).toBe(0);
   },
   120_000,
@@ -347,6 +352,7 @@ test(
     const fixture = await open({
       ...lintWiring(),
       "knip.json": JSON.stringify({ entry: ["dependency-cruiser.config.ts", "widget.ts"], include: ["files"] }),
+      "dependency-cruiser.config.ts": `import { defineConfig } from "${CHECKOUT}/dist/presets/dependency-cruiser.js";\n\nexport default defineConfig({ orphans: ["^widget[.]ts$"] });\n`,
       "widget.ts": `import { used } from "./used.ts";\n\nexport const widget = used;\n`,
       "used.ts": `export const used = 1;\nexport const unusedExport = 2;\n`,
     });
@@ -355,14 +361,14 @@ test(
     await commit("feat: base");
 
     const red = await lint();
-    expect(red.text).toContain("1 of 14 gate(s) failed: checks-exports");
+    expect(red.text).toContain("1 of 12 gate(s) failed: checks-graphwalk");
     expect(red.text).toContain("exports: 1 unused export(s) not in exports-baseline.json:\n  used.ts: unusedExport (export)");
     expect(red.exitCode).toBe(1);
 
     await write({ "used.ts": `export const used = 1;\n` });
     await commit("refactor: use every export");
     const clean = await lint();
-    expect(clean.text).toContain("checks-lint: 14 gate(s) pass");
+    expect(clean.text).toContain("checks-lint: 12 gate(s) pass");
     expect(clean.exitCode).toBe(0);
   },
   180_000,

@@ -1,9 +1,9 @@
 import { BunRuntime, BunServices } from "@effect/platform-bun";
 import { Cause, Console, Effect, Exit, Schema } from "effect";
 
-const PASSED = 0;
-const VIOLATED = 1;
-const UNDECIDED = 2;
+export const PASSED = 0;
+export const VIOLATED = 1;
+export const UNDECIDED = 2;
 const INTERRUPTED = 130;
 
 export class Usage extends Schema.TaggedError<Usage>()("Usage", {
@@ -19,12 +19,16 @@ export function runMain<E extends { readonly message: string }>(
   name: string,
   passes: Effect.Effect<boolean, E, BunServices.BunServices>,
 ): void {
-  const program = passes.pipe(
-    Effect.map((passed) => (passed ? PASSED : VIOLATED)),
-    Effect.catch((failure) => Console.error(`${name}: ${failure.message}`).pipe(Effect.as(UNDECIDED))),
-    Effect.provide(BunServices.layer),
+  runExitMain(
+    passes.pipe(
+      Effect.map((passed) => (passed ? PASSED : VIOLATED)),
+      Effect.catch((failure) => Console.error(`${name}: ${failure.message}`).pipe(Effect.as(UNDECIDED))),
+    ),
   );
-  BunRuntime.runMain(program, { teardown: (exit, onExit) => onExit(statusOf(exit)) });
+}
+
+export function runExitMain(exits: Effect.Effect<number, never, BunServices.BunServices>): void {
+  BunRuntime.runMain(exits.pipe(Effect.provide(BunServices.layer)), { teardown: (exit, onExit) => onExit(statusOf(exit)) });
 }
 
 export function runTreeGate<Outcome extends { readonly violations: readonly unknown[] }>(

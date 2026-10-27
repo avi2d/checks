@@ -11,7 +11,7 @@ The kit's dependency-cruiser rules hold a repository's imports, and a repository
 `defineConfig` from `@avi2dg/checks/dependency-cruiser` returns these rules, with or without a config of the repository's own:
 
 - `no-circular`
-- `no-orphans`, which a repository that depends on `astro` gets only by listing its own, as [checks-imports](../gates/checks-imports.md) explains
+- `no-orphans`, which a repository that depends on `astro` gets only by listing its own, as [checks-graphwalk](../gates/checks-graphwalk.md) explains
 - `not-to-dev-dep`, which refuses shipped source importing a dev-only package, and a package listed in `peerDependencies` too is not dev-only
 - `no-non-package-json`, which refuses an import of an installed package that the nearest `package.json` does not declare, and counts a peer that `peerDependenciesMeta` marks optional as declared
 - `not-to-unresolvable`, which refuses a specifier nothing installed answers
@@ -61,9 +61,9 @@ A rule under `forbidden` that takes a kit rule's name replaces that rule whole, 
 
 ## Running it
 
-`checks-lint` runs [checks-imports](../gates/checks-imports.md) in the full run, which cruises every tracked TypeScript file against `dependency-cruiser.config.ts`, or against the kit's defaults when the repository holds no config.
+`checks-lint` runs [checks-graphwalk](../gates/checks-graphwalk.md) in the full run, which cruises every tracked TypeScript file against `dependency-cruiser.config.ts`, or against the kit's defaults when the repository holds no config.
 
 ## Related topics
 
-- [checks-imports](../gates/checks-imports.md)
+- [checks-graphwalk](../gates/checks-graphwalk.md)
 - [Why it is shaped this way](../design.md)
