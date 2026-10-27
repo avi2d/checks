@@ -151,11 +151,12 @@ test("tracking frontend-syntax.json opts a repository into checks-frontend-synta
   expect(green.exitCode).toBe(0);
 }, 60_000);
 
-test("checks-lint --night runs the retired gates over the day's range instead of the per-PR gates", async () => {
-  const { repo, base } = await repository();
+test("checks-lint --night runs the retired gates over the whole tree at HEAD instead of the per-PR gates", async () => {
+  const { repo } = await repository();
   await repo.write({ "clean.ts": "export const clean = 42;\n" });
-  const head = await commit(repo, "feat: clean", ["-c", "user.name=Wren Fixture", "-c", "user.email=wren@example.com"]);
-  const night = await lint(repo, ["--night", base, head]);
+  await commit(repo, "feat: clean");
+  const night = await lint(repo, ["--night"]);
+  expect(night.text).toContain("from the whole tree at HEAD");
   expect(night.text).toContain("lint-coverage: 3/3 tracked .ts/.tsx/.astro files");
   expect(night.text).toContain("suppressions-ratchet: no count in oxlint-suppressions.json or stylelint-suppressions.json rose or appeared");
   expect(night.text).toContain("repetition: the head holds no .jscpd.json, so no file is measured");
@@ -163,3 +164,20 @@ test("checks-lint --night runs the retired gates over the day's range instead of
   expect(night.text).toContain("checks-lint: 4 gate(s) pass");
   expect(night.exitCode).toBe(0);
 }, 60_000);
+
+test("checks-lint --night finds oxlint and jscpd in the repository's own install when PATH lacks node_modules/.bin", async () => {
+  const repo = await open({
+    ...lintWiring(),
+    ".jscpd.json": JSON.stringify({ path: ["src"] }),
+    "src/tally.ts": "export const tally = 1;\n",
+  });
+  await withOwnInstall(repo);
+  await commit(repo, "feat: base");
+  const stripped = (process.env["PATH"] ?? "").split(":").filter((entry) => !entry.includes("node_modules")).join(":");
+  const night = await lint(repo, ["--night"], { PATH: stripped });
+  expect(night.text).toContain("from the whole tree at HEAD");
+  expect(night.text).toContain("lint-coverage: 2/2 tracked .ts/.tsx/.astro files");
+  expect(night.text).toContain("repetition: 1 file(s) .jscpd.json holds repeat no lines at the head, at 50 tokens and 5 lines");
+  expect(night.text).toContain("checks-lint: 4 gate(s) pass");
+  expect(night.exitCode).toBe(0);
+}, 120_000);

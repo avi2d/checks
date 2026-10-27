@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 import { Console, Effect, Schema } from "effect";
 import { commitOf, git, isShallowBoundary, refArgs, writtenAt } from "../core/git.ts";
-import { runMain } from "../core/main.ts";
+import { WHOLE_TREE } from "../core/gates.ts";
+import { Usage, runMain } from "../core/main.ts";
 import { TEST_FILE } from "./test-layout.ts";
 
 export const QUARANTINE = "tests/quarantine/";
@@ -12,7 +13,7 @@ export class QuarantineError extends Schema.TaggedError<QuarantineError>()("Quar
   message: Schema.String,
 }) {}
 
-const USAGE = "usage: quarantine-clock.ts <ref> | <base-ref> <head-ref>";
+const USAGE = "usage: quarantine-clock.ts <ref> | <base-ref> <head-ref> | --whole-tree <head-ref>";
 
 export type Entry =
   | { readonly kind: "entered"; readonly sha: string; readonly at: number; readonly day: string }
@@ -133,6 +134,13 @@ export const runHead = Effect.fn("runHead")(function* (root: string, head: strin
 
 const clock = Effect.gen(function* () {
   const { first, second } = yield* refArgs(process.argv.slice(2), USAGE);
+  if (first === WHOLE_TREE) {
+    if (second === undefined) return yield* new Usage({ message: USAGE });
+    const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
+    const result = yield* runHead(root, yield* commitOf(second));
+    yield* Console.log(report(result));
+    return result.overdue.length === 0;
+  }
   if (second !== undefined) yield* commitOf(first);
   const head = yield* commitOf(second ?? first);
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();

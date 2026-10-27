@@ -168,7 +168,9 @@ export const changedLines = Effect.fn("changedLines")(function* (
   return parseAddedLines(diff);
 });
 
-const emptyTree = (cwd?: string) => git(["hash-object", "-t", "tree", "/dev/null"], cwd).pipe(Effect.map((sha) => sha.trim()));
+export const emptyTree = Effect.fn("emptyTree")(function* (cwd?: string) {
+  return (yield* git(["hash-object", "-t", "tree", "/dev/null"], cwd)).trim();
+});
 
 export const pathsAt = Effect.fn("pathsAt")(function* (rev: string, pathspecs: readonly string[], cwd?: string) {
   const listed = yield* git(["diff", "--name-only", "-z", "--no-renames", yield* emptyTree(cwd), rev, "--", ...pathspecs], cwd);

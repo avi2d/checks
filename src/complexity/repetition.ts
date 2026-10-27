@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
-import { changedPaths, checkoutFiles, collect, git, pathsAt, rangeFromArgs } from "../core/git.ts";
-import { runMain } from "../core/main.ts";
+import { changedPaths, checkoutFiles, collect, commitOf, git, pathsAt, rangeFromArgs } from "../core/git.ts";
+import { WHOLE_TREE } from "../core/gates.ts";
+import { Usage, runMain } from "../core/main.ts";
 
 export type Fragment = {
   readonly file: string;
@@ -29,7 +30,7 @@ class JscpdUnreadable extends Schema.TaggedError<JscpdUnreadable>()("JscpdUnread
 }) {}
 
 const NAME = "repetition";
-const USAGE = "usage: repetition.ts <ref> | <base-ref> <head-ref>";
+const USAGE = "usage: repetition.ts <ref> | <base-ref> <head-ref> | --whole-tree <head-ref>";
 const MIN_TOKENS = 50;
 const MIN_LINES = 5;
 const MEASURE = `at ${MIN_TOKENS} tokens and ${MIN_LINES} lines`;
@@ -164,6 +165,13 @@ const runHold = Effect.fn("runHold")(function* (root: string, config: string, ba
   return heldOf(sources, rises, after) satisfies Held;
 });
 
+const runWholeTree = Effect.fn("runWholeTree")(function* (root: string, config: string, head: string) {
+  const { sources, clones } = yield* scan(root, head, config, []);
+  const after = repeatedLines(clones);
+  const rises = risesOf([...after.keys()], new Map(), after, new Map(), clones);
+  return heldOf(sources, rises, after) satisfies Held;
+});
+
 export function describe({ file, before, after, clones }: Rise): readonly string[] {
   return [
     `  ${file}: ${after} repeated line(s), up from ${before}`,
@@ -171,24 +179,46 @@ export function describe({ file, before, after, clones }: Rise): readonly string
   ];
 }
 
+const noticeOf = (advisory: Held["advisory"]): readonly string[] =>
+  advisory.size === 0
+    ? []
+    : [
+        `${NAME}: advisory, ${advisory.size} file(s) repeat lines the hold does not fail:`,
+        ...[...advisory].map(([file, lines]) => `  ${file}: ${lines} repeated line(s)`),
+      ];
+
 export function report({ measured, rises, advisory }: Held): string {
   const verdict =
     rises.length === 0
       ? [`${NAME}: ${measured} file(s) ${CONFIG} holds repeat no more lines than where the range starts, ${MEASURE}`]
       : [`${NAME}: ${rises.length} file(s) ${CONFIG} holds repeat more lines than where the range starts, ${MEASURE}:`, ...rises.flatMap(describe)];
-  const notice =
-    advisory.size === 0
-      ? []
-      : [
-          `${NAME}: advisory, ${advisory.size} file(s) repeat lines the hold does not fail:`,
-          ...[...advisory].map(([file, lines]) => `  ${file}: ${lines} repeated line(s)`),
-        ];
-  return [...verdict, ...notice].join("\n");
+  return [...verdict, ...noticeOf(advisory)].join("\n");
+}
+
+export function reportWholeTree({ measured, rises, advisory }: Held): string {
+  const verdict =
+    rises.length === 0
+      ? [`${NAME}: ${measured} file(s) ${CONFIG} holds repeat no lines at the head, ${MEASURE}`]
+      : [`${NAME}: ${rises.length} file(s) ${CONFIG} holds repeat lines at the head, ${MEASURE}:`, ...rises.flatMap(describe)];
+  return [...verdict, ...noticeOf(advisory)].join("\n");
 }
 
 const hold = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
-  const { base, head } = yield* rangeFromArgs(process.argv.slice(2), USAGE, root);
+  const args = process.argv.slice(2);
+  if (args[0] === WHOLE_TREE) {
+    const headArg = args[1];
+    if (args.length !== 2 || headArg === undefined) return yield* new Usage({ message: USAGE });
+    const wholeHead = yield* commitOf(headArg);
+    if ((yield* pathsAt(wholeHead, [`:(literal)${CONFIG}`], root)).length === 0) {
+      yield* Console.log(`${NAME}: the head holds no ${CONFIG}, so no file is measured`);
+      return true;
+    }
+    const whole = yield* runWholeTree(root, yield* git(["show", `${wholeHead}:${CONFIG}`], root), wholeHead);
+    yield* Console.log(reportWholeTree(whole));
+    return whole.rises.length === 0;
+  }
+  const { base, head } = yield* rangeFromArgs(args, USAGE, root);
   if ((yield* pathsAt(head, [`:(literal)${CONFIG}`], root)).length === 0) {
     yield* Console.log(`${NAME}: the head holds no ${CONFIG}, so no file is measured`);
     return true;

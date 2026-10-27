@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 import { Console, Effect, Schema } from "effect";
-import { git, commitOf, parentOrEmptyTree, refArgs } from "../core/git.ts";
-import { runMain } from "../core/main.ts";
+import { git, commitOf, emptyTree, parentOrEmptyTree, refArgs } from "../core/git.ts";
+import { WHOLE_TREE } from "../core/gates.ts";
+import { Usage, runMain } from "../core/main.ts";
 
 export const SUPPRESSIONS = ["oxlint-suppressions.json", "stylelint-suppressions.json"] as const;
 
@@ -23,7 +24,7 @@ export class SuppressionsError extends Schema.TaggedError<SuppressionsError>()("
   message: Schema.String,
 }) {}
 
-const USAGE = "usage: suppressions-ratchet.ts <ref> | <base-ref> <head-ref>";
+const USAGE = "usage: suppressions-ratchet.ts <ref> | <base-ref> <head-ref> | --whole-tree <head-ref>";
 
 const parseJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
 const decodeObject = Schema.decodeUnknownEffect(Schema.Record(Schema.String, Schema.Unknown));
@@ -124,11 +125,19 @@ export const runTip = Effect.fn("runTip")(function* (tip: string) {
   return yield* compareAt(yield* parentOrEmptyTree(tipCommit), tipCommit);
 });
 
+export const runWholeTree = Effect.fn("runWholeTree")(function* (head: string) {
+  return yield* compareAt(yield* emptyTree(), yield* commitOf(head));
+});
+
 const ratchet = Effect.gen(function* () {
   const { first, second } = yield* refArgs(process.argv.slice(2), USAGE);
-
+  if (first === WHOLE_TREE) {
+    if (second === undefined) return yield* new Usage({ message: USAGE });
+    const whole = yield* runWholeTree(second);
+    yield* Console.log(report(whole));
+    return whole.rises.length === 0;
+  }
   const result = second !== undefined ? yield* runRange(first, second) : yield* runTip(first);
-
   yield* Console.log(report(result));
   return result.rises.length === 0;
 });

@@ -45,6 +45,8 @@ const STYLESHEET: TrackedContent = { pathspecs: ["*.css"], content: "a styleshee
 
 const COPY_DECLARATION: TrackedContent = { pathspecs: ["copy.json"], content: "a copy declaration" };
 
+export const WHOLE_TREE = "--whole-tree";
+
 export const KIT_GATES = [
   { bin: "checks-lint-coverage", vector: "quality", file: "lint-coverage.sh", reads: "tree", appliesTo: LINTED_SOURCE, night: true },
   { bin: "checks-test-layout", vector: "testing", file: "test-layout.ts", reads: "tree", appliesTo: TYPESCRIPT_SOURCE },

@@ -32,11 +32,11 @@ Tree gates read the working tree rather than the range.
 ```sh
 checks-lint
 checks-lint <base-ref> <head-ref>
-checks-lint --night [<base-ref> <head-ref>]
+checks-lint --night
 ```
 
 With two arguments, the base and head override range discovery.
-With `--night` and no arguments, it runs the four nightly gates over the whole tree.
+With `--night`, it takes no range arguments and runs the four nightly gates over the whole tree.
 
 ## Exit codes
 

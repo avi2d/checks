@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
-import { EVERY_REPOSITORY, NIGHT_GATES, PR_GATES, type KitGate } from "./gates.ts";
+import { EVERY_REPOSITORY, NIGHT_GATES, PR_GATES, WHOLE_TREE, type KitGate } from "./gates.ts";
 import { defaultBranch, git } from "./git.ts";
 import { runMain, Usage } from "./main.ts";
 
@@ -21,7 +21,7 @@ class GatesUndecided extends Schema.TaggedError<GatesUndecided>()("GatesUndecide
 }) {}
 
 const NAME = "checks-lint";
-const USAGE = "usage: lint.ts [--night] [<base-ref> <head-ref>]";
+const USAGE = "usage: lint.ts [<base-ref> <head-ref>] | --night";
 const NIGHT = "--night";
 const PULL_REQUEST_EVENT = "pull_request";
 const SHALLOW_HINT = "a CI checkout needs actions/checkout fetch-depth: 0";
@@ -141,19 +141,6 @@ const resolveRange = Effect.fn("resolveRange")(function* (args: readonly string[
   return { refs: rangeOf(base, head), source: ends.source } satisfies Range;
 });
 
-const resolveWholeTree = Effect.fn("resolveWholeTree")(function* () {
-  const head = yield* commitOf("HEAD");
-  const root = (yield* git(["rev-list", "--max-parents=0", "HEAD"])).split("\n").map((line) => line.trim()).filter((line) => line !== "")[0];
-  if (root === undefined) return yield* new RangeUnresolved({ message: `HEAD has no commit in this clone; ${SHALLOW_HINT}` });
-  const base = yield* git(["merge-base", root, head]).pipe(
-    Effect.map((sha) => sha.trim()),
-    Effect.mapError(
-      () => new RangeUnresolved({ message: `HEAD shares no commit with its root in this clone; ${SHALLOW_HINT}` }),
-    ),
-  );
-  return { refs: rangeOf(base, head), source: "the whole tree at HEAD" } satisfies Range;
-});
-
 export function describe({ refs }: Range): string {
   return refs.length === 1 ? `tip ${refs[0]}` : `range ${refs[0]}..${refs[1]}`;
 }
@@ -163,11 +150,16 @@ function outcomeOf(exitCode: number): Outcome {
   return exitCode === 1 ? "violated" : "undecided";
 }
 
-const runGate = Effect.fn("runGate")(function* (gate: KitGate, range: Range) {
+const runGate = Effect.fn("runGate")(function* (gate: KitGate, range: Range, wholeTree: boolean) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const script = (yield* Path.Path).join(import.meta.dir, "..", gate.vector, gate.file);
   const program = gate.file.endsWith(".sh") ? "sh" : process.execPath;
-  const args = gate.reads === "range" ? [script, ...range.refs] : [script, ...(gate.args ?? [])];
+  const args =
+    gate.reads === "range"
+      ? wholeTree
+        ? [script, WHOLE_TREE, ...range.refs]
+        : [script, ...range.refs]
+      : [script, ...(gate.args ?? [])];
   const exitCode = yield* spawner
     .exitCode(ChildProcess.make(program, args, { stdin: "ignore", stdout: "inherit", stderr: "inherit" }))
     .pipe(
@@ -178,19 +170,25 @@ const runGate = Effect.fn("runGate")(function* (gate: KitGate, range: Range) {
   return { gate, outcome: outcomeOf(exitCode) };
 });
 
+const wholeTreeRange = Effect.fn("wholeTreeRange")(function* () {
+  const head = yield* commitOf("HEAD");
+  return { refs: [head], source: "the whole tree at HEAD" } satisfies Range;
+});
+
 const lint = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const raw = process.argv.slice(2);
   const night = raw.includes(NIGHT);
   const filtered = raw.filter((arg) => arg !== NIGHT);
-  const range = yield* night && filtered.length === 0 ? resolveWholeTree() : resolveRange(filtered);
+  if (night && filtered.length > 0) return yield* new Usage({ message: USAGE });
+  const range = night ? yield* wholeTreeRange() : yield* resolveRange(filtered);
   yield* Console.log(`${NAME}: ${describe(range)} from ${range.source}`);
   const gates = yield* Effect.filter(night ? NIGHT_GATES : PR_GATES, (gate) =>
     gate.appliesTo === EVERY_REPOSITORY
       ? Effect.succeed(true)
       : git(["ls-files", "--", ...gate.appliesTo.pathspecs], root).pipe(Effect.map((files) => files.trim() !== "")),
   );
-  const verdicts = yield* Effect.forEach(gates, (gate) => runGate(gate, range));
+  const verdicts = yield* Effect.forEach(gates, (gate) => runGate(gate, range, night));
   const failed = verdicts.filter((verdict) => verdict.outcome !== "passed");
   if (failed.length === 0) {
     yield* Console.log(`${NAME}: ${gates.length} gate(s) pass`);

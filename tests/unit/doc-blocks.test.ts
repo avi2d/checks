@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Effect } from "effect";
 import { kitFacts, MANIFEST, optInInstall, splice, TARGETS } from "../../scripts/doc-blocks.ts";
-import { KIT_GATES, PR_GATES } from "../../src/core/gates.ts";
+import { PR_GATES } from "../../src/core/gates.ts";
 
 const CHECKOUT = resolve(import.meta.dir, "..", "..");
 
@@ -49,7 +49,7 @@ test("an optional peer no opt-in page installs is refused, naming it, rather tha
   expect(refused.message).toBe("package.json: the optional peer left-pad is in no OPT_IN_PEERS row of scripts/doc-blocks.ts");
 });
 
-test("a stale lint sample count is rewritten from KIT_GATES", () => {
+test("a stale lint sample count is rewritten from PR_GATES", () => {
   const target = TARGETS.find(({ file }) => file === "docs/gates/checks-lint.md");
   expect(target).toBeDefined();
   const stale = [
