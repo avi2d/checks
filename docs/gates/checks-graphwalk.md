@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-graphwalk
 
-`checks-graphwalk` is the gate that judges unreferenced files, unused exports and import violations together, running Knip once over the working tree for unreferenced files and unused exports and dependency-cruiser in the same process for import violations, plus Knip once more on the base checkout when the range adds baseline entries.
+`checks-graphwalk` is the gate that judges unreferenced files, unused exports and import violations together, running Knip once over the working tree for unreferenced files and unused exports and dependency-cruiser once for import violations, plus Knip once more on the base checkout when the range adds baseline entries.
 
 ## What it checks
 
@@ -82,6 +82,8 @@ A seed written after the range adds a dead export, or after it removes the last 
 | 0 | no file is unreferenced, no symbol is unlisted, added or stale, and no import breaks an `error` rule, or `--write` recorded the baseline |
 | 1 | a file is unreferenced, a symbol is unlisted, added or stale, an import breaks an `error` rule, or the repository holds no Knip configuration |
 | 2 | a ref does not resolve, a scanner cannot run, or a Knip report, a cruise report or the baseline does not parse |
+
+The gate exits 1 when any section reports a violation, and exits 2 only when no section reports one and at least one section cannot decide.
 
 It also exits 2 when the repository tracks no `.ts`, `.tsx` or `.astro` file, or, with `--write`, when it tracks no TypeScript file.
 A repository that tracks `.astro` files but no TypeScript prints only the unreferenced-files section.
