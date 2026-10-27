@@ -1,7 +1,7 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { dirname, join } from "node:path";
-import { CHECKOUT, fixtureRepos, lintWiring, type FixtureRepo } from "./lib/fixture-repo.ts";
+import { join } from "node:path";
+import { CHECKOUT, fixtureRepos, lintWiring, withOwnInstall, type FixtureRepo } from "./lib/fixture-repo.ts";
 
 const ROSE = "file(s) .jscpd.json holds repeat more lines than where the range starts, at 50 tokens and 5 lines:\n";
 const open = fixtureRepos("checks-repetition-");
@@ -61,14 +61,14 @@ test(
 );
 
 test(
-  "without jscpd to run it cannot decide, and exits 2",
+  "repetition finds jscpd in the kit install when PATH lacks node_modules/.bin",
   async () => {
     const { dir, commit } = await repository({ "src/ledger.ts": block("ledger") });
     const first = await commit("feat: first");
-    const gitOnly = { ...process.env, PATH: dirname(Bun.which("git") ?? "/usr/bin/git") };
-    const result = await $`${process.execPath} ${join(CHECKOUT, "src", "complexity", "repetition.ts")} ${first}`.cwd(dir).env(gitOnly).nothrow().quiet();
-    expect(result.stderr.toString()).toContain("repetition: cannot run jscpd");
-    expect(result.exitCode).toBe(2);
+    const stripped = (process.env["PATH"] ?? "").split(":").filter((entry) => !entry.includes("node_modules")).join(":");
+    const result = await $`${process.execPath} ${join(CHECKOUT, "src", "complexity", "repetition.ts")} ${first}`.cwd(dir).env({ ...process.env, PATH: stripped }).nothrow().quiet();
+    expect(result.stdout.toString()).toContain("repetition: 1 file(s) .jscpd.json holds repeat no more lines than where the range starts");
+    expect(result.exitCode).toBe(0);
   },
   60_000,
 );
@@ -104,7 +104,9 @@ test(
 test(
   "checks-lint runs the repetition hold over its range, red on an added copy and green once it is gone",
   async () => {
-    const { dir, write, commit, lint } = await repository({ ...lintWiring(), "src/ledger.ts": block("ledger") });
+    const repo = await repository({ ...lintWiring(), "src/ledger.ts": block("ledger") });
+    await withOwnInstall(repo);
+    const { dir, write, commit, lint } = repo;
     await commit("feat: base");
     await $`git update-ref refs/remotes/origin/main HEAD && git checkout -q -b feature`.cwd(dir).quiet();
     await write({ "src/copy.ts": block("ledger") });

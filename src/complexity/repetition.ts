@@ -68,6 +68,15 @@ export function repeatedLines(clones: readonly Clone[]): ReadonlyMap<string, num
   return new Map([...lines].map(([file, covered]) => [file, covered.size]));
 }
 
+const jscpdBinary = Effect.fn("jscpdBinary")(function* () {
+  const path = yield* Path.Path;
+  const main = yield* Effect.try({
+    try: () => new URL("./run-jscpd.js", import.meta.resolve("jscpd/package.json")),
+    catch: () => new JscpdUnreadable({ message: "cannot resolve jscpd, a peer dependency of the kit" }),
+  });
+  return yield* path.fromFileUrl(main);
+});
+
 // jscpd reads files from disk, and the working tree need not hold the revision: a merge checkout or an uncommitted edit.
 // Both ends scan under the head's config, so a changed file set never reads as a change in repetition.
 // jscpd refuses a missing path, so a path in `emptied` the revision lacks is created empty.
@@ -87,7 +96,7 @@ const scan = Effect.fn("scan")(
     const flags = ["--silent", "--no-tips", "--no-gitignore", "--absolute", "--reporters", "json", "--output", output];
     const thresholds = ["--min-tokens", `${MIN_TOKENS}`, "--min-lines", `${MIN_LINES}`];
 
-    const run = yield* collect("jscpd", [...flags, ...thresholds], tree).pipe(
+    const run = yield* collect(process.execPath, [yield* jscpdBinary(), ...flags, ...thresholds], tree).pipe(
       Effect.mapError((cause) => new JscpdUnreadable({ message: `cannot run jscpd: ${cause.message}` })),
     );
     const reportPath = path.join(output, REPORT);

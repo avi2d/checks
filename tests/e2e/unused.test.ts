@@ -1,7 +1,7 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { join } from "node:path";
-import { CHECKOUT, fixtureRepos, lintWiring, ran } from "./lib/fixture-repo.ts";
+import { CHECKOUT, fixtureRepos, lintWiring, ran, withOwnInstall } from "./lib/fixture-repo.ts";
 
 const open = fixtureRepos("checks-unused-");
 
@@ -172,11 +172,13 @@ test(
 test(
   "checks-lint runs the gate over the working tree, red on an added dead file and green once it is gone",
   async () => {
-    const { dir, write, commit, lint } = await open({
+    const repo = await open({
       ...lintWiring(),
       "knip.json": JSON.stringify({ entry: ["dependency-cruiser.config.ts", "widget.ts"], include: ["files"] }),
       "widget.ts": `export const widget = 42;\n`,
     });
+    await withOwnInstall(repo);
+    const { dir, write, commit, lint } = repo;
     await commit("feat: base");
 
     const green = await lint();

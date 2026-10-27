@@ -21,7 +21,7 @@ A `tsconfig.json` that does not extend `@avi2dg/checks/tsconfig.effect.json`, or
 It reads the working tree: the `*.ts`, `*.tsx` and `*.astro` files `git ls-files` lists, and the files `oxlint --debug=files` walks.
 It walks without naming a path, since an explicit path bypasses the ignore files whose skips it looks for.
 It reads the program from `tsc --listFilesOnly -p tsconfig.json`, and passes over the program when the repository tracks no `.ts` or `.tsx` file or the root holds no `tsconfig.json`.
-oxlint and tsc must be on `PATH`, as they are under a package script.
+The gate runs oxlint and tsc from the repository's own `node_modules/.bin`, so they need no `PATH` entry.
 
 ## Arguments
 
@@ -33,7 +33,7 @@ It takes none.
 | --- | --- |
 | 0 | the repository tracks no `.ts`, `.tsx` or `.astro` file, or oxlint walks each one and the program holds both ts-reset rules, the repository tracks no `.ts` or `.tsx` file or the root holds no `tsconfig.json` |
 | 1 | oxlint skips a tracked file, or the program drops a ts-reset rule |
-| 2 | oxlint cannot walk the tree, or tsc cannot list the program after oxlint walks every tracked file, as when either is not on `PATH` or a config does not parse |
+| 2 | oxlint cannot walk the tree, or tsc cannot list the program after oxlint walks every tracked file, as when the repository's install lacks either tool or a config does not parse |
 
 ## Sample output
 

@@ -1,9 +1,10 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
+import { Schema } from "effect";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { withoutPullRequestEvent } from "../lib/env.ts";
-import { CHECKOUT, fixtureRepos, lintWiring, ran, type FixtureRepo, type Ran } from "./lib/fixture-repo.ts";
+import { CHECKOUT, fixtureRepos, lintWiring, ran, withOwnInstall, type FixtureRepo, type Ran } from "./lib/fixture-repo.ts";
 
 const SCRIPT = join(CHECKOUT, "src", "core", "lint.ts");
 const OWNER = ["-c", "user.name=Wren Fixture", "-c", "user.email=wren@example.com"];
@@ -17,6 +18,7 @@ async function commit(repo: FixtureRepo, message: string, identity: readonly str
 
 async function repository(): Promise<{ repo: FixtureRepo; base: string }> {
   const repo = await open({ ...lintWiring(), "widget.ts": "export const widget = 42;\n" });
+  await withOwnInstall(repo);
   const base = await commit(repo, "feat: base", ["-c", "user.name=Wren Fixture", "-c", "user.email=wren@example.com"]);
   await $`git update-ref refs/remotes/origin/main HEAD && git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main && git checkout -q -b feature`.cwd(repo.dir).quiet();
   return { repo, base };
@@ -38,6 +40,45 @@ test("the local range starts at origin/HEAD, and explicit bad refs are refused",
   expect(missing.exitCode).toBe(2);
   expect(missing.text).toContain("missing is not a commit");
 }, 60_000);
+
+test("checks-lint finds oxlint and jscpd in the repository's own install when PATH lacks node_modules/.bin", async () => {
+  const repo = await open({
+    ...lintWiring(),
+    ".jscpd.json": JSON.stringify({ path: ["src"] }),
+    "src/ledger.ts": [
+      "export function ledgerSum(rows: readonly number[]): number {",
+      "  let total = 0;",
+      "  for (const row of rows) {",
+      "    if (row > 10) total += row * 2;",
+      "    else if (row < 0) total -= row;",
+      "    else total += 1;",
+      "    if (total > 1000) return 1000;",
+      "  }",
+      "  return total;",
+      "}",
+      "",
+    ].join("\n"),
+  });
+  await withOwnInstall(repo);
+  await commit(repo, "feat: base");
+  const stripped = (process.env["PATH"] ?? "").split(":").filter((entry) => !entry.includes("node_modules")).join(":");
+  const green = await lint(repo, [], { PATH: stripped });
+  expect(green.text).toContain("lint-coverage: 2/2 tracked .ts/.tsx/.astro files");
+  expect(green.text).toContain("repetition: 1 file(s) .jscpd.json holds repeat no more lines than where the range starts");
+  expect(green.text).toContain("checks-lint: 14 gate(s) pass");
+  expect(green.exitCode).toBe(0);
+
+  const manifest = Schema.decodeUnknownSync(Schema.Struct({ devDependencies: Schema.optional(Schema.Record(Schema.String, Schema.String)) }))(
+    await Bun.file(join(CHECKOUT, "package.json")).json(),
+  );
+  const { oxlint = "", jscpd = "" } = manifest.devDependencies ?? {};
+  const oxlintVersion = await $`${join(repo.dir, "node_modules", ".bin", "oxlint")} --version`.env({ ...process.env, PATH: stripped }).quiet();
+  expect(oxlintVersion.stdout.toString()).toContain(oxlint);
+  const jscpdVersion = await $`${process.execPath} ${join(repo.dir, "node_modules", ".bin", "jscpd")} --version`
+    .env({ ...process.env, PATH: stripped })
+    .quiet();
+  expect(jscpdVersion.stdout.toString()).toContain(jscpd);
+}, 120_000);
 
 test("a pushed tip runs every range gate and names each failure", async () => {
   const { repo } = await repository();
