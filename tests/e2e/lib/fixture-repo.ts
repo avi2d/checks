@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { afterEach } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
@@ -106,6 +106,16 @@ export function scratchDirs(): (prefix: string) => Promise<string> {
     (prefix: string) => mkdtemp(join(tmpdir(), prefix)),
     (dir) => rm(dir, { recursive: true, force: true }),
   );
+}
+
+// A lint gate runs the repository's own tools rather than the harness PATH, so a fixture the lint gate judges carries the kit's install as its own node_modules.
+export async function withOwnInstall(repo: FixtureRepo): Promise<void> {
+  const ignore = await readFile(join(repo.dir, ".gitignore"), "utf8").catch(() => "");
+  if (!ignore.split("\n").some((line) => line.trim() === "node_modules" || line.trim() === "node_modules/")) {
+    await repo.write({ ".gitignore": `${ignore}${ignore === "" || ignore.endsWith("\n") ? "" : "\n"}node_modules/\n` });
+  }
+  await mkdir(join(repo.dir, "node_modules"), { recursive: true });
+  await symlink(join(CHECKOUT, "node_modules", ".bin"), join(repo.dir, "node_modules", ".bin"));
 }
 
 export const UNVENDORED_BUNFIG = '[test]\npathIgnorePatterns = ["**/tests/quarantine/**", "**/tests/live/**", "**/tests/pixel/**"]\n';
