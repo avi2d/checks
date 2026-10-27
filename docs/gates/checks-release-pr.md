@@ -116,6 +116,8 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
+      - name: fail fast when the release cannot plan
+        run: ./node_modules/.bin/checks-release-preflight release.yml
       - name: open or refresh the release pull request
         env:
           GH_TOKEN: ${{ github.token }}
@@ -141,6 +143,7 @@ jobs:
         run: ./node_modules/.bin/checks-release-tag release.yml
 ```
 
+The `pull-request` job runs `checks-release-preflight` before planning, so a version the last tag does not name fails before `checks-release-pr` builds.
 A public repository keeps `runs-on: ubuntu-latest`.
 A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on both jobs, as [checks-ci-wiring](checks-ci-wiring.md#runners) requires of every job but a mutation job.
 A repository whose build needs more than Bun adds the steps its `.github/workflows/ci.yml` runs before `bun run build` to both jobs, and nothing after it.
