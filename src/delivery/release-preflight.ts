@@ -2,6 +2,7 @@
 import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { lastTag } from "./release.ts";
 import { refused } from "./release-commit.ts";
+import { fromProgram, shellWords, type Command } from "./shell-command.ts";
 import { git } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 
@@ -26,8 +27,22 @@ export function ownerRepoOf(url: string): string | undefined {
   return match === null ? undefined : `${match[1]}/${match[2]}`;
 }
 
+const PUBLISH_BINS = ["checks-release-publish"];
+const PUBLISH_SOURCES = ["release-publish.ts"];
+
+function isPublishPath(word: string, files: readonly string[]): boolean {
+  return files.some((file) => word === file || word.endsWith(`/${file}`));
+}
+
+function publishesInvocation(words: Command): boolean {
+  const [head = "", ...rest] = fromProgram(words);
+  if (head === "npm" && rest[0] === "publish") return true;
+  if (isPublishPath(head, PUBLISH_BINS)) return true;
+  return head === "bun" && rest.some((word) => isPublishPath(word, PUBLISH_SOURCES));
+}
+
 export function publishesToNpm(command: string): boolean {
-  return command.includes("release-publish") || command.includes("npm publish");
+  return shellWords(command).some((words) => publishesInvocation(words.map(({ text }) => text)));
 }
 
 const FlexiblePermissions = Schema.Union([Schema.String, Schema.Record(Schema.String, Schema.Unknown)]);
@@ -137,7 +152,7 @@ const checkPublisher = Effect.fn("checkPublisher")(function* (root: string, work
   }
   if (held.toLowerCase() !== repository.toLowerCase()) {
     return yield* refused(
-      `${MANIFEST} names the repository ${held}, but the run is in ${repository}, so the run cannot present npm's trusted publisher for ${name}; point repository.url at ${repository}, or move the trusted publisher on npm to ${held} and ${workflow}`,
+      `${MANIFEST} names the repository ${held}, but the run is in ${repository}, so the run cannot present npm's trusted publisher for ${name}; point repository.url at ${repository}, the repository the run publishes from`,
     );
   }
   if (!grantsOidc(document)) {

@@ -63,7 +63,7 @@ checks-release-preflight: package.json holds 0.7.0, but the last release tag is 
 A run in another repository than the manifest names refuses with both sides.
 
 ```text
-checks-release-preflight: package.json names the repository other/widget, but the run is in acme/widget, so the run cannot present npm's trusted publisher for @acme/widget; point repository.url at acme/widget, or move the trusted publisher on npm to other/widget and release.yml
+checks-release-preflight: package.json names the repository other/widget, but the run is in acme/widget, so the run cannot present npm's trusted publisher for @acme/widget; point repository.url at acme/widget, the repository the run publishes from
 ```
 
 A publishing job with no token refuses with where to grant it.

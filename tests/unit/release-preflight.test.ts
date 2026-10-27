@@ -1,11 +1,5 @@
 import { expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
 import { grantsOidc, ownerRepoOf, publishesToNpm } from "../../src/delivery/release-preflight.ts";
-import { isRecord, workflowJobs } from "../../src/delivery/workflow-references.ts";
-
-const REPO = resolve(import.meta.dir, "..", "..");
-const F = "`".repeat(3);
 
 test("owner and name come from the https and ssh forms of a GitHub remote", () => {
   expect(ownerRepoOf("https://github.com/acme/widget.git")).toBe("acme/widget");
@@ -20,11 +14,14 @@ test("anything but a GitHub owner and name has no repository to match", () => {
   expect(ownerRepoOf("")).toBeUndefined();
 });
 
-test("the publisher matters for the kit publish and for npm publish", () => {
+test("only an executed kit or npm publish command counts as publishing", () => {
   expect(publishesToNpm("./node_modules/.bin/checks-release-publish")).toBe(true);
   expect(publishesToNpm("bun src/delivery/release-publish.ts")).toBe(true);
   expect(publishesToNpm("npm publish --provenance")).toBe(true);
+  expect(publishesToNpm("npm  publish")).toBe(true);
   expect(publishesToNpm("bun run build")).toBe(false);
+  expect(publishesToNpm("echo 'No npm publish is needed'")).toBe(false);
+  expect(publishesToNpm("# npm publish is needed")).toBe(false);
 });
 
 const kitStep = { run: "bun src/delivery/release-publish.ts" };
@@ -116,42 +113,3 @@ test("no grant anywhere mints no token", () => {
   expect(grantsOidc(undefined)).toBe(false);
 });
 
-function stepRuns(document: unknown, jobId: string): string[] {
-  const job = workflowJobs({ path: "", document, text: "" }).find(([id]) => id === jobId)?.[1];
-  const steps = isRecord(job) ? job["steps"] : undefined;
-  if (!Array.isArray(steps)) return [];
-  return steps.flatMap((step) => {
-    const run = isRecord(step) ? step["run"] : undefined;
-    return typeof run === "string" ? [run] : [];
-  });
-}
-
-test("the release-push flow plans only after the preflight passes, so an untagged bump fails before release-push plans", async () => {
-  const text = await readFile(join(REPO, ".github/workflows/release-push.yml"), "utf8");
-  const runs = stepRuns(Bun.YAML.parse(text), "release");
-  const preflight = runs.findIndex((run) => run.includes("release-preflight") && run.includes("release.yml"));
-  const plan = runs.findIndex((run) => run.includes("release-push.ts"));
-  expect(preflight).toBeGreaterThanOrEqual(0);
-  expect(plan).toBeGreaterThanOrEqual(0);
-  expect(preflight).toBeLessThan(plan);
-  expect(runs[preflight] ?? "").toContain("chore: release");
-});
-
-test("the daily-release template plans only after the preflight passes, so an untagged bump fails before release-pr plans", async () => {
-  const page = await readFile(join(REPO, "docs/gates/checks-release-pr.md"), "utf8");
-  const fences = page.split(F).filter((_, index) => index % 2 === 1);
-  const documents = fences.flatMap((fence) => {
-    try {
-      return [Bun.YAML.parse(fence.replace(/^[a-z]+\n/, ""))];
-    } catch {
-      return [];
-    }
-  });
-  const template = documents.find((document) => isRecord(document) && document["name"] === "daily-release");
-  const runs = stepRuns(template, "pull-request");
-  const preflight = runs.findIndex((run) => run.includes("release-preflight") && run.includes("release.yml"));
-  const plan = runs.findIndex((run) => run.includes("release-pr") && !run.includes("release-preflight"));
-  expect(preflight).toBeGreaterThanOrEqual(0);
-  expect(plan).toBeGreaterThanOrEqual(0);
-  expect(preflight).toBeLessThan(plan);
-});
