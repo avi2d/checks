@@ -1,18 +1,6 @@
 import { expect, test } from "bun:test";
 import { classifyPath, FAST_TREE_GATES, selectScope } from "../../src/core/scope.ts";
 
-const RANGE_GATES = [
-  "checks-commit-identity",
-  "checks-comment-gate",
-  "checks-suppressions-ratchet",
-  "checks-secrets",
-  "checks-docs",
-  "checks-repetition",
-  "checks-exports",
-  "checks-quarantine-clock",
-  "checks-advisories",
-];
-
 const TREE_GATES = [
   "checks-lint-coverage",
   "checks-test-layout",
@@ -30,11 +18,6 @@ test("a docs-only change runs a tree gate", () => {
   const scope = selectScope(["README.md", "docs/gates/checks-lint.md", "AGENTS.md"]);
   expect(scope.full).toBe(false);
   expect(scope.gates).toContain("checks-copy");
-  expect(scope.tests).toBe("none");
-});
-
-test("a docs-only change runs the unit tier", () => {
-  expect(selectScope(["docs/design.md"]).tests).toBe("none");
 });
 
 test("a copy change skips checks-copy", () => {
@@ -42,7 +25,6 @@ test("a copy change skips checks-copy", () => {
   expect(scope.full).toBe(false);
   expect(scope.gates).toContain("checks-copy");
   expect(scope.gates.filter((bin) => TREE_GATES.includes(bin))).toEqual(["checks-copy"]);
-  expect(scope.tests).toBe("none");
 });
 
 const FULL_GATES = [
@@ -68,21 +50,12 @@ const FULL_GATES = [
 ];
 
 test("a typescript change drops a tree gate", () => {
-  expect(selectScope(["src/core/lint.ts"])).toEqual({ full: false, gates: FULL_GATES, tests: "unit-and-touched" });
-});
-
-test("a typescript change skips the touched e2e files", () => {
-  expect(selectScope(["src/core/lint.ts"]).tests).toBe("unit-and-touched");
+  expect(selectScope(["src/core/lint.ts"])).toEqual({ full: false, gates: FULL_GATES });
 });
 
 test("a test change skips test-layout", () => {
   const scope = selectScope(["tests/unit/lint.test.ts"]);
   expect(scope.gates).toContain("checks-test-layout");
-  expect(scope.tests).toBe("unit-and-touched");
-});
-
-test("a test change runs the full e2e tier", () => {
-  expect(selectScope(["tests/e2e/docs.test.ts"]).tests).toBe("unit-and-touched");
 });
 
 test("a quarantined test change skips the quarantine clock", () => {
@@ -94,13 +67,11 @@ test("a quarantined test change skips the quarantine clock", () => {
 test("a workflow change runs the scoped matrix", () => {
   const scope = selectScope([".github/workflows/ci.yml"]);
   expect(scope.full).toBe(true);
-  expect(scope.tests).toBe("full");
 });
 
 test("a lockfile change runs the scoped matrix", () => {
   const scope = selectScope(["bun.lock"]);
   expect(scope.full).toBe(true);
-  expect(scope.tests).toBe("full");
 });
 
 test("a suppression change runs a tree gate", () => {
@@ -108,17 +79,18 @@ test("a suppression change runs a tree gate", () => {
   expect(scope.full).toBe(false);
   expect(scope.gates).toContain("checks-suppressions-ratchet");
   expect(scope.gates.filter((bin) => TREE_GATES.includes(bin))).toEqual([]);
-  expect(scope.tests).toBe("none");
 });
 
-test("a secret-adjacent change skips the secrets scan", () => {
-  expect(selectScope(["gitleaks.toml"]).gates).toContain("checks-secrets");
-  expect(selectScope(["config/credentials.json"]).gates).toContain("checks-secrets");
+test("a secret-like filename takes the full run instead of the range-only subset", () => {
+  expect(classifyPath("gitleaks.toml")).toBe("unknown");
+  expect(classifyPath("config/credentials.json")).toBe("unknown");
+  expect(classifyPath("src/credentials.js")).toBe("unknown");
+  expect(selectScope(["config/credentials.json"]).full).toBe(true);
+  expect(selectScope(["src/credentials.js"]).full).toBe(true);
 });
 
 test("a secrets source file selects the typescript tree", () => {
   expect(classifyPath("src/delivery/secrets.ts")).toBe("typescript");
-  expect(selectScope(["src/delivery/secrets.ts"]).tests).toBe("unit-and-touched");
 });
 
 test("an unknown path runs the scoped matrix", () => {
@@ -126,7 +98,7 @@ test("an unknown path runs the scoped matrix", () => {
 });
 
 test("an empty range runs the scoped matrix", () => {
-  expect(selectScope([])).toEqual({ full: true, gates: FULL_GATES, tests: "full" });
+  expect(selectScope([])).toEqual({ full: true, gates: FULL_GATES });
 });
 
 test("the desk run skips the two slowest tree gates", () => {

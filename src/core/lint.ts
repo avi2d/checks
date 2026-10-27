@@ -185,7 +185,7 @@ const scopedGates = Effect.fn("scopedGates")(function* (range: Range, root: stri
   if (scope.full) return { gates: undefined, detail: "the full run, since the change reaches past a scoped shape" };
   return {
     gates: scope.gates,
-    detail: `${scope.gates.length} gate(s) for this change, with the ${scope.tests} test selection`,
+    detail: `${scope.gates.length} gate(s) for this change`,
   };
 });
 
