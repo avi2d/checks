@@ -169,7 +169,19 @@ test("checks-lint --night finds oxlint and jscpd in the repository's own install
   const repo = await open({
     ...lintWiring(),
     ".jscpd.json": JSON.stringify({ path: ["src"] }),
-    "src/tally.ts": "export const tally = 1;\n",
+    "src/tally.ts": [
+      "export const tally00 = 0;",
+      "export const tally01 = 1;",
+      "export const tally02 = 2;",
+      "export const tally03 = 3;",
+      "export const tally04 = 4;",
+      "export const tally05 = 5;",
+      "export const tally06 = 6;",
+      "export const tally07 = 7;",
+      "export const tally08 = 8;",
+      "export const tally09 = 9;",
+      "",
+    ].join("\n"),
   });
   await withOwnInstall(repo);
   await commit(repo, "feat: base");
