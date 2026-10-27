@@ -201,6 +201,14 @@ test("a failed nightly gate is filed under its own key instead of dropped silent
   ]);
 });
 
+test("an all-undecided lint summary files checks-lint itself and no per-gate issue", () => {
+  const log = [
+    "checks-lint: tip 03da92c from the whole tree at HEAD",
+    "checks-lint: 2 of 4 gate(s) undecided: checks-repetition, checks-suppressions-ratchet",
+  ].join("\n");
+  expect(gatesOf(log)).toEqual([{ kind: "gates", file: "checks-lint" }]);
+});
+
 test("a passing lint log files no gate, and a log with no verdict files checks-lint itself", () => {
   expect(gatesOf("checks-lint: 4 gate(s) pass")).toEqual([]);
   expect(gatesOf("checks-lint: cannot run checks-repetition: boom")).toEqual([{ kind: "gates", file: "checks-lint" }]);

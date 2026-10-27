@@ -125,7 +125,7 @@ A gate then behaves the same alone or through `checks-lint`, and `lint-coverage.
 The gates run one at a time and pass their output straight through, so each report reads whole and in the order of the gate table.
 `checks-lint` picks the gates that apply from the tracked files, and a repository cannot select gates.
 A TypeScript gate runs as soon as the repository tracks TypeScript source, and `checks-unused` also runs on tracked Astro source.
-`checks-lint-coverage` runs only at night.
+`checks-lint-coverage` and `checks-repetition` run only at night.
 
 dependency-cruiser runs as the `checks-imports` gate rather than as a script each repository adds to `lint`, so no repository can leave it out.
 A repository with no config of its own is cruised against the kit's defaults, since every rule has one.

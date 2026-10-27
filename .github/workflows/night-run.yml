@@ -59,7 +59,6 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      # The night runs the unit, e2e and live levels of the suite.
       # A failing test becomes an issue, so its exit leaves the job going on to the upload.
       - run: |
           bun src/testing/test.ts --tier=unit --junit=reports/night-run-tests/unit.xml || true
@@ -90,7 +89,8 @@ jobs:
         with:
           name: night-run-mutation
           path: reports/mutation
-      - uses: actions/download-artifact@v4
+      - if: needs.gates.result == 'success'
+        uses: actions/download-artifact@v4
         with:
           name: night-run-gates
           path: reports/night-run-gates
@@ -100,7 +100,7 @@ jobs:
           path: reports/night-run-tests
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: bun src/testing/night-run.ts ${{ needs.mutation.result == 'success' && '--mutation reports/mutation/mutation.json' || '' }} --tests reports/night-run-tests/unit.xml --tests reports/night-run-tests/e2e.xml --tests reports/night-run-tests/live.xml --gates reports/night-run-gates/gates.log
+        run: bun src/testing/night-run.ts ${{ needs.mutation.result == 'success' && '--mutation reports/mutation/mutation.json' || '' }} --tests reports/night-run-tests/unit.xml --tests reports/night-run-tests/e2e.xml --tests reports/night-run-tests/live.xml ${{ needs.gates.result == 'success' && '--gates reports/night-run-gates/gates.log' || '' }}
       - uses: actions/upload-artifact@v4
         with:
           name: night-run

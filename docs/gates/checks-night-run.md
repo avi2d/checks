@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-night-run
 
-`checks-night-run` turns a night run on `main` into GitHub issues, one for each file whose mutation score fell and one for each failing test.
+`checks-night-run` turns a night run on `main` into GitHub issues, one for each file whose mutation score fell, one for each failing test, and one for each failed nightly gate.
 
 ## What it checks
 
@@ -16,6 +16,7 @@ A file with no scored mutant has no score, so it is no finding either.
 An equal score is no finding, even when it counts other mutants.
 Each failing test in a JUnit report is a finding, whatever the previous night holds.
 Each nightly gate the lint log names as failed is a finding.
+A log where every named gate is undecided files `checks-lint` itself, with no per-gate issue.
 A log with no passing run and no named gate files `checks-lint` itself, so a gate run that never finished still reaches an issue.
 A file whose test worker crashed is one finding, since Bun reports none of its tests.
 With no previous night it compares no score and still files each failing test.
@@ -172,7 +173,8 @@ jobs:
         with:
           name: night-run-mutation
           path: reports/mutation
-      - uses: actions/download-artifact@v4
+      - if: needs.gates.result == 'success'
+        uses: actions/download-artifact@v4
         with:
           name: night-run-gates
           path: reports/night-run-gates
@@ -182,7 +184,7 @@ jobs:
           path: reports/night-run-tests
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: bunx checks-night-run ${{ needs.mutation.result == 'success' && '--mutation reports/mutation/mutation.json' || '' }} --tests reports/night-run-tests/live.xml --tests reports/night-run-tests/pixel.xml --gates reports/night-run-gates/gates.log
+        run: bunx checks-night-run ${{ needs.mutation.result == 'success' && '--mutation reports/mutation/mutation.json' || '' }} --tests reports/night-run-tests/live.xml --tests reports/night-run-tests/pixel.xml ${{ needs.gates.result == 'success' && '--gates reports/night-run-gates/gates.log' || '' }}
       - uses: actions/upload-artifact@v4
         with:
           name: night-run
@@ -199,6 +201,7 @@ A tier that writes no report fails the report job, because `checks-night-run` ca
 The gates job runs the nightly lint gates and keeps the log, since a failing gate becomes an issue.
 The report job runs whenever the tests job succeeds, so a failing test that also stops Stryker still becomes an issue.
 It passes `--mutation` only when the mutation job succeeded, and the failed mutation job still fails the run.
+It passes `--gates` only when the gates job succeeded, and the failed gates job still fails the run.
 The concurrency group queues a run started by hand behind the scheduled one, so two runs never file the same finding twice.
 A dispatch on a branch runs both jobs and lists its findings in the report job's log, and `if-no-files-found: ignore` lets that run upload no record.
 `issues: write` on the report job is the one permission beyond reading the repository and its runs.

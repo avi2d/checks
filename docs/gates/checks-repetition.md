@@ -28,7 +28,7 @@ A repository that lists `"css"` in `format` measures its stylesheets the same wa
 
 The gate sets the 50 tokens and 5 lines itself, over any the file names.
 A `threshold` the file names never fails the gate, which reads jscpd's report once the scan finishes.
-The bin reads the base and head commits rather than the working tree's file contents.
+The bin reads the named commits rather than the working tree's file contents.
 
 ## Arguments
 
@@ -44,8 +44,8 @@ With `--whole-tree` it scans the named head alone, which is the form `checks-lin
 
 | Code | Result |
 | --- | --- |
-| 0 | No measured file repeated more lines across the range, or repeats lines at the head. |
-| 1 | At least one measured file repeated more lines across the range, or repeats lines at the head. |
+| 0 | Across a range, no measured file repeated more lines. With `--whole-tree`, no measured file repeats lines at the head. |
+| 1 | Across a range, at least one measured file repeated more lines. With `--whole-tree`, at least one measured file repeats lines at the head. |
 | 2 | A config or ref is invalid, or jscpd cannot run. |
 
 ## Sample output

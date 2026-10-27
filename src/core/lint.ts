@@ -195,10 +195,11 @@ const lint = Effect.gen(function* () {
     yield* Console.log(`${NAME}: ${gates.length} gate(s) pass`);
     return true;
   }
-  const summary = `${failed.length} of ${gates.length} gate(s) failed: ${failed.map((verdict) => verdict.gate.bin).join(", ")}`;
+  const names = failed.map((verdict) => verdict.gate.bin).join(", ");
   if (failed.every((verdict) => verdict.outcome === "undecided")) {
-    return yield* new GatesUndecided({ message: summary });
+    return yield* new GatesUndecided({ message: `${failed.length} of ${gates.length} gate(s) undecided: ${names}` });
   }
+  const summary = `${failed.length} of ${gates.length} gate(s) failed: ${names}`;
   yield* Console.error(`${NAME}: ${summary}`);
   return false;
 });
