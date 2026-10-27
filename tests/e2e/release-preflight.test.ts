@@ -6,6 +6,9 @@ import { CHECKOUT, fixtureRepos, ran, type Ran, scratchDirs } from "./lib/fixtur
 
 const SCRIPT = join(CHECKOUT, "src", "delivery", "release-preflight.ts");
 
+const KIT_PUBLISH = "bun src/delivery/release-publish.ts";
+const BUILD = "bun run build";
+
 const repository = fixtureRepos("checks-release-preflight-");
 const scratch = scratchDirs();
 
@@ -13,20 +16,46 @@ function manifest(version: string, repositoryUrl: string | undefined): string {
   return JSON.stringify({ name: "@acme/widget", version, repository: repositoryUrl === undefined ? undefined : { type: "git", url: repositoryUrl } }, null, 2) + "\n";
 }
 
-function workflow(publish: boolean, oidc: boolean): string {
-  const permissions = oidc ? "  contents: read\n  id-token: write\n" : "  contents: read\n";
-  const step = publish ? "      - run: ./node_modules/.bin/checks-release-publish\n" : "      - run: bun run build\n";
-  return "name: release\non:\n  push:\n    tags: [\"v*\"]\n  workflow_dispatch:\npermissions:\n" + permissions + "jobs:\n  publish:\n    runs-on: ubuntu-latest\n    steps:\n" + step;
+function topPermissions(oidc: boolean): string {
+  return oidc ? "  contents: read\n  id-token: write\n" : "  contents: read\n";
 }
+
+function jobPermissions(oidc: boolean): string {
+  return oidc ? "    permissions:\n      contents: read\n      id-token: write\n" : "    permissions:\n      contents: read\n";
+}
+
+function workflow(publish: string | undefined, topOidc: boolean, jobOidc?: boolean, extraJobs = ""): string {
+  const step = publish === undefined ? BUILD : publish;
+  const job = jobOidc === undefined ? "" : `${jobPermissions(jobOidc)}\n`;
+  return (
+    "name: release\non:\n  push:\n    tags: [\"v*\"]\n  workflow_dispatch:\npermissions:\n" +
+    topPermissions(topOidc) +
+    "jobs:\n  publish:\n    runs-on: ubuntu-latest\n" +
+    job +
+    "    steps:\n" +
+    `      - run: ${step}\n` +
+    extraJobs
+  );
+}
+
+const LINT_JOB = "  lint:\n    runs-on: ubuntu-latest\n    permissions:\n      id-token: write\n    steps:\n      - run: bun run lint\n";
 
 type Ready = {
   readonly run: (env?: Readonly<Record<string, string>>) => Promise<Ran>;
   readonly state: FakeGh["state"];
 };
 
-async function ready(version: string, tag: string | undefined, repositoryUrl: string | undefined, flow: "npm" | "plain", oidc = true): Promise<Ready> {
+async function ready(
+  version: string,
+  tag: string | undefined,
+  repositoryUrl: string | undefined,
+  publish: string | undefined,
+  topOidc = true,
+  jobOidc?: boolean,
+  extraJobs = "",
+): Promise<Ready> {
   const repo = await repository({});
-  await repo.write({ "package.json": manifest(tag === undefined ? version : tag.slice(1), repositoryUrl), ".github/workflows/release.yml": workflow(flow === "npm", oidc) });
+  await repo.write({ "package.json": manifest(tag === undefined ? version : tag.slice(1), repositoryUrl), ".github/workflows/release.yml": workflow(publish, topOidc, jobOidc, extraJobs) });
   await repo.commit("chore: add the manifest");
   if (tag !== undefined) await $`git tag ${tag}`.cwd(repo.dir).quiet();
   await repo.write({ "package.json": manifest(version, repositoryUrl), "notes.txt": "bill\n" });
@@ -43,7 +72,7 @@ async function ready(version: string, tag: string | undefined, repositoryUrl: st
 test(
   "a manifest bumped past the last tag fails before the release runs, since 0.7.0 over v0.6.0 is untagged",
   async () => {
-    const preflight = await ready("0.7.0", "v0.6.0", "git+https://github.com/acme/widget.git", "npm");
+    const preflight = await ready("0.7.0", "v0.6.0", "git+https://github.com/acme/widget.git", KIT_PUBLISH);
 
     const refused = await preflight.run();
     expect(refused.exitCode).toBe(2);
@@ -56,44 +85,57 @@ test(
 );
 
 test(
-  "a manifest naming another repository fails the trusted publisher, since the run in acme/widget matches no publisher for another owner",
+  "a manifest naming another repository fails the publisher prerequisites, since the run in acme/widget presents no publisher for another owner",
   async () => {
-    const preflight = await ready("0.6.0", "v0.6.0", "git+https://github.com/other/widget.git", "npm");
+    const preflight = await ready("0.6.0", "v0.6.0", "git+https://github.com/other/widget.git", KIT_PUBLISH);
 
     const refused = await preflight.run();
     expect(refused.exitCode).toBe(2);
     expect(refused.text).toContain(
-      "checks-release-preflight: package.json names the repository other/widget, but the run is in acme/widget, so npm's trusted publisher for @acme/widget matches no run here; point repository.url at acme/widget, or move the trusted publisher on npm to other/widget and release.yml\n",
+      "checks-release-preflight: package.json names the repository other/widget, but the run is in acme/widget, so the run cannot present npm's trusted publisher for @acme/widget; point repository.url at acme/widget, or move the trusted publisher on npm to other/widget and release.yml\n",
     );
   },
   60_000,
 );
 
 test(
-  "a release workflow minting no OIDC token fails the trusted publisher, since the run cannot prove its publisher",
+  "a release workflow minting no OIDC token fails the publisher prerequisites, since the run cannot prove its publisher",
   async () => {
-    const preflight = await ready("0.6.0", "v0.6.0", "git+https://github.com/acme/widget.git", "npm", false);
+    const preflight = await ready("0.6.0", "v0.6.0", "git+https://github.com/acme/widget.git", KIT_PUBLISH, false);
 
     const refused = await preflight.run();
     expect(refused.exitCode).toBe(2);
     expect(refused.text).toContain(
-      "checks-release-preflight: .github/workflows/release.yml grants no id-token: write, so the run mints no OIDC token for npm's trusted publisher; grant id-token: write where the release job runs\n",
+      "checks-release-preflight: .github/workflows/release.yml grants the publishing job no id-token: write, so the run mints no OIDC token for npm's trusted publisher; grant id-token: write where the release job runs\n",
     );
   },
   60_000,
 );
 
 test(
-  "a repository forbidding release pull requests fails before the tag, since the approve setting is off",
+  "a publishing job with its own permissions ignores the workflow grant, so the run mints no token",
   async () => {
-    const preflight = await ready("0.6.0", "v0.6.0", "git+https://github.com/acme/widget.git", "npm");
+    const preflight = await ready("0.6.0", "v0.6.0", "git+https://github.com/acme/widget.git", KIT_PUBLISH, true, false);
 
-    const refused = await preflight.run({ FAKE_GH_APPROVE: "0" });
+    const refused = await preflight.run();
     expect(refused.exitCode).toBe(2);
     expect(refused.text).toContain(
-      "checks-release-preflight: the repository forbids GitHub Actions from creating and approving pull requests, so the daily release cannot open its release pull request; allow it with `gh api --method PUT repos/acme/widget/actions/permissions/workflow -F can_approve_pull_request_reviews=true`\n",
+      "checks-release-preflight: .github/workflows/release.yml grants the publishing job no id-token: write, so the run mints no OIDC token for npm's trusted publisher; grant id-token: write where the release job runs\n",
     );
-    expect(refused.text).toContain("gh api --method PUT repos/acme/widget/actions/permissions/workflow -F can_approve_pull_request_reviews=true");
+  },
+  60_000,
+);
+
+test(
+  "a grant on another job mints no token for the publishing job, so the run mints no token",
+  async () => {
+    const preflight = await ready("0.6.0", "v0.6.0", "git+https://github.com/acme/widget.git", KIT_PUBLISH, false, undefined, LINT_JOB);
+
+    const refused = await preflight.run();
+    expect(refused.exitCode).toBe(2);
+    expect(refused.text).toContain(
+      "checks-release-preflight: .github/workflows/release.yml grants the publishing job no id-token: write, so the run mints no OIDC token for npm's trusted publisher; grant id-token: write where the release job runs\n",
+    );
   },
   60_000,
 );
@@ -101,24 +143,24 @@ test(
 test(
   "a release that agrees on every check passes and names what it checked",
   async () => {
-    const preflight = await ready("0.6.0", "v0.6.0", "git+https://github.com/acme/widget.git", "npm");
+    const preflight = await ready("0.6.0", "v0.6.0", "git+https://github.com/acme/widget.git", KIT_PUBLISH);
 
     expect(await preflight.run()).toEqual({
       exitCode: 0,
-      text: "release-preflight: package.json holds 0.6.0, which matches v0.6.0\nrelease-preflight: npm's trusted publisher for @acme/widget matches the run in acme/widget\nrelease-preflight: the repository lets GitHub Actions create and approve the release pull request\n",
+      text: "release-preflight: package.json holds 0.6.0, which matches v0.6.0\nrelease-preflight: package.json names acme/widget and release.yml grants the publishing job id-token: write, so the run holds the prerequisites for npm's trusted publisher for @acme/widget\n",
     });
   },
   60_000,
 );
 
 test(
-  "a workflow that publishes nothing to npm skips the publisher match and still passes",
+  "a workflow that publishes nothing to npm skips the publisher prerequisites and still passes",
   async () => {
-    const preflight = await ready("0.6.0", "v0.6.0", undefined, "plain");
+    const preflight = await ready("0.6.0", "v0.6.0", undefined, undefined);
 
     expect(await preflight.run()).toEqual({
       exitCode: 0,
-      text: "release-preflight: package.json holds 0.6.0, which matches v0.6.0\nrelease-preflight: release.yml publishes nothing to npm, so no trusted publisher has to match\nrelease-preflight: the repository lets GitHub Actions create and approve the release pull request\n",
+      text: "release-preflight: package.json holds 0.6.0, which matches v0.6.0\nrelease-preflight: release.yml publishes nothing to npm, so no trusted publisher has to match\n",
     });
   },
   60_000,

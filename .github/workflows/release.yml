@@ -14,7 +14,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      actions: read
     steps:
       - uses: actions/checkout@v5
         with:
@@ -24,8 +23,6 @@ jobs:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - name: fail fast when the release cannot run
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: bun src/delivery/release-preflight.ts release.yml
   publish:
     needs: preflight

@@ -64,7 +64,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      actions: read
     steps:
       - uses: actions/checkout@v5
         with:
@@ -74,8 +73,6 @@ jobs:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - name: fail fast when the release cannot run
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: ./node_modules/.bin/checks-release-preflight release.yml
   publish:
     needs: preflight
@@ -135,7 +132,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      actions: read
     steps:
       - uses: actions/checkout@v5
         with:
@@ -145,8 +141,6 @@ jobs:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - name: fail fast when the release cannot run
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: ./node_modules/.bin/checks-release-preflight release.yml
   github-release:
     needs: preflight
@@ -175,7 +169,9 @@ jobs:
         run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/release-notes.md"
 ```
 
-A `preflight` job runs `checks-release-preflight` before the release step, so a release the version, the publisher or a repository setting rules out fails before the build.
+A `preflight` job runs `checks-release-preflight` before the publish step, so a release whose version disagrees with the last tag or whose run lacks the trusted publisher prerequisites fails before the build.
+An untagged bump also fails earlier, since `checks-release-pr` and `checks-release-push` refuse to plan a release the last tag does not name.
+The approval setting has no read only check under the release token, so `checks-release-pr` fails while opening the pull request when the setting is off.
 A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on each job in either workflow, as [checks-ci-wiring](checks-ci-wiring.md#runners) requires.
 A release is one commit that holds only the version bump and the built changelog.
 A package repository lands it on every push to `main` through [checks-release-push](checks-release-push.md), which tags it and dispatches this workflow on the tag.

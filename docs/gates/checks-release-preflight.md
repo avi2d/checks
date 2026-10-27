@@ -12,20 +12,20 @@ It runs before the release step, so a release that cannot publish never builds, 
 It reads the version `package.json` holds and the last `v*` tag.
 It refuses when the last tag names another version, since an untagged bump means a release landed that nothing published.
 It reads the release workflow its argument names.
-When the workflow publishes to npm, it compares the repository `package.json` names with the repository the run is in.
-It refuses when the two differ, since the trusted publisher npm holds matches the run by repository and workflow.
-It refuses when the workflow grants no `id-token: write`, since the run then mints no OIDC token for the trusted publisher npm holds.
 A workflow that publishes nothing to npm needs no trusted publisher, so that check passes it without reading the repository.
-It reads whether the repository lets GitHub Actions create and approve pull requests.
-It refuses when the setting is off, since the daily release cannot open its release pull request.
+When the workflow publishes to npm, it compares the repository `package.json` names with the repository the run is in.
+It refuses when the two differ, since the run then cannot present the trusted publisher npm holds.
+It refuses when the publishing job holds no `id-token: write`, since the run then mints no OIDC token for the trusted publisher npm holds.
+A job with its own permissions replaces the workflow permissions, so a workflow grant alone never passes a publishing job that lists its own permissions without the token, and a grant on another job never passes the publishing job.
+The bin checks these prerequisites from local files only.
+Npm itself remains the authority at publish time, since no public registry field exposes the trusted publisher for a read only check.
 
 ## What it reads
 
 It reads `package.json` and `.github/workflows/<workflow>` from the checkout.
 It reads the `v*` tags from the checkout, so the checkout fetches the whole history.
 It reads the run repository from `GITHUB_REPOSITORY`.
-It calls the GitHub API through `gh api`, which takes the repository from the checkout remote and the token from `GH_TOKEN`.
-The token needs `contents: read` and `actions: read`.
+It makes no network call and takes no token.
 
 ## Arguments
 
@@ -44,12 +44,11 @@ The argument names the release workflow file under `.github/workflows/`, such as
 
 ## Sample output
 
-A release that agrees on every check prints three lines.
+A release that agrees on every check prints two lines.
 
 ```text
 release-preflight: package.json holds 0.4.0, which matches v0.4.0
-release-preflight: npm's trusted publisher for @acme/widget matches the run in acme/widget
-release-preflight: the repository lets GitHub Actions create and approve the release pull request
+release-preflight: package.json names acme/widget and release.yml grants the publishing job id-token: write, so the run holds the prerequisites for npm's trusted publisher for @acme/widget
 ```
 
 A manifest bumped past the last tag refuses with the fix.
@@ -61,19 +60,21 @@ checks-release-preflight: package.json holds 0.7.0, but the last release tag is 
 A run in another repository than the manifest names refuses with both sides.
 
 ```text
-checks-release-preflight: package.json names the repository other/widget, but the run is in acme/widget, so npm's trusted publisher for @acme/widget matches no run here; point repository.url at acme/widget, or move the trusted publisher on npm to other/widget and release.yml
+checks-release-preflight: package.json names the repository other/widget, but the run is in acme/widget, so the run cannot present npm's trusted publisher for @acme/widget; point repository.url at acme/widget, or move the trusted publisher on npm to other/widget and release.yml
 ```
 
-A repository that forbids release pull requests refuses with the command that allows them.
+A publishing job with no token refuses with where to grant it.
 
 ```text
-checks-release-preflight: the repository forbids GitHub Actions from creating and approving pull requests, so the daily release cannot open its release pull request; allow it with `gh api --method PUT repos/acme/widget/actions/permissions/workflow -F can_approve_pull_request_reviews=true`
+checks-release-preflight: .github/workflows/release.yml grants the publishing job no id-token: write, so the run mints no OIDC token for npm's trusted publisher; grant id-token: write where the release job runs
 ```
 
 ## When it runs
 
 The `preflight` job of the release workflow runs it, and the job that publishes needs that job.
 A release that cannot run then fails before the build, the lint, the typecheck and the suite.
+An untagged bump also fails earlier, since `checks-release-pr` and `checks-release-push` refuse to plan a release the last tag does not name.
+The approval setting has no read only check under the release token, so `checks-release-pr` fails while opening the pull request when the setting is off.
 
 ## Related topics
 

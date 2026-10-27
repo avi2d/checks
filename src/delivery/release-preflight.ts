@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
 import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
-import { gitHubJson, REPOSITORY } from "./github.ts";
 import { lastTag } from "./release.ts";
 import { refused } from "./release-commit.ts";
 import { git } from "../core/git.ts";
@@ -18,7 +17,6 @@ const Manifest = Schema.Struct({
 });
 
 const decodeManifest = Schema.decodeUnknownEffect(Schema.fromJsonString(Manifest));
-const decodeWorkflowPermissions = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ can_approve_pull_request_reviews: Schema.Boolean })));
 
 const GITHUB_HTTPS = /^(?:git\+)?https:\/\/github\.com\/([^/]+?)\/([^/]+?)(?:\.git)?\/?$/;
 const GITHUB_SCP = /^git@github\.com:([^/]+?)\/([^/]+?)(?:\.git)?\/?$/;
@@ -29,7 +27,7 @@ export function ownerRepoOf(url: string): string | undefined {
 }
 
 export function publishesToNpm(workflow: string): boolean {
-  return workflow.includes("checks-release-publish") || workflow.includes("npm publish");
+  return workflow.includes("release-publish") || workflow.includes("npm publish");
 }
 
 const FlexiblePermissions = Schema.Union([Schema.String, Schema.Record(Schema.String, Schema.Unknown)]);
@@ -48,15 +46,23 @@ function grantsOidcValue(permissions: FlexiblePermissions | undefined): boolean 
   return permissions === "write-all" || (typeof permissions === "object" && permissions["id-token"] === "write");
 }
 
+function jobPublishes(job: unknown): boolean {
+  return publishesToNpm(JSON.stringify(job));
+}
+
 export function grantsOidc(document: unknown): boolean {
   const decoded = decodeDocument(document);
   if (Option.isNone(decoded)) return false;
-  if (grantsOidcValue(decoded.value.permissions)) return true;
+  const inherited = decoded.value.permissions;
   const jobs = decoded.value.jobs;
-  if (jobs === undefined) return false;
-  return Object.values(jobs).some((job) => {
+  if (jobs === undefined) return grantsOidcValue(inherited);
+  const publishing = Object.values(jobs).filter(jobPublishes);
+  if (publishing.length === 0) return grantsOidcValue(inherited);
+  return publishing.some((job) => {
     const decodedJob = decodeJob(job);
-    return Option.isSome(decodedJob) && grantsOidcValue(decodedJob.value.permissions);
+    if (Option.isNone(decodedJob)) return false;
+    const own = decodedJob.value.permissions;
+    return grantsOidcValue(own === undefined ? inherited : own);
   });
 }
 
@@ -82,7 +88,7 @@ const checkTag = Effect.fn("checkTag")(function* (root: string) {
 const checkPublisher = Effect.fn("checkPublisher")(function* (root: string, workflow: string) {
   const path = (yield* Path.Path).join(root, WORKFLOWS, workflow);
   const text = yield* (yield* FileSystem.FileSystem).readFileString(path).pipe(
-    Effect.mapError(() => refused(`${WORKFLOWS}/${workflow} is missing, so the run cannot prove it matches npm's trusted publisher`)),
+    Effect.mapError(() => refused(`${WORKFLOWS}/${workflow} is missing, so the run cannot show the prerequisites npm's trusted publisher needs`)),
   );
   if (!publishesToNpm(text)) {
     yield* Console.log(`${LABEL}: ${workflow} publishes nothing to npm, so no trusted publisher has to match`);
@@ -90,7 +96,7 @@ const checkPublisher = Effect.fn("checkPublisher")(function* (root: string, work
   }
   const document = yield* Effect.try({
     try: () => Bun.YAML.parse(text),
-    catch: () => refused(`${WORKFLOWS}/${workflow} does not parse, so the run cannot prove it matches npm's trusted publisher`),
+    catch: () => refused(`${WORKFLOWS}/${workflow} does not parse, so the run cannot show the prerequisites npm's trusted publisher needs`),
   });
   const repository = yield* Config.String("GITHUB_REPOSITORY").pipe(Config.withDefault(""));
   if (repository === "") return yield* refused("GITHUB_REPOSITORY is not set, so the run has no repository to match; run this in the release workflow");
@@ -98,37 +104,28 @@ const checkPublisher = Effect.fn("checkPublisher")(function* (root: string, work
   const raw = typeof field === "string" ? field : field?.url;
   if (raw === undefined) {
     return yield* refused(
-      `${MANIFEST} has no repository, so npm's trusted publisher has nothing to match the run in ${repository} against; point repository.url at ${repository}`,
+      `${MANIFEST} has no repository, so the run holds no repository for npm's trusted publisher to allow; point repository.url at ${repository}`,
     );
   }
   const held = ownerRepoOf(raw);
   if (held === undefined) {
     return yield* refused(
-      `${MANIFEST} names the repository ${raw}, which is no GitHub owner and name, so npm's trusted publisher has nothing to match the run in ${repository} against; point repository.url at ${repository}`,
+      `${MANIFEST} names the repository ${raw}, which is no GitHub owner and name, so the run holds no repository for npm's trusted publisher to allow; point repository.url at ${repository}`,
     );
   }
   if (held.toLowerCase() !== repository.toLowerCase()) {
     return yield* refused(
-      `${MANIFEST} names the repository ${held}, but the run is in ${repository}, so npm's trusted publisher for ${name} matches no run here; point repository.url at ${repository}, or move the trusted publisher on npm to ${held} and ${workflow}`,
+      `${MANIFEST} names the repository ${held}, but the run is in ${repository}, so the run cannot present npm's trusted publisher for ${name}; point repository.url at ${repository}, or move the trusted publisher on npm to ${held} and ${workflow}`,
     );
   }
   if (!grantsOidc(document)) {
     return yield* refused(
-      `${WORKFLOWS}/${workflow} grants no id-token: write, so the run mints no OIDC token for npm's trusted publisher; grant id-token: write where the release job runs`,
+      `${WORKFLOWS}/${workflow} grants the publishing job no id-token: write, so the run mints no OIDC token for npm's trusted publisher; grant id-token: write where the release job runs`,
     );
   }
-  yield* Console.log(`${LABEL}: npm's trusted publisher for ${name} matches the run in ${repository}`);
-});
-
-const checkApprovals = Effect.fn("checkApprovals")(function* () {
-  const repository = yield* Config.String("GITHUB_REPOSITORY").pipe(Config.withDefault("{owner}/{repo}"));
-  const { can_approve_pull_request_reviews } = yield* gitHubJson(decodeWorkflowPermissions, "GET", `${REPOSITORY}/actions/permissions/workflow`);
-  if (!can_approve_pull_request_reviews) {
-    return yield* refused(
-      `the repository forbids GitHub Actions from creating and approving pull requests, so the daily release cannot open its release pull request; allow it with \u0060gh api --method PUT repos/${repository}/actions/permissions/workflow -F can_approve_pull_request_reviews=true\u0060`,
-    );
-  }
-  yield* Console.log(`${LABEL}: the repository lets GitHub Actions create and approve the release pull request`);
+  yield* Console.log(
+    `${LABEL}: ${MANIFEST} names ${repository} and ${workflow} grants the publishing job id-token: write, so the run holds the prerequisites for npm's trusted publisher for ${name}`,
+  );
 });
 
 const releasePreflight = Effect.gen(function* () {
@@ -137,7 +134,6 @@ const releasePreflight = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   yield* checkTag(root);
   yield* checkPublisher(root, workflow);
-  yield* checkApprovals();
   return true;
 });
 
