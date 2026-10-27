@@ -93,7 +93,7 @@ export default defineConfig({ baseline: "widely", tokens: false });
 
 The size rules are oxlint's own rules at `error`, which every `oxlint.config.ts` built with `defineConfig` sets over the whole tree, so `bun run lint` fails on any file over them.
 A repository records its existing violations with `oxlint --suppress-all`, which writes them to `oxlint-suppressions.json`.
-`checks-suppressions-ratchet` refuses any count in that file that rises.
+`checks-suppressions-ratchet` refuses every count that file still holds when the night run scans the whole tree.
 `SOURCE_LIMITS` holds the limits for sources and `TEST_LIMITS` the limits for tests:
 
 <!-- generated size-limits: bun run build writes it from SOURCE_LIMITS, TEST_LIMITS, SOURCES and TESTS in src/quality/presets/oxlint.ts and scripts/doc-blocks.ts -->

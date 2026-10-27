@@ -1,0 +1,7 @@
+checks-lint: tip 03da92c76e7f269c979bf7ee281a76af27693c31 from the whole tree at HEAD
+suppressions-ratchet: no count in oxlint-suppressions.json or stylelint-suppressions.json rose or appeared (0 at the head, 0 lowered)
+quarantine-clock: no test in tests/quarantine/ is past 30 days (0 checked)
+repetition: 1 file(s) .jscpd.json holds repeat lines at the head, at 50 tokens and 5 lines:
+  src/copy.ts: 10 repeated line(s)
+    src/copy.ts:1-10 repeats src/ledger.ts:1-10
+checks-lint: 1 of 4 gate(s) failed: checks-repetition

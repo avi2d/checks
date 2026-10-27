@@ -2,8 +2,8 @@ import { $ } from "bun";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { ran, UNVENDORED_BUNFIG } from "./lib/fixture-repo.ts";
-import { committedBase, expectStrykerExitsZero, operandTest, PROBE_TEST, readReport, readState, removeConsumer, restoredFull, reusedOf, STRYKER_CONFIG, unpackConsumer, widgetTest, WIDGET_TEST } from "./lib/stryker-consumer.ts";
+import { ran, UNVENDORED_BUNFIG } from "../e2e/lib/fixture-repo.ts";
+import { committedBase, expectStrykerExitsZero, operandTest, PROBE_TEST, readReport, readState, removeConsumer, restoredFull, reusedOf, STRYKER_CONFIG, unpackConsumer, widgetTest, WIDGET_TEST } from "../e2e/lib/stryker-consumer.ts";
 
 let packDir = "";
 let dir = "";

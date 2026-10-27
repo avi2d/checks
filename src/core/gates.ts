@@ -26,6 +26,7 @@ export type KitGate = {
   readonly args?: readonly string[];
   readonly env?: Readonly<Record<string, string>>;
   readonly appliesTo: typeof EVERY_REPOSITORY | TrackedContent;
+  readonly night?: true;
 };
 
 export const ENTRY_POINT: Program = { bin: "checks-lint", script: "core/lint.ts" };
@@ -48,8 +49,10 @@ const STYLESHEET: TrackedContent = { pathspecs: ["*.css"], content: "a styleshee
 
 const COPY_DECLARATION: TrackedContent = { pathspecs: ["copy.json"], content: "a copy declaration" };
 
+export const WHOLE_TREE = "--whole-tree";
+
 export const KIT_GATES = [
-  { bin: "checks-lint-coverage", vector: "quality", file: "lint-coverage.sh", reads: "tree", appliesTo: LINTED_SOURCE },
+  { bin: "checks-lint-coverage", vector: "quality", file: "lint-coverage.sh", reads: "tree", appliesTo: LINTED_SOURCE, night: true },
   { bin: "checks-test-layout", vector: "testing", file: "test-layout.ts", reads: "tree", appliesTo: TYPESCRIPT_SOURCE },
   { bin: "checks-commit-identity", vector: "delivery", file: "commit-identity.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-comment-gate", vector: "quality", file: "comment-gate.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
@@ -57,14 +60,14 @@ export const KIT_GATES = [
   { bin: "checks-frontend-syntax", vector: "quality", file: "frontend-syntax.ts", reads: "tree", appliesTo: FRONTEND_SYNTAX_DECLARATION },
   { bin: "checks-css-size", vector: "quality", file: "css-size.ts", reads: "tree", appliesTo: STYLESHEET },
   { bin: "checks-no-plain-js", vector: "quality", file: "no-plain-js.ts", reads: "tree", appliesTo: TYPESCRIPT_SOURCE },
-  { bin: "checks-suppressions-ratchet", vector: "complexity", file: "suppressions-ratchet.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
+  { bin: "checks-suppressions-ratchet", vector: "complexity", file: "suppressions-ratchet.ts", reads: "range", appliesTo: EVERY_REPOSITORY, night: true },
   { bin: "checks-ci-wiring", vector: "delivery", file: "ci-wiring.ts", reads: "tree", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-secrets", vector: "delivery", file: "secrets.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-docs", vector: "docs", file: "docs.ts", reads: "range", alsoReads: "every agent file at the head commit", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-copy", vector: "docs", file: "copy.ts", reads: "tree", appliesTo: COPY_DECLARATION },
-  { bin: "checks-repetition", vector: "complexity", file: "repetition.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE },
+  { bin: "checks-repetition", vector: "complexity", file: "repetition.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE, night: true },
   { bin: "checks-graphwalk", vector: "complexity", file: "graphwalk.ts", reads: "range", appliesTo: LINTED_SOURCE },
-  { bin: "checks-quarantine-clock", vector: "testing", file: "quarantine-clock.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
+  { bin: "checks-quarantine-clock", vector: "testing", file: "quarantine-clock.ts", reads: "range", appliesTo: EVERY_REPOSITORY, night: true },
   {
     bin: "checks-advisories",
     vector: "dependencies",
@@ -74,3 +77,7 @@ export const KIT_GATES = [
     appliesTo: BUN_LOCKFILE,
   }
 ] as const satisfies readonly KitGate[];
+
+export const NIGHT_GATES: readonly KitGate[] = KIT_GATES.filter((gate) => "night" in gate);
+
+export const PR_GATES: readonly KitGate[] = KIT_GATES.filter((gate) => !("night" in gate));

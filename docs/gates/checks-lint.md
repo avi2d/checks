@@ -4,11 +4,12 @@ audience: consumers
 ---
 # checks-lint
 
-`checks-lint` runs every applicable kit lint gate in the selected set over one range and reports each failure.
+`checks-lint` runs every applicable gate in the selected set and reports each failure.
 
 ## What it checks
 
 It runs the gates under [What runs](../bins.md#what-runs), each in its own process.
+With `--night` it runs the four nightly gates instead.
 It scopes the run to the gates the change reaches, and the full run stays the fallback.
 Applicability below selects the full run, and a scoped or desk run selects a subset.
 A Markdown change runs the range gates plus `checks-copy`.
@@ -31,6 +32,7 @@ A local run with `GITHUB_BASE_REF` set starts at that branch on `origin` instead
 A clone with no remote tracking refs checks `HEAD` alone.
 On a pull request the range ends at the event's head commit and starts at its merge base with the event's base branch.
 Tree gates read the working tree rather than the range.
+With `--night` the range gates read the whole tree at `HEAD` instead of a range.
 
 ## Arguments
 
@@ -38,11 +40,13 @@ Tree gates read the working tree rather than the range.
 checks-lint
 checks-lint [--full | --desk]
 checks-lint [--full | --desk] <base-ref> <head-ref>
+checks-lint --night
 ```
 
 With two arguments, the base and head override range discovery.
 `--full` forces the unscoped run.
 `--desk` runs the fast tree gates.
+With `--night`, it takes no other arguments and runs the four nightly gates over the whole tree.
 
 ## Exit codes
 
@@ -54,11 +58,11 @@ With two arguments, the base and head override range discovery.
 
 ## Sample output
 
-<!-- generated lint-sample: bun run build writes it from KIT_GATES in src/core/gates.ts and scripts/doc-blocks.ts -->
+<!-- generated lint-sample: bun run build writes it from PR_GATES in src/core/gates.ts and scripts/doc-blocks.ts -->
 
 ```
 checks-lint: range 2504acf098d120e73a8ece3c96f22b934f35c6a8..10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD against origin/main
-checks-lint: 1 of 17 gate(s) failed: checks-comment-gate
+checks-lint: 1 of 13 gate(s) failed: checks-comment-gate
 ```
 
 <!-- end generated lint-sample -->
@@ -69,6 +73,7 @@ A repository runs it from `bun run lint` in a pull request workflow that fetches
 It leaves out the TypeScript gates while the repository tracks no TypeScript file, except that `checks-lint-coverage` and `checks-graphwalk` run when it tracks an `.astro` file.
 It never runs `checks-browser`, which a product runs after it builds its site.
 A pull request run scopes the gates to the change.
+A repository runs the four nightly gates from its night-run workflow with `checks-lint --night` over the whole tree.
 
 ## Related topics
 

@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect";
 import { ADR_DIRECTORY, ADR_INDEX, ROOT_FILES } from "../src/docs/doc-rules.ts";
 import { listed, MODES, templateFile } from "../src/docs/doc-templates.ts";
-import { EVERY_REPOSITORY, KIT_GATES, VECTORS, type KitGate } from "../src/core/gates.ts";
+import { EVERY_REPOSITORY, KIT_GATES, PR_GATES, VECTORS, type KitGate } from "../src/core/gates.ts";
 import { AGENT_NAMES, DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, HISTORY_NAMES, LIVING_NAMES, PROSE_RULES } from "../src/docs/prose-matchers.ts";
 import { SOURCE_LIMITS, SOURCES, TEST_LIMITS, TESTS, type SizeRule } from "../src/quality/presets/oxlint.ts";
 
@@ -206,11 +206,11 @@ const SIZE_LIMITS: Block = {
 
 const LINT_SAMPLE: Block = {
   name: "lint-sample",
-  from: ["KIT_GATES in src/core/gates.ts"],
+  from: ["PR_GATES in src/core/gates.ts"],
   render: () => [
     "```",
     "checks-lint: range 2504acf098d120e73a8ece3c96f22b934f35c6a8..10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD against origin/main",
-    `checks-lint: 1 of ${KIT_GATES.length} gate(s) failed: checks-comment-gate`,
+    `checks-lint: 1 of ${PR_GATES.length} gate(s) failed: checks-comment-gate`,
     "```",
   ],
 };

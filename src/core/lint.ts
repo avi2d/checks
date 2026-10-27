@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
-import { EVERY_REPOSITORY, KIT_GATES, type KitGate } from "./gates.ts";
+import { EVERY_REPOSITORY, NIGHT_GATES, PR_GATES, WHOLE_TREE, type KitGate } from "./gates.ts";
 import { changedPaths, defaultBranch, git } from "./git.ts";
 import { runMain, Usage } from "./main.ts";
 import { FAST_TREE_GATES, selectScope } from "./scope.ts";
@@ -22,7 +22,8 @@ class GatesUndecided extends Schema.TaggedError<GatesUndecided>()("GatesUndecide
 }) {}
 
 const NAME = "checks-lint";
-const USAGE = "usage: lint.ts [--full | --desk] [<base-ref> <head-ref>]";
+const USAGE = "usage: lint.ts [--full | --desk] [<base-ref> <head-ref>] | --night";
+const NIGHT = "--night";
 const PULL_REQUEST_EVENT = "pull_request";
 const SHALLOW_HINT = "a CI checkout needs actions/checkout fetch-depth: 0";
 
@@ -159,11 +160,16 @@ function outcomeOf(exitCode: number): Outcome {
   return exitCode === 1 ? "violated" : "undecided";
 }
 
-const runGate = Effect.fn("runGate")(function* (gate: KitGate, range: Range) {
+const runGate = Effect.fn("runGate")(function* (gate: KitGate, range: Range, wholeTree: boolean) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const script = (yield* Path.Path).join(import.meta.dir, "..", gate.vector, gate.file);
   const program = gate.file.endsWith(".sh") ? "sh" : process.execPath;
-  const args = gate.reads === "range" ? [script, ...range.refs] : [script, ...(gate.args ?? [])];
+  const args =
+    gate.reads === "range"
+      ? wholeTree
+        ? [script, WHOLE_TREE, ...range.refs]
+        : [script, ...range.refs]
+      : [script, ...(gate.args ?? [])];
   const extra = gate.env === undefined ? {} : { env: gate.env, extendEnv: true };
   const exitCode = yield* spawner
     .exitCode(ChildProcess.make(program, args, { stdin: "ignore", stdout: "inherit", stderr: "inherit", ...extra }))
@@ -173,6 +179,11 @@ const runGate = Effect.fn("runGate")(function* (gate: KitGate, range: Range) {
       ),
     );
   return { gate, outcome: outcomeOf(exitCode) };
+});
+
+const wholeTreeRange = Effect.fn("wholeTreeRange")(function* () {
+  const head = yield* commitOf("HEAD");
+  return { refs: [head], source: "the whole tree at HEAD" } satisfies Range;
 });
 
 const scopedGates = Effect.fn("scopedGates")(function* (range: Range, root: string) {
@@ -187,39 +198,62 @@ const scopedGates = Effect.fn("scopedGates")(function* (range: Range, root: stri
   return { bins: scope.gates, detail: "" };
 });
 
+const pullRequestSelection = Effect.fn("pullRequestSelection")(function* (
+  split: { readonly mode: LintMode; readonly rest: readonly string[] },
+  range: Range,
+  root: string,
+  applicable: readonly KitGate[],
+) {
+  if (split.mode === "desk") {
+    return {
+      bins: applicable.filter((gate) => FAST_TREE_GATES.includes(gate.bin)).map((gate) => gate.bin),
+      detail: "the desk run",
+    };
+  }
+  if (split.mode === "full") {
+    return { bins: applicable.map((gate) => gate.bin), detail: "the full run (--full)" };
+  }
+  return yield* scopedGates(range, root);
+});
+
+function selectionDetail(night: boolean, mode: LintMode, scopeDetail: string, count: number): string | undefined {
+  if (night) return undefined;
+  if (mode === "scoped" && scopeDetail === "") return `${count} gate(s) for this change`;
+  return scopeDetail === "" ? undefined : scopeDetail;
+}
+
 const lint = Effect.gen(function* () {
-  const split = splitMode(process.argv.slice(2));
+  const raw = process.argv.slice(2);
+  const night = raw.includes(NIGHT);
+  if (night && raw.length > 1) return yield* new Usage({ message: USAGE });
+  const split = night ? { mode: "full" as const, rest: [] as readonly string[] } : splitMode(raw);
   if (split === undefined) return yield* new Usage({ message: USAGE });
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
-  const range = yield* resolveRange(split.rest);
+  const range = night ? yield* wholeTreeRange() : yield* resolveRange(split.rest);
   yield* Console.log(`${NAME}: ${describe(range)} from ${range.source}`);
-  const applicable = yield* Effect.filter(KIT_GATES, (gate) =>
+  const applicable = yield* Effect.filter(night ? NIGHT_GATES : PR_GATES, (gate) =>
     gate.appliesTo === EVERY_REPOSITORY
       ? Effect.succeed(true)
       : git(["ls-files", "--", ...gate.appliesTo.pathspecs], root).pipe(Effect.map((files) => files.trim() !== "")),
   );
-  const scoped = split.mode === "desk"
-    ? {
-      bins: applicable.filter((gate) => FAST_TREE_GATES.includes(gate.bin)).map((gate) => gate.bin),
-      detail: "the desk run",
-    }
-    : split.mode === "full"
-      ? { bins: applicable.map((gate) => gate.bin), detail: "the full run (--full)" }
-      : yield* scopedGates(range, root);
+  const scoped = night
+    ? { bins: applicable.map((gate) => gate.bin) as readonly string[] | undefined, detail: "" }
+    : yield* pullRequestSelection(split, range, root, applicable);
   const bins = scoped.bins;
   const gates = bins === undefined ? applicable : applicable.filter((gate) => bins.includes(gate.bin));
-  const detail = split.mode === "scoped" && bins !== undefined ? `${gates.length} gate(s) for this change` : scoped.detail;
-  yield* Console.log(`${NAME}: ${detail}`);
-  const verdicts = yield* Effect.forEach(gates, (gate) => runGate(gate, range));
+  const detail = selectionDetail(night, split.mode, scoped.detail, gates.length);
+  if (detail !== undefined) yield* Console.log(`${NAME}: ${detail}`);
+  const verdicts = yield* Effect.forEach(gates, (gate) => runGate(gate, range, night));
   const failed = verdicts.filter((verdict) => verdict.outcome !== "passed");
   if (failed.length === 0) {
     yield* Console.log(`${NAME}: ${gates.length} gate(s) pass`);
     return true;
   }
-  const summary = `${failed.length} of ${gates.length} gate(s) failed: ${failed.map((verdict) => verdict.gate.bin).join(", ")}`;
+  const names = failed.map((verdict) => verdict.gate.bin).join(", ");
   if (failed.every((verdict) => verdict.outcome === "undecided")) {
-    return yield* new GatesUndecided({ message: summary });
+    return yield* new GatesUndecided({ message: `${failed.length} of ${gates.length} gate(s) undecided: ${names}` });
   }
+  const summary = `${failed.length} of ${gates.length} gate(s) failed: ${names}`;
   yield* Console.error(`${NAME}: ${summary}`);
   return false;
 });

@@ -54,14 +54,14 @@ The builder changes four of the shared config's rules:
 - In an `.html` or `.astro` file, `declaration-block-single-line-max-declarations` is off, since a `style` attribute is one line.
 
 The comment rule refuses every comment but a sourcemap `/*# */` one, which stylelint passes to keep the map.
-CSS repetition is not a family of this gate: a repository adds `"css"` to `format` in `.jscpd.json`, and [checks-repetition](checks-repetition.md) then fails when a stylesheet's repeated lines grow.
+CSS repetition is not a family of this gate: a repository adds `"css"` to `format` in `.jscpd.json`, and [checks-repetition](checks-repetition.md) then fails at night on every repeated line a stylesheet still holds.
 A stylesheet's length is not a family of this gate either, and [checks-css-size](checks-css-size.md) fails one that holds more than 400 lines.
 
 ### What no comment turns off
 
 It sets stylelint's `ignoreDisables`, so a `stylelint-disable` comment silences nothing in either run, and [checks-comment-gate](checks-comment-gate.md) refuses one on the line that adds it.
 A repository adopts a family over existing problems by counting them in `stylelint-suppressions.json` with `--suppress`.
-stylelint lets a file and rule through while its problems stay within the count, and [checks-suppressions-ratchet](checks-suppressions-ratchet.md) fails a change that raises a count.
+stylelint lets a file and rule through while its problems stay within the count, and the nightly [checks-suppressions-ratchet](checks-suppressions-ratchet.md) fails on every count still present until it is removed.
 `--suppress` counts only what the repository run reports, and a file that does not parse still fails in the kit run.
 
 ### Files

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { clonesOf, describe, heldOf, report, repeatedLines, risesOf, type Clone, type Fragment } from "../../src/complexity/repetition.ts";
+import { clonesOf, describe, heldOf, report, repeatedLines, reportWholeTree, risesOf, type Clone, type Fragment } from "../../src/complexity/repetition.ts";
 
 function fragment(file: string, start: number, end: number): Fragment {
   return { file, start, end };
@@ -74,6 +74,20 @@ test("report renders a rise with its clones, and the advisory notice beneath it"
 test("report renders success by count, with no advisory line when nothing repeats outside the hold", () => {
   expect(report({ measured: 3, rises: [], advisory: new Map() })).toBe(
     "repetition: 3 file(s) .jscpd.json holds repeat no more lines than where the range starts, at 50 tokens and 5 lines",
+  );
+});
+
+test("reportWholeTree reports repeated lines at the head, never a rise from zero with an advisory tail", () => {
+  const rise = { file: "src/fresh.ts", before: 0, after: 10, clones: [[fragment("src/fresh.ts", 1, 10), fragment("src/ledger.ts", 4, 13)]] as const };
+  expect(reportWholeTree({ measured: 3, rises: [rise], advisory: new Map([["tests/one.test.ts", 10]]) })).toBe(
+    [
+      "repetition: 1 file(s) .jscpd.json holds repeat lines at the head, at 50 tokens and 5 lines:",
+      "  src/fresh.ts: 10 repeated line(s)",
+      "    src/fresh.ts:1-10 repeats src/ledger.ts:4-13",
+    ].join("\n"),
+  );
+  expect(reportWholeTree({ measured: 3, rises: [], advisory: new Map([["tests/one.test.ts", 10]]) })).toBe(
+    "repetition: 3 file(s) .jscpd.json holds repeat no lines at the head, at 50 tokens and 5 lines",
   );
 });
 

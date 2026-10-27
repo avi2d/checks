@@ -9,7 +9,7 @@ The kit ships one bin per check, each named `checks-` and called from a package 
 ## What runs
 
 `checks-lint` runs each of these gates that applies to the repository, and names every one that fails.
-A gate reads either the working tree or the range `checks-lint` resolves.
+A gate reads either the working tree or the range `checks-lint` resolves, or the whole tree at the head under `checks-lint --night`.
 It scopes tree gates to the change unless `--full` forces the full run, and `--desk` runs the fast tree gates.
 The table groups the gates by vector, the part of a repository each one judges.
 
@@ -37,6 +37,10 @@ The table groups the gates by vector, the part of a repository each one judges.
 
 <!-- end generated gates -->
 
+Four of these gates run only at night.
+They are `checks-lint-coverage`, `checks-quarantine-clock`, `checks-repetition` and `checks-suppressions-ratchet`.
+The night-run workflow runs them with `checks-lint --night`, which hands each range gate `--whole-tree HEAD`, so the four judge the whole tree with no base.
+
 These bins run on their own:
 
 - [`checks-test`](gates/checks-test.md) runs the suite as `scripts.test` and refuses a skip without a reason at its test site.
@@ -46,7 +50,7 @@ These bins run on their own:
 - [`checks-mutation-baseline`](gates/checks-mutation-baseline.md) restores the newest mutation baseline from `main`, saves it on a self-hosted runner's disk in place of an artifact, and deletes superseded baselines after a `main` run.
 - [`checks-mutation-scope`](gates/checks-mutation-scope.md) turns a branch's diff into the files its mutation runs mutate.
 - [`checks-subsumed-tests`](gates/checks-subsumed-tests.md) lists each test another test subsumes in a mutation run.
-- [`checks-night-run`](gates/checks-night-run.md) opens or comments on one GitHub issue per finding of a night run on `main`, each file whose mutation score fell and each failing test.
+- [`checks-night-run`](gates/checks-night-run.md) opens or comments on one GitHub issue per finding of a night run on `main`, each file whose mutation score fell, each failing test, and each failed nightly gate.
 - [`checks-changelog`](gates/checks-changelog.md) writes the pending release into `CHANGELOG.md` from the conventional commits since the last release.
 - [`checks-release-notes`](gates/checks-release-notes.md) writes one `CHANGELOG.md` section to a file for a GitHub release.
 - [`checks-release-report`](gates/checks-release-report.md) tells whether the history holds unreleased features or fixes since the last tag.

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Effect } from "effect";
 import { kitFacts, MANIFEST, optInInstall, splice, TARGETS } from "../../scripts/doc-blocks.ts";
-import { KIT_GATES } from "../../src/core/gates.ts";
+import { PR_GATES } from "../../src/core/gates.ts";
 
 const CHECKOUT = resolve(import.meta.dir, "..", "..");
 
@@ -49,7 +49,7 @@ test("an optional peer no opt-in page installs is refused, naming it, rather tha
   expect(refused.message).toBe("package.json: the optional peer left-pad is in no OPT_IN_PEERS row of scripts/doc-blocks.ts");
 });
 
-test("a stale lint sample count is rewritten from KIT_GATES", () => {
+test("a stale lint sample count is rewritten from PR_GATES", () => {
   const target = TARGETS.find(({ file }) => file === "docs/gates/checks-lint.md");
   expect(target).toBeDefined();
   const stale = [
@@ -66,7 +66,7 @@ test("a stale lint sample count is rewritten from KIT_GATES", () => {
   ].join("\n");
   const spliced = splice(stale, target?.blocks ?? [], FACTS);
   expect(spliced.type).toBe("spliced");
-  if (spliced.type === "spliced") expect(spliced.text).toContain(`1 of ${KIT_GATES.length} gate(s) failed`);
+  if (spliced.type === "spliced") expect(spliced.text).toContain(`1 of ${PR_GATES.length} gate(s) failed`);
 });
 
 test("a doc missing a block's markers is refused naming the block, rather than written without it", () => {

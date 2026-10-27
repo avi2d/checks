@@ -126,6 +126,7 @@ The gates run one at a time and pass their output straight through, so each repo
 `checks-lint` picks the gates that apply from the tracked files for the full run, and a repository cannot select gates.
 A scoped run selects a subset by changed paths, and the desk run selects the fast tree gates.
 A TypeScript gate applies as soon as the repository tracks TypeScript source, and `checks-lint-coverage` and `checks-graphwalk` also apply on tracked Astro source.
+`checks-lint-coverage` and `checks-repetition` run only at night.
 
 dependency-cruiser runs inside the `checks-graphwalk` gate rather than as a script each repository adds to `lint`, so the full run keeps it.
 A repository with no config of its own is cruised against the kit's defaults, since every rule has one.
@@ -162,6 +163,7 @@ A stylesheet already over 400 lines fails until it is split, whatever the suppre
 `checks-repetition` runs jscpd at both ends of the range with the head's `.jscpd.json`, so the same `path` and `ignore` globs pick the files at both ends.
 It compares each file's count of repeated lines, and does not use jscpd's `--baseline-from-ref`.
 That flag reports a repeated block as new once its text changes, so a change that shortens an existing repeated block would fail.
+At night `checks-lint --night` runs both ratchets over the whole tree with no base, so every suppression count and every repeated line still present fails until it is removed.
 
 ## checks-test runs the suite itself
 
