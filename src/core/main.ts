@@ -19,12 +19,12 @@ export function runMain<E extends { readonly message: string }>(
   name: string,
   passes: Effect.Effect<boolean, E, BunServices.BunServices>,
 ): void {
-  const program = passes.pipe(
-    Effect.map((passed) => (passed ? PASSED : VIOLATED)),
-    Effect.catch((failure) => Console.error(`${name}: ${failure.message}`).pipe(Effect.as(UNDECIDED))),
-    Effect.provide(BunServices.layer),
+  runExitMain(
+    passes.pipe(
+      Effect.map((passed) => (passed ? PASSED : VIOLATED)),
+      Effect.catch((failure) => Console.error(`${name}: ${failure.message}`).pipe(Effect.as(UNDECIDED))),
+    ),
   );
-  BunRuntime.runMain(program, { teardown: (exit, onExit) => onExit(statusOf(exit)) });
 }
 
 export function runExitMain(exits: Effect.Effect<number, never, BunServices.BunServices>): void {
