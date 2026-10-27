@@ -53,15 +53,14 @@ test("a typescript change drops a tree gate", () => {
   expect(selectScope(["src/core/lint.ts"])).toEqual({ full: false, gates: FULL_GATES });
 });
 
-test("a test change skips test-layout", () => {
-  const scope = selectScope(["tests/unit/lint.test.ts"]);
-  expect(scope.gates).toContain("checks-test-layout");
+test("a test change runs every tree gate instead of the test-only subset", () => {
+  expect(classifyPath("tests/unit/lint.test.ts")).toBe("typescript");
+  expect(selectScope(["tests/unit/lint.test.ts"])).toEqual({ full: false, gates: FULL_GATES });
 });
 
-test("a quarantined test change skips the quarantine clock", () => {
-  const scope = selectScope(["tests/quarantine/unit/flaky.test.ts"]);
-  expect(scope.gates).toContain("checks-quarantine-clock");
-  expect(scope.gates).toContain("checks-test-layout");
+test("a quarantined test change runs every tree gate instead of the test-only subset", () => {
+  expect(classifyPath("tests/quarantine/unit/flaky.test.ts")).toBe("typescript");
+  expect(selectScope(["tests/quarantine/unit/flaky.test.ts"])).toEqual({ full: false, gates: FULL_GATES });
 });
 
 test("a workflow change runs the scoped matrix", () => {
@@ -122,4 +121,15 @@ test("a docs stylesheet takes the full run instead of the docs subset", () => {
 test("a config typescript file takes the full run instead of the typescript subset", () => {
   expect(classifyPath("oxlint.config.ts")).toBe("workflow");
   expect(selectScope(["oxlint.config.ts"]).full).toBe(true);
+});
+
+test("an uppercase markdown suffix takes the full run instead of the docs subset", () => {
+  expect(classifyPath("README.MD")).toBe("unknown");
+  expect(selectScope(["README.MD"]).full).toBe(true);
+});
+
+test("a nested copy declaration takes the full run instead of the copy subset", () => {
+  expect(classifyPath("content/copy.json")).toBe("unknown");
+  expect(classifyPath("copy.json")).toBe("copy");
+  expect(selectScope(["content/copy.json"]).full).toBe(true);
 });

@@ -4,15 +4,16 @@ audience: consumers
 ---
 # checks-lint
 
-`checks-lint` runs every applicable kit lint gate over one range and reports each failure.
+`checks-lint` runs every applicable kit lint gate in the selected set over one range and reports each failure.
 
 ## What it checks
 
 It runs the gates under [What runs](../bins.md#what-runs), each in its own process.
 It scopes the run to the gates the change reaches, and the full run stays the fallback.
 Applicability below selects the full run, and a scoped or desk run selects a subset.
-A Markdown or agent file change runs the range gates plus `checks-copy`.
+A Markdown change runs the range gates plus `checks-copy`.
 A TypeScript source change runs every applicable gate.
+A test file classifies as TypeScript, so its change runs every applicable gate too.
 Gates requiring tracked TypeScript files begin running when the repository tracks TypeScript.
 `checks-lint-coverage` and `checks-unused` also begin running when the repository tracks an `.astro` file.
 `checks-advisories` begins running when the repository tracks `bun.lock`.
@@ -46,7 +47,7 @@ With two arguments, the base and head override range discovery.
 
 | Code | Result |
 | --- | --- |
-| 0 | Every applicable gate passed. |
+| 0 | Every gate that ran passed. |
 | 1 | At least one gate found a violation. |
 | 2 | The range could not resolve or no failed gate could decide. |
 

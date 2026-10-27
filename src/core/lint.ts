@@ -175,18 +175,15 @@ const runGate = Effect.fn("runGate")(function* (gate: KitGate, range: Range) {
 });
 
 const scopedGates = Effect.fn("scopedGates")(function* (range: Range, root: string) {
-  if (range.refs.length === 1) return { gates: undefined, detail: "the full run, since a lone tip scopes nothing" };
+  if (range.refs.length === 1) return { bins: undefined, detail: "the full run, since a lone tip scopes nothing" };
   const [base, head] = range.refs;
   const changes = yield* changedPaths(base, head, [], root);
   const committed = changes.flatMap((change) => (change.kind === "renamed" ? [change.from, change.path] : [change.path]));
   const working = (yield* git(["diff", "--no-renames", "--name-only", "-z", "HEAD", "--"], root)).split("\0").filter(Boolean);
   const untracked = (yield* git(["ls-files", "--others", "--exclude-standard", "-z"], root)).split("\0").filter(Boolean);
   const scope = selectScope([...committed, ...working, ...untracked]);
-  if (scope.full) return { gates: undefined, detail: "the full run, since the change reaches past a scoped shape" };
-  return {
-    gates: scope.gates,
-    detail: `${scope.gates.length} gate(s) for this change`,
-  };
+  if (scope.full) return { bins: undefined, detail: "the full run, since the change reaches past a scoped shape" };
+  return { bins: scope.gates, detail: "" };
 });
 
 const lint = Effect.gen(function* () {
@@ -207,10 +204,11 @@ const lint = Effect.gen(function* () {
     }
     : split.mode === "full"
       ? { bins: applicable.map((gate) => gate.bin), detail: "the full run (--full)" }
-      : yield* scopedGates(range, root).pipe(Effect.map(({ gates, detail }) => ({ bins: gates, detail })));
+      : yield* scopedGates(range, root);
   const bins = scoped.bins;
   const gates = bins === undefined ? applicable : applicable.filter((gate) => bins.includes(gate.bin));
-  yield* Console.log(`${NAME}: ${scoped.detail}`);
+  const detail = split.mode === "scoped" && bins !== undefined ? `${gates.length} gate(s) for this change` : scoped.detail;
+  yield* Console.log(`${NAME}: ${detail}`);
   const verdicts = yield* Effect.forEach(gates, (gate) => runGate(gate, range));
   const failed = verdicts.filter((verdict) => verdict.outcome !== "passed");
   if (failed.length === 0) {
