@@ -82,9 +82,9 @@ With `--all` it fails on every advisory in `bun.lock` at `HEAD` that no entry co
 
 | Code | When |
 | --- | --- |
-| 0 | the range adds no advisory to `bun.lock`, and every acknowledgement holds |
-| 1 | the range adds an advisory no acknowledgement covers, or an acknowledgement does not hold |
-| 2 | a ref does not resolve, `advisory-acks.json` does not decode, or no verified scanner or usable database is at hand |
+| 0 | the range adds no advisory on a direct scan or an unchanged range and every acknowledgement holds, or a deferred run holds every acknowledgement without a scan |
+| 1 | a direct scan adds an advisory no acknowledgement covers, or an acknowledgement does not hold on any run |
+| 2 | a ref does not resolve, `advisory-acks.json` does not decode, or a direct scan has no verified scanner or usable database at hand |
 
 ## Sample output
 
