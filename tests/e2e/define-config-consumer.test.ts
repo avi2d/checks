@@ -105,7 +105,7 @@ beforeAll(async () => {
   );
   await $`bun install`.cwd(dir).quiet();
   await put(TREE);
-  await $`git init -q -b main && git add -A`.cwd(dir).quiet();
+  await $`git init -q -b main && git add -A && git -c user.name=avi2d -c user.email=avi2dg@gmail.com commit -qm "feat: fixture"`.cwd(dir).quiet();
 }, 360_000);
 
 afterAll(async () => {

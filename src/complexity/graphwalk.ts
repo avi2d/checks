@@ -291,12 +291,6 @@ const exportsSection = (root: string, stdout: string, first: string, second: str
       const head = yield* baselineInTree(root);
       const reported = yield* symbolsOf(stdout);
       const baseRev = yield* judgedBase(first, second, root);
-      // An empty baseline holds nothing, so nothing the range adds or drops needs the base to judge.
-      if (head.length === 0) {
-        const drift = { unlisted: reported, added: [], stale: [] };
-        yield* Console.log(exportsReport(head, drift));
-        return drift.unlisted.length === 0 ? "passed" : "violated";
-      }
       const base = yield* baselineAt(baseRev, root);
       const unusedAtBase = outside(head, base).length === 0 ? [] : yield* unusedAt(baseRev, root);
       const drift = driftOf({ reported, base, head, unusedAtBase });
@@ -354,14 +348,14 @@ const seed = Effect.fn("seed")(function* (root: string, tracked: number) {
 const gate = Effect.gen(function* () {
   const args = process.argv.slice(2);
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
-  const linted = yield* trackedIn(root, LINTED_SOURCE);
-  if (linted.length === 0) return yield* new GraphwalkError({ message: "no tracked TypeScript or Astro source to scan" });
   if (args.length === 1 && args[0] === WRITE) {
     const tracked = yield* trackedIn(root, TYPESCRIPT_SOURCE);
     return yield* seed(root, tracked.length).pipe(
       Effect.catch((cause: { readonly message: string }) => Console.error(`${EXPORTS}: ${cause.message}`).pipe(Effect.as(UNDECIDED))),
     );
   }
+  const linted = yield* trackedIn(root, LINTED_SOURCE);
+  if (linted.length === 0) return yield* new GraphwalkError({ message: "no tracked TypeScript or Astro source to scan" });
   const { first, second } = args.length === 0 ? { first: "HEAD", second: undefined } : yield* refArgs(args, USAGE);
   const typescript = yield* trackedIn(root, TYPESCRIPT_SOURCE);
   const knipOutcome = yield* knipReport(root, INCLUDED).pipe(

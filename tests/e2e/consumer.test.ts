@@ -555,7 +555,7 @@ test(
     await mkdir(join(dir, "tests", "unit"), { recursive: true });
     await writeFile(join(dir, "tests", "unit", "index.test.ts"), `import { index } from "../../index.ts";\n\nexport const seen = index;\n`);
     await writeFile(join(dir, "dead.ts"), `export const dead = 1;\n`);
-    await $`git init -q && git add -A`.cwd(dir).quiet();
+    await $`git init -q && git add -A && git -c user.name=avi2d -c user.email=avi2dg@gmail.com commit -qm "feat: fixture"`.cwd(dir).quiet();
 
     const red = await runScript("graphwalk");
     expect(red.exitCode).toBe(1);
