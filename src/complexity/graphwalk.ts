@@ -34,72 +34,39 @@ export const CRUISED = ["*.ts", "*.tsx", "*.mts", "*.cts"] as const;
 
 const KIT_DEFAULTS = "kit-defaults.ts";
 
-
 export type Status = "passed" | "violated" | "undecided";
 
 class GraphwalkError extends Schema.TaggedError<GraphwalkError>()("GraphwalkError", {
   message: Schema.String,
 }) {}
 
-const UnusedSymbolSchema = Schema.Struct({
-  file: Schema.String,
-  kind: Schema.Literals(["export", "type"]),
-  name: Schema.String,
-});
+const UnusedSymbolSchema = Schema.Struct({ file: Schema.String, kind: Schema.Literals(["export", "type"]), name: Schema.String });
 
 export type UnusedSymbol = typeof UnusedSymbolSchema.Type;
 
 export type Baseline = readonly UnusedSymbol[];
 
-export type Drift = {
-  readonly unlisted: readonly UnusedSymbol[];
-  readonly added: readonly UnusedSymbol[];
-  readonly stale: readonly UnusedSymbol[];
-};
+export type Drift = { readonly unlisted: readonly UnusedSymbol[]; readonly added: readonly UnusedSymbol[]; readonly stale: readonly UnusedSymbol[] };
 
-const Violation = Schema.Struct({
-  from: Schema.String,
-  to: Schema.String,
-  rule: Schema.Struct({ name: Schema.String, severity: Schema.String }),
-});
+const Violation = Schema.Struct({ from: Schema.String, to: Schema.String, rule: Schema.Struct({ name: Schema.String, severity: Schema.String }) });
 
 export type Violation = typeof Violation.Type;
 
 const decodeKnipFiles = Schema.decodeUnknownEffect(
-  Schema.fromJsonString(
-    Schema.Struct({
-      issues: Schema.Array(Schema.Struct({ files: Schema.optional(Schema.Array(Schema.Struct({ name: Schema.String }))) })),
-    }),
-  ),
+  Schema.fromJsonString(Schema.Struct({ issues: Schema.Array(Schema.Struct({ files: Schema.optional(Schema.Array(Schema.Struct({ name: Schema.String }))) })) })),
 );
 
 const decodeKnipSymbols = Schema.decodeUnknownEffect(
-  Schema.fromJsonString(
-    Schema.Struct({
-      issues: Schema.Array(
-        Schema.Struct({
-          file: Schema.String,
-          exports: Schema.optional(Schema.Array(Schema.Struct({ name: Schema.String }))),
-          types: Schema.optional(Schema.Array(Schema.Struct({ name: Schema.String }))),
-        }),
-      ),
-    }),
-  ),
+  Schema.fromJsonString(Schema.Struct({ issues: Schema.Array(Schema.Struct({ file: Schema.String, exports: Schema.optional(Schema.Array(Schema.Struct({ name: Schema.String }))), types: Schema.optional(Schema.Array(Schema.Struct({ name: Schema.String }))) })) })),
 );
 
 const decodeBaseline = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Array(UnusedSymbolSchema)));
 
 const decodeCruise = Schema.decodeUnknownEffect(
-  Schema.fromJsonString(
-    Schema.Struct({
-      summary: Schema.Struct({ violations: Schema.Array(Violation), error: Schema.Int, totalCruised: Schema.Int }),
-    }),
-  ),
+  Schema.fromJsonString(Schema.Struct({ summary: Schema.Struct({ violations: Schema.Array(Violation), error: Schema.Int, totalCruised: Schema.Int }) })),
 );
 
-function byPosition(a: UnusedSymbol, b: UnusedSymbol): number {
-  return a.file.localeCompare(b.file) || a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name);
-}
+const byPosition = (a: UnusedSymbol, b: UnusedSymbol): number => a.file.localeCompare(b.file) || a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name);
 
 const keyOf = ({ file, kind, name }: UnusedSymbol): string => `${kind}\0${file}\0${name}`;
 
@@ -108,9 +75,7 @@ function outside(symbols: readonly UnusedSymbol[], others: readonly UnusedSymbol
   return symbols.filter((symbol) => !known.has(keyOf(symbol))).toSorted(byPosition);
 }
 
-function describe(symbol: UnusedSymbol): string {
-  return `  ${symbol.file}: ${symbol.name} (${symbol.kind})`;
-}
+const describe = (symbol: UnusedSymbol): string => `  ${symbol.file}: ${symbol.name} (${symbol.kind})`;
 
 export const filesOf = Effect.fn("filesOf")(function* (stdout: string) {
   const { issues } = yield* decodeKnipFiles(stdout).pipe(
@@ -341,6 +306,39 @@ const seed = Effect.fn("seed")(function* (root: string, tracked: number) {
   return PASSED;
 });
 
+const lintOnlyGate = Effect.fn("lintOnlyGate")(function* (root: string, args: readonly string[]) {
+  if ((yield* trackedInTree(root)).length === 0) return yield* new GraphwalkError({ message: "no tracked TypeScript or Astro source to scan" });
+  if (args.length > 0) yield* refArgs(args, USAGE);
+  return exitOf([yield* importsSection(root)]);
+});
+
+const knipFailedGate = Effect.fn("knipFailedGate")(function* (root: string, message: string, hasTypescript: boolean) {
+  yield* Console.error(`${UNUSED}: ${message}`);
+  if (!hasTypescript) {
+    if ((yield* trackedInTree(root)).length === 0) return UNDECIDED;
+    return exitOf(["undecided", yield* importsSection(root)]);
+  }
+  yield* Console.error(`${EXPORTS}: ${message}`);
+  return exitOf(["undecided", "undecided", yield* importsSection(root)]);
+});
+
+const unconfiguredGate = Effect.fn("unconfiguredGate")(function* (root: string, hasTypescript: boolean) {
+  yield* Console.log(unconfiguredLine(UNUSED));
+  yield* Console.log(unconfiguredLine(EXPORTS));
+  const cruised = hasTypescript || (yield* trackedInTree(root)).length > 0 ? yield* importsSection(root) : "passed";
+  return exitOf(["violated", "violated", cruised]);
+});
+
+const judgedGate = Effect.fn("judgedGate")(function* (root: string, linted: number, typescript: number, stdout: string, first: string, second: string | undefined) {
+  const unlisted = yield* unusedSection(linted, stdout);
+  if (typescript === 0) {
+    if ((yield* trackedInTree(root)).length === 0) return exitOf([unlisted]);
+    return exitOf([unlisted, yield* importsSection(root)]);
+  }
+  const drifted = yield* exportsSection(root, stdout, first, second);
+  return exitOf([unlisted, drifted, yield* importsSection(root)]);
+});
+
 const gate = Effect.gen(function* () {
   const args = process.argv.slice(2);
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
@@ -351,13 +349,7 @@ const gate = Effect.gen(function* () {
     );
   }
   const linted = yield* trackedIn(root, LINTED_SOURCE);
-  if (linted.length === 0) {
-    if ((yield* trackedInTree(root)).length === 0)
-      return yield* new GraphwalkError({ message: "no tracked TypeScript or Astro source to scan" });
-    if (args.length > 0) yield* refArgs(args, USAGE);
-    const cruised = yield* importsSection(root);
-    return exitOf([cruised]);
-  }
+  if (linted.length === 0) return yield* lintOnlyGate(root, args);
   const { first, second } = args.length === 0 ? { first: "HEAD", second: undefined } : yield* refArgs(args, USAGE);
   const typescript = yield* trackedIn(root, TYPESCRIPT_SOURCE);
   const knipOutcome = yield* knipReport(root, INCLUDED).pipe(
@@ -365,34 +357,10 @@ const gate = Effect.gen(function* () {
     Effect.map((reported) => ({ failed: false as const, reported })),
     Effect.catch((cause: { readonly message: string }) => Effect.succeed({ failed: true as const, message: cause.message })),
   );
-  if (knipOutcome.failed) {
-    yield* Console.error(`${UNUSED}: ${knipOutcome.message}`);
-    if (typescript.length === 0) {
-      if ((yield* trackedInTree(root)).length === 0) return UNDECIDED;
-      const cruised = yield* importsSection(root);
-      return exitOf(["undecided", cruised]);
-    }
-    yield* Console.error(`${EXPORTS}: ${knipOutcome.message}`);
-    const cruised = yield* importsSection(root);
-    return exitOf(["undecided", "undecided", cruised]);
-  }
+  if (knipOutcome.failed) return yield* knipFailedGate(root, knipOutcome.message, typescript.length > 0);
   const reported = knipOutcome.reported;
-  if (reported.kind === "unconfigured") {
-    yield* Console.log(unconfiguredLine(UNUSED));
-    yield* Console.log(unconfiguredLine(EXPORTS));
-    const cruised =
-      typescript.length > 0 || (yield* trackedInTree(root)).length > 0 ? yield* importsSection(root) : "passed";
-    return exitOf(["violated", "violated", cruised]);
-  }
-  const unlisted = yield* unusedSection(linted.length, reported.stdout);
-  if (typescript.length === 0) {
-    if ((yield* trackedInTree(root)).length === 0) return exitOf([unlisted]);
-    const cruised = yield* importsSection(root);
-    return exitOf([unlisted, cruised]);
-  }
-  const drifted = yield* exportsSection(root, reported.stdout, first, second);
-  const cruised = yield* importsSection(root);
-  return exitOf([unlisted, drifted, cruised]);
+  if (reported.kind === "unconfigured") return yield* unconfiguredGate(root, typescript.length > 0);
+  return yield* judgedGate(root, linted.length, typescript.length, reported.stdout, first, second);
 }).pipe(
   Effect.catch((cause: { readonly message: string }) =>
     (cause instanceof Usage ? Console.error(`${NAME}: ${cause.message}`) : Console.error(`${UNUSED}: ${cause.message}`)).pipe(
