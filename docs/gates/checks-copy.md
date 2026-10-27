@@ -107,7 +107,7 @@ copy: no violation in 2 file(s) from 2 declared input(s)
 
 ## When it runs
 
-`checks-lint` runs it when the repository tracks `copy.json` at its root.
+`checks-lint` runs it in the full run when the repository tracks `copy.json` at its root.
 A repository without that file never runs it and needs no html-validate.
 
 ## Related topics

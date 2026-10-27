@@ -131,7 +131,7 @@ ci-wiring: 1 reference(s) name a missing workflow or job:
 
 ## When it runs
 
-`checks-lint` runs it in every repository.
+`checks-lint` runs it in the full run in every repository.
 
 ## Related topics
 

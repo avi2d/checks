@@ -123,10 +123,11 @@ So the three packages move together at one exact version.
 `checks-lint` runs each gate in a child process rather than importing it.
 A gate then behaves the same alone or through `checks-lint`, and `lint-coverage.sh` can stay a shell script.
 The gates run one at a time and pass their output straight through, so each report reads whole and in the order of the gate table.
-`checks-lint` picks the gates that apply from the tracked files, and a repository cannot select gates.
-A TypeScript gate runs as soon as the repository tracks TypeScript source, and `checks-lint-coverage` and `checks-unused` also run on tracked Astro source.
+`checks-lint` picks the gates that apply from the tracked files for the full run, and a repository cannot select gates.
+A scoped run selects a subset by changed paths, and the desk run selects the fast tree gates.
+A TypeScript gate applies as soon as the repository tracks TypeScript source, and `checks-lint-coverage` and `checks-unused` also apply on tracked Astro source.
 
-dependency-cruiser runs as the `checks-imports` gate rather than as a script each repository adds to `lint`, so no repository can leave it out.
+dependency-cruiser runs as the `checks-imports` gate rather than as a script each repository adds to `lint`, so the full run keeps it.
 A repository with no config of its own is cruised against the kit's defaults, since every rule has one.
 The gate cruises the tracked TypeScript, so a build output or a linked library outside git never reaches the cruise.
 It runs dependency-cruiser under Bun, which loads a TypeScript config wherever it sits, the kit's defaults under `node_modules` among them.

@@ -56,7 +56,7 @@ imports: 225 module(s) cruised against dependency-cruiser.config.ts, no violatio
 
 ## When it runs
 
-`checks-lint` runs it when the repository tracks a `.ts` or `.tsx` file, so a repository with no config of its own still has its imports judged.
+`checks-lint` runs it in the full run when the repository tracks a `.ts` or `.tsx` file, so a repository with no config of its own still has its imports judged, and never in the desk run.
 
 ## Related topics
 

@@ -44,7 +44,7 @@ css-size: 1 violation(s)
 
 ## When it runs
 
-`checks-lint` runs it when the repository tracks a `*.css` file.
+`checks-lint` runs it in the full run when the repository tracks a `*.css` file.
 
 ## Related topics
 
