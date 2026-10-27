@@ -14,6 +14,22 @@ permissions:
   pull-requests: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      e2e-skip: ${{ steps.skip.outputs.e2e-skip }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The merge commit would hide the pull request head, so check out the head itself.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      - id: skip
+        run: bun scripts/e2e-skip.ts ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} >> "$GITHUB_OUTPUT"
   unit:
     runs-on: ubuntu-latest
     steps:
@@ -32,6 +48,9 @@ jobs:
       - if: steps.filter.outputs.docs-only != 'true'
         run: bun run test:unit
   e2e:
+    needs: changes
+    # A step gate would still pay for checkout and install, so the whole job skips on a change the changes job marks.
+    if: needs.changes.outputs.e2e-skip != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -43,11 +62,7 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      # Path filters would leave this required check unreported, so steps gate on the filter instead.
-      - id: filter
-        run: bun src/delivery/docs-only.ts ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} >> "$GITHUB_OUTPUT"
-      - if: steps.filter.outputs.docs-only != 'true'
-        run: bun run test:e2e
+      - run: bun run test:e2e
   static:
     runs-on: ubuntu-latest
     steps:
@@ -88,16 +103,23 @@ jobs:
         run: bun run typecheck
   checks:
     # Branch protection requires the checks context alone and passes a skipped one, so the job runs after a failed part and fails on it.
-    needs: [unit, e2e, static]
+    needs: [changes, unit, e2e, static]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: require every part
         env:
+          CHANGES: ${{ needs.changes.result }}
           UNIT: ${{ needs.unit.result }}
           E2E: ${{ needs.e2e.result }}
+          E2E_SKIP: ${{ needs.changes.outputs.e2e-skip }}
           STATIC: ${{ needs.static.result }}
-        run: test "$UNIT" = success && test "$E2E" = success && test "$STATIC" = success
+        run: |
+          test "$CHANGES" = success
+          test "$UNIT" = success
+          test "$STATIC" = success
+          # A skipped e2e job passes only for a change the changes job marked skippable.
+          test "$E2E" = success || { test "$E2E" = skipped && test "$E2E_SKIP" = true; }
       # GitHub keeps a dispatched run's check off the pull request, so the job reports its result there as a commit status.
       - name: report the result on the head commit
         if: always() && github.event_name == 'workflow_dispatch'
