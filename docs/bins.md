@@ -52,6 +52,7 @@ These bins run on their own:
 - [`checks-release-notes`](gates/checks-release-notes.md) writes one `CHANGELOG.md` section to a file for a GitHub release.
 - [`checks-release-report`](gates/checks-release-report.md) tells whether the history holds unreleased features or fixes since the last tag.
 - [`checks-release-pr`](gates/checks-release-pr.md) opens or refreshes the pull request that releases the next version, and dispatches its checks.
+- [`checks-release-preflight`](gates/checks-release-preflight.md) refuses the release before it starts when the version disagrees with the last tag or the run lacks the trusted publisher prerequisites.
 - [`checks-release-publish`](gates/checks-release-publish.md) publishes the version `package.json` holds to npm, unless npm already holds it or a newer version.
 - [`checks-release-push`](gates/checks-release-push.md) releases a package's next version onto its branch once the checks pass, tags it and dispatches the release workflow on the tag.
 - [`checks-release-tag`](gates/checks-release-tag.md) tags a landed release commit with its version and dispatches the release workflow on the tag.
