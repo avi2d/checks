@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.56.0
+
+Released 2026-10-27.
+
+### Features
+
+- **core:** scope lint gates by changed paths and add desk run [#11](https://github.com/avi2d/checks/pull/11)
+
 ## 0.55.0
 
 Released 2026-10-27.
