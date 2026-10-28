@@ -34,10 +34,11 @@ test(
 );
 
 test(
-  "commitlint config accepts house prefixes, rejects unknown types and long headers",
+  "commitlint config rejects the retired house prefixes, unknown types and long headers",
   async () => {
-    const house = [
+    const retired = [
       "theme",
+      "renamer",
       "shell",
       "pi",
       "home",
@@ -45,9 +46,9 @@ test(
       "comments",
       "unslop",
     ];
-    for (const type of house) {
-      const green = await lint(`${type}(scope): add x`);
-      expect(green.exitCode).toBe(0);
+    for (const type of retired) {
+      const refused = await lint(`${type}(scope): add x`);
+      expect(refused.exitCode).not.toBe(0);
     }
     const red = await lint("frobnicate(scope): add x");
     expect(red.exitCode).not.toBe(0);
