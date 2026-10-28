@@ -28,8 +28,8 @@ import { defineConfig } from "@avi2dg/checks/oxlint";
 export default defineConfig({
   effect: {
     excludeFiles: [
-      // Launchd runs the renamer, and it cannot import Effect v4.
-      "home/.config/renamer/**",
+      // The host loads this entry outside the Effect runtime.
+      "src/host/**",
     ],
   },
 });

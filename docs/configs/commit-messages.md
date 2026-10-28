@@ -8,7 +8,7 @@ The shared commitlint config holds each pull request title to the conventional c
 
 ## Config
 
-Commits follow `@commitlint/config-conventional` plus the house prefixes `commitlint.config.ts` lists, shared from `node_modules/@avi2dg/checks/commitlint.config.ts`.
+Commits follow `@commitlint/config-conventional`, shared from `node_modules/@avi2dg/checks/commitlint.config.ts`.
 It arrives with the kit, since `@commitlint/cli` and `@commitlint/config-conventional` are dependencies, not peers.
 
 ## Workflow
