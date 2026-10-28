@@ -38,7 +38,6 @@ test(
   async () => {
     const house = [
       "theme",
-      "renamer",
       "shell",
       "pi",
       "home",
