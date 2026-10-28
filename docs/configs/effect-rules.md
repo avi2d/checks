@@ -27,7 +27,10 @@ import { defineConfig } from "@avi2dg/checks/oxlint";
 
 export default defineConfig({
   effect: {
-    excludeFiles: [],
+    excludeFiles: [
+      // The host loads this entry outside the Effect runtime.
+      "src/host/**",
+    ],
   },
 });
 ```
