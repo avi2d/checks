@@ -49,9 +49,11 @@ test(
     for (const type of retired) {
       const refused = await lint(`${type}(scope): add x`);
       expect(refused.exitCode).not.toBe(0);
+      expect(refused.text).toContain("[type-enum]");
     }
     const red = await lint("frobnicate(scope): add x");
     expect(red.exitCode).not.toBe(0);
+    expect(red.text).toContain("[type-enum]");
     const atLimit = `feat(scope): ${"x".repeat(100 - "feat(scope): ".length)}`;
     expect(atLimit.length).toBe(100);
     const accepted = await lint(atLimit);
