@@ -323,6 +323,8 @@ A finding location prints as it stands, such as a file name or a link.
 So a term inside a file name or a repository name shows there.
 That location is already public in the scanned commit or the scanned pull request.
 
+A pushed branch has already sent each commit message to the forge.
+So `checks-secrets` scans each message in the range with the same rules and the same pack.
 A pull request's title, body and comments reach the forge without a commit, so [checks-pr-text](gates/checks-pr-text.md) scans them with the same rules and the same pack.
 
 ## The frontend checks are opt-in

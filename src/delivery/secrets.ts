@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
-import { Console, Effect, FileSystem, Schema } from "effect";
-import { commitOf, git, refArgs } from "../core/git.ts";
+import { Console, Effect, FileSystem, Path, Schema } from "effect";
+import { GitFailure, commitOf, git, refArgs } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { cacheRoot } from "../dependencies/cache-root.ts";
-import { pinnedGitleaks, scanCommits, type Leak } from "./gitleaks.ts";
+import { pinnedGitleaks, scanCommits, scanDirectory, type DirectoryScan, type Leak } from "./gitleaks.ts";
 import { scanConfig } from "./secrets-pack.ts";
 
 const NAME = "secrets";
@@ -27,8 +27,7 @@ const revisionsOf = Effect.fn("revisionsOf")(function* (args: readonly string[],
 
 // Without --remerge-diff git log prints no diff for a merge, and a first-parent diff would rescan what the merge brings in.
 // git skips --remerge-diff for an octopus merge with only a warning, so the scan would pass a commit it never read.
-const logOptionsOf = Effect.fn("logOptionsOf")(function* (args: readonly string[], root: string) {
-  const revisions = yield* revisionsOf(args, root);
+const logOptionsOf = Effect.fn("logOptionsOf")(function* (revisions: readonly string[], root: string) {
   const [octopus] = (yield* git(["rev-list", `--min-parents=${OCTOPUS_PARENTS}`, ...revisions], root)).split("\n");
   if (octopus !== undefined && octopus !== "") {
     return yield* new OctopusMerge({
@@ -48,8 +47,40 @@ const atRepositoryPath = Effect.fn("atRepositoryPath")(function* (leak: Leak, ro
   return held ? leak : { ...leak, File: leak.File.slice(NEW_SIDE_PREFIX.length) };
 });
 
+type Message = { readonly commit: string; readonly text: string };
+
+// git refuses a NUL in a commit message, so the NUL -z writes after each record ends it.
+const messagesOf = Effect.fn("messagesOf")(function* (revisions: readonly string[], root: string) {
+  const records = (yield* git(["log", "--no-show-signature", "-z", "--format=%H%n%B", ...revisions], root)).split("\0").filter((record) => record !== "");
+  return yield* Effect.forEach(records, (record) => {
+    const newline = record.indexOf("\n");
+    const commit = newline === -1 ? "" : record.slice(0, newline);
+    if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(commit)) {
+      return Effect.fail(new GitFailure({ message: "git log: a record does not start with a commit id" }));
+    }
+    return Effect.succeed({ commit, text: record.slice(newline + 1) } satisfies Message);
+  });
+});
+
+const messageLeaksOf = Effect.fn("messageLeaksOf")(function* (messages: readonly Message[], scanner: Omit<DirectoryScan, "dir">) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const dir = yield* fs.makeTempDirectoryScoped({ prefix: "checks-secrets-messages-" });
+  yield* Effect.forEach(messages, ({ commit, text }) => fs.writeFileString(path.join(dir, commit), text));
+  const leaks = yield* scanDirectory({ ...scanner, dir });
+  return leaks.map((leak) => ({ ...leak, Commit: path.basename(leak.File) }));
+});
+
 function leakLine({ File, StartLine, RuleID, Commit, Description }: Leak): string {
   return `  ${File}:${StartLine} ${RuleID} in ${Commit.slice(0, SHORT_SHA)}: ${Description}`;
+}
+
+function messageLine({ StartLine, RuleID, Commit, Description }: Leak): string {
+  return `  the message:${StartLine} ${RuleID} in ${Commit.slice(0, SHORT_SHA)}: ${Description}`;
+}
+
+function byMessage(left: Leak, right: Leak): number {
+  return left.Commit.localeCompare(right.Commit) || left.StartLine - right.StartLine || left.RuleID.localeCompare(right.RuleID);
 }
 
 function byPlace(left: Leak, right: Leak): number {
@@ -61,27 +92,31 @@ function byPlace(left: Leak, right: Leak): number {
   );
 }
 
-export function report(leaks: readonly Leak[]): string {
-  if (leaks.length === 0) return `${NAME}: the range adds no secret`;
+export function report(fileLeaks: readonly Leak[], messageLeaks: readonly Leak[]): string {
+  const count = fileLeaks.length + messageLeaks.length;
+  if (count === 0) return `${NAME}: the range adds no secret`;
   return [
-    `${NAME}: the range adds ${leaks.length} secret(s); put a placeholder such as <private-key> in its place in the commit that added it, and rotate any secret that left this machine:`,
-    ...leaks.toSorted(byPlace).map(leakLine),
+    `${NAME}: the range adds ${count} secret(s); put a placeholder such as <private-key> in its place in the commit that added it, and rotate any secret that left this machine:`,
+    ...fileLeaks.toSorted(byPlace).map(leakLine),
+    ...messageLeaks.toSorted(byMessage).map(messageLine),
   ].join("\n");
 }
 
 const secrets = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
-  const logOptions = yield* logOptionsOf(process.argv.slice(2), root);
+  const revisions = yield* revisionsOf(process.argv.slice(2), root);
+  const logOptions = yield* logOptionsOf(revisions, root);
   const ignoreDir = yield* fs.makeTempDirectoryScoped({ prefix: "checks-secrets-" });
   const { config, notice } = yield* scanConfig(NAME, yield* fs.makeTempDirectoryScoped({ prefix: "checks-secrets-pack-" }));
   const binary = yield* pinnedGitleaks(yield* cacheRoot());
   const gitDir = (yield* git(["rev-parse", "--absolute-git-dir"], root)).trim();
   const reported = yield* scanCommits({ binary, gitDir, logOptions, config, ignoreDir });
-  const leaks = yield* Effect.forEach(reported, (leak) => atRepositoryPath(leak, root));
-  yield* Console.log(report(leaks));
+  const fileLeaks = yield* Effect.forEach(reported, (leak) => atRepositoryPath(leak, root));
+  const messageLeaks = yield* messageLeaksOf(yield* messagesOf(revisions, root), { binary, config, ignoreDir });
+  yield* Console.log(report(fileLeaks, messageLeaks));
   yield* Console.log(notice);
-  return leaks.length === 0;
+  return fileLeaks.length + messageLeaks.length === 0;
 }).pipe(Effect.scoped);
 
 if (import.meta.main) runMain(NAME, secrets);

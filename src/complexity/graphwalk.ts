@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { BunServices } from "@effect/platform-bun";
-import { Console, Effect, FileSystem, Path, Schema } from "effect";
+import { Config, Console, Duration, Effect, FileSystem, Path, Schema } from "effect";
 import { LINTED_SOURCE, TYPESCRIPT_SOURCE, type TrackedContent } from "../core/gates.ts";
 import { checkoutFiles, collect, commitOf, git, pathsAt, rangeEnds, refArgs } from "../core/git.ts";
 import { PASSED, runExitMain, UNDECIDED, Usage, VIOLATED } from "../core/main.ts";
@@ -33,6 +33,10 @@ export const OWN_CONFIGS = [
 export const CRUISED = ["*.ts", "*.tsx", "*.mts", "*.cts"] as const;
 
 const KIT_DEFAULTS = "kit-defaults.ts";
+
+type TimeLimit = { readonly variable: string; readonly seconds: number };
+const RUN_LIMIT = { variable: "CHECKS_GRAPHWALK_TIMEOUT_SECONDS", seconds: 300 } satisfies TimeLimit;
+const CRUISE_LIMIT = { variable: "CHECKS_DEPCRUISE_TIMEOUT_SECONDS", seconds: 120 } satisfies TimeLimit;
 
 export type Status = "passed" | "violated" | "undecided";
 
@@ -74,6 +78,15 @@ function outside(symbols: readonly UnusedSymbol[], others: readonly UnusedSymbol
   const known = new Set(others.map(keyOf));
   return symbols.filter((symbol) => !known.has(keyOf(symbol))).toSorted(byPosition);
 }
+
+const withinLimit = Effect.fn("withinLimit")(function* <A, E, R>(prefix: string, { variable, seconds: fallback }: TimeLimit, body: Effect.Effect<A, E, R>) {
+  const seconds = yield* Config.schema(Schema.Int.check(Schema.isGreaterThan(0)), variable).pipe(
+    Config.withDefault(fallback),
+    Effect.mapError(() => new GraphwalkError({ message: `${variable} must be a whole number of seconds above 0` })),
+  );
+  const message = `${prefix}timed out after ${seconds}s; set ${variable} to allow longer`;
+  return yield* body.pipe(Effect.timeoutOrElse({ duration: Duration.seconds(seconds), orElse: () => Effect.fail(new GraphwalkError({ message })) }));
+});
 
 const describe = (symbol: UnusedSymbol): string => `  ${symbol.file}: ${symbol.name} (${symbol.kind})`;
 
@@ -267,9 +280,10 @@ const importsSection = (root: string) =>
       const files = yield* trackedInTree(root);
       if (files.length === 0) return yield* new GraphwalkError({ message: "no tracked TypeScript to cruise" });
       const config = yield* configOf(root);
-      const run = yield* collect(process.execPath, [yield* depcruise(), "--config", config.file, "--output-type", "json", ...files], root).pipe(
+      const cruise = collect(process.execPath, [yield* depcruise(), "--config", config.file, "--output-type", "json", ...files], root).pipe(
         Effect.mapError((cause) => new GraphwalkError({ message: `cannot run dependency-cruiser: ${cause.message}` })),
       );
+      const run = yield* withinLimit("dependency-cruiser ", CRUISE_LIMIT, cruise);
       const { summary } = yield* decodeCruise(run.stdout).pipe(
         Effect.mapError(
           () => new GraphwalkError({ message: `dependency-cruiser exits ${run.exitCode} with no report: ${(run.stdout + run.stderr).trim()}` }),
@@ -369,6 +383,10 @@ const gate = Effect.gen(function* () {
   ),
 );
 
+const timedGate = withinLimit("", RUN_LIMIT, gate).pipe(
+  Effect.catch((cause) => Console.error(`${NAME}: ${cause.message}`).pipe(Effect.as(UNDECIDED))),
+);
+
 if (import.meta.main) {
-  runExitMain(gate);
+  runExitMain(timedGate);
 }
