@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.57.1
+
+Released 2026-10-29.
+
+### Fixes
+
+- **complexity:** time out graphwalk and its dependency cruiser child [#18](https://github.com/avi2d/checks/pull/18)
+
 ## 0.57.0
 
 Released 2026-10-27.
