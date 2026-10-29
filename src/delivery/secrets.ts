@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
-import { commitOf, git, refArgs } from "../core/git.ts";
+import { GitFailure, commitOf, git, refArgs } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { cacheRoot } from "../dependencies/cache-root.ts";
 import { pinnedGitleaks, scanCommits, scanDirectory, type DirectoryScan, type Leak } from "./gitleaks.ts";
@@ -51,10 +51,14 @@ type Message = { readonly commit: string; readonly text: string };
 
 // git refuses a NUL in a commit message, so the NUL -z writes after each record ends it.
 const messagesOf = Effect.fn("messagesOf")(function* (revisions: readonly string[], root: string) {
-  const records = (yield* git(["log", "-z", "--format=%H%n%B", ...revisions], root)).split("\0").filter((record) => record !== "");
-  return records.map((record): Message => {
+  const records = (yield* git(["log", "--no-show-signature", "-z", "--format=%H%n%B", ...revisions], root)).split("\0").filter((record) => record !== "");
+  return yield* Effect.forEach(records, (record) => {
     const newline = record.indexOf("\n");
-    return { commit: record.slice(0, newline), text: record.slice(newline + 1) };
+    const commit = newline === -1 ? "" : record.slice(0, newline);
+    if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(commit)) {
+      return Effect.fail(new GitFailure({ message: `git log: cannot parse the commit of ${JSON.stringify(record.slice(0, 80))}` }));
+    }
+    return Effect.succeed({ commit, text: record.slice(newline + 1) } satisfies Message);
   });
 });
 
