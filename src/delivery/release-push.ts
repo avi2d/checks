@@ -101,7 +101,7 @@ const land = Effect.fn("land")(function* (root: string, base: string, head: stri
           Effect.gen(function* () {
             const now = listed.split("\t")[0];
             if (now === release) return "landed";
-            if (now === head) return yield* Effect.fail(failure);
+            if (now === head) return yield* failure;
             yield* git(["fetch", "--quiet", "--no-tags", "origin", `refs/heads/${base}`], root);
             const ancestor = yield* git(["merge-base", "--is-ancestor", release, "FETCH_HEAD"], root).pipe(
               Effect.as(true),
