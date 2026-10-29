@@ -92,6 +92,7 @@ A seed written after the range adds a dead export, or after it removes the last 
 | 2 | a ref does not resolve, a scanner cannot run, the run or dependency-cruiser passes its time limit, or a Knip report, a cruise report or the baseline does not parse |
 
 The gate exits 1 when any section reports a violation, and exits 2 only when no section reports one and at least one section cannot decide.
+When the run passes its time limit the gate exits 2 even when a section already reported a violation.
 
 It also exits 2 when the repository tracks no `.ts`, `.tsx`, `.astro`, `.mts` or `.cts` file, or, with `--write`, when it tracks no TypeScript file.
 A repository that tracks `.astro` files but no `.ts`, `.tsx`, `.mts` or `.cts` file prints only the unreferenced-files section.

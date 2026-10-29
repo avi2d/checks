@@ -110,9 +110,9 @@ test(
     const pidsFile = join(dir, ".git", "stuck-pids");
 
     const stuck = await ran(
-      $`bun ${GRAPHWALK}`.cwd(dir).env({ ...process.env, CHECKS_DEPCRUISE_TIMEOUT_SECONDS: "2", PIDS_FILE: pidsFile }),
+      $`bun ${GRAPHWALK}`.cwd(dir).env({ ...process.env, CHECKS_DEPCRUISE_TIMEOUT_SECONDS: "12", PIDS_FILE: pidsFile }),
     );
-    expect(stuck.text).toContain("imports: dependency-cruiser timed out after 2s; set CHECKS_DEPCRUISE_TIMEOUT_SECONDS to allow longer\n");
+    expect(stuck.text).toContain("imports: dependency-cruiser timed out after 12s; set CHECKS_DEPCRUISE_TIMEOUT_SECONDS to allow longer\n");
     expect(stuck.text).not.toContain("graphwalk: timed out");
     expect(stuck.exitCode).toBe(2);
     expect(await survivorsOf(pidsFile)).toEqual([]);
@@ -131,8 +131,8 @@ test(
     await commit("feat: a knip config that never loads");
     const pidsFile = join(dir, ".git", "stuck-pids");
 
-    const stuck = await ran($`bun ${GRAPHWALK}`.cwd(dir).env({ ...process.env, CHECKS_GRAPHWALK_TIMEOUT_SECONDS: "3", PIDS_FILE: pidsFile }));
-    expect(stuck.text).toBe("graphwalk: timed out after 3s; set CHECKS_GRAPHWALK_TIMEOUT_SECONDS to allow longer\n");
+    const stuck = await ran($`bun ${GRAPHWALK}`.cwd(dir).env({ ...process.env, CHECKS_GRAPHWALK_TIMEOUT_SECONDS: "12", PIDS_FILE: pidsFile }));
+    expect(stuck.text).toBe("graphwalk: timed out after 12s; set CHECKS_GRAPHWALK_TIMEOUT_SECONDS to allow longer\n");
     expect(stuck.exitCode).toBe(2);
     expect(await survivorsOf(pidsFile)).toEqual([]);
   },
