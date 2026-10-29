@@ -15,12 +15,15 @@ export type Feed = {
   readonly input?: string;
 };
 
+// Without a SIGKILL deadline, an interrupted child that ignores SIGTERM holds its scope open forever.
+const KILL_GRACE = "2 seconds";
+
 // Both pipes drain while the program runs: one left unread fills its buffer and stalls it.
 export const collect = Effect.fn("collect")(
   function* (program: string, args: readonly string[], cwd?: string, { env, input }: Feed = {}) {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const stdin = input === undefined ? undefined : Stream.make(new TextEncoder().encode(input));
-    const handle = yield* spawner.spawn(ChildProcess.make(program, args, { cwd, env, extendEnv: true, stdin }));
+    const handle = yield* spawner.spawn(ChildProcess.make(program, args, { cwd, env, extendEnv: true, stdin, forceKillAfter: KILL_GRACE }));
     const [stdout, stderr, exitCode] = yield* Effect.all([text(handle.stdout), text(handle.stderr), handle.exitCode], {
       concurrency: "unbounded",
     });
