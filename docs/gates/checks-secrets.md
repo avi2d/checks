@@ -12,7 +12,10 @@ A private pack adds terms no public file may carry, such as a person's name, an 
 It scans the lines each commit in the range adds, in every file the commit adds or modifies, with gitleaks.
 In a merge commit it scans the lines the merge's own resolution adds, such as a key written while resolving a conflict, and not what the merge brings in from the other parent.
 It exits 2 when a commit it scans is an octopus merge, one with three or more parents, because git gives no resolution diff for one.
+It scans the message of each commit in the range with the same rules and the same private pack.
+A merge commit's message is scanned too, as [checks-pr-text](checks-pr-text.md) scans a pull request's text.
 It fails on each secret the scan finds, and names its file, its line, the rule that matched and the commit that added it.
+A finding in a message names `the message` and its line in place of a file, where the subject is line 1.
 A secret one commit adds and a later commit in the range removes still fails, because the first commit still holds it.
 It guards new changes only, and never scans a commit before the range, so a secret already in the history takes no part.
 
@@ -40,14 +43,15 @@ These rules do not catch:
 No setting accepts a finding.
 It ignores a repository's `.gitleaks.toml`, its `.gitleaksignore` and every `gitleaks:allow` comment.
 It skips the paths gitleaks' default config skips, such as lockfiles, images and `node_modules/`.
-It scans what a commit adds to its files, and not its message or its author, which [checks-commit-identity](checks-commit-identity.md) judges.
+It scans what a commit adds to its files and its message, and not its author, which [checks-commit-identity](checks-commit-identity.md) judges.
 
 ## The private pack
 
 The private pack is a JSON file of terms that lives outside every public repository, and `CHECKS_SECRETS_PACK` names its path.
 The kit ships no pack and no term, so a public repository can run the pack without carrying what it hides.
 With `CHECKS_SECRETS_PACK` unset the gate runs the kit's rules alone, exactly as it does without a pack, and its last line says so.
-With it set the gate adds a rule for each kind of term the pack lists, and fails a range that adds any of them.
+With it set the gate adds a rule for each kind of term the pack lists.
+It fails a range that adds any of them to a file or a commit message.
 
 Each key is optional, and each holds a list of strings:
 
@@ -78,7 +82,7 @@ An IPv6 range has no key, so a pack lists its prefix under `hosts` as its addres
 The gitleaks default allowlist skips paths such as lockfiles, go.mod and go.sum, images and documents such as PDFs.
 It also skips node_modules and some Go and Ruby vendor paths, so the pack terms are not searched there.
 A lockfile's resolved URLs can carry a private registry host, so keep such a host out of lockfiles, go.mod and go.sum by other means.
-Commit messages are not scanned by the pack, and checks-commit-identity covers only the author, the committer and Co-authored-by trailers.
+The pack scans each commit message, trailers included, and checks-commit-identity also judges the author, the committer and Co-authored-by trailers.
 
 The gate exits 2, and scans nothing, when `CHECKS_SECRETS_PACK` is set but the pack cannot serve:
 
@@ -119,11 +123,12 @@ Unlike [checks-pr-text](checks-pr-text.md), this gate has no skip: a job that wr
 
 ## What it reads
 
-It reads the commits of the range from git, not the working tree.
+It reads the commits of the range and their messages from git, not the working tree.
 It needs git 2.36 or newer, which diffs a merge against the merge git would make on its own, and it exits 2 on an older git.
 It reads its rules from `src/delivery/gitleaks.toml` in the installed package.
 It reads the path of the private pack from `CHECKS_SECRETS_PACK`.
-It writes the kit's rules and the pack's into one config in a temporary directory it deletes when the scan ends.
+It writes the kit's rules and the pack's into one config, and each commit message into a file of its own.
+Each goes in a temporary directory it deletes when the scan ends.
 
 It runs the gitleaks release `src/delivery/gitleaks.ts` pins, by the SHA-256 of each platform's archive and of the binary inside it.
 On first use it downloads the archive from the scanner's GitHub release and unpacks the binary into `~/.cache/avi2dg-checks/gitleaks/<version>/`.
@@ -146,8 +151,8 @@ With one it scans that commit alone.
 
 | Code | When |
 | --- | --- |
-| 0 | no commit in the range adds a secret |
-| 1 | a commit in the range adds a secret |
+| 0 | no commit in the range adds a secret, in its files or its message |
+| 1 | a commit in the range adds a secret, in its files or its message |
 | 2 | a ref does not resolve, or a commit it scans is an octopus merge, or no verified scanner is at hand, or git is older than 2.36, or gitleaks fails, or `CHECKS_SECRETS_PACK` is set and the pack cannot serve |
 
 ## Sample output
@@ -163,8 +168,9 @@ secrets: CHECKS_SECRETS_PACK is unset, so the kit's rules ran without a private 
 With a pack set, a finding of the pack names the kind of term and never the term:
 
 ```
-secrets: the range adds 1 secret(s); put a placeholder such as <private-key> in its place in the commit that added it, and rotate any secret that left this machine:
+secrets: the range adds 2 secret(s); put a placeholder such as <private-key> in its place in the commit that added it, and rotate any secret that left this machine:
   docs/setup.md:12 private-domain in 4f1c09ab: A domain the private pack lists
+  the message:3 private-name in 4f1c09ab: A name form the private pack lists
 secrets: the kit's rules and the private pack CHECKS_SECRETS_PACK names ran
 ```
 
