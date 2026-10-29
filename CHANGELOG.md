@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.58.1
+
+Released 2026-10-29.
+
+### Fixes
+
+- **browser:** judge where the pointer lands instead of timing the hover [#19](https://github.com/avi2d/checks/pull/19)
+
 ## 0.58.0
 
 Released 2026-10-29.
