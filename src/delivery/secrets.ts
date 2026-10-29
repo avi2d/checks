@@ -56,7 +56,7 @@ const messagesOf = Effect.fn("messagesOf")(function* (revisions: readonly string
     const newline = record.indexOf("\n");
     const commit = newline === -1 ? "" : record.slice(0, newline);
     if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(commit)) {
-      return Effect.fail(new GitFailure({ message: `git log: cannot parse the commit of ${JSON.stringify(record.slice(0, 80))}` }));
+      return Effect.fail(new GitFailure({ message: "git log: a record does not start with a commit id" }));
     }
     return Effect.succeed({ commit, text: record.slice(newline + 1) } satisfies Message);
   });
