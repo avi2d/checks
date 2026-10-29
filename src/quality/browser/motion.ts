@@ -7,9 +7,11 @@ const CONTROLS = "a[href], button, summary, input, select, textarea";
 
 const Landing = Schema.NullOr(Schema.Struct({ x: Schema.Finite, y: Schema.Finite }));
 
+type ScrollAlignment = "nearest" | "center" | "start" | "end";
+
 type PointerTarget = {
   readonly ownerDocument: { readonly documentElement: { readonly clientWidth: number; readonly clientHeight: number } };
-  readonly scrollIntoView: (options: { readonly behavior: "instant"; readonly block: "nearest"; readonly inline: "nearest" }) => void;
+  readonly scrollIntoView: (options: { readonly behavior: "instant"; readonly block: ScrollAlignment; readonly inline: ScrollAlignment }) => void;
   readonly getClientRects: () => Iterable<Rect>;
   readonly getRootNode: () => { readonly elementFromPoint: (x: number, y: number) => unknown };
   readonly contains: (other: unknown) => boolean;
@@ -18,18 +20,21 @@ type PointerTarget = {
 // Playwright's hover retries until a timeout to give up on a control the pointer cannot reach, and a busy host outlasts any timeout on a control it can reach.
 // The page runs this from its source text, so it must not reach anything outside its own body.
 function pointerLanding(control: PointerTarget): typeof Landing.Type {
-  control.scrollIntoView({ behavior: "instant", block: "nearest", inline: "nearest" });
-  const { clientWidth, clientHeight } = control.ownerDocument.documentElement;
-  for (const rect of control.getClientRects()) {
-    const left = Math.max(rect.left, 0);
-    const right = Math.min(rect.right, clientWidth);
-    const top = Math.max(rect.top, 0);
-    const bottom = Math.min(rect.bottom, clientHeight);
-    if (right - left < 1 || bottom - top < 1) continue;
-    const x = (left + right) / 2;
-    const y = (top + bottom) / 2;
-    const hit = control.getRootNode().elementFromPoint(x, y);
-    if (hit !== null && control.contains(hit)) return { x, y };
+  const alignments: readonly ScrollAlignment[] = ["nearest", "center", "start", "end"];
+  for (const alignment of alignments) {
+    control.scrollIntoView({ behavior: "instant", block: alignment, inline: alignment });
+    const { clientWidth, clientHeight } = control.ownerDocument.documentElement;
+    for (const rect of control.getClientRects()) {
+      const left = Math.max(rect.left, 0);
+      const right = Math.min(rect.right, clientWidth);
+      const top = Math.max(rect.top, 0);
+      const bottom = Math.min(rect.bottom, clientHeight);
+      if (right - left < 1 || bottom - top < 1) continue;
+      const x = (left + right) / 2;
+      const y = (top + bottom) / 2;
+      const hit = control.getRootNode().elementFromPoint(x, y);
+      if (hit !== null && control.contains(hit)) return { x, y };
+    }
   }
   return null;
 }
