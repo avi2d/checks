@@ -442,6 +442,49 @@ test(
 );
 
 test(
+  "a term of the private pack in a commit message of the range fails on the message line that carries it, rather than passing because no file carries it",
+  async () => {
+    const terms = packTerms();
+    const { first, last, domain, host, runner } = terms;
+    const pack = await packFile(terms);
+    const { repo } = await started();
+    await repo.write({ "notes/before.md": "before\n" });
+    const before = await repo.commit(`docs: thank ${first} ${last}`);
+    await repo.write({ "notes/team.md": "notes\n" });
+    const described = await repo.commit(
+      [`docs: add team notes`, "", `Reviewed by ${first.toUpperCase()}\t ${last.toLowerCase()}`, `Ask pat@${domain} for access`, `${first}${last} and ${runner}s and not${domain}`].join("\n"),
+    );
+    await repo.write({ "notes/deploy.md": "deploy\n" });
+    const titled = await repo.commit(`fix: deploy from ${host}`);
+    const inMessage = (commit: string, line: number, rule: string, kind: string) => `  the message:${line} ${rule} in ${commit.slice(0, 8)}: A ${kind} the private pack lists`;
+
+    const failed = await withPack(repo, pack, before, titled);
+    expect(failed.exitCode).toBe(1);
+    expect(findings(failed.text).toSorted()).toEqual(
+      [inMessage(described, 3, "private-name", "name form"), inMessage(described, 4, "private-domain", "domain"), inMessage(titled, 1, "private-host", "host name")].toSorted(),
+    );
+    for (const term of [first, last, domain, host, runner]) expect(failed.text.toLowerCase()).not.toContain(term.toLowerCase());
+    expect((await withPack(repo, pack, before)).exitCode).toBe(1);
+
+    expect(await repo.script(GATE, before, titled)).toEqual(CLEAN);
+  },
+  SCAN_MS,
+);
+
+test(
+  "a commit message carrying a secret the kit's rules know fails with no pack set, rather than only a pack term failing there",
+  async () => {
+    const { repo, base } = await started();
+    await repo.write({ "notes/ci.md": "ci\n" });
+    const head = await repo.commit(`ci: set the token\n\nGITHUB_TOKEN=${["gh", "p_"].join("")}${alphanumeric(36)}`);
+    const failed = await repo.script(GATE, base, head);
+    expect(failed.exitCode).toBe(1);
+    expect(findings(failed.text).map((line) => line.split(":").slice(0, 2).join(":"))).toEqual([`  the message:3 github-pat in ${head.slice(0, 8)}`]);
+  },
+  SCAN_MS,
+);
+
+test(
   "a pack set but missing, empty or naming no term fails the gate rather than scanning without it",
   async () => {
     const { repo, base } = await started();
