@@ -1,8 +1,36 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { CHECKOUT, fixtureRepos } from "./lib/fixture-repo.ts";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { CHECKOUT, fixtureRepos, ran } from "./lib/fixture-repo.ts";
 
 const open = fixtureRepos("checks-graphwalk-");
+
+const GRAPHWALK = join(CHECKOUT, "src", "complexity", "graphwalk.ts");
+
+const STUCK_CONFIG = `import { writeFileSync } from "node:fs";
+const sleeper = Bun.spawn(["sleep", "600"]);
+writeFileSync(process.env["PIDS_FILE"] ?? "", \`\${process.pid} \${sleeper.pid}\`);
+process.on("SIGTERM", () => {});
+setInterval(() => {}, 60_000);
+await new Promise(() => {});
+export default {};
+`;
+
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function survivorsOf(pidsFile: string): Promise<readonly number[]> {
+  const pids = (await readFile(pidsFile, "utf8")).trim().split(" ").map(Number);
+  expect(pids).toHaveLength(2);
+  return pids.filter(isAlive);
+}
 
 function kitConfig(entry: readonly string[]): string {
   return `import { defineConfig } from "${CHECKOUT}/dist/presets/knip.js";\nexport default defineConfig({ entry: ${JSON.stringify(entry)} });\n`;
@@ -67,3 +95,47 @@ test(
   },
   120_000,
 );
+
+test(
+  "a dependency-cruiser child that never exits fails the imports section at its time limit instead of holding the gate open, and leaves no process behind",
+  async () => {
+    const { dir, commit } = await open({
+      "package.json": JSON.stringify({ name: "graphwalk-stuck-cruise", type: "module" }),
+      "knip.config.ts": kitConfig(["src/index.ts"]),
+      "exports-baseline.json": "[]\n",
+      "src/index.ts": "export const index = 1;\n",
+      "dependency-cruiser.config.ts": STUCK_CONFIG,
+    });
+    await commit("feat: a cruise config that never loads");
+    const pidsFile = join(dir, ".git", "stuck-pids");
+
+    const stuck = await ran(
+      $`bun ${GRAPHWALK}`.cwd(dir).env({ ...process.env, CHECKS_DEPCRUISE_TIMEOUT_SECONDS: "2", PIDS_FILE: pidsFile }),
+    );
+    expect(stuck.text).toContain("imports: dependency-cruiser timed out after 2s; set CHECKS_DEPCRUISE_TIMEOUT_SECONDS to allow longer\n");
+    expect(stuck.text).not.toContain("graphwalk: timed out");
+    expect(stuck.exitCode).toBe(2);
+    expect(await survivorsOf(pidsFile)).toEqual([]);
+  },
+  120_000,
+);
+
+test(
+  "a graphwalk run whose scanner never exits fails the gate at its time limit instead of running on, and leaves no process behind",
+  async () => {
+    const { dir, commit } = await open({
+      "package.json": JSON.stringify({ name: "graphwalk-stuck-knip", type: "module" }),
+      "knip.config.ts": STUCK_CONFIG,
+      "src/index.ts": "export const index = 1;\n",
+    });
+    await commit("feat: a knip config that never loads");
+    const pidsFile = join(dir, ".git", "stuck-pids");
+
+    const stuck = await ran($`bun ${GRAPHWALK}`.cwd(dir).env({ ...process.env, CHECKS_GRAPHWALK_TIMEOUT_SECONDS: "3", PIDS_FILE: pidsFile }));
+    expect(stuck.text).toBe("graphwalk: timed out after 3s; set CHECKS_GRAPHWALK_TIMEOUT_SECONDS to allow longer\n");
+    expect(stuck.exitCode).toBe(2);
+    expect(await survivorsOf(pidsFile)).toEqual([]);
+  },
+  120_000,
+);
+

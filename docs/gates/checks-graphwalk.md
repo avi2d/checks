@@ -55,6 +55,14 @@ It cruises against the first config it finds there:
 It runs dependency-cruiser from the installed kit under Bun, which loads a TypeScript config wherever it sits.
 It leaves out a tracked file the working tree no longer holds.
 
+## Time limits
+
+A run that lasts past 300 seconds stops, prints `graphwalk: timed out after 300s; set CHECKS_GRAPHWALK_TIMEOUT_SECONDS to allow longer` and exits 2.
+A dependency-cruiser run that lasts past 120 seconds stops, and the imports section prints `imports: dependency-cruiser timed out after 120s; set CHECKS_DEPCRUISE_TIMEOUT_SECONDS to allow longer` and cannot decide.
+`CHECKS_GRAPHWALK_TIMEOUT_SECONDS` and `CHECKS_DEPCRUISE_TIMEOUT_SECONDS` each take a whole number of seconds above 0, and any other value leaves the run or the section undecided.
+When a limit passes, the gate sends SIGTERM to the process group of each process it started.
+It sends SIGKILL 2 seconds later to any process still in that group, so nothing it started outlives the gate.
+
 ## Arguments
 
 ```sh
@@ -81,7 +89,7 @@ A seed written after the range adds a dead export, or after it removes the last 
 | --- | --- |
 | 0 | no file is unreferenced, no symbol is unlisted, added or stale, and no import breaks an `error` rule, or `--write` recorded the baseline |
 | 1 | a file is unreferenced, a symbol is unlisted, added or stale, an import breaks an `error` rule, or the repository holds no Knip configuration |
-| 2 | a ref does not resolve, a scanner cannot run, or a Knip report, a cruise report or the baseline does not parse |
+| 2 | a ref does not resolve, a scanner cannot run, the run or dependency-cruiser passes its time limit, or a Knip report, a cruise report or the baseline does not parse |
 
 The gate exits 1 when any section reports a violation, and exits 2 only when no section reports one and at least one section cannot decide.
 
