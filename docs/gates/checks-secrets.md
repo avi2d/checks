@@ -12,8 +12,8 @@ A private pack adds terms no public file may carry, such as a person's name, an 
 It scans the lines each commit in the range adds, in every file the commit adds or modifies, with gitleaks.
 In a merge commit it scans the lines the merge's own resolution adds, such as a key written while resolving a conflict, and not what the merge brings in from the other parent.
 It exits 2 when a commit it scans is an octopus merge, one with three or more parents, because git gives no resolution diff for one.
-It scans the message of each commit in the range with the same rules and the same private pack.
-A merge commit's message is scanned too, as [checks-pr-text](checks-pr-text.md) scans a pull request's text.
+It scans the message of each commit in the range with the rules and the private pack [checks-pr-text](checks-pr-text.md) runs on a pull request's text.
+A merge commit's own message is scanned too, though the file scan skips what the merge brings in from the other parent.
 It fails on each secret the scan finds, and names its file, its line, the rule that matched and the commit that added it.
 A finding in a message names `the message` and its line in place of a file, where the subject is line 1.
 A secret one commit adds and a later commit in the range removes still fails, because the first commit still holds it.
