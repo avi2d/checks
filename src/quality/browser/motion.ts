@@ -14,12 +14,32 @@ type PointerTarget = {
   readonly scrollIntoView: (options: { readonly behavior: "instant"; readonly block: ScrollAlignment; readonly inline: ScrollAlignment }) => void;
   readonly getClientRects: () => Iterable<Rect>;
   readonly getRootNode: () => { readonly elementFromPoint: (x: number, y: number) => unknown };
-  readonly contains: (other: unknown) => boolean;
 };
 
 // Playwright's hover retries until a timeout to give up on a control the pointer cannot reach, and a busy host outlasts any timeout on a control it can reach.
 // The page runs this from its source text, so it must not reach anything outside its own body.
 function pointerLanding(control: PointerTarget): typeof Landing.Type {
+  const reachesControl = (hit: unknown): boolean => {
+    let node: unknown = hit;
+    while (node !== null && node !== undefined) {
+      if (node === control) return true;
+      const candidate = node as { readonly assignedSlot?: unknown; readonly parentNode?: unknown; readonly host?: unknown };
+      if (candidate.assignedSlot !== undefined && candidate.assignedSlot !== null) {
+        node = candidate.assignedSlot;
+        continue;
+      }
+      if (candidate.parentNode !== undefined && candidate.parentNode !== null) {
+        node = candidate.parentNode;
+        continue;
+      }
+      if (candidate.host !== undefined && candidate.host !== null) {
+        node = candidate.host;
+        continue;
+      }
+      return false;
+    }
+    return false;
+  };
   const alignments: readonly ScrollAlignment[] = ["nearest", "center", "start", "end"];
   for (const alignment of alignments) {
     control.scrollIntoView({ behavior: "instant", block: alignment, inline: alignment });
@@ -33,7 +53,7 @@ function pointerLanding(control: PointerTarget): typeof Landing.Type {
       const x = (left + right) / 2;
       const y = (top + bottom) / 2;
       const hit = control.getRootNode().elementFromPoint(x, y);
-      if (hit !== null && control.contains(hit)) return { x, y };
+      if (hit !== null && reachesControl(hit)) return { x, y };
     }
   }
   return null;
