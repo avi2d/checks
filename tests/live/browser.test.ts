@@ -190,8 +190,9 @@ test("a control the page renders once for each breakpoint is judged only where i
   expect(passed.exitCode).toBe(0);
 }, 120_000);
 
-test("motion is red on a hover transition a visitor who turns motion off still sees, and green once it waits for no-preference", async () => {
-  const hovered = (css: string): string => page(`<p><a href="/">Write to me</a></p>`, { head: `<style>${css}</style>` });
+test("motion is red on a hover transition a visitor who turns motion off still sees, even on a page slow to answer the pointer, and green once it waits for no-preference", async () => {
+  const SLOW_POINTER = `<script>document.querySelector("a").addEventListener("pointerover", () => { const until = performance.now() + 3_000; while (performance.now() < until); });</script>`;
+  const hovered = (css: string): string => page(`<p><a href="/">Write to me</a></p>${SLOW_POINTER}`, { head: `<style>${css}</style>` });
   const site = await browserSite({
     "dist/index.html": hovered("a { transition: color 300ms; } a:hover { color: red; }"),
     "browser-checks.json": declaration({ states: [{ name: "default" }, { name: "reduced motion", reducedMotion: "reduce" }], checks: ["motion"] }),
