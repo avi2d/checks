@@ -142,6 +142,7 @@
     "./tsconfig.effect.json": "./tsconfig.effect.json",
     "./browser-hooks.ts": "./src/quality/browser/hooks.ts",
     "./browser-checks.json": "./src/quality/browser/browser-checks.json",
+    "./screen-sizes.ts": "./src/quality/browser/screen-sizes.ts",
     "./oxlint": {
       "types": "./dist/presets/oxlint.d.ts",
       "default": "./dist/presets/oxlint.js"
