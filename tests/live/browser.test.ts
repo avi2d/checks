@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { browserSite, declaration, failuresOf, HOOK_TYPES, page, routesOf } from "../e2e/lib/browser-site.ts";
+import { CHECKOUT } from "../e2e/lib/fixture-repo.ts";
 
 const CLEAN_LINK = page(`<p><a href="/">Write to me</a></p>`);
 
@@ -132,6 +135,27 @@ test("a long Russian action that fits at default text but clips at enlarged text
   expect(passed.text).toContain("browser: layout at /ru/ (ru), phone 375x812 touch, enlarged text scanned email action 1");
   expect(passed.exitCode).toBe(0);
 }, 120_000);
+
+test("the shipped starter declaration visits every anchor size in every state it lists, skipping none and adding none", async () => {
+  const anchors = [
+    ...[["phone", 360, 640], ["phone", 375, 667], ["phone", 393, 852], ["phone", 412, 915], ["tablet", 820, 1180]],
+    ...[["desktop", 1366, 768], ["desktop", 1440, 900], ["desktop", 1920, 1080]],
+  ] as const;
+  const site = await browserSite({
+    "dist/index.html": page(`<h1>Fixture</h1><p><a href="/">Write to me</a></p>`),
+    "browser-checks.json": await readFile(join(CHECKOUT, "src", "quality", "browser", "browser-checks.json"), "utf8"),
+  });
+  const passed = await site.run();
+  expect(failuresOf(passed.text)).toEqual([]);
+  for (const [device, width, height] of anchors) {
+    for (const state of ["default", "enlarged text", "reduced motion"]) {
+      const viewport = `${device}-${width}x${height} ${width}x${height}${device === "phone" ? " touch" : ""}`;
+      expect(passed.text).toContain(`browser: layout at / (en), ${viewport}, ${state} scanned headline 1, link 1`);
+    }
+  }
+  expect(passed.text).toContain("over 1 route(s), 8 viewport(s), 3 state(s) and 2 target(s) pass");
+  expect(passed.exitCode).toBe(0);
+}, 300_000);
 
 test("keyboard is red on a hidden focus ring and on a target Tab skips, and green once both are restored", async () => {
   const red = {

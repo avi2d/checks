@@ -3,12 +3,15 @@ import { ADR_DIRECTORY, ADR_INDEX, ROOT_FILES } from "../src/docs/doc-rules.ts";
 import { listed, MODES, templateFile } from "../src/docs/doc-templates.ts";
 import { EVERY_REPOSITORY, KIT_GATES, PR_GATES, VECTORS, type KitGate } from "../src/core/gates.ts";
 import { AGENT_NAMES, DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, HISTORY_NAMES, LIVING_NAMES, PROSE_RULES } from "../src/docs/prose-matchers.ts";
+import starter from "../src/quality/browser/browser-checks.json" with { type: "json" };
+import { SCREEN_SIZE_SETS, SCREEN_SIZES, screenSizeName } from "../src/quality/browser/screen-sizes.ts";
 import { SOURCE_LIMITS, SOURCES, TEST_LIMITS, TESTS, type SizeRule } from "../src/quality/presets/oxlint.ts";
 
 export const MANIFEST = "package.json";
 export const GATE_PAGES = "docs/gates";
 export const BINS_PAGE = "docs/bins.md";
 const OXLINT_PRESET = "src/quality/presets/oxlint.ts";
+const BROWSER_STARTER = "src/quality/browser/browser-checks.json";
 
 const Manifest = Schema.Struct({
   name: Schema.String,
@@ -25,7 +28,7 @@ const SHIPPED = {
   "commitlint.config.ts": "the shared commitlint config",
   "dependency-cruiser.config.js": "the kit's dependency-cruiser rules as a base a `.dependency-cruiser.cjs` extends by path, which the build writes",
   "knip-base.json": "the Knip `include` setting, for a configuration that spreads it",
-  "src/": "every bin, which a package script calls by its `checks-` name, the modules the bins import, and the Effect language service severities under `src/quality/presets/`",
+  "src/": "every bin, which a package script calls by its `checks-` name, the modules the bins import, the Effect language service severities under `src/quality/presets/`, and the starter `browser-checks.json` under `src/quality/browser/`",
   "oxlintrc.json": "the oxlint `base` as a config a `.oxlintrc.json` extends by path, which the build writes",
   "stryker.preset.js": "the Stryker mutation-testing preset, which refuses a full run outside CI",
   "tsconfig.effect.json": "the tsconfig fragment with the shared compiler options and the Effect language-service block",
@@ -215,6 +218,41 @@ const LINT_SAMPLE: Block = {
   ],
 };
 
+function inline(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(inline).join(", ")}]`;
+  if (typeof value === "object" && value !== null) return `{ ${Object.entries(value).map(([key, field]) => `${JSON.stringify(key)}: ${inline(field)}`).join(", ")} }`;
+  return JSON.stringify(value);
+}
+
+function jsonField([key, value]: readonly [string, unknown]): readonly string[] {
+  if (!Array.isArray(value) || !value.some((item) => typeof item === "object")) return [`  ${JSON.stringify(key)}: ${inline(value)}`];
+  return [`  ${JSON.stringify(key)}: [`, ...value.map((item, index) => `    ${inline(item)}${index < value.length - 1 ? "," : ""}`), "  ]"];
+}
+
+function compactJson(value: Readonly<Record<string, unknown>>): readonly string[] {
+  const fields = Object.entries(value).map(jsonField);
+  return ["{", ...fields.flatMap((lines, index) => (index < fields.length - 1 ? [...lines.slice(0, -1), `${lines.at(-1) ?? ""},`] : lines)), "}"];
+}
+
+const STARTER: Block = {
+  name: "starter",
+  from: [BROWSER_STARTER],
+  render: () => ["```json", ...compactJson(starter), "```"],
+};
+
+const SIZES: Block = {
+  name: "screen-sizes",
+  from: ["SCREEN_SIZES in src/quality/browser/screen-sizes.ts"],
+  render: () => [
+    "| Device | Width | Height | Name | Sets |",
+    "| --- | --- | --- | --- | --- |",
+    ...SCREEN_SIZES.full.map((size) => {
+      const sets = SCREEN_SIZE_SETS.filter((set) => SCREEN_SIZES[set].includes(size));
+      return `| ${size.device} | ${size.width} | ${size.height} | ${code(screenSizeName(size))} | ${sets.map(code).join(" and ")} |`;
+    }),
+  ],
+};
+
 const WHERE: Block = {
   name: "shipped",
   from: [MANIFEST],
@@ -226,6 +264,7 @@ export const TARGETS: readonly { readonly file: string; readonly blocks: readonl
   { file: "docs/shipped-files.md", blocks: [WHERE] },
   { file: "docs/how-to/upgrade-the-kit.md", blocks: [UPGRADE_INSTALL] },
   ...Object.entries(OPT_IN_PEERS).map(([bin, names]) => ({ file: `${GATE_PAGES}/${bin}.md`, blocks: [optInInstall(names)] })),
+  { file: `${GATE_PAGES}/checks-browser.md`, blocks: [SIZES, STARTER] },
   { file: `${GATE_PAGES}/checks-docs.md`, blocks: [DOC_KINDS, LIVING_DOCS, PROSE] },
   { file: `${GATE_PAGES}/checks-lint.md`, blocks: [LINT_SAMPLE] },
   { file: "docs/configs/native-settings.md", blocks: [SIZE_LIMITS] },
