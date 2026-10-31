@@ -1,0 +1,19 @@
+{
+  "site": "dist",
+  "routes": [
+    { "path": "/", "locale": "en" }
+  ],
+  "viewports": [
+    { "preset": "anchor" }
+  ],
+  "states": [
+    { "name": "default" },
+    { "preset": "enlarged-text" },
+    { "name": "reduced motion", "reducedMotion": "reduce" }
+  ],
+  "targets": [
+    { "name": "headline", "selector": "main h1" },
+    { "name": "link", "selector": "a[href]", "focusable": true }
+  ],
+  "checks": ["layout", "keyboard", "motion", "axe", "nesting", "assets"]
+}

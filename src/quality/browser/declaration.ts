@@ -1,5 +1,6 @@
-import { Effect, FileSystem, Path, Schema } from "effect";
+import { Array as Arr, Effect, FileSystem, Path, Schema } from "effect";
 import { Usage } from "../../core/main.ts";
+import { DEVICES, ENLARGED_TEXT_PX, SCREEN_SIZE_SETS, SCREEN_SIZES, screenSizeName, type ScreenSize } from "./screen-sizes.ts";
 
 const DECLARATION = "browser-checks.json";
 
@@ -15,13 +16,25 @@ const Route = Schema.Struct({
   locale: Name,
 });
 
-const Viewport = Schema.Struct({ name: Name, width: Pixels, height: Pixels, touch: Schema.optionalKey(Schema.Boolean) });
+const Viewport = Schema.Struct({
+  name: Name,
+  width: Pixels,
+  height: Pixels,
+  touch: Schema.optionalKey(Schema.Boolean),
+  device: Schema.optionalKey(Schema.Literals(DEVICES)),
+});
+
+const ScreenSizeSet = Schema.Struct({ preset: Schema.Literals(SCREEN_SIZE_SETS) });
 
 const State = Schema.Struct({
   name: Name,
   textPx: Schema.optionalKey(Pixels),
   reducedMotion: Schema.optionalKey(Schema.Literals(["reduce", "no-preference"])),
 });
+
+const STATE_PRESETS = ["enlarged-text"] as const;
+
+const StatePreset = Schema.Struct({ preset: Schema.Literals(STATE_PRESETS) });
 
 const Target = Schema.Struct({
   name: Name,
@@ -40,6 +53,12 @@ const Declaration = Schema.Struct({
   hooks: Schema.optionalKey(Name),
 });
 
+const Listed = Schema.Struct({
+  ...Declaration.fields,
+  viewports: Schema.NonEmptyArray(Schema.Union([Viewport, ScreenSizeSet])),
+  states: Schema.NonEmptyArray(Schema.Union([State, StatePreset])),
+});
+
 export type Route = typeof Route.Type;
 export type Viewport = typeof Viewport.Type;
 export type State = typeof State.Type;
@@ -52,7 +71,26 @@ export type Visit = {
   readonly state: State;
 };
 
-const decodeDeclaration = Schema.decodeUnknownEffect(Schema.fromJsonString(Declaration));
+export type Listed = typeof Listed.Type;
+
+const decodeListed = Schema.decodeUnknownEffect(Schema.fromJsonString(Listed));
+
+function viewportOf(size: ScreenSize): Viewport {
+  const { device, width, height } = size;
+  return { name: screenSizeName(size), width, height, device, ...(device === "phone" ? { touch: true } : {}) };
+}
+
+const STATES: Readonly<Record<(typeof STATE_PRESETS)[number], State>> = {
+  "enlarged-text": { name: "enlarged text", textPx: ENLARGED_TEXT_PX },
+};
+
+export function expanded(listed: Listed): Declaration {
+  return {
+    ...listed,
+    viewports: Arr.flatMap(listed.viewports, (entry) => ("preset" in entry ? Arr.map(SCREEN_SIZES[entry.preset], viewportOf) : [entry])),
+    states: Arr.map(listed.states, (entry) => ("preset" in entry ? STATES[entry.preset] : entry)),
+  };
+}
 
 function repeated(names: readonly string[]): readonly string[] {
   return [...new Set(names.filter((name, index) => names.indexOf(name) !== index))];
@@ -85,9 +123,10 @@ export const readDeclaration = Effect.fn("readDeclaration")(function* (root: str
   if (!(yield* fs.exists(file))) {
     return yield* new Usage({ message: `${DECLARATION} is missing, and a product opts in to the browser checks by declaring its pages there` });
   }
-  const declaration = yield* decodeDeclaration(yield* fs.readFileString(file)).pipe(
+  const listed = yield* decodeListed(yield* fs.readFileString(file)).pipe(
     Effect.mapError(({ message }) => new Usage({ message: `${DECLARATION} does not decode: ${message}` })),
   );
+  const declaration = expanded(listed);
   const found = inconsistencies(declaration);
   if (found.length > 0) return yield* new Usage({ message: `${DECLARATION}: ${found.join("; ")}` });
   return declaration;

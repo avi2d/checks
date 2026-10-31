@@ -121,12 +121,12 @@ It reads `browser-checks.json` in the directory it runs in:
     { "path": "/ru/", "locale": "ru" }
   ],
   "viewports": [
-    { "name": "phone", "width": 375, "height": 812, "touch": true },
-    { "name": "desktop", "width": 1280, "height": 800 }
+    { "preset": "anchor" },
+    { "name": "small laptop", "width": 1280, "height": 720, "device": "desktop" }
   ],
   "states": [
     { "name": "default" },
-    { "name": "enlarged text", "textPx": 32 },
+    { "preset": "enlarged-text" },
     { "name": "reduced motion", "reducedMotion": "reduce" }
   ],
   "targets": [
@@ -143,8 +143,8 @@ It reads `browser-checks.json` in the directory it runs in:
 | --- | --- |
 | `site` | the directory of the built site, which the runner serves on a local port, an `index.html` answering for its directory |
 | `routes` | each page to visit, as a `path` from the site root and the `locale` it renders |
-| `viewports` | each window to visit in, with a `name`, a `width` and a `height` in pixels, and `touch` for a phone that has touch and a mobile viewport |
-| `states` | each condition to visit in, with a `name`, `textPx` for the browser's default text size, and `reducedMotion` as `reduce` or `no-preference` |
+| `viewports` | each window to visit in, with a `name`, a `width` and a `height` in pixels, `touch` for a phone that has touch and a mobile viewport, and `device` as `phone`, `tablet` or `desktop`, or a `preset` that stands for a set of screen sizes |
+| `states` | each condition to visit in, with a `name`, `textPx` for the browser's default text size, and `reducedMotion` as `reduce` or `no-preference`, or the `enlarged-text` preset |
 | `targets` | each named control or text the checks judge, with a CSS `selector`, the `routes` it is on when not every route, and `focusable` when Tab must reach it |
 | `checks` | the built-in checks to run, from `layout`, `keyboard`, `motion`, `axe`, `nesting` and `assets` |
 | `hooks` | the module of product hooks, as a path from the directory the runner runs in |
@@ -152,6 +152,88 @@ It reads `browser-checks.json` in the directory it runs in:
 `textPx` sets the default font size, so text the page sizes in `rem` or `em` grows, as a visitor's own setting makes it grow.
 A declaration that names a route, viewport, state, target or check twice is refused.
 So are a `motion` check with no state whose `reducedMotion` is `reduce`, a `keyboard` check with no `focusable` target, and a target or a hook that names an undeclared route.
+
+### Screen sizes
+
+A viewport `{ "preset": "anchor" }` stands for the anchor set of screen sizes, and `{ "preset": "full" }` for the full set.
+The full set holds the anchors and eleven more sizes.
+A product runs the anchor set on every pull request and the full set at night.
+Each size in a set is a viewport named for its device and its size, with `device` set, and each phone also sets `touch`.
+A preset sits beside a product's own viewports.
+A name both declare is refused as declared twice, and so is a size that two listed presets both hold.
+
+<!-- generated screen-sizes: bun run build writes it from SCREEN_SIZES in src/quality/browser/screen-sizes.ts and scripts/doc-blocks.ts -->
+
+| Device | Width | Height | Name | Sets |
+| --- | --- | --- | --- | --- |
+| phone | 360 | 640 | `phone-360x640` | `anchor` and `full` |
+| phone | 375 | 667 | `phone-375x667` | `anchor` and `full` |
+| phone | 393 | 852 | `phone-393x852` | `anchor` and `full` |
+| phone | 412 | 915 | `phone-412x915` | `anchor` and `full` |
+| tablet | 820 | 1180 | `tablet-820x1180` | `anchor` and `full` |
+| desktop | 1366 | 768 | `desktop-1366x768` | `anchor` and `full` |
+| desktop | 1440 | 900 | `desktop-1440x900` | `anchor` and `full` |
+| desktop | 1920 | 1080 | `desktop-1920x1080` | `anchor` and `full` |
+| phone | 320 | 568 | `phone-320x568` | `full` |
+| phone | 360 | 540 | `phone-360x540` | `full` |
+| phone | 375 | 567 | `phone-375x567` | `full` |
+| phone | 375 | 812 | `phone-375x812` | `full` |
+| phone | 390 | 844 | `phone-390x844` | `full` |
+| phone | 430 | 932 | `phone-430x932` | `full` |
+| tablet | 768 | 1024 | `tablet-768x1024` | `full` |
+| tablet | 1024 | 1366 | `tablet-1024x1366` | `full` |
+| desktop | 1280 | 800 | `desktop-1280x800` | `full` |
+| desktop | 1536 | 864 | `desktop-1536x864` | `full` |
+| desktop | 2560 | 1440 | `desktop-2560x1440` | `full` |
+
+<!-- end generated screen-sizes -->
+
+The state `{ "preset": "enlarged-text" }` stands for a state named `enlarged text` whose `textPx` is 32.
+The sizes were checked on 2026-10-31 against four sources.
+They are StatCounter's screen resolution statistics, the point sizes in Apple's Human Interface Guidelines, Material Design's device metrics and the Chrome UX Report.
+They are due for a recheck against those sources once a year.
+
+### Start from the shipped declaration
+
+The kit ships a starter declaration, which a product copies and then edits to its own routes and targets:
+
+```sh
+cp node_modules/@avi2dg/checks/src/quality/browser/browser-checks.json browser-checks.json
+```
+
+A host resolves it as `@avi2dg/checks/browser-checks.json`.
+
+<!-- generated starter: bun run build writes it from src/quality/browser/browser-checks.json and scripts/doc-blocks.ts -->
+
+```json
+{
+  "site": "dist",
+  "routes": [
+    { "path": "/", "locale": "en" }
+  ],
+  "viewports": [
+    { "preset": "anchor" }
+  ],
+  "states": [
+    { "name": "default" },
+    { "preset": "enlarged-text" },
+    { "name": "reduced motion", "reducedMotion": "reduce" }
+  ],
+  "targets": [
+    { "name": "headline", "selector": "main h1" },
+    { "name": "link", "selector": "a[href]", "focusable": true }
+  ],
+  "checks": ["layout", "keyboard", "motion", "axe", "nesting", "assets"]
+}
+```
+
+<!-- end generated starter -->
+
+For the night run, a product keeps a second declaration in a directory of its own.
+Its `site` is a path from that directory, such as `../dist`, and its viewports are `{ "preset": "full" }`.
+It runs `checks-browser <directory>` on that directory.
+
+### Chrome and the peers
 
 It drives the Chrome the machine has, which `CHROME_PATH` names, or Chrome's standard install when it is unset.
 The product installs the optional peers the runner loads, at the versions the kit pins:
@@ -183,15 +265,15 @@ It reads the declaration in the directory it runs in, or in the directory it is 
 ## Sample output
 
 ```
-browser: targets at /ru/ (ru), phone 375x812 touch, enlarged text scanned language switch 1, email contact 1, headline 1
-browser: layout at /ru/ (ru), phone 375x812 touch, enlarged text scanned language switch 1, email contact 1, headline 1
-browser: keyboard at /ru/ (ru), phone 375x812 touch, enlarged text scanned language switch 1, email contact 1
-browser: axe at /ru/ (ru), phone 375x812 touch, enlarged text scanned 11 rule(s)
+browser: targets at /ru/ (ru), phone-375x667 375x667 touch, enlarged text scanned language switch 1, email contact 1, headline 1
+browser: layout at /ru/ (ru), phone-375x667 375x667 touch, enlarged text scanned language switch 1, email contact 1, headline 1
+browser: keyboard at /ru/ (ru), phone-375x667 375x667 touch, enlarged text scanned language switch 1, email contact 1
+browser: axe at /ru/ (ru), phone-375x667 375x667 touch, enlarged text scanned 11 rule(s)
 browser: 1 contrast check(s) axe cannot measure, reported as unverified:
-  axe at /ru/ (ru), phone 375x812 touch, enlarged text: color-contrast unverified: header > p: Element's background color could not be determined due to a background image
+  axe at /ru/ (ru), phone-375x667 375x667 touch, enlarged text: color-contrast unverified: header > p: Element's background color could not be determined due to a background image
 browser: 2 failure(s) in 4 check run(s) over 1 route(s), 1 viewport(s), 1 state(s) and 3 target(s):
-  layout at /ru/ (ru), phone 375x812 touch, enlarged text: email contact "Написать письмо владельцу" clips its own text
-  axe at /ru/ (ru), phone 375x812 touch, enlarged text: nested-interactive (serious): button: Interactive controls must not be nested
+  layout at /ru/ (ru), phone-375x667 375x667 touch, enlarged text: email contact "Написать письмо владельцу" clips its own text
+  axe at /ru/ (ru), phone-375x667 375x667 touch, enlarged text: nested-interactive (serious): button: Interactive controls must not be nested
 ```
 
 ## When it runs

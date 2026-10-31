@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { describeVisit, inconsistencies, targetsOn, visitsOf, type Declaration } from "../../src/quality/browser/declaration.ts";
+import { describeVisit, expanded, inconsistencies, targetsOn, visitsOf, type Declaration, type Listed } from "../../src/quality/browser/declaration.ts";
 import { counted, passes, report, type Outcome } from "../../src/quality/browser/report.ts";
 
 const DECLARATION: Declaration = {
@@ -54,6 +54,60 @@ test("a declaration that repeats a name, names an undeclared route or enables a 
     "check motion judges a visitor who turns motion off, and no state sets reducedMotion to reduce",
     "check keyboard judges the targets Tab reaches, and no target sets focusable",
   ]);
+});
+
+const ANCHOR_SIZES = ["phone 360x640", "phone 375x667", "phone 393x852", "phone 412x915", "tablet 820x1180", "desktop 1366x768", "desktop 1440x900", "desktop 1920x1080"];
+
+const NIGHTLY_SIZES = [
+  ...["phone 320x568", "phone 360x540", "phone 375x567", "phone 375x812", "phone 390x844", "phone 430x932"],
+  ...["tablet 768x1024", "tablet 1024x1366", "desktop 1280x800", "desktop 1536x864", "desktop 2560x1440"],
+];
+
+function listing(viewports: Listed["viewports"], states: Listed["states"] = DECLARATION.states): Listed {
+  return { ...DECLARATION, viewports, states };
+}
+
+function sizesOf({ viewports }: Declaration): readonly string[] {
+  return viewports.map(({ device, width, height }) => `${device ?? "unclassed"} ${width}x${height}`).toSorted();
+}
+
+test("the anchor preset expands to exactly the eight anchor sizes, with none missing, none extra and none in the wrong device class", () => {
+  expect(sizesOf(expanded(listing([{ preset: "anchor" }])))).toEqual(ANCHOR_SIZES.toSorted());
+});
+
+test("the full preset expands to the anchors and the eleven nightly sizes, with none missing and none extra", () => {
+  expect(sizesOf(expanded(listing([{ preset: "full" }])))).toEqual([...ANCHOR_SIZES, ...NIGHTLY_SIZES].toSorted());
+});
+
+test("every phone a preset expands to has touch and no tablet or desktop does, so a phone is never judged without a mobile viewport", () => {
+  const { viewports } = expanded(listing([{ preset: "full" }]));
+  const touching = viewports.filter(({ touch }) => touch === true).map(({ width, height }) => `phone ${width}x${height}`);
+  expect(touching.toSorted()).toEqual([...ANCHOR_SIZES, ...NIGHTLY_SIZES].filter((size) => size.startsWith("phone ")).toSorted());
+});
+
+test("a preset gives each entry a name of its own, so the full set never collides with itself", () => {
+  expect(inconsistencies(expanded(listing([{ preset: "full" }])))).toEqual([]);
+});
+
+test("a preset sits beside a product's own viewport, which keeps its fields as listed", () => {
+  const { viewports } = expanded(listing([{ preset: "anchor" }, { name: "kiosk", width: 1080, height: 1920, touch: true }]));
+  expect(viewports).toHaveLength(9);
+  expect(viewports.at(-1)).toEqual({ name: "kiosk", width: 1080, height: 1920, touch: true });
+});
+
+test("a listed viewport that reuses a preset entry's name, or a preset listed twice, is refused as declared twice", () => {
+  const reused = expanded(listing([{ preset: "anchor" }, { name: "phone-375x667", width: 375, height: 667 }]));
+  expect(inconsistencies(reused)).toEqual(["viewport phone-375x667 is declared twice"]);
+  const twice = inconsistencies(expanded(listing([{ preset: "anchor" }, { preset: "full" }])));
+  expect(twice).toHaveLength(ANCHOR_SIZES.length);
+  expect(twice).toContain("viewport desktop-1920x1080 is declared twice");
+});
+
+test("the enlarged text preset sets the default text to 32px, not the browser's 16px, and is refused beside a state of its name", () => {
+  const { states } = expanded(listing([{ preset: "anchor" }], [...DECLARATION.states, { preset: "enlarged-text" }]));
+  expect(states.at(-1)).toEqual({ name: "enlarged text", textPx: 32 });
+  const twice = expanded(listing([{ preset: "anchor" }], [...DECLARATION.states, { name: "enlarged text", textPx: 24 }, { preset: "enlarged-text" }]));
+  expect(inconsistencies(twice)).toEqual(["state enlarged text is declared twice"]);
 });
 
 const [VISIT] = visitsOf(DECLARATION);
