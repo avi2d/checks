@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.59.0
+
+Released 2026-10-31.
+
+### Features
+
+- **browser:** add shared screen size presets and starter declaration [#20](https://github.com/avi2d/checks/pull/20)
+
 ## 0.58.1
 
 Released 2026-10-29.
