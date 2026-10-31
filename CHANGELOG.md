@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.60.0
+
+Released 2026-10-31.
+
+### Features
+
+- **browser:** export the screen sizes for a site to import [#21](https://github.com/avi2d/checks/pull/21)
+
 ## 0.59.0
 
 Released 2026-10-31.
