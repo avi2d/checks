@@ -175,7 +175,7 @@ The approval setting has no read only check under the release token, so `checks-
 A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on each job in either workflow, as [checks-ci-wiring](checks-ci-wiring.md#runners) requires.
 A release is one commit that holds only the version bump and the built changelog.
 A package repository lands it on every push to `main` through [checks-release-push](checks-release-push.md), which tags it and dispatches this workflow on the tag.
-Another repository takes it as the pull request [checks-release-pr](checks-release-pr.md) opens on the daily release's schedule.
+Another repository takes it as the pull request [checks-release-pr](checks-release-pr.md) opens when someone runs the `release-pr` workflow.
 When it lands, [checks-release-tag](checks-release-tag.md) tags the merge commit and dispatches this workflow on the tag.
 A tag the workflow token pushes starts no `push` run, so the workflow triggers on `workflow_dispatch` as well, and refuses a dispatch on a ref that is not a tag.
 A tag a person pushes starts the same workflow through its `push` trigger.

@@ -2,6 +2,7 @@ import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { pageWorkflow } from "../lib/doc-workflows.ts";
 import { withoutPullRequestEvent } from "../lib/env.ts";
 import { CHECKOUT, fixtureRepos, ran, type FixtureRepo, type Ran } from "./lib/fixture-repo.ts";
 
@@ -168,13 +169,43 @@ test("a private repository's mutation job through a repository shell script in i
   expect(green.exitCode).toBe(0);
 }, 30_000);
 
+function releaseWorkflow(run: string): string {
+  return `name: release\non:\n  workflow_dispatch:\njobs:\n  publish:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ${run}\n`;
+}
+
+test("the installed bin refuses a scheduled release pull request in a repository that publishes nothing to npm, and passes the by-hand template", async () => {
+  const byHand = await pageWorkflow("docs/gates/checks-release-pr.md", "release-pr");
+  const daily = (await pageWorkflow("docs/gates/checks-release-pr.md", "daily-release")) + byHand.slice(byHand.indexOf("permissions:"));
+  const repo = await open({
+    "package.json": scripts(["lint", "test"]),
+    ".bun-version": `${FLEET_BUN_VERSION}\n`,
+    ".github/workflows/ci.yml": workflow,
+    ".github/workflows/daily-release.yml": daily,
+    ".github/workflows/release.yml": releaseWorkflow("echo publish"),
+  });
+  await repo.commit("start");
+  const red = await wiring(repo);
+  expect(red.exitCode).toBe(1);
+  expect(red.text).toContain(
+    "ci-wiring: 1 workflow(s) schedule checks-release-pr, but no workflow publishes to npm:\n  .github/workflows/daily-release.yml line 3: drop the schedule",
+  );
+  await repo.write({ ".github/workflows/release.yml": releaseWorkflow("npm publish") });
+  expect((await wiring(repo)).exitCode).toBe(0);
+  await repo.write({ ".github/workflows/release.yml": releaseWorkflow("echo publish") });
+  await $`git rm -q .github/workflows/daily-release.yml`.cwd(repo.dir).quiet();
+  await repo.write({ ".github/workflows/release-pr.yml": byHand });
+  const green = await wiring(repo);
+  expect(green.text).not.toContain("schedule");
+  expect(green.exitCode).toBe(0);
+}, 30_000);
+
 test("a daily release that names a removed workflow fails until the name is gone", async () => {
   const broken = await Bun.file(join(CHECKOUT, "tests", "fixtures", "socials-daily-release-broken.yml")).text();
   const repo = await open({
     "package.json": JSON.stringify({ name: "consumer", scripts: { lint: "lint", test: "test" }, engines: { bun: FLEET_BUN_VERSION } }),
     ".github/workflows/ci.yml": workflow,
     ".github/workflows/daily-release.yml": broken,
-    ".github/workflows/release.yml": "name: release\non:\n  workflow_dispatch:\njobs:\n  publish:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo publish\n",
+    ".github/workflows/release.yml": releaseWorkflow("npm publish"),
   });
   await repo.commit("start");
   const red = await wiring(repo);

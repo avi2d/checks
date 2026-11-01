@@ -18,7 +18,8 @@ It bumps the version `package.json` holds by the kit's rule:
 | only fixes, performance changes or reverts | patch | patch |
 
 It refuses when the last release tag names a version other than the one `package.json` holds, since an untagged bump means a release landed that nothing published.
-The refusal points at the `tag` job of `daily-release` on the release commit, whose own refusal says what to fix, rather than at a tag pushed by hand.
+The refusal points at the `tag` job of the workflow it runs in, rerun on the release commit, rather than at a tag pushed by hand.
+That job's own refusal says what to fix.
 It refuses a version that is not a plain `major.minor.patch`.
 It writes the next version into `package.json`, runs `bun run build` so the build writes `CHANGELOG.md`, and commits every tracked file the build changed as `chore: release <version>`.
 The commit's one parent is `HEAD`.
@@ -35,6 +36,7 @@ It leaves the working tree as it found it.
 ## What it reads
 
 It reads the `v*` tags, the commit subjects since the last one and `package.json` from the checkout.
+It names the workflow it runs in by `GITHUB_WORKFLOW`, or as `release-pr` when that is unset.
 It refuses a shallow checkout, a detached `HEAD` and a working tree with changes to tracked files.
 It reads the release branch from `origin` with `git ls-remote` and `git fetch`.
 It calls the GitHub API through `gh api`, which takes the repository from the checkout's remote and the token from `GH_TOKEN`.
@@ -74,22 +76,20 @@ release-pr: https://github.com/acme/widget/pull/12 releases 0.4.0 from 3f2a9c81d
 
 ## When it runs
 
-The daily release workflow below runs it once a day on the default branch.
+The `release-pr` workflow below runs it on the default branch when someone starts it with `gh workflow run release-pr`.
+A repository that publishes nothing to npm releases only then, since the workflow has no schedule.
 A package published to npm releases each push to `main` through [checks-release-push](checks-release-push.md) instead, with no pull request.
-Run the workflow by hand with `gh workflow run daily-release` to refresh the release pull request sooner.
+A package published to npm that keeps the release pull request runs it once a day, as [the daily release](#the-daily-release-of-a-package) says.
 
 ## Running it in CI
 
-A repository takes the daily release as the `daily-release` workflow below.
-A consuming repository pins daily-release between 03:00 and 04:00 UTC at a minute chosen so repositories do not start together.
+A repository takes the release pull request as the `release-pr` workflow below.
 The `pull-request` job checks out its branch's tip when it starts, so a run that starts late never rebuilds the release on an older commit.
-The `pull-request` job runs on the schedule, and the `tag` job runs when a release commit lands on `main`, as [checks-release-tag](checks-release-tag.md) says:
+The `pull-request` job runs when someone starts the workflow, and the `tag` job runs when a release commit lands on `main`, as [checks-release-tag](checks-release-tag.md) says:
 
 ```yaml
-name: daily-release
+name: release-pr
 on:
-  schedule:
-    - cron: "7 3 * * *"
   workflow_dispatch:
   push:
     branches: [main]
@@ -155,7 +155,7 @@ The checks it dispatches are the release pull request's own required checks, and
 The pull request also lists its own `pull_request` runs as waiting for approval.
 Nothing requires them, and approving them runs the same checks again.
 
-The daily release needs the repository's other workflows to accept the dispatch:
+The release pull request needs the repository's other workflows to accept the dispatch:
 
 - `.github/workflows/ci.yml` triggers on `workflow_dispatch`, grants `statuses: write` and `pull-requests: read`, and ends each required job with the step below.
 - The title lint reads the title of the one open pull request its branch heads when the event carries none, as [Commit messages](../configs/commit-messages.md) says.
@@ -182,6 +182,24 @@ The call turns the repository setting on:
 ```sh
 gh api --method PUT repos/<owner>/<repo>/actions/permissions/workflow -F can_approve_pull_request_reviews=true
 ```
+
+### The daily release of a package
+
+A package published to npm that keeps the release pull request names the workflow `daily-release` and adds a schedule to its triggers.
+It pins the schedule between 03:00 and 04:00 UTC at a minute chosen so repositories do not start together:
+
+```yaml
+name: daily-release
+on:
+  schedule:
+    - cron: "7 3 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+```
+
+The jobs are the ones the `release-pr` workflow holds.
+[checks-ci-wiring](checks-ci-wiring.md#release-schedule) refuses the schedule in a repository whose workflows publish nothing to npm.
 
 ## Related topics
 

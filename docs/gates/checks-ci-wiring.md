@@ -84,6 +84,15 @@ This rule skips a repository with no setup-bun step.
 A kit release that moves the fleet version turns each consumer red until its pin follows.
 Each refusal names the workflow file and line, the version found and where it was read, and the fleet version.
 
+### Release schedule
+
+It refuses a workflow that triggers on `schedule` and runs `checks-release-pr` in a repository whose workflows publish nothing to npm.
+The `checks-release-pr` call counts directly, through `bunx`, or through `bun` or `bun run` with the bin's path or its source file.
+A repository publishes to npm when a run step in any of its workflows runs `npm publish`, `checks-release-publish` or `bun` with `release-publish.ts`, as [checks-release-preflight](checks-release-preflight.md) reads it.
+Text that only names the publish, such as an `echo`, never counts.
+Such a repository starts its release pull request by hand, as [checks-release-pr](checks-release-pr.md#when-it-runs) says.
+Each refusal names the workflow file and the line of its `schedule` trigger.
+
 ## What it reads
 
 The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts` and `checks` runners in `package.json` and the shell scripts those steps and scripts run from the working tree.
@@ -102,7 +111,7 @@ It takes no arguments.
 | Code | Result |
 | --- | --- |
 | 0 | Every required command has a reachable step. |
-| 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, or a setup-bun step drifts from the fleet bun version. |
+| 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, a setup-bun step drifts from the fleet bun version, or a repository that publishes nothing to npm schedules its release pull request. |
 | 2 | A workflow or `package.json` cannot be decoded, or the kit's own `.bun-version` is missing, unreadable or blank. |
 
 ## Sample output
@@ -127,6 +136,13 @@ A reference to a missing workflow produces a report like this:
 ```
 ci-wiring: 1 reference(s) name a missing workflow or job:
   .github/workflows/daily-release.yml line 31: names missing workflow commitlint.yml
+```
+
+A scheduled release pull request in a repository that publishes nothing to npm produces a report like this:
+
+```
+ci-wiring: 1 workflow(s) schedule checks-release-pr, but no workflow publishes to npm:
+  .github/workflows/daily-release.yml line 3: drop the schedule, so the release pull request opens only when someone runs the workflow
 ```
 
 ## When it runs

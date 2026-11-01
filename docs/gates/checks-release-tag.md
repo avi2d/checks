@@ -19,11 +19,13 @@ It refuses when `v<version>` already tags another commit.
 Before it pushes the tag, it runs `bun run build` and refuses when the build rewrites a committed file.
 That happens when a release pull request merged behind `main`, so its `CHANGELOG.md` lacks the commits `main` gained.
 The refusal says to open a `chore: cancel the unpublished <version>` pull request that returns `package.json` to the last tag's version and commits what `bun run build` then writes to `CHANGELOG.md`.
-The build reads the returned version as a revert, so it drops the unpublished section, and the next `daily-release` run cuts the release again with every change since the last tag.
+The build reads the returned version as a revert, so it drops the unpublished section.
+The next run of the workflow that tags it then cuts the release again with every change since the last tag.
 
 ## What it reads
 
 It reads the subject of `HEAD` and `package.json` from the checkout, and the tag from `origin` with `git ls-remote`.
+It names the workflow it runs in by `GITHUB_WORKFLOW`, or as `release-pr` when that is unset.
 The build it runs reads the whole history, so the checkout fetches all of it.
 It pushes the tag with the credentials the checkout holds.
 It calls the GitHub API through `gh api`, which takes the repository from the checkout's remote and the token from `GH_TOKEN`.
@@ -55,7 +57,7 @@ release-tag: tagged 3f2a9c81d0b4 as v0.4.0, and dispatched release.yml on it
 
 ## When it runs
 
-The `tag` job of the daily release workflow runs it on each push to `main` whose head commit reads as a release, as [checks-release-pr](checks-release-pr.md#running-it-in-ci) shows.
+The `tag` job of the `release-pr` workflow runs it on each push to `main` whose head commit reads as a release, as [checks-release-pr](checks-release-pr.md#running-it-in-ci) shows.
 A package repository needs no `tag` job, since [checks-release-push](checks-release-push.md) tags the release it lands.
 
 ## Related topics

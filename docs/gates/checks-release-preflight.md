@@ -82,7 +82,7 @@ A wrong trusted publisher setting on npm itself surfaces only at the publish ste
 ## Operator check
 
 No endpoint the release token may read exposes the approval setting, so the bin never checks it.
-Turn on **Allow GitHub Actions to create and approve pull requests** under the repository Actions settings before the daily release plans.
+Turn on **Allow GitHub Actions to create and approve pull requests** under the repository Actions settings before the release pull request plans.
 `checks-release-pr` fails while opening the pull request when the setting is off.
 
 ## Related topics

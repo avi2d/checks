@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Config, Effect, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { groupOf } from "./changelog.ts";
 import { git } from "../core/git.ts";
@@ -39,6 +39,8 @@ export function withVersion(manifest: string, from: string, to: string): string 
   const field = new RegExp(`("version"\\s*:\\s*")${from.replaceAll(".", "\\.")}(")`);
   return field.test(manifest) ? manifest.replace(field, `$1${to}$2`) : undefined;
 }
+
+export const runningWorkflow = Config.String("GITHUB_WORKFLOW").pipe(Config.withDefault("release-pr"));
 
 export function releaseTitle(version: string): string {
   return `chore: release ${version}`;

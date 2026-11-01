@@ -202,7 +202,8 @@ A daily release pull request would leave each merged change unpublished until a 
 `checks-release-push` builds the release commit on top of `main` and runs the required checks on it from the `release/<branch>` branch it owns.
 Only then does it move `main` to it without a force, so `main` only ever gains a release commit whose checks passed.
 It tags the commit it landed and nothing else.
-A repository that is no package keeps the daily release pull request.
+A repository that is no package keeps the release pull request, and it opens only when someone runs the workflow.
+No user waits on a version nobody publishes, so a schedule there would only cut releases no one asked for.
 `checks-release-pr` writes only to the `release/<branch>` branch it owns, and rebuilds that branch on `main` rather than merging `main` into it, so the changelog it carries is the one the build writes.
 `checks-release-tag` writes only the `v*` tag of a release commit that already landed.
 The `github-release` job's `contents: write` creates or updates the GitHub release from the tag's `CHANGELOG.md` section.
@@ -218,7 +219,7 @@ So each dispatched job reports its result as a commit status named for the job, 
 Where a status and a check share a name, branch protection requires both, so the status never passes a pull request whose own check failed.
 The cost is a `workflow_dispatch` trigger and a status step on each workflow a release needs.
 The title lint reads its title from the open pull request, or lints the head subject when none is open.
-The daily release also needs the repository setting that lets the token open a pull request.
+The release pull request also needs the repository setting that lets the token open a pull request.
 
 ## The docs gate judges what a change touches
 
