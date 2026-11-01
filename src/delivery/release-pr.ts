@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect, Schema } from "effect";
 import { dispatch, gitHubJson, REPOSITORY } from "./github.ts";
-import { releaseTitle } from "./release.ts";
+import { releaseTitle, runningWorkflow } from "./release.ts";
 import { buildRelease, commitRelease, hasBranch, MANIFEST, planRelease, pointBranch, versionIn } from "./release-commit.ts";
 import { git } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
@@ -13,7 +13,6 @@ type Remote = {
 
 const NAME = "checks-release-pr";
 const USAGE = "usage: release-pr.ts <workflow>...";
-const UNTAGGED = "rerun the tag job of daily-release on the release commit, whose refusal says what to fix";
 
 const PullRequest = Schema.Struct({ number: Schema.Int, title: Schema.String, html_url: Schema.String });
 type PullRequest = typeof PullRequest.Type;
@@ -53,7 +52,8 @@ const releasePullRequest = Effect.gen(function* () {
   const workflows = process.argv.slice(2);
   if (workflows.length === 0) return yield* new Usage({ message: USAGE });
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
-  const plan = yield* planRelease("release-pr", root, UNTAGGED);
+  const untagged = `rerun the tag job of ${yield* runningWorkflow} on the release commit, whose refusal says what to fix`;
+  const plan = yield* planRelease("release-pr", root, untagged);
   if (plan === undefined) return true;
   const { base, branch, head, next, bumped } = plan;
   const remote = yield* readRemote(root, branch);

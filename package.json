@@ -43,6 +43,7 @@
     "src/delivery/release-commit.ts",
     "src/delivery/release-pr.ts",
     "src/delivery/release-preflight.ts",
+    "src/delivery/release-schedule.ts",
     "src/delivery/release-publish.ts",
     "src/delivery/release-push.ts",
     "src/delivery/release-tag.ts",

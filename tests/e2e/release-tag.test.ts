@@ -101,10 +101,10 @@ test(
     await land("fix(parts): keep the order of parts (#4)", { "notes/4.txt": "order\n" });
     const main = await withOrigin(repo, await land("chore: release 0.2.0 (#5)", { "package.json": manifest("0.2.0"), "CHANGELOG.md": builtBeforeTheFix }));
 
-    const refused = await main.run(["release.yml"]);
+    const refused = await main.run(["release.yml"], { GITHUB_WORKFLOW: "release-pr" });
     expect(refused.exitCode).toBe(2);
     expect(refused.text).toContain(
-      `checks-release-tag: the build rewrites CHANGELOG.md at ${main.head.slice(0, 12)}, which the release workflow's build check refuses; open a \`chore: cancel the unpublished 0.2.0\` pull request that returns package.json to 0.1.0 and commits what \`bun run build\` then writes to CHANGELOG.md, and the next daily-release run cuts the release again with every change since v0.1.0`,
+      `checks-release-tag: the build rewrites CHANGELOG.md at ${main.head.slice(0, 12)}, which the release workflow's build check refuses; open a \`chore: cancel the unpublished 0.2.0\` pull request that returns package.json to 0.1.0 and commits what \`bun run build\` then writes to CHANGELOG.md, and the next release-pr run cuts the release again with every change since v0.1.0`,
     );
     expect(await main.inOrigin("tag", "--list")).toBe("");
     expect((await main.state()).calls).toEqual([]);

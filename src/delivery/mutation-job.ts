@@ -16,6 +16,8 @@ type Walked = {
   readonly files: readonly string[];
 };
 
+export type BinCheck = (program: Command) => boolean;
+
 type Context = {
   readonly scripts: ReadonlyMap<string, string>;
   readonly files: (file: string) => string | undefined;
@@ -41,15 +43,32 @@ export function within(dir: string | undefined, path: string): string | undefine
 }
 
 export function runsMutation(run: Run, scripts: ReadonlyMap<string, string>, files: (file: string) => string | undefined): boolean {
-  return scriptRunsMutation(run.script, run.dir, { scripts, files }, { scripts: [], files: [] });
+  return runsBin(run, scripts, files, mutationBin);
 }
 
-function scriptRunsMutation(script: string, dir: string | undefined, context: Context, walked: Walked): boolean {
+export function runsBin(
+  run: Run,
+  scripts: ReadonlyMap<string, string>,
+  files: (file: string) => string | undefined,
+  isBin: BinCheck,
+  followShellOperands = false,
+): boolean {
+  return scriptRunsBin(run.script, run.dir, { scripts, files }, { scripts: [], files: [] }, isBin, followShellOperands);
+}
+
+function scriptRunsBin(
+  script: string,
+  dir: string | undefined,
+  context: Context,
+  walked: Walked,
+  isBin: BinCheck,
+  followShellOperands: boolean,
+): boolean {
   let cwd = dir;
   for (const command of shellCommands(script)) {
     const [program = "", ...args] = fromProgram(command);
     if (program === "cd") cwd = changedDirectory(cwd, withoutOptions(args, new Set()));
-    else if (mutationCommand(command, cwd, context, walked)) return true;
+    else if (binCommand(command, cwd, context, walked, isBin, followShellOperands)) return true;
   }
   return false;
 }
@@ -73,11 +92,16 @@ function fileAt(dir: string | undefined, path: string): string | undefined {
   return within(dir, path) || undefined;
 }
 
-function invocation(command: Command, dir: string | undefined, context: Context, walked: Walked): Invocation | undefined {
+function invocation(command: Command, dir: string | undefined, context: Context, walked: Walked, followShellOperands: boolean): Invocation | undefined {
   const [first = "", ...rest] = fromProgram(command);
-  if (first !== "bun") return { program: [first, ...rest], file: first.includes("/") ? fileAt(dir, first) : undefined, dir };
+  if (first !== "bun") {
+    if (followShellOperands && rest[0] !== undefined && !rest[0].startsWith("-") && SHELLS.includes(first.slice(first.lastIndexOf("/") + 1))) {
+      return { program: [first, ...rest], file: fileAt(dir, rest[0]), dir };
+    }
+    return { program: [first, ...rest], file: first.includes("/") ? fileAt(dir, first) : undefined, dir };
+  }
   const [subcommand = "", ...operands] = withoutOptions(rest, BUN_OPERANDS);
-  if (subcommand === "x") return invocation(["bunx", ...operands], dir, context, walked);
+  if (subcommand === "x") return invocation(["bunx", ...operands], dir, context, walked, followShellOperands);
   if (BUN_COMMANDS.has(subcommand)) return undefined;
   const [target = "", ...targetArgs] = subcommand === "run" ? withoutOptions(operands, BUN_OPERANDS) : [subcommand, ...operands];
   const cwd = bunDirectory([...bunOptions(rest), ...(subcommand === "run" ? bunOptions(operands) : [])], dir);
@@ -85,19 +109,33 @@ function invocation(command: Command, dir: string | undefined, context: Context,
   return body === undefined ? { program: [target, ...targetArgs], file: fileAt(cwd, target), dir: cwd } : { script: target, body };
 }
 
-function mutationCommand(command: Command, dir: string | undefined, context: Context, walked: Walked): boolean {
-  const call = invocation(command, dir, context, walked);
+function binCommand(
+  command: Command,
+  dir: string | undefined,
+  context: Context,
+  walked: Walked,
+  isBin: BinCheck,
+  followShellOperands: boolean,
+): boolean {
+  const call = invocation(command, dir, context, walked, followShellOperands);
   if (call === undefined) return false;
   // bun runs a script from the directory of the package.json that names it.
-  if ("body" in call) return scriptRunsMutation(call.body, ROOT, context, { ...walked, scripts: [...walked.scripts, call.script] });
-  return mutationBin(call.program) || fileRunsMutation(call.file, call.dir, context, walked);
+  if ("body" in call) return scriptRunsBin(call.body, ROOT, context, { ...walked, scripts: [...walked.scripts, call.script] }, isBin, followShellOperands);
+  return isBin(call.program) || fileRunsBin(call.file, call.dir, context, walked, isBin, followShellOperands);
 }
 
 // A script file runs in its caller's directory, not its own.
-function fileRunsMutation(file: string | undefined, dir: string | undefined, context: Context, walked: Walked): boolean {
+function fileRunsBin(
+  file: string | undefined,
+  dir: string | undefined,
+  context: Context,
+  walked: Walked,
+  isBin: BinCheck,
+  followShellOperands: boolean,
+): boolean {
   if (file === undefined || walked.files.includes(file)) return false;
   const body = context.files(file);
-  return body !== undefined && scriptRunsMutation(body, dir, context, { ...walked, files: [...walked.files, file] });
+  return body !== undefined && scriptRunsBin(body, dir, context, { ...walked, files: [...walked.files, file] }, isBin, followShellOperands);
 }
 
 function mutationBin([program = "", subcommand]: Command): boolean {
@@ -115,17 +153,37 @@ function filesWanted(runs: readonly Run[], scripts: ReadonlyMap<string, string>,
   return [...wanted];
 }
 
-export const readShellFiles = Effect.fn("readShellFiles")(function* (root: string, scripts: ReadonlyMap<string, string>, runs: readonly Run[]) {
+function scheduleFilesWanted(runs: readonly Run[], scripts: ReadonlyMap<string, string>, files: ReadonlyMap<string, string>, read: ReadonlySet<string>): readonly string[] {
+  const wanted = new Set<string>();
+  const lookup = (file: string) => {
+    if (!read.has(file)) wanted.add(file);
+    return files.get(file);
+  };
+  for (const run of runs) runsBin(run, scripts, lookup, () => false, true);
+  return [...wanted];
+}
+
+type FilesWanted = (runs: readonly Run[], scripts: ReadonlyMap<string, string>, files: ReadonlyMap<string, string>, read: ReadonlySet<string>) => readonly string[];
+
+const readFiles = Effect.fn("readFiles")(function* (root: string, scripts: ReadonlyMap<string, string>, runs: readonly Run[], wanted: FilesWanted) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const contents = new Map<string, string>();
   const read = new Set<string>();
-  for (let wanted = filesWanted(runs, scripts, contents, read); wanted.length > 0; wanted = filesWanted(runs, scripts, contents, read)) {
-    for (const file of wanted) {
+  for (let pending = wanted(runs, scripts, contents, read); pending.length > 0; pending = wanted(runs, scripts, contents, read)) {
+    for (const file of pending) {
       read.add(file);
       const text = yield* fs.readFileString(path.join(root, file)).pipe(Effect.orElseSucceed(() => undefined));
       if (text !== undefined && (file.endsWith(".sh") || SHELL_SHEBANG.test(text))) contents.set(file, text);
     }
   }
   return contents;
+});
+
+export const readShellFiles = Effect.fn("readShellFiles")(function* (root: string, scripts: ReadonlyMap<string, string>, runs: readonly Run[]) {
+  return yield* readFiles(root, scripts, runs, filesWanted);
+});
+
+export const readScheduleFiles = Effect.fn("readScheduleFiles")(function* (root: string, scripts: ReadonlyMap<string, string>, runs: readonly Run[]) {
+  return yield* readFiles(root, scripts, runs, scheduleFilesWanted);
 });

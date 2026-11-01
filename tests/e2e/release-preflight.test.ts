@@ -4,6 +4,7 @@ import { mkdir, readFile, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isRecord } from "../../src/delivery/workflow-references.ts";
 import { fakeGh, type FakeGh } from "./lib/fake-gh.ts";
+import { pageWorkflow } from "../lib/doc-workflows.ts";
 import { CHECKOUT, fixtureRepos, ran, type Ran, scratchDirs } from "./lib/fixture-repo.ts";
 
 const SCRIPT = join(CHECKOUT, "src", "delivery", "release-preflight.ts");
@@ -246,22 +247,8 @@ async function pushPreflightRun(): Promise<string> {
   return namedRun(text, "release", "fail fast when the release cannot plan");
 }
 
-async function dailyPreflightRun(): Promise<string> {
-  const page = await readFile(join(CHECKOUT, "docs/gates/checks-release-pr.md"), "utf8");
-  const fences = page.split("```").filter((_, index) => index % 2 === 1);
-  for (const fence of fences) {
-    const body = fence.replace(/^[a-z]+\n/, "");
-    let parsed: unknown;
-    try {
-      parsed = Bun.YAML.parse(body);
-    } catch {
-      continue;
-    }
-    if (isRecord(parsed) && parsed["name"] === "daily-release") {
-      return namedRun(body, "pull-request", "fail fast when the release cannot plan");
-    }
-  }
-  throw new Error("the daily-release template holds no preflight step");
+async function templatePreflightRun(): Promise<string> {
+  return namedRun(await pageWorkflow("docs/gates/checks-release-pr.md", "release-pr"), "pull-request", "fail fast when the release cannot plan");
 }
 
 async function linkSources(dir: string): Promise<void> {
@@ -342,24 +329,24 @@ test(
 );
 
 test(
-  "the daily template preflight step passes on a matching version",
+  "the release-pr template preflight step passes on a matching version",
   async () => {
     const preflight = await ready("0.6.0", "v0.6.0", "git+https://github.com/acme/widget.git", KIT_PUBLISH);
     await linkBin(preflight.dir);
 
-    const passed = await runTemplateStep(preflight.dir, await dailyPreflightRun());
+    const passed = await runTemplateStep(preflight.dir, await templatePreflightRun());
     expect(passed.exitCode).toBe(0);
   },
   60_000,
 );
 
 test(
-  "the daily template preflight step fails before planning on the recorded website mismatch",
+  "the release-pr template preflight step fails before planning on the recorded website mismatch",
   async () => {
     const preflight = await ready("0.7.0", "v0.6.0", "git+https://github.com/acme/widget.git", KIT_PUBLISH);
     await linkBin(preflight.dir);
 
-    const refused = await runTemplateStep(preflight.dir, await dailyPreflightRun());
+    const refused = await runTemplateStep(preflight.dir, await templatePreflightRun());
     expect(refused.exitCode).toBe(2);
     expect(refused.text).toContain("checks-release-preflight: package.json holds 0.7.0, but the last release tag is v0.6.0, so v0.7.0 is untagged;");
   },

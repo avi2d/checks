@@ -174,14 +174,29 @@ test(
 );
 
 test(
+  "an untagged bump points at the tag job of the workflow it runs in, not at a release-pr workflow the repository lacks",
+  async () => {
+    const widget = await consumer();
+    await writeFile(join(widget.dir, "package.json"), manifest("0.3.0"));
+    await widget.commit("chore: jump");
+
+    const refused = await widget.run(["ci.yml"], { GITHUB_WORKFLOW: "daily-release" });
+    expect(refused.exitCode).toBe(2);
+    expect(refused.text).toContain("rerun the tag job of daily-release on the release commit, whose refusal says what to fix");
+    expect((await widget.state()).calls).toEqual([]);
+  },
+  60_000,
+);
+
+test(
   "a version the last tag does not name, a dirty tree, a detached head and no workflow are each refused before anything is written",
   async () => {
     const widget = await consumer();
     await writeFile(join(widget.dir, "package.json"), manifest("0.3.0"));
     await widget.commit("chore: jump");
-    const untagged = await widget.run(["ci.yml"]);
+    const untagged = await widget.run(["ci.yml"], { GITHUB_WORKFLOW: "release-pr" });
     expect(untagged.exitCode).toBe(2);
-    expect(untagged.text).toContain("checks-release-pr: package.json holds 0.3.0, but the last release tag is v0.1.0, so v0.3.0 is untagged; rerun the tag job of daily-release on the release commit, whose refusal says what to fix, or return its version to 0.1.0");
+    expect(untagged.text).toContain("checks-release-pr: package.json holds 0.3.0, but the last release tag is v0.1.0, so v0.3.0 is untagged; rerun the tag job of release-pr on the release commit, whose refusal says what to fix, or return its version to 0.1.0");
 
     await $`git reset -q --hard HEAD~1`.cwd(widget.dir).quiet();
     await writeFile(join(widget.dir, "CHANGELOG.md"), "edited by hand\n");

@@ -84,6 +84,19 @@ This rule skips a repository with no setup-bun step.
 A kit release that moves the fleet version turns each consumer red until its pin follows.
 Each refusal names the workflow file and line, the version found and where it was read, and the fleet version.
 
+### Release schedule
+
+It refuses a workflow that triggers on `schedule` and releases, in every repository, whether or not it publishes to npm.
+A workflow releases when a run step calls `checks-release-pr`, `checks-release-push`, `checks-release-tag` or `checks-release-publish`.
+A call counts directly, through `bunx`, or through `bun` or `bun run` with the bin's path or its source file.
+A call through a `package.json` script counts, as `bun run <script>` where the named script releases.
+A call through a local reusable workflow counts, as a job that uses a file under `.github/workflows/` that releases.
+A call through a repository shell script counts, as a path inside the repository whose file releases.
+A workflow also releases when a run step publishes to npm, as [checks-release-preflight](checks-release-preflight.md) reads it, directly or through one of those paths.
+Text that only names a release bin, such as an `echo`, never counts.
+A release runs when someone starts it, as [checks-release-pr](checks-release-pr.md#when-it-runs) says.
+Each refusal names the workflow file and the line of its `schedule` trigger.
+
 ## What it reads
 
 The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts` and `checks` runners in `package.json` and the shell scripts those steps and scripts run from the working tree.
@@ -102,7 +115,7 @@ It takes no arguments.
 | Code | Result |
 | --- | --- |
 | 0 | Every required command has a reachable step. |
-| 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, or a setup-bun step drifts from the fleet bun version. |
+| 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, a setup-bun step drifts from the fleet bun version, or a workflow that releases runs on a schedule. |
 | 2 | A workflow or `package.json` cannot be decoded, or the kit's own `.bun-version` is missing, unreadable or blank. |
 
 ## Sample output
@@ -127,6 +140,13 @@ A reference to a missing workflow produces a report like this:
 ```
 ci-wiring: 1 reference(s) name a missing workflow or job:
   .github/workflows/daily-release.yml line 31: names missing workflow commitlint.yml
+```
+
+A workflow that releases on a schedule produces a report like this:
+
+```
+ci-wiring: 1 workflow(s) release on a schedule:
+  .github/workflows/daily-release.yml line 3: drop the schedule, so a release runs only when someone starts it
 ```
 
 ## When it runs

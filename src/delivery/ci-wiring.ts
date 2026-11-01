@@ -4,7 +4,8 @@ import { defaultBranch, git } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { ENTRY_POINT, KIT_GATES, type KitGate } from "../core/gates.ts";
 import { findBunPinFaults, formatBunPinReport, readBunPinPolicy } from "./bun-pin.ts";
-import { readShellFiles } from "./mutation-job.ts";
+import { readScheduleFiles, readShellFiles } from "./mutation-job.ts";
+import { findScheduledReleases, formatScheduleReport } from "./release-schedule.ts";
 import { findRunnerFaults, formatRunnerReport, jobRuns, readRunnerConfig } from "./runner-policy.ts";
 import { invokes, mentions, plainCommand, type Command } from "./shell-command.ts";
 import { findMissingWorkflows, formatMissingReport, isRecord, names, workflowJobs, type Workflow } from "./workflow-references.ts";
@@ -328,7 +329,10 @@ const wiring = Effect.gen(function* () {
   if (faults.length > 0) yield* Console.error(formatRunnerReport(faults));
   const bunFaults = findBunPinFaults(yield* readBunPinPolicy(root, workflows), workflows);
   if (bunFaults.length > 0) yield* Console.error(formatBunPinReport(bunFaults));
-  return gaps.length === 0 && faults.length === 0 && missing.length === 0 && bunFaults.length === 0;
+  const scheduleFiles = yield* readScheduleFiles(root, scripts, runs);
+  const scheduled = findScheduledReleases(workflows, { scripts, files: scheduleFiles });
+  if (scheduled.length > 0) yield* Console.error(formatScheduleReport(scheduled));
+  return gaps.length === 0 && faults.length === 0 && missing.length === 0 && bunFaults.length === 0 && scheduled.length === 0;
 });
 
 if (import.meta.main) runMain("ci-wiring", wiring);
