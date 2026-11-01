@@ -325,8 +325,7 @@ const wiring = Effect.gen(function* () {
   const scripts = yield* readScripts(root);
   const runs = workflows.flatMap((workflow) => workflowJobs(workflow).flatMap(([, job]) => jobRuns(workflow, job)));
   const runners = yield* readRunnerConfig(root);
-  const files = yield* readShellFiles(root, scripts, [...runs, ...[...scripts.values()].map((script) => ({ script, dir: "" }))]);
-  const faults = findRunnerFaults({ visibility: yield* readVisibility, scripts, files, runners }, workflows);
+  const faults = findRunnerFaults({ visibility: yield* readVisibility, scripts, files: yield* readShellFiles(root, scripts, runs), runners }, workflows);
   if (faults.length > 0) yield* Console.error(formatRunnerReport(faults));
   const bunFaults = findBunPinFaults(yield* readBunPinPolicy(root, workflows), workflows);
   if (bunFaults.length > 0) yield* Console.error(formatBunPinReport(bunFaults));
