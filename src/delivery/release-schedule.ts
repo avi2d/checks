@@ -6,16 +6,16 @@ export type ScheduledRelease = {
   readonly location: string;
 };
 
-const RELEASE_PR = ["checks-release-pr", "release-pr.ts"];
+const RELEASE_BINS = ["pr", "push", "tag", "publish"].flatMap((bin) => [`checks-release-${bin}`, `release-${bin}.ts`]);
 
-function isReleasePr(word: string): boolean {
-  return RELEASE_PR.some((name) => word === name || word.endsWith(`/${name}`));
+function isReleaseBin(word: string): boolean {
+  return RELEASE_BINS.some((name) => word === name || word.endsWith(`/${name}`));
 }
 
-function callsReleasePr(run: string): boolean {
+function callsReleaseBin(run: string): boolean {
   return shellWords(run).some((words) => {
     const [head = "", target = "", entry = ""] = fromProgram(words.map(({ text }) => text));
-    return isReleasePr(head === "bun" ? (target === "run" ? entry : target) : head);
+    return isReleaseBin(head === "bun" ? (target === "run" ? entry : target) : head);
   });
 }
 
@@ -24,23 +24,25 @@ function schedules(document: unknown): boolean {
   return isRecord(on) ? "schedule" in on : (names(on) ?? []).includes("schedule");
 }
 
-function runsReleasePr(workflow: Workflow): boolean {
-  return workflowJobs(workflow).some(([, job]) => {
-    const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
-    return steps.some((step: unknown) => isRecord(step) && typeof step["run"] === "string" && callsReleasePr(step["run"]));
-  });
+function releases(workflow: Workflow): boolean {
+  return (
+    documentPublishes(workflow.document) ||
+    workflowJobs(workflow).some(([, job]) => {
+      const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
+      return steps.some((step: unknown) => isRecord(step) && typeof step["run"] === "string" && callsReleaseBin(step["run"]));
+    })
+  );
 }
 
 export function findScheduledReleases(workflows: readonly Workflow[]): readonly ScheduledRelease[] {
-  if (workflows.some((workflow) => documentPublishes(workflow.document))) return [];
   return workflows
-    .filter((workflow) => schedules(workflow.document) && runsReleasePr(workflow))
+    .filter((workflow) => schedules(workflow.document) && releases(workflow))
     .map((workflow) => ({ location: locate(workflow.path, workflow.text.split("\n"))(["on"], "schedule", "on schedule") }));
 }
 
 export function formatScheduleReport(scheduled: readonly ScheduledRelease[]): string {
   return [
-    `ci-wiring: ${scheduled.length} workflow(s) schedule checks-release-pr, but no workflow publishes to npm:`,
-    ...scheduled.map(({ location }) => `  ${location}: drop the schedule, so the release pull request opens only when someone runs the workflow`),
+    `ci-wiring: ${scheduled.length} workflow(s) release on a schedule:`,
+    ...scheduled.map(({ location }) => `  ${location}: drop the schedule, so a release runs only when someone starts it`),
   ].join("\n");
 }

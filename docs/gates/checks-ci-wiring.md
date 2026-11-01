@@ -86,11 +86,12 @@ Each refusal names the workflow file and line, the version found and where it wa
 
 ### Release schedule
 
-It refuses a workflow that triggers on `schedule` and runs `checks-release-pr` in a repository whose workflows publish nothing to npm.
-The `checks-release-pr` call counts directly, through `bunx`, or through `bun` or `bun run` with the bin's path or its source file.
-A repository publishes to npm when a run step in any of its workflows runs `npm publish`, `checks-release-publish` or `bun` with `release-publish.ts`, as [checks-release-preflight](checks-release-preflight.md) reads it.
-Text that only names the publish, such as an `echo`, never counts.
-Such a repository starts its release pull request by hand, as [checks-release-pr](checks-release-pr.md#when-it-runs) says.
+It refuses a workflow that triggers on `schedule` and releases, in every repository, whether or not it publishes to npm.
+A workflow releases when a run step calls `checks-release-pr`, `checks-release-push`, `checks-release-tag` or `checks-release-publish`.
+A call counts directly, through `bunx`, or through `bun` or `bun run` with the bin's path or its source file.
+A workflow also releases when a run step publishes to npm, as [checks-release-preflight](checks-release-preflight.md) reads it.
+Text that only names a release bin, such as an `echo`, never counts.
+A release runs when someone starts it, as [checks-release-pr](checks-release-pr.md#when-it-runs) says.
 Each refusal names the workflow file and the line of its `schedule` trigger.
 
 ## What it reads
@@ -111,7 +112,7 @@ It takes no arguments.
 | Code | Result |
 | --- | --- |
 | 0 | Every required command has a reachable step. |
-| 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, a setup-bun step drifts from the fleet bun version, or a repository that publishes nothing to npm schedules its release pull request. |
+| 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, a setup-bun step drifts from the fleet bun version, or a workflow that releases runs on a schedule. |
 | 2 | A workflow or `package.json` cannot be decoded, or the kit's own `.bun-version` is missing, unreadable or blank. |
 
 ## Sample output
@@ -138,11 +139,11 @@ ci-wiring: 1 reference(s) name a missing workflow or job:
   .github/workflows/daily-release.yml line 31: names missing workflow commitlint.yml
 ```
 
-A scheduled release pull request in a repository that publishes nothing to npm produces a report like this:
+A workflow that releases on a schedule produces a report like this:
 
 ```
-ci-wiring: 1 workflow(s) schedule checks-release-pr, but no workflow publishes to npm:
-  .github/workflows/daily-release.yml line 3: drop the schedule, so the release pull request opens only when someone runs the workflow
+ci-wiring: 1 workflow(s) release on a schedule:
+  .github/workflows/daily-release.yml line 3: drop the schedule, so a release runs only when someone starts it
 ```
 
 ## When it runs

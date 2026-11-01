@@ -174,7 +174,7 @@ test(
 );
 
 test(
-  "an untagged bump in a repository that keeps the daily-release name points at its tag job, not at a release-pr workflow it lacks",
+  "an untagged bump points at the tag job of the workflow it runs in, not at a release-pr workflow the repository lacks",
   async () => {
     const widget = await consumer();
     await writeFile(join(widget.dir, "package.json"), manifest("0.3.0"));

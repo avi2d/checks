@@ -203,7 +203,7 @@ A daily release pull request would leave each merged change unpublished until a 
 Only then does it move `main` to it without a force, so `main` only ever gains a release commit whose checks passed.
 It tags the commit it landed and nothing else.
 A repository that is no package keeps the release pull request, and it opens only when someone runs the workflow.
-No user waits on a version nobody publishes, so a schedule there would only cut releases no one asked for.
+No release runs on a schedule, in a package or not, since a schedule cuts releases no one asked for.
 `checks-release-pr` writes only to the `release/<branch>` branch it owns, and rebuilds that branch on `main` rather than merging `main` into it, so the changelog it carries is the one the build writes.
 `checks-release-tag` writes only the `v*` tag of a release commit that already landed.
 The `github-release` job's `contents: write` creates or updates the GitHub release from the tag's `CHANGELOG.md` section.
