@@ -199,6 +199,48 @@ test("the installed bin refuses a scheduled release in a package published to np
   expect(green.exitCode).toBe(0);
 }, 30_000);
 
+test("the installed bin refuses a schedule that reaches checks-release-pr through a bash shell wrapper", async () => {
+  const repo = await open({
+    "package.json": scripts(["lint", "test"]),
+    ".bun-version": `${FLEET_BUN_VERSION}\n`,
+    ".github/workflows/ci.yml": workflow,
+    ".github/workflows/nightly.yml": 'name: nightly\non:\n  schedule:\n    - cron: "7 3 * * *"\njobs:\n  job:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bash scripts/release.sh\n',
+    "scripts/release.sh": "#!/bin/sh\nbunx checks-release-pr ci.yml\n",
+  });
+  await repo.commit("start");
+  const red = await wiring(repo);
+  expect(red.exitCode).toBe(1);
+  expect(red.text).toContain("ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/nightly.yml line 3: drop the schedule, so a release runs only when someone starts it");
+}, 30_000);
+
+test("the installed bin refuses a schedule that reaches checks-release-pr through chained shell scripts under bun --cwd", async () => {
+  const repo = await open({
+    "package.json": scripts(["lint", "test"]),
+    ".bun-version": `${FLEET_BUN_VERSION}\n`,
+    ".github/workflows/ci.yml": workflow,
+    ".github/workflows/nightly.yml": 'name: nightly\non:\n  schedule:\n    - cron: "7 3 * * *"\njobs:\n  job:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun --cwd tools run ./release.sh\n',
+    "tools/release.sh": "#!/bin/sh\n./cut.sh\n",
+    "tools/cut.sh": "#!/bin/sh\nbunx checks-release-pr ci.yml\n",
+  });
+  await repo.commit("start");
+  const red = await wiring(repo);
+  expect(red.exitCode).toBe(1);
+  expect(red.text).toContain("ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/nightly.yml line 3: drop the schedule, so a release runs only when someone starts it");
+}, 30_000);
+
+test("the installed bin refuses a schedule that runs a release package script through bun --env-file", async () => {
+  const repo = await open({
+    "package.json": JSON.stringify({ name: "consumer", scripts: { lint: "lint", test: "test", release: "checks-release-pr ci.yml" } }),
+    ".bun-version": `${FLEET_BUN_VERSION}\n`,
+    ".github/workflows/ci.yml": workflow,
+    ".github/workflows/nightly.yml": 'name: nightly\non:\n  schedule:\n    - cron: "7 3 * * *"\njobs:\n  job:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun --env-file .env run release\n',
+  });
+  await repo.commit("start");
+  const red = await wiring(repo);
+  expect(red.exitCode).toBe(1);
+  expect(red.text).toContain("ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/nightly.yml line 3: drop the schedule, so a release runs only when someone starts it");
+}, 30_000);
+
 test("a daily release that names a removed workflow fails until the name is gone", async () => {
   const recorded = await Bun.file(join(CHECKOUT, "tests", "fixtures", "socials-daily-release-broken.yml")).text();
   const broken = recorded.replace('  schedule:\n    - cron: "29 3 * * *"\n', "");

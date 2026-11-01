@@ -16,6 +16,8 @@ type Walked = {
   readonly files: readonly string[];
 };
 
+export type BinCheck = (program: Command) => boolean;
+
 type Context = {
   readonly scripts: ReadonlyMap<string, string>;
   readonly files: (file: string) => string | undefined;
@@ -41,15 +43,19 @@ export function within(dir: string | undefined, path: string): string | undefine
 }
 
 export function runsMutation(run: Run, scripts: ReadonlyMap<string, string>, files: (file: string) => string | undefined): boolean {
-  return scriptRunsMutation(run.script, run.dir, { scripts, files }, { scripts: [], files: [] });
+  return runsBin(run, scripts, files, mutationBin);
 }
 
-function scriptRunsMutation(script: string, dir: string | undefined, context: Context, walked: Walked): boolean {
+export function runsBin(run: Run, scripts: ReadonlyMap<string, string>, files: (file: string) => string | undefined, isBin: BinCheck): boolean {
+  return scriptRunsBin(run.script, run.dir, { scripts, files }, { scripts: [], files: [] }, isBin);
+}
+
+function scriptRunsBin(script: string, dir: string | undefined, context: Context, walked: Walked, isBin: BinCheck): boolean {
   let cwd = dir;
   for (const command of shellCommands(script)) {
     const [program = "", ...args] = fromProgram(command);
     if (program === "cd") cwd = changedDirectory(cwd, withoutOptions(args, new Set()));
-    else if (mutationCommand(command, cwd, context, walked)) return true;
+    else if (binCommand(command, cwd, context, walked, isBin)) return true;
   }
   return false;
 }
@@ -75,7 +81,19 @@ function fileAt(dir: string | undefined, path: string): string | undefined {
 
 function invocation(command: Command, dir: string | undefined, context: Context, walked: Walked): Invocation | undefined {
   const [first = "", ...rest] = fromProgram(command);
-  if (first !== "bun") return { program: [first, ...rest], file: first.includes("/") ? fileAt(dir, first) : undefined, dir };
+  if (first !== "bun" && first !== "npm") {
+    if (rest[0] !== undefined && !rest[0].startsWith("-") && SHELLS.includes(first.slice(first.lastIndexOf("/") + 1))) {
+      return { program: [first, ...rest], file: fileAt(dir, rest[0]), dir };
+    }
+    return { program: [first, ...rest], file: first.includes("/") ? fileAt(dir, first) : undefined, dir };
+  }
+  if (first === "npm") {
+    if (rest[0] === "run" && rest[1] !== undefined && !rest[1].startsWith("-")) {
+      const body = walked.scripts.includes(rest[1]) ? undefined : context.scripts.get(rest[1]);
+      if (body !== undefined) return { script: rest[1], body };
+    }
+    return { program: [first, ...rest], file: undefined, dir };
+  }
   const [subcommand = "", ...operands] = withoutOptions(rest, BUN_OPERANDS);
   if (subcommand === "x") return invocation(["bunx", ...operands], dir, context, walked);
   if (BUN_COMMANDS.has(subcommand)) return undefined;
@@ -85,19 +103,19 @@ function invocation(command: Command, dir: string | undefined, context: Context,
   return body === undefined ? { program: [target, ...targetArgs], file: fileAt(cwd, target), dir: cwd } : { script: target, body };
 }
 
-function mutationCommand(command: Command, dir: string | undefined, context: Context, walked: Walked): boolean {
+function binCommand(command: Command, dir: string | undefined, context: Context, walked: Walked, isBin: BinCheck): boolean {
   const call = invocation(command, dir, context, walked);
   if (call === undefined) return false;
   // bun runs a script from the directory of the package.json that names it.
-  if ("body" in call) return scriptRunsMutation(call.body, ROOT, context, { ...walked, scripts: [...walked.scripts, call.script] });
-  return mutationBin(call.program) || fileRunsMutation(call.file, call.dir, context, walked);
+  if ("body" in call) return scriptRunsBin(call.body, ROOT, context, { ...walked, scripts: [...walked.scripts, call.script] }, isBin);
+  return isBin(call.program) || fileRunsBin(call.file, call.dir, context, walked, isBin);
 }
 
 // A script file runs in its caller's directory, not its own.
-function fileRunsMutation(file: string | undefined, dir: string | undefined, context: Context, walked: Walked): boolean {
+function fileRunsBin(file: string | undefined, dir: string | undefined, context: Context, walked: Walked, isBin: BinCheck): boolean {
   if (file === undefined || walked.files.includes(file)) return false;
   const body = context.files(file);
-  return body !== undefined && scriptRunsMutation(body, dir, context, { ...walked, files: [...walked.files, file] });
+  return body !== undefined && scriptRunsBin(body, dir, context, { ...walked, files: [...walked.files, file] }, isBin);
 }
 
 function mutationBin([program = "", subcommand]: Command): boolean {

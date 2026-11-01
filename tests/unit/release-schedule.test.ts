@@ -90,11 +90,6 @@ test("a schedule that reaches checks-release-pr through a local reusable workflo
   ]);
 });
 
-test("a schedule that reaches checks-release-pr through a repository shell script releases on a schedule", () => {
-  const context = { scripts: new Map<string, string>(), files: new Map([["scripts/release.sh", "bunx checks-release-pr ci.yml"]]) };
-  expect(findScheduledReleases(named({ "nightly.yml": scheduled("./scripts/release.sh") }), context)).toEqual([{ location: ".github/workflows/nightly.yml line 3" }]);
-});
-
 test("the report names each scheduled release and says to drop its schedule", () => {
   expect(formatScheduleReport([{ location: ".github/workflows/daily-release.yml line 3" }])).toBe(
     "ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/daily-release.yml line 3: drop the schedule, so a release runs only when someone starts it",
