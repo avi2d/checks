@@ -89,7 +89,10 @@ Each refusal names the workflow file and line, the version found and where it wa
 It refuses a workflow that triggers on `schedule` and releases, in every repository, whether or not it publishes to npm.
 A workflow releases when a run step calls `checks-release-pr`, `checks-release-push`, `checks-release-tag` or `checks-release-publish`.
 A call counts directly, through `bunx`, or through `bun` or `bun run` with the bin's path or its source file.
-A workflow also releases when a run step publishes to npm, as [checks-release-preflight](checks-release-preflight.md) reads it.
+A call through a `package.json` script counts, as `bun run <script>` or `npm run <script>` where the named script releases.
+A call through a local reusable workflow counts, as a job that uses a file under `.github/workflows/` that releases.
+A call through a repository shell script counts, as a path inside the repository whose file releases.
+A workflow also releases when a run step publishes to npm, as [checks-release-preflight](checks-release-preflight.md) reads it, directly or through one of those paths.
 Text that only names a release bin, such as an `echo`, never counts.
 A release runs when someone starts it, as [checks-release-pr](checks-release-pr.md#when-it-runs) says.
 Each refusal names the workflow file and the line of its `schedule` trigger.

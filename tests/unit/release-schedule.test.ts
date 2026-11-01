@@ -72,6 +72,29 @@ test("a schedule that only names a release bin or runs something else is not ref
   expect(findScheduledReleases(named({ "night-run.yml": scheduled("bun run test") }))).toEqual([]);
 });
 
+test("a schedule that reaches checks-release-pr through a bun run package script releases on a schedule", () => {
+  const context = { scripts: new Map([["release", "bunx checks-release-pr ci.yml"]]), files: new Map<string, string>() };
+  expect(findScheduledReleases(named({ "nightly.yml": scheduled("bun run release") }), context)).toEqual([{ location: ".github/workflows/nightly.yml line 3" }]);
+});
+
+test("a schedule that reaches checks-release-pr through an npm run package script releases on a schedule", () => {
+  const context = { scripts: new Map([["release", "bunx checks-release-pr ci.yml"]]), files: new Map<string, string>() };
+  expect(findScheduledReleases(named({ "nightly.yml": scheduled("npm run release") }), context)).toEqual([{ location: ".github/workflows/nightly.yml line 3" }]);
+});
+
+test("a schedule that reaches checks-release-pr through a local reusable workflow releases on a schedule", () => {
+  const caller = `name: nightly\non:\n  schedule:\n    - cron: "7 3 * * *"\njobs:\n  cut:\n    uses: ./.github/workflows/cut.yml\n`;
+  const callee = release("bunx checks-release-pr ci.yml");
+  expect(findScheduledReleases(named({ "nightly.yml": caller, "cut.yml": callee }), { scripts: new Map(), files: new Map() })).toEqual([
+    { location: ".github/workflows/nightly.yml line 3" },
+  ]);
+});
+
+test("a schedule that reaches checks-release-pr through a repository shell script releases on a schedule", () => {
+  const context = { scripts: new Map<string, string>(), files: new Map([["scripts/release.sh", "bunx checks-release-pr ci.yml"]]) };
+  expect(findScheduledReleases(named({ "nightly.yml": scheduled("./scripts/release.sh") }), context)).toEqual([{ location: ".github/workflows/nightly.yml line 3" }]);
+});
+
 test("the report names each scheduled release and says to drop its schedule", () => {
   expect(formatScheduleReport([{ location: ".github/workflows/daily-release.yml line 3" }])).toBe(
     "ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/daily-release.yml line 3: drop the schedule, so a release runs only when someone starts it",
