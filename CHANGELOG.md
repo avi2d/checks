@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.61.0
+
+Released 2026-11-01.
+
+### Features
+
+- **ci-wiring:** refuse a scheduled release in every repository [#22](https://github.com/avi2d/checks/pull/22)
+
 ## 0.60.0
 
 Released 2026-10-31.
