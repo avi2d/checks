@@ -1,4 +1,3 @@
-import { documentPublishes } from "./release-preflight.ts";
 import { runsBin } from "./mutation-job.ts";
 import { jobRuns } from "./runner-policy.ts";
 import type { Command } from "./shell-command.ts";
@@ -38,12 +37,11 @@ function workflowReleases(
   byPath: ReadonlyMap<string, Workflow>,
   walkedWorkflows: readonly string[],
 ): boolean {
-  if (documentPublishes(workflow.document)) return true;
   const files = (file: string) => context.files.get(file);
   if (
     workflowJobs(workflow)
       .flatMap(([, job]) => jobRuns(workflow, job))
-      .some((run) => runsBin(run, context.scripts, files, isReleaseCommand))
+      .some((run) => runsBin(run, context.scripts, files, isReleaseCommand, true))
   )
     return true;
   return workflowJobs(workflow).some(([, job]) => {

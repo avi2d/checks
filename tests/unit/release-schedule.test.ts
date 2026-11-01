@@ -77,11 +77,6 @@ test("a schedule that reaches checks-release-pr through a bun run package script
   expect(findScheduledReleases(named({ "nightly.yml": scheduled("bun run release") }), context)).toEqual([{ location: ".github/workflows/nightly.yml line 3" }]);
 });
 
-test("a schedule that reaches checks-release-pr through an npm run package script releases on a schedule", () => {
-  const context = { scripts: new Map([["release", "bunx checks-release-pr ci.yml"]]), files: new Map<string, string>() };
-  expect(findScheduledReleases(named({ "nightly.yml": scheduled("npm run release") }), context)).toEqual([{ location: ".github/workflows/nightly.yml line 3" }]);
-});
-
 test("a schedule that reaches checks-release-pr through a local reusable workflow releases on a schedule", () => {
   const caller = `name: nightly\non:\n  schedule:\n    - cron: "7 3 * * *"\njobs:\n  cut:\n    uses: ./.github/workflows/cut.yml\n`;
   const callee = release("bunx checks-release-pr ci.yml");

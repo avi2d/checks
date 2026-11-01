@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
 import { parseWorkflow } from "../../src/delivery/ci-wiring.ts";
+import { runsMutation } from "../../src/delivery/mutation-job.ts";
 import { findRunnerFaults, formatRunnerReport, type RunnerConfig } from "../../src/delivery/runner-policy.ts";
 
 function workflow(text: string) {
@@ -460,5 +461,12 @@ test("a repository file resolves from the directory its command runs in", () => 
   mutation(step("./report.sh", tools));
   expect(sweep(step("bun --cwd=tools run ../mutate.sh"))).toEqual([]);
   expect(sweep(step("./mutate.sh", "        working-directory: ${{ github.workspace }}/tools\n"))).toEqual([]);
+});
+
+test("an npm run script or shell operand that reaches a mutation bin is not a mutation job", () => {
+  const scripts = new Map([["mutate", "bunx checks-mutation"]]);
+  const files = (file: string) => (file === "scripts/mutate.sh" ? "bunx checks-mutation" : undefined);
+  expect(runsMutation({ script: "npm run mutate", dir: "" }, scripts, files)).toBe(false);
+  expect(runsMutation({ script: "bash scripts/mutate.sh", dir: "" }, scripts, files)).toBe(false);
 });
 

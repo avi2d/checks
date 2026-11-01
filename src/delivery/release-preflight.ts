@@ -79,7 +79,7 @@ function jobPublishes(job: unknown): boolean {
   return runsOf(job).some(publishesToNpm);
 }
 
-export function documentPublishes(document: unknown): boolean {
+function documentPublishes(document: unknown): boolean {
   const decoded = decodeDocument(document);
   if (Option.isNone(decoded) || decoded.value.jobs === undefined) return false;
   return Object.values(decoded.value.jobs).some(jobPublishes);
