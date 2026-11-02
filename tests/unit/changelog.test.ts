@@ -90,8 +90,16 @@ test("a bump not newer than the release before it is a revert that cancels the u
 });
 
 test("a revert keeps a tagged release, which was published", () => {
-  const found = cuts(bumps("0.1.0", "0.2.0", "0.3.0", "0.2.0", "0.4.0"), recorded("0.3.0", "0.2.0", "0.1.0"), new Set(["0.3.0"]), undefined);
+  const found = cuts(bumps("0.1.0", "0.2.0", "0.3.0", "0.2.0", "0.4.0"), recorded("0.3.0", "0.2.0", "0.1.0"), new Set(["c2"]), undefined);
   expect(found.map(({ version }) => version)).toEqual(["0.1.0", "0.2.0", "0.3.0", "0.4.0"]);
+});
+
+test("a tag on a version bumped again after a cancel does not revive the cancelled bump in place of the tagged one", () => {
+  const found = cuts(bumps("0.6.0", "0.7.0", "0.6.0", "0.7.0"), recorded("0.7.0", "0.6.0"), new Set(["c0", "c3"]), undefined);
+  expect(found.map(({ version, through, after }) => ({ version, through, after }))).toEqual([
+    { version: "0.6.0", through: "c0", after: [] },
+    { version: "0.7.0", through: "c3", after: ["c0"] },
+  ]);
 });
 
 test("a release keeps the date the changelog gives it, else its bump's date", () => {
