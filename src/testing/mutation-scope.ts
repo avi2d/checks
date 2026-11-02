@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { escape, minimatch } from "minimatch";
-import { changedPaths, git, pathsAt, rangeEnds, type Change } from "../core/git.ts";
+import { changedPaths, git, pathsAt, pathsOf, rangeEnds, type Change } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { importedFile, importsOf, readersOf, resolved, TEST_TREE } from "./mutation-scope-graph.ts";
 
@@ -86,8 +86,6 @@ function scopedNames(change: Change, mutated: (file: string) => boolean): readon
   if (change.kind === "renamed" && mutated(change.from) && mutated(change.path)) return [change.from, change.path];
   return mutated(change.path) ? [change.path] : [];
 }
-
-const pathsOf = (change: Change): readonly string[] => (change.kind === "renamed" ? [change.from, change.path] : [change.path]);
 
 export function pickFromDiff(changes: readonly Change[], mutated: (file: string) => boolean): Picked {
   const paths = changes.flatMap(pathsOf);

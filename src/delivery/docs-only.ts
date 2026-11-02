@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect } from "effect";
-import { changedPaths, git } from "../core/git.ts";
+import { pathsSinceMergeBase } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 
 const NAME = "docs-only";
@@ -18,9 +18,7 @@ const check = Effect.gen(function* () {
     yield* Console.log("docs-only=false");
     return true;
   }
-  const mergeBase = (yield* git(["merge-base", base, head])).trim();
-  const changes = yield* changedPaths(mergeBase, head, []);
-  const paths = changes.flatMap((change) => (change.kind === "renamed" ? [change.from, change.path] : [change.path]));
+  const paths = yield* pathsSinceMergeBase(base, head);
   const full = paths.filter((path) => !isDocsPath(path));
   if (paths.length === 0) {
     yield* Console.error(`${NAME}: the range changes no file, so the full run stays`);
