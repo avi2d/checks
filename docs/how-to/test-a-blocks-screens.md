@@ -36,7 +36,7 @@ To add a suite for one block:
 1. Approve them as [Approve new pictures](#approve-new-pictures) says.
 
 `blockScreens` registers one test for each size, and each test opens the page in a fresh browser context for its device.
-It waits for the fonts and every animation that ends, runs `setup` and takes the picture with animations stopped.
+It waits for the fonts and every running animation that ends, runs `setup` and takes the picture with animations stopped.
 
 | Key | What it takes |
 | --- | --- |
