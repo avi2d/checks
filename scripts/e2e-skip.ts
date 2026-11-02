@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect } from "effect";
-import { changedPaths, git } from "../src/core/git.ts";
+import { pathsSinceMergeBase } from "../src/core/git.ts";
 import { runMain } from "../src/core/main.ts";
 
 const NAME = "e2e-skip";
@@ -17,9 +17,7 @@ const check = Effect.gen(function* () {
     yield* Console.log("e2e-skip=false");
     return true;
   }
-  const mergeBase = (yield* git(["merge-base", base, head])).trim();
-  const changes = yield* changedPaths(mergeBase, head, []);
-  const paths = changes.flatMap((change) => (change.kind === "renamed" ? [change.from, change.path] : [change.path]));
+  const paths = yield* pathsSinceMergeBase(base, head);
   const skip = skipsE2e(paths);
   if (paths.length === 0) {
     yield* Console.error(NAME + ": the range changes no file, so the e2e tier runs");

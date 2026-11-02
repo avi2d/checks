@@ -107,6 +107,15 @@ export const changedPaths = Effect.fn("changedPaths")(function* (
   return parseNameStatus(yield* git(["diff", "--name-status", "-z", "-M", base, head, "--", ...pathspecs], cwd));
 });
 
+export function pathsOf(change: Change): readonly string[] {
+  return change.kind === "renamed" ? [change.from, change.path] : [change.path];
+}
+
+export const pathsSinceMergeBase = Effect.fn("pathsSinceMergeBase")(function* (base: string, head: string, cwd?: string) {
+  const mergeBase = (yield* git(["merge-base", base, head], cwd)).trim();
+  return (yield* changedPaths(mergeBase, head, [], cwd)).flatMap(pathsOf);
+});
+
 const ESCAPES: Readonly<Record<string, string>> = { a: "\x07", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t", v: "\v" };
 
 // Git quotes a path holding a quote, a backslash or a control character, and ends one holding a space with a tab.

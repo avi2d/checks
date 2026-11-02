@@ -2,7 +2,7 @@
 import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { EVERY_REPOSITORY, NIGHT_GATES, PR_GATES, WHOLE_TREE, type KitGate } from "./gates.ts";
-import { changedPaths, defaultBranch, git } from "./git.ts";
+import { changedPaths, defaultBranch, git, pathsOf } from "./git.ts";
 import { runMain, Usage } from "./main.ts";
 import { FAST_TREE_GATES, selectScope } from "./scope.ts";
 
@@ -190,7 +190,7 @@ const scopedGates = Effect.fn("scopedGates")(function* (range: Range, root: stri
   if (range.refs.length === 1) return { bins: undefined, detail: "the full run, since a lone tip scopes nothing" };
   const [base, head] = range.refs;
   const changes = yield* changedPaths(base, head, [], root);
-  const committed = changes.flatMap((change) => (change.kind === "renamed" ? [change.from, change.path] : [change.path]));
+  const committed = changes.flatMap(pathsOf);
   const working = (yield* git(["diff", "--no-renames", "--name-only", "-z", "HEAD", "--"], root)).split("\0").filter(Boolean);
   const untracked = (yield* git(["ls-files", "--others", "--exclude-standard", "-z"], root)).split("\0").filter(Boolean);
   const scope = selectScope([...committed, ...working, ...untracked]);
