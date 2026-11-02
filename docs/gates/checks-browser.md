@@ -162,6 +162,7 @@ Each size in a set is a viewport named for its device and its size, with `device
 A preset sits beside a product's own viewports.
 A name both declare is refused as declared twice, and so is a size that two listed presets both hold.
 A product's own code takes the sizes by importing `SCREEN_SIZES`, `screenSizeName` and `ENLARGED_TEXT_PX` from `@avi2dg/checks/screen-sizes.ts`.
+A block's screenshot suite runs at the same sizes, as [Test the screens of one block](../how-to/test-a-blocks-screens.md) says.
 
 <!-- generated screen-sizes: bun run build writes it from SCREEN_SIZES in src/quality/browser/screen-sizes.ts and scripts/doc-blocks.ts -->
 

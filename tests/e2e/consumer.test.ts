@@ -370,7 +370,7 @@ test(
     const installed = join(dir, "node_modules", "@avi2dg", "checks");
     const manifest = Schema.decodeSync(Manifest)(await readFile(join(CHECKOUT, "package.json"), "utf8"));
     expect(Object.keys(manifest.exports).toSorted()).toEqual([
-      ...["./browser-checks.json", "./browser-hooks.ts", "./dependency-cruiser", "./dependency-cruiser.config.js", "./knip", "./knip-base.json", "./oxlint"],
+      ...["./block-screens.ts", "./browser-checks.json", "./browser-hooks.ts", "./dependency-cruiser", "./dependency-cruiser.config.js", "./knip", "./knip-base.json", "./oxlint"],
       ...["./screen-sizes.ts", "./scripts/comment-matchers.ts", "./scripts/prose-matchers.ts", "./scripts/test-skips.ts", "./stryker.preset.js", "./stylelint", "./templates/*", "./tsconfig.effect.json"],
     ]);
     const resolved = Object.entries(manifest.exports).map(([key, exported]) => {

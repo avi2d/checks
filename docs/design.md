@@ -84,11 +84,12 @@ Nothing would then say which gate a helper serves.
 A mutation runner's default scope covers `src/`, so the kit's own Stryker run mutates its source with no `mutate` list.
 The testing directory is named `testing` rather than `tests`, because a `src/tests/` beside the root `tests/` would read as a second suite.
 
-Seven `exports` keys name a path the file does not sit at, because consumers resolve them by that name.
+Eight `exports` keys name a path the file does not sit at, because consumers resolve them by that name.
 `@avi2dg/checks/scripts/test-skips.ts`, `@avi2dg/checks/scripts/comment-matchers.ts` and `@avi2dg/checks/scripts/prose-matchers.ts` point at their files under `src/`.
 `@avi2dg/checks/browser-hooks.ts` points at `src/quality/browser/hooks.ts`, whose types a product's browser hooks import.
 `@avi2dg/checks/browser-checks.json` points at `src/quality/browser/browser-checks.json`, the starter a product copies.
 `@avi2dg/checks/screen-sizes.ts` points at `src/quality/browser/screen-sizes.ts`, whose sizes a product imports.
+`@avi2dg/checks/block-screens.ts` points at `src/testing/block-screens.ts`, whose screenshot suite a product's pixel tests call.
 `@avi2dg/checks/templates/*` points at `dist/templates/`.
 A path read without the resolver, such as `node_modules/@avi2dg/checks/scripts/test-skips.ts`, does not exist.
 
@@ -114,7 +115,7 @@ A shell reaches it through `bun run`, which never falls back to the registry the
 The `.ts` bins keep a `bun` shebang and need no build step, unlike the oxlint plugins that Node loads.
 
 The bins are written in Effect.
-So `effect` is a peer dependency, and `@effect/platform-bun`, which only the bins use, is a dependency.
+So `effect` is a peer dependency, and `@effect/platform-bun`, which the bins and the block screenshot helper use, is a dependency.
 The Stryker test order helper runs under Node, so it takes its services from `@effect/platform-node-shared`, which is a direct dependency.
 That dependency also pins its version.
 `@effect/platform-bun` asks for it with a `^` range, so a newer minor of it could resolve and peer on a newer `effect` than the exact version consumers install.
