@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.61.1
+
+Released 2026-11-02.
+
+### Fixes
+
+- **changelog:** keep a release's section when its commit gets its tag [#23](https://github.com/avi2d/checks/pull/23)
+
 ## 0.61.0
 
 Released 2026-11-01.
