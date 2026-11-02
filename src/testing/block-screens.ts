@@ -231,7 +231,7 @@ const PICTURE_OPTIONS = { scale: "css", animations: "disabled", caret: "hide" } 
 export const pictureOf = (page: Page, selector?: string): Promise<Uint8Array> =>
   selector === undefined ? page.screenshot(PICTURE_OPTIONS) : page.locator(selector).screenshot(PICTURE_OPTIONS);
 
-const SETTLED = `document.fonts.ready.then(() => Promise.all(document.getAnimations().filter((animation) => animation.timeline === document.timeline && animation.effect?.getTiming().iterations !== Infinity).map((animation) => animation.finished))).then(() => undefined)`;
+const SETTLED = `document.fonts.ready.then(() => Promise.all(document.getAnimations().filter((animation) => animation.playState !== "paused" && animation.timeline === document.timeline && animation.effect?.getTiming().iterations !== Infinity).map((animation) => animation.finished))).then(() => undefined)`;
 
 export const settled = (page: Page): Promise<unknown> => page.evaluate(SETTLED);
 

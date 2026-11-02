@@ -115,7 +115,7 @@ A shell reaches it through `bun run`, which never falls back to the registry the
 The `.ts` bins keep a `bun` shebang and need no build step, unlike the oxlint plugins that Node loads.
 
 The bins are written in Effect.
-So `effect` is a peer dependency, and `@effect/platform-bun`, which only the bins use, is a dependency.
+So `effect` is a peer dependency, and `@effect/platform-bun`, which the bins and the block screenshot helper use, is a dependency.
 The Stryker test order helper runs under Node, so it takes its services from `@effect/platform-node-shared`, which is a direct dependency.
 That dependency also pins its version.
 `@effect/platform-bun` asks for it with a `^` range, so a newer minor of it could resolve and peer on a newer `effect` than the exact version consumers install.
