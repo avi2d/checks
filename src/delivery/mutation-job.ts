@@ -143,27 +143,24 @@ function mutationBin([program = "", subcommand]: Command): boolean {
   return MUTATION_BINS.includes(bin) || (bin === "stryker" && subcommand === "run");
 }
 
-function filesWanted(runs: readonly Run[], scripts: ReadonlyMap<string, string>, files: ReadonlyMap<string, string>, read: ReadonlySet<string>): readonly string[] {
-  const wanted = new Set<string>();
-  const lookup = (file: string) => {
-    if (!read.has(file)) wanted.add(file);
-    return files.get(file);
-  };
-  for (const run of runs) runsMutation(run, scripts, lookup);
-  return [...wanted];
-}
-
-function scheduleFilesWanted(runs: readonly Run[], scripts: ReadonlyMap<string, string>, files: ReadonlyMap<string, string>, read: ReadonlySet<string>): readonly string[] {
-  const wanted = new Set<string>();
-  const lookup = (file: string) => {
-    if (!read.has(file)) wanted.add(file);
-    return files.get(file);
-  };
-  for (const run of runs) runsBin(run, scripts, lookup, () => false, true);
-  return [...wanted];
-}
-
 type FilesWanted = (runs: readonly Run[], scripts: ReadonlyMap<string, string>, files: ReadonlyMap<string, string>, read: ReadonlySet<string>) => readonly string[];
+
+type Walk = (run: Run, scripts: ReadonlyMap<string, string>, files: (file: string) => string | undefined) => void;
+
+function wantedBy(walk: Walk): FilesWanted {
+  return (runs, scripts, files, read) => {
+    const wanted = new Set<string>();
+    const lookup = (file: string) => {
+      if (!read.has(file)) wanted.add(file);
+      return files.get(file);
+    };
+    for (const run of runs) walk(run, scripts, lookup);
+    return [...wanted];
+  };
+}
+
+const filesWanted = wantedBy(runsMutation);
+const scheduleFilesWanted = wantedBy((run, scripts, files) => runsBin(run, scripts, files, () => false, true));
 
 const readFiles = Effect.fn("readFiles")(function* (root: string, scripts: ReadonlyMap<string, string>, runs: readonly Run[], wanted: FilesWanted) {
   const fs = yield* FileSystem.FileSystem;
