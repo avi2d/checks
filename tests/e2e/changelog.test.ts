@@ -410,6 +410,58 @@ test(
 );
 
 test(
+  "tagging a release that was bumped, cancelled and bumped again leaves the changelog as the release commit wrote it, and a later bump keeps that release",
+  async () => {
+    await initRepo();
+    await bump("0.6.0");
+    await commit("feat: open the site (#60)");
+    await rewritten(1);
+    await commit("chore: release 0.6.0 (#61)");
+    await $`git tag v0.6.0`.cwd(dir).quiet();
+    await commit("feat: add the legal section to the home page (#69)");
+    await commit("feat: fade the page end into the toolbar zone (#73)");
+    await bump("0.7.0");
+    await rewritten(2);
+    await commit("chore: release 0.7.0 (#78)");
+    await commit("feat: split publishing into staging and production (#98)");
+    await commit("fix: strip license comments from built pages (#99)");
+    await commit("feat(scripts): photograph the pages on an emulator (#103)");
+    await bump("0.6.0");
+    await rewritten(1);
+    await commit("chore: cancel the 0.7.0 release (#116)");
+    await bump("0.7.0");
+    await rewritten(2);
+    await commit("chore: release 0.7.0 (#118)");
+    const untagged = await rewritten(2);
+    const date = /^Released (\S+)\.$/m.exec(untagged)?.[1] ?? "";
+    const release = section(
+      "0.7.0",
+      date,
+      [
+        "Features",
+        "**scripts:** photograph the pages on an emulator [#103](https://github.com/acme/widget/pull/103)",
+        "split publishing into staging and production [#98](https://github.com/acme/widget/pull/98)",
+        "fade the page end into the toolbar zone [#73](https://github.com/acme/widget/pull/73)",
+        "add the legal section to the home page [#69](https://github.com/acme/widget/pull/69)",
+      ],
+      ["Fixes", "strip license comments from built pages [#99](https://github.com/acme/widget/pull/99)"],
+    );
+    const opened = section("0.6.0", "2026-09-01", ["Features", "open the site [#60](https://github.com/acme/widget/pull/60)"]);
+    expect(untagged).toBe(written(release, opened));
+
+    await $`git tag v0.7.0`.cwd(dir).quiet();
+    expect(await rewritten(2)).toBe(untagged);
+
+    await commit("feat: list the prices (#120)");
+    await bump("0.8.0");
+    const pending = await rewritten(3);
+    const next = section("0.8.0", localDate(), ["Features", "list the prices [#120](https://github.com/acme/widget/pull/120)"]);
+    expect(pending).toBe(written(next, release, opened));
+  },
+  { timeout: 30_000 },
+);
+
+test(
   "a shallow checkout is refused rather than written from the part of the history it holds",
   async () => {
     await initRepo();
