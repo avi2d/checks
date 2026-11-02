@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.62.1
+
+Released 2026-11-02.
+
+### Fixes
+
+- **dependencies:** raise minimatch to 11.0.3 and qs override to 6.16.1 [#25](https://github.com/avi2d/checks/pull/25)
+
 ## 0.62.0
 
 Released 2026-11-02.
