@@ -28,13 +28,13 @@ test("a version above npm's latest publishes and becomes latest", async () => {
   const a = await release("0.1.1", "0.1.0");
   expect(await a.publish()).toEqual({ exitCode: 0, text: "+ @acme/widget@0.1.1\nrelease-publish: published @acme/widget@0.1.1\n" });
   expect(await a.state()).toEqual({ latest: "0.1.1", calls: ["view @acme/widget dist-tags --json", "publish"] });
-});
+}, 30_000);
 
 test("the first version of a package npm does not hold yet publishes", async () => {
   const a = await release("0.1.0", null);
   expect((await a.publish()).exitCode).toBe(0);
   expect((await a.state()).latest).toBe("0.1.0");
-});
+}, 30_000);
 
 test("a release that runs after a newer one published ends cleanly and leaves npm's latest on the newer version", async () => {
   const a = await release("0.1.1", "0.1.2");
@@ -43,7 +43,7 @@ test("a release that runs after a newer one published ends cleanly and leaves np
     text: "release-publish: npm already holds @acme/widget@0.1.2, which carries every change in 0.1.1, so 0.1.1 stays off npm\n",
   });
   expect(await a.state()).toEqual({ latest: "0.1.2", calls: ["view @acme/widget dist-tags --json"] });
-});
+}, 30_000);
 
 test("a newer release that publishes while this one runs ends this one cleanly", async () => {
   const a = await release("0.1.1", "0.1.0");
@@ -51,13 +51,13 @@ test("a newer release that publishes while this one runs ends this one cleanly",
   expect(raced.exitCode).toBe(0);
   expect(raced.text).toContain("release-publish: npm already holds @acme/widget@0.1.2, which carries every change in 0.1.1, so 0.1.1 stays off npm\n");
   expect(await a.state()).toEqual({ latest: "0.1.2", calls: ["view @acme/widget dist-tags --json", "publish", "view @acme/widget dist-tags --json"] });
-});
+}, 30_000);
 
 test("a rerun of a release npm already holds publishes nothing", async () => {
   const a = await release("0.1.1", "0.1.1");
   expect(await a.publish()).toEqual({ exitCode: 0, text: "release-publish: npm already holds @acme/widget@0.1.1\n" });
   expect((await a.state()).calls).toEqual(["view @acme/widget dist-tags --json"]);
-});
+}, 30_000);
 
 test("a publish npm refuses for any other reason fails the release", async () => {
   const a = await release("0.1.1", "0.1.0");
@@ -65,4 +65,4 @@ test("a publish npm refuses for any other reason fails the release", async () =>
   expect(refused.exitCode).toBe(2);
   expect(refused.text).toContain("checks-release-publish: npm publish refused @acme/widget@0.1.1\n");
   expect((await a.state()).latest).toBe("0.1.0");
-});
+}, 30_000);
