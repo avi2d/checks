@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.62.0
+
+Released 2026-11-02.
+
+### Features
+
+- **testing:** picture one block at each screen size in chromium and webkit [#24](https://github.com/avi2d/checks/pull/24)
+
 ## 0.61.1
 
 Released 2026-11-02.
