@@ -27,6 +27,8 @@ It finds releases in the version bumps of `package.json` across all of `HEAD` an
 It reads a commit whose `package.json` is missing or has no version as unversioned, so the commit that adds the version is the first release and a repository that adopts a version late still writes its changelog.
 A bump to a version no newer than the release before it is a revert.
 A revert cancels every release above the version it returns to, except a release a `v` tag marks as published.
+A `v` tag publishes only the newest bump of its version that the tagged commit reaches.
+So a version bumped again after a cancel keeps its cancelled bump cancelled, and the tag leaves the changelog unchanged.
 A version older than the newest in the committed `CHANGELOG.md` and absent from it was never published, so its commits go into the next release.
 It refuses a shallow checkout, since the releases reach back past its history.
 It refuses a `package.json` with no repository address, since each entry links its pull request under it.

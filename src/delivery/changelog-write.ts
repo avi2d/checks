@@ -64,9 +64,26 @@ const readBumps = Effect.fn("readBumps")(function* (root: string) {
   return bumps;
 });
 
-const readPublished = Effect.fn("readPublished")(function* (root: string) {
+const reaches = (root: string, ancestor: string, descendant: string) =>
+  git(["merge-base", "--is-ancestor", ancestor, descendant], root).pipe(
+    Effect.as(true),
+    Effect.catchTag("GitFailure", () => Effect.succeed(false)),
+  );
+
+// A tag publishes the newest bump of its version that it reaches, so a cancelled older bump of that version stays cancelled.
+const readPublishedShas = Effect.fn("readPublishedShas")(function* (root: string, bumps: readonly Bump[]) {
   const tags = yield* git(["for-each-ref", "--format=%(refname:strip=2)", `refs/tags/${TAG_PREFIX}*`], root);
-  return new Set(tags.split("\n").flatMap((tag) => (tag.startsWith(TAG_PREFIX) ? [tag.slice(TAG_PREFIX.length)] : [])));
+  const published = new Set<string>();
+  for (const tag of tags.split("\n").filter((line) => line.startsWith(TAG_PREFIX))) {
+    const version = tag.slice(TAG_PREFIX.length);
+    for (const bump of bumps.filter((one) => one.version === version).toReversed()) {
+      if (yield* reaches(root, bump.sha, `refs/tags/${tag}`)) {
+        published.add(bump.sha);
+        break;
+      }
+    }
+  }
+  return published;
 });
 
 const mergedTips = Effect.fn("mergedTips")(function* (root: string, through: string) {
@@ -78,11 +95,7 @@ const mergedTips = Effect.fn("mergedTips")(function* (root: string, through: str
   for (const [, ...parents] of merges.split("\n").filter((line) => line !== "").map((line) => line.split(" "))) {
     for (const parent of parents) {
       // A parent past the bump belongs to a later release, so only a parent beside it joins this one.
-      const past = yield* git(["merge-base", "--is-ancestor", through, parent], root).pipe(
-        Effect.as(true),
-        Effect.catchTag("GitFailure", () => Effect.succeed(false)),
-      );
-      if (!past) tips.push(parent);
+      if (!(yield* reaches(root, through, parent))) tips.push(parent);
     }
   }
   return tips;
@@ -113,7 +126,8 @@ const write = Effect.gen(function* () {
   }
   const recorded = (yield* fs.exists(target)) ? releaseDates(yield* fs.readFileString(target)) : new Map<string, string>();
   const pending = version === (yield* versionAt(root, "HEAD")) ? undefined : { sha: "HEAD", version, date: yield* today };
-  const released = cuts(yield* readBumps(root), recorded, yield* readPublished(root), pending);
+  const bumps = yield* readBumps(root);
+  const released = cuts(bumps, recorded, yield* readPublishedShas(root, bumps), pending);
   const tip = released.at(-1);
   const extra = tip === undefined || tip.through === "HEAD" ? [] : yield* mergedTips(root, tip.through);
   const found = (yield* Effect.forEach(released, (cut, index) => subjectsOf(root, cut, index === released.length - 1 ? extra : [])))

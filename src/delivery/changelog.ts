@@ -57,12 +57,13 @@ function entryOf(subject: string, repositoryUrl: string): Entry | undefined {
 }
 
 // A bump not newer than the release before it is a revert: it cancels every release above the version it
-// returns to, except a published one.
-function standing(bumps: readonly Bump[], published: ReadonlySet<string>): readonly Bump[] {
+// returns to, except a published one. A version cancelled and bumped again holds two bumps, so a bump is
+// published by its sha and never by its version.
+function standing(bumps: readonly Bump[], publishedShas: ReadonlySet<string>): readonly Bump[] {
   return bumps.reduce<readonly Bump[]>((kept, bump) => {
     const before = kept.at(-1);
     if (before === undefined || Bun.semver.order(bump.version, before.version) === 1) return [...kept, bump];
-    return kept.filter(({ version }) => published.has(version) || Bun.semver.order(version, bump.version) !== 1);
+    return kept.filter(({ sha, version }) => publishedShas.has(sha) || Bun.semver.order(version, bump.version) !== 1);
   }, []);
 }
 
@@ -71,11 +72,11 @@ function standing(bumps: readonly Bump[], published: ReadonlySet<string>): reado
 export function cuts(
   bumps: readonly Bump[],
   recorded: ReadonlyMap<string, string>,
-  published: ReadonlySet<string>,
+  publishedShas: ReadonlySet<string>,
   pending: Bump | undefined,
 ): readonly Cut[] {
   const newest = [...recorded.keys()].toSorted(Bun.semver.order).at(-1);
-  const candidates = standing(pending === undefined ? bumps : [...bumps, pending], published);
+  const candidates = standing(pending === undefined ? bumps : [...bumps, pending], publishedShas);
   const released = candidates.filter(
     ({ version }, index) =>
       index === candidates.length - 1 || newest === undefined || recorded.has(version) || Bun.semver.order(version, newest) !== -1,
