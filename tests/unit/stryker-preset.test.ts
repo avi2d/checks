@@ -33,7 +33,7 @@ test("the preset carries exactly the agreed rollout settings, the full-run guard
     tempDirName: "../.stryker-tmp",
     coverageAnalysis: "perTest",
     reporters: ["html", "json", "clear-text", "progress"],
-    timeoutMS: 60000,
+    timeoutMS: 10000,
     concurrency: halfAvailableCores(),
     thresholds: { high: 85, low: 70, break: null },
   });
