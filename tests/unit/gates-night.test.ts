@@ -172,9 +172,10 @@ function evaluateEquality(expr: string, gatesResult: string): string | boolean {
 
 function evaluateAnd(expr: string, gatesResult: string): string | boolean {
   const parts = splitOutsideQuotes(expr, "&&");
-  if (parts === undefined) return evaluateEquality(expr, gatesResult);
-  let result = evaluateEquality(parts[0].trim(), gatesResult);
-  for (const part of parts.slice(1)) {
+  const [first, ...rest] = parts ?? [];
+  if (first === undefined) return evaluateEquality(expr, gatesResult);
+  let result = evaluateEquality(first.trim(), gatesResult);
+  for (const part of rest) {
     if (!truthy(result)) return result;
     result = evaluateEquality(part.trim(), gatesResult);
   }
@@ -183,9 +184,10 @@ function evaluateAnd(expr: string, gatesResult: string): string | boolean {
 
 function evaluateOr(expr: string, gatesResult: string): string | boolean {
   const parts = splitOutsideQuotes(expr, "||");
-  if (parts === undefined) return evaluateAnd(expr, gatesResult);
-  let result = evaluateAnd(parts[0].trim(), gatesResult);
-  for (const part of parts.slice(1)) {
+  const [first, ...rest] = parts ?? [];
+  if (first === undefined) return evaluateAnd(expr, gatesResult);
+  let result = evaluateAnd(first.trim(), gatesResult);
+  for (const part of rest) {
     if (truthy(result)) return result;
     result = evaluateAnd(part.trim(), gatesResult);
   }
