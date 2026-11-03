@@ -5,7 +5,7 @@ import { DEFAULT_BRANCH } from "../core/gates.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { gh, type GitHubFailure, gitHubJson, REPOSITORY } from "../delivery/github.ts";
 import { parseReport as parseMutationReport } from "./mutation-compare.ts";
-import { cleared, type Finding, findingsOf, gatesDecided, gatesOf, keyOf, NightRecordSchema, type Observed, type NightRecord, percent, type PreviousNight, scoresOf, type TestReport } from "./night-run-findings.ts";
+import { cleared, type Finding, findingsOf, gatesDecided, gatesOf, keyOf, NightRecordSchema, noted, type Observed, type NightRecord, percent, type PreviousNight, scoresOf, type TestReport } from "./night-run-findings.ts";
 import { parseReport as parseTestReport } from "./test-report.ts";
 
 const NAME = "checks-night-run";
@@ -143,6 +143,10 @@ export function clearedText(key: string, run: string): string {
   return `The night run ${run} no longer reports \`${key}\`, so it closes this issue.`;
 }
 
+export function notedText(key: string, run: string): string {
+  return `The night run ${run} no longer reports \`${key}\`. This issue stays open because a mutation score can recover and drop again.`;
+}
+
 export const fileFindings = Effect.fn("fileFindings")(function* (findings: readonly Finding[], observed: Observed, run: string) {
   const issues = yield* Issues;
   if (findings.length > 0) yield* issues.ensureLabel;
@@ -163,6 +167,11 @@ export const fileFindings = Effect.fn("fileFindings")(function* (findings: reado
     }
   }
   for (const { number, key } of listed) {
+    if (noted(key, present, observed)) {
+      yield* issues.comment(number, notedText(key, run));
+      filed.push({ key, issue: number, action: "commented on" });
+      continue;
+    }
     if (!cleared(key, present, observed)) continue;
     yield* issues.comment(number, clearedText(key, run));
     yield* issues.close(number);
@@ -259,8 +268,8 @@ const nightRun = Effect.gen(function* () {
   const tests: TestReport[] = yield* Effect.forEach(options.tests, testReport);
   const log = Option.isSome(options.gates) ? Option.some(yield* readText(options.gates.value)) : Option.none<string>();
   const gates: readonly Finding[] = Option.isSome(log) ? gatesOf(log.value) : [];
-  const observed: Observed = { tests: options.tests.length > 0, gates: Option.isSome(log) && gatesDecided(log.value) };
   const previous = Option.isSome(scores) ? yield* previousNight(actions) : Option.none<PreviousNight>();
+  const observed: Observed = { tests: options.tests.length > 0, gates: Option.isSome(log) && gatesDecided(log.value), mutation: Option.isSome(previous) };
   const findings = findingsOf(previous, { scores: Option.getOrElse(scores, () => ({})), tests }, gates);
   const filing: Filing = actions.ref === `refs/heads/${DEFAULT_BRANCH}` ? { onMain: true, filed: yield* fileFindings(findings, observed, actions.run) } : { onMain: false, ref: actions.ref };
   if (filing.onMain && Option.isSome(scores)) yield* writeRecord({ scores: scores.value });

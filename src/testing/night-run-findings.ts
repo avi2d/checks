@@ -44,7 +44,7 @@ function fell(before: Score, after: Score): boolean {
 }
 
 // A night judges a key only from a report it read, since a report it lacks leaves every finding in it absent.
-export type Observed = { readonly tests: boolean; readonly gates: boolean };
+export type Observed = { readonly tests: boolean; readonly gates: boolean; readonly mutation: boolean };
 
 export function keyOf(finding: Finding): string {
   if (finding.kind === "mutation") return `mutation:${finding.file}`;
@@ -100,6 +100,10 @@ export function cleared(key: string, present: ReadonlySet<string>, observed: Obs
   if (!key.startsWith("test:")) return false;
   const [file] = key.slice("test:".length).split(NAME_SEPARATOR);
   return observed.tests && !present.has(`test:${file}`);
+}
+
+export function noted(key: string, present: ReadonlySet<string>, observed: Observed): boolean {
+  return key.startsWith("mutation:") && !present.has(key) && observed.mutation;
 }
 
 export function percent(score: Score): string {

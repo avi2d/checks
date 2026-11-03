@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { Effect, Layer, Option } from "effect";
 import { readFile } from "node:fs/promises";
 import { parseReport as parseMutationReport } from "../../src/testing/mutation-compare.ts";
-import { clearedText, fileFindings, Issues, issueBody, markedKey, marker, parseArgs, titleOf, type OpenIssue } from "../../src/testing/night-run.ts";
+import { clearedText, fileFindings, Issues, issueBody, markedKey, marker, notedText, parseArgs, titleOf, type OpenIssue } from "../../src/testing/night-run.ts";
 import { type Finding, findingsOf, gatesDecided, gatesOf, keyOf, type Observed, type NightRecord, type PreviousNight, scoresOf, type TestReport } from "../../src/testing/night-run-findings.ts";
 import { parseReport as parseTestReport } from "../../src/testing/test-report.ts";
 import { Usage } from "../../src/core/main.ts";
@@ -105,7 +105,7 @@ function recordingIssues(open: readonly OpenIssue[]): { readonly layer: Layer.La
 }
 
 const FELL: Finding = { kind: "mutation", file: "src/cart.ts", before: { detected: 9, valid: 10 }, after: { detected: 8, valid: 10 }, since: LAST_NIGHT };
-const EVERY_REPORT: Observed = { tests: true, gates: true };
+const EVERY_REPORT: Observed = { tests: true, gates: true, mutation: true };
 const ROUNDS = "test:tests/unit/cart.test.ts > totals > rounds half to even";
 const ROUNDS_FAILS: Finding = { kind: "test", file: "tests/unit/cart.test.ts", name: "totals > rounds half to even" };
 
@@ -120,8 +120,11 @@ test("a finding with a new key opens one issue that names the run, the file and 
 
   const filed = await Effect.runPromise(fileFindings([FELL], EVERY_REPORT, RUN).pipe(Effect.provide(issues.layer)));
 
-  expect(filed).toEqual([{ key: "mutation:src/cart.ts", issue: 41, action: "opened" }]);
-  expect(issues.calls.map((call) => call.method)).toEqual(["ensureLabel", "open", "create"]);
+  expect(filed).toEqual([
+    { key: "mutation:src/cart.ts", issue: 41, action: "opened" },
+    { key: "mutation:src/other.ts", issue: 7, action: "commented on" },
+  ]);
+  expect(issues.calls.map((call) => call.method)).toEqual(["ensureLabel", "open", "create", "comment"]);
   const [, , create] = issues.calls;
   expect(create?.args[0]).toBe("Night run: mutation score fell in src/cart.ts");
   expect(create?.args[1]).toContain(RUN);
@@ -186,14 +189,26 @@ test("a night that read no test report closes no test issue, and one with an und
     { number: 9, key: "gates:checks-repetition" },
   ];
 
-  const { filed, calls } = await file([], { tests: false, gates: false }, open);
+  const { filed, calls } = await file([], { tests: false, gates: false, mutation: false }, open);
 
   expect(filed).toEqual([]);
   expect(calls.map((call) => call.method)).toEqual(["open"]);
 });
 
-test("a mutation issue stays open on a night its score does not fall again, since a score that stays down has not recovered", async () => {
+test("a mutation issue absent on a later night is commented on once and stays open", async () => {
   const { filed, calls } = await file([], EVERY_REPORT, [{ number: 7, key: "mutation:src/cart.ts" }]);
+
+  expect(filed).toEqual([{ key: "mutation:src/cart.ts", issue: 7, action: "commented on" }]);
+  expect(calls).toEqual([
+    { method: "open", args: [] },
+    { method: "comment", args: [7, notedText("mutation:src/cart.ts", RUN)] },
+  ]);
+  expect(notedText("mutation:src/cart.ts", RUN)).toContain(RUN);
+  expect(notedText("mutation:src/cart.ts", RUN)).toContain("mutation:src/cart.ts");
+});
+
+test("a mutation issue absent without a compared score stays silent", async () => {
+  const { filed, calls } = await file([], { tests: false, gates: false, mutation: false }, [{ number: 7, key: "mutation:src/cart.ts" }]);
 
   expect(filed).toEqual([]);
   expect(calls).toEqual([{ method: "open", args: [] }]);
