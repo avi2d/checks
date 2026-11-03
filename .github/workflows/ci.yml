@@ -1,10 +1,8 @@
 name: ci
 
 on:
-  push:
-    branches: [main]
   pull_request:
-    types: [opened, edited, synchronize, reopened]
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
 
 permissions:
@@ -12,6 +10,11 @@ permissions:
   statuses: write
   # A dispatched run carries no pull request, so the title lookup needs read access.
   pull-requests: read
+
+# A dispatched run is one release-push waits on, so only a pull request's newer push cancels a run.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   changes:

@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { runMain, Usage } from "../core/main.ts";
+import { ciWorkflow } from "./setup-workflow.ts";
 import { TEMPLATES } from "../docs/doc-templates.ts";
 import { scriptOptions } from "../testing/test.ts";
 import { withServiceOverrides, type ServiceOverride } from "../quality/effect-scope.ts";
@@ -10,8 +11,6 @@ import severities from "../quality/presets/effect.language-service.json" with { 
 const NAME = "checks-setup";
 const USAGE = "usage: " + NAME + " [--private]";
 const PRIVATE = "--private";
-const HOSTED_FALLBACK = "ubuntu-latest";
-const HOSTED_DEFAULT = "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}";
 const IGNORE_ENTRY = "node_modules/";
 const KIT_ID = "@avi2dg/checks";
 
@@ -115,42 +114,6 @@ const KNIP_CONFIG = [
   "export default defineConfig({ entry: [\"src/index.ts\"] });",
   "",
 ].join("\n");
-
-function workflow(isPrivate: boolean, hasBuild: boolean): string {
-  const lines = [
-    "name: ci",
-    "",
-    "on:",
-    "  pull_request:",
-    "    types: [opened, synchronize]",
-    "",
-    "jobs:",
-    "  checks:",
-    "    runs-on: " + (isPrivate ? HOSTED_DEFAULT : HOSTED_FALLBACK),
-    "    steps:",
-    "      - uses: actions/checkout@v5",
-    "        with:",
-    "          fetch-depth: 0",
-    "      - uses: oven-sh/setup-bun@v2",
-    "        with:",
-    "          bun-version-file: .bun-version",
-    "      - run: bun install --frozen-lockfile",
-  ];
-  if (hasBuild) {
-    lines.push("      - run: bun run build", "      - run: git diff --exit-code");
-  }
-  lines.push("      - run: bun run lint", "      - run: bun run typecheck", "      - run: bun run test");
-  lines.push(
-    "      - id: title",
-    "        name: lint the title",
-    "        env:",
-    "          PR_TITLE: ${{ github.event.pull_request.title }}",
-    "          GH_TOKEN: ${{ github.token }}",
-    "        run: bunx checks-commit-title",
-    "",
-  );
-  return lines.join("\n");
-}
 
 const kitText = Effect.fn("kitText")(function* (file: string) {
   const system = yield* FileSystem.FileSystem;
@@ -385,7 +348,7 @@ const check = Effect.gen(function* () {
     : OXLINT_CONFIG;
   yield* setupTsconfig(root, oxlintText);
   yield* setupFile(root, "knip.config.ts", KNIP_CONFIG);
-  yield* setupFile(root, ".github/workflows/ci.yml", workflow(isPrivate, outcome.hasBuild));
+  yield* setupFile(root, ".github/workflows/ci.yml", ciWorkflow(isPrivate, outcome.hasBuild));
   for (const kind of Object.keys(TEMPLATES)) {
     yield* setupFile(root, "templates/" + kind + ".md", yield* kitText("dist/templates/" + kind + ".md"));
   }
