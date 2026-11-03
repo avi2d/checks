@@ -101,7 +101,7 @@ jobs:
           path: reports/night-run-tests
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: bun src/testing/night-run.ts ${{ needs.mutation.result == 'success' && '--mutation reports/mutation/mutation.json' || '' }} --tests reports/night-run-tests/unit.xml --tests reports/night-run-tests/e2e.xml --tests reports/night-run-tests/live.xml ${{ needs.gates.result == 'success' && '--gates reports/night-run-gates/gates.log' || '' }}
+        run: bun src/testing/night-run.ts --mutation reports/mutation/mutation.json --tests reports/night-run-tests/unit.xml --tests reports/night-run-tests/e2e.xml --tests reports/night-run-tests/live.xml ${{ needs.gates.result == 'success' && '--gates reports/night-run-gates/gates.log' || '' }}
       - uses: actions/upload-artifact@v4
         with:
           name: night-run

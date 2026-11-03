@@ -121,6 +121,47 @@ test("with no mutation report it files each failing test, compares no score and 
   expect(await recorded(runner.work)).toBe(false);
 }, 30_000);
 
+const MISSING_REPORT = "reports/mutation/night-run-mutation-delivery/mutation.json";
+
+test("a mutation report its job never wrote opens an issue for it instead of a night that reads as clean", async () => {
+  const runner = await night([lastNight({ "src/mixed.ts": { detected: 3, valid: 4 } })]);
+
+  const unreported = await runner.runWith(["--mutation", MISSING_REPORT, ...testArgs(["passing.xml"])], {});
+
+  expect(unreported).toEqual({
+    exitCode: 0,
+    text: [
+      `checks-night-run: the night run ${RUNS}/12 had no mutation report, so it compared no score; 1 finding(s)`,
+      `  opened #100 for mutation-report:${MISSING_REPORT}`,
+      "checks-night-run: recorded no score, since it had no mutation report",
+      "",
+    ].join("\n"),
+  });
+  const issues = await runner.issues();
+  expect(issues.map(({ title, labels }) => ({ title, labels }))).toEqual([{ title: `Night run: no mutation report at ${MISSING_REPORT}`, labels: ["night-run"] }]);
+  expect(issues[0]?.body).toContain(`${RUNS}/12`);
+  expect(issues[0]?.body).toContain(`Finding key: \`mutation-report:${MISSING_REPORT}\``);
+  expect(await recorded(runner.work)).toBe(false);
+}, 30_000);
+
+test("with one of two mutation reports missing it still compares the other's files but records no score", async () => {
+  const runner = await night([lastNight({ "src/mixed.ts": { detected: 3, valid: 4 } })]);
+
+  const partial = await runner.runWith(["--mutation", join(FIXTURES, "mutation.json"), "--mutation", MISSING_REPORT, ...testArgs(["passing.xml"])], {});
+
+  expect(partial).toEqual({
+    exitCode: 0,
+    text: [
+      `checks-night-run: the night run ${RUNS}/12 compared with the night run ${RUNS}/11; 2 finding(s)`,
+      `  opened #100 for mutation-report:${MISSING_REPORT}`,
+      "  opened #101 for mutation:src/mixed.ts",
+      "checks-night-run: recorded no score, since 1 mutation report(s) were missing",
+      "",
+    ].join("\n"),
+  });
+  expect(await recorded(runner.work)).toBe(false);
+}, 30_000);
+
 test("a run on a branch lists each finding in its log, files no issue and records no score", async () => {
   const runner = await night([lastNight({ "src/mixed.ts": { detected: 3, valid: 4 } })]);
   const branch = { GITHUB_REF: "refs/heads/feature", GITHUB_WORKFLOW_REF: "acme/widget/.github/workflows/night-run.yml@refs/heads/feature" };

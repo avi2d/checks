@@ -123,7 +123,6 @@ function expressionsOf(run: string): readonly string[] {
   return [...run.matchAll(/\$\{\{\s*([\s\S]*?)\s*\}\}/g)].map((match) => (match[1] ?? "").trim());
 }
 
-const MUTATION_EXPRESSION = "needs.mutation.result == 'success' && '--mutation reports/mutation/mutation.json' || ''";
 const GATES_EXPRESSION = "needs.gates.result == 'success' && '--gates reports/night-run-gates/gates.log' || ''";
 
 function downloadCondition(path: string, jobId: string, artifact: string): unknown {
@@ -145,7 +144,13 @@ test("rejects a gates flag moved out of its result guard", () => {
   expect(downloadCondition(path, "report", "night-run-gates")).toBe("needs.gates.result == 'success'");
   expect(downloadCondition(path, "report", "night-run-mutation")).toBe("needs.mutation.result == 'success'");
   const run = nightRunStep(path)?.["run"];
-  expect(typeof run === "string" ? expressionsOf(run) : []).toEqual([MUTATION_EXPRESSION, GATES_EXPRESSION]);
+  expect(typeof run === "string" ? expressionsOf(run) : []).toEqual([GATES_EXPRESSION]);
+});
+
+test("rejects a report job that drops the mutation report when the mutation job leaves none, so no finding names it", () => {
+  const path = ".github/workflows/night-run.yml";
+  const runs = scheduledCommands(path, "report");
+  expect(runs.some((command) => invokes(command, ["bun", "src/testing/night-run.ts", "--mutation", "reports/mutation/mutation.json"]))).toBe(true);
 });
 
 test("rejects a live tier with a moved suite filed back under e2e", () => {

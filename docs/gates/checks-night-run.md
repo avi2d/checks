@@ -4,11 +4,12 @@ audience: consumers
 ---
 # checks-night-run
 
-`checks-night-run` turns a night run on `main` into GitHub issues, one for each file whose mutation score fell, one for each failing test, and one for each failed nightly gate.
+`checks-night-run` turns each finding of a night run on `main` into a GitHub issue.
+A finding is a file whose mutation score fell, a failing test, a failed nightly gate or a missing mutation report.
 
 ## What it checks
 
-It scores each file of tonight's Stryker report as Stryker does, the `Killed` and `Timeout` mutants over every mutant but the `Ignored`, `CompileError`, `RuntimeError` and `Pending` ones.
+It scores each file of tonight's Stryker reports as Stryker does, the `Killed` and `Timeout` mutants over every mutant but the `Ignored`, `CompileError`, `RuntimeError` and `Pending` ones.
 It compares each file's score with the same file's score from the previous night.
 A file whose score is lower than the previous night's is a finding.
 A file only one night holds is no finding, since it lacks one of the two scores.
@@ -20,7 +21,10 @@ A log where every named gate is undecided files `checks-lint` itself, with no pe
 A log with no passing run and no named gate files `checks-lint` itself, so a gate run that never finished still reaches an issue.
 A file whose test worker crashed is one finding, since Bun reports none of its tests.
 With no previous night it compares no score and still files each failing test.
+Each mutation report `--mutation` names that does not exist is a finding, since the mutation job that writes it failed, timed out or was cancelled.
 With no mutation report it compares and records no score and still files each failing test.
+With some mutation reports missing it compares the files the others hold and records no score.
+The next night then compares every file with the last night that scored them all.
 
 Each finding has a key that stays the same from night to night:
 
@@ -30,6 +34,7 @@ Each finding has a key that stays the same from night to night:
 | a failing test | `test:<file> > <describe> > <name>` |
 | a file whose test worker crashed | `test:<file>` |
 | a nightly gate that failed | `gates:<gate>` |
+| a missing mutation report | `mutation-report:<path>` |
 
 ## How it files a finding
 
@@ -47,24 +52,24 @@ A run on any ref but `refs/heads/main` files no issue and records no score, and 
 
 ## What it reads
 
-It reads tonight's Stryker `mutation.json` report, when the mutation run left one, and any number of JUnit reports, such as the ones `checks-test --junit=<file>` keeps, as [checks-test](checks-test.md#arguments) says.
+It reads tonight's Stryker `mutation.json` reports and any number of JUnit reports, such as the ones `checks-test --junit=<file>` keeps, as [checks-test](checks-test.md#arguments) says.
 It reads the lint log `--gates` names for the `gate(s) failed:` line `checks-lint --night` prints.
 It scans the newest 30 successful runs of the same workflow on `main` from newest to oldest.
 It takes the first run whose `night-run` artifact still exists as the previous night.
 That artifact holds `night-run.json`, the scores the run recorded.
 When no scanned run holds the artifact it compares no score.
 A run on another branch never becomes the previous night.
-On `main` with a mutation report it writes tonight's scores to `reports/night-run.json`, and the workflow uploads that file as the `night-run` artifact.
+On `main` with every mutation report present it writes tonight's scores to `reports/night-run.json`, and the workflow uploads that file as the `night-run` artifact.
 It reads the run from `GITHUB_SERVER_URL`, `GITHUB_REPOSITORY`, `GITHUB_RUN_ID`, `GITHUB_WORKFLOW_REF` and `GITHUB_REF`, so it runs only inside a GitHub Actions job.
 It calls `gh` with the job's `GH_TOKEN`, which needs `actions: read` for the previous night and `issues: write` for the issues.
 
 ## Arguments
 
 ```sh
-checks-night-run [--mutation <mutation-report>] [--tests <junit-report>]... [--gates <lint-log>]
+checks-night-run [--mutation <mutation-report>]... [--tests <junit-report>]... [--gates <lint-log>]
 ```
 
-`--mutation` names tonight's Stryker report and is given at most once.
+`--mutation` names one of tonight's Stryker reports and is given once per report the workflow's mutation jobs write, whether or not each job wrote it.
 `--tests` names one JUnit report and is given once per report.
 `--gates` names tonight's `checks-lint --night` log and is given at most once.
 At least one report is given.

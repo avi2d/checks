@@ -20,7 +20,8 @@ export type Finding =
   | { readonly kind: "mutation"; readonly file: string; readonly before: Score; readonly after: Score; readonly since: string }
   | { readonly kind: "test"; readonly file: string; readonly name: string }
   | { readonly kind: "crash"; readonly file: string }
-  | { readonly kind: "gates"; readonly file: string };
+  | { readonly kind: "gates"; readonly file: string }
+  | { readonly kind: "mutation-report"; readonly file: string };
 
 function scoreOf(file: ReportFile): Score {
   let detected = 0;
@@ -47,6 +48,7 @@ export function keyOf(finding: Finding): string {
   if (finding.kind === "mutation") return `mutation:${finding.file}`;
   if (finding.kind === "test") return `test:${finding.file}${NAME_SEPARATOR}${finding.name}`;
   if (finding.kind === "gates") return `gates:${finding.file}`;
+  if (finding.kind === "mutation-report") return `mutation-report:${finding.file}`;
   return `test:${finding.file}`;
 }
 
@@ -67,8 +69,8 @@ function testFindings(reports: readonly TestReport[]): readonly Finding[] {
   return [...new Map(failing.map((finding) => [keyOf(finding), finding])).values()];
 }
 
-export function findingsOf(previous: Option.Option<PreviousNight>, tonight: Tonight, gates: readonly Finding[] = []): readonly Finding[] {
-  return [...scoreFindings(previous, tonight.scores), ...testFindings(tonight.tests), ...gates].sort((one, other) =>
+export function findingsOf(previous: Option.Option<PreviousNight>, tonight: Tonight, others: readonly Finding[] = []): readonly Finding[] {
+  return [...scoreFindings(previous, tonight.scores), ...testFindings(tonight.tests), ...others].sort((one, other) =>
     keyOf(one).localeCompare(keyOf(other)),
   );
 }
