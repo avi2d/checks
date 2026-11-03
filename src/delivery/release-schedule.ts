@@ -52,15 +52,18 @@ function workflowReleases(
   });
 }
 
-function schedules(document: unknown): boolean {
+export function schedules(document: unknown): boolean {
   const on = isRecord(document) ? document["on"] : undefined;
   return isRecord(on) ? "schedule" in on : (names(on) ?? []).includes("schedule");
 }
 
-export function findScheduledReleases(workflows: readonly Workflow[], context: ScheduleContext = EMPTY): readonly ScheduledRelease[] {
+export function releasesOnSchedule(workflows: readonly Workflow[], context: ScheduleContext): readonly Workflow[] {
   const byPath = new Map(workflows.map((workflow) => [workflow.path, workflow] as const));
-  return workflows
-    .filter((workflow) => schedules(workflow.document) && workflowReleases(workflow, context, byPath, [workflow.path]))
+  return workflows.filter((workflow) => schedules(workflow.document) && workflowReleases(workflow, context, byPath, [workflow.path]));
+}
+
+export function findScheduledReleases(workflows: readonly Workflow[], context: ScheduleContext = EMPTY): readonly ScheduledRelease[] {
+  return releasesOnSchedule(workflows, context)
     .map((workflow) => ({ location: locate(workflow.path, workflow.text.split("\n"))(["on"], "schedule", "on schedule") }));
 }
 

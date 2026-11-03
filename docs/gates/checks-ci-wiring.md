@@ -97,9 +97,20 @@ Text that only names a release bin, such as an `echo`, never counts.
 A release runs when someone starts it, as [checks-release-pr](checks-release-pr.md#when-it-runs) says.
 Each refusal names the workflow file and the line of its `schedule` trigger.
 
+### Schedules
+
+It refuses every other workflow that triggers on `schedule`, since a test, mutation, flake, browser or night run starts only by hand, with `gh workflow run`.
+The one schedule it keeps is a weekly advisory scan in a public repository whose `package.json` does not set `private` to `true`.
+A workflow scans advisories when a run step calls `checks-advisories`, the same ways a release call counts, and every other run step is a `bun install`.
+A weekly scan has one `cron` entry with one minute, one hour and one weekday, and `*` for the day of the month and the month.
+It refuses an advisory scan that runs more often, and any scheduled advisory scan in a private repository or a package that sets `private`.
+A run outside CI cannot read whether the repository is private, so it refuses a scan there only for the `package.json` field or the cron.
+A workflow that releases on a schedule gets only the release refusal.
+Each refusal names the workflow file, the line of its `schedule` trigger and what to change.
+
 ## What it reads
 
-The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts` and `checks` runners in `package.json` and the shell scripts those steps and scripts run from the working tree.
+The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts`, `private` and `checks` runners in `package.json` and the shell scripts those steps and scripts run from the working tree.
 It reads each file a setup-bun step names for its version.
 It reads the fleet pin from the kit's own `.bun-version`.
 It reads the target branch from `GITHUB_BASE_REF`, then from `refs/remotes/origin/HEAD` and then from the event file `GITHUB_EVENT_PATH` names.
@@ -115,7 +126,7 @@ It takes no arguments.
 | Code | Result |
 | --- | --- |
 | 0 | Every required command has a reachable step. |
-| 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, a setup-bun step drifts from the fleet bun version, or a workflow that releases runs on a schedule. |
+| 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, a setup-bun step drifts from the fleet bun version, a workflow that releases runs on a schedule, or a workflow other than a weekly public advisory scan runs on a schedule. |
 | 2 | A workflow or `package.json` cannot be decoded, or the kit's own `.bun-version` is missing, unreadable or blank. |
 
 ## Sample output
@@ -147,6 +158,14 @@ A workflow that releases on a schedule produces a report like this:
 ```
 ci-wiring: 1 workflow(s) release on a schedule:
   .github/workflows/daily-release.yml line 3: drop the schedule, so a release runs only when someone starts it
+```
+
+A scheduled test run and a daily advisory scan produce a report like this:
+
+```
+ci-wiring: 2 workflow(s) run on a schedule:
+  .github/workflows/advisories.yml line 3: the advisory scan runs more than once a week; keep one cron at a minute, an hour and a weekday, such as "15 5 * * 1"
+  .github/workflows/night-run.yml line 4: drop the schedule, so it runs only when someone starts it with gh workflow run
 ```
 
 ## When it runs

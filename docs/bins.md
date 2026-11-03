@@ -44,7 +44,7 @@ The night-run workflow runs them with `checks-lint --night`, which hands each ra
 These bins run on their own:
 
 - [`checks-test`](gates/checks-test.md) runs the suite as `scripts.test` and refuses a skip without a reason at its test site.
-- [`checks-flake`](gates/checks-flake.md) runs the suite on a schedule and records the seeds a flaky test fails with.
+- [`checks-flake`](gates/checks-flake.md) runs the suite when started by hand and records the seeds a flaky test fails with.
 - [`checks-mutation`](gates/checks-mutation.md) runs Stryker for scoped checks and refuses a full run outside CI.
 - [`checks-mutation-compare`](gates/checks-mutation-compare.md) compares the mutants of two reports and lists each one that regresses.
 - [`checks-mutation-baseline`](gates/checks-mutation-baseline.md) restores the newest mutation baseline from `main`, saves it on a self-hosted runner's disk in place of an artifact, and deletes superseded baselines after a `main` run.

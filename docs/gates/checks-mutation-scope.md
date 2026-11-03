@@ -38,7 +38,7 @@ Stryker writes no source without mutants into the report, so a mutated source th
 When a unit test changed, each such source that exists at `HEAD` enters the scope.
 A change under `tests/e2e/` changes no unit test, so it needs no baseline report.
 The scope trusts the coverage edges of the latest full baseline.
-So a helper, fixture or preload changed on `main` since that baseline can hide a lost kill until the scheduled full baseline refreshes.
+So a helper, fixture or preload changed on `main` since that baseline can hide a lost kill until the next full baseline refreshes.
 
 ## What it reads
 

@@ -7,6 +7,7 @@ import { findBunPinFaults, formatBunPinReport, readBunPinPolicy } from "./bun-pi
 import { readScheduleFiles, readShellFiles } from "./mutation-job.ts";
 import { findScheduledReleases, formatScheduleReport } from "./release-schedule.ts";
 import { findRunnerFaults, formatRunnerReport, jobRuns, readRunnerConfig } from "./runner-policy.ts";
+import { findScheduledRuns, formatScheduledRunReport } from "./schedule-policy.ts";
 import { invokes, mentions, plainCommand, type Command } from "./shell-command.ts";
 import { findMissingWorkflows, formatMissingReport, isRecord, names, workflowJobs, type Workflow } from "./workflow-references.ts";
 
@@ -65,6 +66,7 @@ const TITLE_LINT = "bunx checks-commit-title";
 const TITLE_CALLS = ["bun src/delivery/commit-title.ts", "./node_modules/.bin/commitlint"];
 const ScriptsManifest = Schema.Struct({
   scripts: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
+  private: Schema.optionalKey(Schema.Boolean),
 });
 // Without these a pull_request workflow never sees the commits a pull request pushes.
 const GATING_TYPES = ["opened", "synchronize"];
@@ -271,16 +273,19 @@ export const parseWorkflow = (path: string, text: string): Effect.Effect<Workflo
     catch: (error) => new WiringError({ message: `cannot parse ${path}: ${String(error)}` }),
   });
 
-const readScripts = Effect.fn("readScripts")(function* (root: string) {
+const readManifest = Effect.fn("readManifest")(function* (root: string) {
   const fs = yield* FileSystem.FileSystem;
   const file = (yield* Path.Path).join(root, "package.json");
-  const { scripts = {} } = (yield* fs.exists(file))
+  return (yield* fs.exists(file))
     ? yield* fs.readFileString(file).pipe(
         Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(ScriptsManifest))),
         Effect.mapError((cause) => new WiringError({ message: `cannot read ${file}: ${cause.message}` })),
       )
     : ScriptsManifest.make({});
-  return new Map(Object.entries(scripts));
+});
+
+const readScripts = Effect.fn("readScripts")(function* (root: string) {
+  return new Map(Object.entries((yield* readManifest(root)).scripts ?? {}));
 });
 
 export const readDeclaration = Effect.fn("readDeclaration")(function* (root: string) {
@@ -322,17 +327,21 @@ const wiring = Effect.gen(function* () {
   yield* gaps.length > 0 ? Console.error(gapReport) : Console.log(gapReport);
   const missing = findMissingWorkflows(workflows);
   if (missing.length > 0) yield* Console.error(formatMissingReport(missing));
-  const scripts = yield* readScripts(root);
+  const manifest = yield* readManifest(root);
+  const scripts = new Map(Object.entries(manifest.scripts ?? {}));
+  const visibility = yield* readVisibility;
   const runs = workflows.flatMap((workflow) => workflowJobs(workflow).flatMap(([, job]) => jobRuns(workflow, job)));
   const runners = yield* readRunnerConfig(root);
-  const faults = findRunnerFaults({ visibility: yield* readVisibility, scripts, files: yield* readShellFiles(root, scripts, runs), runners }, workflows);
+  const faults = findRunnerFaults({ visibility, scripts, files: yield* readShellFiles(root, scripts, runs), runners }, workflows);
   if (faults.length > 0) yield* Console.error(formatRunnerReport(faults));
   const bunFaults = findBunPinFaults(yield* readBunPinPolicy(root, workflows), workflows);
   if (bunFaults.length > 0) yield* Console.error(formatBunPinReport(bunFaults));
   const scheduleFiles = yield* readScheduleFiles(root, scripts, runs);
   const scheduled = findScheduledReleases(workflows, { scripts, files: scheduleFiles });
   if (scheduled.length > 0) yield* Console.error(formatScheduleReport(scheduled));
-  return gaps.length === 0 && faults.length === 0 && missing.length === 0 && bunFaults.length === 0 && scheduled.length === 0;
+  const scheduledRuns = findScheduledRuns(workflows, { scripts, files: scheduleFiles }, { visibility, publishes: manifest.private !== true });
+  if (scheduledRuns.length > 0) yield* Console.error(formatScheduledRunReport(scheduledRuns));
+  return [gaps, faults, missing, bunFaults, scheduled, scheduledRuns].every((found) => found.length === 0);
 });
 
 if (import.meta.main) runMain("ci-wiring", wiring);

@@ -281,7 +281,7 @@ A group or other write bit fails the run, because another user could have edited
 
 `checks-advisories` compares the advisories at both ends of a range instead of failing on every advisory at the head.
 An advisory published against a package that landed a month earlier would otherwise fail every open pull request, including one that touches only docs.
-The scheduled `--all` run finds those advisories, and `advisory-acks.json` carries the ones a repository accepts for a while.
+The weekly `--all` run finds those advisories, and `advisory-acks.json` carries the ones a repository accepts for a while.
 
 The gate runs OSV-Scanner rather than Trivy, Grype or `bun audit`.
 Trivy 0.74.0 reads a nested `bun.lock` entry such as `mkdirp/minimist` under a name no advisory carries, so it misses every package bun nests.

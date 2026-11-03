@@ -1,7 +1,5 @@
 name: flake
 on:
-  schedule:
-    - cron: "27 2 * * *"
   workflow_dispatch:
 
 jobs:
