@@ -44,6 +44,9 @@ function fell(before: Score, after: Score): boolean {
   return before.valid > 0 && after.valid > 0 && after.detected * before.valid < before.detected * after.valid;
 }
 
+// A night judges a key only from a report it read, since a report it lacks leaves every finding in it absent.
+export type Observed = { readonly tests: boolean; readonly gates: boolean; readonly mutation: boolean };
+
 export function keyOf(finding: Finding): string {
   if (finding.kind === "mutation") return `mutation:${finding.file}`;
   if (finding.kind === "test") return `test:${finding.file}${NAME_SEPARATOR}${finding.name}`;
@@ -86,6 +89,23 @@ export function gatesOf(log: string): readonly Finding[] {
     .filter((name) => name !== "");
   if (names.length > 0) return [...new Map(names.map((file): [string, Finding] => [file, { kind: "gates", file }])).values()];
   return PASSED_GATES.test(log) ? [] : [{ kind: "gates", file: "checks-lint" }];
+}
+
+export function gatesDecided(log: string): boolean {
+  return FAILED_GATES.test(log) || PASSED_GATES.test(log);
+}
+
+// A mutation finding is a fall between two nights, so a night without it shows no score recovered.
+export function cleared(key: string, present: ReadonlySet<string>, observed: Observed): boolean {
+  if (present.has(key)) return false;
+  if (key.startsWith("gates:")) return observed.gates;
+  if (!key.startsWith("test:")) return false;
+  const [file] = key.slice("test:".length).split(NAME_SEPARATOR);
+  return observed.tests && !present.has(`test:${file}`);
+}
+
+export function noted(key: string, present: ReadonlySet<string>, observed: Observed): boolean {
+  return key.startsWith("mutation:") && !present.has(key) && observed.mutation;
 }
 
 export function percent(score: Score): string {
