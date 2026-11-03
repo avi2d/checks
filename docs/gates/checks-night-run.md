@@ -52,7 +52,7 @@ An open test or gate issue whose key tonight's findings lack gets one comment na
 It then closes as completed.
 An open mutation issue whose key tonight's findings lack gets one comment that names tonight's run and the key, and stays open.
 A closed issue is no longer read, so a later night without the finding comments on it no more.
-Each comment the run posts carries a hidden marker saying whether it reported the finding or noted it gone.
+A comment that reports the finding carries a reported marker, and a note that a mutation finding is gone carries a noted marker.
 A mutation issue whose latest marked comment already notes the finding gone gets no further note.
 So a mutation finding gone for many nights is noted once, and noted again only after a later night reports it again.
 A person's comment carries no marker, so it never makes the run note an issue twice.
