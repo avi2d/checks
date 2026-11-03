@@ -291,7 +291,7 @@ const nightRun = Effect.gen(function* () {
   const log = Option.isSome(options.gates) ? Option.some(yield* readText(options.gates.value)) : Option.none<string>();
   const gates: readonly Finding[] = Option.isSome(log) ? gatesOf(log.value) : [];
   const previous = Option.isSome(scores) ? yield* previousNight(actions) : Option.none<PreviousNight>();
-  const observed: Observed = { tests: options.tests.length > 0, gates: Option.isSome(log) && gatesDecided(log.value), mutation: Option.isSome(previous) };
+  const observed: Observed = { tests: options.tests.length > 0, gates: Option.isSome(log) && gatesDecided(log.value), mutation: Option.isSome(previous) && missing.length === 0 };
   const findings = findingsOf(previous, { scores: Option.getOrElse(scores, () => ({})), tests }, [...missing, ...gates]);
   const filing: Filing = actions.ref === `refs/heads/${DEFAULT_BRANCH}` ? { onMain: true, filed: yield* fileFindings(findings, observed, actions.run) } : { onMain: false, ref: actions.ref };
   if (filing.onMain && Option.isSome(scores) && missing.length === 0) yield* writeRecord({ scores: scores.value });
