@@ -3,12 +3,7 @@ import { releasesOnSchedule, schedules } from "./release-schedule.ts";
 import { jobRuns } from "./runner-policy.ts";
 import { invokes, plainCommand, type Command } from "./shell-command.ts";
 import { isRecord, locate, workflowJobs, type Workflow } from "./workflow-references.ts";
-import type { ScheduleContext } from "./release-schedule.ts";
-
-export type ScheduleOwner = {
-  readonly visibility: "private" | "public" | "unknown";
-  readonly publishes: boolean;
-};
+import type { ScheduleContext, ScheduleOwner } from "./release-schedule.ts";
 
 export type ScheduledRun = {
   readonly location: string;
@@ -53,7 +48,7 @@ function advisoryFault(workflow: Workflow, owner: ScheduleOwner): string | undef
   return 'the advisory scan runs more than once a week; keep one cron at a minute, an hour and a weekday, such as "15 5 * * 1"';
 }
 
-// A workflow that releases on a schedule is the release rule's refusal, so this rule passes over it.
+// A workflow that releases on a schedule is the release rule's to judge, so this rule passes over it.
 export function findScheduledRuns(workflows: readonly Workflow[], context: ScheduleContext, owner: ScheduleOwner): readonly ScheduledRun[] {
   const releasing = new Set(releasesOnSchedule(workflows, context));
   return workflows.flatMap((workflow) => {

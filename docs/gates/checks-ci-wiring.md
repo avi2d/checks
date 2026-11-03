@@ -86,7 +86,7 @@ Each refusal names the workflow file and line, the version found and where it wa
 
 ### Release schedule
 
-It refuses a workflow that triggers on `schedule` and releases, in every repository, whether or not it publishes to npm.
+It refuses a workflow that triggers on `schedule` and releases, unless the repository is a public package that publishes to npm and the release runs at most once a day.
 A workflow releases when a run step calls `checks-release-pr`, `checks-release-push`, `checks-release-tag` or `checks-release-publish`.
 A call counts directly, through `bunx`, or through `bun` or `bun run` with the bin's path or its source file.
 A call through a `package.json` script counts, as `bun run <script>` where the named script releases.
@@ -94,8 +94,11 @@ A call through a local reusable workflow counts, as a job that uses a file under
 A call through a repository shell script counts, as a path inside the repository whose file releases.
 A workflow also releases when a run step publishes to npm, as [checks-release-preflight](checks-release-preflight.md) reads it, directly or through one of those paths.
 Text that only names a release bin, such as an `echo`, never counts.
-A release runs when someone starts it, as [checks-release-pr](checks-release-pr.md#when-it-runs) says.
-Each refusal names the workflow file and the line of its `schedule` trigger.
+A repository publishes to npm when one of its workflows runs `npm publish` or `checks-release-publish`, the same ways a release call counts, and its `package.json` does not set `private` to `true`.
+A run outside CI cannot read whether the repository is private, so there it refuses only for the `package.json` field or the missing publish step.
+A daily release has one `cron` entry with one minute and one hour.
+Any other release runs when someone starts it, as [checks-release-pr](checks-release-pr.md#when-it-runs) says.
+Each refusal names the workflow file, the line of its `schedule` trigger and what to change.
 
 ### Schedules
 
@@ -105,7 +108,7 @@ A workflow scans advisories when a run step calls `checks-advisories`, the same 
 A weekly scan has one `cron` entry with one minute, one hour and one weekday, and `*` for the day of the month and the month.
 It refuses an advisory scan that runs more often, and any scheduled advisory scan in a private repository or a package that sets `private`.
 A run outside CI cannot read whether the repository is private, so it refuses a scan there only for the `package.json` field or the cron.
-A workflow that releases on a schedule gets only the release refusal.
+A workflow that releases on a schedule is judged only by the release rule above.
 Each refusal names the workflow file, the line of its `schedule` trigger and what to change.
 
 ## What it reads
@@ -126,7 +129,7 @@ It takes no arguments.
 | Code | Result |
 | --- | --- |
 | 0 | Every required command has a reachable step. |
-| 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, a setup-bun step drifts from the fleet bun version, a workflow that releases runs on a schedule, or a workflow other than a weekly public advisory scan runs on a schedule. |
+| 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, a setup-bun step drifts from the fleet bun version, a workflow that releases runs on a schedule outside a public npm package or more than once a day, or a workflow other than a weekly public advisory scan runs on a schedule. |
 | 2 | A workflow or `package.json` cannot be decoded, or the kit's own `.bun-version` is missing, unreadable or blank. |
 
 ## Sample output
@@ -153,11 +156,11 @@ ci-wiring: 1 reference(s) name a missing workflow or job:
   .github/workflows/daily-release.yml line 31: names missing workflow commitlint.yml
 ```
 
-A workflow that releases on a schedule produces a report like this:
+A workflow that releases on a schedule in a repository that publishes nothing to npm produces a report like this:
 
 ```
 ci-wiring: 1 workflow(s) release on a schedule:
-  .github/workflows/daily-release.yml line 3: drop the schedule, so a release runs only when someone starts it
+  .github/workflows/daily-release.yml line 3: only a public package that publishes to npm releases on a schedule; drop the schedule, so a release runs only when someone starts it
 ```
 
 A scheduled test run and a daily advisory scan produce a report like this:

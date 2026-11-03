@@ -173,7 +173,7 @@ function releaseWorkflow(run: string): string {
   return `name: release\non:\n  workflow_dispatch:\njobs:\n  publish:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ${run}\n`;
 }
 
-test("the installed bin refuses a scheduled release in a package published to npm as in one that is not, and passes the by-hand template", async () => {
+test("the installed bin passes a daily release only in a package published to npm, refuses it in one that is not or that sets private, and passes the by-hand template", async () => {
   const byHand = await pageWorkflow("docs/gates/checks-release-pr.md", "release-pr");
   const daily = byHand.replace("name: release-pr\non:\n", 'name: daily-release\non:\n  schedule:\n    - cron: "7 3 * * *"\n');
   const repo = await open({
@@ -184,14 +184,18 @@ test("the installed bin refuses a scheduled release in a package published to np
     ".github/workflows/release.yml": releaseWorkflow("echo publish"),
   });
   await repo.commit("start");
-  const report = "ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/daily-release.yml line 3: drop the schedule, so a release runs only when someone starts it";
+  const report = "ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/daily-release.yml line 3: only a public package that publishes to npm releases on a schedule; drop the schedule, so a release runs only when someone starts it";
   const unpublished = await wiring(repo);
   expect(unpublished.exitCode).toBe(1);
   expect(unpublished.text).toContain(report);
   await repo.write({ ".github/workflows/release.yml": releaseWorkflow("npm publish") });
   const published = await wiring(repo);
-  expect(published.exitCode).toBe(1);
-  expect(published.text).toContain(report);
+  expect(published.text).not.toContain("release on a schedule");
+  expect(published.exitCode).toBe(0);
+  await repo.write({ "package.json": JSON.stringify({ name: "consumer", scripts: { lint: "lint", test: "test" }, private: true }) });
+  const unlisted = await wiring(repo);
+  expect(unlisted.exitCode).toBe(1);
+  expect(unlisted.text).toContain(report);
   await $`git rm -q .github/workflows/daily-release.yml`.cwd(repo.dir).quiet();
   await repo.write({ ".github/workflows/release-pr.yml": byHand });
   const green = await wiring(repo);
@@ -210,7 +214,7 @@ test("the installed bin refuses a schedule that reaches checks-release-pr throug
   await repo.commit("start");
   const red = await wiring(repo);
   expect(red.exitCode).toBe(1);
-  expect(red.text).toContain("ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/nightly.yml line 3: drop the schedule, so a release runs only when someone starts it");
+  expect(red.text).toContain("ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/nightly.yml line 3: only a public package that publishes to npm releases on a schedule; drop the schedule, so a release runs only when someone starts it");
 }, 30_000);
 
 test("the installed bin refuses a schedule that reaches checks-release-pr through chained shell scripts under bun --cwd", async () => {
@@ -225,7 +229,7 @@ test("the installed bin refuses a schedule that reaches checks-release-pr throug
   await repo.commit("start");
   const red = await wiring(repo);
   expect(red.exitCode).toBe(1);
-  expect(red.text).toContain("ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/nightly.yml line 3: drop the schedule, so a release runs only when someone starts it");
+  expect(red.text).toContain("ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/nightly.yml line 3: only a public package that publishes to npm releases on a schedule; drop the schedule, so a release runs only when someone starts it");
 }, 30_000);
 
 test("the installed bin refuses a schedule that reaches checks-release-pr past a mutation call in the same shell wrapper", async () => {
@@ -240,7 +244,7 @@ test("the installed bin refuses a schedule that reaches checks-release-pr past a
   await repo.commit("start");
   const red = await wiring(repo);
   expect(red.exitCode).toBe(1);
-  expect(red.text).toContain("ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/nightly.yml line 3: drop the schedule, so a release runs only when someone starts it");
+  expect(red.text).toContain("ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/nightly.yml line 3: only a public package that publishes to npm releases on a schedule; drop the schedule, so a release runs only when someone starts it");
 }, 30_000);
 
 test("the installed bin refuses a schedule that runs a release package script through bun --env-file", async () => {
@@ -253,7 +257,7 @@ test("the installed bin refuses a schedule that runs a release package script th
   await repo.commit("start");
   const red = await wiring(repo);
   expect(red.exitCode).toBe(1);
-  expect(red.text).toContain("ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/nightly.yml line 3: drop the schedule, so a release runs only when someone starts it");
+  expect(red.text).toContain("ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/nightly.yml line 3: only a public package that publishes to npm releases on a schedule; drop the schedule, so a release runs only when someone starts it");
 }, 30_000);
 
 test("a daily release that names a removed workflow fails until the name is gone", async () => {

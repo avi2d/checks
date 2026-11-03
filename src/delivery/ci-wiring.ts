@@ -337,9 +337,10 @@ const wiring = Effect.gen(function* () {
   const bunFaults = findBunPinFaults(yield* readBunPinPolicy(root, workflows), workflows);
   if (bunFaults.length > 0) yield* Console.error(formatBunPinReport(bunFaults));
   const scheduleFiles = yield* readScheduleFiles(root, scripts, runs);
-  const scheduled = findScheduledReleases(workflows, { scripts, files: scheduleFiles });
+  const owner = { visibility, publishes: manifest.private !== true };
+  const scheduled = findScheduledReleases(workflows, { scripts, files: scheduleFiles }, owner);
   if (scheduled.length > 0) yield* Console.error(formatScheduleReport(scheduled));
-  const scheduledRuns = findScheduledRuns(workflows, { scripts, files: scheduleFiles }, { visibility, publishes: manifest.private !== true });
+  const scheduledRuns = findScheduledRuns(workflows, { scripts, files: scheduleFiles }, owner);
   if (scheduledRuns.length > 0) yield* Console.error(formatScheduledRunReport(scheduledRuns));
   return [gaps, faults, missing, bunFaults, scheduled, scheduledRuns].every((found) => found.length === 0);
 });

@@ -78,8 +78,9 @@ release-pr: https://github.com/acme/widget/pull/12 releases 0.4.0 from 3f2a9c81d
 
 The `release-pr` workflow below runs it on the default branch when someone starts it with `gh workflow run release-pr`.
 The workflow has no schedule, so a release is cut only when someone asks for one.
+A public package that publishes to npm may add one daily `cron` to it instead, such as `"7 3 * * *"`.
 A package published to npm releases each push to `main` through [checks-release-push](checks-release-push.md) instead, with no pull request.
-[checks-ci-wiring](checks-ci-wiring.md#release-schedule) refuses a schedule on any workflow that releases.
+[checks-ci-wiring](checks-ci-wiring.md#release-schedule) refuses a schedule on any other workflow that releases, and one that runs more than once a day.
 
 ## Running it in CI
 
