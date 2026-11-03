@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.65.1
+
+Released 2026-11-03.
+
+### Fixes
+
+- allow weekly advisory scan in any public repository [#42](https://github.com/avi2d/checks/pull/42)
+
 ## 0.65.0
 
 Released 2026-11-03.
