@@ -115,9 +115,10 @@ test("a failing test absent on a later night closes its issue once with one comm
   expect(again.text).toContain("; 1 finding(s)\n  commented on #101 for gates:checks-repetition\nchecks-night-run: recorded no score");
   expect(again.text).not.toContain("closed");
   const issues = await runner.issues();
+  const gateFailed = `The night run ${RUNS}/12 failed nightly gate \`checks-repetition\`.\n\n<!-- checks-night-run reported -->\n`;
   expect(issues.map(({ number, state, comments }) => ({ number, state, comments }))).toEqual([
     { number: 1, state: "open", comments: [] },
-    { number: 101, state: "open", comments: [`The night run ${RUNS}/12 failed nightly gate \`checks-repetition\`.`, `The night run ${RUNS}/12 failed nightly gate \`checks-repetition\`.`] },
+    { number: 101, state: "open", comments: [gateFailed, gateFailed] },
     { number: 102, state: "closed", comments: [`The night run ${RUNS}/12 no longer reports \`test:tests/unit/cart.test.ts > totals > rounds half to even\`, so it closes this issue.`] },
     { number: 103, state: "closed", comments: [`The night run ${RUNS}/12 no longer reports \`test:tests/unit/session.test.ts\`, so it closes this issue.`] },
   ]);
