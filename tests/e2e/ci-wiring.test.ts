@@ -11,7 +11,7 @@ const FLEET_BUN_VERSION = readFileSync(join(CHECKOUT, ".bun-version"), "utf8").t
 
 const open = fixtureRepos("checks-ci-wiring-");
 const SCRIPT = join(CHECKOUT, "src", "delivery", "ci-wiring.ts");
-const workflow = `on:\n  pull_request:\n    types: [opened, synchronize]\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n      - run: bun run build\n      - run: git diff --exit-code\n      - run: bun run typecheck\n      - run: bun run test\n      - run: ./node_modules/.bin/commitlint\n`;
+const workflow = `on:\n  pull_request:\n    types: [opened, synchronize]\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    steps:\n      - run: bun run lint\n      - run: bun run build\n      - run: git diff --exit-code\n      - run: bun run typecheck\n      - run: bun run test\n      - run: ./node_modules/.bin/commitlint\n`;
 const scripts = (names: readonly string[]): string => JSON.stringify({ name: "consumer", scripts: Object.fromEntries(names.map((name) => [name, name])) });
 
 function wiring(repo: FixtureRepo, ci: Readonly<Record<string, string>> = {}): Promise<Ran> {
@@ -32,6 +32,16 @@ test("the installed bin refuses an omitted gate and accepts its restored step", 
   const green = await wiring(repo);
   expect(green.exitCode).toBe(0);
   expect(green.text).toContain("3 gate(s) run");
+}, 30_000);
+
+test("the installed bin refuses a job that can run for hours and passes it once it stops within an hour", async () => {
+  const repo = await open({ "package.json": scripts(["lint", "test"]), ".github/workflows/ci.yml": workflow.replace("    timeout-minutes: 10\n", "") });
+  await repo.commit("start");
+  const red = await wiring(repo);
+  expect(red.exitCode).toBe(1);
+  expect(red.text).toContain(".github/workflows/ci.yml job checks: the job sets no timeout-minutes");
+  await repo.write({ ".github/workflows/ci.yml": workflow.replace("timeout-minutes: 10", "timeout-minutes: 60") });
+  expect((await wiring(repo)).exitCode).toBe(0);
 }, 30_000);
 
 test("a build script requires its step and a clean git diff after it", async () => {
@@ -80,7 +90,7 @@ test("the default branch comes from origin HEAD, the pull request base or GitHub
 
 test("a private repository's event holds mutation jobs to its configured labels and every other job to a hosted default", async () => {
   const old = `\${{ vars.CI_RUNS_ON || fromJSON('["self-hosted","gpu"]') }}`;
-  const mutation = (runsOn: string) => `on: pull_request\njobs:\n  mutation-compare:\n    runs-on: ${runsOn}\n    steps:\n      - run: bun run mutate\n`;
+  const mutation = (runsOn: string) => `on: pull_request\njobs:\n  mutation-compare:\n    runs-on: ${runsOn}\n    timeout-minutes: 10\n    steps:\n      - run: bun run mutate\n`;
   const consumer = { name: "consumer", scripts: { lint: "lint", test: "test", mutate: "bunx stryker run" }, checks: { mutationRunner: ["self-hosted", "gpu", "x64"] } };
   const repo = await open({
     "package.json": JSON.stringify(consumer),
@@ -145,7 +155,7 @@ test("a private repository's mutation job through a repository shell script in i
   const mutationRunner = "[self-hosted, gpu, x64]";
   const runs = ["bun run mutate:incremental", "./mutate.sh", "bun run ./scripts/mutate.sh", "cd tools && ./sweep.sh"];
   const mutation = (runsOn: string) =>
-    `on: pull_request\njobs:\n${runs.map((run, index) => `  sweep-${index}:\n    runs-on: ${runsOn}\n    steps:\n      - run: ${run}\n`).join("")}  report:\n    runs-on: ${hosted}\n    steps:\n      - run: scripts/report.ts\n      - run: ./mutate.sh\n        working-directory: docs\n`;
+    `on: pull_request\njobs:\n${runs.map((run, index) => `  sweep-${index}:\n    runs-on: ${runsOn}\n    timeout-minutes: 10\n    steps:\n      - run: ${run}\n`).join("")}  report:\n    runs-on: ${hosted}\n    timeout-minutes: 10\n    steps:\n      - run: scripts/report.ts\n      - run: ./mutate.sh\n        working-directory: docs\n`;
   const repo = await open({
     "package.json": JSON.stringify({ name: "consumer", scripts: { lint: "lint", test: "test", "mutate:incremental": "scripts/mutate.sh --incremental" }, checks: { mutationRunner: ["self-hosted", "gpu", "x64"] } }),
     "scripts/mutate.sh": '#!/usr/bin/env bash\nset -euo pipefail\nexec ./node_modules/.bin/stryker run "$@"\n',
@@ -170,10 +180,10 @@ test("a private repository's mutation job through a repository shell script in i
 }, 30_000);
 
 function releaseWorkflow(run: string): string {
-  return `name: release\non:\n  workflow_dispatch:\njobs:\n  publish:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ${run}\n`;
+  return `name: release\non:\n  workflow_dispatch:\njobs:\n  publish:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    steps:\n      - run: ${run}\n`;
 }
 
-test("the installed bin refuses a scheduled release in a package published to npm as in one that is not, and passes the by-hand template", async () => {
+test("the installed bin passes a daily release only in a package published to npm, refuses it in one that is not or that sets private, and passes the by-hand template", async () => {
   const byHand = await pageWorkflow("docs/gates/checks-release-pr.md", "release-pr");
   const daily = byHand.replace("name: release-pr\non:\n", 'name: daily-release\non:\n  schedule:\n    - cron: "7 3 * * *"\n');
   const repo = await open({
@@ -184,14 +194,18 @@ test("the installed bin refuses a scheduled release in a package published to np
     ".github/workflows/release.yml": releaseWorkflow("echo publish"),
   });
   await repo.commit("start");
-  const report = "ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/daily-release.yml line 3: drop the schedule, so a release runs only when someone starts it";
+  const report = "ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/daily-release.yml line 3: only a public package that publishes to npm releases on a schedule; drop the schedule, so a release runs only when someone starts it";
   const unpublished = await wiring(repo);
   expect(unpublished.exitCode).toBe(1);
   expect(unpublished.text).toContain(report);
   await repo.write({ ".github/workflows/release.yml": releaseWorkflow("npm publish") });
   const published = await wiring(repo);
-  expect(published.exitCode).toBe(1);
-  expect(published.text).toContain(report);
+  expect(published.text).not.toContain("release on a schedule");
+  expect(published.exitCode).toBe(0);
+  await repo.write({ "package.json": JSON.stringify({ name: "consumer", scripts: { lint: "lint", test: "test" }, private: true }) });
+  const unlisted = await wiring(repo);
+  expect(unlisted.exitCode).toBe(1);
+  expect(unlisted.text).toContain(report);
   await $`git rm -q .github/workflows/daily-release.yml`.cwd(repo.dir).quiet();
   await repo.write({ ".github/workflows/release-pr.yml": byHand });
   const green = await wiring(repo);
@@ -204,13 +218,13 @@ test("the installed bin refuses a schedule that reaches checks-release-pr throug
     "package.json": scripts(["lint", "test"]),
     ".bun-version": `${FLEET_BUN_VERSION}\n`,
     ".github/workflows/ci.yml": workflow,
-    ".github/workflows/nightly.yml": 'name: nightly\non:\n  schedule:\n    - cron: "7 3 * * *"\njobs:\n  job:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bash scripts/release.sh\n',
+    ".github/workflows/nightly.yml": 'name: nightly\non:\n  schedule:\n    - cron: "7 3 * * *"\njobs:\n  job:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    steps:\n      - run: bash scripts/release.sh\n',
     "scripts/release.sh": "#!/bin/sh\nbunx checks-release-pr ci.yml\n",
   });
   await repo.commit("start");
   const red = await wiring(repo);
   expect(red.exitCode).toBe(1);
-  expect(red.text).toContain("ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/nightly.yml line 3: drop the schedule, so a release runs only when someone starts it");
+  expect(red.text).toContain("ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/nightly.yml line 3: only a public package that publishes to npm releases on a schedule; drop the schedule, so a release runs only when someone starts it");
 }, 30_000);
 
 test("the installed bin refuses a schedule that reaches checks-release-pr through chained shell scripts under bun --cwd", async () => {
@@ -218,14 +232,14 @@ test("the installed bin refuses a schedule that reaches checks-release-pr throug
     "package.json": scripts(["lint", "test"]),
     ".bun-version": `${FLEET_BUN_VERSION}\n`,
     ".github/workflows/ci.yml": workflow,
-    ".github/workflows/nightly.yml": 'name: nightly\non:\n  schedule:\n    - cron: "7 3 * * *"\njobs:\n  job:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun --cwd tools run ./release.sh\n',
+    ".github/workflows/nightly.yml": 'name: nightly\non:\n  schedule:\n    - cron: "7 3 * * *"\njobs:\n  job:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    steps:\n      - run: bun --cwd tools run ./release.sh\n',
     "tools/release.sh": "#!/bin/sh\n./cut.sh\n",
     "tools/cut.sh": "#!/bin/sh\nbunx checks-release-pr ci.yml\n",
   });
   await repo.commit("start");
   const red = await wiring(repo);
   expect(red.exitCode).toBe(1);
-  expect(red.text).toContain("ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/nightly.yml line 3: drop the schedule, so a release runs only when someone starts it");
+  expect(red.text).toContain("ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/nightly.yml line 3: only a public package that publishes to npm releases on a schedule; drop the schedule, so a release runs only when someone starts it");
 }, 30_000);
 
 test("the installed bin refuses a schedule that reaches checks-release-pr past a mutation call in the same shell wrapper", async () => {
@@ -233,14 +247,14 @@ test("the installed bin refuses a schedule that reaches checks-release-pr past a
     "package.json": scripts(["lint", "test"]),
     ".bun-version": `${FLEET_BUN_VERSION}\n`,
     ".github/workflows/ci.yml": workflow,
-    ".github/workflows/nightly.yml": 'name: nightly\non:\n  schedule:\n    - cron: "7 3 * * *"\njobs:\n  job:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ./scripts/release.sh\n',
+    ".github/workflows/nightly.yml": 'name: nightly\non:\n  schedule:\n    - cron: "7 3 * * *"\njobs:\n  job:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    steps:\n      - run: ./scripts/release.sh\n',
     "scripts/release.sh": "#!/bin/sh\nbunx checks-mutation && ./scripts/cut.sh\n",
     "scripts/cut.sh": "#!/bin/sh\nbunx checks-release-pr ci.yml\n",
   });
   await repo.commit("start");
   const red = await wiring(repo);
   expect(red.exitCode).toBe(1);
-  expect(red.text).toContain("ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/nightly.yml line 3: drop the schedule, so a release runs only when someone starts it");
+  expect(red.text).toContain("ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/nightly.yml line 3: only a public package that publishes to npm releases on a schedule; drop the schedule, so a release runs only when someone starts it");
 }, 30_000);
 
 test("the installed bin refuses a schedule that runs a release package script through bun --env-file", async () => {
@@ -248,12 +262,12 @@ test("the installed bin refuses a schedule that runs a release package script th
     "package.json": JSON.stringify({ name: "consumer", scripts: { lint: "lint", test: "test", release: "checks-release-pr ci.yml" } }),
     ".bun-version": `${FLEET_BUN_VERSION}\n`,
     ".github/workflows/ci.yml": workflow,
-    ".github/workflows/nightly.yml": 'name: nightly\non:\n  schedule:\n    - cron: "7 3 * * *"\njobs:\n  job:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun --env-file .env run release\n',
+    ".github/workflows/nightly.yml": 'name: nightly\non:\n  schedule:\n    - cron: "7 3 * * *"\njobs:\n  job:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    steps:\n      - run: bun --env-file .env run release\n',
   });
   await repo.commit("start");
   const red = await wiring(repo);
   expect(red.exitCode).toBe(1);
-  expect(red.text).toContain("ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/nightly.yml line 3: drop the schedule, so a release runs only when someone starts it");
+  expect(red.text).toContain("ci-wiring: 1 workflow(s) release on a schedule:\n  .github/workflows/nightly.yml line 3: only a public package that publishes to npm releases on a schedule; drop the schedule, so a release runs only when someone starts it");
 }, 30_000);
 
 test("a daily release that names a removed workflow fails until the name is gone", async () => {

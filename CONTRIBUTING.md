@@ -20,13 +20,16 @@ To check a change before opening a pull request:
 Declare each skip with `skipReason(reason, name)` beside the native Bun test call, as [checks-test](docs/gates/checks-test.md) says.
 A test that spawns `checks-lint` passes it `withoutPullRequestEvent()` from `tests/lib/env.ts`, so the CI event cannot decide the range.
 
-CI runs the commands in `.github/workflows/ci.yml` and lints the pull request title in its `static` job.
-`.github/workflows/mutation.yml` runs Stryker, with `stryker.conf.mjs`, as a baseline on `main` or on any branch by hand, and no pull request runs it.
-The workflow has no schedule: the weekly full baseline starts with `gh workflow run mutation`.
-A hand-started run restores the previous full baseline state, so it retests the mutants its changes reach and fits the job timeout, while a result made stale by a file a test reads at runtime lasts until the next 28-day refresh.
+CI runs the commands in `.github/workflows/ci.yml` on each pull request, and on the release branch when `release-push` dispatches it.
+A pull request runs only the tests it reaches, and the release runs the whole suite, as [checks-test](docs/gates/checks-test.md#pull-request-runs) says.
+`.github/workflows/pr-title.yml` lints the pull request title, so editing the title reruns only that.
+No workflow runs on a schedule except the weekly advisory scan, as [checks-ci-wiring](docs/gates/checks-ci-wiring.md#schedules) requires.
+`.github/workflows/mutation.yml` runs Stryker, with `stryker.conf.mjs`, as a full baseline on any branch.
+It runs only when `gh workflow run mutation` starts it, and no pull request runs it.
+That run restores the previous full baseline state through [checks-mutation-baseline](docs/gates/checks-mutation-baseline.md), so it retests only the mutants its changes reach.
+A result made stale by a file a test reads at runtime lasts until the next 28-day refresh.
 That run uploads the report and the incremental state again as the `mutation-baseline-full` artifact.
-A push run restores the previous baseline through [checks-mutation-baseline](docs/gates/checks-mutation-baseline.md).
-`.github/workflows/night-run.yml` runs at 02:07 UTC, and `gh workflow run night-run` starts it by hand, queued behind any night run already going.
+`.github/workflows/night-run.yml` runs when `gh workflow run night-run` starts it, queued behind any night run already going.
 It runs a full Stryker run in three parallel shards by source directory.
 It runs the unit, e2e and live levels of the suite and keeps each JUnit report.
 It also runs the four nightly lint gates over the whole tree with no base, so every suppression count and every repeated line still present is reported until it is removed.

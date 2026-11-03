@@ -15,7 +15,7 @@ It refuses when `v<version>` of the next version already tags a commit, since a 
 It writes the next version into `package.json` and runs `bun run build`, which writes `CHANGELOG.md`.
 It commits both as `chore: release <version>` on top of `HEAD` through the GitHub API, as `checks-release-pr` does.
 It points the branch `release/<branch>` at that commit and dispatches every check workflow its arguments name there.
-It waits up to 45 minutes in all for those workflows to finish on the release commit.
+It waits up to 22 minutes in all for those workflows to finish on the release commit.
 It reads the newest run of each, so a rerun stands in for the run it repeats.
 A failed read of the runs list does not end the wait.
 The wait retries the read at the same interval.
@@ -26,7 +26,8 @@ When all of them pass, it moves `<branch>` to the release commit without a force
 GitHub refuses that update when `<branch>` moved while the checks ran.
 The run then ends cleanly, since the run of the push that moved it releases the new head.
 When the update fails but `<branch>` already holds the release commit, the update landed and the run goes on.
-It then tags the release commit `v<version>`, pushes the tag and dispatches the release workflow on it, and waits up to 45 minutes for that workflow's run on the release commit to finish.
+It then tags the release commit `v<version>`, pushes the tag and dispatches the release workflow on it.
+It waits up to 22 minutes for that workflow's run on the release commit to finish.
 When that run concludes short of success, or does not finish in time, the bin fails, though `<branch>` already holds the release and the tag exists.
 When `HEAD` is itself a release commit, it tags it as [checks-release-tag](checks-release-tag.md) does, and waits for the release workflow it dispatches the same way.
 So a rerun after a failed tag push finishes the release.
@@ -104,7 +105,7 @@ jobs:
   release:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 55
     concurrency:
       group: release-push
       cancel-in-progress: false

@@ -106,7 +106,7 @@ test("a pull request event ends the range at its head rather than the checked-ou
 
 test("a workflow omission makes the lint gate fail and restoring it makes it pass", async () => {
   const { repo } = await repository();
-  await repo.write({ ".github/workflows/ci.yml": "on: pull_request\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n" });
+  await repo.write({ ".github/workflows/ci.yml": "on: pull_request\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    steps:\n      - run: bun run lint\n" });
   await commit(repo, "chore: omit test");
   const red = await lint(repo);
   expect(red.exitCode).toBe(1);

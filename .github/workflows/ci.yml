@@ -1,10 +1,8 @@
 name: ci
 
 on:
-  push:
-    branches: [main]
   pull_request:
-    types: [opened, edited, synchronize, reopened]
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
 
 permissions:
@@ -13,9 +11,15 @@ permissions:
   # A dispatched run carries no pull request, so the title lookup needs read access.
   pull-requests: read
 
+# A dispatched run is one release-push waits on, so only a pull request's newer push cancels a run.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       e2e-skip: ${{ steps.skip.outputs.e2e-skip }}
     steps:
@@ -32,6 +36,7 @@ jobs:
         run: bun scripts/e2e-skip.ts ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} >> "$GITHUB_OUTPUT"
   unit:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
         with:
@@ -52,6 +57,7 @@ jobs:
     # A step gate would still pay for checkout and install, so the whole job skips on a change the changes job marks.
     if: needs.changes.outputs.e2e-skip != 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
         with:
@@ -65,6 +71,7 @@ jobs:
       - run: bun run test:e2e
   static:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
         with:
@@ -106,6 +113,7 @@ jobs:
     needs: [changes, unit, e2e, static]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: require every part
         env:

@@ -98,6 +98,7 @@ jobs:
       contents: read
       actions: read
     runs-on: [self-hosted, gpu, x64]
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
         with:

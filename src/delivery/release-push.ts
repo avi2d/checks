@@ -12,7 +12,7 @@ const LABEL = "release-push";
 const USAGE = "usage: release-push.ts <release-workflow> <workflow>...";
 const UNTAGGED = "tag the release commit with checks-release-tag, whose refusal says what to fix";
 const POLL = Duration.seconds(15);
-const POLLS = 180;
+const POLLS = 88;
 
 const Run = Schema.Struct({ path: Schema.String, status: Schema.String, conclusion: Schema.NullOr(Schema.String), html_url: Schema.String });
 type Run = typeof Run.Type;

@@ -81,10 +81,10 @@ function scheduledCrons(path: string): readonly string[] {
   return on["schedule"].flatMap((entry: unknown) => (isRecord(entry) && typeof entry["cron"] === "string" ? [entry["cron"]] : []));
 }
 
-test("rejects a night workflow that mentions the night gates without an executable scheduled step", () => {
+test("rejects a night workflow that mentions the night gates without an executable step, or that starts on a schedule rather than by hand", () => {
   const path = ".github/workflows/night-run.yml";
   expect(scheduledJobIds(path)).toEqual(["gates", "mutation", "report", "tests"]);
-  expect(scheduledCrons(path).length).toBeGreaterThan(0);
+  expect(scheduledCrons(path)).toEqual([]);
   const gates = scheduledCommands(path, "gates");
   expect(gates.some((command) => command.join(" ") === "bun src/core/lint.ts --night")).toBe(true);
   expect(gates.some((command) => invokes(command, ["bun", "src/core/lint.ts", "--night"]))).toBe(true);

@@ -86,7 +86,8 @@ Each refusal names the workflow file and line, the version found and where it wa
 
 ### Release schedule
 
-It refuses a workflow that triggers on `schedule` and releases, in every repository, whether or not it publishes to npm.
+It refuses a workflow that triggers on `schedule` and releases, unless the repository is a public package that publishes to npm.
+That release runs at most once a day.
 A workflow releases when a run step calls `checks-release-pr`, `checks-release-push`, `checks-release-tag` or `checks-release-publish`.
 A call counts directly, through `bunx`, or through `bun` or `bun run` with the bin's path or its source file.
 A call through a `package.json` script counts, as `bun run <script>` where the named script releases.
@@ -94,12 +95,34 @@ A call through a local reusable workflow counts, as a job that uses a file under
 A call through a repository shell script counts, as a path inside the repository whose file releases.
 A workflow also releases when a run step publishes to npm, as [checks-release-preflight](checks-release-preflight.md) reads it, directly or through one of those paths.
 Text that only names a release bin, such as an `echo`, never counts.
-A release runs when someone starts it, as [checks-release-pr](checks-release-pr.md#when-it-runs) says.
-Each refusal names the workflow file and the line of its `schedule` trigger.
+A repository publishes to npm when one of its workflows runs `npm publish` or `checks-release-publish`, the same ways a release call counts, and its `package.json` does not set `private` to `true`.
+A run outside CI cannot read whether the repository is private, so there it refuses only for the `package.json` field or the missing publish step.
+A daily release has one `cron` entry with one minute and one hour.
+Any other release runs when someone starts it, as [checks-release-pr](checks-release-pr.md#when-it-runs) says.
+Each refusal names the workflow file, the line of its `schedule` trigger and what to change.
+
+### Schedules
+
+It refuses every other workflow that triggers on `schedule`, since a test, mutation, flake, browser or night run starts only by hand, with `gh workflow run`.
+The one schedule it keeps is a weekly advisory scan in a public repository whose `package.json` does not set `private` to `true`.
+A workflow scans advisories when a run step calls `checks-advisories`, the same ways a release call counts, and every other run step is a `bun install`.
+A weekly scan has one `cron` entry with one minute, one hour and one weekday, and `*` for the day of the month and the month.
+It refuses an advisory scan that runs more often, and any scheduled advisory scan in a private repository or a package that sets `private`.
+A run outside CI cannot read whether the repository is private, so it refuses a scan there only for the `package.json` field or the cron.
+A workflow that releases on a schedule is judged only by the release rule above.
+Each refusal names the workflow file, the line of its `schedule` trigger and what to change.
+
+### Job timeouts
+
+Every job sets `timeout-minutes` to a number of at most 60, so no job runs for hours.
+A job without one would hold its runner for GitHub's 360-minute default when a step hangs.
+It refuses a job that sets no `timeout-minutes`, sets more than 60, or sets an expression it cannot read before the run.
+A job that calls a reusable workflow with `uses` sets no timeout, and the called workflow's jobs are judged in their own file.
+Each refusal names the workflow file, the job and the limit.
 
 ## What it reads
 
-The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts` and `checks` runners in `package.json` and the shell scripts those steps and scripts run from the working tree.
+The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts`, `private` and `checks` runners in `package.json` and the shell scripts those steps and scripts run from the working tree.
 It reads each file a setup-bun step names for its version.
 It reads the fleet pin from the kit's own `.bun-version`.
 It reads the target branch from `GITHUB_BASE_REF`, then from `refs/remotes/origin/HEAD` and then from the event file `GITHUB_EVENT_PATH` names.
@@ -115,7 +138,7 @@ It takes no arguments.
 | Code | Result |
 | --- | --- |
 | 0 | Every required command has a reachable step. |
-| 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, a setup-bun step drifts from the fleet bun version, or a workflow that releases runs on a schedule. |
+| 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, a setup-bun step drifts from the fleet bun version, a workflow that releases runs on a schedule outside a public npm package or more than once a day, a workflow other than a weekly public advisory scan runs on a schedule, or a job can run for more than 60 minutes. |
 | 2 | A workflow or `package.json` cannot be decoded, or the kit's own `.bun-version` is missing, unreadable or blank. |
 
 ## Sample output
@@ -142,11 +165,26 @@ ci-wiring: 1 reference(s) name a missing workflow or job:
   .github/workflows/daily-release.yml line 31: names missing workflow commitlint.yml
 ```
 
-A workflow that releases on a schedule produces a report like this:
+A workflow that releases on a schedule in a repository that publishes nothing to npm produces a report like this:
 
 ```
 ci-wiring: 1 workflow(s) release on a schedule:
-  .github/workflows/daily-release.yml line 3: drop the schedule, so a release runs only when someone starts it
+  .github/workflows/daily-release.yml line 3: only a public package that publishes to npm releases on a schedule; drop the schedule, so a release runs only when someone starts it
+```
+
+A scheduled test run and a daily advisory scan produce a report like this:
+
+```
+ci-wiring: 2 workflow(s) run on a schedule:
+  .github/workflows/advisories.yml line 3: the advisory scan runs more than once a week; keep one cron at a minute, an hour and a weekday, such as "15 5 * * 1"
+  .github/workflows/night-run.yml line 4: drop the schedule, so it runs only when someone starts it with gh workflow run
+```
+
+A job that sets no timeout produces a report like this:
+
+```
+ci-wiring: 1 job(s) can run for hours:
+  .github/workflows/ci.yml job checks: the job sets no timeout-minutes, so a hung run holds its runner for GitHub's 360 minute default; set timeout-minutes to a number of at most 60
 ```
 
 ## When it runs

@@ -1,16 +1,6 @@
 name: mutation
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - src/**
-      - tests/**
-      - stryker.conf.mjs
-      - stryker.preset.js
-      - package.json
-      - bun.lock
-      - .github/workflows/mutation.yml
   workflow_dispatch:
 
 permissions:
@@ -22,7 +12,7 @@ jobs:
     concurrency:
       group: mutation-baseline
       cancel-in-progress: false
-    timeout-minutes: ${{ github.event_name == 'push' && 60 || 45 }}
+    timeout-minutes: 45
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -39,13 +29,7 @@ jobs:
           node-version: 24
       - run: bun install --frozen-lockfile
       # Every run restores state, so a full baseline retests the mutants its changes reach and fits the timeout, while a result made stale by a file a test reads at runtime lasts until the next 28-day refresh.
-      - name: Restore previous baseline state
-        if: github.event_name == 'push'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bun src/testing/mutation-baseline.ts reports/stryker-incremental.json
       - name: Restore previous full baseline state
-        if: github.event_name != 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: bun src/testing/mutation-baseline.ts --full reports/mutation/mutation.json reports/stryker-incremental.json
@@ -60,8 +44,7 @@ jobs:
             reports/stryker-incremental.json
           retention-days: 7
       # This repository is public so its artifacts do not count against the storage quota and its full runs start by hand.
-      - if: github.event_name != 'push'
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: mutation-baseline-full
           path: |

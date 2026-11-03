@@ -25,6 +25,8 @@ The workflow always runs `bun run lint`, `bun run typecheck` and `bun run test`.
 A `build` script there also brings a `git diff --exit-code` step.
 Other scripts a `package.json` it finds already holds stay, but the workflow never schedules them.
 The workflow always ends with a `bunx checks-commit-title` step for the pull request title.
+It runs on pull requests alone, so a merge to the default branch does not run the suite a second time.
+A newer push to the same pull request cancels the run in progress.
 A `--private` run pins each job to `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
 Setting the `CI_RUNS_ON` variable to a self-hosted runner label then lands the jobs there.
 A public run pins each job to `ubuntu-latest`.

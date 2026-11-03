@@ -127,15 +127,14 @@ checks-night-run: recorded 42 file score(s) in reports/night-run.json
 
 Only a night workflow the repository writes runs it, after that workflow's full mutation run, its long test tiers and its nightly lint gates.
 
-## Running it at night
+## Running it by hand
 
-A repository runs it from a workflow named `night-run` on a schedule, and starts the same workflow by hand with `gh workflow run night-run`:
+A repository runs it from a workflow named `night-run`, which someone starts with `gh workflow run night-run`.
+The workflow holds no schedule, since [checks-ci-wiring](checks-ci-wiring.md#schedules) refuses one:
 
 ```yaml
 name: night-run
 on:
-  schedule:
-    - cron: "7 22 * * *"
   workflow_dispatch:
 permissions:
   contents: read
@@ -160,6 +159,7 @@ jobs:
           retention-days: 1
   tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -176,6 +176,7 @@ jobs:
           retention-days: 1
   gates:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
         with:
@@ -194,6 +195,7 @@ jobs:
     needs: [mutation, gates, tests]
     if: ${{ !cancelled() && needs.tests.result == 'success' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       actions: read
@@ -228,8 +230,6 @@ jobs:
           retention-days: 90
 ```
 
-The cron starts the run at 22:07 UTC, inside the kit's own night window from 22:00 to 22:30 UTC.
-A repository takes minute 7 of its own tier's 30 minute night window, so repositories do not start together.
 The tests job runs each long tier the repository holds, `live` and `pixel` as [checks-test](checks-test.md#test-tiers) names them, and keeps each JUnit report.
 Each `|| true` lets the job go on to the upload after a failing test, since that test becomes an issue.
 A tier that writes no report fails the report job, because `checks-night-run` cannot read it.
@@ -240,7 +240,7 @@ The download names the artifact by `pattern`, which downloads nothing rather tha
 A full run too long for one job splits into a matrix of shards.
 Each shard uploads its own artifact under the one pattern, and each report gets its own `--mutation`.
 It passes `--gates` only when the gates job succeeded, and the failed gates job still fails the run.
-The concurrency group queues a run started by hand behind the scheduled one, so two runs never file the same finding twice.
+The concurrency group queues a run behind one already going, so two runs never file the same finding twice.
 A dispatch on a branch runs both jobs and lists its findings in the report job's log, and `if-no-files-found: ignore` lets that run upload no record.
 `issues: write` on the report job is the one permission beyond reading the repository and its runs.
 A public repository keeps `runs-on: ubuntu-latest` on every job.

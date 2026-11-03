@@ -83,9 +83,13 @@ To run the gates in CI:
    ```yaml
    on:
      pull_request:
+   concurrency:
+     group: ci-${{ github.event.pull_request.number }}
+     cancel-in-progress: true
    jobs:
      checks:
        runs-on: ubuntu-latest
+       timeout-minutes: 30
        steps:
          - uses: actions/checkout@v5
            with:

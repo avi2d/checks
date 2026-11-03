@@ -45,13 +45,14 @@ A skipped test or a todo without `skipReason` fails in every environment.
 ## What it reads
 
 `checks-test` reads test source files and the JUnit report written by its own run.
+A pull request run also reads the event file, the git history between the base and the head, the tracked sources, `package.json` and `bunfig.toml`.
 It reads no skip list from `package.json`, only the smoke list.
 It counts a run as `ci` when `CI` is true and as `local` otherwise.
 A local run covers `./tests/unit` plus the smoke list the repository declares.
 The smoke list lives in `package.json` under `checks.smoke` as an array of test file paths.
 A repository with no smoke list runs the unit tier alone outside CI.
 A local run with no unit test and no smoke list runs nothing and passes.
-A `ci` run covers the full default suite.
+A `ci` run covers the full default suite, unless a pull request narrows it, as [Pull request runs](#pull-request-runs) says.
 A smoke entry that names no test file fails the run.
 A smoke entry under `tests/quarantine/`, `tests/live/` or `tests/pixel/` fails the run, since Bun's ignored paths would drop it.
 
@@ -70,6 +71,32 @@ A live or pixel run clears Bun's ignored paths, runs only `./tests/live` or `./t
 A unit or e2e run keeps Bun's ignored paths, runs only `./tests/unit` or `./tests/e2e`, and still checks each skip.
 
 Files under `tests/quarantine/` are not run or judged, as [checks-test-layout](checks-test-layout.md) says.
+
+## Pull request runs
+
+A `ci` run on a `pull_request` event runs only the test files the pull request reaches.
+It reads the base and head from the event file `GITHUB_EVENT_PATH` names and the changed paths since their merge base from git.
+A test reaches a changed file when it imports it, names its path, runs its `package.json` bin or imports the package by name.
+A test also reaches a file through a test helper or a source that reaches it, at any depth.
+A source reaches only what it imports, so a registry that lists every bin's path does not make each of its importers reach every bin.
+A test that names a fixture's directory reaches each fixture under it.
+A changed test always reaches itself.
+
+A shared file runs the whole suite instead:
+
+- a lockfile, `package.json`, a `*.config.*` or `tsconfig` file, `bunfig.toml`, or a tool pin such as `.bun-version`
+- a file Bun preloads into every test, or a file a preload imports
+- a test helper, which is a file under `tests/` that is neither a test nor a fixture
+- a stylesheet, a font, or a layout under `layouts/` or named `layout.*`
+
+A dependency bump changes `package.json` or the lockfile, so it runs the whole suite in every repository.
+A workflow under `.github/` is not a shared file, since the suite runs under it rather than reading it.
+A pull request that changes no file a test reaches runs no test and passes.
+The run names how many test files it reached, or which shared file made it run the whole suite.
+A change whose paths cannot be read runs the whole suite.
+A run on any other event, such as `workflow_dispatch` for a release, runs the whole suite.
+`--full` and the live and pixel tiers always run whole.
+A narrowed run judges only the skips the files it ran declare.
 
 ## Test tiers
 

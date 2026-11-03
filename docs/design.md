@@ -204,7 +204,8 @@ A daily release pull request would leave each merged change unpublished until a 
 Only then does it move `main` to it without a force, so `main` only ever gains a release commit whose checks passed.
 It tags the commit it landed and nothing else.
 A repository that is no package keeps the release pull request, and it opens only when someone runs the workflow.
-No release runs on a schedule, in a package or not, since a schedule cuts releases no one asked for.
+Only a public package that publishes to npm may release on a schedule, at most once a day.
+A schedule elsewhere cuts releases no one asked for.
 `checks-release-pr` writes only to the `release/<branch>` branch it owns, and rebuilds that branch on `main` rather than merging `main` into it, so the changelog it carries is the one the build writes.
 `checks-release-tag` writes only the `v*` tag of a release commit that already landed.
 The `github-release` job's `contents: write` creates or updates the GitHub release from the tag's `CHANGELOG.md` section.
@@ -281,7 +282,7 @@ A group or other write bit fails the run, because another user could have edited
 
 `checks-advisories` compares the advisories at both ends of a range instead of failing on every advisory at the head.
 An advisory published against a package that landed a month earlier would otherwise fail every open pull request, including one that touches only docs.
-The scheduled `--all` run finds those advisories, and `advisory-acks.json` carries the ones a repository accepts for a while.
+The weekly `--all` run finds those advisories, and `advisory-acks.json` carries the ones a repository accepts for a while.
 
 The gate runs OSV-Scanner rather than Trivy, Grype or `bun audit`.
 Trivy 0.74.0 reads a nested `bun.lock` entry such as `mkdirp/minimist` under a name no advisory carries, so it misses every package bun nests.

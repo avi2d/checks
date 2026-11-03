@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-flake
 
-`checks-flake` is the scheduled run that finds flaky tests and records the seeds each one fails with.
+`checks-flake` is the run someone starts by hand that finds flaky tests and records the seeds each one fails with.
 
 ## What it checks
 
@@ -100,21 +100,20 @@ Rerunning a seed with bun test --randomize --seed=<seed> --parallel=4 reproduces
 
 ## When it runs
 
-Only a schedule the repository writes runs it.
+Only a workflow the repository starts by hand runs it.
 
-## Running it on a schedule
+## Running it by hand
 
-A repository runs it on a schedule and keeps the record of a failed run as an artifact.
-A repository schedules it at minute 27 of its tier's 30 minute night window, so repositories do not start together:
+A repository runs it from a workflow someone starts with `gh workflow run`, and keeps the record of a failed run as an artifact.
+The workflow holds no schedule, since [checks-ci-wiring](checks-ci-wiring.md#schedules) refuses one:
 
 ```yaml
 on:
-  schedule:
-    - cron: "27 22 * * *"
   workflow_dispatch:
 jobs:
   flake:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2

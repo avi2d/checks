@@ -107,6 +107,20 @@ expect(runsOn).toBe("ubuntu-latest");
 );
 
 test(
+"the generated workflow runs on pull requests alone and cancels a run a newer push to the same pull request supersedes, not on push to main as well",
+async () => {
+const dir = await scratch("single-trigger");
+expect((await $`bun ${join(CHECKOUT, "src", "delivery", "setup.ts")}`.cwd(dir).nothrow().quiet()).exitCode).toBe(0);
+const workflow = Schema.decodeUnknownSync(
+  Schema.Struct({ on: Schema.Record(Schema.String, Schema.Unknown), concurrency: Schema.Struct({ group: Schema.String, "cancel-in-progress": Schema.Boolean }) }),
+)(Bun.YAML.parse(await readFile(join(dir, ".github/workflows/ci.yml"), "utf8")));
+expect(Object.keys(workflow.on)).toEqual(["pull_request"]);
+expect(workflow.concurrency).toEqual({ group: "ci-${{ github.event.pull_request.number }}", "cancel-in-progress": true });
+},
+60_000,
+);
+
+test(
 "a second run writes nothing and keeps every file",
 async () => {
 const repo = await open({});
