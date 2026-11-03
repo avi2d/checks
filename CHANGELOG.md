@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.64.0
+
+Released 2026-11-03.
+
+### Features
+
+- **testing:** shard the night mutation run and file each missing report [#27](https://github.com/avi2d/checks/pull/27)
+
 ## 0.63.1
 
 Released 2026-11-03.
