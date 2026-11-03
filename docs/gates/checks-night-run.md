@@ -6,7 +6,7 @@ audience: consumers
 
 `checks-night-run` turns each finding of a night run on `main` into a GitHub issue.
 A finding is a file whose mutation score fell, a failing test, a failed nightly gate or a missing mutation report.
-It closes the issue of a test or gate that a later night no longer reports, and it comments on a mutation issue it no longer reports without closing it, but only when a previous night exists and every requested mutation report is present.
+It closes the issue of a test, gate or missing mutation report that a later night no longer reports, and it comments on a mutation issue it no longer reports without closing it, but only when a previous night exists and every requested mutation report is present.
 
 ## What it checks
 
