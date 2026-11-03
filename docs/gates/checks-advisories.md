@@ -105,7 +105,7 @@ A range that leaves `bun.lock` unchanged runs in under a second, and a direct ru
 ## Running it on a schedule
 
 A range never fails on an advisory published after its package landed, so a weekly `--all` run finds those.
-Only a public repository that publishes its package to npm runs it on a schedule, as [checks-ci-wiring](checks-ci-wiring.md#schedules) requires.
+Only a public repository runs it on a schedule, as [checks-ci-wiring](checks-ci-wiring.md#schedules) requires.
 Any other repository starts the same workflow by hand with `gh workflow run`, with no `schedule` trigger.
 A package scans on Monday between 05:00 and 06:00 UTC, at a minute chosen so repositories do not start together:
 

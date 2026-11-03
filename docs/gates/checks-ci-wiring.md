@@ -104,11 +104,11 @@ Each refusal names the workflow file, the line of its `schedule` trigger and wha
 ### Schedules
 
 It refuses every other workflow that triggers on `schedule`, since a test, mutation, flake, browser or night run starts only by hand, with `gh workflow run`.
-The one schedule it keeps is a weekly advisory scan in a public repository whose `package.json` does not set `private` to `true`.
+The one schedule it keeps is a weekly advisory scan in a public repository.
 A workflow scans advisories when a run step calls `checks-advisories`, the same ways a release call counts, and every other run step is a `bun install`.
 A weekly scan has one `cron` entry with one minute, one hour and one weekday, and `*` for the day of the month and the month.
-It refuses an advisory scan that runs more often, and any scheduled advisory scan in a private repository or a package that sets `private`.
-A run outside CI cannot read whether the repository is private, so it refuses a scan there only for the `package.json` field or the cron.
+It refuses an advisory scan that runs more often, and any scheduled advisory scan in a private repository.
+A run outside CI cannot read whether the repository is private, so it refuses a scan there only for the cron.
 A workflow that releases on a schedule is judged only by the release rule above.
 Each refusal names the workflow file, the line of its `schedule` trigger and what to change.
 
