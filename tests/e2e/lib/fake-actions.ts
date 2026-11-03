@@ -23,6 +23,7 @@ const Issue = Schema.Struct({
   title: Schema.String,
   body: Schema.String,
   labels: Schema.Array(Schema.String),
+  state: Schema.Literals(["open", "closed"]),
   comments: Schema.Array(Schema.String),
 });
 
@@ -45,6 +46,7 @@ type FakeState = typeof State.Type;
 const decodeState = Schema.decodeUnknownSync(Schema.fromJsonString(State));
 const decodeNewIssue = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Struct({ title: Schema.String, body: Schema.String, labels: Schema.Array(Schema.String) })));
 const decodeComment = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Struct({ body: Schema.String })));
+const decodeClose = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Struct({ state: Schema.Literal("closed"), state_reason: Schema.Literal("completed") })));
 
 export type FakeActions = {
   readonly env: Readonly<Record<string, string>>;
@@ -172,13 +174,22 @@ const ISSUES = "repos/{owner}/{repo}/issues";
 function issueCall(state: FakeState, method: string, endpoint: string, input: string): Answer | undefined {
   const [path, query = ""] = endpoint.split("?");
   if (method === "GET" && path === ISSUES) {
-    const label = new URLSearchParams(query).get("labels");
-    const listed = state.issues.filter((issue) => label === null || issue.labels.includes(label)).map(({ number, title, body }) => ({ number, title, body }));
+    const params = new URLSearchParams(query);
+    const [label, wanted] = [params.get("labels"), params.get("state")];
+    const listed = state.issues
+      .filter((issue) => (label === null || issue.labels.includes(label)) && (wanted === null || wanted === "all" || issue.state === wanted))
+      .map(({ number, title, body }) => ({ number, title, body }));
     return { state, out: JSON.stringify(listed) };
   }
   if (method === "POST" && path === ISSUES) {
-    const issue = { number: 100 + state.issues.length, ...decodeNewIssue(input), comments: [] };
+    const issue = { number: 100 + state.issues.length, ...decodeNewIssue(input), state: "open" as const, comments: [] };
     return { state: { ...state, issues: [...state.issues, issue] }, out: JSON.stringify({ number: issue.number }) };
+  }
+  const closed = Number(/^repos\/\{owner\}\/\{repo\}\/issues\/(\d+)$/.exec(path ?? "")?.[1]);
+  if (method === "PATCH" && state.issues.some((issue) => issue.number === closed)) {
+    decodeClose(input);
+    const issues = state.issues.map((issue) => (issue.number === closed ? { ...issue, state: "closed" as const } : issue));
+    return { state: { ...state, issues }, out: JSON.stringify({ number: closed }) };
   }
   const commented = Number(/^repos\/\{owner\}\/\{repo\}\/issues\/(\d+)\/comments$/.exec(path ?? "")?.[1]);
   if (method !== "POST" || !state.issues.some((issue) => issue.number === commented)) return undefined;

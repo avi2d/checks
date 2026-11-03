@@ -2,8 +2,8 @@ import { expect, test } from "bun:test";
 import { Effect, Layer, Option } from "effect";
 import { readFile } from "node:fs/promises";
 import { parseReport as parseMutationReport } from "../../src/testing/mutation-compare.ts";
-import { fileFindings, Issues, issueBody, markedKey, marker, parseArgs, titleOf, type OpenIssue } from "../../src/testing/night-run.ts";
-import { type Finding, findingsOf, gatesOf, keyOf, type NightRecord, type PreviousNight, scoresOf, type TestReport } from "../../src/testing/night-run-findings.ts";
+import { clearedText, fileFindings, Issues, issueBody, markedKey, marker, parseArgs, titleOf, type OpenIssue } from "../../src/testing/night-run.ts";
+import { type Finding, findingsOf, gatesDecided, gatesOf, keyOf, type Observed, type NightRecord, type PreviousNight, scoresOf, type TestReport } from "../../src/testing/night-run-findings.ts";
 import { parseReport as parseTestReport } from "../../src/testing/test-report.ts";
 import { Usage } from "../../src/core/main.ts";
 
@@ -98,17 +98,27 @@ function recordingIssues(open: readonly OpenIssue[]): { readonly layer: Layer.La
       open: record("open").pipe(Effect.as(open)),
       create: (title, body) => record("create", title, body).pipe(Effect.as(41)),
       comment: (issue, body) => record("comment", issue, body),
+      close: (issue) => record("close", issue),
     }),
   );
   return { layer, calls };
 }
 
 const FELL: Finding = { kind: "mutation", file: "src/cart.ts", before: { detected: 9, valid: 10 }, after: { detected: 8, valid: 10 }, since: LAST_NIGHT };
+const EVERY_REPORT: Observed = { tests: true, gates: true };
+const ROUNDS = "test:tests/unit/cart.test.ts > totals > rounds half to even";
+const ROUNDS_FAILS: Finding = { kind: "test", file: "tests/unit/cart.test.ts", name: "totals > rounds half to even" };
+
+async function file(findings: readonly Finding[], observed: Observed, open: readonly OpenIssue[]) {
+  const issues = recordingIssues(open);
+  const filed = await Effect.runPromise(fileFindings(findings, observed, RUN).pipe(Effect.provide(issues.layer)));
+  return { filed, calls: issues.calls };
+}
 
 test("a finding with a new key opens one issue that names the run, the file and the score change", async () => {
-  const issues = recordingIssues([{ number: 7, key: "test:tests/unit/other.test.ts > passes" }]);
+  const issues = recordingIssues([{ number: 7, key: "mutation:src/other.ts" }]);
 
-  const filed = await Effect.runPromise(fileFindings([FELL], RUN).pipe(Effect.provide(issues.layer)));
+  const filed = await Effect.runPromise(fileFindings([FELL], EVERY_REPORT, RUN).pipe(Effect.provide(issues.layer)));
 
   expect(filed).toEqual([{ key: "mutation:src/cart.ts", issue: 41, action: "opened" }]);
   expect(issues.calls.map((call) => call.method)).toEqual(["ensureLabel", "open", "create"]);
@@ -122,7 +132,7 @@ test("a finding with a new key opens one issue that names the run, the file and 
 test("a finding whose key an open issue holds comments on that issue once and opens none", async () => {
   const issues = recordingIssues([{ number: 7, key: "mutation:src/cart.ts" }]);
 
-  const filed = await Effect.runPromise(fileFindings([FELL], RUN).pipe(Effect.provide(issues.layer)));
+  const filed = await Effect.runPromise(fileFindings([FELL], EVERY_REPORT, RUN).pipe(Effect.provide(issues.layer)));
 
   expect(filed).toEqual([{ key: "mutation:src/cart.ts", issue: 7, action: "commented on" }]);
   expect(issues.calls.map((call) => call.method)).toEqual(["ensureLabel", "open", "comment"]);
@@ -130,11 +140,70 @@ test("a finding whose key an open issue holds comments on that issue once and op
   expect(issues.calls[2]?.args[1]).toContain(RUN);
 });
 
-test("no finding makes no call at all", async () => {
-  const issues = recordingIssues([{ number: 7, key: "mutation:src/cart.ts" }]);
+test("a failing test absent on a later night comments once and closes its issue instead of leaving it open", async () => {
+  const { filed, calls } = await file([], EVERY_REPORT, [{ number: 7, key: ROUNDS }]);
 
-  expect(await Effect.runPromise(fileFindings([], RUN).pipe(Effect.provide(issues.layer)))).toEqual([]);
-  expect(issues.calls).toEqual([]);
+  expect(filed).toEqual([{ key: ROUNDS, issue: 7, action: "closed" }]);
+  expect(calls).toEqual([
+    { method: "open", args: [] },
+    { method: "comment", args: [7, clearedText(ROUNDS, RUN)] },
+    { method: "close", args: [7] },
+  ]);
+  expect(clearedText(ROUNDS, RUN)).toContain(RUN);
+  expect(clearedText(ROUNDS, RUN)).toContain(ROUNDS);
+});
+
+test("a failing test still present tonight is commented on and not closed", async () => {
+  const { filed, calls } = await file([ROUNDS_FAILS], EVERY_REPORT, [{ number: 7, key: ROUNDS }]);
+
+  expect(filed).toEqual([{ key: ROUNDS, issue: 7, action: "commented on" }]);
+  expect(calls.map((call) => call.method)).toEqual(["ensureLabel", "open", "comment"]);
+});
+
+test("only the absent finding's issue closes, and a present one beside it stays open", async () => {
+  const { filed } = await file([ROUNDS_FAILS], EVERY_REPORT, [
+    { number: 7, key: ROUNDS },
+    { number: 8, key: "gates:checks-repetition" },
+  ]);
+
+  expect(filed).toEqual([
+    { key: ROUNDS, issue: 7, action: "commented on" },
+    { key: "gates:checks-repetition", issue: 8, action: "closed" },
+  ]);
+});
+
+test("a test issue stays open while its file crashed tonight, instead of closing on results the crash lost", async () => {
+  const { filed, calls } = await file([{ kind: "crash", file: "tests/unit/cart.test.ts" }], EVERY_REPORT, [{ number: 7, key: ROUNDS }]);
+
+  expect(filed).toEqual([{ key: "test:tests/unit/cart.test.ts", issue: 41, action: "opened" }]);
+  expect(calls.map((call) => call.method)).toEqual(["ensureLabel", "open", "create"]);
+});
+
+test("a night that read no test report closes no test issue, and one with an undecided gate log closes no gate issue", async () => {
+  const open = [
+    { number: 7, key: ROUNDS },
+    { number: 8, key: "test:tests/unit/session.test.ts" },
+    { number: 9, key: "gates:checks-repetition" },
+  ];
+
+  const { filed, calls } = await file([], { tests: false, gates: false }, open);
+
+  expect(filed).toEqual([]);
+  expect(calls.map((call) => call.method)).toEqual(["open"]);
+});
+
+test("a mutation issue stays open on a night its score does not fall again, since a score that stays down has not recovered", async () => {
+  const { filed, calls } = await file([], EVERY_REPORT, [{ number: 7, key: "mutation:src/cart.ts" }]);
+
+  expect(filed).toEqual([]);
+  expect(calls).toEqual([{ method: "open", args: [] }]);
+});
+
+test("a gate log decides gates when it passes or names failed gates, and not when it is undecided or never finished", () => {
+  expect(gatesDecided("checks-lint: 4 gate(s) pass")).toBe(true);
+  expect(gatesDecided("checks-lint: 1 of 4 gate(s) failed: checks-repetition")).toBe(true);
+  expect(gatesDecided("checks-lint: 2 of 4 gate(s) undecided: checks-repetition, checks-suppressions-ratchet")).toBe(false);
+  expect(gatesDecided("checks-lint: cannot run checks-repetition: boom")).toBe(false);
 });
 
 test("an issue body carries its key back, even a key holding quotes and a comment's closing", () => {
@@ -151,7 +220,7 @@ test("a test name too long for GitHub's 256-character title keeps the title with
   const finding: Finding = { kind: "test", file: "tests/e2e/browser.test.ts", name };
   const issues = recordingIssues([]);
 
-  await Effect.runPromise(fileFindings([finding], RUN).pipe(Effect.provide(issues.layer)));
+  await Effect.runPromise(fileFindings([finding], EVERY_REPORT, RUN).pipe(Effect.provide(issues.layer)));
 
   const [, , create] = issues.calls;
   const [title, body] = create?.args ?? [];
@@ -216,7 +285,7 @@ test("a passing lint log files no gate, and a log with no verdict files checks-l
 
 test("a gates finding opens one issue that names the run and the failed gate", async () => {
   const issues = recordingIssues([]);
-  const filed = await Effect.runPromise(fileFindings([{ kind: "gates", file: "checks-repetition" }], RUN).pipe(Effect.provide(issues.layer)));
+  const filed = await Effect.runPromise(fileFindings([{ kind: "gates", file: "checks-repetition" }], EVERY_REPORT, RUN).pipe(Effect.provide(issues.layer)));
   expect(filed).toEqual([{ key: "gates:checks-repetition", issue: 41, action: "opened" }]);
   const [, , create] = issues.calls;
   expect(create?.args[0]).toBe("Night run: nightly gate checks-repetition failed");
