@@ -16,6 +16,17 @@ jobs:
   mutation:
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: delivery
+            mutate: src/delivery/**/*.ts,src/complexity/**/*.ts
+          - shard: quality
+            mutate: src/quality/**/*.ts,src/core/**/*.ts,src/dependencies/**/*.ts
+          # Every directory the other shards leave out lands here, so a new one is still mutated.
+          - shard: rest
+            mutate: src/**/*.ts,!src/delivery/**,!src/complexity/**,!src/quality/**,!src/core/**,!src/dependencies/**
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -25,10 +36,10 @@ jobs:
         with:
           node-version: 24
       - run: bun install --frozen-lockfile
-      - run: time bun run mutate
+      - run: time bun run mutate -- --mutate '${{ matrix.mutate }}'
       - uses: actions/upload-artifact@v4
         with:
-          name: night-run-mutation
+          name: night-run-mutation-${{ matrix.shard }}
           path: reports/mutation/mutation.json
           retention-days: 1
 
@@ -85,10 +96,10 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      - if: needs.mutation.result == 'success'
-        uses: actions/download-artifact@v4
+      # A pattern downloads the shards that uploaded and skips the rest, which checks-night-run files as missing.
+      - uses: actions/download-artifact@v4
         with:
-          name: night-run-mutation
+          pattern: night-run-mutation-*
           path: reports/mutation
       - if: needs.gates.result == 'success'
         uses: actions/download-artifact@v4
@@ -101,7 +112,7 @@ jobs:
           path: reports/night-run-tests
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: bun src/testing/night-run.ts --mutation reports/mutation/mutation.json --tests reports/night-run-tests/unit.xml --tests reports/night-run-tests/e2e.xml --tests reports/night-run-tests/live.xml ${{ needs.gates.result == 'success' && '--gates reports/night-run-gates/gates.log' || '' }}
+        run: bun src/testing/night-run.ts --mutation reports/mutation/night-run-mutation-delivery/mutation.json --mutation reports/mutation/night-run-mutation-quality/mutation.json --mutation reports/mutation/night-run-mutation-rest/mutation.json --tests reports/night-run-tests/unit.xml --tests reports/night-run-tests/e2e.xml --tests reports/night-run-tests/live.xml ${{ needs.gates.result == 'success' && '--gates reports/night-run-gates/gates.log' || '' }}
       - uses: actions/upload-artifact@v4
         with:
           name: night-run

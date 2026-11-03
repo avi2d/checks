@@ -173,10 +173,9 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      - if: needs.mutation.result == 'success'
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
-          name: night-run-mutation
+          pattern: night-run-mutation
           path: reports/mutation
       - if: needs.gates.result == 'success'
         uses: actions/download-artifact@v4
@@ -189,7 +188,7 @@ jobs:
           path: reports/night-run-tests
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: bunx checks-night-run ${{ needs.mutation.result == 'success' && '--mutation reports/mutation/mutation.json' || '' }} --tests reports/night-run-tests/live.xml --tests reports/night-run-tests/pixel.xml ${{ needs.gates.result == 'success' && '--gates reports/night-run-gates/gates.log' || '' }}
+        run: bunx checks-night-run --mutation reports/mutation/night-run-mutation/mutation.json --tests reports/night-run-tests/live.xml --tests reports/night-run-tests/pixel.xml ${{ needs.gates.result == 'success' && '--gates reports/night-run-gates/gates.log' || '' }}
       - uses: actions/upload-artifact@v4
         with:
           name: night-run
@@ -205,7 +204,11 @@ Each `|| true` lets the job go on to the upload after a failing test, since that
 A tier that writes no report fails the report job, because `checks-night-run` cannot read it.
 The gates job runs the nightly lint gates and keeps the log, since a failing gate becomes an issue.
 The report job runs whenever the tests job succeeds, so a failing test that also stops Stryker still becomes an issue.
-It passes `--mutation` only when the mutation job succeeded, and the failed mutation job still fails the run.
+It always passes `--mutation`, so a mutation job that failed or timed out leaves a missing report that becomes an issue.
+The download names the artifact by `pattern`, which downloads nothing rather than failing when the artifact is missing.
+A full run too long for one job splits into a matrix of shards.
+Each shard uploads its own artifact under the one pattern, and each report gets its own `--mutation`.
+[The kit's own night workflow](../../.github/workflows/night-run.yml) runs three shards.
 It passes `--gates` only when the gates job succeeded, and the failed gates job still fails the run.
 The concurrency group queues a run started by hand behind the scheduled one, so two runs never file the same finding twice.
 A dispatch on a branch runs both jobs and lists its findings in the report job's log, and `if-no-files-found: ignore` lets that run upload no record.

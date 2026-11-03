@@ -142,15 +142,39 @@ function downloadCondition(path: string, jobId: string, artifact: string): unkno
 test("rejects a gates flag moved out of its result guard", () => {
   const path = ".github/workflows/night-run.yml";
   expect(downloadCondition(path, "report", "night-run-gates")).toBe("needs.gates.result == 'success'");
-  expect(downloadCondition(path, "report", "night-run-mutation")).toBe("needs.mutation.result == 'success'");
   const run = nightRunStep(path)?.["run"];
   expect(typeof run === "string" ? expressionsOf(run) : []).toEqual([GATES_EXPRESSION]);
 });
 
-test("rejects a report job that drops the mutation report when the mutation job leaves none, so no finding names it", () => {
+function mutationShards(path: string): readonly string[] {
+  const strategy = jobRecord(path, "mutation")?.["strategy"];
+  const matrix = isRecord(strategy) ? strategy["matrix"] : undefined;
+  const include = isRecord(matrix) ? matrix["include"] : undefined;
+  return Array.isArray(include) ? include.flatMap((row) => (isRecord(row) && typeof row["shard"] === "string" ? [row["shard"]] : [])) : [];
+}
+
+function mutationDownload(path: string): Record<string, unknown> | undefined {
+  const steps = jobRecord(path, "report")?.["steps"];
+  if (!Array.isArray(steps)) return undefined;
+  const step = steps.find((entry) => isRecord(entry) && isRecord(entry["with"]) && entry["with"]["pattern"] === "night-run-mutation-*");
+  return isRecord(step) ? step : undefined;
+}
+
+test("rejects a report job that names no report for a mutation shard that timed out, so no finding names it", () => {
   const path = ".github/workflows/night-run.yml";
-  const runs = scheduledCommands(path, "report");
-  expect(runs.some((command) => invokes(command, ["bun", "src/testing/night-run.ts", "--mutation", "reports/mutation/mutation.json"]))).toBe(true);
+  const shards = mutationShards(path);
+  expect(shards.length).toBeGreaterThan(1);
+  expect(artifactNames(path, "mutation", "upload-artifact")).toEqual(["night-run-mutation-${{ matrix.shard }}"]);
+  const download = mutationDownload(path);
+  expect(download?.["if"]).toBeUndefined();
+  expect(download?.["with"]).toEqual({ pattern: "night-run-mutation-*", path: "reports/mutation" });
+  const reports = shards.flatMap((shard) => ["--mutation", `reports/mutation/night-run-mutation-${shard}/mutation.json`]);
+  expect(scheduledCommands(path, "report").some((command) => invokes(command, ["bun", "src/testing/night-run.ts", ...reports]))).toBe(true);
+});
+
+test("rejects a mutation shard that cancels its siblings when it fails", () => {
+  const strategy = jobRecord(".github/workflows/night-run.yml", "mutation")?.["strategy"];
+  expect(isRecord(strategy) ? strategy["fail-fast"] : undefined).toBe(false);
 });
 
 test("rejects a live tier with a moved suite filed back under e2e", () => {

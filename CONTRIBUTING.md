@@ -27,7 +27,8 @@ A hand-started run restores the previous full baseline state, so it retests the 
 That run uploads the report and the incremental state again as the `mutation-baseline-full` artifact.
 A push run restores the previous baseline through [checks-mutation-baseline](docs/gates/checks-mutation-baseline.md).
 `.github/workflows/night-run.yml` runs at 02:07 UTC, and `gh workflow run night-run` starts it by hand, queued behind any night run already going.
-It runs a full Stryker run and the unit, e2e and live levels of the suite, and keeps each JUnit report.
+It runs a full Stryker run in three parallel shards by source directory.
+It runs the unit, e2e and live levels of the suite and keeps each JUnit report.
 It also runs the four nightly lint gates over the whole tree with no base, so every suppression count and every repeated line still present is reported until it is removed.
 [checks-night-run](docs/gates/checks-night-run.md) then opens or comments on one issue labelled `night-run` for each file whose mutation score fell since the previous night, for each failing test, and for each nightly gate that failed.
 It also files each mutation report a failed or timed-out mutation job never wrote.
