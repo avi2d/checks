@@ -107,7 +107,7 @@ function recordingIssues(open: readonly OpenIssue[], earlier: ReadonlyMap<number
 }
 
 const FELL: Finding = { kind: "mutation", file: "src/cart.ts", before: { detected: 9, valid: 10 }, after: { detected: 8, valid: 10 }, since: LAST_NIGHT };
-const EVERY_REPORT: Observed = { tests: true, gates: true, mutation: true };
+const EVERY_REPORT: Observed = { tests: true, gates: true, mutation: true, mutationReports: new Set() };
 const ROUNDS = "test:tests/unit/cart.test.ts > totals > rounds half to even";
 const ROUNDS_FAILS: Finding = { kind: "test", file: "tests/unit/cart.test.ts", name: "totals > rounds half to even" };
 
@@ -191,7 +191,7 @@ test("a night that read no test report closes no test issue, and one with an und
     { number: 9, key: "gates:checks-repetition" },
   ];
 
-  const { filed, calls } = await file([], { tests: false, gates: false, mutation: false }, open);
+  const { filed, calls } = await file([], { tests: false, gates: false, mutation: false, mutationReports: new Set() }, open);
 
   expect(filed).toEqual([]);
   expect(calls.map((call) => call.method)).toEqual(["open"]);
@@ -251,7 +251,7 @@ test("a person's comment after the note does not make a quiet night note the mut
 });
 
 test("a mutation issue absent without a compared score stays silent", async () => {
-  const { filed, calls } = await file([], { tests: false, gates: false, mutation: false }, [{ number: 7, key: "mutation:src/cart.ts" }]);
+  const { filed, calls } = await file([], { tests: false, gates: false, mutation: false, mutationReports: new Set() }, [{ number: 7, key: "mutation:src/cart.ts" }]);
 
   expect(filed).toEqual([]);
   expect(calls).toEqual([{ method: "open", args: [] }]);
@@ -300,15 +300,16 @@ test("a title within GitHub's 256 characters stays whole, and a cut never splits
   expect(full.startsWith(cut.slice(0, -1))).toBe(true);
 });
 
-test("checks-night-run takes at most one mutation report and any number of test reports", async () => {
-  expect(await Effect.runPromise(parseArgs(["--mutation", "m.json", "--tests", "unit.xml", "--tests", "e2e.xml"]))).toEqual({ mutation: Option.some("m.json"), tests: ["unit.xml", "e2e.xml"], gates: Option.none() });
-  expect(await Effect.runPromise(parseArgs(["--tests", "unit.xml"]))).toEqual({ mutation: Option.none(), tests: ["unit.xml"], gates: Option.none() });
+test("checks-night-run takes any number of mutation and test reports and at most one lint log", async () => {
+  expect(await Effect.runPromise(parseArgs(["--mutation", "m.json", "--tests", "unit.xml", "--tests", "e2e.xml"]))).toEqual({ mutation: ["m.json"], tests: ["unit.xml", "e2e.xml"], gates: Option.none() });
+  expect(await Effect.runPromise(parseArgs(["--mutation", "a.json", "--mutation", "b.json"]))).toEqual({ mutation: ["a.json", "b.json"], tests: [], gates: Option.none() });
+  expect(await Effect.runPromise(parseArgs(["--tests", "unit.xml"]))).toEqual({ mutation: [], tests: ["unit.xml"], gates: Option.none() });
   expect(await Effect.runPromise(parseArgs(["--gates", "gates.log"]))).toEqual({
-    mutation: Option.none(),
+    mutation: [],
     tests: [],
     gates: Option.some("gates.log"),
   });
-  for (const argv of [[], ["--mutation"], ["--mutation", "a.json", "--mutation", "b.json"], ["--mutation", "--tests"], ["--report", "x"], ["--gates"], ["--gates", "a.log", "--gates", "b.log"], ["--gates", "--tests"]]) {
+  for (const argv of [[], ["--mutation"], ["--mutation", "--tests"], ["--report", "x"], ["--gates"], ["--gates", "a.log", "--gates", "b.log"], ["--gates", "--tests"]]) {
     expect(await Effect.runPromise(Effect.flip(parseArgs(argv)))).toBeInstanceOf(Usage);
   }
 });
@@ -349,4 +350,37 @@ test("a gates finding opens one issue that names the run and the failed gate", a
   expect(create?.args[0]).toBe("Night run: nightly gate checks-repetition failed");
   expect(create?.args[1]).toContain(RUN);
   expect(create?.args[1]).toContain("Finding key: `gates:checks-repetition`");
+});
+
+test("a recovered shard report closes its issue while a still-missing one stays open instead of both staying open", async () => {
+  const recovered = "reports/mutation/night-run-mutation-quality/mutation.json";
+  const stillMissing = "reports/mutation/night-run-mutation-delivery/mutation.json";
+  const missing: Finding = { kind: "mutation-report", file: stillMissing };
+  const { filed, calls } = await file([missing], { ...EVERY_REPORT, mutationReports: new Set([recovered]) }, [
+    { number: 7, key: `mutation-report:${recovered}` },
+    { number: 8, key: `mutation-report:${stillMissing}` },
+  ]);
+
+  expect(filed).toEqual([
+    { key: `mutation-report:${stillMissing}`, issue: 8, action: "commented on" },
+    { key: `mutation-report:${recovered}`, issue: 7, action: "closed" },
+  ]);
+  expect(calls).toEqual([
+    { method: "ensureLabel", args: [] },
+    { method: "open", args: [] },
+    { method: "comment", args: [8, reportedText(missing, RUN)] },
+    { method: "comment", args: [7, clearedText(`mutation-report:${recovered}`, RUN)] },
+    { method: "close", args: [7] },
+  ]);
+});
+
+test("a missing mutation report opens one issue under its own key that names the run and the report", async () => {
+  const issues = recordingIssues([]);
+  const report = "reports/mutation/night-run-mutation-quality/mutation.json";
+  const filed = await Effect.runPromise(fileFindings([{ kind: "mutation-report", file: report }], EVERY_REPORT, RUN).pipe(Effect.provide(issues.layer)));
+  expect(filed).toEqual([{ key: `mutation-report:${report}`, issue: 41, action: "opened" }]);
+  const [, , create] = issues.calls;
+  expect(create?.args[0]).toBe(`Night run: no mutation report at ${report}`);
+  expect(create?.args[1]).toContain(RUN);
+  expect(create?.args[1]).toContain(`Finding key: \`mutation-report:${report}\``);
 });

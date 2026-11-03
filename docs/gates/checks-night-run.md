@@ -4,13 +4,13 @@ audience: consumers
 ---
 # checks-night-run
 
-`checks-night-run` turns a night run on `main` into GitHub issues, one for each file whose mutation score fell, one for each failing test, and one for each failed nightly gate.
-It closes the issue of a test or gate that a later night no longer reports.
-It comments on a mutation issue a later night no longer reports, and leaves it open.
+`checks-night-run` turns each finding of a night run on `main` into a GitHub issue.
+A finding is a file whose mutation score fell, a failing test, a failed nightly gate or a missing mutation report.
+It closes the issue of a test, gate or missing mutation report that a later night no longer reports, and it comments on a mutation issue it no longer reports without closing it, but only when a previous night exists and every requested mutation report is present.
 
 ## What it checks
 
-It scores each file of tonight's Stryker report as Stryker does, the `Killed` and `Timeout` mutants over every mutant but the `Ignored`, `CompileError`, `RuntimeError` and `Pending` ones.
+It scores each file of tonight's Stryker reports as Stryker does, the `Killed` and `Timeout` mutants over every mutant but the `Ignored`, `CompileError`, `RuntimeError` and `Pending` ones.
 It compares each file's score with the same file's score from the previous night.
 A file whose score is lower than the previous night's is a finding.
 A file only one night holds is no finding, since it lacks one of the two scores.
@@ -22,7 +22,10 @@ A log where every named gate is undecided files `checks-lint` itself, with no pe
 A log with no passing run and no named gate files `checks-lint` itself, so a gate run that never finished still reaches an issue.
 A file whose test worker crashed is one finding, since Bun reports none of its tests.
 With no previous night it compares no score and still files each failing test.
+Each mutation report `--mutation` names that does not exist is a finding, since the mutation job that writes it failed, timed out or was cancelled.
 With no mutation report it compares and records no score and still files each failing test.
+With some mutation reports missing it compares the files the others hold and records no score.
+The next night then compares every file with the last night that scored them all.
 
 Each finding has a key that stays the same from night to night:
 
@@ -32,6 +35,7 @@ Each finding has a key that stays the same from night to night:
 | a failing test | `test:<file> > <describe> > <name>` |
 | a file whose test worker crashed | `test:<file>` |
 | a nightly gate that failed | `gates:<gate>` |
+| a missing mutation report | `mutation-report:<path>` |
 
 ## How it files a finding
 
@@ -42,15 +46,14 @@ Any other finding opens one issue labelled `night-run`.
 The issue and the comment name tonight's run, the file and the test, the score of both nights or the failed gate.
 The body holds the file, the full test name or the failed gate, and the finding key.
 A title longer than GitHub's 256 characters is cut to at most 256 and ends in `…`.
-A night with no finding creates no label and opens no issue.
-It still reads the open issues, to close or comment on each one whose finding is gone.
+A night with no finding creates no label and writes no issue, and only reads the open issues to close any test, gate or mutation-report issue whose finding is gone and, when a previous night exists and every requested mutation report is present, to comment on any mutation issue whose finding is gone.
 Closing an issue ends it, and the same finding on a later night opens a new one.
 
 ## How it closes an issue
 
-An open test or gate issue whose key tonight's findings lack gets one comment naming tonight's run and the key.
+An open test, gate or mutation-report issue whose key tonight's findings lack gets one comment naming tonight's run and the key.
 It then closes as completed.
-An open mutation issue whose key tonight's findings lack gets one comment that names tonight's run and the key, and stays open.
+When a previous night exists and every requested mutation report is present, an open mutation issue whose key tonight's findings lack gets one comment that names tonight's run and the key, and stays open.
 A closed issue is no longer read, so a later night without the finding comments on it no more.
 A comment that reports the finding carries a reported marker, and a note that a mutation finding is gone carries a noted marker.
 A mutation issue whose latest marked comment already notes the finding gone gets no further note.
@@ -63,13 +66,14 @@ It judges a key only from a report it read tonight:
 | `test:<file> > <describe> > <name>` | tonight read a JUnit report, the test is not failing, and `<file>`'s worker did not crash |
 | `test:<file>` | tonight read a JUnit report and `<file>`'s worker did not crash |
 | `gates:<gate>` | tonight read a lint log that passes or names its failed gates, and `<gate>` is not among them |
+| `mutation-report:<path>` | tonight read the mutation report at `<path>` |
 | `mutation:<file>` | never |
 
 A crashed worker loses every result of its file, so the issue of a test in that file stays open.
 A lint log that is undecided or never finished says nothing of any one gate, so every gate issue stays open.
 A mutation finding is a fall from one night to the next.
 A later night that does not fall again still holds the lower score.
-A night that compared scores comments on the mutation issue without closing it, since a score can recover and drop again.
+Only a night that compared scores with every requested mutation report present comments on the mutation issue without closing it, since a score can recover and drop again.
 So a person closes a mutation issue once the score is back.
 An issue with no key in its body is never read, so a person's issue under the `night-run` label is never commented on or closed.
 A run off `main` comments on and closes no issue.
@@ -78,24 +82,24 @@ A run on any ref but `refs/heads/main` files no issue and records no score, and 
 
 ## What it reads
 
-It reads tonight's Stryker `mutation.json` report, when the mutation run left one, and any number of JUnit reports, such as the ones `checks-test --junit=<file>` keeps, as [checks-test](checks-test.md#arguments) says.
+It reads tonight's Stryker `mutation.json` reports and any number of JUnit reports, such as the ones `checks-test --junit=<file>` keeps, as [checks-test](checks-test.md#arguments) says.
 It reads the lint log `--gates` names for the `gate(s) failed:` line `checks-lint --night` prints.
 It scans the newest 30 successful runs of the same workflow on `main` from newest to oldest.
 It takes the first run whose `night-run` artifact still exists as the previous night.
 That artifact holds `night-run.json`, the scores the run recorded.
 When no scanned run holds the artifact it compares no score.
 A run on another branch never becomes the previous night.
-On `main` with a mutation report it writes tonight's scores to `reports/night-run.json`, and the workflow uploads that file as the `night-run` artifact.
+On `main` with every mutation report present it writes tonight's scores to `reports/night-run.json`, and the workflow uploads that file as the `night-run` artifact.
 It reads the run from `GITHUB_SERVER_URL`, `GITHUB_REPOSITORY`, `GITHUB_RUN_ID`, `GITHUB_WORKFLOW_REF` and `GITHUB_REF`, so it runs only inside a GitHub Actions job.
 It calls `gh` with the job's `GH_TOKEN`, which needs `actions: read` for the previous night and `issues: write` for the issues.
 
 ## Arguments
 
 ```sh
-checks-night-run [--mutation <mutation-report>] [--tests <junit-report>]... [--gates <lint-log>]
+checks-night-run [--mutation <mutation-report>]... [--tests <junit-report>]... [--gates <lint-log>]
 ```
 
-`--mutation` names tonight's Stryker report and is given at most once.
+`--mutation` names one of tonight's Stryker reports and is given once per report the workflow's mutation jobs write, whether or not each job wrote it.
 `--tests` names one JUnit report and is given once per report.
 `--gates` names tonight's `checks-lint --night` log and is given at most once.
 At least one report is given.
@@ -200,10 +204,9 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      - if: needs.mutation.result == 'success'
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
-          name: night-run-mutation
+          pattern: night-run-mutation
           path: reports/mutation
       - if: needs.gates.result == 'success'
         uses: actions/download-artifact@v4
@@ -216,7 +219,7 @@ jobs:
           path: reports/night-run-tests
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: bunx checks-night-run ${{ needs.mutation.result == 'success' && '--mutation reports/mutation/mutation.json' || '' }} --tests reports/night-run-tests/live.xml --tests reports/night-run-tests/pixel.xml ${{ needs.gates.result == 'success' && '--gates reports/night-run-gates/gates.log' || '' }}
+        run: bunx checks-night-run --mutation reports/mutation/night-run-mutation/mutation.json --tests reports/night-run-tests/live.xml --tests reports/night-run-tests/pixel.xml ${{ needs.gates.result == 'success' && '--gates reports/night-run-gates/gates.log' || '' }}
       - uses: actions/upload-artifact@v4
         with:
           name: night-run
@@ -232,7 +235,10 @@ Each `|| true` lets the job go on to the upload after a failing test, since that
 A tier that writes no report fails the report job, because `checks-night-run` cannot read it.
 The gates job runs the nightly lint gates and keeps the log, since a failing gate becomes an issue.
 The report job runs whenever the tests job succeeds, so a failing test that also stops Stryker still becomes an issue.
-It passes `--mutation` only when the mutation job succeeded, and the failed mutation job still fails the run.
+It always passes `--mutation`, so a mutation job that failed or timed out leaves a missing report that becomes an issue.
+The download names the artifact by `pattern`, which downloads nothing rather than failing when the artifact is missing.
+A full run too long for one job splits into a matrix of shards.
+Each shard uploads its own artifact under the one pattern, and each report gets its own `--mutation`.
 It passes `--gates` only when the gates job succeeded, and the failed gates job still fails the run.
 The concurrency group queues a run started by hand behind the scheduled one, so two runs never file the same finding twice.
 A dispatch on a branch runs both jobs and lists its findings in the report job's log, and `if-no-files-found: ignore` lets that run upload no record.
@@ -240,7 +246,7 @@ A dispatch on a branch runs both jobs and lists its findings in the report job's
 A public repository keeps `runs-on: ubuntu-latest` on every job.
 A private repository sets `runs-on` on the mutation job to the labels declared under `checks.mutationRunner` in `package.json`, and [checks-ci-wiring](checks-ci-wiring.md#runners) refuses a mutation job that names `CI_RUNS_ON`.
 A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on the tests, gates, and report jobs.
-A successful run uploads `night-run`, so the next night compares with it, and a failed run uploads nothing a later night reads.
+A successful run with every mutation report present uploads `night-run`, so the next night compares with it, and a run that failed or missed a report uploads nothing a later night reads.
 The artifact keeps 90 days, so a gap of nights still leaves a previous night to compare with.
 
 ## Related topics
