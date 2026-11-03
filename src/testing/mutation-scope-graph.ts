@@ -1,3 +1,5 @@
+import { Schema } from "effect";
+
 export const TEST_TREE = "tests/";
 const FIXTURES = "tests/fixtures/";
 const CANDIDATE_EXTENSIONS = [".tsx", ".ts", ".mts", ".cts", ".jsx", ".js", ".mjs", ".cjs", ".json", ".node"];
@@ -5,6 +7,17 @@ const CANDIDATE_EXTENSIONS = [".tsx", ".ts", ".mts", ".cts", ".jsx", ".js", ".mj
 const IMPORT = /(?:from|import)\s*\(?\s*["'](\.[^"']*)["']|require\s*\(\s*["'](\.[^"']*)["']\s*\)/g;
 const LISTED_SEGMENTS = /["'`][ \t]*,[ \t]*["'`]/g;
 const DIRECTORY_ENDS = ['"', "'", "`", '/"', "/'", "/`", "/${"];
+
+const Bunfig = Schema.Struct({
+  test: Schema.optionalKey(Schema.Struct({ preload: Schema.optionalKey(Schema.Union([Schema.String, Schema.Array(Schema.String)])) })),
+});
+
+export const decodeBunfig = Schema.decodeUnknownEffect(Bunfig);
+
+export function preloadPaths(bunfig: typeof Bunfig.Type): readonly string[] {
+  const preload = bunfig.test?.preload ?? [];
+  return (typeof preload === "string" ? [preload] : preload).map((entry) => resolved("", entry));
+}
 
 type Needle = { readonly text: string; readonly kind: "file" | "directory"; readonly fixture: string };
 

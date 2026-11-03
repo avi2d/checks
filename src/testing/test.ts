@@ -4,9 +4,13 @@ import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effec
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { TEST_ENTRY_POINT } from "../core/gates.ts";
 import { runMain, Usage } from "../core/main.ts";
+import { readPullRequestNarrowing } from "./affected-tests.ts";
 import {
+  readDeclarationsIn,
   readSkipDeclarations,
   readSmokeDeclarations,
+  scanTestFiles,
+  selectedTierFile,
   type Environment,
   type SkipDeclaration,
   type TestTier,
@@ -171,7 +175,8 @@ const environmentOf = Config.Boolean("CI").pipe(
 export type SuiteSelection =
   | { readonly kind: "full" }
   | { readonly kind: "tier"; readonly tier: TestTier }
-  | { readonly kind: "smoke" };
+  | { readonly kind: "smoke" }
+  | { readonly kind: "files"; readonly files: readonly string[] };
 
 export function selectSuite(options: TestOptions, environment: Environment): SuiteSelection {
   if (options.tier !== undefined) return { kind: "tier", tier: options.tier };
@@ -191,6 +196,7 @@ export function smokeList(manifest: unknown): readonly string[] | undefined {
 export function suiteArgs(selection: SuiteSelection, smoke: readonly string[]): readonly string[] {
   if (selection.kind === "tier") return tierArgs(selection.tier);
   if (selection.kind === "smoke") return ["./tests/unit", ...smoke.map((file) => `./${file}`)];
+  if (selection.kind === "files") return selection.files.map((file) => `./${file}`);
   return [];
 }
 
@@ -218,6 +224,37 @@ const readSmokeList = Effect.fn("readSmokeList")(function* (root: string) {
   return smoke;
 });
 
+// A live or pixel tier and --full run whole, since no pull request picks them.
+export function narrowedTier(options: TestOptions, selection: SuiteSelection): { readonly tier: TestTier | undefined } | undefined {
+  if (options.full === true) return undefined;
+  if (selection.kind === "full") return { tier: undefined };
+  if (selection.kind === "tier" && (selection.tier === "unit" || selection.tier === "e2e")) return { tier: selection.tier };
+  return undefined;
+}
+
+const narrowSelection = Effect.fn("narrowSelection")(function* (options: TestOptions, selection: SuiteSelection, environment: Environment) {
+  const narrowed = narrowedTier(options, selection);
+  if (environment !== "ci" || narrowed === undefined) return selection;
+  const tests = (yield* scanTestFiles(process.cwd())).filter((file) => selectedTierFile(file, narrowed.tier));
+  const narrowing = yield* readPullRequestNarrowing(process.cwd(), tests);
+  if (Option.isNone(narrowing)) return selection;
+  if (narrowing.value.kind === "full") {
+    yield* Console.log(`${NAME}: ${narrowing.value.because}, so the whole suite runs`);
+    return selection;
+  }
+  yield* Console.log(`${NAME}: the pull request reaches ${narrowing.value.files.length} of ${tests.length} test file(s)`);
+  return { kind: "files", files: narrowing.value.files } satisfies SuiteSelection;
+});
+
+const readScope = Effect.fn("readScope")(function* (selection: SuiteSelection, smoke: readonly string[]) {
+  if (selection.kind === "smoke") return yield* readSmokeDeclarations(process.cwd(), smoke);
+  const declarations =
+    selection.kind === "files"
+      ? yield* readDeclarationsIn(process.cwd(), selection.files)
+      : yield* readSkipDeclarations(process.cwd(), selection.kind === "tier" ? selection.tier : undefined);
+  return { files: undefined, declarations };
+});
+
 const runSuite = Effect.fn("runSuite")(function* (outfile: string, args: readonly string[], workers: number | undefined) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const command = ["test", "--randomize", `--parallel=${workerCount(workers)}`, ...args, ...reporterArgs(outfile)];
@@ -239,15 +276,13 @@ const testEntry = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const environment = yield* environmentOf;
-  const selection = selectSuite(options, environment);
+  const selection = yield* narrowSelection(options, selectSuite(options, environment), environment);
+  if (selection.kind === "files" && selection.files.length === 0) {
+    yield* Console.log(`${NAME}: the pull request changes no file a test reads, so no test ran`);
+    return true;
+  }
   const smoke = selection.kind === "smoke" ? yield* readSmokeList(process.cwd()) : [];
-  const scope =
-    selection.kind === "smoke"
-      ? yield* readSmokeDeclarations(process.cwd(), smoke)
-      : {
-          files: undefined,
-          declarations: yield* readSkipDeclarations(process.cwd(), selection.kind === "tier" ? selection.tier : undefined),
-        };
+  const scope = yield* readScope(selection, smoke);
   if (scope.files?.length === 0) {
     yield* Console.log(`${NAME}: no unit test and no smoke list, so this local run ran nothing; declare checks.smoke or pass ${FULL}`);
     return true;
@@ -257,6 +292,18 @@ const testEntry = Effect.gen(function* () {
   const outfile = path.join(yield* fs.makeTempDirectoryScoped({ prefix: "checks-test-" }), "junit.xml");
   const suitePassed =
     (yield* runSuite(outfile, suiteArgs(selection, smoke), options.workers)) === ChildProcessSpawner.ExitCode(0);
+  return yield* judgeRun(outfile, junit, suitePassed, declarations, environment);
+}).pipe(Effect.scoped);
+
+const judgeRun = Effect.fn("judgeRun")(function* (
+  outfile: string,
+  junit: Option.Option<string>,
+  suitePassed: boolean,
+  declarations: Parameters<typeof judgeSkips>[1],
+  environment: Environment,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
   const written = yield* fs.exists(outfile);
   if (written && Option.isSome(junit)) {
     yield* fs.makeDirectory(path.dirname(junit.value), { recursive: true });
@@ -276,6 +323,6 @@ const testEntry = Effect.gen(function* () {
   const verdict = judgeSkips(results, judged, environment);
   yield* passes(verdict) ? Console.log(report(verdict)) : Console.error(report(verdict));
   return suitePassed && crashedFiles.length === 0 && passes(verdict);
-}).pipe(Effect.scoped);
+});
 
 if (import.meta.main) runMain(NAME, testEntry);

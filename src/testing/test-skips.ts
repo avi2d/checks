@@ -138,13 +138,13 @@ function declarationsIn(source: string, file: string, module: unknown): Declarat
   return { kind: "valid", declarations };
 }
 
-function selectedTierFile(file: string, tier: TestTier | undefined): boolean {
+export function selectedTierFile(file: string, tier: TestTier | undefined): boolean {
   if (file.startsWith("tests/quarantine/")) return false;
   if (tier === undefined) return !file.startsWith("tests/live/") && !file.startsWith("tests/pixel/");
   return file.startsWith(`tests/${tier}/`);
 }
 
-const scanTestFiles = Effect.fn("scanTestFiles")(function* (root: string) {
+export const scanTestFiles = Effect.fn("scanTestFiles")(function* (root: string) {
   return yield* Effect.tryPromise({
     try: () =>
       Promise.all(
@@ -156,7 +156,7 @@ const scanTestFiles = Effect.fn("scanTestFiles")(function* (root: string) {
   });
 });
 
-const readDeclarationsIn = Effect.fn("readDeclarationsIn")(function* (root: string, files: readonly string[]) {
+export const readDeclarationsIn = Effect.fn("readDeclarationsIn")(function* (root: string, files: readonly string[]) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const declarations: SkipDeclaration[] = [];

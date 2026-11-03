@@ -3,7 +3,7 @@ import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { escape, minimatch } from "minimatch";
 import { changedPaths, git, pathsAt, pathsOf, rangeEnds, type Change } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
-import { importedFile, importsOf, readersOf, resolved, TEST_TREE } from "./mutation-scope-graph.ts";
+import { decodeBunfig, importedFile, importsOf, preloadPaths, readersOf, resolved, TEST_TREE } from "./mutation-scope-graph.ts";
 
 const NAME = "mutation-scope";
 const USAGE = "usage: mutation-scope.ts <base> [full-baseline-report]";
@@ -52,12 +52,6 @@ const BaselineSchema = Schema.Struct({
 export type Baseline = typeof BaselineSchema.Type;
 
 const decodeBaseline = Schema.decodeUnknownEffect(Schema.fromJsonString(BaselineSchema));
-
-const decodeBunfig = Schema.decodeUnknownEffect(
-  Schema.Struct({
-    test: Schema.optionalKey(Schema.Struct({ preload: Schema.optionalKey(Schema.Union([Schema.String, Schema.Array(Schema.String)])) })),
-  }),
-);
 
 export type MutationScope = { readonly scope: readonly string[]; readonly staleTests: readonly string[] };
 
@@ -173,8 +167,7 @@ const preloadsAt = Effect.fn("preloadsAt")(function* (rev: string, paths: Readon
   const text = yield* git(["show", `${rev}:${BUNFIG}`]);
   const unparsed = () => new ScopeError({ message: `${BUNFIG} at ${rev} does not parse as TOML whose [test] preload is a path or a list of paths` });
   const bunfig = yield* Effect.try({ try: (): unknown => Bun.TOML.parse(text), catch: unparsed }).pipe(Effect.flatMap(decodeBunfig), Effect.mapError(unparsed));
-  const preload = bunfig.test?.preload ?? [];
-  return (typeof preload === "string" ? [preload] : preload).map((entry) => resolved("", entry));
+  return preloadPaths(bunfig);
 });
 
 const transitivelyImported = Effect.fn("transitivelyImported")(function* (rev: string, roots: readonly string[], paths: ReadonlySet<string>) {

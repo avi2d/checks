@@ -53,6 +53,7 @@
     "src/testing/block-screens.ts",
     "src/testing/test.ts",
     "src/testing/test-skips.ts",
+    "src/testing/affected-tests.ts",
     "src/core/swc.ts",
     "src/testing/test-report.ts",
     "src/testing/flake.ts",
