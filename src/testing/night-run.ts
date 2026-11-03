@@ -278,6 +278,10 @@ function missingReports(reports: readonly MutationReport[]): readonly Finding[] 
   return reports.flatMap(({ file, files }): readonly Finding[] => (Option.isNone(files) ? [{ kind: "mutation-report", file }] : []));
 }
 
+function readReports(reports: readonly MutationReport[]): ReadonlySet<string> {
+  return new Set(reports.flatMap(({ file, files }) => (Option.isSome(files) ? [file] : [])));
+}
+
 function tonightScores(reports: readonly MutationReport[]): Option.Option<NightRecord["scores"]> {
   const read = reports.flatMap(({ files }) => (Option.isSome(files) ? [...files.value] : []));
   return reports.some(({ files }) => Option.isSome(files)) ? Option.some(scoresOf(new Map(read))) : Option.none();
@@ -316,7 +320,7 @@ const nightRun = Effect.gen(function* () {
   const log = Option.isSome(options.gates) ? Option.some(yield* readText(options.gates.value)) : Option.none<string>();
   const gates: readonly Finding[] = Option.isSome(log) ? gatesOf(log.value) : [];
   const previous = Option.isSome(scores) ? yield* previousNight(actions) : Option.none<PreviousNight>();
-  const observed: Observed = { tests: options.tests.length > 0, gates: Option.isSome(log) && gatesDecided(log.value), mutation: Option.isSome(previous) && missing.length === 0 };
+  const observed: Observed = { tests: options.tests.length > 0, gates: Option.isSome(log) && gatesDecided(log.value), mutation: Option.isSome(previous) && missing.length === 0, mutationReports: readReports(reports) };
   const findings = findingsOf(previous, { scores: Option.getOrElse(scores, () => ({})), tests }, [...missing, ...gates]);
   const filing: Filing = actions.ref === `refs/heads/${DEFAULT_BRANCH}` ? { onMain: true, filed: yield* fileFindings(findings, observed, actions.run) } : { onMain: false, ref: actions.ref };
   if (filing.onMain && Option.isSome(scores) && missing.length === 0) yield* writeRecord({ scores: scores.value });

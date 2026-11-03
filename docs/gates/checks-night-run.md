@@ -46,12 +46,12 @@ Any other finding opens one issue labelled `night-run`.
 The issue and the comment name tonight's run, the file and the test, the score of both nights or the failed gate.
 The body holds the file, the full test name or the failed gate, and the finding key.
 A title longer than GitHub's 256 characters is cut to at most 256 and ends in `…`.
-A night with no finding creates no label and writes no issue, and only reads the open issues to close any test or gate issue whose finding is gone and, when a previous night exists and every requested mutation report is present, to comment on any mutation issue whose finding is gone.
+A night with no finding creates no label and writes no issue, and only reads the open issues to close any test, gate or mutation-report issue whose finding is gone and, when a previous night exists and every requested mutation report is present, to comment on any mutation issue whose finding is gone.
 Closing an issue ends it, and the same finding on a later night opens a new one.
 
 ## How it closes an issue
 
-An open test or gate issue whose key tonight's findings lack gets one comment naming tonight's run and the key.
+An open test, gate or mutation-report issue whose key tonight's findings lack gets one comment naming tonight's run and the key.
 It then closes as completed.
 When a previous night exists and every requested mutation report is present, an open mutation issue whose key tonight's findings lack gets one comment that names tonight's run and the key, and stays open.
 A closed issue is no longer read, so a later night without the finding comments on it no more.
@@ -66,6 +66,7 @@ It judges a key only from a report it read tonight:
 | `test:<file> > <describe> > <name>` | tonight read a JUnit report, the test is not failing, and `<file>`'s worker did not crash |
 | `test:<file>` | tonight read a JUnit report and `<file>`'s worker did not crash |
 | `gates:<gate>` | tonight read a lint log that passes or names its failed gates, and `<gate>` is not among them |
+| `mutation-report:<path>` | tonight read the mutation report at `<path>` |
 | `mutation:<file>` | never |
 
 A crashed worker loses every result of its file, so the issue of a test in that file stays open.
