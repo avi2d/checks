@@ -36,7 +36,7 @@ export default {
   tempDirName: "../.stryker-tmp",
   coverageAnalysis: "perTest",
   reporters: ["html", "json", "clear-text", "progress"],
-  timeoutMS: 10000,
+  timeoutMS: 60000,
   concurrency: halfAvailableCores(),
   thresholds: { high: 85, low: 70, break: null },
 };
