@@ -76,7 +76,7 @@ Files under `tests/quarantine/` are not run or judged, as [checks-test-layout](c
 
 A `ci` run on a `pull_request` event runs only the test files the pull request reaches.
 It reads the base and head from the event file `GITHUB_EVENT_PATH` names and the changed paths since their merge base from git.
-A test reaches a changed file when it imports it, names its path, runs its `package.json` bin by name or imports the package by its own name.
+A test reaches a changed file when it imports it, names its path, runs its `package.json` bin or imports the package by name.
 A test also reaches a file through a test helper or a source that reaches it, at any depth.
 A source reaches only what it imports, so a registry that lists every bin's path does not make each of its importers reach every bin.
 A test that names a fixture's directory reaches each fixture under it.

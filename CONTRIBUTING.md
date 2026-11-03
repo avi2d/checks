@@ -24,8 +24,10 @@ CI runs the commands in `.github/workflows/ci.yml` on each pull request, and on 
 A pull request runs only the tests it reaches, and the release runs the whole suite, as [checks-test](docs/gates/checks-test.md#pull-request-runs) says.
 `.github/workflows/pr-title.yml` lints the pull request title, so editing the title reruns only that.
 No workflow runs on a schedule except the weekly advisory scan, as [checks-ci-wiring](docs/gates/checks-ci-wiring.md#schedules) requires.
-`.github/workflows/mutation.yml` runs Stryker, with `stryker.conf.mjs`, as a full baseline on any branch when `gh workflow run mutation` starts it, and no pull request runs it.
-That run restores the previous full baseline state through [checks-mutation-baseline](docs/gates/checks-mutation-baseline.md), so it retests the mutants its changes reach and fits the job timeout, while a result made stale by a file a test reads at runtime lasts until the next 28-day refresh.
+`.github/workflows/mutation.yml` runs Stryker, with `stryker.conf.mjs`, as a full baseline on any branch.
+It runs only when `gh workflow run mutation` starts it, and no pull request runs it.
+That run restores the previous full baseline state through [checks-mutation-baseline](docs/gates/checks-mutation-baseline.md), so it retests only the mutants its changes reach.
+A result made stale by a file a test reads at runtime lasts until the next 28-day refresh.
 That run uploads the report and the incremental state again as the `mutation-baseline-full` artifact.
 `.github/workflows/night-run.yml` runs when `gh workflow run night-run` starts it, queued behind any night run already going.
 It runs a full Stryker run in three parallel shards by source directory.
