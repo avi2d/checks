@@ -42,7 +42,6 @@ function scansAdvisoriesOnly(workflow: Workflow, context: ScheduleContext): bool
 
 function advisoryFault(workflow: Workflow, owner: ScheduleOwner): string | undefined {
   if (owner.visibility === "private") return "a private repository scans advisories by hand; " + BY_HAND;
-  if (!owner.publishes) return "a package.json that sets private publishes nothing to npm, so it scans advisories by hand; " + BY_HAND;
   const entries = crons(workflow.document);
   if (entries.length === 1 && entries.every(weekly)) return undefined;
   return 'the advisory scan runs more than once a week; keep one cron at a minute, an hour and a weekday, such as "15 5 * * 1"';

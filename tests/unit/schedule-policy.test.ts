@@ -25,7 +25,7 @@ test("a scheduled test, mutation, flake or browser run is refused rather than pa
   }
 });
 
-test("a weekly advisory scan in a public package that publishes passes, through the bin or the kit's own source", () => {
+test("a weekly advisory scan in a public repository passes, through the bin or the kit's own source", () => {
   expect(judged(scheduled("15 5 * * 1", "bun install --frozen-lockfile", "./node_modules/.bin/checks-advisories --all"))).toEqual([]);
   expect(judged(scheduled("15 5 * * mon", "bun install --frozen-lockfile", "bun src/dependencies/advisories.ts --all"))).toEqual([]);
 });
@@ -36,16 +36,20 @@ test("a daily advisory scan is refused instead of passing as the weekly one", ()
   ]);
 });
 
-test("an advisory scan in a private repository or an unpublished package is refused even when weekly", () => {
+test("a weekly advisory scan in a private repository is refused rather than kept as the public scan", () => {
   const weeklyScan = scheduled("15 5 * * 1", "bunx checks-advisories --all");
   expect(faultOf(weeklyScan, { visibility: "private", publishes: true })).toEqual(["a private repository scans advisories by hand; drop the schedule, so it runs only when someone starts it with gh workflow run"]);
-  expect(faultOf(weeklyScan, { visibility: "public", publishes: false })).toEqual([
-    "a package.json that sets private publishes nothing to npm, so it scans advisories by hand; drop the schedule, so it runs only when someone starts it with gh workflow run",
-  ]);
+  expect(faultOf(weeklyScan, { visibility: "private", publishes: false })).toEqual(["a private repository scans advisories by hand; drop the schedule, so it runs only when someone starts it with gh workflow run"]);
+});
+
+test("a weekly advisory scan in a public repository that sets private is kept rather than refused as unpublished", () => {
+  const weeklyScan = scheduled("15 5 * * 1", "bunx checks-advisories --all");
+  expect(judged(weeklyScan, { visibility: "public", publishes: false })).toEqual([]);
 });
 
 test("a run outside CI does not refuse a weekly scan for a visibility it cannot read", () => {
   expect(judged(scheduled("15 5 * * 1", "bunx checks-advisories --all"), { visibility: "unknown", publishes: true })).toEqual([]);
+  expect(judged(scheduled("15 5 * * 1", "bunx checks-advisories --all"), { visibility: "unknown", publishes: false })).toEqual([]);
 });
 
 test("an advisory workflow that also runs the suite is refused, so a test run cannot ride the advisory schedule", () => {
