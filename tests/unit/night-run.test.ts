@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { Effect, Layer, Option } from "effect";
 import { readFile } from "node:fs/promises";
 import { parseReport as parseMutationReport } from "../../src/testing/mutation-compare.ts";
-import { clearedText, fileFindings, Issues, issueBody, markedKey, marker, notedText, parseArgs, titleOf, type OpenIssue } from "../../src/testing/night-run.ts";
+import { clearedText, fileFindings, Issues, issueBody, markedKey, marker, notedText, parseArgs, reportedText, titleOf, type OpenIssue } from "../../src/testing/night-run.ts";
 import { type Finding, findingsOf, gatesDecided, gatesOf, keyOf, type Observed, type NightRecord, type PreviousNight, scoresOf, type TestReport } from "../../src/testing/night-run-findings.ts";
 import { parseReport as parseTestReport } from "../../src/testing/test-report.ts";
 import { Usage } from "../../src/core/main.ts";
@@ -88,8 +88,9 @@ test("the same failing test in two reports is one finding", async () => {
 
 type Call = { readonly method: string; readonly args: readonly unknown[] };
 
-function recordingIssues(open: readonly OpenIssue[]): { readonly layer: Layer.Layer<Issues>; readonly calls: Call[] } {
+function recordingIssues(open: readonly OpenIssue[], earlier: ReadonlyMap<number, readonly string[]> = new Map()): { readonly layer: Layer.Layer<Issues>; readonly calls: Call[] } {
   const calls: Call[] = [];
+  const posted = new Map([...earlier].map(([issue, bodies]) => [issue, [...bodies]]));
   const record = (method: string, ...args: readonly unknown[]) => Effect.sync(() => void calls.push({ method, args }));
   const layer = Layer.succeed(
     Issues,
@@ -97,8 +98,9 @@ function recordingIssues(open: readonly OpenIssue[]): { readonly layer: Layer.La
       ensureLabel: record("ensureLabel"),
       open: record("open").pipe(Effect.as(open)),
       create: (title, body) => record("create", title, body).pipe(Effect.as(41)),
-      comment: (issue, body) => record("comment", issue, body),
+      comment: (issue, body) => record("comment", issue, body).pipe(Effect.andThen(Effect.sync(() => void posted.set(issue, [...(posted.get(issue) ?? []), body])))),
       close: (issue) => record("close", issue),
+      comments: (issue) => record("comments", issue).pipe(Effect.as(posted.get(issue) ?? [])),
     }),
   );
   return { layer, calls };
@@ -124,7 +126,7 @@ test("a finding with a new key opens one issue that names the run, the file and 
     { key: "mutation:src/cart.ts", issue: 41, action: "opened" },
     { key: "mutation:src/other.ts", issue: 7, action: "commented on" },
   ]);
-  expect(issues.calls.map((call) => call.method)).toEqual(["ensureLabel", "open", "create", "comment"]);
+  expect(issues.calls.map((call) => call.method)).toEqual(["ensureLabel", "open", "create", "comments", "comment"]);
   const [, , create] = issues.calls;
   expect(create?.args[0]).toBe("Night run: mutation score fell in src/cart.ts");
   expect(create?.args[1]).toContain(RUN);
@@ -201,10 +203,51 @@ test("a mutation issue absent on a later night is commented on once and stays op
   expect(filed).toEqual([{ key: "mutation:src/cart.ts", issue: 7, action: "commented on" }]);
   expect(calls).toEqual([
     { method: "open", args: [] },
+    { method: "comments", args: [7] },
     { method: "comment", args: [7, notedText("mutation:src/cart.ts", RUN)] },
   ]);
   expect(notedText("mutation:src/cart.ts", RUN)).toContain(RUN);
   expect(notedText("mutation:src/cart.ts", RUN)).toContain("mutation:src/cart.ts");
+});
+
+test("a second and a third night without the mutation finding comment on its issue no more instead of repeating the note", async () => {
+  const issues = recordingIssues([{ number: 7, key: "mutation:src/cart.ts" }]);
+  const tonight = () => Effect.runPromise(fileFindings([], EVERY_REPORT, RUN).pipe(Effect.provide(issues.layer)));
+
+  const first = await tonight();
+  const second = await tonight();
+  const third = await tonight();
+
+  expect(first).toEqual([{ key: "mutation:src/cart.ts", issue: 7, action: "commented on" }]);
+  expect([second, third]).toEqual([[], []]);
+  expect(issues.calls.filter((call) => call.method === "comment")).toHaveLength(1);
+  expect(issues.calls.filter((call) => call.method === "close")).toEqual([]);
+});
+
+test("a mutation finding that recovers, falls again and recovers again is noted twice instead of once for good", async () => {
+  const issues = recordingIssues([{ number: 7, key: "mutation:src/cart.ts" }]);
+  const night = (findings: readonly Finding[]) => Effect.runPromise(fileFindings(findings, EVERY_REPORT, RUN).pipe(Effect.provide(issues.layer)));
+
+  await night([]);
+  await night([FELL]);
+  const absentAgain = await night([]);
+
+  expect(absentAgain).toEqual([{ key: "mutation:src/cart.ts", issue: 7, action: "commented on" }]);
+  expect(issues.calls.filter((call) => call.method === "comment").map((call) => call.args[1])).toEqual([
+    notedText("mutation:src/cart.ts", RUN),
+    reportedText(FELL, RUN),
+    notedText("mutation:src/cart.ts", RUN),
+  ]);
+});
+
+test("a person's comment after the note does not make a quiet night note the mutation issue again", async () => {
+  const earlier = new Map([[7, [notedText("mutation:src/cart.ts", LAST_NIGHT), "A person asks whether this is fixed."]]]);
+  const issues = recordingIssues([{ number: 7, key: "mutation:src/cart.ts" }], earlier);
+
+  const filed = await Effect.runPromise(fileFindings([], EVERY_REPORT, RUN).pipe(Effect.provide(issues.layer)));
+
+  expect(filed).toEqual([]);
+  expect(issues.calls.map((call) => call.method)).toEqual(["open", "comments"]);
 });
 
 test("a mutation issue absent without a compared score stays silent", async () => {

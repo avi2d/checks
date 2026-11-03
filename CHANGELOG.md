@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.63.1
+
+Released 2026-11-03.
+
+### Fixes
+
+- **testing:** note a cleared mutation issue once [#29](https://github.com/avi2d/checks/pull/29)
+
 ## 0.63.0
 
 Released 2026-11-03.

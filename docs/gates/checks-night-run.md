@@ -51,9 +51,14 @@ Closing an issue ends it, and the same finding on a later night opens a new one.
 
 ## How it closes an issue
 
-An open test or gate issue whose key tonight's findings lack gets one comment that names tonight's run and the key, and then closes as completed.
+An open test or gate issue whose key tonight's findings lack gets one comment naming tonight's run and the key.
+It then closes as completed.
 When a previous night exists and every requested mutation report is present, an open mutation issue whose key tonight's findings lack gets one comment that names tonight's run and the key, and stays open.
 A closed issue is no longer read, so a later night without the finding comments on it no more.
+A comment that reports the finding carries a reported marker, and a note that a mutation finding is gone carries a noted marker.
+A mutation issue whose latest marked comment already notes the finding gone gets no further note.
+So a mutation finding gone for many nights is noted once, and noted again only after a later night reports it again.
+A person's comment carries no marker, so it never makes the run note an issue twice.
 It judges a key only from a report it read tonight:
 
 | Key | Closes when |

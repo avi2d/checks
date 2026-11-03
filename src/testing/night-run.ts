@@ -53,6 +53,7 @@ export class Issues extends Context.Service<
     readonly create: (title: string, body: string) => Effect.Effect<number, GitHubFailure>;
     readonly comment: (issue: number, body: string) => Effect.Effect<void, GitHubFailure>;
     readonly close: (issue: number) => Effect.Effect<void, GitHubFailure>;
+    readonly comments: (issue: number) => Effect.Effect<readonly string[], GitHubFailure>;
   }
 >()("@avi2dg/checks/testing/Issues") {
   static readonly gh = Layer.effect(
@@ -66,6 +67,7 @@ export class Issues extends Context.Service<
         create: (title, body) => provided(gitHubJson(decodeNumbered, "POST", `${REPOSITORY}/issues`, { title, body, labels: [LABEL] })).pipe(Effect.map(({ number }) => number)),
         comment: (issue, body) => provided(gitHubJson(decodeAny, "POST", `${REPOSITORY}/issues/${issue}/comments`, { body })).pipe(Effect.asVoid),
         close: (issue) => provided(gitHubJson(decodeAny, "PATCH", `${REPOSITORY}/issues/${issue}`, { state: "closed", state_reason: "completed" })).pipe(Effect.asVoid),
+        comments: (issue) => provided(issueComments(issue)),
       });
     }),
   );
@@ -77,6 +79,7 @@ const decodeIssues = Schema.decodeUnknownEffect(
   Schema.fromJsonString(Schema.Array(Schema.Struct({ number: Schema.Int, body: Schema.NullOr(Schema.String), pull_request: Schema.optionalKey(Schema.Unknown) }))),
 );
 const decodeKey = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.String));
+const decodeComments = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Array(Schema.Struct({ body: Schema.String }))));
 
 const MARKER = /<!-- checks-night-run ("(?:[^"\\]|\\.)*") -->/;
 
@@ -100,6 +103,15 @@ const openIssues = Effect.gen(function* () {
       const key = markedKey(issue.body);
       if (issue.pull_request === undefined && Option.isSome(key)) found.push({ number: issue.number, key: key.value });
     }
+    if (batch.length < PAGE_SIZE) return found;
+  }
+});
+
+const issueComments = Effect.fn("issueComments")(function* (issue: number) {
+  const found: string[] = [];
+  for (let page = 1; ; page += 1) {
+    const batch = yield* gitHubJson(decodeComments, "GET", `${REPOSITORY}/issues/${issue}/comments?per_page=${PAGE_SIZE}&page=${page}`);
+    found.push(...batch.map(({ body }) => body));
     if (batch.length < PAGE_SIZE) return found;
   }
 });
@@ -141,12 +153,24 @@ export function issueBody(finding: Finding, run: string): string {
   return `${findingText(finding, run)}\n\nFinding key: \`${keyOf(finding)}\`\n\n${marker(keyOf(finding))}\n`;
 }
 
+const REPORTED = "<!-- checks-night-run reported -->";
+const NOTED = "<!-- checks-night-run noted -->";
+
+export function reportedText(finding: Finding, run: string): string {
+  return `${findingText(finding, run)}\n\n${REPORTED}\n`;
+}
+
+// The issue body reports the finding too, so an issue with no marked comment is not yet noted.
+export function alreadyNoted(comments: readonly string[]): boolean {
+  return comments.findLast((body) => body.includes(NOTED) || body.includes(REPORTED))?.includes(NOTED) ?? false;
+}
+
 export function clearedText(key: string, run: string): string {
   return `The night run ${run} no longer reports \`${key}\`, so it closes this issue.`;
 }
 
 export function notedText(key: string, run: string): string {
-  return `The night run ${run} no longer reports \`${key}\`. This issue stays open because a mutation score can recover and drop again.`;
+  return `The night run ${run} no longer reports \`${key}\`. This issue stays open because a mutation score can recover and drop again.\n\n${NOTED}\n`;
 }
 
 export const fileFindings = Effect.fn("fileFindings")(function* (findings: readonly Finding[], observed: Observed, run: string) {
@@ -164,12 +188,13 @@ export const fileFindings = Effect.fn("fileFindings")(function* (findings: reado
       open.set(key, issue);
       filed.push({ key, issue, action: "opened" });
     } else {
-      yield* issues.comment(known, findingText(finding, run));
+      yield* issues.comment(known, reportedText(finding, run));
       filed.push({ key, issue: known, action: "commented on" });
     }
   }
   for (const { number, key } of listed) {
     if (noted(key, present, observed)) {
+      if (alreadyNoted(yield* issues.comments(number))) continue;
       yield* issues.comment(number, notedText(key, run));
       filed.push({ key, issue: number, action: "commented on" });
       continue;
