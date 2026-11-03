@@ -113,6 +113,7 @@ on:
 jobs:
   flake:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2

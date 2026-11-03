@@ -159,6 +159,7 @@ jobs:
           retention-days: 1
   tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -175,6 +176,7 @@ jobs:
           retention-days: 1
   gates:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
         with:
@@ -193,6 +195,7 @@ jobs:
     needs: [mutation, gates, tests]
     if: ${{ !cancelled() && needs.tests.result == 'success' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       actions: read

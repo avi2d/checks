@@ -16,6 +16,7 @@ export function ciWorkflow(isPrivate: boolean, hasBuild: boolean): string {
     "jobs:",
     "  checks:",
     "    runs-on: " + (isPrivate ? HOSTED_DEFAULT : HOSTED_FALLBACK),
+    "    timeout-minutes: 30",
     "    steps:",
     "      - uses: actions/checkout@v5",
     "        with:",

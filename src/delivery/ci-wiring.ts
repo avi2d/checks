@@ -4,6 +4,7 @@ import { defaultBranch, git } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { ENTRY_POINT, KIT_GATES, type KitGate } from "../core/gates.ts";
 import { findBunPinFaults, formatBunPinReport, readBunPinPolicy } from "./bun-pin.ts";
+import { findLongJobs, formatLongJobReport } from "./job-timeout.ts";
 import { readScheduleFiles, readShellFiles } from "./mutation-job.ts";
 import { findScheduledReleases, formatScheduleReport } from "./release-schedule.ts";
 import { findRunnerFaults, formatRunnerReport, jobRuns, readRunnerConfig } from "./runner-policy.ts";
@@ -342,7 +343,9 @@ const wiring = Effect.gen(function* () {
   if (scheduled.length > 0) yield* Console.error(formatScheduleReport(scheduled));
   const scheduledRuns = findScheduledRuns(workflows, { scripts, files: scheduleFiles }, owner);
   if (scheduledRuns.length > 0) yield* Console.error(formatScheduledRunReport(scheduledRuns));
-  return [gaps, faults, missing, bunFaults, scheduled, scheduledRuns].every((found) => found.length === 0);
+  const longJobs = findLongJobs(workflows);
+  if (longJobs.length > 0) yield* Console.error(formatLongJobReport(longJobs));
+  return [gaps, faults, missing, bunFaults, scheduled, scheduledRuns, longJobs].every((found) => found.length === 0);
 });
 
 if (import.meta.main) runMain("ci-wiring", wiring);
