@@ -32,7 +32,7 @@ It runs the unit, e2e and live levels of the suite and keeps each JUnit report.
 It also runs the four nightly lint gates over the whole tree with no base, so every suppression count and every repeated line still present is reported until it is removed.
 [checks-night-run](docs/gates/checks-night-run.md) then opens or comments on one issue labelled `night-run` for each file whose mutation score fell since the previous night, for each failing test, and for each nightly gate that failed.
 It also files each mutation report a failed or timed-out mutation job never wrote.
-It closes the issue of a test or gate that a later night no longer reports, and comments on a mutation issue it no longer reports without closing it.
+It closes the issue of a test or gate that a later night no longer reports, and it comments on a mutation issue it no longer reports without closing it, but only when a previous night exists and every requested mutation report is present.
 A failed mutation run still leaves each failing test filed, and records no score.
 A run started on a branch other than `main` lists its findings in the log and files no issue.
 Each issue is fixed in a pull request of its own, so no pull request waits for a mutation run.

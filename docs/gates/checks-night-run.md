@@ -6,7 +6,7 @@ audience: consumers
 
 `checks-night-run` turns each finding of a night run on `main` into a GitHub issue.
 A finding is a file whose mutation score fell, a failing test, a failed nightly gate or a missing mutation report.
-It closes the issue of a test or gate that a later night no longer reports, and comments on a mutation issue it no longer reports without closing it.
+It closes the issue of a test or gate that a later night no longer reports, and it comments on a mutation issue it no longer reports without closing it, but only when a previous night exists and every requested mutation report is present.
 
 ## What it checks
 
@@ -46,13 +46,13 @@ Any other finding opens one issue labelled `night-run`.
 The issue and the comment name tonight's run, the file and the test, the score of both nights or the failed gate.
 The body holds the file, the full test name or the failed gate, and the finding key.
 A title longer than GitHub's 256 characters is cut to at most 256 and ends in `…`.
-A night with no finding creates no label and writes no issue, and only reads the open issues to close any test or gate issue whose finding is gone and to comment on any mutation issue whose finding is gone.
+A night with no finding creates no label and writes no issue, and only reads the open issues to close any test or gate issue whose finding is gone and, when a previous night exists and every requested mutation report is present, to comment on any mutation issue whose finding is gone.
 Closing an issue ends it, and the same finding on a later night opens a new one.
 
 ## How it closes an issue
 
 An open test or gate issue whose key tonight's findings lack gets one comment that names tonight's run and the key, and then closes as completed.
-An open mutation issue whose key tonight's findings lack gets one comment that names tonight's run and the key, and stays open.
+When a previous night exists and every requested mutation report is present, an open mutation issue whose key tonight's findings lack gets one comment that names tonight's run and the key, and stays open.
 A closed issue is no longer read, so a later night without the finding comments on it no more.
 It judges a key only from a report it read tonight:
 
@@ -67,7 +67,7 @@ A crashed worker loses every result of its file, so the issue of a test in that 
 A lint log that is undecided or never finished says nothing of any one gate, so every gate issue stays open.
 A mutation finding is a fall from one night to the next.
 A later night that does not fall again still holds the lower score.
-A night that compared scores comments on the mutation issue without closing it, since a score can recover and drop again.
+Only a night that compared scores with every requested mutation report present comments on the mutation issue without closing it, since a score can recover and drop again.
 So a person closes a mutation issue once the score is back.
 An issue with no key in its body is never read, so a person's issue under the `night-run` label is never commented on or closed.
 A run off `main` comments on and closes no issue.
