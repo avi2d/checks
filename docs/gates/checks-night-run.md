@@ -208,7 +208,6 @@ It always passes `--mutation`, so a mutation job that failed or timed out leaves
 The download names the artifact by `pattern`, which downloads nothing rather than failing when the artifact is missing.
 A full run too long for one job splits into a matrix of shards.
 Each shard uploads its own artifact under the one pattern, and each report gets its own `--mutation`.
-[The kit's own night workflow](../../.github/workflows/night-run.yml) runs three shards.
 It passes `--gates` only when the gates job succeeded, and the failed gates job still fails the run.
 The concurrency group queues a run started by hand behind the scheduled one, so two runs never file the same finding twice.
 A dispatch on a branch runs both jobs and lists its findings in the report job's log, and `if-no-files-found: ignore` lets that run upload no record.
