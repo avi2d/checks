@@ -5,7 +5,7 @@ import { DEFAULT_BRANCH } from "../core/gates.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { gh, type GitHubFailure, gitHubJson, REPOSITORY } from "../delivery/github.ts";
 import { parseReport as parseMutationReport } from "./mutation-compare.ts";
-import { type Finding, findingsOf, gatesOf, keyOf, NightRecordSchema, type NightRecord, percent, type PreviousNight, scoresOf, type TestReport } from "./night-run-findings.ts";
+import { cleared, type Finding, findingsOf, gatesDecided, gatesOf, keyOf, NightRecordSchema, noted, type Observed, type NightRecord, percent, type PreviousNight, scoresOf, type TestReport } from "./night-run-findings.ts";
 import { parseReport as parseTestReport } from "./test-report.ts";
 
 const NAME = "checks-night-run";
@@ -43,7 +43,7 @@ export const parseArgs = Effect.fnUntraced(function* (argv: readonly string[]): 
 
 export type OpenIssue = { readonly number: number; readonly key: string };
 
-export type Filed = { readonly key: string; readonly issue: number; readonly action: "opened" | "commented on" };
+export type Filed = { readonly key: string; readonly issue: number; readonly action: "opened" | "commented on" | "closed" };
 
 export class Issues extends Context.Service<
   Issues,
@@ -52,6 +52,7 @@ export class Issues extends Context.Service<
     readonly open: Effect.Effect<readonly OpenIssue[], GitHubFailure>;
     readonly create: (title: string, body: string) => Effect.Effect<number, GitHubFailure>;
     readonly comment: (issue: number, body: string) => Effect.Effect<void, GitHubFailure>;
+    readonly close: (issue: number) => Effect.Effect<void, GitHubFailure>;
   }
 >()("@avi2dg/checks/testing/Issues") {
   static readonly gh = Layer.effect(
@@ -64,6 +65,7 @@ export class Issues extends Context.Service<
         open: provided(openIssues),
         create: (title, body) => provided(gitHubJson(decodeNumbered, "POST", `${REPOSITORY}/issues`, { title, body, labels: [LABEL] })).pipe(Effect.map(({ number }) => number)),
         comment: (issue, body) => provided(gitHubJson(decodeAny, "POST", `${REPOSITORY}/issues/${issue}/comments`, { body })).pipe(Effect.asVoid),
+        close: (issue) => provided(gitHubJson(decodeAny, "PATCH", `${REPOSITORY}/issues/${issue}`, { state: "closed", state_reason: "completed" })).pipe(Effect.asVoid),
       });
     }),
   );
@@ -137,12 +139,20 @@ export function issueBody(finding: Finding, run: string): string {
   return `${findingText(finding, run)}\n\nFinding key: \`${keyOf(finding)}\`\n\n${marker(keyOf(finding))}\n`;
 }
 
-// Nothing to file means no call at all, so a quiet night never touches the label or the issues.
-export const fileFindings = Effect.fn("fileFindings")(function* (findings: readonly Finding[], run: string) {
-  if (findings.length === 0) return [];
+export function clearedText(key: string, run: string): string {
+  return `The night run ${run} no longer reports \`${key}\`, so it closes this issue.`;
+}
+
+export function notedText(key: string, run: string): string {
+  return `The night run ${run} no longer reports \`${key}\`. This issue stays open because a mutation score can recover and drop again.`;
+}
+
+export const fileFindings = Effect.fn("fileFindings")(function* (findings: readonly Finding[], observed: Observed, run: string) {
   const issues = yield* Issues;
-  yield* issues.ensureLabel;
-  const open = new Map((yield* issues.open).map((issue) => [issue.key, issue.number]));
+  if (findings.length > 0) yield* issues.ensureLabel;
+  const listed = yield* issues.open;
+  const present = new Set(findings.map(keyOf));
+  const open = new Map(listed.map((issue) => [issue.key, issue.number]));
   const filed: Filed[] = [];
   for (const finding of findings) {
     const key = keyOf(finding);
@@ -155,6 +165,17 @@ export const fileFindings = Effect.fn("fileFindings")(function* (findings: reado
       yield* issues.comment(known, findingText(finding, run));
       filed.push({ key, issue: known, action: "commented on" });
     }
+  }
+  for (const { number, key } of listed) {
+    if (noted(key, present, observed)) {
+      yield* issues.comment(number, notedText(key, run));
+      filed.push({ key, issue: number, action: "commented on" });
+      continue;
+    }
+    if (!cleared(key, present, observed)) continue;
+    yield* issues.comment(number, clearedText(key, run));
+    yield* issues.close(number);
+    filed.push({ key, issue: number, action: "closed" });
   }
   return filed;
 });
@@ -245,10 +266,12 @@ const nightRun = Effect.gen(function* () {
   const actions = yield* actionsRun;
   const scores = Option.isSome(options.mutation) ? Option.some(yield* tonightScores(options.mutation.value)) : Option.none<NightRecord["scores"]>();
   const tests: TestReport[] = yield* Effect.forEach(options.tests, testReport);
-  const gates: readonly Finding[] = Option.isSome(options.gates) ? gatesOf(yield* readText(options.gates.value)) : [];
+  const log = Option.isSome(options.gates) ? Option.some(yield* readText(options.gates.value)) : Option.none<string>();
+  const gates: readonly Finding[] = Option.isSome(log) ? gatesOf(log.value) : [];
   const previous = Option.isSome(scores) ? yield* previousNight(actions) : Option.none<PreviousNight>();
+  const observed: Observed = { tests: options.tests.length > 0, gates: Option.isSome(log) && gatesDecided(log.value), mutation: Option.isSome(previous) };
   const findings = findingsOf(previous, { scores: Option.getOrElse(scores, () => ({})), tests }, gates);
-  const filing: Filing = actions.ref === `refs/heads/${DEFAULT_BRANCH}` ? { onMain: true, filed: yield* fileFindings(findings, actions.run) } : { onMain: false, ref: actions.ref };
+  const filing: Filing = actions.ref === `refs/heads/${DEFAULT_BRANCH}` ? { onMain: true, filed: yield* fileFindings(findings, observed, actions.run) } : { onMain: false, ref: actions.ref };
   if (filing.onMain && Option.isSome(scores)) yield* writeRecord({ scores: scores.value });
   yield* Console.log(report(actions.run, Option.map(scores, (tonight) => Object.keys(tonight).length), previous, findings, filing));
   return true;

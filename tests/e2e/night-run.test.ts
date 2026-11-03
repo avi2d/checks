@@ -2,7 +2,7 @@ import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { fakeActions, type FakeActions, type FakeRun } from "./lib/fake-actions.ts";
+import { fakeActions, type FakeActions, type FakeOptions, type FakeRun } from "./lib/fake-actions.ts";
 import { CHECKOUT, ran, type Ran, scratchDirs } from "./lib/fixture-repo.ts";
 
 const SCRIPT = join(CHECKOUT, "src", "testing", "night-run.ts");
@@ -28,9 +28,9 @@ function lastNight(scores: Readonly<Record<string, { readonly detected: number; 
   return { databaseId: 11, event: "schedule", createdAt: "2026-10-18T22:07:00Z", artifacts: [{ id: 110, name: "night-run", expired: false, files: { "night-run.json": JSON.stringify({ scores }) } }] };
 }
 
-async function night(runs: readonly FakeRun[]): Promise<Night> {
+async function night(runs: readonly FakeRun[], issues: FakeOptions["issues"] = []): Promise<Night> {
   const home = await scratch("checks-night-run-");
-  const fake = await fakeActions(home, 4242, runs, { workflow: "night-run.yml" });
+  const fake = await fakeActions(home, 4242, runs, { workflow: "night-run.yml", issues });
   const work = join(home, "work");
   await mkdir(work);
   const runWith = (args: readonly string[], env: Readonly<Record<string, string>>) => ran($`bun ${SCRIPT} ${args}`.cwd(work).env({ ...process.env, ...ACTIONS_ENV, ...env, ...fake.env }));
@@ -77,16 +77,50 @@ test("a regression that persists two nights opens one issue per finding the firs
   });
 }, 30_000);
 
-test("a quiet night touches neither the label nor any issue and still records tonight's scores", async () => {
+const writes = (calls: readonly string[]): readonly string[] => calls.filter((call) => call.startsWith("label") || (call.includes("/issues") && !call.includes("--method GET")));
+
+test("a quiet night with no open issue only reads the issues, touching neither the label nor any issue, and still records tonight's scores", async () => {
   const runner = await night([lastNight({ "src/mixed.ts": { detected: 2, valid: 4 } })]);
 
   const quiet = await runner.run(["passing.xml"]);
 
   expect(quiet.exitCode).toBe(0);
   expect(quiet.text).toContain("; no finding\n");
-  expect((await runner.calls()).filter((call) => call.startsWith("label") || call.includes("/issues"))).toEqual([]);
+  expect(writes(await runner.calls())).toEqual([]);
   expect(await runner.issues()).toEqual([]);
   expect(await record(runner.work)).toMatchObject({ scores: { "src/mixed.ts": { detected: 2, valid: 4 } } });
+}, 30_000);
+
+test("a failing test absent on a later night closes its issue once with one comment, and the next night comments on it no more", async () => {
+  const unkeyed = { number: 1, title: "Flaky checkout", body: "A person wrote this.", labels: ["night-run"], state: "open" as const, comments: [] };
+  const runner = await night([], [unkeyed]);
+  const gates = ["--gates", join(FIXTURES, "gates-failed.log")];
+
+  const failing = await runner.runWith([...testArgs(["failing.xml"]), ...gates], {});
+  const passing = await runner.runWith([...testArgs(["passing.xml"]), ...gates], {});
+  const again = await runner.runWith([...testArgs(["passing.xml"]), ...gates], {});
+
+  expect(failing.text).toContain("  opened #102 for test:tests/unit/cart.test.ts > totals > rounds half to even\n");
+  expect(passing).toEqual({
+    exitCode: 0,
+    text: [
+      `checks-night-run: the night run ${RUNS}/12 had no mutation report, so it compared no score; 1 finding(s)`,
+      "  commented on #101 for gates:checks-repetition",
+      "  closed #102 for test:tests/unit/cart.test.ts > totals > rounds half to even",
+      "  closed #103 for test:tests/unit/session.test.ts",
+      "checks-night-run: recorded no score, since it had no mutation report",
+      "",
+    ].join("\n"),
+  });
+  expect(again.text).toContain("; 1 finding(s)\n  commented on #101 for gates:checks-repetition\nchecks-night-run: recorded no score");
+  expect(again.text).not.toContain("closed");
+  const issues = await runner.issues();
+  expect(issues.map(({ number, state, comments }) => ({ number, state, comments }))).toEqual([
+    { number: 1, state: "open", comments: [] },
+    { number: 101, state: "open", comments: [`The night run ${RUNS}/12 failed nightly gate \`checks-repetition\`.`, `The night run ${RUNS}/12 failed nightly gate \`checks-repetition\`.`] },
+    { number: 102, state: "closed", comments: [`The night run ${RUNS}/12 no longer reports \`test:tests/unit/cart.test.ts > totals > rounds half to even\`, so it closes this issue.`] },
+    { number: 103, state: "closed", comments: [`The night run ${RUNS}/12 no longer reports \`test:tests/unit/session.test.ts\`, so it closes this issue.`] },
+  ]);
 }, 30_000);
 
 test("with no previous night it files each failing test and no score", async () => {
