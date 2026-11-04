@@ -32,6 +32,11 @@ A workflow without a `name` answers to its path from the repository root.
 A local reusable `uses` must name a file under `.github/workflows/` that the repository holds.
 Each `needs` entry names a job in the same workflow, so every one must match a job id in that file.
 Each refusal names the file, the line and the missing workflow or job.
+It requires a run step that invokes `checks-lint --night` in a repository that tracks TypeScript, so the four nightly gates run on the night run.
+A call counts directly, through `bunx`, or through `bun` or `bun run` with the bin's path or its source file.
+A call through a `package.json` script counts, as `bun run <script>` where the named script runs the night step.
+A call through a local reusable workflow counts, as a job that uses a file under `.github/workflows/` that runs the night step.
+A call through a repository shell script counts, as a path inside the repository whose file runs the night step.
 
 ### Runners
 
@@ -138,7 +143,7 @@ It takes no arguments.
 | Code | Result |
 | --- | --- |
 | 0 | Every required command has a reachable step. |
-| 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, a setup-bun step drifts from the fleet bun version, a workflow that releases runs on a schedule outside a public npm package or more than once a day, a workflow other than a weekly public advisory scan runs on a schedule, or a job can run for more than 60 minutes. |
+| 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, a setup-bun step drifts from the fleet bun version, a workflow that releases runs on a schedule outside a public npm package or more than once a day, a workflow other than a weekly public advisory scan runs on a schedule, or a job can run for more than 60 minutes, or a repository that tracks TypeScript never runs `checks-lint --night`. |
 | 2 | A workflow or `package.json` cannot be decoded, or the kit's own `.bun-version` is missing, unreadable or blank. |
 
 ## Sample output
@@ -148,6 +153,14 @@ A missing step produces a report like this:
 ```
 ci-wiring: 1 of 6 gate(s) do not run on pull requests to main:
   bun run test
+    no run step invokes it
+```
+
+A missing night step produces a report like this:
+
+```
+ci-wiring: 1 gate(s) never run on the night run:
+  checks-lint --night
     no run step invokes it
 ```
 

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
 import { declarationFor, findGaps, formatReport, parseWorkflow, requiredCommands } from "../../src/delivery/ci-wiring.ts";
+import { findNightStepFaults, formatNightStepReport } from "../../src/delivery/night-step.ts";
 import { findMissingWorkflows, formatMissingReport } from "../../src/delivery/workflow-references.ts";
 
 const scripts = ["lint", "build", "typecheck", "test"];
@@ -376,4 +377,35 @@ test("a needs entry must name a job in the same workflow", () => {
   expect(findMissingWorkflows(pipe)).toEqual([
     { location: ".github/workflows/pipe.yml line 9", fault: "job test needs missing job checks" },
   ]);
+});
+
+const nightPrefix = `name: night-run\non:\n  workflow_dispatch:\njobs:\n  gates:\n    runs-on: ubuntu-latest\n    steps:\n`;
+
+function nightWorkflow(run: string) {
+  return [Effect.runSync(parseWorkflow(".github/workflows/night-run.yml", `${nightPrefix}      - run: ${run}\n`))];
+}
+
+const emptyContext = { scripts: new Map(), files: new Map() };
+
+test("a workflow set with no night step fails the night run, which checks-lint --night satisfies", () => {
+  expect(findNightStepFaults(true, workflow(full), emptyContext)).toEqual([{ gate: "checks-lint --night" }]);
+  expect(findNightStepFaults(true, nightWorkflow("bunx checks-lint --night"), emptyContext)).toEqual([]);
+  expect(formatNightStepReport([{ gate: "checks-lint --night" }])).toBe(
+    "ci-wiring: 1 gate(s) never run on the night run:\n  checks-lint --night\n    no run step invokes it",
+  );
+});
+
+test("a repository that tracks no TypeScript passes with no night step", () => {
+  expect(findNightStepFaults(false, workflow(full), emptyContext)).toEqual([]);
+});
+
+test("the night step counts through the installed bin, its entry point and a package script", () => {
+  for (const run of ["checks-lint --night", "bunx checks-lint --night", "bun src/core/lint.ts --night", "bun src/core/lint.ts --night > reports/night-run-gates/gates.log 2>&1 || true", "bun run night:lint"]) {
+    const nightScripts = run === "bun run night:lint" ? new Map([["night:lint", "checks-lint --night"]]) : new Map();
+    expect(findNightStepFaults(true, nightWorkflow(run), { scripts: nightScripts, files: new Map() })).toEqual([]);
+  }
+});
+
+test("a checks-lint run without the night flag leaves the night run failing", () => {
+  expect(findNightStepFaults(true, nightWorkflow("bunx checks-lint"), emptyContext)).toEqual([{ gate: "checks-lint --night" }]);
 });
