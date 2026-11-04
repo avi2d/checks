@@ -9,7 +9,7 @@ export type Run = {
 
 type Invocation =
   | { readonly script: string; readonly body: string }
-  | { readonly program: Command; readonly file: string | undefined; readonly dir: string | undefined };
+  | { readonly program: Command; readonly file: string | undefined; readonly dir: string | undefined; readonly argv: Command };
 
 type Walked = {
   readonly scripts: readonly string[];
@@ -53,7 +53,7 @@ export function runsBin(
   isBin: BinCheck,
   followShellOperands = false,
 ): boolean {
-  return scriptRunsBin(run.script, run.dir, { scripts, files }, { scripts: [], files: [] }, isBin, followShellOperands);
+  return scriptRunsBin(run.script, run.dir, { scripts, files }, { scripts: [], files: [] }, isBin, followShellOperands, []);
 }
 
 function scriptRunsBin(
@@ -63,12 +63,14 @@ function scriptRunsBin(
   walked: Walked,
   isBin: BinCheck,
   followShellOperands: boolean,
+  argv: Command,
 ): boolean {
   let cwd = dir;
   for (const command of shellCommands(script)) {
-    const [program = "", ...args] = fromProgram(command);
+    const expanded = command.flatMap((word) => (word === "$@" ? argv : [word]));
+    const [program = "", ...args] = fromProgram(expanded);
     if (program === "cd") cwd = changedDirectory(cwd, withoutOptions(args, new Set()));
-    else if (binCommand(command, cwd, context, walked, isBin, followShellOperands)) return true;
+    else if (binCommand(expanded, cwd, context, walked, isBin, followShellOperands)) return true;
   }
   return false;
 }
@@ -103,9 +105,9 @@ function invocation(command: Command, dir: string | undefined, context: Context,
   const [first = "", ...rest] = fromProgram(command);
   if (first !== "bun") {
     if (followShellOperands && rest[0] !== undefined && !rest[0].startsWith("-") && SHELLS.includes(first.slice(first.lastIndexOf("/") + 1))) {
-      return { program: [first, ...rest], file: fileAt(dir, rest[0]), dir };
+      return { program: [first, ...rest], file: fileAt(dir, rest[0]), dir, argv: rest.slice(1) };
     }
-    return { program: [first, ...rest], file: first.includes("/") ? fileAt(dir, first) : undefined, dir };
+    return { program: [first, ...rest], file: first.includes("/") ? fileAt(dir, first) : undefined, dir, argv: rest };
   }
   const [subcommand = "", ...operands] = withoutOptions(rest, BUN_OPERANDS);
   if (subcommand === "x") return invocation(["bunx", ...operands], dir, context, walked, followShellOperands);
@@ -113,7 +115,7 @@ function invocation(command: Command, dir: string | undefined, context: Context,
   const [target = "", ...targetArgs] = subcommand === "run" ? withoutOptions(operands, BUN_OPERANDS) : [subcommand, ...operands];
   const cwd = bunDirectory([...bunOptions(rest), ...(subcommand === "run" ? bunOptions(operands) : [])], dir);
   const body = walked.scripts.includes(target) ? undefined : context.scripts.get(target);
-  if (body === undefined) return { program: [target, ...targetArgs], file: fileAt(cwd, target), dir: cwd };
+  if (body === undefined) return { program: [target, ...targetArgs], file: fileAt(cwd, target), dir: cwd, argv: targetArgs };
   return { script: target, body: targetArgs.length === 0 ? body : `${body} ${targetArgs.map(quotedWord).join(" ")}` };
 }
 
@@ -128,14 +130,15 @@ function binCommand(
   const call = invocation(command, dir, context, walked, followShellOperands);
   if (call === undefined) return false;
   // bun runs a script from the directory of the package.json that names it.
-  if ("body" in call) return scriptRunsBin(call.body, ROOT, context, { ...walked, scripts: [...walked.scripts, call.script] }, isBin, followShellOperands);
-  return isBin(call.program) || fileRunsBin(call.file, call.dir, context, walked, isBin, followShellOperands);
+  if ("body" in call) return scriptRunsBin(call.body, ROOT, context, { ...walked, scripts: [...walked.scripts, call.script] }, isBin, followShellOperands, []);
+  return isBin(call.program) || fileRunsBin(call.file, call.dir, call.argv, context, walked, isBin, followShellOperands);
 }
 
 // A script file runs in its caller's directory, not its own.
 function fileRunsBin(
   file: string | undefined,
   dir: string | undefined,
+  argv: Command,
   context: Context,
   walked: Walked,
   isBin: BinCheck,
@@ -143,7 +146,7 @@ function fileRunsBin(
 ): boolean {
   if (file === undefined || walked.files.includes(file)) return false;
   const body = context.files(file);
-  return body !== undefined && scriptRunsBin(body, dir, context, { ...walked, files: [...walked.files, file] }, isBin, followShellOperands);
+  return body !== undefined && scriptRunsBin(body, dir, context, { ...walked, files: [...walked.files, file] }, isBin, followShellOperands, argv);
 }
 
 function mutationBin([program = "", subcommand]: Command): boolean {

@@ -455,6 +455,23 @@ test("forwarded arguments keep their boundaries when they reach the package scri
   expect(findNightStepFaults(true, nightWorkflow("bun run nightly --night"), { scripts: nightly, files: new Map() })).toEqual([]);
 });
 
+test("a shell wrapper forwards its arguments through a standalone $@", () => {
+  const wrapper = new Map([["scripts/night.sh", `exec checks-lint --night "$@"`]]);
+  expect(findNightStepFaults(true, nightWorkflow("bash scripts/night.sh"), { scripts: new Map(), files: wrapper })).toEqual([]);
+  const chained = new Map([
+    ["scripts/outer.sh", `bash scripts/inner.sh "$@"`],
+    ["scripts/inner.sh", `exec checks-lint --night "$@"`],
+  ]);
+  expect(findNightStepFaults(true, nightWorkflow("bash scripts/outer.sh"), { scripts: new Map(), files: chained })).toEqual([]);
+  const forwarded = new Map([["scripts/night.sh", `exec checks-lint "$@"`]]);
+  expect(findNightStepFaults(true, nightWorkflow("bash scripts/night.sh --night"), { scripts: new Map(), files: forwarded })).toEqual([]);
+  expect(findNightStepFaults(true, nightWorkflow("bash scripts/night.sh --full"), { scripts: new Map(), files: forwarded })).toEqual([
+    { gate: "checks-lint --night" },
+  ]);
+  const throughScript = new Map([["nightly", "bash scripts/night.sh"]]);
+  expect(findNightStepFaults(true, nightWorkflow("bun run nightly"), { scripts: throughScript, files: wrapper })).toEqual([]);
+});
+
 test("a night step in a reusable workflow counts only through a job that uses it", () => {
   const reusable = Effect.runSync(
     parseWorkflow(".github/workflows/reusable.yml", "name: reusable\non:\n  workflow_call:\njobs:\n  gates:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bunx checks-lint --night\n"),
