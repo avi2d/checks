@@ -106,7 +106,8 @@ function invocation(command: Command, dir: string | undefined, context: Context,
   const [target = "", ...targetArgs] = subcommand === "run" ? withoutOptions(operands, BUN_OPERANDS) : [subcommand, ...operands];
   const cwd = bunDirectory([...bunOptions(rest), ...(subcommand === "run" ? bunOptions(operands) : [])], dir);
   const body = walked.scripts.includes(target) ? undefined : context.scripts.get(target);
-  return body === undefined ? { program: [target, ...targetArgs], file: fileAt(cwd, target), dir: cwd } : { script: target, body };
+  if (body === undefined) return { program: [target, ...targetArgs], file: fileAt(cwd, target), dir: cwd };
+  return { script: target, body: targetArgs.length === 0 ? body : `${body} ${targetArgs.join(" ")}` };
 }
 
 function binCommand(

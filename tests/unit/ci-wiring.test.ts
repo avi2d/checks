@@ -409,3 +409,52 @@ test("the night step counts through the installed bin, its entry point and a pac
 test("a checks-lint run without the night flag leaves the night run failing", () => {
   expect(findNightStepFaults(true, nightWorkflow("bunx checks-lint"), emptyContext)).toEqual([{ gate: "checks-lint --night" }]);
 });
+
+test("a night step with any other argument leaves the night run failing", () => {
+  for (const run of ["bunx checks-lint --night --full", "bunx checks-lint --night --night", "bunx checks-lint --desk --night", "bunx checks-lint --night base head"]) {
+    expect(findNightStepFaults(true, nightWorkflow(run), emptyContext)).toEqual([{ gate: "checks-lint --night" }]);
+  }
+});
+
+test("a disabled night step leaves the night run failing", () => {
+  const red = (run: string) =>
+    Effect.runSync(parseWorkflow(".github/workflows/night-run.yml", `${nightPrefix}      - run: ${run}\n`));
+  expect(findNightStepFaults(true, [red("bunx checks-lint --night\n        if: false")], emptyContext)).toEqual([
+    { gate: "checks-lint --night" },
+  ]);
+  expect(findNightStepFaults(true, [red("bunx checks-lint --night\n        continue-on-error: true")], emptyContext)).toEqual([
+    { gate: "checks-lint --night" },
+  ]);
+  const waiting = Effect.runSync(
+    parseWorkflow(
+      ".github/workflows/night-run.yml",
+      "name: night-run\non:\n  workflow_dispatch:\njobs:\n  setup:\n    runs-on: ubuntu-latest\n    if: false\n    steps:\n      - run: echo setup\n  gates:\n    runs-on: ubuntu-latest\n    needs: setup\n    steps:\n      - run: bunx checks-lint --night\n",
+    ),
+  );
+  expect(findNightStepFaults(true, [waiting], emptyContext)).toEqual([{ gate: "checks-lint --night" }]);
+});
+
+test("arguments passed to bun run reach the package script they name", () => {
+  const nightly = new Map([["nightly", "checks-lint"]]);
+  expect(findNightStepFaults(true, nightWorkflow("bun run nightly --night"), { scripts: nightly, files: new Map() })).toEqual([]);
+  const nested = new Map([["outer", "bun run inner"], ["inner", "checks-lint"]]);
+  expect(findNightStepFaults(true, nightWorkflow("bun run outer --night"), { scripts: nested, files: new Map() })).toEqual([]);
+  expect(findNightStepFaults(true, nightWorkflow("bun run nightly --night --full"), { scripts: nightly, files: new Map() })).toEqual([
+    { gate: "checks-lint --night" },
+  ]);
+});
+
+test("a night step in a reusable workflow counts only through a job that uses it", () => {
+  const reusable = Effect.runSync(
+    parseWorkflow(".github/workflows/reusable.yml", "name: reusable\non:\n  workflow_call:\njobs:\n  gates:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bunx checks-lint --night\n"),
+  );
+  expect(findNightStepFaults(true, [reusable], emptyContext)).toEqual([{ gate: "checks-lint --night" }]);
+  const caller = Effect.runSync(
+    parseWorkflow(".github/workflows/night-run.yml", "name: night-run\non:\n  workflow_dispatch:\njobs:\n  gates:\n    uses: ./.github/workflows/reusable.yml\n"),
+  );
+  expect(findNightStepFaults(true, [caller, reusable], emptyContext)).toEqual([]);
+  const blocked = Effect.runSync(
+    parseWorkflow(".github/workflows/night-run.yml", "name: night-run\non:\n  workflow_dispatch:\njobs:\n  gates:\n    uses: ./.github/workflows/reusable.yml\n    if: false\n"),
+  );
+  expect(findNightStepFaults(true, [blocked, reusable], emptyContext)).toEqual([{ gate: "checks-lint --night" }]);
+});

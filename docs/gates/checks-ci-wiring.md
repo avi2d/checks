@@ -34,9 +34,11 @@ Each `needs` entry names a job in the same workflow, so every one must match a j
 Each refusal names the file, the line and the missing workflow or job.
 It requires a run step that invokes `checks-lint --night` in a repository that tracks TypeScript, so the four nightly gates run on the night run.
 A call counts directly, through `bunx`, or through `bun` or `bun run` with the bin's path or its source file.
-A call through a `package.json` script counts, as `bun run <script>` where the named script runs the night step.
-A call through a local reusable workflow counts, as a job that uses a file under `.github/workflows/` that runs the night step.
+The call carries only `--night`, since any other argument stops the night run before it runs a gate.
+A call through a `package.json` script counts, as `bun run <script>` where the named script runs the night step with the arguments the step passes.
+A call through a local reusable workflow counts only through a job that uses the file that runs the night step.
 A call through a repository shell script counts, as a path inside the repository whose file runs the night step.
+A step or job with `if: false` or `continue-on-error: true` never counts, nor does a job that waits on one that never runs.
 
 ### Runners
 

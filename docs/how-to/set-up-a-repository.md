@@ -133,6 +133,20 @@ The same job reports the title step's outcome under that name on every run, whic
    ```
 
 A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on each job, as [checks-ci-wiring](../gates/checks-ci-wiring.md#runners) requires.
+Run the four nightly gates from a night-run workflow once the repository tracks TypeScript:
+
+   ```yaml
+   name: night-run
+   on:
+     workflow_dispatch:
+   jobs:
+     gates:
+       runs-on: ubuntu-latest
+       timeout-minutes: 20
+       steps:
+         - run: bunx checks-lint --night
+   ```
+
 `checks-effect-scope` writes the Effect paths of `oxlint.config.ts` and the kit's severities into `tsconfig.json`, as [The Effect rules](../configs/effect-rules.md#language-service) says.
 `bun run lint` then ends with `checks-lint: <count> gate(s) pass`.
 
