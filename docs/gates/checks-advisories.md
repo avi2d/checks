@@ -116,7 +116,7 @@ on:
   workflow_dispatch:
 jobs:
   advisories:
-    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
