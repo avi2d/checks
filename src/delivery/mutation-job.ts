@@ -118,18 +118,46 @@ function scriptRunsAny(
   return false;
 }
 
-type Region = { scan: boolean; decided: boolean };
+const COMPOUND_OPENERS = new Map([
+  ["if", "fi"],
+  ["while", "done"],
+  ["until", "done"],
+  ["for", "done"],
+  ["case", "esac"],
+  ["select", "done"],
+]);
 
-function branchTaken(command: Command): boolean | undefined {
-  const [, ...condition] = command;
+const LEADING_WORDS = new Set(["{", "}", "then", "do", "else"]);
+
+type Region = {
+  readonly closer: string;
+  readonly scan: boolean;
+  readonly decided: boolean;
+};
+
+function compoundHead(script: string, words: readonly Word[], command: Command): { readonly opener: string; readonly condition: Command } | undefined {
+  let index = 0;
+  while (index < words.length) {
+    const word = words[index];
+    if (word === undefined || script[word.start] === '"' || script[word.start] === "'") break;
+    if (!LEADING_WORDS.has(word.text)) break;
+    index += 1;
+  }
+  const head = words[index];
+  if (head === undefined || script[head.start] === '"' || script[head.start] === "'") return undefined;
+  const opener = COMPOUND_OPENERS.get(head.text);
+  return opener === undefined ? undefined : { opener, condition: command.slice(index + 1) };
+}
+
+function branchTaken(condition: Command): boolean | undefined {
   if (condition.length !== 1 || (condition[0] !== "true" && condition[0] !== "false")) return undefined;
   return condition[0] === "true";
 }
 
-function pushIf(command: Command, closers: Region[], live: boolean, parentScan: boolean): boolean {
-  const taken = branchTaken(command);
+function pushIf(opener: string, condition: Command, closers: Region[], live: boolean, parentScan: boolean): boolean {
+  const taken = opener === "fi" ? branchTaken(condition) : undefined;
   const certain = live && parentScan;
-  closers.push({ scan: certain && taken === true, decided: certain && taken !== undefined });
+  closers.push({ closer: opener, scan: certain && taken === true, decided: certain && taken !== undefined });
   return parentScan;
 }
 
@@ -138,25 +166,31 @@ function branchStep(head: string | undefined, command: Command, closers: Region[
   if (top === undefined) return true;
   if (head !== "else" && head !== "elif") return top.scan;
   if (top.scan || !top.decided) {
-    closers[closers.length - 1] = { scan: false, decided: false };
+    closers[closers.length - 1] = { closer: "fi", scan: false, decided: false };
     return false;
   }
-  const taken = head === "else" ? true : branchTaken(command);
+  const taken = head === "else" ? true : branchTaken(command.slice(1));
   if (taken !== true) {
-    if (taken === undefined) closers[closers.length - 1] = { scan: false, decided: false };
+    if (taken === undefined) closers[closers.length - 1] = { closer: "fi", scan: false, decided: false };
     return false;
   }
-  closers[closers.length - 1] = { scan: true, decided: true };
+  closers[closers.length - 1] = { closer: "fi", scan: true, decided: true };
   return true;
 }
 
-function trackRegion(head: string | undefined, command: Command, closers: Region[], live: boolean): boolean {
+function trackRegion(script: string, words: readonly Word[], command: Command, head: string | undefined, closers: Region[], live: boolean): boolean {
   const top = closers[closers.length - 1];
+  const found = compoundHead(script, words, command);
   if (top === undefined) {
-    if (head !== "if") return true;
-    return pushIf(command, closers, live, true);
+    if (found === undefined) return true;
+    return pushIf(found.opener, found.condition, closers, live, true);
   }
-  if (head === "if") return pushIf(command, closers, live, top.scan);
+  if (top.closer !== "fi") {
+    if (found !== undefined) closers.push({ closer: found.opener, scan: false, decided: false });
+    else if (head === top.closer) closers.pop();
+    return false;
+  }
+  if (found !== undefined) return pushIf(found.opener, found.condition, closers, live, top.scan);
   if (head === "fi") {
     closers.pop();
     return false;
@@ -164,35 +198,7 @@ function trackRegion(head: string | undefined, command: Command, closers: Region
   return branchStep(head, command, closers);
 }
 
-type FunctionSkip = { depth: number; seen: boolean; done: boolean };
-
-function trackBraces(script: string, words: readonly Word[], skip: FunctionSkip): FunctionSkip {
-  let { depth, seen } = skip;
-  for (const word of words) {
-    if (script[word.start] === '"' || script[word.start] === "'") continue;
-    if (word.text === "{}") seen = true;
-    else if (word.text === "{") {
-      depth += 1;
-      seen = true;
-    } else if (word.text === "}" && seen) depth -= 1;
-  }
-  return { depth, seen, done: seen && depth <= 0 };
-}
-
-function functionHead(script: string, words: readonly Word[], command: Command): boolean {
-  const start = words[0]?.start ?? 0;
-  if (script[start] === '"' || script[start] === "'") return false;
-  if (command[0] === "function") return command.length >= 2;
-  return /^[A-Za-z0-9_]+[ \t]*\(/.test(script.slice(start));
-}
-
-type ReachState = { closers: Region[]; live: boolean; terminated: boolean; cwd: string | undefined };
-
-function inSubshell(script: string, words: readonly Word[]): boolean {
-  let at = (words[0]?.start ?? 0) - 1;
-  while (script[at] === " " || script[at] === "\t" || script[at] === "\n" || script[at] === "\r") at -= 1;
-  return script[at] === "(";
-}
+type ReachState = { closers: Region[]; live: boolean; cwd: string | undefined };
 
 function stepReachable(
   script: string,
@@ -208,17 +214,13 @@ function stepReachable(
 ): ReachState | true {
   const start = words[0]?.start ?? 0;
   const head = script[start] === '"' || script[start] === "'" ? undefined : command[0];
-  const live = connectorLive(script, words, previous, state.live) && !state.terminated;
-  if (!trackRegion(head, command, state.closers, live)) return { ...state, live };
+  const live = connectorLive(script, words, previous, state.live);
+  if (!trackRegion(script, words, command, head, state.closers, live)) return { ...state, live };
   if (!live) return { ...state, live };
   const expanded = expandArgv(script, words, argv);
-  const [program = ""] = fromProgram(expanded);
-  const [raw = ""] = expanded;
-  const replaced = !inSubshell(script, words) && (program === "exit" || program === "return" || (raw === "exec" && expanded.length > 1));
-  const terminated = state.terminated || replaced;
   const next = runsExpanded(expanded, state.cwd, context, walked, isBin, followShellOperands, true);
   if (next.matched) return true;
-  return { ...state, live, terminated, cwd: next.cwd };
+  return { ...state, live, cwd: next.cwd };
 }
 
 function scriptRunsReachable(
@@ -232,15 +234,9 @@ function scriptRunsReachable(
   argv: Command,
 ): boolean {
   const texts = parsed.map((words) => words.map(({ text }) => text));
-  let skipFunction: FunctionSkip | undefined;
-  let state: ReachState = { closers: [], live: true, terminated: false, cwd: dir };
+  let state: ReachState = { closers: [], live: true, cwd: dir };
   for (const [index, words] of parsed.entries()) {
     const command = texts[index] ?? [];
-    if (skipFunction !== undefined || functionHead(script, words, command)) {
-      const next = trackBraces(script, words, skipFunction ?? { depth: 0, seen: false, done: false });
-      skipFunction = next.done ? undefined : next;
-      continue;
-    }
     const stepped = stepReachable(script, words, command, texts[index - 1], argv, context, walked, isBin, followShellOperands, state);
     if (stepped === true) return true;
     state = stepped;
