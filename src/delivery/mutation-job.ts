@@ -1,5 +1,5 @@
 import { Effect, FileSystem, Path } from "effect";
-import { fromProgram, SHELLS, shellCommands, withoutOptions, type Command } from "./shell-command.ts";
+import { fromProgram, SHELLS, shellWords, withoutOptions, type Command, type Word } from "./shell-command.ts";
 
 // An undefined directory is one known only at run time.
 export type Run = {
@@ -52,8 +52,38 @@ export function runsBin(
   files: (file: string) => string | undefined,
   isBin: BinCheck,
   followShellOperands = false,
+  reachableOnly = false,
 ): boolean {
-  return scriptRunsBin(run.script, run.dir, { scripts, files }, { scripts: [], files: [] }, isBin, followShellOperands, []);
+  return scriptRunsBin(run.script, run.dir, { scripts, files }, { scripts: [], files: [] }, isBin, followShellOperands, [], reachableOnly);
+}
+
+const COMPOUND_OPENERS = new Map([
+  ["if", "fi"],
+  ["while", "done"],
+  ["until", "done"],
+  ["for", "done"],
+  ["case", "esac"],
+  ["select", "done"],
+]);
+
+function expandArgv(script: string, words: readonly Word[], argv: Command): Command {
+  return words.flatMap((word) =>
+    word.text === "$@" && (script[word.start] === '"' || script[word.start] === "$") ? argv : [word.text],
+  );
+}
+
+function runsExpanded(
+  expanded: Command,
+  cwd: string | undefined,
+  context: Context,
+  walked: Walked,
+  isBin: BinCheck,
+  followShellOperands: boolean,
+  reachableOnly: boolean,
+): { readonly matched: boolean; readonly cwd: string | undefined } {
+  const [program = "", ...args] = fromProgram(expanded);
+  if (program === "cd") return { matched: false, cwd: changedDirectory(cwd, withoutOptions(args, new Set())) };
+  return { matched: binCommand(expanded, cwd, context, walked, isBin, followShellOperands, reachableOnly), cwd };
 }
 
 function scriptRunsBin(
@@ -64,15 +94,82 @@ function scriptRunsBin(
   isBin: BinCheck,
   followShellOperands: boolean,
   argv: Command,
+  reachableOnly: boolean,
+): boolean {
+  const parsed = shellWords(script);
+  return reachableOnly
+    ? scriptRunsReachable(parsed, script, dir, context, walked, isBin, followShellOperands, argv)
+    : scriptRunsAny(parsed, script, dir, context, walked, isBin, followShellOperands, argv, reachableOnly);
+}
+
+function scriptRunsAny(
+  parsed: readonly (readonly Word[])[],
+  script: string,
+  dir: string | undefined,
+  context: Context,
+  walked: Walked,
+  isBin: BinCheck,
+  followShellOperands: boolean,
+  argv: Command,
+  reachableOnly: boolean,
 ): boolean {
   let cwd = dir;
-  for (const command of shellCommands(script)) {
-    const expanded = command.flatMap((word) => (word === "$@" ? argv : [word]));
-    const [program = "", ...args] = fromProgram(expanded);
-    if (program === "cd") cwd = changedDirectory(cwd, withoutOptions(args, new Set()));
-    else if (binCommand(expanded, cwd, context, walked, isBin, followShellOperands)) return true;
+  for (const words of parsed) {
+    const next = runsExpanded(expandArgv(script, words, argv), cwd, context, walked, isBin, followShellOperands, reachableOnly);
+    if (next.matched) return true;
+    cwd = next.cwd;
   }
   return false;
+}
+
+function consumeCompound(head: string | undefined, closers: string[]): boolean {
+  if (closers.length === 0) return false;
+  const nested = head === undefined ? undefined : COMPOUND_OPENERS.get(head);
+  if (nested !== undefined) closers.push(nested);
+  else if (head === closers[closers.length - 1]) closers.pop();
+  return true;
+}
+
+function scriptRunsReachable(
+  parsed: readonly (readonly Word[])[],
+  script: string,
+  dir: string | undefined,
+  context: Context,
+  walked: Walked,
+  isBin: BinCheck,
+  followShellOperands: boolean,
+  argv: Command,
+): boolean {
+  let cwd = dir;
+  const texts = parsed.map((words) => words.map(({ text }) => text));
+  const closers: string[] = [];
+  let live = true;
+  for (const [index, words] of parsed.entries()) {
+    const command = texts[index] ?? [];
+    const start = words[0]?.start ?? 0;
+    const head = script[start] === '"' || script[start] === "'" ? undefined : command[0];
+    if (consumeCompound(head, closers)) continue;
+    const closer = head === undefined ? undefined : COMPOUND_OPENERS.get(head);
+    if (closer !== undefined) closers.push(closer);
+    live = connectorLive(script, words, texts[index - 1], live);
+    if (!live) continue;
+    const next = runsExpanded(expandArgv(script, words, argv), cwd, context, walked, isBin, followShellOperands, true);
+    if (next.matched) return true;
+    cwd = next.cwd;
+  }
+  return false;
+}
+
+function connectorLive(script: string, words: readonly Word[], previous: Command | undefined, live: boolean): boolean {
+  let at = (words[0]?.start ?? 0) - 1;
+  while (script[at] === " " || script[at] === "\t") at -= 1;
+  const mark = script[at] ?? "";
+  const raw = previous ?? [];
+  const [program = ""] = raw[0] === "!" ? [""] : fromProgram(raw);
+  const dead = program === "false" || program === "exit" || program === "return";
+  if (mark === "&" && script[at - 1] === "&") return live && !dead;
+  if (mark === "|" && script[at - 1] === "|") return dead || (live && program !== "true");
+  return true;
 }
 
 function changedDirectory(cwd: string | undefined, [target]: Command): string | undefined {
@@ -126,12 +223,14 @@ function binCommand(
   walked: Walked,
   isBin: BinCheck,
   followShellOperands: boolean,
+  reachableOnly: boolean,
 ): boolean {
   const call = invocation(command, dir, context, walked, followShellOperands);
   if (call === undefined) return false;
   // bun runs a script from the directory of the package.json that names it.
-  if ("body" in call) return scriptRunsBin(call.body, ROOT, context, { ...walked, scripts: [...walked.scripts, call.script] }, isBin, followShellOperands, []);
-  return isBin(call.program) || fileRunsBin(call.file, call.dir, call.argv, context, walked, isBin, followShellOperands);
+  if ("body" in call)
+    return scriptRunsBin(call.body, ROOT, context, { ...walked, scripts: [...walked.scripts, call.script] }, isBin, followShellOperands, [], reachableOnly);
+  return isBin(call.program) || fileRunsBin(call.file, call.dir, call.argv, context, walked, isBin, followShellOperands, reachableOnly);
 }
 
 // A script file runs in its caller's directory, not its own.
@@ -143,10 +242,14 @@ function fileRunsBin(
   walked: Walked,
   isBin: BinCheck,
   followShellOperands: boolean,
+  reachableOnly: boolean,
 ): boolean {
   if (file === undefined || walked.files.includes(file)) return false;
   const body = context.files(file);
-  return body !== undefined && scriptRunsBin(body, dir, context, { ...walked, files: [...walked.files, file] }, isBin, followShellOperands, argv);
+  return (
+    body !== undefined &&
+    scriptRunsBin(body, dir, context, { ...walked, files: [...walked.files, file] }, isBin, followShellOperands, argv, reachableOnly)
+  );
 }
 
 function mutationBin([program = "", subcommand]: Command): boolean {

@@ -470,6 +470,31 @@ test("a shell wrapper forwards its arguments through a standalone $@", () => {
   ]);
   const throughScript = new Map([["nightly", "bash scripts/night.sh"]]);
   expect(findNightStepFaults(true, nightWorkflow("bun run nightly"), { scripts: throughScript, files: wrapper })).toEqual([]);
+  const literal = new Map([["scripts/night.sh", `exec checks-lint --night '$@'`]]);
+  expect(findNightStepFaults(true, nightWorkflow("bash scripts/night.sh"), { scripts: new Map(), files: literal })).toEqual([
+    { gate: "checks-lint --night" },
+  ]);
+});
+
+test("a night call the shell cannot reach never counts", () => {
+  const branched = new Map([
+    ["scripts/lint.sh", `if [ "\${1:-}" = "--night" ]; then checks-lint --night; else checks-lint; fi`],
+  ]);
+  expect(findNightStepFaults(true, nightWorkflow("bash scripts/lint.sh"), { scripts: new Map(), files: branched })).toEqual([
+    { gate: "checks-lint --night" },
+  ]);
+  const guarded = new Map([["scripts/nope.sh", "false && checks-lint --night"]]);
+  expect(findNightStepFaults(true, nightWorkflow("bash scripts/nope.sh"), { scripts: new Map(), files: guarded })).toEqual([
+    { gate: "checks-lint --night" },
+  ]);
+  expect(findNightStepFaults(true, nightWorkflow("false && bunx checks-lint --night"), emptyContext)).toEqual([
+    { gate: "checks-lint --night" },
+  ]);
+  const sequenced = new Map([["nightly", "false && checks-lint --night"]]);
+  expect(findNightStepFaults(true, nightWorkflow("bun run nightly"), { scripts: sequenced, files: new Map() })).toEqual([
+    { gate: "checks-lint --night" },
+  ]);
+  expect(findNightStepFaults(true, nightWorkflow("bun install --frozen-lockfile && bunx checks-lint --night"), emptyContext)).toEqual([]);
 });
 
 test("a night step in a reusable workflow counts only through a job that uses it", () => {
