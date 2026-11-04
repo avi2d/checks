@@ -385,6 +385,14 @@ function nightWorkflow(run: string) {
   return [Effect.runSync(parseWorkflow(".github/workflows/night-run.yml", `${nightPrefix}      - run: ${run}\n`))];
 }
 
+function blockWorkflow(run: string) {
+  const body = run
+    .split("\n")
+    .map((line) => `          ${line}`)
+    .join("\n");
+  return [Effect.runSync(parseWorkflow(".github/workflows/night-run.yml", `${nightPrefix}      - run: |\n${body}\n`))];
+}
+
 const emptyContext = { scripts: new Map(), files: new Map() };
 
 test("a workflow set with no night step fails the night run, which checks-lint --night satisfies", () => {
@@ -503,6 +511,27 @@ test("a night call the shell cannot reach never counts", () => {
     { gate: "checks-lint --night" },
   ]);
   expect(findNightStepFaults(true, nightWorkflow("bun install --frozen-lockfile && bunx checks-lint --night"), emptyContext)).toEqual([]);
+  expect(findNightStepFaults(true, nightWorkflow("if true; then bunx checks-lint --night; fi"), emptyContext)).toEqual([]);
+  expect(findNightStepFaults(true, nightWorkflow("if false; then bunx checks-lint; else bunx checks-lint --night; fi"), emptyContext)).toEqual(
+    [],
+  );
+  expect(findNightStepFaults(true, nightWorkflow("if true; then bunx checks-lint; else bunx checks-lint --night; fi"), emptyContext)).toEqual([
+    { gate: "checks-lint --night" },
+  ]);
+});
+
+test("a night call after a terminator or inside a dead definition never counts", () => {
+  expect(findNightStepFaults(true, blockWorkflow("exit 0\nbunx checks-lint --night"), emptyContext)).toEqual([
+    { gate: "checks-lint --night" },
+  ]);
+  expect(findNightStepFaults(true, blockWorkflow("bunx checks-lint --night\nexit 0"), emptyContext)).toEqual([]);
+  expect(findNightStepFaults(true, blockWorkflow("false &&\n bunx checks-lint --night"), emptyContext)).toEqual([
+    { gate: "checks-lint --night" },
+  ]);
+  const defined = new Map([["scripts/night.sh", "night() { bunx checks-lint --night; }"]]);
+  expect(findNightStepFaults(true, nightWorkflow("bash scripts/night.sh"), { scripts: new Map(), files: defined })).toEqual([
+    { gate: "checks-lint --night" },
+  ]);
 });
 
 test("a night step in a reusable workflow counts only through a job that uses it", () => {
