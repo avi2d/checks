@@ -78,7 +78,7 @@ export function findingsOf(previous: Option.Option<PreviousNight>, tonight: Toni
   );
 }
 
-const FAILED_GATES = /of \d+ gate\(s\) failed: (.+)/;
+const FAILED_GATES = /checks-lint: \d+ of \d+ gate\(s\) failed: (.+)/;
 const PASSED_GATES = /gate\(s\) pass/;
 
 export function gatesOf(log: string): readonly Finding[] {

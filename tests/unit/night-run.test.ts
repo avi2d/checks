@@ -5,6 +5,7 @@ import { parseReport as parseMutationReport } from "../../src/testing/mutation-c
 import { clearedText, fileFindings, Issues, issueBody, markedKey, marker, notedText, parseArgs, reportedText, titleOf, type OpenIssue } from "../../src/testing/night-run.ts";
 import { type Finding, findingsOf, gatesDecided, gatesOf, keyOf, type Observed, type NightRecord, type PreviousNight, scoresOf, type TestReport } from "../../src/testing/night-run-findings.ts";
 import { parseReport as parseTestReport } from "../../src/testing/test-report.ts";
+import { summaryOf } from "../../src/core/lint.ts";
 import { Usage } from "../../src/core/main.ts";
 
 const FIXTURES = new URL("../fixtures/night-run/", import.meta.url);
@@ -334,6 +335,11 @@ test("an all-undecided lint summary files checks-lint itself and no per-gate iss
     "checks-lint: tip 03da92c from the whole tree at HEAD",
     "checks-lint: 2 of 4 gate(s) undecided: checks-repetition, checks-suppressions-ratchet",
   ].join("\n");
+  expect(gatesOf(log)).toEqual([{ kind: "gates", file: "checks-lint" }]);
+});
+
+test("the shared writer's undecided line files checks-lint itself instead of per-gate issues", () => {
+  const log = ["checks-lint: tip 03da92c from the whole tree at HEAD", `checks-lint: ${summaryOf(["checks-repetition", "checks-suppressions-ratchet"], 4, "undecided")}`].join("\n");
   expect(gatesOf(log)).toEqual([{ kind: "gates", file: "checks-lint" }]);
 });
 
