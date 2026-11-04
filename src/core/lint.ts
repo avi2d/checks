@@ -160,6 +160,10 @@ function outcomeOf(exitCode: number): Outcome {
   return exitCode === 1 ? "violated" : "undecided";
 }
 
+export function summaryOf(names: readonly string[], total: number, outcome: "failed" | "undecided"): string {
+  return `${names.length} of ${total} gate(s) ${outcome}: ${names.join(", ")}`;
+}
+
 const runGate = Effect.fn("runGate")(function* (gate: KitGate, range: Range, wholeTree: boolean) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const script = (yield* Path.Path).join(import.meta.dir, "..", gate.vector, gate.file);
@@ -249,11 +253,11 @@ const lint = Effect.gen(function* () {
     yield* Console.log(`${NAME}: ${gates.length} gate(s) pass`);
     return true;
   }
-  const names = failed.map((verdict) => verdict.gate.bin).join(", ");
+  const names = failed.map((verdict) => verdict.gate.bin);
   if (failed.every((verdict) => verdict.outcome === "undecided")) {
-    return yield* new GatesUndecided({ message: `${failed.length} of ${gates.length} gate(s) undecided: ${names}` });
+    return yield* new GatesUndecided({ message: summaryOf(names, gates.length, "undecided") });
   }
-  const summary = `${failed.length} of ${gates.length} gate(s) failed: ${names}`;
+  const summary = summaryOf(names, gates.length, "failed");
   yield* Console.error(`${NAME}: ${summary}`);
   return false;
 });
