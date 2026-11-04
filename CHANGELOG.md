@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.65.2
+
+Released 2026-11-04.
+
+### Fixes
+
+- **testing:** stop filing failed issues for fully undecided night runs [#43](https://github.com/avi2d/checks/pull/43)
+
 ## 0.65.1
 
 Released 2026-11-03.
