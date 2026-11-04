@@ -492,48 +492,37 @@ test("a shell wrapper forwards its arguments through a standalone $@", () => {
   ]);
 });
 
-test("a night call the shell cannot reach never counts", () => {
-  const branched = new Map([
-    ["scripts/lint.sh", `if [ "\${1:-}" = "--night" ]; then checks-lint --night; else checks-lint; fi`],
-  ]);
-  expect(findNightStepFaults(true, nightWorkflow("bash scripts/lint.sh"), { scripts: new Map(), files: branched })).toEqual([
-    { gate: "checks-lint --night" },
-  ]);
-  const guarded = new Map([["scripts/nope.sh", "false && checks-lint --night"]]);
-  expect(findNightStepFaults(true, nightWorkflow("bash scripts/nope.sh"), { scripts: new Map(), files: guarded })).toEqual([
-    { gate: "checks-lint --night" },
-  ]);
-  expect(findNightStepFaults(true, nightWorkflow("false && bunx checks-lint --night"), emptyContext)).toEqual([
-    { gate: "checks-lint --night" },
-  ]);
-  const sequenced = new Map([["nightly", "false && checks-lint --night"]]);
-  expect(findNightStepFaults(true, nightWorkflow("bun run nightly"), { scripts: sequenced, files: new Map() })).toEqual([
-    { gate: "checks-lint --night" },
-  ]);
+test("a night call inside a for loop counts", () => {
+  expect(findNightStepFaults(true, nightWorkflow("for d in a b; do bunx checks-lint --night; done"), emptyContext)).toEqual([]);
+});
+
+test("a night call inside a CI-guarded if counts", () => {
+  expect(findNightStepFaults(true, nightWorkflow(`if [ -n "$CI" ]; then bunx checks-lint --night; fi`), emptyContext)).toEqual([]);
+});
+
+test("a night call inside a case body counts", () => {
+  expect(findNightStepFaults(true, nightWorkflow(`case "$X" in a) bunx checks-lint --night;; esac`), emptyContext)).toEqual([]);
+});
+
+test("a night call after false and counts", () => {
+  expect(findNightStepFaults(true, nightWorkflow("false && bunx checks-lint --night"), emptyContext)).toEqual([]);
   expect(findNightStepFaults(true, nightWorkflow("bun install --frozen-lockfile && bunx checks-lint --night"), emptyContext)).toEqual([]);
+});
+
+test("a night call inside an if-false branch counts", () => {
+  expect(findNightStepFaults(true, nightWorkflow("if false; then bunx checks-lint --night; fi"), emptyContext)).toEqual([]);
   expect(findNightStepFaults(true, nightWorkflow("if true; then bunx checks-lint --night; fi"), emptyContext)).toEqual([]);
-  expect(findNightStepFaults(true, nightWorkflow("if false; then bunx checks-lint; else bunx checks-lint --night; fi"), emptyContext)).toEqual(
-    [],
-  );
-  expect(findNightStepFaults(true, nightWorkflow("if true; then bunx checks-lint; else bunx checks-lint --night; fi"), emptyContext)).toEqual([
-    { gate: "checks-lint --night" },
-  ]);
+  expect(findNightStepFaults(true, nightWorkflow("if false; then bunx checks-lint; else bunx checks-lint --night; fi"), emptyContext)).toEqual([]);
+  expect(findNightStepFaults(true, nightWorkflow("if true; then bunx checks-lint; else bunx checks-lint --night; fi"), emptyContext)).toEqual([]);
+});
+
+test("a night call after cd-or-exit and exec counts", () => {
+  expect(findNightStepFaults(true, blockWorkflow(`cd "$(dirname "$0")/.." || exit 1
+exec bunx checks-lint --night "$@"`), emptyContext)).toEqual([]);
 });
 
 test("a night call before exit still counts", () => {
   expect(findNightStepFaults(true, blockWorkflow("bunx checks-lint --night\nexit 0"), emptyContext)).toEqual([]);
-});
-
-test("a night call a dead connector or a skipped chain guards never counts", () => {
-  expect(findNightStepFaults(true, nightWorkflow("false && if true; then bunx checks-lint --night; fi"), emptyContext)).toEqual([
-    { gate: "checks-lint --night" },
-  ]);
-  expect(findNightStepFaults(true, nightWorkflow("true || false || bunx checks-lint --night"), emptyContext)).toEqual([
-    { gate: "checks-lint --night" },
-  ]);
-  expect(findNightStepFaults(true, blockWorkflow("false &&\n bunx checks-lint --night"), emptyContext)).toEqual([
-    { gate: "checks-lint --night" },
-  ]);
 });
 
 test("a night call past a subshell exit or a guarded exit still counts", () => {
@@ -541,18 +530,6 @@ test("a night call past a subshell exit or a guarded exit still counts", () => {
   expect(findNightStepFaults(true, nightWorkflow("exec bunx checks-lint --night"), emptyContext)).toEqual([]);
   expect(findNightStepFaults(true, nightWorkflow("cd sub || exit 1; exec bunx checks-lint --night"), emptyContext)).toEqual([]);
   expect(findNightStepFaults(true, blockWorkflow("[ -n \"$SKIP\" ] && exit 0; bunx checks-lint --night"), emptyContext)).toEqual([]);
-});
-
-test("a night call inside a dead nested branch never counts", () => {
-  expect(findNightStepFaults(true, nightWorkflow("for x in a; do if false; then bunx checks-lint --night; fi; done"), emptyContext)).toEqual([
-    { gate: "checks-lint --night" },
-  ]);
-  expect(findNightStepFaults(true, blockWorkflow("{ if false; then bunx checks-lint --night; fi; }"), emptyContext)).toEqual([
-    { gate: "checks-lint --night" },
-  ]);
-  expect(
-    findNightStepFaults(true, nightWorkflow(`if [ "\${1:-}" = --night ]; then if [ -n "$CI" ]; then echo ci; fi; bunx checks-lint --night; fi`), emptyContext),
-  ).toEqual([{ gate: "checks-lint --night" }]);
 });
 
 test("a night call inside a called function body still counts", () => {

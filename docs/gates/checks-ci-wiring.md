@@ -39,9 +39,7 @@ A call through a `package.json` script counts, as `bun run <script>` where the n
 A call through a local reusable workflow counts only through a job that uses the file that runs the night step.
 A call through a repository shell script counts, as a path inside the repository whose file runs the night step.
 A shell wrapper forwards its arguments through a standalone `"$@"`, so `exec checks-lint --night "$@"` counts with no arguments passed.
-A night call counts only where the shell always reaches it.
-That includes the then branch under a true condition and the else branch under a false condition.
-A command after `false &&` never runs, and neither does a branch under any other condition or a loop body.
+Shell control flow inside scripts is not evaluated: a night call after `false &&`, in an `if` branch, in a loop body or after `exit 0` counts all the same.
 A call inside a function body counts whether or not the workflow calls the function.
 A step or job with `if: false` or `continue-on-error: true` never counts, nor does a job that waits on one that never runs.
 

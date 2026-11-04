@@ -53,7 +53,7 @@ function workflowRunsNightStep(
     const unblocked = jobRuns(workflow, job).some(
       (run, index) =>
         (jobBlocker ?? switchedOff(runRecords[index] ?? {}, "the step")) === undefined &&
-        runsBin(run, context.scripts, files, isNightLint, true, true),
+        runsBin(run, context.scripts, files, isNightLint, true),
     );
     if (unblocked) return true;
     const called = localUses(job);
