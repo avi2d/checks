@@ -148,7 +148,7 @@ It takes no arguments.
 | Code | Result |
 | --- | --- |
 | 0 | Every required command has a reachable step. |
-| 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, a setup-bun step drifts from the fleet bun version, a workflow that releases runs on a schedule outside a public npm package or more than once a day, a workflow other than a weekly public advisory scan runs on a schedule, or a job can run for more than 60 minutes, or a repository that tracks TypeScript never runs `checks-lint --night`. |
+| 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, a setup-bun step drifts from the fleet bun version, a workflow that releases runs on a schedule outside a public npm package or more than once a day, a workflow other than a weekly public advisory scan runs on a schedule, a job can run for more than 60 minutes, or a repository that tracks TypeScript never runs `checks-lint --night`. |
 | 2 | A workflow or `package.json` cannot be decoded, or the kit's own `.bun-version` is missing, unreadable or blank. |
 
 ## Sample output
