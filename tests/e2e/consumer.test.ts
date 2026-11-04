@@ -97,8 +97,7 @@ async function useConsumer(kind: Kind, manifest: Record<string, unknown> = {}): 
   const checks = kind === "file" ? `file:${CHECKOUT}` : `file:${tarballPath}`;
   await writeFile(join(dir, "package.json"), JSON.stringify({ ...manifestFor(checks), ...manifest }));
   await writeOxlintrc();
-  // oxlint honours .gitignore but not ignorePatterns for node_modules,
-  // so the fixture carries the same node_modules/ entry a real consumer has.
+  // oxlint honours .gitignore but not ignorePatterns for node_modules, so the fixture carries that entry.
   await writeFile(join(dir, ".gitignore"), "node_modules/\n");
 }
 
