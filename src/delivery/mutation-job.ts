@@ -66,10 +66,14 @@ const COMPOUND_OPENERS = new Map([
   ["select", "done"],
 ]);
 
+function isPositionalForward(script: string, word: Word): boolean {
+  if (word.text !== "$@") return false;
+  if (script[word.start] === '"') return script.slice(word.start, word.start + 4) === '"$@"';
+  return script[word.start] === "$" && script[word.start + 1] === "@";
+}
+
 function expandArgv(script: string, words: readonly Word[], argv: Command): Command {
-  return words.flatMap((word) =>
-    word.text === "$@" && (script[word.start] === '"' || script[word.start] === "$") ? argv : [word.text],
-  );
+  return words.flatMap((word) => (isPositionalForward(script, word) ? argv : [word.text]));
 }
 
 function runsExpanded(

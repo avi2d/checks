@@ -474,6 +474,14 @@ test("a shell wrapper forwards its arguments through a standalone $@", () => {
   expect(findNightStepFaults(true, nightWorkflow("bash scripts/night.sh"), { scripts: new Map(), files: literal })).toEqual([
     { gate: "checks-lint --night" },
   ]);
+  const escaped = new Map([["scripts/night.sh", `exec checks-lint --night "\\$@"`]]);
+  expect(findNightStepFaults(true, nightWorkflow("bash scripts/night.sh"), { scripts: new Map(), files: escaped })).toEqual([
+    { gate: "checks-lint --night" },
+  ]);
+  const concatenated = new Map([["scripts/night.sh", `exec checks-lint --night "$"'@'`]]);
+  expect(findNightStepFaults(true, nightWorkflow("bash scripts/night.sh"), { scripts: new Map(), files: concatenated })).toEqual([
+    { gate: "checks-lint --night" },
+  ]);
 });
 
 test("a night call the shell cannot reach never counts", () => {
