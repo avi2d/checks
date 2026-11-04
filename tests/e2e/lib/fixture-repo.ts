@@ -120,6 +120,8 @@ export async function withOwnInstall(repo: FixtureRepo): Promise<void> {
 
 export const UNVENDORED_BUNFIG = '[test]\npathIgnorePatterns = ["**/tests/quarantine/**", "**/tests/live/**", "**/tests/pixel/**"]\n';
 
+const NIGHT_WORKFLOW = "name: night-run\non:\n  workflow_dispatch:\njobs:\n  gates:\n    runs-on: ubuntu-latest\n    timeout-minutes: 20\n    steps:\n      - run: bunx checks-lint --night\n";
+
 export function lintWiring(): Readonly<Record<string, string>> {
   return {
     "package.json": JSON.stringify({ name: "lint-fixture", type: "module", author: AUTHOR, scripts: { lint: "checks-lint", test: "checks-test" } }),
@@ -128,5 +130,6 @@ export function lintWiring(): Readonly<Record<string, string>> {
     "bunfig.toml": UNVENDORED_BUNFIG,
     [SUITE_WORKFLOW]: "on:\n  pull_request:\n    types: [opened, synchronize]\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    steps:\n      - run: bun run lint\n      - run: bun run build\n      - run: git diff --exit-code\n      - run: bun run typecheck\n      - run: bun run test\n",
     [COMMITLINT_WORKFLOW]: "on:\n  pull_request:\n    types: [opened, synchronize]\njobs:\n  title:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    steps:\n      - run: ./node_modules/.bin/commitlint\n",
+    ".github/workflows/night-run.yml": NIGHT_WORKFLOW,
   };
 }

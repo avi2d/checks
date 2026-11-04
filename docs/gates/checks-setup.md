@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-setup
 
-`checks-setup` writes the kit config, the CI workflow and the doc templates into a repository that does not hold them yet.
+`checks-setup` writes the kit config, the CI workflow, the night-run workflow and the doc templates into a repository that does not hold them yet.
 
 ## What it checks
 
@@ -30,6 +30,9 @@ A newer push to the same pull request cancels the run in progress.
 A `--private` run pins each job to `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
 Setting the `CI_RUNS_ON` variable to a self-hosted runner label then lands the jobs there.
 A public run pins each job to `ubuntu-latest`.
+It writes `.github/workflows/night-run.yml`, which installs with `bun install --frozen-lockfile` and then runs `bunx checks-lint --night`.
+It runs on manual dispatch alone.
+Its job uses the same runner choice as the CI workflow.
 It copies each kit template under `dist/templates/` into `templates/`, so a new doc file starts from a copy there.
 It names every file it wrote and every file it kept.
 It tells the owner to declare the repository owners in `package.json` `author` or `contributors` before the first commit.

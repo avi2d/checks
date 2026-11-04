@@ -1,6 +1,31 @@
 const HOSTED_FALLBACK = "ubuntu-latest";
 const HOSTED_DEFAULT = "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}";
 
+export function nightWorkflow(isPrivate: boolean): string {
+  const lines = [
+    "name: night-run",
+    "",
+    "on:",
+    "  workflow_dispatch:",
+    "",
+    "jobs:",
+    "  gates:",
+    "    runs-on: " + (isPrivate ? HOSTED_DEFAULT : HOSTED_FALLBACK),
+    "    timeout-minutes: 20",
+    "    steps:",
+    "      - uses: actions/checkout@v5",
+    "        with:",
+    "          fetch-depth: 0",
+    "      - uses: oven-sh/setup-bun@v2",
+    "        with:",
+    "          bun-version-file: .bun-version",
+    "      - run: bun install --frozen-lockfile",
+    "      - run: bunx checks-lint --night",
+    "",
+  ];
+  return lines.join("\n");
+}
+
 export function ciWorkflow(isPrivate: boolean, hasBuild: boolean): string {
   const lines = [
     "name: ci",

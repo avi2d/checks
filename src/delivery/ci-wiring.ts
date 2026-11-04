@@ -2,7 +2,7 @@
 import { Config, Console, Effect, FileSystem, Path, Schema } from "effect";
 import { defaultBranch, git } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
-import { ENTRY_POINT, KIT_GATES, type KitGate } from "../core/gates.ts";
+import { ENTRY_POINT, KIT_GATES, TYPESCRIPT_SOURCE, type KitGate } from "../core/gates.ts";
 import { findBunPinFaults, formatBunPinReport, readBunPinPolicy } from "./bun-pin.ts";
 import { findLongJobs, formatLongJobReport } from "./job-timeout.ts";
 import { readScheduleFiles, readShellFiles } from "./mutation-job.ts";
@@ -10,7 +10,8 @@ import { findScheduledReleases, formatScheduleReport } from "./release-schedule.
 import { findRunnerFaults, formatRunnerReport, jobRuns, readRunnerConfig } from "./runner-policy.ts";
 import { findScheduledRuns, formatScheduledRunReport } from "./schedule-policy.ts";
 import { invokes, mentions, plainCommand, type Command } from "./shell-command.ts";
-import { findMissingWorkflows, formatMissingReport, isRecord, names, workflowJobs, type Workflow } from "./workflow-references.ts";
+import { findNightStepFaults, formatNightStepReport } from "./night-step.ts";
+import { findMissingWorkflows, formatMissingReport, isRecord, localUses, names, skippedBy, switchedOff, workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export { BunPinError, findBunPinFaults, formatBunPinReport } from "./bun-pin.ts";
 export { RunnerPolicyError } from "./runner-policy.ts";
@@ -71,25 +72,7 @@ const ScriptsManifest = Schema.Struct({
 });
 // Without these a pull_request workflow never sees the commits a pull request pushes.
 const GATING_TYPES = ["opened", "synchronize"];
-const CONSTANTS = new Map([
-  ["true", true],
-  ["false", false],
-]);
-const STATUS_OVERRIDE = /\b(?:always|failure|cancelled)\s*\(/;
 const EventRepository = Schema.fromJsonString(Schema.Struct({ repository: Schema.Struct({ private: Schema.Boolean }) }));
-
-function constant(value: unknown): boolean | undefined {
-  if (typeof value === "boolean") return value;
-  if (typeof value !== "string") return undefined;
-  const expression = value.trim().replace(/^\$\{\{(.*)\}\}$/s, "$1").trim();
-  return CONSTANTS.get(expression);
-}
-
-function switchedOff(node: Readonly<Record<string, unknown>>, subject: string): string | undefined {
-  if (constant(node["if"]) === false) return `${subject} sets if: false`;
-  if (constant(node["continue-on-error"]) === true) return `${subject} sets continue-on-error: true`;
-  return undefined;
-}
 
 // Last match wins, as GitHub evaluates a branch filter, so one match anywhere is not enough.
 function selects(patterns: readonly string[], branch: string): boolean {
@@ -125,23 +108,6 @@ const pullRequestTrigger = (branch: string): Trigger => (workflow) => {
   return undefined;
 };
 
-// GitHub prefixes any other if: with success(), so only a status function overrides a needed job's skip.
-function skippedBy(jobs: Readonly<Record<string, unknown>>, id: string, seen: readonly string[]): string | undefined {
-  const job = jobs[id];
-  if (!isRecord(job) || seen.includes(id)) return undefined;
-  if (constant(job["if"]) === false) return `job ${id} sets if: false`;
-  if (typeof job["if"] === "string" && STATUS_OVERRIDE.test(job["if"])) return undefined;
-  for (const need of names(job["needs"]) ?? []) {
-    const cause = skippedBy(jobs, need, [...seen, id]);
-    if (cause !== undefined) return cause;
-  }
-  return undefined;
-}
-
-function localCall(uses: unknown): string | undefined {
-  return typeof uses === "string" && uses.startsWith("./") ? uses.slice(2) : undefined;
-}
-
 function runSteps(workflows: readonly Workflow[], trigger: Trigger): readonly RunStep[] {
   const documents = new Map(workflows.map((workflow) => [workflow.path, workflow.document]));
   const steps: RunStep[] = [];
@@ -162,7 +128,7 @@ function runSteps(workflows: readonly Workflow[], trigger: Trigger): readonly Ru
         blocker ??
         switchedOff(job, `job ${id}`) ??
         (skipped === undefined ? undefined : `job ${id} needs a job that never runs: ${skipped}`);
-      const called = localCall(job["uses"]);
+      const called = localUses(job["uses"]);
       if (called !== undefined && !walked.includes(called)) {
         visit(documents.get(called), `${jobLocation} > ${called}`, jobBlocker, [...walked, called]);
       }
@@ -345,7 +311,11 @@ const wiring = Effect.gen(function* () {
   if (scheduledRuns.length > 0) yield* Console.error(formatScheduledRunReport(scheduledRuns));
   const longJobs = findLongJobs(workflows);
   if (longJobs.length > 0) yield* Console.error(formatLongJobReport(longJobs));
-  return [gaps, faults, missing, bunFaults, scheduled, scheduledRuns, longJobs].every((found) => found.length === 0);
+  const tracksTypeScript =
+    (yield* git(["ls-files", "--", ...TYPESCRIPT_SOURCE.pathspecs], root)).trim() !== "";
+  const nightFaults = findNightStepFaults(tracksTypeScript, workflows, { scripts, files: scheduleFiles });
+  if (nightFaults.length > 0) yield* Console.error(formatNightStepReport(nightFaults));
+  return [gaps, faults, missing, bunFaults, scheduled, scheduledRuns, longJobs, nightFaults].every((found) => found.length === 0);
 });
 
 if (import.meta.main) runMain("ci-wiring", wiring);

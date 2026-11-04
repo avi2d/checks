@@ -1,7 +1,7 @@
 import { runsBin } from "./mutation-job.ts";
 import { jobRuns } from "./runner-policy.ts";
 import type { Command } from "./shell-command.ts";
-import { isRecord, locate, names, workflowJobs, type Workflow } from "./workflow-references.ts";
+import { isRecord, localUses, locate, names, workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export type ScheduledRelease = {
   readonly location: string;
@@ -35,11 +35,6 @@ function isReleaseCommand(program: Command): boolean {
   return isPublishCommand(program) || isBinIn(RELEASE_BINS, program[0] ?? "");
 }
 
-function localUses(job: Readonly<Record<string, unknown>>): string | undefined {
-  const uses = job["uses"];
-  return typeof uses === "string" && uses.startsWith("./") ? uses.slice(2) : undefined;
-}
-
 function workflowRuns(
   workflow: Workflow,
   context: ScheduleContext,
@@ -55,7 +50,7 @@ function workflowRuns(
   )
     return true;
   return workflowJobs(workflow).some(([, job]) => {
-    const called = localUses(job);
+    const called = localUses(job["uses"]);
     if (called === undefined || walkedWorkflows.includes(called)) return false;
     const next = byPath.get(called);
     return next !== undefined && workflowRuns(next, context, isBin, byPath, [...walkedWorkflows, called]);

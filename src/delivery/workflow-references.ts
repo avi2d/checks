@@ -26,6 +26,42 @@ export function names(value: unknown): readonly string[] | undefined {
   return value.filter((entry): entry is string => typeof entry === "string");
 }
 
+const CONSTANTS = new Map([
+  ["true", true],
+  ["false", false],
+]);
+const STATUS_OVERRIDE = /\b(?:always|failure|cancelled)\s*\(/;
+
+function constant(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") return value;
+  if (typeof value !== "string") return undefined;
+  const expression = value.trim().replace(/^\$\{\{(.*)\}\}$/s, "$1").trim();
+  return CONSTANTS.get(expression);
+}
+
+export function switchedOff(node: Readonly<Record<string, unknown>>, subject: string): string | undefined {
+  if (constant(node["if"]) === false) return `${subject} sets if: false`;
+  if (constant(node["continue-on-error"]) === true) return `${subject} sets continue-on-error: true`;
+  return undefined;
+}
+
+// GitHub prefixes any other if: with success(), so only a status function overrides a needed job's skip.
+export function skippedBy(jobs: Readonly<Record<string, unknown>>, id: string, seen: readonly string[]): string | undefined {
+  const job = jobs[id];
+  if (!isRecord(job) || seen.includes(id)) return undefined;
+  if (constant(job["if"]) === false) return `job ${id} sets if: false`;
+  if (typeof job["if"] === "string" && STATUS_OVERRIDE.test(job["if"])) return undefined;
+  for (const need of names(job["needs"]) ?? []) {
+    const cause = skippedBy(jobs, need, [...seen, id]);
+    if (cause !== undefined) return cause;
+  }
+  return undefined;
+}
+
+export function localUses(uses: unknown): string | undefined {
+  return typeof uses === "string" && uses.startsWith("./") ? uses.slice(2) : undefined;
+}
+
 type Key = string | number;
 
 type Target = { readonly name: string; readonly invocation: number };

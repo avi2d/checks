@@ -31,6 +31,8 @@ To move a repository to a newer release of the kit:
 1. Run `bun run build`, whose `checks-effect-scope` rewrites the Effect override and the kit's severities in `tsconfig.json` when a release changes them.
    A severity key the release drops stays in `tsconfig.json` until the repository removes it.
 1. Copy `node_modules/@avi2dg/checks/bunfig.toml` over `bunfig.toml` again, since `checks-test-layout` compares the copy with the installed preset.
+1. When the repository tracks TypeScript, add a night-run workflow with a run step that invokes `checks-lint --night`, as [Set up a repository](set-up-a-repository.md) shows, or add that step to the workflow that already runs nightly.
+   Only that step runs the four nightly gates.
 1. Run `bun run lint`, `bun run typecheck` and `bun run test`.
 
 The repository's lockfile pins the kit, so a repository moves only when it runs these steps.
