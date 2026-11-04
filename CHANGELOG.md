@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.65.3
+
+Released 2026-11-04.
+
+### Fixes
+
+- **ci-wiring:** require the night run step in TypeScript repositories [#45](https://github.com/avi2d/checks/pull/45)
+
 ## 0.65.2
 
 Released 2026-11-04.
