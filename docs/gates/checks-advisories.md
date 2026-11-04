@@ -127,7 +127,8 @@ jobs:
       - run: ./node_modules/.bin/checks-advisories --all
 ```
 
-The job runs on a hosted runner unless `CI_RUNS_ON` names another, as [checks-ci-wiring](checks-ci-wiring.md#runners) requires.
+A public repository keeps `runs-on: ubuntu-latest`.
+A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on the job, as [checks-ci-wiring](checks-ci-wiring.md#runners) requires.
 A hosted runner starts each run with an empty cache, so each run downloads both the scanner and the database.
 A self-hosted runner keeps `~/.cache/avi2dg-checks/` between runs, so it downloads the scanner once per pinned version and the database about once a day.
 
