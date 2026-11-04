@@ -1,6 +1,6 @@
 {
   "name": "@avi2dg/checks",
-  "version": "0.65.1",
+  "version": "0.65.2",
   "description": "Deterministic checks shared across a set of TypeScript repositories",
   "author": {
     "name": "avi2d",
