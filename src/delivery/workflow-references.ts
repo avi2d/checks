@@ -58,6 +58,10 @@ export function skippedBy(jobs: Readonly<Record<string, unknown>>, id: string, s
   return undefined;
 }
 
+export function localUses(uses: unknown): string | undefined {
+  return typeof uses === "string" && uses.startsWith("./") ? uses.slice(2) : undefined;
+}
+
 type Key = string | number;
 
 type Target = { readonly name: string; readonly invocation: number };

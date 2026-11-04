@@ -3,7 +3,7 @@ import { runsBin } from "./mutation-job.ts";
 import type { ScheduleContext } from "./release-schedule.ts";
 import { jobRuns } from "./runner-policy.ts";
 import type { Command } from "./shell-command.ts";
-import { isRecord, names, skippedBy, switchedOff, type Workflow } from "./workflow-references.ts";
+import { isRecord, localUses, names, skippedBy, switchedOff, type Workflow } from "./workflow-references.ts";
 
 const NIGHT_STEP = `${ENTRY_POINT.bin} --night`;
 
@@ -15,11 +15,6 @@ const NIGHT_BINS = [ENTRY_POINT.bin, ENTRY_POINT.script];
 
 function isNightLint([head = "", ...rest]: Command): boolean {
   return NIGHT_BINS.some((name) => head === name || head.endsWith("/" + name)) && rest.length === 1 && rest[0] === "--night";
-}
-
-function localUses(job: Readonly<Record<string, unknown>>): string | undefined {
-  const uses = job["uses"];
-  return typeof uses === "string" && uses.startsWith("./") ? uses.slice(2) : undefined;
 }
 
 function rootBlocker(workflow: Workflow): string | undefined {
@@ -56,7 +51,7 @@ function workflowRunsNightStep(
         runsBin(run, context.scripts, files, isNightLint, true),
     );
     if (unblocked) return true;
-    const called = localUses(job);
+    const called = localUses(job["uses"]);
     if (called === undefined || walkedWorkflows.includes(called)) return false;
     const next = byPath.get(called);
     return next !== undefined && workflowRunsNightStep(next, context, byPath, [...walkedWorkflows, called], jobBlocker);

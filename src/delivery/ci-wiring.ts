@@ -11,7 +11,7 @@ import { findRunnerFaults, formatRunnerReport, jobRuns, readRunnerConfig } from 
 import { findScheduledRuns, formatScheduledRunReport } from "./schedule-policy.ts";
 import { invokes, mentions, plainCommand, type Command } from "./shell-command.ts";
 import { findNightStepFaults, formatNightStepReport } from "./night-step.ts";
-import { findMissingWorkflows, formatMissingReport, isRecord, names, skippedBy, switchedOff, workflowJobs, type Workflow } from "./workflow-references.ts";
+import { findMissingWorkflows, formatMissingReport, isRecord, localUses, names, skippedBy, switchedOff, workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export { BunPinError, findBunPinFaults, formatBunPinReport } from "./bun-pin.ts";
 export { RunnerPolicyError } from "./runner-policy.ts";
@@ -108,10 +108,6 @@ const pullRequestTrigger = (branch: string): Trigger => (workflow) => {
   return undefined;
 };
 
-function localCall(uses: unknown): string | undefined {
-  return typeof uses === "string" && uses.startsWith("./") ? uses.slice(2) : undefined;
-}
-
 function runSteps(workflows: readonly Workflow[], trigger: Trigger): readonly RunStep[] {
   const documents = new Map(workflows.map((workflow) => [workflow.path, workflow.document]));
   const steps: RunStep[] = [];
@@ -132,7 +128,7 @@ function runSteps(workflows: readonly Workflow[], trigger: Trigger): readonly Ru
         blocker ??
         switchedOff(job, `job ${id}`) ??
         (skipped === undefined ? undefined : `job ${id} needs a job that never runs: ${skipped}`);
-      const called = localCall(job["uses"]);
+      const called = localUses(job["uses"]);
       if (called !== undefined && !walked.includes(called)) {
         visit(documents.get(called), `${jobLocation} > ${called}`, jobBlocker, [...walked, called]);
       }
