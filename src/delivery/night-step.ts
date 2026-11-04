@@ -1,16 +1,17 @@
+import { ENTRY_POINT } from "../core/gates.ts";
 import { runsBin } from "./mutation-job.ts";
 import type { ScheduleContext } from "./release-schedule.ts";
 import { jobRuns } from "./runner-policy.ts";
 import type { Command } from "./shell-command.ts";
 import { isRecord, names, skippedBy, switchedOff, type Workflow } from "./workflow-references.ts";
 
-const NIGHT_STEP = "checks-lint --night";
+const NIGHT_STEP = `${ENTRY_POINT.bin} --night`;
 
 export type NightStepFault = {
   readonly gate: string;
 };
 
-const NIGHT_BINS = ["checks-lint", "core/lint.ts"];
+const NIGHT_BINS = [ENTRY_POINT.bin, ENTRY_POINT.script];
 
 function isNightLint([head = "", ...rest]: Command): boolean {
   return NIGHT_BINS.some((name) => head === name || head.endsWith("/" + name)) && rest.length === 1 && rest[0] === "--night";

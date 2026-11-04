@@ -444,6 +444,17 @@ test("arguments passed to bun run reach the package script they name", () => {
   ]);
 });
 
+test("forwarded arguments keep their boundaries when they reach the package script", () => {
+  const nightly = new Map([["nightly", "checks-lint"]]);
+  expect(findNightStepFaults(true, nightWorkflow(`bun run nightly ""`), { scripts: nightly, files: new Map() })).toEqual([
+    { gate: "checks-lint --night" },
+  ]);
+  expect(findNightStepFaults(true, nightWorkflow(`bun run nightly " --night"`), { scripts: nightly, files: new Map() })).toEqual([
+    { gate: "checks-lint --night" },
+  ]);
+  expect(findNightStepFaults(true, nightWorkflow("bun run nightly --night"), { scripts: nightly, files: new Map() })).toEqual([]);
+});
+
 test("a night step in a reusable workflow counts only through a job that uses it", () => {
   const reusable = Effect.runSync(
     parseWorkflow(".github/workflows/reusable.yml", "name: reusable\non:\n  workflow_call:\njobs:\n  gates:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bunx checks-lint --night\n"),

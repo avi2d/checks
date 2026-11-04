@@ -92,6 +92,13 @@ function fileAt(dir: string | undefined, path: string): string | undefined {
   return within(dir, path) || undefined;
 }
 
+const PLAIN_WORD = /^[A-Za-z0-9_@%+=:,./-]+$/;
+
+function quotedWord(word: string): string {
+  if (word !== "" && PLAIN_WORD.test(word)) return word;
+  return `'${word.replace(/'/g, "'\\''")}'`;
+}
+
 function invocation(command: Command, dir: string | undefined, context: Context, walked: Walked, followShellOperands: boolean): Invocation | undefined {
   const [first = "", ...rest] = fromProgram(command);
   if (first !== "bun") {
@@ -107,7 +114,7 @@ function invocation(command: Command, dir: string | undefined, context: Context,
   const cwd = bunDirectory([...bunOptions(rest), ...(subcommand === "run" ? bunOptions(operands) : [])], dir);
   const body = walked.scripts.includes(target) ? undefined : context.scripts.get(target);
   if (body === undefined) return { program: [target, ...targetArgs], file: fileAt(cwd, target), dir: cwd };
-  return { script: target, body: targetArgs.length === 0 ? body : `${body} ${targetArgs.join(" ")}` };
+  return { script: target, body: targetArgs.length === 0 ? body : `${body} ${targetArgs.map(quotedWord).join(" ")}` };
 }
 
 function binCommand(

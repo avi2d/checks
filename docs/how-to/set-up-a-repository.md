@@ -144,6 +144,13 @@ Run the four nightly gates from a night-run workflow once the repository tracks 
        runs-on: ubuntu-latest
        timeout-minutes: 20
        steps:
+         - uses: actions/checkout@v5
+           with:
+             fetch-depth: 0
+         - uses: oven-sh/setup-bun@v2
+           with:
+             bun-version-file: .bun-version
+         - run: bun install --frozen-lockfile
          - run: bunx checks-lint --night
    ```
 
