@@ -40,8 +40,8 @@ A call through a local reusable workflow counts only through a job that uses the
 A call through a repository shell script counts, as a path inside the repository whose file runs the night step.
 A shell wrapper forwards its arguments through a standalone `"$@"`, so `exec checks-lint --night "$@"` counts with no arguments passed.
 A night call counts only where the shell always reaches it.
-An if with a true condition runs its then branch, and an if with a false condition runs its else branch.
-A command after false and never runs, and neither does a branch under any other condition, a loop body, an uncalled function body, or a command after exit.
+That includes loop bodies, the then branch under a true condition, and the else branch under a false condition.
+A command after false and never runs, and neither does a branch under any other condition, an uncalled function body, or a command after exit or exec.
 A step or job with `if: false` or `continue-on-error: true` never counts, nor does a job that waits on one that never runs.
 
 ### Runners

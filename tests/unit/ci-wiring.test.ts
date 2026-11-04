@@ -534,6 +534,25 @@ test("a night call after a terminator or inside a dead definition never counts",
   ]);
 });
 
+test("a night call a dead connector or a skipped chain guards never counts", () => {
+  expect(findNightStepFaults(true, nightWorkflow("false && if true; then bunx checks-lint --night; fi"), emptyContext)).toEqual([
+    { gate: "checks-lint --night" },
+  ]);
+  expect(findNightStepFaults(true, nightWorkflow("true || false || bunx checks-lint --night"), emptyContext)).toEqual([
+    { gate: "checks-lint --night" },
+  ]);
+  expect(findNightStepFaults(true, nightWorkflow("exec checks-lint; checks-lint --night"), emptyContext)).toEqual([
+    { gate: "checks-lint --night" },
+  ]);
+});
+
+test("a night call past a subshell exit or inside a loop body still counts", () => {
+  expect(findNightStepFaults(true, nightWorkflow("(exit 0); bunx checks-lint --night"), emptyContext)).toEqual([]);
+  expect(findNightStepFaults(true, nightWorkflow("exec bunx checks-lint --night"), emptyContext)).toEqual([]);
+  expect(findNightStepFaults(true, nightWorkflow("for i in 1 2; do bunx checks-lint --night; done"), emptyContext)).toEqual([]);
+  expect(findNightStepFaults(true, nightWorkflow("while true; do bunx checks-lint --night; done"), emptyContext)).toEqual([]);
+});
+
 test("a night step in a reusable workflow counts only through a job that uses it", () => {
   const reusable = Effect.runSync(
     parseWorkflow(".github/workflows/reusable.yml", "name: reusable\non:\n  workflow_call:\njobs:\n  gates:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bunx checks-lint --night\n"),
