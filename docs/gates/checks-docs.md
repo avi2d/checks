@@ -196,7 +196,9 @@ The root `README.md` and every `README.md` beside a `package.json` take two ceil
 - The file holds at most 6,000 characters, counted as the agent file ceiling counts them.
   The failure names the file's size and its largest section, and says to move that section to a page under `docs/`.
 - A table cell holds at most 300 characters.
-  A table follows the GitHub table rules, with a header, a delimiter row and body rows that each hold `|`.
+  A table follows the GitHub table rules, with a header row above a delimiter row with the same cell count.
+  Every line after the delimiter counts until a blank line.
+  Tables inside list items are left unchecked.
   Lines in fenced or indented code never count as table rows.
   An escaped `\|` never ends a cell.
 

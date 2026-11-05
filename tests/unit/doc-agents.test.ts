@@ -88,6 +88,26 @@ test("a pipe line in an indented code block never counts as a table row", () => 
   expect(readmeFindings(`# widget\n\n    | ${"y".repeat(400)} |\n`)).toEqual([]);
 });
 
+test("a body row without any pipe still fails the table cell ceiling", () => {
+  const text = `# widget\n\n| Part | Note |\n| --- | --- |\n${"y".repeat(301)}\n`;
+  expect(readmeFindings(text)).toEqual([
+    {
+      line: 5,
+      message: "holds a 301-character table cell, over the 300-character ceiling for a README table cell. Move the detail to a page under docs/ and keep the cell to what a reader scans",
+    },
+  ]);
+});
+
+test("a header and delimiter with different cell counts never form a table", () => {
+  const text = `# widget\n\n| Part | Note |\n| --- |\n| ${"y".repeat(400)} |\n`;
+  expect(readmeFindings(text)).toEqual([]);
+});
+
+test("a quoted 300-character cell passes without its quote marker", () => {
+  const text = `# widget\n\n> Part | Note\n> --- | ---\n> ${"y".repeat(300)} | ok\n`;
+  expect(readmeFindings(text)).toEqual([]);
+});
+
 test("the README ceilings cover the root README and a README beside a package.json, and no other README", () => {
   const files = new Set(["package.json", "packages/run/package.json", "packages/run/README.md", "docs/README.md", "README.md"]);
   expect(["README.md", "packages/run/README.md"].map((path) => isCeiledReadme(path, files))).toEqual([true, true]);

@@ -73,8 +73,12 @@ function largestPart(lines: readonly MarkdownLine[], endings: readonly number[])
     .reduce((largest, part) => (part.size > largest.size ? part : largest));
 }
 
+function strippedOf(raw: string): string {
+  return raw.replace(/^(?:\s*>)+\s*/, "");
+}
+
 function cellsOf(raw: string): readonly string[] {
-  return raw.trim().replaceAll(ROW_EDGES, "").split(CELL_SEPARATOR).map((cell) => cell.trim());
+  return strippedOf(raw).trim().replaceAll(ROW_EDGES, "").split(CELL_SEPARATOR).map((cell) => cell.trim());
 }
 
 const DELIMITER_CELL = /^\s*:?-+:?\s*$/;
@@ -114,15 +118,16 @@ function tableRows(lines: readonly MarkdownLine[], code: ReadonlySet<number>): r
   const rows: MarkdownLine[] = [];
   for (let at = 0; at < lines.length; at += 1) {
     const delimiter = lines[at];
-    if (delimiter === undefined || !isTableCandidate(delimiter, code) || !isDelimiterRow(delimiter.raw) || !CELL_SEPARATOR.test(delimiter.raw)) continue;
+    if (delimiter === undefined || !isTableCandidate(delimiter, code) || !isDelimiterRow(delimiter.raw) || !CELL_SEPARATOR.test(strippedOf(delimiter.raw))) continue;
     const header = lines[at - 1];
-    if (header === undefined || header.line + 1 !== delimiter.line || !isTableCandidate(header, code) || !CELL_SEPARATOR.test(header.raw) || isDelimiterRow(header.raw)) continue;
+    if (header === undefined || header.line + 1 !== delimiter.line || !isTableCandidate(header, code) || !CELL_SEPARATOR.test(strippedOf(header.raw)) || isDelimiterRow(header.raw)) continue;
+    if (cellsOf(header.raw).length !== cellsOf(delimiter.raw).length) continue;
     rows.push(header);
     let expected = delimiter.line + 1;
     for (let next = at + 1; next < lines.length; next += 1) {
       const body = lines[next];
       if (body === undefined || body.line !== expected) break;
-      if (!isTableCandidate(body, code) || !CELL_SEPARATOR.test(body.raw) || isDelimiterRow(body.raw)) break;
+      if (!isTableCandidate(body, code) || isDelimiterRow(body.raw)) break;
       rows.push(body);
       expected += 1;
     }
