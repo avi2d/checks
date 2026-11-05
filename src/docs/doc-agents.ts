@@ -120,27 +120,50 @@ function isBodyLine(line: MarkdownLine, code: ReadonlySet<number>): boolean {
   return true;
 }
 
+type HeaderMatch = { readonly header: MarkdownLine; readonly delimiterLine: number; readonly width: number };
+
+function matchHeader(lines: readonly MarkdownLine[], at: number, code: ReadonlySet<number>): HeaderMatch | undefined {
+  const delimiter = lines[at];
+  if (delimiter === undefined || !isTableCandidate(delimiter, code)) return undefined;
+  if (!isDelimiterRow(delimiter.raw) || !CELL_SEPARATOR.test(delimiter.raw)) return undefined;
+  const header = lines[at - 1];
+  if (header === undefined || header.line + 1 !== delimiter.line) return undefined;
+  if (!isTableCandidate(header, code) || !CELL_SEPARATOR.test(header.raw)) return undefined;
+  const width = cellsOf(header.raw).length;
+  if (width !== cellsOf(delimiter.raw).length) return undefined;
+  return { header, delimiterLine: delimiter.line, width };
+}
+
+function collectBody(
+  lines: readonly MarkdownLine[],
+  from: number,
+  delimiterLine: number,
+  width: number,
+  code: ReadonlySet<number>,
+): { readonly rows: readonly TableRow[]; readonly last: number } {
+  const rows: TableRow[] = [];
+  let expected = delimiterLine + 1;
+  let last = from - 1;
+  for (let next = from; next < lines.length; next += 1) {
+    const body = lines[next];
+    if (body === undefined || body.line !== expected) break;
+    if (!isBodyLine(body, code)) break;
+    rows.push({ line: body.line, raw: body.raw, width });
+    expected += 1;
+    last = next;
+  }
+  return { rows, last };
+}
+
 function tableRows(lines: readonly MarkdownLine[], code: ReadonlySet<number>): readonly TableRow[] {
   const rows: TableRow[] = [];
   for (let at = 0; at < lines.length; at += 1) {
-    const delimiter = lines[at];
-    if (delimiter === undefined || !isTableCandidate(delimiter, code) || !isDelimiterRow(delimiter.raw) || !CELL_SEPARATOR.test(delimiter.raw)) continue;
-    const header = lines[at - 1];
-    if (header === undefined || header.line + 1 !== delimiter.line || !isTableCandidate(header, code) || !CELL_SEPARATOR.test(header.raw)) continue;
-    const width = cellsOf(header.raw).length;
-    if (width !== cellsOf(delimiter.raw).length) continue;
-    rows.push({ line: header.line, raw: header.raw, width });
-    let expected = delimiter.line + 1;
-    let last = at;
-    for (let next = at + 1; next < lines.length; next += 1) {
-      const body = lines[next];
-      if (body === undefined || body.line !== expected) break;
-      if (!isBodyLine(body, code)) break;
-      rows.push({ line: body.line, raw: body.raw, width });
-      expected += 1;
-      last = next;
-    }
-    at = last;
+    const matched = matchHeader(lines, at, code);
+    if (matched === undefined) continue;
+    rows.push({ line: matched.header.line, raw: matched.header.raw, width: matched.width });
+    const body = collectBody(lines, at + 1, matched.delimiterLine, matched.width, code);
+    rows.push(...body.rows);
+    at = body.last;
   }
   return rows;
 }
