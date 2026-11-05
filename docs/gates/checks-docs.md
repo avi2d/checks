@@ -16,6 +16,7 @@ It fails when such a line copies a version `package.json` or `.bun-version` pins
 It fails when a living doc or an agent file names a path, link or command that does not resolve, and the range added or broke it.
 It fails when an agent file holds more than 3,000 characters or a `## Maintaining this file` section, whatever the range touches, as [Agent files](#agent-files) says.
 It fails when an entry in an agent file names no tracked path, link or `bun run` command, whatever the range touches.
+It fails when a range edits a README that is over 6,000 characters or holds a table cell over 300, as [README ceilings](#readme-ceilings) says.
 It fails when a living doc or an agent file names a code span the range removed from every file outside the docs, on any line.
 [Paths, links and commands](#paths-links-and-commands) says how each reference resolves.
 The package ships one template per kind under `dist/templates/`, and a repository starts a new doc file by copying one:
@@ -188,6 +189,23 @@ An entry is any list item a reader sees as CommonMark renders the file, the item
 A list item inside an HTML comment, an HTML block or an indented code block is not an entry.
 A fresh file passes the ceiling, and its entries pass once each names the file that holds its detail.
 
+## README ceilings
+
+The root `README.md` and every `README.md` beside a `package.json` take two ceilings, since npm shows a package's README as its front page:
+
+- The file holds at most 6,000 characters, counted as the agent file ceiling counts them.
+  The failure names the file's size and its largest section, and says to move that section to a page under `docs/`.
+- A table cell holds at most 300 characters.
+  A table follows the GitHub table rules, with a header row above a delimiter row with the same cell count.
+  Every line after the delimiter counts until a blank line.
+  Tables indented by four spaces or a tab, and tables inside blockquotes, are left unchecked.
+  Lines in fenced or indented code never count as table rows.
+  An escaped `\|` never ends a cell.
+
+No line in a complete same-named generated block counts toward either ceiling, from its `<!-- generated <name>: ... -->` line to its `<!-- end generated <name> -->` line, so a generated index sizes itself.
+A README fails only in a range that edits it.
+A README the range leaves alone is listed as advisory, so the first change that edits an oversize README shrinks it.
+
 ## What it reads
 
 It reads each Markdown file at the head commit, and uses its path or front matter to choose its kind.
@@ -198,6 +216,7 @@ It compares each code span a living doc or an agent file names with the text git
 It reads the repository's own name and its direct dependencies from the root `package.json` at the head commit.
 It reads the versions the root `package.json` and `.bun-version` pin at the head commit.
 It reads each agent file at the head commit for the ceiling, its sections and its entries, whatever the range touches.
+It reads the root `README.md` and each `README.md` beside a tracked `package.json` at the head commit for the README ceilings.
 A name that an installed direct dependency still holds counts as present.
 From the working tree it reads the ignore files git reads, `node_modules/.bin`, and the directory of each direct dependency under `node_modules`.
 
@@ -215,8 +234,8 @@ With one it is that commit against its parent, or against the empty tree for a r
 
 | Code | When |
 | --- | --- |
-| 0 | every doc file the range touches holds to its template, every line it adds to a living doc or an agent file holds to the prose rules and copies no pinned version, it adds or breaks no reference that does not resolve, every agent file holds to the ceiling and holds no `## Maintaining this file`, every entry in an agent file names a tracked path, a link or a command, and no code span a living doc or an agent file names vanished from every file outside the docs |
-| 1 | a doc file the range touches does not hold to its template, a line the range adds to a living doc or an agent file breaks a prose rule or copies a pinned version, the range adds or breaks a reference that does not resolve, an agent file is over the ceiling or holds `## Maintaining this file`, an entry in an agent file names no tracked path, link or command, or the range removes a name a living doc or an agent file still carries |
+| 0 | every doc file the range touches holds to its template, every line it adds to a living doc or an agent file holds to the prose rules and copies no pinned version, it adds or breaks no reference that does not resolve, every agent file holds to the ceiling and holds no `## Maintaining this file`, every entry in an agent file names a tracked path, a link or a command, every README the range edits holds to the README ceilings, and no code span a living doc or an agent file names vanished from every file outside the docs |
+| 1 | a doc file the range touches does not hold to its template, a line the range adds to a living doc or an agent file breaks a prose rule or copies a pinned version, the range adds or breaks a reference that does not resolve, an agent file is over the ceiling or holds `## Maintaining this file`, an entry in an agent file names no tracked path, link or command, a README the range edits is over a README ceiling, or the range removes a name a living doc or an agent file still carries |
 | 2 | a `package.json` does not decode, a ref does not resolve, or `grep` cannot read an installed direct dependency |
 
 ## Sample output
@@ -232,6 +251,8 @@ docs: 7 violation(s):
   docs/parts.md:9: names `gates.lint`, which the range removed from every file outside the docs. Say what holds now, or drop the line
 docs: advisory, 1 doc file(s) the range leaves alone do not hold to their templates yet:
   docs/adr/0001-quality-gates.md: 5 violation(s)
+docs: advisory, 1 README ceiling finding(s) in README(s) the range leaves alone:
+  packages/run/README.md: is 6412 characters, over the 6,000-character ceiling for a README. Its largest section is `## Configure a run` at 2310 characters. Move that section to a page under docs/ and link it from the README in one line
 docs: advisory, 1 sentence(s) over the trial length caps:
   README.md:16: carries a 27-word descriptive sentence, over the 25-word cap (procedural means an ordered list item, capped at 20 words)
 docs: advisory, 1 path(s), link(s) or command(s) the living docs or agent files name were broken before the range:
@@ -243,6 +264,7 @@ docs: advisory, 1 path(s), link(s) or command(s) the living docs or agent files 
 `checks-lint` runs it over each pull request's range in every repository, as [checks-lint](checks-lint.md) says.
 A repository adopts the templates as its files change, and the prose rules as its lines change, because an untouched file or line never fails those checks.
 It reshapes its agent files when it adopts the gate, because [Agent files](#agent-files) judges each one whatever the range touches.
+It shrinks an oversize README in the first change that edits it, because [README ceilings](#readme-ceilings) judges only a README the range edits.
 A name the range removes fails wherever a doc still carries it, because the removal is what turned the line stale.
 
 ## Related topics
