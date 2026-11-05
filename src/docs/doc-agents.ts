@@ -73,20 +73,16 @@ function largestPart(lines: readonly MarkdownLine[], endings: readonly number[])
     .reduce((largest, part) => (part.size > largest.size ? part : largest));
 }
 
-function strippedOf(raw: string): string {
-  return raw.replace(/^(?:\s*>)+\s*/, "");
-}
-
 function cellsOf(raw: string): readonly string[] {
-  return strippedOf(raw).trim().replaceAll(ROW_EDGES, "").split(CELL_SEPARATOR).map((cell) => cell.trim());
+  return raw.trim().replaceAll(ROW_EDGES, "").split(CELL_SEPARATOR).map((cell) => cell.trim());
 }
 
 const DELIMITER_CELL = /^\s*:?-+:?\s*$/;
 
 function isDelimiterRow(raw: string): boolean {
-  const stripped = raw.replace(/^(?:\s*>)+\s*/, "");
-  if (/^(?: {4}|\t)/.test(stripped)) return false;
-  const trimmed = stripped.trim();
+  if (/^\s*>/.test(raw)) return false;
+  if (/^(?: {4}|\t)/.test(raw)) return false;
+  const trimmed = raw.trim();
   if (!trimmed.includes("|") || !trimmed.includes("-")) return false;
   const inner = trimmed.replace(/^\|/, "").replace(/\|$/, "");
   return inner.split("|").every((cell) => DELIMITER_CELL.test(cell));
@@ -109,27 +105,38 @@ function codeLinesIn(scanned: readonly MarkdownLine[]): ReadonlySet<number> {
 function isTableCandidate(line: MarkdownLine, code: ReadonlySet<number>): boolean {
   if (line.kind !== "prose" && line.kind !== "table") return false;
   if (code.has(line.line)) return false;
-  const stripped = line.raw.replace(/^(?:\s*>)+\s*/, "");
-  if (/^(?: {4}|\t)/.test(stripped)) return false;
+  if (/^\s*>/.test(line.raw)) return false;
+  if (/^(?: {4}|\t)/.test(line.raw)) return false;
   return true;
 }
 
-function tableRows(lines: readonly MarkdownLine[], code: ReadonlySet<number>): readonly MarkdownLine[] {
-  const rows: MarkdownLine[] = [];
+type TableRow = { readonly line: number; readonly raw: string; readonly width: number };
+
+function isBodyLine(line: MarkdownLine, code: ReadonlySet<number>): boolean {
+  if (line.raw.trim() === "") return false;
+  if (code.has(line.line)) return false;
+  if (/^\s*>/.test(line.raw)) return false;
+  if (/^(?: {4}|\t)/.test(line.raw)) return false;
+  return true;
+}
+
+function tableRows(lines: readonly MarkdownLine[], code: ReadonlySet<number>): readonly TableRow[] {
+  const rows: TableRow[] = [];
   for (let at = 0; at < lines.length; at += 1) {
     const delimiter = lines[at];
-    if (delimiter === undefined || !isTableCandidate(delimiter, code) || !isDelimiterRow(delimiter.raw) || !CELL_SEPARATOR.test(strippedOf(delimiter.raw))) continue;
+    if (delimiter === undefined || !isTableCandidate(delimiter, code) || !isDelimiterRow(delimiter.raw) || !CELL_SEPARATOR.test(delimiter.raw)) continue;
     const header = lines[at - 1];
-    if (header === undefined || header.line + 1 !== delimiter.line || !isTableCandidate(header, code) || !CELL_SEPARATOR.test(strippedOf(header.raw))) continue;
-    if (cellsOf(header.raw).length !== cellsOf(delimiter.raw).length) continue;
-    rows.push(header);
+    if (header === undefined || header.line + 1 !== delimiter.line || !isTableCandidate(header, code) || !CELL_SEPARATOR.test(header.raw)) continue;
+    const width = cellsOf(header.raw).length;
+    if (width !== cellsOf(delimiter.raw).length) continue;
+    rows.push({ line: header.line, raw: header.raw, width });
     let expected = delimiter.line + 1;
     let last = at;
     for (let next = at + 1; next < lines.length; next += 1) {
       const body = lines[next];
       if (body === undefined || body.line !== expected) break;
-      if (!isTableCandidate(body, code)) break;
-      rows.push(body);
+      if (!isBodyLine(body, code)) break;
+      rows.push({ line: body.line, raw: body.raw, width });
       expected += 1;
       last = next;
     }
@@ -154,8 +161,9 @@ export function readmeFindings(text: string): readonly AgentFinding[] {
           },
         ];
   const rows = tableRows(lines, codeLinesIn(scanned));
-  const cells = rows.flatMap(({ line, raw }) =>
+  const cells = rows.flatMap(({ line, raw, width }) =>
       cellsOf(raw)
+        .slice(0, width)
         .filter((cell) => cell.length > CELL_CEILING)
         .map((cell) => ({
           line,

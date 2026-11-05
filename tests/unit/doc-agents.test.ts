@@ -103,8 +103,23 @@ test("a header and delimiter with different cell counts never form a table", () 
   expect(readmeFindings(text)).toEqual([]);
 });
 
-test("a quoted 300-character cell passes without its quote marker", () => {
-  const text = `# widget\n\n> Part | Note\n> --- | ---\n> ${"y".repeat(300)} | ok\n`;
+test("a quoted table with an oversized cell never counts", () => {
+  const text = `# widget\n\n> Part | Note\n> --- | ---\n> bolt | ${"y".repeat(301)} |\n`;
+  expect(readmeFindings(text)).toEqual([]);
+});
+
+test("a setext underline after a table body never ends the table", () => {
+  const text = `# widget\n\n| A | B |\n| --- | --- |\n${"y".repeat(301)}\n---\n`;
+  expect(readmeFindings(text)).toEqual([
+    {
+      line: 5,
+      message: "holds a 301-character table cell, over the 300-character ceiling for a README table cell. Move the detail to a page under docs/ and keep the cell to what a reader scans",
+    },
+  ]);
+});
+
+test("a body cell past the header width never counts", () => {
+  const text = `# widget\n\n| A | B |\n| --- | --- |\n| ok | ok | ${"y".repeat(301)} |\n`;
   expect(readmeFindings(text)).toEqual([]);
 });
 
