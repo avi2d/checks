@@ -120,17 +120,20 @@ function tableRows(lines: readonly MarkdownLine[], code: ReadonlySet<number>): r
     const delimiter = lines[at];
     if (delimiter === undefined || !isTableCandidate(delimiter, code) || !isDelimiterRow(delimiter.raw) || !CELL_SEPARATOR.test(strippedOf(delimiter.raw))) continue;
     const header = lines[at - 1];
-    if (header === undefined || header.line + 1 !== delimiter.line || !isTableCandidate(header, code) || !CELL_SEPARATOR.test(strippedOf(header.raw)) || isDelimiterRow(header.raw)) continue;
+    if (header === undefined || header.line + 1 !== delimiter.line || !isTableCandidate(header, code) || !CELL_SEPARATOR.test(strippedOf(header.raw))) continue;
     if (cellsOf(header.raw).length !== cellsOf(delimiter.raw).length) continue;
     rows.push(header);
     let expected = delimiter.line + 1;
+    let last = at;
     for (let next = at + 1; next < lines.length; next += 1) {
       const body = lines[next];
       if (body === undefined || body.line !== expected) break;
-      if (!isTableCandidate(body, code) || isDelimiterRow(body.raw)) break;
+      if (!isTableCandidate(body, code)) break;
       rows.push(body);
       expected += 1;
+      last = next;
     }
+    at = last;
   }
   return rows;
 }
