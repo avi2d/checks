@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.66.0
+
+Released 2026-11-05.
+
+### Features
+
+- **docs:** cap READMEs at 6,000 characters and table cells at 300 [#46](https://github.com/avi2d/checks/pull/46)
+
 ## 0.65.3
 
 Released 2026-11-04.
