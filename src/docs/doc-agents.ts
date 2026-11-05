@@ -42,8 +42,13 @@ export function isCeiledReadme(repositoryPath: string, files: ReadonlySet<string
 
 type Part = { readonly title: string; readonly lines: readonly MarkdownLine[] };
 
-function charactersIn(lines: readonly MarkdownLine[]): number {
-  return lines.reduce((sum, { raw }) => sum + raw.length + 1, 0);
+function endingLengths(text: string): readonly number[] {
+  const pieces = text.split("\n");
+  return pieces.map((piece, index) => (index < pieces.length - 1 ? (piece.endsWith("\r") ? 2 : 1) : 0));
+}
+
+function sizeOf(lines: readonly MarkdownLine[], endings: readonly number[]): number {
+  return lines.reduce((sum, { line, raw }) => sum + raw.length + (endings[line - 1] ?? 0), 0);
 }
 
 function sectionTitle(line: MarkdownLine, next: MarkdownLine | undefined): string | undefined {
@@ -62,9 +67,9 @@ function partsOf(lines: readonly MarkdownLine[]): readonly Part[] {
   return bounds.map(({ index, title }, at) => ({ title, lines: lines.slice(index, bounds[at + 1]?.index ?? lines.length) }));
 }
 
-function largestPart(lines: readonly MarkdownLine[]): { readonly title: string; readonly size: number } {
+function largestPart(lines: readonly MarkdownLine[], endings: readonly number[]): { readonly title: string; readonly size: number } {
   return partsOf(lines)
-    .map(({ title, lines: held }) => ({ title, size: charactersIn(held) }))
+    .map(({ title, lines: held }) => ({ title, size: sizeOf(held, endings) }))
     .reduce((largest, part) => (part.size > largest.size ? part : largest));
 }
 
@@ -72,10 +77,65 @@ function cellsOf(raw: string): readonly string[] {
   return raw.trim().replaceAll(ROW_EDGES, "").split(CELL_SEPARATOR).map((cell) => cell.trim());
 }
 
+const DELIMITER_CELL = /^\s*:?-+:?\s*$/;
+
+function isDelimiterRow(raw: string): boolean {
+  const stripped = raw.replace(/^(?:\s*>)+\s*/, "");
+  if (/^(?: {4}|\t)/.test(stripped)) return false;
+  const trimmed = stripped.trim();
+  if (!trimmed.includes("|") || !trimmed.includes("-")) return false;
+  const inner = trimmed.replace(/^\|/, "").replace(/\|$/, "");
+  return inner.split("|").every((cell) => DELIMITER_CELL.test(cell));
+}
+
+function codeLinesIn(scanned: readonly MarkdownLine[]): ReadonlySet<number> {
+  const read = scanned.map(({ kind, raw }) => (kind === "front-matter" ? "" : raw)).join("\n");
+  const walker = new Parser().parse(read).walker();
+  const excluded = new Set<number>();
+  for (let step = walker.next(); step !== null; step = walker.next()) {
+    if (step.entering && step.node.type === "code_block" && step.node.sourcepos) {
+      const start = step.node.sourcepos[0][0];
+      const end = step.node.sourcepos[1][0];
+      for (let line = start; line <= end; line += 1) excluded.add(line);
+    }
+  }
+  return excluded;
+}
+
+function isTableCandidate(line: MarkdownLine, code: ReadonlySet<number>): boolean {
+  if (line.kind !== "prose" && line.kind !== "table") return false;
+  if (code.has(line.line)) return false;
+  const stripped = line.raw.replace(/^(?:\s*>)+\s*/, "");
+  if (/^(?: {4}|\t)/.test(stripped)) return false;
+  return true;
+}
+
+function tableRows(lines: readonly MarkdownLine[], code: ReadonlySet<number>): readonly MarkdownLine[] {
+  const rows: MarkdownLine[] = [];
+  for (let at = 0; at < lines.length; at += 1) {
+    const delimiter = lines[at];
+    if (delimiter === undefined || !isTableCandidate(delimiter, code) || !isDelimiterRow(delimiter.raw) || !CELL_SEPARATOR.test(delimiter.raw)) continue;
+    const header = lines[at - 1];
+    if (header === undefined || header.line + 1 !== delimiter.line || !isTableCandidate(header, code) || !CELL_SEPARATOR.test(header.raw) || isDelimiterRow(header.raw)) continue;
+    rows.push(header);
+    let expected = delimiter.line + 1;
+    for (let next = at + 1; next < lines.length; next += 1) {
+      const body = lines[next];
+      if (body === undefined || body.line !== expected) break;
+      if (!isTableCandidate(body, code) || !CELL_SEPARATOR.test(body.raw) || isDelimiterRow(body.raw)) break;
+      rows.push(body);
+      expected += 1;
+    }
+  }
+  return rows;
+}
+
 export function readmeFindings(text: string): readonly AgentFinding[] {
-  const lines = handWritten(scanMarkdown(text));
-  const size = Math.max(charactersIn(lines) - 1, 0);
-  const largest = largestPart(lines);
+  const scanned = scanMarkdown(text);
+  const endings = endingLengths(text);
+  const lines = handWritten(scanned);
+  const size = sizeOf(lines, endings);
+  const largest = largestPart(lines, endings);
   const ceiling: readonly AgentFinding[] =
     size <= README_CEILING
       ? []
@@ -85,9 +145,8 @@ export function readmeFindings(text: string): readonly AgentFinding[] {
             message: `is ${size} characters, over the 6,000-character ceiling for a README. Its largest section is ${largest.title} at ${largest.size} characters. Move that section to a page under docs/ and link it from the README in one line`,
           },
         ];
-  const cells = lines
-    .filter(({ kind }) => kind === "table")
-    .flatMap(({ line, raw }) =>
+  const rows = tableRows(lines, codeLinesIn(scanned));
+  const cells = rows.flatMap(({ line, raw }) =>
       cellsOf(raw)
         .filter((cell) => cell.length > CELL_CEILING)
         .map((cell) => ({

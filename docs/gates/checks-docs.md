@@ -196,7 +196,9 @@ The root `README.md` and every `README.md` beside a `package.json` take two ceil
 - The file holds at most 6,000 characters, counted as the agent file ceiling counts them.
   The failure names the file's size and its largest section, and says to move that section to a page under `docs/`.
 - A table cell holds at most 300 characters.
-  A table row is a line that opens with `|`, and an escaped `\|` does not end a cell.
+  A table follows the GitHub table rules, with a header, a delimiter row and body rows that each hold `|`.
+  Lines in fenced or indented code never count as table rows.
+  An escaped `\|` never ends a cell.
 
 No line in a complete same-named generated block counts toward either ceiling, from its `<!-- generated <name>: ... -->` line to its `<!-- end generated <name> -->` line, so a generated index sizes itself.
 A README fails only in a range that edits it.
