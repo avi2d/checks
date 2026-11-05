@@ -64,7 +64,7 @@ function patternOf({ name, version }: Pin): RegExp {
 const GENERATED_OPEN = /^\s*<!-- generated ([\w-]+):/;
 const GENERATED_CLOSE = /^\s*<!-- end generated ([\w-]+) -->/;
 
-function handWritten(lines: readonly MarkdownLine[]): readonly MarkdownLine[] {
+export function handWritten(lines: readonly MarkdownLine[]): readonly MarkdownLine[] {
   const exempt = new Set<number>();
   let at = 0;
   while (at < lines.length) {

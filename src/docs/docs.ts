@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect } from "effect";
-import { ceilingFinding, entryFindings, isAgentFile, maintainingFinding } from "./doc-agents.ts";
+import { ceilingFinding, entryFindings, isAgentFile, isCeiledReadme, maintainingFinding, readmeFindings } from "./doc-agents.ts";
 import { rootsOf, snapshotOf, unresolvedIn, type Judging, type Unresolved } from "./doc-references.ts";
 import { ADR_DIRECTORY, judge, placementOf, placementProblem, recordsOf, speaksToConsumers, type Placement, type Records } from "./doc-rules.ts";
 import { vanishedNames } from "./doc-names.ts";
@@ -22,8 +22,10 @@ type Judged = {
   readonly edited: { readonly docs: number; readonly lines: number };
   readonly named: number;
   readonly agents: number;
+  readonly readmes: number;
   readonly findings: readonly Finding[];
   readonly advisory: ReadonlyMap<string, number>;
+  readonly readmeAdvisory: readonly Finding[];
   readonly sentenceAdvisory: readonly Finding[];
   readonly brokenBefore: readonly Finding[];
 };
@@ -127,6 +129,8 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
     [ceilingFinding(text(path)), maintainingFinding(text(path))].flatMap((finding) => (finding === undefined ? [] : [{ path, ...finding }])),
   );
   const entries = agents.flatMap(({ path }) => entryFindings(path, text(path), tracked).map((finding) => ({ path, ...finding })));
+  const readmes = proseDocs.filter(({ path }) => isCeiledReadme(path, tracked.files));
+  const oversize = readmes.flatMap(({ path }) => readmeFindings(text(path)).map((finding) => ({ path, ...finding })));
   const advisory = new Map<string, number>();
   for (const { path } of templated.filter((finding) => !touched.has(finding.path))) advisory.set(path, (advisory.get(path) ?? 0) + 1);
   return {
@@ -134,6 +138,7 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
     edited: { docs: edited.length, lines: edited.reduce((sum, { path }) => sum + (changed.get(path)?.size ?? 0), 0) },
     named: referenced.size,
     agents: agents.length,
+    readmes: readmes.filter(({ path }) => touched.has(path)).length,
     findings: [
       ...templated.filter((finding) => touched.has(finding.path)),
       ...prose,
@@ -142,8 +147,10 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
       ...vanished,
       ...shapes,
       ...entries,
+      ...oversize.filter((finding) => touched.has(finding.path)),
     ].toSorted(inPathOrder),
     advisory,
+    readmeAdvisory: oversize.filter((finding) => !touched.has(finding.path)).toSorted(inPathOrder),
     sentenceAdvisory,
     brokenBefore: references.brokenBefore.toSorted(inPathOrder),
   } satisfies Judged;
@@ -153,7 +160,7 @@ function describe({ path, line, message }: Finding): string {
   return `  ${path}${line === undefined ? "" : `:${line}`}: ${message}`;
 }
 
-export function report({ held, edited, named, agents, findings, advisory, sentenceAdvisory, brokenBefore }: Judged): string {
+export function report({ held, edited, named, agents, readmes, findings, advisory, readmeAdvisory, sentenceAdvisory, brokenBefore }: Judged): string {
   const verdict =
     findings.length === 0
       ? [
@@ -162,6 +169,7 @@ export function report({ held, edited, named, agents, findings, advisory, senten
           `${NAME}: no line the range adds or edits copies a version package.json or .bun-version pins`,
           `${NAME}: the range breaks no path, link or command the ${named} living doc(s) or agent file(s) name`,
           `${NAME}: the ${agents} agent file(s) hold to the ceiling, and every entry names a tracked path, a link or a command`,
+          `${NAME}: the ${readmes} README(s) the range edits hold to the 6,000-character ceiling and the 300-character table cell ceiling`,
         ]
       : [`${NAME}: ${findings.length} violation(s):`, ...findings.map(describe)];
   const unconformed =
@@ -171,6 +179,10 @@ export function report({ held, edited, named, agents, findings, advisory, senten
           `${NAME}: advisory, ${advisory.size} doc file(s) the range leaves alone do not hold to their templates yet:`,
           ...[...advisory].map(([path, count]) => `  ${path}: ${count} violation(s)`),
         ];
+  const oversize =
+    readmeAdvisory.length === 0
+      ? []
+      : [`${NAME}: advisory, ${readmeAdvisory.length} README ceiling finding(s) in README(s) the range leaves alone:`, ...readmeAdvisory.map(describe)];
   const sentences =
     sentenceAdvisory.length === 0
       ? []
@@ -185,7 +197,7 @@ export function report({ held, edited, named, agents, findings, advisory, senten
           `${NAME}: advisory, ${brokenBefore.length} path(s), link(s) or command(s) the living docs or agent files name were broken before the range:`,
           ...brokenBefore.map(describe),
         ];
-  return [...verdict, ...unconformed, ...sentences, ...broken].join("\n");
+  return [...verdict, ...unconformed, ...oversize, ...sentences, ...broken].join("\n");
 }
 
 const docs = Effect.gen(function* () {

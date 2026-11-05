@@ -1,5 +1,17 @@
 import { expect, test } from "bun:test";
-import { AGENT_CEILING, ceilingFinding, entries, entryFindings, isAgentFile, maintainingFinding, type AgentFinding } from "../../src/docs/doc-agents.ts";
+import {
+  AGENT_CEILING,
+  CELL_CEILING,
+  README_CEILING,
+  ceilingFinding,
+  entries,
+  entryFindings,
+  isAgentFile,
+  isCeiledReadme,
+  maintainingFinding,
+  readmeFindings,
+  type AgentFinding,
+} from "../../src/docs/doc-agents.ts";
 import { snapshotOf } from "../../src/docs/doc-references.ts";
 
 const LEAD = "# Project agent memory\n\nchecks judges a repository through gates, and `README.md` holds what a person reads.\n";
@@ -16,6 +28,56 @@ test("the ceiling holds at 3,000 characters and fails above it with the fix", ()
   expect(over?.line).toBeUndefined();
   expect(over?.message).toContain("is 3001 characters, over the 3,000-character ceiling for agent files");
   expect(over?.message).toContain("move each part's notes into the people doc that covers that part");
+});
+
+test("a README of 6,001 characters fails the ceiling and one of 6,000 never does", () => {
+  expect(README_CEILING).toBe(6000);
+  expect(readmeFindings("x".repeat(6000))).toEqual([]);
+  const [over, ...rest] = readmeFindings("x".repeat(6001));
+  expect(rest).toEqual([]);
+  expect(over?.line).toBeUndefined();
+  expect(over?.message).toContain("is 6001 characters, over the 6,000-character ceiling for a README");
+  expect(over?.message).toContain("Move that section to a page under docs/");
+});
+
+test("the README ceiling names the largest section rather than the first or the last", () => {
+  const text = `# widget\n\nIt builds bills.\n\n## Install\n\n${"a".repeat(1000)}\n\n## Build a bill\n\n${"b".repeat(4000)}\n\n## Where things are\n\n${"c".repeat(1000)}\n`;
+  const [over] = readmeFindings(text);
+  expect(over?.message).toContain(`is ${text.length} characters`);
+  expect(over?.message).toContain("Its largest section is `## Build a bill` at 4019 characters");
+});
+
+test("lines in a generated block do not count toward the README ceiling, and a hand-written 6,001 still fails beside one", () => {
+  const block = `<!-- generated index: bun run build writes it -->\n${"| a | b |\n".repeat(2000)}<!-- end generated index -->\n`;
+  expect(readmeFindings(`${block}${"x".repeat(5999)}`)).toEqual([]);
+  expect(readmeFindings(`${block}${"x".repeat(6001)}`)[0]?.message).toContain("is 6001 characters");
+});
+
+test("a table cell of 301 characters fails and one of 300 never does", () => {
+  expect(CELL_CEILING).toBe(300);
+  const table = (cell: string): string => `# widget\n\n| Path | What it holds |\n| --- | --- |\n| \`src/\` | ${cell} |\n`;
+  expect(readmeFindings(table("y".repeat(300)))).toEqual([]);
+  expect(readmeFindings(table("y".repeat(301)))).toEqual([
+    {
+      line: 5,
+      message: "holds a 301-character table cell, over the 300-character ceiling for a README table cell. Move the detail to a page under docs/ and keep the cell to what a reader scans",
+    },
+  ]);
+});
+
+test("a long table cell inside a generated block does not fail", () => {
+  const text = `# widget\n\n<!-- generated parts: bun run build writes it -->\n| Part | Note |\n| --- | --- |\n| bolt | ${"y".repeat(900)} |\n<!-- end generated parts -->\n`;
+  expect(readmeFindings(text)).toEqual([]);
+});
+
+test("a long cell in a fenced code block is not a table cell", () => {
+  expect(readmeFindings(`# widget\n\n\`\`\`md\n| ${"y".repeat(400)} |\n\`\`\`\n`)).toEqual([]);
+});
+
+test("the README ceilings cover the root README and a README beside a package.json, and no other README", () => {
+  const files = new Set(["package.json", "packages/run/package.json", "packages/run/README.md", "docs/README.md", "README.md"]);
+  expect(["README.md", "packages/run/README.md"].map((path) => isCeiledReadme(path, files))).toEqual([true, true]);
+  expect(["docs/README.md", "packages/README.md", "packages/run/CONTRIBUTING.md"].map((path) => isCeiledReadme(path, files))).toEqual([false, false, false]);
 });
 
 const TRACKED = snapshotOf(["src/parts.toml", "docs/layout.md", "CONTRIBUTING.md", "LICENSE", ".gitignore", "tools/build.ts"], new Map(), new Map());
