@@ -93,7 +93,7 @@ function codeLinesIn(scanned: readonly MarkdownLine[]): ReadonlySet<number> {
   const walker = new Parser().parse(read).walker();
   const excluded = new Set<number>();
   for (let step = walker.next(); step !== null; step = walker.next()) {
-    if (step.entering && step.node.type === "code_block" && step.node.sourcepos) {
+    if (step.entering && step.node.type === "code_block") {
       const start = step.node.sourcepos[0][0];
       const end = step.node.sourcepos[1][0];
       for (let line = start; line <= end; line += 1) excluded.add(line);
