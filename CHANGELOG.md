@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.68.2
+
+Released 2026-11-06.
+
+### Fixes
+
+- **commit-identity:** accept Dependabot bot identity on Dependabot titles [#53](https://github.com/avi2d/checks/pull/53)
+
 ## 0.68.1
 
 Released 2026-11-06.
