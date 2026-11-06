@@ -17,11 +17,11 @@ The same author on a commit with any other committer must match the allowed name
 `github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>` is allowed as author only of a commit whose subject is `chore: release <version>`, with or without the pull request number a squash merge adds.
 GitHub attributes the release commit [checks-release-pr](checks-release-pr.md) or [checks-release-push](checks-release-push.md) makes to that bot, since each commits through the workflow token.
 Such a commit may carry a `Co-authored-by` trailer naming that bot, since GitHub adds one to some squash merges of a pull request the bot opened, and every other trailer is refused.
+A Dependabot-titled commit may carry a `Co-authored-by` trailer naming `dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>`, since GitHub adds one when the owner squash-merges a pull request the bot opened, and every other trailer is refused.
 `dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>` is allowed as author only of a commit whose subject is a Dependabot title [the commit message lint](../configs/commit-messages.md) exempts, with or without the pull request number a squash merge adds.
 Dependabot writes that commit itself, and GitHub commits it as `GitHub <noreply@github.com>`, which the gate already allows as committer.
 This identity matches by name and email, even on a commit GitHub made, so the Dependabot address under another name is refused.
 Its `Signed-off-by` trailer is not a `Co-authored-by` trailer, so the gate does not read it.
-Such a commit may carry a `Co-authored-by` trailer naming that bot, since GitHub adds one when the owner squash-merges a pull request the bot opened, and every other trailer is refused.
 
 ## What it reads
 
