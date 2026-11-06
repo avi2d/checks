@@ -70,6 +70,32 @@ test(
 );
 
 test(
+  "commitlint config accepts a Dependabot title whose old version is unknown or whose requirement lists several values, and refuses a title with no new version",
+  async () => {
+    const dependabot = [
+      "build(deps): Bump actions/checkout to v2.2.0",
+      "build(deps): Update actions/checkout requirement to v2.2.0",
+      "build(deps): Update JSON requirement from ^0.20, ^0.21 to ^0.20, ^0.21, 1.5",
+    ];
+    for (const title of dependabot) {
+      for (const landed of [title, `${title} (#3)`]) {
+        const green = await lint(landed);
+        expect({ title: landed, exitCode: green.exitCode, text: green.text }).toEqual({ title: landed, exitCode: 0, text: "" });
+      }
+    }
+    for (const title of ["build(deps): Bump actions/checkout to", "build(deps): Update actions/checkout requirement to"]) {
+      const red = await lint(title);
+      expect({ title, exitCode: red.exitCode === 0 ? 0 : 1, flagged: red.text.includes("[subject-case]") }).toEqual({
+        title,
+        exitCode: 1,
+        flagged: true,
+      });
+    }
+  },
+  120_000,
+);
+
+test(
   "commitlint config still applies subject-case to a title no Dependabot shape matches, such as an arbitrary Bump, an arbitrary Update, a trailing full stop, a chore prefix or a wrong type",
   async () => {
     const refused = [

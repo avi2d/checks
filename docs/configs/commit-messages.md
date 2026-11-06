@@ -17,7 +17,9 @@ So the config skips every rule for a one-line title in one of the shapes Dependa
 - `build(deps)` or `build(deps-dev)`, then `Bump` or `bump`, then `X from A to B` with an optional `in /dir`, or `X and Y`, or `X, Y and Z`, or `X across N directory or directories`, or `X in /dir`.
 - `build(deps)` or `build(deps-dev)`, then `Bump` or `bump`, then `the G group`, optionally `in /dir` or `across N directory or directories`, then `with N update` or `with N updates`.
 - `build(deps)` or `build(deps-dev)`, then `Bump` or `bump`, then `X from A to B in the G group`, optionally `across N directory or directories`.
-- `build(deps)` or `build(deps-dev)`, then `Update` or `update`, then `X requirement from A to B`, where a version may carry an operator such as `~> 1.4.0`.
+- `build(deps)` or `build(deps-dev)`, then `Bump` or `bump`, then `X to V`, when the previous version is unknown.
+- `build(deps)` or `build(deps-dev)`, then `Update` or `update`, then `X requirement`, then `from A` when the old requirement is known, then `to B`.
+  A requirement may carry an operator such as `~> 1.4.0`, and several may be listed with commas, such as `^0.20, ^0.21`.
 
 The title may end with the pull request number, such as ` (#123)`.
 A body keeps every rule.
