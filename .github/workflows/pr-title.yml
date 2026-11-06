@@ -1,6 +1,6 @@
 name: pr-title
 
-# ci lints the title on each push, so an edit to the title alone reruns only this rather than the whole suite.
+# A title edit reruns only this workflow, not the suite ci runs on each push.
 on:
   pull_request:
     types: [edited]
@@ -32,7 +32,7 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
           GH_TOKEN: ${{ github.token }}
         run: bun src/delivery/commit-title.ts
-      # Branch protection requires a commitlint check, which no job of that name reports.
+      # Branch protection requires a commitlint check that no job reports.
       - name: report the title as commitlint
         if: always()
         env:

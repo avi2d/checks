@@ -11,7 +11,7 @@ permissions:
   # A dispatched run carries no pull request, so the title lookup needs read access.
   pull-requests: read
 
-# A dispatched run is one release-push waits on, so only a pull request's newer push cancels a run.
+# release-push waits on a dispatched run, so it gets its own group.
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
@@ -25,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          # The merge commit would hide the pull request head, so check out the head itself.
+          # The merge commit would hide the pull request head.
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
@@ -40,28 +40,28 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          # The merge commit would hide the pull request head, so check out the head itself.
+          # The merge commit would hide the pull request head.
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      # Path filters would leave this required check unreported, so steps gate on the filter instead.
+      # A path filter would leave this required check unreported.
       - id: filter
         run: bun src/delivery/docs-only.ts ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} >> "$GITHUB_OUTPUT"
       - if: steps.filter.outputs.docs-only != 'true'
         run: bun run test:unit
   e2e:
     needs: changes
-    # A step gate would still pay for checkout and install, so the whole job skips on a change the changes job marks.
+    # A step gate would still pay for checkout and install.
     if: needs.changes.outputs.e2e-skip != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
         with:
-          # The merge commit would hide the pull request head, so check out the head itself.
+          # The merge commit would hide the pull request head.
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
@@ -75,7 +75,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          # The merge commit would hide the pull request head, so check out the head itself.
+          # The merge commit would hide the pull request head.
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
@@ -88,7 +88,7 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
           GH_TOKEN: ${{ github.token }}
         run: bun src/delivery/commit-title.ts
-      # Branch protection requires a commitlint check, which no job of that name reports.
+      # Branch protection requires a commitlint check that no job reports.
       - name: report the title as commitlint
         if: always()
         env:
@@ -99,17 +99,17 @@ jobs:
           state=failure
           if [ "$OUTCOME" = success ]; then state=success; fi
           gh api "repos/$GITHUB_REPOSITORY/statuses/${HEAD_SHA:-$GITHUB_SHA}" -f state="$state" -f context=commitlint -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --silent
-      # Path filters would leave this required check unreported, so steps gate on the filter instead.
+      # A path filter would leave this required check unreported.
       - id: filter
         run: bun src/delivery/docs-only.ts ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} >> "$GITHUB_OUTPUT"
       - run: bun run build
       - run: git diff --exit-code
-      # A docs-only change still runs lint, since checks-docs checks only the range it is given.
+      # checks-docs checks only the range it is given, so lint runs on docs-only changes.
       - run: bun run lint
       - if: steps.filter.outputs.docs-only != 'true'
         run: bun run typecheck
   checks:
-    # Branch protection requires the checks context alone and passes a skipped one, so the job runs after a failed part and fails on it.
+    # Branch protection passes a skipped job, so this runs and fails when a part fails.
     needs: [changes, unit, e2e, static]
     if: always()
     runs-on: ubuntu-latest
@@ -126,9 +126,8 @@ jobs:
           test "$CHANGES" = success
           test "$UNIT" = success
           test "$STATIC" = success
-          # A skipped e2e job passes only for a change the changes job marked skippable.
           test "$E2E" = success || { test "$E2E" = skipped && test "$E2E_SKIP" = true; }
-      # GitHub keeps a dispatched run's check off the pull request, so the job reports its result there as a commit status.
+      # GitHub keeps a dispatched run's check off the pull request, so this posts a commit status.
       - name: report the result on the head commit
         if: always() && github.event_name == 'workflow_dispatch'
         env:

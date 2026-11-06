@@ -1,7 +1,7 @@
 name: pr-text
 
 on:
-  # The base branch's workflow runs with the secret even for a fork, and the job reads the pull request's text without checking out its code.
+  # pull_request withholds secrets from forks, and this trigger checks out no pull request code.
   pull_request_target:
     types: [opened, edited, synchronize, reopened]
   issue_comment:
@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   pr-text:
-    # GitHub withholds secrets from a review on a fork's pull request, so the scan would skip there; the next run of another trigger scans that review.
+    # GitHub withholds secrets from a fork's review, so the scan would skip it; another trigger scans it.
     if: >-
       (github.event_name != 'issue_comment' || github.event.issue.pull_request) &&
       (!startsWith(github.event_name, 'pull_request_review') || github.event.pull_request.head.repo.full_name == github.repository)
@@ -39,7 +39,7 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      # Only the repository secret decides the skip, so nothing a pull request sets reaches this step.
+      # Only the repository secret decides the skip; no pull request value reaches this step.
       - id: pack
         name: decide whether a private pack is configured
         env:
@@ -63,7 +63,7 @@ jobs:
       - id: scan
         if: steps.pack.outputs.configured == 'true'
         run: bun src/delivery/pr-text.ts "$NUMBER"
-      # A comment's run reports on no pull request, so the job reports its result on the head commit.
+      # A comment's run reports on no pull request, so this posts a commit status.
       - name: report the result on the head commit
         if: ${{ !cancelled() }}
         env:

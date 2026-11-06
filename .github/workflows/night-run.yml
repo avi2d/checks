@@ -22,7 +22,7 @@ jobs:
             mutate: src/delivery/**/*.ts,src/complexity/**/*.ts
           - shard: quality
             mutate: src/quality/**/*.ts,src/core/**/*.ts,src/dependencies/**/*.ts
-          # Every directory the other shards leave out lands here, so a new one is still mutated.
+          # Directories the other shards omit land here, so a new one is still mutated.
           - shard: rest
             mutate: src/**/*.ts,!src/delivery/**,!src/complexity/**,!src/quality/**,!src/core/**,!src/dependencies/**
     steps:
@@ -71,7 +71,7 @@ jobs:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - run: bunx playwright-core install --with-deps chromium-headless-shell webkit
-      # A failing test becomes an issue, so its exit leaves the job going on to the upload.
+      # A failing test must not end the job before the upload.
       - run: |
           bun src/testing/test.ts --tier=unit --junit=reports/night-run-tests/unit.xml || true
           bun src/testing/test.ts --tier=e2e --parallel=4 --junit=reports/night-run-tests/e2e.xml || true
@@ -97,7 +97,7 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      # A pattern downloads the shards that uploaded and skips the rest, which checks-night-run files as missing.
+      # A pattern skips a shard that never uploaded; checks-night-run reports it missing.
       - uses: actions/download-artifact@v4
         with:
           pattern: night-run-mutation-*
