@@ -18,16 +18,12 @@ jobs:
       contents: read
       actions: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: avi2d/workflows/setup@v1
         with:
           fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-      - run: bun install --frozen-lockfile
       # Restoring state keeps a full baseline within the timeout.
       - name: Restore previous full baseline state
         env:

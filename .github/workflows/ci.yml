@@ -23,30 +23,22 @@ jobs:
     outputs:
       e2e-skip: ${{ steps.skip.outputs.e2e-skip }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: avi2d/workflows/setup@v1
         with:
           # The merge commit would hide the pull request head.
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-      - run: bun install --frozen-lockfile
       - id: skip
         run: bun scripts/e2e-skip.ts ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} >> "$GITHUB_OUTPUT"
   unit:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
+      - uses: avi2d/workflows/setup@v1
         with:
           # The merge commit would hide the pull request head.
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-      - run: bun install --frozen-lockfile
       # A path filter would leave this required check unreported.
       - id: filter
         run: bun src/delivery/docs-only.ts ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} >> "$GITHUB_OUTPUT"
@@ -59,29 +51,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
+      - uses: avi2d/workflows/setup@v1
         with:
           # The merge commit would hide the pull request head.
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-      - run: bun install --frozen-lockfile
       - run: bun run test:e2e
   static:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
+      - uses: avi2d/workflows/setup@v1
         with:
           # The merge commit would hide the pull request head.
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-      - run: bun install --frozen-lockfile
       - id: title
         name: lint the title
         env:
@@ -91,14 +75,9 @@ jobs:
       # Branch protection requires a commitlint check that no job of that name reports.
       - name: report the title as commitlint
         if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          OUTCOME: ${{ steps.title.outcome }}
-        run: |
-          state=failure
-          if [ "$OUTCOME" = success ]; then state=success; fi
-          gh api "repos/$GITHUB_REPOSITORY/statuses/${HEAD_SHA:-$GITHUB_SHA}" -f state="$state" -f context=commitlint -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --silent
+        uses: avi2d/workflows/commitlint-status@v1
+        with:
+          outcome: ${{ steps.title.outcome }}
       # A path filter would leave this required check unreported.
       - id: filter
         run: bun src/delivery/docs-only.ts ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} >> "$GITHUB_OUTPUT"
@@ -130,7 +109,6 @@ jobs:
       # GitHub keeps a dispatched run's check off the pull request, so this posts a commit status.
       - name: report the result on the head commit
         if: always() && github.event_name == 'workflow_dispatch'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          STATE: ${{ job.status == 'success' && 'success' || 'failure' }}
-        run: gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" -f state="$STATE" -f context="$GITHUB_JOB" -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --silent
+        uses: avi2d/workflows/head-status@v1
+        with:
+          job-status: ${{ job.status }}
