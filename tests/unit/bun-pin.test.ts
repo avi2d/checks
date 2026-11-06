@@ -192,9 +192,36 @@ test("another action is not judged (oracle: the rule names only setup-bun steps)
   expect(bunFaults(other, bunPolicy())).toEqual([]);
 });
 
+const SETUP_SHA = "0123456789abcdef0123456789abcdef01234567";
+
+function sharedSetupSteps(): string {
+  return `on: pull_request\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: avi2d/workflows/actions/setup@${SETUP_SHA}\n      - run: bun run lint\n`;
+}
+
+test("a shared setup step pinned to a SHA passes on the fleet .bun-version (oracle: the S1 rule that the shared setup action reads .bun-version)", () => {
+  expect(bunFaults(sharedSetupSteps(), bunPolicy({ ".bun-version": `${FLEET_BUN_VERSION}\n` }))).toEqual([]);
+});
+
+test("a shared setup step fails when .bun-version drifts from the fleet version (oracle: the S1 rule that the shared setup action reads .bun-version)", () => {
+  const faults = bunFaults(sharedSetupSteps(), bunPolicy({ ".bun-version": `${drifted}\n` }));
+  expect(faults).toEqual([{ location: ".github/workflows/ci.yml line 6", fault: `requests bun ${drifted} from .bun-version, want ${FLEET_BUN_VERSION}` }]);
+});
+
+test("a shared setup step fails when the caller holds no .bun-version file (oracle: the S1 rule that the caller holds .bun-version)", () => {
+  const faults = bunFaults(sharedSetupSteps(), bunPolicy());
+  expect(faults).toHaveLength(1);
+  expect(faults[0]?.location).toBe(".github/workflows/ci.yml line 6");
+  expect(faults[0]?.fault).toBe(
+    `uses avi2d/workflows/actions/setup@${SETUP_SHA}, which reads .bun-version, but the repository holds no .bun-version file, want ${FLEET_BUN_VERSION}`,
+  );
+  const manifestOnly = bunFaults(sharedSetupSteps(), bunPolicy({}, { "package.json": { packageManager: `bun@${FLEET_BUN_VERSION}` } }));
+  expect(manifestOnly).toHaveLength(1);
+  expect(manifestOnly[0]?.fault).toContain("holds no .bun-version file");
+});
+
 test("the bun pin report names each step and the fleet version", () => {
   const faults = bunFaults(bunSteps(`        with:\n          bun-version: ${drifted}\n`), bunPolicy());
   expect(formatBunPinReport(faults)).toBe(
-    `ci-wiring: 1 setup-bun step(s) drift from the fleet bun version:\n  .github/workflows/ci.yml line 6: requests bun ${drifted} from with.bun-version, want ${FLEET_BUN_VERSION}`,
+    `ci-wiring: 1 bun setup step(s) drift from the fleet bun version:\n  .github/workflows/ci.yml line 6: requests bun ${drifted} from with.bun-version, want ${FLEET_BUN_VERSION}`,
   );
 });

@@ -1,5 +1,6 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
 import { runsMutation, within, type Run } from "./mutation-job.ts";
+import { readsRunnerPick } from "./runner-pick.ts";
 import { isRecord, names, workflowJobs, workflowTitle, type Workflow } from "./workflow-references.ts";
 
 export type RunnerConfig = {
@@ -314,11 +315,20 @@ function watchedWorkflows(workflow: Workflow): readonly string[] {
   return isRecord(watched) ? (names(watched["workflows"]) ?? []) : [];
 }
 
-function runnerFault(job: Readonly<Record<string, unknown>>, runsOn: unknown, mutation: boolean, policy: RunnerPolicy, reachable: boolean): string | undefined {
+function runnerFault(
+  job: Readonly<Record<string, unknown>>,
+  runsOn: unknown,
+  mutation: boolean,
+  policy: RunnerPolicy,
+  reachable: boolean,
+  jobs: ReadonlyMap<string, Readonly<Record<string, unknown>>>,
+  workflows: readonly Workflow[],
+): string | undefined {
   if (policy.visibility === "public" && reachable) {
     const fault = publicFault(job, runsOn, policy.runners);
     if (fault !== undefined) return fault;
   }
+  if (readsRunnerPick(job, runsOn, jobs, workflows)) return undefined;
   return mutation ? mutationFault(runsOn, policy.runners.mutation, policy.visibility, reachable) : otherFault(runsOn, policy.runners, policy.visibility);
 }
 
@@ -359,14 +369,16 @@ export function findRunnerFaults(policy: RunnerPolicy, workflows: readonly Workf
       }
     }
   }
-  return workflows.flatMap((workflow) =>
-    workflowJobs(workflow).flatMap(([id, job]) => {
+  return workflows.flatMap((workflow) => {
+    const entries = workflowJobs(workflow);
+    const jobs = new Map(entries);
+    return entries.flatMap(([id, job]) => {
       if (job["runs-on"] === undefined) return [];
       const mutation = jobRuns(workflow, job).some((run) => runsMutation(run, policy.scripts, (file) => policy.files?.get(file)));
-      const fault = runnerFault(job, job["runs-on"], mutation, policy, reachable.get(workflow.path) ?? forkReachable(workflow));
+      const fault = runnerFault(job, job["runs-on"], mutation, policy, reachable.get(workflow.path) ?? forkReachable(workflow), jobs, workflows);
       return fault === undefined ? [] : [{ location: workflow.path + " job " + id, fault }];
-    }),
-  );
+    });
+  });
 }
 
 export function formatRunnerReport(faults: readonly RunnerFault[]): string {

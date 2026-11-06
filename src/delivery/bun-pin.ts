@@ -17,10 +17,17 @@ export type BunPinFault = {
 
 const SETUP_BUN = /^oven-sh\/setup-bun(?:@(?<ref>.*))?$/i;
 const V2_REF = /^v2(?:\.\d+){0,2}$/;
+const SHARED_SETUP = /^avi2d\/workflows\/actions\/setup@(?<sha>[0-9a-f]{40})$/i;
+const SETUP_VERSION_FILE = ".bun-version";
 
 function setupBunRef(uses: unknown): string | undefined {
   const match = typeof uses === "string" ? SETUP_BUN.exec(uses.trim()) : null;
   return match === null ? undefined : (match.groups?.["ref"] ?? "");
+}
+
+function sharedSetupSha(uses: unknown): string | undefined {
+  const match = typeof uses === "string" ? SHARED_SETUP.exec(uses.trim()) : null;
+  return match?.groups?.["sha"];
 }
 
 function isExpression(value: string): boolean {
@@ -106,6 +113,14 @@ function unknownRefFault(ref: string): string {
   return `uses oven-sh/setup-bun at ${ref === "" ? "no ref" : ref}, but the check knows only setup-bun v2's version resolution, so the step must use oven-sh/setup-bun@v2`;
 }
 
+function sharedSetupFault(policy: BunPinPolicy, sha: string): string | undefined {
+  const version = nonEmpty(policy.files.get(SETUP_VERSION_FILE));
+  if (version === undefined) {
+    return `uses avi2d/workflows/actions/setup@${sha}, which reads ${SETUP_VERSION_FILE}, but the repository holds no ${SETUP_VERSION_FILE} file, want ${policy.fleet}`;
+  }
+  return version === policy.fleet ? undefined : `requests bun ${version} from ${SETUP_VERSION_FILE}, want ${policy.fleet}`;
+}
+
 export function findBunPinFaults(policy: BunPinPolicy, workflows: readonly Workflow[]): readonly BunPinFault[] {
   return workflows.flatMap((workflow) => {
     const at = locate(workflow.path, workflow.text.split("\n"));
@@ -113,17 +128,25 @@ export function findBunPinFaults(policy: BunPinPolicy, workflows: readonly Workf
       const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
       return steps.flatMap((step: unknown, index: number) => {
         if (!isRecord(step)) return [];
+        const atStep = (fault: string) => [
+          { location: at(["jobs", id, "steps", index, "uses"], String(step["uses"]), `job ${id} step ${index + 1}`), fault },
+        ];
         const ref = setupBunRef(step["uses"]);
-        if (ref === undefined) return [];
-        const fault = V2_REF.test(ref) ? bunPinFault(policy, step) : unknownRefFault(ref);
-        return fault === undefined ? [] : [{ location: at(["jobs", id, "steps", index, "uses"], String(step["uses"]), `job ${id} step ${index + 1}`), fault }];
+        if (ref !== undefined) {
+          const fault = V2_REF.test(ref) ? bunPinFault(policy, step) : unknownRefFault(ref);
+          return fault === undefined ? [] : atStep(fault);
+        }
+        const sha = sharedSetupSha(step["uses"]);
+        if (sha === undefined) return [];
+        const fault = sharedSetupFault(policy, sha);
+        return fault === undefined ? [] : atStep(fault);
       });
     });
   });
 }
 
 export function formatBunPinReport(faults: readonly BunPinFault[]): string {
-  return [`ci-wiring: ${faults.length} setup-bun step(s) drift from the fleet bun version:`, ...faults.map(({ location, fault }) => `  ${location}: ${fault}`)].join("\n");
+  return [`ci-wiring: ${faults.length} bun setup step(s) drift from the fleet bun version:`, ...faults.map(({ location, fault }) => `  ${location}: ${fault}`)].join("\n");
 }
 
 function versionFileKeys(job: Readonly<Record<string, unknown>>): readonly string[] {
@@ -139,11 +162,17 @@ function versionFileKeys(job: Readonly<Record<string, unknown>>): readonly strin
   return keys;
 }
 
+function usesSharedSetup(job: Readonly<Record<string, unknown>>): boolean {
+  const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
+  return steps.some((step) => isRecord(step) && sharedSetupSha(step["uses"]) !== undefined);
+}
+
 function wantedBunPinFiles(workflows: readonly Workflow[]): ReadonlySet<string> {
   const wanted = new Set<string>([ROOT_MANIFEST]);
   for (const workflow of workflows) {
     for (const [, job] of workflowJobs(workflow)) {
       for (const key of versionFileKeys(job)) wanted.add(key);
+      if (usesSharedSetup(job)) wanted.add(SETUP_VERSION_FILE);
     }
   }
   return wanted;
