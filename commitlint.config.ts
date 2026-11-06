@@ -1,9 +1,6 @@
 // subject-case cannot be relaxed for one author, so every rule skips the title shapes Dependabot writes.
-const token = String.raw`\S*[^\s.]`;
-const directory = String.raw`in \/\S*[^\s.]`;
-const single = String.raw`[Bb]ump ${token} from ${token} to ${token}(?: ${directory})?`;
-const grouped = String.raw`[Bb]ump the [\w.-]+ group(?: (?:${directory}|across \d+ (?:directory|directories)))? with \d+ updates?`;
-const dependabot = new RegExp(String.raw`^build\(deps(?:-dev)?\): (?:${single}|${grouped})(?: \(#\d+\))?$`);
+const subject = String.raw`[Bb]ump \S(?:.*[^\s.])?`;
+const dependabot = new RegExp(String.raw`^(?:build|chore)\(deps(?:-dev)?\): ${subject}(?: \(#\d+\))?$`);
 
 export default {
   extends: ["@commitlint/config-conventional"],

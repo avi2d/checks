@@ -34,7 +34,7 @@ test(
 );
 
 test(
-  "commitlint config accepts the titles Dependabot writes for a single, grouped or in-directory update, with or without the pull request number",
+  "commitlint config accepts the titles Dependabot writes for a single, grouped, joint or in-directory update, with or without the pull request number",
   async () => {
     const dependabot = [
       "build(deps): Bump actions/checkout from 5.1.0 to 7.0.1",
@@ -43,6 +43,9 @@ test(
       "build(deps-dev): Bump the dev-deps group with 2 updates",
       "build(deps): bump the npm_and_yarn group across 1 directory with 3 updates",
       "build(deps): Bump the npm_and_yarn group across 1 directory with 3 updates",
+      "build(deps): Bump foo and bar",
+      "chore(deps): Bump actions/checkout from 5.1.0 to 7.0.1",
+      "chore(deps-dev): Bump foo and bar",
     ];
     for (const title of dependabot) {
       for (const landed of [title, `${title} (#3)`]) {
@@ -55,11 +58,10 @@ test(
 );
 
 test(
-  "commitlint config still applies subject-case to a build(deps) title that names no dependency update, a wrong type or scope, or a trailing full stop",
+  "commitlint config still applies subject-case to a title that names no update, a wrong type or scope, or a trailing full stop",
   async () => {
     const refused = [
       "build(deps): Bump",
-      "build(deps): Bump the thing",
       "build(deps): Bump actions/checkout from 5.1.0 to 7.0.1.",
       "build(ci): Bump actions/checkout from 5.1.0 to 7.0.1",
       "feat(deps): Bump actions/checkout from 5.1.0 to 7.0.1",
