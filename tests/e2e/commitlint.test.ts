@@ -74,6 +74,7 @@ test(
       "build(deps): Bump hello world",
       "build(deps): Bump the thing",
       "build(deps): Bump business from 1.4.0 to 1.5.0.",
+      "build(deps): Bump business from 1.4.0 to 1.5.0. (#3)",
       "build(deps): Update anything at all",
       "build(ci): Bump actions/checkout from 5.1.0 to 7.0.1",
       "chore(deps): Bump actions/checkout from 5.1.0 to 7.0.1",

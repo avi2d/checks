@@ -12,14 +12,17 @@ Commits follow `@commitlint/config-conventional`, shared from `node_modules/@avi
 It arrives with the kit, since `@commitlint/cli` and `@commitlint/config-conventional` are dependencies, not peers.
 
 A Dependabot title can capitalise `Bump` or `Update` after its prefix, which subject-case forbids.
-So the config skips every rule for a one-line title of this shape, whoever wrote it:
+So the config skips every rule for a one-line title in one of the shapes Dependabot writes, whoever wrote it:
 
-- `build(deps)`, `build(deps-dev)`, `chore(deps)` or `chore(deps-dev)`, then `Bump`, `bump`, `Update` or `update` with any detail.
+- `build(deps)` or `build(deps-dev)`, then `Bump` or `bump`, then `X from A to B` with an optional `in /dir`, or `X and Y`, or `X, Y and Z`, or `X across N directories`, or `X in /dir`.
+- `build(deps)` or `build(deps-dev)`, then `Bump` or `bump`, then `the G group`, optionally `in /dir` or `across N directories`, then `with N update` or `with N updates`.
+- `build(deps)` or `build(deps-dev)`, then `Bump` or `bump`, then `X from A to B in the G group`, optionally `across N directory`.
+- `build(deps)` or `build(deps-dev)`, then `Update` or `update`, then `X requirement from A to B`, where a version may carry an operator such as `~> 1.4.0`.
 
 The title may end with the pull request number, such as ` (#123)`.
 A body keeps every rule.
-Every rule applies to any other title.
-A hand-written title with the same prefix and the same opening verb matches too, because it is the shape Dependabot writes.
+Every rule applies to any other title, including a hand-written title that uses a Dependabot prefix and verb but none of these shapes.
+`chore` is not in the list because no avi2d repository's Dependabot config writes it.
 
 ## Workflow
 
