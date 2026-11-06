@@ -11,16 +11,16 @@ The shared commitlint config holds each pull request title to the conventional c
 Commits follow `@commitlint/config-conventional`, shared from `node_modules/@avi2dg/checks/commitlint.config.ts`.
 It arrives with the kit, since `@commitlint/cli` and `@commitlint/config-conventional` are dependencies, not peers.
 
-A Dependabot title can capitalise `Bump` after its prefix, which subject-case forbids.
+A Dependabot title can capitalise `Bump` or `Update` after its prefix, which subject-case forbids.
 So the config skips every rule for the titles Dependabot writes, and only those:
 
-- `build(deps)`, `build(deps-dev)`, `chore(deps)` or `chore(deps-dev)`, then `Bump` or `bump` with the update detail.
-- The detail is a single update, several updates at once, or a group update, with any directory or count suffix Dependabot writes.
+- `build(deps)`, `build(deps-dev)`, `chore(deps)` or `chore(deps-dev)`, then `Bump`, `bump`, `Update` or `update` with the update detail.
+- The detail is a single update, several updates at once, a requirement widening, or a group update, with any directory or count suffix Dependabot writes.
 
 Either form may end with the pull request number, such as ` (#123)`.
-A trailing full stop or a body keeps every rule.
+A body keeps every rule.
 Every rule applies to any other title.
-A hand-written title with the same prefix and a `Bump` detail matches too, because it is the shape Dependabot writes.
+A hand-written title with the same prefix and the same opening verb matches too, because it is the shape Dependabot writes.
 
 ## Workflow
 
@@ -36,7 +36,7 @@ The title lint runs before the docs-only filter, so a change to top-level Markdo
 It lints the pull request title, or the head subject when no open pull request heads the dispatched branch.
 The title is the enforced subject because a squash merge uses it as the main commit subject, and otherwise per-commit messages are not linted.
 GitHub appends the pull request number to the squashed subject, so the bin lints the title with ` (#0000)` attached.
-The header length limit applies to the landed subject, not the bare title.
+The header length limit applies to the landed subject, not the bare title, for any title the config does not skip.
 The bin moves the git comment character off `#`, so a title starting with `#` is linted like any other.
 The `ci` job also triggers on `workflow_dispatch`, as [checks-release-pr](../gates/checks-release-pr.md) and [checks-release-push](../gates/checks-release-push.md) say.
 GitHub holds the `pull_request` runs of a release pull request the workflow token opens until a maintainer approves them.
