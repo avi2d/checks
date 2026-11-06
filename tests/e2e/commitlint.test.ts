@@ -34,6 +34,49 @@ test(
 );
 
 test(
+  "commitlint config accepts the titles Dependabot writes for a single, grouped or in-directory update, with or without the pull request number",
+  async () => {
+    const dependabot = [
+      "build(deps): Bump actions/checkout from 5.1.0 to 7.0.1",
+      "build(deps): Bump actions/checkout from 5.1.0 to 7.0.1 in /actions/setup",
+      "build(deps): bump actions/checkout from 5.1.0 to 7.0.1",
+      "build(deps-dev): Bump the dev-deps group with 2 updates",
+      "build(deps): bump the npm_and_yarn group across 1 directory with 3 updates",
+    ];
+    for (const title of dependabot) {
+      for (const landed of [title, `${title} (#3)`]) {
+        const green = await lint(landed);
+        expect({ title: landed, exitCode: green.exitCode, text: green.text }).toEqual({ title: landed, exitCode: 0, text: "" });
+      }
+    }
+  },
+  120_000,
+);
+
+test(
+  "commitlint config still applies subject-case to a build(deps) title that names no dependency update, a wrong type or scope, or a trailing full stop",
+  async () => {
+    const refused = [
+      "build(deps): Bump",
+      "build(deps): Bump the thing",
+      "build(deps): Bump actions/checkout from 5.1.0 to 7.0.1.",
+      "build(ci): Bump actions/checkout from 5.1.0 to 7.0.1",
+      "feat(deps): Bump actions/checkout from 5.1.0 to 7.0.1",
+      "feat: Add thing",
+    ];
+    for (const title of refused) {
+      const red = await lint(title);
+      expect({ title, exitCode: red.exitCode === 0 ? 0 : 1, flagged: red.text.includes("[subject-case]") }).toEqual({
+        title,
+        exitCode: 1,
+        flagged: true,
+      });
+    }
+  },
+  120_000,
+);
+
+test(
   "commitlint config rejects the retired house prefixes, unknown types and long headers",
   async () => {
     const retired = [
@@ -103,6 +146,15 @@ test(
     if (Bun.which("node", { PATH: dir }) !== null) throw new Error("node leaked onto the test PATH");
     expect((await lintTitle("feat(lint): add x")).text).toBe("");
     expect((await lintTitle("# feat(lint): add x")).exitCode).not.toBe(0);
+  },
+  60_000,
+);
+
+test(
+  "the title bin passes the title Dependabot writes for its own update, which is the pull request title CI lints",
+  async () => {
+    const lintTitle = titleLinter(process.env["PATH"] ?? "");
+    expect(await lintTitle("build(deps): Bump actions/checkout from 5.1.0 to 7.0.1")).toEqual({ exitCode: 0, text: "" });
   },
   60_000,
 );
