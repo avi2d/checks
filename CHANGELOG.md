@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.68.0
+
+Released 2026-11-06.
+
+### Features
+
+- **ci-wiring:** accept short shared refs for runner pick and setup [#49](https://github.com/avi2d/checks/pull/49)
+
 ## 0.67.0
 
 Released 2026-11-06.
