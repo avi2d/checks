@@ -33,6 +33,11 @@ function namesReleaseAuthor(trailer: string): boolean {
   return name !== undefined && allows([RELEASE_AUTHOR], { name, email });
 }
 
+function namesDependabotAuthor(trailer: string): boolean {
+  const [, name, email = ""] = CO_AUTHOR.exec(trailer) ?? [];
+  return name !== undefined && allows([DEPENDABOT_AUTHOR], { name, email });
+}
+
 // git's own trailer parser, so only the trailer block counts and prose never does.
 const CO_AUTHORED_BY_FORMAT = "%(trailers:key=Co-authored-by)";
 
@@ -135,7 +140,8 @@ function inspect(commit: Commit, allowed: readonly Identity[]): Offence | undefi
   const madeByGitHub = allows([SQUASH_COMMITTER], commit.committer);
   const authored = madeByGitHub ? allowsEmail(authors, commit.author) : allows(authors, commit.author);
   // Outside the author list, which a GitHub-made commit matches by email alone and so would take any name on the bot's address.
-  const dependabot = isDependabotTitle(commit.subject) && allows([DEPENDABOT_AUTHOR], commit.author);
+  const dependabotTitle = isDependabotTitle(commit.subject);
+  const dependabot = dependabotTitle && allows([DEPENDABOT_AUTHOR], commit.author);
   if (!authored && !dependabot) {
     reasons.push(`author ${render(commit.author)}`);
   }
@@ -144,6 +150,7 @@ function inspect(commit: Commit, allowed: readonly Identity[]): Offence | undefi
   }
   for (const trailer of commit.coAuthoredBy) {
     if (release && namesReleaseAuthor(trailer)) continue;
+    if (dependabotTitle && namesDependabotAuthor(trailer)) continue;
     reasons.push(`trailer ${trailer}`);
   }
   return reasons.length === 0 ? undefined : { commit, reasons };

@@ -289,7 +289,7 @@ test(
 );
 
 test(
-  "commit-identity refuses a Co-authored-by trailer on a Dependabot commit and allows its Signed-off-by trailer",
+  "commit-identity refuses another co-author on a Dependabot commit and allows its Signed-off-by trailer",
   async () => {
     await initRepo();
     const base = await commit({ message: "feat: base" });
@@ -305,6 +305,65 @@ test(
     expect(red.text).toContain("1 of 2 commit(s)");
     expect(red.text).toContain(`${coauthored.slice(0, 12)} ${DEPENDABOT_TITLE}\n    trailer Co-authored-by: Pat Stranger <stranger@example.com>`);
     expect(red.text).not.toContain(signed.slice(0, 12));
+  },
+  60_000,
+);
+
+test(
+  "commit-identity lets an owner squash of a Dependabot update name dependabot[bot] as its co-author",
+  async () => {
+    await initRepo();
+    const base = await commit({ message: "feat: base" });
+    await commit({
+      message: `${DEPENDABOT_TITLE} (#2)\n\nBumps actions/checkout from 5.1.0 to 7.0.1.\n\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>\n`,
+      author: OWNER,
+      committer: SQUASH,
+    });
+
+    const green = await check(base, "HEAD");
+    expect(green.exitCode).toBe(0);
+    expect(green.text).toContain("1 commit(s)");
+  },
+  60_000,
+);
+
+test(
+  "commit-identity refuses a near-miss Dependabot co-author on a Dependabot commit",
+  async () => {
+    await initRepo();
+    const base = await commit({ message: "feat: base" });
+    const wrongEmail = await commit({
+      message: `${DEPENDABOT_TITLE}\n\nCo-authored-by: dependabot[bot] <intruder@example.com>\n`,
+      author: OWNER,
+      committer: SQUASH,
+    });
+    const wrongName = await commit({
+      message: `${DEPENDABOT_TITLE}\n\nCo-authored-by: Pat Stranger <49699333+dependabot[bot]@users.noreply.github.com>\n`,
+      author: OWNER,
+      committer: SQUASH,
+    });
+
+    const red = await check(base, "HEAD");
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain("2 of 2 commit(s)");
+    expect(red.text).toContain(`${wrongEmail.slice(0, 12)} ${DEPENDABOT_TITLE}\n    trailer Co-authored-by: dependabot[bot] <intruder@example.com>`);
+    expect(red.text).toContain(`${wrongName.slice(0, 12)} ${DEPENDABOT_TITLE}\n    trailer Co-authored-by: Pat Stranger <49699333+dependabot[bot]@users.noreply.github.com>`);
+  },
+  60_000,
+);
+
+test(
+  "commit-identity refuses the Dependabot co-author trailer on a title no Dependabot shape matches",
+  async () => {
+    await initRepo();
+    const base = await commit({ message: "feat: base" });
+    const landed = await commit({
+      message: "feat: price a bill\n\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>\n",
+    });
+
+    const red = await check(base, "HEAD");
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain(`${landed.slice(0, 12)} feat: price a bill\n    trailer Co-authored-by: dependabot[bot]`);
   },
   60_000,
 );

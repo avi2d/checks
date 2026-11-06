@@ -20,7 +20,8 @@ Such a commit may carry a `Co-authored-by` trailer naming that bot, since GitHub
 `dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>` is allowed as author only of a commit whose subject is a Dependabot title [the commit message lint](../configs/commit-messages.md) exempts, with or without the pull request number a squash merge adds.
 Dependabot writes that commit itself, and GitHub commits it as `GitHub <noreply@github.com>`, which the gate already allows as committer.
 This identity matches by name and email, even on a commit GitHub made, so the Dependabot address under another name is refused.
-Its `Signed-off-by` trailer is not a `Co-authored-by` trailer, so the gate does not read it, and any `Co-authored-by` trailer on such a commit is refused.
+Its `Signed-off-by` trailer is not a `Co-authored-by` trailer, so the gate does not read it.
+Such a commit may carry a `Co-authored-by` trailer naming that bot, since GitHub adds one when the owner squash-merges a pull request the bot opened, and every other trailer is refused.
 
 ## What it reads
 
@@ -56,6 +57,9 @@ commit-identity: 1 of 1 commit(s) in HEAD carry a foreign identity:
   79fa94f9f027 feat: foreign
     author someone <someone@example.com>
   allowed: Repo Owner <owner@example.com>
+  allowed as committer only: GitHub <noreply@github.com>, which also lets an allowed email author under any name
+  allowed as release author only: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+  allowed as Dependabot author only, on a Dependabot title: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>
 ```
 
 ## When it runs
