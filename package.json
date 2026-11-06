@@ -81,6 +81,7 @@
     "src/delivery/mutation-job.ts",
     "src/delivery/job-timeout.ts",
     "src/delivery/runner-policy.ts",
+    "src/delivery/runner-pick.ts",
     "src/delivery/secrets.ts",
     "src/delivery/secrets-pack.ts",
     "src/delivery/pr-text.ts",

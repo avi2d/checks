@@ -463,6 +463,62 @@ test("a repository file resolves from the directory its command runs in", () => 
   expect(sweep(step("./mutate.sh", "        working-directory: ${{ github.workspace }}/tools\n"))).toEqual([]);
 });
 
+const PICK = "${{ needs.runner.outputs.runs-on }}";
+const PICK_SHA = "0123456789abcdef0123456789abcdef01234567";
+
+function pickedWorkflow(runnerUses: string, probeRunsOn = HOSTED, workerStep = "- run: bun run lint"): ReturnType<typeof named>[] {
+  const ci = named(
+    ".github/workflows/ci.yml",
+    `on: pull_request\njobs:\n  runner:\n    uses: ${runnerUses}\n  checks:\n    needs: runner\n    runs-on: ${PICK}\n    steps:\n      ${workerStep}\n`,
+  );
+  const runner = named(
+    ".github/workflows/runner.yml",
+    `on:\n  workflow_call:\n    outputs:\n      runs-on:\n        value: test\njobs:\n  hosted-minutes:\n    runs-on: ${probeRunsOn}\n    steps:\n      - run: echo hi\n`,
+  );
+  return [ci, runner];
+}
+
+test("a private repository accepts runs-on read from a needed local runner pick (oracle: azalialaw pull request 88 https://github.com/azalialaw/azalialaw/pull/88)", () => {
+  const policy = { visibility: "private" as const, scripts: noScripts, runners: NO_RUNNERS };
+  expect(findRunnerFaults(policy, pickedWorkflow("./.github/workflows/runner.yml"))).toEqual([]);
+});
+
+test("a private mutation job accepts runs-on read from a needed local runner pick (oracle: azalialaw pull request 88 https://github.com/azalialaw/azalialaw/pull/88)", () => {
+  const policy = { visibility: "private" as const, scripts: noScripts, runners: RUNNERS };
+  expect(findRunnerFaults(policy, pickedWorkflow("./.github/workflows/runner.yml", HOSTED, "- run: bunx stryker run"))).toEqual([]);
+});
+
+test("a private repository accepts runs-on read from the shared runner pick at a pinned SHA (oracle: the S1 rule that avi2d/workflows/.github/workflows/runner.yml counts at a pinned full SHA)", () => {
+  const policy = { visibility: "private" as const, scripts: noScripts, runners: NO_RUNNERS };
+  expect(findRunnerFaults(policy, pickedWorkflow(`avi2d/workflows/.github/workflows/runner.yml@${PICK_SHA}`))).toEqual([]);
+});
+
+test("a private repository still refuses needs-output without the runner pick behind it (oracle: the S1 rule that the needed job calls the runner pick)", () => {
+  const policy = { visibility: "private" as const, scripts: noScripts, runners: NO_RUNNERS };
+  for (const runnerUses of ["./.github/workflows/ci.yml", "avi2d/workflows/.github/workflows/runner.yml@v1.0.0"]) {
+    const faults = findRunnerFaults(policy, pickedWorkflow(runnerUses));
+    expect(faults.map(({ location }) => location)).toEqual([".github/workflows/ci.yml job checks"]);
+    expect(faults[0]?.fault).toContain(HOSTED);
+  }
+  const unneeded = named(
+    ".github/workflows/ci.yml",
+    `on: pull_request\njobs:\n  runner:\n    uses: ./.github/workflows/runner.yml\n  checks:\n    runs-on: ${PICK}\n    steps:\n      - run: bun run lint\n`,
+  );
+  const runner = named(".github/workflows/runner.yml", `on: workflow_call\njobs:\n  hosted-minutes:\n    runs-on: ${HOSTED}\n    steps:\n      - run: echo hi\n`);
+  const faults = findRunnerFaults(policy, [unneeded, runner]);
+  expect(faults.map(({ location }) => location)).toEqual([".github/workflows/ci.yml job checks"]);
+  expect(faults[0]?.fault).toContain(HOSTED);
+});
+
+test("a public fork-reachable job on the runner pick still refuses the self-hosted fallback (oracle: GitHub hardening guide https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions)", () => {
+  const policy = { visibility: "public" as const, scripts: noScripts, runners: NO_RUNNERS };
+  for (const runnerUses of ["./.github/workflows/runner.yml", `avi2d/workflows/.github/workflows/runner.yml@${PICK_SHA}`]) {
+    const faults = findRunnerFaults(policy, pickedWorkflow(runnerUses, "ubuntu-latest"));
+    expect(faults.map(({ location }) => location)).toEqual([".github/workflows/ci.yml job checks"]);
+    expect(faults[0]?.fault).toContain("cannot be shown to be a hosted runner");
+  }
+});
+
 test("an npm run script or shell operand that reaches a mutation bin is not a mutation job", () => {
   const scripts = new Map([["mutate", "bunx checks-mutation"]]);
   const files = (file: string) => (file === "scripts/mutate.sh" ? "bunx checks-mutation" : undefined);

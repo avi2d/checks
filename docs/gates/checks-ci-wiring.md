@@ -68,6 +68,10 @@ Any other expression refuses as unresolvable.
 A job on `push` or another trigger no fork reaches may still name self-hosted labels.
 In a private repository each mutation job carries exactly the labels the consumer declares in `package.json` under `checks.mutationRunner`.
 Every other job there carries exactly the hosted-default expression, or exactly one of the label sets the consumer declares under `checks.selfHostedRunners`.
+A job there also carries `runs-on: ${{ needs.<job>.outputs.runs-on }}` when the same workflow needs that job and that job calls the runner pick.
+The pick is the repository file `runner.yml` under `.github/workflows/` or `avi2d/workflows/.github/workflows/runner.yml` at a pinned full SHA.
+A public repository still refuses that expression on a job a fork can reach.
+The resolved label cannot be shown to be a hosted runner before the run.
 A repository without those declarations fails each job they would pin until it declares them.
 The check knows a repository is private only from GitHub's event, so a run outside CI judges only the rules that hold in either.
 
@@ -90,7 +94,9 @@ The fleet version is the version the kit ships in its own `.bun-version`.
 The step fails the check when the version is missing or differs from the fleet bun version.
 A range fails because it differs from the fleet version.
 A version built from an expression fails because it cannot be shown equal before the run.
-This rule skips a repository with no setup-bun step.
+A step that uses `avi2d/workflows/actions/setup` reads `.bun-version`.
+The step fails the check when `.bun-version` is missing or differs from the fleet bun version.
+This rule skips a repository with no setup-bun step and no shared setup step.
 A kit release that moves the fleet version turns each consumer red until its pin follows.
 Each refusal names the workflow file and line, the version found and where it was read, and the fleet version.
 
@@ -136,6 +142,7 @@ The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts`, `private` and 
 It reads each shell script that a shell script it reads runs, until none is left.
 It lists the `*.ts` and `*.tsx` files `git ls-files` tracks to decide whether the night run applies.
 It reads each file a setup-bun step names for its version.
+It reads `.bun-version` for each step that uses the shared setup action.
 It reads the fleet pin from the kit's own `.bun-version`.
 It reads the target branch from `GITHUB_BASE_REF`, then from `refs/remotes/origin/HEAD` and then from the event file `GITHUB_EVENT_PATH` names.
 It reads whether the repository is private from `repository.private` in that event file.
@@ -150,7 +157,7 @@ It takes no arguments.
 | Code | Result |
 | --- | --- |
 | 0 | Every required command has a reachable step. |
-| 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, a setup-bun step drifts from the fleet bun version, a workflow that releases runs on a schedule outside a public npm package or more than once a day, a workflow other than a weekly public advisory scan runs on a schedule, a job can run for more than 60 minutes, or a repository that tracks TypeScript never runs `checks-lint --night`. |
+| 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, a bun setup step drifts from the fleet bun version, a workflow that releases runs on a schedule outside a public npm package or more than once a day, a workflow other than a weekly public advisory scan runs on a schedule, a job can run for more than 60 minutes, or a repository that tracks TypeScript never runs `checks-lint --night`. |
 | 2 | A workflow or `package.json` cannot be decoded, or the kit's own `.bun-version` is missing, unreadable or blank. |
 
 ## Sample output
