@@ -34,6 +34,110 @@ test(
 );
 
 test(
+  "commitlint config accepts the titles Dependabot writes for a single, grouped, joint, requirement or in-directory update, with or without the pull request number",
+  async () => {
+    const dependabot = [
+      "build(deps): Bump actions/checkout from 5.1.0 to 7.0.1",
+      "build(deps): Bump actions/checkout from 5.1.0 to 7.0.1 in /actions/setup",
+      "build(deps): bump business from 1.4.0 to 1.5.0",
+      "build(deps): Bump business from `2468a02` to `cff701b`",
+      "build(deps): Bump business from 1.4.0 to 1.5.0 in /directory",
+      "build(deps): Bump business from 1.4.0 to 1.5.0 in the all-the-things group",
+      "build(deps): Bump business from 1.4.0 to 1.5.0 in the go_modules group across 1 directory",
+      "build(deps): Bump business from 1.4.0 to 1.5.0 in the go_modules group across 2 directories",
+      "build(deps): Bump business and business2",
+      "build(deps): Bump business, business2 and business3",
+      "build(deps): Bump business across 2 directories",
+      "build(deps): Bump business across 10 directories",
+      "build(deps): Bump business in /frontend",
+      "build(deps): Bump the all-the-things group with 1 update",
+      "build(deps): Bump the all-the-things group with 2 updates",
+      "build(deps): Bump the all-the-things group in /directory with 2 updates",
+      "build(deps): Bump the go_modules group across 2 directories with 2 updates",
+      "build(deps): Bump the npm_and_yarn group across 1 directory with 3 updates",
+      "build(deps): Update business requirement from ~> 1.4.0 to ~> 1.5.0",
+      "build(deps): Update business requirement from v0.3.0 to v0.4.1",
+      "build(deps-dev): Bump the all-the-things group with 2 updates",
+    ];
+    for (const title of dependabot) {
+      for (const landed of [title, `${title} (#3)`]) {
+        const green = await lint(landed);
+        expect({ title: landed, exitCode: green.exitCode, text: green.text }).toEqual({ title: landed, exitCode: 0, text: "" });
+      }
+    }
+  },
+  120_000,
+);
+
+test(
+  "commitlint config accepts a Dependabot title whose old version is unknown or whose requirement lists several values, and refuses a title with no new version",
+  async () => {
+    const dependabot = [
+      "build(deps): Bump actions/checkout to v2.2.0",
+      "build(deps): Update actions/checkout requirement to v2.2.0",
+      "build(deps): Update JSON requirement from ^0.20, ^0.21 to ^0.20, ^0.21, 1.5",
+    ];
+    for (const title of dependabot) {
+      for (const landed of [title, `${title} (#3)`]) {
+        const green = await lint(landed);
+        expect({ title: landed, exitCode: green.exitCode, text: green.text }).toEqual({ title: landed, exitCode: 0, text: "" });
+      }
+    }
+    for (const title of ["build(deps): Bump actions/checkout to", "build(deps): Update actions/checkout requirement to"]) {
+      const red = await lint(title);
+      expect({ title, exitCode: red.exitCode === 0 ? 0 : 1, flagged: red.text.includes("[subject-case]") }).toEqual({
+        title,
+        exitCode: 1,
+        flagged: true,
+      });
+    }
+  },
+  120_000,
+);
+
+test(
+  "commitlint config still applies subject-case to a title no Dependabot shape matches, such as an arbitrary Bump, an arbitrary Update, a trailing full stop, a chore prefix or a wrong type",
+  async () => {
+    const refused = [
+      "build(deps): Bump",
+      "build(deps): Bump hello world",
+      "build(deps): Bump the thing",
+      "build(deps): Bump business from 1.4.0 to 1.5.0.",
+      "build(deps): Bump business from 1.4.0 to 1.5.0. (#3)",
+      "build(deps): Update anything at all",
+      "build(ci): Bump actions/checkout from 5.1.0 to 7.0.1",
+      "chore(deps): Bump actions/checkout from 5.1.0 to 7.0.1",
+      "feat(deps): Bump actions/checkout from 5.1.0 to 7.0.1",
+      "feat: Add thing",
+    ];
+    for (const title of refused) {
+      const red = await lint(title);
+      expect({ title, exitCode: red.exitCode === 0 ? 0 : 1, flagged: red.text.includes("[subject-case]") }).toEqual({
+        title,
+        exitCode: 1,
+        flagged: true,
+      });
+    }
+  },
+  120_000,
+);
+
+test(
+  "commitlint config refuses a by-name Dependabot title that counts one directory, which Dependabot writes only for two or more",
+  async () => {
+    for (const title of ["build(deps): Bump business across 1 directory", "build(deps): Bump business across 1 directory (#3)"]) {
+      const red = await lint(title);
+      expect({ title, exitCode: red.exitCode === 0 ? 0 : 1, flagged: red.text.includes("[subject-case]") }).toEqual({
+        title,
+        exitCode: 1,
+        flagged: true,
+      });
+    }
+  },
+  120_000,
+);
+
+test(
   "commitlint config rejects the retired house prefixes, unknown types and long headers",
   async () => {
     const retired = [
@@ -103,6 +207,15 @@ test(
     if (Bun.which("node", { PATH: dir }) !== null) throw new Error("node leaked onto the test PATH");
     expect((await lintTitle("feat(lint): add x")).text).toBe("");
     expect((await lintTitle("# feat(lint): add x")).exitCode).not.toBe(0);
+  },
+  60_000,
+);
+
+test(
+  "the title bin passes the title Dependabot writes for its own update, which is the pull request title CI lints",
+  async () => {
+    const lintTitle = titleLinter(process.env["PATH"] ?? "");
+    expect(await lintTitle("build(deps): Bump actions/checkout from 5.1.0 to 7.0.1")).toEqual({ exitCode: 0, text: "" });
   },
   60_000,
 );

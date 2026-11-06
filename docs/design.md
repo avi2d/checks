@@ -190,7 +190,7 @@ Commits merged after the bump wait for the next release.
 Releases come from the version bumps across all of `HEAD`'s ancestry, not from tags.
 So a checkout without tags, a fork, and a branch that merged `main` in all write the same file when no release was reverted.
 A section keeps the date it was written, because the squash merge that lands the release commit may fall on another day.
-Entries come from commit subjects, which are the squash-merged pull request titles that commitlint holds to the conventional format.
+Entries come from commit subjects, the squash-merged pull request titles commitlint holds to the conventional format, except the Dependabot shapes [The commit message lint](configs/commit-messages.md) names.
 A commit body holds the branch's own messages, and nothing lints it, so no entry comes from a body.
 The changelog arrives in the release commit, and no workflow pushes to a branch a person works on.
 
