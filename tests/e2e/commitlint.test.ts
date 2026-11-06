@@ -48,6 +48,7 @@ test(
       "build(deps): Bump business and business2",
       "build(deps): Bump business, business2 and business3",
       "build(deps): Bump business across 2 directories",
+      "build(deps): Bump business across 10 directories",
       "build(deps): Bump business in /frontend",
       "build(deps): Bump the all-the-things group with 1 update",
       "build(deps): Bump the all-the-things group with 2 updates",
