@@ -5,7 +5,7 @@ const group = String.raw`[\w.-]+`;
 const single = String.raw`[Bb]ump ${token} from ${token} to ${token}(?: ${directory})?`;
 const bumpTo = String.raw`[Bb]ump ${token} to ${token}`;
 const joint = String.raw`[Bb]ump ${token}(?:, ${token})* and ${token}`;
-const byName = String.raw`[Bb]ump ${token}(?: ${directory}| across \d+ director(?:y|ies))`;
+const byName = String.raw`[Bb]ump ${token}(?: ${directory}| across [2-9]\d* directories)`;
 const requirementVersion = String.raw`(?:[~^<>=!]+ )?${token}(?:, (?:[~^<>=!]+ )?${token})*`;
 const requirement = String.raw`[Uu]pdate ${token} requirement (?:from ${requirementVersion} )?to ${requirementVersion}`;
 const inGroup = String.raw`[Bb]ump ${token} from ${token} to ${token} in the ${group} group(?: across \d+ director(?:y|ies))?`;
