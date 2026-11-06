@@ -12,12 +12,11 @@ Commits follow `@commitlint/config-conventional`, shared from `node_modules/@avi
 It arrives with the kit, since `@commitlint/cli` and `@commitlint/config-conventional` are dependencies, not peers.
 
 A Dependabot title can capitalise `Bump` or `Update` after its prefix, which subject-case forbids.
-So the config skips every rule for the titles Dependabot writes, and only those:
+So the config skips every rule for a one-line title of this shape, whoever wrote it:
 
-- `build(deps)`, `build(deps-dev)`, `chore(deps)` or `chore(deps-dev)`, then `Bump`, `bump`, `Update` or `update` with the update detail.
-- The detail is a single update, several updates at once, a requirement widening, or a group update, with any directory or count suffix Dependabot writes.
+- `build(deps)`, `build(deps-dev)`, `chore(deps)` or `chore(deps-dev)`, then `Bump`, `bump`, `Update` or `update` with any detail.
 
-Either form may end with the pull request number, such as ` (#123)`.
+The title may end with the pull request number, such as ` (#123)`.
 A body keeps every rule.
 Every rule applies to any other title.
 A hand-written title with the same prefix and the same opening verb matches too, because it is the shape Dependabot writes.
