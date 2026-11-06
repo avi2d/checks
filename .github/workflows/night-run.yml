@@ -82,16 +82,16 @@ jobs:
     steps:
       - uses: avi2d/workflows/setup@v1
       # A pattern skips a shard that never uploaded; checks-night-run reports it missing.
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: night-run-mutation-*
           path: reports/mutation
       - if: needs.gates.result == 'success'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: night-run-gates
           path: reports/night-run-gates
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: night-run-tests
           path: reports/night-run-tests
