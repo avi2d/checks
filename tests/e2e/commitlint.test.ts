@@ -47,7 +47,6 @@ test(
       "build(deps): Bump business from 1.4.0 to 1.5.0 in the go_modules group across 2 directories",
       "build(deps): Bump business and business2",
       "build(deps): Bump business, business2 and business3",
-      "build(deps): Bump business across 1 directory",
       "build(deps): Bump business across 2 directories",
       "build(deps): Bump business in /frontend",
       "build(deps): Bump the all-the-things group with 1 update",
@@ -111,6 +110,21 @@ test(
       "feat: Add thing",
     ];
     for (const title of refused) {
+      const red = await lint(title);
+      expect({ title, exitCode: red.exitCode === 0 ? 0 : 1, flagged: red.text.includes("[subject-case]") }).toEqual({
+        title,
+        exitCode: 1,
+        flagged: true,
+      });
+    }
+  },
+  120_000,
+);
+
+test(
+  "commitlint config refuses a by-name Dependabot title that counts one directory, which Dependabot writes only for two or more",
+  async () => {
+    for (const title of ["build(deps): Bump business across 1 directory", "build(deps): Bump business across 1 directory (#3)"]) {
       const red = await lint(title);
       expect({ title, exitCode: red.exitCode === 0 ? 0 : 1, flagged: red.text.includes("[subject-case]") }).toEqual({
         title,
