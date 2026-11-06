@@ -14,7 +14,9 @@ const dependabot = new RegExp(
   String.raw`^build\(deps(?:-dev)?\): (?:${single}|${bumpTo}|${joint}|${byName}|${requirement}|${inGroup}|${groupWithUpdates})(?: \(#\d+\))?$`,
 );
 
+export const isDependabotTitle = (title: string): boolean => dependabot.test(title);
+
 export default {
   extends: ["@commitlint/config-conventional"],
-  ignores: [(message: string) => dependabot.test(message)],
+  ignores: [isDependabotTitle],
 };
