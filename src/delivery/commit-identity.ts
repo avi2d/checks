@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
+import { isDependabotTitle } from "../../commitlint.config.ts";
 import { releasedVersionOf } from "./release.ts";
 import { git, refArgs } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
@@ -22,6 +23,8 @@ const SQUASH_COMMITTER: Identity = { name: "GitHub", email: "noreply@github.com"
 // checks-release-pr commits through the workflow token, which GitHub attributes to its Actions bot.
 // GitHub may also name that bot as co-author when it squashes the pull request the bot opened.
 const RELEASE_AUTHOR: Identity = { name: "github-actions[bot]", email: "41898282+github-actions[bot]@users.noreply.github.com" };
+
+const DEPENDABOT_AUTHOR: Identity = { name: "dependabot[bot]", email: "49699333+dependabot[bot]@users.noreply.github.com" };
 
 const CO_AUTHOR = /^co-authored-by:\s*(.*?)\s*<([^<>]*)>\s*$/i;
 
@@ -130,7 +133,10 @@ function inspect(commit: Commit, allowed: readonly Identity[]): Offence | undefi
   const release = releasedVersionOf(commit.subject) !== undefined;
   const authors = release ? [...allowed, RELEASE_AUTHOR] : allowed;
   const madeByGitHub = allows([SQUASH_COMMITTER], commit.committer);
-  if (!(madeByGitHub ? allowsEmail(authors, commit.author) : allows(authors, commit.author))) {
+  const authored = madeByGitHub ? allowsEmail(authors, commit.author) : allows(authors, commit.author);
+  // Outside the author list, which a GitHub-made commit matches by email alone and so would take any name on the bot's address.
+  const dependabot = isDependabotTitle(commit.subject) && allows([DEPENDABOT_AUTHOR], commit.author);
+  if (!authored && !dependabot) {
     reasons.push(`author ${render(commit.author)}`);
   }
   if (!allows([...allowed, SQUASH_COMMITTER], commit.committer)) {
@@ -167,6 +173,7 @@ const check = Effect.gen(function* () {
     lines.push(`  allowed: ${allowed.map(render).join(", ")}`);
     lines.push(`  allowed as committer only: ${render(SQUASH_COMMITTER)}, which also lets an allowed email author under any name`);
     lines.push(`  allowed as release author only: ${render(RELEASE_AUTHOR)}`);
+    lines.push(`  allowed as Dependabot author only, on a Dependabot title: ${render(DEPENDABOT_AUTHOR)}`);
     yield* Console.error(lines.join("\n"));
     return false;
   }

@@ -12,6 +12,9 @@ const SQUASH = { name: "GitHub", email: "noreply@github.com" };
 const DISPLAY_NAME = { name: "Owner Display", email: "avi2dg@gmail.com" };
 const INTRUDER = { name: "Ivy Intruder", email: "intruder@example.com" };
 const ACTIONS_BOT = { name: "github-actions[bot]", email: "41898282+github-actions[bot]@users.noreply.github.com" };
+const DEPENDABOT = { name: "dependabot[bot]", email: "49699333+dependabot[bot]@users.noreply.github.com" };
+const DEPENDABOT_TITLE = "build(deps): bump actions/checkout from 5.1.0 to 7.0.1";
+const DEPENDABOT_SIGNOFF = "Signed-off-by: dependabot[bot] <support@github.com>";
 
 type Identity = { name: string; email: string };
 
@@ -201,6 +204,107 @@ test(
     expect(red.text).toContain("2 of 3 commit(s)");
     expect(red.text).toContain(`${stranger.slice(0, 12)} chore: release 0.2.1 (#13)\n    trailer Co-authored-by: Pat Stranger <stranger@example.com>`);
     expect(red.text).toContain(`${botOnFeature.slice(0, 12)} feat: price a bill (#14)\n    trailer Co-authored-by: github-actions[bot]`);
+  },
+  60_000,
+);
+
+test(
+  "commit-identity lets dependabot[bot] author a Dependabot update with the Signed-off-by trailer it carries, as GitHub commits it",
+  async () => {
+    await initRepo();
+    const base = await commit({ message: "feat: base" });
+    await commit({
+      message: `${DEPENDABOT_TITLE}\n\nBumps actions/checkout from 5.1.0 to 7.0.1.\n\n${DEPENDABOT_SIGNOFF}\n`,
+      author: DEPENDABOT,
+      committer: SQUASH,
+    });
+    await commit({ message: "build(deps): Bump actions/checkout from 5.1.0 to 7.0.1 (#2)", author: DEPENDABOT, committer: SQUASH });
+
+    const green = await check(base, "HEAD");
+    expect(green.text).toContain("2 commit(s)");
+    expect(green.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
+  "commit-identity refuses dependabot[bot] authoring a title no Dependabot shape matches",
+  async () => {
+    await initRepo();
+    const base = await commit({ message: "feat: base" });
+    const feature = await commit({ message: "feat: bump the thing", author: DEPENDABOT, committer: SQUASH });
+    const chore = await commit({ message: "chore(deps): bump actions/checkout from 5.1.0 to 7.0.1", author: DEPENDABOT, committer: SQUASH });
+    const stop = await commit({ message: `${DEPENDABOT_TITLE}.`, author: DEPENDABOT, committer: SQUASH });
+
+    const red = await check(base, "HEAD");
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain("3 of 3 commit(s)");
+    expect(red.text).toContain(`${feature.slice(0, 12)} feat: bump the thing\n    author dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>`);
+    expect(red.text).toContain(`${chore.slice(0, 12)} chore(deps): bump actions/checkout from 5.1.0 to 7.0.1\n    author dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>`);
+    expect(red.text).toContain(`${stop.slice(0, 12)} ${DEPENDABOT_TITLE}.\n    author dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>`);
+  },
+  60_000,
+);
+
+test(
+  "commit-identity refuses the Dependabot name under another bot's email",
+  async () => {
+    await initRepo();
+    const base = await commit({ message: "feat: base" });
+    const landed = await commit({ message: DEPENDABOT_TITLE, author: { name: DEPENDABOT.name, email: ACTIONS_BOT.email }, committer: SQUASH });
+
+    const red = await check(base, "HEAD");
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain(`${landed.slice(0, 12)} ${DEPENDABOT_TITLE}\n    author dependabot[bot] <41898282+github-actions[bot]@users.noreply.github.com>`);
+  },
+  60_000,
+);
+
+test(
+  "commit-identity refuses a Dependabot-looking name with another email",
+  async () => {
+    await initRepo();
+    const base = await commit({ message: "feat: base" });
+    const landed = await commit({ message: DEPENDABOT_TITLE, author: { name: DEPENDABOT.name, email: INTRUDER.email }, committer: SQUASH });
+
+    const red = await check(base, "HEAD");
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain(`${landed.slice(0, 12)} ${DEPENDABOT_TITLE}\n    author dependabot[bot] <intruder@example.com>`);
+  },
+  60_000,
+);
+
+test(
+  "commit-identity refuses the Dependabot email under another name, even on a commit GitHub made",
+  async () => {
+    await initRepo();
+    const base = await commit({ message: "feat: base" });
+    const landed = await commit({ message: DEPENDABOT_TITLE, author: { name: STRANGER.name, email: DEPENDABOT.email }, committer: SQUASH });
+
+    const red = await check(base, "HEAD");
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain(`${landed.slice(0, 12)} ${DEPENDABOT_TITLE}\n    author Pat Stranger <49699333+dependabot[bot]@users.noreply.github.com>`);
+  },
+  60_000,
+);
+
+test(
+  "commit-identity refuses a Co-authored-by trailer on a Dependabot commit and allows its Signed-off-by trailer",
+  async () => {
+    await initRepo();
+    const base = await commit({ message: "feat: base" });
+    const signed = await commit({ message: `${DEPENDABOT_TITLE}\n\n${DEPENDABOT_SIGNOFF}\n`, author: DEPENDABOT, committer: SQUASH });
+    const coauthored = await commit({
+      message: `${DEPENDABOT_TITLE}\n\n${DEPENDABOT_SIGNOFF}\nCo-authored-by: Pat Stranger <stranger@example.com>\n`,
+      author: DEPENDABOT,
+      committer: SQUASH,
+    });
+
+    const red = await check(base, "HEAD");
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain("1 of 2 commit(s)");
+    expect(red.text).toContain(`${coauthored.slice(0, 12)} ${DEPENDABOT_TITLE}\n    trailer Co-authored-by: Pat Stranger <stranger@example.com>`);
+    expect(red.text).not.toContain(signed.slice(0, 12));
   },
   60_000,
 );
