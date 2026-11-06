@@ -194,8 +194,8 @@ test("another action is not judged (oracle: the rule names only setup-bun steps)
 
 const SETUP_SHA = "0123456789abcdef0123456789abcdef01234567";
 
-function sharedSetupSteps(): string {
-  return `on: pull_request\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: avi2d/workflows/actions/setup@${SETUP_SHA}\n      - run: bun run lint\n`;
+function sharedSetupSteps(uses = `avi2d/workflows/actions/setup@${SETUP_SHA}`): string {
+  return `on: pull_request\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: ${uses}\n      - run: bun run lint\n`;
 }
 
 test("a shared setup step pinned to a SHA passes on the fleet .bun-version (oracle: the S1 rule that the shared setup action reads .bun-version)", () => {
@@ -217,6 +217,23 @@ test("a shared setup step fails when the caller holds no .bun-version file (orac
   const manifestOnly = bunFaults(sharedSetupSteps(), bunPolicy({}, { "package.json": { packageManager: `bun@${FLEET_BUN_VERSION}` } }));
   expect(manifestOnly).toHaveLength(1);
   expect(manifestOnly[0]?.fault).toContain("holds no .bun-version file");
+});
+
+test("a short-ref shared setup step does not pass a drifted .bun-version unseen", () => {
+  const faults = bunFaults(sharedSetupSteps("avi2d/workflows/setup@v1"), bunPolicy({ ".bun-version": `${drifted}\n` }));
+  expect(faults).toEqual([{ location: ".github/workflows/ci.yml line 6", fault: `requests bun ${drifted} from .bun-version, want ${FLEET_BUN_VERSION}` }]);
+});
+
+test("a short-ref shared setup step is refused although the caller pins the fleet .bun-version", () => {
+  expect(bunFaults(sharedSetupSteps("avi2d/workflows/setup@v1"), bunPolicy({ ".bun-version": `${FLEET_BUN_VERSION}\n` }))).toEqual([]);
+});
+
+test("a shared setup step at the short path is not passed unjudged at a tag, a SHA or no ref", () => {
+  for (const uses of ["avi2d/workflows/setup@v1", "avi2d/workflows/setup@v1.1.0", `avi2d/workflows/setup@${SETUP_SHA}`, "avi2d/workflows/setup"]) {
+    expect(bunFaults(sharedSetupSteps(uses), bunPolicy())).toEqual([
+      { location: ".github/workflows/ci.yml line 6", fault: `uses ${uses}, which reads .bun-version, but the repository holds no .bun-version file, want ${FLEET_BUN_VERSION}` },
+    ]);
+  }
 });
 
 test("the bun pin report names each step and the fleet version", () => {

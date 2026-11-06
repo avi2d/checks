@@ -69,7 +69,8 @@ A job on `push` or another trigger no fork reaches may still name self-hosted la
 In a private repository each mutation job carries exactly the labels the consumer declares in `package.json` under `checks.mutationRunner`.
 Every other job there carries exactly the hosted-default expression, or exactly one of the label sets the consumer declares under `checks.selfHostedRunners`.
 A job there also carries `runs-on: ${{ needs.<job>.outputs.runs-on }}` when the same workflow needs that job and that job calls the runner pick.
-The pick is the repository file `runner.yml` under `.github/workflows/` or `avi2d/workflows/.github/workflows/runner.yml` at a pinned full SHA.
+The pick is the repository file `runner.yml` under `.github/workflows/` or `avi2d/workflows/.github/workflows/runner.yml` at a full SHA or at a version tag, `v<major>` or `v<major>.<minor>.<patch>`.
+A branch name or a missing ref is not the pick.
 A public repository still refuses that expression on a job a fork can reach.
 The resolved label cannot be shown to be a hosted runner before the run.
 A repository without those declarations fails each job they would pin until it declares them.
@@ -94,7 +95,7 @@ The fleet version is the version the kit ships in its own `.bun-version`.
 The step fails the check when the version is missing or differs from the fleet bun version.
 A range fails because it differs from the fleet version.
 A version built from an expression fails because it cannot be shown equal before the run.
-A step that uses `avi2d/workflows/actions/setup` reads `.bun-version`.
+A step that uses `avi2d/workflows/setup` or `avi2d/workflows/actions/setup`, at any ref or none, reads `.bun-version`.
 The step fails the check when `.bun-version` is missing or differs from the fleet bun version.
 This rule skips a repository with no setup-bun step and no shared setup step.
 A kit release that moves the fleet version turns each consumer red until its pin follows.
