@@ -32,7 +32,7 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
           GH_TOKEN: ${{ github.token }}
         run: bun src/delivery/commit-title.ts
-      # Branch protection requires a commitlint check that no job reports.
+      # Branch protection requires a commitlint check that no job of that name reports.
       - name: report the title as commitlint
         if: always()
         env:

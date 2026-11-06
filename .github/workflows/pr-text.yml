@@ -1,7 +1,7 @@
 name: pr-text
 
 on:
-  # pull_request withholds secrets from forks, and this trigger checks out no pull request code.
+  # pull_request withholds secrets from forks, so this job must never check out pull request code.
   pull_request_target:
     types: [opened, edited, synchronize, reopened]
   issue_comment:

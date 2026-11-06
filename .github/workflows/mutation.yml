@@ -42,7 +42,7 @@ jobs:
             reports/mutation/mutation.json
             reports/stryker-incremental.json
           retention-days: 7
-      # This repository is public, so its artifacts miss the storage quota.
+      # Full runs start by hand, so this must outlive the gap; a public repository's artifacts cost no storage quota.
       - uses: actions/upload-artifact@v4
         with:
           name: mutation-baseline-full
