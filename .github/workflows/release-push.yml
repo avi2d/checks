@@ -19,14 +19,10 @@ jobs:
       contents: write
       actions: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: avi2d/workflows/setup@v1
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-      - run: bun install --frozen-lockfile
       - name: fail fast when the release cannot plan
         run: |
           if git log -1 --format=%s HEAD | grep -qE '^chore: release [0-9]+\.[0-9]+\.[0-9]+( \(#[0-9]+\))?$'; then

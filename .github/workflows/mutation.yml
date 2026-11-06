@@ -18,16 +18,12 @@ jobs:
       contents: read
       actions: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: avi2d/workflows/setup@v1
         with:
           fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-      - run: bun install --frozen-lockfile
       # Every run restores state, so a full baseline retests the mutants its changes reach and fits the timeout, while a result made stale by a file a test reads at runtime lasts until the next 28-day refresh.
       - name: Restore previous full baseline state
         env:
