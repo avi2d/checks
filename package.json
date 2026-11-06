@@ -152,6 +152,11 @@
     "./browser-checks.json": "./src/quality/browser/browser-checks.json",
     "./screen-sizes.ts": "./src/quality/browser/screen-sizes.ts",
     "./block-screens.ts": "./src/testing/block-screens.ts",
+    "./core/git": "./src/core/git.ts",
+    "./core/main": "./src/core/main.ts",
+    "./testing/test-report": "./src/testing/test-report.ts",
+    "./testing/test": "./src/testing/test.ts",
+    "./testing/test-skips": "./src/testing/test-skips.ts",
     "./oxlint": {
       "types": "./dist/presets/oxlint.d.ts",
       "default": "./dist/presets/oxlint.js"
