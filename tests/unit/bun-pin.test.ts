@@ -194,7 +194,7 @@ test("another action is not judged (oracle: the rule names only setup-bun steps)
 
 const SETUP_SHA = "0123456789abcdef0123456789abcdef01234567";
 
-function sharedSetupSteps(uses: string = `avi2d/workflows/actions/setup@${SETUP_SHA}`): string {
+function sharedSetupSteps(uses = `avi2d/workflows/actions/setup@${SETUP_SHA}`): string {
   return `on: pull_request\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: ${uses}\n      - run: bun run lint\n`;
 }
 
