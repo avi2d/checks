@@ -493,9 +493,37 @@ test("a private repository accepts runs-on read from the shared runner pick at a
   expect(findRunnerFaults(policy, pickedWorkflow(`avi2d/workflows/.github/workflows/runner.yml@${PICK_SHA}`))).toEqual([]);
 });
 
+function sharedPickFaults(runnerUses: string): string[] {
+  return findRunnerFaults({ visibility: "private", scripts: noScripts, runners: NO_RUNNERS }, pickedWorkflow(runnerUses)).map(({ location }) => location);
+}
+
+test("a private repository refuses runs-on from the shared runner pick at the moving tag v1", () => {
+  expect(sharedPickFaults("avi2d/workflows/.github/workflows/runner.yml@v1")).toEqual([]);
+});
+
+test("a private repository refuses runs-on from the shared runner pick at the exact tag v1.1.0", () => {
+  expect(sharedPickFaults("avi2d/workflows/.github/workflows/runner.yml@v1.1.0")).toEqual([]);
+});
+
+test("a private repository refuses runs-on from the shared runner pick at a SHA with its tag in a trailing comment, as home-vpn pull request 65 writes it", () => {
+  expect(sharedPickFaults("avi2d/workflows/.github/workflows/runner.yml@574998091bb0255a2e5e069f2f1eae8fe8b0e495 # v1.0.0")).toEqual([]);
+});
+
+test("a private repository accepts runs-on from the shared runner pick at a branch name", () => {
+  expect(sharedPickFaults("avi2d/workflows/.github/workflows/runner.yml@main")).toEqual([".github/workflows/ci.yml job checks"]);
+});
+
+test("a private repository accepts runs-on from the shared runner pick with no ref", () => {
+  expect(sharedPickFaults("avi2d/workflows/.github/workflows/runner.yml")).toEqual([".github/workflows/ci.yml job checks"]);
+});
+
+test("a private repository accepts runs-on from the shared runner pick at a tag outside v<major> and v<major>.<minor>.<patch>, such as v1.1", () => {
+  expect(sharedPickFaults("avi2d/workflows/.github/workflows/runner.yml@v1.1")).toEqual([".github/workflows/ci.yml job checks"]);
+});
+
 test("a private repository still refuses needs-output without the runner pick behind it (oracle: the S1 rule that the needed job calls the runner pick)", () => {
   const policy = { visibility: "private" as const, scripts: noScripts, runners: NO_RUNNERS };
-  for (const runnerUses of ["./.github/workflows/ci.yml", "avi2d/workflows/.github/workflows/runner.yml@v1.0.0"]) {
+  for (const runnerUses of ["./.github/workflows/ci.yml", "avi2d/workflows/.github/workflows/runner.yml@main"]) {
     const faults = findRunnerFaults(policy, pickedWorkflow(runnerUses));
     expect(faults.map(({ location }) => location)).toEqual([".github/workflows/ci.yml job checks"]);
     expect(faults[0]?.fault).toContain(HOSTED);
