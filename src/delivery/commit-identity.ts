@@ -28,14 +28,9 @@ const DEPENDABOT_AUTHOR: Identity = { name: "dependabot[bot]", email: "49699333+
 
 const CO_AUTHOR = /^co-authored-by:\s*(.*?)\s*<([^<>]*)>\s*$/i;
 
-function namesReleaseAuthor(trailer: string): boolean {
+function namesCoAuthor(identity: Identity, trailer: string): boolean {
   const [, name, email = ""] = CO_AUTHOR.exec(trailer) ?? [];
-  return name !== undefined && allows([RELEASE_AUTHOR], { name, email });
-}
-
-function namesDependabotAuthor(trailer: string): boolean {
-  const [, name, email = ""] = CO_AUTHOR.exec(trailer) ?? [];
-  return name !== undefined && allows([DEPENDABOT_AUTHOR], { name, email });
+  return name !== undefined && allows([identity], { name, email });
 }
 
 // git's own trailer parser, so only the trailer block counts and prose never does.
@@ -149,8 +144,8 @@ function inspect(commit: Commit, allowed: readonly Identity[]): Offence | undefi
     reasons.push(`committer ${render(commit.committer)}`);
   }
   for (const trailer of commit.coAuthoredBy) {
-    if (release && namesReleaseAuthor(trailer)) continue;
-    if (dependabotTitle && namesDependabotAuthor(trailer)) continue;
+    if (release && namesCoAuthor(RELEASE_AUTHOR, trailer)) continue;
+    if (dependabotTitle && namesCoAuthor(DEPENDABOT_AUTHOR, trailer)) continue;
     reasons.push(`trailer ${trailer}`);
   }
   return reasons.length === 0 ? undefined : { commit, reasons };
