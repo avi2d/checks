@@ -1,15 +1,15 @@
 import { names, type Workflow } from "./workflow-references.ts";
 
 const NEEDS_RUNS_ON = /^\$\{\{\s*needs\.([\w-]+)\.outputs\.runs-on\s*\}\}$/i;
-const SHARED_RUNNER = /^avi2d\/workflows\/\.github\/workflows\/runner\.ya?ml@[0-9a-f]{40}$/i;
-const LOCAL_RUNNER = new Set([".github/workflows/runner.yml", ".github/workflows/runner.yaml"]);
+const SHARED_RUNNER = /^avi2d\/workflows\/\.github\/workflows\/runner\.yml@[0-9a-f]{40}$/i;
+const LOCAL_RUNNER = ".github/workflows/runner.yml";
 
 function callsRunnerPick(uses: unknown, workflows: readonly Workflow[]): boolean {
   if (typeof uses !== "string") return false;
   const target = uses.trim();
   if (target.startsWith("./")) {
     const path = target.slice(2);
-    return LOCAL_RUNNER.has(path) && workflows.some((workflow) => workflow.path === path);
+    return path === LOCAL_RUNNER && workflows.some((workflow) => workflow.path === path);
   }
   return SHARED_RUNNER.test(target);
 }

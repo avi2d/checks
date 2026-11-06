@@ -93,7 +93,7 @@ The fleet version is the version the kit ships in its own `.bun-version`.
 The step fails the check when the version is missing or differs from the fleet bun version.
 A range fails because it differs from the fleet version.
 A version built from an expression fails because it cannot be shown equal before the run.
-A step that uses `avi2d/workflows/actions/setup` at a pinned full SHA reads `.bun-version`.
+A step that uses `avi2d/workflows/actions/setup` reads `.bun-version`.
 The step fails the check when `.bun-version` is missing or differs from the fleet bun version.
 This rule skips a repository with no setup-bun step and no shared setup step.
 A kit release that moves the fleet version turns each consumer red until its pin follows.

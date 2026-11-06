@@ -17,7 +17,7 @@ export type BunPinFault = {
 
 const SETUP_BUN = /^oven-sh\/setup-bun(?:@(?<ref>.*))?$/i;
 const V2_REF = /^v2(?:\.\d+){0,2}$/;
-const SHARED_SETUP = /^avi2d\/workflows\/actions\/setup@(?<sha>[0-9a-f]{40})$/i;
+const SHARED_SETUP = /^avi2d\/workflows\/actions\/setup(?:@(?<ref>.*))?$/i;
 const SETUP_VERSION_FILE = ".bun-version";
 
 function setupBunRef(uses: unknown): string | undefined {
@@ -25,9 +25,9 @@ function setupBunRef(uses: unknown): string | undefined {
   return match === null ? undefined : (match.groups?.["ref"] ?? "");
 }
 
-function sharedSetupSha(uses: unknown): string | undefined {
+function sharedSetupRef(uses: unknown): string | undefined {
   const match = typeof uses === "string" ? SHARED_SETUP.exec(uses.trim()) : null;
-  return match?.groups?.["sha"];
+  return match === null ? undefined : (match.groups?.["ref"] ?? "");
 }
 
 function isExpression(value: string): boolean {
@@ -113,10 +113,11 @@ function unknownRefFault(ref: string): string {
   return `uses oven-sh/setup-bun at ${ref === "" ? "no ref" : ref}, but the check knows only setup-bun v2's version resolution, so the step must use oven-sh/setup-bun@v2`;
 }
 
-function sharedSetupFault(policy: BunPinPolicy, sha: string): string | undefined {
+function sharedSetupFault(policy: BunPinPolicy, ref: string): string | undefined {
   const version = nonEmpty(policy.files.get(SETUP_VERSION_FILE));
+  const uses = ref === "" ? "avi2d/workflows/actions/setup" : `avi2d/workflows/actions/setup@${ref}`;
   if (version === undefined) {
-    return `uses avi2d/workflows/actions/setup@${sha}, which reads ${SETUP_VERSION_FILE}, but the repository holds no ${SETUP_VERSION_FILE} file, want ${policy.fleet}`;
+    return `uses ${uses}, which reads ${SETUP_VERSION_FILE}, but the repository holds no ${SETUP_VERSION_FILE} file, want ${policy.fleet}`;
   }
   return version === policy.fleet ? undefined : `requests bun ${version} from ${SETUP_VERSION_FILE}, want ${policy.fleet}`;
 }
@@ -136,9 +137,9 @@ export function findBunPinFaults(policy: BunPinPolicy, workflows: readonly Workf
           const fault = V2_REF.test(ref) ? bunPinFault(policy, step) : unknownRefFault(ref);
           return fault === undefined ? [] : atStep(fault);
         }
-        const sha = sharedSetupSha(step["uses"]);
-        if (sha === undefined) return [];
-        const fault = sharedSetupFault(policy, sha);
+        const sharedRef = sharedSetupRef(step["uses"]);
+        if (sharedRef === undefined) return [];
+        const fault = sharedSetupFault(policy, sharedRef);
         return fault === undefined ? [] : atStep(fault);
       });
     });
@@ -164,7 +165,7 @@ function versionFileKeys(job: Readonly<Record<string, unknown>>): readonly strin
 
 function usesSharedSetup(job: Readonly<Record<string, unknown>>): boolean {
   const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
-  return steps.some((step) => isRecord(step) && sharedSetupSha(step["uses"]) !== undefined);
+  return steps.some((step) => isRecord(step) && sharedSetupRef(step["uses"]) !== undefined);
 }
 
 function wantedBunPinFiles(workflows: readonly Workflow[]): ReadonlySet<string> {
