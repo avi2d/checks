@@ -39,15 +39,22 @@ test(
     const dependabot = [
       "build(deps): Bump actions/checkout from 5.1.0 to 7.0.1",
       "build(deps): Bump actions/checkout from 5.1.0 to 7.0.1 in /actions/setup",
-      "build(deps): bump actions/checkout from 5.1.0 to 7.0.1",
-      "build(deps-dev): Bump the dev-deps group with 2 updates",
-      "build(deps): bump the npm_and_yarn group across 1 directory with 3 updates",
-      "build(deps): Bump the npm_and_yarn group across 1 directory with 3 updates",
-      "build(deps): Bump foo and bar",
-      "chore(deps): Bump actions/checkout from 5.1.0 to 7.0.1",
-      "chore(deps-dev): Bump foo and bar",
-      "build(deps): Update rand requirement from 0.7 to 0.8",
-      "chore(deps): Update rand requirement from 0.7 to 0.8",
+      "build(deps): bump business from 1.4.0 to 1.5.0",
+      "build(deps): Bump business from `2468a02` to `cff701b`",
+      "build(deps): Bump business from 1.4.0 to 1.5.0 in /directory",
+      "build(deps): Bump business from 1.4.0 to 1.5.0 in the all-the-things group",
+      "build(deps): Bump business from 1.4.0 to 1.5.0 in the go_modules group across 1 directory",
+      "build(deps): Bump business and business2",
+      "build(deps): Bump business, business2 and business3",
+      "build(deps): Bump business across 2 directories",
+      "build(deps): Bump business in /frontend",
+      "build(deps): Bump the all-the-things group with 1 update",
+      "build(deps): Bump the all-the-things group with 2 updates",
+      "build(deps): Bump the all-the-things group in /directory with 2 updates",
+      "build(deps): Bump the go_modules group across 2 directories with 2 updates",
+      "build(deps): Update business requirement from ~> 1.4.0 to ~> 1.5.0",
+      "build(deps): Update business requirement from v0.3.0 to v0.4.1",
+      "build(deps-dev): Bump the all-the-things group with 2 updates",
     ];
     for (const title of dependabot) {
       for (const landed of [title, `${title} (#3)`]) {
@@ -60,11 +67,16 @@ test(
 );
 
 test(
-  "commitlint config still applies subject-case to a title that names no update or has a wrong type or scope",
+  "commitlint config still applies subject-case to a title no Dependabot shape matches, such as an arbitrary Bump, an arbitrary Update, a trailing full stop, a chore prefix or a wrong type",
   async () => {
     const refused = [
       "build(deps): Bump",
+      "build(deps): Bump hello world",
+      "build(deps): Bump the thing",
+      "build(deps): Bump business from 1.4.0 to 1.5.0.",
+      "build(deps): Update anything at all",
       "build(ci): Bump actions/checkout from 5.1.0 to 7.0.1",
+      "chore(deps): Bump actions/checkout from 5.1.0 to 7.0.1",
       "feat(deps): Bump actions/checkout from 5.1.0 to 7.0.1",
       "feat: Add thing",
     ];
