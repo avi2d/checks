@@ -2,7 +2,7 @@ name: release
 on:
   push:
     tags: ["v*"]
-  # checks-release-push pushes the tag with the workflow token, which starts no push run, so it dispatches this workflow on the tag.
+  # A tag pushed with the workflow token starts no push run, so checks-release-push dispatches this.
   workflow_dispatch:
 
 permissions:
