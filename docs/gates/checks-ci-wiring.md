@@ -133,6 +133,7 @@ Each refusal names the workflow file, the job and the limit.
 ## What it reads
 
 The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts`, `private` and `checks` runners in `package.json` and the shell scripts those steps and scripts run from the working tree.
+It reads each shell script that a shell script it reads runs, until none is left.
 It lists the `*.ts` and `*.tsx` files `git ls-files` tracks to decide whether the night run applies.
 It reads each file a setup-bun step names for its version.
 It reads the fleet pin from the kit's own `.bun-version`.
