@@ -4,8 +4,8 @@ import { type Change } from "@avi2dg/checks/core/git";
 import * as main from "@avi2dg/checks/core/main";
 import * as testGate from "@avi2dg/checks/testing/test";
 import * as testReport from "@avi2dg/checks/testing/test-report";
-import * as testSkips from "@avi2dg/checks/testing/test-skips";
-import { type Environment } from "@avi2dg/checks/testing/test-skips";
+import * as testSkips from "@avi2dg/checks/scripts/test-skips.ts";
+import { type Environment } from "@avi2dg/checks/scripts/test-skips.ts";
 import * as gitSource from "../../src/core/git.ts";
 import * as mainSource from "../../src/core/main.ts";
 import * as testReportSource from "../../src/testing/test-report.ts";
@@ -17,7 +17,7 @@ const published = [
   { subpath: "core/main", module: main, source: mainSource, names: ["runMain", "Usage"] },
   { subpath: "testing/test-report", module: testReport, source: testReportSource, names: ["parseReport", "reporterArgs", "ReportError"] },
   { subpath: "testing/test", module: testGate, source: testSource, names: ["judgeSkips", "passes", "report", "SkipGateError"] },
-  { subpath: "testing/test-skips", module: testSkips, source: testSkipsSource, names: ["readSkipDeclarations"] },
+  { subpath: "scripts/test-skips.ts", module: testSkips, source: testSkipsSource, names: ["readSkipDeclarations"] },
 ];
 
 test.each(published)("$subpath publishes the very helpers its source file defines, not a missing or stand-in export", ({ module, source, names }) => {

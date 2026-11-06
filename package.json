@@ -156,7 +156,6 @@
     "./core/main": "./src/core/main.ts",
     "./testing/test-report": "./src/testing/test-report.ts",
     "./testing/test": "./src/testing/test.ts",
-    "./testing/test-skips": "./src/testing/test-skips.ts",
     "./oxlint": {
       "types": "./dist/presets/oxlint.d.ts",
       "default": "./dist/presets/oxlint.js"
