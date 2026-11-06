@@ -11,6 +11,15 @@ The shared commitlint config holds each pull request title to the conventional c
 Commits follow `@commitlint/config-conventional`, shared from `node_modules/@avi2dg/checks/commitlint.config.ts`.
 It arrives with the kit, since `@commitlint/cli` and `@commitlint/config-conventional` are dependencies, not peers.
 
+A Dependabot title can capitalise `Bump` after its prefix, which subject-case forbids.
+So the config skips every rule for one title shape Dependabot writes, and only that shape:
+
+- `build(deps)` or `build(deps-dev)`, then `Bump <dependency> from <old> to <new>`, optionally followed by ` in /<directory>`.
+- `build(deps)` or `build(deps-dev)`, then `Bump the <group> group`, optionally followed by ` in /<directory>` or ` across <n> directories`, then ` with <n> updates`.
+
+Either form may end with the pull request number, such as ` (#123)`.
+Every rule applies to any other title, including a hand-written `build(deps): Bump the thing`.
+
 ## Workflow
 
 The lint runs in CI on pull requests, because `jj` never fires a git hook.

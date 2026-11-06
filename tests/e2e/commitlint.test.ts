@@ -42,6 +42,7 @@ test(
       "build(deps): bump actions/checkout from 5.1.0 to 7.0.1",
       "build(deps-dev): Bump the dev-deps group with 2 updates",
       "build(deps): bump the npm_and_yarn group across 1 directory with 3 updates",
+      "build(deps): Bump the npm_and_yarn group across 1 directory with 3 updates",
     ];
     for (const title of dependabot) {
       for (const landed of [title, `${title} (#3)`]) {
