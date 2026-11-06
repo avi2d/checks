@@ -14,9 +14,9 @@ It arrives with the kit, since `@commitlint/cli` and `@commitlint/config-convent
 A Dependabot title can capitalise `Bump` or `Update` after its prefix, which subject-case forbids.
 So the config skips every rule for a one-line title in one of the shapes Dependabot writes, whoever wrote it:
 
-- `build(deps)` or `build(deps-dev)`, then `Bump` or `bump`, then `X from A to B` with an optional `in /dir`, or `X and Y`, or `X, Y and Z`, or `X across N directories`, or `X in /dir`.
-- `build(deps)` or `build(deps-dev)`, then `Bump` or `bump`, then `the G group`, optionally `in /dir` or `across N directories`, then `with N update` or `with N updates`.
-- `build(deps)` or `build(deps-dev)`, then `Bump` or `bump`, then `X from A to B in the G group`, optionally `across N directory`.
+- `build(deps)` or `build(deps-dev)`, then `Bump` or `bump`, then `X from A to B` with an optional `in /dir`, or `X and Y`, or `X, Y and Z`, or `X across N directory or directories`, or `X in /dir`.
+- `build(deps)` or `build(deps-dev)`, then `Bump` or `bump`, then `the G group`, optionally `in /dir` or `across N directory or directories`, then `with N update` or `with N updates`.
+- `build(deps)` or `build(deps-dev)`, then `Bump` or `bump`, then `X from A to B in the G group`, optionally `across N directory or directories`.
 - `build(deps)` or `build(deps-dev)`, then `Update` or `update`, then `X requirement from A to B`, where a version may carry an operator such as `~> 1.4.0`.
 
 The title may end with the pull request number, such as ` (#123)`.
