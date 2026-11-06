@@ -69,8 +69,9 @@ A job on `push` or another trigger no fork reaches may still name self-hosted la
 In a private repository each mutation job carries exactly the labels the consumer declares in `package.json` under `checks.mutationRunner`.
 Every other job there carries exactly the hosted-default expression, or exactly one of the label sets the consumer declares under `checks.selfHostedRunners`.
 A job there also carries `runs-on: ${{ needs.<job>.outputs.runs-on }}` when the same workflow needs that job and that job calls the runner pick.
-The pick is the repository file `.github/workflows/runner.yml` or `avi2d/workflows/.github/workflows/runner.yml` at a pinned full SHA.
-A public repository still refuses that expression on a job a fork can reach, since the resolved label cannot be shown to be a hosted runner before the run.
+The pick is the repository file `runner.yml` under `.github/workflows/` or `avi2d/workflows/.github/workflows/runner.yml` at a pinned full SHA.
+A public repository still refuses that expression on a job a fork can reach.
+The resolved label cannot be shown to be a hosted runner before the run.
 A repository without those declarations fails each job they would pin until it declares them.
 The check knows a repository is private only from GitHub's event, so a run outside CI judges only the rules that hold in either.
 
