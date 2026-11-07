@@ -6,6 +6,13 @@ import { fixtureRepo, releasedAfterEach, type Ran } from "./fixture-repo.ts";
 export const GUIDE = "tools/README.md";
 export const OPENING = "# Tools\n\nThe tools build bills.\n";
 
+export const ROOT_AGENTS = "# Project agent memory\n\nThe fixture builds bills, and README.md holds what a person reads.\n";
+
+export async function putAgentFiles(put: DocsRepo["put"]): Promise<void> {
+  await put("AGENTS.md", ROOT_AGENTS);
+  await put("CLAUDE.md", "<!-- Points Claude at AGENTS.md via import; edit AGENTS.md, not this file. -->\n@AGENTS.md\n");
+}
+
 export type Plant = {
   readonly red: string;
   readonly refusal: string;

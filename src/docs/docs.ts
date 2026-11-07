@@ -1,12 +1,12 @@
 #!/usr/bin/env bun
 import { Console, Effect } from "effect";
-import { ceilingFinding, entryFindings, isAgentFile, isCeiledReadme, maintainingFinding, readmeFindings } from "./doc-agents.ts";
-import { rootsOf, snapshotOf, unresolvedIn, type Judging, type Unresolved } from "./doc-references.ts";
+import { ceilingFinding, entryFindings, hasManifest, isAgentFile, isCeiledReadme, maintainingFinding, missingAgentFiles, readmeFindings, type RootAgentFinding } from "./doc-agents.ts";
+import { rootsOf, snapshotOf, type Snapshot, unresolvedIn, type Judging, type Unresolved } from "./doc-references.ts";
 import { ADR_DIRECTORY, judge, placementOf, placementProblem, recordsOf, speaksToConsumers, type Placement, type Records } from "./doc-rules.ts";
 import { vanishedNames } from "./doc-names.ts";
 import { pinsAt, versionFindings } from "./doc-versions.ts";
 import { readTexts, snapshotAt, stillMissing } from "./doc-snapshot.ts";
-import { changedLines, changedPaths, git, pathsAt, rangeEnds, refArgs } from "../core/git.ts";
+import { changedLines, changedPaths, git, pathsAt, pathsOf, rangeEnds, refArgs, type Change } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { proseFindings, readerOf } from "./prose-matchers.ts";
 import { longSentences } from "./sentence-length.ts";
@@ -23,9 +23,11 @@ type Judged = {
   readonly named: number;
   readonly agents: number;
   readonly readmes: number;
+  readonly hasManifest: boolean;
   readonly findings: readonly Finding[];
   readonly advisory: ReadonlyMap<string, number>;
   readonly readmeAdvisory: readonly Finding[];
+  readonly agentFileAdvisory: readonly Finding[];
   readonly sentenceAdvisory: readonly Finding[];
   readonly brokenBefore: readonly Finding[];
 };
@@ -44,6 +46,27 @@ type Located = Unresolved & { readonly path: string };
 const NAME = "docs";
 const USAGE = "usage: docs.ts <ref> | <base-ref> <head-ref>";
 const MARKDOWN = [":(glob)**/*.md"];
+
+function agentFileFindings(path: string, text: string, tracked: Snapshot): readonly Finding[] {
+  const shaped = [ceilingFinding(text), maintainingFinding(text)].flatMap((finding) => (finding === undefined ? [] : [finding]));
+  return [...shaped, ...entryFindings(path, text, tracked)].map((finding) => ({ path, ...finding }));
+}
+
+const rangeEditsDocs = Effect.fn("rangeEditsDocs")(function* (root: string, base: string, changes: readonly Change[], text: (path: string) => string) {
+  const paths = changes.flatMap((change) => pathsOf(change));
+  if (paths.some((path) => placementOf(path, text(path)).type !== "unjudged" || readerOf(path) !== undefined)) return true;
+  const gone = [...new Set(changes.flatMap((change) => (change.kind === "deleted" ? [change.path] : change.kind === "renamed" ? [change.from] : [])))].filter(
+    (path) => readerOf(path) === undefined && placementOf(path).type === "unjudged",
+  );
+  if (gone.length === 0) return false;
+  const before = yield* readTexts(root, base, gone);
+  return gone.some((path) => placementOf(path, before.get(path) ?? "").type !== "unjudged");
+});
+
+function rootAgentFindings(absent: readonly RootAgentFinding[], editsDocs: boolean): { readonly failing: readonly Finding[]; readonly advisory: readonly Finding[] } {
+  const listed = absent.map((finding) => ({ ...finding, line: undefined }));
+  return editsDocs ? { failing: listed, advisory: [] } : { failing: [], advisory: listed };
+}
 
 function templateFindings(path: string, text: string, placement: Placement, records: Records): readonly Finding[] {
   const misplaced = placementProblem(placement);
@@ -114,9 +137,6 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   const versions = edited.flatMap(({ path }) =>
     versionFindings(text(path), pins, changed.get(path)).map(({ line, message }) => ({ path, line, message })),
   );
-  const sentenceAdvisory = edited
-    .flatMap(({ path }) => longSentences(text(path), changed.get(path)).map(({ line, message }) => ({ path, line, message })))
-    .toSorted(inPathOrder);
   const judging = (path: string): Judging => ({ commands: !speaksToConsumers(text(path)) });
   // A directory the range deletes still belongs to this repository, so a path under it is stale rather than another repository's.
   const roots = rootsOf(yield* pathsAt(base, [], root));
@@ -125,12 +145,11 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   const vanished = yield* vanishedNames(root, base, head, referenced, references.failed);
   const agents = proseDocs.filter(({ path }) => isAgentFile(path));
   const tracked = snapshotOf(yield* pathsAt(head, [], root), new Map(), new Map());
-  const shapes = agents.flatMap(({ path }) =>
-    [ceilingFinding(text(path)), maintainingFinding(text(path))].flatMap((finding) => (finding === undefined ? [] : [{ path, ...finding }])),
-  );
-  const entries = agents.flatMap(({ path }) => entryFindings(path, text(path), tracked).map((finding) => ({ path, ...finding })));
+  const shapes = agents.flatMap(({ path }) => agentFileFindings(path, text(path), tracked));
   const readmes = proseDocs.filter(({ path }) => isCeiledReadme(path, tracked.files));
   const oversize = readmes.flatMap(({ path }) => readmeFindings(text(path)).map((finding) => ({ path, ...finding })));
+  const absent = missingAgentFiles(tracked.files);
+  const rootAgents = rootAgentFindings(absent, absent.length === 0 ? false : yield* rangeEditsDocs(root, base, changes, text));
   const advisory = new Map<string, number>();
   for (const { path } of templated.filter((finding) => !touched.has(finding.path))) advisory.set(path, (advisory.get(path) ?? 0) + 1);
   return {
@@ -139,6 +158,7 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
     named: referenced.size,
     agents: agents.length,
     readmes: readmes.filter(({ path }) => touched.has(path)).length,
+    hasManifest: hasManifest(tracked.files),
     findings: [
       ...templated.filter((finding) => touched.has(finding.path)),
       ...prose,
@@ -146,12 +166,15 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
       ...references.failing,
       ...vanished,
       ...shapes,
-      ...entries,
       ...oversize.filter((finding) => touched.has(finding.path)),
+      ...rootAgents.failing,
     ].toSorted(inPathOrder),
     advisory,
     readmeAdvisory: oversize.filter((finding) => !touched.has(finding.path)).toSorted(inPathOrder),
-    sentenceAdvisory,
+    agentFileAdvisory: rootAgents.advisory,
+    sentenceAdvisory: edited
+      .flatMap(({ path }) => longSentences(text(path), changed.get(path)).map(({ line, message }) => ({ path, line, message })))
+      .toSorted(inPathOrder),
     brokenBefore: references.brokenBefore.toSorted(inPathOrder),
   } satisfies Judged;
 });
@@ -160,7 +183,24 @@ function describe({ path, line, message }: Finding): string {
   return `  ${path}${line === undefined ? "" : `:${line}`}: ${message}`;
 }
 
-export function report({ held, edited, named, agents, readmes, findings, advisory, readmeAdvisory, sentenceAdvisory, brokenBefore }: Judged): string {
+export function report({
+  held,
+  edited,
+  named,
+  agents,
+  readmes,
+  hasManifest: manifestHeld,
+  findings,
+  advisory,
+  readmeAdvisory,
+  agentFileAdvisory,
+  sentenceAdvisory,
+  brokenBefore,
+}: Judged): string {
+  const rootAgentFiles =
+    manifestHeld && agentFileAdvisory.length === 0
+      ? [`${NAME}: the repository root holds the AGENTS.md and CLAUDE.md a repository with a \`package.json\` keeps`]
+      : [];
   const verdict =
     findings.length === 0
       ? [
@@ -170,6 +210,7 @@ export function report({ held, edited, named, agents, readmes, findings, advisor
           `${NAME}: the range breaks no path, link or command the ${named} living doc(s) or agent file(s) name`,
           `${NAME}: the ${agents} agent file(s) hold to the ceiling, and every entry names a tracked path, a link or a command`,
           `${NAME}: the ${readmes} README(s) the range edits hold to the 6,000-character ceiling and the 300-character table cell ceiling`,
+          ...rootAgentFiles,
         ]
       : [`${NAME}: ${findings.length} violation(s):`, ...findings.map(describe)];
   const unconformed =
@@ -183,6 +224,13 @@ export function report({ held, edited, named, agents, readmes, findings, advisor
     readmeAdvisory.length === 0
       ? []
       : [`${NAME}: advisory, ${readmeAdvisory.length} README ceiling finding(s) in README(s) the range leaves alone:`, ...readmeAdvisory.map(describe)];
+  const missing =
+    agentFileAdvisory.length === 0
+      ? []
+      : [
+          `${NAME}: advisory, ${agentFileAdvisory.length} agent file(s) missing from the repository root, which the first range that edits a doc adds:`,
+          ...agentFileAdvisory.map(describe),
+        ];
   const sentences =
     sentenceAdvisory.length === 0
       ? []
@@ -197,7 +245,7 @@ export function report({ held, edited, named, agents, readmes, findings, advisor
           `${NAME}: advisory, ${brokenBefore.length} path(s), link(s) or command(s) the living docs or agent files name were broken before the range:`,
           ...brokenBefore.map(describe),
         ];
-  return [...verdict, ...unconformed, ...oversize, ...sentences, ...broken].join("\n");
+  return [...verdict, ...unconformed, ...oversize, ...missing, ...sentences, ...broken].join("\n");
 }
 
 const docs = Effect.gen(function* () {
