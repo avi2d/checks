@@ -64,8 +64,8 @@ const rangeEditsDocs = Effect.fn("rangeEditsDocs")(function* (root: string, base
 });
 
 function rootAgentFindings(absent: readonly RootAgentFinding[], editsDocs: boolean): { readonly failing: readonly Finding[]; readonly advisory: readonly Finding[] } {
-  const failing = absent.map((finding) => ({ ...finding, line: undefined }));
-  return editsDocs ? { failing, advisory: [] } : { failing: [], advisory: absent };
+  const listed = absent.map((finding) => ({ ...finding, line: undefined }));
+  return editsDocs ? { failing: listed, advisory: [] } : { failing: [], advisory: listed };
 }
 
 function templateFindings(path: string, text: string, placement: Placement, records: Records): readonly Finding[] {
@@ -189,7 +189,7 @@ export function report({
   named,
   agents,
   readmes,
-  hasManifest,
+  hasManifest: manifestHeld,
   findings,
   advisory,
   readmeAdvisory,
@@ -198,7 +198,7 @@ export function report({
   brokenBefore,
 }: Judged): string {
   const rootAgentFiles =
-    hasManifest && agentFileAdvisory.length === 0
+    manifestHeld && agentFileAdvisory.length === 0
       ? [`${NAME}: the repository root holds the AGENTS.md and CLAUDE.md a repository with a \`package.json\` keeps`]
       : [];
   const verdict =
