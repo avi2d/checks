@@ -234,7 +234,7 @@ It reads the versions the root `package.json` and `.bun-version` pin at the head
 It reads each agent file at the head commit for the ceiling, its sections and its entries, whatever the range touches.
 It reads the root `README.md` and each `README.md` beside a tracked `package.json` at the head commit for the README ceilings.
 It reads whether any `package.json` and the root `AGENTS.md` and `CLAUDE.md` are tracked at the head commit for the root agent files.
-It reads each Markdown file the range deletes or renames away at the base commit, to tell whether the range edits a doc file for the root agent files.
+When a root agent file is missing, it reads a deleted or renamed Markdown file at the base commit to find its front matter kind.
 A name that an installed direct dependency still holds counts as present.
 From the working tree it reads the ignore files git reads, `node_modules/.bin`, and the directory of each direct dependency under `node_modules`.
 
