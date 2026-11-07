@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect } from "effect";
-import { ceilingFinding, entryFindings, isAgentFile, isCeiledReadme, maintainingFinding, missingAgentFiles, readmeFindings } from "./doc-agents.ts";
-import { PACKAGE_MANIFEST, rootsOf, snapshotOf, type Snapshot, unresolvedIn, type Judging, type Unresolved } from "./doc-references.ts";
+import { ceilingFinding, entryFindings, hasManifest, isAgentFile, isCeiledReadme, maintainingFinding, missingAgentFiles, readmeFindings } from "./doc-agents.ts";
+import { rootsOf, snapshotOf, type Snapshot, unresolvedIn, type Judging, type Unresolved } from "./doc-references.ts";
 import { ADR_DIRECTORY, judge, placementOf, placementProblem, recordsOf, speaksToConsumers, type Placement, type Records } from "./doc-rules.ts";
 import { vanishedNames } from "./doc-names.ts";
 import { pinsAt, versionFindings } from "./doc-versions.ts";
@@ -156,7 +156,7 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
     named: referenced.size,
     agents: agents.length,
     readmes: readmes.filter(({ path }) => touched.has(path)).length,
-    hasManifest: [...tracked.files].some((file) => file === PACKAGE_MANIFEST || file.endsWith(`/${PACKAGE_MANIFEST}`)),
+    hasManifest: hasManifest(tracked.files),
     findings: [
       ...templated.filter((finding) => touched.has(finding.path)),
       ...prose,

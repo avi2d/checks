@@ -17,7 +17,7 @@ It fails when a living doc or an agent file names a path, link or command that d
 It fails when an agent file holds more than 3,000 characters or a `## Maintaining this file` section, whatever the range touches, as [Agent files](#agent-files) says.
 It fails when an entry in an agent file names no tracked path, link or `bun run` command, whatever the range touches.
 It fails when a range edits a README that is over 6,000 characters or holds a table cell over 300, as [README ceilings](#readme-ceilings) says.
-It fails when a range edits a doc file and a repository with a `package.json` keeps no `AGENTS.md` or `CLAUDE.md` at its root, as [Root agent files](#root-agent-files) says.
+It fails when a range edits a doc file and a repository with a `package.json` is missing `AGENTS.md` or `CLAUDE.md` at its root, as [Root agent files](#root-agent-files) says.
 It fails when a living doc or an agent file names a code span the range removed from every file outside the docs, on any line.
 [Paths, links and commands](#paths-links-and-commands) says how each reference resolves.
 The package ships one template per kind under `dist/templates/`, and a repository starts a new doc file by copying one:
@@ -219,7 +219,7 @@ The failure names the missing file and the template to copy:
 A `package.json` anywhere in the repository asks for both files.
 A repository with no `package.json` needs neither.
 A missing file fails only in a range that adds, changes, renames or deletes a doc file, an ADR or the changelog included.
-A changeset, a test fixture or a pull request template does not end the advisory period.
+Markdown the gate does not judge, such as a changeset entry or a pull request template, does not end the advisory period.
 Any other range lists the missing file as advisory, so the first change that edits a doc file adds both files.
 
 ## What it reads
@@ -252,7 +252,7 @@ With one it is that commit against its parent, or against the empty tree for a r
 | Code | When |
 | --- | --- |
 | 0 | every doc file the range touches holds to its template, every line it adds to a living doc or an agent file holds to the prose rules and copies no pinned version, it adds or breaks no reference that does not resolve, every agent file holds to the ceiling and holds no `## Maintaining this file`, every entry in an agent file names a tracked path, a link or a command, every README the range edits holds to the README ceilings, a range that edits a doc file leaves `AGENTS.md` and `CLAUDE.md` at the root of a repository with a `package.json`, and no code span a living doc or an agent file names vanished from every file outside the docs |
-| 1 | a doc file the range touches does not hold to its template, a line the range adds to a living doc or an agent file breaks a prose rule or copies a pinned version, the range adds or breaks a reference that does not resolve, an agent file is over the ceiling or holds `## Maintaining this file`, an entry in an agent file names no tracked path, link or command, a README the range edits is over a README ceiling, a range that edits a doc file leaves the root without `AGENTS.md` or `CLAUDE.md` in a repository with a `package.json`, or the range removes a name a living doc or an agent file still carries |
+| 1 | a doc file the range touches does not hold to its template, a line the range adds to a living doc or an agent file breaks a prose rule or copies a pinned version, the range adds or breaks a reference that does not resolve, an agent file is over the ceiling or holds `## Maintaining this file`, an entry in an agent file names no tracked path, link or command, a README the range edits is over a README ceiling, a range that edits a doc file leaves either `AGENTS.md` or `CLAUDE.md` missing from the root in a repository with a `package.json`, or the range removes a name a living doc or an agent file still carries |
 | 2 | a `package.json` does not decode, a ref does not resolve, or `grep` cannot read an installed direct dependency |
 
 ## Sample output

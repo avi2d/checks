@@ -51,8 +51,12 @@ export type RootAgentFinding = {
   readonly message: string;
 };
 
+export function hasManifest(files: ReadonlySet<string>): boolean {
+  return [...files].some((file) => file === PACKAGE_MANIFEST || file.endsWith(`/${PACKAGE_MANIFEST}`));
+}
+
 export function missingAgentFiles(files: ReadonlySet<string>): readonly RootAgentFinding[] {
-  if (![...files].some((file) => file === PACKAGE_MANIFEST || file.endsWith(`/${PACKAGE_MANIFEST}`))) return [];
+  if (!hasManifest(files)) return [];
   return ROOT_AGENT_FILES.filter(({ path }) => !files.has(path)).map(({ path, fix }) => ({
     path,
     message: `is missing from the repository root, which a repository with a \`package.json\` keeps. ${fix}`,
