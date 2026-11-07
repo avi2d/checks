@@ -4,11 +4,11 @@ import { lastTag } from "./release.ts";
 import { refused } from "./release-commit.ts";
 import { fromProgram, shellWords, type Command } from "./shell-command.ts";
 import { git } from "../core/git.ts";
+import { MANIFEST, releaseTag, taggedVersion } from "../core/release-names.ts";
 import { runMain, Usage } from "../core/main.ts";
 
 const LABEL = "release-preflight";
 const USAGE = "usage: release-preflight.ts <release-workflow>";
-const MANIFEST = "package.json";
 const WORKFLOWS = ".github/workflows";
 
 const Manifest = Schema.Struct({
@@ -114,9 +114,9 @@ const checkTag = Effect.fn("checkTag")(function* (root: string) {
   }
   const { version } = yield* readManifest(root);
   const since = yield* lastTag(root);
-  if (since !== undefined && since !== `v${version}`) {
+  if (since !== undefined && since !== releaseTag(version)) {
     return yield* refused(
-      `${MANIFEST} holds ${version}, but the last release tag is ${since}, so v${version} is untagged; rerun the release that bumped it, whose refusal says what to fix, or return ${MANIFEST} to ${since.slice(1)}`,
+      `${MANIFEST} holds ${version}, but the last release tag is ${since}, so ${releaseTag(version)} is untagged; rerun the release that bumped it, whose refusal says what to fix, or return ${MANIFEST} to ${taggedVersion(since)}`,
     );
   }
   yield* Console.log(`${LABEL}: ${MANIFEST} holds ${version}, which ${since === undefined ? "has no release tag yet" : `matches ${since}`}`);

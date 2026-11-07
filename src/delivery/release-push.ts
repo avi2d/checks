@@ -5,6 +5,7 @@ import { releasedVersionOf } from "./release.ts";
 import { buildRelease, commitRelease, decodeRef, hasBranch, planRelease, pointBranch, refused } from "./release-commit.ts";
 import { pushTag, tagHead, taggedOn } from "./release-tagging.ts";
 import { git } from "../core/git.ts";
+import { releaseTag } from "../core/release-names.ts";
 import { runMain, Usage } from "../core/main.ts";
 
 const NAME = "checks-release-push";
@@ -124,7 +125,7 @@ const releasePush = Effect.gen(function* () {
   const plan = yield* planRelease(LABEL, root, UNTAGGED);
   if (plan === undefined) return true;
   const { base, branch, head, next, bumped } = plan;
-  const tag = `v${next}`;
+  const tag = releaseTag(next);
   const taken = yield* taggedOn(root, tag);
   if (taken !== undefined) return yield* refused(`${tag} already tags ${taken.slice(0, 12)}, so ${next} cannot be released again`);
   const release = yield* commitRelease(root, head, yield* buildRelease(NAME, root, bumped), next);

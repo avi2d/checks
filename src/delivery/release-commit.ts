@@ -3,6 +3,7 @@ import * as Base64 from "effect/encoding/Base64";
 import { gitHubJson, REPOSITORY } from "../core/github.ts";
 import { nextVersion, type Pending, readPending, releaseTitle, runBuild, withVersion } from "./release.ts";
 import { git } from "../core/git.ts";
+import { MANIFEST, releaseTag, taggedVersion } from "../core/release-names.ts";
 
 export class ReleaseRefused extends Schema.TaggedError<ReleaseRefused>()("ReleaseRefused", {
   message: Schema.String,
@@ -21,7 +22,6 @@ type Built = {
   readonly files: readonly Read[];
 };
 
-export const MANIFEST = "package.json";
 const REGULAR_FILE_MODES = new Set(["100644", "100755"]);
 const RAW_ENTRY = /^:(\d{6}) (\d{6}) [0-9a-f]+ [0-9a-f]+ ([A-Z])/;
 
@@ -56,9 +56,9 @@ export const versionIn = (manifest: string): Effect.Effect<string | undefined> =
 
 const releaseVersion = Effect.fn("releaseVersion")(function* (manifest: string, { since, unreleased }: Pending, untagged: string) {
   const { version } = yield* decodeVersion(manifest).pipe(Effect.mapError((cause) => refused(`${MANIFEST}: ${cause.message}`)));
-  if (since !== undefined && since !== `v${version}`) {
+  if (since !== undefined && since !== releaseTag(version)) {
     return yield* refused(
-      `${MANIFEST} holds ${version}, but the last release tag is ${since}, so v${version} is untagged; ${untagged}, or return its version to ${since.slice(1)}`,
+      `${MANIFEST} holds ${version}, but the last release tag is ${since}, so ${releaseTag(version)} is untagged; ${untagged}, or return its version to ${taggedVersion(since)}`,
     );
   }
   const next = nextVersion(version, unreleased);

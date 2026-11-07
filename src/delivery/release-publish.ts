@@ -2,12 +2,12 @@
 import { Console, Effect, FileSystem, Option, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { collect } from "../core/git.ts";
+import { MANIFEST } from "../core/release-names.ts";
 import { runMain, Usage } from "../core/main.ts";
 
 const NAME = "checks-release-publish";
 const LABEL = "release-publish";
 const USAGE = "usage: release-publish.ts";
-const MANIFEST = "package.json";
 
 class PublishFailed extends Schema.TaggedError<PublishFailed>()("PublishFailed", {
   message: Schema.String,

@@ -2,6 +2,7 @@ import { Config, Effect, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { groupOf } from "./changelog.ts";
 import { git } from "../core/git.ts";
+import { RELEASE_TAG_GLOB } from "../core/release-names.ts";
 
 class ReleaseUnreadable extends Schema.TaggedError<ReleaseUnreadable>()("ReleaseUnreadable", {
   message: Schema.String,
@@ -16,7 +17,6 @@ export type Pending = {
   readonly unreleased: readonly string[];
 };
 
-const RELEASE_TAG = "v[0-9]*.[0-9]*.[0-9]*";
 const PLAIN_VERSION = /^(\d+)\.(\d+)\.(\d+)$/;
 const RELEASE_SUBJECT = /^chore: release (\d+\.\d+\.\d+)(?: \(#\d+\))?$/;
 
@@ -59,7 +59,7 @@ export const runBuild = Effect.fn("runBuild")(function* (root: string) {
 });
 
 export const lastTag = Effect.fn("lastTag")(function* (root: string) {
-  const described = yield* git(["describe", "--tags", "--abbrev=0", `--match=${RELEASE_TAG}`, "HEAD"], root).pipe(
+  const described = yield* git(["describe", "--tags", "--abbrev=0", `--match=${RELEASE_TAG_GLOB}`, "HEAD"], root).pipe(
     Effect.map((tag) => tag.trim()),
     Effect.catchTag("GitFailure", () => Effect.succeed("")),
   );

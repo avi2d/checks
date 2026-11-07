@@ -2,8 +2,9 @@
 import { Console, Effect, Schema } from "effect";
 import { dispatch, gitHubJson, REPOSITORY } from "../core/github.ts";
 import { releaseTitle, runningWorkflow } from "./release.ts";
-import { buildRelease, commitRelease, hasBranch, MANIFEST, planRelease, pointBranch, versionIn } from "./release-commit.ts";
+import { buildRelease, commitRelease, hasBranch, planRelease, pointBranch, versionIn } from "./release-commit.ts";
 import { git } from "../core/git.ts";
+import { MANIFEST } from "../core/release-names.ts";
 import { runMain, Usage } from "../core/main.ts";
 
 type Remote = {
