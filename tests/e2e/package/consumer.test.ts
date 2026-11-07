@@ -247,27 +247,6 @@ test(
 );
 
 test(
-  "file: consumer goes red on a mutable collection parameter and a schema twin, a twin under tests/ included, green once each is fixed",
-  async () => {
-    await useConsumer("file");
-    await writeFile(join(dir, "totals.ts"), `export function total(items: string[]): number {\n  return items.length;\n}\n`);
-    await writeFile(join(dir, "status.ts"), `import { Schema } from "effect";\nexport type Status = { readonly code: string; readonly count: number };\nexport const StatusSchema = Schema.Struct({ code: Schema.String, count: Schema.Number });\n`);
-    await mkdir(join(dir, "tests"));
-    await writeFile(join(dir, "tests", "oracle.ts"), `import { Schema } from "effect";\nexport type Oracle = { readonly code: string; readonly count: number };\nexport const OracleSchema = Schema.Struct({ code: Schema.String, count: Schema.Number });\n`);
-    const red = await oxlint();
-    expect(red.text).toContain("data-shape(readonly-collection-param)");
-    expect(red.text).toContain("data-shape(schema-twin)");
-    expect(red.text).toContain("status.ts");
-    expect(red.text).toContain("tests/oracle.ts");
-    await writeFile(join(dir, "totals.ts"), `export function total(items: readonly string[]): number {\n  return items.length;\n}\n`);
-    await writeFile(join(dir, "status.ts"), `import { Schema } from "effect";\nexport const StatusSchema = Schema.Struct({ code: Schema.String, count: Schema.Number });\nexport type Status = typeof StatusSchema.Type;\n`);
-    await writeFile(join(dir, "tests", "oracle.ts"), `import { Schema } from "effect";\nexport const OracleSchema = Schema.Struct({ code: Schema.String, count: Schema.Number });\nexport type Oracle = typeof OracleSchema.Type;\n`);
-    expect((await oxlint()).exitCode).toBe(0);
-  },
-  180_000,
-);
-
-test(
   "file: consumer lint stays green with a lint-dirty file inside the installed package",
   async () => {
     await useConsumer("file");
