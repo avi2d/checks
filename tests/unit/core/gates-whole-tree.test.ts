@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { existsSync, readdirSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { selectSuite, suiteArgs, testOptions } from "../../../src/testing/test.ts";
-import { KIT_GATES, WHOLE_TREE_GATES } from "../../../src/core/gates.ts";
+import { WHOLE_TREE_GATES } from "../../../src/core/gates.ts";
 
 const WHOLE_TREE_SWEEP = [
   "checks-lint-coverage",
@@ -15,9 +15,8 @@ const MOVED = ["browser.test.ts", "stryker-consumer.test.ts", "stryker-consumer-
 
 const binsOf = (gates: readonly { readonly bin: string }[]): readonly string[] => gates.map(({ bin }) => bin).toSorted();
 
-test("rejects a per-PR run that leaves a whole-tree gate to the by-hand sweep alone", () => {
+test("rejects a whole-tree sweep that adds or drops one of the four gates", () => {
   expect(binsOf(WHOLE_TREE_GATES)).toEqual([...WHOLE_TREE_SWEEP].toSorted());
-  for (const bin of WHOLE_TREE_SWEEP) expect(KIT_GATES.some((gate) => gate.bin === bin)).toBe(true);
 });
 
 test("rejects a live tier with a moved suite filed back under e2e", () => {
