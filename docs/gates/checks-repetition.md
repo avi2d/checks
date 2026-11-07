@@ -71,7 +71,8 @@ repetition: the head tracks TypeScript and holds no .jscpd.json, so add one such
 
 `checks-lint` runs it over each pull request's range when the repository tracks a `.ts` or `.tsx` file.
 `checks-lint --whole-tree` also runs it over the whole tree when someone starts the whole-tree run by hand.
-When the head holds no `.jscpd.json` and tracks no TypeScript, as a range given by hand can, the gate reports that no file was measured and passes.
+When the head holds no `.jscpd.json` and tracks no TypeScript, the gate passes with no file measured.
+Only a range given by hand reaches this state.
 
 ## Related topics
 
