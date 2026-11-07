@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.75.0
+
+Released 2026-11-07.
+
+### Features
+
+- **delivery:** publish gitleaks and cache-root subpaths [#71](https://github.com/avi2d/checks/pull/71)
+
 ## 0.74.1
 
 Released 2026-11-07.
