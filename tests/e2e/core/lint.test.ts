@@ -170,7 +170,7 @@ test("a pull request range that hides new lint findings behind oxlint --suppress
   expect(red.exitCode).toBe(1);
 }, 60_000);
 
-test("checks-lint --whole-tree runs the retired gates over the whole tree at HEAD instead of the per-PR gates", async () => {
+test("checks-lint --whole-tree runs only the four whole-tree gates over the whole tree at HEAD", async () => {
   const { repo } = await repository();
   await repo.write({ "clean.ts": "export const clean = 42;\n" });
   await commit(repo, "feat: clean");

@@ -129,7 +129,8 @@ Only a whole-tree workflow the repository writes runs it, after that workflow's 
 
 ## Coverage that stops running
 
-The four whole-tree gates run on every pull request, since `checks-lint` judges each pull request's range with them like every other gate.
+The three range whole-tree gates run on every pull request, since `checks-lint` judges each pull request's range with them like every other range gate.
+`checks-lint-coverage` reads the working tree, so a pull request run judges it only when the change selects the tree gates.
 Neither release nor CI runs a full mutation run, the whole-tree sweep of the four gates or the issue filing in any repository below.
 Each answer comes from the workflows under `.github/workflows` of that repository.
 

@@ -30,8 +30,9 @@ That run restores the previous full baseline state through [checks-mutation-base
 A result made stale by a file a test reads at runtime lasts until the next 28-day refresh.
 That run uploads the report and the incremental state again as the `mutation-baseline-full` artifact.
 No workflow runs the long test tiers, the whole-tree sweep or the issue filing on its own.
-`bun run lint` runs the four whole-tree lint gates over each pull request's range.
-The sweep runs them by hand through `bun src/core/lint.ts --whole-tree` over the whole tree with no base.
+`bun run lint` runs the three range whole-tree lint gates over each pull request's range.
+It runs `checks-lint-coverage` only when the change selects the tree gates, since that gate reads the working tree.
+The sweep runs the four whole-tree gates by hand through `bun src/core/lint.ts --whole-tree` over the whole tree with no base.
 It reports every suppression count and every repeated line still present until it is removed.
 Issue filing runs only under a workflow the owner writes when one is wanted, from the commands [checks-whole-tree-run](docs/gates/checks-whole-tree-run.md#running-it-by-hand) shows.
 [checks-whole-tree-run](docs/gates/checks-whole-tree-run.md) opens or comments on one issue labelled `whole-tree-run` for each file whose mutation score fell since the previous run, for each failing test, and for each whole-tree gate that failed.
