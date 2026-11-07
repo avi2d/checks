@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.74.1
+
+Released 2026-11-07.
+
+### Fixes
+
+- **core:** run the four whole-tree gates on every pull request again [#70](https://github.com/avi2d/checks/pull/70)
+
 ## 0.74.0
 
 Released 2026-11-07.
