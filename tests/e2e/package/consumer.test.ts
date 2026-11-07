@@ -257,6 +257,7 @@ test(
     const red = await oxlint();
     expect(red.text).toContain("data-shape(readonly-collection-param)");
     expect(red.text).toContain("data-shape(schema-twin)");
+    expect(red.text).toContain("status.ts");
     expect(red.text).toContain("tests/oracle.ts");
     await writeFile(join(dir, "totals.ts"), `export function total(items: readonly string[]): number {\n  return items.length;\n}\n`);
     await writeFile(join(dir, "status.ts"), `import { Schema } from "effect";\nexport const StatusSchema = Schema.Struct({ code: Schema.String, count: Schema.Number });\nexport type Status = typeof StatusSchema.Type;\n`);
