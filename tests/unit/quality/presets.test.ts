@@ -111,7 +111,7 @@ function ruleNamed(config: ReturnType<typeof defineCruise>, name: string): unkno
   return config.forbidden?.find((rule) => rule.name === name);
 }
 
-test("the dependency-cruiser builder carries the kit's six rules and options, with tests/ allowed dev dependencies", () => {
+test("the dependency-cruiser builder carries the kit's seven rules and options, with tests/ allowed dev dependencies", () => {
   const config = defineCruise();
   expect(config.forbidden?.map(({ name }) => name)).toEqual(cruiseBase.forbidden?.map(({ name }) => name));
   expect(ruleNamed(config, "not-to-dev-dep")).toMatchObject({ from: { pathNot: expect.arrayContaining([...DEV_ONLY]) } });
@@ -133,7 +133,7 @@ test("a project rule named for a kit rule replaces it, and any other is added af
   const config = defineCruise({ forbidden: [replaced, added] });
   expect(config.forbidden?.filter(({ name }) => name === "no-circular")).toEqual([replaced]);
   expect(config.forbidden?.slice(-2)).toEqual([replaced, added]);
-  expect(config.forbidden).toHaveLength(7);
+  expect(config.forbidden).toHaveLength(8);
 });
 
 const CHECKOUT = resolve(import.meta.dir, "..", "..", "..");
