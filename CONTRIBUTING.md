@@ -102,6 +102,7 @@ To place a change:
    | `src/quality/presets/` | the oxlint, Knip, dependency-cruiser and stylelint config builders, and the Effect language service severities |
    | `CHANGELOG.md` | every release, which `bun run build` writes from the conventional commits |
    | `tests/` | the suite, with the in-process tests under `tests/unit/` and the tests that spawn a process under `tests/e2e/` and `tests/live/` |
+   | `tests/unit/<area>/`, `tests/e2e/<area>/` | the tests of `src/<area>/`, with the tests of `scripts/` under `scripts/` and the tests of the packed package as a whole and the repository-wide layout checks under `package/` |
    | `docs/gates/` | one reference page per bin |
    | `docs/configs/` | one reference page per shipped config a bin does not own |
    | `docs/design.md` | why the kit is shaped the way it is |
