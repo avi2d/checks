@@ -17,8 +17,8 @@ function judged(text: string, owner: Parameters<typeof findScheduledRuns>[2] = P
 
 const faultOf = (text: string, owner?: Parameters<typeof findScheduledRuns>[2]) => judged(text, owner).map(({ fault }) => fault);
 
-test("a scheduled test, mutation, flake or browser run is refused rather than passed as a nightly job", () => {
-  for (const run of ["bun run test", "bunx stryker run", "bunx checks-flake", "bunx checks-lint --night", "bunx lighthouse https://example.com"]) {
+test("a scheduled test, mutation, flake or browser run is refused rather than passed as a hand-run job", () => {
+  for (const run of ["bun run test", "bunx stryker run", "bunx checks-flake", "bunx checks-lint --whole-tree", "bunx lighthouse https://example.com"]) {
     expect(judged(scheduled("7 2 * * *", "bun install --frozen-lockfile", run))).toEqual([
       { location: ".github/workflows/job.yml line 3", fault: "drop the schedule, so it runs only when someone starts it with gh workflow run" },
     ]);

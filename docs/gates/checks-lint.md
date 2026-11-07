@@ -9,7 +9,7 @@ audience: consumers
 ## What it checks
 
 It runs the gates under [What runs](../bins.md#what-runs), each in its own process.
-With `--night` it runs the four nightly gates instead.
+With `--whole-tree` it runs the four whole-tree gates instead.
 It scopes the run to the gates the change reaches, and the full run stays the fallback.
 Applicability below selects the full run, and a scoped or desk run selects a subset.
 A Markdown change runs the range gates plus `checks-copy`.
@@ -32,7 +32,7 @@ A local run with `GITHUB_BASE_REF` set starts at that branch on `origin` instead
 A clone with no remote tracking refs checks `HEAD` alone.
 On a pull request the range ends at the event's head commit and starts at its merge base with the event's base branch.
 Tree gates read the working tree rather than the range.
-With `--night` the range gates read the whole tree at `HEAD` instead of a range.
+With `--whole-tree` the range gates read the whole tree at `HEAD` instead of a range.
 
 ## Arguments
 
@@ -40,13 +40,13 @@ With `--night` the range gates read the whole tree at `HEAD` instead of a range.
 checks-lint
 checks-lint [--full | --desk]
 checks-lint [--full | --desk] <base-ref> <head-ref>
-checks-lint --night
+checks-lint --whole-tree
 ```
 
 With two arguments, the base and head override range discovery.
 `--full` forces the unscoped run.
 `--desk` runs the fast tree gates.
-With `--night`, it takes no other arguments and runs the four nightly gates over the whole tree.
+With `--whole-tree`, it takes no other arguments and runs the four whole-tree gates over the whole tree.
 
 ## Exit codes
 
@@ -73,7 +73,7 @@ A repository runs it from `bun run lint` in a pull request workflow that fetches
 It leaves out the TypeScript gates while the repository tracks no TypeScript file, except that `checks-lint-coverage` and `checks-graphwalk` run when it tracks an `.astro` file.
 It never runs `checks-browser`, which a product runs after it builds its site.
 A pull request run scopes the gates to the change.
-A repository runs the four nightly gates from its night-run workflow with `checks-lint --night` over the whole tree.
+A repository that adds a whole-tree-run workflow runs the four whole-tree gates from it with `checks-lint --whole-tree` over the whole tree.
 
 ## Related topics
 

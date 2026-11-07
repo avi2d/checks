@@ -157,7 +157,7 @@ So are a `motion` check with no state whose `reducedMotion` is `reduce`, a `keyb
 
 A viewport `{ "preset": "anchor" }` stands for the anchor set of screen sizes, and `{ "preset": "full" }` for the full set.
 The full set holds the anchors and eleven more sizes.
-A product runs the anchor set on every pull request and the full set at night.
+A product runs the anchor set on every pull request and the full set on a run started by hand.
 Each size in a set is a viewport named for its device and its size, with `device` set, and each phone also sets `touch`.
 A preset sits beside a product's own viewports.
 A name both declare is refused as declared twice, and so is a size that two listed presets both hold.
@@ -231,7 +231,7 @@ A host resolves it as `@avi2dg/checks/browser-checks.json`.
 
 <!-- end generated starter -->
 
-For the night run, a product keeps a second declaration in a directory of its own.
+For a run started by hand, a product keeps a second declaration in a directory of its own.
 Its `site` is a path from that directory, such as `../dist`, and its viewports are `{ "preset": "full" }`.
 It runs `checks-browser <directory>` on that directory.
 

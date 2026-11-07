@@ -105,7 +105,7 @@ test("each release bin and each way of calling one on a schedule is refused, not
 
 test("a schedule that only names a release bin or runs something else is not refused as a release", () => {
   expect(judged({ "nightly.yml": scheduled("echo checks-release-pr ci.yml") }, PRIVATE_REPOSITORY)).toEqual([]);
-  expect(judged({ "night-run.yml": scheduled("bun run test") }, PRIVATE_REPOSITORY)).toEqual([]);
+  expect(judged({ "other.yml": scheduled("bun run test") }, PRIVATE_REPOSITORY)).toEqual([]);
 });
 
 test("a schedule that reaches checks-release-pr through a bun run package script releases on a schedule", () => {

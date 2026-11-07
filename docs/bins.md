@@ -9,7 +9,7 @@ The kit ships one bin per check, each named `checks-` and called from a package 
 ## What runs
 
 `checks-lint` runs each of these gates that applies to the repository, and names every one that fails.
-A gate reads either the working tree or the range `checks-lint` resolves, or the whole tree at the head under `checks-lint --night`.
+A gate reads either the working tree or the range `checks-lint` resolves, or the whole tree at the head under `checks-lint --whole-tree`.
 It scopes tree gates to the change unless `--full` forces the full run, and `--desk` runs the fast tree gates.
 The table groups the gates by vector, the part of a repository each one judges.
 
@@ -37,9 +37,9 @@ The table groups the gates by vector, the part of a repository each one judges.
 
 <!-- end generated gates -->
 
-Four of these gates run only at night.
+Four of these gates run only on the whole-tree run.
 They are `checks-lint-coverage`, `checks-quarantine-clock`, `checks-repetition` and `checks-suppressions-ratchet`.
-The night-run workflow runs them with `checks-lint --night`, which hands each range gate `--whole-tree HEAD`, so the four judge the whole tree with no base.
+A whole-tree-run workflow the repository writes runs them with `checks-lint --whole-tree`, which hands each range gate `--whole-tree HEAD`, so the four judge the whole tree with no base.
 
 These bins run on their own:
 
@@ -50,8 +50,8 @@ These bins run on their own:
 - [`checks-mutation-baseline`](gates/checks-mutation-baseline.md) restores the newest mutation baseline from `main`, saves it on a self-hosted runner's disk in place of an artifact, and deletes superseded baselines after a `main` run.
 - [`checks-mutation-scope`](gates/checks-mutation-scope.md) turns a branch's diff into the files its mutation runs mutate.
 - [`checks-subsumed-tests`](gates/checks-subsumed-tests.md) lists each test another test subsumes in a mutation run.
-- [`checks-night-run`](gates/checks-night-run.md) opens or comments on one GitHub issue per finding of a night run on `main`, each file whose mutation score fell, each failing test, each failed nightly gate, and each missing mutation report.
-  It closes the issue of a test, a gate or a missing mutation report that a later night no longer reports, and it comments on a mutation issue it no longer reports without closing it, but only when a previous night exists and every requested mutation report is present.
+- [`checks-whole-tree-run`](gates/checks-whole-tree-run.md) opens or comments on one GitHub issue per finding of a whole-tree run on `main`, each file whose mutation score fell, each failing test, each failed whole-tree gate, and each missing mutation report.
+  It closes the issue of a test, a gate or a missing mutation report that a later run no longer reports, and it comments on a mutation issue it no longer reports without closing it, but only when a previous run exists and every requested mutation report is present.
 - [`checks-changelog`](gates/checks-changelog.md) writes the pending release into `CHANGELOG.md` from the conventional commits since the last release.
 - [`checks-release-notes`](gates/checks-release-notes.md) writes one `CHANGELOG.md` section to a file for a GitHub release.
 - [`checks-release-report`](gates/checks-release-report.md) tells whether the history holds unreleased features or fixes since the last tag.
@@ -65,7 +65,7 @@ These bins run on their own:
 - [`checks-commit-title`](gates/checks-commit-title.md) lints the pull request title in one step of the `ci` job.
 - [`checks-pr-text`](gates/checks-pr-text.md) scans the title, body and comments of a pull request in a public repository for a secret or a term of the private pack.
 - [`checks-docs-only`](gates/checks-docs-only.md) tells whether a change touches only top-level Markdown and Markdown under `docs/`, so a docs-only change skips the full run.
-- [`checks-setup`](gates/checks-setup.md) writes the kit config, the CI workflow, the night-run workflow and the doc templates into a new repository.
+- [`checks-setup`](gates/checks-setup.md) writes the kit config, the CI workflow and the doc templates into a new repository.
 
 `checks-lint` has [its own page](gates/checks-lint.md), which says which range it resolves.
 oxlint runs through its own tool, as [Native settings](configs/native-settings.md) says.

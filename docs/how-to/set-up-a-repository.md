@@ -147,10 +147,10 @@ The same job reports the title step's outcome under that name on every run, whic
    ```
 
 A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on each job, as [checks-ci-wiring](../gates/checks-ci-wiring.md#runners) requires.
-Run the four nightly gates from a night-run workflow once the repository tracks TypeScript:
+To run the four whole-tree gates on demand, a repository adds a whole-tree-run workflow:
 
    ```yaml
-   name: night-run
+   name: whole-tree-run
    on:
      workflow_dispatch:
    jobs:
@@ -165,7 +165,7 @@ Run the four nightly gates from a night-run workflow once the repository tracks 
            with:
              bun-version-file: .bun-version
          - run: bun install --frozen-lockfile
-         - run: bunx checks-lint --night
+         - run: bunx checks-lint --whole-tree
    ```
 
 `checks-effect-scope` writes the Effect paths of `oxlint.config.ts` and the kit's severities into `tsconfig.json`, as [The Effect rules](../configs/effect-rules.md#language-service) says.

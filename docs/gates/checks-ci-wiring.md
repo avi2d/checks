@@ -32,16 +32,6 @@ A workflow without a `name` answers to its path from the repository root.
 A local reusable `uses` must name a file under `.github/workflows/` that the repository holds.
 Each `needs` entry names a job in the same workflow, so every one must match a job id in that file.
 Each refusal names the file, the line and the missing workflow or job.
-It requires a run step that invokes `checks-lint --night` in a repository that tracks TypeScript, so the four nightly gates run on the night run.
-A call counts directly, through `bunx`, or through `bun` or `bun run` with the bin's path or its source file.
-The call carries only `--night`, since any other argument stops the night run before it runs a gate.
-A call through a `package.json` script counts, as `bun run <script>` where the named script runs the night step with the arguments the step passes.
-A call through a local reusable workflow counts only through a job that uses the file that runs the night step.
-A call through a repository shell script counts, as a path inside the repository whose file runs the night step.
-A shell wrapper forwards its arguments through a standalone `"$@"`, so `exec checks-lint --night "$@"` counts with no arguments passed.
-Shell control flow inside scripts is not evaluated: a night call after `false &&`, in an `if` branch, in a loop body or after `exit 0` counts all the same.
-A call inside a function body counts whether or not the workflow calls the function.
-A step or job with `if: false` or `continue-on-error: true` never counts, nor does a job that waits on one that never runs.
 
 ### Runners
 
@@ -120,7 +110,7 @@ Each refusal names the workflow file, the line of its `schedule` trigger and wha
 
 ### Schedules
 
-It refuses every other workflow that triggers on `schedule`, since a test, mutation, flake, browser or night run starts only by hand, with `gh workflow run`.
+It refuses every other workflow that triggers on `schedule`, since a test, mutation, flake, browser or whole-tree run starts only by hand, with `gh workflow run`.
 The one schedule it keeps is a weekly advisory scan in a public repository.
 A workflow scans advisories when a run step calls `checks-advisories`, the same ways a release call counts, and every other run step is a `bun install`.
 A weekly scan has one `cron` entry with one minute, one hour and one weekday, and `*` for the day of the month and the month.
@@ -141,7 +131,6 @@ Each refusal names the workflow file, the job and the limit.
 
 The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts`, `private` and `checks` runners in `package.json` and the shell scripts those steps and scripts run from the working tree.
 It reads each shell script that a shell script it reads runs, until none is left.
-It lists the `*.ts` and `*.tsx` files `git ls-files` tracks to decide whether the night run applies.
 It reads each file a setup-bun step names for its version.
 It reads `.bun-version` for each step that uses the shared setup action.
 It reads the fleet pin from the kit's own `.bun-version`.
@@ -158,7 +147,7 @@ It takes no arguments.
 | Code | Result |
 | --- | --- |
 | 0 | Every required command has a reachable step. |
-| 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, a bun setup step drifts from the fleet bun version, a workflow that releases runs on a schedule outside a public npm package or more than once a day, a workflow other than a weekly public advisory scan runs on a schedule, a job can run for more than 60 minutes, or a repository that tracks TypeScript never runs `checks-lint --night`. |
+| 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, a bun setup step drifts from the fleet bun version, a workflow that releases runs on a schedule outside a public npm package or more than once a day, a workflow other than a weekly public advisory scan runs on a schedule, or a job can run for more than 60 minutes. |
 | 2 | A workflow or `package.json` cannot be decoded, or the kit's own `.bun-version` is missing, unreadable or blank. |
 
 ## Sample output
@@ -168,14 +157,6 @@ A missing step produces a report like this:
 ```
 ci-wiring: 1 of 6 gate(s) do not run on pull requests to main:
   bun run test
-    no run step invokes it
-```
-
-A missing night step produces a report like this:
-
-```
-ci-wiring: 1 gate(s) never run on the night run:
-  checks-lint --night
     no run step invokes it
 ```
 
@@ -205,7 +186,7 @@ A scheduled test run and a daily advisory scan produce a report like this:
 ```
 ci-wiring: 2 workflow(s) run on a schedule:
   .github/workflows/advisories.yml line 3: the advisory scan runs more than once a week; keep one cron at a minute, an hour and a weekday, such as "15 5 * * 1"
-  .github/workflows/night-run.yml line 4: drop the schedule, so it runs only when someone starts it with gh workflow run
+  .github/workflows/whole-tree-run.yml line 4: drop the schedule, so it runs only when someone starts it with gh workflow run
 ```
 
 A job that sets no timeout produces a report like this:

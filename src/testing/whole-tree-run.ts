@@ -5,21 +5,21 @@ import { DEFAULT_BRANCH } from "../core/gates.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { gh, type GitHubFailure, gitHubJson, REPOSITORY } from "../delivery/github.ts";
 import { parseReport as parseMutationReport, type ReportFile } from "./mutation-compare.ts";
-import { cleared, type Finding, findingsOf, gatesDecided, gatesOf, keyOf, NightRecordSchema, noted, type Observed, type NightRecord, percent, type PreviousNight, scoresOf, type TestReport } from "./night-run-findings.ts";
+import { cleared, type Finding, findingsOf, gatesDecided, gatesOf, keyOf, WholeTreeRecordSchema, noted, type Observed, type WholeTreeRecord, percent, type PreviousRun, scoresOf, type TestReport } from "./whole-tree-run-findings.ts";
 import { parseReport as parseTestReport } from "./test-report.ts";
 
-const NAME = "checks-night-run";
+const NAME = "checks-whole-tree-run";
 const USAGE = `usage: ${NAME} [--mutation <mutation-report>]... [--tests <junit-report>]... [--gates <lint-log>]`;
-export const LABEL = "night-run";
+export const LABEL = "whole-tree-run";
 const LABEL_COLOR = "5319e7";
-const LABEL_DESCRIPTION = "A regression a night run on main found";
-const ARTIFACT = "night-run";
-const RECORD_NAME = "night-run.json";
+const LABEL_DESCRIPTION = "A regression a whole-tree run on main found";
+const ARTIFACT = "whole-tree-run";
+const RECORD_NAME = "whole-tree-run.json";
 export const RECORD = `reports/${RECORD_NAME}`;
 const PAGE_SIZE = 100;
 const GITHUB_TITLE_LIMIT = 256;
 
-class NightRunFailure extends Schema.TaggedError<NightRunFailure>()("NightRunFailure", {
+class WholeTreeRunFailure extends Schema.TaggedError<WholeTreeRunFailure>()("WholeTreeRunFailure", {
   message: Schema.String,
 }) {}
 
@@ -81,11 +81,11 @@ const decodeIssues = Schema.decodeUnknownEffect(
 const decodeKey = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.String));
 const decodeComments = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Array(Schema.Struct({ body: Schema.String }))));
 
-const MARKER = /<!-- checks-night-run ("(?:[^"\\]|\\.)*") -->/;
+const MARKER = /<!-- checks-whole-tree-run ("(?:[^"\\]|\\.)*") -->/;
 
 // The key is JSON with every > escaped, so no key can close the HTML comment early.
 export function marker(key: string): string {
-  return `<!-- checks-night-run ${JSON.stringify(key).replaceAll(">", "\\u003e")} -->`;
+  return `<!-- checks-whole-tree-run ${JSON.stringify(key).replaceAll(">", "\\u003e")} -->`;
 }
 
 export function markedKey(body: string | null): Option.Option<string> {
@@ -117,11 +117,11 @@ const issueComments = Effect.fn("issueComments")(function* (issue: number) {
 });
 
 function fullTitleOf(finding: Finding): string {
-  if (finding.kind === "mutation") return `Night run: mutation score fell in ${finding.file}`;
-  if (finding.kind === "test") return `Night run: ${finding.file} > ${finding.name} fails`;
-  if (finding.kind === "gates") return `Night run: nightly gate ${finding.file} failed`;
-  if (finding.kind === "mutation-report") return `Night run: no mutation report at ${finding.file}`;
-  return `Night run: ${finding.file} crashed its test worker`;
+  if (finding.kind === "mutation") return `Whole-tree run: mutation score fell in ${finding.file}`;
+  if (finding.kind === "test") return `Whole-tree run: ${finding.file} > ${finding.name} fails`;
+  if (finding.kind === "gates") return `Whole-tree run: whole-tree gate ${finding.file} failed`;
+  if (finding.kind === "mutation-report") return `Whole-tree run: no mutation report at ${finding.file}`;
+  return `Whole-tree run: ${finding.file} crashed its test worker`;
 }
 
 export function titleOf(finding: Finding): string {
@@ -136,25 +136,25 @@ export function findingText(finding: Finding, run: string): string {
   if (finding.kind === "mutation") {
     const { file, before, after, since } = finding;
     return [
-      `The night run ${run} scored \`${file}\` lower than the night run ${since}.`,
+      `The whole-tree run ${run} scored \`${file}\` lower than the whole-tree run ${since}.`,
       "",
-      "| File | Previous night | Tonight |",
+      "| File | Previous run | This run |",
       "| --- | --- | --- |",
       `| \`${file}\` | ${percent(before)}, ${before.detected} of ${before.valid} mutants detected | ${percent(after)}, ${after.detected} of ${after.valid} mutants detected |`,
     ].join("\n");
   }
-  if (finding.kind === "test") return `The night run ${run} failed \`${finding.name}\` in \`${finding.file}\`.`;
-  if (finding.kind === "gates") return `The night run ${run} failed nightly gate \`${finding.file}\`.`;
-  if (finding.kind === "mutation-report") return `The night run ${run} found no mutation report at \`${finding.file}\`: the mutation job that writes it failed, timed out or was cancelled, so no file it mutates was scored.`;
-  return `The night run ${run} lost every result of \`${finding.file}\`, because the worker running it crashed.`;
+  if (finding.kind === "test") return `The whole-tree run ${run} failed \`${finding.name}\` in \`${finding.file}\`.`;
+  if (finding.kind === "gates") return `The whole-tree run ${run} failed whole-tree gate \`${finding.file}\`.`;
+  if (finding.kind === "mutation-report") return `The whole-tree run ${run} found no mutation report at \`${finding.file}\`: the mutation job that writes it failed, timed out or was cancelled, so no file it mutates was scored.`;
+  return `The whole-tree run ${run} lost every result of \`${finding.file}\`, because the worker running it crashed.`;
 }
 
 export function issueBody(finding: Finding, run: string): string {
   return `${findingText(finding, run)}\n\nFinding key: \`${keyOf(finding)}\`\n\n${marker(keyOf(finding))}\n`;
 }
 
-const REPORTED = "<!-- checks-night-run reported -->";
-const NOTED = "<!-- checks-night-run noted -->";
+const REPORTED = "<!-- checks-whole-tree-run reported -->";
+const NOTED = "<!-- checks-whole-tree-run noted -->";
 
 export function reportedText(finding: Finding, run: string): string {
   return `${findingText(finding, run)}\n\n${REPORTED}\n`;
@@ -166,11 +166,11 @@ export function alreadyNoted(comments: readonly string[]): boolean {
 }
 
 export function clearedText(key: string, run: string): string {
-  return `The night run ${run} no longer reports \`${key}\`, so it closes this issue.`;
+  return `The whole-tree run ${run} no longer reports \`${key}\`, so it closes this issue.`;
 }
 
 export function notedText(key: string, run: string): string {
-  return `The night run ${run} no longer reports \`${key}\`. This issue stays open because a mutation score can recover and drop again.\n\n${NOTED}\n`;
+  return `The whole-tree run ${run} no longer reports \`${key}\`. This issue stays open because a mutation score can recover and drop again.\n\n${NOTED}\n`;
 }
 
 export const fileFindings = Effect.fn("fileFindings")(function* (findings: readonly Finding[], observed: Observed, run: string) {
@@ -208,7 +208,7 @@ export const fileFindings = Effect.fn("fileFindings")(function* (findings: reado
 });
 
 const required = (name: string) =>
-  Config.String(name).pipe(Effect.mapError(() => new NightRunFailure({ message: `${name} is unset, so ${NAME} runs only inside a GitHub Actions job` })));
+  Config.String(name).pipe(Effect.mapError(() => new WholeTreeRunFailure({ message: `${name} is unset, so ${NAME} runs only inside a GitHub Actions job` })));
 
 const WORKFLOW_FILE = /\/\.github\/workflows\/([^/@]+)@/;
 
@@ -218,18 +218,18 @@ const actionsRun = Effect.gen(function* () {
   const runs = `${yield* required("GITHUB_SERVER_URL")}/${yield* required("GITHUB_REPOSITORY")}/actions/runs`;
   const reference = yield* required("GITHUB_WORKFLOW_REF");
   const workflow = WORKFLOW_FILE.exec(reference)?.[1];
-  if (workflow === undefined) return yield* new NightRunFailure({ message: `GITHUB_WORKFLOW_REF ${reference} names no workflow file` });
+  if (workflow === undefined) return yield* new WholeTreeRunFailure({ message: `GITHUB_WORKFLOW_REF ${reference} names no workflow file` });
   return { runs, run: `${runs}/${yield* required("GITHUB_RUN_ID")}`, workflow, ref: yield* required("GITHUB_REF") } satisfies Actions;
 });
 
 const decodeRuns = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Array(Schema.Struct({ databaseId: Schema.Int }))));
 const decodeArtifacts = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ artifacts: Schema.Array(Schema.Struct({ name: Schema.String, expired: Schema.Boolean })) })));
-const decodeRecord = Schema.decodeUnknownEffect(Schema.fromJsonString(NightRecordSchema));
+const decodeRecord = Schema.decodeUnknownEffect(Schema.fromJsonString(WholeTreeRecordSchema));
 
-const unreadable = (source: string) => (cause: { readonly message: string }) => new NightRunFailure({ message: `cannot read ${source}: ${cause.message}` });
+const unreadable = (source: string) => (cause: { readonly message: string }) => new WholeTreeRunFailure({ message: `cannot read ${source}: ${cause.message}` });
 
-// A skipped night records no artifact, so the newest successful run can carry no baseline.
-const previousNight = Effect.fn("previousNight")(
+// A skipped run records no artifact, so the newest successful run can carry no baseline.
+const previousRun = Effect.fn("previousRun")(
   function* ({ runs, workflow }: Actions) {
     const listed = ["run", "list", "--workflow", workflow, "--branch", DEFAULT_BRANCH, "--status", "success", "--limit", "30", "--json", "databaseId,event,createdAt"];
     const candidates = yield* gh(listed).pipe(Effect.flatMap(decodeRuns), Effect.mapError(unreadable(`the runs of ${workflow}`)));
@@ -241,13 +241,13 @@ const previousNight = Effect.fn("previousNight")(
       );
       if (!artifacts.some((artifact) => artifact.name === ARTIFACT && !artifact.expired)) continue;
       const fs = yield* FileSystem.FileSystem;
-      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "checks-night-run-" });
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "checks-whole-tree-run-" });
       yield* gh(["run", "download", String(run), "--name", ARTIFACT, "--dir", dir]);
       const file = (yield* Path.Path).join(dir, RECORD_NAME);
       const record = yield* fs.readFileString(file).pipe(Effect.flatMap(decodeRecord), Effect.mapError(unreadable(`the ${ARTIFACT} artifact of run ${run}`)));
-      return Option.some<PreviousNight>({ url: `${runs}/${run}`, record });
+      return Option.some<PreviousRun>({ url: `${runs}/${run}`, record });
     }
-    return Option.none<PreviousNight>();
+    return Option.none<PreviousRun>();
   },
   Effect.scoped,
 );
@@ -260,7 +260,7 @@ const testReport = Effect.fn("testReport")(function* (file: string) {
   return yield* parseTestReport(yield* readText(file)).pipe(Effect.mapError(unreadable(file)));
 });
 
-const writeRecord = Effect.fn("writeRecord")(function* (record: NightRecord) {
+const writeRecord = Effect.fn("writeRecord")(function* (record: WholeTreeRecord) {
   const fs = yield* FileSystem.FileSystem;
   yield* fs.makeDirectory((yield* Path.Path).dirname(RECORD), { recursive: true });
   yield* fs.writeFileString(RECORD, `${JSON.stringify(record, null, 2)}\n`);
@@ -282,21 +282,21 @@ function readReports(reports: readonly MutationReport[]): ReadonlySet<string> {
   return new Set(reports.flatMap(({ file, files }) => (Option.isSome(files) ? [file] : [])));
 }
 
-function tonightScores(reports: readonly MutationReport[]): Option.Option<NightRecord["scores"]> {
+function currentScores(reports: readonly MutationReport[]): Option.Option<WholeTreeRecord["scores"]> {
   const read = reports.flatMap(({ files }) => (Option.isSome(files) ? [...files.value] : []));
   return reports.some(({ files }) => Option.isSome(files)) ? Option.some(scoresOf(new Map(read))) : Option.none();
 }
 
 type Filing = { readonly onMain: true; readonly filed: readonly Filed[] } | { readonly onMain: false; readonly ref: string };
 
-// A night missing one report records nothing, so the next night still compares every file with the last night that scored it.
+// A run missing one report records nothing, so the next run still compares every file with the last run that scored it.
 type Scored = { readonly files: number; readonly missing: number };
 
-export function report(run: string, scored: Option.Option<Scored>, previous: Option.Option<PreviousNight>, findings: readonly Finding[], filing: Filing): string {
+export function report(run: string, scored: Option.Option<Scored>, previous: Option.Option<PreviousRun>, findings: readonly Finding[], filing: Filing): string {
   const against = Option.isNone(scored)
     ? "had no mutation report, so it compared no score"
     : Option.isSome(previous)
-      ? `compared with the night run ${previous.value.url}`
+      ? `compared with the whole-tree run ${previous.value.url}`
       : `found no earlier successful run on ${DEFAULT_BRANCH} holding a ${ARTIFACT} artifact, so it compared no score`;
   const verdict = findings.length === 0 ? "no finding" : `${findings.length} finding(s)`;
   const listed = filing.onMain ? filing.filed.map((one) => `  ${one.action} #${one.issue} for ${one.key}`) : findings.map((finding) => `  found ${keyOf(finding)}`);
@@ -307,30 +307,30 @@ export function report(run: string, scored: Option.Option<Scored>, previous: Opt
       : scored.value.missing === 0
         ? `${NAME}: recorded ${scored.value.files} file score(s) in ${RECORD}`
         : `${NAME}: recorded no score, since ${scored.value.missing} mutation report(s) were missing`;
-  return [`${NAME}: the night run ${run} ${against}; ${verdict}`, ...listed, recorded].join("\n");
+  return [`${NAME}: the whole-tree run ${run} ${against}; ${verdict}`, ...listed, recorded].join("\n");
 }
 
-const nightRun = Effect.gen(function* () {
+const wholeTreeRun = Effect.gen(function* () {
   const options = yield* parseArgs(process.argv.slice(2));
   const actions = yield* actionsRun;
   const reports = yield* Effect.forEach(options.mutation, mutationReport);
   const missing = missingReports(reports);
-  const scores = tonightScores(reports);
+  const scores = currentScores(reports);
   const tests: TestReport[] = yield* Effect.forEach(options.tests, testReport);
   const log = Option.isSome(options.gates) ? Option.some(yield* readText(options.gates.value)) : Option.none<string>();
   const gates: readonly Finding[] = Option.isSome(log) ? gatesOf(log.value) : [];
-  const previous = Option.isSome(scores) ? yield* previousNight(actions) : Option.none<PreviousNight>();
+  const previous = Option.isSome(scores) ? yield* previousRun(actions) : Option.none<PreviousRun>();
   const observed: Observed = { tests: options.tests.length > 0, gates: Option.isSome(log) && gatesDecided(log.value), mutation: Option.isSome(previous) && missing.length === 0, mutationReports: readReports(reports) };
   const findings = findingsOf(previous, { scores: Option.getOrElse(scores, () => ({})), tests }, [...missing, ...gates]);
   const filing: Filing = actions.ref === `refs/heads/${DEFAULT_BRANCH}` ? { onMain: true, filed: yield* fileFindings(findings, observed, actions.run) } : { onMain: false, ref: actions.ref };
   if (filing.onMain && Option.isSome(scores) && missing.length === 0) yield* writeRecord({ scores: scores.value });
-  const scored = Option.map(scores, (tonight): Scored => ({ files: Object.keys(tonight).length, missing: missing.length }));
+  const scored = Option.map(scores, (current): Scored => ({ files: Object.keys(current).length, missing: missing.length }));
   yield* Console.log(report(actions.run, scored, previous, findings, filing));
   return true;
 });
 
 export function main(issues: Layer.Layer<Issues, never, ChildProcessSpawner.ChildProcessSpawner>): void {
-  runMain(NAME, nightRun.pipe(Effect.provide(issues)));
+  runMain(NAME, wholeTreeRun.pipe(Effect.provide(issues)));
 }
 
 if (import.meta.main) main(Issues.gh);

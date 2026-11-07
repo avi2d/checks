@@ -482,7 +482,6 @@ test(
     await mkdir(join(dir, ".github/workflows"), { recursive: true });
     await writeFile(join(dir, ".github/workflows/ci.yml"), "on: pull_request\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    steps:\n      - run: bun run lint\n      - run: bun run build\n      - run: git diff --exit-code\n      - run: bun run typecheck\n      - run: bun run test\n");
     await writeFile(join(dir, ".github/workflows/commitlint.yml"), "on: pull_request\njobs:\n  title:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    steps:\n      - run: ./node_modules/.bin/commitlint\n");
-    await writeFile(join(dir, ".github/workflows/night-run.yml"), "name: night-run\non:\n  workflow_dispatch:\njobs:\n  gates:\n    runs-on: ubuntu-latest\n    timeout-minutes: 20\n    steps:\n      - run: bunx checks-lint --night\n");
     await writeFile(join(dir, "knip.json"), JSON.stringify({ entry: ["*.ts", "tests/**/*.ts"], include: ["files"] }));
     await writeFile(join(dir, "dependency-cruiser.config.ts"), `import { defineConfig } from "@avi2dg/checks/dependency-cruiser";\nexport default defineConfig({ orphans: ["^clean[.]ts$"] });\n`);
 

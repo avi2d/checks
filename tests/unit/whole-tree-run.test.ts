@@ -2,14 +2,14 @@ import { expect, test } from "bun:test";
 import { Effect, Layer, Option } from "effect";
 import { readFile } from "node:fs/promises";
 import { parseReport as parseMutationReport } from "../../src/testing/mutation-compare.ts";
-import { clearedText, fileFindings, Issues, issueBody, markedKey, marker, notedText, parseArgs, reportedText, titleOf, type OpenIssue } from "../../src/testing/night-run.ts";
-import { type Finding, findingsOf, gatesDecided, gatesOf, keyOf, type Observed, type NightRecord, type PreviousNight, scoresOf, type TestReport } from "../../src/testing/night-run-findings.ts";
+import { clearedText, fileFindings, Issues, issueBody, markedKey, marker, notedText, parseArgs, reportedText, titleOf, type OpenIssue } from "../../src/testing/whole-tree-run.ts";
+import { type Finding, findingsOf, gatesDecided, gatesOf, keyOf, type Observed, type WholeTreeRecord, type PreviousRun, scoresOf, type TestReport } from "../../src/testing/whole-tree-run-findings.ts";
 import { parseReport as parseTestReport } from "../../src/testing/test-report.ts";
 import { Usage } from "../../src/core/main.ts";
 
-const FIXTURES = new URL("../fixtures/night-run/", import.meta.url);
+const FIXTURES = new URL("../fixtures/whole-tree-run/", import.meta.url);
 const RUN = "https://github.com/acme/widget/actions/runs/12";
-const LAST_NIGHT = "https://github.com/acme/widget/actions/runs/11";
+const LAST_RUN = "https://github.com/acme/widget/actions/runs/11";
 
 const fixture = (name: string): Promise<string> => readFile(new URL(name, FIXTURES), "utf8");
 
@@ -17,8 +17,8 @@ async function testReport(name: string): Promise<TestReport> {
   return Effect.runPromise(parseTestReport(await fixture(name)));
 }
 
-function lastNight(scores: NightRecord["scores"]): Option.Option<PreviousNight> {
-  return Option.some({ url: LAST_NIGHT, record: { scores } });
+function lastRun(scores: WholeTreeRecord["scores"]): Option.Option<PreviousRun> {
+  return Option.some({ url: LAST_RUN, record: { scores } });
 }
 
 const PREVIOUS = {
@@ -37,35 +37,35 @@ test("Stryker's score counts Killed and Timeout as detected over every mutant bu
 });
 
 test("no regression: a score that holds or rises and a passing suite file nothing", async () => {
-  const tonight = { scores: { "src/cart.ts": { detected: 9, valid: 10 }, "src/session.ts": { detected: 5, valid: 5 } }, tests: [await testReport("passing.xml")] };
+  const current = { scores: { "src/cart.ts": { detected: 9, valid: 10 }, "src/session.ts": { detected: 5, valid: 5 } }, tests: [await testReport("passing.xml")] };
 
-  expect(findingsOf(lastNight(PREVIOUS), tonight)).toEqual([]);
+  expect(findingsOf(lastRun(PREVIOUS), current)).toEqual([]);
 });
 
-test("a lower score on one file files that file alone, from last night's score to tonight's", () => {
-  const tonight = { scores: { "src/cart.ts": { detected: 8, valid: 10 }, "src/session.ts": { detected: 4, valid: 5 } }, tests: [] };
+test("a lower score on one file files that file alone, from last run's score to this run's", () => {
+  const current = { scores: { "src/cart.ts": { detected: 8, valid: 10 }, "src/session.ts": { detected: 4, valid: 5 } }, tests: [] };
 
-  expect(findingsOf(lastNight(PREVIOUS), tonight)).toEqual([
-    { kind: "mutation", file: "src/cart.ts", before: { detected: 9, valid: 10 }, after: { detected: 8, valid: 10 }, since: LAST_NIGHT },
+  expect(findingsOf(lastRun(PREVIOUS), current)).toEqual([
+    { kind: "mutation", file: "src/cart.ts", before: { detected: 9, valid: 10 }, after: { detected: 8, valid: 10 }, since: LAST_RUN },
   ]);
 });
 
 test("an equal score reached through other counts is no finding", () => {
-  const tonight = { scores: { "src/cart.ts": { detected: 18, valid: 20 }, "src/session.ts": { detected: 8, valid: 10 } }, tests: [] };
+  const current = { scores: { "src/cart.ts": { detected: 18, valid: 20 }, "src/session.ts": { detected: 8, valid: 10 } }, tests: [] };
 
-  expect(findingsOf(lastNight(PREVIOUS), tonight)).toEqual([]);
+  expect(findingsOf(lastRun(PREVIOUS), current)).toEqual([]);
 });
 
 test("a new file has no score to fall from, and a file with no scored mutant has no score", () => {
-  const tonight = { scores: { ...PREVIOUS, "src/new.ts": { detected: 1, valid: 4 }, "src/session.ts": { detected: 0, valid: 0 } }, tests: [] };
+  const current = { scores: { ...PREVIOUS, "src/new.ts": { detected: 1, valid: 4 }, "src/session.ts": { detected: 0, valid: 0 } }, tests: [] };
 
-  expect(findingsOf(lastNight(PREVIOUS), tonight)).toEqual([]);
+  expect(findingsOf(lastRun(PREVIOUS), current)).toEqual([]);
 });
 
 test("each failing test is filed by its file and full name, and a crashed worker's file once", async () => {
-  const tonight = { scores: PREVIOUS, tests: [await testReport("failing.xml")] };
+  const current = { scores: PREVIOUS, tests: [await testReport("failing.xml")] };
 
-  const findings = findingsOf(lastNight(PREVIOUS), tonight);
+  const findings = findingsOf(lastRun(PREVIOUS), current);
 
   expect(findings).toEqual([
     { kind: "test", file: "tests/unit/cart.test.ts", name: "totals > rounds half to even" },
@@ -74,10 +74,10 @@ test("each failing test is filed by its file and full name, and a crashed worker
   expect(findings.map(keyOf)).toEqual(["test:tests/unit/cart.test.ts > totals > rounds half to even", "test:tests/unit/session.test.ts"]);
 });
 
-test("with no previous night no score is compared, and a failing test is still filed", async () => {
-  const tonight = { scores: { "src/cart.ts": { detected: 1, valid: 10 } }, tests: [await testReport("failing.xml")] };
+test("with no previous run no score is compared, and a failing test is still filed", async () => {
+  const current = { scores: { "src/cart.ts": { detected: 1, valid: 10 } }, tests: [await testReport("failing.xml")] };
 
-  expect(findingsOf(Option.none(), tonight).map(keyOf)).toEqual(["test:tests/unit/cart.test.ts > totals > rounds half to even", "test:tests/unit/session.test.ts"]);
+  expect(findingsOf(Option.none(), current).map(keyOf)).toEqual(["test:tests/unit/cart.test.ts > totals > rounds half to even", "test:tests/unit/session.test.ts"]);
 });
 
 test("the same failing test in two reports is one finding", async () => {
@@ -106,7 +106,7 @@ function recordingIssues(open: readonly OpenIssue[], earlier: ReadonlyMap<number
   return { layer, calls };
 }
 
-const FELL: Finding = { kind: "mutation", file: "src/cart.ts", before: { detected: 9, valid: 10 }, after: { detected: 8, valid: 10 }, since: LAST_NIGHT };
+const FELL: Finding = { kind: "mutation", file: "src/cart.ts", before: { detected: 9, valid: 10 }, after: { detected: 8, valid: 10 }, since: LAST_RUN };
 const EVERY_REPORT: Observed = { tests: true, gates: true, mutation: true, mutationReports: new Set() };
 const ROUNDS = "test:tests/unit/cart.test.ts > totals > rounds half to even";
 const ROUNDS_FAILS: Finding = { kind: "test", file: "tests/unit/cart.test.ts", name: "totals > rounds half to even" };
@@ -128,9 +128,9 @@ test("a finding with a new key opens one issue that names the run, the file and 
   ]);
   expect(issues.calls.map((call) => call.method)).toEqual(["ensureLabel", "open", "create", "comments", "comment"]);
   const [, , create] = issues.calls;
-  expect(create?.args[0]).toBe("Night run: mutation score fell in src/cart.ts");
+  expect(create?.args[0]).toBe("Whole-tree run: mutation score fell in src/cart.ts");
   expect(create?.args[1]).toContain(RUN);
-  expect(create?.args[1]).toContain(LAST_NIGHT);
+  expect(create?.args[1]).toContain(LAST_RUN);
   expect(create?.args[1]).toContain("| `src/cart.ts` | 90.00%, 9 of 10 mutants detected | 80.00%, 8 of 10 mutants detected |");
 });
 
@@ -145,7 +145,7 @@ test("a finding whose key an open issue holds comments on that issue once and op
   expect(issues.calls[2]?.args[1]).toContain(RUN);
 });
 
-test("a failing test absent on a later night comments once and closes its issue instead of leaving it open", async () => {
+test("a failing test absent on a later run comments once and closes its issue instead of leaving it open", async () => {
   const { filed, calls } = await file([], EVERY_REPORT, [{ number: 7, key: ROUNDS }]);
 
   expect(filed).toEqual([{ key: ROUNDS, issue: 7, action: "closed" }]);
@@ -158,7 +158,7 @@ test("a failing test absent on a later night comments once and closes its issue 
   expect(clearedText(ROUNDS, RUN)).toContain(ROUNDS);
 });
 
-test("a failing test still present tonight is commented on and not closed", async () => {
+test("a failing test still present on this run is commented on and not closed", async () => {
   const { filed, calls } = await file([ROUNDS_FAILS], EVERY_REPORT, [{ number: 7, key: ROUNDS }]);
 
   expect(filed).toEqual([{ key: ROUNDS, issue: 7, action: "commented on" }]);
@@ -177,14 +177,14 @@ test("only the absent finding's issue closes, and a present one beside it stays 
   ]);
 });
 
-test("a test issue stays open while its file crashed tonight, instead of closing on results the crash lost", async () => {
+test("a test issue stays open while its file crashed on this run, instead of closing on results the crash lost", async () => {
   const { filed, calls } = await file([{ kind: "crash", file: "tests/unit/cart.test.ts" }], EVERY_REPORT, [{ number: 7, key: ROUNDS }]);
 
   expect(filed).toEqual([{ key: "test:tests/unit/cart.test.ts", issue: 41, action: "opened" }]);
   expect(calls.map((call) => call.method)).toEqual(["ensureLabel", "open", "create"]);
 });
 
-test("a night that read no test report closes no test issue, and one with an undecided gate log closes no gate issue", async () => {
+test("a run that read no test report closes no test issue, and one with an undecided gate log closes no gate issue", async () => {
   const open = [
     { number: 7, key: ROUNDS },
     { number: 8, key: "test:tests/unit/session.test.ts" },
@@ -197,7 +197,7 @@ test("a night that read no test report closes no test issue, and one with an und
   expect(calls.map((call) => call.method)).toEqual(["open"]);
 });
 
-test("a mutation issue absent on a later night is commented on once and stays open", async () => {
+test("a mutation issue absent on a later run is commented on once and stays open", async () => {
   const { filed, calls } = await file([], EVERY_REPORT, [{ number: 7, key: "mutation:src/cart.ts" }]);
 
   expect(filed).toEqual([{ key: "mutation:src/cart.ts", issue: 7, action: "commented on" }]);
@@ -210,13 +210,13 @@ test("a mutation issue absent on a later night is commented on once and stays op
   expect(notedText("mutation:src/cart.ts", RUN)).toContain("mutation:src/cart.ts");
 });
 
-test("a second and a third night without the mutation finding comment on its issue no more instead of repeating the note", async () => {
+test("a second and a third run without the mutation finding comment on its issue no more instead of repeating the note", async () => {
   const issues = recordingIssues([{ number: 7, key: "mutation:src/cart.ts" }]);
-  const tonight = () => Effect.runPromise(fileFindings([], EVERY_REPORT, RUN).pipe(Effect.provide(issues.layer)));
+  const current = () => Effect.runPromise(fileFindings([], EVERY_REPORT, RUN).pipe(Effect.provide(issues.layer)));
 
-  const first = await tonight();
-  const second = await tonight();
-  const third = await tonight();
+  const first = await current();
+  const second = await current();
+  const third = await current();
 
   expect(first).toEqual([{ key: "mutation:src/cart.ts", issue: 7, action: "commented on" }]);
   expect([second, third]).toEqual([[], []]);
@@ -226,11 +226,11 @@ test("a second and a third night without the mutation finding comment on its iss
 
 test("a mutation finding that recovers, falls again and recovers again is noted twice instead of once for good", async () => {
   const issues = recordingIssues([{ number: 7, key: "mutation:src/cart.ts" }]);
-  const night = (findings: readonly Finding[]) => Effect.runPromise(fileFindings(findings, EVERY_REPORT, RUN).pipe(Effect.provide(issues.layer)));
+  const run = (findings: readonly Finding[]) => Effect.runPromise(fileFindings(findings, EVERY_REPORT, RUN).pipe(Effect.provide(issues.layer)));
 
-  await night([]);
-  await night([FELL]);
-  const absentAgain = await night([]);
+  await run([]);
+  await run([FELL]);
+  const absentAgain = await run([]);
 
   expect(absentAgain).toEqual([{ key: "mutation:src/cart.ts", issue: 7, action: "commented on" }]);
   expect(issues.calls.filter((call) => call.method === "comment").map((call) => call.args[1])).toEqual([
@@ -240,8 +240,8 @@ test("a mutation finding that recovers, falls again and recovers again is noted 
   ]);
 });
 
-test("a person's comment after the note does not make a quiet night note the mutation issue again", async () => {
-  const earlier = new Map([[7, [notedText("mutation:src/cart.ts", LAST_NIGHT), "A person asks whether this is fixed."]]]);
+test("a person's comment after the note does not make a quiet run note the mutation issue again", async () => {
+  const earlier = new Map([[7, [notedText("mutation:src/cart.ts", LAST_RUN), "A person asks whether this is fixed."]]]);
   const issues = recordingIssues([{ number: 7, key: "mutation:src/cart.ts" }], earlier);
 
   const filed = await Effect.runPromise(fileFindings([], EVERY_REPORT, RUN).pipe(Effect.provide(issues.layer)));
@@ -283,15 +283,15 @@ test("a test name too long for GitHub's 256-character title keeps the title with
   const [, , create] = issues.calls;
   const [title, body] = create?.args ?? [];
   expect(title).toHaveLength(256);
-  expect(String(title).startsWith("Night run: tests/e2e/browser.test.ts > renders a very long scenario name")).toBe(true);
+  expect(String(title).startsWith("Whole-tree run: tests/e2e/browser.test.ts > renders a very long scenario name")).toBe(true);
   expect(body).toContain(name);
   expect(body).toContain("tests/e2e/browser.test.ts");
   expect(body).toContain(`Finding key: \`test:tests/e2e/browser.test.ts > ${name}\``);
 });
 
 test("a title within GitHub's 256 characters stays whole, and a cut never splits a character", () => {
-  expect(titleOf({ kind: "crash", file: "tests/unit/session.test.ts" })).toBe("Night run: tests/unit/session.test.ts crashed its test worker");
-  const full = `Night run: tests/unit/emoji.test.ts > ${"😀".repeat(200)} fails`;
+  expect(titleOf({ kind: "crash", file: "tests/unit/session.test.ts" })).toBe("Whole-tree run: tests/unit/session.test.ts crashed its test worker");
+  const full = `Whole-tree run: tests/unit/emoji.test.ts > ${"😀".repeat(200)} fails`;
   const cut = titleOf({ kind: "test", file: "tests/unit/emoji.test.ts", name: "😀".repeat(200) });
   expect(cut.length).toBeLessThanOrEqual(256);
   expect(cut.isWellFormed()).toBe(true);
@@ -300,7 +300,7 @@ test("a title within GitHub's 256 characters stays whole, and a cut never splits
   expect(full.startsWith(cut.slice(0, -1))).toBe(true);
 });
 
-test("checks-night-run takes any number of mutation and test reports and at most one lint log", async () => {
+test("checks-whole-tree-run takes any number of mutation and test reports and at most one lint log", async () => {
   expect(await Effect.runPromise(parseArgs(["--mutation", "m.json", "--tests", "unit.xml", "--tests", "e2e.xml"]))).toEqual({ mutation: ["m.json"], tests: ["unit.xml", "e2e.xml"], gates: Option.none() });
   expect(await Effect.runPromise(parseArgs(["--mutation", "a.json", "--mutation", "b.json"]))).toEqual({ mutation: ["a.json", "b.json"], tests: [], gates: Option.none() });
   expect(await Effect.runPromise(parseArgs(["--tests", "unit.xml"]))).toEqual({ mutation: [], tests: ["unit.xml"], gates: Option.none() });
@@ -314,7 +314,7 @@ test("checks-night-run takes any number of mutation and test reports and at most
   }
 });
 
-test("a failed nightly gate is filed under its own key instead of dropped silently", () => {
+test("a failed whole-tree gate is filed under its own key instead of dropped silently", () => {
   const log = [
     "checks-lint: tip 03da92c from the whole tree at HEAD",
     "checks-lint: 2 of 4 gate(s) failed: checks-repetition, checks-suppressions-ratchet",
@@ -347,14 +347,14 @@ test("a gates finding opens one issue that names the run and the failed gate", a
   const filed = await Effect.runPromise(fileFindings([{ kind: "gates", file: "checks-repetition" }], EVERY_REPORT, RUN).pipe(Effect.provide(issues.layer)));
   expect(filed).toEqual([{ key: "gates:checks-repetition", issue: 41, action: "opened" }]);
   const [, , create] = issues.calls;
-  expect(create?.args[0]).toBe("Night run: nightly gate checks-repetition failed");
+  expect(create?.args[0]).toBe("Whole-tree run: whole-tree gate checks-repetition failed");
   expect(create?.args[1]).toContain(RUN);
   expect(create?.args[1]).toContain("Finding key: `gates:checks-repetition`");
 });
 
 test("a recovered shard report closes its issue while a still-missing one stays open instead of both staying open", async () => {
-  const recovered = "reports/mutation/night-run-mutation-quality/mutation.json";
-  const stillMissing = "reports/mutation/night-run-mutation-delivery/mutation.json";
+  const recovered = "reports/mutation/whole-tree-run-mutation-quality/mutation.json";
+  const stillMissing = "reports/mutation/whole-tree-run-mutation-delivery/mutation.json";
   const missing: Finding = { kind: "mutation-report", file: stillMissing };
   const { filed, calls } = await file([missing], { ...EVERY_REPORT, mutationReports: new Set([recovered]) }, [
     { number: 7, key: `mutation-report:${recovered}` },
@@ -376,11 +376,11 @@ test("a recovered shard report closes its issue while a still-missing one stays 
 
 test("a missing mutation report opens one issue under its own key that names the run and the report", async () => {
   const issues = recordingIssues([]);
-  const report = "reports/mutation/night-run-mutation-quality/mutation.json";
+  const report = "reports/mutation/whole-tree-run-mutation-quality/mutation.json";
   const filed = await Effect.runPromise(fileFindings([{ kind: "mutation-report", file: report }], EVERY_REPORT, RUN).pipe(Effect.provide(issues.layer)));
   expect(filed).toEqual([{ key: `mutation-report:${report}`, issue: 41, action: "opened" }]);
   const [, , create] = issues.calls;
-  expect(create?.args[0]).toBe(`Night run: no mutation report at ${report}`);
+  expect(create?.args[0]).toBe(`Whole-tree run: no mutation report at ${report}`);
   expect(create?.args[1]).toContain(RUN);
   expect(create?.args[1]).toContain(`Finding key: \`mutation-report:${report}\``);
 });

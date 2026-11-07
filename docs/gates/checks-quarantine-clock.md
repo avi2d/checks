@@ -30,7 +30,7 @@ checks-quarantine-clock --whole-tree <head-ref>
 
 With two arguments it judges the head, and the base must resolve but changes nothing.
 With one it judges that commit, including a repository's first commit.
-With `--whole-tree` it judges the named head, which is the form `checks-lint --night` runs.
+With `--whole-tree` it judges the named head, which is the form `checks-lint --whole-tree` runs.
 
 ## Exit codes
 
@@ -49,7 +49,7 @@ quarantine-clock: 1 test(s) in tests/quarantine/ is past 30 days; fix each and m
 
 ## When it runs
 
-`checks-lint --night` runs it nightly in every repository, as [checks-lint](checks-lint.md) says.
+`checks-lint --whole-tree` runs it on every whole-tree run in every repository, as [checks-lint](checks-lint.md) says.
 A repository with no test file under `tests/quarantine/` passes with nothing checked.
 
 ## Related topics

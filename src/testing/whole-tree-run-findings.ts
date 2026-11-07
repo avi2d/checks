@@ -6,15 +6,15 @@ const ScoreSchema = Schema.Struct({ detected: Schema.Int, valid: Schema.Int });
 
 export type Score = typeof ScoreSchema.Type;
 
-export const NightRecordSchema = Schema.Struct({ scores: Schema.Record(Schema.String, ScoreSchema) });
+export const WholeTreeRecordSchema = Schema.Struct({ scores: Schema.Record(Schema.String, ScoreSchema) });
 
-export type NightRecord = typeof NightRecordSchema.Type;
+export type WholeTreeRecord = typeof WholeTreeRecordSchema.Type;
 
 export type TestReport = { readonly results: readonly TestResult[]; readonly crashedFiles: readonly string[] };
 
-export type Tonight = { readonly scores: NightRecord["scores"]; readonly tests: readonly TestReport[] };
+export type CurrentRun = { readonly scores: WholeTreeRecord["scores"]; readonly tests: readonly TestReport[] };
 
-export type PreviousNight = { readonly url: string; readonly record: NightRecord };
+export type PreviousRun = { readonly url: string; readonly record: WholeTreeRecord };
 
 export type Finding =
   | { readonly kind: "mutation"; readonly file: string; readonly before: Score; readonly after: Score; readonly since: string }
@@ -35,7 +35,7 @@ function scoreOf(file: ReportFile): Score {
   return { detected, valid };
 }
 
-export function scoresOf(files: ReadonlyMap<string, ReportFile>): NightRecord["scores"] {
+export function scoresOf(files: ReadonlyMap<string, ReportFile>): WholeTreeRecord["scores"] {
   return Object.fromEntries([...files].map(([path, file]) => [path, scoreOf(file)] as const).sort(([one], [other]) => one.localeCompare(other)));
 }
 
@@ -44,7 +44,7 @@ function fell(before: Score, after: Score): boolean {
   return before.valid > 0 && after.valid > 0 && after.detected * before.valid < before.detected * after.valid;
 }
 
-// A night judges a key only from a report it read, since a report it lacks leaves every finding in it absent.
+// A run judges a key only from a report it read, since a report it lacks leaves every finding in it absent.
 export type Observed = { readonly tests: boolean; readonly gates: boolean; readonly mutation: boolean; readonly mutationReports: ReadonlySet<string> };
 
 export function keyOf(finding: Finding): string {
@@ -55,7 +55,7 @@ export function keyOf(finding: Finding): string {
   return `test:${finding.file}`;
 }
 
-function scoreFindings(previous: Option.Option<PreviousNight>, scores: NightRecord["scores"]): readonly Finding[] {
+function scoreFindings(previous: Option.Option<PreviousRun>, scores: WholeTreeRecord["scores"]): readonly Finding[] {
   if (Option.isNone(previous)) return [];
   const { url, record } = previous.value;
   return Object.entries(scores).flatMap(([file, after]): readonly Finding[] => {
@@ -72,8 +72,8 @@ function testFindings(reports: readonly TestReport[]): readonly Finding[] {
   return [...new Map(failing.map((finding) => [keyOf(finding), finding])).values()];
 }
 
-export function findingsOf(previous: Option.Option<PreviousNight>, tonight: Tonight, others: readonly Finding[] = []): readonly Finding[] {
-  return [...scoreFindings(previous, tonight.scores), ...testFindings(tonight.tests), ...others].sort((one, other) =>
+export function findingsOf(previous: Option.Option<PreviousRun>, current: CurrentRun, others: readonly Finding[] = []): readonly Finding[] {
+  return [...scoreFindings(previous, current.scores), ...testFindings(current.tests), ...others].sort((one, other) =>
     keyOf(one).localeCompare(keyOf(other)),
   );
 }
@@ -95,7 +95,7 @@ export function gatesDecided(log: string): boolean {
   return FAILED_GATES.test(log) || PASSED_GATES.test(log);
 }
 
-// A mutation finding is a fall between two nights, so a night without it shows no score recovered.
+// A mutation finding is a fall between two runs, so a run without it shows no score recovered.
 export function cleared(key: string, present: ReadonlySet<string>, observed: Observed): boolean {
   if (present.has(key)) return false;
   if (key.startsWith("gates:")) return observed.gates;
