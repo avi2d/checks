@@ -17,6 +17,7 @@ It stops when a `typecheck` script it finds does not run the Effect diagnostics,
 It stops when a `test` script it finds is not the kit suite, and names the script to fix.
 It copies the fleet pin into `.bun-version` and the preset into `bunfig.toml`.
 It writes `oxlint.config.ts`, `tsconfig.json` and `knip.config.ts` from the kit builders, with Effect rules on.
+It writes `.jscpd.json` with the kit default.
 It writes the Effect paths of the `oxlint.config.ts` it finds or writes into the language service entry of `tsconfig.json`.
 The pair passes `checks-effect-scope --check` from the first write.
 It writes `package.json` with the kit in `devDependencies` and with `lint`, `typecheck` and `test` scripts.

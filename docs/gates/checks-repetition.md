@@ -20,11 +20,12 @@ It fails when the head tracks a `.ts` or `.tsx` file and holds no `.jscpd.json`,
 
 jscpd reads the head's `.jscpd.json` at each end it scans, so its `path` and `ignore` globs select the files to measure.
 The kit's default, which the refusal names, measures `src`:
-A `path` entry the base revision lacks reads as empty there, so a newly measured folder never fails the scan.
 
 ```json
 { "path": ["src"], "format": ["typescript"], "ignore": ["**/*.d.ts"] }
 ```
+
+A `path` entry the base revision lacks reads as empty there, so a newly measured folder never fails the scan.
 
 A repository whose TypeScript sits outside `src` names its own folders in `path`.
 

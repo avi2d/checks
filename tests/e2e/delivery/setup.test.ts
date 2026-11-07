@@ -107,6 +107,20 @@ expect(runsOn).toBe("ubuntu-latest");
 );
 
 test(
+"writes the kit default .jscpd.json rather than leaving repetition refused, and keeps a retained one rather than overwriting it",
+async () => {
+const dir = await scratch("jscpd-default");
+expect((await $`bun ${join(CHECKOUT, "src", "delivery", "setup.ts")}`.cwd(dir).nothrow().quiet()).exitCode).toBe(0);
+const config = Schema.decodeUnknownSync(Schema.Struct({ path: Schema.Array(Schema.String), format: Schema.Array(Schema.String), ignore: Schema.Array(Schema.String) }))(JSON.parse(await readFile(join(dir, ".jscpd.json"), "utf8")));
+expect(config).toEqual({ path: ["src"], format: ["typescript"], ignore: ["**/*.d.ts"] });
+const retained = await open({ ".jscpd.json": JSON.stringify({ path: ["src"], format: ["typescript"], ignore: ["**/*.d.ts", "src/generated/**"] }) });
+expect((await setup(retained)).exitCode).toBe(0);
+expect(await readFile(join(retained.dir, ".jscpd.json"), "utf8")).toBe(JSON.stringify({ path: ["src"], format: ["typescript"], ignore: ["**/*.d.ts", "src/generated/**"] }));
+},
+60_000,
+);
+
+test(
 "the generated workflow runs on pull requests alone and cancels a run a newer push to the same pull request supersedes, not on push to main as well",
 async () => {
 const dir = await scratch("single-trigger");
