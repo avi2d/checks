@@ -135,7 +135,7 @@ Each answer comes from that repository's `night-run.yml` and `mutation.yml` unde
 - checks keeps none of the three on a workflow.
   Mutation testing runs only by hand through the mutation workflow baseline.
   The four whole-tree gates run only by hand through `checks-lint --whole-tree`.
-  Issue filing runs only by hand through `checks-whole-tree-run`.
+  Nothing files issues until someone adds a `whole-tree-run` workflow.
 - skills runs all three by hand through its `night-run` workflow.
   That workflow runs a full Stryker mutation run, the four gates and the unit and e2e tiers with issue filing.
 - dotfiles runs mutation testing on pull requests as an advisory scoped compare, and the full baseline by hand, both through `mutation.yml`.

@@ -147,7 +147,7 @@ A timings option waits for Bun to honour timings under random order.
 ## Arguments
 
 The default command takes no arguments except `--parallel=<workers>`, as [Parallel runs](#parallel-runs) says, `--full` and `--junit=<file>`.
-`--full` runs the full suite outside CI, so a whole-tree run covers what a local run skips.
+`--full` runs the full suite outside CI, so a run started by hand covers what a local run skips.
 A `package.json` script never takes `--full`, as [checks-test-layout](checks-test-layout.md) says of `scripts.test`.
 Its named tier options are `--tier=live`, `--tier=pixel`, `--tier=unit` and `--tier=e2e`, and a tier run takes `--parallel=<workers>` too, but not `--full`.
 `--junit=<file>` keeps the JUnit report Bun wrote at `<file>`, whether the tests passed or failed, so a whole-tree run hands it to [checks-whole-tree-run](checks-whole-tree-run.md).
