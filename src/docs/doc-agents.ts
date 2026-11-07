@@ -1,5 +1,5 @@
 import { Parser, type NodeType } from "commonmark";
-import { commandNames, type Snapshot } from "./doc-references.ts";
+import { commandNames, PACKAGE_MANIFEST, type Snapshot } from "./doc-references.ts";
 import { handWritten } from "./doc-versions.ts";
 import { AGENT_NAMES, scanMarkdown, type MarkdownLine } from "./prose-matchers.ts";
 
@@ -8,7 +8,6 @@ export const README_CEILING = 6000;
 export const CELL_CEILING = 300;
 
 const README = "README.md";
-const MANIFEST = "package.json";
 const SECOND_LEVEL = /^\s{0,3}##(?:\s+|$)(.*?)(?:\s+#+)?\s*$/;
 const SETEXT_SECOND = /^\s{0,3}-+\s*$/;
 const CELL_SEPARATOR = /(?<!\\)\|/;
@@ -37,7 +36,31 @@ export function ceilingFinding(text: string): AgentFinding | undefined {
 
 export function isCeiledReadme(repositoryPath: string, files: ReadonlySet<string>): boolean {
   if (repositoryPath === README) return true;
-  return repositoryPath.endsWith(`/${README}`) && files.has(`${repositoryPath.slice(0, -README.length)}${MANIFEST}`);
+  return repositoryPath.endsWith(`/${README}`) && files.has(`${repositoryPath.slice(0, -README.length)}${PACKAGE_MANIFEST}`);
+}
+
+const KIT_TEMPLATES = "node_modules/@avi2dg/checks/dist/templates";
+
+const ROOT_AGENT_FILES = [
+  { path: "AGENTS.md", fix: `Copy \`${KIT_TEMPLATES}/agents.md\` to \`AGENTS.md\` and fill it with what an agent cannot infer from the code` },
+  { path: "CLAUDE.md", fix: `Copy \`${KIT_TEMPLATES}/claude.md\` to \`CLAUDE.md\` word for word, so Claude Code reads \`AGENTS.md\`` },
+] as const;
+
+export type RootAgentFinding = {
+  readonly path: (typeof ROOT_AGENT_FILES)[number]["path"];
+  readonly message: string;
+};
+
+export function hasManifest(files: ReadonlySet<string>): boolean {
+  return [...files].some((file) => file === PACKAGE_MANIFEST || file.endsWith(`/${PACKAGE_MANIFEST}`));
+}
+
+export function missingAgentFiles(files: ReadonlySet<string>): readonly RootAgentFinding[] {
+  if (!hasManifest(files)) return [];
+  return ROOT_AGENT_FILES.filter(({ path }) => !files.has(path)).map(({ path, fix }) => ({
+    path,
+    message: `is missing from the repository root, which a repository with a \`package.json\` keeps. ${fix}`,
+  }));
 }
 
 type Part = { readonly title: string; readonly lines: readonly MarkdownLine[] };

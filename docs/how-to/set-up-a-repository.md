@@ -65,6 +65,20 @@ To give each tool the config it reads:
    export default defineConfig({ orphans: ["^src/bin[.]ts$"] });
    ```
 
+## Write the agent files
+
+To give each agent the file it reads:
+
+1. Copy the agent templates to the repository root:
+
+   ```sh
+   cp node_modules/@avi2dg/checks/dist/templates/agents.md AGENTS.md
+   cp node_modules/@avi2dg/checks/dist/templates/claude.md CLAUDE.md
+   ```
+
+1. Fill `AGENTS.md` with what an agent cannot infer from the code.
+1. Keep `CLAUDE.md` word for word, so Claude Code reads `AGENTS.md`.
+
 ## Run the checks on every pull request
 
 To run the gates in CI:
