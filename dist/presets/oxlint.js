@@ -58,13 +58,12 @@ var BASE = {
   overrides: [
     {
       files: ["**/*.ts", "**/*.tsx"],
-      rules: { "data-shape/readonly-collection-param": "error" }
+      rules: { "data-shape/readonly-collection-param": "error", "data-shape/schema-twin": "error" }
     },
     {
       files: ["**/*.ts", "**/*.tsx"],
       excludeFiles: ["tests/**"],
       rules: {
-        "data-shape/schema-twin": "error",
         "typescript/no-unsafe-assignment": "error",
         "typescript/no-unsafe-member-access": "error",
         "typescript/no-unsafe-argument": "error",

@@ -6,6 +6,7 @@ import { availableParallelism, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { Schema } from "effect";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
+import { consumerManifest, installConsumer } from "../lib/consumer-install.ts";
 import { CHECKOUT, ran, UNVENDORED_BUNFIG, type Ran } from "../lib/fixture-repo.ts";
 
 const WIDGET = "export const widget = 42;\n";
@@ -43,26 +44,6 @@ function widgetTest(widget: string): string {
   return `import { expect, test } from "bun:test";\nimport { widget } from "${widget}";\ntest("widget", () => {\n  expect(widget).toBe(42);\n});\n`;
 }
 
-function manifestFor(checks: string): Record<string, unknown> {
-  return {
-    name: "checks-consumer-fixture",
-    type: "module",
-    author: "avi2d <avi2dg@gmail.com>",
-    devDependencies: {
-      "@avi2dg/checks": checks,
-      effect: "4.0.0",
-      oxlint: "1.83.0",
-      "@swc/core": "1.16.2",
-      "@types/bun": "1.4.2",
-    },
-  };
-}
-
-async function installConsumer(installDir: string, checks: string): Promise<void> {
-  await writeFile(join(installDir, "package.json"), JSON.stringify(manifestFor(checks)));
-  await $`bun install`.cwd(installDir).quiet();
-}
-
 async function resetWorkspace(workDir: string): Promise<void> {
   for (const entry of await readdir(workDir)) {
     if (KEPT_ACROSS_TESTS.has(entry)) continue;
@@ -95,7 +76,7 @@ async function useConsumer(kind: Kind, manifest: Record<string, unknown> = {}): 
   dir = kind === "file" ? fileDir : tarballDir;
   await resetWorkspace(dir);
   const checks = kind === "file" ? `file:${CHECKOUT}` : `file:${tarballPath}`;
-  await writeFile(join(dir, "package.json"), JSON.stringify({ ...manifestFor(checks), ...manifest }));
+  await writeFile(join(dir, "package.json"), JSON.stringify({ ...consumerManifest(checks), ...manifest }));
   await writeOxlintrc();
   // oxlint honours .gitignore but not ignorePatterns for node_modules, so the fixture carries that entry.
   await writeFile(join(dir, ".gitignore"), "node_modules/\n");
@@ -242,25 +223,6 @@ test(
     await writeFile(join(dir, "settle.js"), FLAT_SETTLE);
     const green = await oxlint();
     expect(green.exitCode).toBe(0);
-  },
-  180_000,
-);
-
-test(
-  "file: consumer goes red on a mutable collection parameter and a schema twin, green once each is fixed",
-  async () => {
-    await useConsumer("file");
-    await writeFile(join(dir, "totals.ts"), `export function total(items: string[]): number {\n  return items.length;\n}\n`);
-    await writeFile(join(dir, "status.ts"), `import { Schema } from "effect";\nexport type Status = { readonly code: string; readonly count: number };\nexport const StatusSchema = Schema.Struct({ code: Schema.String, count: Schema.Number });\n`);
-    await mkdir(join(dir, "tests"));
-    await writeFile(join(dir, "tests", "oracle.ts"), `import { Schema } from "effect";\nexport type Oracle = { readonly code: string; readonly count: number };\nexport const OracleSchema = Schema.Struct({ code: Schema.String, count: Schema.Number });\n`);
-    const red = await oxlint();
-    expect(red.text).toContain("data-shape(readonly-collection-param)");
-    expect(red.text).toContain("data-shape(schema-twin)");
-    expect(red.text).not.toContain("oracle.ts");
-    await writeFile(join(dir, "totals.ts"), `export function total(items: readonly string[]): number {\n  return items.length;\n}\n`);
-    await writeFile(join(dir, "status.ts"), `import { Schema } from "effect";\nexport const StatusSchema = Schema.Struct({ code: Schema.String, count: Schema.Number });\nexport type Status = typeof StatusSchema.Type;\n`);
-    expect((await oxlint()).exitCode).toBe(0);
   },
   180_000,
 );

@@ -29,9 +29,8 @@ So `defineConfig` returns the whole root config with `plugins` set, and a reposi
 oxlint reads a relative `jsPlugins` path against the consumer's config, so `base` names each plugin bundle by its absolute path in the installed kit.
 `.gitignore` keeps oxlint out of `node_modules/`, because oxlint still walks the installed package when only `ignorePatterns` names it.
 
-The base turns `data-shape/readonly-collection-param` on for every TypeScript file and `data-shape/schema-twin` on for production files only.
+The base turns `data-shape/readonly-collection-param` and `data-shape/schema-twin` on for every TypeScript file, tests included.
 `typescript/prefer-readonly-parameter-types` would flag every object parameter for deep `readonly`, so the kit rule stays with the collections a function never mutates.
-A test that declares its own schema as an oracle for a production type is reasonable, so the twin rule leaves `tests/` out.
 
 bun has no bunfig `extends`, and it ignores an unknown top-level key without a warning.
 So a repository copies the kit's `bunfig.toml`, and `checks-test-layout` compares the copy with the installed one key by key.
