@@ -3,7 +3,7 @@ import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { runMain, Usage } from "../core/main.ts";
 import { cacheRoot } from "../dependencies/cache-root.ts";
 import { pinnedGitleaks, scanDirectory, type Leak } from "./gitleaks.ts";
-import { gh, gitHubJson, GitHubFailure, REPOSITORY } from "./github.ts";
+import { gh, gitHubJson, GitHubFailure, REPOSITORY } from "../core/github.ts";
 import { scanConfig } from "./secrets-pack.ts";
 
 const NAME = "pr-text";
