@@ -201,8 +201,12 @@ export function smokeFiles(scanned: readonly string[], smoke: readonly string[])
       message: "checks.smoke cannot name a quarantined, live or pixel test at " + ignored.join(", "),
     };
   }
-  const wanted = new Set(smoke);
-  return { kind: "valid", files: scanned.filter((file) => selectedTierFile(file, "unit") || wanted.has(file)) };
+  return { kind: "valid", files: unitTierPlus(scanned, smoke) };
+}
+
+export function unitTierPlus(scanned: readonly string[], extra: readonly string[]): readonly string[] {
+  const wanted = new Set(extra);
+  return scanned.filter((file) => selectedTierFile(file, "unit") || wanted.has(file));
 }
 
 export const readSmokeDeclarations = Effect.fn("readSmokeDeclarations")(function* (

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { Option } from "effect";
 import { entryOptions, judgeSkips, passes, report, scriptOptions, testOptions } from "../../src/testing/test.ts";
-import { skipReason, type SkipDeclaration } from "../../src/testing/test-skips.ts";
+import { skipReason, unitTierPlus, type SkipDeclaration } from "../../src/testing/test-skips.ts";
 import type { TestResult } from "../../src/testing/test-report.ts";
 
 function declaration(file: string, line: number, reason: string, when?: "ci" | "local"): SkipDeclaration {
@@ -89,11 +89,25 @@ test("checks-test takes a tier and a worker count for bun test --parallel, each 
 });
 
 test("checks-test takes one --junit file beside its other options on the command line, and a test script never takes it", () => {
-  expect(entryOptions(["--tier=live", "--junit=reports/live.xml"])).toEqual({ options: { tier: "live" }, junit: Option.some("reports/live.xml") });
-  expect(entryOptions(["--parallel=4"])).toEqual({ options: { workers: 4 }, junit: Option.none() });
+  expect(entryOptions(["--tier=live", "--junit=reports/live.xml"])).toEqual({
+    options: { tier: "live" },
+    junit: Option.some("reports/live.xml"),
+    changed: false,
+  });
+  expect(entryOptions(["--parallel=4"])).toEqual({ options: { workers: 4 }, junit: Option.none(), changed: false });
   expect(entryOptions(["--junit=one.xml", "--junit=two.xml"])).toBeUndefined();
   expect(entryOptions(["--junit="])).toBeUndefined();
   expect(scriptOptions("checks-test --junit=reports/suite.xml")).toBeUndefined();
+});
+
+test("the shared scope keeps the unit tests and the named files, not a quarantined, live or unnamed test", () => {
+  expect(unitTierPlus([
+    "tests/e2e/docs.test.ts",
+    "tests/e2e/release.test.ts",
+    "tests/live/browser.test.ts",
+    "tests/quarantine/unit/flaky.test.ts",
+    "tests/unit/test.test.ts",
+  ], ["tests/e2e/docs.test.ts"])).toEqual(["tests/e2e/docs.test.ts", "tests/unit/test.test.ts"]);
 });
 
 test("checks-test refuses a test filter, a missing or zero worker count and a repeated option", () => {
