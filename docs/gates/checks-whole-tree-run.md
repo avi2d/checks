@@ -127,7 +127,7 @@ checks-whole-tree-run: recorded 42 file score(s) in reports/whole-tree-run.json
 
 Only a whole-tree workflow the repository writes runs it, after that workflow's full mutation run, its long test tiers and its whole-tree lint gates.
 
-## Coverage that stops running
+## What each repository runs
 
 `checks-suppressions-ratchet` and `checks-quarantine-clock` run on every pull request, since `checks-lint` judges each pull request's range with them like every other range gate.
 `checks-repetition` runs on every pull request in a repository that tracks TypeScript.
