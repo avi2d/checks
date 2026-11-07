@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readdirSync } from "node:fs";
+import { basename, resolve } from "node:path";
 import { selectSuite, suiteArgs, testOptions } from "../../src/testing/test.ts";
 import { KIT_GATES, PR_GATES, WHOLE_TREE_GATES } from "../../src/core/gates.ts";
 
@@ -25,9 +25,10 @@ test("retiring gates to the whole-tree run never skips secrets or graphwalk on a
 });
 
 test("rejects a live tier with a moved suite filed back under e2e", () => {
+  const e2e = readdirSync(resolve(import.meta.dir, "..", "..", "tests", "e2e"), { recursive: true, encoding: "utf8" }).map((path) => basename(path));
   for (const file of MOVED) {
     expect(existsSync(resolve(import.meta.dir, "..", "..", "tests", "live", file))).toBe(true);
-    expect(existsSync(resolve(import.meta.dir, "..", "..", "tests", "e2e", file))).toBe(false);
+    expect(e2e).not.toContain(file);
   }
 });
 
