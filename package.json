@@ -1,6 +1,6 @@
 {
   "name": "@avi2dg/checks",
-  "version": "0.74.1",
+  "version": "0.75.0",
   "description": "Deterministic checks shared across a set of TypeScript repositories",
   "author": {
     "name": "avi2d",
@@ -53,6 +53,9 @@
     "./block-screens.ts": "./src/testing/block-screens.ts",
     "./core/git.ts": "./src/core/git.ts",
     "./core/main.ts": "./src/core/main.ts",
+    "./delivery/gitleaks.ts": "./src/delivery/gitleaks.ts",
+    "./delivery/gitleaks.toml": "./src/delivery/gitleaks.toml",
+    "./dependencies/cache-root.ts": "./src/dependencies/cache-root.ts",
     "./testing/test-report.ts": "./src/testing/test-report.ts",
     "./testing/test.ts": "./src/testing/test.ts",
     "./oxlint": {

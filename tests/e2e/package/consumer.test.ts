@@ -350,7 +350,7 @@ test(
     const installed = join(dir, "node_modules", "@avi2dg", "checks");
     const manifest = Schema.decodeSync(Manifest)(await readFile(join(CHECKOUT, "package.json"), "utf8"));
     expect(Object.keys(manifest.exports).toSorted()).toEqual([
-      ...["./block-screens.ts", "./browser-checks.json", "./browser-hooks.ts", "./core/git.ts", "./core/main.ts", "./dependency-cruiser", "./dependency-cruiser.config.js", "./knip", "./knip-base.json", "./oxlint", "./screen-sizes.ts"],
+      ...["./block-screens.ts", "./browser-checks.json", "./browser-hooks.ts", "./core/git.ts", "./core/main.ts", "./delivery/gitleaks.toml", "./delivery/gitleaks.ts", "./dependencies/cache-root.ts", "./dependency-cruiser", "./dependency-cruiser.config.js", "./knip", "./knip-base.json", "./oxlint", "./screen-sizes.ts"],
       ...["./scripts/comment-matchers.ts", "./scripts/prose-matchers.ts", "./scripts/test-skips.ts", "./stryker.preset.js", "./stylelint", "./templates/*", "./testing/test-report.ts", "./testing/test.ts", "./tsconfig.effect.json"],
     ]);
     const resolved = Object.entries(manifest.exports).map(([key, exported]) => {
