@@ -30,7 +30,7 @@ The rules parse with swc, so the cruise needs `@swc/core` installed, and without
 The rules honour `exports` maps, so a subpath the map publishes resolves and passes, and a subpath it omits fails to resolve and is reported.
 A package without an `exports` map publishes every file.
 A bare import always passes, whatever file its entry lives in.
-The two relative-path rules judge only an import that resolves as a local file, so a bare import of a workspace package or an installed one always passes.
+The two relative-path rules judge only an import that resolves as a local file, so a bare workspace or installed import always passes.
 A repository that sets its own `options.enhancedResolveOptions` replaces the kit's, and restates `exportsFields` and `conditionNames` in it.
 
 ## A repository's own config
