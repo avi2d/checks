@@ -1,5 +1,5 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
-import { dispatch, GitHubFailure } from "./github.ts";
+import { dispatch, GitHubFailure } from "../core/github.ts";
 import { ChildProcessSpawner } from "effect/process";
 import { lastTag, releasedVersionOf, runBuild } from "./release.ts";
 import { git } from "../core/git.ts";

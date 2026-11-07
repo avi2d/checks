@@ -116,6 +116,7 @@ This repository holds itself to the kit through its own `oxlint.config.ts`, `kni
 - It keeps the oxlint plugins and the oxlint, Knip, dependency-cruiser and stylelint builders outside its Effect paths, since a tool loads each synchronously.
 - It keeps the `checks-flake` preload outside its Effect paths, since Bun loads it into every test file.
 - Its `dependency-cruiser.config.ts` names each plugin entry in `orphans`, and adds `host-loaded-imports-nothing`.
+- Its `dependency-cruiser.config.ts` adds one rule per area under `src/`, which lets the area import `src/core/` and only the other areas `AREA_IMPORTS` lists for it.
 
 ## Related topics
 

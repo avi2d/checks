@@ -3,7 +3,8 @@ import { Config, Console, Effect, FileSystem, Option, Path, Random, Schema } fro
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { runMain, Usage } from "../core/main.ts";
 import { NAME_SEPARATOR, parseReport, ReportError, reporterArgs, type TestResult } from "./test-report.ts";
-import { scriptOptions, workerCount } from "./test.ts";
+import { scriptOptions } from "../core/test-script.ts";
+import { workerCount } from "./test.ts";
 
 export type Run = {
   readonly seed: number;

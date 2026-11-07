@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Duration, Effect, Schema } from "effect";
-import { dispatch, gitHubJson, REPOSITORY } from "./github.ts";
+import { dispatch, gitHubJson, REPOSITORY } from "../core/github.ts";
 import { releasedVersionOf } from "./release.ts";
 import { buildRelease, commitRelease, decodeRef, hasBranch, planRelease, pointBranch, refused } from "./release-commit.ts";
 import { pushTag, tagHead, taggedOn } from "./release-tagging.ts";

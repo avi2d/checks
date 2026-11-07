@@ -4,6 +4,7 @@ import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effec
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { TEST_ENTRY_POINT } from "../core/gates.ts";
 import { runMain, Usage } from "../core/main.ts";
+import { FULL, testOptions, type TestOptions, type TestTier } from "../core/test-script.ts";
 import { readPullRequestNarrowing } from "./affected-tests.ts";
 import { changedE2eFiles } from "./changed-tests.ts";
 import {
@@ -15,11 +16,11 @@ import {
   unitTierPlus,
   type Environment,
   type SkipDeclaration,
-  type TestTier,
 } from "./test-skips.ts";
 import { NAME_SEPARATOR, parseReport, ReportError, reporterArgs, type TestResult } from "./test-report.ts";
 
 export type { Environment, SkipDeclaration } from "./test-skips.ts";
+export { scriptOptions, testOptions, type TestOptions } from "../core/test-script.ts";
 
 export type Verdict = {
   readonly environment: Environment;
@@ -33,43 +34,10 @@ export class SkipGateError extends Schema.TaggedError<SkipGateError>()("SkipGate
   message: Schema.String,
 }) {}
 
-export type TestOptions = {
-  readonly tier?: TestTier;
-  readonly workers?: number;
-  readonly full?: boolean;
-};
-
 const NAME = TEST_ENTRY_POINT.bin;
 const USAGE = `usage: ${NAME} [--tier=live | --tier=pixel | --tier=unit | --tier=e2e | --full | --changed] [--parallel=<workers>] [--junit=<file>], and it refuses test filters`;
-const FULL = "--full";
 const CHANGED = "--changed";
-const TIERS = new Map<string, TestTier>([
-  ["--tier=live", "live"],
-  ["--tier=pixel", "pixel"],
-  ["--tier=unit", "unit"],
-  ["--tier=e2e", "e2e"],
-]);
-const PARALLEL = /^--parallel=([1-9][0-9]*)$/;
 const JUNIT = /^--junit=(.+)$/;
-
-function optionOf(arg: string): TestOptions | undefined {
-  const tier = TIERS.get(arg);
-  if (tier !== undefined) return { tier };
-  if (arg === FULL) return { full: true };
-  const workers = PARALLEL.exec(arg)?.[1];
-  return workers === undefined ? undefined : { workers: Number(workers) };
-}
-
-export function testOptions(args: readonly string[]): TestOptions | undefined {
-  let options: TestOptions = {};
-  for (const arg of args) {
-    const option = optionOf(arg);
-    if (option === undefined || Object.keys(option).some((key) => key in options)) return undefined;
-    options = { ...options, ...option };
-  }
-  if (options.tier !== undefined && options.full === true) return undefined;
-  return options;
-}
 
 export type EntryOptions = {
   readonly options: TestOptions;
@@ -85,14 +53,6 @@ export function entryOptions(args: readonly string[]): EntryOptions | undefined 
   if (options === undefined || junit.length > 1 || changed > 1) return undefined;
   if (changed === 1 && (options.tier !== undefined || options.full === true)) return undefined;
   return { options, junit: Option.fromNullishOr(junit[0]), changed: changed === 1 };
-}
-
-const TEST_SCRIPTS: readonly string[] = [NAME, `bun src/${TEST_ENTRY_POINT.script}`];
-
-export function scriptOptions(script: unknown): TestOptions | undefined {
-  if (typeof script !== "string") return undefined;
-  const entry = TEST_SCRIPTS.find((candidate) => script === candidate || script.startsWith(`${candidate} `));
-  return entry === undefined ? undefined : testOptions(script.slice(entry.length).split(" ").filter((arg) => arg !== ""));
 }
 
 function matches(declaration: SkipDeclaration, result: TestResult): boolean {

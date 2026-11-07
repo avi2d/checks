@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect";
 import { ChildProcessSpawner } from "effect/process";
-import { collect, type Feed } from "../core/git.ts";
+import { collect, type Feed } from "./git.ts";
 
 export class GitHubFailure extends Schema.TaggedError<GitHubFailure>()("GitHubFailure", {
   message: Schema.String,

@@ -3,7 +3,7 @@ import { Config, Console, Context, Effect, FileSystem, Layer, Option, Path, Sche
 import { ChildProcessSpawner } from "effect/process";
 import { DEFAULT_BRANCH } from "../core/gates.ts";
 import { runMain, Usage } from "../core/main.ts";
-import { gh, type GitHubFailure, gitHubJson, REPOSITORY } from "../delivery/github.ts";
+import { gh, type GitHubFailure, gitHubJson, REPOSITORY } from "../core/github.ts";
 import { parseReport as parseMutationReport, type ReportFile } from "./mutation-compare.ts";
 import { cleared, type Finding, findingsOf, gatesDecided, gatesOf, keyOf, WholeTreeRecordSchema, noted, type Observed, type WholeTreeRecord, percent, type PreviousRun, scoresOf, type TestReport } from "./whole-tree-run-findings.ts";
 import { parseReport as parseTestReport } from "./test-report.ts";

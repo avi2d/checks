@@ -1,6 +1,6 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import * as Base64 from "effect/encoding/Base64";
-import { gitHubJson, REPOSITORY } from "./github.ts";
+import { gitHubJson, REPOSITORY } from "../core/github.ts";
 import { nextVersion, type Pending, readPending, releaseTitle, runBuild, withVersion } from "./release.ts";
 import { git } from "../core/git.ts";
 
