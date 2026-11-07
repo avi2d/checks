@@ -5,6 +5,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { TEST_ENTRY_POINT } from "../core/gates.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { readPullRequestNarrowing } from "./affected-tests.ts";
+import { changedE2eFiles } from "./changed-tests.ts";
 import {
   readDeclarationsIn,
   readSkipDeclarations,
@@ -38,8 +39,9 @@ export type TestOptions = {
 };
 
 const NAME = TEST_ENTRY_POINT.bin;
-const USAGE = `usage: ${NAME} [--tier=live | --tier=pixel | --tier=unit | --tier=e2e] [--parallel=<workers>] [--full] [--junit=<file>], and it refuses test filters`;
+const USAGE = `usage: ${NAME} [--tier=live | --tier=pixel | --tier=unit | --tier=e2e | --full | --changed] [--parallel=<workers>] [--junit=<file>], and it refuses test filters`;
 const FULL = "--full";
+const CHANGED = "--changed";
 const TIERS = new Map<string, TestTier>([
   ["--tier=live", "live"],
   ["--tier=pixel", "pixel"],
@@ -68,14 +70,20 @@ export function testOptions(args: readonly string[]): TestOptions | undefined {
   return options;
 }
 
-export type EntryOptions = { readonly options: TestOptions; readonly junit: Option.Option<string> };
+export type EntryOptions = {
+  readonly options: TestOptions;
+  readonly junit: Option.Option<string>;
+  readonly changed: boolean;
+};
 
 // Kept out of testOptions, so checks-test-layout still holds a package.json test script to --parallel alone.
 export function entryOptions(args: readonly string[]): EntryOptions | undefined {
   const junit = args.flatMap((arg) => JUNIT.exec(arg)?.[1] ?? []);
-  const options = testOptions(args.filter((arg) => !JUNIT.test(arg)));
-  if (options === undefined || junit.length > 1) return undefined;
-  return { options, junit: Option.fromNullishOr(junit[0]) };
+  const changed = args.filter((arg) => arg === CHANGED).length;
+  const options = testOptions(args.filter((arg) => !JUNIT.test(arg) && arg !== CHANGED));
+  if (options === undefined || junit.length > 1 || changed > 1) return undefined;
+  if (changed === 1 && (options.tier !== undefined || options.full === true)) return undefined;
+  return { options, junit: Option.fromNullishOr(junit[0]), changed: changed === 1 };
 }
 
 const TEST_SCRIPTS: readonly string[] = [NAME, `bun src/${TEST_ENTRY_POINT.script}`];
@@ -176,7 +184,8 @@ export type SuiteSelection =
   | { readonly kind: "full" }
   | { readonly kind: "tier"; readonly tier: TestTier }
   | { readonly kind: "smoke" }
-  | { readonly kind: "files"; readonly files: readonly string[] };
+  | { readonly kind: "files"; readonly files: readonly string[] }
+  | { readonly kind: "changed"; readonly e2e: readonly string[] };
 
 export function selectSuite(options: TestOptions, environment: Environment): SuiteSelection {
   if (options.tier !== undefined) return { kind: "tier", tier: options.tier };
@@ -197,6 +206,7 @@ export function suiteArgs(selection: SuiteSelection, smoke: readonly string[]): 
   if (selection.kind === "tier") return tierArgs(selection.tier);
   if (selection.kind === "smoke") return ["./tests/unit", ...smoke.map((file) => `./${file}`)];
   if (selection.kind === "files") return selection.files.map((file) => `./${file}`);
+  if (selection.kind === "changed") return ["./tests/unit", ...selection.e2e.map((file) => `./${file}`)];
   return [];
 }
 
@@ -248,11 +258,30 @@ const narrowSelection = Effect.fn("narrowSelection")(function* (options: TestOpt
 
 const readScope = Effect.fn("readScope")(function* (selection: SuiteSelection, smoke: readonly string[]) {
   if (selection.kind === "smoke") return yield* readSmokeDeclarations(process.cwd(), smoke);
+  if (selection.kind === "changed") {
+    const files = changedFiles(yield* scanTestFiles(process.cwd()), selection.e2e);
+    return { files, declarations: yield* readDeclarationsIn(process.cwd(), files) };
+  }
   const declarations =
     selection.kind === "files"
       ? yield* readDeclarationsIn(process.cwd(), selection.files)
       : yield* readSkipDeclarations(process.cwd(), selection.kind === "tier" ? selection.tier : undefined);
   return { files: undefined, declarations };
+});
+
+export function changedFiles(scanned: readonly string[], e2e: readonly string[]): readonly string[] {
+  const touched = new Set(e2e);
+  return scanned.filter((file) => selectedTierFile(file, "unit") || touched.has(file));
+}
+
+const changedSelection = Effect.fn("changedSelection")(function* () {
+  const e2e = yield* changedE2eFiles(process.cwd());
+  yield* Console.log(
+    e2e.length === 0
+      ? `${NAME}: the change touches no e2e test files, so only the unit tier runs`
+      : `${NAME}: the change touches ${e2e.length} e2e test file(s): ${e2e.join(" ")}`,
+  );
+  return { kind: "changed", e2e } satisfies SuiteSelection;
 });
 
 const runSuite = Effect.fn("runSuite")(function* (outfile: string, args: readonly string[], workers: number | undefined) {
@@ -272,17 +301,23 @@ const runSuite = Effect.fn("runSuite")(function* (outfile: string, args: readonl
 const testEntry = Effect.gen(function* () {
   const entry = entryOptions(process.argv.slice(2));
   if (entry === undefined) return yield* new Usage({ message: USAGE });
-  const { options, junit } = entry;
+  const { options, junit, changed } = entry;
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const environment = yield* environmentOf;
-  const selection = yield* narrowSelection(options, selectSuite(options, environment), environment);
+  const selection = changed
+    ? yield* changedSelection()
+    : yield* narrowSelection(options, selectSuite(options, environment), environment);
   if (selection.kind === "files" && selection.files.length === 0) {
     yield* Console.log(`${NAME}: the pull request changes no file a test reads, so no test ran`);
     return true;
   }
   const smoke = selection.kind === "smoke" ? yield* readSmokeList(process.cwd()) : [];
   const scope = yield* readScope(selection, smoke);
+  if (scope.files?.length === 0 && selection.kind === "changed") {
+    yield* Console.log(`${NAME}: no unit test and no e2e test the change touches, so no test ran`);
+    return true;
+  }
   if (scope.files?.length === 0) {
     yield* Console.log(`${NAME}: no unit test and no smoke list, so this local run ran nothing; declare checks.smoke or pass ${FULL}`);
     return true;

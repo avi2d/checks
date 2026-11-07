@@ -89,8 +89,12 @@ test("checks-test takes a tier and a worker count for bun test --parallel, each 
 });
 
 test("checks-test takes one --junit file beside its other options on the command line, and a test script never takes it", () => {
-  expect(entryOptions(["--tier=live", "--junit=reports/live.xml"])).toEqual({ options: { tier: "live" }, junit: Option.some("reports/live.xml") });
-  expect(entryOptions(["--parallel=4"])).toEqual({ options: { workers: 4 }, junit: Option.none() });
+  expect(entryOptions(["--tier=live", "--junit=reports/live.xml"])).toEqual({
+    options: { tier: "live" },
+    junit: Option.some("reports/live.xml"),
+    changed: false,
+  });
+  expect(entryOptions(["--parallel=4"])).toEqual({ options: { workers: 4 }, junit: Option.none(), changed: false });
   expect(entryOptions(["--junit=one.xml", "--junit=two.xml"])).toBeUndefined();
   expect(entryOptions(["--junit="])).toBeUndefined();
   expect(scriptOptions("checks-test --junit=reports/suite.xml")).toBeUndefined();

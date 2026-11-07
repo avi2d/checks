@@ -36,6 +36,8 @@ To move a repository to a newer release of the kit:
    [Set up a repository](set-up-a-repository.md) and [checks-whole-tree-run](../gates/checks-whole-tree-run.md#running-it-by-hand) show the current names.
 1. A stale workflow left behind still passes `checks-ci-wiring`, but dispatching it fails, so delete it before dispatching it.
 1. The release notes hold the old-to-new name mapping for the workflow, label, artifacts and report file.
+1. When the repository carries its own fast test runner importing kit source files, delete it.
+   Point its script at `checks-test --changed`, as [checks-test](../gates/checks-test.md#changed-file-runs) says.
 1. Run `bun run lint`, `bun run typecheck` and `bun run test`.
 
 The repository's lockfile pins the kit, so a repository moves only when it runs these steps.

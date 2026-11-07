@@ -98,6 +98,25 @@ A run on any other event, such as `workflow_dispatch` for a release, runs the wh
 `--full` and the live and pixel tiers always run whole.
 A narrowed run judges only the skips the files it ran declare.
 
+## Changed-file runs
+
+`checks-test --changed` runs the unit tier and each e2e test file the change touches, so a desk run stays short.
+The change is every path between where `HEAD` branched from `origin/<default branch>` and `HEAD`, plus the working tree's edits and its untracked files.
+A deleted file drops out, and a renamed file counts under its new name.
+An e2e test file is a `.test.ts` or `.test.tsx` file under `tests/e2e/`, so a helper under `tests/e2e/lib/` and a quarantined test never run.
+The run names each e2e test file it picked, or says the change touches none and only the unit tier runs.
+It judges the skips of the files it ran, as any other run does.
+A clone with no remote-tracking default branch fails before any test runs and asks for a fetch of it.
+A repository runs it from a script of its own, such as:
+
+```json
+{
+  "scripts": {
+    "test:fast": "checks-test --changed"
+  }
+}
+```
+
 ## Test tiers
 
 Tests that need a live machine go in `tests/live/`, and tests that need a screen go in `tests/pixel/`.
@@ -146,9 +165,11 @@ A timings option waits for Bun to honour timings under random order.
 
 ## Arguments
 
-The default command takes no arguments except `--parallel=<workers>`, as [Parallel runs](#parallel-runs) says, `--full` and `--junit=<file>`.
+The default command takes no arguments except `--parallel=<workers>`, as [Parallel runs](#parallel-runs) says, `--full`, `--changed` and `--junit=<file>`.
 `--full` runs the full suite outside CI, so a run started by hand covers what a local run skips.
 A `package.json` script never takes `--full`, as [checks-test-layout](checks-test-layout.md) says of `scripts.test`.
+`--changed` runs the unit tier and the e2e test files the change touches, as [Changed-file runs](#changed-file-runs) says, and takes neither a tier nor `--full`.
+`scripts.test` never takes `--changed` either, so CI still runs the suite it reaches.
 Its named tier options are `--tier=live`, `--tier=pixel`, `--tier=unit` and `--tier=e2e`, and a tier run takes `--parallel=<workers>` too, but not `--full`.
 `--junit=<file>` keeps the JUnit report Bun wrote at `<file>`, whether the tests passed or failed, so a whole-tree run hands it to [checks-whole-tree-run](checks-whole-tree-run.md).
 A `package.json` script never takes `--junit`, as [checks-test-layout](checks-test-layout.md) says of `scripts.test`.
