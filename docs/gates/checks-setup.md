@@ -70,6 +70,8 @@ checks-setup: set the CI_RUNS_ON variable to a self-hosted runner label so the n
 
 A repository owner runs it once in a new repository, before the first install.
 Declare the repository owners in `package.json` `author` or `contributors` before the first commit.
+Fill `AGENTS.md` with what an agent cannot infer from the code before the first commit.
+`checks-docs` fails on the unfilled placeholder entry until it is filled.
 Running it again with the same kit version changes nothing.
 A later kit release arrives through [Upgrade the kit](../how-to/upgrade-the-kit.md).
 
