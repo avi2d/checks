@@ -554,3 +554,41 @@ test("an npm run script or shell operand that reaches a mutation bin is not a mu
   expect(runsMutation({ script: "bash scripts/mutate.sh", dir: "" }, scripts, files)).toBe(false);
 });
 
+test("arguments passed to bun run reach the package script they name, so a bare call misses the mutation subcommand", () => {
+  const scripts = new Map([["mutate", "stryker"]]);
+  const files = () => undefined;
+  expect(runsMutation({ script: "bun run mutate run", dir: "" }, scripts, files)).toBe(true);
+  expect(runsMutation({ script: "bun run mutate", dir: "" }, scripts, files)).toBe(false);
+  const nested = new Map([
+    ["outer", "bun run inner"],
+    ["inner", "stryker"],
+  ]);
+  expect(runsMutation({ script: "bun run outer run", dir: "" }, nested, files)).toBe(true);
+});
+
+test("forwarded arguments keep their boundaries when they reach the package script, so a quoted blank or padded word misses", () => {
+  const scripts = new Map([["mutate", "stryker"]]);
+  const files = () => undefined;
+  expect(runsMutation({ script: 'bun run mutate ""', dir: "" }, scripts, files)).toBe(false);
+  expect(runsMutation({ script: 'bun run mutate " run"', dir: "" }, scripts, files)).toBe(false);
+  expect(runsMutation({ script: "bun run mutate run", dir: "" }, scripts, files)).toBe(true);
+});
+
+test('a shell wrapper forwards its arguments only through a standalone $@ (oracle: POSIX shell semantics), so literal forms miss the mutation bin', () => {
+  const forwarded = (file: string) => (file === "scripts/mutate.sh" ? 'exec stryker "$@"' : undefined);
+  const none = new Map<string, string>();
+  expect(runsMutation({ script: "./scripts/mutate.sh run", dir: "" }, none, forwarded)).toBe(true);
+  expect(runsMutation({ script: "./scripts/mutate.sh", dir: "" }, none, forwarded)).toBe(false);
+  expect(runsMutation({ script: "./scripts/mutate.sh status", dir: "" }, none, forwarded)).toBe(false);
+  const chained = (file: string) => (file === "scripts/outer.sh" ? './scripts/inner.sh "$@"' : file === "scripts/inner.sh" ? 'exec stryker "$@"' : undefined);
+  expect(runsMutation({ script: "./scripts/outer.sh run", dir: "" }, none, chained)).toBe(true);
+  const throughScript = new Map([["mutate", "./scripts/mutate.sh"]]);
+  expect(runsMutation({ script: "bun run mutate run", dir: "" }, throughScript, forwarded)).toBe(true);
+  const literal = (file: string) => (file === "scripts/mutate.sh" ? "exec stryker '$@'" : undefined);
+  expect(runsMutation({ script: "./scripts/mutate.sh run", dir: "" }, none, literal)).toBe(false);
+  const escaped = (file: string) => (file === "scripts/mutate.sh" ? 'exec stryker "\\$@"' : undefined);
+  expect(runsMutation({ script: "./scripts/mutate.sh run", dir: "" }, none, escaped)).toBe(false);
+  const concatenated = (file: string) => (file === "scripts/mutate.sh" ? 'exec stryker "$"\'@\'' : undefined);
+  expect(runsMutation({ script: "./scripts/mutate.sh run", dir: "" }, none, concatenated)).toBe(false);
+});
+

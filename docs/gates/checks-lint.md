@@ -73,7 +73,7 @@ A repository runs it from `bun run lint` in a pull request workflow that fetches
 It leaves out the TypeScript gates while the repository tracks no TypeScript file, except that `checks-lint-coverage` and `checks-graphwalk` run when it tracks an `.astro` file.
 It never runs `checks-browser`, which a product runs after it builds its site.
 A pull request run scopes the gates to the change.
-A repository runs the four whole-tree gates from its whole-tree-run workflow with `checks-lint --whole-tree` over the whole tree.
+A repository that adds a whole-tree-run workflow runs the four whole-tree gates from it with `checks-lint --whole-tree` over the whole tree.
 
 ## Related topics
 
