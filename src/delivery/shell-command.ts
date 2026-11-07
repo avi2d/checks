@@ -289,10 +289,6 @@ export function shellWords(script: string): readonly (readonly Word[])[] {
   return parse.commands.filter((command) => command.length > 0);
 }
 
-export function shellCommands(script: string): readonly Command[] {
-  return shellWords(script).map(texts);
-}
-
 export function withoutOptions(words: Command, operands: ReadonlySet<string>): Command {
   const [first = "", ...rest] = words;
   if (first === "--") return rest;

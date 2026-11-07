@@ -12,7 +12,7 @@ The gate runs jscpd at 50 tokens and 5 lines against the base and head revisions
 It compares repeated lines for each file, so a decrease in another file never offsets a rise.
 It follows an edited rename back to the original file.
 A file that repeats lines without a rise is advisory.
-At night `checks-lint --night` scans the head alone with no base, so every file that repeats lines at the head fails until the repetition is removed, and no file is advisory.
+On the whole-tree run `checks-lint --whole-tree` scans the head alone with no base, so every file that repeats lines at the head fails until the repetition is removed, and no file is advisory.
 A block two bins need goes into a module both import, as `rangeFromArgs` and `checkoutFiles` in `src/core/git.ts` show.
 
 ## What it reads
@@ -38,7 +38,7 @@ checks-repetition <ref>
 checks-repetition --whole-tree <head-ref>
 ```
 
-With `--whole-tree` it scans the named head alone, which is the form `checks-lint --night` runs.
+With `--whole-tree` it scans the named head alone, which is the form `checks-lint --whole-tree` runs.
 
 ## Exit codes
 
@@ -58,7 +58,7 @@ repetition: 1 file(s) .jscpd.json holds repeat lines at the head, at 50 tokens a
 
 ## When it runs
 
-`checks-lint --night` runs it nightly when the repository tracks a `.ts` or `.tsx` file.
+`checks-lint --whole-tree` runs it on every whole-tree run when the repository tracks a `.ts` or `.tsx` file.
 When the head holds no `.jscpd.json`, the gate reports that no file was measured.
 
 ## Related topics

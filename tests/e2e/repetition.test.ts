@@ -102,7 +102,7 @@ test(
 );
 
 test(
-  "checks-lint --night runs the repetition hold over the whole tree, red on an added copy and green once it is gone",
+  "checks-lint --whole-tree runs the repetition hold over the whole tree, red on an added copy and green once it is gone",
   async () => {
     const repo = await repository({ ...lintWiring(), "src/ledger.ts": block("ledger") });
     await withOwnInstall(repo);
@@ -111,7 +111,7 @@ test(
     await write({ "src/copy.ts": block("ledger") });
     await commit("feat: copy");
 
-    const red = await script("core/lint.ts", "--night");
+    const red = await script("core/lint.ts", "--whole-tree");
     expect(red.text).toContain("repetition: 2 file(s) .jscpd.json holds repeat lines at the head, at 50 tokens and 5 lines:");
     expect(red.text).toContain("  src/copy.ts: 10 repeated line(s)\n");
     expect(red.text).not.toContain("up from 0");
@@ -120,7 +120,7 @@ test(
 
     await write({ "src/copy.ts": "export const copy = 1;\n" });
     await commit("fix: no copy");
-    const green = await script("core/lint.ts", "--night");
+    const green = await script("core/lint.ts", "--whole-tree");
     expect(green.text).toContain("repetition: 1 file(s) .jscpd.json holds repeat no lines at the head, at 50 tokens and 5 lines");
     expect(green.text).toContain("checks-lint: 4 gate(s) pass\n");
     expect(green.exitCode).toBe(0);

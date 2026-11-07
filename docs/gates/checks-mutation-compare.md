@@ -69,7 +69,7 @@ mutation-compare: REGRESSION (1 mutant(s))
 
 Only a CI step the repository writes runs it.
 A person starts that step by hand on a branch, and no pull request triggers it or waits for it.
-[checks-night-run](checks-night-run.md) judges the mutation score of `main` each night and opens an issue for each file whose score fell.
+[checks-whole-tree-run](checks-whole-tree-run.md) judges the mutation score of `main` on each whole-tree run and opens an issue for each file whose score fell.
 A repository runs it with `--advisory`, so the comparison stays advisory.
 Its lines land only in the CI log.
 A full sweep runs in CI and never on a laptop.
@@ -145,5 +145,5 @@ The job never reads `CI_RUNS_ON`, so an override that moves a repository's other
 
 - [checks-mutation](checks-mutation.md)
 - [checks-mutation-scope](checks-mutation-scope.md)
-- [checks-night-run](checks-night-run.md)
+- [checks-whole-tree-run](checks-whole-tree-run.md)
 - [checks-test-layout](checks-test-layout.md)

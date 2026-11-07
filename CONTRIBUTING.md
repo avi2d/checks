@@ -29,16 +29,15 @@ It runs only when `gh workflow run mutation` starts it, and no pull request runs
 That run restores the previous full baseline state through [checks-mutation-baseline](docs/gates/checks-mutation-baseline.md), so it retests only the mutants its changes reach.
 A result made stale by a file a test reads at runtime lasts until the next 28-day refresh.
 That run uploads the report and the incremental state again as the `mutation-baseline-full` artifact.
-`.github/workflows/night-run.yml` runs when `gh workflow run night-run` starts it, queued behind any night run already going.
-It runs a full Stryker run in three parallel shards by source directory.
-It runs the unit, e2e and live levels of the suite and keeps each JUnit report.
-It also runs the four nightly lint gates over the whole tree with no base, so every suppression count and every repeated line still present is reported until it is removed.
-[checks-night-run](docs/gates/checks-night-run.md) then opens or comments on one issue labelled `night-run` for each file whose mutation score fell since the previous night, for each failing test, and for each nightly gate that failed.
+No workflow runs the full Stryker run, the long test tiers, the four whole-tree lint gates or the issue filing on its own.
+Each runs by hand from the commands [checks-whole-tree-run](docs/gates/checks-whole-tree-run.md#running-it-by-hand) shows, under a workflow named `whole-tree-run` the owner writes when one is wanted.
+`bunx checks-lint --whole-tree` runs the four whole-tree lint gates over the whole tree with no base, so every suppression count and every repeated line still present is reported until it is removed.
+[checks-whole-tree-run](docs/gates/checks-whole-tree-run.md) then opens or comments on one issue labelled `whole-tree-run` for each file whose mutation score fell since the previous run, for each failing test, and for each whole-tree gate that failed.
 It also files each mutation report a failed or timed-out mutation job never wrote.
-It closes the issue of a test, a gate or a missing mutation report that a later night no longer reports, and it comments on a mutation issue it no longer reports without closing it, but only when a previous night exists and every requested mutation report is present.
+It closes the issue of a test, a gate or a missing mutation report that a later run no longer reports, and it comments on a mutation issue it no longer reports without closing it, but only when a previous run exists and every requested mutation report is present.
 A failed mutation run still leaves each failing test filed, and records no score.
 A run started on a branch other than `main` lists its findings in the log and files no issue.
-Each issue is fixed in a pull request of its own, so no pull request waits for a mutation run.
+Each issue is fixed in a pull request of its own, so no pull request waits for a whole-tree run.
 Run `bun run mutate -- --mutate <file>` to mutate one source file locally, since the preset refuses a full run outside CI.
 The patch under `patches/` makes `@hughescr/stryker-bun-runner` honour Stryker's hit limit, so a mutant whose code loops endlessly ends as a `Timeout` within seconds.
 A static mutant, evaluated once when its module loads, never reaches that limit and still waits for `timeoutMS`.

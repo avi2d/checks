@@ -353,22 +353,21 @@ test("a setup-bun step with no pinned version fails until the root package.json 
   expect((await wiring(repo)).exitCode).toBe(0);
 }, 30_000);
 
-test("the installed bin refuses a TypeScript repository with no night step and passes it once the step lands", async () => {
+test("a TypeScript repository passes with no whole-tree step, and a stale night-run.yml beside it still passes", async () => {
   const repo = await open({
     "package.json": scripts(["lint", "test"]),
     "src/index.ts": "export const answer = 42;\n",
     ".github/workflows/ci.yml": workflow,
   });
   await repo.commit("start");
-  const red = await wiring(repo);
-  expect(red.exitCode).toBe(1);
-  expect(red.text).toContain("ci-wiring: 1 gate(s) never run on the night run:\n  checks-lint --night\n    no run step invokes it");
+  const bare = await wiring(repo);
+  expect(bare.exitCode).toBe(0);
+  expect(bare.text).not.toContain("1 gate(s) never run on the night run");
   await repo.write({ ".github/workflows/night-run.yml": nightRun });
-  const green = await wiring(repo);
-  expect(green.exitCode).toBe(0);
+  expect((await wiring(repo)).exitCode).toBe(0);
 }, 30_000);
 
-test("a repository that tracks no TypeScript passes with no night step", async () => {
+test("a repository that tracks no TypeScript passes", async () => {
   const repo = await open({
     "package.json": scripts(["lint", "test"]),
     ".github/workflows/ci.yml": workflow,

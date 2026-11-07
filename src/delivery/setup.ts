@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { runMain, Usage } from "../core/main.ts";
-import { ciWorkflow, nightWorkflow } from "./setup-workflow.ts";
+import { ciWorkflow } from "./setup-workflow.ts";
 import { TEMPLATES } from "../docs/doc-templates.ts";
 import { scriptOptions } from "../testing/test.ts";
 import { withServiceOverrides, type ServiceOverride } from "../quality/effect-scope.ts";
@@ -349,7 +349,6 @@ const check = Effect.gen(function* () {
   yield* setupTsconfig(root, oxlintText);
   yield* setupFile(root, "knip.config.ts", KNIP_CONFIG);
   yield* setupFile(root, ".github/workflows/ci.yml", ciWorkflow(isPrivate, outcome.hasBuild));
-  yield* setupFile(root, ".github/workflows/night-run.yml", nightWorkflow(isPrivate));
   for (const kind of Object.keys(TEMPLATES)) {
     yield* setupFile(root, "templates/" + kind + ".md", yield* kitText("dist/templates/" + kind + ".md"));
   }
