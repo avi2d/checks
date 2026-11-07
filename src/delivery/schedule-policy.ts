@@ -1,8 +1,8 @@
 import { runsBin } from "./mutation-job.ts";
-import { releasesOnSchedule, schedules } from "./release-schedule.ts";
+import { crons, isBinIn, releasesOnSchedule, schedules } from "./release-schedule.ts";
 import { jobRuns } from "./runner-policy.ts";
 import { invokes, plainCommand, type Command } from "./shell-command.ts";
-import { isRecord, locate, workflowJobs, type Workflow } from "./workflow-references.ts";
+import { locate, workflowJobs, type Workflow } from "./workflow-references.ts";
 import type { ScheduleContext, ScheduleOwner } from "./release-schedule.ts";
 
 export type ScheduledRun = {
@@ -17,13 +17,7 @@ const WEEKDAY = /^(?:[0-7]|sun|mon|tue|wed|thu|fri|sat)$/i;
 const BY_HAND = "drop the schedule, so it runs only when someone starts it with gh workflow run";
 
 function isAdvisoryBin([head = ""]: Command): boolean {
-  return ADVISORY_BINS.some((name) => head === name || head.endsWith(`/${name}`));
-}
-
-function crons(document: unknown): readonly unknown[] {
-  const on = isRecord(document) ? document["on"] : undefined;
-  const schedule = isRecord(on) ? on["schedule"] : undefined;
-  return Array.isArray(schedule) ? schedule.map((entry) => (isRecord(entry) ? entry["cron"] : undefined)) : [];
+  return isBinIn(ADVISORY_BINS, head);
 }
 
 // Once a week is one minute, one hour and one weekday, on any day of any month.

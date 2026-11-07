@@ -96,8 +96,10 @@ A path read without the resolver, such as `node_modules/@avi2dg/checks/scripts/t
 
 ## The package ships built plugins and runnable bins
 
-`files` in `package.json` lists what an install gets.
-`tests/`, `AGENTS.md` and the TypeScript source of the oxlint plugins never reach an install.
+`files` in `package.json` lists what an install gets, and `tests/` and `AGENTS.md` never reach an install.
+It ships `docs/`, `src/` and `dist/`, so a new bin or page ships with no edit to `files`.
+Its `!` entries keep out the decision records under `docs/adr/` and the sources only the build reads.
+A source a shipped bin imports ships even when the build also compiles it.
 npm adds `package.json`, `README.md` and `LICENSE` whatever `files` says.
 `bun pm pack` builds the same tarball the registry serves, and the consumer e2e test installs that tarball.
 

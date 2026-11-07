@@ -76,7 +76,8 @@ function topLevel(file: string): string {
 }
 
 function shippedPaths({ files }: typeof Manifest.Type): Effect.Effect<readonly ShippedPath[], DocBlocksUnwritable> {
-  const paths = [...new Set(files.map(topLevel))];
+  const included = files.filter((file) => !file.startsWith("!"));
+  const paths = [...new Set(included.map(topLevel))];
   const unrowed = paths.filter((path) => !isShipped(path));
   const unshipped = Object.keys(SHIPPED).filter((path) => !paths.includes(path));
   if (unrowed.length === 0 && unshipped.length === 0) return Effect.succeed(paths.filter(isShipped));

@@ -86,6 +86,11 @@ test("a package.json that ships a top-level path Where things are has no row for
   expect(refused.message).toBe("package.json: files ships extras/, which SHIPPED in scripts/doc-blocks.ts has no row for");
 });
 
+test("a negated files entry excludes a path rather than being refused as a top-level path with no row", () => {
+  const facts = Effect.runSync(kitFacts(shipping([...KIT.manifest.files, "!docs/adr/", "!src/quality/data-shape/"])));
+  expect(facts.shipped).toEqual(KIT.shipped);
+});
+
 test("a Where things are row for a path package.json no longer ships is refused, naming the path", () => {
   const refused = Effect.runSync(Effect.flip(kitFacts(shipping(KIT.manifest.files.filter((file) => file !== "stryker.preset.js")))));
   expect(refused.message).toBe("package.json: SHIPPED in scripts/doc-blocks.ts has a row for stryker.preset.js, which files does not ship");

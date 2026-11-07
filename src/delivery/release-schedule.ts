@@ -23,7 +23,7 @@ const PUBLISH_BINS = ["checks-release-publish", "release-publish.ts"];
 const NUMBER = /^\d+$/;
 const BY_HAND = "drop the schedule, so a release runs only when someone starts it";
 
-function isBinIn(bins: readonly string[], word: string): boolean {
+export function isBinIn(bins: readonly string[], word: string): boolean {
   return bins.some((name) => word === name || word.endsWith(`/${name}`));
 }
 
@@ -57,7 +57,7 @@ function workflowRuns(
   });
 }
 
-function crons(document: unknown): readonly unknown[] {
+export function crons(document: unknown): readonly unknown[] {
   const on = isRecord(document) ? document["on"] : undefined;
   const schedule = isRecord(on) ? on["schedule"] : undefined;
   return Array.isArray(schedule) ? schedule.map((entry) => (isRecord(entry) ? entry["cron"] : undefined)) : [];
