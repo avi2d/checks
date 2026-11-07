@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { mkdir, symlink, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CHECKOUT, ran, scratchDirs, type Ran } from "../lib/fixture-repo.ts";
 
@@ -326,6 +326,85 @@ test(
       ].join("\n"),
     );
     const green = await depcruise(config, "src");
+    expect(green.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+async function writeWorkspace(entry: string): Promise<void> {
+  await writeProject({
+    "packages/a/package.json": JSON.stringify({ name: "@ws/a", type: "module", dependencies: { "@ws/b": "workspace:*", ext: "1.0.0" } }),
+    "packages/a/src/index.test.ts": `import "./index.ts";\n`,
+    "packages/a/src/index.ts": entry,
+    "packages/a/src/sibling.ts": `export const sibling: number = 1;\n`,
+    "packages/b/package.json": JSON.stringify({ name: "@ws/b", type: "module", exports: { ".": "./src/index.ts" } }),
+    "packages/b/src/index.ts": `import { inner } from "./inner.ts";\nexport const b: number = inner;\n`,
+    "packages/b/src/inner.ts": `export const inner: number = 1;\n`,
+  });
+  await writeManifest({ private: true, workspaces: ["packages/*"] });
+  await mkdir(join(dir, "node_modules", "@ws"), { recursive: true });
+  await symlink(join("..", "..", "packages", "b"), join(dir, "node_modules", "@ws", "b"));
+  await writePackage("ext", {}, { "index.js": `export const e = 1;\n` });
+}
+
+const BARE_ENTRY = `import { b } from "@ws/b";\nimport { e } from "ext";\nimport { sibling } from "./sibling.ts";\nexport const a: number = b + e + sibling;\n`;
+
+test(
+  "no-relative-into-other-package goes red on a relative path into a sibling workspace package, green on the bare workspace import",
+  async () => {
+    dir = await scratch("checks-depcruiser-other-package-");
+    await writeWorkspace(`import { inner } from "../../b/src/inner.ts";\nexport const a: number = inner;\n`);
+    const config = await writeConfig();
+
+    const red = await depcruise(config, "packages");
+    expect(red.exitCode).not.toBe(0);
+    expect(red.text).toContain("no-relative-into-other-package");
+    expect(red.text).toContain("packages/b/src/inner.ts");
+
+    await writeFile(join(dir, "packages/a/src/index.ts"), BARE_ENTRY);
+    const green = await depcruise(config, "packages");
+    expect(green.text).not.toContain("no-relative-into-other-package");
+    expect(green.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
+  "no-relative-into-node-modules goes red on a relative path into an installed package, green on its bare entry and the bare workspace import",
+  async () => {
+    dir = await scratch("checks-depcruiser-into-node-modules-");
+    await writeWorkspace(`import { e } from "../../../node_modules/ext/index.js";\nexport const a: number = e;\n`);
+    const config = await writeConfig();
+
+    const red = await depcruise(config, "packages");
+    expect(red.exitCode).not.toBe(0);
+    expect(red.text).toContain("no-relative-into-node-modules");
+    expect(red.text).toContain("node_modules/ext/index.js");
+
+    await writeFile(join(dir, "packages/a/src/index.ts"), BARE_ENTRY);
+    const green = await depcruise(config, "packages");
+    expect(green.text).not.toContain("no-relative-into-node-modules");
+    expect(green.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
+  "a repository without workspaces stays green under both relative-path rules on its bare and local imports",
+  async () => {
+    dir = await scratch("checks-depcruiser-no-workspace-");
+    await writeProject({
+      "src/entry.test.js": `import "./entry.js";\n`,
+      "src/entry.js": `import { e } from "ext";\nimport { local } from "./local.js";\nexport const entry = e + local;\n`,
+      "src/local.js": `export const local = 1;\n`,
+    });
+    await writeManifest({ dependencies: { ext: "1.0.0" } });
+    await writePackage("ext", {}, { "index.js": `export const e = 1;\n` });
+    const config = await writeConfig();
+
+    const green = await depcruise(config, "src");
+    expect(green.text).not.toContain("no-relative-into-other-package");
+    expect(green.text).not.toContain("no-relative-into-node-modules");
     expect(green.exitCode).toBe(0);
   },
   60_000,

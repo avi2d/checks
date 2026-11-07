@@ -133,7 +133,7 @@ test("a project rule named for a kit rule replaces it, and any other is added af
   const config = defineCruise({ forbidden: [replaced, added] });
   expect(config.forbidden?.filter(({ name }) => name === "no-circular")).toEqual([replaced]);
   expect(config.forbidden?.slice(-2)).toEqual([replaced, added]);
-  expect(config.forbidden).toHaveLength(8);
+  expect(config.forbidden).toHaveLength(10);
 });
 
 const CHECKOUT = resolve(import.meta.dir, "..", "..", "..");

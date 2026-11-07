@@ -17,6 +17,8 @@ The kit's dependency-cruiser rules hold a repository's imports, and a repository
 - `no-non-package-json`, which refuses an import of an installed package that the nearest `package.json` does not declare, and counts a peer that `peerDependenciesMeta` marks optional as declared
 - `not-to-unresolvable`, which refuses a specifier nothing installed answers
 - `no-deep-imports`, which refuses a subpath the package's exports map does not publish
+- `no-relative-into-other-package`, which refuses a relative path from one `packages/<name>/` into another's files
+- `no-relative-into-node-modules`, which refuses a relative path into `node_modules/`
 
 A test file, a config file and every path under `tests/` may import a dev-only package.
 Shipped source may import a dev-only package with `import type` or an inline `type` specifier, since swc tags that import type-only without a TypeScript compiler.
@@ -28,6 +30,7 @@ The rules parse with swc, so the cruise needs `@swc/core` installed, and without
 The rules honour `exports` maps, so a subpath the map publishes resolves and passes, and a subpath it omits fails to resolve and is reported.
 A package without an `exports` map publishes every file.
 A bare import always passes, whatever file its entry lives in.
+The two relative-path rules judge only an import that resolves as a local file, so a bare workspace or installed import always passes.
 A repository that sets its own `options.enhancedResolveOptions` replaces the kit's, and restates `exportsFields` and `conditionNames` in it.
 
 ## A repository's own config
