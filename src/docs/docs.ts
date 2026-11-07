@@ -6,7 +6,7 @@ import { ADR_DIRECTORY, judge, placementOf, placementProblem, recordsOf, speaksT
 import { vanishedNames } from "./doc-names.ts";
 import { pinsAt, versionFindings } from "./doc-versions.ts";
 import { readTexts, snapshotAt, stillMissing } from "./doc-snapshot.ts";
-import { changedLines, changedPaths, git, pathsAt, rangeEnds, refArgs } from "../core/git.ts";
+import { changedLines, changedPaths, git, pathsAt, pathsOf, rangeEnds, refArgs, type Change } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { proseFindings, readerOf } from "./prose-matchers.ts";
 import { longSentences } from "./sentence-length.ts";
@@ -50,6 +50,10 @@ const MARKDOWN = [":(glob)**/*.md"];
 function agentFileFindings(path: string, text: string, tracked: Snapshot): readonly Finding[] {
   const shaped = [ceilingFinding(text), maintainingFinding(text)].flatMap((finding) => (finding === undefined ? [] : [finding]));
   return [...shaped, ...entryFindings(path, text, tracked)].map((finding) => ({ path, ...finding }));
+}
+
+function rangeEditsDocs(changes: readonly Change[], text: (path: string) => string): boolean {
+  return changes.flatMap((change) => pathsOf(change)).some((path) => placementOf(path, text(path)).type !== "unjudged" || readerOf(path) !== undefined);
 }
 
 function rootAgentFindings(files: ReadonlySet<string>, editsDocs: boolean): { readonly failing: readonly Finding[]; readonly advisory: readonly Finding[] } {
@@ -140,7 +144,7 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   const shapes = agents.flatMap(({ path }) => agentFileFindings(path, text(path), tracked));
   const readmes = proseDocs.filter(({ path }) => isCeiledReadme(path, tracked.files));
   const oversize = readmes.flatMap(({ path }) => readmeFindings(text(path)).map((finding) => ({ path, ...finding })));
-  const rootAgents = rootAgentFindings(tracked.files, changes.length > 0);
+  const rootAgents = rootAgentFindings(tracked.files, rangeEditsDocs(changes, text));
   const advisory = new Map<string, number>();
   for (const { path } of templated.filter((finding) => !touched.has(finding.path))) advisory.set(path, (advisory.get(path) ?? 0) + 1);
   return {

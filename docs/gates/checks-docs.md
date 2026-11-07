@@ -218,6 +218,7 @@ The failure names the missing file and the template to copy:
 
 A `package.json` in a subdirectory asks for no agent file, and a repository with no `package.json` at its root needs neither.
 A missing file fails only in a range that adds, changes, renames or deletes a doc file, an ADR or the changelog included.
+A changeset, a test fixture or a pull request template does not end the advisory period.
 Any other range lists the missing file as advisory, so the first change that edits a doc file adds both files.
 
 ## What it reads

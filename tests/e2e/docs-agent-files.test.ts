@@ -83,6 +83,26 @@ test(
 );
 
 test(
+  "a package repository without CLAUDE.md does not fail a range that adds only a changeset, and lists the file as advisory",
+  async () => {
+    const { put, commit, docs } = await initRepo();
+    await put("package.json", MANIFEST);
+    await put("AGENTS.md", ROOT_AGENTS);
+    const previous = await commit("a package with AGENTS.md alone");
+    await put(".changeset/brave-fox.md", "---\n\"widget\": patch\n---\n\nFix the bill.\n");
+    const head = await commit("add a changeset");
+
+    const quiet = await docs(previous, head);
+    expect(quiet.text).toContain(
+      "docs: advisory, 1 agent file(s) missing from the repository root, which the first range that edits a doc adds:",
+    );
+    expect(quiet.text).toContain(MISSING_CLAUDE);
+    expect(quiet.exitCode).toBe(0);
+  },
+  120_000,
+);
+
+test(
   "a range that deletes CLAUDE.md from a package repository fails rather than passing as a range that edits no doc",
   async () => {
     const { put, remove, commit, docs } = await initRepo();
