@@ -75,7 +75,7 @@ It never runs `checks-browser`, which a product runs after it builds its site.
 A pull request run scopes the gates to the change.
 A pull request run judges the three range whole-tree gates over its range like every other range gate.
 It judges `checks-lint-coverage` only when the change selects the tree gates, since that gate reads the working tree.
-Someone runs the four whole-tree gates over the whole tree by hand with `checks-lint --whole-tree`, from a whole-tree-run workflow or at the desk.
+Someone runs the four whole-tree gates over the whole tree by hand with `checks-lint --whole-tree`, from a whole-tree-run workflow or from a local shell.
 
 ## Related topics
 
