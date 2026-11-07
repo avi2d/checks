@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.76.0
+
+Released 2026-11-07.
+
+### Features
+
+- **oxlint:** run schema-twin on tests too [#68](https://github.com/avi2d/checks/pull/68)
+
 ## 0.75.0
 
 Released 2026-11-07.
