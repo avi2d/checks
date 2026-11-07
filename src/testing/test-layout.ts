@@ -4,7 +4,7 @@ import { workingTreeFiles } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { ENTRY_POINT, TEST_ENTRY_POINT } from "../core/gates.ts";
 import { identifierName, isRecord, lineOf, parseTypeScript, spanStart, stringValue } from "../core/swc.ts";
-import { scriptOptions } from "./test.ts";
+import { scriptOptions } from "../core/test-script.ts";
 
 export type Violation = {
   readonly file: string;

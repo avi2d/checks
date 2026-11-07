@@ -50,6 +50,7 @@
     "src/delivery/release-tag.ts",
     "src/delivery/release-tagging.ts",
     "src/core/github.ts",
+    "src/core/test-script.ts",
     "src/testing/test-layout.ts",
     "src/testing/block-screens.ts",
     "src/testing/test.ts",

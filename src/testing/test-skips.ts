@@ -1,8 +1,9 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
 import { identifierName, isRecord, lineOf, parseTypeScript, spanStart, stringValue } from "../core/swc.ts";
+import type { TestTier } from "../core/test-script.ts";
 
 export type Environment = "ci" | "local";
-export type TestTier = "live" | "pixel" | "unit" | "e2e";
+export type { TestTier };
 export type SkipDeclaration = {
   readonly file: string;
   readonly line: number;

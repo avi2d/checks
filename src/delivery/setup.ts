@@ -3,7 +3,7 @@ import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { runMain, Usage } from "../core/main.ts";
 import { ciWorkflow } from "./setup-workflow.ts";
 import { TEMPLATES } from "../docs/doc-templates.ts";
-import { scriptOptions } from "../testing/test.ts";
+import { scriptOptions } from "../core/test-script.ts";
 import { withServiceOverrides, type ServiceOverride } from "../quality/effect-scope.ts";
 import { SOURCES, TESTS } from "../quality/presets/oxlint.ts";
 import severities from "../quality/presets/effect.language-service.json" with { type: "json" };
