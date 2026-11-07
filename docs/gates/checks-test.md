@@ -8,7 +8,7 @@ audience: consumers
 
 ## What it checks
 
-It runs the unit tier plus the smoke list outside CI and the full suite under CI.
+It runs the unit tier plus the smoke list outside CI and the full suite under CI, except a `--changed` run, as [Changed-file runs](#changed-file-runs) says.
 It runs them with `bun test --randomize --parallel=<workers>`, as [Parallel runs](#parallel-runs) says, and reads Bun's JUnit report from that run.
 It runs Bun with `CI=true`, so `test.only` fails the run in every environment.
 Bun exits zero when tests skip, so `checks-test` checks every skipped test against its source declaration.
@@ -46,13 +46,14 @@ A skipped test or a todo without `skipReason` fails in every environment.
 
 `checks-test` reads test source files and the JUnit report written by its own run.
 A pull request run also reads the event file, the git history between the base and the head, the tracked sources, `package.json` and `bunfig.toml`.
+A `--changed` run also reads the git history since the merge base with `origin/<default branch>`, the working tree diff and the untracked files, as [Changed-file runs](#changed-file-runs) says.
 It reads no skip list from `package.json`, only the smoke list.
 It counts a run as `ci` when `CI` is true and as `local` otherwise.
-A local run covers `./tests/unit` plus the smoke list the repository declares.
+A local run covers `./tests/unit` plus the smoke list the repository declares, except a `--changed` run, as [Changed-file runs](#changed-file-runs) says.
 The smoke list lives in `package.json` under `checks.smoke` as an array of test file paths.
 A repository with no smoke list runs the unit tier alone outside CI.
 A local run with no unit test and no smoke list runs nothing and passes.
-A `ci` run covers the full default suite, unless a pull request narrows it, as [Pull request runs](#pull-request-runs) says.
+A `ci` run covers the full default suite, unless a pull request narrows it or `--changed` narrows it, as [Pull request runs](#pull-request-runs) and [Changed-file runs](#changed-file-runs) say.
 A smoke entry that names no test file fails the run.
 A smoke entry under `tests/quarantine/`, `tests/live/` or `tests/pixel/` fails the run, since Bun's ignored paths would drop it.
 
@@ -182,7 +183,7 @@ It refuses test filters because every test excluded by a filter would look skipp
 | --- | --- |
 | 0 | every test passed and every skip has a matching site reason |
 | 1 | a test failed, a parallel worker crashed, a skip lacks a site reason or a declaration is stale in CI |
-| 2 | an argument is not one it takes, a declaration or the smoke list cannot be read, a smoke entry names no runnable test, `CI` is not a boolean or Bun wrote no report |
+| 2 | an argument is not one it takes, a declaration or the smoke list cannot be read, a smoke entry names no runnable test, `CI` is not a boolean, Bun wrote no report or a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` |
 
 ## Sample output
 
