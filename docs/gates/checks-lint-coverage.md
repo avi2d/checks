@@ -53,8 +53,8 @@ lint-coverage: the program tsconfig.json builds holds the ts-reset rules is-arra
 
 ## When it runs
 
-`checks-lint --whole-tree` runs it on every whole-tree run when the repository tracks a `.ts`, `.tsx` or `.astro` file.
-No pull request run selects it.
+`checks-lint` runs it in the full run when the repository tracks a `.ts`, `.tsx` or `.astro` file.
+`checks-lint --whole-tree` also runs it when someone starts the whole-tree run by hand.
 
 ## Related topics
 

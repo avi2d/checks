@@ -134,7 +134,6 @@ The gates run one at a time and pass their output straight through, so each repo
 `checks-lint` picks the gates that apply from the tracked files for the full run, and a repository cannot select gates.
 A scoped run selects a subset by changed paths, and the desk run selects the fast tree gates.
 A TypeScript gate applies as soon as the repository tracks TypeScript source, and `checks-lint-coverage` and `checks-graphwalk` also apply on tracked Astro source.
-`checks-lint-coverage` and `checks-repetition` run only on the whole-tree run.
 
 dependency-cruiser runs inside the `checks-graphwalk` gate rather than as a script each repository adds to `lint`, so the full run keeps it.
 A repository with no config of its own is cruised against the kit's defaults, since every rule has one.

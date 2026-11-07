@@ -129,26 +129,27 @@ Only a whole-tree workflow the repository writes runs it, after that workflow's 
 
 ## Coverage that stops running
 
-Neither release nor CI runs a full mutation run, the four whole-tree gates or the issue filing in any repository below.
+The four whole-tree gates run on every pull request, since `checks-lint` judges each pull request's range with them like every other gate.
+Neither release nor CI runs a full mutation run, the whole-tree sweep of the four gates or the issue filing in any repository below.
 Each answer comes from the workflows under `.github/workflows` of that repository.
 
 - checks keeps none of the three on a workflow.
   Mutation testing runs only by hand through the mutation workflow baseline.
-  The four whole-tree gates run only by hand through `checks-lint --whole-tree`.
+  The whole-tree sweep runs only by hand through `checks-lint --whole-tree`.
   Nothing files issues until someone adds a `whole-tree-run` workflow.
 - skills runs all three by hand through its `night-run` workflow.
-  That workflow runs a full Stryker mutation run, the four gates and the unit and e2e tiers with issue filing.
+  That workflow runs a full Stryker mutation run, the whole-tree sweep and the unit and e2e tiers with issue filing.
 - dotfiles runs mutation testing on pull requests as an advisory scoped compare, and the full baseline by hand, both through `mutation.yml`.
-  The four gates run only by hand through its `night-run` workflow.
+  The whole-tree sweep runs only by hand through its `night-run` workflow.
   Nothing files issues.
-- career runs the four gates only by hand through its `night-run` workflow.
+- career runs the whole-tree sweep only by hand through its `night-run` workflow.
   No mutation testing and no issue filing run anywhere.
-- home-vpn runs the four gates only by hand through its `night-run` workflow.
+- home-vpn runs the whole-tree sweep only by hand through its `night-run` workflow.
   No mutation testing and no issue filing run anywhere.
 - orc runs mutation testing only by hand through its mutation workflow baseline.
-  The four gates run only by hand through its `night-run` workflow.
+  The whole-tree sweep runs only by hand through its `night-run` workflow.
   Nothing files issues.
-- shopping runs the four gates only by hand through its `night-run` workflow.
+- shopping runs the whole-tree sweep only by hand through its `night-run` workflow.
   No mutation testing and no issue filing run anywhere.
 
 ## Running it by hand
