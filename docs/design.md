@@ -78,6 +78,7 @@ So the fragment lists the rules in `files`, and in `include` beside every file u
 
 The source sits under `src/<vector>/`, one directory for each thing the kit judges a repository on: complexity, quality, testing, docs, delivery and dependencies.
 `src/core/` holds what every vector runs on.
+An area imports `src/core/` and only the other areas listed for it in `AREA_IMPORTS` in the repository's `dependency-cruiser.config.ts`, so code two areas share moves into `src/core/` rather than one area importing the other back.
 `scripts/` holds only the kit's own build and CI tooling, and nothing in it ships.
 Sorting files by what loads them would put both oxlint plugins at the root and every bin in one flat directory.
 Nothing would then say which gate a helper serves.
