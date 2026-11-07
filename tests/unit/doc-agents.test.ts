@@ -9,12 +9,32 @@ import {
   isAgentFile,
   isCeiledReadme,
   maintainingFinding,
+  missingAgentFiles,
   readmeFindings,
   type AgentFinding,
 } from "../../src/docs/doc-agents.ts";
 import { snapshotOf } from "../../src/docs/doc-references.ts";
 
 const LEAD = "# Project agent memory\n\nchecks judges a repository through gates, and `README.md` holds what a person reads.\n";
+
+test("a root package.json without CLAUDE.md asks for CLAUDE.md alone rather than passing on AGENTS.md", () => {
+  expect(missingAgentFiles(new Set(["package.json", "AGENTS.md"])).map(({ path }) => path)).toEqual(["CLAUDE.md"]);
+  expect(missingAgentFiles(new Set(["package.json", "CLAUDE.md"])).map(({ path }) => path)).toEqual(["AGENTS.md"]);
+  expect(missingAgentFiles(new Set(["package.json", "AGENTS.md", "CLAUDE.md"]))).toEqual([]);
+});
+
+test("only a package.json at the root asks for agent files, never one nested in a package or an agent file nested beside it", () => {
+  expect(missingAgentFiles(new Set(["README.md"]))).toEqual([]);
+  expect(missingAgentFiles(new Set(["packages/run/package.json"]))).toEqual([]);
+  expect(missingAgentFiles(new Set(["package.json", "tools/AGENTS.md", "tools/CLAUDE.md"])).map(({ path }) => path)).toEqual(["AGENTS.md", "CLAUDE.md"]);
+});
+
+test("the missing file's finding names the repository root and the template to copy", () => {
+  const [agents, claude] = missingAgentFiles(new Set(["package.json"]));
+  expect(agents?.message).toContain("is missing from the repository root, which holds a `package.json`");
+  expect(agents?.message).toContain("`node_modules/@avi2dg/checks/dist/templates/agents.md`");
+  expect(claude?.message).toContain("`node_modules/@avi2dg/checks/dist/templates/claude.md` to `CLAUDE.md` word for word");
+});
 
 test("an agent file is recognised by name in any directory", () => {
   expect(["AGENTS.md", "CLAUDE.md", "tools/AGENTS.md"].map(isAgentFile)).toEqual([true, true, true]);

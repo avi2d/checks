@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { docsRepos, plantRedThenGreen, type Plant } from "./lib/docs-repo.ts";
+import { docsRepos, plantRedThenGreen, putAgentFiles, type Plant } from "./lib/docs-repo.ts";
 
 const PLANTS: readonly (Plant & { readonly pin: string })[] = [
   {
@@ -24,6 +24,7 @@ test(
     const repo = await repository();
     await repo.put("package.json", JSON.stringify({ name: "tools", peerDependencies: { "html-validate": "11.16.0" } }));
     await repo.put(".bun-version", "1.4.3\n");
+    await putAgentFiles(repo.put);
     await plantRedThenGreen(
       repo,
       PLANTS,

@@ -40,6 +40,26 @@ export function isCeiledReadme(repositoryPath: string, files: ReadonlySet<string
   return repositoryPath.endsWith(`/${README}`) && files.has(`${repositoryPath.slice(0, -README.length)}${MANIFEST}`);
 }
 
+const KIT_TEMPLATES = "node_modules/@avi2dg/checks/dist/templates";
+
+const ROOT_AGENT_FILES = [
+  { path: "AGENTS.md", fix: `Copy \`${KIT_TEMPLATES}/agents.md\` to \`AGENTS.md\` and fill it with what an agent cannot infer from the code` },
+  { path: "CLAUDE.md", fix: `Copy \`${KIT_TEMPLATES}/claude.md\` to \`CLAUDE.md\` word for word, so Claude Code reads \`AGENTS.md\`` },
+] as const;
+
+export type RootAgentFinding = {
+  readonly path: (typeof ROOT_AGENT_FILES)[number]["path"];
+  readonly message: string;
+};
+
+export function missingAgentFiles(files: ReadonlySet<string>): readonly RootAgentFinding[] {
+  if (!files.has(MANIFEST)) return [];
+  return ROOT_AGENT_FILES.filter(({ path }) => !files.has(path)).map(({ path, fix }) => ({
+    path,
+    message: `is missing from the repository root, which holds a \`package.json\`. ${fix}`,
+  }));
+}
+
 type Part = { readonly title: string; readonly lines: readonly MarkdownLine[] };
 
 function endingLengths(text: string): readonly number[] {
