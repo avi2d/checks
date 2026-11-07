@@ -42,9 +42,30 @@ test("--full combines with a worker count and a junit file but never with a tier
   expect(entryOptions(["--full", "--junit=reports/suite.xml"])).toEqual({
     options: { full: true },
     junit: expect.anything(),
+    changed: false,
   });
   expect(testOptions(["--tier=e2e", "--full"])).toBeUndefined();
   expect(testOptions(["--full", "--full"])).toBeUndefined();
+});
+
+test("--changed combines with a worker count and a junit file, while a tier, --full or a second --changed is refused", () => {
+  expect(entryOptions(["--changed", "--parallel=3"])).toEqual({ options: { workers: 3 }, junit: expect.anything(), changed: true });
+  expect(entryOptions(["--junit=reports/fast.xml", "--changed"])?.changed).toBe(true);
+  expect(entryOptions(["--changed", "--tier=unit"])).toBeUndefined();
+  expect(entryOptions(["--changed", "--full"])).toBeUndefined();
+  expect(entryOptions(["--changed", "--changed"])).toBeUndefined();
+});
+
+test("a test script never takes --changed, so scripts.test cannot shrink the CI suite to the changed files", () => {
+  expect(scriptOptions("checks-test --changed")).toBeUndefined();
+  expect(scriptViolations({ scripts: { test: "checks-test --changed", lint: "checks-lint" } }).map((violation) => violation.message)).toEqual([
+    'scripts.test must be "checks-test", optionally with --parallel=<workers>, which runs bun test --randomize and judges its skips, found "checks-test --changed"',
+  ]);
+});
+
+test("a --changed run passes the unit level and each touched e2e file to bun test, rather than the whole e2e level", () => {
+  expect(suiteArgs({ kind: "changed", e2e: ["tests/e2e/docs.test.ts"] }, [])).toEqual(["./tests/unit", "./tests/e2e/docs.test.ts"]);
+  expect(suiteArgs({ kind: "changed", e2e: [] }, ["tests/e2e/smoke.test.ts"])).toEqual(["./tests/unit"]);
 });
 
 test("an explicit tier still runs only that tier in either environment", () => {

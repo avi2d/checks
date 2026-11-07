@@ -32,13 +32,17 @@ export const collect = Effect.fn("collect")(
   Effect.scoped,
 );
 
-export const workingTreeFiles = Effect.fn("workingTreeFiles")(function* (root: string) {
+// Effect.filter with concurrency keeps the order its checks finish in, not the order it was given.
+export const existingFiles = Effect.fn("existingFiles")(function* (root: string, files: readonly string[]) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+  const exists = yield* Effect.forEach(files, (file) => fs.exists(path.join(root, file)), { concurrency: "unbounded" });
+  return files.filter((_, index) => exists[index]);
+});
+
+export const workingTreeFiles = Effect.fn("workingTreeFiles")(function* (root: string) {
   const listed = yield* git(["ls-files", "-z", "--cached", "--others", "--exclude-standard"], root);
-  return yield* Effect.filter(listed.split("\0").filter(Boolean), (file) => fs.exists(path.join(root, file)), {
-    concurrency: "unbounded",
-  });
+  return yield* existingFiles(root, listed.split("\0").filter(Boolean));
 });
 
 export const git = Effect.fn("git")(function* (args: readonly string[], cwd?: string, feed?: Feed) {

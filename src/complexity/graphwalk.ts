@@ -2,7 +2,7 @@
 import { BunServices } from "@effect/platform-bun";
 import { Config, Console, Duration, Effect, FileSystem, Path, Schema } from "effect";
 import { LINTED_SOURCE, TYPESCRIPT_SOURCE, type TrackedContent } from "../core/gates.ts";
-import { checkoutFiles, collect, commitOf, git, pathsAt, rangeEnds, refArgs } from "../core/git.ts";
+import { checkoutFiles, collect, commitOf, existingFiles, git, pathsAt, rangeEnds, refArgs } from "../core/git.ts";
 import { PASSED, runExitMain, UNDECIDED, Usage, VIOLATED } from "../core/main.ts";
 import { knipReport } from "./knip.ts";
 
@@ -233,10 +233,8 @@ const depcruise = Effect.fn("depcruise")(function* () {
 });
 
 const trackedInTree = Effect.fn("trackedInTree")(function* (root: string) {
-  const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
   const listed = yield* git(["ls-files", "-z", "--", ...CRUISED], root);
-  return yield* Effect.filter(listed.split("\0").filter(Boolean), (file) => fs.exists(path.join(root, file)), { concurrency: "unbounded" });
+  return yield* existingFiles(root, listed.split("\0").filter(Boolean));
 });
 
 const runSection = Effect.fn("runSection")(function* (
