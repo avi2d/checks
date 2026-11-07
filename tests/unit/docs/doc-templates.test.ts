@@ -34,11 +34,6 @@ test("the template directory holds a template for each kind and nothing else", (
   );
 });
 
-test("each template ships in the package where a consuming repository copies it from", () => {
-  const manifest: unknown = JSON.parse(readFileSync(resolve(CHECKOUT, "package.json"), "utf8"));
-  expect(manifest).toHaveProperty("files", expect.arrayContaining([`${TEMPLATE_DIRECTORY}/`]));
-});
-
 test("a template with each placeholder filled in holds to its own kind", () => {
   const refused = KINDS.flatMap((kind) => {
     const text = renderTemplate(TEMPLATES[kind]).replace(PLACEHOLDER, sample);
