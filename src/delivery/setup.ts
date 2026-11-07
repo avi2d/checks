@@ -130,11 +130,12 @@ const setupFile = Effect.fn("setupFile")(function* (root: string, relative: stri
   const full = path.join(root, relative);
   if (yield* system.exists(full)) {
     yield* Console.log(NAME + ": kept " + relative + ", already there");
-    return;
+    return false;
   }
   yield* system.makeDirectory(path.dirname(full), { recursive: true });
   yield* system.writeFileString(full, content);
   yield* Console.log(NAME + ": wrote " + relative);
+  return true;
 });
 
 const setupIgnore = Effect.fn("setupIgnore")(function* (root: string) {
@@ -352,9 +353,14 @@ const check = Effect.gen(function* () {
   for (const kind of Object.keys(TEMPLATES)) {
     yield* setupFile(root, "templates/" + kind + ".md", yield* kitText("dist/templates/" + kind + ".md"));
   }
+  const wroteAgents = yield* setupFile(root, "AGENTS.md", yield* kitText("dist/templates/agents.md"));
+  yield* setupFile(root, "CLAUDE.md", yield* kitText("dist/templates/claude.md"));
   if (isPrivate) yield* Console.log(NAME + ": set the CI_RUNS_ON variable to a self-hosted runner label so the new jobs land there");
   if (!outcome.hasOwner) {
     yield* Console.log(NAME + ": declare the repository owners in package.json author or contributors before the first commit");
+  }
+  if (wroteAgents) {
+    yield* Console.log(NAME + ": fill AGENTS.md with what an agent cannot infer from the code before the first commit");
   }
   return true;
 });

@@ -31,6 +31,7 @@ A `--private` run pins each job to `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
 Setting the `CI_RUNS_ON` variable to a self-hosted runner label then lands the jobs there.
 A public run pins each job to `ubuntu-latest`.
 It copies each kit template under `dist/templates/` into `templates/`, so a new doc file starts from a copy there.
+It copies `dist/templates/agents.md` to `AGENTS.md` and `dist/templates/claude.md` to `CLAUDE.md` when the root lacks them, and keeps either file it finds.
 It names every file it wrote and every file it kept.
 It tells the owner to declare the repository owners in `package.json` `author` or `contributors` before the first commit.
 
@@ -69,6 +70,8 @@ checks-setup: set the CI_RUNS_ON variable to a self-hosted runner label so the n
 
 A repository owner runs it once in a new repository, before the first install.
 Declare the repository owners in `package.json` `author` or `contributors` before the first commit.
+Fill `AGENTS.md` with what an agent cannot infer from the code before the first commit.
+`checks-docs` fails on the unfilled placeholder entry until it is filled.
 Running it again with the same kit version changes nothing.
 A later kit release arrives through [Upgrade the kit](../how-to/upgrade-the-kit.md).
 
