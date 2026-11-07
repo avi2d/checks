@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect } from "effect";
-import { ceilingFinding, entryFindings, hasManifest, isAgentFile, isCeiledReadme, maintainingFinding, missingAgentFiles, readmeFindings } from "./doc-agents.ts";
+import { ceilingFinding, entryFindings, hasManifest, isAgentFile, isCeiledReadme, maintainingFinding, missingAgentFiles, readmeFindings, type RootAgentFinding } from "./doc-agents.ts";
 import { rootsOf, snapshotOf, type Snapshot, unresolvedIn, type Judging, type Unresolved } from "./doc-references.ts";
 import { ADR_DIRECTORY, judge, placementOf, placementProblem, recordsOf, speaksToConsumers, type Placement, type Records } from "./doc-rules.ts";
 import { vanishedNames } from "./doc-names.ts";
@@ -53,15 +53,19 @@ function agentFileFindings(path: string, text: string, tracked: Snapshot): reado
 }
 
 const rangeEditsDocs = Effect.fn("rangeEditsDocs")(function* (root: string, base: string, changes: readonly Change[], text: (path: string) => string) {
-  const gone = [...new Set(changes.flatMap((change) => (change.kind === "deleted" ? [change.path] : change.kind === "renamed" ? [change.from] : [])))];
-  const before = gone.length === 0 ? new Map<string, string>() : yield* readTexts(root, base, gone);
-  const at = (path: string): string => (text(path) === "" ? (before.get(path) ?? "") : text(path));
-  return changes.flatMap((change) => pathsOf(change)).some((path) => placementOf(path, at(path)).type !== "unjudged" || readerOf(path) !== undefined);
+  const paths = changes.flatMap((change) => pathsOf(change));
+  if (paths.some((path) => placementOf(path, text(path)).type !== "unjudged" || readerOf(path) !== undefined)) return true;
+  const gone = [...new Set(changes.flatMap((change) => (change.kind === "deleted" ? [change.path] : change.kind === "renamed" ? [change.from] : [])))].filter(
+    (path) => readerOf(path) === undefined && placementOf(path).type === "unjudged",
+  );
+  if (gone.length === 0) return false;
+  const before = yield* readTexts(root, base, gone);
+  return gone.some((path) => placementOf(path, before.get(path) ?? "").type !== "unjudged");
 });
 
-function rootAgentFindings(files: ReadonlySet<string>, editsDocs: boolean): { readonly failing: readonly Finding[]; readonly advisory: readonly Finding[] } {
-  const absent = missingAgentFiles(files).map((finding) => ({ ...finding, line: undefined }));
-  return editsDocs ? { failing: absent, advisory: [] } : { failing: [], advisory: absent };
+function rootAgentFindings(absent: readonly RootAgentFinding[], editsDocs: boolean): { readonly failing: readonly Finding[]; readonly advisory: readonly Finding[] } {
+  const failing = absent.map((finding) => ({ ...finding, line: undefined }));
+  return editsDocs ? { failing, advisory: [] } : { failing: [], advisory: absent };
 }
 
 function templateFindings(path: string, text: string, placement: Placement, records: Records): readonly Finding[] {
@@ -133,9 +137,6 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   const versions = edited.flatMap(({ path }) =>
     versionFindings(text(path), pins, changed.get(path)).map(({ line, message }) => ({ path, line, message })),
   );
-  const sentenceAdvisory = edited
-    .flatMap(({ path }) => longSentences(text(path), changed.get(path)).map(({ line, message }) => ({ path, line, message })))
-    .toSorted(inPathOrder);
   const judging = (path: string): Judging => ({ commands: !speaksToConsumers(text(path)) });
   // A directory the range deletes still belongs to this repository, so a path under it is stale rather than another repository's.
   const roots = rootsOf(yield* pathsAt(base, [], root));
@@ -147,7 +148,8 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   const shapes = agents.flatMap(({ path }) => agentFileFindings(path, text(path), tracked));
   const readmes = proseDocs.filter(({ path }) => isCeiledReadme(path, tracked.files));
   const oversize = readmes.flatMap(({ path }) => readmeFindings(text(path)).map((finding) => ({ path, ...finding })));
-  const rootAgents = rootAgentFindings(tracked.files, yield* rangeEditsDocs(root, base, changes, text));
+  const absent = missingAgentFiles(tracked.files);
+  const rootAgents = rootAgentFindings(absent, absent.length === 0 ? false : yield* rangeEditsDocs(root, base, changes, text));
   const advisory = new Map<string, number>();
   for (const { path } of templated.filter((finding) => !touched.has(finding.path))) advisory.set(path, (advisory.get(path) ?? 0) + 1);
   return {
@@ -170,7 +172,9 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
     advisory,
     readmeAdvisory: oversize.filter((finding) => !touched.has(finding.path)).toSorted(inPathOrder),
     agentFileAdvisory: rootAgents.advisory,
-    sentenceAdvisory,
+    sentenceAdvisory: edited
+      .flatMap(({ path }) => longSentences(text(path), changed.get(path)).map(({ line, message }) => ({ path, line, message })))
+      .toSorted(inPathOrder),
     brokenBefore: references.brokenBefore.toSorted(inPathOrder),
   } satisfies Judged;
 });
