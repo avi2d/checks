@@ -132,8 +132,7 @@ Only a whole-tree workflow the repository writes runs it, after that workflow's 
 `checks-suppressions-ratchet` and `checks-quarantine-clock` run on every pull request, since `checks-lint` judges each pull request's range with them like every other range gate.
 `checks-repetition` runs on every pull request in a repository that tracks TypeScript.
 `checks-lint-coverage` reads the working tree, so a pull request run judges it only when the change selects the tree gates.
-The sentence below comes from the workflows under `.github/workflows` on the `main` branch of each repository.
-checks, skills, career, dotfiles, home-vpn, orc and shopping keep none of the three on a workflow.
+On `main`, no workflow under `.github/workflows` in checks, skills, career, dotfiles, home-vpn, orc or shopping runs a full mutation run, the whole-tree sweep or the issue filing.
 
 The whole-tree sweep runs only by hand through `checks-lint --whole-tree`.
 Nothing files issues until a repository adds a `whole-tree-run` workflow.
