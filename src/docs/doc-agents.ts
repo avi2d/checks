@@ -102,9 +102,12 @@ function cellsOf(raw: string): readonly string[] {
 
 const DELIMITER_CELL = /^\s*:?-+:?\s*$/;
 
+function isQuoteOrIndentedCode(raw: string): boolean {
+  return /^\s*>/.test(raw) || /^(?: {4}|\t)/.test(raw);
+}
+
 function isDelimiterRow(raw: string): boolean {
-  if (/^\s*>/.test(raw)) return false;
-  if (/^(?: {4}|\t)/.test(raw)) return false;
+  if (isQuoteOrIndentedCode(raw)) return false;
   const trimmed = raw.trim();
   if (!trimmed.includes("|") || !trimmed.includes("-")) return false;
   const inner = trimmed.replace(/^\|/, "").replace(/\|$/, "");
@@ -125,22 +128,18 @@ function codeLinesIn(scanned: readonly MarkdownLine[]): ReadonlySet<number> {
   return excluded;
 }
 
+function isOutsideCodeAndQuote(line: MarkdownLine, code: ReadonlySet<number>): boolean {
+  return !code.has(line.line) && !isQuoteOrIndentedCode(line.raw);
+}
+
 function isTableCandidate(line: MarkdownLine, code: ReadonlySet<number>): boolean {
-  if (line.kind !== "prose" && line.kind !== "table") return false;
-  if (code.has(line.line)) return false;
-  if (/^\s*>/.test(line.raw)) return false;
-  if (/^(?: {4}|\t)/.test(line.raw)) return false;
-  return true;
+  return (line.kind === "prose" || line.kind === "table") && isOutsideCodeAndQuote(line, code);
 }
 
 type TableRow = { readonly line: number; readonly raw: string; readonly width: number };
 
 function isBodyLine(line: MarkdownLine, code: ReadonlySet<number>): boolean {
-  if (line.raw.trim() === "") return false;
-  if (code.has(line.line)) return false;
-  if (/^\s*>/.test(line.raw)) return false;
-  if (/^(?: {4}|\t)/.test(line.raw)) return false;
-  return true;
+  return line.raw.trim() !== "" && isOutsideCodeAndQuote(line, code);
 }
 
 type HeaderMatch = { readonly header: MarkdownLine; readonly delimiterLine: number; readonly width: number };
