@@ -17,7 +17,7 @@ It fails when a living doc or an agent file names a path, link or command that d
 It fails when an agent file holds more than 3,000 characters or a `## Maintaining this file` section, whatever the range touches, as [Agent files](#agent-files) says.
 It fails when an entry in an agent file names no tracked path, link or `bun run` command, whatever the range touches.
 It fails when a range edits a README that is over 6,000 characters or holds a table cell over 300, as [README ceilings](#readme-ceilings) says.
-It fails when a range edits a doc and the root holds a `package.json` without `AGENTS.md` or `CLAUDE.md`, as [Root agent files](#root-agent-files) says.
+It fails when a range edits a living doc or an agent file and the root holds a `package.json` without `AGENTS.md` or `CLAUDE.md`, as [Root agent files](#root-agent-files) says.
 It fails when a living doc or an agent file names a code span the range removed from every file outside the docs, on any line.
 [Paths, links and commands](#paths-links-and-commands) says how each reference resolves.
 The package ships one template per kind under `dist/templates/`, and a repository starts a new doc file by copying one:
@@ -218,7 +218,7 @@ The failure names the missing file and the template to copy:
 
 A `package.json` in a subdirectory asks for no agent file, and a repository with no `package.json` at its root needs neither.
 A missing file fails only in a range that adds, changes, renames or deletes a living doc or an agent file.
-Any other range lists the missing file as advisory, so the first change that edits a doc adds both files.
+Any other range lists the missing file as advisory, so the first change that edits a living doc or an agent file adds both files.
 
 ## What it reads
 
@@ -249,8 +249,8 @@ With one it is that commit against its parent, or against the empty tree for a r
 
 | Code | When |
 | --- | --- |
-| 0 | every doc file the range touches holds to its template, every line it adds to a living doc or an agent file holds to the prose rules and copies no pinned version, it adds or breaks no reference that does not resolve, every agent file holds to the ceiling and holds no `## Maintaining this file`, every entry in an agent file names a tracked path, a link or a command, every README the range edits holds to the README ceilings, a range that edits a doc leaves a root `package.json` beside `AGENTS.md` and `CLAUDE.md`, and no code span a living doc or an agent file names vanished from every file outside the docs |
-| 1 | a doc file the range touches does not hold to its template, a line the range adds to a living doc or an agent file breaks a prose rule or copies a pinned version, the range adds or breaks a reference that does not resolve, an agent file is over the ceiling or holds `## Maintaining this file`, an entry in an agent file names no tracked path, link or command, a README the range edits is over a README ceiling, a range that edits a doc leaves a root `package.json` without `AGENTS.md` or `CLAUDE.md`, or the range removes a name a living doc or an agent file still carries |
+| 0 | every doc file the range touches holds to its template, every line it adds to a living doc or an agent file holds to the prose rules and copies no pinned version, it adds or breaks no reference that does not resolve, every agent file holds to the ceiling and holds no `## Maintaining this file`, every entry in an agent file names a tracked path, a link or a command, every README the range edits holds to the README ceilings, a range that edits a living doc or an agent file leaves a root `package.json` beside `AGENTS.md` and `CLAUDE.md`, and no code span a living doc or an agent file names vanished from every file outside the docs |
+| 1 | a doc file the range touches does not hold to its template, a line the range adds to a living doc or an agent file breaks a prose rule or copies a pinned version, the range adds or breaks a reference that does not resolve, an agent file is over the ceiling or holds `## Maintaining this file`, an entry in an agent file names no tracked path, link or command, a README the range edits is over a README ceiling, a range that edits a living doc or an agent file leaves a root `package.json` without `AGENTS.md` or `CLAUDE.md`, or the range removes a name a living doc or an agent file still carries |
 | 2 | a `package.json` does not decode, a ref does not resolve, or `grep` cannot read an installed direct dependency |
 
 ## Sample output
@@ -268,7 +268,7 @@ docs: advisory, 1 doc file(s) the range leaves alone do not hold to their templa
   docs/adr/0001-quality-gates.md: 5 violation(s)
 docs: advisory, 1 README ceiling finding(s) in README(s) the range leaves alone:
   packages/run/README.md: is 6412 characters, over the 6,000-character ceiling for a README. Its largest section is `## Configure a run` at 2310 characters. Move that section to a page under docs/ and link it from the README in one line
-docs: advisory, 1 agent file(s) missing from the repository root, which the first range that edits a doc adds:
+docs: advisory, 1 agent file(s) missing from the repository root, which the first range that edits a living doc or an agent file adds:
   CLAUDE.md: is missing from the repository root, which holds a `package.json`. Copy `node_modules/@avi2dg/checks/dist/templates/claude.md` to `CLAUDE.md` word for word, so Claude Code reads `AGENTS.md`
 docs: advisory, 1 sentence(s) over the trial length caps:
   README.md:16: carries a 27-word descriptive sentence, over the 25-word cap (procedural means an ordered list item, capped at 20 words)
@@ -282,7 +282,7 @@ docs: advisory, 1 path(s), link(s) or command(s) the living docs or agent files 
 A repository adopts the templates as its files change, and the prose rules as its lines change, because an untouched file or line never fails those checks.
 It reshapes its agent files when it adopts the gate, because [Agent files](#agent-files) judges each one whatever the range touches.
 It shrinks an oversize README in the first change that edits it, because [README ceilings](#readme-ceilings) judges only a README the range edits.
-It adds `AGENTS.md` and `CLAUDE.md` beside its root `package.json` in the first change that edits a doc, because [Root agent files](#root-agent-files) judges only such a range.
+It adds `AGENTS.md` and `CLAUDE.md` beside its root `package.json` in the first change that edits a living doc or an agent file, because [Root agent files](#root-agent-files) judges only such a range.
 A name the range removes fails wherever a doc still carries it, because the removal is what turned the line stale.
 
 ## Related topics

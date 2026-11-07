@@ -51,7 +51,7 @@ test(
 
     const quiet = await docs(previous, head);
     expect(quiet.text).toContain(
-      "docs: advisory, 2 agent file(s) missing from the repository root, which the first range that edits a doc adds:",
+      "docs: advisory, 2 agent file(s) missing from the repository root, which the first range that edits a living doc or an agent file adds:",
     );
     expect(quiet.text).toContain(MISSING_AGENTS);
     expect(quiet.text).toContain(MISSING_CLAUDE);

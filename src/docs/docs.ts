@@ -6,7 +6,7 @@ import { ADR_DIRECTORY, judge, placementOf, placementProblem, recordsOf, speaksT
 import { vanishedNames } from "./doc-names.ts";
 import { pinsAt, versionFindings } from "./doc-versions.ts";
 import { readTexts, snapshotAt, stillMissing } from "./doc-snapshot.ts";
-import { changedLines, changedPaths, git, pathsAt, rangeEnds, refArgs, type Change } from "../core/git.ts";
+import { changedLines, changedPaths, git, pathsAt, pathsOf, rangeEnds, refArgs, type Change } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { proseFindings, readerOf } from "./prose-matchers.ts";
 import { longSentences } from "./sentence-length.ts";
@@ -48,7 +48,7 @@ const USAGE = "usage: docs.ts <ref> | <base-ref> <head-ref>";
 const MARKDOWN = [":(glob)**/*.md"];
 
 function editsDocs(changes: readonly Change[]): boolean {
-  return changes.some((change) => [change.path, ...(change.kind === "renamed" ? [change.from] : [])].some((path) => readerOf(path) !== undefined));
+  return changes.some((change) => pathsOf(change).some((path) => readerOf(path) !== undefined));
 }
 
 function agentFileFindings(path: string, text: string, tracked: Snapshot): readonly Finding[] {
@@ -219,7 +219,7 @@ export function report({
     agentFileAdvisory.length === 0
       ? []
       : [
-          `${NAME}: advisory, ${agentFileAdvisory.length} agent file(s) missing from the repository root, which the first range that edits a doc adds:`,
+          `${NAME}: advisory, ${agentFileAdvisory.length} agent file(s) missing from the repository root, which the first range that edits a living doc or an agent file adds:`,
           ...agentFileAdvisory.map(describe),
         ];
   const sentences =

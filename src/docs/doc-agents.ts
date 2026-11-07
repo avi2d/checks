@@ -1,5 +1,5 @@
 import { Parser, type NodeType } from "commonmark";
-import { commandNames, type Snapshot } from "./doc-references.ts";
+import { commandNames, PACKAGE_MANIFEST, type Snapshot } from "./doc-references.ts";
 import { handWritten } from "./doc-versions.ts";
 import { AGENT_NAMES, scanMarkdown, type MarkdownLine } from "./prose-matchers.ts";
 
@@ -8,7 +8,6 @@ export const README_CEILING = 6000;
 export const CELL_CEILING = 300;
 
 const README = "README.md";
-const MANIFEST = "package.json";
 const SECOND_LEVEL = /^\s{0,3}##(?:\s+|$)(.*?)(?:\s+#+)?\s*$/;
 const SETEXT_SECOND = /^\s{0,3}-+\s*$/;
 const CELL_SEPARATOR = /(?<!\\)\|/;
@@ -37,7 +36,7 @@ export function ceilingFinding(text: string): AgentFinding | undefined {
 
 export function isCeiledReadme(repositoryPath: string, files: ReadonlySet<string>): boolean {
   if (repositoryPath === README) return true;
-  return repositoryPath.endsWith(`/${README}`) && files.has(`${repositoryPath.slice(0, -README.length)}${MANIFEST}`);
+  return repositoryPath.endsWith(`/${README}`) && files.has(`${repositoryPath.slice(0, -README.length)}${PACKAGE_MANIFEST}`);
 }
 
 const KIT_TEMPLATES = "node_modules/@avi2dg/checks/dist/templates";
@@ -53,7 +52,7 @@ export type RootAgentFinding = {
 };
 
 export function missingAgentFiles(files: ReadonlySet<string>): readonly RootAgentFinding[] {
-  if (!files.has(MANIFEST)) return [];
+  if (!files.has(PACKAGE_MANIFEST)) return [];
   return ROOT_AGENT_FILES.filter(({ path }) => !files.has(path)).map(({ path, fix }) => ({
     path,
     message: `is missing from the repository root, which holds a \`package.json\`. ${fix}`,
