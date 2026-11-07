@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
-import { EVERY_REPOSITORY, PR_GATES, WHOLE_TREE, WHOLE_TREE_GATES, type KitGate } from "./gates.ts";
+import { EVERY_REPOSITORY, KIT_GATES, WHOLE_TREE, WHOLE_TREE_GATES, type KitGate } from "./gates.ts";
 import { changedPaths, defaultBranch, git, pathsOf } from "./git.ts";
 import { runMain, Usage } from "./main.ts";
 import { FAST_TREE_GATES, selectScope } from "./scope.ts";
@@ -234,7 +234,7 @@ const lint = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const range = wholeTree ? yield* wholeTreeRange() : yield* resolveRange(split.rest);
   yield* Console.log(`${NAME}: ${describe(range)} from ${range.source}`);
-  const applicable = yield* Effect.filter(wholeTree ? WHOLE_TREE_GATES : PR_GATES, (gate) =>
+  const applicable = yield* Effect.filter(wholeTree ? WHOLE_TREE_GATES : KIT_GATES, (gate) =>
     gate.appliesTo === EVERY_REPOSITORY
       ? Effect.succeed(true)
       : git(["ls-files", "--", ...gate.appliesTo.pathspecs], root).pipe(Effect.map((files) => files.trim() !== "")),

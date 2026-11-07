@@ -60,6 +60,41 @@ test(
 );
 
 test(
+  "no-folder-cycle goes red on two folders importing each other with no module cycle, green once one import runs one way, red again on a type-only back edge",
+  async () => {
+    dir = await scratch("checks-depcruiser-folder-cycle-");
+    await writeProject({
+      "src/main.test.ts": `import "./main.ts";\n`,
+      "src/main.ts": `import { body } from "./bodies/body.ts";\nimport { dispatch } from "./dispatcher/dispatch.ts";\nexport const main: number = body + dispatch;\n`,
+      "src/bodies/body.ts": `import { route } from "../dispatcher/route.ts";\nexport const body: number = route;\n`,
+      "src/bodies/shape.ts": `export const shape: number = 1;\n`,
+      "src/dispatcher/route.ts": `export const route: number = 1;\n`,
+      "src/dispatcher/dispatch.ts": `import { shape } from "../bodies/shape.ts";\nexport const dispatch: number = shape;\n`,
+    });
+    const config = await writeConfig();
+
+    const red = await depcruise(config, "src");
+    expect(red.exitCode).not.toBe(0);
+    expect(red.text).toContain("no-folder-cycle");
+    expect(red.text).not.toContain("no-circular");
+
+    await mkdir(join(dir, "src/shared"), { recursive: true });
+    await unlink(join(dir, "src/bodies/shape.ts"));
+    await writeFile(join(dir, "src/shared/shape.ts"), `export const shape: number = 1;\n`);
+    await writeFile(join(dir, "src/dispatcher/dispatch.ts"), `import { shape } from "../shared/shape.ts";\nexport const dispatch: number = shape;\n`);
+    const green = await depcruise(config, "src");
+    expect(green.exitCode).toBe(0);
+
+    await writeFile(join(dir, "src/dispatcher/route.ts"), `export type Route = number;\nexport const route: Route = 1;\n`);
+    await writeFile(join(dir, "src/shared/shape.ts"), `import type { Route } from "../dispatcher/route.ts";\nexport const shape: Route = 1;\n`);
+    const typeOnly = await depcruise(config, "src");
+    expect(typeOnly.exitCode).not.toBe(0);
+    expect(typeOnly.text).toContain("no-folder-cycle");
+  },
+  60_000,
+);
+
+test(
   "no-orphans goes red naming the unreachable module, green once it is used",
   async () => {
     dir = await scratch("checks-depcruiser-orphans-");
@@ -113,6 +148,31 @@ test(
     await writeFile(join(dir, "src/entry.js"), `import { dev } from "./local.js";\nexport const entry = dev;\n`);
     const green = await depcruise(config, "src");
     expect(green.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
+  "not-to-dev-dep stays green on a type-only import of a dev dependency, red once the import carries a value",
+  async () => {
+    dir = await scratch("checks-depcruiser-type-only-");
+    await writeProject({
+      "src/entry.test.ts": `import "./entry.ts";\nimport "./inline.ts";\n`,
+      "src/entry.ts": `import type { Dev } from "fake-dev";\nexport const entry: Dev = 1;\n`,
+      "src/inline.ts": `import { type Dev } from "fake-dev";\nexport const inline: Dev = 1;\n`,
+    });
+    await writeManifest({ devDependencies: { "fake-dev": "1.0.0" } });
+    await writePackage("fake-dev", { types: "index.d.ts" }, { "index.js": `export const dev = 1;\n`, "index.d.ts": `export type Dev = number;\nexport declare const dev: Dev;\n` });
+    const config = await writeConfig();
+
+    const green = await depcruise(config, "src");
+    expect(green.text).not.toContain("not-to-dev-dep");
+    expect(green.exitCode).toBe(0);
+
+    await writeFile(join(dir, "src/inline.ts"), `import { dev, type Dev } from "fake-dev";\nexport const inline: Dev = dev;\n`);
+    const red = await depcruise(config, "src");
+    expect(red.exitCode).not.toBe(0);
+    expect(red.text).toContain("not-to-dev-dep");
   },
   60_000,
 );
