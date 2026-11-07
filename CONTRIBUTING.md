@@ -30,10 +30,9 @@ That run restores the previous full baseline state through [checks-mutation-base
 A result made stale by a file a test reads at runtime lasts until the next 28-day refresh.
 That run uploads the report and the incremental state again as the `mutation-baseline-full` artifact.
 No workflow runs the long test tiers, the four whole-tree lint gates or the issue filing on its own.
-The four whole-tree gates run by hand through `bunx checks-lint --whole-tree`.
-Issue filing runs only under a workflow named `whole-tree-run` the owner writes when one is wanted, from the commands [checks-whole-tree-run](docs/gates/checks-whole-tree-run.md#running-it-by-hand) shows.
-`bunx checks-lint --whole-tree` runs the four whole-tree lint gates over the whole tree with no base, so every suppression count and every repeated line still present is reported until it is removed.
-[checks-whole-tree-run](docs/gates/checks-whole-tree-run.md) then opens or comments on one issue labelled `whole-tree-run` for each file whose mutation score fell since the previous run, for each failing test, and for each whole-tree gate that failed.
+The four whole-tree gates run by hand through `bunx checks-lint --whole-tree` over the whole tree with no base, so every suppression count and every repeated line still present is reported until it is removed.
+Issue filing runs only under a workflow the owner writes when one is wanted, from the commands [checks-whole-tree-run](docs/gates/checks-whole-tree-run.md#running-it-by-hand) shows.
+[checks-whole-tree-run](docs/gates/checks-whole-tree-run.md) opens or comments on one issue labelled `whole-tree-run` for each file whose mutation score fell since the previous run, for each failing test, and for each whole-tree gate that failed.
 It also files each mutation report a failed or timed-out mutation job never wrote.
 It closes the issue of a test, a gate or a missing mutation report that a later run no longer reports, and it comments on a mutation issue it no longer reports without closing it, but only when a previous run exists and every requested mutation report is present.
 A failed mutation run still leaves each failing test filed, and records no score.

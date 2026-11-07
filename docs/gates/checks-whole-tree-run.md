@@ -130,7 +130,7 @@ Only a whole-tree workflow the repository writes runs it, after that workflow's 
 ## Coverage that stops running
 
 Neither release nor CI runs mutation testing, the four whole-tree gates or the issue filing in any repository below.
-Each answer comes from that repository's `night-run.yml` and `mutation.yml` under `.github/workflows`.
+Each answer comes from the workflows under `.github/workflows` of that repository.
 
 - checks keeps none of the three on a workflow.
   Mutation testing runs only by hand through the mutation workflow baseline.
