@@ -12,16 +12,16 @@ const directories = (path: string): readonly string[] =>
 
 const AREAS = [...directories("src"), "scripts", "package"];
 
-const misplaced = (level: "unit" | "e2e", helpers: readonly string[]): readonly string[] =>
+const misplaced = (level: "unit" | "e2e"): readonly string[] =>
   readdirSync(resolve(CHECKOUT, "tests", level), { recursive: true, encoding: "utf8" })
     .filter((path) => TEST_FILE.test(path))
     .filter((path) => {
       const [folder, ...rest] = path.split("/");
-      return rest.length === 0 || folder === undefined || helpers.includes(folder) || !AREAS.includes(folder);
+      return rest.length === 0 || folder === undefined || !AREAS.includes(folder);
     })
     .map((path) => `tests/${level}/${path}`);
 
 test("a unit or e2e test at the top of its level, or under a folder no src area names, is refused", () => {
-  expect(misplaced("unit", [])).toEqual([]);
-  expect(misplaced("e2e", ["lib"])).toEqual([]);
+  expect(misplaced("unit")).toEqual([]);
+  expect(misplaced("e2e")).toEqual([]);
 });
