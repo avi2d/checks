@@ -256,7 +256,8 @@ With one it is that commit against its parent, or against the empty tree for a r
 ## Sample output
 
 ```
-docs: 7 violation(s):
+docs: 8 violation(s):
+  CLAUDE.md: is missing from the repository root, which holds a `package.json`. Copy `node_modules/@avi2dg/checks/dist/templates/claude.md` to `CLAUDE.md` word for word, so Claude Code reads `AGENTS.md`
   README.md:1: lacks `## Before you begin`
   README.md:12: carries `;`, a semicolon. Use two sentences
   README.md:13: carries `1.3.5`, a version .bun-version pins. Name .bun-version instead, or let a build write the line between generated markers
@@ -268,8 +269,6 @@ docs: advisory, 1 doc file(s) the range leaves alone do not hold to their templa
   docs/adr/0001-quality-gates.md: 5 violation(s)
 docs: advisory, 1 README ceiling finding(s) in README(s) the range leaves alone:
   packages/run/README.md: is 6412 characters, over the 6,000-character ceiling for a README. Its largest section is `## Configure a run` at 2310 characters. Move that section to a page under docs/ and link it from the README in one line
-docs: advisory, 1 agent file(s) missing from the repository root, which the first range that edits a living doc or an agent file adds:
-  CLAUDE.md: is missing from the repository root, which holds a `package.json`. Copy `node_modules/@avi2dg/checks/dist/templates/claude.md` to `CLAUDE.md` word for word, so Claude Code reads `AGENTS.md`
 docs: advisory, 1 sentence(s) over the trial length caps:
   README.md:16: carries a 27-word descriptive sentence, over the 25-word cap (procedural means an ordered list item, capped at 20 words)
 docs: advisory, 1 path(s), link(s) or command(s) the living docs or agent files name were broken before the range:
