@@ -31,11 +31,11 @@ To move a repository to a newer release of the kit:
 1. Run `bun run build`, whose `checks-effect-scope` rewrites the Effect override and the kit's severities in `tsconfig.json` when a release changes them.
    A severity key the release drops stays in `tsconfig.json` until the repository removes it.
 1. Copy `node_modules/@avi2dg/checks/bunfig.toml` over `bunfig.toml` again, since `checks-test-layout` compares the copy with the installed preset.
-1. Delete `.github/workflows/night-run.yml` when the repository still holds one, since `checks-setup` no longer writes it and `checks-ci-wiring` no longer requires it.
-   A stale file left behind still passes `checks-ci-wiring`, but dispatching it fails at its `checks-lint --night` step, or at the `checks-night-run` step where the gates step ends in `|| true`, so delete or rename it before dispatching it.
-1. When the repository runs the four whole-tree gates, the mutation testing or the issue filing by hand, rename each `night` name to its `whole-tree` name.
-   `checks-lint --night` is now `checks-lint --whole-tree`, `checks-night-run` is now `checks-whole-tree-run`, and the workflow, label, artifacts and report file drop `night-run` for `whole-tree-run`, as [Set up a repository](set-up-a-repository.md) and [checks-whole-tree-run](../gates/checks-whole-tree-run.md#running-it-by-hand) show.
-   Close open issues labelled `night-run` when bumping, since the renamed run files under `whole-tree-run` and never closes the old ones, and the first run after the rename compares no score because the `whole-tree-run` artifact does not continue the `night-run` baseline.
+1. When the repository still holds the workflow the previous kit wrote for the whole-tree gates, delete that workflow.
+   Run the gates with `checks-lint --whole-tree` instead.
+   [Set up a repository](set-up-a-repository.md) and [checks-whole-tree-run](../gates/checks-whole-tree-run.md#running-it-by-hand) show the current names.
+1. A stale workflow left behind still passes `checks-ci-wiring`, but dispatching it fails, so delete it before dispatching it.
+1. The release notes hold the old-to-new name mapping for the workflow, label, artifacts and report file.
 1. Run `bun run lint`, `bun run typecheck` and `bun run test`.
 
 The repository's lockfile pins the kit, so a repository moves only when it runs these steps.
