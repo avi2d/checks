@@ -17,7 +17,7 @@ A configuration that turns the files rule off still has its files judged.
 It holds each reported symbol against `exports-baseline.json`, and fails on any symbol the baseline does not hold.
 It fails on any baseline entry the range adds unless Knip reports that same symbol unused at the base, so the baseline records debt that already existed and never debt the range creates.
 It fails on any baseline entry Knip no longer reports, so the baseline only shrinks.
-It runs dependency-cruiser over every tracked `.ts`, `.tsx`, `.mts` and `.cts` file and names each violation with its rule, the importing module and the module it reaches.
+It runs dependency-cruiser over every tracked `.ts`, `.tsx`, `.mts` and `.cts` file and names each violation with its rule, the importing module or folder and the module or folder it reaches.
 It fails on a violation whose rule has `error` severity, and lists a `warn` or `info` violation without failing.
 It fails when the repository tracks no `.ts`, `.tsx`, `.astro`, `.mts` or `.cts` file, since an empty scan would pass without judging anything.
 It fails when the repository holds no Knip configuration, since Knip's default entries cannot tell a dead file from an entry point.
