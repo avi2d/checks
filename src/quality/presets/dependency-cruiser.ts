@@ -36,7 +36,7 @@ const BASE = {
       name: "no-folder-cycle",
       severity: "error",
       comment:
-        "Two folders import each other, so neither stands without the other. Move the module that reaches back into the folder it imports, or move what both folders need into a third folder they both import.",
+        "Folders reach each other in a cycle, so none stands without the others. Move the module that reaches back into the folder it imports, or move what the folders need into a third folder they all import.",
       scope: "folder",
       from: {},
       to: { circular: true },
