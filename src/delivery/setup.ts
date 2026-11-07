@@ -352,6 +352,8 @@ const check = Effect.gen(function* () {
   for (const kind of Object.keys(TEMPLATES)) {
     yield* setupFile(root, "templates/" + kind + ".md", yield* kitText("dist/templates/" + kind + ".md"));
   }
+  yield* setupFile(root, "AGENTS.md", yield* kitText("dist/templates/agents.md"));
+  yield* setupFile(root, "CLAUDE.md", yield* kitText("dist/templates/claude.md"));
   if (isPrivate) yield* Console.log(NAME + ": set the CI_RUNS_ON variable to a self-hosted runner label so the new jobs land there");
   if (!outcome.hasOwner) {
     yield* Console.log(NAME + ": declare the repository owners in package.json author or contributors before the first commit");

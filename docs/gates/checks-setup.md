@@ -31,6 +31,7 @@ A `--private` run pins each job to `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
 Setting the `CI_RUNS_ON` variable to a self-hosted runner label then lands the jobs there.
 A public run pins each job to `ubuntu-latest`.
 It copies each kit template under `dist/templates/` into `templates/`, so a new doc file starts from a copy there.
+It copies `dist/templates/agents.md` to `AGENTS.md` and `dist/templates/claude.md` to `CLAUDE.md` when the root lacks them, and keeps either file it finds.
 It names every file it wrote and every file it kept.
 It tells the owner to declare the repository owners in `package.json` `author` or `contributors` before the first commit.
 

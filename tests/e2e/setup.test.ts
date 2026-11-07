@@ -270,6 +270,31 @@ return event;
 }
 
 test(
+"a setup from empty writes the root agent files, so the first doc edit passes the agent-files rule rather than failing both files missing",
+async () => {
+const repo = await open({});
+expect((await setup(repo)).exitCode).toBe(0);
+expect(await readFile(join(repo.dir, "AGENTS.md"), "utf8")).toBe(await kitFile("dist/templates/agents.md"));
+expect(await readFile(join(repo.dir, "CLAUDE.md"), "utf8")).toBe(await kitFile("dist/templates/claude.md"));
+await repo.write({
+"AGENTS.md": "# Project agent memory\n\nThe shop bills parts, and README.md holds what a person reads.\n\n## Bills\n\n- The bills follow [the tools guide](tools/README.md).\n",
+"tools/README.md": "# Tools\n\nThe tools build bills.\n",
+});
+const previous = await repo.commit("fill the agent file and add a guide");
+await repo.write({ "tools/README.md": "# Tools\n\nThe tools build bills.\nIt prints a bill.\n" });
+const head = await repo.commit("edit a doc");
+const held = await repo.script("docs/docs.ts", previous, head);
+expect(held.text).toContain("docs: the repository root holds the AGENTS.md and CLAUDE.md");
+expect(held.exitCode).toBe(0);
+const rerun = await setup(repo);
+expect(rerun.exitCode).toBe(0);
+expect(rerun.text).toContain("kept AGENTS.md, already there");
+expect(rerun.text).toContain("kept CLAUDE.md, already there");
+},
+120_000,
+);
+
+test(
 "the generated public and private workflows pass the kit ci-wiring gate",
 async () => {
 const pub = await open({});
