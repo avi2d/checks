@@ -49,7 +49,8 @@ suppressions-ratchet: 2 count(s) rose or appeared; fix the site instead of suppr
 
 ## When it runs
 
-`checks-lint --whole-tree` runs it on every whole-tree run in every repository, as [checks-lint](checks-lint.md) says.
+`checks-lint` runs it over each pull request's range in every repository, as [checks-lint](checks-lint.md) says.
+`checks-lint --whole-tree` also runs it over the whole tree when someone starts the whole-tree run by hand.
 A repository with neither file passes.
 
 ## Related topics

@@ -58,7 +58,8 @@ repetition: 1 file(s) .jscpd.json holds repeat lines at the head, at 50 tokens a
 
 ## When it runs
 
-`checks-lint --whole-tree` runs it on every whole-tree run when the repository tracks a `.ts` or `.tsx` file.
+`checks-lint` runs it over each pull request's range when the repository tracks a `.ts` or `.tsx` file.
+`checks-lint --whole-tree` also runs it over the whole tree when someone starts the whole-tree run by hand.
 When the head holds no `.jscpd.json`, the gate reports that no file was measured.
 
 ## Related topics

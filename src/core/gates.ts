@@ -79,5 +79,3 @@ export const KIT_GATES = [
 ] as const satisfies readonly KitGate[];
 
 export const WHOLE_TREE_GATES: readonly KitGate[] = KIT_GATES.filter((gate) => "wholeTree" in gate);
-
-export const PR_GATES: readonly KitGate[] = KIT_GATES.filter((gate) => !("wholeTree" in gate));
