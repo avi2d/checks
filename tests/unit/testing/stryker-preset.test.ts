@@ -15,7 +15,7 @@ const { halfAvailableCores, unitTestFiles }: {
 } = await import(presetUrl);
 
 const Manifest = Schema.fromJsonString(
-  Schema.Struct({ files: Schema.Array(Schema.String), exports: Schema.Record(Schema.String, Schema.Unknown) }),
+  Schema.Struct({ exports: Schema.Record(Schema.String, Schema.Unknown) }),
 );
 
 test("the preset carries exactly the agreed rollout settings, the full-run guard and no ignoreStatic", () => {
@@ -104,11 +104,9 @@ test("unitTestFiles walks nested groups, sorts, and skips files that are not uni
   }
 });
 
-test("the preset ships the way every other shared artifact is exposed", async () => {
+test("the preset is exported at its own path the way every other shared artifact is exposed", async () => {
   const manifest = Schema.decodeSync(Manifest)(
     await readFile(new URL("../../../package.json", import.meta.url), "utf8"),
   );
-  expect(manifest.files).toContain("stryker.preset.js");
   expect(manifest.exports["./stryker.preset.js"]).toBe("./stryker.preset.js");
-  expect(manifest.files).toContain("dist/mutation/");
 });

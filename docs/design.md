@@ -97,8 +97,10 @@ A path read without the resolver, such as `node_modules/@avi2dg/checks/scripts/t
 
 ## The package ships built plugins and runnable bins
 
-`files` in `package.json` lists what an install gets.
-`tests/`, `AGENTS.md` and the TypeScript source of the oxlint plugins never reach an install.
+`files` in `package.json` lists what an install gets, and `tests/` and `AGENTS.md` never reach an install.
+It ships `docs/`, `src/` and `dist/`, so a new bin or page ships with no edit to `files`.
+Its `!` entries keep out the decision records under `docs/adr/` and the sources only the build reads.
+A source a shipped bin imports ships even when the build also compiles it.
 npm adds `package.json`, `README.md` and `LICENSE` whatever `files` says.
 `bun pm pack` builds the same tarball the registry serves, and the consumer e2e test installs that tarball.
 
@@ -132,7 +134,6 @@ The gates run one at a time and pass their output straight through, so each repo
 `checks-lint` picks the gates that apply from the tracked files for the full run, and a repository cannot select gates.
 A scoped run selects a subset by changed paths, and the desk run selects the fast tree gates.
 A TypeScript gate applies as soon as the repository tracks TypeScript source, and `checks-lint-coverage` and `checks-graphwalk` also apply on tracked Astro source.
-`checks-lint-coverage` and `checks-repetition` run only on the whole-tree run.
 
 dependency-cruiser runs inside the `checks-graphwalk` gate rather than as a script each repository adds to `lint`, so the full run keeps it.
 A repository with no config of its own is cruised against the kit's defaults, since every rule has one.

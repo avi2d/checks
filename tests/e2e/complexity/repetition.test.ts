@@ -102,6 +102,31 @@ test(
 );
 
 test(
+  "checks-lint over a pull request range runs the repetition hold rather than leaving it to --whole-tree, red on an added copy and green once it is gone",
+  async () => {
+    const repo = await repository({ ...lintWiring(), "src/ledger.ts": block("ledger") });
+    await withOwnInstall(repo);
+    const { dir, write, commit, lint } = repo;
+    await commit("feat: base");
+    await $`git update-ref refs/remotes/origin/main HEAD && git checkout -q -b feature`.cwd(dir).quiet();
+    await write({ "src/copy.ts": block("ledger") });
+    await commit("feat: copy");
+
+    const red = await lint();
+    expect(red.text).toContain("  src/copy.ts: 10 repeated line(s), up from 0\n");
+    expect(red.text).toContain("checks-lint: 1 of 12 gate(s) failed: checks-repetition\n");
+    expect(red.exitCode).toBe(1);
+
+    await write({ "src/copy.ts": "export const copy = 1;\n" });
+    await commit("fix: no copy");
+    const green = await lint();
+    expect(green.text).toContain("checks-lint: 12 gate(s) pass\n");
+    expect(green.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
   "checks-lint --whole-tree runs the repetition hold over the whole tree, red on an added copy and green once it is gone",
   async () => {
     const repo = await repository({ ...lintWiring(), "src/ledger.ts": block("ledger") });

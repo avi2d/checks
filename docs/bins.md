@@ -37,9 +37,9 @@ The table groups the gates by vector, the part of a repository each one judges.
 
 <!-- end generated gates -->
 
-Four of these gates run only on the whole-tree run.
+Four of these gates also run on the whole-tree run, which someone starts by hand.
 They are `checks-lint-coverage`, `checks-quarantine-clock`, `checks-repetition` and `checks-suppressions-ratchet`.
-A whole-tree-run workflow the repository writes runs them with `checks-lint --whole-tree`, which hands each range gate `--whole-tree HEAD`, so the four judge the whole tree with no base.
+`checks-lint --whole-tree` hands each of these range gates `--whole-tree HEAD`, so the four judge the whole tree with no base.
 
 These bins run on their own:
 

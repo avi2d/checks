@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.74.0
+
+Released 2026-11-07.
+
+### Features
+
+- **quality:** refuse folder-level import cycles in the dependency-cruiser preset [#69](https://github.com/avi2d/checks/pull/69)
+
 ## 0.73.0
 
 Released 2026-11-07.

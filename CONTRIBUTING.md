@@ -24,8 +24,11 @@ CI runs the commands in `.github/workflows/ci.yml` on each pull request, and on 
 A pull request runs only the tests it reaches, and the release runs the whole suite, as [checks-test](docs/gates/checks-test.md#pull-request-runs) says.
 `.github/workflows/pr-title.yml` lints the pull request title, so editing the title reruns only that.
 No workflow runs on a schedule except the weekly advisory scan, as [checks-ci-wiring](docs/gates/checks-ci-wiring.md#schedules) requires.
-No workflow runs mutation testing, the long test tiers, the four whole-tree lint gates or the issue filing on its own.
-The four whole-tree gates run by hand through `bun src/core/lint.ts --whole-tree` over the whole tree with no base, so every suppression count and every repeated line still present is reported until it is removed.
+No workflow runs mutation testing, the long test tiers, the whole-tree sweep or the issue filing on its own.
+`bun run lint` runs the three range whole-tree lint gates over each pull request's range.
+It runs `checks-lint-coverage` only when the change selects the tree gates, since that gate reads the working tree.
+The sweep runs the four whole-tree gates by hand through `bun src/core/lint.ts --whole-tree` over the whole tree with no base.
+It reports every suppression count and every repeated line still present until it is removed.
 Issue filing runs only under a workflow the owner writes when one is wanted, from the commands [checks-whole-tree-run](docs/gates/checks-whole-tree-run.md#running-it-by-hand) shows.
 [checks-whole-tree-run](docs/gates/checks-whole-tree-run.md) opens or comments on one issue labelled `whole-tree-run` for each file whose mutation score fell since the previous run, for each failing test, and for each whole-tree gate that failed.
 It also files each mutation report a failed or timed-out mutation job never wrote.

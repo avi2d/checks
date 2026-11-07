@@ -127,15 +127,18 @@ checks-whole-tree-run: recorded 42 file score(s) in reports/whole-tree-run.json
 
 Only a whole-tree workflow the repository writes runs it, after that workflow's full mutation run, its long test tiers and its whole-tree lint gates.
 
-## Coverage that stops running
+## What each repository runs
 
-Neither release nor CI runs a full mutation run, the four whole-tree gates or the issue filing in any repository below.
+`checks-suppressions-ratchet` and `checks-quarantine-clock` run on every pull request, since `checks-lint` judges each pull request's range with them like every other range gate.
+`checks-repetition` runs on every pull request in a repository that tracks TypeScript.
+`checks-lint-coverage` reads the working tree, so a pull request run judges it only when the change selects the tree gates.
+Neither release nor CI runs a full mutation run, the whole-tree sweep of the four gates or the issue filing in any repository below.
 Each answer comes from the workflows under `.github/workflows` on the `main` branch of that repository.
 
 - checks, skills, career, dotfiles, home-vpn and shopping keep none of the three on a workflow.
-- orc runs mutation testing only by hand through its mutation workflow baseline, and keeps neither the four gates nor the issue filing on a workflow.
+- orc runs mutation testing only by hand through its mutation workflow baseline, and keeps neither the whole-tree sweep nor the issue filing on a workflow.
 
-The four whole-tree gates run only by hand through `checks-lint --whole-tree`.
+The whole-tree sweep runs only by hand through `checks-lint --whole-tree`.
 Nothing files issues until a repository adds a `whole-tree-run` workflow.
 
 ## Running it by hand

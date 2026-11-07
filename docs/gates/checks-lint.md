@@ -58,11 +58,11 @@ With `--whole-tree`, it takes no other arguments and runs the four whole-tree ga
 
 ## Sample output
 
-<!-- generated lint-sample: bun run build writes it from PR_GATES in src/core/gates.ts and scripts/doc-blocks.ts -->
+<!-- generated lint-sample: bun run build writes it from KIT_GATES in src/core/gates.ts and scripts/doc-blocks.ts -->
 
 ```
 checks-lint: range 2504acf098d120e73a8ece3c96f22b934f35c6a8..10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD against origin/main
-checks-lint: 1 of 13 gate(s) failed: checks-comment-gate
+checks-lint: 1 of 17 gate(s) failed: checks-comment-gate
 ```
 
 <!-- end generated lint-sample -->
@@ -73,7 +73,9 @@ A repository runs it from `bun run lint` in a pull request workflow that fetches
 It leaves out the TypeScript gates while the repository tracks no TypeScript file, except that `checks-lint-coverage` and `checks-graphwalk` run when it tracks an `.astro` file.
 It never runs `checks-browser`, which a product runs after it builds its site.
 A pull request run scopes the gates to the change.
-A repository that adds a whole-tree-run workflow runs the four whole-tree gates from it with `checks-lint --whole-tree` over the whole tree.
+A pull request run judges the three range whole-tree gates over its range like every other range gate.
+It judges `checks-lint-coverage` only when the change selects the tree gates, since that gate reads the working tree.
+Someone runs the four whole-tree gates over the whole tree by hand with `checks-lint --whole-tree`, from a whole-tree-run workflow or from a local shell.
 
 ## Related topics
 

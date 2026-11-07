@@ -11,6 +11,7 @@ The kit's dependency-cruiser rules hold a repository's imports, and a repository
 `defineConfig` from `@avi2dg/checks/dependency-cruiser` returns these rules, with or without a config of the repository's own:
 
 - `no-circular`
+- `no-folder-cycle`, which refuses folders that reach each other in a cycle even when no module cycle joins them
 - `no-orphans`, which a repository that depends on `astro` gets only by listing its own, as [checks-graphwalk](../gates/checks-graphwalk.md) explains
 - `not-to-dev-dep`, which refuses shipped source importing a dev-only package, and a package listed in `peerDependencies` too is not dev-only
 - `no-non-package-json`, which refuses an import of an installed package that the nearest `package.json` does not declare, and counts a peer that `peerDependenciesMeta` marks optional as declared
@@ -18,6 +19,8 @@ The kit's dependency-cruiser rules hold a repository's imports, and a repository
 - `no-deep-imports`, which refuses a subpath the package's exports map does not publish
 
 A test file, a config file and every path under `tests/` may import a dev-only package.
+Shipped source may import a dev-only package with `import type` or an inline `type` specifier, since swc tags that import type-only without a TypeScript compiler.
+Both cycle rules count a type-only import as an edge.
 
 The rules parse with swc, so the cruise needs `@swc/core` installed, and without it the cruise silently skips every `.ts` file.
 
