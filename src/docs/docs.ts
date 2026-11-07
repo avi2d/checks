@@ -23,7 +23,7 @@ type Judged = {
   readonly named: number;
   readonly agents: number;
   readonly readmes: number;
-  readonly packageRoot: boolean;
+  readonly hasManifest: boolean;
   readonly findings: readonly Finding[];
   readonly advisory: ReadonlyMap<string, number>;
   readonly readmeAdvisory: readonly Finding[];
@@ -52,9 +52,12 @@ function agentFileFindings(path: string, text: string, tracked: Snapshot): reado
   return [...shaped, ...entryFindings(path, text, tracked)].map((finding) => ({ path, ...finding }));
 }
 
-function rangeEditsDocs(changes: readonly Change[], text: (path: string) => string): boolean {
-  return changes.flatMap((change) => pathsOf(change)).some((path) => placementOf(path, text(path)).type !== "unjudged" || readerOf(path) !== undefined);
-}
+const rangeEditsDocs = Effect.fn("rangeEditsDocs")(function* (root: string, base: string, changes: readonly Change[], text: (path: string) => string) {
+  const gone = [...new Set(changes.flatMap((change) => (change.kind === "deleted" ? [change.path] : change.kind === "renamed" ? [change.from] : [])))];
+  const before = gone.length === 0 ? new Map<string, string>() : yield* readTexts(root, base, gone);
+  const at = (path: string): string => (text(path) === "" ? (before.get(path) ?? "") : text(path));
+  return changes.flatMap((change) => pathsOf(change)).some((path) => placementOf(path, at(path)).type !== "unjudged" || readerOf(path) !== undefined);
+});
 
 function rootAgentFindings(files: ReadonlySet<string>, editsDocs: boolean): { readonly failing: readonly Finding[]; readonly advisory: readonly Finding[] } {
   const absent = missingAgentFiles(files).map((finding) => ({ ...finding, line: undefined }));
@@ -144,7 +147,7 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   const shapes = agents.flatMap(({ path }) => agentFileFindings(path, text(path), tracked));
   const readmes = proseDocs.filter(({ path }) => isCeiledReadme(path, tracked.files));
   const oversize = readmes.flatMap(({ path }) => readmeFindings(text(path)).map((finding) => ({ path, ...finding })));
-  const rootAgents = rootAgentFindings(tracked.files, rangeEditsDocs(changes, text));
+  const rootAgents = rootAgentFindings(tracked.files, yield* rangeEditsDocs(root, base, changes, text));
   const advisory = new Map<string, number>();
   for (const { path } of templated.filter((finding) => !touched.has(finding.path))) advisory.set(path, (advisory.get(path) ?? 0) + 1);
   return {
@@ -153,7 +156,7 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
     named: referenced.size,
     agents: agents.length,
     readmes: readmes.filter(({ path }) => touched.has(path)).length,
-    packageRoot: tracked.files.has(PACKAGE_MANIFEST),
+    hasManifest: [...tracked.files].some((file) => file === PACKAGE_MANIFEST || file.endsWith(`/${PACKAGE_MANIFEST}`)),
     findings: [
       ...templated.filter((finding) => touched.has(finding.path)),
       ...prose,
@@ -182,7 +185,7 @@ export function report({
   named,
   agents,
   readmes,
-  packageRoot,
+  hasManifest,
   findings,
   advisory,
   readmeAdvisory,
@@ -191,7 +194,9 @@ export function report({
   brokenBefore,
 }: Judged): string {
   const rootAgentFiles =
-    packageRoot && agentFileAdvisory.length === 0 ? [`${NAME}: the repository root holds the AGENTS.md and CLAUDE.md its package.json calls for`] : [];
+    hasManifest && agentFileAdvisory.length === 0
+      ? [`${NAME}: the repository root holds the AGENTS.md and CLAUDE.md a repository with a \`package.json\` keeps`]
+      : [];
   const verdict =
     findings.length === 0
       ? [

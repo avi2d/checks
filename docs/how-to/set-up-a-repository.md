@@ -69,7 +69,7 @@ To give each tool the config it reads:
 
 To give each agent the file it reads:
 
-1. Copy the agent templates beside the root `package.json`:
+1. Copy the agent templates to the repository root:
 
    ```sh
    cp node_modules/@avi2dg/checks/dist/templates/agents.md AGENTS.md

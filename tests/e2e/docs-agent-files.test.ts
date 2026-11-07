@@ -12,10 +12,10 @@ function initRepo(): Promise<DocsRepo> {
 
 const MANIFEST = JSON.stringify({ name: "widget" });
 const MISSING_CLAUDE =
-  "  CLAUDE.md: is missing from the repository root, which holds a `package.json`. Copy `node_modules/@avi2dg/checks/dist/templates/claude.md` to `CLAUDE.md` word for word";
+  "  CLAUDE.md: is missing from the repository root, which a repository with a `package.json` keeps. Copy `node_modules/@avi2dg/checks/dist/templates/claude.md` to `CLAUDE.md` word for word";
 const MISSING_AGENTS =
-  "  AGENTS.md: is missing from the repository root, which holds a `package.json`. Copy `node_modules/@avi2dg/checks/dist/templates/agents.md` to `AGENTS.md`";
-const HELD = "docs: the repository root holds the AGENTS.md and CLAUDE.md its package.json calls for";
+  "  AGENTS.md: is missing from the repository root, which a repository with a `package.json` keeps. Copy `node_modules/@avi2dg/checks/dist/templates/agents.md` to `AGENTS.md`";
+const HELD = "docs: the repository root holds the AGENTS.md and CLAUDE.md a repository with a `package.json` keeps";
 
 test(
   "a package repository without CLAUDE.md fails a range that edits its docs, and passes once CLAUDE.md is added",
@@ -120,19 +120,39 @@ test(
 );
 
 test(
-  "a repository with no package.json at its root passes a range that edits its docs without AGENTS.md or CLAUDE.md, even beside a nested package.json",
+  "a repository whose only package.json is nested still fails a range that edits its docs without AGENTS.md or CLAUDE.md",
   async () => {
     const { put, commit, docs } = await initRepo();
     await put("packages/run/package.json", MANIFEST);
     await put(GUIDE, OPENING);
-    const previous = await commit("no manifest at the root");
+    const previous = await commit("a nested-only manifest with no agent files");
     await put(GUIDE, `${OPENING}It prints a bill.\n`);
     const edited = await commit("edit a doc");
 
-    const green = await docs(previous, edited);
-    expect(green.text).not.toContain("is missing from the repository root");
-    expect(green.text).not.toContain(HELD);
-    expect(green.exitCode).toBe(0);
+    const red = await docs(previous, edited);
+    expect(red.text).toContain(MISSING_AGENTS);
+    expect(red.text).toContain(MISSING_CLAUDE);
+    expect(red.text).not.toContain("agent file(s) missing from the repository root");
+    expect(red.exitCode).toBe(1);
+  },
+  120_000,
+);
+
+test(
+  "a package repository without CLAUDE.md fails a range that deletes only a moded doc outside docs",
+  async () => {
+    const { put, remove, commit, docs } = await initRepo();
+    await put("package.json", MANIFEST);
+    await put("AGENTS.md", ROOT_AGENTS);
+    await put("guides/setup.md", "---\nkind: how-to\n---\n# Set up the widget\n\nFollow the steps.\n");
+    const previous = await commit("a package with a moded doc outside docs");
+    await remove("guides/setup.md");
+    const deleted = await commit("delete the moded doc");
+
+    const red = await docs(previous, deleted);
+    expect(red.text).toContain(MISSING_CLAUDE);
+    expect(red.text).not.toContain("agent file(s) missing from the repository root");
+    expect(red.exitCode).toBe(1);
   },
   120_000,
 );
