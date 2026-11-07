@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.77.0
+
+Released 2026-11-07.
+
+### Features
+
+- **quality:** refuse relative imports into other packages and node_modules [#72](https://github.com/avi2d/checks/pull/72)
+
 ## 0.76.0
 
 Released 2026-11-07.
