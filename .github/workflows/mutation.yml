@@ -31,7 +31,7 @@ jobs:
         run: bun src/testing/mutation-baseline.ts --full reports/mutation/mutation.json reports/stryker-incremental.json
       - run: time bun run mutate:incremental
       # Readers take only main's baseline, so uploads from other runs cannot replace it.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: mutation-baseline
           path: |
@@ -39,7 +39,7 @@ jobs:
             reports/stryker-incremental.json
           retention-days: 7
       # Full runs start by hand, so this must outlive the gap; a public repository's artifacts cost no storage quota.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: mutation-baseline-full
           path: |
