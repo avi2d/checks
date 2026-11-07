@@ -130,26 +130,14 @@ Only a whole-tree workflow the repository writes runs it, after that workflow's 
 ## Coverage that stops running
 
 Neither release nor CI runs a full mutation run, the four whole-tree gates or the issue filing in any repository below.
-Each answer comes from the workflows under `.github/workflows` of that repository.
+Each answer comes from the workflows under `.github/workflows` on the `main` branch of that repository.
 
-- checks keeps none of the three on a workflow.
-  Mutation testing runs only by hand through the mutation workflow baseline.
-  The four whole-tree gates run only by hand through `checks-lint --whole-tree`.
-  Nothing files issues until someone adds a `whole-tree-run` workflow.
-- skills runs all three by hand through its `night-run` workflow.
-  That workflow runs a full Stryker mutation run, the four gates and the unit and e2e tiers with issue filing.
-- dotfiles runs mutation testing on pull requests as an advisory scoped compare, and the full baseline by hand, both through `mutation.yml`.
-  The four gates run only by hand through its `night-run` workflow.
-  Nothing files issues.
-- career runs the four gates only by hand through its `night-run` workflow.
-  No mutation testing and no issue filing run anywhere.
-- home-vpn runs the four gates only by hand through its `night-run` workflow.
-  No mutation testing and no issue filing run anywhere.
-- orc runs mutation testing only by hand through its mutation workflow baseline.
-  The four gates run only by hand through its `night-run` workflow.
-  Nothing files issues.
-- shopping runs the four gates only by hand through its `night-run` workflow.
-  No mutation testing and no issue filing run anywhere.
+- checks, skills, career, home-vpn and shopping keep none of the three on a workflow.
+- dotfiles keeps its mutation workflow disabled, so none of the three runs there either.
+- orc runs mutation testing only by hand through its mutation workflow baseline, and keeps neither the four gates nor the issue filing on a workflow.
+
+The four whole-tree gates run only by hand through `checks-lint --whole-tree`.
+Nothing files issues until a repository adds a `whole-tree-run` workflow.
 
 ## Running it by hand
 
