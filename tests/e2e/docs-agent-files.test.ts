@@ -1,4 +1,7 @@
 import { expect, test } from "bun:test";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { CHECKOUT } from "./lib/fixture-repo.ts";
 import { docsRepos, GUIDE, OPENING, putAgentFiles, ROOT_AGENTS, type DocsRepo } from "./lib/docs-repo.ts";
 
 const repository = docsRepos();
@@ -51,12 +54,30 @@ test(
 
     const quiet = await docs(previous, head);
     expect(quiet.text).toContain(
-      "docs: advisory, 2 agent file(s) missing from the repository root, which the first range that edits a living doc or an agent file adds:",
+      "docs: advisory, 2 agent file(s) missing from the repository root, which the first range that edits a doc adds:",
     );
     expect(quiet.text).toContain(MISSING_AGENTS);
     expect(quiet.text).toContain(MISSING_CLAUDE);
     expect(quiet.text).not.toContain(HELD);
     expect(quiet.exitCode).toBe(0);
+  },
+  120_000,
+);
+
+test(
+  "a package repository without CLAUDE.md fails a range that adds only an ADR rather than leaving the file advisory",
+  async () => {
+    const { put, commit, docs } = await initRepo();
+    await put("package.json", MANIFEST);
+    await put("AGENTS.md", ROOT_AGENTS);
+    const previous = await commit("a package with AGENTS.md alone");
+    await put("docs/adr/0001-a-part-names-its-supplier.md", await readFile(join(CHECKOUT, "tests", "fixtures", "docs", "adr.md"), "utf8"));
+    const recorded = await commit("add an ADR");
+
+    const red = await docs(previous, recorded);
+    expect(red.text).toContain(MISSING_CLAUDE);
+    expect(red.text).not.toContain("agent file(s) missing from the repository root");
+    expect(red.exitCode).toBe(1);
   },
   120_000,
 );
