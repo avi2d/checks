@@ -3,12 +3,12 @@ import { dispatch, GitHubFailure } from "../core/github.ts";
 import { ChildProcessSpawner } from "effect/process";
 import { lastTag, releasedVersionOf, runBuild } from "./release.ts";
 import { git } from "../core/git.ts";
+import { MANIFEST, releaseTag, taggedVersion } from "../core/release-names.ts";
 
 class TagRefused extends Schema.TaggedError<TagRefused>()("TagRefused", {
   message: Schema.String,
 }) {}
 
-const MANIFEST = "package.json";
 
 const decodeVersion = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ version: Schema.String })));
 
@@ -48,7 +48,7 @@ export const tagHead = Effect.fn("tagHead")(function* (
   const manifest = yield* (yield* FileSystem.FileSystem).readFileString((yield* Path.Path).join(root, MANIFEST));
   const { version: held } = yield* decodeVersion(manifest).pipe(Effect.mapError((cause) => new TagRefused({ message: `${MANIFEST}: ${cause.message}` })));
   if (held !== version) return yield* new TagRefused({ message: `${head.slice(0, 12)} releases ${version}, but ${MANIFEST} holds ${held}` });
-  const tag = `v${version}`;
+  const tag = releaseTag(version);
   const tagged = yield* taggedOn(root, tag);
   if (tagged === head) {
     yield* Console.log(`${label}: ${tag} already tags ${head.slice(0, 12)}`);
@@ -59,7 +59,7 @@ export const tagHead = Effect.fn("tagHead")(function* (
   const rebuilt = (yield* git(["diff", "--name-only"], root)).trim().split("\n").filter((file) => file !== "");
   if (rebuilt.length > 0) {
     const since = yield* lastTag(root);
-    const returned = since === undefined ? "the version it held before this release" : since.slice(1);
+    const returned = since === undefined ? "the version it held before this release" : taggedVersion(since);
     return yield* new TagRefused({
       message: `the build rewrites ${rebuilt.join(", ")} at ${head.slice(0, 12)}, which the release workflow's build check refuses; open a \`chore: cancel the unpublished ${version}\` pull request that returns ${MANIFEST} to ${returned} and commits what \`bun run build\` then writes to CHANGELOG.md, and the next ${cuttingWorkflow} run cuts the release again with every change since ${since ?? "the first commit"}`,
     });

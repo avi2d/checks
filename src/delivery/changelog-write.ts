@@ -2,13 +2,12 @@
 import { Console, DateTime, Effect, FileSystem, Path, Schema } from "effect";
 import { cuts, hasEntries, namesPullRequest, releaseDates, renderChangelog, type Bump, type Cut, type Release } from "./changelog.ts";
 import { git } from "../core/git.ts";
+import { MANIFEST, TAG_PREFIX, taggedVersion } from "../core/release-names.ts";
 import { runMain } from "../core/main.ts";
 
 const NAME = "checks-changelog";
 const CHANGELOG = "CHANGELOG.md";
-const MANIFEST = "package.json";
 const FIELD = "\x1f";
-const TAG_PREFIX = "v";
 
 class ChangelogUnreadable extends Schema.TaggedError<ChangelogUnreadable>()("ChangelogUnreadable", {
   message: Schema.String,
@@ -75,7 +74,7 @@ const readPublishedShas = Effect.fn("readPublishedShas")(function* (root: string
   const tags = yield* git(["for-each-ref", "--format=%(refname:strip=2)", `refs/tags/${TAG_PREFIX}*`], root);
   const published = new Set<string>();
   for (const tag of tags.split("\n").filter((line) => line.startsWith(TAG_PREFIX))) {
-    const version = tag.slice(TAG_PREFIX.length);
+    const version = taggedVersion(tag);
     for (const bump of bumps.filter((one) => one.version === version).toReversed()) {
       if (yield* reaches(root, bump.sha, `refs/tags/${tag}`)) {
         published.add(bump.sha);
