@@ -23,9 +23,10 @@ async function scratch(): Promise<string> {
 
 const loaded = (file: Option.Option<string>, dir: string) => Effect.runPromise(Effect.exit(packConfig("secrets", dir, file)).pipe(Effect.provide(BunServices.layer)));
 
-const Rules = Schema.Struct({ rules: Schema.Array(Schema.Struct({ id: Schema.String, regex: Schema.optionalKey(Schema.String) })) });
+const Rule = Schema.Struct({ id: Schema.String, regex: Schema.optionalKey(Schema.String) });
+const Rules = Schema.Struct({ rules: Schema.Array(Rule) });
 
-async function idsOf(pack: unknown): Promise<readonly { readonly id: string; readonly regex?: string }[]> {
+async function idsOf(pack: unknown): Promise<readonly (typeof Rule.Type)[]> {
   const dir = await scratch();
   await writeFile(join(dir, "pack.json"), JSON.stringify(pack));
   const exit = await loaded(Option.some(join(dir, "pack.json")), dir);
