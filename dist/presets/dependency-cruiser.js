@@ -65,6 +65,20 @@ var BASE = {
       comment: "The specifier reaches past the package name into a subpath its exports map does not publish. Depend on a published entry instead.",
       from: {},
       to: { couldNotResolve: true, path: "^(@[^/]+/[^/]+|[^@./#][^/]*)/" }
+    },
+    {
+      name: "no-relative-into-other-package",
+      severity: "error",
+      comment: "A relative path reaches into another workspace package's files. Import the package by name.",
+      from: { path: "^packages/([^/]+)/" },
+      to: { path: "^packages/", pathNot: "^packages/$1/", dependencyTypes: ["local"], dependencyTypesNot: ["aliased-workspace"] }
+    },
+    {
+      name: "no-relative-into-node-modules",
+      severity: "error",
+      comment: "A relative path reaches into an installed package's files. Import a published entry.",
+      from: {},
+      to: { path: "(^|/)node_modules/", dependencyTypes: ["local"], dependencyTypesNot: ["aliased-workspace"] }
     }
   ],
   options: {
