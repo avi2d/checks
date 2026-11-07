@@ -132,8 +132,7 @@ Only a whole-tree workflow the repository writes runs it, after that workflow's 
 Neither release nor CI runs a full mutation run, the four whole-tree gates or the issue filing in any repository below.
 Each answer comes from the workflows under `.github/workflows` on the `main` branch of that repository.
 
-- checks, skills, career, home-vpn and shopping keep none of the three on a workflow.
-- dotfiles keeps its mutation workflow disabled, so none of the three runs there either.
+- checks, skills, career, dotfiles, home-vpn and shopping keep none of the three on a workflow.
 - orc runs mutation testing only by hand through its mutation workflow baseline, and keeps neither the four gates nor the issue filing on a workflow.
 
 The four whole-tree gates run only by hand through `checks-lint --whole-tree`.
