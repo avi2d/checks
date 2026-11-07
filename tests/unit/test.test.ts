@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import {
-  changedFiles,
   entryOptions,
   scriptOptions,
   selectSuite,
@@ -67,16 +66,6 @@ test("a test script never takes --changed, so scripts.test cannot shrink the CI 
 test("a --changed run passes the unit level and each touched e2e file to bun test, rather than the whole e2e level", () => {
   expect(suiteArgs({ kind: "changed", e2e: ["tests/e2e/docs.test.ts"] }, [])).toEqual(["./tests/unit", "./tests/e2e/docs.test.ts"]);
   expect(suiteArgs({ kind: "changed", e2e: [] }, ["tests/e2e/smoke.test.ts"])).toEqual(["./tests/unit"]);
-});
-
-test("a --changed run judges the unit tests and the touched e2e files, not a quarantined, live or untouched test", () => {
-  expect(changedFiles([
-    "tests/e2e/docs.test.ts",
-    "tests/e2e/release.test.ts",
-    "tests/live/browser.test.ts",
-    "tests/quarantine/unit/flaky.test.ts",
-    "tests/unit/test.test.ts",
-  ], ["tests/e2e/docs.test.ts"])).toEqual(["tests/e2e/docs.test.ts", "tests/unit/test.test.ts"]);
 });
 
 test("an explicit tier still runs only that tier in either environment", () => {

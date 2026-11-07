@@ -12,6 +12,7 @@ import {
   readSmokeDeclarations,
   scanTestFiles,
   selectedTierFile,
+  unitTierPlus,
   type Environment,
   type SkipDeclaration,
   type TestTier,
@@ -204,9 +205,9 @@ export function smokeList(manifest: unknown): readonly string[] | undefined {
 
 export function suiteArgs(selection: SuiteSelection, smoke: readonly string[]): readonly string[] {
   if (selection.kind === "tier") return tierArgs(selection.tier);
+  if (selection.kind === "changed") return suiteArgs({ kind: "smoke" }, selection.e2e);
   if (selection.kind === "smoke") return ["./tests/unit", ...smoke.map((file) => `./${file}`)];
   if (selection.kind === "files") return selection.files.map((file) => `./${file}`);
-  if (selection.kind === "changed") return ["./tests/unit", ...selection.e2e.map((file) => `./${file}`)];
   return [];
 }
 
@@ -259,7 +260,7 @@ const narrowSelection = Effect.fn("narrowSelection")(function* (options: TestOpt
 const readScope = Effect.fn("readScope")(function* (selection: SuiteSelection, smoke: readonly string[]) {
   if (selection.kind === "smoke") return yield* readSmokeDeclarations(process.cwd(), smoke);
   if (selection.kind === "changed") {
-    const files = changedFiles(yield* scanTestFiles(process.cwd()), selection.e2e);
+    const files = unitTierPlus(yield* scanTestFiles(process.cwd()), selection.e2e);
     return { files, declarations: yield* readDeclarationsIn(process.cwd(), files) };
   }
   const declarations =
@@ -268,11 +269,6 @@ const readScope = Effect.fn("readScope")(function* (selection: SuiteSelection, s
       : yield* readSkipDeclarations(process.cwd(), selection.kind === "tier" ? selection.tier : undefined);
   return { files: undefined, declarations };
 });
-
-export function changedFiles(scanned: readonly string[], e2e: readonly string[]): readonly string[] {
-  const touched = new Set(e2e);
-  return scanned.filter((file) => selectedTierFile(file, "unit") || touched.has(file));
-}
 
 const changedSelection = Effect.fn("changedSelection")(function* () {
   const e2e = yield* changedE2eFiles(process.cwd());
