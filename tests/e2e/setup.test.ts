@@ -270,6 +270,41 @@ return event;
 }
 
 test(
+"a setup from empty keeps the placeholder agent entry failing the gate rather than passing unfilled, and a filled entry holds rather than failing the range",
+async () => {
+const repo = await open({});
+const first = await setup(repo);
+expect(first.exitCode).toBe(0);
+expect(first.text).toContain("fill AGENTS.md with what an agent cannot infer from the code before the first commit");
+expect(await readFile(join(repo.dir, "AGENTS.md"), "utf8")).toBe(await kitFile("dist/templates/agents.md"));
+expect(await readFile(join(repo.dir, "CLAUDE.md"), "utf8")).toBe(await kitFile("dist/templates/claude.md"));
+const base = await repo.commit("setup from empty");
+await repo.write({ "a.txt": "hello\n" });
+const head = await repo.commit("add a code file");
+const failed = await repo.script("docs/docs.ts", base, head);
+expect(failed.exitCode).toBe(1);
+expect(failed.text).toContain("AGENTS.md");
+expect(failed.text).toContain("names no tracked path");
+await repo.write({
+"AGENTS.md": "# Project agent memory\n\nThe shop bills parts, and README.md holds what a person reads.\n\n## Bills\n\n- The bills follow [the tools guide](tools/README.md).\n",
+"tools/README.md": "# Tools\n\nThe tools build bills.\n",
+});
+const previous = await repo.commit("fill the agent file and add a guide");
+await repo.write({ "tools/README.md": "# Tools\n\nThe tools build bills.\nIt prints a bill.\n" });
+const filledHead = await repo.commit("edit a doc");
+const held = await repo.script("docs/docs.ts", previous, filledHead);
+expect(held.text).toContain("docs: the repository root holds the AGENTS.md and CLAUDE.md");
+expect(held.exitCode).toBe(0);
+const rerun = await setup(repo);
+expect(rerun.exitCode).toBe(0);
+expect(rerun.text).toContain("kept AGENTS.md, already there");
+expect(rerun.text).toContain("kept CLAUDE.md, already there");
+expect(rerun.text).not.toContain("fill AGENTS.md");
+},
+120_000,
+);
+
+test(
 "the generated public and private workflows pass the kit ci-wiring gate",
 async () => {
 const pub = await open({});

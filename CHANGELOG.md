@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.72.0
+
+Released 2026-11-07.
+
+### Features
+
+- **checks-setup:** write root AGENTS.md and CLAUDE.md when absent [#60](https://github.com/avi2d/checks/pull/60)
+
 ## 0.71.0
 
 Released 2026-11-07.
