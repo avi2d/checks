@@ -127,9 +127,7 @@
     "test:fast": "bun src/testing/test.ts --changed",
     "test:unit": "bun src/testing/test.ts --tier=unit",
     "test:e2e": "bun src/testing/test.ts --tier=e2e --parallel=4",
-    "test:live": "bun src/testing/test.ts --tier=live",
-    "mutate": "bunx stryker run",
-    "mutate:incremental": "bunx stryker run --incremental"
+    "test:live": "bun src/testing/test.ts --tier=live"
   },
   "peerDependencies": {
     "@axe-core/playwright": "4.13.0",

@@ -132,27 +132,10 @@ Only a whole-tree workflow the repository writes runs it, after that workflow's 
 `checks-suppressions-ratchet` and `checks-quarantine-clock` run on every pull request, since `checks-lint` judges each pull request's range with them like every other range gate.
 `checks-repetition` runs on every pull request in a repository that tracks TypeScript.
 `checks-lint-coverage` reads the working tree, so a pull request run judges it only when the change selects the tree gates.
-Neither release nor CI runs a full mutation run, the whole-tree sweep of the four gates or the issue filing in any repository below.
-Each answer comes from the workflows under `.github/workflows` of that repository.
+On `main`, no workflow under `.github/workflows` in checks, skills, career, dotfiles, home-vpn, orc or shopping runs a full mutation run, the whole-tree sweep or the issue filing.
 
-- checks keeps none of the three on a workflow.
-  Mutation testing runs only by hand through the mutation workflow baseline.
-  The whole-tree sweep runs only by hand through `checks-lint --whole-tree`.
-  Nothing files issues until someone adds a `whole-tree-run` workflow.
-- skills runs all three by hand through its `night-run` workflow.
-  That workflow runs a full Stryker mutation run, the whole-tree sweep and the unit and e2e tiers with issue filing.
-- dotfiles runs mutation testing on pull requests as an advisory scoped compare, and the full baseline by hand, both through `mutation.yml`.
-  The whole-tree sweep runs only by hand through its `night-run` workflow.
-  Nothing files issues.
-- career runs the whole-tree sweep only by hand through its `night-run` workflow.
-  No mutation testing and no issue filing run anywhere.
-- home-vpn runs the whole-tree sweep only by hand through its `night-run` workflow.
-  No mutation testing and no issue filing run anywhere.
-- orc runs mutation testing only by hand through its mutation workflow baseline.
-  The whole-tree sweep runs only by hand through its `night-run` workflow.
-  Nothing files issues.
-- shopping runs the whole-tree sweep only by hand through its `night-run` workflow.
-  No mutation testing and no issue filing run anywhere.
+The whole-tree sweep runs only by hand through `checks-lint --whole-tree`.
+Nothing files issues until a repository adds a `whole-tree-run` workflow.
 
 ## Running it by hand
 

@@ -24,12 +24,7 @@ CI runs the commands in `.github/workflows/ci.yml` on each pull request, and on 
 A pull request runs only the tests it reaches, and the release runs the whole suite, as [checks-test](docs/gates/checks-test.md#pull-request-runs) says.
 `.github/workflows/pr-title.yml` lints the pull request title, so editing the title reruns only that.
 No workflow runs on a schedule except the weekly advisory scan, as [checks-ci-wiring](docs/gates/checks-ci-wiring.md#schedules) requires.
-`.github/workflows/mutation.yml` runs Stryker, with `stryker.conf.mjs`, as a full baseline on any branch.
-It runs only when `gh workflow run mutation` starts it, and no pull request runs it.
-That run restores the previous full baseline state through [checks-mutation-baseline](docs/gates/checks-mutation-baseline.md), so it retests only the mutants its changes reach.
-A result made stale by a file a test reads at runtime lasts until the next 28-day refresh.
-That run uploads the report and the incremental state again as the `mutation-baseline-full` artifact.
-No workflow runs the long test tiers, the whole-tree sweep or the issue filing on its own.
+No workflow runs mutation testing, the long test tiers, the whole-tree sweep or the issue filing on its own.
 `bun run lint` runs the three range whole-tree lint gates over each pull request's range.
 It runs `checks-lint-coverage` only when the change selects the tree gates, since that gate reads the working tree.
 The sweep runs the four whole-tree gates by hand through `bun src/core/lint.ts --whole-tree` over the whole tree with no base.
@@ -41,7 +36,7 @@ It closes the issue of a test, a gate or a missing mutation report that a later 
 A failed mutation run still leaves each failing test filed, and records no score.
 A run started on a branch other than `main` lists its findings in the log and files no issue.
 Each issue is fixed in a pull request of its own, so no pull request waits for a whole-tree run.
-Run `bun run mutate -- --mutate <file>` to mutate one source file locally, since the preset refuses a full run outside CI.
+Run `bunx stryker run --mutate <file>` to mutate one source file locally, since the preset refuses a full run outside CI.
 The patch under `patches/` makes `@hughescr/stryker-bun-runner` honour Stryker's hit limit, so a mutant whose code loops endlessly ends as a `Timeout` within seconds.
 A static mutant, evaluated once when its module loads, never reaches that limit and still waits for `timeoutMS`.
 The patch applies only to this repository's install, not to a repository that installs the kit.
