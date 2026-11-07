@@ -6,6 +6,7 @@ import { availableParallelism, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { Schema } from "effect";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
+import { consumerManifest, installConsumer } from "../lib/consumer-install.ts";
 import { CHECKOUT, ran, UNVENDORED_BUNFIG, type Ran } from "../lib/fixture-repo.ts";
 
 const WIDGET = "export const widget = 42;\n";
@@ -43,26 +44,6 @@ function widgetTest(widget: string): string {
   return `import { expect, test } from "bun:test";\nimport { widget } from "${widget}";\ntest("widget", () => {\n  expect(widget).toBe(42);\n});\n`;
 }
 
-function manifestFor(checks: string): Record<string, unknown> {
-  return {
-    name: "checks-consumer-fixture",
-    type: "module",
-    author: "avi2d <avi2dg@gmail.com>",
-    devDependencies: {
-      "@avi2dg/checks": checks,
-      effect: "4.0.0",
-      oxlint: "1.83.0",
-      "@swc/core": "1.16.2",
-      "@types/bun": "1.4.2",
-    },
-  };
-}
-
-async function installConsumer(installDir: string, checks: string): Promise<void> {
-  await writeFile(join(installDir, "package.json"), JSON.stringify(manifestFor(checks)));
-  await $`bun install`.cwd(installDir).quiet();
-}
-
 async function resetWorkspace(workDir: string): Promise<void> {
   for (const entry of await readdir(workDir)) {
     if (KEPT_ACROSS_TESTS.has(entry)) continue;
@@ -95,7 +76,7 @@ async function useConsumer(kind: Kind, manifest: Record<string, unknown> = {}): 
   dir = kind === "file" ? fileDir : tarballDir;
   await resetWorkspace(dir);
   const checks = kind === "file" ? `file:${CHECKOUT}` : `file:${tarballPath}`;
-  await writeFile(join(dir, "package.json"), JSON.stringify({ ...manifestFor(checks), ...manifest }));
+  await writeFile(join(dir, "package.json"), JSON.stringify({ ...consumerManifest(checks), ...manifest }));
   await writeOxlintrc();
   // oxlint honours .gitignore but not ignorePatterns for node_modules, so the fixture carries that entry.
   await writeFile(join(dir, ".gitignore"), "node_modules/\n");
