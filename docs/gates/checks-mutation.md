@@ -24,24 +24,30 @@ So a bare `bunx stryker run` in a repository whose `stryker.conf.mjs` spreads th
 The preset also registers an ignore plugin that checks the incremental report once Stryker has resolved its options, because a config file can set `incrementalFile` after the preset loads.
 A config that replaces `plugins` or `ignorers` must keep the preset's entries, or that check does not run.
 The preset also exports `unitTestFiles`, which lists every `.test.ts` and `.test.tsx` file under `tests/unit` at config load.
-A repository sets `bun.testFiles` to its result, so a covered, non-static mutant loads only the test files that cover it.
+The preset sets `bun.testFiles` to its result, so a covered, non-static mutant loads only the test files that cover it.
+A repository without `tests/unit` lists no file, and the preset leaves `bun.testFiles` unset, so the runner finds every test itself.
 A static mutant has no per-test coverage, so it still loads every listed file, and with bail it stops at the first test that fails.
-So when a `stryker run` without `--ignoreStatic` loads the preset, the preset first runs the listed files once with `bun test` and times each file.
+So when a `stryker run` that tests static mutants loads the preset, the preset first runs the listed files once with `bun test` and times each file.
 `unitTestFiles` then lists each file with a leading `./`, fastest first, and Bun runs such paths in the order given.
 It then lists each path again without the `./`, the spelling the runner matches a covering test against.
 Bun loads a file once however often the list names it.
 When that timing run fails, the preset prints why on stderr and `unitTestFiles` keeps Bun's default directory order.
+A run with `--ignoreStatic` on the command line or in a refresh tests no static mutant, so it skips the timing run.
+
+The preset sets `ignoreStatic` only when `CHECKS_MUTATION_MODE` is `refresh`, which a refresh run of the shared mutation workflow sets.
+A baseline or a branch comparison leaves the variable at another value or unset, so it still tests each static mutant.
+
+The preset runs one Stryker worker per core when `RUNNER_ENVIRONMENT` is `github-hosted`, since a GitHub-hosted runner is a VM the job holds alone.
+Elsewhere it runs one worker per two cores, rounded down and at least one, since a self-hosted runner or a laptop shares its cores.
+The preset exports `mutationConcurrency`, which takes the runner environment and the core count and returns that worker count.
+
 The config then reads:
 
 ```js
-import preset, { unitTestFiles } from "@avi2dg/checks/stryker.preset.js";
+import preset from "@avi2dg/checks/stryker.preset.js";
 
 export default {
   ...preset,
-  bun: {
-    ...preset.bun,
-    testFiles: unitTestFiles(),
-  },
 };
 ```
 
