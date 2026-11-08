@@ -92,8 +92,7 @@ A changed unit test that `main` edited after that baseline widens the scope to e
 Refresh the full baseline with `gh workflow run mutation`, choosing `refresh` for the `mode` input, as [checks-mutation](checks-mutation.md#running-it-in-ci) shows.
 A run with `--mutate` is scoped, so the preset lets it through without `CI=true`.
 A public repository keeps `runs-on: ubuntu-latest`, as [checks-ci-wiring](checks-ci-wiring.md#runners) requires of a job a fork can reach.
-A private repository sets `runs-on` to the labels it declares in `package.json` under `checks.mutationRunner` instead, which is where it sends its mutation runs.
-The job never reads `CI_RUNS_ON`, so an override that moves a repository's other jobs during a runner outage leaves the comparison waiting for those labels.
+A private repository runs the comparison on `ubuntu-latest` too, and the job never reads `CI_RUNS_ON`.
 [checks-ci-wiring](checks-ci-wiring.md#runners) refuses a mutation job that names it in `runs-on`.
 
 ## Related topics
