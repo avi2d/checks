@@ -10,6 +10,7 @@ import {
   isCeiledReadme,
   maintainingFinding,
   missingAgentFiles,
+  missingVision,
   readmeFindings,
   type AgentFinding,
 } from "../../../src/docs/doc-agents.ts";
@@ -34,6 +35,16 @@ test("the missing file's finding names the repository root and the template to c
   expect(agents?.message).toContain("is missing from the repository root, which a repository with a `package.json` keeps");
   expect(agents?.message).toContain("`node_modules/@avi2dg/checks/dist/templates/agents.md`");
   expect(claude?.message).toContain("`node_modules/@avi2dg/checks/dist/templates/claude.md` to `CLAUDE.md` word for word");
+});
+
+test("a package repository without docs/vision.md is asked for it by the template, and a root VISION.md does not stand in", () => {
+  const [missing, ...rest] = missingVision(new Set(["package.json", "VISION.md"]));
+  expect(rest).toEqual([]);
+  expect(missing?.path).toBe("docs/vision.md");
+  expect(missing?.message).toContain("Copy `node_modules/@avi2dg/checks/dist/templates/vision.md` to `docs/vision.md`");
+  expect(missingVision(new Set(["packages/run/package.json"])).map(({ path }) => path)).toEqual(["docs/vision.md"]);
+  expect(missingVision(new Set(["package.json", "docs/vision.md"]))).toEqual([]);
+  expect(missingVision(new Set(["README.md"]))).toEqual([]);
 });
 
 test("an agent file is recognised by name in any directory", () => {

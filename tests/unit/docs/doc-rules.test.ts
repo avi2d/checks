@@ -52,6 +52,19 @@ test("front matter carrying the audience beside the kind is read past, and lines
   ]);
 });
 
+test("docs/vision.md is a vision page by its path alone, and a vision page elsewhere is not", () => {
+  expect(placementOf("docs/vision.md")).toEqual({ type: "judged", kind: "vision" });
+  expect(placementOf("docs/vision.md", "---\nkind: reference\n---\n# Vision\n")).toEqual({ type: "judged", kind: "vision" });
+  expect(["VISION.md", "docs/plans/vision.md"].map((path) => placementOf(path).type)).toEqual(["unjudged", "undeclared"]);
+});
+
+test("a vision page missing any one of its six sections is refused, naming that section", () => {
+  const vision = fixture("vision");
+  const sections = ["Purpose", "Serves", "Owns", "Non-goals", "Direction", "Constraints"];
+  const without = (section: string): string => vision.replace(new RegExp(`## ${section}\n\n(?:.+\n)+\n?`), "");
+  expect(sections.map((section) => found("vision", without(section)))).toEqual(sections.map((section) => [`1: lacks \`## ${section}\``]));
+});
+
 test("a README missing a section is refused", () => {
   const readme = fixture("readme");
   expect(found("readme", readme.replace("## Before you begin\n\n- Bun 1.3.13 or later.\n\n", ""))).toEqual([

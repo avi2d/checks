@@ -1,6 +1,18 @@
 #!/usr/bin/env bun
 import { Console, Effect } from "effect";
-import { ceilingFinding, entryFindings, hasManifest, isAgentFile, isCeiledReadme, maintainingFinding, missingAgentFiles, readmeFindings, type RootAgentFinding } from "./doc-agents.ts";
+import {
+  ceilingFinding,
+  entryFindings,
+  hasManifest,
+  isAgentFile,
+  isCeiledReadme,
+  maintainingFinding,
+  missingAgentFiles,
+  missingVision,
+  readmeFindings,
+  type RootAgentFinding,
+  type VisionFinding,
+} from "./doc-agents.ts";
 import { deletedGoverned, governingRecords, missingGoverned, type GovernedFinding, type GovernedRecord, type Governing } from "./doc-governs.ts";
 import { INDEX_WRITER, indexState } from "./doc-index.ts";
 import { rootsOf, snapshotOf, type Snapshot, unresolvedIn, type Judging, type Unresolved } from "./doc-references.ts";
@@ -19,6 +31,7 @@ import {
   type Records,
 } from "./doc-rules.ts";
 import { vanishedNames } from "./doc-names.ts";
+import { VISION_PAGE } from "./doc-templates.ts";
 import { pinsAt, versionFindings } from "./doc-versions.ts";
 import { readTexts, snapshotAt, stillMissing } from "./doc-snapshot.ts";
 import { changedLines, changedPaths, git, pathsAt, pathsOf, rangeEnds, refArgs, type Change } from "../core/git.ts";
@@ -46,6 +59,7 @@ type Judged = {
   readonly indexAdvisory: readonly Finding[];
   readonly readmeAdvisory: readonly Finding[];
   readonly agentFileAdvisory: readonly Finding[];
+  readonly visionAdvisory: readonly Finding[];
   readonly sentenceAdvisory: readonly Finding[];
   readonly brokenBefore: readonly Finding[];
 };
@@ -81,7 +95,7 @@ const rangeEditsDocs = Effect.fn("rangeEditsDocs")(function* (root: string, base
   return gone.some((path) => placementOf(path, before.get(path) ?? "").type !== "unjudged");
 });
 
-function rootAgentFindings(absent: readonly RootAgentFinding[], editsDocs: boolean): { readonly failing: readonly Finding[]; readonly advisory: readonly Finding[] } {
+function missingFileFindings(absent: readonly (RootAgentFinding | VisionFinding)[], editsDocs: boolean): { readonly failing: readonly Finding[]; readonly advisory: readonly Finding[] } {
   const listed = absent.map((finding) => ({ ...finding, line: undefined }));
   return editsDocs ? { failing: listed, advisory: [] } : { failing: [], advisory: listed };
 }
@@ -171,6 +185,13 @@ function untouchedCounts(templated: readonly Finding[], touched: ReadonlySet<str
   return advisory;
 }
 
+const requiredFiles = Effect.fn("requiredFiles")(function* (root: string, base: string, changes: readonly Change[], text: (path: string) => string, files: ReadonlySet<string>) {
+  const absent = missingAgentFiles(files);
+  const absentVision = missingVision(files);
+  const editsDocs = absent.length + absentVision.length === 0 ? false : yield* rangeEditsDocs(root, base, changes, text);
+  return { rootAgents: missingFileFindings(absent, editsDocs), vision: missingFileFindings(absentVision, editsDocs) };
+});
+
 const recordIndex = Effect.fn("recordIndex")(function* (root: string, base: string, head: string, records: readonly GovernedRecord[], readme: string | undefined, changes: readonly Change[]) {
   const governing = records.length === 0 ? [] : governingRecords(records, (yield* changedPaths(base, head, [], root)).flatMap(pathsOf));
   const index = indexFindings(readme, records);
@@ -218,8 +239,7 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   const shapes = agents.flatMap(({ path }) => agentFileFindings(path, text(path), tracked));
   const readmes = proseDocs.filter(({ path }) => isCeiledReadme(path, tracked.files));
   const oversize = readmes.flatMap(({ path }) => readmeFindings(text(path)).map((finding) => ({ path, ...finding })));
-  const absent = missingAgentFiles(tracked.files);
-  const rootAgents = rootAgentFindings(absent, absent.length === 0 ? false : yield* rangeEditsDocs(root, base, changes, text));
+  const { rootAgents, vision } = yield* requiredFiles(root, base, changes, text, tracked.files);
   const index = yield* recordIndex(root, base, head, after, present.includes(ADR_INDEX) ? text(ADR_INDEX) : undefined, changes);
   return {
     held: judged.map(({ path }) => path).filter((path) => touched.has(path)),
@@ -241,11 +261,13 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
       ...shapes,
       ...oversize.filter((finding) => touched.has(finding.path)),
       ...rootAgents.failing,
+      ...vision.failing,
     ].toSorted(inPathOrder),
     advisory: untouchedCounts(templated, touched),
     indexAdvisory: index.advisory,
     readmeAdvisory: oversize.filter((finding) => !touched.has(finding.path)).toSorted(inPathOrder),
     agentFileAdvisory: rootAgents.advisory,
+    visionAdvisory: vision.advisory,
     sentenceAdvisory: edited
       .flatMap(({ path }) => longSentences(text(path), changed.get(path)).map(({ line, message }) => ({ path, line, message })))
       .toSorted(inPathOrder),
@@ -271,6 +293,7 @@ export function report({
   indexAdvisory,
   readmeAdvisory,
   agentFileAdvisory,
+  visionAdvisory,
   sentenceAdvisory,
   brokenBefore,
 }: Judged): string {
@@ -278,6 +301,7 @@ export function report({
     manifestHeld && agentFileAdvisory.length === 0
       ? [`${NAME}: the repository root holds the AGENTS.md and CLAUDE.md a repository with a \`package.json\` keeps`]
       : [];
+  const visionPage = manifestHeld && visionAdvisory.length === 0 ? [`${NAME}: ${VISION_PAGE} holds the vision a repository with a \`package.json\` keeps`] : [];
   const verdict =
     findings.length === 0
       ? [
@@ -289,6 +313,7 @@ export function report({
           `${NAME}: the ${agents} agent file(s) hold to the ceiling, and every entry names a tracked path, a link or a command`,
           `${NAME}: the ${readmes} README(s) the range edits hold to the 6,000-character ceiling and the 300-character table cell ceiling`,
           ...rootAgentFiles,
+          ...visionPage,
           ...(indexed === undefined ? [] : [`${NAME}: ${ADR_INDEX} indexes the ${indexed} record(s) in ${ADR_DIRECTORY}`]),
         ]
       : [`${NAME}: ${findings.length} violation(s):`, ...findings.map(describe)];
@@ -319,6 +344,8 @@ export function report({
           `${NAME}: advisory, ${agentFileAdvisory.length} agent file(s) missing from the repository root, which the first range that edits a doc adds:`,
           ...agentFileAdvisory.map(describe),
         ];
+  const unvisioned =
+    visionAdvisory.length === 0 ? [] : [`${NAME}: advisory, ${VISION_PAGE} is missing, and the first range that edits a doc adds it:`, ...visionAdvisory.map(describe)];
   const sentences =
     sentenceAdvisory.length === 0
       ? []
@@ -333,7 +360,7 @@ export function report({
           `${NAME}: advisory, ${brokenBefore.length} path(s), link(s) or command(s) the living docs or agent files name were broken before the range:`,
           ...brokenBefore.map(describe),
         ];
-  return [...verdict, ...governingLines, ...unconformed, ...unindexed, ...oversize, ...missing, ...sentences, ...broken].join("\n");
+  return [...verdict, ...governingLines, ...unconformed, ...unindexed, ...oversize, ...missing, ...unvisioned, ...sentences, ...broken].join("\n");
 }
 
 const docs = Effect.gen(function* () {
