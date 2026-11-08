@@ -63,9 +63,11 @@ test("a test script never takes --changed, so scripts.test cannot shrink the CI 
   ]);
 });
 
-test("a --changed run passes the unit level and each touched e2e file to bun test, rather than the whole e2e level", () => {
-  expect(suiteArgs({ kind: "changed", e2e: ["tests/e2e/docs.test.ts"] }, [])).toEqual(["./tests/unit", "./tests/e2e/docs.test.ts"]);
-  expect(suiteArgs({ kind: "changed", e2e: [] }, ["tests/e2e/smoke.test.ts"])).toEqual(["./tests/unit"]);
+test("a --changed run passes only the files it reached to bun test, rather than the whole unit level", () => {
+  expect(suiteArgs({ kind: "changed", files: ["tests/unit/docs.test.ts", "tests/e2e/docs.test.ts"] }, ["tests/e2e/smoke.test.ts"])).toEqual([
+    "./tests/unit/docs.test.ts",
+    "./tests/e2e/docs.test.ts",
+  ]);
 });
 
 test("an explicit tier still runs only that tier in either environment", () => {

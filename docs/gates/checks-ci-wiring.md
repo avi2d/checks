@@ -66,6 +66,14 @@ The resolved label cannot be shown to be a hosted runner before the run.
 A repository without those declarations fails each job they would pin until it declares them.
 The check knows a repository is private only from GitHub's event, so a run outside CI judges only the rules that hold in either.
 
+### Mutation jobs
+
+A repository runs mutation through one job that calls `avi2d/workflows/.github/workflows/mutation.yml@v1`, the caller that [checks-setup](checks-setup.md) writes.
+It refuses every mutation job of the repository's own, a job with a run step that calls mutation as [Runners](#runners) defines it.
+A job that calls a reusable workflow has no run step, so the caller passes.
+The `avi2d/workflows` repository holds the shared workflow, so there it refuses none.
+Each refusal names the workflow file and the job.
+
 ### Bun version
 
 It also judges every step that uses `oven-sh/setup-bun`.
@@ -136,6 +144,7 @@ It reads `.bun-version` for each step that uses the shared setup action.
 It reads the fleet pin from the kit's own `.bun-version`.
 It reads the target branch from `GITHUB_BASE_REF`, then from `refs/remotes/origin/HEAD` and then from the event file `GITHUB_EVENT_PATH` names.
 It reads whether the repository is private from `repository.private` in that event file.
+It reads the repository's owner and name from `GITHUB_REPOSITORY`, then from the `origin` remote's GitHub URL.
 It parses the workflows with `Bun.YAML` without executing them.
 
 ## Arguments
@@ -147,7 +156,7 @@ It takes no arguments.
 | Code | Result |
 | --- | --- |
 | 0 | Every required command has a reachable step. |
-| 1 | A required command is missing or blocked, a job runs on the wrong runner, a workflow names a missing workflow or job, a bun setup step drifts from the fleet bun version, a workflow that releases runs on a schedule outside a public npm package or more than once a day, a workflow other than a weekly public advisory scan runs on a schedule, or a job can run for more than 60 minutes. |
+| 1 | A required command is missing or blocked, a job runs on the wrong runner, a job runs mutation outside the shared workflow, a workflow names a missing workflow or job, a bun setup step drifts from the fleet bun version, a workflow that releases runs on a schedule outside a public npm package or more than once a day, a workflow other than a weekly public advisory scan runs on a schedule, or a job can run for more than 60 minutes. |
 | 2 | A workflow or `package.json` cannot be decoded, or the kit's own `.bun-version` is missing, unreadable or blank. |
 
 ## Sample output
@@ -165,6 +174,13 @@ A mutation job that names `CI_RUNS_ON` in `runs-on` produces a report like this:
 ```
 ci-wiring: 1 job(s) run on the wrong runner:
   .github/workflows/mutation-compare.yml job mutation-compare: a mutation job reads CI_RUNS_ON, so an override moves its mutation runs off [self-hosted, gpu, x64]; set runs-on: [self-hosted, gpu, x64]
+```
+
+A job that runs Stryker itself produces a report like this:
+
+```
+ci-wiring: 1 job(s) run mutation outside the shared workflow:
+  .github/workflows/mutation.yml job mutation: run mutation through a job with uses: avi2d/workflows/.github/workflows/mutation.yml@v1, as checks-setup writes it
 ```
 
 A reference to a missing workflow produces a report like this:
