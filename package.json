@@ -112,6 +112,7 @@
     "checks-vendor": "src/dependencies/vendor.ts",
     "checks-advisories": "src/dependencies/advisories.ts",
     "checks-secrets": "src/delivery/secrets.ts",
+    "checks-no-mistakes-test": "src/delivery/no-mistakes-test.ts",
     "checks-pr-text": "src/delivery/pr-text.ts",
     "checks-setup": "src/delivery/setup.ts",
     "checks-frontend-syntax": "src/quality/frontend-syntax.ts",
