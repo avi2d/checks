@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.86.2
+
+Released 2026-11-08.
+
+### Fixes
+
+- **lint-coverage:** accept the macos shell wording for a missing oxlint [#90](https://github.com/avi2d/checks/pull/90)
+
 ## 0.86.1
 
 Released 2026-11-08.
