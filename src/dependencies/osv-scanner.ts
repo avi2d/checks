@@ -1,9 +1,10 @@
 import { Clock, Context, Effect, FileSystem, Layer, Option, Path, Schema } from "effect";
 import { collect } from "../core/git.ts";
-import { installPinned } from "./pinned-binary.ts";
+import { installPinned, releaseAssetApi } from "./pinned-binary.ts";
 
 export const OSV_SCANNER_VERSION = "2.6.0";
-const RELEASES = `https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}`;
+const REPOSITORY = "google/osv-scanner";
+const RELEASES = `https://github.com/${REPOSITORY}/releases/download/v${OSV_SCANNER_VERSION}`;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 export const REFRESH_HOURS = 24;
@@ -13,14 +14,14 @@ const FOUND_ADVISORIES = 1;
 const FOUND_NO_PACKAGE = 128;
 const NO_RESULTS = JSON.stringify({ results: [] });
 
-type Build = { readonly asset: string; readonly sha256: string };
+type Build = { readonly asset: string; readonly assetId: number; readonly sha256: string };
 
-// The SHA-256 of each asset as osv-scanner_SHA256SUMS of the release lists it.
+// The SHA-256 of each asset as osv-scanner_SHA256SUMS of the release lists it, and its id in the release as GitHub's API lists it.
 const BUILDS: Readonly<Record<string, Build>> = {
-  "darwin-arm64": { asset: "osv-scanner_darwin_arm64", sha256: "98c460dcd37de25819babd757d04542045b6243113e209edcd4d89fedb0256b4" },
-  "darwin-x64": { asset: "osv-scanner_darwin_amd64", sha256: "60c5296637e977b28eeda5c7f13573e447659a632922737f94d11fa7e30ad6ca" },
-  "linux-arm64": { asset: "osv-scanner_linux_arm64", sha256: "2c71403eb443d05891c4f268c3ad771cf4f16e5443463fd7851ef8f454d3c7e4" },
-  "linux-x64": { asset: "osv-scanner_linux_amd64", sha256: "ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108" },
+  "darwin-arm64": { asset: "osv-scanner_darwin_arm64", assetId: 562_414_648, sha256: "98c460dcd37de25819babd757d04542045b6243113e209edcd4d89fedb0256b4" },
+  "darwin-x64": { asset: "osv-scanner_darwin_amd64", assetId: 562_414_712, sha256: "60c5296637e977b28eeda5c7f13573e447659a632922737f94d11fa7e30ad6ca" },
+  "linux-arm64": { asset: "osv-scanner_linux_arm64", assetId: 562_414_650, sha256: "2c71403eb443d05891c4f268c3ad771cf4f16e5443463fd7851ef8f454d3c7e4" },
+  "linux-x64": { asset: "osv-scanner_linux_amd64", assetId: 562_414_718, sha256: "ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108" },
 };
 
 class OsvScannerError extends Schema.TaggedError<OsvScannerError>()("OsvScannerError", {
@@ -37,8 +38,11 @@ const pinnedBinary = Effect.fn("pinnedBinary")(function* (cache: string) {
     return yield* new OsvScannerError({ message: `no pinned OSV-Scanner build runs on ${process.platform}-${process.arch}` });
   }
   const path = yield* Path.Path;
-  const { asset, sha256 } = build.value;
-  return yield* installPinned({ kind: "binary", url: `${RELEASES}/${asset}`, sha256 }, path.join(cache, "osv-scanner", OSV_SCANNER_VERSION, asset));
+  const { asset, assetId, sha256 } = build.value;
+  return yield* installPinned(
+    { kind: "binary", url: `${RELEASES}/${asset}`, mirror: releaseAssetApi(REPOSITORY, assetId), sha256 },
+    path.join(cache, "osv-scanner", OSV_SCANNER_VERSION, asset),
+  );
 });
 
 type PinnedBinary = ReturnType<typeof pinnedBinary>;

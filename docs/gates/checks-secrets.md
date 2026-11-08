@@ -131,7 +131,14 @@ It writes the kit's rules and the pack's into one config, and each commit messag
 Each goes in a temporary directory it deletes when the scan ends.
 
 It runs the gitleaks release `src/delivery/gitleaks.ts` pins, by the SHA-256 of each platform's archive and of the binary inside it.
-On first use it downloads the archive from the scanner's GitHub release and unpacks the binary into `~/.cache/avi2dg-checks/gitleaks/<version>/`.
+On first use it downloads the archive from the scanner's GitHub release and unpacks the binary into `~/.cache/avi2dg-checks/gitleaks/<version>/<platform>-<arch>/`, such as `linux-x64`.
+Every later run finds it there and downloads nothing.
+A download that meets a network error or a status outside 2xx, such as 504, is tried again.
+It makes six attempts in all, waiting 2, 4, 8, 16 and 32 seconds between them.
+The attempts alternate between the release URL and the asset's URL on GitHub's API, which other hosts serve.
+The same SHA-256 pin judges the bytes from either.
+When the sixth fails it exits 2 and names the last status, so the gate fails only when the release URL and the API URL both fail on every attempt.
+A hosted runner starts each run with an empty cache, so each run downloads the archive.
 It checks the binary's SHA-256 again on every run and exits 2 on a copy that differs.
 Builds are pinned for macOS and Linux, each on x64 and arm64.
 On any other platform it exits 2, and no setting runs a scanner other than the pinned build.
