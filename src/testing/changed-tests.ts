@@ -16,7 +16,7 @@ export const changedLocalPaths = Effect.fn("changedLocalPaths")(function* (root:
     })),
   );
   const committed = (yield* changedPaths(range.base, range.head, [], root)).flatMap(pathsOf);
-  const working = splitZero(yield* git(["diff", "--name-only", "-z", "HEAD", "--"], root));
+  const working = splitZero(yield* git(["diff", "--name-only", "-z", "--no-renames", "HEAD", "--"], root));
   const untracked = splitZero(yield* git(["ls-files", "--others", "--exclude-standard", "-z"], root));
   return [...new Set([...committed, ...working, ...untracked])].sort();
 });
