@@ -25,6 +25,8 @@ jobs:
     needs: preflight
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      SUITE_ALREADY_RAN: ${{ github.event_name == 'workflow_dispatch' && github.actor == 'github-actions[bot]' }}
     steps:
       - name: ref is a tag
         run: test "$GITHUB_REF_TYPE" = tag
@@ -33,11 +35,17 @@ jobs:
           fetch-depth: 0
       - name: tag is on main
         run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      # A dispatch made with the workflow token comes only from release-push, after its ci.yml run passed on this commit.
       - run: bun run build
+        if: env.SUITE_ALREADY_RAN != 'true'
       - run: git diff --exit-code
+        if: env.SUITE_ALREADY_RAN != 'true'
       - run: bun run lint
+        if: env.SUITE_ALREADY_RAN != 'true'
       - run: bun run typecheck
+        if: env.SUITE_ALREADY_RAN != 'true'
       - run: bun run test
+        if: env.SUITE_ALREADY_RAN != 'true'
       - name: tag matches package version
         run: test "v$(bun -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
       - uses: actions/setup-node@v4

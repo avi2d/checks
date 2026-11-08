@@ -12,7 +12,16 @@ import {
   type Violation,
   VERSION,
 } from "./doc-outline.ts";
-import { governsOf, governsProblems, numbersIn, supersessionKeyProblems, supersessionProblems, type GovernedRecord } from "./doc-governs.ts";
+import {
+  governsOf,
+  governsProblems,
+  numbersIn,
+  padded,
+  statusSection,
+  supersessionKeyProblems,
+  supersessionProblems,
+  type GovernedRecord,
+} from "./doc-governs.ts";
 import { ADR_STATUSES, MODES, TEMPLATES, templateFile, type Kind, type Title } from "./doc-templates.ts";
 import { ADR_DIRECTORY, DOCS_DIRECTORY } from "./prose-matchers.ts";
 
@@ -108,16 +117,8 @@ function revisedIn(status: string): ReadonlySet<number> {
   return new Set((status.match(REVISION_CLAUSE) ?? []).flatMap((clause) => [...numbersIn(clause)]));
 }
 
-function padded(number: number): string {
-  return String(number).padStart(4, "0");
-}
-
 function outlineOf(text: string): Outline {
   return parseOutline(text.slice(frontMatterOf(text).text.length));
-}
-
-function statusSection(outline: Outline): Section | undefined {
-  return outline.sections.find(({ heading }) => heading.title === "Status");
 }
 
 type StatusLinks = {
