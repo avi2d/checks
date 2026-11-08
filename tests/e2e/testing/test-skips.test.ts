@@ -248,7 +248,7 @@ test("a local pixel run without approve refuses before any test runs and names t
 
   const pixelRun = await checksTest(false, ["--tier=pixel"]);
   expect(pixelRun.exitCode).toBe(2);
-  expect(pixelRun.text).toContain("gh workflow run whole-tree-run");
+  expect(pixelRun.text).toContain("gh workflow run whole-tree-run --ref <branch>");
   expect(pixelRun.text).toContain("APPROVE_SCREENS=1");
   expect(pixelRun.text).not.toContain("skipped test(s)");
 });
@@ -330,7 +330,7 @@ test("a local run with --full or the e2e tier refuses before any test runs and n
   for (const args of [["--full"], ["--tier=e2e"]]) {
     const refused = await checksTest(false, args);
     expect(refused.exitCode).toBe(2);
-    expect(refused.text).toContain("gh workflow run ci");
+    expect(refused.text).toContain("gh workflow run ci --ref <branch>");
     expect(refused.text).not.toContain("breaks outside the smoke list");
   }
 });

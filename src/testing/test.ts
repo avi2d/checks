@@ -4,7 +4,7 @@ import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effec
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { TEST_ENTRY_POINT } from "../core/gates.ts";
 import { runMain, Usage } from "../core/main.ts";
-import { FULL, testOptions, type TestOptions, type TestTier } from "../core/test-script.ts";
+import { testOptions, type TestOptions, type TestTier } from "../core/test-script.ts";
 import { readPullRequestNarrowing } from "./affected-tests.ts";
 import { changedE2eFiles } from "./changed-tests.ts";
 import { APPROVE_VARIABLE, heavyRunRefusal } from "./test-refusal.ts";
@@ -287,7 +287,7 @@ const testEntry = Effect.gen(function* () {
     return true;
   }
   if (scope.files?.length === 0) {
-    yield* Console.log(`${NAME}: no unit test and no smoke list, so this local run ran nothing; declare checks.smoke or pass ${FULL}`);
+    yield* Console.log(`${NAME}: no unit test and no smoke list, so this local run ran nothing; declare checks.smoke`);
     return true;
   }
   const { declarations } = scope;

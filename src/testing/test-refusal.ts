@@ -4,7 +4,7 @@ import type { Environment } from "./test-skips.ts";
 export const APPROVE_VARIABLE = "APPROVE_SCREENS";
 
 function refusal(run: string, workflow: string): string {
-  return `refusing a \`${run}\` run outside CI; start the same run in CI with \`gh workflow run ${workflow}\``;
+  return `refusing a \`${run}\` run outside CI; push the branch, then start the same run in CI with \`gh workflow run ${workflow} --ref <branch>\``;
 }
 
 export function heavyRunRefusal(options: TestOptions, environment: Environment, approvingScreens: boolean): string | undefined {

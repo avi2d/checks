@@ -33,7 +33,7 @@ To add a suite for one block:
 1. Write the same file for `"webkit"` beside it.
 1. Add `*.new.png` to `.gitignore`.
 1. Approve its first pictures as [Approve new pictures](#approve-new-pictures) says.
-1. Start a compare run in CI with `gh workflow run whole-tree-run`, since `checks-test` refuses a pixel run outside CI unless it approves, as [checks-test](../gates/checks-test.md#runs-refused-outside-ci) says.
+1. Push the branch, then start a compare run in CI with `gh workflow run whole-tree-run --ref <branch>`, since `checks-test` refuses a pixel run outside CI unless it approves, as [checks-test](../gates/checks-test.md#runs-refused-outside-ci) says.
 
 `blockScreens` registers one test for each size, and each test opens the page in a fresh browser context for its device.
 It waits for the fonts and every running animation that ends, runs `setup` and takes the picture with animations stopped.

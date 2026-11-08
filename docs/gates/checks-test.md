@@ -9,7 +9,7 @@ audience: consumers
 ## What it checks
 
 It runs the unit tier plus the smoke list outside CI and the full suite under CI, except a `--changed` run, as [Changed-file runs](#changed-file-runs) says.
-It refuses `--full`, `--tier=e2e` and `--tier=pixel` outside CI, as [Runs refused outside CI](#runs-refused-outside-ci) says.
+It refuses `--full`, `--tier=e2e` and `--tier=pixel` outside CI, except a pixel run that approves pictures, as [Runs refused outside CI](#runs-refused-outside-ci) says.
 It runs them with `bun test --randomize --parallel=<workers>`, as [Parallel runs](#parallel-runs) says, and reads Bun's JUnit report from that run.
 It runs Bun with `CI=true`, so `test.only` fails the run in every environment.
 Bun exits zero when tests skip, so `checks-test` checks every skipped test against its source declaration.
@@ -70,24 +70,25 @@ The default suite takes only the arguments [Arguments](#arguments) lists.
 Use `checks-test --tier=live` or `checks-test --tier=pixel` for a named test tier.
 Use `checks-test --tier=unit` or `checks-test --tier=e2e` to run only one level of the default suite.
 A live or pixel run clears Bun's ignored paths, runs only `./tests/live` or `./tests/pixel`, and still checks each skip.
-Outside CI, the live and unit tiers run and the e2e and pixel tiers are refused, as [Runs refused outside CI](#runs-refused-outside-ci) says.
+Outside CI, the live and unit tiers run and the e2e tier is refused, while a pixel run outside CI runs only when it approves pictures, as [Runs refused outside CI](#runs-refused-outside-ci) says.
 A unit or e2e run keeps Bun's ignored paths, runs only `./tests/unit` or `./tests/e2e`, and still checks each skip.
 
 Files under `tests/quarantine/` are not run or judged, as [checks-test-layout](checks-test-layout.md) says.
 
 ## Runs refused outside CI
 
-Outside CI, `checks-test` refuses `--full`, `--tier=e2e` and `--tier=pixel` before any test runs, and exits 2.
+Outside CI, `checks-test` refuses `--full`, `--tier=e2e` and a `--tier=pixel` run that does not approve pictures before any test runs, and exits 2.
 `CI` counts as unset when it is missing or false.
-A refused `--full` or `--tier=e2e` run names `gh workflow run ci`, which starts the same run in CI.
-A refused `--tier=pixel` run names `gh workflow run whole-tree-run`, the workflow [checks-whole-tree-run](checks-whole-tree-run.md#running-it-by-hand) describes.
+A refused `--full` or `--tier=e2e` run names `gh workflow run ci --ref <branch>`, which starts the same run in CI on that branch.
+A refused `--tier=pixel` run names `gh workflow run whole-tree-run --ref <branch>`, the workflow [checks-whole-tree-run](checks-whole-tree-run.md#running-it-by-hand) describes.
+Push the branch first, so the dispatched run tests the branch instead of the default branch.
 A pixel run with `APPROVE_SCREENS` true still runs outside CI, since a CI run cannot write approved pictures back.
 [Test the screens of one block](../how-to/test-a-blocks-screens.md#approve-new-pictures) shows that run.
 `--tier=live` runs outside CI, since the full suite never includes it and it needs credentials on the local machine.
 With `CI` true, every option runs as the rest of this page says.
 
 ```
-checks-test: refusing a `--full` run outside CI; start the same run in CI with `gh workflow run ci`
+checks-test: refusing a `--full` run outside CI; push the branch, then start the same run in CI with `gh workflow run ci --ref <branch>`
 ```
 
 ## Pull request runs
