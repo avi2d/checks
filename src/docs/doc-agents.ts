@@ -1,5 +1,6 @@
 import { Parser, type NodeType } from "commonmark";
 import { commandNames, PACKAGE_MANIFEST, type Snapshot } from "./doc-references.ts";
+import { VISION_PAGE } from "./doc-templates.ts";
 import { handWritten } from "./doc-versions.ts";
 import { AGENT_NAMES, scanMarkdown, type MarkdownLine } from "./prose-matchers.ts";
 
@@ -51,6 +52,11 @@ export type RootAgentFinding = {
   readonly message: string;
 };
 
+export type VisionFinding = {
+  readonly path: typeof VISION_PAGE;
+  readonly message: string;
+};
+
 export function hasManifest(files: ReadonlySet<string>): boolean {
   return [...files].some((file) => file === PACKAGE_MANIFEST || file.endsWith(`/${PACKAGE_MANIFEST}`));
 }
@@ -61,6 +67,16 @@ export function missingAgentFiles(files: ReadonlySet<string>): readonly RootAgen
     path,
     message: `is missing from the repository root, which a repository with a \`package.json\` keeps. ${fix}`,
   }));
+}
+
+export function missingVision(files: ReadonlySet<string>): readonly VisionFinding[] {
+  if (!hasManifest(files) || files.has(VISION_PAGE)) return [];
+  return [
+    {
+      path: VISION_PAGE,
+      message: `is missing, and it holds the vision a repository with a \`package.json\` keeps. Copy \`${KIT_TEMPLATES}/vision.md\` to \`${VISION_PAGE}\`, fill its six sections, and name it in one line of \`AGENTS.md\``,
+    },
+  ];
 }
 
 type Part = { readonly title: string; readonly lines: readonly MarkdownLine[] };

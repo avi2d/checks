@@ -2,7 +2,7 @@ import { slotLabel, type FixedSlot, type HeadingRule, type OpenSlot, type Presen
 
 export const MODES = ["tutorial", "how-to", "reference", "explanation"] as const;
 
-export const KINDS = ["readme", "changelog", "adr", "agents", "claude", ...MODES] as const;
+export const KINDS = ["readme", "changelog", "adr", "agents", "claude", "vision", ...MODES] as const;
 export type Kind = (typeof KINDS)[number];
 
 export type Title =
@@ -25,6 +25,8 @@ type Exact = {
 export type Template = Outlined | Exact;
 
 export const TEMPLATE_DIRECTORY = "dist/templates";
+
+export const VISION_PAGE = "docs/vision.md";
 
 export const ADR_STATUSES = ["Proposed", "Accepted", "Rejected", "Deprecated", "Superseded", "Retired"] as const;
 
@@ -129,6 +131,19 @@ export const TEMPLATES: Readonly<Record<Kind, Template>> = {
   claude: {
     shape: "exact",
     text: "<!-- Points Claude at AGENTS.md via import; edit AGENTS.md, not this file. -->\n@AGENTS.md\n",
+  },
+  vision: {
+    shape: "outline",
+    title: { type: "fixed", text: "Vision" },
+    lead: ["<What the repository is, in one sentence, stated as what holds now.>"],
+    sections: [
+      fixed("Purpose", REQUIRED, ["<Why the repository exists, in one sentence.>"]),
+      fixed("Serves", REQUIRED, ["<Who uses it, and for what.>"]),
+      fixed("Owns", REQUIRED, ["<The one job it does, and where its edge is.>"]),
+      fixed("Non-goals", REQUIRED, ["- <Something it will not do, in one line.>"]),
+      fixed("Direction", REQUIRED, ["- <Where it is going next, as a standing bet rather than a task.>"]),
+      fixed("Constraints", REQUIRED, ["- <A settled limit a change must respect, in one line, with any longer reason in a record under docs/adr/.>"]),
+    ],
   },
   tutorial: {
     shape: "outline",

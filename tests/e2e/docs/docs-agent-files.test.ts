@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CHECKOUT } from "../lib/fixture-repo.ts";
-import { docsRepos, GUIDE, OPENING, putAgentFiles, ROOT_AGENTS, type DocsRepo } from "../lib/docs-repo.ts";
+import { docsRepos, GUIDE, OPENING, putAgentFiles, putVision, ROOT_AGENTS, type DocsRepo } from "../lib/docs-repo.ts";
 
 const repository = docsRepos();
 
@@ -23,6 +23,7 @@ test(
     const { put, commit, docs } = await initRepo();
     await put("package.json", MANIFEST);
     await put("AGENTS.md", ROOT_AGENTS);
+    await putVision(put);
     await put(GUIDE, OPENING);
     const previous = await commit("a package with AGENTS.md alone");
     await put(GUIDE, `${OPENING}It prints a bill.\n`);
