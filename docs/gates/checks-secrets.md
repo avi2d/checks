@@ -137,7 +137,7 @@ A download that meets a network error or a status outside 2xx, such as 504, is t
 It makes six attempts in all, waiting 2, 4, 8, 16 and 32 seconds between them.
 The attempts alternate between the release URL and the asset's URL on GitHub's API, which other hosts serve.
 The same SHA-256 pin judges the bytes from either.
-When the sixth fails it exits 2 and names the last status, so an outage of the release host fails the gate.
+When the sixth fails it exits 2 and names the last status, so the gate fails only when the release URL and the API URL both fail on every attempt.
 A hosted runner starts each run with an empty cache, so each run downloads the archive.
 It checks the binary's SHA-256 again on every run and exits 2 on a copy that differs.
 Builds are pinned for macOS and Linux, each on x64 and arm64.
