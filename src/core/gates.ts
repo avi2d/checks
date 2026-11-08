@@ -49,6 +49,8 @@ const STYLESHEET: TrackedContent = { pathspecs: ["*.css"], content: "a styleshee
 
 const COPY_DECLARATION: TrackedContent = { pathspecs: ["copy.json"], content: "a copy declaration" };
 
+const NO_MISTAKES_CONFIG: TrackedContent = { pathspecs: [".no-mistakes.yaml"], content: "a no-mistakes config" };
+
 export const WHOLE_TREE = "--whole-tree";
 
 export const KIT_GATES = [
@@ -65,6 +67,7 @@ export const KIT_GATES = [
   { bin: "checks-secrets", vector: "delivery", file: "secrets.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-docs", vector: "docs", file: "docs.ts", reads: "range", alsoReads: "every agent file at the head commit and every live record's governed paths", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-copy", vector: "docs", file: "copy.ts", reads: "tree", appliesTo: COPY_DECLARATION },
+  { bin: "checks-no-mistakes-test", vector: "delivery", file: "no-mistakes-test.ts", reads: "tree", appliesTo: NO_MISTAKES_CONFIG },
   { bin: "checks-repetition", vector: "complexity", file: "repetition.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE, wholeTree: true },
   { bin: "checks-graphwalk", vector: "complexity", file: "graphwalk.ts", reads: "range", appliesTo: LINTED_SOURCE },
   { bin: "checks-quarantine-clock", vector: "testing", file: "quarantine-clock.ts", reads: "range", appliesTo: EVERY_REPOSITORY, wholeTree: true },
