@@ -39,7 +39,6 @@ A baseline or a branch comparison leaves the variable at another value or unset,
 
 The preset runs one Stryker worker per core when `RUNNER_ENVIRONMENT` is `github-hosted`, since a GitHub-hosted runner is a VM the job holds alone.
 Elsewhere it runs one worker per two cores, rounded down and at least one, since a self-hosted runner or a laptop shares its cores.
-The preset exports `mutationConcurrency`, which takes the runner environment and the core count and returns that worker count.
 
 The config then reads:
 
