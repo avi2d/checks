@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { narrowTests, sharedReason, type Repository } from "../../../src/testing/affected-tests.ts";
+import { narrowLocalTests, narrowTests, sharedReason, type Repository } from "../../../src/testing/affected-tests.ts";
 
 function repository(sources: Readonly<Record<string, string>>, extra: Partial<Repository> = {}): Repository {
   return { files: Object.keys(sources), sources: new Map(Object.entries(sources)), bins: new Map(), self: undefined, preloads: [], ...extra };
@@ -82,4 +82,43 @@ test("a fixture under tests is data, not a test helper that would run the whole 
 
 test("a pull request that changes no file runs the whole suite rather than nothing", () => {
   expect(narrowTests([], TREE, TESTS).kind).toBe("full");
+});
+
+const LOCAL_TESTS = ["tests/e2e/checkout.test.ts", "tests/unit/cart.test.ts", "tests/unit/price.test.ts", "tests/unit/tax.test.ts"];
+const SHOP_SOURCES = {
+  "src/price.ts": "export const price = 1;\n",
+  "src/cart.ts": 'import { price } from "./price.ts";\nexport const cart = price;\n',
+  "src/tax.ts": "export const tax = 2;\n",
+  "tests/lib/money.ts": "export const money = 3;\n",
+  "tests/e2e/checkout.test.ts": 'import { cart } from "../../src/cart.ts";\n',
+  "tests/unit/cart.test.ts": 'import { cart } from "../../src/cart.ts";\n',
+  "tests/unit/price.test.ts": 'import { price } from "../../src/price.ts";\n',
+  "tests/unit/tax.test.ts": 'import { tax } from "../../src/tax.ts";\nimport { money } from "../lib/money.ts";\n',
+};
+const SHOP = repository(SHOP_SOURCES, { files: [...Object.keys(SHOP_SOURCES), "bun.lock"] });
+
+test("a local change to a source runs the unit and e2e tests that reach it, rather than the whole unit tier", () => {
+  expect(narrowLocalTests(["src/price.ts"], SHOP, LOCAL_TESTS)).toEqual({
+    files: ["tests/e2e/checkout.test.ts", "tests/unit/cart.test.ts", "tests/unit/price.test.ts"],
+    shared: [],
+  });
+});
+
+test("a local change to a test file runs that file alone, not the tests beside it", () => {
+  expect(narrowLocalTests(["tests/unit/price.test.ts"], SHOP, LOCAL_TESTS)).toEqual({ files: ["tests/unit/price.test.ts"], shared: [] });
+});
+
+test("a local change to a shared file runs only the tests the change reaches and names the shared file, rather than the whole suite", () => {
+  expect(narrowLocalTests(["bun.lock", "src/tax.ts"], SHOP, LOCAL_TESTS)).toEqual({
+    files: ["tests/unit/tax.test.ts"],
+    shared: [{ path: "bun.lock", reason: "a lockfile" }],
+  });
+  expect(narrowLocalTests(["tests/lib/money.ts"], SHOP, LOCAL_TESTS)).toEqual({
+    files: ["tests/unit/tax.test.ts"],
+    shared: [{ path: "tests/lib/money.ts", reason: "a test helper" }],
+  });
+});
+
+test("no local change runs no test rather than the whole suite", () => {
+  expect(narrowLocalTests([], SHOP, LOCAL_TESTS)).toEqual({ files: [], shared: [] });
 });

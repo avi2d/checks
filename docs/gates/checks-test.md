@@ -46,7 +46,8 @@ A skipped test or a todo without `skipReason` fails in every environment.
 
 `checks-test` reads test source files and the JUnit report written by its own run.
 A pull request run also reads the event file, the git history between the base and the head, the tracked sources, `package.json` and `bunfig.toml`.
-A `--changed` run also reads the git history since the merge base with `origin/<default branch>`, the working tree diff and the untracked files, as [Changed-file runs](#changed-file-runs) says.
+A `--changed` run also reads the git history since the merge base with `origin/<default branch>`, the working tree diff and the untracked files.
+It reads the sources, `package.json` and `bunfig.toml` too, as [Changed-file runs](#changed-file-runs) says.
 It reads no skip list from `package.json`, only the smoke list.
 It counts a run as `ci` when `CI` is true and as `local` otherwise.
 A local run covers `./tests/unit` plus the smoke list the repository declares, except a `--changed` run, as [Changed-file runs](#changed-file-runs) says.
@@ -101,11 +102,15 @@ A narrowed run judges only the skips the files it ran declare.
 
 ## Changed-file runs
 
-`checks-test --changed` runs the unit tier and each e2e test file the change touches, so a desk run stays short.
+`checks-test --changed` runs only the unit and e2e test files the change reaches, so a desk run stays short.
 The change is every path between where `HEAD` branched from `origin/<default branch>` and `HEAD`, plus the working tree's edits and its untracked files.
-A deleted file drops out, and a renamed file counts under its new name.
-An e2e test file is a `.test.ts` or `.test.tsx` file under `tests/e2e/`, so a helper under `tests/e2e/lib/` and a quarantined test never run.
-The run names each e2e test file it picked, or says the change touches none and only the unit tier runs.
+A test reaches a changed file as [Pull request runs](#pull-request-runs) says, at any depth.
+A changed test file runs alone, without the rest of its tier.
+A deleted file and the old name of a renamed file still count, so a test that imports one runs.
+A quarantined, live or pixel test never runs.
+A shared file never widens the run to the whole suite.
+It runs only the tests the change reaches and names each shared file as left to the pull request's whole run.
+The run names each test file it reached, or says it reached none and runs no test.
 It judges the skips of the files it ran, as any other run does.
 A clone with no remote-tracking default branch fails before any test runs and asks for a fetch of it.
 A repository runs it from a script of its own, such as:
@@ -169,7 +174,7 @@ A timings option waits for Bun to honour timings under random order.
 The default command takes no arguments except `--parallel=<workers>`, as [Parallel runs](#parallel-runs) says, `--full`, `--changed` and `--junit=<file>`.
 `--full` runs the full suite outside CI, so a run started by hand covers what a local run skips.
 A `package.json` script never takes `--full`, as [checks-test-layout](checks-test-layout.md) says of `scripts.test`.
-`--changed` runs the unit tier and the e2e test files the change touches, as [Changed-file runs](#changed-file-runs) says, and takes neither a tier nor `--full`.
+`--changed` runs the test files the change reaches, as [Changed-file runs](#changed-file-runs) says, and takes neither a tier nor `--full`.
 `scripts.test` never takes `--changed` either, so CI still runs the suite it reaches.
 Its named tier options are `--tier=live`, `--tier=pixel`, `--tier=unit` and `--tier=e2e`, and a tier run takes `--parallel=<workers>` too, but not `--full`.
 `--junit=<file>` keeps the JUnit report Bun wrote at `<file>`, whether the tests passed or failed, so a whole-tree run hands it to [checks-whole-tree-run](checks-whole-tree-run.md).
