@@ -52,17 +52,22 @@ test("front matter carrying the audience beside the kind is read past, and lines
   ]);
 });
 
-test("docs/vision.md is a vision page by its path alone, and a vision page elsewhere is not", () => {
-  expect(placementOf("docs/vision.md")).toEqual({ type: "judged", kind: "vision" });
-  expect(placementOf("docs/vision.md", "---\nkind: reference\n---\n# Vision\n")).toEqual({ type: "judged", kind: "vision" });
-  expect(["VISION.md", "docs/plans/vision.md"].map((path) => placementOf(path).type)).toEqual(["unjudged", "undeclared"]);
+test("VISION.md is a vision page by its path alone, and a vision page elsewhere is not", () => {
+  expect(placementOf("VISION.md")).toEqual({ type: "judged", kind: "vision" });
+  expect(placementOf("VISION.md", "---\nkind: reference\n---\n# Vision\n")).toEqual({ type: "judged", kind: "vision" });
+  expect(["docs/vision.md", "docs/plans/vision.md"].map((path) => placementOf(path).type)).toEqual(["undeclared", "undeclared"]);
 });
 
-test("a vision page missing any one of its six sections is refused, naming that section", () => {
+test("a vision page missing Scope or a closing line is refused naming what it lacks", () => {
   const vision = fixture("vision");
-  const sections = ["Purpose", "Serves", "Owns", "Non-goals", "Direction", "Constraints"];
-  const without = (section: string): string => vision.replace(new RegExp(`## ${section}\n\n(?:.+\n)+\n?`), "");
-  expect(sections.map((section) => found("vision", without(section)))).toEqual(sections.map((section) => [`1: lacks \`## ${section}\``]));
+  expect(found("vision", vision, "VISION.md")).toEqual([]);
+  expect(found("vision", vision.replace("## Scope", "## Buying stays elsewhere"), "VISION.md")).toEqual(["1: lacks `## Scope`"]);
+  expect(found("vision", vision.replace("A change aligns when it makes the bill cheaper to trust.\n", ""), "VISION.md")).toEqual([
+    "1: lacks an `A change aligns when ...` closing line",
+  ]);
+  expect(found("vision", vision.replace("A change should be resisted when it moves the bill past pricing into buying or keeping stock.\n", ""), "VISION.md")).toEqual([
+    "1: lacks an `A change should be resisted when ...` closing line",
+  ]);
 });
 
 test("a README missing a section is refused", () => {

@@ -1,27 +1,24 @@
 # Vision
 
-<What the repository is, in one sentence, stated as what holds now.>
+<The outcome the repository exists for, in one line.>
+<Who it serves, in one line.>
+<The one thing it owns, in one line.>
 
-## Purpose
+## <A stance it holds, one of three to six>
 
-<Why the repository exists, in one sentence.>
+- <A rule naming what it allows, what it forbids and the trade it takes, in one line.>
 
-## Serves
+## <Another stance it holds>
 
-<Who uses it, and for what.>
+<Leave this section out when the page holds a single stance.>
 
-## Owns
+<A section like this may also follow any section below it.>
 
-<The one job it does, and where its edge is.>
+- <A rule naming what it allows, what it forbids and the trade it takes, in one line.>
 
-## Non-goals
+## Scope
 
-- <Something it will not do, in one line.>
+- <What it refuses and which neighbour owns it, in one line.>
 
-## Direction
-
-- <Where it is going next, as a standing bet rather than a task.>
-
-## Constraints
-
-- <A settled limit a change must respect, in one line, with any longer reason in a record under docs/adr/.>
+A change aligns when <what it deepens>.
+A change should be resisted when <what it trades away>.

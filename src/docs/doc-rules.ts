@@ -22,6 +22,7 @@ import {
   supersessionProblems,
   type GovernedRecord,
 } from "./doc-governs.ts";
+import { shapeFindings } from "./doc-vision.ts";
 import { ADR_STATUSES, MODES, TEMPLATES, templateFile, VISION_PAGE, type Kind, type Title } from "./doc-templates.ts";
 import { ADR_DIRECTORY, DOCS_DIRECTORY } from "./prose-matchers.ts";
 
@@ -256,6 +257,7 @@ function kindProblems(kind: Kind, doc: Doc, outline: Outline, records: Records):
   if (kind === "adr") return adrProblems(doc.path, outline, records);
   if (kind === "changelog") return changelogProblems(outline);
   if (kind === "how-to" || kind === "tutorial") return stepsProblems(kind, outline);
+  if (kind === "vision") return shapeFindings(doc.text);
   return [];
 }
 

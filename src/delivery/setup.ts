@@ -390,7 +390,7 @@ const check = Effect.gen(function* () {
     yield* Console.log(NAME + ": fill AGENTS.md with what an agent cannot infer from the code before the first commit");
   }
   if (wroteVision) {
-    yield* Console.log(NAME + ": fill the six sections of " + VISION_PAGE + " and name it in one line of AGENTS.md before the first commit");
+    yield* Console.log(NAME + ": fill the opening, stance sections, Scope and closing lines of " + VISION_PAGE + " and name it in one line of AGENTS.md before the first commit");
   }
   return true;
 });

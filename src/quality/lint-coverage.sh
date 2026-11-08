@@ -6,6 +6,11 @@ set -eu
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
+if ! [ -f package.json ]; then
+  echo "lint-coverage: no package.json at the repository root, so the gate skips"
+  exit 0
+fi
+
 git ls-files -- '*.ts' '*.tsx' '*.astro' | LC_ALL=C sort > "$tmp/expected"
 if ! [ -s "$tmp/expected" ]; then
   echo "lint-coverage: no tracked .ts/.tsx/.astro files"

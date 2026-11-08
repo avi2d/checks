@@ -194,8 +194,8 @@ test("masking keeps each line's length, so a column in the prose is the column i
   expect(line?.links).toEqual(["z.md"]);
 });
 
-test("living docs are READMEs, CONTRIBUTING.md and pages under docs/, but not records or agent files", () => {
-  const living = ["README.md", "home/.config/mise/README.md", "CONTRIBUTING.md", ".github/CONTRIBUTING.md", "docs/design.md", "docs/gates/checks-docs.md"];
+test("living docs are READMEs, CONTRIBUTING.md, VISION.md and pages under docs/, but not records or agent files", () => {
+  const living = ["README.md", "home/.config/mise/README.md", "CONTRIBUTING.md", ".github/CONTRIBUTING.md", "VISION.md", "docs/design.md", "docs/gates/checks-docs.md"];
   const exempt = [
     "docs/adr/0001-quality-gates.md",
     "docs/adr/README.md",

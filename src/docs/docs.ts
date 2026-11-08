@@ -32,8 +32,9 @@ import {
 } from "./doc-rules.ts";
 import { vanishedNames } from "./doc-names.ts";
 import { VISION_PAGE } from "./doc-templates.ts";
+import { visionPools } from "./doc-vision.ts";
 import { pinsAt, versionFindings } from "./doc-versions.ts";
-import { readTexts, snapshotAt, stillMissing } from "./doc-snapshot.ts";
+import { readTexts, snapshotAt, stillMissing, visionRequiredAt } from "./doc-snapshot.ts";
 import { changedLines, changedPaths, git, pathsAt, pathsOf, rangeEnds, refArgs, type Change } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { proseFindings, readerOf } from "./prose-matchers.ts";
@@ -60,6 +61,7 @@ type Judged = {
   readonly readmeAdvisory: readonly Finding[];
   readonly agentFileAdvisory: readonly Finding[];
   readonly visionAdvisory: readonly Finding[];
+  readonly visionRequired: boolean;
   readonly sentenceAdvisory: readonly Finding[];
   readonly brokenBefore: readonly Finding[];
 };
@@ -185,9 +187,16 @@ function untouchedCounts(templated: readonly Finding[], touched: ReadonlySet<str
   return advisory;
 }
 
-const requiredFiles = Effect.fn("requiredFiles")(function* (root: string, base: string, changes: readonly Change[], text: (path: string) => string, files: ReadonlySet<string>) {
+const requiredFiles = Effect.fn("requiredFiles")(function* (
+  root: string,
+  base: string,
+  changes: readonly Change[],
+  text: (path: string) => string,
+  files: ReadonlySet<string>,
+  visionRequired: boolean,
+) {
   const absent = missingAgentFiles(files);
-  const absentVision = missingVision(files);
+  const absentVision = missingVision(files, visionRequired);
   const editsDocs = absent.length + absentVision.length === 0 ? false : yield* rangeEditsDocs(root, base, changes, text);
   return { rootAgents: missingFileFindings(absent, editsDocs), vision: missingFileFindings(absentVision, editsDocs) };
 });
@@ -216,11 +225,13 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   });
   const texts = yield* readTexts(root, head, [...new Set([...present.filter((path) => path.endsWith(".md")), ...proseDocs.map(({ path }) => path)])]);
   const text = (path: string): string => texts.get(path) ?? "";
+  const visionRequired = yield* visionRequiredAt(root, head);
   const records = recordsOf(present.filter((path) => path.startsWith(ADR_DIRECTORY)).map((path) => ({ path, text: text(path) })));
   const judged = present.map((path) => ({ path, placement: placementOf(path, text(path)) })).filter(({ placement }) => placement.type !== "unjudged");
   const { baseFiles, tracked, after, ...governed } = yield* governedFindings(root, base, head, present.filter(isRecord).map((path) => ({ path, text: text(path) })));
 
   const templated = [...judged.flatMap(({ path, placement }) => templateFindings(path, text(path), placement, records)), ...governed.missing];
+  const { vision: visionFindings, template } = visionPools(templated, texts);
   const edited = proseDocs.filter(({ path }) => changed.has(path));
   const prose = edited.flatMap(({ path, reader }) =>
     proseFindings(text(path), reader, changed.get(path)).map(({ line, message }) => ({ path, line, message })),
@@ -239,7 +250,7 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   const shapes = agents.flatMap(({ path }) => agentFileFindings(path, text(path), tracked));
   const readmes = proseDocs.filter(({ path }) => isCeiledReadme(path, tracked.files));
   const oversize = readmes.flatMap(({ path }) => readmeFindings(text(path)).map((finding) => ({ path, ...finding })));
-  const { rootAgents, vision } = yield* requiredFiles(root, base, changes, text, tracked.files);
+  const { rootAgents, vision } = yield* requiredFiles(root, base, changes, text, tracked.files, visionRequired);
   const index = yield* recordIndex(root, base, head, after, present.includes(ADR_INDEX) ? text(ADR_INDEX) : undefined, changes);
   return {
     held: judged.map(({ path }) => path).filter((path) => touched.has(path)),
@@ -252,7 +263,8 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
     governing: index.governing,
     findings: [
       ...index.failing,
-      ...templated.filter((finding) => touched.has(finding.path)),
+      ...template.filter((finding) => touched.has(finding.path)),
+      ...(visionRequired ? visionFindings.filter((finding) => touched.has(finding.path)) : []),
       ...governed.deleted,
       ...prose,
       ...versions,
@@ -263,11 +275,12 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
       ...rootAgents.failing,
       ...vision.failing,
     ].toSorted(inPathOrder),
-    advisory: untouchedCounts(templated, touched),
+    advisory: untouchedCounts([...template, ...visionFindings], touched),
     indexAdvisory: index.advisory,
     readmeAdvisory: oversize.filter((finding) => !touched.has(finding.path)).toSorted(inPathOrder),
     agentFileAdvisory: rootAgents.advisory,
     visionAdvisory: vision.advisory,
+    visionRequired,
     sentenceAdvisory: edited
       .flatMap(({ path }) => longSentences(text(path), changed.get(path)).map(({ line, message }) => ({ path, line, message })))
       .toSorted(inPathOrder),
@@ -294,6 +307,7 @@ export function report({
   readmeAdvisory,
   agentFileAdvisory,
   visionAdvisory,
+  visionRequired,
   sentenceAdvisory,
   brokenBefore,
 }: Judged): string {
@@ -301,7 +315,10 @@ export function report({
     manifestHeld && agentFileAdvisory.length === 0
       ? [`${NAME}: the repository root holds the AGENTS.md and CLAUDE.md a repository with a \`package.json\` keeps`]
       : [];
-  const visionPage = manifestHeld && visionAdvisory.length === 0 ? [`${NAME}: ${VISION_PAGE} holds the vision a repository with a \`package.json\` keeps`] : [];
+  const visionPage =
+    manifestHeld && visionRequired && visionAdvisory.length === 0
+      ? [`${NAME}: ${VISION_PAGE} holds the vision a repository where a change needs a referee keeps`]
+      : [];
   const verdict =
     findings.length === 0
       ? [

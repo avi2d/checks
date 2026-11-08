@@ -40,7 +40,7 @@ It writes `stryker.conf.mjs`, which spreads the kit's Stryker preset and sets th
 It adds the kit's own pins of `@stryker-mutator/core` and `@hughescr/stryker-bun-runner` to `devDependencies`, and keeps a pin it finds.
 It copies each kit template under `dist/templates/` into `templates/`, so a new doc file starts from a copy there.
 It copies `dist/templates/agents.md` to `AGENTS.md` and `dist/templates/claude.md` to `CLAUDE.md` when the root lacks them, and keeps either file it finds.
-It copies `dist/templates/vision.md` to `docs/vision.md` when the repository lacks it, keeps the page it finds, and tells the owner to fill its six sections.
+It copies `dist/templates/vision.md` to `VISION.md` when the repository lacks it, keeps the page it finds, and tells the owner to fill its opening, stance sections, Scope and closing lines.
 It names every file it wrote and every file it kept.
 It tells the owner to declare the repository owners in `package.json` `author` or `contributors` before the first commit.
 

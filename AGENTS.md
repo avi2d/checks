@@ -1,7 +1,7 @@
 # Project agent memory
 
 checks judges a repository through small binaries called gates, and `README.md` holds what a person reads.
-`docs/vision.md` holds what checks is for and what it will not do, so read it before adding scope.
+`VISION.md` holds what checks is for and what it will not do, so read it before adding scope.
 
 ## Before you change a part
 
