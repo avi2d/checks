@@ -37,14 +37,14 @@ test("the missing file's finding names the repository root and the template to c
   expect(claude?.message).toContain("`node_modules/@avi2dg/checks/dist/templates/claude.md` to `CLAUDE.md` word for word");
 });
 
-test("a package repository without docs/vision.md is asked for it by the template, and a root VISION.md does not stand in", () => {
-  const [missing, ...rest] = missingVision(new Set(["package.json", "VISION.md"]));
+test("a referee repository without VISION.md is asked for it, and any other repository is left advisory rather than failing the range", () => {
+  const [missing, ...rest] = missingVision(new Set(["package.json"]), true);
   expect(rest).toEqual([]);
-  expect(missing?.path).toBe("docs/vision.md");
-  expect(missing?.message).toContain("Copy `node_modules/@avi2dg/checks/dist/templates/vision.md` to `docs/vision.md`");
-  expect(missingVision(new Set(["packages/run/package.json"])).map(({ path }) => path)).toEqual(["docs/vision.md"]);
-  expect(missingVision(new Set(["package.json", "docs/vision.md"]))).toEqual([]);
-  expect(missingVision(new Set(["README.md"]))).toEqual([]);
+  expect(missing?.path).toBe("VISION.md");
+  expect(missing?.message).toContain("Copy `node_modules/@avi2dg/checks/dist/templates/vision.md` to `VISION.md`");
+  expect(missingVision(new Set(["package.json"]), false)).toEqual([]);
+  expect(missingVision(new Set(["package.json", "VISION.md"]), true)).toEqual([]);
+  expect(missingVision(new Set(["README.md"]), true)).toEqual([]);
 });
 
 test("an agent file is recognised by name in any directory", () => {

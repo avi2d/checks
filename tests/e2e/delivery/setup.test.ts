@@ -292,8 +292,8 @@ expect(first.exitCode).toBe(0);
 expect(first.text).toContain("fill AGENTS.md with what an agent cannot infer from the code before the first commit");
 expect(await readFile(join(repo.dir, "AGENTS.md"), "utf8")).toBe(await kitFile("dist/templates/agents.md"));
 expect(await readFile(join(repo.dir, "CLAUDE.md"), "utf8")).toBe(await kitFile("dist/templates/claude.md"));
-expect(await readFile(join(repo.dir, "docs", "vision.md"), "utf8")).toBe(await kitFile("dist/templates/vision.md"));
-expect(first.text).toContain("fill the six sections of docs/vision.md and name it in one line of AGENTS.md before the first commit");
+expect(await Bun.file(join(repo.dir, "VISION.md")).exists()).toBe(false);
+expect(first.text).not.toContain("fill the opening, stance sections, Scope and closing lines of VISION.md");
 const base = await repo.commit("setup from empty");
 await repo.write({ "a.txt": "hello\n" });
 const head = await repo.commit("add a code file");
@@ -310,16 +310,32 @@ await repo.write({ "tools/README.md": "# Tools\n\nThe tools build bills.\nIt pri
 const filledHead = await repo.commit("edit a doc");
 const held = await repo.script("docs/docs.ts", previous, filledHead);
 expect(held.text).toContain("docs: the repository root holds the AGENTS.md and CLAUDE.md");
-expect(held.text).toContain("docs: docs/vision.md holds the vision");
+expect(held.text).not.toContain("holds the vision");
 expect(held.exitCode).toBe(0);
 const rerun = await setup(repo);
 expect(rerun.exitCode).toBe(0);
 expect(rerun.text).toContain("kept AGENTS.md, already there");
 expect(rerun.text).toContain("kept CLAUDE.md, already there");
-expect(rerun.text).toContain("kept docs/vision.md, already there");
+expect(rerun.text).not.toContain("VISION.md");
 expect(rerun.text).not.toContain("fill AGENTS.md");
 },
 120_000,
+);
+
+test(
+"a setup in an eligible repository writes the vision page and keeps it rather than staying silent",
+async () => {
+const repo = await open({ "package.json": JSON.stringify({ name: "checks", type: "module" }) });
+const first = await setup(repo);
+expect(first.exitCode).toBe(0);
+expect(await readFile(join(repo.dir, "VISION.md"), "utf8")).toBe(await kitFile("dist/templates/vision.md"));
+expect(first.text).toContain("fill the opening, stance sections, Scope and closing lines of VISION.md and name it in one line of AGENTS.md before the first commit");
+const rerun = await setup(repo);
+expect(rerun.exitCode).toBe(0);
+expect(rerun.text).toContain("kept VISION.md, already there");
+expect(rerun.text).not.toContain("fill the opening, stance sections, Scope and closing lines of VISION.md");
+},
+60_000,
 );
 
 test(

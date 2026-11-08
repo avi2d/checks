@@ -26,7 +26,7 @@ export type Template = Outlined | Exact;
 
 export const TEMPLATE_DIRECTORY = "dist/templates";
 
-export const VISION_PAGE = "docs/vision.md";
+export const VISION_PAGE = "VISION.md";
 
 export const ADR_STATUSES = ["Proposed", "Accepted", "Rejected", "Deprecated", "Superseded", "Retired"] as const;
 
@@ -135,14 +135,21 @@ export const TEMPLATES: Readonly<Record<Kind, Template>> = {
   vision: {
     shape: "outline",
     title: { type: "fixed", text: "Vision" },
-    lead: ["<What the repository is, in one sentence, stated as what holds now.>"],
+    lead: [
+      "<The outcome the repository exists for, in one line.>",
+      "<Who it serves, in one line.>",
+      "<The one thing it owns, in one line.>"
+    ],
     sections: [
-      fixed("Purpose", REQUIRED, ["<Why the repository exists, in one sentence.>"]),
-      fixed("Serves", REQUIRED, ["<Who uses it, and for what.>"]),
-      fixed("Owns", REQUIRED, ["<The one job it does, and where its edge is.>"]),
-      fixed("Non-goals", REQUIRED, ["- <Something it will not do, in one line.>"]),
-      fixed("Direction", REQUIRED, ["- <Where it is going next, as a standing bet rather than a task.>"]),
-      fixed("Constraints", REQUIRED, ["- <A settled limit a change must respect, in one line, with any longer reason in a record under docs/adr/.>"]),
+      open("<A stance it holds, one of three to six>", "any", REQUIRED, [
+        "- <A rule naming what it allows, what it forbids and the trade it takes, in one line.>"
+      ]),
+      fixed("Scope", REQUIRED, [
+        "- <What it refuses and which neighbour owns it, in one line.>",
+        "",
+        "A change aligns when <what it deepens>.",
+        "A change should be resisted when <what it trades away>."
+      ])
     ],
   },
   tutorial: {
