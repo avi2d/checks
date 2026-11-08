@@ -58,7 +58,7 @@ test(
 );
 
 test(
-  "lint-coverage cannot decide when the repository's own install lacks oxlint",
+  "lint-coverage cannot decide when the repository's own install lacks oxlint, by the missing oxlint path both shells print rather than any failure text or one shell's wording",
   async () => {
     const bare = await mkdtemp(join(tmpdir(), "checks-lint-coverage-no-install-"));
     try {
@@ -68,7 +68,7 @@ test(
       const undecided = await coverage(SYSTEM_PATH, bare);
       expect(undecided.exitCode).toBe(2);
       expect(undecided.text).toContain("oxlint could not walk the tree");
-      expect(undecided.text).toContain("not found");
+      expect(undecided.text).toContain(`${await realpath(bare)}/node_modules/.bin/oxlint: `);
     } finally {
       await rm(bare, { recursive: true, force: true });
     }
