@@ -9,6 +9,7 @@ audience: consumers
 ## What it checks
 
 It runs the unit tier plus the smoke list outside CI and the full suite under CI, except a `--changed` run, as [Changed-file runs](#changed-file-runs) says.
+It refuses `--full`, `--tier=e2e` and `--tier=pixel` outside CI, as [Runs refused outside CI](#runs-refused-outside-ci) says.
 It runs them with `bun test --randomize --parallel=<workers>`, as [Parallel runs](#parallel-runs) says, and reads Bun's JUnit report from that run.
 It runs Bun with `CI=true`, so `test.only` fails the run in every environment.
 Bun exits zero when tests skip, so `checks-test` checks every skipped test against its source declaration.
@@ -69,9 +70,25 @@ The default suite takes only the arguments [Arguments](#arguments) lists.
 Use `checks-test --tier=live` or `checks-test --tier=pixel` for a named test tier.
 Use `checks-test --tier=unit` or `checks-test --tier=e2e` to run only one level of the default suite.
 A live or pixel run clears Bun's ignored paths, runs only `./tests/live` or `./tests/pixel`, and still checks each skip.
+Outside CI, the live and unit tiers run and the e2e and pixel tiers are refused, as [Runs refused outside CI](#runs-refused-outside-ci) says.
 A unit or e2e run keeps Bun's ignored paths, runs only `./tests/unit` or `./tests/e2e`, and still checks each skip.
 
 Files under `tests/quarantine/` are not run or judged, as [checks-test-layout](checks-test-layout.md) says.
+
+## Runs refused outside CI
+
+Outside CI, `checks-test` refuses `--full`, `--tier=e2e` and `--tier=pixel` before any test runs, and exits 2.
+`CI` counts as unset when it is missing or false.
+A refused `--full` or `--tier=e2e` run names `gh workflow run ci`, which starts the same run in CI.
+A refused `--tier=pixel` run names `gh workflow run whole-tree-run`, the workflow [checks-whole-tree-run](checks-whole-tree-run.md#running-it-by-hand) describes.
+A pixel run with `APPROVE_SCREENS` true still runs outside CI, since a CI run cannot write approved pictures back.
+[Test the screens of one block](../how-to/test-a-blocks-screens.md#approve-new-pictures) shows that run.
+`--tier=live` runs outside CI, since the full suite never includes it and it needs credentials on the local machine.
+With `CI` true, every option runs as the rest of this page says.
+
+```
+checks-test: refusing a `--full` run outside CI; start the same run in CI with `gh workflow run ci`
+```
 
 ## Pull request runs
 
@@ -167,7 +184,7 @@ A timings option waits for Bun to honour timings under random order.
 ## Arguments
 
 The default command takes no arguments except `--parallel=<workers>`, as [Parallel runs](#parallel-runs) says, `--full`, `--changed` and `--junit=<file>`.
-`--full` runs the full suite outside CI, so a run started by hand covers what a local run skips.
+`--full` runs the full suite in CI even when a pull request would narrow it, and is refused outside CI, as [Runs refused outside CI](#runs-refused-outside-ci) says.
 A `package.json` script never takes `--full`, as [checks-test-layout](checks-test-layout.md) says of `scripts.test`.
 `--changed` runs the unit tier and the e2e test files the change touches, as [Changed-file runs](#changed-file-runs) says, and takes neither a tier nor `--full`.
 `scripts.test` never takes `--changed` either, so CI still runs the suite it reaches.
@@ -183,7 +200,7 @@ It refuses test filters because every test excluded by a filter would look skipp
 | --- | --- |
 | 0 | every test passed and every skip has a matching site reason |
 | 1 | a test failed, a parallel worker crashed, a skip lacks a site reason or a declaration is stale in CI |
-| 2 | an argument is not one it takes, a declaration or the smoke list cannot be read, a smoke entry names no runnable test, `CI` is not a boolean, Bun wrote no report or a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` |
+| 2 | an argument is not one it takes, a run outside CI is refused, `APPROVE_SCREENS` is not a boolean in a pixel run, a declaration or the smoke list cannot be read, a smoke entry names no runnable test, `CI` is not a boolean, Bun wrote no report or a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` |
 
 ## Sample output
 
