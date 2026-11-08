@@ -51,15 +51,18 @@ const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 const INDENTED_CODE = /^(?: {4,}|\t)/;
 const LIST_MARKER = /^\s*(?:[-*+]|\d{1,9}[.)])\s+/;
 const QUOTE_MARKER = /^\s*(?:>\s*)+/;
-const BOLD_LABEL = /^\*\*[^*]+\*\*\s+/;
+const AUTOLINK = /<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^\s<>]*|[^\s@<>]+@[^\s<>]+)>/g;
+const DELIMITER_CELL = /^:?-+:?$/;
 const SENTENCE_SPLIT = /(?<=[.!?]["'"”’»)\]]*)\s+/;
 
 function inlineOf(raw: string): string {
-  const unlisted = raw.replace(QUOTE_MARKER, "").replace(LIST_MARKER, "").replace(BOLD_LABEL, "");
+  const unlisted = raw.replace(QUOTE_MARKER, "").replace(LIST_MARKER, "");
   return unlisted
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]*)\]/g, "$1")
     .replace(/`([^`]*)`/g, "$1")
+    .replace(AUTOLINK, "$1")
+    .replace(/<!--[\s\S]*?-->/g, " ")
     .replace(/\*\*([^*]*)\*\*/g, "$1")
     .replace(/__([^_]*)__/g, "$1")
     .replace(/(^|\W)\*([^\*\n]+)\*(?=\W|$)/g, "$1$2")
@@ -68,15 +71,23 @@ function inlineOf(raw: string): string {
     .replace(/<[^>]*>/g, " ");
 };
 
+function cellsOf(raw: string): readonly string[] {
+  const cells = raw.split("|").map((cell) => inlineOf(cell));
+  if (cells.every((cell) => cell.trim() === "" || DELIMITER_CELL.test(cell.trim()))) return [];
+  return cells;
+};
+
 function sentencesOf(text: string): readonly { readonly line: number; readonly sentence: string }[] {
   const found: { readonly line: number; readonly sentence: string }[] = [];
   for (const line of scanMarkdown(text)) {
-    if (line.kind !== "prose" || INDENTED_CODE.test(line.raw)) continue;
-    const clean = inlineOf(line.raw).replace(/\s+/g, " ").trim();
-    if (clean === "") continue;
-    for (const part of clean.split(SENTENCE_SPLIT)) {
-      const sentence = part.toLowerCase().replace(/\s+/g, " ").trim();
-      if (sentence !== "") found.push({ line: line.line, sentence });
+    const sources = line.kind === "prose" && !INDENTED_CODE.test(line.raw) ? [inlineOf(line.raw)] : line.kind === "table" ? cellsOf(line.raw) : [];
+    for (const source of sources) {
+      const clean = source.replace(/\s+/g, " ").trim();
+      if (clean === "") continue;
+      for (const part of clean.split(SENTENCE_SPLIT)) {
+        const sentence = part.toLowerCase().replace(/\s+/g, " ").trim();
+        if (sentence !== "") found.push({ line: line.line, sentence });
+      }
     }
   }
   return found;
