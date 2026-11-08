@@ -25,6 +25,9 @@ It reads the advisories OSV.dev exports for npm, which hold GitHub's reviewed ad
 
 It runs the OSV-Scanner release `src/dependencies/osv-scanner.ts` pins, by the SHA-256 of each platform's build.
 On first use it downloads the build from the scanner's GitHub release into `~/.cache/avi2dg-checks/osv-scanner/<version>/`.
+A download that meets a network error or a status outside 2xx, such as 504, is tried again.
+It makes six attempts in all, waiting 2, 4, 8, 16 and 32 seconds between them.
+When the sixth fails it exits 2 and names the last status.
 It checks the SHA-256 again on every run and exits 2 on a copy that differs.
 Builds are pinned for macOS and Linux, each on x64 and arm64.
 On any other platform it exits 2, and no setting runs a scanner other than the pinned build.

@@ -1,4 +1,4 @@
-import { Crypto, Effect, FileSystem, Path, Schema } from "effect";
+import { Crypto, Duration, Effect, FileSystem, Path, Schedule, Schema } from "effect";
 import * as Hex from "effect/encoding/Hex";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
@@ -9,6 +9,10 @@ const EXECUTABLE_MODE = 0o755;
 export type Asset =
   | { readonly kind: "binary"; readonly url: string; readonly sha256: string }
   | { readonly kind: "tar.gz"; readonly url: string; readonly sha256: string; readonly member: string; readonly memberSha256: string };
+
+export type Retry = { readonly attempts: number; readonly firstDelay: Duration.Input };
+
+const DOWNLOAD_RETRY: Retry = { attempts: 6, firstDelay: "2 seconds" };
 
 class PinnedBinaryError extends Schema.TaggedError<PinnedBinaryError>()("PinnedBinaryError", {
   message: Schema.String,
@@ -32,10 +36,17 @@ const verified = Effect.fn("verified")(function* (binary: string, sha256: string
   return binary;
 });
 
-const download = Effect.fn("download")(function* (url: string) {
+const fetched = Effect.fn("fetched")(function* (url: string) {
   const response = yield* HttpClient.get(url).pipe(Effect.flatMap(HttpClientResponse.filterStatusOk));
   return new Uint8Array(yield* response.arrayBuffer);
 }, Effect.provide(FetchHttpClient.layer));
+
+function download(url: string, { attempts, firstDelay }: Retry) {
+  return fetched(url).pipe(
+    Effect.retry({ schedule: Schedule.exponential(firstDelay), times: attempts - 1 }),
+    Effect.mapError((cause) => new PinnedBinaryError({ message: `cannot download ${url} in ${attempts} attempt(s): ${cause.message}` })),
+  );
+}
 
 const unpacked = Effect.fn("unpacked")(function* (asset: Asset, bytes: Uint8Array, staging: string) {
   const fs = yield* FileSystem.FileSystem;
@@ -60,13 +71,11 @@ const unpacked = Effect.fn("unpacked")(function* (asset: Asset, bytes: Uint8Arra
 });
 
 // The binary lands through a rename in its own directory, so a concurrent run sees it whole or not at all.
-export const installPinned = Effect.fn("installPinned")(function* (asset: Asset, binary: string) {
+export const installPinned = Effect.fn("installPinned")(function* (asset: Asset, binary: string, retry: Retry = DOWNLOAD_RETRY) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   if (yield* fs.exists(binary)) return yield* verified(binary, installedSha256(asset));
-  const bytes = yield* download(asset.url).pipe(
-    Effect.mapError((cause) => new PinnedBinaryError({ message: `cannot download ${asset.url}: ${cause.message}` })),
-  );
+  const bytes = yield* download(asset.url, retry);
   const found = yield* sha256Of(bytes);
   if (found !== asset.sha256) {
     return yield* new PinnedBinaryError({ message: `${asset.url} has SHA-256 ${found}, not the pinned ${asset.sha256}, so nothing was installed` });
