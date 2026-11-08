@@ -25,6 +25,7 @@ export type DocsRepo = {
   readonly remove: (path: string) => Promise<void>;
   readonly commit: (message: string) => Promise<string>;
   readonly docs: (...args: readonly string[]) => Promise<Ran>;
+  readonly index: () => Promise<Ran>;
   readonly dispose: () => Promise<void>;
 };
 
@@ -38,6 +39,7 @@ async function docsRepo(): Promise<DocsRepo> {
     remove: (path) => rm(join(dir, path)),
     commit,
     docs: (...args) => script("docs/docs.ts", ...args),
+    index: () => script("docs/adr-index.ts"),
     dispose,
   };
 }

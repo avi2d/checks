@@ -172,6 +172,24 @@ governs: [src/parts.ts, docs/parts]
 A record the range leaves alone is listed as advisory for these findings, as for every template finding.
 A deleted governed path is the one exception, and fails wherever the record sits.
 
+A range that changes a governed path, or a file under a governed directory, names each live record that governs it.
+The list follows the verdict, gives each record's status and the governed paths the range reaches, and never fails the run:
+
+```
+docs: 1 live record(s) govern paths the range changes:
+  docs/adr/0003-parts-list.md: Accepted, governs `src/parts.ts`
+```
+
+## The record index
+
+A repository with a record in `docs/adr/` keeps `docs/adr/README.md` as the index of its records.
+The index is the generated `adr-index` block that [checks-adr-index](checks-adr-index.md) writes, with each record's number, title, status and governed paths.
+The rest of the README is free prose.
+A range that touches a file in `docs/adr/` fails when the README is missing or holds no `adr-index` block.
+It also fails when the block differs from what `checks-adr-index` writes from the records at the head commit.
+The failure says to run `checks-adr-index`.
+Any other range lists a stale index as advisory, since only a change in `docs/adr/` can make it stale.
+
 ## Paths, links and commands
 
 Each reference a living doc or an agent file names has to resolve at the head commit:
@@ -260,6 +278,8 @@ It reads each Markdown file at the head commit, and uses its path or front matte
 A file the range adds, changes or renames is held to its template, and a file it deletes is not.
 It reads the lines the range adds or edits from the diff, with renames detected, so a renamed doc is judged only on the lines the rename changed.
 It reads each record's `governs` at both ends of the range, and checks it against the files tracked at each end.
+It reads every path the range changes, Markdown or not, to name the live records that govern them.
+It reads `docs/adr/README.md` at the head commit for the record index.
 It reads the files tracked at both ends of the range, and the `scripts` of each `package.json` a living doc or an agent file sits under.
 It compares each code span a living doc or an agent file names with the text git tracks outside the docs at both ends of the range.
 It reads the repository's own name and its direct dependencies from the root `package.json` at the head commit.
@@ -285,8 +305,8 @@ With one it is that commit against its parent, or against the empty tree for a r
 
 | Code | When |
 | --- | --- |
-| 0 | every doc file the range touches holds to its template, every line it adds to a living doc or an agent file holds to the prose rules and copies no pinned version, it adds or breaks no reference that does not resolve, every agent file holds to the ceiling and holds no `## Maintaining this file`, every entry in an agent file names a tracked path, a link or a command, every README the range edits holds to the README ceilings, a range that edits a doc file leaves `AGENTS.md` and `CLAUDE.md` at the root of a repository with a `package.json`, no code span a living doc or an agent file names vanished from every file outside the docs, and the range deletes no path a live record governs |
-| 1 | a doc file the range touches does not hold to its template, a line the range adds to a living doc or an agent file breaks a prose rule or copies a pinned version, the range adds or breaks a reference that does not resolve, an agent file is over the ceiling or holds `## Maintaining this file`, an entry in an agent file names no tracked path, link or command, a README the range edits is over a README ceiling, a range that edits a doc file leaves either `AGENTS.md` or `CLAUDE.md` missing from the root in a repository with a `package.json`, the range removes a name a living doc or an agent file still carries, or the range deletes a path a live record governs |
+| 0 | every doc file the range touches holds to its template, every line it adds to a living doc or an agent file holds to the prose rules and copies no pinned version, it adds or breaks no reference that does not resolve, every agent file holds to the ceiling and holds no `## Maintaining this file`, every entry in an agent file names a tracked path, a link or a command, every README the range edits holds to the README ceilings, a range that edits a doc file leaves `AGENTS.md` and `CLAUDE.md` at the root of a repository with a `package.json`, no code span a living doc or an agent file names vanished from every file outside the docs, the range deletes no path a live record governs, and a range that touches `docs/adr/` leaves its index fresh |
+| 1 | a doc file the range touches does not hold to its template, a line the range adds to a living doc or an agent file breaks a prose rule or copies a pinned version, the range adds or breaks a reference that does not resolve, an agent file is over the ceiling or holds `## Maintaining this file`, an entry in an agent file names no tracked path, link or command, a README the range edits is over a README ceiling, a range that edits a doc file leaves either `AGENTS.md` or `CLAUDE.md` missing from the root in a repository with a `package.json`, the range removes a name a living doc or an agent file still carries, the range deletes a path a live record governs, or a range that touches `docs/adr/` leaves its index missing or stale |
 | 2 | a `package.json` does not decode, a ref does not resolve, or `grep` cannot read an installed direct dependency |
 
 ## Sample output
@@ -302,6 +322,8 @@ docs: 9 violation(s):
   docs/adr/0003-parts-list.md:2: governs `src/parts.ts`, which the range deletes. In the same change, retire it with Superseded or Retired in `## Status`
   docs/parts.md: is a page under docs/ with no mode; add kind: tutorial, how-to, reference, explanation in YAML front matter
   docs/parts.md:9: names `gates.lint`, which the range removed from every file outside the docs. Say what holds now, or drop the line
+docs: 1 live record(s) govern paths the range changes:
+  docs/adr/0002-parts-suppliers.md: Accepted, governs `docs`
 docs: advisory, 1 doc file(s) the range leaves alone do not hold to their templates yet:
   docs/adr/0001-quality-gates.md: 5 violation(s)
 docs: advisory, 1 README ceiling finding(s) in README(s) the range leaves alone:

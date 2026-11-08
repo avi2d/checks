@@ -100,12 +100,13 @@ test(
 test(
   "a record, a changelog and fenced code take no prose rule",
   async () => {
-    const { put, commit, docs } = await repository();
+    const { put, commit, docs, index } = await repository();
     const base = await commit("start");
     const record = await readFile(join(FIXTURES, "adr.md"), "utf8");
     await put("docs/adr/0001-a-part-names-its-supplier.md", `${record}\nIt builds; it ships (fast) — twice.\n`);
     await put("tools/CHANGELOG.md", "It builds; it ships (fast) — twice.\n");
     await put(GUIDE, `${OPENING}\n\`\`\`sh\nbuild; ship (fast) — twice\n\`\`\`\n`);
+    await index();
     const head = await commit("separators where the prose rules do not reach");
 
     const held = await docs(base, head);

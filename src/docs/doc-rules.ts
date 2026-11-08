@@ -75,6 +75,11 @@ export function placementOf(path: string, text = ""): Placement {
   return path.startsWith(DOCS_DIRECTORY) ? { type: "undeclared" } : { type: "unjudged" };
 }
 
+export function isRecord(path: string): boolean {
+  const placement = placementOf(path);
+  return placement.type === "judged" && placement.kind === "adr";
+}
+
 function titleOf({ headings: [first] }: Outline): Heading | undefined {
   return first?.level === 1 && first.line === 1 ? first : undefined;
 }
@@ -292,6 +297,7 @@ export function governedRecord({ path, text }: Doc): GovernedRecord {
     path,
     number: recordNumber(path),
     governs: governsOf(frontMatter.text, frontMatter.parsed),
+    title: titleOf(outline)?.title,
     status: statusWordOf(outline),
     frontMatter: frontMatter.text,
   };

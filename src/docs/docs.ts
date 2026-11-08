@@ -1,11 +1,14 @@
 #!/usr/bin/env bun
 import { Console, Effect } from "effect";
 import { ceilingFinding, entryFindings, hasManifest, isAgentFile, isCeiledReadme, maintainingFinding, missingAgentFiles, readmeFindings, type RootAgentFinding } from "./doc-agents.ts";
-import { deletedGoverned, missingGoverned, type GovernedFinding } from "./doc-governs.ts";
+import { deletedGoverned, governingRecords, missingGoverned, type GovernedFinding, type GovernedRecord, type Governing } from "./doc-governs.ts";
+import { INDEX_WRITER, indexState } from "./doc-index.ts";
 import { rootsOf, snapshotOf, type Snapshot, unresolvedIn, type Judging, type Unresolved } from "./doc-references.ts";
 import {
   ADR_DIRECTORY,
+  ADR_INDEX,
   governedRecord,
+  isRecord,
   judge,
   placementOf,
   placementProblem,
@@ -36,8 +39,11 @@ type Judged = {
   readonly agents: number;
   readonly readmes: number;
   readonly hasManifest: boolean;
+  readonly indexed: number | undefined;
+  readonly governing: readonly Governing[];
   readonly findings: readonly Finding[];
   readonly advisory: ReadonlyMap<string, number>;
+  readonly indexAdvisory: readonly Finding[];
   readonly readmeAdvisory: readonly Finding[];
   readonly agentFileAdvisory: readonly Finding[];
   readonly sentenceAdvisory: readonly Finding[];
@@ -87,9 +93,21 @@ function templateFindings(path: string, text: string, placement: Placement, reco
   return judge(placement.kind, { path, text }, records).map(({ line, message }) => ({ path, line, message }));
 }
 
-function isRecord(path: string): boolean {
-  const placement = placementOf(path);
-  return placement.type === "judged" && placement.kind === "adr";
+const INDEX_REMEDY = `Run \`${INDEX_WRITER}\` to write it from the records in ${ADR_DIRECTORY}`;
+
+function indexFindings(readme: string | undefined, records: readonly GovernedRecord[]): readonly Finding[] {
+  if (records.length === 0) return [];
+  const state = indexState(readme, records);
+  switch (state.type) {
+    case "fresh":
+      return [];
+    case "missing":
+      return [{ path: ADR_INDEX, line: undefined, message: `is missing, and it indexes the records in ${ADR_DIRECTORY}. ${INDEX_REMEDY}` }];
+    case "unmarked":
+      return [{ path: ADR_INDEX, line: undefined, message: `holds no generated adr-index block. ${INDEX_REMEDY}` }];
+    case "stale":
+      return [{ path: ADR_INDEX, line: state.line, message: `holds an adr-index block that differs from the records in ${ADR_DIRECTORY}. ${INDEX_REMEDY}` }];
+  }
 }
 
 const governedKey = ({ path, governed }: GovernedFinding): string => `${path}\0${governed}`;
@@ -106,7 +124,7 @@ const governedFindings = Effect.fn("governedFindings")(function* (root: string, 
   const reported = new Set(deleted.map(governedKey));
   const missing = after.flatMap((record) => missingGoverned(record, tracked)).filter((finding) => !reported.has(governedKey(finding)));
   const finding = ({ path, line, message }: GovernedFinding): Finding => ({ path, line, message });
-  return { baseFiles, tracked, deleted: deleted.map(finding), missing: missing.map(finding) };
+  return { baseFiles, tracked, after, deleted: deleted.map(finding), missing: missing.map(finding) };
 });
 
 function inPathOrder(a: Finding, b: Finding): number {
@@ -147,6 +165,24 @@ const referenceFindings = Effect.fn("referenceFindings")(function* (range: Range
   };
 });
 
+function untouchedCounts(templated: readonly Finding[], touched: ReadonlySet<string>): ReadonlyMap<string, number> {
+  const advisory = new Map<string, number>();
+  for (const { path } of templated.filter((finding) => !touched.has(finding.path))) advisory.set(path, (advisory.get(path) ?? 0) + 1);
+  return advisory;
+}
+
+const recordIndex = Effect.fn("recordIndex")(function* (root: string, base: string, head: string, records: readonly GovernedRecord[], readme: string | undefined, changes: readonly Change[]) {
+  const governing = records.length === 0 ? [] : governingRecords(records, (yield* changedPaths(base, head, [], root)).flatMap(pathsOf));
+  const index = indexFindings(readme, records);
+  const touchesRecords = changes.some((change) => pathsOf(change).some((path) => path.startsWith(ADR_DIRECTORY)));
+  return {
+    governing,
+    indexed: records.length === 0 || index.length > 0 ? undefined : records.length,
+    failing: touchesRecords ? index : [],
+    advisory: touchesRecords ? [] : index,
+  };
+});
+
 const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head: string) {
   const changes = yield* changedPaths(base, head, MARKDOWN, root);
   const touched = new Set(changes.flatMap((change) => (change.kind === "deleted" ? [] : [change.path])));
@@ -161,7 +197,7 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   const text = (path: string): string => texts.get(path) ?? "";
   const records = recordsOf(present.filter((path) => path.startsWith(ADR_DIRECTORY)).map((path) => ({ path, text: text(path) })));
   const judged = present.map((path) => ({ path, placement: placementOf(path, text(path)) })).filter(({ placement }) => placement.type !== "unjudged");
-  const { baseFiles, tracked, ...governed } = yield* governedFindings(root, base, head, present.filter(isRecord).map((path) => ({ path, text: text(path) })));
+  const { baseFiles, tracked, after, ...governed } = yield* governedFindings(root, base, head, present.filter(isRecord).map((path) => ({ path, text: text(path) })));
 
   const templated = [...judged.flatMap(({ path, placement }) => templateFindings(path, text(path), placement, records)), ...governed.missing];
   const edited = proseDocs.filter(({ path }) => changed.has(path));
@@ -184,8 +220,7 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   const oversize = readmes.flatMap(({ path }) => readmeFindings(text(path)).map((finding) => ({ path, ...finding })));
   const absent = missingAgentFiles(tracked.files);
   const rootAgents = rootAgentFindings(absent, absent.length === 0 ? false : yield* rangeEditsDocs(root, base, changes, text));
-  const advisory = new Map<string, number>();
-  for (const { path } of templated.filter((finding) => !touched.has(finding.path))) advisory.set(path, (advisory.get(path) ?? 0) + 1);
+  const index = yield* recordIndex(root, base, head, after, present.includes(ADR_INDEX) ? text(ADR_INDEX) : undefined, changes);
   return {
     held: judged.map(({ path }) => path).filter((path) => touched.has(path)),
     edited: { docs: edited.length, lines: edited.reduce((sum, { path }) => sum + (changed.get(path)?.size ?? 0), 0) },
@@ -193,7 +228,10 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
     agents: agents.length,
     readmes: readmes.filter(({ path }) => touched.has(path)).length,
     hasManifest: hasManifest(tracked.files),
+    indexed: index.indexed,
+    governing: index.governing,
     findings: [
+      ...index.failing,
       ...templated.filter((finding) => touched.has(finding.path)),
       ...governed.deleted,
       ...prose,
@@ -204,7 +242,8 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
       ...oversize.filter((finding) => touched.has(finding.path)),
       ...rootAgents.failing,
     ].toSorted(inPathOrder),
-    advisory,
+    advisory: untouchedCounts(templated, touched),
+    indexAdvisory: index.advisory,
     readmeAdvisory: oversize.filter((finding) => !touched.has(finding.path)).toSorted(inPathOrder),
     agentFileAdvisory: rootAgents.advisory,
     sentenceAdvisory: edited
@@ -225,8 +264,11 @@ export function report({
   agents,
   readmes,
   hasManifest: manifestHeld,
+  indexed,
+  governing,
   findings,
   advisory,
+  indexAdvisory,
   readmeAdvisory,
   agentFileAdvisory,
   sentenceAdvisory,
@@ -247,8 +289,18 @@ export function report({
           `${NAME}: the ${agents} agent file(s) hold to the ceiling, and every entry names a tracked path, a link or a command`,
           `${NAME}: the ${readmes} README(s) the range edits hold to the 6,000-character ceiling and the 300-character table cell ceiling`,
           ...rootAgentFiles,
+          ...(indexed === undefined ? [] : [`${NAME}: ${ADR_INDEX} indexes the ${indexed} record(s) in ${ADR_DIRECTORY}`]),
         ]
       : [`${NAME}: ${findings.length} violation(s):`, ...findings.map(describe)];
+  const governingLines =
+    governing.length === 0
+      ? []
+      : [
+          `${NAME}: ${governing.length} live record(s) govern paths the range changes:`,
+          ...governing.map(({ path, status, governed }) => `  ${path}: ${status ?? "no status"}, governs ${governed.map((one) => `\`${one}\``).join(", ")}`),
+        ];
+  const unindexed =
+    indexAdvisory.length === 0 ? [] : [`${NAME}: advisory, the record index is not fresh, and the first range that touches ${ADR_DIRECTORY} fails on it:`, ...indexAdvisory.map(describe)];
   const unconformed =
     advisory.size === 0
       ? []
@@ -281,7 +333,7 @@ export function report({
           `${NAME}: advisory, ${brokenBefore.length} path(s), link(s) or command(s) the living docs or agent files name were broken before the range:`,
           ...brokenBefore.map(describe),
         ];
-  return [...verdict, ...unconformed, ...oversize, ...missing, ...sentences, ...broken].join("\n");
+  return [...verdict, ...governingLines, ...unconformed, ...unindexed, ...oversize, ...missing, ...sentences, ...broken].join("\n");
 }
 
 const docs = Effect.gen(function* () {
