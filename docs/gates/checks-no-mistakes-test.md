@@ -13,13 +13,16 @@ It passes when `commands.test` is absent.
 It passes when `commands.test` runs `checks-test --changed` directly.
 It passes when `commands.test` runs a `bun run` script whose definition runs `checks-test --changed`.
 It fails on `bun run test` and on a bare `checks-test`, since each runs the whole suite.
+It fails with exit 1 when the command contains a shell control character, so a chained `checks-test --changed && ...` line fails.
+It fails with exit 1 when `--changed` is combined with `--full` or `--tier=`, since each combination refuses the run.
+It fails with exit 1 when a `bun run` script name cannot resolve or when a chain of script names cycles.
 
 ## What it reads
 
 It reads the working tree.
 It reads `commands.test` from `.no-mistakes.yaml` and the script definitions from `package.json`.
 It resolves a `bun run` script name to its definition, and follows a chain of such names until it reaches the test command.
-A name it cannot resolve fails the run.
+A name it cannot resolve fails the run with exit 1, as does a chain of script names that cycles.
 
 ## Arguments
 

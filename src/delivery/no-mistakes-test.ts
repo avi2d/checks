@@ -23,7 +23,7 @@ function wordsOf(command: string): readonly string[] {
 function runsChanged(words: readonly string[]): boolean {
   if (!words.includes("--changed")) return false;
   if (words.includes("--full") || words.some((word) => word.startsWith("--tier="))) return false;
-  return words.includes("checks-test") || words.some((word) => word === "src/testing/test.ts" || word.endsWith("/testing/test.ts"));
+  return words.includes("checks-test") || words.includes("src/testing/test.ts");
 }
 
 // A word split alone would pass a line that runs the suite after &&, so any shell control refuses it.
@@ -39,7 +39,7 @@ export function isTouchedOnly(
   if (words.length === 0) return false;
   if (runsChanged(words)) return true;
   const [runner, verb, name] = words;
-  if ((runner === "bun" || runner === "bunx") && verb === "run" && name !== undefined && !name.startsWith("-") && !visited.includes(name)) {
+  if (runner === "bun" && verb === "run" && name !== undefined && !name.startsWith("-") && !visited.includes(name)) {
     const target = scripts[name];
     if (typeof target !== "string") return false;
     return isTouchedOnly(target, scripts, [...visited, name]);
