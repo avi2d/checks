@@ -1,4 +1,4 @@
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { fileURLToPath } from "node:url";
 import { GUARD_IGNORER } from "./dist/mutation/mutation-guard-plugin.js";
@@ -9,18 +9,32 @@ const [, , command, ...args] = process.argv;
 const refusal = command === "run" ? fullRunRefusal(args, process.env.CI ?? "") : undefined;
 if (refusal !== undefined) throw new Error(refusal);
 
-export const halfAvailableCores = (cores = availableParallelism()) => Math.max(1, Math.floor(cores / 2));
+// A GitHub-hosted runner is a VM the job holds alone, while any other machine shares its cores with whatever else runs there.
+export const mutationConcurrency = (environment, cores) =>
+  environment === "github-hosted" ? cores : Math.max(1, Math.floor(cores / 2));
+
+export const ignoresStatic = (mode) => mode === "refresh";
+
+const UNIT_TESTS = "tests/unit";
 
 // The bun runner narrows a mutant's run to its covering files only when each listed path equals a test id's file part, which carries no leading ./.
 const listedUnitTests = () =>
-  readdirSync("tests/unit", { recursive: true, encoding: "utf8" })
-    .filter((name) => name.endsWith(".test.ts") || name.endsWith(".test.tsx"))
-    .map((name) => `tests/unit/${name}`)
-    .toSorted();
+  existsSync(UNIT_TESTS)
+    ? readdirSync(UNIT_TESTS, { recursive: true, encoding: "utf8" })
+        .filter((name) => name.endsWith(".test.ts") || name.endsWith(".test.tsx"))
+        .map((name) => `${UNIT_TESTS}/${name}`)
+        .toSorted()
+    : [];
 
-const timedUnitTests = ordersTests(command, args) ? await runOrder(listedUnitTests()) : undefined;
+const listedAtLoad = listedUnitTests();
+const timedUnitTests =
+  listedAtLoad.length > 0 && ordersTests(command, args) && !ignoresStatic(process.env.CHECKS_MUTATION_MODE)
+    ? await runOrder(listedAtLoad)
+    : undefined;
 
 export const unitTestFiles = () => timedUnitTests ?? listedUnitTests();
+
+const testFiles = unitTestFiles();
 
 export default {
   packageManager: "npm",
@@ -31,12 +45,14 @@ export default {
   ],
   ignorers: [GUARD_IGNORER],
   testRunner: "bun",
-  bun: { timeout: 60000 },
+  // The runner warns on an empty list before it finds every test itself, as it does for an absent one.
+  bun: { timeout: 60000, ...(testFiles.length > 0 ? { testFiles } : {}) },
   inPlace: true,
   tempDirName: "../.stryker-tmp",
   coverageAnalysis: "perTest",
   reporters: ["html", "json", "clear-text", "progress"],
   timeoutMS: 60000,
-  concurrency: halfAvailableCores(),
+  concurrency: mutationConcurrency(process.env.RUNNER_ENVIRONMENT, availableParallelism()),
+  ignoreStatic: ignoresStatic(process.env.CHECKS_MUTATION_MODE),
   thresholds: { high: 85, low: 70, break: null },
 };
