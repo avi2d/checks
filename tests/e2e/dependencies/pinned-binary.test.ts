@@ -60,8 +60,21 @@ function droppingFirst(drops: number) {
   return { url: `http://localhost:${server.port}/osv-scanner`, connections: () => connections, stop: () => server.stop(true) };
 }
 
-const install = (url: string, sha256: string, binary: string, retry: Retry = FAST) =>
-  installPinned({ kind: "binary", url, sha256 }, binary, retry).pipe(Effect.provide(BunServices.layer));
+// GitHub's REST API answers an asset id with its JSON metadata unless the request accepts application/octet-stream.
+function assetApi() {
+  const accepts: (string | null)[] = [];
+  const server = Bun.serve({
+    port: 0,
+    fetch: (request) => {
+      accepts.push(request.headers.get("accept"));
+      return request.headers.get("accept") === "application/octet-stream" ? new Response(BYTES) : Response.json({ id: 1, name: "osv-scanner" });
+    },
+  });
+  return { url: `http://localhost:${server.port}/repos/google/osv-scanner/releases/assets/1`, accepts, stop: () => server.stop(true) };
+}
+
+const install = (url: string, sha256: string, binary: string, retry: Retry = FAST, mirror = url) =>
+  installPinned({ kind: "binary", url, mirror, sha256 }, binary, retry).pipe(Effect.provide(BunServices.layer));
 const failureOf = async (url: string, sha256: string, binary: string) => (await Effect.runPromise(Effect.flip(install(url, sha256, binary)))).message;
 const listed = (dir: string) => readdir(dir).catch(() => []);
 
@@ -113,12 +126,27 @@ test("a download that answers 504 on every attempt stops after the last attempt 
   const server = flaky(Number.POSITIVE_INFINITY, 504);
   try {
     const message = await failureOf(server.url, SHA256, binary);
-    expect(message).toContain(`cannot download ${server.url} in 4 attempt(s)`);
+    expect(message).toContain(`cannot download ${server.url} or ${server.url} in 4 attempt(s)`);
     expect(message).toContain(`504 GET ${server.url}`);
     expect(server.requests.length).toBe(4);
     expect(await listed(dir)).toEqual([]);
   } finally {
     await server.stop();
+  }
+});
+
+test("a release URL that answers 504 on every attempt installs from the asset API mirror on the next attempt rather than exhausting the retries on it", async () => {
+  const binary = join(await scratch("checks-pinned-mirror-"), "osv-scanner");
+  const releaseHost = flaky(Number.POSITIVE_INFINITY, 504);
+  const api = assetApi();
+  try {
+    expect(await Effect.runPromise(install(releaseHost.url, SHA256, binary, FAST, api.url))).toBe(binary);
+    expect(new Uint8Array(await readFile(binary))).toEqual(BYTES);
+    expect(releaseHost.requests.length).toBe(1);
+    expect(api.accepts).toEqual(["application/octet-stream"]);
+  } finally {
+    await releaseHost.stop();
+    await api.stop();
   }
 });
 
@@ -144,7 +172,7 @@ test("a pinned archive installs only the member whose SHA-256 matches, and the i
   const dir = join(await scratch("checks-gitleaks-install-"), "8.30.1");
   const binary = join(dir, "gitleaks");
   const server = release("gitleaks.tar.gz", archive);
-  const asset = (memberSha256: string) => ({ kind: "tar.gz", url: server.url, sha256: sha256Of(archive), member: "gitleaks", memberSha256 }) as const;
+  const asset = (memberSha256: string) => ({ kind: "tar.gz", url: server.url, mirror: server.url, sha256: sha256Of(archive), member: "gitleaks", memberSha256 }) as const;
   const run = (memberSha256: string) => installPinned(asset(memberSha256), binary).pipe(Effect.provide(BunServices.layer));
   try {
     const wrongMember = (await Effect.runPromise(Effect.flip(run("0".repeat(64))))).message;

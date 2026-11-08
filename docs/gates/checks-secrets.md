@@ -135,6 +135,8 @@ On first use it downloads the archive from the scanner's GitHub release and unpa
 Every later run finds it there and downloads nothing.
 A download that meets a network error or a status outside 2xx, such as 504, is tried again.
 It makes six attempts in all, waiting 2, 4, 8, 16 and 32 seconds between them.
+The attempts alternate between the release URL and the asset's URL on GitHub's API, which other hosts serve.
+The same SHA-256 pin judges the bytes from either.
 When the sixth fails it exits 2 and names the last status, so an outage of the release host fails the gate.
 A hosted runner starts each run with an empty cache, so each run downloads the archive.
 It checks the binary's SHA-256 again on every run and exits 2 on a copy that differs.
