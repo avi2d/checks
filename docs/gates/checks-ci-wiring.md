@@ -120,7 +120,8 @@ Each refusal names the workflow file, the line of its `schedule` trigger and wha
 
 It refuses every other workflow that triggers on `schedule`, since a test, mutation, flake, browser or whole-tree run starts only by hand, with `gh workflow run`.
 The one schedule it keeps is a weekly advisory scan in a public repository.
-A workflow scans advisories when a run step calls `checks-advisories`, the same ways a release call counts, and every other run step is a `bun install`.
+A workflow scans advisories when a run step calls `checks-advisories`, the same ways a release call counts, or a job calls the shared `avi2d/workflows/.github/workflows/advisories.yml` at any ref.
+Every other run step is then a `bun install`, and every other job that calls a workflow calls that one.
 A weekly scan has one `cron` entry with one minute, one hour and one weekday, and `*` for the day of the month and the month.
 It refuses an advisory scan that runs more often, and any scheduled advisory scan in a private repository.
 A run outside CI cannot read whether the repository is private, so it refuses a scan there only for the cron.
