@@ -20,6 +20,7 @@ const OUTSIDE_LINT = {
   "checks-mutation-compare": "src/testing/mutation-compare.ts",
   "checks-mutation-baseline": "src/testing/mutation-baseline.ts",
   "checks-mutation-scope": "src/testing/mutation-scope.ts",
+  "checks-mutation-merge": "src/testing/mutation-merge.ts",
   "checks-subsumed-tests": "src/testing/subsumed-tests.ts",
   "checks-whole-tree-run": "src/testing/whole-tree-run.ts",
   "checks-flake": "src/testing/flake.ts",
