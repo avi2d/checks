@@ -27,7 +27,7 @@ The preset also exports `unitTestFiles`, which lists every `.test.ts` and `.test
 The preset sets `bun.testFiles` to its result, so a covered, non-static mutant loads only the test files that cover it.
 A repository without `tests/unit` lists no file, and the preset leaves `bun.testFiles` unset, so the runner finds every test itself.
 A static mutant has no per-test coverage, so it still loads every listed file, and with bail it stops at the first test that fails.
-So when a `stryker run` that tests static mutants loads the preset, the preset first runs the listed files once with `bun test` and times each file.
+So when a `stryker run` that tests static mutants loads the preset, the preset first runs the listed files once with `bun test` and times each file when at least one file is listed.
 `unitTestFiles` then lists each file with a leading `./`, fastest first, and Bun runs such paths in the order given.
 It then lists each path again without the `./`, the spelling the runner matches a covering test against.
 Bun loads a file once however often the list names it.

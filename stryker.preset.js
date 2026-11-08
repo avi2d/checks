@@ -26,7 +26,11 @@ const listedUnitTests = () =>
         .toSorted()
     : [];
 
-const timedUnitTests = ordersTests(command, args) && !ignoresStatic(process.env.CHECKS_MUTATION_MODE) ? await runOrder(listedUnitTests()) : undefined;
+const listedAtLoad = listedUnitTests();
+const timedUnitTests =
+  listedAtLoad.length > 0 && ordersTests(command, args) && !ignoresStatic(process.env.CHECKS_MUTATION_MODE)
+    ? await runOrder(listedAtLoad)
+    : undefined;
 
 export const unitTestFiles = () => timedUnitTests ?? listedUnitTests();
 

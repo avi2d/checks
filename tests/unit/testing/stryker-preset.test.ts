@@ -92,7 +92,7 @@ test("unitTestFiles lists every repository unit test with no leading ./, so a ne
 });
 
 test("unitTestFiles paths are what resolveCoveringTestFiles at @hughescr/stryker-bun-runner/dist/index.js:8451 matches, and the directory form is not", async () => {
-  const testId = "tests/unit/testing/stryker-preset.test.ts > the preset spreads that cap to every consumer";
+  const testId = "tests/unit/testing/stryker-preset.test.ts > unitTestFiles lists every repository unit test with no leading ./, so a new file joins on its own";
   expect(await coveringFiles(unitTestFiles(), testId)).toEqual(["tests/unit/testing/stryker-preset.test.ts"]);
   expect(await coveringFiles(["./tests/unit/"], testId)).toBeUndefined();
   expect(await coveringFiles(["./tests/unit/testing/stryker-preset.test.ts"], testId)).toBeUndefined();
