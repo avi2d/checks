@@ -92,7 +92,7 @@ It prints one line for each list, as `NAME=a,b`, with each list sorted by path:
 
 | Line | What it lists |
 | --- | --- |
-| `SCOPE` | the files the base and head runs both mutate, empty when nothing in mutation scope changed |
+| `SCOPE` | the files the incremental head run mutates, empty when nothing in mutation scope changed |
 | `STALE_TESTS` | the unit tests that count as changed only because they read a changed file |
 
 Stryker reads each `--mutate` entry as a glob and turns each backslash into a `/`.
@@ -105,7 +105,7 @@ Each entry is one shard's files, escaped as `SCOPE` escapes them and joined with
 On stderr it names each shard's file count and mutant weight.
 
 Stryker compares only a test file's own source when it resumes from incremental state.
-A run that resumes from the merge base's state drops each `STALE_TESTS` entry from that state first, so Stryker retests the mutants those tests cover.
+A run that resumes from the saved `main` baseline drops each `STALE_TESTS` entry from that state first, so Stryker retests the mutants those tests cover.
 
 On stderr it names each unit test that reads a changed file, and each source a changed unit test brings in.
 It also names each stale test that widens the scope.
@@ -151,7 +151,8 @@ mutation-scope: the baseline report did not run tests/unit/dashboard/snapshot.te
 
 ## When it runs
 
-Only a CI step the repository writes runs it, in a branch's mutation comparison, before either Stryker run:
+Only a CI step runs it, in a branch's mutation comparison before the incremental head run.
+The shared `mutation` workflow runs it in its compare and refresh jobs, and a step the repository writes runs it too:
 
 ```yaml
 - name: Select mutation scope
@@ -165,7 +166,7 @@ Only a CI step the repository writes runs it, in a branch's mutation comparison,
 ```
 
 Each later step reads `SCOPE` from the environment, and a failed scope step adds nothing to it.
-[checks-mutation-compare](checks-mutation-compare.md#running-it-in-ci) shows the whole job.
+[checks-mutation-compare](checks-mutation-compare.md#running-it-in-ci) shows the comparison it scopes.
 The full baseline comes from the `mutation` workflow, as [checks-mutation](checks-mutation.md#running-it-in-ci) shows.
 
 ## Related topics

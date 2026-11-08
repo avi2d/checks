@@ -71,6 +71,7 @@ It scopes one incremental head run against the saved `main` baseline, with no se
 [checks-whole-tree-run](checks-whole-tree-run.md) judges the mutation score of `main` on each whole-tree run and opens an issue for each file whose score fell.
 A repository runs it with `--advisory`, so the comparison stays advisory and never fails the pull request.
 It posts one advisory comment on the pull request that lists each lost kill and each survivor on an added line.
+On a fork it writes that note to the job summary instead.
 A full sweep runs in CI and never on a laptop.
 Refresh the full baseline it scopes against with `gh workflow run mutation`, choosing `refresh` for the `mode` input.
 The shared preset refuses a full `stryker run` outside CI and names that workflow command instead, as [checks-mutation](checks-mutation.md) says.
