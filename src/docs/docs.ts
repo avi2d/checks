@@ -1,8 +1,20 @@
 #!/usr/bin/env bun
 import { Console, Effect } from "effect";
 import { ceilingFinding, entryFindings, hasManifest, isAgentFile, isCeiledReadme, maintainingFinding, missingAgentFiles, readmeFindings, type RootAgentFinding } from "./doc-agents.ts";
+import { deletedGoverned, missingGoverned, type GovernedFinding } from "./doc-governs.ts";
 import { rootsOf, snapshotOf, type Snapshot, unresolvedIn, type Judging, type Unresolved } from "./doc-references.ts";
-import { ADR_DIRECTORY, judge, placementOf, placementProblem, recordsOf, speaksToConsumers, type Placement, type Records } from "./doc-rules.ts";
+import {
+  ADR_DIRECTORY,
+  governedRecord,
+  judge,
+  placementOf,
+  placementProblem,
+  recordsOf,
+  speaksToConsumers,
+  type Doc,
+  type Placement,
+  type Records,
+} from "./doc-rules.ts";
 import { vanishedNames } from "./doc-names.ts";
 import { pinsAt, versionFindings } from "./doc-versions.ts";
 import { readTexts, snapshotAt, stillMissing } from "./doc-snapshot.ts";
@@ -75,6 +87,28 @@ function templateFindings(path: string, text: string, placement: Placement, reco
   return judge(placement.kind, { path, text }, records).map(({ line, message }) => ({ path, line, message }));
 }
 
+function isRecord(path: string): boolean {
+  const placement = placementOf(path);
+  return placement.type === "judged" && placement.kind === "adr";
+}
+
+const governedKey = ({ path, governed }: GovernedFinding): string => `${path}\0${governed}`;
+
+const governedFindings = Effect.fn("governedFindings")(function* (root: string, base: string, head: string, records: readonly Doc[]) {
+  const baseFiles = yield* pathsAt(base, [], root);
+  const tracked = snapshotOf(yield* pathsAt(head, [], root), new Map(), new Map());
+  const after = records.map(governedRecord);
+  const deletes = baseFiles.some((path) => !tracked.files.has(path));
+  const earlier = deletes ? baseFiles.filter(isRecord) : [];
+  const texts = yield* readTexts(root, base, earlier);
+  const before = earlier.map((path) => governedRecord({ path, text: texts.get(path) ?? "" }));
+  const deleted = deletedGoverned(before, after, snapshotOf(baseFiles, new Map(), new Map()), tracked);
+  const reported = new Set(deleted.map(governedKey));
+  const missing = after.flatMap((record) => missingGoverned(record, tracked)).filter((finding) => !reported.has(governedKey(finding)));
+  const finding = ({ path, line, message }: GovernedFinding): Finding => ({ path, line, message });
+  return { baseFiles, tracked, deleted: deleted.map(finding), missing: missing.map(finding) };
+});
+
 function inPathOrder(a: Finding, b: Finding): number {
   return a.path === b.path ? (a.line ?? 0) - (b.line ?? 0) : a.path < b.path ? -1 : 1;
 }
@@ -127,8 +161,9 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   const text = (path: string): string => texts.get(path) ?? "";
   const records = recordsOf(present.filter((path) => path.startsWith(ADR_DIRECTORY)).map((path) => ({ path, text: text(path) })));
   const judged = present.map((path) => ({ path, placement: placementOf(path, text(path)) })).filter(({ placement }) => placement.type !== "unjudged");
+  const { baseFiles, tracked, ...governed } = yield* governedFindings(root, base, head, present.filter(isRecord).map((path) => ({ path, text: text(path) })));
 
-  const templated = judged.flatMap(({ path, placement }) => templateFindings(path, text(path), placement, records));
+  const templated = [...judged.flatMap(({ path, placement }) => templateFindings(path, text(path), placement, records)), ...governed.missing];
   const edited = proseDocs.filter(({ path }) => changed.has(path));
   const prose = edited.flatMap(({ path, reader }) =>
     proseFindings(text(path), reader, changed.get(path)).map(({ line, message }) => ({ path, line, message })),
@@ -139,12 +174,11 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   );
   const judging = (path: string): Judging => ({ commands: !speaksToConsumers(text(path)) });
   // A directory the range deletes still belongs to this repository, so a path under it is stale rather than another repository's.
-  const roots = rootsOf(yield* pathsAt(base, [], root));
+  const roots = rootsOf(baseFiles);
   const referenced = new Map(proseDocs.map(({ path }) => [path, text(path)]));
   const references = yield* referenceFindings({ root, base, head, roots, changed, renamedFrom }, referenced, judging);
   const vanished = yield* vanishedNames(root, base, head, referenced, references.failed);
   const agents = proseDocs.filter(({ path }) => isAgentFile(path));
-  const tracked = snapshotOf(yield* pathsAt(head, [], root), new Map(), new Map());
   const shapes = agents.flatMap(({ path }) => agentFileFindings(path, text(path), tracked));
   const readmes = proseDocs.filter(({ path }) => isCeiledReadme(path, tracked.files));
   const oversize = readmes.flatMap(({ path }) => readmeFindings(text(path)).map((finding) => ({ path, ...finding })));
@@ -161,6 +195,7 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
     hasManifest: hasManifest(tracked.files),
     findings: [
       ...templated.filter((finding) => touched.has(finding.path)),
+      ...governed.deleted,
       ...prose,
       ...versions,
       ...references.failing,
@@ -207,6 +242,7 @@ export function report({
           `${NAME}: ${held.length} doc file(s) the range touches hold to their templates`,
           `${NAME}: ${edited.lines} line(s) the range adds or edits in ${edited.docs} living doc(s) or agent file(s) hold to the prose rules`,
           `${NAME}: no line the range adds or edits copies a version package.json or .bun-version pins`,
+          `${NAME}: the range deletes no path a live record governs`,
           `${NAME}: the range breaks no path, link or command the ${named} living doc(s) or agent file(s) name`,
           `${NAME}: the ${agents} agent file(s) hold to the ceiling, and every entry names a tracked path, a link or a command`,
           `${NAME}: the ${readmes} README(s) the range edits hold to the 6,000-character ceiling and the 300-character table cell ceiling`,
