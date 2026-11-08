@@ -83,37 +83,58 @@ function normalizeLine(raw: string): string {
   return raw.replace(/\s+/g, " ").trim();
 };
 
+type ScanState = {
+  fence: string | undefined;
+  front: boolean;
+  comment: boolean;
+};
+
+function startScan(first: string | undefined): ScanState {
+  return { fence: undefined, front: first !== undefined && FRONT_OPEN.test(first), comment: false };
+};
+
+function trackFront(raw: string, at: number, state: ScanState): boolean {
+  if (!state.front) return false;
+  if (at > 0 && FRONT_CLOSE.test(raw)) state.front = false;
+  return true;
+};
+
+function trackFence(raw: string, state: ScanState): boolean {
+  if (state.fence !== undefined) {
+    if (fenceCloses(raw, state.fence)) state.fence = undefined;
+    return true;
+  }
+  const fenceMatch = FENCE.exec(raw)?.[1];
+  if (fenceMatch === undefined) return false;
+  state.fence = fenceMatch;
+  return true;
+};
+
+function trackComment(raw: string, state: ScanState): boolean {
+  if (state.comment) {
+    if (COMMENT_CLOSE.test(raw)) state.comment = false;
+    return true;
+  }
+  if (!COMMENT_OPEN.test(raw)) return false;
+  if (!COMMENT_CLOSE.test(raw)) state.comment = true;
+  return true;
+};
+
+function blockedLine(raw: string, at: number, tables: ReadonlySet<number>): boolean {
+  return HEADING.test(raw) || INDENTED_CODE.test(raw) || BREAK.test(raw) || tables.has(at);
+};
+
 function comparableLines(text: string): readonly { readonly line: number; readonly text: string }[] {
   const raws = text.split("\n");
   const tables = tableLines(raws);
   const found: { readonly line: number; readonly text: string }[] = [];
-  let fence: string | undefined;
-  let front = raws.length > 0 && FRONT_OPEN.test(raws[0] ?? "");
-  let comment = false;
+  const state = startScan(raws[0]);
   for (let at = 0; at < raws.length; at += 1) {
     const raw = raws[at] ?? "";
-    if (front) {
-      if (at > 0 && FRONT_CLOSE.test(raw)) front = false;
-      continue;
-    }
-    const fenceMatch = FENCE.exec(raw)?.[1];
-    if (fence !== undefined) {
-      if (fenceCloses(raw, fence)) fence = undefined;
-      continue;
-    }
-    if (fenceMatch !== undefined) {
-      fence = fenceMatch;
-      continue;
-    }
-    if (comment) {
-      if (COMMENT_CLOSE.test(raw)) comment = false;
-      continue;
-    }
-    if (COMMENT_OPEN.test(raw)) {
-      if (!COMMENT_CLOSE.test(raw)) comment = true;
-      continue;
-    }
-    if (HEADING.test(raw) || INDENTED_CODE.test(raw) || BREAK.test(raw) || tables.has(at)) continue;
+    if (trackFront(raw, at, state)) continue;
+    if (trackFence(raw, state)) continue;
+    if (trackComment(raw, state)) continue;
+    if (blockedLine(raw, at, tables)) continue;
     const line = normalizeLine(raw);
     if (line === "") continue;
     found.push({ line: at + 1, text: line });
