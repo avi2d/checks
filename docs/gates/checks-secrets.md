@@ -131,7 +131,7 @@ It writes the kit's rules and the pack's into one config, and each commit messag
 Each goes in a temporary directory it deletes when the scan ends.
 
 It runs the gitleaks release `src/delivery/gitleaks.ts` pins, by the SHA-256 of each platform's archive and of the binary inside it.
-On first use it downloads the archive from the scanner's GitHub release and unpacks the binary into `~/.cache/avi2dg-checks/gitleaks/<version>/`.
+On first use it downloads the archive from the scanner's GitHub release and unpacks the binary into `~/.cache/avi2dg-checks/gitleaks/<version>/<platform>-<arch>/`, such as `linux-x64`.
 Every later run finds it there and downloads nothing.
 A download that meets a network error or a status outside 2xx, such as 504, is tried again.
 It makes six attempts in all, waiting 2, 4, 8, 16 and 32 seconds between them.

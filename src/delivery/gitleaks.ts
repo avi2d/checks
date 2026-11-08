@@ -49,7 +49,7 @@ export const pinnedGitleaks = Effect.fn("pinnedGitleaks")(function* (cache: stri
   const { archive, sha256, binarySha256 } = build.value;
   return yield* installPinned(
     { kind: "tar.gz", url: `${RELEASES}/${archive}`, sha256, member: MEMBER, memberSha256: binarySha256 },
-    path.join(cache, "gitleaks", GITLEAKS_VERSION, MEMBER),
+    path.join(cache, "gitleaks", GITLEAKS_VERSION, `${process.platform}-${process.arch}`, MEMBER),
   );
 });
 
