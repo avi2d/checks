@@ -27,7 +27,7 @@ export function shapeFindings(text: string): readonly VisionViolation[] {
   for (const raw of text.split("\n")) {
     const fenceMatch = FENCE.exec(raw)?.[1];
     if (fence !== undefined) {
-      if (fenceMatch !== undefined && fenceMatch[0] === fence[0] && fenceMatch.length >= fence.length) fence = undefined;
+      if (fenceCloses(raw, fence)) fence = undefined;
       continue;
     }
     if (fenceMatch !== undefined) {
@@ -47,6 +47,11 @@ export function shapeFindings(text: string): readonly VisionViolation[] {
 };
 
 const FENCE = /^ {0,3}(`{3,}|~{3,})/;
+
+function fenceCloses(raw: string, opener: string): boolean {
+  const closer = FENCE.exec(raw)?.[1];
+  return closer !== undefined && closer[0] === opener[0] && closer.length >= opener.length && raw.trim() === closer;
+};
 const HEADING = /^ {0,3}#{1,6}(?:\s|$)/;
 const INDENTED_CODE = /^(?: {4,}|\t)/;
 const BREAK = /^(?:\*{3,}|-{3,}|_{3,}|=+)\s*$/;
@@ -93,7 +98,7 @@ function comparableLines(text: string): readonly { readonly line: number; readon
     }
     const fenceMatch = FENCE.exec(raw)?.[1];
     if (fence !== undefined) {
-      if (fenceMatch !== undefined && fenceMatch[0] === fence[0] && fenceMatch.length >= fence.length) fence = undefined;
+      if (fenceCloses(raw, fence)) fence = undefined;
       continue;
     }
     if (fenceMatch !== undefined) {

@@ -60,6 +60,21 @@ test("a heading or a fenced line matching another file is not a repeated line", 
   expect(repeated(fenced)).toEqual([]);
 });
 
+test("closing lines behind an info-string closer are still refused rather than leaking out of the block", () => {
+  const page = vision(["```", "A change aligns when it holds.", "```example", "A change should be resisted when it spreads.", "```"]);
+  expect(shapeFindings(page)).toEqual([
+    { line: 1, message: "lacks an `A change aligns when ...` closing line" },
+    { line: 1, message: "lacks an `A change should be resisted when ...` closing line" },
+  ]);
+});
+
+test("a fenced line behind an info-string closer stays out of the repeat check rather than ending the block early", () => {
+  const fenced = vision(["```", "Shared line.", "```example", "```", "", "Shared line.", "", ...CLOSING]);
+  expect(
+    repeatedVisionFindings(fenced, [{ path: "README.md", text: "# widget\n\nShared line.\n" }]).map(({ line, message }) => line + ": " + message),
+  ).toEqual(['12: repeats a line from README.md: "Shared line."']);
+});
+
 test("a scoped kit name requires a vision and a personal name leaves it advisory rather than failing the range", () => {
   expect(["skills", "checks", "workflows", "orc"].map((name) => requiresName({ name }))).toEqual([true, true, true, true]);
   expect(requiresName({ name: "@avi2dg/checks" })).toBe(true);
