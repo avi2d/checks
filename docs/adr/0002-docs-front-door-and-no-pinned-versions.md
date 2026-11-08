@@ -1,3 +1,6 @@
+---
+governs: [README.md, docs, dist/templates, src/docs/doc-versions.ts]
+---
 # 0002. The docs keep a short README, sort every other page by kind and copy no pinned version
 
 Date: 2026-10-25

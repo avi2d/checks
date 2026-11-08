@@ -28,7 +28,7 @@ The table groups the gates by vector, the part of a repository each one judges.
 | quality | [`checks-no-plain-js`](gates/checks-no-plain-js.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
 | testing | [`checks-test-layout`](gates/checks-test-layout.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
 | testing | [`checks-quarantine-clock`](gates/checks-quarantine-clock.md) | the range | every repository |
-| docs | [`checks-docs`](gates/checks-docs.md) | the range, and every agent file at the head commit | every repository |
+| docs | [`checks-docs`](gates/checks-docs.md) | the range, and every agent file at the head commit and every live record's governed paths | every repository |
 | docs | [`checks-copy`](gates/checks-copy.md) | the working tree | a repository tracking `copy.json` |
 | delivery | [`checks-commit-identity`](gates/checks-commit-identity.md) | the range | every repository |
 | delivery | [`checks-ci-wiring`](gates/checks-ci-wiring.md) | the working tree | every repository |

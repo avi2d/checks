@@ -1,3 +1,6 @@
+---
+governs: [<each path the record governs from the repository root>]
+---
 # <number>. <The decision, as a sentence>
 
 Date: <YYYY-MM-DD, the day the record was written>
