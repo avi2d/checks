@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.79.0
+
+Released 2026-11-08.
+
+### Features
+
+- **mutation:** use all cores on hosted runners and ignore static mutants in refresh [#75](https://github.com/avi2d/checks/pull/75)
+
 ## 0.78.1
 
 Released 2026-11-08.
