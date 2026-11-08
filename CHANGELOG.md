@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.86.1
+
+Released 2026-11-08.
+
+### Fixes
+
+- **ci-wiring:** accept a scheduled call of the shared advisories workflow [#88](https://github.com/avi2d/checks/pull/88)
+
 ## 0.86.0
 
 Released 2026-11-08.
