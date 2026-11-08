@@ -49,7 +49,8 @@ These bins run on their own:
 - [`checks-mutation`](gates/checks-mutation.md) runs Stryker for scoped checks and refuses a full run outside CI.
 - [`checks-mutation-compare`](gates/checks-mutation-compare.md) compares the mutants of two reports and lists each one that regresses.
 - [`checks-mutation-baseline`](gates/checks-mutation-baseline.md) restores the newest mutation baseline from `main`, saves it on a self-hosted runner's disk in place of an artifact, and deletes superseded baselines after a `main` run.
-- [`checks-mutation-scope`](gates/checks-mutation-scope.md) turns a branch's diff into the files its mutation runs mutate.
+- [`checks-mutation-scope`](gates/checks-mutation-scope.md) turns a branch's diff into the files its mutation runs mutate, or splits a whole-tree run into shards.
+- [`checks-mutation-merge`](gates/checks-mutation-merge.md) merges the reports or the incremental states of a sharded mutation run into one.
 - [`checks-subsumed-tests`](gates/checks-subsumed-tests.md) lists each test another test subsumes in a mutation run.
 - [`checks-whole-tree-run`](gates/checks-whole-tree-run.md) opens or comments on one GitHub issue per finding of a whole-tree run on `main`, each file whose mutation score fell, each failing test, each failed whole-tree gate, and each missing mutation report.
   It closes the issue of a test, a gate or a missing mutation report that a later run no longer reports, and it comments on a mutation issue it no longer reports without closing it, but only when a previous run exists and every requested mutation report is present.
