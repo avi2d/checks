@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.89.0
+
+Released 2026-11-08.
+
+### Features
+
+- **docs:** add a vision doc kind and require docs/vision.md [#92](https://github.com/avi2d/checks/pull/92)
+
 ## 0.88.0
 
 Released 2026-11-08.
