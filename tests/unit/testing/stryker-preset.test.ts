@@ -21,7 +21,7 @@ const Manifest = Schema.fromJsonString(
 );
 
 test("the preset carries exactly the agreed rollout settings, the full-run guard and the unit tests", () => {
-  expect(preset).toMatchObject({
+  expect(preset).toEqual({
     packageManager: "npm",
     plugins: [
       "@stryker-mutator/*",
@@ -30,17 +30,16 @@ test("the preset carries exactly the agreed rollout settings, the full-run guard
     ],
     ignorers: ["checks-incremental-report-guard"],
     testRunner: "bun",
-    bun: { timeout: 60000 },
+    bun: { timeout: 60000, testFiles: expect.arrayContaining(["tests/unit/testing/stryker-preset.test.ts"]) },
     inPlace: true,
     tempDirName: "../.stryker-tmp",
     coverageAnalysis: "perTest",
     reporters: ["html", "json", "clear-text", "progress"],
     timeoutMS: 60000,
+    concurrency: expect.any(Number),
+    ignoreStatic: expect.any(Boolean),
     thresholds: { high: 85, low: 70, break: null },
   });
-  expect((preset as { bun: { testFiles?: Array<string> } }).bun.testFiles).toContain(
-    "tests/unit/testing/stryker-preset.test.ts",
-  );
 });
 
 const presetPath = fileURLToPath(new URL("../../../stryker.preset.js", import.meta.url));
@@ -65,14 +64,16 @@ test("mutation concurrency off a GitHub-hosted runner halves the cores, rounds d
   expect(mutationConcurrency(undefined, 1)).toBe(1);
 });
 
-test("rejects a preset hard-wired to half the cores by using every core on a GitHub-hosted runner", () => {
+test("rejects a preset hard-wired to half the cores or to ignoreStatic true by using every core without ignoreStatic on a hosted baseline run", () => {
   const loaded = loadPresetInSubprocess({ RUNNER_ENVIRONMENT: "github-hosted", CHECKS_MUTATION_MODE: "baseline" });
   expect(loaded.concurrency).toBe(availableParallelism());
+  expect(loaded.ignoreStatic).toBe(false);
 });
 
-test("rejects a preset hard-wired to ignoreStatic false by turning ignoreStatic on in a refresh run", () => {
+test("rejects a preset hard-wired to ignoreStatic false or to full cores everywhere by halving cores with ignoreStatic on in a self-hosted refresh run", () => {
   const loaded = loadPresetInSubprocess({ CHECKS_MUTATION_MODE: "refresh", RUNNER_ENVIRONMENT: "self-hosted" });
   expect(loaded.ignoreStatic).toBe(true);
+  expect(loaded.concurrency).toBe(Math.max(1, Math.floor(availableParallelism() / 2)));
 });
 
 test("static mutants are ignored only in a refresh run, not in a baseline, a compare or a local run", () => {
