@@ -4,7 +4,7 @@ import type { Change } from "../../../src/core/git.ts";
 import { coveringTests, envLines, mutatedBy, parseArgs, pickFromDiff, preloadChange, readersOf, STRYKER_DEFAULT_MUTATE } from "../../../src/testing/mutation-scope.ts";
 
 const ROOT = "/runner/work/repo";
-const TUI_DASH_MUTATE = ["packages/*/src/**/*.ts", "!packages/*/src/live/**", "!packages/*/src/bin.ts"];
+const ORC_DASH_MUTATE = ["packages/*/src/**/*.ts", "!packages/*/src/live/**", "!packages/*/src/bin.ts"];
 
 test("Stryker's default globs mutate the code under src and lib, and no test, spec or __tests__ file", () => {
   const mutated = mutatedBy(STRYKER_DEFAULT_MUTATE, ROOT);
@@ -46,7 +46,7 @@ test("the diff scopes changed sources, and keeps tests and test tree apart", () 
       { kind: "deleted", path: "packages/ui/src/gone.ts" },
       { kind: "deleted", path: "tests/unit/ui/gone.test.ts" },
     ],
-    mutatedBy(TUI_DASH_MUTATE, ROOT),
+    mutatedBy(ORC_DASH_MUTATE, ROOT),
   );
 
   expect([...picked.scope]).toEqual(["packages/ui/src/layout.ts", "packages/ui/src/sources.ts"]);
