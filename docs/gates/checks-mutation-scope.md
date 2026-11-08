@@ -52,7 +52,6 @@ With no last report operand, each file weighs one mutant, so the shards split by
 A named last report with no file, or a file that does not load as a Stryker report, fails the run instead.
 Each file in turn, heaviest first and then by path, joins the shard with the fewest mutants so far, the lowest numbered on a tie.
 A shard with no file is left out, so fewer files than `<count>` print fewer shards.
-Static and `Ignored` mutants carry no weight, since a refresh skips those.
 
 ## What it reads
 
@@ -82,7 +81,7 @@ checks-mutation-scope --shards <count> [<last-report>]
 ```
 
 `<base>` is the target branch, such as `origin/main`, or the merge base itself.
-`<full-baseline-report>` is the path the full baseline was restored to, and a path with no file fails the run.
+`<full-baseline-report>` is the path the full baseline was restored to, and a path with no file reads as no report, which fails the run only when a unit test changed.
 `<count>` is a whole number from 1 to 256, the most jobs one GitHub Actions matrix runs.
 `<last-report>` is the path of the last whole-tree report.
 With no `<last-report>`, each file weighs one mutant, and a path with no file fails the run.
