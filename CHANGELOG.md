@@ -2,6 +2,15 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.83.0
+
+Released 2026-11-08.
+
+### Features
+
+- **setup:** write the shared mutation caller and refuse a hand-rolled mutation job [#82](https://github.com/avi2d/checks/pull/82)
+- **testing:** run only the tests a local change reaches with checks-test --changed [#80](https://github.com/avi2d/checks/pull/80)
+
 ## 0.82.0
 
 Released 2026-11-08.
