@@ -4,7 +4,7 @@ import { escape, minimatch } from "minimatch";
 import { changedPaths, git, pathsAt, pathsOf, rangeEnds, type Change } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { decodeBunfig, importedFile, importsOf, preloadPaths, readersOf, resolved, TEST_TREE } from "./mutation-scope-graph.ts";
-import { balancedShards, MAX_SHARDS, mutantWeights, type Shard } from "./mutation-shards.ts";
+import { balancedShards, MAX_SHARDS, mutantWeights, runnableMutants, type Shard } from "./mutation-shards.ts";
 
 const NAME = "mutation-scope";
 const USAGE = "usage: mutation-scope.ts <base> [full-baseline-report] | mutation-scope.ts --shards <count> [last-report]";
@@ -56,7 +56,11 @@ export type Baseline = typeof BaselineSchema.Type;
 const decodeBaseline = Schema.decodeUnknownEffect(Schema.fromJsonString(BaselineSchema));
 
 const decodeMutantCounts = Schema.decodeUnknownEffect(
-  Schema.fromJsonString(Schema.Struct({ files: Schema.Record(Schema.String, Schema.Struct({ mutants: Schema.Array(Schema.Unknown) })) })),
+  Schema.fromJsonString(
+    Schema.Struct({
+      files: Schema.Record(Schema.String, Schema.Struct({ mutants: Schema.Array(Schema.Struct({ static: Schema.optionalKey(Schema.Boolean), status: Schema.optionalKey(Schema.String) })) })),
+    }),
+  ),
 );
 
 export type MutationScope = { readonly scope: readonly string[]; readonly staleTests: readonly string[] };
@@ -310,13 +314,16 @@ const enteringSources = Effect.fn("enteringSources")(function* (
 
 const reportedCounts = Effect.fn("reportedCounts")(function* (report: string | undefined) {
   const fs = yield* FileSystem.FileSystem;
-  if (report === undefined || !(yield* fs.exists(report))) {
-    yield* Console.error(`${NAME}: no last report${report === undefined ? "" : ` at ${report}`}, so each file weighs one mutant`);
+  if (report === undefined) {
+    yield* Console.error(`${NAME}: no last report, so each file weighs one mutant`);
     return new Map<string, number>();
+  }
+  if (!(yield* fs.exists(report))) {
+    return yield* new ScopeError({ message: `${NAME}: no last report at ${report}, so no shard can balance by mutant count` });
   }
   const unparsed = (cause: { readonly message: string }) => new ScopeError({ message: `${report} is not a Stryker mutation report: ${cause.message}` });
   const { files } = yield* fs.readFileString(report).pipe(Effect.flatMap(decodeMutantCounts), Effect.mapError(unparsed));
-  return new Map(Object.entries(files).map(([file, { mutants }]) => [file, mutants.length]));
+  return new Map(Object.entries(files).map(([file, { mutants }]) => [file, runnableMutants(mutants)]));
 });
 
 const pickShards = Effect.fn("pickShards")(function* (count: number, report: string | undefined) {

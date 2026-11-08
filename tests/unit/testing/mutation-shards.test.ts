@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { balancedShards, mutantWeights } from "../../../src/testing/mutation-shards.ts";
+import { balancedShards, mutantWeights, runnableMutants } from "../../../src/testing/mutation-shards.ts";
 
 const weights = (entries: Record<string, number>): ReadonlyMap<string, number> => new Map(Object.entries(entries));
 
@@ -32,6 +32,10 @@ test("a file the report lacks weighs the reported average rounded up, and a repo
   const reported = weights({ "src/a.ts": 10, "src/b.ts": 5, "src/gone.ts": 100 });
 
   expect(mutantWeights(["src/a.ts", "src/b.ts", "src/new.ts"], reported)).toEqual(weights({ "src/a.ts": 10, "src/b.ts": 5, "src/new.ts": 8 }));
+});
+
+test("static and Ignored mutants carry no weight rather than counting every mutant the report lists", () => {
+  expect(runnableMutants([{ status: "Killed" }, { status: "Survived", static: true }, { status: "Ignored" }, {}])).toBe(2);
 });
 
 test("with no report each file weighs one mutant, so the shards balance by file count rather than all landing in one", () => {

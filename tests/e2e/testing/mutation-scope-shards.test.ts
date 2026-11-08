@@ -10,6 +10,7 @@ setDefaultTimeout(30_000);
 const SCOPE = join(CHECKOUT, "src", "testing", "mutation-scope.ts");
 const repoWith = committedRepos("checks-mutation-shards-");
 const mutants = (count: number) => ({ mutants: Array.from({ length: count }, (_, id) => ({ id: `${id}` })) });
+const runnable = (count: number) => Array.from({ length: count }, (_, id) => ({ id: `run-${id}`, status: "Killed" }));
 
 test("the bin splits the tracked mutated files by the last report's mutant counts, leaving out what the globs exclude", async () => {
   const { repo } = await repoWith({
@@ -30,14 +31,51 @@ test("the bin splits the tracked mutated files by the last report's mutant count
   expect(done.text).toContain("mutation-scope: shard 1 holds 2 file(s) and about 9 mutant(s)");
 });
 
-test("with no last report the bin still splits by file count, and says each file weighs one mutant", async () => {
+test("the bin leaves static and Ignored mutants out of each file's weight rather than counting every mutant the report lists", async () => {
+  const { repo } = await repoWith({
+    "stryker.conf.json": JSON.stringify({ mutate: ["src/**/*.ts"] }),
+    "src/a.ts": body("a"),
+    "src/b.ts": body("b"),
+    "src/c.ts": body("c"),
+  });
+  await repo.write({
+    "last.json": JSON.stringify({
+      files: {
+        "src/a.ts": {
+          mutants: [...runnable(4), ...Array.from({ length: 3 }, (_, id) => ({ id: `static-${id}`, status: "Survived", static: true })), { id: "ignored-0", status: "Ignored" }],
+        },
+        "src/b.ts": { mutants: runnable(5) },
+        "src/c.ts": { mutants: runnable(4) },
+      },
+    }),
+  });
+
+  const done = await ran($`bun ${SCOPE} --shards 2 last.json`.cwd(repo.dir));
+
+  expect(done.exitCode).toBe(0);
+  expect(done.text).toContain('SHARDS=["src/b.ts","src/a.ts,src/c.ts"]');
+  expect(done.text).toContain("mutation-scope: shard 1 holds 1 file(s) and about 5 mutant(s)");
+  expect(done.text).toContain("mutation-scope: shard 2 holds 2 file(s) and about 8 mutant(s)");
+});
+
+test("with no last-report operand the bin splits by file count rather than failing with no report to balance by", async () => {
   const { repo } = await repoWith({ "stryker.conf.json": JSON.stringify({ mutate: ["src/**/*.ts"] }), "src/a.ts": body("a"), "src/b.ts": body("b"), "src/c.ts": body("c") });
 
-  const done = await ran($`bun ${SCOPE} --shards 2 missing.json`.cwd(repo.dir));
+  const done = await ran($`bun ${SCOPE} --shards 2`.cwd(repo.dir));
 
   expect(done.exitCode).toBe(0);
   expect(done.text).toContain('SHARDS=["src/a.ts,src/c.ts","src/b.ts"]');
-  expect(done.text).toContain("no last report at missing.json, so each file weighs one mutant");
+  expect(done.text).toContain("no last report, so each file weighs one mutant");
+});
+
+test("a named last report with no file fails the bin rather than splitting by file count as if no report were given", async () => {
+  const { repo } = await repoWith({ "stryker.conf.json": JSON.stringify({ mutate: ["src/**/*.ts"] }), "src/a.ts": body("a"), "src/b.ts": body("b") });
+
+  const done = await ran($`bun ${SCOPE} --shards 2 missing.json`.cwd(repo.dir));
+
+  expect(done.exitCode).toBe(2);
+  expect(done.text).toContain("no last report at missing.json");
+  expect(done.text).not.toContain("SHARDS=");
 });
 
 test("a last report that is not a Stryker report fails the bin rather than splitting by a guess", async () => {

@@ -44,15 +44,15 @@ So a helper, fixture or preload changed on `main` since that baseline can hide a
 ## Splitting a whole-tree run
 
 `checks-mutation-scope --shards <count>` takes every file git tracks at `HEAD` that the `mutate` globs match, with each negated glob applied in order.
-It splits those files into at most `<count>` shards, so a baseline or a refresh run spreads across that many jobs.
-Each file weighs the number of mutants the last report holds for it.
+It splits those files into at most `<count>` shards, so a refresh run spreads across that many jobs while a baseline stays a single incremental run.
+Each file weighs the mutants the last report holds for it that a refresh runs, leaving out each mutant with `static` true or status `Ignored` since a refresh skips those.
 A file the last report lacks may be newer than that report.
-So it weighs the average count of the files the report holds, rounded up.
-With no last report, each file weighs one mutant, so the shards split by file count.
+So it weighs the average count of the reported files the globs still match, rounded up and at least one.
+With no last report operand, each file weighs one mutant, so the shards split by file count.
+A named last report with no file, or a file that does not load as a Stryker report, fails the run instead.
 Each file in turn, heaviest first and then by path, joins the shard with the fewest mutants so far, the lowest numbered on a tie.
 A shard with no file is left out, so fewer files than `<count>` print fewer shards.
-The weights count each mutant once, while a static mutant runs every test.
-So a shard heavy in static mutants runs longer than its count says.
+Static and `Ignored` mutants carry no weight, since a refresh skips those.
 
 ## What it reads
 
@@ -65,7 +65,7 @@ So a shard heavy in static mutants runs longer than its count says.
 - Each tracked `.ts` and `.tsx` file under `tests/` from the working tree, for its relative imports and the fixture paths it names.
 - Each changed unit test at the merge base, to match it against the source the report recorded.
 - The full baseline report that `checks-mutation-baseline --full` restores, for each mutant's `coveredBy` and `killedBy` and the `testFiles` that own those tests.
-- With `--shards`, the last report, for the number of mutants in each file.
+- With `--shards`, the last report, for the number of mutants in each file that a refresh runs.
 
 Stryker leaves `coveredBy` empty on a static mutant, so only `killedBy` names its tests.
 A reused result needs its affected tests, sources, and configuration invalidated before reuse, so each mutant's tests are the ones the run recorded.
@@ -82,9 +82,10 @@ checks-mutation-scope --shards <count> [<last-report>]
 ```
 
 `<base>` is the target branch, such as `origin/main`, or the merge base itself.
-`<full-baseline-report>` is the path the full baseline was restored to, and a path with no file reads as no report.
+`<full-baseline-report>` is the path the full baseline was restored to, and a path with no file fails the run.
 `<count>` is a whole number from 1 to 256, the most jobs one GitHub Actions matrix runs.
-`<last-report>` is the path of the last whole-tree report, and a path with no file reads as no report.
+`<last-report>` is the path of the last whole-tree report.
+With no `<last-report>`, each file weighs one mutant, and a path with no file fails the run.
 
 ## Output
 
@@ -131,9 +132,9 @@ STALE_TESTS=tests/unit/dashboard/snapshot.test.ts
 A whole-tree run split three ways:
 
 ```
-mutation-scope: shard 1 holds 14 file(s) and about 412 mutant(s)
-mutation-scope: shard 2 holds 19 file(s) and about 410 mutant(s)
-mutation-scope: shard 3 holds 22 file(s) and about 409 mutant(s)
+mutation-scope: shard 1 holds 2 file(s) and about 9 mutant(s)
+mutation-scope: shard 2 holds 1 file(s) and about 8 mutant(s)
+mutation-scope: shard 3 holds 2 file(s) and about 8 mutant(s)
 SHARDS=["src/a.ts,src/b.ts","src/c.ts","src/d.ts,src/e.ts"]
 ```
 
