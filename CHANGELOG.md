@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.85.0
+
+Released 2026-11-08.
+
+### Features
+
+- **setup:** run typecheck and test in the generated ci workflow after a failed lint [#83](https://github.com/avi2d/checks/pull/83)
+
 ## 0.84.0
 
 Released 2026-11-08.
