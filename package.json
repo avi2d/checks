@@ -1,6 +1,6 @@
 {
   "name": "@avi2dg/checks",
-  "version": "0.86.1",
+  "version": "0.86.2",
   "description": "Deterministic checks shared across a set of TypeScript repositories",
   "author": {
     "name": "avi2d",
@@ -107,6 +107,7 @@
     "checks-graphwalk": "src/complexity/graphwalk.ts",
     "checks-quarantine-clock": "src/testing/quarantine-clock.ts",
     "checks-docs": "src/docs/docs.ts",
+    "checks-adr-index": "src/docs/adr-index.ts",
     "checks-copy": "src/docs/copy.ts",
     "checks-vendor": "src/dependencies/vendor.ts",
     "checks-advisories": "src/dependencies/advisories.ts",

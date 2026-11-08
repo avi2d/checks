@@ -54,6 +54,7 @@ These bins run on their own:
 - [`checks-subsumed-tests`](gates/checks-subsumed-tests.md) lists each test another test subsumes in a mutation run.
 - [`checks-whole-tree-run`](gates/checks-whole-tree-run.md) opens or comments on one GitHub issue per finding of a whole-tree run on `main`, each file whose mutation score fell, each failing test, each failed whole-tree gate, and each missing mutation report.
   It closes the issue of a test, a gate or a missing mutation report that a later run no longer reports, and it comments on a mutation issue it no longer reports without closing it, but only when a previous run exists and every requested mutation report is present.
+- [`checks-adr-index`](gates/checks-adr-index.md) writes the index of the records in `docs/adr/` into `docs/adr/README.md`, which `checks-docs` holds fresh.
 - [`checks-changelog`](gates/checks-changelog.md) writes the pending release into `CHANGELOG.md` from the conventional commits since the last release.
 - [`checks-release-notes`](gates/checks-release-notes.md) writes one `CHANGELOG.md` section to a file for a GitHub release.
 - [`checks-release-report`](gates/checks-release-report.md) tells whether the history holds unreleased features or fixes since the last tag.

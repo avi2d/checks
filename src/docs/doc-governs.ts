@@ -21,6 +21,7 @@ export type GovernedRecord = {
   readonly path: string;
   readonly number: number | undefined;
   readonly governs: Governs;
+  readonly title: string | undefined;
   readonly status: string | undefined;
   readonly frontMatter: string;
 };
@@ -176,8 +177,27 @@ function lineOf({ governs, frontMatter }: GovernedRecord, governed: string): num
   return scan(lines, governs.line, governed) ?? governs.line;
 }
 
-function listedPaths(record: GovernedRecord): readonly string[] {
+export function listedPaths(record: GovernedRecord): readonly string[] {
   return record.governs.type === "listed" ? record.governs.paths : [];
+}
+
+export type Governing = {
+  readonly path: string;
+  readonly status: string | undefined;
+  readonly governed: readonly string[];
+};
+
+function reaches(governed: string, changed: string): boolean {
+  return changed === governed || changed.startsWith(`${governed}/`);
+}
+
+export function governingRecords(records: readonly GovernedRecord[], changed: readonly string[]): readonly Governing[] {
+  return records
+    .filter((record) => !isRetired(record.status))
+    .flatMap((record) => {
+      const governed = listedPaths(record).filter((path) => changed.some((one) => reaches(path, one)));
+      return governed.length === 0 ? [] : [{ path: record.path, status: record.status, governed }];
+    });
 }
 
 export function missingGoverned(record: GovernedRecord, head: Tree): readonly GovernedFinding[] {

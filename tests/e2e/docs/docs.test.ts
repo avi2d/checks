@@ -88,7 +88,7 @@ function page(kind: Kind, path: string, text: string): string {
 test(
   "a planted non-conforming file of each kind goes red, and green once it holds to its template",
   async () => {
-    const { put, commit, docs } = await initRepo();
+    const { put, commit, docs, index } = await initRepo();
     let previous = await commit("start");
     for (const { kind, path, defect, refusal } of PLANTS) {
       const conforming = await fixture(kind);
@@ -99,6 +99,7 @@ test(
       expect(red.exitCode).toBe(1);
 
       await put(path, page(kind, path, conforming));
+      await index();
       const fixed = await commit(`bring the ${kind} to its template`);
       const green = await docs(planted, fixed);
       expect(green.text).toContain("docs: 1 doc file(s) the range touches hold to their templates");
@@ -160,7 +161,7 @@ test(
 test(
   "a revision link one side only names goes red, and green once both records name each other",
   async () => {
-    const { put, commit, docs } = await initRepo();
+    const { put, commit, docs, index } = await initRepo();
     const first = await fixture("adr");
     const second = first.replace("# 1.", "# 2.").replace("Accepted.", "Accepted. Amends 0001: spares name a supplier too.");
     await put("docs/adr/0001-a-part-names-its-supplier.md", first);
@@ -176,6 +177,7 @@ test(
       "docs/adr/0001-a-part-names-its-supplier.md",
       first.replace("Accepted.", "Accepted. Amended by 0002: spares name a supplier too."),
     );
+    await index();
     const fixed = await commit("name the amendment back");
     const green = await docs(head, fixed);
     expect(green.text).toContain("docs: 1 doc file(s) the range touches hold to their templates");
