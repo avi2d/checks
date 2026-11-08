@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { Option } from "effect";
-import { newestFirst, pruneReport, pruned, superseded, uploadedBy } from "../../../src/testing/mutation-baseline.ts";
+import { incrementalCandidates, newestFirst, pruneReport, pruned, superseded, uploadedBy } from "../../../src/testing/mutation-baseline.ts";
 import { inRefreshWindow } from "../../../src/testing/mutation-baseline-full.ts";
 import { outlived, withoutReasons, withoutStale } from "../../../src/testing/mutation-baseline-saved.ts";
 
@@ -9,6 +9,19 @@ test("pruning keeps the highest artifact ids and the one being restored, and pas
   expect(pruned(["9", "100", ".staging-ab12", "11", "2"], 2, "100")).toEqual(["9", "2"]);
   expect(pruned(["9", "100", ".staging-ab12", "11", "2"], 2, "2")).toEqual(["9"]);
   expect(pruned(["5"], 2, "5")).toEqual([]);
+});
+
+test("incremental candidates walk past a newer refresh run and stop at the newest push", () => {
+  const runs = [
+    { databaseId: 40, event: "workflow_dispatch", createdAt: "2026-10-04T00:00:00Z" },
+    { databaseId: 30, event: "pull_request", createdAt: "2026-10-03T00:00:00Z" },
+    { databaseId: 20, event: "push", createdAt: "2026-10-02T00:00:00Z" },
+    { databaseId: 10, event: "push", createdAt: "2026-10-01T00:00:00Z" },
+  ];
+  expect(incrementalCandidates(runs).map((run) => run.databaseId)).toEqual([40, 20]);
+  expect(incrementalCandidates(runs.slice(2)).map((run) => run.databaseId)).toEqual([20]);
+  expect(incrementalCandidates([runs[0]]).map((run) => run.databaseId)).toEqual([40]);
+  expect(incrementalCandidates([runs[1]])).toEqual([]);
 });
 
 test("full candidates from two event lists merge newest first by creation time", () => {

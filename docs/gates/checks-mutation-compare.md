@@ -24,7 +24,7 @@ Each list prints in order of file, then line, then column, and a matched mutant 
 
 ## What it reads
 
-It reads two Stryker `mutation.json` reports, one built at the merge-base and one at the head.
+It reads two Stryker `mutation.json` reports, the saved `main` baseline and the incremental head report.
 The shared Stryker preset's `json` reporter writes `reports/mutation/mutation.json` in each worktree.
 
 A repository that runs mutation testing installs `@stryker-mutator/core` and `@hughescr/stryker-bun-runner`, then spreads the shipped preset in `stryker.conf.mjs`.
@@ -66,76 +66,31 @@ mutation-compare: REGRESSION (1 mutant(s))
 
 ## When it runs
 
-Only a CI step the repository writes runs it.
-A person starts that step by hand on a branch, and no pull request triggers it or waits for it.
+The shared `mutation` workflow runs it on each pull request in `compare` mode.
+It scopes one incremental head run against the saved `main` baseline, with no second base run.
 [checks-whole-tree-run](checks-whole-tree-run.md) judges the mutation score of `main` on each whole-tree run and opens an issue for each file whose score fell.
-A repository runs it with `--advisory`, so the comparison stays advisory.
-Its lines land only in the CI log.
+A repository runs it with `--advisory`, so the comparison stays advisory and never fails the pull request.
+It posts one advisory comment on the pull request that lists each lost kill and each survivor on an added line.
 A full sweep runs in CI and never on a laptop.
-Start a baseline with `gh workflow run mutation` and keep its report as an artifact.
+Refresh the full baseline it scopes against with `gh workflow run mutation`, choosing `refresh` for the `mode` input.
 The shared preset refuses a full `stryker run` outside CI and names that workflow command instead, as [checks-mutation](checks-mutation.md) says.
 
 ## Running it in CI
 
-Only `avi2d/workflows` holds a job like the one below, since [checks-ci-wiring](checks-ci-wiring.md#mutation-jobs) refuses it in any other repository.
+Only `avi2d/workflows` holds the comparison job, since [checks-ci-wiring](checks-ci-wiring.md#mutation-jobs) refuses it in any other repository.
 Any other repository calls that shared workflow from the caller [checks-setup](checks-setup.md) writes.
-A comparison job compares the head report against a report built at the merge-base with `main` over the same scope:
-
-```yaml
-name: mutation-compare
-on:
-  workflow_dispatch:
-jobs:
-  mutation-compare:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      actions: read
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-      - run: bun install --frozen-lockfile
-      - name: Select mutation scope
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          base="$(git merge-base HEAD origin/main)"
-          echo "BASE_SHA=$base" >> "$GITHUB_ENV"
-          bunx checks-mutation-baseline --full "$RUNNER_TEMP/baseline-full/mutation.json"
-          bunx checks-mutation-scope "$base" "$RUNNER_TEMP/baseline-full/mutation.json" >> "$GITHUB_ENV"
-      - if: env.SCOPE == ''
-        run: echo "::notice::mutation-compare: nothing in mutation scope changed, so neither Stryker run starts"
-      - if: env.SCOPE != ''
-        run: bunx stryker run --mutate "$SCOPE"
-      - if: env.SCOPE != ''
-        run: |
-          base_worktree="$RUNNER_TEMP/mutation-base-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          echo "BASE_WORKTREE=$base_worktree" >> "$GITHUB_ENV"
-          git worktree prune
-          git worktree add "$base_worktree" "$BASE_SHA"
-          (cd "$base_worktree" && bun install --frozen-lockfile && bunx stryker run --mutate "$SCOPE")
-      - if: env.SCOPE != ''
-        run: bun run checks-mutation-compare --advisory "$BASE_WORKTREE/reports/mutation/mutation.json" reports/mutation/mutation.json
-      - if: always() && env.BASE_WORKTREE != ''
-        run: |
-          git worktree remove --force "$BASE_WORKTREE"
-          git worktree prune
-```
+A comparison job restores the saved `main` baseline and runs Stryker once at the head over the same scope, with no second base run.
+The caller selects `compare` on each pull request, as [checks-setup](checks-setup.md) writes it.
 
 The scope step picks the files the branch changes and the sources its changed unit tests cover or kill, as [checks-mutation-scope](checks-mutation-scope.md) says.
-Neither run mutates a file outside that scope, so the job's time follows the size of the change and not the size of the repository.
-Both runs take the same `--mutate "$SCOPE"`, so the two reports hold the same files.
-A scope file the merge base lacks matches nothing there, and Stryker still writes a report.
-An empty scope skips both runs and the comparison, and the notice names the skip on the run's summary.
+The head run mutates no file outside that scope, so the job's time follows the size of the change and not the size of the repository.
+A scope file the saved baseline lacks matches nothing there, and Stryker still writes a report.
+An empty scope skips the head run and the comparison, and the notice names the skip on the run's summary.
+A scope past the mutant cap skips the comparison, and a note names the skip.
 A changed unit test with no full baseline on `main` fails the scope step, since no report then says which sources the test covers.
 A changed unit test that `main` edited after that baseline widens the scope to every file the `mutate` globs match.
-Start a full baseline with `gh workflow run mutation`, as [checks-mutation](checks-mutation.md#running-it-in-ci) shows.
+Refresh the full baseline with `gh workflow run mutation`, choosing `refresh` for the `mode` input, as [checks-mutation](checks-mutation.md#running-it-in-ci) shows.
 A run with `--mutate` is scoped, so the preset lets it through without `CI=true`.
-The base worktree's path carries the run's id and attempt, and the last step removes it even when a run fails, so a runner kept between jobs starts each job clean.
 A public repository keeps `runs-on: ubuntu-latest`, as [checks-ci-wiring](checks-ci-wiring.md#runners) requires of a job a fork can reach.
 A private repository sets `runs-on` to the labels it declares in `package.json` under `checks.mutationRunner` instead, which is where it sends its mutation runs.
 The job never reads `CI_RUNS_ON`, so an override that moves a repository's other jobs during a runner outage leaves the comparison waiting for those labels.

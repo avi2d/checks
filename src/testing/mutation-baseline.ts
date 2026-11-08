@@ -52,11 +52,14 @@ export function newestFirst(runs: readonly Run[]): readonly number[] {
   return byNewest(runs).map((run) => run.databaseId);
 }
 
-// All non-pull-request runs newest first: a newer full run holds no baseline, and the newest baseline must survive it.
-const latestCandidates = Effect.gen(function* () {
-  const newest = (yield* listed(undefined, LATEST_LIMIT)).find((run) => run.event !== "pull_request");
-  return newest === undefined ? [] : [newest];
-});
+// Runs newer than the newest push hold no baseline, and a newer push without one supersedes every older baseline.
+export function incrementalCandidates(runs: readonly Run[]): readonly Run[] {
+  const ordered = byNewest(runs.filter((run) => run.event !== "pull_request"));
+  const newestPush = ordered.findIndex((run) => run.event === "push");
+  return newestPush === -1 ? ordered : ordered.slice(0, newestPush + 1);
+}
+
+const latestCandidates = listed(undefined, LATEST_LIMIT).pipe(Effect.map(incrementalCandidates));
 
 const latestRuns = listed(undefined, LATEST_LIMIT).pipe(Effect.map((runs) => newestFirst(runs.filter((run) => run.event !== "pull_request"))));
 

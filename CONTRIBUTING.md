@@ -24,7 +24,9 @@ CI runs the commands in `.github/workflows/ci.yml` on each pull request, and on 
 A pull request runs only the tests it reaches, and the release runs the whole suite, as [checks-test](docs/gates/checks-test.md#pull-request-runs) says.
 `.github/workflows/pr-title.yml` lints the pull request title, so editing the title reruns only that.
 No workflow runs on a schedule except the weekly advisory scan, as [checks-ci-wiring](docs/gates/checks-ci-wiring.md#schedules) requires.
-No workflow runs mutation testing, the long test tiers, the whole-tree sweep or the issue filing on its own.
+No workflow runs mutation testing except the `mutation` caller that [checks-setup](docs/gates/checks-setup.md) writes.
+That caller runs `baseline` on each push to `main` that changes what Stryker mutates or tests, runs `compare` on each pull request, and runs `refresh` by hand every 28 days.
+No workflow runs the long test tiers, the whole-tree sweep or the issue filing on its own.
 `bun run lint` runs the three range whole-tree lint gates over each pull request's range.
 It runs `checks-lint-coverage` only when the change selects the tree gates, since that gate reads the working tree.
 The sweep runs the four whole-tree gates by hand through `bun src/core/lint.ts --whole-tree` over the whole tree with no base.

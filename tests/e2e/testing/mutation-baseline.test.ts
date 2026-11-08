@@ -20,6 +20,20 @@ test("a cache miss downloads the newest main run's baseline that is not a pull r
   expect(await runner.shelf("mutation-baseline")).toEqual(["200"]);
 }, 30_000);
 
+test("a newer refresh run without a baseline does not hide the newest push baseline", async () => {
+  const runner = await selfHosted([
+    run(40, "workflow_dispatch", "2026-10-04T00:00:00Z", [fullReport(400, "refresh")]),
+    ...MAIN_RUNS,
+  ]);
+
+  const restored = await runner.run(["reports/stryker-incremental.json", "baseline/mutation.json"]);
+
+  expect(restored).toEqual({ exitCode: 0, text: "mutation-baseline: downloaded it into the runner's cache, mutation-baseline artifact 200 from run 20\n" });
+  expect(await runner.read("reports/stryker-incremental.json")).toBe('{"state":"newest push"}');
+  expect(await runner.read("baseline/mutation.json")).toBe('{"report":"newest push"}');
+  expect(await runner.downloads()).toHaveLength(1);
+}, 30_000);
+
 test("a cache hit on the artifact's id restores the same files without downloading again", async () => {
   const runner = await selfHosted(MAIN_RUNS);
   await runner.run(["first/stryker-incremental.json"]);

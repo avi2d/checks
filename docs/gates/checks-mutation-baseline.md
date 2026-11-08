@@ -11,10 +11,11 @@ There it also saves a run's baseline on the runner's disk, so the baseline never
 ## What it checks
 
 It reads the successful runs of `mutation.yml` on `main`.
-Without `--full` it takes the newest of the 20 newest of those runs that a pull request did not start.
+Without `--full` it takes the 20 newest of those runs that a pull request did not start, newest first, down to the newest push.
 It restores the baseline that run saved on the runner's disk, as [The saved baselines](#the-saved-baselines) says.
-Without one there, it restores that run's `mutation-baseline` artifact, and takes the run whether or not it holds one.
-It tries no older run, so a newest run without the artifact restores nothing.
+Without one there, it restores that run's `mutation-baseline` artifact.
+A run without the artifact counts as no baseline there, so a newer refresh run never hides the newest push baseline.
+It tries no run older than that push, so a newest push without the artifact restores nothing.
 An artifact without `stryker-incremental.json` counts as no baseline.
 It copies `stryker-incremental.json` to the first destination, and `mutation/mutation.json` to the second destination when the artifact holds it.
 
