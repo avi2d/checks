@@ -169,6 +169,11 @@ function retiredIn(outline: Outline): boolean {
   return status !== undefined && isRetired(statusWord(status));
 }
 
+function statusWordOf(outline: Outline): string | undefined {
+  const status = statusSection(outline);
+  return status === undefined ? undefined : statusWord(status);
+}
+
 function statusProblem(outline: Outline): Violation | undefined {
   const status = statusSection(outline);
   if (status === undefined) return undefined;
@@ -287,11 +292,13 @@ function recordFrontMatterProblems(frontMatter: FrontMatter, outline: Outline): 
 
 export function governedRecord({ path, text }: Doc): GovernedRecord {
   const frontMatter = frontMatterOf(text);
+  const outline = outlineOf(text);
   return {
     path,
     number: recordNumber(path),
     governs: governsOf(frontMatter.text, frontMatter.parsed),
-    retired: retiredIn(outlineOf(text)),
+    retired: retiredIn(outline),
+    status: statusWordOf(outline),
     frontMatter: frontMatter.text,
   };
 }

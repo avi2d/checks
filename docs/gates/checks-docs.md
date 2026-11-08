@@ -157,7 +157,8 @@ governs: [src/parts.ts, docs/parts]
 - A path is written from the repository root and names a tracked file or a directory that holds one.
   A path the head commit lacks fails, and the failure names the record and the path.
 - A record whose Status opens with Proposed or Accepted lists at least one path.
-  A record whose Status opens with Rejected, Deprecated, Superseded or Retired may hold `governs: []`.
+  A record whose Status opens with Superseded or Retired is retired, and any other record is live.
+  A Rejected or Deprecated record may also hold `governs: []`.
   The paths a retired record lists are not checked, since a retired record may outlive what it governed.
 - A range that deletes a path a live record governs fails unless the same range retires the record.
   A file deleted from under a governed directory is not a deleted path while the directory still holds a file.

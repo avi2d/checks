@@ -20,6 +20,7 @@ export type GovernedRecord = {
   readonly number: number | undefined;
   readonly governs: Governs;
   readonly retired: boolean;
+  readonly status: string | undefined;
   readonly frontMatter: string;
 };
 
@@ -74,7 +75,7 @@ export function governsProblems(governs: Governs, status: string | undefined): r
     return [{ line: governs.line, message: `holds a \`governs\` that is not a list of paths, as in ${SAMPLE}` }];
   }
   if (governs.paths.length > 0 || isRetired(status) || status === "Rejected" || status === "Deprecated") return [];
-  return [{ line: governs.line, message: `lists no path in \`governs\`, which a live record keeps. List the paths it governs, or ${RETIRE}` }];
+  return [{ line: governs.line, message: `lists no path in \`governs\`, which a Proposed or Accepted record keeps. List the paths it governs, or ${RETIRE}` }];
 }
 
 const SUPERSESSION_KEY = /supersed/i;
@@ -162,13 +163,14 @@ function listedPaths(record: GovernedRecord): readonly string[] {
 
 export function missingGoverned(record: GovernedRecord, head: Tree): readonly GovernedFinding[] {
   if (record.retired) return [];
+  const remedy = record.status === "Rejected" || record.status === "Deprecated" ? "empty the list to `governs: []`" : RETIRE;
   return listedPaths(record)
     .filter((governed) => !existsIn(head, governed))
     .map((governed) => ({
       path: record.path,
       line: lineOf(record, governed),
       governed,
-      message: `governs \`${governed}\`, which is not in the repository. Name a tracked file or directory, or ${RETIRE}`,
+      message: `governs \`${governed}\`, which is not in the repository. Name a tracked file or directory, or ${remedy}`,
     }));
 }
 

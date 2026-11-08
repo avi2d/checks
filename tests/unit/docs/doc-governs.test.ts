@@ -37,7 +37,7 @@ test("a governs that is not a list of path strings is refused rather than taken 
 });
 
 test("an empty governs is refused on a Proposed or Accepted record, and passes on a Rejected, Deprecated, Superseded or Retired one", () => {
-  const empty = "2: lists no path in `governs`, which a live record keeps. List the paths it governs, or retire it with Superseded or Retired in `## Status`";
+  const empty = "2: lists no path in `governs`, which a Proposed or Accepted record keeps. List the paths it governs, or retire it with Superseded or Retired in `## Status`";
   for (const status of ["Accepted.", "Proposed.", "Accepted. Superseded in part by 0002."]) {
     expect(refused(record("governs: []", status))).toEqual([empty]);
   }
@@ -80,6 +80,19 @@ test("a missing path that is a prefix of another entry is reported on its own en
       message: "governs `docs`, which is not in the repository. Name a tracked file or directory, or retire it with Superseded or Retired in `## Status`",
     },
   ]);
+});
+
+test("a missing path on a Rejected or Deprecated record names emptying governs, not retiring the record", () => {
+  for (const status of ["Rejected. No supplier ever existed.", "Deprecated. The parts list is going away."]) {
+    expect(missingGoverned(governedRecord({ path: FIRST, text: record("governs: [src/never-written.ts]", status) }), tree())).toEqual([
+      {
+        path: FIRST,
+        line: 2,
+        governed: "src/never-written.ts",
+        message: "governs `src/never-written.ts`, which is not in the repository. Name a tracked file or directory, or empty the list to `governs: []`",
+      },
+    ]);
+  }
 });
 
 test("a retired record keeps its governs paths unchecked, so its gone paths do not fail it", () => {
