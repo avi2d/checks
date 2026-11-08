@@ -70,7 +70,8 @@ The default suite takes only the arguments [Arguments](#arguments) lists.
 Use `checks-test --tier=live` or `checks-test --tier=pixel` for a named test tier.
 Use `checks-test --tier=unit` or `checks-test --tier=e2e` to run only one level of the default suite.
 A live or pixel run clears Bun's ignored paths, runs only `./tests/live` or `./tests/pixel`, and still checks each skip.
-Outside CI, the live and unit tiers run and the e2e tier is refused, while a pixel run outside CI runs only when it approves pictures, as [Runs refused outside CI](#runs-refused-outside-ci) says.
+Outside CI, the live and unit tiers run and the e2e tier is refused.
+A pixel run outside CI runs only when it approves pictures, as [Runs refused outside CI](#runs-refused-outside-ci) says.
 A unit or e2e run keeps Bun's ignored paths, runs only `./tests/unit` or `./tests/e2e`, and still checks each skip.
 
 Files under `tests/quarantine/` are not run or judged, as [checks-test-layout](checks-test-layout.md) says.
