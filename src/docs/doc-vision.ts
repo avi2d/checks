@@ -1,4 +1,5 @@
 import { VISION_PAGE } from "./doc-templates.ts";
+import { scanMarkdown } from "./prose-matchers.ts";
 
 export type VisionViolation = {
   readonly line: number;
@@ -22,7 +23,20 @@ const ALIGNS = /^ {0,3}A change aligns when\s+\S/;
 const RESISTED = /^ {0,3}A change should be resisted when\s+\S/;
 
 export function shapeFindings(text: string): readonly VisionViolation[] {
-  const lines = text.split("\n");
+  const lines: string[] = [];
+  let fence: string | undefined;
+  for (const raw of text.split("\n")) {
+    const fenceMatch = FENCE.exec(raw)?.[1];
+    if (fence !== undefined) {
+      if (fenceMatch !== undefined && fenceMatch[0] === fence[0] && fenceMatch.length >= fence.length) fence = undefined;
+      continue;
+    }
+    if (fenceMatch !== undefined) {
+      fence = fenceMatch;
+      continue;
+    }
+    lines.push(raw);
+  }
   const findings: VisionViolation[] = [];
   if (!lines.some((line) => ALIGNS.test(line))) {
     findings.push({ line: 1, message: "lacks an `A change aligns when ...` closing line" });
@@ -34,38 +48,37 @@ export function shapeFindings(text: string): readonly VisionViolation[] {
 };
 
 const FENCE = /^ {0,3}(`{3,}|~{3,})/;
-const HEADING = /^ {0,3}#{1,6}(?:\s|$)/;
-const LIST_MARKER = /^ {0,3}(?:[-*+]|\d+[.)])\s+/;
-const QUOTE_MARKER = /^ {0,3}>\s?/;
+const INDENTED_CODE = /^(?: {4,}|\t)/;
+const LIST_MARKER = /^\s*(?:[-*+]|\d{1,9}[.)])\s+/;
+const QUOTE_MARKER = /^\s*(?:>\s*)+/;
 const BOLD_LABEL = /^\*\*[^*]+\*\*\s+/;
+const SENTENCE_SPLIT = /(?<=[.!?]["'"”’»)\]]*)\s+/;
 
-function sentenceOf(raw: string): string {
-  return raw
-    .replace(QUOTE_MARKER, "")
-    .replace(LIST_MARKER, "")
-    .replace(BOLD_LABEL, "")
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
+function inlineOf(raw: string): string {
+  const unlisted = raw.replace(QUOTE_MARKER, "").replace(LIST_MARKER, "").replace(BOLD_LABEL, "");
+  return unlisted
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]*)\]/g, "$1")
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/\*\*([^*]*)\*\*/g, "$1")
+    .replace(/__([^_]*)__/g, "$1")
+    .replace(/(^|\W)\*([^\*\n]+)\*(?=\W|$)/g, "$1$2")
+    .replace(/(^|\W)_([^_\n]+)_(?=\W|$)/g, "$1$2")
+    .replace(/~~([^~]*)~~/g, "$1")
+    .replace(/<[^>]*>/g, " ");
 };
 
 function sentencesOf(text: string): readonly { readonly line: number; readonly sentence: string }[] {
   const found: { readonly line: number; readonly sentence: string }[] = [];
-  let fence: string | undefined;
-  text.split("\n").forEach((raw, index) => {
-    const fenceMatch = FENCE.exec(raw)?.[1];
-    if (fence !== undefined) {
-      if (fenceMatch !== undefined && fenceMatch[0] === fence[0] && fenceMatch.length >= fence.length) fence = undefined;
-      return;
+  for (const line of scanMarkdown(text)) {
+    if (line.kind !== "prose" || INDENTED_CODE.test(line.raw)) continue;
+    const clean = inlineOf(line.raw).replace(/\s+/g, " ").trim();
+    if (clean === "") continue;
+    for (const part of clean.split(SENTENCE_SPLIT)) {
+      const sentence = part.toLowerCase().replace(/\s+/g, " ").trim();
+      if (sentence !== "") found.push({ line: line.line, sentence });
     }
-    if (fenceMatch !== undefined) {
-      fence = fenceMatch;
-      return;
-    }
-    if (raw.trim() === "" || HEADING.test(raw)) return;
-    const sentence = sentenceOf(raw);
-    if (sentence !== "") found.push({ line: index + 1, sentence });
-  });
+  }
   return found;
 };
 

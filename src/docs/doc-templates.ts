@@ -144,9 +144,6 @@ export const TEMPLATES: Readonly<Record<Kind, Template>> = {
       open("<A stance it holds, one of three to six>", "any", REQUIRED, [
         "- <A rule naming what it allows, what it forbids and the trade it takes, in one line.>"
       ]),
-      open("<Another stance it holds>", "any", optional("the page holds a single stance"), [
-        "- <A rule naming what it allows, what it forbids and the trade it takes, in one line.>"
-      ], { interleaved: true }),
       fixed("Scope", REQUIRED, [
         "- <What it refuses and which neighbour owns it, in one line.>",
         "",

@@ -8,14 +8,6 @@
 
 - <A rule naming what it allows, what it forbids and the trade it takes, in one line.>
 
-## <Another stance it holds>
-
-<Leave this section out when the page holds a single stance.>
-
-<A section like this may also follow any section below it.>
-
-- <A rule naming what it allows, what it forbids and the trade it takes, in one line.>
-
 ## Scope
 
 - <What it refuses and which neighbour owns it, in one line.>
