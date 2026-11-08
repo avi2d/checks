@@ -9,12 +9,15 @@ import { cacheRoot } from "../../../src/dependencies/cache-root.ts";
 import { buildFor, OSV_SCANNER_VERSION } from "../../../src/dependencies/osv-scanner.ts";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
 import { FAKE_SCANNER_PATH, GATE_WITH_FAKE_SCANNER } from "../lib/advisories-gate.ts";
+import { fakeActions, type FakeActions, type FakeOptions } from "../lib/fake-actions.ts";
 import { CHECKOUT, fixtureRepos, lintWiring, ran, scratchDirs, withOwnInstall, type FixtureRepo, type Ran } from "../lib/fixture-repo.ts";
 
 const open = fixtureRepos("checks-advisories-");
 const scratch = scratchDirs();
 const IDENTITY = ["-c", "user.name=Wren Fixture", "-c", "user.email=wren@example.com"];
 const DAY = 86_400_000;
+const RUN = "https://github.com/acme/widget/actions/runs/12";
+const ACTIONS_ENV = { GITHUB_SERVER_URL: "https://github.com", GITHUB_REPOSITORY: "acme/widget", GITHUB_RUN_ID: "12", GITHUB_REF: "refs/heads/main" };
 
 const FAKE_SCANNER = `#!${process.execPath}
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -310,6 +313,103 @@ test(
     expect(red.exitCode).toBe(2);
     expect(red.text).toContain(`${cached} has SHA-256 `);
     expect(red.text).toContain(`not the pinned ${build.sha256}; delete it and rerun`);
+    expect(await box.calls()).toEqual([]);
+  },
+  120_000,
+);
+
+async function withIssues(issues: FakeOptions["issues"] = []): Promise<{ readonly box: Sandbox; readonly fake: FakeActions }> {
+  const home = await scratch("checks-advisories-actions-");
+  const fake = await fakeActions(home, 4242, [], { issues });
+  return { box: await sandbox({ ...ACTIONS_ENV, ...fake.env }), fake };
+}
+
+const issueWrites = (calls: readonly string[]): readonly string[] => calls.filter((call) => call.startsWith("label") || (call.includes("/issues") && !call.includes("--method GET")));
+
+test(
+  "a failing --issue run on main opens one issue, a second failing run comments on it instead of opening another, and a passing run closes it",
+  async () => {
+    const person = { number: 1, title: "Bump lodash", body: "A person wrote this.", labels: ["advisories"], state: "open" as const, comments: [] };
+    const { box, fake } = await withIssues([person]);
+    const repo = await open({ "bun.lock": lockfile({ lodash: "4.17.20" }) });
+    await repo.commit("chore: lock");
+
+    const first = await gate(repo, box, "--all", "--issue");
+    const second = await gate(repo, box, "--all", "--issue");
+
+    expect(first.exitCode).toBe(1);
+    expect(first.text).toContain("advisories: opened #101\n");
+    expect(second.exitCode).toBe(1);
+    expect(second.text).toContain("advisories: commented on #101\n");
+    expect(await fake.labels()).toEqual(["advisories"]);
+    const [, opened] = await fake.issues();
+    expect(opened).toMatchObject({ number: 101, title: "Advisories: bun.lock on main fails checks-advisories --all", labels: ["advisories"], state: "open" });
+    expect(opened?.body).toContain(`The advisories run ${RUN} failed on main:`);
+    expect(opened?.body).toContain("- lodash@4.17.20 GHSA-35jh-r3h4-6jhm high: Command Injection in lodash");
+    expect(opened?.comments).toHaveLength(1);
+    expect(opened?.comments[0]).toContain(`The advisories run ${RUN} still fails:`);
+
+    await repo.write({ "bun.lock": lockfile({ "left-pad": "1.3.0" }) });
+    await repo.commit("build: drop lodash");
+    const passing = await gate(repo, box, "--all", "--issue");
+    const quiet = await gate(repo, box, "--all", "--issue");
+
+    expect(passing.exitCode).toBe(0);
+    expect(passing.text).toContain("advisories: closed #101\n");
+    expect(quiet.exitCode).toBe(0);
+    expect(quiet.text).not.toContain("#101");
+    expect((await fake.issues()).map(({ number, state, comments }) => ({ number, state, comments: comments.at(-1) }))).toEqual([
+      { number: 1, state: "open", comments: undefined },
+      { number: 101, state: "closed", comments: `The advisories run ${RUN} passes, so it closes this issue.` },
+    ]);
+  },
+  120_000,
+);
+
+test(
+  "a passing --issue run with no open issue writes neither a label, an issue nor a blank line",
+  async () => {
+    const { box, fake } = await withIssues();
+    const repo = await open({ "bun.lock": lockfile({ "left-pad": "1.3.0" }) });
+    await repo.commit("chore: lock");
+
+    const quiet = await gate(repo, box, "--all", "--issue");
+
+    expect(quiet).toEqual({ exitCode: 0, text: "advisories: bun.lock at the head holds no unacknowledged advisory (0 acknowledged)\n" });
+    expect(issueWrites(await fake.calls())).toEqual([]);
+  },
+  120_000,
+);
+
+test(
+  "a failing --issue run on a branch files no issue and still fails",
+  async () => {
+    const { box, fake } = await withIssues();
+    const repo = await open({ "bun.lock": lockfile({ lodash: "4.17.20" }) });
+    await repo.commit("chore: lock");
+
+    const branch = await gate(repo, { ...box, env: { ...box.env, GITHUB_REF: "refs/heads/feature" } }, "--all", "--issue");
+
+    expect(branch.exitCode).toBe(1);
+    expect(branch.text).toContain("advisories: the run is on refs/heads/feature, not main, so it filed no issue\n");
+    expect(await fake.calls()).toEqual([]);
+  },
+  120_000,
+);
+
+test(
+  "--issue outside a GitHub Actions job names the variable it lacks instead of scanning, and --issue on a range is a usage error",
+  async () => {
+    const { box } = await withIssues();
+    const repo = await open({ "bun.lock": lockfile({ lodash: "4.17.20" }) });
+    const head = await repo.commit("chore: lock");
+    const { GITHUB_RUN_ID: _run, ...env } = box.env;
+
+    const outside = await gate(repo, { ...box, env }, "--all", "--issue");
+    const range = await gate(repo, box, head, "--issue");
+
+    expect(outside).toEqual({ exitCode: 2, text: "advisories: GITHUB_RUN_ID is unset, so --issue runs only inside a GitHub Actions job\n" });
+    expect(range.exitCode).toBe(2);
     expect(await box.calls()).toEqual([]);
   },
   120_000,

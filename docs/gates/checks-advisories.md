@@ -43,6 +43,24 @@ A cold cache downloads about 55 MB of scanner and 217 MB of database.
 
 `--all` appends its report to the file `GITHUB_STEP_SUMMARY` names, which is the job summary.
 
+`--issue` reads the run from `GITHUB_SERVER_URL`, `GITHUB_REPOSITORY`, `GITHUB_RUN_ID` and `GITHUB_REF`, so it runs only inside a GitHub Actions job.
+It reads them before the scan, so a job that lacks one exits 2 without downloading anything.
+It calls `gh` with the job's `GH_TOKEN`, which needs `issues: write`.
+
+## How it files an issue
+
+With `--issue`, a run on `refs/heads/main` turns its verdict into one GitHub issue.
+A failing run creates the `advisories` label when the repository lacks it.
+It reads every open issue labelled `advisories` and keeps the ones whose body carries the hidden marker `<!-- checks-advisories -->`.
+With none, it opens one issue labelled `advisories`, titled `Advisories: bun.lock on main fails checks-advisories --all`.
+The body names the run and holds its report as a Markdown list.
+With one open, it comments on it with the run and its report instead, so an advisory that lasts many weeks stays one issue.
+A passing run comments on each open marked issue, naming the run, and closes it as completed.
+A passing run with no open marked issue writes no label and no issue.
+An issue without the marker is never commented on or closed, so a person's issue under the `advisories` label stays as it is.
+A run on any other ref files no issue and says so in its log.
+The exit code stays the verdict's, so a failing run still fails its job after it files the issue.
+
 ## The acknowledgement file
 
 `advisory-acks.json` at the repository root lists the advisories the repository accepts for a while, such as a false positive or a fix that waits on an upstream release:
@@ -77,11 +95,13 @@ A file that does not decode as that list exits 2.
 checks-advisories <base-ref> <head-ref>
 checks-advisories <ref>
 checks-advisories --all
+checks-advisories --all --issue
 ```
 
 With two arguments it judges the range from their merge base to the head.
 With one it judges that commit against its parent, or against an empty tree for a repository's first commit.
 With `--all` it fails on every advisory in `bun.lock` at `HEAD` that no entry covers.
+`--issue` follows `--all` and also files the verdict as [How it files an issue](#how-it-files-an-issue) says.
 
 ## Exit codes
 
@@ -89,7 +109,7 @@ With `--all` it fails on every advisory in `bun.lock` at `HEAD` that no entry co
 | --- | --- |
 | 0 | the range adds no advisory on a direct scan or an unchanged range and every acknowledgement holds, or a deferred run holds every acknowledgement without a scan |
 | 1 | a direct scan adds an advisory no acknowledgement covers, or an acknowledgement does not hold on any run |
-| 2 | a ref does not resolve, `advisory-acks.json` does not decode, or a direct scan has no verified scanner or usable database at hand |
+| 2 | a ref does not resolve, `advisory-acks.json` does not decode, a direct scan has no verified scanner or usable database at hand, or with `--issue` a GitHub Actions variable is unset or a `gh` call fails |
 
 ## Sample output
 

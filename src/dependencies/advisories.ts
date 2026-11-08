@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-import { Clock, Config, Console, Effect, FileSystem, type Layer, Option, Path, Schema } from "effect";
-import { ADVISORIES_DEFER_SCAN } from "../core/gates.ts";
+import { Clock, Config, Console, Effect, FileSystem, Layer, Option, Path, Schema } from "effect";
+import { ADVISORIES_DEFER_SCAN, DEFAULT_BRANCH } from "../core/gates.ts";
 import { changedPaths, commitOf, git, pathsAt, rangeFromArgs, writtenAt } from "../core/git.ts";
 import type { BunServices } from "@effect/platform-bun";
 import { runMain, Usage } from "../core/main.ts";
@@ -18,24 +18,28 @@ import {
   type AcknowledgementClock,
   type Outcome,
 } from "./advisory-rules.ts";
+import { AdvisoryIssues, fileVerdict, type Filed } from "./advisory-issues.ts";
 import { cacheRoot } from "./cache-root.ts";
 import { scanLockfiles, Scanner } from "./osv-scanner.ts";
 
 const NAME = "advisories";
 const ALL = "--all";
-const USAGE = `usage: advisories.ts <ref> | <base-ref> <head-ref> | ${ALL}`;
+const ISSUE = "--issue";
+const USAGE = `usage: advisories.ts <ref> | <base-ref> <head-ref> | ${ALL} [${ISSUE}]`;
 const SIDES = ["base", "head"] as const;
 
 class AdvisoriesError extends Schema.TaggedError<AdvisoriesError>()("AdvisoriesError", {
   message: Schema.String,
 }) {}
 
-type Request = { readonly kind: "range"; readonly base: string; readonly head: string } | { readonly kind: "head"; readonly head: string };
+type Request =
+  | { readonly kind: "range"; readonly base: string; readonly head: string }
+  | { readonly kind: "head"; readonly head: string; readonly issue: boolean };
 
 const requestOf = Effect.fn("requestOf")(function* (args: readonly string[]) {
   if (args[0] === ALL) {
-    if (args.length > 1) return yield* new Usage({ message: USAGE });
-    return { kind: "head", head: yield* commitOf("HEAD") } satisfies Request;
+    if (args.length > 2 || (args.length === 2 && args[1] !== ISSUE)) return yield* new Usage({ message: USAGE });
+    return { kind: "head", head: yield* commitOf("HEAD"), issue: args[1] === ISSUE } satisfies Request;
   }
   const { base, head } = yield* rangeFromArgs(args, USAGE);
   return { kind: "range", base, head: yield* commitOf(head) } satisfies Request;
@@ -104,8 +108,25 @@ const toStepSummary = Effect.fn("toStepSummary")(function* (text: string) {
   yield* (yield* FileSystem.FileSystem).writeFileString(stepSummary.value, `${summaryOf(text)}\n`, { flag: "a" });
 });
 
+const required = (name: string) =>
+  Config.String(name).pipe(Effect.mapError(() => new AdvisoriesError({ message: `${name} is unset, so ${ISSUE} runs only inside a GitHub Actions job` })));
+
+type Actions = { readonly run: string; readonly ref: string };
+
+const actionsRun = Effect.gen(function* () {
+  const run = `${yield* required("GITHUB_SERVER_URL")}/${yield* required("GITHUB_REPOSITORY")}/actions/runs/${yield* required("GITHUB_RUN_ID")}`;
+  return { run, ref: yield* required("GITHUB_REF") } satisfies Actions;
+});
+
+function filingLines(actions: Actions, filed: Option.Option<readonly Filed[]>): readonly string[] {
+  if (Option.isNone(filed)) return [`${NAME}: the run is on ${actions.ref}, not ${DEFAULT_BRANCH}, so it filed no issue`];
+  return filed.value.map(({ issue, action }) => `${NAME}: ${action} #${issue}`);
+}
+
+// The variables are read before the scan, so a job missing one fails before it downloads anything.
 const advisories = Effect.gen(function* () {
   const request = yield* requestOf(process.argv.slice(2));
+  const actions = request.kind === "head" && request.issue ? Option.some(yield* actionsRun) : Option.none<Actions>();
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const dates = { head: (yield* writtenAt(request.head, root)) * 1000, now: yield* Clock.currentTimeMillis };
   const clock = clockOf(yield* acknowledgementsAt(request.head, root), { kind: request.kind }, dates);
@@ -113,11 +134,17 @@ const advisories = Effect.gen(function* () {
   const text = report(outcome);
   yield* Console.log(text);
   if (request.kind === "head") yield* toStepSummary(text);
-  return passes(outcome);
+  const passed = passes(outcome);
+  if (Option.isSome(actions)) {
+    const onMain = actions.value.ref === `refs/heads/${DEFAULT_BRANCH}`;
+    const filed = onMain ? Option.some(yield* fileVerdict(passed ? { kind: "pass" } : { kind: "fail", report: text }, actions.value.run)) : Option.none();
+    for (const line of filingLines(actions.value, filed)) yield* Console.log(line);
+  }
+  return passed;
 });
 
 export function main(scanner: Layer.Layer<Scanner, never, BunServices.BunServices>): void {
-  runMain(NAME, advisories.pipe(Effect.provide(scanner)));
+  runMain(NAME, advisories.pipe(Effect.provide(Layer.merge(scanner, AdvisoryIssues.gh))));
 }
 
 if (import.meta.main) main(Scanner.pinned);
