@@ -3,7 +3,7 @@ import { Config, Console, Context, Effect, FileSystem, Layer, Option, Path, Sche
 import { ChildProcessSpawner } from "effect/process";
 import { DEFAULT_BRANCH } from "../core/gates.ts";
 import { runMain, Usage } from "../core/main.ts";
-import { gh, type GitHubFailure, gitHubJson, REPOSITORY } from "../core/github.ts";
+import { gh, type GitHubFailure, type LabelledIssue, labelledIssues, REPOSITORY } from "../core/github.ts";
 import { parseReport as parseMutationReport, type ReportFile } from "./mutation-compare.ts";
 import { cleared, type Finding, findingsOf, gatesDecided, gatesOf, keyOf, WholeTreeRecordSchema, noted, type Observed, type WholeTreeRecord, percent, type PreviousRun, scoresOf, type TestReport } from "./whole-tree-run-findings.ts";
 import { parseReport as parseTestReport } from "./test-report.ts";
@@ -16,7 +16,6 @@ const LABEL_DESCRIPTION = "A regression a whole-tree run on main found";
 const ARTIFACT = "whole-tree-run";
 const RECORD_NAME = "whole-tree-run.json";
 export const RECORD = `reports/${RECORD_NAME}`;
-const PAGE_SIZE = 100;
 const GITHUB_TITLE_LIMIT = 256;
 
 class WholeTreeRunFailure extends Schema.TaggedError<WholeTreeRunFailure>()("WholeTreeRunFailure", {
@@ -59,27 +58,13 @@ export class Issues extends Context.Service<
   static readonly gh = Layer.effect(
     Issues,
     Effect.gen(function* () {
-      const services = yield* Effect.context<ChildProcessSpawner.ChildProcessSpawner>();
-      const provided = <A>(effect: Effect.Effect<A, GitHubFailure, ChildProcessSpawner.ChildProcessSpawner>) => effect.pipe(Effect.provideContext(services));
-      return Issues.of({
-        ensureLabel: provided(ensureLabel),
-        open: provided(openIssues),
-        create: (title, body) => provided(gitHubJson(decodeNumbered, "POST", `${REPOSITORY}/issues`, { title, body, labels: [LABEL] })).pipe(Effect.map(({ number }) => number)),
-        comment: (issue, body) => provided(gitHubJson(decodeAny, "POST", `${REPOSITORY}/issues/${issue}/comments`, { body })).pipe(Effect.asVoid),
-        close: (issue) => provided(gitHubJson(decodeAny, "PATCH", `${REPOSITORY}/issues/${issue}`, { state: "closed", state_reason: "completed" })).pipe(Effect.asVoid),
-        comments: (issue) => provided(issueComments(issue)),
-      });
+      const github = yield* labelledIssues({ name: LABEL, color: LABEL_COLOR, description: LABEL_DESCRIPTION });
+      return Issues.of({ ...github, open: github.open.pipe(Effect.map(keyedIssues)) });
     }),
   );
 }
 
-const decodeNumbered = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ number: Schema.Int })));
-const decodeAny = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
-const decodeIssues = Schema.decodeUnknownEffect(
-  Schema.fromJsonString(Schema.Array(Schema.Struct({ number: Schema.Int, body: Schema.NullOr(Schema.String), pull_request: Schema.optionalKey(Schema.Unknown) }))),
-);
 const decodeKey = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.String));
-const decodeComments = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Array(Schema.Struct({ body: Schema.String }))));
 
 const MARKER = /<!-- checks-whole-tree-run ("(?:[^"\\]|\\.)*") -->/;
 
@@ -93,28 +78,12 @@ export function markedKey(body: string | null): Option.Option<string> {
   return quoted === undefined ? Option.none() : decodeKey(quoted);
 }
 
-const ensureLabel = gh(["label", "create", LABEL, "--color", LABEL_COLOR, "--description", LABEL_DESCRIPTION, "--force"]).pipe(Effect.asVoid);
-
-const openIssues = Effect.gen(function* () {
-  const found: OpenIssue[] = [];
-  for (let page = 1; ; page += 1) {
-    const batch = yield* gitHubJson(decodeIssues, "GET", `${REPOSITORY}/issues?labels=${LABEL}&state=open&per_page=${PAGE_SIZE}&page=${page}`);
-    for (const issue of batch) {
-      const key = markedKey(issue.body);
-      if (issue.pull_request === undefined && Option.isSome(key)) found.push({ number: issue.number, key: key.value });
-    }
-    if (batch.length < PAGE_SIZE) return found;
-  }
-});
-
-const issueComments = Effect.fn("issueComments")(function* (issue: number) {
-  const found: string[] = [];
-  for (let page = 1; ; page += 1) {
-    const batch = yield* gitHubJson(decodeComments, "GET", `${REPOSITORY}/issues/${issue}/comments?per_page=${PAGE_SIZE}&page=${page}`);
-    found.push(...batch.map(({ body }) => body));
-    if (batch.length < PAGE_SIZE) return found;
-  }
-});
+function keyedIssues(issues: readonly LabelledIssue[]): readonly OpenIssue[] {
+  return issues.flatMap(({ number, body }) => {
+    const key = markedKey(body);
+    return Option.isSome(key) ? [{ number, key: key.value }] : [];
+  });
+}
 
 function fullTitleOf(finding: Finding): string {
   if (finding.kind === "mutation") return `Whole-tree run: mutation score fell in ${finding.file}`;
