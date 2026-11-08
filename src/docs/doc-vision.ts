@@ -1,5 +1,5 @@
 import { VISION_PAGE } from "./doc-templates.ts";
-import { scanMarkdown } from "./prose-matchers.ts";
+import { continues, scanMarkdown, type MarkdownLine } from "./prose-matchers.ts";
 
 export type VisionViolation = {
   readonly line: number;
@@ -53,14 +53,15 @@ const LIST_MARKER = /^\s*(?:[-*+]|\d{1,9}[.)])\s+/;
 const QUOTE_MARKER = /^\s*(?:>\s*)+/;
 const AUTOLINK = /<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^\s<>]*|[^\s@<>]+@[^\s<>]+)>/g;
 const DELIMITER_CELL = /^:?-+:?$/;
-const SENTENCE_SPLIT = /(?<=[.!?]["'"”’»)\]]*)\s+/;
+const CLOSERS: ReadonlySet<string> = new Set(["'", '"', "\u201d", "\u2019", "\u00bb", ")", "]"]);
 
-function inlineOf(raw: string): string {
+function textOf(raw: string): string {
+  const codes: string[] = [];
   const unlisted = raw.replace(QUOTE_MARKER, "").replace(LIST_MARKER, "");
   return unlisted
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]*)\]/g, "$1")
-    .replace(/`([^`]*)`/g, "$1")
+    .replace(/`([^`]*)`/g, (_match: string, code: string) => "\x00" + String(codes.push(code) - 1) + "\x00")
     .replace(AUTOLINK, "$1")
     .replace(/<!--[\s\S]*?-->/g, " ")
     .replace(/\*\*([^*]*)\*\*/g, "$1")
@@ -68,27 +69,102 @@ function inlineOf(raw: string): string {
     .replace(/(^|\W)\*([^\*\n]+)\*(?=\W|$)/g, "$1$2")
     .replace(/(^|\W)_([^_\n]+)_(?=\W|$)/g, "$1$2")
     .replace(/~~([^~]*)~~/g, "$1")
-    .replace(/<[^>]*>/g, " ");
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\x00(\d+)\x00/g, (_match: string, index: string) => codes[Number(index)] ?? "");
+};
+
+function isDelimiterRow(raw: string): boolean {
+  const cells = raw.split("|").map((cell) => cell.trim());
+  return cells.some((cell) => cell !== "") && cells.every((cell) => cell === "" || DELIMITER_CELL.test(cell));
 };
 
 function cellsOf(raw: string): readonly string[] {
-  const cells = raw.split("|").map((cell) => inlineOf(cell));
-  if (cells.every((cell) => cell.trim() === "" || DELIMITER_CELL.test(cell.trim()))) return [];
-  return cells;
+  if (isDelimiterRow(raw)) return [];
+  return raw.split("|").map((cell) => textOf(cell));
+};
+
+function normalize(sentence: string): string {
+  return sentence.toLowerCase().replace(/\s+/g, " ").trim();
+};
+
+function sentenceBounds(clean: string): readonly { readonly start: number; readonly end: number }[] {
+  const bounds: { readonly start: number; readonly end: number }[] = [];
+  let start = 0;
+  let at = 0;
+  while (at < clean.length) {
+    const char = clean[at] ?? "";
+    if (char === "." || char === "!" || char === "?") {
+      let end = at + 1;
+      while (end < clean.length && CLOSERS.has(clean[end] ?? "")) end += 1;
+      const next = end >= clean.length ? "" : clean[end] ?? "";
+      if (end >= clean.length || /\s/.test(next)) {
+        bounds.push({ start, end });
+        while (end < clean.length && /\s/.test(clean[end] ?? "")) end += 1;
+        start = end;
+        at = end;
+        continue;
+      }
+    }
+    at += 1;
+  }
+  if (start < clean.length) bounds.push({ start, end: clean.length });
+  return bounds;
+};
+
+function emitSentences(clean: string, line: number, found: { readonly line: number; readonly sentence: string }[]): void {
+  if (clean.trim() === "") return;
+  for (const { start, end } of sentenceBounds(clean)) {
+    const sentence = normalize(clean.slice(start, end));
+    if (sentence !== "") found.push({ line, sentence });
+  }
 };
 
 function sentencesOf(text: string): readonly { readonly line: number; readonly sentence: string }[] {
   const found: { readonly line: number; readonly sentence: string }[] = [];
-  for (const line of scanMarkdown(text)) {
-    const sources = line.kind === "prose" && !INDENTED_CODE.test(line.raw) ? [inlineOf(line.raw)] : line.kind === "table" ? cellsOf(line.raw) : [];
-    for (const source of sources) {
-      const clean = source.replace(/\s+/g, " ").trim();
-      if (clean === "") continue;
-      for (const part of clean.split(SENTENCE_SPLIT)) {
-        const sentence = part.toLowerCase().replace(/\s+/g, " ").trim();
-        if (sentence !== "") found.push({ line: line.line, sentence });
+  const lines = scanMarkdown(text);
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index];
+    if (line === undefined) break;
+    if (line.kind === "table") {
+      const next = lines[index + 1];
+      if (next?.kind !== "table" || !isDelimiterRow(next.raw)) {
+        for (const cell of cellsOf(line.raw)) emitSentences(cell, line.line, found);
+      }
+      index += 1;
+      continue;
+    }
+    if (line.kind !== "prose" || INDENTED_CODE.test(line.raw)) {
+      index += 1;
+      continue;
+    }
+    const block: MarkdownLine[] = [line];
+    let following = lines[index + 1];
+    while (following !== undefined && following.kind === "prose" && !INDENTED_CODE.test(following.raw) && continues(lines[index], following)) {
+      block.push(following);
+      index += 1;
+      following = lines[index + 1];
+    }
+    const texts = block.map((one) => textOf(one.raw));
+    const starts: number[] = [];
+    let at = 0;
+    for (const one of texts) {
+      starts.push(at);
+      at += one.length + 1;
+    }
+    const joined = texts.join(" ");
+    if (joined.trim() !== "") {
+      for (const { start, end } of sentenceBounds(joined)) {
+        const sentence = normalize(joined.slice(start, end));
+        if (sentence === "") continue;
+        let owner = 0;
+        for (let i = 0; i < starts.length; i += 1) {
+          if ((starts[i] ?? 0) <= start) owner = i;
+        }
+        found.push({ line: block[owner]?.line ?? line.line, sentence });
       }
     }
+    index += 1;
   }
   return found;
 };
