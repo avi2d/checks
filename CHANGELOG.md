@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.80.0
+
+Released 2026-11-08.
+
+### Features
+
+- **testing:** split whole-tree mutation runs into balanced shards [#78](https://github.com/avi2d/checks/pull/78)
+
 ## 0.79.0
 
 Released 2026-11-08.
