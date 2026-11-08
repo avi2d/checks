@@ -107,6 +107,7 @@
     "checks-graphwalk": "src/complexity/graphwalk.ts",
     "checks-quarantine-clock": "src/testing/quarantine-clock.ts",
     "checks-docs": "src/docs/docs.ts",
+    "checks-adr-index": "src/docs/adr-index.ts",
     "checks-copy": "src/docs/copy.ts",
     "checks-vendor": "src/dependencies/vendor.ts",
     "checks-advisories": "src/dependencies/advisories.ts",

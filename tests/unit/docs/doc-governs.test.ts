@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { deletedGoverned, existsIn, missingGoverned } from "../../../src/docs/doc-governs.ts";
+import { deletedGoverned, existsIn, governingRecords, missingGoverned } from "../../../src/docs/doc-governs.ts";
 import { snapshotOf } from "../../../src/docs/doc-references.ts";
 import { governedRecord, judge, recordsOf, type Doc } from "../../../src/docs/doc-rules.ts";
 
@@ -177,4 +177,13 @@ test("a supersession key in front matter is refused, since the fact lives in Sta
   expect(refused(record("governs: [a.ts]\n'supersedes': [2]"), OTHERS)).toEqual([
     "3: holds `supersedes` in its front matter, and a supersession lives in `## Status` alone. Move it there",
   ]);
+});
+
+test("a change names the live records that govern it, not a retired record or one whose path only shares a prefix", () => {
+  const live = governedRecord({ path: FIRST, text: record("governs: [src/parts.ts, docs/parts]") });
+  const retired = governedRecord({ path: SECOND, text: record("governs: [src/parts.ts]", "Retired. Parts are gone.") });
+  const prefixed = governedRecord({ path: "docs/adr/0003-a-part-is-counted.md", text: record("governs: [src/part]") });
+  const changed = ["src/parts.ts", "docs/parts/bolts.md", "src/partsbin.ts"];
+  expect(governingRecords([live, retired, prefixed], changed)).toEqual([{ path: FIRST, status: "Accepted", governed: ["src/parts.ts", "docs/parts"] }]);
+  expect(governingRecords([live], ["docs/partsbin.md", "README.md"])).toEqual([]);
 });

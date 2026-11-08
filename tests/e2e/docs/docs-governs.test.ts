@@ -14,7 +14,7 @@ const repository = docsRepos();
 test(
   "a record with no governs field is refused rather than passed, and passes once it lists a tracked path",
   async () => {
-    const { put, commit, docs } = await repository();
+    const { put, commit, docs, index } = await repository();
     const base = await commit("start");
     await put(FIRST, record(1, "", "Accepted."));
     const ungoverned = await commit("a record that governs nothing");
@@ -24,6 +24,7 @@ test(
     expect(red.exitCode).toBe(1);
 
     await put(FIRST, record(1, "governs: [widget.ts]", "Accepted."));
+    await index();
     const governed = await commit("the record governs widget.ts");
     const green = await docs(base, governed);
     expect(green.text).toContain("docs: 1 doc file(s) the range touches hold to their templates");
@@ -51,7 +52,7 @@ test(
 test(
   "deleting a governed file without retiring its record is refused, even when the range leaves the record alone",
   async () => {
-    const { put, remove, commit, docs } = await repository();
+    const { put, remove, commit, docs, index } = await repository();
     await put(FIRST, record(1, "governs: [widget.ts]", "Accepted."));
     const base = await commit("a record that governs widget.ts");
     await remove("widget.ts");
@@ -62,6 +63,7 @@ test(
     expect(red.exitCode).toBe(1);
 
     await put(FIRST, record(1, "governs: [widget.ts]", "Retired. The widget is gone, so parts no longer name a supplier through it."));
+    await index();
     const retired = await commit("retire the record with the file");
     const green = await docs(base, retired);
     expect(green.text).toContain("docs: 1 doc file(s) the range touches hold to their templates");
@@ -73,7 +75,7 @@ test(
 test(
   "a supersession stated outside Status is refused rather than passed, and passes once Status carries it",
   async () => {
-    const { put, commit, docs } = await repository();
+    const { put, commit, docs, index } = await repository();
     await put(FIRST, record(1, "governs: [widget.ts]", "Accepted."));
     const base = await commit("one record");
     await put(SECOND, record(2, "governs: [widget.ts]", "Accepted.", "A spare names its supplier.\nThis record supersedes record 0001."));
@@ -85,9 +87,58 @@ test(
 
     await put(FIRST, record(1, "governs: [widget.ts]", "Superseded by 0002: a spare names its supplier."));
     await put(SECOND, record(2, "governs: [widget.ts]", "Accepted. Supersedes 0001: a spare names its supplier.", "A spare names its supplier."));
+    await index();
     const inStatus = await commit("move the supersession into both Status sections");
     const green = await docs(base, inStatus);
     expect(green.text).toContain("docs: 2 doc file(s) the range touches hold to their templates");
+    expect(green.exitCode).toBe(0);
+  },
+  120_000,
+);
+
+test(
+  "a range that edits a governed file names its live record in the output, and leaves a retired record unnamed",
+  async () => {
+    const { put, commit, docs, index } = await repository();
+    await put(FIRST, record(1, "governs: [widget.ts]", "Accepted."));
+    await put(SECOND, record(2, "governs: [widget.ts]", "Retired. Spares are bought by hand.", "A spare names its supplier."));
+    await index();
+    const base = await commit("a live and a retired record that govern widget.ts");
+    await put("widget.ts", "export const widget = 2;\n");
+    const head = await commit("edit the governed file");
+
+    const named = await docs(base, head);
+    expect(named.text).toContain(`docs: 1 live record(s) govern paths the range changes:\n  ${FIRST}: Accepted, governs \`widget.ts\`\n`);
+    expect(named.text).not.toContain(`  ${SECOND}:`);
+    expect(named.exitCode).toBe(0);
+  },
+  120_000,
+);
+
+test(
+  "a range that changes a record and leaves the index stale is refused, while a range outside docs/adr only lists it as advisory",
+  async () => {
+    const { put, commit, docs, index } = await repository();
+    await put(FIRST, record(1, "governs: [widget.ts]", "Accepted."));
+    await index();
+    const base = await commit("a record and its index");
+    await put(FIRST, record(1, "governs: [widget.ts]", "Deprecated. Parts are bought by hand."));
+    const stale = await commit("deprecate the record without rewriting the index");
+
+    const red = await docs(base, stale);
+    expect(red.text).toContain("  docs/adr/README.md:7: holds an adr-index block that differs from the records in docs/adr/. Run `checks-adr-index`");
+    expect(red.exitCode).toBe(1);
+
+    await put("widget.ts", "export const widget = 2;\n");
+    const elsewhere = await commit("edit a file outside docs/adr");
+    const advisory = await docs(stale, elsewhere);
+    expect(advisory.text).toContain("docs: advisory, the record index is not fresh, and the first range that touches docs/adr/ fails on it:\n  docs/adr/README.md:7:");
+    expect(advisory.exitCode).toBe(0);
+
+    await index();
+    const fresh = await commit("rewrite the index");
+    const green = await docs(base, fresh);
+    expect(green.text).toContain("docs: docs/adr/README.md indexes the 1 record(s) in docs/adr/");
     expect(green.exitCode).toBe(0);
   },
   120_000,
