@@ -5,11 +5,23 @@ import { fileURLToPath } from "node:url";
 
 const presetPath = fileURLToPath(new URL("../../../stryker.preset.js", import.meta.url));
 
-const loadPresetInSubprocess = (env: Record<string, string>): { concurrency: number; ignoreStatic: boolean } => {
+type LoadedPreset = { concurrency: number; ignoreStatic: boolean };
+
+const isLoadedPreset = (value: unknown): value is LoadedPreset =>
+  typeof value === "object" &&
+  value !== null &&
+  "concurrency" in value &&
+  typeof value.concurrency === "number" &&
+  "ignoreStatic" in value &&
+  typeof value.ignoreStatic === "boolean";
+
+const loadPresetInSubprocess = (env: Record<string, string>): LoadedPreset => {
   const script = "import preset from " + JSON.stringify(presetPath) + "; console.log(JSON.stringify({ concurrency: preset.concurrency, ignoreStatic: preset.ignoreStatic }));";
   const result = spawnSync(process.execPath, ["-e", script], { env: { ...process.env, ...env }, encoding: "utf8" });
   expect(result.status).toBe(0);
-  return JSON.parse(result.stdout);
+  const loaded: unknown = JSON.parse(result.stdout);
+  if (!isLoadedPreset(loaded)) throw new Error(`the preset printed ${result.stdout}`);
+  return loaded;
 };
 
 test("rejects a preset hard-wired to half the cores or to ignoreStatic true by using every core without ignoreStatic on a hosted baseline run", () => {
