@@ -6,8 +6,7 @@ on:
 
 jobs:
   advisories:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: avi2d/workflows/setup@v1
-      - run: bun src/dependencies/advisories.ts --all
+    permissions:
+      contents: read
+      issues: write
+    uses: avi2d/workflows/.github/workflows/advisories.yml@v1
