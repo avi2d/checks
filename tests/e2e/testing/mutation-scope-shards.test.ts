@@ -74,7 +74,8 @@ test("a named last report with no file fails the bin rather than splitting by fi
   const done = await ran($`bun ${SCOPE} --shards 2 missing.json`.cwd(repo.dir));
 
   expect(done.exitCode).toBe(2);
-  expect(done.text).toContain("no last report at missing.json");
+  expect(done.text).toContain("mutation-scope: no last report at missing.json");
+  expect(done.text).not.toContain("mutation-scope: mutation-scope:");
   expect(done.text).not.toContain("SHARDS=");
 });
 

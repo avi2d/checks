@@ -114,7 +114,7 @@ It also names each stale test that widens the scope.
 
 | Code | When |
 | --- | --- |
-| 0 | it printed the scope, an empty one included |
+| 0 | it printed the scope or the shards, an empty list included |
 | 2 | the arguments do not parse, git fails, the Stryker config, `bunfig.toml`, the baseline report or the last report does not load, a `mutate` entry names a mutation range, or a unit test changed with no baseline report |
 
 ## Sample output

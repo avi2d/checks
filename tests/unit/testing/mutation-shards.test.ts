@@ -34,8 +34,8 @@ test("a file the report lacks weighs the reported average rounded up, and a repo
   expect(mutantWeights(["src/a.ts", "src/b.ts", "src/new.ts"], reported)).toEqual(weights({ "src/a.ts": 10, "src/b.ts": 5, "src/new.ts": 8 }));
 });
 
-test("static and Ignored mutants carry no weight rather than counting every mutant the report lists", () => {
-  expect(runnableMutants([{ status: "Killed" }, { status: "Survived", static: true }, { status: "Ignored" }, {}])).toBe(2);
+test("static, Ignored and NoCoverage mutants carry no weight rather than counting every mutant the report lists", () => {
+  expect(runnableMutants([{ status: "Killed" }, { status: "Survived", static: true }, { status: "Ignored" }, { status: "NoCoverage" }, {}])).toBe(2);
 });
 
 test("with no report each file weighs one mutant, so the shards balance by file count rather than all landing in one", () => {

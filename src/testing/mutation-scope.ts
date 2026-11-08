@@ -319,7 +319,7 @@ const reportedCounts = Effect.fn("reportedCounts")(function* (report: string | u
     return new Map<string, number>();
   }
   if (!(yield* fs.exists(report))) {
-    return yield* new ScopeError({ message: `${NAME}: no last report at ${report}, so no shard can balance by mutant count` });
+    return yield* new ScopeError({ message: `no last report at ${report}, so no shard can balance by mutant count` });
   }
   const unparsed = (cause: { readonly message: string }) => new ScopeError({ message: `${report} is not a Stryker mutation report: ${cause.message}` });
   const { files } = yield* fs.readFileString(report).pipe(Effect.flatMap(decodeMutantCounts), Effect.mapError(unparsed));

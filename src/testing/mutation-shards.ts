@@ -6,7 +6,7 @@ export type Shard = { readonly files: readonly string[]; readonly mutants: numbe
 export type ReportedMutant = { readonly static?: boolean; readonly status?: string };
 
 export function runnableMutants(mutants: readonly ReportedMutant[]): number {
-  return mutants.filter((mutant) => mutant.static !== true && mutant.status !== "Ignored").length;
+  return mutants.filter((mutant) => mutant.static !== true && mutant.status !== "Ignored" && mutant.status !== "NoCoverage").length;
 }
 
 // A file the report lacks may be new since it ran, so it weighs what the average reported file does.
