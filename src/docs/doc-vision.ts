@@ -55,13 +55,48 @@ const AUTOLINK = /<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^\s<>]*|[^\s@<>]+@[^\s<>]+)>/g
 const DELIMITER_CELL = /^:?-+:?$/;
 const CLOSERS: ReadonlySet<string> = new Set(["'", '"', "\u201d", "\u2019", "\u00bb", ")", "]"]);
 
+function stashCode(text: string, codes: string[]): string {
+  let out = "";
+  let at = 0;
+  while (at < text.length) {
+    const open = text.indexOf("`", at);
+    if (open === -1) {
+      out += text.slice(at);
+      break;
+    }
+    let run = 0;
+    while (text[open + run] === "`") run += 1;
+    let close = -1;
+    let scan = open + run;
+    while (scan < text.length) {
+      const tick = text.indexOf("`", scan);
+      if (tick === -1) break;
+      let length = 0;
+      while (text[tick + length] === "`") length += 1;
+      if (length === run) {
+        close = tick;
+        break;
+      }
+      scan = tick + length;
+    }
+    if (close === -1) {
+      out += text.slice(at);
+      break;
+    }
+    out += text.slice(at, open);
+    codes.push(text.slice(open + run, close).trim());
+    out += "\x00" + String(codes.length - 1) + "\x00";
+    at = close + run;
+  }
+  return out;
+};
+
 function textOf(raw: string): string {
   const codes: string[] = [];
-  const unlisted = raw.replace(QUOTE_MARKER, "").replace(LIST_MARKER, "");
+  const unlisted = stashCode(raw, codes).replace(QUOTE_MARKER, "").replace(LIST_MARKER, "");
   return unlisted
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]*)\]/g, "$1")
-    .replace(/`([^`]*)`/g, (_match: string, code: string) => "\x00" + String(codes.push(code) - 1) + "\x00")
     .replace(AUTOLINK, "$1")
     .replace(/<!--[\s\S]*?-->/g, " ")
     .replace(/\*\*([^*]*)\*\*/g, "$1")
@@ -71,6 +106,24 @@ function textOf(raw: string): string {
     .replace(/~~([^~]*)~~/g, "$1")
     .replace(/<[^>]*>/g, " ")
     .replace(/\x00(\d+)\x00/g, (_match: string, index: string) => codes[Number(index)] ?? "");
+};
+
+const ABBREVIATION = /\b(?:e\.g|i\.e|etc|vs|cf|approx|mr|mrs|ms|dr|st|no|fig)$/i;
+
+function terminated(fragment: string): boolean {
+  let end = fragment.length;
+  while (end > 0 && CLOSERS.has(fragment[end - 1] ?? "")) end -= 1;
+  const char = end > 0 ? fragment[end - 1] ?? "" : "";
+  return char === "." || char === "!" || char === "?";
+};
+
+function isIndentedCode(index: number, lines: readonly MarkdownLine[]): boolean {
+  const line = lines[index];
+  if (line === undefined || line.kind !== "prose" || !INDENTED_CODE.test(line.raw)) return false;
+  let at = index - 1;
+  while (at >= 0 && lines[at]?.kind === "prose" && INDENTED_CODE.test(lines[at]?.raw ?? "")) at -= 1;
+  const head = at >= 0 ? lines[at] : undefined;
+  return head?.kind !== "prose";
 };
 
 function isDelimiterRow(raw: string): boolean {
@@ -97,7 +150,7 @@ function sentenceBounds(clean: string): readonly { readonly start: number; reado
       let end = at + 1;
       while (end < clean.length && CLOSERS.has(clean[end] ?? "")) end += 1;
       const next = end >= clean.length ? "" : clean[end] ?? "";
-      if (end >= clean.length || /\s/.test(next)) {
+      if ((end >= clean.length || /\s/.test(next)) && !(end < clean.length && ABBREVIATION.test(clean.slice(start, at)))) {
         bounds.push({ start, end });
         while (end < clean.length && /\s/.test(clean[end] ?? "")) end += 1;
         start = end;
@@ -114,7 +167,9 @@ function sentenceBounds(clean: string): readonly { readonly start: number; reado
 function emitSentences(clean: string, line: number, found: { readonly line: number; readonly sentence: string }[]): void {
   if (clean.trim() === "") return;
   for (const { start, end } of sentenceBounds(clean)) {
-    const sentence = normalize(clean.slice(start, end));
+    const fragment = clean.slice(start, end);
+    if (!terminated(fragment)) continue;
+    const sentence = normalize(fragment);
     if (sentence !== "") found.push({ line, sentence });
   }
 };
@@ -134,13 +189,13 @@ function sentencesOf(text: string): readonly { readonly line: number; readonly s
       index += 1;
       continue;
     }
-    if (line.kind !== "prose" || INDENTED_CODE.test(line.raw)) {
+    if (line.kind !== "prose" || isIndentedCode(index, lines)) {
       index += 1;
       continue;
     }
     const block: MarkdownLine[] = [line];
     let following = lines[index + 1];
-    while (following !== undefined && following.kind === "prose" && !INDENTED_CODE.test(following.raw) && continues(lines[index], following)) {
+    while (following !== undefined && following.kind === "prose" && !isIndentedCode(index + 1, lines) && continues(lines[index], following)) {
       block.push(following);
       index += 1;
       following = lines[index + 1];
