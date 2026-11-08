@@ -2,7 +2,7 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { runMain, Usage } from "../core/main.ts";
 import { ciWorkflow, MUTATION_WORKFLOW, STRYKER_CONFIG } from "./setup-workflow.ts";
-import { TEMPLATES } from "../docs/doc-templates.ts";
+import { TEMPLATES, VISION_PAGE } from "../docs/doc-templates.ts";
 import { scriptOptions } from "../core/test-script.ts";
 import { withServiceOverrides, type ServiceOverride } from "../quality/effect-scope.ts";
 import { SOURCES, TESTS } from "../quality/presets/oxlint.ts";
@@ -342,6 +342,16 @@ const setupWorkflows = Effect.fn("setupWorkflows")(function* (root: string, isPr
   yield* setupFile(root, "stryker.conf.mjs", STRYKER_CONFIG);
 });
 
+const setupDocFiles = Effect.fn("setupDocFiles")(function* (root: string) {
+  for (const kind of Object.keys(TEMPLATES)) {
+    yield* setupFile(root, "templates/" + kind + ".md", yield* kitText("dist/templates/" + kind + ".md"));
+  }
+  const wroteAgents = yield* setupFile(root, "AGENTS.md", yield* kitText("dist/templates/agents.md"));
+  yield* setupFile(root, "CLAUDE.md", yield* kitText("dist/templates/claude.md"));
+  const wroteVision = yield* setupFile(root, VISION_PAGE, yield* kitText("dist/templates/vision.md"));
+  return { wroteAgents, wroteVision };
+});
+
 const check = Effect.gen(function* () {
   const args = process.argv.slice(2);
   const unknown = args.find((arg) => arg !== PRIVATE);
@@ -371,17 +381,16 @@ const check = Effect.gen(function* () {
   yield* setupFile(root, "knip.config.ts", KNIP_CONFIG);
   yield* setupFile(root, ".jscpd.json", JSCPD_CONFIG);
   yield* setupWorkflows(root, isPrivate, outcome.hasBuild);
-  for (const kind of Object.keys(TEMPLATES)) {
-    yield* setupFile(root, "templates/" + kind + ".md", yield* kitText("dist/templates/" + kind + ".md"));
-  }
-  const wroteAgents = yield* setupFile(root, "AGENTS.md", yield* kitText("dist/templates/agents.md"));
-  yield* setupFile(root, "CLAUDE.md", yield* kitText("dist/templates/claude.md"));
+  const { wroteAgents, wroteVision } = yield* setupDocFiles(root);
   if (isPrivate) yield* Console.log(NAME + ": set the CI_RUNS_ON variable to a self-hosted runner label so the new jobs land there");
   if (!outcome.hasOwner) {
     yield* Console.log(NAME + ": declare the repository owners in package.json author or contributors before the first commit");
   }
   if (wroteAgents) {
     yield* Console.log(NAME + ": fill AGENTS.md with what an agent cannot infer from the code before the first commit");
+  }
+  if (wroteVision) {
+    yield* Console.log(NAME + ": fill the six sections of " + VISION_PAGE + " and name it in one line of AGENTS.md before the first commit");
   }
   return true;
 });
