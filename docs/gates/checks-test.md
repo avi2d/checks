@@ -79,7 +79,8 @@ Files under `tests/quarantine/` are not run or judged, as [checks-test-layout](c
 
 Outside CI, `checks-test` refuses `--full`, `--tier=e2e` and a `--tier=pixel` run that does not approve pictures before any test runs, and exits 2.
 `CI` counts as unset when it is missing or false.
-A refused `--full` or `--tier=e2e` run names `gh workflow run ci --ref <branch>`, which starts the same run in CI on that branch.
+A refused `--full` or `--tier=e2e` run tells the reader to push the branch and open or update its pull request, so CI runs the checks.
+The full suite runs at release.
 A refused `--tier=pixel` run names `gh workflow run whole-tree-run --ref <branch>`, the workflow [checks-whole-tree-run](checks-whole-tree-run.md#running-it-by-hand) describes.
 Push the branch first, so the dispatched run tests the branch instead of the default branch.
 A pixel run with `APPROVE_SCREENS` true still runs outside CI, since a CI run cannot write approved pictures back.
@@ -88,7 +89,7 @@ A pixel run with `APPROVE_SCREENS` true still runs outside CI, since a CI run ca
 With `CI` true, every option runs as the rest of this page says.
 
 ```
-checks-test: refusing a `--full` run outside CI; push the branch, then start the same run in CI with `gh workflow run ci --ref <branch>`
+checks-test: refusing a `--full` run outside CI; push the branch and open or update its pull request so CI runs the checks, and the full suite runs at release
 ```
 
 ## Pull request runs

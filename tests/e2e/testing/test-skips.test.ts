@@ -324,13 +324,13 @@ test("a CI run covers the full suite past the smoke list", async () => {
   expect(ci.text).toContain("tests/e2e/search.test.ts:");
 });
 
-test("a local run with --full or the e2e tier refuses before any test runs and names the ci workflow", async () => {
+test("a local run with --full or the e2e tier refuses before any test runs and names the pull request", async () => {
   await smokeConsumer();
 
   for (const args of [["--full"], ["--tier=e2e"]]) {
     const refused = await checksTest(false, args);
     expect(refused.exitCode).toBe(2);
-    expect(refused.text).toContain("gh workflow run ci --ref <branch>");
+    expect(refused.text).toContain("open or update its pull request");
     expect(refused.text).not.toContain("breaks outside the smoke list");
   }
 });

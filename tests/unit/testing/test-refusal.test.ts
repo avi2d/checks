@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
 import { heavyRunRefusal } from "../../../src/testing/test-refusal.ts";
 
-test("a --full or e2e run outside CI is refused rather than run, and names the ci workflow", () => {
-  expect(heavyRunRefusal({ full: true }, "local", false)).toBe("refusing a `--full` run outside CI; push the branch, then start the same run in CI with `gh workflow run ci --ref <branch>`");
+test("a --full or e2e run outside CI is refused rather than run, and names the pull request", () => {
+  expect(heavyRunRefusal({ full: true }, "local", false)).toBe("refusing a `--full` run outside CI; push the branch and open or update its pull request so CI runs the checks, and the full suite runs at release");
   expect(heavyRunRefusal({ tier: "e2e", workers: 4 }, "local", false)).toBe(
-    "refusing a `--tier=e2e` run outside CI; push the branch, then start the same run in CI with `gh workflow run ci --ref <branch>`",
+    "refusing a `--tier=e2e` run outside CI; push the branch and open or update its pull request so CI runs the checks, and the full suite runs at release",
   );
 });
 
