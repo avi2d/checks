@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.78.0
+
+Released 2026-11-08.
+
+### Features
+
+- **complexity:** refuse TypeScript heads with no .jscpd.json [#73](https://github.com/avi2d/checks/pull/73)
+
 ## 0.77.0
 
 Released 2026-11-07.
