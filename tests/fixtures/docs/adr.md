@@ -1,3 +1,6 @@
+---
+governs: [widget.ts]
+---
 # 1. A part names its supplier
 
 Date: 2026-09-24

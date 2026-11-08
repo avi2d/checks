@@ -63,7 +63,7 @@ export const KIT_GATES = [
   { bin: "checks-suppressions-ratchet", vector: "complexity", file: "suppressions-ratchet.ts", reads: "range", appliesTo: EVERY_REPOSITORY, wholeTree: true },
   { bin: "checks-ci-wiring", vector: "delivery", file: "ci-wiring.ts", reads: "tree", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-secrets", vector: "delivery", file: "secrets.ts", reads: "range", appliesTo: EVERY_REPOSITORY },
-  { bin: "checks-docs", vector: "docs", file: "docs.ts", reads: "range", alsoReads: "every agent file at the head commit", appliesTo: EVERY_REPOSITORY },
+  { bin: "checks-docs", vector: "docs", file: "docs.ts", reads: "range", alsoReads: "every agent file at the head commit and every live record's governed paths", appliesTo: EVERY_REPOSITORY },
   { bin: "checks-copy", vector: "docs", file: "copy.ts", reads: "tree", appliesTo: COPY_DECLARATION },
   { bin: "checks-repetition", vector: "complexity", file: "repetition.ts", reads: "range", appliesTo: TYPESCRIPT_SOURCE, wholeTree: true },
   { bin: "checks-graphwalk", vector: "complexity", file: "graphwalk.ts", reads: "range", appliesTo: LINTED_SOURCE },

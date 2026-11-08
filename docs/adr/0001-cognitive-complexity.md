@@ -1,3 +1,6 @@
+---
+governs: [src/complexity/readability/cognitive.ts, src/complexity/readability/cognitive-complexity.ts, src/complexity/readability/cognitive-nodes.ts, src/complexity/readability/cognitive-plain.ts, src/quality/presets/oxlint.ts]
+---
 # 0001. The size budget holds cognitive complexity at 15
 
 Date: 2026-09-25
