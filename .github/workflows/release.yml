@@ -26,6 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # The dispatched ci.yml run already passed the suite on this commit before the tag.
       - name: ref is a tag
         run: test "$GITHUB_REF_TYPE" = tag
       - uses: avi2d/workflows/setup@v1
@@ -33,11 +34,6 @@ jobs:
           fetch-depth: 0
       - name: tag is on main
         run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
-      - run: bun run build
-      - run: git diff --exit-code
-      - run: bun run lint
-      - run: bun run typecheck
-      - run: bun run test
       - name: tag matches package version
         run: test "v$(bun -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
       - uses: actions/setup-node@v4
