@@ -11,6 +11,7 @@ A repository owner follows these steps to picture one block at the kit's screen 
 - `playwright-core` installed at the version the kit's `package.json` lists among its `peerDependencies`.
 - Playwright's Chromium headless shell and WebKit, installed with `bunx playwright-core install --with-deps chromium-headless-shell webkit`.
 - A `test:pixel` script set to `checks-test --tier=pixel`, as [checks-test-layout](../gates/checks-test-layout.md) says.
+- A `whole-tree-run` workflow in the repository, as [Running it by hand](../gates/checks-whole-tree-run.md#running-it-by-hand) describes.
 
 ## Add a suite
 
@@ -33,7 +34,7 @@ To add a suite for one block:
 1. Write the same file for `"webkit"` beside it.
 1. Add `*.new.png` to `.gitignore`.
 1. Approve its first pictures as [Approve new pictures](#approve-new-pictures) says.
-1. Push the branch, then start a compare run in CI with `gh workflow run whole-tree-run --ref <branch>`, since `checks-test` refuses a pixel run outside CI unless it approves, as [checks-test](../gates/checks-test.md#runs-refused-outside-ci) says.
+1. Push the branch, then start a compare run in CI with `gh workflow run whole-tree-run --ref <branch>`, and read the pixel failures in the `tests` job's `whole-tree-run-tests` artifact and the `checks-whole-tree-run` log, since `checks-test` refuses a pixel run outside CI unless it approves, as [checks-test](../gates/checks-test.md#runs-refused-outside-ci) says.
 
 `blockScreens` registers one test for each size, and each test opens the page in a fresh browser context for its device.
 It waits for the fonts and every running animation that ends, runs `setup` and takes the picture with animations stopped.
