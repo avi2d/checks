@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.87.0
+
+Released 2026-11-08.
+
+### Features
+
+- **docs:** name the governing records on a change and keep a generated record index [#87](https://github.com/avi2d/checks/pull/87)
+
 ## 0.86.2
 
 Released 2026-11-08.
