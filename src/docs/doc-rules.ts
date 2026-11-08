@@ -12,6 +12,7 @@ import {
   type Violation,
   VERSION,
 } from "./doc-outline.ts";
+import { governsOf, governsProblems, numbersIn, supersessionKeyProblems, supersessionProblems, type GovernedRecord } from "./doc-governs.ts";
 import { ADR_STATUSES, MODES, TEMPLATES, templateFile, type Kind, type Title } from "./doc-templates.ts";
 import { ADR_DIRECTORY, DOCS_DIRECTORY } from "./prose-matchers.ts";
 
@@ -41,11 +42,13 @@ const FRONT_MATTER = /^---\r?\n(?:([\s\S]*?)\r?\n)?(?:---|\.\.\.)[ \t]*(?:\r?\n|
 const Fields = Schema.Struct({ kind: Schema.optionalKey(Schema.String), audience: Schema.optionalKey(Schema.String) });
 const decodeFields = Schema.decodeUnknownOption(Fields);
 
-function frontMatterOf(text: string): { readonly text: string; readonly fields: typeof Fields.Type } {
+type FrontMatter = { readonly text: string; readonly parsed: unknown; readonly fields: typeof Fields.Type };
+
+function frontMatterOf(text: string): FrontMatter {
   const match = FRONT_MATTER.exec(text);
-  if (match === null) return { text: "", fields: {} };
+  if (match === null) return { text: "", parsed: undefined, fields: {} };
   const parsed = Result.getOrUndefined(Result.try(() => Bun.YAML.parse(match[1] ?? "")));
-  return { text: match[0], fields: Option.getOrElse(decodeFields(parsed), () => ({})) };
+  return { text: match[0], parsed, fields: Option.getOrElse(decodeFields(parsed), () => ({})) };
 }
 
 export function speaksToConsumers(text: string): boolean {
@@ -95,11 +98,6 @@ function recordNumber(path: string): number | undefined {
 }
 
 const REVISION_CLAUSE = /\b(?:amend(?:s|ed)|narrow(?:s|ed)|supersede[sd])\b(?:[^.]|\.(?=\S))*/gi;
-const RECORD_REFERENCE = /\b(\d{4})\b/g;
-
-function numbersIn(text: string): ReadonlySet<number> {
-  return new Set(Array.from(text.matchAll(RECORD_REFERENCE), (match) => Number(match[1])));
-}
 
 function revisedIn(status: string): ReadonlySet<number> {
   return new Set((status.match(REVISION_CLAUSE) ?? []).flatMap((clause) => [...numbersIn(clause)]));
@@ -162,11 +160,20 @@ function revisionLinkProblems(path: string, outline: Outline, links: ReadonlyMap
   return [...links].flatMap(([number, other]) => pairProblems(filed, own, mine, number, other));
 }
 
+function statusWord(status: Section): string | undefined {
+  return firstText(status.body)?.text.trim().split(/\s+/, 1)[0]?.replace(/[.,;:]+$/, "");
+}
+
+function statusWordOf(outline: Outline): string | undefined {
+  const status = statusSection(outline);
+  return status === undefined ? undefined : statusWord(status);
+}
+
 function statusProblem(outline: Outline): Violation | undefined {
   const status = statusSection(outline);
   if (status === undefined) return undefined;
   const opening = firstText(status.body);
-  const word = opening?.text.trim().split(/\s+/, 1)[0]?.replace(/[.,;:]+$/, "");
+  const word = statusWord(status);
   if (ADR_STATUSES.some((known) => known === word)) return undefined;
   const found = word === undefined ? "nothing" : `\`${word}\``;
   return { line: opening?.line ?? status.heading.line, message: `\`## Status\` opens with ${found} where one of ${ADR_STATUSES.join(", ")} goes` };
@@ -208,6 +215,7 @@ function adrProblems(path: string, outline: Outline, records: Records): readonly
     statusProblem(outline),
     sharedNumberProblem(path, filed, records.paths),
     ...revisionLinkProblems(path, outline, records.links),
+    ...supersessionProblems(outline, new Set(records.paths.flatMap((other) => recordNumber(other) ?? [])), filed),
   ].filter((violation) => violation !== undefined);
 }
 
@@ -255,16 +263,37 @@ function exactProblems(kind: Kind, expected: string, actual: string): readonly V
 export function judge(kind: Kind, doc: Doc, records: Records): readonly Violation[] {
   const template = TEMPLATES[kind];
   if (template.shape === "exact") return exactProblems(kind, template.text, doc.text);
-  const frontMatter = frontMatterOf(doc.text).text;
-  const outline = parseOutline(doc.text.slice(frontMatter.length));
-  const lineOffset = frontMatter === "" ? 0 : frontMatter.split("\n").length - 1;
+  const frontMatter = frontMatterOf(doc.text);
+  const outline = parseOutline(doc.text.slice(frontMatter.text.length));
+  const lineOffset = frontMatter.text === "" ? 0 : frontMatter.text.split("\n").length - 1;
   const title = titleOf(outline);
-  return [
+  const inBody = [
     ...outlineProblems(outline),
     ...(title === undefined ? [] : titleProblems(template.title, title)),
     ...matchSections(outline.sections, template.sections, 2, title?.line ?? 1),
     ...kindProblems(kind, doc, outline, records),
-  ].map(({ line, message }) => ({ line: line + lineOffset, message })).toSorted((a, b) => a.line - b.line);
+  ].map(({ line, message }) => ({ line: line + lineOffset, message }));
+  const inFrontMatter = kind === "adr" ? recordFrontMatterProblems(frontMatter, outline) : [];
+  return [...inFrontMatter, ...inBody].toSorted((a, b) => a.line - b.line);
+}
+
+function recordFrontMatterProblems(frontMatter: FrontMatter, outline: Outline): readonly Violation[] {
+  return [
+    ...governsProblems(governsOf(frontMatter.text, frontMatter.parsed), statusWordOf(outline)),
+    ...supersessionKeyProblems(frontMatter.text, frontMatter.parsed),
+  ];
+}
+
+export function governedRecord({ path, text }: Doc): GovernedRecord {
+  const frontMatter = frontMatterOf(text);
+  const outline = outlineOf(text);
+  return {
+    path,
+    number: recordNumber(path),
+    governs: governsOf(frontMatter.text, frontMatter.parsed),
+    status: statusWordOf(outline),
+    frontMatter: frontMatter.text,
+  };
 }
 
 export function placementProblem(placement: Placement): string | undefined {

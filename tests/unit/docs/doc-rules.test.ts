@@ -62,23 +62,23 @@ test("a README missing a section is refused", () => {
 test("a record is refused for its name, its number, its date, its status and a number another record holds", () => {
   const record = fixture("adr");
   expect(found("adr", record, "docs/adr/first-record.md")).toEqual([
-    "1: is not named as a record, a four-digit number and a kebab-case name directly in docs/adr/",
+    "4: is not named as a record, a four-digit number and a kebab-case name directly in docs/adr/",
   ]);
-  expect(found("adr", record.replace("# 1.", "# 2."))).toEqual(["1: `# 2. A part names its supplier` carries number 2, and the file name 1"]);
+  expect(found("adr", record.replace("# 1.", "# 2."))).toEqual(["4: `# 2. A part names its supplier` carries number 2, and the file name 1"]);
   expect(found("adr", record.replace("# 1. ", "# "))).toEqual([
-    "1: `# A part names its supplier` does not open with the record's number, as in `# 7. The decision`",
+    "4: `# A part names its supplier` does not open with the record's number, as in `# 7. The decision`",
   ]);
   expect(found("adr", record.replace("Date: 2026-09-24", "Date: 2026-02-30"))).toEqual([
-    "3: does not follow its title with a `Date: YYYY-MM-DD` line",
+    "6: does not follow its title with a `Date: YYYY-MM-DD` line",
   ]);
   expect(found("adr", record.replace("Accepted.", "Maybe."))).toEqual([
-    "7: `## Status` opens with `Maybe` where one of Proposed, Accepted, Rejected, Deprecated, Superseded, Retired goes",
+    "10: `## Status` opens with `Maybe` where one of Proposed, Accepted, Rejected, Deprecated, Superseded, Retired goes",
   ]);
   expect(found("adr", record, RECORD, [
     { path: RECORD, text: record },
     { path: "docs/adr/0001-another.md", text: record },
-  ])).toEqual(["1: shares number 1 with docs/adr/0001-another.md"]);
-  expect(found("adr", record.replace("## Decision\n\nA part names its supplier.\n\n", ""))).toEqual(["1: lacks `## Decision`"]);
+  ])).toEqual(["4: shares number 1 with docs/adr/0001-another.md"]);
+  expect(found("adr", record.replace("## Decision\n\nA part names its supplier.\n\n", ""))).toEqual(["4: lacks `## Decision`"]);
 });
 
 const SECOND = "docs/adr/0002-a-spare-names-its-supplier.md";
@@ -94,8 +94,8 @@ function refused(doc: Doc, records: readonly Doc[]): readonly string[] {
 test("a revision link one side only names is refused until both records name each other", () => {
   const first = { path: RECORD, text: fixture("adr") };
   const second = { path: SECOND, text: secondRecord(first.text) };
-  expect(refused(second, [first, second])).toEqual(["7: `## Status` names 0001 without 0001 naming 0002 back"]);
-  expect(refused(first, [first, second])).toEqual(["5: `## Status` is named by 0002 without naming 0002 back"]);
+  expect(refused(second, [first, second])).toEqual(["10: `## Status` names 0001 without 0001 naming 0002 back"]);
+  expect(refused(first, [first, second])).toEqual(["8: `## Status` is named by 0002 without naming 0002 back"]);
 
   const namedBack = { path: RECORD, text: first.text.replace("Accepted.", "Accepted. Amended by 0002: spares name a supplier too.") };
   expect(refused(namedBack, [namedBack, second])).toEqual([]);
@@ -111,7 +111,7 @@ test("every record a revision sentence links is held to naming it back, past eac
       .replace("# 1.", "# 2.")
       .replace("Accepted.", "Accepted. Amends [0001](0001-a-part-names-its-supplier.md) and [0003](0003-a-tool-names-its-supplier.md)."),
   };
-  expect(refused(second, [first, second, third])).toEqual(["7: `## Status` names 0003 without 0003 naming 0002 back"]);
+  expect(refused(second, [first, second, third])).toEqual(["10: `## Status` names 0003 without 0003 naming 0002 back"]);
 });
 
 test("a word that only starts like a revision verb links no record", () => {

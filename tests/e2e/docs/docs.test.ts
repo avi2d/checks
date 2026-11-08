@@ -31,7 +31,7 @@ const PLANTS: readonly Plant[] = [
     kind: "adr",
     path: "docs/adr/0001-a-part-names-its-supplier.md",
     defect: (text) => text.replace("Accepted.", "Maybe."),
-    refusal: "docs/adr/0001-a-part-names-its-supplier.md:7: `## Status` opens with `Maybe`",
+    refusal: "docs/adr/0001-a-part-names-its-supplier.md:10: `## Status` opens with `Maybe`",
   },
   {
     kind: "agents",
@@ -143,7 +143,7 @@ test(
     const head = await commit("an undeclared page and a record with a taken number");
 
     const red = await docs(base, head);
-    expect(red.text).toContain("  docs/adr/0001-a-second-record.md:1: shares number 1 with docs/adr/0001-a-part-names-its-supplier.md\n");
+    expect(red.text).toContain("  docs/adr/0001-a-second-record.md:4: shares number 1 with docs/adr/0001-a-part-names-its-supplier.md\n");
     expect(red.text).toContain("  docs/parts.md: is a page under docs/ with no mode; add kind:");
     expect(red.exitCode).toBe(1);
 
@@ -169,7 +169,7 @@ test(
     const head = await commit("a second record that amends the first");
 
     const red = await docs(base, head);
-    expect(red.text).toContain("  docs/adr/0002-a-spare-names-its-supplier.md:7: `## Status` names 0001 without 0001 naming 0002 back\n");
+    expect(red.text).toContain("  docs/adr/0002-a-spare-names-its-supplier.md:10: `## Status` names 0001 without 0001 naming 0002 back\n");
     expect(red.exitCode).toBe(1);
 
     await put(
