@@ -1,6 +1,10 @@
+import { BunServices } from "@effect/platform-bun";
 import { expect, test } from "bun:test";
-import { Option } from "effect";
-import { gitleaksBuildFor, type Leak } from "../../../src/delivery/gitleaks.ts";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Effect, Option } from "effect";
+import { gitleaksBuildFor, pinnedGitleaks, type Leak } from "../../../src/delivery/gitleaks.ts";
 import { report } from "../../../src/delivery/secrets.ts";
 
 const leak = (File: string, StartLine: number, RuleID: string, Commit = "e19e45c2f00dfeed"): Leak => ({
@@ -16,6 +20,20 @@ test("each platform a runner or a laptop uses has a pinned gitleaks archive, and
   expect(Option.map(gitleaksBuildFor("darwin", "arm64"), ({ archive }) => archive)).toEqual(Option.some("gitleaks_8.30.1_darwin_arm64.tar.gz"));
   expect(Option.getOrUndefined(gitleaksBuildFor("linux", "arm64"))?.binarySha256).toMatch(/^[0-9a-f]{64}$/);
   expect(gitleaksBuildFor("win32", "x64")).toEqual(Option.none());
+});
+
+test("the cached gitleaks is read from its version and platform directory, not from one copy every platform sharing the cache would reuse", async () => {
+  const cache = await mkdtemp(join(tmpdir(), "checks-gitleaks-cache-"));
+  const binary = join(cache, "gitleaks", "8.30.1", `${process.platform}-${process.arch}`, "gitleaks");
+  try {
+    await mkdir(join(binary, ".."), { recursive: true });
+    await writeFile(binary, "another platform's gitleaks");
+    const failure = await Effect.runPromise(Effect.flip(pinnedGitleaks(cache)).pipe(Effect.provide(BunServices.layer)));
+    expect(failure.message).toStartWith(`${binary} has SHA-256 `);
+    expect(failure.message).toEndWith("delete it and rerun");
+  } finally {
+    await rm(cache, { recursive: true, force: true });
+  }
 });
 
 test("the report names each secret by file, line and rule in that order, and the commit that added it", () => {

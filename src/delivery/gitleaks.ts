@@ -1,32 +1,38 @@
 import { Effect, Option, Path, Schema } from "effect";
 import { collect } from "../core/git.ts";
-import { installPinned } from "../dependencies/pinned-binary.ts";
+import { installPinned, releaseAssetApi } from "../dependencies/pinned-binary.ts";
 
 const GITLEAKS_VERSION = "8.30.1";
 const RELEASES = `https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}`;
+const REPOSITORY = "gitleaks/gitleaks";
 const MEMBER = "gitleaks";
 
-type Build = { readonly archive: string; readonly sha256: string; readonly binarySha256: string };
+type Build = { readonly archive: string; readonly assetId: number; readonly sha256: string; readonly binarySha256: string };
 
 // The archive's SHA-256 as gitleaks_<version>_checksums.txt of the release lists it, and the SHA-256 of the binary inside.
+// The asset id is the archive's in the release, as GitHub's API lists it.
 const BUILDS: Readonly<Record<string, Build>> = {
   "darwin-arm64": {
     archive: `gitleaks_${GITLEAKS_VERSION}_darwin_arm64.tar.gz`,
+    assetId: 378_332_059,
     sha256: "b40ab0ae55c505963e365f271a8d3846efbc170aa17f2607f13df610a9aeb6a5",
     binarySha256: "ba52fb1bfabbcde42f032afad3d6e0b19dff8ed105229a16e7caa338bbc0e84f",
   },
   "darwin-x64": {
     archive: `gitleaks_${GITLEAKS_VERSION}_darwin_x64.tar.gz`,
+    assetId: 378_332_053,
     sha256: "dfe101a4db2255fc85120ac7f3d25e4342c3c20cf749f2c20a18081af1952709",
     binarySha256: "cee01fea7173f1b779dff188e1c26ecbcb4027d394acc573b23aaf0be260e291",
   },
   "linux-arm64": {
     archive: `gitleaks_${GITLEAKS_VERSION}_linux_arm64.tar.gz`,
+    assetId: 378_332_057,
     sha256: "e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080",
     binarySha256: "00e91bbe655bd7c47753e8cfe61cb76ea1a5d7e7702fe161ee40102b46b3823b",
   },
   "linux-x64": {
     archive: `gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz`,
+    assetId: 378_332_058,
     sha256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb",
     binarySha256: "88f91962aa2f93ac6ab281d553b9e125f5197bbbce38f9f2437f7299c32e5509",
   },
@@ -46,10 +52,10 @@ export const pinnedGitleaks = Effect.fn("pinnedGitleaks")(function* (cache: stri
     return yield* new GitleaksError({ message: `no pinned gitleaks build runs on ${process.platform}-${process.arch}` });
   }
   const path = yield* Path.Path;
-  const { archive, sha256, binarySha256 } = build.value;
+  const { archive, assetId, sha256, binarySha256 } = build.value;
   return yield* installPinned(
-    { kind: "tar.gz", url: `${RELEASES}/${archive}`, sha256, member: MEMBER, memberSha256: binarySha256 },
-    path.join(cache, "gitleaks", GITLEAKS_VERSION, MEMBER),
+    { kind: "tar.gz", url: `${RELEASES}/${archive}`, mirror: releaseAssetApi(REPOSITORY, assetId), sha256, member: MEMBER, memberSha256: binarySha256 },
+    path.join(cache, "gitleaks", GITLEAKS_VERSION, `${process.platform}-${process.arch}`, MEMBER),
   );
 });
 

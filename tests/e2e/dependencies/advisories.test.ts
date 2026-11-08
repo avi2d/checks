@@ -1,8 +1,11 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { chmod, copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { Option } from "effect";
+import { dirname, join, relative } from "node:path";
+import { BunServices } from "@effect/platform-bun";
+import { Effect, Option } from "effect";
+import { pinnedGitleaks } from "../../../src/delivery/gitleaks.ts";
+import { cacheRoot } from "../../../src/dependencies/cache-root.ts";
 import { buildFor, OSV_SCANNER_VERSION } from "../../../src/dependencies/osv-scanner.ts";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
 import { FAKE_SCANNER_PATH, GATE_WITH_FAKE_SCANNER } from "../lib/advisories-gate.ts";
@@ -68,6 +71,16 @@ async function sandbox(extra: Readonly<Record<string, string>> = {}): Promise<Sa
   const env = { ...withoutPullRequestEvent(), HOME: dir, [FAKE_SCANNER_PATH]: scanner, FAKE_OSV_LOG: log, GITHUB_STEP_SUMMARY: summary, ...extra };
   const calls = async () => (await readFile(log, "utf8")).split("\n").filter((line) => line !== "");
   return { env, calls, summary, marker: join(dir, ".cache", "avi2dg-checks", "osv-scanner", "db", "refreshed"), scanner, home: dir };
+}
+
+// A lint run's secrets gate downloads gitleaks into an empty HOME, so the sandbox gets the verified copy from the real cache.
+async function withVerifiedGitleaks(home: string): Promise<void> {
+  const cache = await Effect.runPromise(cacheRoot().pipe(Effect.provide(BunServices.layer)));
+  const binary = await Effect.runPromise(pinnedGitleaks(cache).pipe(Effect.provide(BunServices.layer)));
+  const seeded = join(home, ".cache", "avi2dg-checks", relative(cache, binary));
+  await mkdir(dirname(seeded), { recursive: true });
+  await copyFile(binary, seeded);
+  await chmod(seeded, 0o755);
 }
 
 function gate(repo: FixtureRepo, box: Sandbox, ...args: readonly string[]): Promise<Ran> {
@@ -252,6 +265,7 @@ test(
     await repo.write({ "bun.lock": lockfile({ "left-pad": "1.3.0", lodash: "4.17.20" }) });
     await repo.commit("build: add lodash");
     const box = await sandbox();
+    await withVerifiedGitleaks(box.home);
     const lint = await ran(
       $`${process.execPath} ${join(CHECKOUT, "src", "core", "lint.ts")}`
         .cwd(repo.dir)
