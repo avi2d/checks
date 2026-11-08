@@ -53,6 +53,7 @@ export default {
 ## What it reads
 
 It reads `CI` from the environment.
+When Stryker loads the preset, the preset reads `CHECKS_MUTATION_MODE` and `RUNNER_ENVIRONMENT` from the environment.
 It forwards every argument to `stryker run` through `bun x stryker run`.
 
 ## Arguments
