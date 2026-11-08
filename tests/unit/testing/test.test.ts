@@ -27,7 +27,7 @@ test("under CI the default run is the full suite", () => {
   expect(suiteArgs({ kind: "full" }, ["tests/e2e/checkout.test.ts"])).toEqual([]);
 });
 
-test("--full runs the full suite outside CI", () => {
+test("--full selects the full suite", () => {
   expect(testOptions(["--full"])).toEqual({ full: true });
   expect(selectSuite({ full: true }, "local")).toEqual({ kind: "full" });
   expect(suiteArgs(selectSuite({ full: true }, "local"), [])).toEqual([]);

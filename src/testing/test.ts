@@ -4,9 +4,10 @@ import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effec
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { TEST_ENTRY_POINT } from "../core/gates.ts";
 import { runMain, Usage } from "../core/main.ts";
-import { FULL, testOptions, type TestOptions, type TestTier } from "../core/test-script.ts";
+import { testOptions, type TestOptions, type TestTier } from "../core/test-script.ts";
 import { readLocalNarrowing, readPullRequestNarrowing } from "./affected-tests.ts";
 import { changedLocalPaths } from "./changed-tests.ts";
+import { APPROVE_VARIABLE, heavyRunRefusal } from "./test-refusal.ts";
 import {
   readDeclarationsIn,
   readSkipDeclarations,
@@ -30,6 +31,10 @@ export type Verdict = {
 };
 
 export class SkipGateError extends Schema.TaggedError<SkipGateError>()("SkipGateError", {
+  message: Schema.String,
+}) {}
+
+class RunRefusal extends Schema.TaggedError<RunRefusal>()("RunRefusal", {
   message: Schema.String,
 }) {}
 
@@ -138,6 +143,11 @@ const environmentOf = Config.Boolean("CI").pipe(
   Config.withDefault(false),
   Config.map((ci): Environment => (ci ? "ci" : "local")),
   Effect.mapError((cause) => new SkipGateError({ message: `cannot tell a ci run from a local one: ${cause.message}` })),
+);
+
+const approvingScreens = Config.Boolean(APPROVE_VARIABLE).pipe(
+  Config.withDefault(false),
+  Effect.mapError((cause) => new SkipGateError({ message: `cannot read ${APPROVE_VARIABLE}: ${cause.message}` })),
 );
 
 export type SuiteSelection =
@@ -256,6 +266,8 @@ const testEntry = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const environment = yield* environmentOf;
+  const refusal = heavyRunRefusal(options, environment, options.tier === "pixel" && (yield* approvingScreens));
+  if (refusal !== undefined) return yield* new RunRefusal({ message: refusal });
   const selection = changed
     ? yield* changedSelection()
     : yield* narrowSelection(options, selectSuite(options, environment), environment);
@@ -270,7 +282,7 @@ const testEntry = Effect.gen(function* () {
   const smoke = selection.kind === "smoke" ? yield* readSmokeList(process.cwd()) : [];
   const scope = yield* readScope(selection, smoke);
   if (scope.files?.length === 0) {
-    yield* Console.log(`${NAME}: no unit test and no smoke list, so this local run ran nothing; declare checks.smoke or pass ${FULL}`);
+    yield* Console.log(`${NAME}: no unit test and no smoke list, so this local run ran nothing; declare checks.smoke`);
     return true;
   }
   const { declarations } = scope;

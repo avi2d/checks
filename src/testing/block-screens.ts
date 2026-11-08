@@ -3,6 +3,9 @@ import { afterAll, expect, test } from "bun:test";
 import { Config, Effect, FileSystem, Path, Schema } from "effect";
 import { chromium, devices, webkit, type Browser, type Page } from "playwright-core";
 import { SCREEN_SIZES, screenSizeName, type ScreenSize, type ScreenSizeSet } from "../quality/browser/screen-sizes.ts";
+import { APPROVE_VARIABLE } from "./test-refusal.ts";
+
+export { APPROVE_VARIABLE };
 
 export const SCREEN_ENGINES = ["chromium", "webkit"] as const;
 
@@ -189,8 +192,6 @@ const mismatch = (now: Picture, then: Picture, { channel, share }: Tolerance): s
 };
 
 export type ApprovalMode = "compare" | "approve";
-
-export const APPROVE_VARIABLE = "APPROVE_SCREENS";
 
 const modeFromEnvironment = Config.Boolean(APPROVE_VARIABLE).pipe(
   Config.withDefault(false),

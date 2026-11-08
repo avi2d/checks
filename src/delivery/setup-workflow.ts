@@ -26,12 +26,15 @@ export function ciWorkflow(isPrivate: boolean, hasBuild: boolean): string {
     "      - uses: oven-sh/setup-bun@v2",
     "        with:",
     "          bun-version-file: .bun-version",
-    "      - run: bun install --frozen-lockfile",
+    "      - id: install",
+    "        run: bun install --frozen-lockfile",
   ];
   if (hasBuild) {
     lines.push("      - run: bun run build", "      - run: git diff --exit-code");
   }
-  lines.push("      - run: bun run lint", "      - run: bun run typecheck", "      - run: bun run test");
+  // A step without a status function runs only after every earlier step succeeded, so a failed lint would skip both.
+  const afterInstall = "      - if: ${{ !cancelled() && steps.install.outcome == 'success' }}";
+  lines.push("      - run: bun run lint", afterInstall, "        run: bun run typecheck", afterInstall, "        run: bun run test");
   lines.push(
     "      - id: title",
     "        name: lint the title",

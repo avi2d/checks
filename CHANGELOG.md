@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.84.0
+
+Released 2026-11-08.
+
+### Features
+
+- **testing:** refuse full, e2e and pixel checks-test runs outside CI [#81](https://github.com/avi2d/checks/pull/81)
+
 ## 0.83.0
 
 Released 2026-11-08.

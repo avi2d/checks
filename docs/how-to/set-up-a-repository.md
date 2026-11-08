@@ -121,13 +121,18 @@ To run the gates in CI:
          - uses: oven-sh/setup-bun@v2
            with:
              bun-version-file: .bun-version
-         - run: bun install --frozen-lockfile
+         - id: install
+           run: bun install --frozen-lockfile
          - run: bun run build
          - run: git diff --exit-code
          - run: bun run lint
-         - run: bun run typecheck
-         - run: bun run test
+         - if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+           run: bun run typecheck
+         - if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+           run: bun run test
    ```
+
+The `if` on `typecheck` and `test` lets each run and report its own result after a failed `lint`, since a step without one is skipped once an earlier step fails.
 
 Lint the pull request title in the same job with one step:
 
