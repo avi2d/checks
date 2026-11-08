@@ -315,7 +315,7 @@ docs: advisory, 1 path(s), link(s) or command(s) the living docs or agent files 
 ## When it runs
 
 `checks-lint` runs it over each pull request's range in every repository, as [checks-lint](checks-lint.md) says.
-A repository adopts the templates as its files change, and the prose rules as its lines change, because an untouched file or line never fails those checks.
+A repository adopts the templates as its files change, and the prose rules as its lines change, because an untouched file or line never fails those checks, except a live record whose governed path the range deletes.
 It reshapes its agent files when it adopts the gate, because [Agent files](#agent-files) judges each one whatever the range touches.
 It shrinks an oversize README in the first change that edits it, because [README ceilings](#readme-ceilings) judges only a README the range edits.
 It adds `AGENTS.md` and `CLAUDE.md` at its root in the first change that edits a doc file, because [Root agent files](#root-agent-files) judges only such a range.
