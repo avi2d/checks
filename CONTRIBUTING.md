@@ -72,8 +72,9 @@ To release a version:
    A `main` that moved while `ci` ran keeps its new head, and the run of that push releases it.
 1. Watch the `release` workflow.
    The release workflow refuses a ref that is not a tag, a tag off `main` or one that disagrees with `package.json`.
-   It reruns the build, the check that the build changed no committed file, lint, typecheck and the suite before it publishes to npm through [checks-release-publish](docs/gates/checks-release-publish.md).
-   That step leaves the version off npm when npm already holds a newer one.
+   When release-push dispatched the run after its ci run passed on the same commit, it runs only the tag, main ancestry and version guards before it publishes to npm through [checks-release-publish](docs/gates/checks-release-publish.md).
+   A tag a person pushes or a run a person dispatches also runs the build, the check that the build changed no committed file, lint, typecheck and the suite first.
+   checks-release-publish leaves the version off npm when npm already holds a newer one.
    Once it passes, the workflow creates or updates the GitHub release with the matching `CHANGELOG.md` section.
 
 `publishConfig.access` in `package.json` is what makes the scoped package public.
