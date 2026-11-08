@@ -52,7 +52,7 @@ It deletes through `gh`, which needs a token that deletes the repository's Actio
 
 It reads the runs and their artifacts through `gh`, which needs a token that reads the repository's Actions, such as `GH_TOKEN: ${{ github.token }}` with `actions: read`.
 The `mutation-baseline` artifact holds `stryker-incremental.json` and `mutation/mutation.json`, which an upload of `reports/stryker-incremental.json` and `reports/mutation/mutation.json` writes.
-The `mutation-baseline-full` artifact holds `mutation.json` and `stryker-incremental.json` at its root, which an upload of `${{ runner.temp }}/full/` writes.
+The `mutation-baseline-full` artifact holds `mutation.json` at its root, which the `refresh-merge` job's upload of `${{ runner.temp }}/full/` writes.
 It reads `RUNNER_ENVIRONMENT` and `HOME` to place the runner cache, and `GITHUB_REPOSITORY_ID` to find the saved baselines.
 `--save` and `--prune` read `GITHUB_RUN_ID`.
 With `--full` and an incremental destination it reads the run's head through `gh run view <run> --json headSha`.
@@ -156,7 +156,7 @@ With `--dry-run` the summary says what it would delete and what it would keep.
 
 ## When it runs
 
-Only a CI step the repository writes runs it.
+Only a CI step runs it: the shared `mutation` workflow in its baseline, compare and refresh jobs, or a step the repository writes.
 A baseline job restores the state the previous `main` run left before an incremental Stryker run:
 
 ```yaml
@@ -183,24 +183,22 @@ The saved baseline uses none of the account's Actions storage, which every priva
 That storage accrues by the hour over the month, so an artifact deleted early still counts until the month ends.
 A baseline job on a GitHub-hosted runner uploads the same two files as a `mutation-baseline` artifact with `retention-days: 7` instead, since the restore reads only the newest `main` run.
 
-A full baseline job restores the previous full state before its incremental Stryker run, so it retests the mutants its changes reach, while a result made stale by a file a test reads at runtime lasts until the next 28-day refresh.
-The checkout behind that step fetches the full history, so the restore can diff the restored run against `HEAD`:
+A refresh job restores the previous full report with `--full` for shard balancing and runs the full suite with static mutants ignored:
 
 ```yaml
-- name: Restore previous full baseline state
+- name: Restore the previous full report
   env:
     GH_TOKEN: ${{ github.token }}
-  run: bunx checks-mutation-baseline --full reports/mutation/mutation.json reports/stryker-incremental.json
+  run: bunx checks-mutation-baseline --full "$RUNNER_TEMP/baseline-full/mutation.json"
 ```
 
 The restore reads the repository's Actions through `gh`, so the job that holds it grants `contents: read` and `actions: read`.
 
-A full run uploads its slimmed report and its slimmed state as the `mutation-baseline-full` artifact, which a branch comparison's scope step reads on any runner.
-It slims the report and the state first, so the one directory holds about 10 MB in place of about 500 MB:
+A refresh merge uploads its slimmed report as the `mutation-baseline-full` artifact, which a branch comparison's scope step reads on any runner.
+It slims the report first:
 
 ```yaml
 - run: bunx checks-mutation-baseline --slim reports/mutation/mutation.json "$RUNNER_TEMP/full/mutation.json"
-- run: bunx checks-mutation-baseline --slim reports/stryker-incremental.json "$RUNNER_TEMP/full/stryker-incremental.json"
 - uses: actions/upload-artifact@v4
   with:
     name: mutation-baseline-full
