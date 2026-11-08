@@ -11,6 +11,7 @@ export type Title =
 
 type Outlined = {
   readonly shape: "outline";
+  readonly frontMatter?: readonly string[];
   readonly title: Title;
   readonly lead: readonly string[];
   readonly sections: readonly Slot[];
@@ -100,6 +101,7 @@ export const TEMPLATES: Readonly<Record<Kind, Template>> = {
   },
   adr: {
     shape: "outline",
+    frontMatter: ["governs: [<each path the record governs, from the repository root>]"],
     title: { type: "open", placeholder: "<number>. <The decision, as a sentence>", rule: "any" },
     lead: ["Date: <YYYY-MM-DD, the day the record was written>"],
     sections: [
@@ -200,7 +202,8 @@ function renderSlot(slot: Slot, level: number): readonly string[] {
 export function renderTemplate(template: Template): string {
   if (template.shape === "exact") return template.text;
   const lines = separated([[`# ${titleText(template.title)}`], template.lead, ...template.sections.map((slot) => renderSlot(slot, 2))]);
-  return `${lines.join("\n")}\n`;
+  const frontMatter = template.frontMatter === undefined ? [] : ["---", ...template.frontMatter, "---"];
+  return `${[...frontMatter, ...lines].join("\n")}\n`;
 }
 
 export function templateFile(kind: Kind): string {

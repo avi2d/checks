@@ -19,6 +19,8 @@ It fails when an entry in an agent file names no tracked path, link or `bun run`
 It fails when a range edits a README that is over 6,000 characters or holds a table cell over 300, as [README ceilings](#readme-ceilings) says.
 It fails when a range edits a doc file and a repository with a `package.json` is missing `AGENTS.md` or `CLAUDE.md` at its root, as [Root agent files](#root-agent-files) says.
 It fails when a living doc or an agent file names a code span the range removed from every file outside the docs, on any line.
+It fails when a record lacks `governs`, names a path that does not exist, or states a supersession outside its Status, as [Governed paths](#governed-paths) says.
+It fails when the range deletes a path a live record governs and leaves the record live, whatever else the range touches.
 [Paths, links and commands](#paths-links-and-commands) says how each reference resolves.
 The package ships one template per kind under `dist/templates/`, and a repository starts a new doc file by copying one:
 
@@ -65,6 +67,7 @@ A template decides a file's structure, and the template file itself is the refer
   The first word under Status is Proposed, Accepted, Rejected, Deprecated, Superseded or Retired.
   No other record holds its number.
   A Status that amends, narrows or supersedes another record names it, and the other record names it back.
+  Its front matter holds `governs`, as [Governed paths](#governed-paths) says.
 - A changelog lists its releases newest first, and each opens with a `Released YYYY-MM-DD.` line.
 - A how-to or tutorial page numbers its steps.
 - `CLAUDE.md` is its template word for word.
@@ -139,6 +142,33 @@ So does a longer version that opens with a pin.
 A manifest range with no single version pins nothing, as in `>=1.2.3 <2` in `package.json`.
 A doc line that carries a pinned version still fails when that version sits inside a range.
 It reads the root `package.json` and `.bun-version`, so a nested package's pins are not checked.
+
+## Governed paths
+
+A record in `docs/adr/` lives in the repository whose code it governs, and its `governs` front matter lists the paths it governs:
+
+```yaml
+---
+governs: [src/parts.ts, docs/parts]
+---
+```
+
+- A record without `governs`, or whose `governs` is not a list of paths, fails.
+- A path is written from the repository root and names a tracked file or a directory that holds one.
+  A path the head commit lacks fails, and the failure names the record and the path.
+- A live record lists at least one path.
+  A record whose Status opens with Superseded or Retired is retired, and only a retired record may hold `governs: []`.
+  The paths a retired record lists are not checked, since a retired record may outlive what it governed.
+- A range that deletes a path a live record governs fails unless the same range retires the record.
+  A file deleted from under a governed directory is not a deleted path while the directory still holds a file.
+  The failure names the record, even when the range leaves the record alone.
+  Deleting the record with the path fails too, because a retired record stays in the log.
+- A supersession sits in Status alone.
+  A sentence outside Status that says supersede and names another record's number fails, and so does a front matter key that names a supersession.
+  A blockquote and a code span are not read, so a quoted instruction passes.
+
+A record the range leaves alone is listed as advisory for these findings, as for every template finding.
+A deleted governed path is the one exception, and fails wherever the record sits.
 
 ## Paths, links and commands
 
@@ -227,6 +257,7 @@ Any other range lists the missing file as advisory, so the first change that edi
 It reads each Markdown file at the head commit, and uses its path or front matter to choose its kind.
 A file the range adds, changes or renames is held to its template, and a file it deletes is not.
 It reads the lines the range adds or edits from the diff, with renames detected, so a renamed doc is judged only on the lines the rename changed.
+It reads each record's `governs` at both ends of the range, and checks it against the files tracked at each end.
 It reads the files tracked at both ends of the range, and the `scripts` of each `package.json` a living doc or an agent file sits under.
 It compares each code span a living doc or an agent file names with the text git tracks outside the docs at both ends of the range.
 It reads the repository's own name and its direct dependencies from the root `package.json` at the head commit.
@@ -252,20 +283,21 @@ With one it is that commit against its parent, or against the empty tree for a r
 
 | Code | When |
 | --- | --- |
-| 0 | every doc file the range touches holds to its template, every line it adds to a living doc or an agent file holds to the prose rules and copies no pinned version, it adds or breaks no reference that does not resolve, every agent file holds to the ceiling and holds no `## Maintaining this file`, every entry in an agent file names a tracked path, a link or a command, every README the range edits holds to the README ceilings, a range that edits a doc file leaves `AGENTS.md` and `CLAUDE.md` at the root of a repository with a `package.json`, and no code span a living doc or an agent file names vanished from every file outside the docs |
-| 1 | a doc file the range touches does not hold to its template, a line the range adds to a living doc or an agent file breaks a prose rule or copies a pinned version, the range adds or breaks a reference that does not resolve, an agent file is over the ceiling or holds `## Maintaining this file`, an entry in an agent file names no tracked path, link or command, a README the range edits is over a README ceiling, a range that edits a doc file leaves either `AGENTS.md` or `CLAUDE.md` missing from the root in a repository with a `package.json`, or the range removes a name a living doc or an agent file still carries |
+| 0 | every doc file the range touches holds to its template, every line it adds to a living doc or an agent file holds to the prose rules and copies no pinned version, it adds or breaks no reference that does not resolve, every agent file holds to the ceiling and holds no `## Maintaining this file`, every entry in an agent file names a tracked path, a link or a command, every README the range edits holds to the README ceilings, a range that edits a doc file leaves `AGENTS.md` and `CLAUDE.md` at the root of a repository with a `package.json`, no code span a living doc or an agent file names vanished from every file outside the docs, and the range deletes no path a live record governs |
+| 1 | a doc file the range touches does not hold to its template, a line the range adds to a living doc or an agent file breaks a prose rule or copies a pinned version, the range adds or breaks a reference that does not resolve, an agent file is over the ceiling or holds `## Maintaining this file`, an entry in an agent file names no tracked path, link or command, a README the range edits is over a README ceiling, a range that edits a doc file leaves either `AGENTS.md` or `CLAUDE.md` missing from the root in a repository with a `package.json`, the range removes a name a living doc or an agent file still carries, or the range deletes a path a live record governs |
 | 2 | a `package.json` does not decode, a ref does not resolve, or `grep` cannot read an installed direct dependency |
 
 ## Sample output
 
 ```
-docs: 8 violation(s):
+docs: 9 violation(s):
   CLAUDE.md: is missing from the repository root, which a repository with a `package.json` keeps. Copy `node_modules/@avi2dg/checks/dist/templates/claude.md` to `CLAUDE.md` word for word, so Claude Code reads `AGENTS.md`
   README.md:1: lacks `## Before you begin`
   README.md:12: carries `;`, a semicolon. Use two sentences
   README.md:13: carries `1.3.5`, a version .bun-version pins. Name .bun-version instead, or let a build write the line between generated markers
   README.md:14: carries `former`, a report about the past. Say what is true now, and leave what changed to the changelog, a commit message or a decision record
   README.md:20: names `scripts/bild.ts`, which is not in the repository
+  docs/adr/0003-parts-list.md:2: governs `src/parts.ts`, which the range deletes. In the same change, retire it with Superseded or Retired in `## Status`
   docs/parts.md: is a page under docs/ with no mode; add kind: tutorial, how-to, reference, explanation in YAML front matter
   docs/parts.md:9: names `gates.lint`, which the range removed from every file outside the docs. Say what holds now, or drop the line
 docs: advisory, 1 doc file(s) the range leaves alone do not hold to their templates yet:
