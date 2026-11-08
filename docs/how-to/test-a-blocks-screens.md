@@ -62,7 +62,7 @@ To approve the pictures of a block that changed on purpose:
 
 1. Run `APPROVE_SCREENS=1 bun run test:pixel`, which replaces each approved picture with the new one and removes its `.new.png`.
 1. Look at every changed file in the fixtures folder before you commit it.
-1. Restore with git each picture that looks wrong.
+1. Restore with git each changed picture that looks wrong and delete each new one that does.
 
 Approve mode is the one pixel run `checks-test` takes outside CI, since a CI run cannot write the approved pictures back.
 Approve mode passes every size, so the review of the changed pictures is the only check on them.
