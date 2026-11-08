@@ -12,7 +12,7 @@ import {
   type Violation,
   VERSION,
 } from "./doc-outline.ts";
-import { governsOf, governsProblems, isRetired, numbersIn, supersessionKeyProblems, supersessionProblems, type GovernedRecord } from "./doc-governs.ts";
+import { governsOf, governsProblems, numbersIn, supersessionKeyProblems, supersessionProblems, type GovernedRecord } from "./doc-governs.ts";
 import { ADR_STATUSES, MODES, TEMPLATES, templateFile, type Kind, type Title } from "./doc-templates.ts";
 import { ADR_DIRECTORY, DOCS_DIRECTORY } from "./prose-matchers.ts";
 
@@ -164,11 +164,6 @@ function statusWord(status: Section): string | undefined {
   return firstText(status.body)?.text.trim().split(/\s+/, 1)[0]?.replace(/[.,;:]+$/, "");
 }
 
-function retiredIn(outline: Outline): boolean {
-  const status = statusSection(outline);
-  return status !== undefined && isRetired(statusWord(status));
-}
-
 function statusWordOf(outline: Outline): string | undefined {
   const status = statusSection(outline);
   return status === undefined ? undefined : statusWord(status);
@@ -283,9 +278,8 @@ export function judge(kind: Kind, doc: Doc, records: Records): readonly Violatio
 }
 
 function recordFrontMatterProblems(frontMatter: FrontMatter, outline: Outline): readonly Violation[] {
-  const status = statusSection(outline);
   return [
-    ...governsProblems(governsOf(frontMatter.text, frontMatter.parsed), status === undefined ? undefined : statusWord(status)),
+    ...governsProblems(governsOf(frontMatter.text, frontMatter.parsed), statusWordOf(outline)),
     ...supersessionKeyProblems(frontMatter.text, frontMatter.parsed),
   ];
 }
@@ -297,7 +291,6 @@ export function governedRecord({ path, text }: Doc): GovernedRecord {
     path,
     number: recordNumber(path),
     governs: governsOf(frontMatter.text, frontMatter.parsed),
-    retired: retiredIn(outline),
     status: statusWordOf(outline),
     frontMatter: frontMatter.text,
   };

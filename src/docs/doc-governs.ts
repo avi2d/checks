@@ -7,6 +7,8 @@ type Status = (typeof ADR_STATUSES)[number];
 
 const RETIRED_STATUSES = ["Superseded", "Retired"] as const satisfies readonly Status[];
 
+const DECIDED_STATUSES = ["Rejected", "Deprecated"] as const satisfies readonly Status[];
+
 const RETIRE = `retire it with ${RETIRED_STATUSES.join(" or ")} in \`## Status\``;
 const SAMPLE = "`governs: [src/parts.ts]`";
 
@@ -19,7 +21,6 @@ export type GovernedRecord = {
   readonly path: string;
   readonly number: number | undefined;
   readonly governs: Governs;
-  readonly retired: boolean;
   readonly status: string | undefined;
   readonly frontMatter: string;
 };
@@ -74,7 +75,7 @@ export function governsProblems(governs: Governs, status: string | undefined): r
   if (governs.type === "malformed") {
     return [{ line: governs.line, message: `holds a \`governs\` that is not a list of paths, as in ${SAMPLE}` }];
   }
-  if (governs.paths.length > 0 || isRetired(status) || status === "Rejected" || status === "Deprecated") return [];
+  if (governs.paths.length > 0 || isRetired(status) || DECIDED_STATUSES.some((decided) => decided === status)) return [];
   return [{ line: governs.line, message: `lists no path in \`governs\`, which a Proposed or Accepted record keeps. List the paths it governs, or ${RETIRE}` }];
 }
 
@@ -162,8 +163,8 @@ function listedPaths(record: GovernedRecord): readonly string[] {
 }
 
 export function missingGoverned(record: GovernedRecord, head: Tree): readonly GovernedFinding[] {
-  if (record.retired) return [];
-  const remedy = record.status === "Rejected" || record.status === "Deprecated" ? "empty the list to `governs: []`" : RETIRE;
+  if (isRetired(record.status)) return [];
+  const remedy = DECIDED_STATUSES.some((decided) => decided === record.status) ? "empty the list to `governs: []`" : RETIRE;
   return listedPaths(record)
     .filter((governed) => !existsIn(head, governed))
     .map((governed) => ({
@@ -183,7 +184,7 @@ function deletionFinding(record: GovernedRecord, governed: string, after: readon
   if (successor === undefined) {
     return { path: record.path, line: undefined, governed, message: `is deleted with \`${governed}\`, which it governs. Keep the record and ${RETIRE}` };
   }
-  if (successor.retired) return undefined;
+  if (isRetired(successor.status)) return undefined;
   return {
     path: successor.path,
     line: lineOf(successor, governed),
@@ -194,7 +195,7 @@ function deletionFinding(record: GovernedRecord, governed: string, after: readon
 
 export function deletedGoverned(before: readonly GovernedRecord[], after: readonly GovernedRecord[], base: Tree, head: Tree): readonly GovernedFinding[] {
   return before
-    .filter((record) => !record.retired)
+    .filter((record) => !isRetired(record.status))
     .flatMap((record) =>
       listedPaths(record)
         .filter((governed) => existsIn(base, governed) && !existsIn(head, governed))
