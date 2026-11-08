@@ -8,6 +8,10 @@ export type Narrowing =
   | { readonly kind: "full"; readonly because: string }
   | { readonly kind: "files"; readonly files: readonly string[] };
 
+type SharedChange = { readonly path: string; readonly reason: string };
+
+export type LocalNarrowing = { readonly files: readonly string[]; readonly shared: readonly SharedChange[] };
+
 type SelfReference = {
   readonly name: string;
   readonly exports: ReadonlyMap<string, string>;
@@ -189,13 +193,27 @@ function preloadClosure(repository: Repository): ReadonlySet<string> {
 // A source that names a path, as a registry does, would make every importer read every file it lists.
 export function narrowTests(changed: readonly string[], repository: Repository, tests: readonly string[]): Narrowing {
   if (changed.length === 0) return { kind: "full", because: "the pull request changes no file" };
+  const [shared] = sharedChanges(changed, repository);
+  if (shared !== undefined) return { kind: "full", because: `the pull request changes ${shared.path}, ${shared.reason}` };
+  return { kind: "files", files: reachedTests(changed, repository, tests) };
+}
+
+// A local run never widens to the whole suite, so a shared file runs only the tests that reach it.
+export function narrowLocalTests(changed: readonly string[], repository: Repository, tests: readonly string[]): LocalNarrowing {
+  return { files: reachedTests(changed, repository, tests), shared: sharedChanges(changed, repository) };
+}
+
+function sharedChanges(changed: readonly string[], repository: Repository): readonly SharedChange[] {
   const preloads = preloadClosure(repository);
-  for (const path of changed) {
+  return changed.flatMap((path) => {
     const reason = sharedReason(path, preloads);
-    if (reason !== undefined) return { kind: "full", because: `the pull request changes ${path}, ${reason}` };
-  }
+    return reason === undefined ? [] : [{ path, reason }];
+  });
+}
+
+function reachedTests(changed: readonly string[], repository: Repository, tests: readonly string[]): readonly string[] {
   const reached = reach(graphOf(repository, changed), changed, repository.sources);
-  return { kind: "files", files: tests.filter((test) => reached.has(test)) };
+  return tests.filter((test) => reached.has(test));
 }
 
 const Manifest = Schema.Struct({
@@ -242,6 +260,10 @@ const readRepository = Effect.fn("readRepository")(function* (root: string) {
 const pullRequestEvent = Config.all({
   name: Config.String("GITHUB_EVENT_NAME").pipe(Config.withDefault("")),
   path: Config.String("GITHUB_EVENT_PATH").pipe(Config.withDefault("")),
+});
+
+export const readLocalNarrowing = Effect.fn("readLocalNarrowing")(function* (root: string, changed: readonly string[], tests: readonly string[]) {
+  return narrowLocalTests(changed, yield* readRepository(root), tests);
 });
 
 // Only a pull_request run has a base to diff against; every other run keeps the suite whole.
