@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.81.0
+
+Released 2026-11-08.
+
+### Features
+
+- **docs:** require governs on ADRs and refuse deleting governed paths [#76](https://github.com/avi2d/checks/pull/76)
+
 ## 0.80.0
 
 Released 2026-11-08.
