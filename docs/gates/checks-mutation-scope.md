@@ -45,7 +45,7 @@ So a helper, fixture or preload changed on `main` since that baseline can hide a
 
 `checks-mutation-scope --shards <count>` takes every file git tracks at `HEAD` that the `mutate` globs match, with each negated glob applied in order.
 It splits those files into at most `<count>` shards, so a refresh run spreads across that many jobs while a baseline stays a single incremental run.
-Each file weighs the mutants the last report holds for it that a refresh runs, leaving out each mutant with `static` true or status `Ignored` since a refresh skips those.
+Each file weighs the mutants the last report holds for it that a refresh runs, leaving out each mutant with `static` true or status `Ignored` or `NoCoverage`, since a refresh skips the first two and runs no test for the third.
 A file the last report lacks may be newer than that report.
 So it weighs the average count of the reported files the globs still match, rounded up and at least one.
 With no last report operand, each file weighs one mutant, so the shards split by file count.
