@@ -10,6 +10,7 @@ const TREE_GATES = [
   "checks-no-plain-js",
   "checks-ci-wiring",
   "checks-copy",
+  "checks-no-mistakes-test",
   "checks-unused",
   "checks-imports",
 ];
@@ -41,6 +42,7 @@ const FULL_GATES = [
   "checks-secrets",
   "checks-docs",
   "checks-copy",
+  "checks-no-mistakes-test",
   "checks-repetition",
   "checks-graphwalk",
   "checks-quarantine-clock",

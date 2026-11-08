@@ -22,6 +22,7 @@ Gates requiring tracked TypeScript files begin running when the repository track
 `checks-frontend-syntax` begins running when the repository tracks `frontend-syntax.json` at its root.
 `checks-copy` begins running when the repository tracks `copy.json` at its root.
 `checks-css-size` begins running when the repository tracks a `*.css` file.
+`checks-no-mistakes-test` begins running when the repository tracks `.no-mistakes.yaml` at its root.
 All other gates run for every repository.
 
 ## What it reads
@@ -62,7 +63,7 @@ With `--whole-tree`, it takes no other arguments and runs the four whole-tree ga
 
 ```
 checks-lint: range 2504acf098d120e73a8ece3c96f22b934f35c6a8..10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD against origin/main
-checks-lint: 1 of 17 gate(s) failed: checks-comment-gate
+checks-lint: 1 of 18 gate(s) failed: checks-comment-gate
 ```
 
 <!-- end generated lint-sample -->
