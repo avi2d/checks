@@ -41,19 +41,19 @@ function repeated(visionText: string): readonly string[] {
   ]).map(({ line, message }) => line + ": " + message);
 }
 
-test("a sentence shared with the readme fails naming the sentence rather than passing as a fresh rule", () => {
-  const shared = vision([...STANCE.slice(0, 2), "- The tools build bills.", "", ...SCOPE, "", ...CLOSING]);
-  expect(repeated(shared)).toEqual([expect.stringContaining('repeats a sentence from README.md: "the tools build bills."')]);
+test("a line shared with the readme fails naming the line rather than passing as a fresh rule", () => {
+  const shared = vision([...STANCE.slice(0, 2), "The tools build bills.", "", ...SCOPE, "", ...CLOSING]);
+  expect(repeated(shared)).toEqual([expect.stringContaining('9: repeats a line from README.md: "The tools build bills."')]);
 });
 
-test("a sentence shared with the agent file fails naming that file rather than only reading the readme", () => {
-  const shared = vision([...STANCE, "", ...SCOPE.slice(0, 2), "- The fixture builds bills, and README.md holds what a person reads.", "", ...CLOSING]);
+test("a line shared with the agent file fails naming that file rather than only reading the readme", () => {
+  const shared = vision([...STANCE, "", ...SCOPE.slice(0, 2), "The fixture builds bills, and README.md holds what a person reads.", "", ...CLOSING]);
   expect(repeated(shared)).toEqual([
-    expect.stringContaining('repeats a sentence from AGENTS.md: "the fixture builds bills, and readme.md holds what a person reads."'),
+    expect.stringContaining('13: repeats a line from AGENTS.md: "The fixture builds bills, and README.md holds what a person reads."'),
   ]);
 });
 
-test("a heading or a fenced line matching another file is not a repeated sentence", () => {
+test("a heading or a fenced line matching another file is not a repeated line", () => {
   const headed = vision(["## The tools build bills", "", ...STANCE, "", ...SCOPE, "", ...CLOSING]);
   expect(repeated(headed)).toEqual([]);
   const fenced = vision([...STANCE, "", "```", "The tools build bills.", "```", "", ...SCOPE, "", ...CLOSING]);
@@ -68,7 +68,7 @@ test("a scoped kit name requires a vision and a personal name leaves it advisory
   expect(requiresName(null)).toBe(false);
   expect(requiresName({ name: 7 })).toBe(false);
 });
-test("a sentence the readme shares with the agent file is reported on both pages rather than only the vision", () => {
+test("a line the readme shares with the agent file is reported on both pages rather than only the vision", () => {
   const pages = new Map([
     ["README.md", "# Widget\n\nShared line.\n"],
     ["AGENTS.md", "# Memory\n\nShared line.\n"],
@@ -91,7 +91,40 @@ test("a manifest name shortens past its scope rather than comparing the scope", 
   expect(shortName("orc")).toBe("orc");
 });
 
-test("the firstmate vision passes the shape and repeats no sentence of an empty shelf", () => {
+test("a table row shared with another file passes rather than comparing tables", () => {
+  const table = "| Path | Purpose |\n| --- | --- |\n| src/ | Builds. |";
+  expect(repeatedVisionFindings(vision([table, "", ...CLOSING]), [{ path: "README.md", text: "# widget\n\n" + table + "\n" }])).toEqual([]);
+});
+
+test("an indented code line shared with another file passes rather than comparing code", () => {
+  expect(
+    repeatedVisionFindings(vision([...STANCE, "", ...SCOPE, "", "    The tools build bills.", "", ...CLOSING]), [
+      { path: "README.md", text: "# widget\n\n    The tools build bills.\n" },
+    ]),
+  ).toEqual([]);
+});
+
+test("lines differing only in case pass rather than folding the case", () => {
+  const cased = vision([...STANCE.slice(0, 2), "The Tools Build Bills.", "", ...SCOPE, "", ...CLOSING]);
+  expect(repeated(cased)).toEqual([]);
+});
+
+test("lines differing only in markup pass rather than stripping the markup", () => {
+  const marked = vision([...STANCE.slice(0, 2), "- **The tools build bills.**", "", ...SCOPE, "", ...CLOSING]);
+  expect(repeatedVisionFindings(marked, [{ path: "README.md", text: "# widget\n\n- The tools build bills.\n" }])).toEqual([]);
+});
+
+test("a bulleted line does not repeat a bare line rather than stripping the marker", () => {
+  const bulleted = vision([...STANCE.slice(0, 2), "- The tools build bills.", "", ...SCOPE, "", ...CLOSING]);
+  expect(repeated(bulleted)).toEqual([]);
+});
+
+test("a sentence wrapped across lines passes rather than joining the continuation", () => {
+  const wrapped = vision([...STANCE.slice(0, 2), "- The tools build", "bills.", "", ...SCOPE, "", ...CLOSING]);
+  expect(repeatedVisionFindings(wrapped, [{ path: "README.md", text: "# widget\n\n- The tools build bills.\n" }])).toEqual([]);
+});
+
+test("the firstmate vision passes the shape and repeats no line of an empty shelf", () => {
   const model = readFileSync(resolve(FIXTURES, "vision-firstmate.md"), "utf8");
   expect(shapeFindings(model)).toEqual([]);
   expect(repeatedVisionFindings(model, [])).toEqual([]);

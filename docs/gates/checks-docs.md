@@ -12,7 +12,7 @@ It also fails when a doc names a file, a heading or a script that does not exist
 It holds each doc file a change touches to the template for its kind.
 It lists every other doc file that does not match its template yet, and does not fail on it.
 It holds each line a change adds or edits in a living doc or an agent file to the prose rules, as [The prose rules](#the-prose-rules) says.
-It fails when a sentence repeats across `README.md`, `AGENTS.md` and `VISION.md`, since each of the three pages answers its own question, as [The vision page](#the-vision-page) says.
+It fails when a line repeats across `README.md`, `AGENTS.md` and `VISION.md`, since each of the three pages answers its own question, as [The vision page](#the-vision-page) says.
 It fails when such a line copies a version `package.json` or `.bun-version` pins, as [Pinned versions](#pinned-versions) says.
 It fails when a living doc or an agent file names a path, link or command that does not resolve, and the range added or broke it.
 It fails when an agent file holds more than 3,000 characters or a `## Maintaining this file` section, whatever the range touches, as [Agent files](#agent-files) says.
@@ -289,7 +289,7 @@ It opens with the outcome the repository exists for, who it serves and the one t
 Each stance section holds one stance, and a rule in it names what the stance allows, what it forbids and the trade it takes.
 A Scope section names what the page refuses and which neighbour owns it.
 An `A change aligns when` line and an `A change should be resisted when` line end the page.
-No sentence repeats across `README.md`, `AGENTS.md` and `VISION.md`, since each of the three pages answers its own question.
+No line repeats across `README.md`, `AGENTS.md` and `VISION.md`, since each of the three pages answers its own question.
 The repository's `AGENTS.md` names the page in one line, so an agent meets what the repository refuses before it adds scope.
 The failure names the missing page and the template to copy, `dist/templates/vision.md`.
 A missing page fails only in a range that adds, changes, renames or deletes a doc file, as for [Root agent files](#root-agent-files).

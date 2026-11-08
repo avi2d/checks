@@ -22,7 +22,7 @@ It owns the judgment of whether a change belongs, and nothing past that judgment
 
 ## Scope
 
-- Releasing belongs to changesets, and editing belongs to the person or the agent making the change.
+- Releasing belongs to the release workflow, and editing belongs to the person or the agent making the change.
 - Teaching belongs to the guides, and history belongs to the changelog and the decision records.
 
 A change aligns when it moves a rule from memory into a program.

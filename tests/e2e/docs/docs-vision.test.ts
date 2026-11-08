@@ -74,7 +74,7 @@ test(
 );
 
 test(
-  "a vision page repeating a readme sentence fails naming the sentence rather than passing as a fresh rule",
+  "a vision page repeating a readme line fails naming the line rather than passing as a fresh rule",
   async () => {
     const { put, commit, docs } = await packageRepo();
     await put("README.md", "# widget\n\nThe tools build bills.\n");
@@ -82,12 +82,12 @@ test(
     const page = await visionPage();
     await put(
       VISION,
-      page.replace("- It prices the build alone, it never orders a part, and it takes the trade of a bill that never leaves the desk.", "- The tools build bills."),
+      page.replace("- It prices the build alone, it never orders a part, and it takes the trade of a bill that never leaves the desk.", "The tools build bills."),
     );
     const added = await commit("add a vision page repeating the readme");
 
     const red = await docs(previous, added);
-    expect(red.text).toContain(`  ${VISION}:9: repeats a sentence from README.md: "the tools build bills."`);
+    expect(red.text).toContain(`  ${VISION}:9: repeats a line from README.md: "The tools build bills."`);
     expect(red.text).not.toContain(MISSING_VISION);
     expect(red.exitCode).toBe(1);
   },
@@ -95,7 +95,7 @@ test(
 );
 
 test(
-  "a readme repeating an agent sentence fails naming the sentence rather than passing as a second copy",
+  "a readme repeating an agent line fails naming the line rather than passing as a second copy",
   async () => {
     const { put, commit, docs } = await packageRepo();
     const previous = await commit("a package with an agent file");
@@ -103,7 +103,7 @@ test(
     const added = await commit("add a readme repeating the agent file");
 
     const red = await docs(previous, added);
-    expect(red.text).toContain(`  README.md:3: repeats a sentence from AGENTS.md: "the fixture builds bills, and readme.md holds what a person reads."`);
+    expect(red.text).toContain(`  README.md:3: repeats a line from AGENTS.md: "The fixture builds bills, and README.md holds what a person reads."`);
     expect(red.exitCode).toBe(1);
   },
   120_000,
