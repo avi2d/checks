@@ -40,7 +40,7 @@ export function numbersIn(text: string): ReadonlySet<number> {
   return new Set(Array.from(text.matchAll(RECORD_REFERENCE), (match) => Number(match[1])));
 }
 
-export function isRetired(word: string | undefined): boolean {
+function isRetired(word: string | undefined): boolean {
   return RETIRED_STATUSES.some((retired) => retired === word);
 }
 
@@ -133,29 +133,43 @@ function tokensOf(value: string): readonly string[] {
     .map((token) => /^["'](.*)["']$/.exec(token)?.[1] ?? token);
 }
 
+function endsFrontMatter(text: string): boolean {
+  const trimmed = text.trim();
+  return trimmed === "---" || trimmed === "...";
+}
+
+function flowLineOf(lines: readonly string[], start: number, governed: string): number | undefined {
+  for (let index = start; index < lines.length; index++) {
+    const text = lines[index] ?? "";
+    if (endsFrontMatter(text)) return undefined;
+    if (tokensOf(text).includes(governed)) return index + 1;
+    if (text.includes("]")) return undefined;
+  }
+  return undefined;
+}
+
+// A line of "---" also starts with "-", so the end of the front matter is checked before list items.
+function blockLineOf(lines: readonly string[], start: number, governed: string): number | undefined {
+  for (let index = start; index < lines.length; index++) {
+    const text = lines[index] ?? "";
+    const trimmed = text.trim();
+    if (endsFrontMatter(text)) return undefined;
+    if (trimmed.startsWith("-")) {
+      if (entryOf(text) === governed) return index + 1;
+    } else if (trimmed !== "" && !trimmed.startsWith("#")) {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
 function lineOf({ governs, frontMatter }: GovernedRecord, governed: string): number | undefined {
   if (governs.type === "absent") return undefined;
   const lines = frontMatter.split("\n");
   const keyed = lines[governs.line - 1] ?? "";
   if (tokensOf(keyed.slice(keyed.indexOf(":") + 1)).includes(governed)) return governs.line;
-  const flow = keyed.includes("[") && !keyed.includes("]");
-  for (let index = governs.line; index < lines.length; index++) {
-    const text = lines[index] ?? "";
-    const trimmed = text.trim();
-    if (trimmed === "---" || trimmed === "...") break;
-    if (flow) {
-      if (tokensOf(text).includes(governed)) return index + 1;
-      if (text.includes("]")) break;
-      continue;
-    }
-    if (trimmed.startsWith("-")) {
-      if (entryOf(text) === governed) return index + 1;
-      continue;
-    }
-    if (trimmed === "" || trimmed.startsWith("#")) continue;
-    break;
-  }
-  return governs.line;
+  const scan = keyed.includes("[") && !keyed.includes("]") ? flowLineOf : blockLineOf;
+  return scan(lines, governs.line, governed) ?? governs.line;
 }
 
 function listedPaths(record: GovernedRecord): readonly string[] {
