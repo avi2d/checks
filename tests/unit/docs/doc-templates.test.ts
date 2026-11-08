@@ -28,6 +28,12 @@ test("the CLAUDE.md template is the canonical agent pointer byte for byte, since
   expect(renderTemplate(TEMPLATES.claude)).toBe("<!-- Points Claude at AGENTS.md via import; edit AGENTS.md, not this file. -->\n@AGENTS.md\n");
 });
 
+test("the ADR template's governs placeholder parses as one entry, not split at a comma into two", () => {
+  const frontMatter = /^---\n([\s\S]*?)\n---\n/.exec(readFileSync(resolve(CHECKOUT, templateFile("adr")), "utf8"))?.[1] ?? "";
+  const governs: unknown = Reflect.get(Object(Bun.YAML.parse(frontMatter)), "governs");
+  expect(governs).toEqual([expect.stringMatching(/^<[^>]+>$/)]);
+});
+
 test("the template directory holds a template for each kind and nothing else", () => {
   expect(readdirSync(resolve(CHECKOUT, TEMPLATE_DIRECTORY)).toSorted()).toEqual(
     KINDS.map((kind) => templateFile(kind).slice(`${TEMPLATE_DIRECTORY}/`.length)).toSorted(),

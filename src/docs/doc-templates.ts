@@ -101,7 +101,7 @@ export const TEMPLATES: Readonly<Record<Kind, Template>> = {
   },
   adr: {
     shape: "outline",
-    frontMatter: ["governs: [<each path the record governs, from the repository root>]"],
+    frontMatter: ["governs: [<each path the record governs from the repository root>]"],
     title: { type: "open", placeholder: "<number>. <The decision, as a sentence>", rule: "any" },
     lead: ["Date: <YYYY-MM-DD, the day the record was written>"],
     sections: [

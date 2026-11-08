@@ -1,5 +1,5 @@
 ---
-governs: [<each path the record governs, from the repository root>]
+governs: [<each path the record governs from the repository root>]
 ---
 # <number>. <The decision, as a sentence>
 
