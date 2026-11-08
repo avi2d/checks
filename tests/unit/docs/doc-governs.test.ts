@@ -36,12 +36,14 @@ test("a governs that is not a list of path strings is refused rather than taken 
   expect(refused(record("topics: [parts]\ngoverns: ['']"))).toEqual([malformed]);
 });
 
-test("an empty governs is refused on a live record, and passes only on a Superseded or Retired one", () => {
+test("an empty governs is refused on a Proposed or Accepted record, and passes on a Rejected, Deprecated, Superseded or Retired one", () => {
   const empty = "2: lists no path in `governs`, which a live record keeps. List the paths it governs, or retire it with Superseded or Retired in `## Status`";
-  for (const status of ["Accepted.", "Proposed.", "Rejected.", "Deprecated.", "Accepted. Superseded in part by 0002."]) {
+  for (const status of ["Accepted.", "Proposed.", "Accepted. Superseded in part by 0002."]) {
     expect(refused(record("governs: []", status))).toEqual([empty]);
   }
-  expect(refused(record("governs: []", "Retired. The parts list is gone."))).toEqual([]);
+  for (const status of ["Rejected. No supplier ever existed.", "Deprecated. The parts list is going away.", "Retired. The parts list is gone."]) {
+    expect(refused(record("governs: []", status))).toEqual([]);
+  }
   expect(refused(record("governs: []", "Superseded by 0002."), [{ path: SECOND, text: record("governs: [a.ts]", "Accepted. Supersedes 0001.").replace("# 1.", "# 2.") }])).toEqual([]);
 });
 
@@ -58,14 +60,26 @@ test("a governs listed as a YAML block is read as its paths, not refused as malf
   ]);
 });
 
-test("a governed directory exists through any file under it, and a path outside the repository never exists", () => {
+test("only the exact repository-root-relative path exists, and no other spelling of it does", () => {
   const head = tree("src/parts/list.ts", "README.md");
-  expect(["src/parts", "src/parts/", "./src/parts", "src", "README.md", "src/parts/list.ts"].map((path) => existsIn(head, path))).toEqual(
-    Array.from({ length: 6 }, () => true),
+  expect(["src/parts", "src", "README.md", "src/parts/list.ts"].map((path) => existsIn(head, path))).toEqual(
+    Array.from({ length: 4 }, () => true),
   );
-  expect(["src/part", "src/parts/list", "../src/parts", "~/.no-mistakes/config.yaml", "/src/parts/gone.ts"].map((path) => existsIn(head, path))).toEqual(
-    Array.from({ length: 5 }, () => false),
+  expect(["src/parts/", "./src/parts", "src//parts", " src/parts", "/src/parts/list.ts", "src/part", "src/parts/list", "../src/parts", "~/.no-mistakes/config.yaml", "/src/parts/gone.ts"].map((path) => existsIn(head, path))).toEqual(
+    Array.from({ length: 10 }, () => false),
   );
+});
+
+test("a missing path that is a prefix of another entry is reported on its own entry, not the longer one", () => {
+  const text = record("governs:\n  - src/docs/a.ts\n  - docs");
+  expect(missingGoverned(governedRecord({ path: FIRST, text }), tree("src/docs/a.ts"))).toEqual([
+    {
+      path: FIRST,
+      line: 4,
+      governed: "docs",
+      message: "governs `docs`, which is not in the repository. Name a tracked file or directory, or retire it with Superseded or Retired in `## Status`",
+    },
+  ]);
 });
 
 test("a retired record keeps its governs paths unchecked, so its gone paths do not fail it", () => {

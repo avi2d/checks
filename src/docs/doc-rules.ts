@@ -278,8 +278,9 @@ export function judge(kind: Kind, doc: Doc, records: Records): readonly Violatio
 }
 
 function recordFrontMatterProblems(frontMatter: FrontMatter, outline: Outline): readonly Violation[] {
+  const status = statusSection(outline);
   return [
-    ...governsProblems(governsOf(frontMatter.text, frontMatter.parsed), retiredIn(outline)),
+    ...governsProblems(governsOf(frontMatter.text, frontMatter.parsed), status === undefined ? undefined : statusWord(status)),
     ...supersessionKeyProblems(frontMatter.text, frontMatter.parsed),
   ];
 }

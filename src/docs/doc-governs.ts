@@ -66,14 +66,14 @@ export function governsOf(frontMatter: string, parsed: unknown): Governs {
   });
 }
 
-export function governsProblems(governs: Governs, retired: boolean): readonly Violation[] {
+export function governsProblems(governs: Governs, status: string | undefined): readonly Violation[] {
   if (governs.type === "absent") {
     return [{ line: 1, message: `has no \`governs\` in its front matter. List the paths the record governs, as in ${SAMPLE}` }];
   }
   if (governs.type === "malformed") {
     return [{ line: governs.line, message: `holds a \`governs\` that is not a list of paths, as in ${SAMPLE}` }];
   }
-  if (governs.paths.length > 0 || retired) return [];
+  if (governs.paths.length > 0 || isRetired(status) || status === "Rejected" || status === "Deprecated") return [];
   return [{ line: governs.line, message: `lists no path in \`governs\`, which a live record keeps. List the paths it governs, or ${RETIRE}` }];
 }
 
@@ -114,25 +114,46 @@ export function supersessionProblems(outline: Outline, known: ReadonlySet<number
   });
 }
 
-function normalized(path: string): string | undefined {
-  const parts: string[] = [];
-  for (const part of path.trim().split("/")) {
-    if (part === "" || part === ".") continue;
-    if (part === "..") return undefined;
-    parts.push(part);
-  }
-  return parts.join("/");
+export function existsIn(tree: Tree, path: string): boolean {
+  return tree.files.has(path) || tree.directories.has(path);
 }
 
-export function existsIn(tree: Tree, path: string): boolean {
-  const at = normalized(path);
-  return at !== undefined && (tree.files.has(at) || tree.directories.has(at));
+function entryOf(line: string): string {
+  const item = line.trim().slice(1).trim().replace(/,$/, "").trim();
+  return /^["'](.*)["']$/.exec(item)?.[1] ?? item;
+}
+
+function tokensOf(value: string): readonly string[] {
+  return value
+    .split(/[\s,[\]]+/)
+    .map((token) => token.trim())
+    .filter((token) => token !== "")
+    .map((token) => /^["'](.*)["']$/.exec(token)?.[1] ?? token);
 }
 
 function lineOf({ governs, frontMatter }: GovernedRecord, governed: string): number | undefined {
   if (governs.type === "absent") return undefined;
-  const listedAt = frontMatter.split("\n").findIndex((text, index) => index + 1 >= governs.line && text.includes(governed));
-  return listedAt === -1 ? governs.line : listedAt + 1;
+  const lines = frontMatter.split("\n");
+  const keyed = lines[governs.line - 1] ?? "";
+  if (tokensOf(keyed.slice(keyed.indexOf(":") + 1)).includes(governed)) return governs.line;
+  const flow = keyed.includes("[") && !keyed.includes("]");
+  for (let index = governs.line; index < lines.length; index++) {
+    const text = lines[index] ?? "";
+    const trimmed = text.trim();
+    if (trimmed === "---" || trimmed === "...") break;
+    if (flow) {
+      if (tokensOf(text).includes(governed)) return index + 1;
+      if (text.includes("]")) break;
+      continue;
+    }
+    if (trimmed.startsWith("-")) {
+      if (entryOf(text) === governed) return index + 1;
+      continue;
+    }
+    if (trimmed === "" || trimmed.startsWith("#")) continue;
+    break;
+  }
+  return governs.line;
 }
 
 function listedPaths(record: GovernedRecord): readonly string[] {

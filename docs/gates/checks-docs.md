@@ -156,13 +156,14 @@ governs: [src/parts.ts, docs/parts]
 - A record without `governs`, or whose `governs` is not a list of paths, fails.
 - A path is written from the repository root and names a tracked file or a directory that holds one.
   A path the head commit lacks fails, and the failure names the record and the path.
-- A live record lists at least one path.
-  A record whose Status opens with Superseded or Retired is retired, and only a retired record may hold `governs: []`.
+- A record whose Status opens with Proposed or Accepted lists at least one path.
+  A record whose Status opens with Rejected, Deprecated, Superseded or Retired may hold `governs: []`.
   The paths a retired record lists are not checked, since a retired record may outlive what it governed.
 - A range that deletes a path a live record governs fails unless the same range retires the record.
   A file deleted from under a governed directory is not a deleted path while the directory still holds a file.
   The failure names the record, even when the range leaves the record alone.
   Deleting the record with the path fails too, because a retired record stays in the log.
+- A governed path that moves to a new path counts as deleted, so the same range retires the record that governed it and adds the record that governs the new path.
 - A supersession sits in Status alone.
   A sentence outside Status that says supersede and names another record's number fails, and so does a front matter key that names a supersession.
   A blockquote and a code span are not read, so a quoted instruction passes.
