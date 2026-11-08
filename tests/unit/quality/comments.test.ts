@@ -95,7 +95,7 @@ test("a published RFC citation is not a pointer; a record or ticket beside it st
   expect(Effect.runSync(refused("src/probe.ts", "// RFC 8259 requires UTF-8 for interoperable exchange.\n"))).toEqual([]);
   expect(Effect.runSync(refused("src/probe.ts", "// See RFC-2119 for the key words.\n"))).toEqual([]);
   expect(Effect.runSync(refused("src/probe.ts", "// The grammar is WHATWG URL section 4.1 and ECMA-262 §7.\n"))).toEqual([]);
-  for (const pointer of ["ADR 12", "docs/adr/0003", "#123", "avi2d/tui-dash#92", "https://github.com/avi2d/tui-dash/pull/92", "RFC-style ADR 12", "RFC 8259 section 2 and ADR 12", "acme/RFC8259-parser#123", "RFC8259/parser#123"]) {
+  for (const pointer of ["ADR 12", "docs/adr/0003", "#123", "avi2d/orc-dash#92", "https://github.com/avi2d/orc-dash/pull/92", "RFC-style ADR 12", "RFC 8259 section 2 and ADR 12", "acme/RFC8259-parser#123", "RFC8259/parser#123"]) {
     expect(Effect.runSync(refused("src/probe.ts", `// A line about ${pointer}.`)), pointer).not.toEqual([]);
   }
 });

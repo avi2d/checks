@@ -9,7 +9,7 @@ setDefaultTimeout(30_000);
 
 const repoWith = committedRepos("checks-mutation-scope-");
 const NOTHING = { SCOPE: "", STALE_TESTS: "" };
-const TUI_DASH_CONFIG = 'export default { mutate: ["packages/*/src/**/*.ts", "!packages/*/src/live/**", "!packages/*/src/bin.ts"] };\n';
+const ORC_DASH_CONFIG = 'export default { mutate: ["packages/*/src/**/*.ts", "!packages/*/src/live/**", "!packages/*/src/bin.ts"] };\n';
 
 type SharedMutant = { readonly source: string; readonly coveredBy: string[]; readonly killedBy: string[] };
 
@@ -60,9 +60,9 @@ test("a renamed source is scoped under both names, a deleted one not at all, and
   expect(sorted(scope["SCOPE"])).toEqual(["src/edited.ts", "src/fresh.ts", "src/inside.ts", "src/new.ts", "src/old.ts"]);
 });
 
-test("a source the config's negated globs exclude stays out of scope, as src/live and bin.ts do in tui-dash", async () => {
+test("a source the config's negated globs exclude stays out of scope, as src/live and bin.ts do in orc-dash", async () => {
   const { repo, base } = await repoWith({
-    "stryker.conf.mjs": TUI_DASH_CONFIG,
+    "stryker.conf.mjs": ORC_DASH_CONFIG,
     "packages/quota/src/live/layer.ts": body("layer"),
     "packages/quota/src/bin.ts": body("bin"),
     "packages/quota/src/quotas.ts": body("quotas"),
@@ -79,9 +79,9 @@ test("a source the config's negated globs exclude stays out of scope, as src/liv
   expect(sorted(scope["SCOPE"])).toEqual(["packages/quota/src/quotas.ts", "packages/ui/src/sources.ts"]);
 });
 
-test("a test change alone brings in an unchanged source whose kills it holds, as layout.ts lost two in tui-dash PR 11", async () => {
+test("a test change alone brings in an unchanged source whose kills it holds, as layout.ts lost two in orc-dash PR 11", async () => {
   const { repo, base } = await repoWith({
-    "stryker.conf.mjs": TUI_DASH_CONFIG,
+    "stryker.conf.mjs": ORC_DASH_CONFIG,
     "packages/ui/src/layout.ts": body("layout"),
     "packages/session-quota/src/notes.ts": body("notes"),
     "packages/session-quota/src/live/layer.ts": body("layer"),
