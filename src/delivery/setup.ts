@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { runMain, Usage } from "../core/main.ts";
-import { ciWorkflow } from "./setup-workflow.ts";
+import { ciWorkflow, MUTATION_WORKFLOW, STRYKER_CONFIG } from "./setup-workflow.ts";
 import { TEMPLATES } from "../docs/doc-templates.ts";
 import { scriptOptions } from "../core/test-script.ts";
 import { withServiceOverrides, type ServiceOverride } from "../quality/effect-scope.ts";
@@ -18,7 +18,12 @@ class SetupError extends Schema.TaggedError<SetupError>()("SetupError", {
   message: Schema.String,
 }) {}
 
-const KitManifest = Schema.Struct({ version: Schema.String });
+const KitManifest = Schema.Struct({
+  version: Schema.String,
+  devDependencies: Schema.Struct({ "@stryker-mutator/core": Schema.String, "@hughescr/stryker-bun-runner": Schema.String }),
+});
+
+type Pins = { readonly kit: string; readonly mutation: typeof KitManifest.Type.devDependencies };
 const decodeKitManifest = Schema.decodeUnknownEffect(Schema.fromJsonString(KitManifest));
 
 const JsonRecord = Schema.Record(Schema.String, Schema.Unknown);
@@ -268,7 +273,7 @@ function finalizePackage(
 const writeFreshPackage = Effect.fn("writeFreshPackage")(function* (
   root: string,
   isPrivate: boolean,
-  version: string,
+  pins: Pins,
   fallbackName: string,
 ) {
   const system = yield* FileSystem.FileSystem;
@@ -279,7 +284,7 @@ const writeFreshPackage = Effect.fn("writeFreshPackage")(function* (
     type: "module",
     ...(isPrivate ? { private: true } : {}),
     scripts: { ...DEFAULT_SCRIPTS },
-    devDependencies: { [KIT_ID]: version },
+    devDependencies: { [KIT_ID]: pins.kit, ...pins.mutation },
   };
   yield* system.makeDirectory(path.dirname(full), { recursive: true });
   yield* system.writeFileString(full, JSON.stringify(manifest, undefined, 2) + "\n");
@@ -293,13 +298,13 @@ const updatePackage = Effect.fn("updatePackage")(function* (
   record: MutableRecord,
   isPrivate: boolean,
   fallbackName: string,
-  version: string,
+  pins: Pins,
 ) {
   const system = yield* FileSystem.FileSystem;
   const full = (yield* Path.Path).join(root, "package.json");
   const baseScripts = yield* scriptsOf(record);
   const baseDeps = yield* depsOf(record);
-  const devDependencies: MutableRecord = { ...baseDeps, [KIT_ID]: version };
+  const devDependencies: MutableRecord = { ...pins.mutation, ...baseDeps, [KIT_ID]: pins.kit };
   const fault = scriptFault(baseScripts);
   if (fault !== undefined) return yield* new SetupError({ message: fault });
   const scripts = withKitDefaults(baseScripts);
@@ -316,19 +321,25 @@ const updatePackage = Effect.fn("updatePackage")(function* (
 const setupPackage = Effect.fn("setupPackage")(function* (
   root: string,
   isPrivate: boolean,
-  version: string,
+  pins: Pins,
   fallbackName: string,
 ) {
   const system = yield* FileSystem.FileSystem;
   const full = (yield* Path.Path).join(root, "package.json");
   if (!(yield* system.exists(full))) {
-    return yield* writeFreshPackage(root, isPrivate, version, fallbackName);
+    return yield* writeFreshPackage(root, isPrivate, pins, fallbackName);
   }
   const raw = yield* system.readFileString(full).pipe(
     Effect.mapError((cause) => new SetupError({ message: "cannot read package.json: " + cause.message })),
   );
   const record = yield* parsePackageRecord(raw);
-  return yield* updatePackage(root, raw, record, isPrivate, fallbackName, version);
+  return yield* updatePackage(root, raw, record, isPrivate, fallbackName, pins);
+});
+
+const setupWorkflows = Effect.fn("setupWorkflows")(function* (root: string, isPrivate: boolean, hasBuild: boolean) {
+  yield* setupFile(root, ".github/workflows/ci.yml", ciWorkflow(isPrivate, hasBuild));
+  yield* setupFile(root, ".github/workflows/mutation.yml", MUTATION_WORKFLOW);
+  yield* setupFile(root, "stryker.conf.mjs", STRYKER_CONFIG);
 });
 
 const check = Effect.gen(function* () {
@@ -339,10 +350,10 @@ const check = Effect.gen(function* () {
   const root = yield* Effect.sync(() => process.cwd());
   const path = yield* Path.Path;
 
-  const version = (yield* decodeKitManifest(yield* kitText("package.json")).pipe(
+  const kit = yield* decodeKitManifest(yield* kitText("package.json")).pipe(
     Effect.mapError((cause) => new SetupError({ message: "cannot read the kit version: " + cause.message })),
-  )).version;
-  const outcome = yield* setupPackage(root, isPrivate, version, path.basename(root));
+  );
+  const outcome = yield* setupPackage(root, isPrivate, { kit: kit.version, mutation: kit.devDependencies }, path.basename(root));
 
   yield* setupFile(root, ".bun-version", yield* kitText(".bun-version"));
   yield* setupFile(root, "bunfig.toml", yield* kitText("bunfig.toml"));
@@ -359,7 +370,7 @@ const check = Effect.gen(function* () {
   yield* setupTsconfig(root, oxlintText);
   yield* setupFile(root, "knip.config.ts", KNIP_CONFIG);
   yield* setupFile(root, ".jscpd.json", JSCPD_CONFIG);
-  yield* setupFile(root, ".github/workflows/ci.yml", ciWorkflow(isPrivate, outcome.hasBuild));
+  yield* setupWorkflows(root, isPrivate, outcome.hasBuild);
   for (const kind of Object.keys(TEMPLATES)) {
     yield* setupFile(root, "templates/" + kind + ".md", yield* kitText("dist/templates/" + kind + ".md"));
   }

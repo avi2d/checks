@@ -153,20 +153,10 @@ concurrency:
   cancel-in-progress: false
 jobs:
   mutation:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v5
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-      - run: bun install --frozen-lockfile
-      - run: bunx stryker run
-      - uses: actions/upload-artifact@v4
-        with:
-          name: whole-tree-run-mutation
-          path: reports/mutation/mutation.json
-          retention-days: 1
+    uses: avi2d/workflows/.github/workflows/mutation.yml@v1
+    permissions: { contents: read, actions: write, pull-requests: write }
+    with:
+      mode: refresh
   tests:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -218,7 +208,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - uses: actions/download-artifact@v4
         with:
-          pattern: whole-tree-run-mutation
+          pattern: mutation-refresh
           path: reports/mutation
       - if: needs.gates.result == 'success'
         uses: actions/download-artifact@v4
@@ -231,7 +221,7 @@ jobs:
           path: reports/whole-tree-run-tests
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: bunx checks-whole-tree-run --mutation reports/mutation/whole-tree-run-mutation/mutation.json --tests reports/whole-tree-run-tests/live.xml --tests reports/whole-tree-run-tests/pixel.xml ${{ needs.gates.result == 'success' && '--gates reports/whole-tree-run-gates/gates.log' || '' }}
+        run: bunx checks-whole-tree-run --mutation reports/mutation/mutation-refresh/mutation.json --tests reports/whole-tree-run-tests/live.xml --tests reports/whole-tree-run-tests/pixel.xml ${{ needs.gates.result == 'success' && '--gates reports/whole-tree-run-gates/gates.log' || '' }}
       - uses: actions/upload-artifact@v4
         with:
           name: whole-tree-run
@@ -247,15 +237,14 @@ The gates job runs the whole-tree lint gates and keeps the log, since a failing 
 The report job runs whenever the tests job succeeds, so a failing test that also stops Stryker still becomes an issue.
 It always passes `--mutation`, so a mutation job that failed or timed out leaves a missing report that becomes an issue.
 The download names the artifact by `pattern`, which downloads nothing rather than failing when the artifact is missing.
-A full run too long for one job splits into a matrix of shards.
-Each shard uploads its own artifact under the one pattern, and each report gets its own `--mutation`.
+The mutation job is the shared workflow's `refresh` mode, since [checks-ci-wiring](checks-ci-wiring.md#mutation-jobs) refuses a mutation job of the repository's own.
+That mode splits the full run into shards and uploads the merged report as the `mutation-refresh` artifact.
 It passes `--gates` only when the gates job succeeded, and the failed gates job still fails the run.
 The concurrency group queues a run behind one already going, so two runs never file the same finding twice.
 A dispatch on a branch runs both jobs and lists its findings in the report job's log, and `if-no-files-found: ignore` lets that run upload no record.
 `issues: write` on the report job is the one permission beyond reading the repository and its runs.
-A public repository keeps `runs-on: ubuntu-latest` on every job.
-A private repository sets `runs-on` on the mutation job to the labels declared under `checks.mutationRunner` in `package.json`, and [checks-ci-wiring](checks-ci-wiring.md#runners) refuses a mutation job that names `CI_RUNS_ON`.
-A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on the tests, gates, and report jobs.
+A public repository keeps `runs-on: ubuntu-latest` on the tests, gates, and report jobs.
+A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on them instead.
 A successful run with every mutation report present uploads `whole-tree-run`, so the next run compares with it, and a run that failed or missed a report uploads nothing a later run reads.
 The artifact keeps 90 days, so a gap of runs still leaves a previous run to compare with.
 
