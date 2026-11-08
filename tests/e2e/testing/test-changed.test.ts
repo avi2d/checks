@@ -39,7 +39,7 @@ test("a clone without the remote-tracking default branch fails before any tier r
   expect(refused.text).not.toContain("1 pass");
 }, 60_000);
 
-test("a stale local default branch does not pull in e2e files origin already holds", async () => {
+test("a stale local default branch does not pull in test files origin already holds", async () => {
   const repo = await repository();
   await repo.write({ "tests/e2e/b.test.ts": PASSING });
   await repo.commit("test: add an e2e file");
@@ -48,12 +48,12 @@ test("a stale local default branch does not pull in e2e files origin already hol
   await repo.commit("test: add a unit file");
 
   const fast = await testChanged(repo);
-  expect(fast.text).toContain("the change touches no e2e test files, so only the unit tier runs");
-  expect(fast.text).toContain("2 pass");
+  expect(fast.text).toContain("the change reaches 1 of 3 test file(s): tests/unit/c.test.ts");
+  expect(fast.text).toContain("1 pass");
   expect(fast.exitCode).toBe(0);
 }, 60_000);
 
-test("a committed, an edited and an untracked e2e file run beside the unit tier while an untouched e2e file stays out", async () => {
+test("a committed, an edited and an untracked test file each run alone while the untouched unit tier and e2e file stay out", async () => {
   const repo = await repository();
   await repo.write({ "tests/e2e/edited.test.ts": PASSING, "tests/e2e/untouched.test.ts": FAILING });
   await repo.commit("test: add e2e files");
@@ -63,8 +63,8 @@ test("a committed, an edited and an untracked e2e file run beside the unit tier 
   await repo.write({ "tests/e2e/edited.test.ts": PASSING + "test(\"also passes\", () => expect(2).toBe(2));\n", "tests/e2e/untracked.test.ts": PASSING });
 
   const fast = await testChanged(repo);
-  expect(fast.text).toContain("the change touches 3 e2e test file(s): tests/e2e/committed.test.ts tests/e2e/edited.test.ts tests/e2e/untracked.test.ts");
-  expect(fast.text).toContain("5 pass");
+  expect(fast.text).toContain("the change reaches 3 of 5 test file(s): tests/e2e/committed.test.ts tests/e2e/edited.test.ts tests/e2e/untracked.test.ts");
+  expect(fast.text).toContain("4 pass");
   expect(fast.text).toContain("0 fail");
   expect(fast.exitCode).toBe(0);
 }, 60_000);
@@ -78,4 +78,51 @@ test("a skip without a reason in a touched e2e file fails the run, rather than p
   expect(fast.text).toContain("checks-test: 1 skipped test(s) undeclared in this local run:");
   expect(fast.text).toContain("tests/e2e/skipped.test.ts:2 waits");
   expect(fast.exitCode).toBe(1);
+}, 60_000);
+
+test("a changed source runs the unit and e2e tests that import it while a test that does not stays out", async () => {
+  const repo = await repository();
+  await repo.write({
+    "src/price.ts": "export const price = 1;\n",
+    "tests/unit/price.test.ts": 'import { expect, test } from "bun:test";\nimport { price } from "../../src/price.ts";\ntest("prices", () => expect(price).toBe(2));\n',
+    "tests/e2e/checkout.test.ts": 'import { expect, test } from "bun:test";\nimport { price } from "../../src/price.ts";\ntest("checks out", () => expect(price).toBe(2));\n',
+    "tests/unit/untouched.test.ts": FAILING,
+  });
+  await repo.commit("feat: add a price");
+  await branchedFromOrigin(repo);
+  await repo.write({ "src/price.ts": "export const price = 2;\n" });
+
+  const fast = await testChanged(repo);
+  expect(fast.text).toContain("the change reaches 2 of 4 test file(s): tests/e2e/checkout.test.ts tests/unit/price.test.ts");
+  expect(fast.text).toContain("2 pass");
+  expect(fast.text).toContain("0 fail");
+  expect(fast.exitCode).toBe(0);
+}, 60_000);
+
+test("a changed shared file leaves the whole suite to the pull request and runs only the tests the change reaches", async () => {
+  const repo = await repository();
+  await repo.write({ "tests/unit/untouched.test.ts": FAILING });
+  await repo.commit("test: add a failing file");
+  await branchedFromOrigin(repo);
+  await repo.write({
+    "package.json": JSON.stringify({ name: "test-changed-fixture", type: "module", private: true }),
+    "tests/unit/a.test.ts": PASSING + 'test("also passes", () => expect(2).toBe(2));\n',
+  });
+
+  const fast = await testChanged(repo);
+  expect(fast.text).toContain("the change touches package.json, a config every test runs under, so the whole suite is left to the pull request");
+  expect(fast.text).toContain("the change reaches 1 of 2 test file(s): tests/unit/a.test.ts");
+  expect(fast.text).toContain("2 pass");
+  expect(fast.text).toContain("0 fail");
+  expect(fast.exitCode).toBe(0);
+}, 60_000);
+
+test("a branch with no change runs no test rather than the unit tier", async () => {
+  const repo = await repository();
+  await branchedFromOrigin(repo);
+
+  const fast = await testChanged(repo);
+  expect(fast.text).toContain("the change reaches no test file, so no test ran");
+  expect(fast.text).not.toContain("1 pass");
+  expect(fast.exitCode).toBe(0);
 }, 60_000);

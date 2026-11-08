@@ -5,15 +5,14 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { TEST_ENTRY_POINT } from "../core/gates.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { FULL, testOptions, type TestOptions, type TestTier } from "../core/test-script.ts";
-import { readPullRequestNarrowing } from "./affected-tests.ts";
-import { changedE2eFiles } from "./changed-tests.ts";
+import { readLocalNarrowing, readPullRequestNarrowing } from "./affected-tests.ts";
+import { changedLocalPaths } from "./changed-tests.ts";
 import {
   readDeclarationsIn,
   readSkipDeclarations,
   readSmokeDeclarations,
   scanTestFiles,
   selectedTierFile,
-  unitTierPlus,
   type Environment,
   type SkipDeclaration,
 } from "./test-skips.ts";
@@ -146,7 +145,7 @@ export type SuiteSelection =
   | { readonly kind: "tier"; readonly tier: TestTier }
   | { readonly kind: "smoke" }
   | { readonly kind: "files"; readonly files: readonly string[] }
-  | { readonly kind: "changed"; readonly e2e: readonly string[] };
+  | { readonly kind: "changed"; readonly files: readonly string[] };
 
 export function selectSuite(options: TestOptions, environment: Environment): SuiteSelection {
   if (options.tier !== undefined) return { kind: "tier", tier: options.tier };
@@ -165,9 +164,8 @@ export function smokeList(manifest: unknown): readonly string[] | undefined {
 
 export function suiteArgs(selection: SuiteSelection, smoke: readonly string[]): readonly string[] {
   if (selection.kind === "tier") return tierArgs(selection.tier);
-  if (selection.kind === "changed") return suiteArgs({ kind: "smoke" }, selection.e2e);
   if (selection.kind === "smoke") return ["./tests/unit", ...smoke.map((file) => `./${file}`)];
-  if (selection.kind === "files") return selection.files.map((file) => `./${file}`);
+  if (selection.kind === "files" || selection.kind === "changed") return selection.files.map((file) => `./${file}`);
   return [];
 }
 
@@ -219,25 +217,22 @@ const narrowSelection = Effect.fn("narrowSelection")(function* (options: TestOpt
 
 const readScope = Effect.fn("readScope")(function* (selection: SuiteSelection, smoke: readonly string[]) {
   if (selection.kind === "smoke") return yield* readSmokeDeclarations(process.cwd(), smoke);
-  if (selection.kind === "changed") {
-    const files = unitTierPlus(yield* scanTestFiles(process.cwd()), selection.e2e);
-    return { files, declarations: yield* readDeclarationsIn(process.cwd(), files) };
-  }
   const declarations =
-    selection.kind === "files"
+    selection.kind === "files" || selection.kind === "changed"
       ? yield* readDeclarationsIn(process.cwd(), selection.files)
       : yield* readSkipDeclarations(process.cwd(), selection.kind === "tier" ? selection.tier : undefined);
   return { files: undefined, declarations };
 });
 
 const changedSelection = Effect.fn("changedSelection")(function* () {
-  const e2e = yield* changedE2eFiles(process.cwd());
-  yield* Console.log(
-    e2e.length === 0
-      ? `${NAME}: the change touches no e2e test files, so only the unit tier runs`
-      : `${NAME}: the change touches ${e2e.length} e2e test file(s): ${e2e.join(" ")}`,
-  );
-  return { kind: "changed", e2e } satisfies SuiteSelection;
+  const changed = yield* changedLocalPaths(process.cwd());
+  const tests = (yield* scanTestFiles(process.cwd())).filter((file) => selectedTierFile(file, undefined));
+  const { files, shared } = yield* readLocalNarrowing(process.cwd(), changed, tests);
+  for (const { path, reason } of shared) {
+    yield* Console.log(`${NAME}: the change touches ${path}, ${reason}, so the whole suite is left to the pull request`);
+  }
+  if (files.length > 0) yield* Console.log(`${NAME}: the change reaches ${files.length} of ${tests.length} test file(s): ${files.join(" ")}`);
+  return { kind: "changed", files } satisfies SuiteSelection;
 });
 
 const runSuite = Effect.fn("runSuite")(function* (outfile: string, args: readonly string[], workers: number | undefined) {
@@ -268,12 +263,12 @@ const testEntry = Effect.gen(function* () {
     yield* Console.log(`${NAME}: the pull request changes no file a test reads, so no test ran`);
     return true;
   }
-  const smoke = selection.kind === "smoke" ? yield* readSmokeList(process.cwd()) : [];
-  const scope = yield* readScope(selection, smoke);
-  if (scope.files?.length === 0 && selection.kind === "changed") {
-    yield* Console.log(`${NAME}: no unit test and no e2e test the change touches, so no test ran`);
+  if (selection.kind === "changed" && selection.files.length === 0) {
+    yield* Console.log(`${NAME}: the change reaches no test file, so no test ran`);
     return true;
   }
+  const smoke = selection.kind === "smoke" ? yield* readSmokeList(process.cwd()) : [];
+  const scope = yield* readScope(selection, smoke);
   if (scope.files?.length === 0) {
     yield* Console.log(`${NAME}: no unit test and no smoke list, so this local run ran nothing; declare checks.smoke or pass ${FULL}`);
     return true;
