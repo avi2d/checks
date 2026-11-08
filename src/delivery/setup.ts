@@ -115,6 +115,15 @@ const KNIP_CONFIG = [
   "",
 ].join("\n");
 
+const JSCPD_CONFIG = [
+  "{",
+  "  \"path\": [\"src\"],",
+  "  \"format\": [\"typescript\"],",
+  "  \"ignore\": [\"**/*.d.ts\"]",
+  "}",
+  "",
+].join("\n");
+
 const kitText = Effect.fn("kitText")(function* (file: string) {
   const system = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -349,6 +358,7 @@ const check = Effect.gen(function* () {
     : OXLINT_CONFIG;
   yield* setupTsconfig(root, oxlintText);
   yield* setupFile(root, "knip.config.ts", KNIP_CONFIG);
+  yield* setupFile(root, ".jscpd.json", JSCPD_CONFIG);
   yield* setupFile(root, ".github/workflows/ci.yml", ciWorkflow(isPrivate, outcome.hasBuild));
   for (const kind of Object.keys(TEMPLATES)) {
     yield* setupFile(root, "templates/" + kind + ".md", yield* kitText("dist/templates/" + kind + ".md"));

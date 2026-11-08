@@ -57,6 +57,16 @@ To give each tool the config it reads:
    export default defineConfig({ entry: ["src/index.ts"] });
    ```
 
+1. Measure `src` for repetition in `.jscpd.json`:
+
+   ```json
+   {
+     "path": ["src"],
+     "format": ["typescript"],
+     "ignore": ["**/*.d.ts"]
+   }
+   ```
+
 1. Write `dependency-cruiser.config.ts` only when the kit's import rules need an entry point or a boundary of the repository's own:
 
    ```ts

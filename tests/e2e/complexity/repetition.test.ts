@@ -6,6 +6,8 @@ import { CHECKOUT, fixtureRepos, lintWiring, withOwnInstall, type FixtureRepo } 
 const ROSE = "file(s) .jscpd.json holds repeat more lines than where the range starts, at 50 tokens and 5 lines:\n";
 const open = fixtureRepos("checks-repetition-");
 const JSCPD = JSON.stringify({ path: ["src"], ignore: ["**/*.d.ts"] });
+const KIT_DEFAULT = '{"path":["src"],"format":["typescript"],"ignore":["**/*.d.ts"]}';
+const UNCONFIGURED = `repetition: the head tracks TypeScript and holds no .jscpd.json, so add one such as the kit's default ${KIT_DEFAULT}\n`;
 
 // Ten lines and some 70 tokens, over jscpd's 50 and 5, and no two seeds share a token sequence that long.
 function block(seed: string): string {
@@ -29,7 +31,7 @@ function lines(count: number, prefix: string): string {
 }
 
 function repository(files: Readonly<Record<string, string>>): Promise<FixtureRepo> {
-  return open({ ".jscpd.json": JSCPD, ...files });
+  return open({ ...files, ".jscpd.json": JSCPD });
 }
 
 const RULESET = [
@@ -45,6 +47,44 @@ const RULESET = [
   "}",
   "",
 ].join("\n");
+
+test(
+  "a head that tracks TypeScript and holds no .jscpd.json fails naming the kit's default rather than passing with nothing measured",
+  async () => {
+    const { write, commit, script } = await open({ "src/ledger.ts": block("ledger") });
+    const head = await commit("feat: base");
+    const range = await script("complexity/repetition.ts", head);
+    expect(range.text).toBe(UNCONFIGURED);
+    expect(range.exitCode).toBe(1);
+    const whole = await script("complexity/repetition.ts", "--whole-tree", head);
+    expect(whole.text).toBe(UNCONFIGURED);
+    expect(whole.exitCode).toBe(1);
+
+    await write({ ".jscpd.json": KIT_DEFAULT });
+    const configured = await commit("chore: measure repetition");
+    const green = await script("complexity/repetition.ts", configured);
+    expect(green.text).toContain("repetition: 1 file(s) .jscpd.json holds repeat no more lines than where the range starts");
+    expect(green.exitCode).toBe(0);
+    const wholeGreen = await script("complexity/repetition.ts", "--whole-tree", configured);
+    expect(wholeGreen.text).toContain("repetition: 1 file(s) .jscpd.json holds repeat no lines at the head");
+    expect(wholeGreen.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
+  "a head that tracks no TypeScript and holds no .jscpd.json passes with nothing measured rather than demanding a config",
+  async () => {
+    const { commit, script } = await open({ "src/ledger.css": RULESET });
+    const head = await commit("feat: styles only");
+    for (const args of [[head], ["--whole-tree", head]]) {
+      const result = await script("complexity/repetition.ts", ...args);
+      expect(result.text).toBe("repetition: the head holds no .jscpd.json, so no file is measured\n");
+      expect(result.exitCode).toBe(0);
+    }
+  },
+  60_000,
+);
 
 test(
   "a repository that adds css to format in .jscpd.json fails when a stylesheet's repeated lines grow",
@@ -177,7 +217,7 @@ test(
 test(
   "a threshold in .jscpd.json the tree already crosses leaves the hold to judge the range",
   async () => {
-    const { write, commit, script } = await repository({
+    const { write, commit, script } = await open({
       ".jscpd.json": JSON.stringify({ path: ["src"], threshold: 1 }),
       "src/ledger.ts": block("ledger"),
       "src/invoice.ts": block("ledger"),

@@ -445,6 +445,7 @@ test(
     await writeFile(join(dir, ".github/workflows/ci.yml"), "on: pull_request\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    steps:\n      - run: bun run lint\n      - run: bun run build\n      - run: git diff --exit-code\n      - run: bun run typecheck\n      - run: bun run test\n");
     await writeFile(join(dir, ".github/workflows/commitlint.yml"), "on: pull_request\njobs:\n  title:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    steps:\n      - run: ./node_modules/.bin/commitlint\n");
     await writeFile(join(dir, "knip.json"), JSON.stringify({ entry: ["*.ts", "tests/**/*.ts"], include: ["files"] }));
+    await writeFile(join(dir, ".jscpd.json"), JSON.stringify({ path: ["."], format: ["typescript"] }));
     await writeFile(join(dir, "dependency-cruiser.config.ts"), `import { defineConfig } from "@avi2dg/checks/dependency-cruiser";\nexport default defineConfig({ orphans: ["^clean[.]ts$"] });\n`);
 
     const manifest = Schema.decodeSync(Manifest)(await readFile(join(CHECKOUT, "package.json"), "utf8"));
@@ -486,7 +487,7 @@ test(
 
     for (const [script, report] of [
       ["wiring", "3 gate(s) run on pull requests to main"],
-      ["repetition", "repetition: the head holds no .jscpd.json, so no file is measured"],
+      ["repetition", ".jscpd.json holds repeat no more lines than where the range starts"],
       ["docs", "docs: 0 doc file(s) the range touches hold to their templates"],
       ["ratchet", "no count in oxlint-suppressions.json or stylelint-suppressions.json rose or appeared"],
       ["clock", "no test in tests/quarantine/ is past 30 days"],

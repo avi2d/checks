@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { changedPaths, checkoutFiles, collect, commitOf, git, pathsAt, rangeFromArgs } from "../core/git.ts";
-import { WHOLE_TREE } from "../core/gates.ts";
+import { TYPESCRIPT_SOURCE, WHOLE_TREE } from "../core/gates.ts";
 import { Usage, runMain } from "../core/main.ts";
 
 export type Fragment = {
@@ -35,6 +35,7 @@ const MIN_TOKENS = 50;
 const MIN_LINES = 5;
 const MEASURE = `at ${MIN_TOKENS} tokens and ${MIN_LINES} lines`;
 const CONFIG = ".jscpd.json";
+const KIT_DEFAULT = JSON.stringify({ path: ["src"], format: ["typescript"], ignore: ["**/*.d.ts"] });
 const JSCPD_FINISHED = 0;
 const REPORT = "jscpd-report.json";
 
@@ -208,6 +209,18 @@ export function reportWholeTree({ measured, rises }: Held): string {
   return verdict.join("\n");
 }
 
+const configAt = Effect.fn("configAt")(function* (head: string, root: string) {
+  if ((yield* pathsAt(head, [`:(literal)${CONFIG}`], root)).length > 0) {
+    return { kind: "configured", config: yield* git(["show", `${head}:${CONFIG}`], root) } as const;
+  }
+  if ((yield* pathsAt(head, TYPESCRIPT_SOURCE.pathspecs, root)).length > 0) {
+    yield* Console.log(`${NAME}: the head tracks TypeScript and holds no ${CONFIG}, so add one such as the kit's default ${KIT_DEFAULT}`);
+    return { kind: "refused" } as const;
+  }
+  yield* Console.log(`${NAME}: the head holds no ${CONFIG}, so no file is measured`);
+  return { kind: "unmeasured" } as const;
+});
+
 const hold = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const args = process.argv.slice(2);
@@ -215,20 +228,16 @@ const hold = Effect.gen(function* () {
     const headArg = args[1];
     if (args.length !== 2 || headArg === undefined) return yield* new Usage({ message: USAGE });
     const wholeHead = yield* commitOf(headArg);
-    if ((yield* pathsAt(wholeHead, [`:(literal)${CONFIG}`], root)).length === 0) {
-      yield* Console.log(`${NAME}: the head holds no ${CONFIG}, so no file is measured`);
-      return true;
-    }
-    const whole = yield* runWholeTree(root, yield* git(["show", `${wholeHead}:${CONFIG}`], root), wholeHead);
+    const wholeConfig = yield* configAt(wholeHead, root);
+    if (wholeConfig.kind !== "configured") return wholeConfig.kind === "unmeasured";
+    const whole = yield* runWholeTree(root, wholeConfig.config, wholeHead);
     yield* Console.log(reportWholeTree(whole));
     return whole.rises.length === 0;
   }
   const { base, head } = yield* rangeFromArgs(args, USAGE, root);
-  if ((yield* pathsAt(head, [`:(literal)${CONFIG}`], root)).length === 0) {
-    yield* Console.log(`${NAME}: the head holds no ${CONFIG}, so no file is measured`);
-    return true;
-  }
-  const held = yield* runHold(root, yield* git(["show", `${head}:${CONFIG}`], root), base, head);
+  const headConfig = yield* configAt(head, root);
+  if (headConfig.kind !== "configured") return headConfig.kind === "unmeasured";
+  const held = yield* runHold(root, headConfig.config, base, head);
 
   yield* Console.log(report(held));
   return held.rises.length === 0;

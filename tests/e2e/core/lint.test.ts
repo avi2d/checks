@@ -178,7 +178,7 @@ test("checks-lint --whole-tree runs only the four whole-tree gates over the whol
   expect(whole.text).toContain("from the whole tree at HEAD");
   expect(whole.text).toContain("lint-coverage: 3/3 tracked .ts/.tsx/.astro files");
   expect(whole.text).toContain("suppressions-ratchet: no count in oxlint-suppressions.json or stylelint-suppressions.json rose or appeared");
-  expect(whole.text).toContain("repetition: the head holds no .jscpd.json, so no file is measured");
+  expect(whole.text).toContain(".jscpd.json holds repeat no lines at the head");
   expect(whole.text).toContain("quarantine-clock: no test in tests/quarantine/ is past 30 days");
   expect(whole.text).toContain("checks-lint: 4 gate(s) pass");
   expect(whole.exitCode).toBe(0);
