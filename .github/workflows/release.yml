@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # The dispatched ci.yml run already passed the suite on this commit before the tag.
+      # release-push dispatched this workflow only after its ci.yml run passed on this commit.
       - name: ref is a tag
         run: test "$GITHUB_REF_TYPE" = tag
       - uses: avi2d/workflows/setup@v1
@@ -34,6 +34,16 @@ jobs:
           fetch-depth: 0
       - name: tag is on main
         run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - run: bun run build
+        if: ${{ !(github.event_name == 'workflow_dispatch' && github.actor == 'github-actions[bot]') }}
+      - run: git diff --exit-code
+        if: ${{ !(github.event_name == 'workflow_dispatch' && github.actor == 'github-actions[bot]') }}
+      - run: bun run lint
+        if: ${{ !(github.event_name == 'workflow_dispatch' && github.actor == 'github-actions[bot]') }}
+      - run: bun run typecheck
+        if: ${{ !(github.event_name == 'workflow_dispatch' && github.actor == 'github-actions[bot]') }}
+      - run: bun run test
+        if: ${{ !(github.event_name == 'workflow_dispatch' && github.actor == 'github-actions[bot]') }}
       - name: tag matches package version
         run: test "v$(bun -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
       - uses: actions/setup-node@v4
