@@ -10,10 +10,10 @@ const refusal = command === "run" ? fullRunRefusal(args, process.env.CI ?? "") :
 if (refusal !== undefined) throw new Error(refusal);
 
 // A GitHub-hosted runner is a VM the job holds alone, while any other machine shares its cores with whatever else runs there.
-export const mutationConcurrency = (environment = process.env.RUNNER_ENVIRONMENT, cores = availableParallelism()) =>
+export const mutationConcurrency = (environment, cores) =>
   environment === "github-hosted" ? cores : Math.max(1, Math.floor(cores / 2));
 
-export const ignoresStatic = (mode = process.env.CHECKS_MUTATION_MODE) => mode === "refresh";
+export const ignoresStatic = (mode) => mode === "refresh";
 
 const UNIT_TESTS = "tests/unit";
 
@@ -26,7 +26,7 @@ const listedUnitTests = () =>
         .toSorted()
     : [];
 
-const timedUnitTests = ordersTests(command, args) && !ignoresStatic() ? await runOrder(listedUnitTests()) : undefined;
+const timedUnitTests = ordersTests(command, args) && !ignoresStatic(process.env.CHECKS_MUTATION_MODE) ? await runOrder(listedUnitTests()) : undefined;
 
 export const unitTestFiles = () => timedUnitTests ?? listedUnitTests();
 
@@ -48,7 +48,7 @@ export default {
   coverageAnalysis: "perTest",
   reporters: ["html", "json", "clear-text", "progress"],
   timeoutMS: 60000,
-  concurrency: mutationConcurrency(),
-  ignoreStatic: ignoresStatic(),
+  concurrency: mutationConcurrency(process.env.RUNNER_ENVIRONMENT, availableParallelism()),
+  ignoreStatic: ignoresStatic(process.env.CHECKS_MUTATION_MODE),
   thresholds: { high: 85, low: 70, break: null },
 };

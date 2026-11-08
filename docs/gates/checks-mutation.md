@@ -34,7 +34,8 @@ Bun loads a file once however often the list names it.
 When that timing run fails, the preset prints why on stderr and `unitTestFiles` keeps Bun's default directory order.
 A run with `--ignoreStatic` on the command line or in a refresh tests no static mutant, so it skips the timing run.
 
-The preset sets `ignoreStatic` only when `CHECKS_MUTATION_MODE` is `refresh`, which a refresh run of the shared mutation workflow sets.
+The preset sets `ignoreStatic` only when `CHECKS_MUTATION_MODE` is `refresh`.
+A run that sets `CHECKS_MUTATION_MODE=refresh` gets `ignoreStatic`.
 A baseline or a branch comparison leaves the variable at another value or unset, so it still tests each static mutant.
 
 The preset runs one Stryker worker per core when `RUNNER_ENVIRONMENT` is `github-hosted`, since a GitHub-hosted runner is a VM the job holds alone.

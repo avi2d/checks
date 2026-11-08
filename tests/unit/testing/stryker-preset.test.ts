@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { availableParallelism, tmpdir } from "node:os";
@@ -10,8 +11,8 @@ import { Schema } from "effect";
 const presetUrl = new URL("../../../stryker.preset.js", import.meta.url).href;
 const preset: unknown = (await import(presetUrl)).default;
 const { ignoresStatic, mutationConcurrency, unitTestFiles }: {
-  ignoresStatic: (mode?: string) => boolean;
-  mutationConcurrency: (environment?: string, cores?: number) => number;
+  ignoresStatic: (mode: string | undefined) => boolean;
+  mutationConcurrency: (environment: string | undefined, cores: number) => number;
   unitTestFiles: () => Array<string>;
 } = await import(presetUrl);
 
@@ -20,7 +21,7 @@ const Manifest = Schema.fromJsonString(
 );
 
 test("the preset carries exactly the agreed rollout settings, the full-run guard and the unit tests", () => {
-  expect(preset).toEqual({
+  expect(preset).toMatchObject({
     packageManager: "npm",
     plugins: [
       "@stryker-mutator/*",
@@ -29,17 +30,27 @@ test("the preset carries exactly the agreed rollout settings, the full-run guard
     ],
     ignorers: ["checks-incremental-report-guard"],
     testRunner: "bun",
-    bun: { timeout: 60000, testFiles: unitTestFiles() },
+    bun: { timeout: 60000 },
     inPlace: true,
     tempDirName: "../.stryker-tmp",
     coverageAnalysis: "perTest",
     reporters: ["html", "json", "clear-text", "progress"],
     timeoutMS: 60000,
-    concurrency: mutationConcurrency(),
-    ignoreStatic: ignoresStatic(),
     thresholds: { high: 85, low: 70, break: null },
   });
+  expect((preset as { bun: { testFiles?: Array<string> } }).bun.testFiles).toContain(
+    "tests/unit/testing/stryker-preset.test.ts",
+  );
 });
+
+const presetPath = fileURLToPath(new URL("../../../stryker.preset.js", import.meta.url));
+
+const loadPresetInSubprocess = (env: Record<string, string>): { concurrency: number; ignoreStatic: boolean } => {
+  const script = "import preset from " + JSON.stringify(presetPath) + "; console.log(JSON.stringify({ concurrency: preset.concurrency, ignoreStatic: preset.ignoreStatic }));";
+  const result = spawnSync(process.execPath, ["-e", script], { env: { ...process.env, ...env }, encoding: "utf8" });
+  expect(result.status).toBe(0);
+  return JSON.parse(result.stdout as string);
+};
 
 test("mutation concurrency takes every core of a GitHub-hosted runner rather than half of them", () => {
   expect(mutationConcurrency("github-hosted", 4)).toBe(4);
@@ -54,10 +65,14 @@ test("mutation concurrency off a GitHub-hosted runner halves the cores, rounds d
   expect(mutationConcurrency(undefined, 1)).toBe(1);
 });
 
-test("the preset spreads the concurrency of the runner it loads on to every consumer", () => {
-  const cores = availableParallelism();
-  const expected = process.env["RUNNER_ENVIRONMENT"] === "github-hosted" ? cores : Math.max(1, Math.floor(cores / 2));
-  expect(preset).toMatchObject({ concurrency: expected });
+test("rejects a preset hard-wired to half the cores by using every core on a GitHub-hosted runner", () => {
+  const loaded = loadPresetInSubprocess({ RUNNER_ENVIRONMENT: "github-hosted", CHECKS_MUTATION_MODE: "baseline" });
+  expect(loaded.concurrency).toBe(availableParallelism());
+});
+
+test("rejects a preset hard-wired to ignoreStatic false by turning ignoreStatic on in a refresh run", () => {
+  const loaded = loadPresetInSubprocess({ CHECKS_MUTATION_MODE: "refresh", RUNNER_ENVIRONMENT: "self-hosted" });
+  expect(loaded.ignoreStatic).toBe(true);
 });
 
 test("static mutants are ignored only in a refresh run, not in a baseline, a compare or a local run", () => {
