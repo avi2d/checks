@@ -5,6 +5,7 @@ audience: consumers
 # checks-mutation-scope
 
 `checks-mutation-scope` turns a branch's diff into the files its mutation runs mutate, and prints them as `NAME=a,b` lines a CI step appends to its environment file.
+With `--shards`, it splits every file a whole-tree run mutates into groups that each run on a job of their own.
 
 ## What it checks
 
@@ -40,6 +41,18 @@ A change under `tests/e2e/` changes no unit test, so it needs no baseline report
 The scope trusts the coverage edges of the latest full baseline.
 So a helper, fixture or preload changed on `main` since that baseline can hide a lost kill until the next full baseline refreshes.
 
+## Splitting a whole-tree run
+
+`checks-mutation-scope --shards <count>` takes every file git tracks at `HEAD` that the `mutate` globs match, with each negated glob applied in order.
+It splits those files into at most `<count>` shards, so a refresh run spreads across that many jobs while a baseline stays a single incremental run.
+Each file weighs the mutants the last report holds for it that a refresh runs, leaving out each mutant with `static` true or status `Ignored` or `NoCoverage`, since a refresh skips the first two and runs no test for the third.
+A file the last report lacks may be newer than that report.
+So it weighs the average count of the reported files the globs still match, rounded up and at least one.
+With no last report operand, each file weighs one mutant, so the shards split by file count.
+A named last report with no file, or a file that does not load as a Stryker report, fails the run instead.
+Each file in turn, heaviest first and then by path, joins the shard with the fewest mutants so far, the lowest numbered on a tie.
+A shard with no file is left out, so fewer files than `<count>` print fewer shards.
+
 ## What it reads
 
 - The diff from the merge base to `HEAD`, and the files git tracks at both.
@@ -51,6 +64,7 @@ So a helper, fixture or preload changed on `main` since that baseline can hide a
 - Each tracked `.ts` and `.tsx` file under `tests/` from the working tree, for its relative imports and the fixture paths it names.
 - Each changed unit test at the merge base, to match it against the source the report recorded.
 - The full baseline report that `checks-mutation-baseline --full` restores, for each mutant's `coveredBy` and `killedBy` and the `testFiles` that own those tests.
+- With `--shards`, the last report, for the number of mutants in each file that a refresh runs.
 
 Stryker leaves `coveredBy` empty on a static mutant, so only `killedBy` names its tests.
 A reused result needs its affected tests, sources, and configuration invalidated before reuse, so each mutant's tests are the ones the run recorded.
@@ -63,10 +77,14 @@ So whichever killer the report names is a changed test, and a deleted test count
 
 ```sh
 checks-mutation-scope <base> [<full-baseline-report>]
+checks-mutation-scope --shards <count> [<last-report>]
 ```
 
 `<base>` is the target branch, such as `origin/main`, or the merge base itself.
-`<full-baseline-report>` is the path the full baseline was restored to, and a path with no file reads as no report.
+`<full-baseline-report>` is the path the full baseline was restored to, and a path with no file reads as no report, which fails the run only when a unit test changed.
+`<count>` is a whole number from 1 to 256, the most jobs one GitHub Actions matrix runs.
+`<last-report>` is the path of the last whole-tree report.
+With no `<last-report>`, each file weighs one mutant, and a path with no file fails the run.
 
 ## Output
 
@@ -82,6 +100,10 @@ So `SCOPE` wraps each glob character in a path in a class of its own.
 `app/routes/[id].ts` prints as `app/routes/[[]id[]].ts`, which matches that file and not `app/routes/i.ts`.
 `STALE_TESTS` names each test by its literal path, as the incremental state keys it.
 
+With `--shards`, it prints one `SHARDS` line instead, a JSON list a matrix reads with `fromJSON`.
+Each entry is one shard's files, escaped as `SCOPE` escapes them and joined with commas, so it passes to `--mutate` as it stands.
+On stderr it names each shard's file count and mutant weight.
+
 Stryker compares only a test file's own source when it resumes from incremental state.
 A run that resumes from the merge base's state drops each `STALE_TESTS` entry from that state first, so Stryker retests the mutants those tests cover.
 
@@ -92,8 +114,8 @@ It also names each stale test that widens the scope.
 
 | Code | When |
 | --- | --- |
-| 0 | it printed the scope, an empty one included |
-| 2 | the arguments do not parse, git fails, the Stryker config, `bunfig.toml` or the baseline report does not load, a `mutate` entry names a mutation range, or a unit test changed with no baseline report |
+| 0 | it printed the scope or the shards, an empty list included |
+| 2 | the arguments do not parse, git fails, the Stryker config, `bunfig.toml`, the baseline report or the last report does not load, a `mutate` entry names a mutation range, or a unit test changed with no baseline report |
 
 ## Sample output
 
@@ -104,6 +126,15 @@ mutation-scope: tests/unit/dashboard/snapshot.test.ts reads tests/lib/session-fi
 mutation-scope: packages/ui/src/layout.ts enters through tests/unit/dashboard/snapshot.test.ts
 SCOPE=packages/session-quota/src/notes.ts,packages/ui/src/layout.ts
 STALE_TESTS=tests/unit/dashboard/snapshot.test.ts
+```
+
+A whole-tree run split three ways:
+
+```
+mutation-scope: shard 1 holds 2 file(s) and about 9 mutant(s)
+mutation-scope: shard 2 holds 1 file(s) and about 8 mutant(s)
+mutation-scope: shard 3 holds 2 file(s) and about 8 mutant(s)
+SHARDS=["src/a.ts,src/b.ts","src/c.ts","src/d.ts,src/e.ts"]
 ```
 
 A changed unit test with no full baseline on `main`, on stderr:

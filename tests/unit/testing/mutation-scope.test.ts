@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
 import type { Change } from "../../../src/core/git.ts";
-import { coveringTests, envLines, mutatedBy, parseArgs, pickFromDiff, preloadChange, readersOf, STRYKER_DEFAULT_MUTATE } from "../../../src/testing/mutation-scope.ts";
+import { coveringTests, envLines, mutatedBy, parseArgs, pickFromDiff, preloadChange, readersOf, shardsLine, STRYKER_DEFAULT_MUTATE } from "../../../src/testing/mutation-scope.ts";
 
 const ROOT = "/runner/work/repo";
 const ORC_DASH_MUTATE = ["packages/*/src/**/*.ts", "!packages/*/src/live/**", "!packages/*/src/bin.ts"];
@@ -201,10 +201,23 @@ test("the scope escapes each glob character in a path, and the stale tests stay 
   expect(lines).toBe(["SCOPE=src/routes/[[]id[]].ts,src/[{]a[}]/[(]group[)]/[*][?].ts", "STALE_TESTS=tests/unit/[id].test.ts"].join("\n"));
 });
 
-test("the arguments are a base and an optional report, and nothing else", async () => {
-  const parsed = (argv: readonly string[]) => Effect.runPromise(parseArgs(argv).pipe(Effect.match({ onFailure: () => "usage", onSuccess: (options) => options })));
+const parsed = (argv: readonly string[]) => Effect.runPromise(parseArgs(argv).pipe(Effect.match({ onFailure: () => "usage", onSuccess: (options) => options })));
 
-  expect(await parsed(["abc123"])).toEqual({ base: "abc123", baseline: undefined });
-  expect(await parsed(["abc123", "full/mutation.json"])).toEqual({ base: "abc123", baseline: "full/mutation.json" });
+test("the arguments are a base and an optional report, and nothing else", async () => {
+  expect(await parsed(["abc123"])).toEqual({ kind: "scope", base: "abc123", baseline: undefined });
+  expect(await parsed(["abc123", "full/mutation.json"])).toEqual({ kind: "scope", base: "abc123", baseline: "full/mutation.json" });
   expect(await Promise.all([[], ["--full"], ["abc123", "--json"], ["abc123", "a.json", "extra"]].map(parsed))).toEqual(["usage", "usage", "usage", "usage"]);
+});
+
+test("--shards takes a count from 1 to the 256 jobs a matrix runs and an optional report, and refuses zero, a fraction or a flag", async () => {
+  expect(await parsed(["--shards", "4"])).toEqual({ kind: "shards", count: 4, report: undefined });
+  expect(await parsed(["--shards", "256", "last/mutation.json"])).toEqual({ kind: "shards", count: 256, report: "last/mutation.json" });
+  const refused = [["--shards"], ["--shards", "0"], ["--shards", "257"], ["--shards", "1.5"], ["--shards", "04"], ["--shards", "2", "--json"], ["--shards", "2", "a.json", "extra"]];
+  expect(await Promise.all(refused.map(parsed))).toEqual(refused.map(() => "usage"));
+});
+
+test("the shards line is a JSON list a matrix reads, with each shard's files escaped as one --mutate value", () => {
+  const line = shardsLine([{ files: ["src/a.ts", "src/routes/[id].ts"], mutants: 9 }, { files: ["src/b.ts"], mutants: 8 }]);
+
+  expect(line).toBe('SHARDS=["src/a.ts,src/routes/[[]id[]].ts","src/b.ts"]');
 });
