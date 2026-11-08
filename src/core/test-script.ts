@@ -8,7 +8,7 @@ export type TestOptions = {
   readonly full?: boolean;
 };
 
-export const FULL = "--full";
+const FULL = "--full";
 const TIERS = new Map<string, TestTier>([
   ["--tier=live", "live"],
   ["--tier=pixel", "pixel"],

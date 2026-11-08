@@ -43,7 +43,7 @@ They are `checks-lint-coverage`, `checks-quarantine-clock`, `checks-repetition` 
 
 These bins run on their own:
 
-- [`checks-test`](gates/checks-test.md) runs the suite as `scripts.test` and refuses a skip without a reason at its test site.
+- [`checks-test`](gates/checks-test.md) runs the suite as `scripts.test`, refuses a skip without a reason at its test site and refuses a full, e2e or pixel run outside CI.
   With `--changed` it runs only the test files a local change reaches, and never the whole suite.
 - [`checks-flake`](gates/checks-flake.md) runs the suite when started by hand and records the seeds a flaky test fails with.
 - [`checks-mutation`](gates/checks-mutation.md) runs Stryker for scoped checks and refuses a full run outside CI.

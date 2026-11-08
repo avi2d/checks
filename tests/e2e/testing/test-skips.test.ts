@@ -28,9 +28,9 @@ async function consumer(suite: string, files: Readonly<Record<string, string>> =
   await symlink(CHECKOUT, join(scope, "checks"), "dir");
 }
 
-function checksTest(ci: boolean, args: readonly string[] = []): Promise<Ran> {
-  const { CI: _ci, ...env } = process.env;
-  return ran($`bun ${SCRIPT} ${args}`.cwd(dir).env(ci ? { ...env, CI: "true" } : env));
+function checksTest(ci: boolean, args: readonly string[] = [], extra: Readonly<Record<string, string>> = {}): Promise<Ran> {
+  const { CI: _ci, APPROVE_SCREENS: _approve, ...env } = process.env;
+  return ran($`bun ${SCRIPT} ${args}`.cwd(dir).env({ ...env, ...extra, ...(ci ? { CI: "true" } : {}) }));
 }
 
 test("a reason at the test site passes without a package declaration", async () => {
@@ -238,7 +238,25 @@ test("the live tier judges only its own directory", async () => {
 test("the pixel tier judges only its own directory", async () => {
   await livePixelConsumer();
 
+  const pixelRun = await checksTest(true, ["--tier=pixel"]);
+  expect(pixelRun.exitCode).toBe(0);
+  expect(pixelRun.text).toContain("checks-test: 1 skipped test(s), each declared at its test site");
+});
+
+test("a local pixel run without approve refuses before any test runs and names the whole-tree-run workflow", async () => {
+  await livePixelConsumer();
+
   const pixelRun = await checksTest(false, ["--tier=pixel"]);
+  expect(pixelRun.exitCode).toBe(2);
+  expect(pixelRun.text).toContain("gh workflow run whole-tree-run --ref <branch>");
+  expect(pixelRun.text).toContain("APPROVE_SCREENS=1");
+  expect(pixelRun.text).not.toContain("skipped test(s)");
+});
+
+test("a local pixel run that approves pictures runs and judges its own directory instead of refusing", async () => {
+  await livePixelConsumer();
+
+  const pixelRun = await checksTest(false, ["--tier=pixel"], { APPROVE_SCREENS: "1" });
   expect(pixelRun.exitCode).toBe(0);
   expect(pixelRun.text).toContain("checks-test: 1 skipped test(s), each declared at its test site");
 });
@@ -306,10 +324,21 @@ test("a CI run covers the full suite past the smoke list", async () => {
   expect(ci.text).toContain("tests/e2e/search.test.ts:");
 });
 
-test("a local run with --full covers the full suite past the smoke list", async () => {
+test("a local run with --full or the e2e tier refuses before any test runs and names the pull request", async () => {
   await smokeConsumer();
 
-  const full = await checksTest(false, ["--full"]);
+  for (const args of [["--full"], ["--tier=e2e"]]) {
+    const refused = await checksTest(false, args);
+    expect(refused.exitCode).toBe(2);
+    expect(refused.text).toContain("open or update its pull request");
+    expect(refused.text).not.toContain("breaks outside the smoke list");
+  }
+});
+
+test("a CI run with --full covers the full suite past the smoke list", async () => {
+  await smokeConsumer();
+
+  const full = await checksTest(true, ["--full"]);
   expect(full.exitCode).toBe(1);
   expect(full.text).toContain("tests/e2e/checkout.test.tsx:");
   expect(full.text).toContain("tests/e2e/search.test.ts:");
