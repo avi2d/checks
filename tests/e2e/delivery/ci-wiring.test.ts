@@ -89,6 +89,8 @@ test("the default branch comes from origin HEAD, the pull request base or GitHub
   expect(release.text).toContain("limits pull_request to branches other than release");
 }, 30_000);
 
+const SHARED = { GITHUB_REPOSITORY: "avi2d/workflows" };
+
 test("a private repository's event holds mutation jobs to its configured labels and every other job to a hosted default", async () => {
   const old = `\${{ vars.CI_RUNS_ON || fromJSON('["self-hosted","gpu"]') }}`;
   const mutation = (runsOn: string) => `on: pull_request\njobs:\n  mutation-compare:\n    runs-on: ${runsOn}\n    timeout-minutes: 10\n    steps:\n      - run: bun run mutate\n`;
@@ -100,13 +102,13 @@ test("a private repository's event holds mutation jobs to its configured labels 
     "event.json": JSON.stringify({ repository: { default_branch: "main", private: true } }),
   });
   await repo.commit("start");
-  const privateEvent = { GITHUB_EVENT_PATH: join(repo.dir, "event.json") };
+  const privateEvent = { ...SHARED, GITHUB_EVENT_PATH: join(repo.dir, "event.json") };
   const red = await wiring(repo, privateEvent);
   expect(red.exitCode).toBe(1);
   expect(red.text).toContain("2 job(s) run on the wrong runner");
   expect(red.text).toContain(".github/workflows/mutation-compare.yml job mutation-compare: a mutation job reads CI_RUNS_ON");
   expect(red.text).toContain(".github/workflows/ci.yml job checks: the job is not on a hosted runner");
-  expect((await wiring(repo)).exitCode).toBe(1);
+  expect((await wiring(repo, SHARED)).exitCode).toBe(1);
   await repo.write({
     "package.json": JSON.stringify({ name: "consumer", scripts: { lint: "lint", test: "test", mutate: "bunx stryker run" } }),
     ".github/workflows/ci.yml": workflow,
@@ -115,7 +117,7 @@ test("a private repository's event holds mutation jobs to its configured labels 
   const undeclared = await wiring(repo, privateEvent);
   expect(undeclared.exitCode).toBe(1);
   expect(undeclared.text).toContain("job mutation-compare: a mutation job in a private repository names no checks.mutationRunner");
-  expect((await wiring(repo)).exitCode).toBe(0);
+  expect((await wiring(repo, SHARED)).exitCode).toBe(0);
   await repo.write({
     "package.json": JSON.stringify(consumer),
     ".github/workflows/ci.yml": workflow,
@@ -169,7 +171,7 @@ test("a private repository's mutation job through a repository shell script in i
     "event.json": JSON.stringify({ repository: { default_branch: "main", private: true } }),
   });
   await repo.commit("start");
-  const privateEvent = { GITHUB_EVENT_PATH: join(repo.dir, "event.json") };
+  const privateEvent = { ...SHARED, GITHUB_EVENT_PATH: join(repo.dir, "event.json") };
   const red = await wiring(repo, privateEvent);
   expect(red.exitCode).toBe(1);
   expect(red.text).toContain(`${runs.length} job(s) run on the wrong runner`);
@@ -177,6 +179,23 @@ test("a private repository's mutation job through a repository shell script in i
   await repo.write({ ".github/workflows/mutation.yml": mutation(mutationRunner) });
   const green = await wiring(repo, privateEvent);
   expect(green.text).not.toContain("wrong runner");
+  expect(green.exitCode).toBe(0);
+}, 30_000);
+
+test("a consumer's hand-rolled stryker run job is refused under any repository case and passes once it calls the shared workflow", async () => {
+  const handRolled = `on: workflow_dispatch\njobs:\n  mutation:\n    runs-on: ubuntu-latest\n    timeout-minutes: 60\n    steps:\n      - run: bunx stryker run --incremental\n`;
+  const caller = `on: workflow_dispatch\njobs:\n  mutation:\n    uses: avi2d/workflows/.github/workflows/mutation.yml@v1\n`;
+  const repo = await open({ "package.json": scripts(["lint", "test"]), ".github/workflows/ci.yml": workflow, ".github/workflows/mutation.yml": handRolled });
+  await repo.commit("start");
+  const red = await wiring(repo, { GITHUB_REPOSITORY: "avi2d/skills" });
+  expect(red.exitCode).toBe(1);
+  expect(red.text).toContain("ci-wiring: 1 job(s) run mutation outside the shared workflow:\n  .github/workflows/mutation.yml job mutation: run mutation through a job with uses: avi2d/workflows/.github/workflows/mutation.yml@v1, as checks-setup writes it");
+  await $`git -C ${repo.dir} remote add origin git@github.com:avi2d/skills.git`.quiet();
+  expect((await wiring(repo)).text).toContain("job mutation: run mutation through a job with uses:");
+  expect((await wiring(repo, { GITHUB_REPOSITORY: "Avi2d/Workflows" })).exitCode).toBe(0);
+  await repo.write({ ".github/workflows/mutation.yml": caller });
+  const green = await wiring(repo, { GITHUB_REPOSITORY: "avi2d/skills" });
+  expect(green.text).not.toContain("outside the shared workflow");
   expect(green.exitCode).toBe(0);
 }, 30_000);
 

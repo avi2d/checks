@@ -27,14 +27,13 @@ Each list prints in order of file, then line, then column, and a matched mutant 
 It reads two Stryker `mutation.json` reports, one built at the merge-base and one at the head.
 The shared Stryker preset's `json` reporter writes `reports/mutation/mutation.json` in each worktree.
 
-A repository that runs mutation testing installs `@stryker-mutator/core` and `@hughescr/stryker-bun-runner`, then spreads the shipped preset in `stryker.conf.mjs`:
+A repository that runs mutation testing installs `@stryker-mutator/core` and `@hughescr/stryker-bun-runner`, then spreads the shipped preset in `stryker.conf.mjs`.
+[checks-setup](checks-setup.md) writes both pins and this config:
 
 ```js
 import preset from "@avi2dg/checks/stryker.preset.js";
 
-export default {
-  ...preset,
-};
+export default { ...preset, mutate: ["src/**/*.{ts,tsx}", "!src/**/*.test.{ts,tsx}"] };
 ```
 
 Keys the repository sets after the spread win.
@@ -78,8 +77,9 @@ The shared preset refuses a full `stryker run` outside CI and names that workflo
 
 ## Running it in CI
 
-A person starts a workflow named `mutation-compare` on a branch with `gh workflow run mutation-compare --ref <branch>`.
-It compares the head report against a report built at the merge-base with `main` over the same scope:
+Only `avi2d/workflows` holds a job like the one below, since [checks-ci-wiring](checks-ci-wiring.md#mutation-jobs) refuses it in any other repository.
+Any other repository calls that shared workflow from the caller [checks-setup](checks-setup.md) writes.
+A comparison job compares the head report against a report built at the merge-base with `main` over the same scope:
 
 ```yaml
 name: mutation-compare

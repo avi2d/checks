@@ -332,3 +332,54 @@ expect(privWiring.exitCode).toBe(0);
 },
 60_000,
 );
+
+const CallerSchema = Schema.Struct({
+  on: Schema.Struct({
+    pull_request: Schema.Struct({ types: Schema.Array(Schema.String) }),
+    push: Schema.Struct({ branches: Schema.Array(Schema.String), paths: Schema.Array(Schema.String) }),
+    workflow_dispatch: Schema.Struct({ inputs: Schema.Struct({ mode: Schema.Struct({ type: Schema.String, options: Schema.Array(Schema.String), default: Schema.String }) }) }),
+  }),
+  jobs: Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.Unknown)),
+});
+
+test(
+"the generated mutation workflow hands every mode to the shared workflow at v1 and runs no stryker step of its own",
+async () => {
+const dir = await scratch("mutation-caller");
+expect((await $`bun ${join(CHECKOUT, "src", "delivery", "setup.ts")}`.cwd(dir).nothrow().quiet()).exitCode).toBe(0);
+const text = await readFile(join(dir, ".github/workflows/mutation.yml"), "utf8");
+const caller = Schema.decodeUnknownSync(CallerSchema)(Bun.YAML.parse(text));
+expect(caller.on.pull_request.types).toEqual(["opened", "synchronize"]);
+expect(caller.on.push.branches).toEqual(["main"]);
+expect(caller.on.push.paths).toEqual(expect.arrayContaining(["src/**", "tests/unit/**", "stryker.conf.mjs", "bun.lock"]));
+expect(caller.on.workflow_dispatch.inputs.mode).toEqual({ type: "choice", options: ["baseline", "refresh"], default: "baseline" });
+expect(caller.jobs).toEqual({
+  mutation: {
+    uses: "avi2d/workflows/.github/workflows/mutation.yml@v1",
+    permissions: { contents: "read", actions: "write", "pull-requests": "write" },
+    with: { mode: "${{ github.event_name == 'pull_request' && 'compare' || inputs.mode || 'baseline' }}" },
+  },
+});
+expect(text.split("\n").length).toBeLessThanOrEqual(20);
+},
+60_000,
+);
+
+test(
+"setup writes a stryker.conf.mjs that spreads the kit preset alone and pins the kit's own stryker versions, keeping a consumer's own pin rather than replacing it",
+async () => {
+const kitDev = Schema.decodeSync(Schema.fromJsonString(Schema.Struct({ devDependencies: Schema.Record(Schema.String, Schema.String) })))(await kitFile("package.json")).devDependencies;
+const dir = await scratch("stryker-config");
+expect((await $`bun ${join(CHECKOUT, "src", "delivery", "setup.ts")}`.cwd(dir).nothrow().quiet()).exitCode).toBe(0);
+expect(await readFile(join(dir, "stryker.conf.mjs"), "utf8")).toBe('import preset from "@avi2dg/checks/stryker.preset.js";\n\nexport default { ...preset, mutate: ["src/**/*.{ts,tsx}", "!src/**/*.test.{ts,tsx}"] };\n');
+const fresh = decodeManifest(await readFile(join(dir, "package.json"), "utf8")).devDependencies;
+expect(fresh?.["@stryker-mutator/core"]).toBe(kitDev["@stryker-mutator/core"]);
+expect(fresh?.["@hughescr/stryker-bun-runner"]).toBe(kitDev["@hughescr/stryker-bun-runner"]);
+const pinned = await open({ "package.json": JSON.stringify({ name: "shop", type: "module", devDependencies: { "@stryker-mutator/core": "9.0.0" } }) });
+expect((await setup(pinned)).exitCode).toBe(0);
+const kept = decodeManifest(await readFile(join(pinned.dir, "package.json"), "utf8")).devDependencies;
+expect(kept?.["@stryker-mutator/core"]).toBe("9.0.0");
+expect(kept?.["@hughescr/stryker-bun-runner"]).toBe(kitDev["@hughescr/stryker-bun-runner"]);
+},
+60_000,
+);

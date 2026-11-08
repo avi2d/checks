@@ -86,14 +86,16 @@ An `--incremental` run with no report stops before instrumenting with the missin
 
 ## When it runs
 
-A repository runs full baselines from the mutation workflow on `workflow_dispatch`.
-A repository that picks a branch scope from a baseline starts that workflow weekly with `gh workflow run mutation`, because a GitHub schedule can start hours late.
+A repository runs its baselines through the `mutation` caller that [checks-setup](checks-setup.md) writes.
+A push to `main` that changes what Stryker mutates or tests starts one, and so does `gh workflow run mutation`.
 Run scoped checks locally during development.
 A first baseline with no state costs a full Stryker run, and each later one retests the mutants its changes reach, while a result made stale by a file a test reads at runtime lasts until the next 28-day refresh.
 
 ## Running it in CI
 
-A repository starts a baseline by hand from a workflow named `mutation` and keeps its report as an artifact:
+Only `avi2d/workflows` holds a job like the one below, since [checks-ci-wiring](checks-ci-wiring.md#mutation-jobs) refuses it in any other repository.
+Any other repository calls that shared workflow from the caller [checks-setup](checks-setup.md) writes.
+A baseline job takes these steps and keeps its report as an artifact:
 
 ```yaml
 name: mutation

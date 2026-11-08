@@ -6,6 +6,8 @@ import { ENTRY_POINT, KIT_GATES, type KitGate } from "../core/gates.ts";
 import { findBunPinFaults, formatBunPinReport, readBunPinPolicy } from "./bun-pin.ts";
 import { findLongJobs, formatLongJobReport } from "./job-timeout.ts";
 import { readScheduleFiles, readShellFiles } from "./mutation-job.ts";
+import { findHandRolledMutation, formatHandRolledReport } from "./mutation-workflow.ts";
+import { ownerRepoOf } from "./release-preflight.ts";
 import { findScheduledReleases, formatScheduleReport } from "./release-schedule.ts";
 import { findRunnerFaults, formatRunnerReport, jobRuns, readRunnerConfig } from "./runner-policy.ts";
 import { findScheduledRuns, formatScheduledRunReport } from "./schedule-policy.ts";
@@ -269,6 +271,13 @@ const readVisibility = Effect.gen(function* () {
   );
 });
 
+// Outside CI the origin remote names the repository, and a clone without one names none.
+const readRepository = Effect.fn("readRepository")(function* (root: string) {
+  const running = yield* Config.String("GITHUB_REPOSITORY").pipe(Config.withDefault(""));
+  if (running !== "") return running;
+  return ownerRepoOf((yield* git(["remote", "get-url", "origin"], root).pipe(Effect.orElseSucceed(() => ""))).trim());
+});
+
 export const readWorkflows = Effect.fn("readWorkflows")(function* (root: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -298,8 +307,11 @@ const wiring = Effect.gen(function* () {
   const visibility = yield* readVisibility;
   const runs = workflows.flatMap((workflow) => workflowJobs(workflow).flatMap(([, job]) => jobRuns(workflow, job)));
   const runners = yield* readRunnerConfig(root);
-  const faults = findRunnerFaults({ visibility, scripts, files: yield* readShellFiles(root, scripts, runs), runners }, workflows);
+  const shellFiles = yield* readShellFiles(root, scripts, runs);
+  const faults = findRunnerFaults({ visibility, scripts, files: shellFiles, runners }, workflows);
   if (faults.length > 0) yield* Console.error(formatRunnerReport(faults));
+  const handRolled = findHandRolledMutation(workflows, { scripts, files: shellFiles }, yield* readRepository(root));
+  if (handRolled.length > 0) yield* Console.error(formatHandRolledReport(handRolled));
   const bunFaults = findBunPinFaults(yield* readBunPinPolicy(root, workflows), workflows);
   if (bunFaults.length > 0) yield* Console.error(formatBunPinReport(bunFaults));
   const scheduleFiles = yield* readScheduleFiles(root, scripts, runs);
@@ -310,7 +322,7 @@ const wiring = Effect.gen(function* () {
   if (scheduledRuns.length > 0) yield* Console.error(formatScheduledRunReport(scheduledRuns));
   const longJobs = findLongJobs(workflows);
   if (longJobs.length > 0) yield* Console.error(formatLongJobReport(longJobs));
-  return [gaps, faults, missing, bunFaults, scheduled, scheduledRuns, longJobs].every((found) => found.length === 0);
+  return [gaps, faults, handRolled, missing, bunFaults, scheduled, scheduledRuns, longJobs].every((found) => found.length === 0);
 });
 
 if (import.meta.main) runMain("ci-wiring", wiring);
