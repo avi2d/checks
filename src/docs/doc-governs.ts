@@ -1,5 +1,5 @@
 import { Option, Schema } from "effect";
-import type { Outline, Violation } from "./doc-outline.ts";
+import type { Outline, Section, Violation } from "./doc-outline.ts";
 import type { Snapshot } from "./doc-references.ts";
 import { ADR_STATUSES } from "./doc-templates.ts";
 
@@ -95,8 +95,12 @@ const QUOTED = /^ {0,3}>/;
 const CODE_SPAN = /(`+)[^`]*?\1/g;
 const SENTENCE_END = /(?<=[.!?])\s+/;
 
-function padded(number: number): string {
+export function padded(number: number): string {
   return String(number).padStart(4, "0");
+}
+
+export function statusSection(outline: Outline): Section | undefined {
+  return outline.sections.find(({ heading }) => heading.title === "Status");
 }
 
 function supersededIn(text: string, known: ReadonlySet<number>, own: number | undefined): readonly number[] {
@@ -105,7 +109,7 @@ function supersededIn(text: string, known: ReadonlySet<number>, own: number | un
 }
 
 export function supersessionProblems(outline: Outline, known: ReadonlySet<number>, own: number | undefined): readonly Violation[] {
-  const status = outline.sections.find(({ heading }) => heading.title === "Status");
+  const status = statusSection(outline);
   const inStatus = new Set([...(status?.body ?? []).map(({ line }) => line), status?.heading.line]);
   return outline.prose.flatMap(({ line, text }) => {
     if (inStatus.has(line) || QUOTED.test(text)) return [];
