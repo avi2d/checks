@@ -4,9 +4,11 @@ import { escape, minimatch } from "minimatch";
 import { changedPaths, git, pathsAt, pathsOf, rangeEnds, type Change } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { decodeBunfig, importedFile, importsOf, preloadPaths, readersOf, resolved, TEST_TREE } from "./mutation-scope-graph.ts";
+import { balancedShards, MAX_SHARDS, mutantWeights, runnableMutants, type Shard } from "./mutation-shards.ts";
 
 const NAME = "mutation-scope";
-const USAGE = "usage: mutation-scope.ts <base> [full-baseline-report]";
+const USAGE = "usage: mutation-scope.ts <base> [full-baseline-report] | mutation-scope.ts --shards <count> [last-report]";
+const SHARD_COUNT = /^[1-9]\d*$/;
 const UNIT_TESTS = "tests/unit/";
 const TEST_FILE = /\.test\.tsx?$/;
 const READ_FILE = /\.tsx?$/;
@@ -52,6 +54,14 @@ const BaselineSchema = Schema.Struct({
 export type Baseline = typeof BaselineSchema.Type;
 
 const decodeBaseline = Schema.decodeUnknownEffect(Schema.fromJsonString(BaselineSchema));
+
+const decodeMutantCounts = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(
+    Schema.Struct({
+      files: Schema.Record(Schema.String, Schema.Struct({ mutants: Schema.Array(Schema.Struct({ static: Schema.optionalKey(Schema.Boolean), status: Schema.optionalKey(Schema.String) })) })),
+    }),
+  ),
+);
 
 export type MutationScope = { readonly scope: readonly string[]; readonly staleTests: readonly string[] };
 
@@ -117,16 +127,33 @@ export function coveringTests(baseline: Baseline, tests: ReadonlySet<string>, mu
   return covering;
 }
 
-// Stryker reads each --mutate entry as a glob whose backslashes are separators, and the incremental state keys each test by its literal path.
+// Stryker reads each --mutate entry as a glob whose backslashes are separators.
+const mutateGlobs = (files: readonly string[]): string => files.map((file) => escape(file, { windowsPathsNoEscape: true, magicalBraces: true })).join(",");
+
+// The incremental state keys each test by its literal path.
 export function envLines({ scope, staleTests }: MutationScope): string {
-  const globs = scope.toSorted().map((file) => escape(file, { windowsPathsNoEscape: true, magicalBraces: true }));
-  return [`SCOPE=${globs.join(",")}`, `STALE_TESTS=${staleTests.toSorted().join(",")}`].join("\n");
+  return [`SCOPE=${mutateGlobs(scope.toSorted())}`, `STALE_TESTS=${staleTests.toSorted().join(",")}`].join("\n");
 }
 
-export const parseArgs = Effect.fnUntraced(function* (argv: readonly string[]): Effect.fn.Return<{ readonly base: string; readonly baseline: string | undefined }, Usage> {
-  const [base, baseline, ...extra] = argv;
-  if (base === undefined || base.startsWith("-") || baseline?.startsWith("-") === true || extra.length > 0) return yield* new Usage({ message: USAGE });
-  return { base, baseline };
+export function shardsLine(shards: readonly Shard[]): string {
+  return `SHARDS=${JSON.stringify(shards.map(({ files }) => mutateGlobs(files)))}`;
+}
+
+export type Options =
+  | { readonly kind: "scope"; readonly base: string; readonly baseline: string | undefined }
+  | { readonly kind: "shards"; readonly count: number; readonly report: string | undefined };
+
+const isOperand = (arg: string | undefined): arg is string => arg !== undefined && !arg.startsWith("-");
+
+export const parseArgs = Effect.fnUntraced(function* (argv: readonly string[]): Effect.fn.Return<Options, Usage> {
+  const [first, second, third, ...extra] = argv;
+  if (first === "--shards") {
+    const count = Number(second);
+    if (!SHARD_COUNT.test(second ?? "") || count > MAX_SHARDS || (third !== undefined && !isOperand(third)) || extra.length > 0) return yield* new Usage({ message: USAGE });
+    return { kind: "shards", count, report: third };
+  }
+  if (!isOperand(first) || (second !== undefined && !isOperand(second)) || third !== undefined) return yield* new Usage({ message: USAGE });
+  return { kind: "scope", base: first, baseline: second };
 });
 
 const loadConfig = Effect.fn("loadConfig")(function* (file: string) {
@@ -285,8 +312,33 @@ const enteringSources = Effect.fn("enteringSources")(function* (
   return [...entering.map(([source]) => source), ...unknown];
 });
 
+const reportedCounts = Effect.fn("reportedCounts")(function* (report: string | undefined) {
+  const fs = yield* FileSystem.FileSystem;
+  if (report === undefined) {
+    yield* Console.error(`${NAME}: no last report, so each file weighs one mutant`);
+    return new Map<string, number>();
+  }
+  if (!(yield* fs.exists(report))) {
+    return yield* new ScopeError({ message: `no last report at ${report}, so no shard can balance by mutant count` });
+  }
+  const unparsed = (cause: { readonly message: string }) => new ScopeError({ message: `${report} is not a Stryker mutation report: ${cause.message}` });
+  const { files } = yield* fs.readFileString(report).pipe(Effect.flatMap(decodeMutantCounts), Effect.mapError(unparsed));
+  return new Map(Object.entries(files).map(([file, { mutants }]) => [file, runnableMutants(mutants)]));
+});
+
+const pickShards = Effect.fn("pickShards")(function* (count: number, report: string | undefined) {
+  const mutated = mutatedBy(yield* mutatePatterns, (yield* Path.Path).resolve("."));
+  const files = (yield* pathsAt("HEAD", [])).filter(mutated);
+  const shards = balancedShards(mutantWeights(files, yield* reportedCounts(report)), count);
+  for (const [index, { files: held, mutants }] of shards.entries()) yield* Console.error(`${NAME}: shard ${index + 1} holds ${held.length} file(s) and about ${mutants} mutant(s)`);
+  yield* Console.log(shardsLine(shards));
+  return true;
+});
+
 const selectScope = Effect.gen(function* () {
-  const { base, baseline } = yield* parseArgs(process.argv.slice(2));
+  const options = yield* parseArgs(process.argv.slice(2));
+  if (options.kind === "shards") return yield* pickShards(options.count, options.report);
+  const { base, baseline } = options;
   const range = yield* rangeEnds(base, "HEAD");
   const mutated = mutatedBy(yield* mutatePatterns, (yield* Path.Path).resolve("."));
   const snapshots: Snapshots = { ...range, atBase: new Set(yield* pathsAt(range.base, [])), atHead: new Set(yield* pathsAt(range.head, [])) };
