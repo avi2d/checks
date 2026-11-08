@@ -23,6 +23,7 @@ The pair passes `checks-effect-scope --check` from the first write.
 It writes `package.json` with the kit in `devDependencies` and with `lint`, `typecheck` and `test` scripts.
 It writes `.github/workflows/ci.yml`, which installs with `bun install --frozen-lockfile` and then runs the `build` script when the manifest holds one.
 The workflow always runs `bun run lint`, `bun run typecheck` and `bun run test`.
+Once the install succeeds, `bun run typecheck` and `bun run test` run even when an earlier step fails, so each reports its own result.
 A `build` script there also brings a `git diff --exit-code` step.
 Other scripts a `package.json` it finds already holds stay, but the workflow never schedules them.
 The workflow always ends with a `bunx checks-commit-title` step for the pull request title.
