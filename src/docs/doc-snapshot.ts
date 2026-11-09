@@ -1,5 +1,6 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
 import { anchoredTargets, anchorsOf, PACKAGE_MANIFEST, packagesOf, snapshotOf, type Unresolved } from "./doc-references.ts";
+import { requiresName } from "./doc-vision.ts";
 import { git, pathsAt } from "../core/git.ts";
 
 class ManifestUnreadable extends Schema.TaggedError<ManifestUnreadable>()("ManifestUnreadable", {
@@ -12,6 +13,19 @@ const decodeScripts = Schema.decodeUnknownEffect(Scripts);
 export const readTexts = Effect.fn("readTexts")(function* (root: string, rev: string, paths: readonly string[]) {
   const texts = yield* Effect.forEach(paths, (path) => git(["show", `${rev}:${path}`], root), { concurrency: 8 });
   return new Map(paths.map((path, index) => [path, texts[index] ?? ""]));
+});
+
+class ManifestUnparseable extends Schema.TaggedError<ManifestUnparseable>()("ManifestUnparseable", { message: Schema.String }) {}
+
+export const visionRequiredAt = Effect.fn("visionRequiredAt")(function* (root: string, head: string) {
+  const manifest = yield* readTexts(root, head, [PACKAGE_MANIFEST]).pipe(
+    Effect.catchTag("GitFailure", () => Effect.succeed(new Map<string, string>())),
+  );
+  const parsed = yield* Effect.try({
+    try: (): unknown => JSON.parse(manifest.get(PACKAGE_MANIFEST) ?? ""),
+    catch: () => new ManifestUnparseable({ message: `${PACKAGE_MANIFEST} does not parse as JSON` }),
+  }).pipe(Effect.catchTag("ManifestUnparseable", () => Effect.succeed(undefined)));
+  return requiresName(parsed);
 });
 
 function manifestIn(directory: string): string {

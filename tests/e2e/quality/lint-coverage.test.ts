@@ -27,6 +27,7 @@ beforeAll(async () => {
   await writeFile(join(dir, "src", "linted.ts"), "export const a = 1;\n");
   await writeFile(join(dir, "src", "also-linted.ts"), "export const c = 3;\n");
   await writeFile(join(dir, PLANT), "export const b = 2;\n");
+  await writeFile(join(dir, "package.json"), JSON.stringify({ name: "linted" }));
   await writeFile(join(dir, ".gitignore"), "");
   await $`git init -q && git add -A`.cwd(dir).quiet();
   await $`mkdir -p node_modules/.bin`.cwd(dir).quiet();
@@ -58,12 +59,30 @@ test(
 );
 
 test(
+  "lint-coverage skips with a note where no root package.json holds rather than failing the walk",
+  async () => {
+    const tree = await mkdtemp(join(tmpdir(), "checks-lint-coverage-no-manifest-"));
+    try {
+      await $`mkdir -p src`.cwd(tree).quiet();
+      await writeFile(join(tree, "src", "linted.ts"), "export const a = 1;\n");
+      await $`git init -q && git add -A`.cwd(tree).quiet();
+      const skipped = await coverage(KIT_PATH, tree);
+      expect(skipped.exitCode).toBe(0);
+      expect(skipped.text).toContain("lint-coverage: no package.json at the repository root, so the gate skips");
+    } finally {
+      await rm(tree, { recursive: true, force: true });
+    }
+  },
+  60_000,
+);
+test(
   "lint-coverage cannot decide when the repository's own install lacks oxlint, by the missing oxlint path both shells print rather than any failure text or one shell's wording",
   async () => {
     const bare = await mkdtemp(join(tmpdir(), "checks-lint-coverage-no-install-"));
     try {
       await $`mkdir -p src`.cwd(bare).quiet();
       await writeFile(join(bare, "src", "linted.ts"), "export const a = 1;\n");
+      await writeFile(join(bare, "package.json"), JSON.stringify({ name: "linted" }));
       await $`git init -q && git add -A`.cwd(bare).quiet();
       const undecided = await coverage(SYSTEM_PATH, bare);
       expect(undecided.exitCode).toBe(2);
@@ -84,6 +103,7 @@ test(
       await $`mkdir -p src node_modules/.bin`.cwd(tree).quiet();
       await writeFile(join(tree, "src", "linted.ts"), "export const a = 1;\n");
       await writeFile(join(tree, ".gitignore"), "node_modules/\n");
+      await writeFile(join(tree, "package.json"), JSON.stringify({ name: "linted", type: "module" }));
       await writeFile(
         join(tree, "tsconfig.json"),
         JSON.stringify({ extends: join(CHECKOUT, "tsconfig.effect.json"), files: ["src/linted.ts"] }),
@@ -178,6 +198,7 @@ test(
       await $`mkdir -p src/pages`.cwd(astro).quiet();
       await writeFile(join(astro, "src", "pages", "index.astro"), "---\nconst { title } = Astro.props;\n---\n<h1>{title}</h1>\n");
       await writeFile(join(astro, "tsconfig.json"), JSON.stringify({ compilerOptions: { strict: true } }));
+      await writeFile(join(astro, "package.json"), JSON.stringify({ name: "linted-astro" }));
       await $`git init -q && git add -A && mkdir -p node_modules/.bin`.cwd(astro).quiet();
       for (const tool of ["oxlint", "tsc"]) {
         await symlink(await realpath(join(BIN, tool)), join(astro, "node_modules", ".bin", tool));
@@ -199,6 +220,7 @@ test(
   async () => {
     const tree = await consumerTree({ paths: ["src/**/*.ts"], include: ["src/**/*.ts"], types: [] });
     await tree.put("src/app.ts", "export const app = 1;\n");
+    await tree.put("package.json", { name: "linted-consumer", type: "module" });
     await $`git add -A`.cwd(tree.dir).quiet();
     const tsconfig = (own: Readonly<Record<string, unknown>>) =>
       tree.put("tsconfig.json", { extends: "@avi2dg/checks/tsconfig.effect.json", compilerOptions: { strict: true, noEmit: true }, ...own });

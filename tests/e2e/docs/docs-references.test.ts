@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { docsRepos, GUIDE, OPENING, plantRedThenGreen, putAgentFiles, type DocsRepo, type Plant } from "../lib/docs-repo.ts";
+import { docsRepos, GUIDE, OPENING, plantRedThenGreen, putAgentFiles, putVision, type DocsRepo, type Plant } from "../lib/docs-repo.ts";
 
 const MANIFEST = JSON.stringify({ name: "widget", scripts: { build: "bun scripts/build.ts" } });
 
@@ -39,6 +39,7 @@ async function start(): Promise<DocsRepo> {
   await repo.put("package.json", MANIFEST);
   await repo.put("scripts/build.ts", "export const build = 1;\n");
   await putAgentFiles(repo.put);
+  await putVision(repo.put);
   return repo;
 }
 
@@ -49,7 +50,7 @@ test(
       await start(),
       PLANTS,
       ({ reference }) => [`plant ${reference} that resolves nowhere`, `point ${reference} at what exists`],
-      "docs: the range breaks no path, link or command the 3 living doc(s) or agent file(s) name",
+      "docs: the range breaks no path, link or command the 4 living doc(s) or agent file(s) name",
     );
   },
   120_000,
@@ -69,7 +70,7 @@ test(
     await put("tools/AGENTS.md", "# Tools\n\nIt runs `scripts/build.ts`.\n");
     const fixed = await commit("point the agent file at what exists");
     const kept = await docs(planted, fixed);
-    expect(kept.text).toContain("docs: the range breaks no path, link or command the 3 living doc(s) or agent file(s) name");
+    expect(kept.text).toContain("docs: the range breaks no path, link or command the 4 living doc(s) or agent file(s) name");
     expect(kept.exitCode).toBe(0);
   },
   120_000,
@@ -122,7 +123,7 @@ test(
     await put(".gitignore", "generated/*.json\nnode_modules/\n");
     await put("node_modules/.bin/checks-lint", "#!/bin/sh\n");
     const green = await docs(base, head);
-    expect(green.text).toContain("docs: the range breaks no path, link or command the 3 living doc(s) or agent file(s) name");
+    expect(green.text).toContain("docs: the range breaks no path, link or command the 4 living doc(s) or agent file(s) name");
     expect(green.exitCode).toBe(0);
   },
   120_000,
@@ -136,6 +137,7 @@ test(
     const shipped = readme.replace("prints the version.\n", "prints the version.\nRun `bun run deploy` to ship it.\n");
     await put("package.json", JSON.stringify({ name: "widget", scripts: { widget: "bun widget.ts" } }));
     await putAgentFiles(put);
+    await putVision(put);
     await put("README.md", readme);
     const base = await commit("a README that holds to its template");
     await put("README.md", shipped);
@@ -148,7 +150,7 @@ test(
     await put("README.md", `---\naudience: consumers\n---\n${shipped}`);
     const marked = await commit("mark the README as speaking to consumers");
     const green = await docs(base, marked);
-    expect(green.text).toContain("docs: the range breaks no path, link or command the 3 living doc(s) or agent file(s) name");
+    expect(green.text).toContain("docs: the range breaks no path, link or command the 4 living doc(s) or agent file(s) name");
     expect(green.exitCode).toBe(0);
   },
   120_000,

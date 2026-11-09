@@ -2,7 +2,8 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { runMain, Usage } from "../core/main.ts";
 import { ciWorkflow, MUTATION_WORKFLOW, STRYKER_CONFIG } from "./setup-workflow.ts";
-import { TEMPLATES } from "../docs/doc-templates.ts";
+import { TEMPLATES, VISION_PAGE } from "../docs/doc-templates.ts";
+import { requiresName } from "../docs/doc-vision.ts";
 import { scriptOptions } from "../core/test-script.ts";
 import { withServiceOverrides, type ServiceOverride } from "../quality/effect-scope.ts";
 import { SOURCES, TESTS } from "../quality/presets/oxlint.ts";
@@ -289,7 +290,7 @@ const writeFreshPackage = Effect.fn("writeFreshPackage")(function* (
   yield* system.makeDirectory(path.dirname(full), { recursive: true });
   yield* system.writeFileString(full, JSON.stringify(manifest, undefined, 2) + "\n");
   yield* Console.log(NAME + ": wrote package.json");
-  return { hasBuild: false, hasOwner: false };
+  return { hasBuild: false, hasOwner: false, name: fallbackName };
 });
 
 const updatePackage = Effect.fn("updatePackage")(function* (
@@ -310,13 +311,14 @@ const updatePackage = Effect.fn("updatePackage")(function* (
   const scripts = withKitDefaults(baseScripts);
   const finalized = finalizePackage(record, scripts, devDependencies, isPrivate, fallbackName);
   const next = JSON.stringify(finalized.merged, undefined, 2) + "\n";
+  const name = typeof finalized.merged["name"] === "string" ? finalized.merged["name"] : fallbackName;
   if (next === raw) {
     yield* Console.log(NAME + ": kept package.json, already there");
-    return { hasBuild: finalized.hasBuild, hasOwner: finalized.hasOwner };
+    return { hasBuild: finalized.hasBuild, hasOwner: finalized.hasOwner, name };
   }
   yield* system.writeFileString(full, next);
   yield* Console.log(NAME + ": wrote package.json");
-  return { hasBuild: finalized.hasBuild, hasOwner: finalized.hasOwner };
+  return { hasBuild: finalized.hasBuild, hasOwner: finalized.hasOwner, name };
 });
 const setupPackage = Effect.fn("setupPackage")(function* (
   root: string,
@@ -340,6 +342,16 @@ const setupWorkflows = Effect.fn("setupWorkflows")(function* (root: string, isPr
   yield* setupFile(root, ".github/workflows/ci.yml", ciWorkflow(isPrivate, hasBuild));
   yield* setupFile(root, ".github/workflows/mutation.yml", MUTATION_WORKFLOW);
   yield* setupFile(root, "stryker.conf.mjs", STRYKER_CONFIG);
+});
+
+const setupDocFiles = Effect.fn("setupDocFiles")(function* (root: string, visionRequired: boolean) {
+  for (const kind of Object.keys(TEMPLATES)) {
+    yield* setupFile(root, "templates/" + kind + ".md", yield* kitText("dist/templates/" + kind + ".md"));
+  }
+  const wroteAgents = yield* setupFile(root, "AGENTS.md", yield* kitText("dist/templates/agents.md"));
+  yield* setupFile(root, "CLAUDE.md", yield* kitText("dist/templates/claude.md"));
+  const wroteVision = visionRequired ? yield* setupFile(root, VISION_PAGE, yield* kitText("dist/templates/vision.md")) : false;
+  return { wroteAgents, wroteVision };
 });
 
 const check = Effect.gen(function* () {
@@ -371,17 +383,16 @@ const check = Effect.gen(function* () {
   yield* setupFile(root, "knip.config.ts", KNIP_CONFIG);
   yield* setupFile(root, ".jscpd.json", JSCPD_CONFIG);
   yield* setupWorkflows(root, isPrivate, outcome.hasBuild);
-  for (const kind of Object.keys(TEMPLATES)) {
-    yield* setupFile(root, "templates/" + kind + ".md", yield* kitText("dist/templates/" + kind + ".md"));
-  }
-  const wroteAgents = yield* setupFile(root, "AGENTS.md", yield* kitText("dist/templates/agents.md"));
-  yield* setupFile(root, "CLAUDE.md", yield* kitText("dist/templates/claude.md"));
+  const { wroteAgents, wroteVision } = yield* setupDocFiles(root, requiresName({ name: outcome.name }));
   if (isPrivate) yield* Console.log(NAME + ": set the CI_RUNS_ON variable to a self-hosted runner label so the new jobs land there");
   if (!outcome.hasOwner) {
     yield* Console.log(NAME + ": declare the repository owners in package.json author or contributors before the first commit");
   }
   if (wroteAgents) {
     yield* Console.log(NAME + ": fill AGENTS.md with what an agent cannot infer from the code before the first commit");
+  }
+  if (wroteVision) {
+    yield* Console.log(NAME + ": fill the opening, stance sections, Scope and closing lines of " + VISION_PAGE + " and name it in one line of AGENTS.md before the first commit");
   }
   return true;
 });
