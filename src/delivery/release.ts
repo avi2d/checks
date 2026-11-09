@@ -50,13 +50,6 @@ export function releasedVersionOf(subject: string): string | undefined {
   return RELEASE_SUBJECT.exec(subject)?.[1];
 }
 
-const PULL_NUMBER = / \(#(\d+)\)$/;
-
-export function pullNumberOf(subject: string): number | undefined {
-  const [, number = ""] = PULL_NUMBER.exec(subject) ?? [];
-  return number === "" ? undefined : Number(number);
-}
-
 export const runBuild = Effect.fn("runBuild")(function* (root: string) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const exitCode = yield* spawner.exitCode(

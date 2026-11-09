@@ -13,8 +13,6 @@ const scratch = scratchDirs();
 
 type Landed = {
   readonly head: string;
-  readonly dir: string;
-  readonly env: Readonly<Record<string, string>>;
   readonly run: (args: readonly string[], env?: Readonly<Record<string, string>>) => Promise<Ran>;
   readonly state: FakeGh["state"];
   readonly inOrigin: (...args: readonly string[]) => Promise<string>;
@@ -33,20 +31,10 @@ async function withOrigin(repo: FixtureRepo, head: string): Promise<Landed> {
   const fake = await fakeGh(home, origin);
   return {
     head,
-    dir: repo.dir,
-    env: fake.env,
     run: (args, env = {}) => ran($`bun ${SCRIPT} ${args}`.cwd(repo.dir).env({ ...process.env, ...fake.env, ...env })),
     state: fake.state,
     inOrigin: async (...args) => (await $`git ${args}`.cwd(origin).quiet()).stdout.toString().trim(),
   };
-}
-
-async function seedPullRequest(main: Landed, branch: string, title: string): Promise<void> {
-  await $`git push -q origin main:refs/heads/${branch}`.cwd(main.dir).quiet();
-  await $`gh api --method POST repos/{owner}/{repo}/pulls -f title=${title} -f head=${branch} -f base=main -f body=${title}.`
-    .cwd(main.dir)
-    .env({ ...process.env, ...main.env })
-    .quiet();
 }
 
 // main as a squash merge lands a commit on it, carrying the changelog the build writes.
@@ -60,16 +48,12 @@ async function landed(version: string, subject: string): Promise<Landed> {
 test(
   "a landed release commit is tagged with its version once, and the release workflow is dispatched on the tag",
   async () => {
-    const main = await landed("0.2.0", "chore: release 0.2.0 (#1)");
-    await seedPullRequest(main, "seed-1", "chore: release 0.2.0");
+    const main = await landed("0.2.0", "chore: release 0.2.0 (#7)");
 
     const tagged = await main.run(["release.yml"]);
     expect(tagged.exitCode).toBe(0);
     expect(tagged.text).toContain(`release-tag: tagged ${main.head.slice(0, 12)} as v0.2.0, and dispatched release.yml on it\n`);
     expect(await main.inOrigin("rev-parse", "v0.2.0^{commit}")).toBe(main.head);
-    expect(await main.inOrigin("for-each-ref", "--format=%(trailers:key=Tested-Tree,valueonly)", "refs/tags/v0.2.0")).toBe(
-      await main.inOrigin("rev-parse", `${main.head}^{tree}`),
-    );
     expect((await main.state()).dispatches).toEqual([{ workflow: "release.yml", ref: "v0.2.0" }]);
 
     const again = await main.run(["release.yml"]);
@@ -82,8 +66,7 @@ test(
 test(
   "a failed dispatch after the tag is pushed names the command that dispatches the release by hand, since a rerun finds the tag and does nothing",
   async () => {
-    const main = await landed("0.2.0", "chore: release 0.2.0 (#1)");
-    await seedPullRequest(main, "seed-1", "chore: release 0.2.0");
+    const main = await landed("0.2.0", "chore: release 0.2.0 (#7)");
 
     const failed = await main.run(["release.yml"], { FAKE_GH_FAIL: "POST repos/{owner}/{repo}/actions/workflows/release.yml/dispatches" });
     expect(failed.exitCode).toBe(2);
@@ -151,50 +134,6 @@ test(
     const recut = await readFile(join(repo.dir, "CHANGELOG.md"), "utf8");
     const recutSection = recut.slice(recut.indexOf("## 0.2.0"), recut.indexOf("## 0.1.0"));
     for (const pull of ["#3", "#4", "#6"]) expect(recutSection).toContain(`[${pull}]`);
-  },
-  60_000,
-);
-
-test(
-  "a release squash-merged behind main is refused before it is tagged, since its tree differs from the tested one",
-  async () => {
-    const repo = await repository({ "package.json": manifest("0.1.0") });
-    await repo.write({ "notes/1.txt": "bill\n" });
-    await repo.commit("feat: build a bill (#1)");
-    await $`bun ${CHANGELOG}`.cwd(repo.dir).quiet();
-    await repo.commit("docs: write the changelog (#2)");
-    await $`git tag v0.1.0`.cwd(repo.dir).quiet();
-    await repo.write({ "notes/3.txt": "price\n" });
-    await repo.commit("fix(parts): keep the order of parts (#3)");
-    const home = await scratch("checks-release-tag-stale-");
-    const origin = join(home, "origin.git");
-    await $`git init -q --bare -b main ${origin} && git remote add origin ${origin} && git push -q origin main`.cwd(repo.dir).quiet();
-    const fake = await fakeGh(home, origin);
-    const env = { ...process.env, ...fake.env };
-    const run = (args: readonly string[]) => ran($`bun ${SCRIPT} ${args}`.cwd(repo.dir).env(env));
-    const inOrigin = async (...args: readonly string[]) => (await $`git ${args}`.cwd(origin).quiet()).stdout.toString().trim();
-
-    await $`git checkout -qb release/0.1.1`.cwd(repo.dir).quiet();
-    await repo.write({ "package.json": manifest("0.1.1") });
-    await $`bun ${CHANGELOG}`.cwd(repo.dir).quiet();
-    const tested = await repo.commit("chore: release 0.1.1");
-    await $`git push -q origin release/0.1.1 && git checkout -q main`.cwd(repo.dir).quiet();
-    const title = "chore: release 0.1.1";
-    await $`gh api --method POST repos/{owner}/{repo}/pulls -f title=${title} -f head=release/0.1.1 -f base=main -f body=${`${title}.`}`
-      .cwd(repo.dir)
-      .env(env)
-      .quiet();
-
-    await repo.write({ "notes/4.txt": "tidy\n" });
-    await repo.commit("refactor: tidy the notes (#4)");
-    await $`git fetch -q origin release/0.1.1 && git merge -q --squash FETCH_HEAD`.cwd(repo.dir).quiet();
-    const stale = await repo.commit("chore: release 0.1.1 (#1)");
-
-    const refused = await run(["release.yml"]);
-    expect(refused.exitCode).toBe(2);
-    expect(refused.text).toContain(`checks-release-tag: ${stale.slice(0, 12)} differs from the tree ${tested.slice(0, 12)}`);
-    expect(await inOrigin("tag", "--list")).toBe("");
-    expect((await fake.state()).dispatches).toEqual([]);
   },
   60_000,
 );

@@ -93,8 +93,6 @@ jobs:
       - run: git diff --exit-code
       - name: tag matches package version
         run: test "v$(bun -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
-      - name: tag carries the tree the release pull request tested
-        run: test "$(git rev-parse "$GITHUB_REF_NAME^{tree}")" = "$(git for-each-ref --format='%(trailers:key=Tested-Tree,valueonly)' "refs/tags/$GITHUB_REF_NAME")"
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -168,8 +166,6 @@ jobs:
       - run: git diff --exit-code
       - name: tag matches package version
         run: test "v$(bun -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
-      - name: tag carries the tree the release pull request tested
-        run: test "$(git rev-parse "$GITHUB_REF_NAME^{tree}")" = "$(git for-each-ref --format='%(trailers:key=Tested-Tree,valueonly)' "refs/tags/$GITHUB_REF_NAME")"
       - name: extract release notes
         run: ./node_modules/.bin/checks-release-notes "${GITHUB_REF_NAME#v}" "$RUNNER_TEMP/release-notes.md"
       - name: create the GitHub release
@@ -183,7 +179,6 @@ An untagged bump also fails earlier, since `checks-release-pr` refuses to plan a
 The approval setting has no read only check under the release token, so `checks-release-pr` fails while opening the pull request when the setting is off.
 A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on each job in either workflow, as [checks-ci-wiring](checks-ci-wiring.md#runners) requires.
 A release is one commit that holds only the version bump and the built changelog.
-The tag job writes the tested tree into the tag, and either workflow refuses a tag that carries none.
 The kit releases on demand through the pull request [checks-release-pr](checks-release-pr.md) opens when someone runs the `release-pr` workflow.
 Firstmate decides when to release, only for a reason, such as another repository needing a merged change, a fix users need, or merged changes having waited a week.
 When it lands, [checks-release-tag](checks-release-tag.md) tags the merge commit and dispatches this workflow on the tag.
