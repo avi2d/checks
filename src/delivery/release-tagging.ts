@@ -1,7 +1,7 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
-import { dispatch, GitHubFailure } from "../core/github.ts";
+import { dispatch, GitHubFailure, gitHubJson, REPOSITORY } from "../core/github.ts";
 import { ChildProcessSpawner } from "effect/process";
-import { lastTag, releasedVersionOf, runBuild } from "./release.ts";
+import { lastTag, pullNumberOf, releasedVersionOf, releaseTitle, runBuild } from "./release.ts";
 import { git } from "../core/git.ts";
 import { MANIFEST, releaseTag, taggedVersion } from "../core/release-names.ts";
 
@@ -11,6 +11,10 @@ class TagRefused extends Schema.TaggedError<TagRefused>()("TagRefused", {
 
 
 const decodeVersion = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ version: Schema.String })));
+
+const decodeTestedPullRequest = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(Schema.Struct({ title: Schema.String, head: Schema.Struct({ sha: Schema.String }) })),
+);
 
 // An annotated tag lists its own object first and the commit it tags on a `^{}` line after it.
 export function taggedCommitOf(listed: string): string | undefined {
@@ -23,8 +27,20 @@ const taggedOn = Effect.fn("taggedOn")(function* (root: string, tag: string) {
   return taggedCommitOf(yield* git(["ls-remote", "--tags", "origin", `refs/tags/${tag}`, `refs/tags/${tag}^{}`], root));
 });
 
-const pushTag = Effect.fn("pushTag")(function* (root: string, sha: string, tag: string, workflow: string) {
-  yield* git(["push", "--quiet", "origin", `${sha}:refs/tags/${tag}`], root);
+const treeOf = Effect.fn("treeOf")(function* (root: string, sha: string) {
+  return (yield* git(["rev-parse", `${sha}^{tree}`], root)).trim();
+});
+
+const pushTag = Effect.fn("pushTag")(function* (root: string, sha: string, tag: string, workflow: string, note: string) {
+  yield* git(
+    [
+      "-c", "user.name=github-actions[bot]",
+      "-c", "user.email=41898282+github-actions[bot]@users.noreply.github.com",
+      "tag", "-a", "-m", note, tag, sha,
+    ],
+    root,
+  );
+  yield* git(["push", "--quiet", "origin", `refs/tags/${tag}`], root);
   yield* dispatch(workflow, tag).pipe(
     Effect.mapError(
       (failure) => new GitHubFailure({ message: `${failure.message}; ${tag} is pushed, so dispatch the release by hand with \`gh workflow run ${workflow} --ref ${tag}\`` }),
@@ -64,7 +80,23 @@ export const tagHead = Effect.fn("tagHead")(function* (
       message: `the build rewrites ${rebuilt.join(", ")} at ${head.slice(0, 12)}, which the release workflow's build check refuses; open a \`chore: cancel the unpublished ${version}\` pull request that returns ${MANIFEST} to ${returned} and commits what \`bun run build\` then writes to CHANGELOG.md, and the next ${cuttingWorkflow} run cuts the release again with every change since ${since ?? "the first commit"}`,
     });
   }
-  yield* pushTag(root, head, tag, workflow);
+  const pull = pullNumberOf(subject);
+  if (pull === undefined) {
+    return yield* new TagRefused({ message: `${head.slice(0, 12)} names no pull request, so no release pull request tested it; merge the release pull request to land the release, and tag nothing by hand` });
+  }
+  const tested = yield* gitHubJson(decodeTestedPullRequest, "GET", `${REPOSITORY}/pulls/${pull}`);
+  if (tested.title !== releaseTitle(version)) {
+    return yield* new TagRefused({ message: `pull request #${pull} is ${tested.title}, not ${releaseTitle(version)}, so it never tested ${head.slice(0, 12)}; merge the release pull request to land the release, and tag nothing by hand` });
+  }
+  const [landed, expected] = yield* Effect.all([treeOf(root, head), treeOf(root, tested.head.sha)], { concurrency: 2 });
+  if (landed !== expected) {
+    const since = yield* lastTag(root);
+    const returned = since === undefined ? "the version it held before this release" : taggedVersion(since);
+    return yield* new TagRefused({
+      message: `${head.slice(0, 12)} differs from the tree ${tested.head.sha.slice(0, 12)} the release pull request tested, so main moved after the full run; open a \`chore: cancel the unpublished ${version}\` pull request that returns ${MANIFEST} to ${returned} and commits what \`bun run build\` then writes to CHANGELOG.md, and the next ${cuttingWorkflow} run cuts the release again with every change since ${since ?? "the first commit"}`,
+    });
+  }
+  yield* pushTag(root, head, tag, workflow, `Release ${version} tested by pull request #${pull} at ${tested.head.sha}\n\nTested-Tree: ${landed}`);
   yield* Console.log(`${label}: tagged ${head.slice(0, 12)} as ${tag}, and dispatched ${workflow} on it`);
   if (awaitRelease !== undefined) {
     yield* awaitRelease(workflow, head);

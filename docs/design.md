@@ -205,7 +205,8 @@ Firstmate decides when to release, only for a reason, such as another repository
 The release pull request is the one place the full suite runs.
 Merging it tags the release commit, and the tag run publishes it with no test tiers.
 The release pull request holds current `main` when it merges.
-When `main` moves after the full run, `checks-release-tag` refuses the stale release and tags nothing.
+`checks-release-tag` reads the pull request number from the squash subject and refuses a landed tree that differs from the tree the pull request tested.
+It writes the tested tree into the tag, and the release workflow refuses a tag that carries none.
 No schedule cuts a release.
 `checks-release-pr` writes only to the `release/<branch>` branch it owns, and rebuilds that branch on `main` rather than merging `main` into it, so the changelog it carries is the one the build writes.
 `checks-release-tag` writes only the `v*` tag of a release commit that already landed.

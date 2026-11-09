@@ -33,6 +33,8 @@ jobs:
           fetch-depth: 0
       - name: tag is on main
         run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - name: tag carries the tree the release pull request tested
+        run: test "$(git rev-parse "$GITHUB_REF_NAME^{tree}")" = "$(git for-each-ref --format='%(trailers:key=Tested-Tree,valueonly)' "refs/tags/$GITHUB_REF_NAME")"
       - run: bun run build
       - run: git diff --exit-code
       - run: bun run lint

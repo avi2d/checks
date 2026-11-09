@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { groupOf } from "../../../src/delivery/changelog.ts";
-import { nextVersion, releasedVersionOf, releaseTitle, unreleasedOf, withVersion } from "../../../src/delivery/release.ts";
+import { nextVersion, pullNumberOf, releasedVersionOf, releaseTitle, unreleasedOf, withVersion } from "../../../src/delivery/release.ts";
 
 test("only the changelog groups count as unreleased", () => {
   expect(
@@ -62,4 +62,10 @@ test("a release subject names its version, whether or not the squash merge added
   expect(releasedVersionOf("chore(deps): release 0.32.0")).toBeUndefined();
   expect(releasedVersionOf("chore: release 0.32.0 and more")).toBeUndefined();
   expect(releasedVersionOf("feat: release 0.32.0")).toBeUndefined();
+});
+
+test("a release subject names its pull request only when the squash merge added it", () => {
+  expect(pullNumberOf("chore: release 0.32.0 (#45)")).toBe(45);
+  expect(pullNumberOf("chore: release 0.32.0")).toBeUndefined();
+  expect(pullNumberOf("chore: release 0.32.0 (#45) and more")).toBeUndefined();
 });

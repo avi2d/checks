@@ -164,7 +164,9 @@ The release pull request needs the repository's other workflows to accept the di
 - `.github/workflows/release.yml` triggers on `workflow_dispatch` and refuses a ref that is not a tag, as [checks-release-notes](checks-release-notes.md) shows.
 - **Allow GitHub Actions to create and approve pull requests** is on, which the call after the step sets.
 - A release pull request holds current `main` when it merges.
-  One that merges behind `main` lands a changelog short of the commits `main` gained, and `checks-release-tag` refuses to tag it.
+  One that merges behind `main` lands a tree that differs from the tree the full suite tested.
+  `checks-release-tag` reads the pull request number from the squash subject and refuses to tag the landed tree.
+  A tag pushed by hand carries no tested tree, so the release workflow refuses it.
 
 The step reports a dispatched run's result as a commit status on the head commit:
 

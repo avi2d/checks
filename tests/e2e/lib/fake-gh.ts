@@ -131,6 +131,13 @@ function openPull(state: FakeState, body: Body): Answer {
   return { state: { ...state, pulls: [...state.pulls, pull] }, body: pull };
 }
 
+async function singlePull(origin: string, state: FakeState, number: string): Promise<Answer | undefined> {
+  const pull = state.pulls.find((one) => String(one.number) === number);
+  if (pull === undefined) return undefined;
+  const sha = (await $`git rev-parse ${pull.head}^{commit}`.cwd(origin).quiet()).stdout.toString().trim();
+  return { state, body: { title: pull.title, head: { sha } } };
+}
+
 function editPull(state: FakeState, number: string, body: Body): Answer | undefined {
   const pull = state.pulls.find((one) => String(one.number) === number);
   if (pull === undefined) return undefined;
@@ -162,6 +169,7 @@ async function pullsApi(origin: string, state: FakeState, method: string, route:
   if (method === "GET" && path === "pulls") return listPulls(state, query);
   if (method === "POST" && path === "pulls") return openPull(state, body);
   const edited = /^pulls\/(\d+)$/.exec(path)?.[1];
+  if (method === "GET" && edited !== undefined) return singlePull(origin, state, edited);
   if (method === "PATCH" && edited !== undefined) return editPull(state, edited, body);
   const workflow = /^actions\/workflows\/([^/]+)\/dispatches$/.exec(path)?.[1];
   if (method === "POST" && workflow !== undefined) return dispatchRun(origin, state, workflow, body);
@@ -197,7 +205,16 @@ async function main(): Promise<number> {
   const failRunsTimes = Number(process.env["FAKE_GH_FAIL_RUNS_TIMES"] ?? "0");
   if (method === "GET" && endpoint.startsWith(`${REPOSITORY}actions/runs`) && state.calls.slice(state.calls.findLastIndex((call) => call.endsWith("/dispatches"))).filter((call) => call.startsWith("GET repos/{owner}/{repo}/actions/runs")).length <= failRunsTimes)
     return refuse("gh: HTTP 502: Bad Gateway");
-  const body = rest.includes("--input") ? decodeBody(await Bun.stdin.text()) : {};
+  const fields: Record<string, unknown> = {};
+  for (let index = 0; index < rest.length; index += 1) {
+    if ((rest[index] === "-f" || rest[index] === "--field") && index + 1 < rest.length) {
+      const pair = rest[index + 1] ?? "";
+      const at = pair.indexOf("=");
+      if (at !== -1) fields[pair.slice(0, at)] = pair.slice(at + 1);
+      index += 1;
+    }
+  }
+  const body = rest.includes("--input") ? decodeBody(await Bun.stdin.text()) : fields;
   const route = endpoint.slice(REPOSITORY.length);
   if (await isForcedOver(origin, method, route, body)) return refuse("gh: Update is not a fast forward (HTTP 422)");
   const fromGit = await gitApi(origin, method, route, body);

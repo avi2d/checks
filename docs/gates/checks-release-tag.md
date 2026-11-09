@@ -10,7 +10,7 @@ audience: consumers
 
 It reads the subject of `HEAD`, and does nothing unless the subject is `chore: release <version>`, with or without the pull request number a squash merge appends.
 It refuses a release commit whose `package.json` holds another version.
-It tags `HEAD` as `v<version>` and pushes the tag to `origin`.
+It tags `HEAD` as an annotated `v<version>` carrying the tested tree and pushes the tag to `origin`.
 A tag the workflow token pushes starts no `push` workflow, so it then dispatches the workflow its argument names on the tag.
 It does nothing when `v<version>` already tags `HEAD`, so a rerun after a release never publishes it twice.
 When the dispatch fails after the push, it names `gh workflow run <workflow> --ref v<version>`.
@@ -21,10 +21,15 @@ That happens when a release pull request merged behind `main`, so its `CHANGELOG
 The refusal says to open a `chore: cancel the unpublished <version>` pull request that returns `package.json` to the last tag's version and commits what `bun run build` then writes to `CHANGELOG.md`.
 The build reads the returned version as a revert, so it drops the unpublished section.
 The next run of the workflow that tags it then cuts the release again with every change since the last tag.
+Before it pushes the tag, it reads the pull request number from the squash subject and refuses a release commit that names none.
+It refuses when the pull request carries another version in its title.
+It refuses when the landed tree differs from the tree the pull request tested, which happens when `main` moves after the full run even when the newer commits need no changelog entry and the build stays clean.
+That refusal names the tested tree and says to open the same cancel pull request the build refusal names.
 
 ## What it reads
 
 It reads the subject of `HEAD` and `package.json` from the checkout, and the tag from `origin` with `git ls-remote`.
+It reads the release pull request the squash number names to learn the tree the full suite tested.
 It names the workflow it runs in by `GITHUB_WORKFLOW`, or as `release-pr` when that is unset.
 The build it runs reads the whole history, so the checkout fetches all of it.
 It pushes the tag with the credentials the checkout holds.
@@ -45,7 +50,7 @@ That workflow triggers on `workflow_dispatch` and keeps its own guards, as [chec
 | Code | When |
 | --- | --- |
 | 0 | `HEAD` is no release commit, its tag already tags it, or the tag is pushed and the release workflow dispatched |
-| 2 | the arguments do not parse, `package.json` disagrees with the subject, the tag tags another commit, the build fails or rewrites a committed file, or the push or a GitHub API call fails |
+| 2 | the arguments do not parse, `package.json` disagrees with the subject, the tag tags another commit, the build fails or rewrites a committed file, the subject names no pull request or one titled for another version, the landed tree differs from the tested tree, or the push or a GitHub API call fails |
 
 ## Sample output
 
