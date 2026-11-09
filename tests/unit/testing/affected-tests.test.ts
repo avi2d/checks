@@ -80,6 +80,11 @@ test("a fixture under tests is data, not a test helper that would run the whole 
   expect(sharedReason("tests/fixtures/repo/package.json", new Set())).toBeUndefined();
 });
 
+test("a release range of only the version bump and its changelog runs no test rather than the whole suite", () => {
+  expect(narrowTests(["package.json", "CHANGELOG.md"], TREE, TESTS)).toEqual({ kind: "files", files: [] });
+  expect(narrowTests(["src/a.ts", "package.json", "CHANGELOG.md"], TREE, TESTS).kind).toBe("full");
+});
+
 test("a pull request that changes no file runs the whole suite rather than nothing", () => {
   expect(narrowTests([], TREE, TESTS).kind).toBe("full");
 });

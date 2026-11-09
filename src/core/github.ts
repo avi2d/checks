@@ -79,6 +79,6 @@ export const labelledIssues = Effect.fn("labelledIssues")(function* ({ name, col
 });
 
 // A dispatch is the one run a workflow token starts at once: GitHub starts none for the token's push, and holds its pull request's runs for approval.
-export const dispatch = Effect.fn("dispatch")(function* (workflow: string, ref: string, inputs?: Readonly<Record<string, string>>) {
-  yield* gitHub("POST", `${REPOSITORY}/actions/workflows/${workflow}/dispatches`, inputs === undefined ? { ref } : { ref, inputs });
+export const dispatch = Effect.fn("dispatch")(function* (workflow: string, ref: string) {
+  yield* gitHub("POST", `${REPOSITORY}/actions/workflows/${workflow}/dispatches`, { ref });
 });

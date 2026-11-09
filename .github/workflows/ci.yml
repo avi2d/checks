@@ -4,13 +4,6 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
-    inputs:
-      base:
-        required: false
-        type: string
-      head:
-        required: false
-        type: string
 
 permissions:
   contents: read
@@ -36,7 +29,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - id: skip
-        run: bun scripts/e2e-skip.ts ${{ github.event.pull_request.base.sha || inputs.base }} ${{ github.event.pull_request.head.sha || inputs.head }} >> "$GITHUB_OUTPUT"
+        run: bun scripts/e2e-skip.ts ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} >> "$GITHUB_OUTPUT"
   unit:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -48,7 +41,7 @@ jobs:
           fetch-depth: 0
       # A path filter would leave this required check unreported.
       - id: filter
-        run: bun src/delivery/docs-only.ts ${{ github.event.pull_request.base.sha || inputs.base }} ${{ github.event.pull_request.head.sha || inputs.head }} >> "$GITHUB_OUTPUT"
+        run: bun src/delivery/docs-only.ts ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} >> "$GITHUB_OUTPUT"
       - if: steps.filter.outputs.docs-only != 'true'
         run: bun run test:unit
   e2e:
@@ -87,7 +80,7 @@ jobs:
           outcome: ${{ steps.title.outcome }}
       # A path filter would leave this required check unreported.
       - id: filter
-        run: bun src/delivery/docs-only.ts ${{ github.event.pull_request.base.sha || inputs.base }} ${{ github.event.pull_request.head.sha || inputs.head }} >> "$GITHUB_OUTPUT"
+        run: bun src/delivery/docs-only.ts ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} >> "$GITHUB_OUTPUT"
       - run: bun run build
       - run: git diff --exit-code
       # checks-docs checks only the range it is given, so lint runs on docs-only changes.
