@@ -15,7 +15,7 @@ A commit that GitHub committed allows any author name with an allowed email.
 GitHub authors a web merge under the account's display name.
 The same author on a commit with any other committer must match the allowed name too.
 `github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>` is allowed as author only of a commit whose subject is `chore: release <version>`, with or without the pull request number a squash merge adds.
-GitHub attributes the release commit [checks-release-pr](checks-release-pr.md) or [checks-release-push](checks-release-push.md) makes to that bot, since each commits through the workflow token.
+GitHub attributes the release commit [checks-release-pr](checks-release-pr.md) makes to that bot, since it commits through the workflow token.
 Such a commit may carry a `Co-authored-by` trailer naming that bot, since GitHub adds one to some squash merges of a pull request the bot opened, and every other trailer is refused.
 A Dependabot-titled commit may carry a `Co-authored-by` trailer naming `dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>`, since GitHub adds one when the owner squash-merges a pull request the bot opened, and every other trailer is refused.
 `dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>` is allowed as author only of a commit whose subject is a Dependabot title [the commit message lint](../configs/commit-messages.md) exempts, with or without the pull request number a squash merge adds.
