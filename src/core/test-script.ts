@@ -38,6 +38,31 @@ export function testOptions(args: readonly string[]): TestOptions | undefined {
 
 const TEST_SCRIPTS: readonly string[] = [TEST_ENTRY_POINT.bin];
 
+export const KIT_PACKAGE_NAME = "@avi2dg/checks";
+
+const OWN_TEST_ENTRY = `bun src/${TEST_ENTRY_POINT.script}`;
+
+export function ownTestScriptToBin(script: unknown): string | undefined {
+  if (typeof script !== "string") return undefined;
+  if (script === OWN_TEST_ENTRY || script.startsWith(`${OWN_TEST_ENTRY} `)) return `${TEST_ENTRY_POINT.bin}${script.slice(OWN_TEST_ENTRY.length)}`;
+  return undefined;
+}
+
+export function kitScriptsToBin(scripts: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
+  const next: Record<string, unknown> = { ...scripts };
+  for (const [key, value] of Object.entries(next)) {
+    if (key === "test" || key.startsWith("test:")) {
+      const bin = ownTestScriptToBin(value);
+      if (bin !== undefined) next[key] = bin;
+    }
+  }
+  return next;
+}
+
+export function ownTierCommand(tier: TestTier): string {
+  return `${OWN_TEST_ENTRY} --tier=${tier}`;
+}
+
 export function scriptOptions(script: unknown): TestOptions | undefined {
   if (typeof script !== "string") return undefined;
   const entry = TEST_SCRIPTS.find((candidate) => script === candidate || script.startsWith(`${candidate} `));

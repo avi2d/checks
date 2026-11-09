@@ -2,7 +2,7 @@ import { $ } from "bun";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { existsSync, realpathSync } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { availableParallelism, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { Schema } from "effect";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
@@ -487,11 +487,13 @@ test(
     expect(suite.exitCode).toBe(0);
 
     const { GITHUB_STEP_SUMMARY: _summary, ...withoutStepSummary } = process.env;
-    const flake = await runScript("flake", withoutStepSummary);
-    const huntedWorkers = Number(/on ([0-9]+) worker\(s\)/.exec(flake.stdout)?.[1]);
-    expect(huntedWorkers).toBeGreaterThanOrEqual(1);
-    expect(huntedWorkers).toBeLessThanOrEqual(availableParallelism());
-    expect(flake.stdout).toContain(`checks-flake: 2 run(s) passed on ${huntedWorkers} worker(s), with seeds `);
+    const flake = await runScript("flake", {
+      ...withoutStepSummary,
+      CHECKS_TEST_FREE_BYTES: String(2 * 1024 ** 3),
+      CHECKS_TEST_TOTAL_BYTES: String(8 * 1024 ** 3),
+      CHECKS_TEST_CPUS: "8",
+    });
+    expect(flake.stdout).toContain("checks-flake: 2 run(s) passed on 2 worker(s), with seeds ");
     expect(flake.exitCode).toBe(0);
 
     for (const [script, report] of [

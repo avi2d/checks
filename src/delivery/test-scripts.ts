@@ -1,6 +1,6 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
 import { workingTreeFiles } from "../core/git.ts";
-import { scriptFaults, STANDARD_TIERS, tierCommand, type ScriptFault, type TestTier } from "../core/test-script.ts";
+import { KIT_PACKAGE_NAME, kitScriptsToBin, ownTierCommand, scriptFaults, STANDARD_TIERS, tierCommand, type ScriptFault, type TestTier } from "../core/test-script.ts";
 
 class TestScriptsError extends Schema.TaggedError<TestScriptsError>()("TestScriptsError", {
   message: Schema.String,
@@ -39,20 +39,35 @@ const describeFault = (fault: ScriptFault): string => {
   }
 };
 
+const kitNameOf = Effect.fn("kitNameOf")(function* (root: string) {
+  const system = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const file = path.join(root, "package.json");
+  if (!(yield* system.exists(file))) return undefined;
+  const text = yield* system.readFileString(file).pipe(Effect.orElseSucceed(() => undefined));
+  if (text === undefined) return undefined;
+  const parsed: unknown = yield* Effect.try(() => JSON.parse(text)).pipe(Effect.orElseSucceed(() => undefined));
+  if (typeof parsed !== "object" || parsed === null) return undefined;
+  const name = (parsed as Record<string, unknown>)["name"];
+  return typeof name === "string" ? name : undefined;
+});
+
 export const testScriptsFault = Effect.fn("testScriptsFault")(function* (scripts: MutableRecord, root: string) {
   const present: TestTier[] = [];
   for (const tier of STANDARD_TIERS) {
     if (yield* tierHasTests(root, tier)) present.push(tier);
   }
-  const fault = scriptFaults(scripts, (tier) => present.includes(tier)).find((candidate) => candidate.found !== undefined);
+  const effective = (yield* kitNameOf(root)) === KIT_PACKAGE_NAME ? kitScriptsToBin(scripts) : scripts;
+  const fault = scriptFaults(effective, (tier) => present.includes(tier)).find((candidate) => candidate.found !== undefined);
   return fault === undefined ? undefined : `package.json ${describeFault(fault)}`;
 });
 
 export const withTierDefaults = Effect.fn("withTierDefaults")(function* (scripts: MutableRecord, root: string) {
   const next: MutableRecord = { ...scripts };
+  const isKit = (yield* kitNameOf(root)) === KIT_PACKAGE_NAME;
   for (const tier of STANDARD_TIERS) {
     const key = `test:${tier}`;
-    if (typeof next[key] !== "string" && (yield* tierHasTests(root, tier))) next[key] = tierCommand(tier);
+    if (typeof next[key] !== "string" && (yield* tierHasTests(root, tier))) next[key] = isKit ? ownTierCommand(tier) : tierCommand(tier);
   }
   return next;
 });

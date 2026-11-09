@@ -3,7 +3,7 @@ import { Config, Console, Effect, FileSystem, Option, Path, Random, Schema } fro
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { runMain, Usage } from "../core/main.ts";
 import { NAME_SEPARATOR, parseReport, ReportError, reporterArgs, type TestResult } from "./test-report.ts";
-import { scriptOptions } from "../core/test-script.ts";
+import { KIT_PACKAGE_NAME, ownTestScriptToBin, scriptOptions } from "../core/test-script.ts";
 import { resolveWorkerCount } from "./test.ts";
 
 export type Run = {
@@ -77,7 +77,7 @@ const parseArgs = Effect.fnUntraced(function* (args: readonly string[]) {
   return { plan, report };
 });
 
-const Manifest = Schema.fromJsonString(Schema.Struct({ scripts: Schema.optionalKey(Schema.Record(Schema.String, Schema.Unknown)) }));
+const Manifest = Schema.fromJsonString(Schema.Struct({ name: Schema.optionalKey(Schema.String), scripts: Schema.optionalKey(Schema.Record(Schema.String, Schema.Unknown)) }));
 const decodeManifest = Schema.decodeUnknownEffect(Manifest);
 const decodeWorkerLine = Schema.decodeUnknownEffect(
   Schema.fromJsonString(Schema.Struct({ worker: Schema.Int, file: Schema.String })),
@@ -87,11 +87,12 @@ const workersOf = Effect.fn("workersOf")(function* (root: string) {
   const fs = yield* FileSystem.FileSystem;
   const file = (yield* Path.Path).join(root, "package.json");
   if (!(yield* fs.exists(file))) return undefined;
-  const { scripts } = yield* fs.readFileString(file).pipe(
+  const { name, scripts } = yield* fs.readFileString(file).pipe(
     Effect.flatMap(decodeManifest),
     Effect.mapError((cause) => new ManifestError({ message: `cannot read ${file}: ${cause.message}` })),
   );
-  const options = scriptOptions(scripts?.["test"]);
+  const test = name === KIT_PACKAGE_NAME ? (ownTestScriptToBin(scripts?.["test"]) ?? scripts?.["test"]) : scripts?.["test"];
+  const options = scriptOptions(test);
   if (options === undefined) return undefined;
   return yield* resolveWorkerCount(options.workers);
 });

@@ -164,6 +164,7 @@ test("scripts.test must be the test entry point and scripts.lint must run the ch
 
   expect(
     scriptViolations({
+      name: "consumer",
       scripts: {
         test: "bun src/testing/test.ts",
         "test:fast": "bun src/testing/test.ts --changed",
@@ -171,6 +172,17 @@ test("scripts.test must be the test entry point and scripts.lint must run the ch
       },
     }),
   ).toHaveLength(2);
+
+  expect(
+    scriptViolations({
+      name: "@avi2dg/checks",
+      scripts: {
+        test: "bun src/testing/test.ts",
+        "test:fast": "bun src/testing/test.ts --changed",
+        lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout",
+      },
+    }),
+  ).toBeEmpty();
 
   for (const lint of ["oxlint --type-aware && checks-lint && depcruise src", "oxlint && bun src/core/lint.ts"]) {
     expect(scriptViolations({ scripts: { test: "checks-test", "test:fast": "checks-test --changed", lint } })).toBeEmpty();

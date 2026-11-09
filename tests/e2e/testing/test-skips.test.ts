@@ -1,7 +1,6 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
-import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import { CHECKOUT, ran, scratchDirs, type Ran } from "../lib/fixture-repo.ts";
 
@@ -413,16 +412,14 @@ async function workersUsed(): Promise<number> {
   return new Set((await readFile(join(dir, "workers.txt"), "utf8")).split("\n").filter(Boolean)).size;
 }
 
-test("without --parallel the suite runs on the worker count free memory allows", async () => {
+test("controlled memory allowing two of eight workers runs the suite on two workers", async () => {
   await consumer(workerFile(""), { "tests/unit/pricing.test.ts": workerFile("") });
 
-  const run = await checksTest(true);
+  const memory = { CHECKS_TEST_FREE_BYTES: String(2 * 1024 ** 3), CHECKS_TEST_TOTAL_BYTES: String(8 * 1024 ** 3), CHECKS_TEST_CPUS: "8" };
+  const run = await checksTest(true, [], memory);
   expect(run.exitCode).toBe(0);
-  const workers = Number(/([0-9]+)x PARALLEL/.exec(run.text)?.[1]);
-  expect(workers).toBeGreaterThanOrEqual(1);
-  expect(workers).toBeLessThanOrEqual(availableParallelism());
-  expect(run.text).toContain(`${workers}x PARALLEL`);
-  expect(await workersUsed()).toBe(Math.min(2, workers));
+  expect(run.text).toContain("2x PARALLEL");
+  expect(await workersUsed()).toBe(2);
 });
 
 function skippedWorker(condition: boolean): string {

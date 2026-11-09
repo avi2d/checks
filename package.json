@@ -125,11 +125,11 @@
     "build": "bun build src/quality/effect-channel/index.ts --outdir dist/effect-channel --target node --format esm && bun build src/complexity/readability/index.ts --outdir dist/readability --target node --format esm && bun build src/quality/data-shape/index.ts --outdir dist/data-shape --target node --format esm && bun build src/testing/mutation-guard-plugin.ts src/testing/mutation-refusal.ts src/testing/unit-test-order.ts --outdir dist/mutation --target node --format esm --packages external && bun build src/quality/presets/oxlint.ts src/quality/presets/knip.ts src/quality/presets/dependency-cruiser.ts src/quality/presets/stylelint.ts --outdir dist/presets --target node --format esm --packages external && tsc -p tsconfig.presets.json && bun scripts/configs-write.ts && bun src/quality/effect-scope.ts && bun scripts/doc-templates-write.ts && bun src/delivery/changelog-write.ts && bun scripts/doc-blocks-write.ts",
     "lint": "oxlint && bun src/core/lint.ts",
     "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
-    "test": "checks-test",
-    "test:fast": "checks-test --changed",
-    "test:unit": "checks-test --tier=unit",
-    "test:e2e": "checks-test --tier=e2e",
-    "test:live": "checks-test --tier=live"
+    "test": "bun src/testing/test.ts",
+    "test:fast": "bun src/testing/test.ts --changed",
+    "test:unit": "bun src/testing/test.ts --tier=unit",
+    "test:e2e": "bun src/testing/test.ts --tier=e2e",
+    "test:live": "bun src/testing/test.ts --tier=live"
   },
   "peerDependencies": {
     "@axe-core/playwright": "4.13.0",

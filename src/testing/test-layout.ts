@@ -4,7 +4,7 @@ import { workingTreeFiles } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { ENTRY_POINT } from "../core/gates.ts";
 import { identifierName, isRecord, lineOf, parseTypeScript, spanStart, stringValue } from "../core/swc.ts";
-import { scriptFaults, type ScriptFault } from "../core/test-script.ts";
+import { KIT_PACKAGE_NAME, kitScriptsToBin, scriptFaults, type ScriptFault } from "../core/test-script.ts";
 
 export type Violation = {
   readonly file: string;
@@ -250,7 +250,8 @@ export function scriptViolations(manifest: unknown, files: readonly string[] = [
   const lint = isRecord(scripts) ? scripts["lint"] : undefined;
   const violations: Violation[] = [];
   const record: Readonly<Record<string, unknown>> = isRecord(scripts) ? scripts : {};
-  for (const fault of scriptFaults(record, (tier) => files.some((candidate) => candidate.startsWith(`tests/${tier}/`) && TEST_FILE.test(candidate)))) {
+  const effective = isRecord(manifest) && manifest["name"] === KIT_PACKAGE_NAME ? kitScriptsToBin(record) : record;
+  for (const fault of scriptFaults(effective, (tier) => files.some((candidate) => candidate.startsWith(`tests/${tier}/`) && TEST_FILE.test(candidate)))) {
     violations.push({ file, line: undefined, message: describeScriptFault(fault) });
   }
   if (typeof lint !== "string" || !runsLayoutCheck(lint)) {
