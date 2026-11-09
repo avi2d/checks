@@ -2,7 +2,7 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
 import { workingTreeFiles } from "../core/git.ts";
 import { runTreeGate } from "../core/main.ts";
-import { REDIRECT_OPERATOR, SHELLS, shellWords, substitutionEnd } from "./shell-command.ts";
+import { fromProgram, REDIRECT_OPERATOR, SHELLS, shellWords, substitutionEnd } from "./shell-command.ts";
 import { isRecord, maskExpressions, scalarSource } from "./workflow-references.ts";
 
 export type YamlFile = {
@@ -172,9 +172,126 @@ function hasFlag(word: string, flags: readonly string[]): boolean {
   return /^-[a-z]+$/i.test(word) && letters.some((letter) => word.slice(1).toLowerCase().includes(letter));
 }
 
-function options(words: readonly string[]): readonly string[] {
-  const end = words.findIndex((word) => !word.startsWith("-"));
-  return end === -1 ? words : words.slice(0, end);
+const SHELL_VALUE_OPTIONS = new Set(["-o", "+o", "-O", "+O"]);
+const NODE_VALUE_OPTIONS = new Set(["-r", "--require", "--import", "-C"]);
+const PYTHON_VALUE_OPTIONS = new Set(["-W", "-X"]);
+const PWSH_SWITCHES = new Set(["-nologo", "-noprofile", "-noninteractive", "-noexit", "-sta", "-mta", "-help", "-?"]);
+const TIMEOUT_VALUE_OPTIONS = new Set(["-k", "--kill-after", "-s", "--signal"]);
+const NICE_VALUE_OPTIONS = new Set(["-n", "--adjustment"]);
+const XARGS_VALUE_OPTIONS = new Set(["-a", "--arg-file", "-d", "--delimiter", "-E", "-e", "--eof", "-I", "--replace", "-L", "--max-lines", "-n", "--max-args", "-P", "--max-procs", "-s", "--max-chars"]);
+const DOCKER_VALUE_OPTIONS = new Set(["--add-host", "-c", "--cpu-shares", "--cpuset-cpus", "--cpuset-mems", "--cidfile", "--detach-keys", "--device", "--dns", "--dns-option", "--dns-search", "--entrypoint", "-e", "--env", "--env-file", "--group-add", "-h", "--hostname", "--health-cmd", "--health-interval", "--health-retries", "--health-start-period", "--health-timeout", "--ip", "--ipc", "-l", "--label", "--log-driver", "--log-opt", "--mac-address", "-m", "--memory", "--mount", "--name", "--network", "-p", "--publish", "--restart", "--runtime", "--security-opt", "--shm-size", "--stop-signal", "--stop-timeout", "--storage-opt", "--sysctl", "--tmpfs", "-u", "--user", "--ulimit", "-v", "--volume", "-w", "--workdir"]);
+
+function valueOptions(program: string): ReadonlySet<string> | undefined {
+  if (program === "node" || program === "bun") return NODE_VALUE_OPTIONS;
+  if (program === "python" || program === "python3") return PYTHON_VALUE_OPTIONS;
+  if (SHELLS.includes(program)) return SHELL_VALUE_OPTIONS;
+  return undefined;
+}
+
+function interpreterInlineArgs(rest: readonly string[], program: string, flags: readonly string[]): boolean {
+  const values = valueOptions(program);
+  const plus = SHELLS.includes(program);
+  for (let index = 0; index < rest.length; index += 1) {
+    const word = rest[index] ?? "";
+    if (word === "--") return false;
+    const dash = word.startsWith("-") && word !== "-";
+    if (!dash && !(plus && /^[+][A-Za-z]+$/.test(word))) return false;
+    if (dash && hasFlag(word, flags)) return true;
+    const base = word.split("=")[0] ?? "";
+    if (values?.has(base) === true && !word.includes("=")) index += 1;
+  }
+  return false;
+}
+
+function pwshInlineArgs(rest: readonly string[]): boolean {
+  for (let index = 0; index < rest.length; index += 1) {
+    const word = rest[index] ?? "";
+    if (word === "--") return false;
+    if (!word.startsWith("-") || word === "-") {
+      const prev = (rest[index - 1] ?? "").toLowerCase().split("=")[0] ?? "";
+      if (index > 0 && prev.startsWith("-") && prev !== "-" && !PWSH_SWITCHES.has(prev)) continue;
+      return false;
+    }
+    const base = word.toLowerCase().split("=")[0] ?? "";
+    if (base === "-file" || base === "-f") return false;
+    if (pwshInlineFlag(word)) return true;
+  }
+  return false;
+}
+
+function afterOptions(words: readonly string[], from: number, values: ReadonlySet<string>): number {
+  let index = from;
+  while (index < words.length) {
+    const word = words[index] ?? "";
+    if (word === "--") return index + 1;
+    if (!word.startsWith("-") || word === "-") return index;
+    const base = word.split("=")[0] ?? "";
+    index += values.has(base) && !word.includes("=") ? 2 : 1;
+  }
+  return index;
+}
+
+function timeoutHandoff(words: readonly string[]): readonly string[] | undefined {
+  const start = afterOptions(words, 1, TIMEOUT_VALUE_OPTIONS) + 1;
+  return start < words.length ? words.slice(start) : undefined;
+}
+
+function dockerHandoff(words: readonly string[]): readonly string[] | undefined {
+  if ((words[1] ?? "").toLowerCase() !== "run") return undefined;
+  const start = afterOptions(words, 2, DOCKER_VALUE_OPTIONS) + 1;
+  return start < words.length ? words.slice(start) : undefined;
+}
+
+function findHandoffs(words: readonly string[]): readonly (readonly string[])[] {
+  const handoffs: (readonly string[])[] = [];
+  for (let index = 0; index < words.length; index += 1) {
+    if (words[index] === "-exec" || words[index] === "-execdir") {
+      const sub = words.slice(index + 1);
+      if (sub.length > 0) handoffs.push(sub);
+    }
+  }
+  return handoffs;
+}
+
+function handoffs(words: readonly string[]): readonly (readonly string[])[] {
+  const name = baseNameOf(words[0] ?? "").toLowerCase();
+  if (name === "timeout") {
+    const sub = timeoutHandoff(words);
+    return sub === undefined ? [] : [sub];
+  }
+  if (name === "nice") {
+    const start = afterOptions(words, 1, NICE_VALUE_OPTIONS);
+    return start < words.length ? [words.slice(start)] : [];
+  }
+  if (name === "xargs") {
+    const start = afterOptions(words, 1, XARGS_VALUE_OPTIONS);
+    return start < words.length ? [words.slice(start)] : [];
+  }
+  if (name === "docker") {
+    const sub = dockerHandoff(words);
+    return sub === undefined ? [] : [sub];
+  }
+  if (name === "find") return findHandoffs(words);
+  return [];
+}
+
+function checkSlice(slice: readonly string[]): boolean {
+  if (baseNameOf(slice[0] ?? "").toLowerCase() === "npx" && npxUsesCall(slice.slice(1))) return true;
+  const resolved = fromProgram(slice);
+  const [program = "", ...rest] = resolved;
+  const name = baseNameOf(program).toLowerCase();
+  if (SCRIPT_PROGRAMS.has(name)) {
+    if (!hasScriptFile(rest)) return true;
+  } else if (name === "deno") {
+    if (rest[0] === "eval") return true;
+  } else if (name === "pwsh" || name === "powershell") {
+    if (pwshInlineArgs(rest)) return true;
+  } else {
+    const flags = INLINE_CODE_FLAGS.get(name);
+    if (flags !== undefined && interpreterInlineArgs(rest, name, flags)) return true;
+  }
+  if (handoffs(slice).some((sub) => checkSlice(sub))) return true;
+  return resolved !== slice && handoffs(resolved).some((sub) => checkSlice(sub));
 }
 
 function npxUsesCall(rest: readonly string[]): boolean {
@@ -190,23 +307,7 @@ function npxUsesCall(rest: readonly string[]): boolean {
 }
 
 export function runsInlineCode(words: readonly string[]): boolean {
-  for (let index = 0; index < words.length; index += 1) {
-    const name = baseNameOf(words[index] ?? "").toLowerCase();
-    const rest = words.slice(index + 1);
-    if (SCRIPT_PROGRAMS.has(name)) {
-      if (!hasScriptFile(rest)) return true;
-    } else if (name === "deno") {
-      if (rest[0] === "eval") return true;
-    } else if (name === "npx") {
-      if (npxUsesCall(rest)) return true;
-    } else if (name === "pwsh" || name === "powershell") {
-      if (options(rest).some((word) => pwshInlineFlag(word))) return true;
-    } else {
-      const flags = INLINE_CODE_FLAGS.get(name);
-      if (flags !== undefined && options(rest).some((word) => hasFlag(word, flags))) return true;
-    }
-  }
-  return false;
+  return checkSlice(words);
 }
 
 function shellFault(shell: unknown): string | undefined {

@@ -30,7 +30,8 @@ The check refuses a `run` that holds any of these:
 - a program named by an expression, such as `run: ${{ inputs.command }}`, since no one can read it before the run
 - a `shell` other than `bash`, `sh`, `pwsh`, `powershell` or `cmd`, set on the step or in `defaults.run.shell` of its job or workflow, since `shell: python` makes the `run` inline Python
 
-An interpreter flag counts only before the first operand, so `bun scripts/smoke-pack.ts -e staging` passes.
+An interpreter flag counts before the first operand, and the value of an option that takes one does not end the search.
+So `bash -o pipefail -c 'bun install && bun test'` is refused, while `bun scripts/smoke-pack.ts -e staging` passes.
 GitHub substitutes an expression into the script before the shell reads it, so an argument such as `${{ github.ref_name }}` passes and the operators inside the expression are not shell.
 
 This step fails, because it appends through a redirect and spells its data with escapes:
@@ -48,7 +49,7 @@ These steps pass:
   run: bun scripts/smoke-pack.ts
 ```
 
-Each refusal names the file, the line of the `run` key, the job and the step by its `name`, its `id` or its position, and each construct it found.
+Each refusal names the file, the line of the `run` key when the check can locate it, the job and the step by its `name`, its `id` or its position, and each construct it found.
 
 ### Turning it on
 
