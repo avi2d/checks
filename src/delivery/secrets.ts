@@ -1,16 +1,17 @@
 #!/usr/bin/env bun
-import { Console, Effect, FileSystem, Path, Schema } from "effect";
+import { Config, Console, Effect, FileSystem, Path, Schema } from "effect";
 import { GitFailure, commitOf, git, refArgs } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { cacheRoot } from "../dependencies/cache-root.ts";
 import { pinnedGitleaks, scanCommits, scanDirectory, type DirectoryScan, type Leak } from "./gitleaks.ts";
-import { scanConfig } from "./secrets-pack.ts";
+import { kitRules, scanConfig } from "./secrets-pack.ts";
 
 const NAME = "secrets";
 const USAGE = "usage: secrets.ts <ref> | <base-ref> <head-ref>";
 const SHORT_SHA = 8;
 const NEW_SIDE_PREFIX = "b/";
 const OCTOPUS_PARENTS = 3;
+const DEPENDABOT = "dependabot[bot]";
 
 class OctopusMerge extends Schema.TaggedError<OctopusMerge>()("OctopusMerge", {
   message: Schema.String,
@@ -71,6 +72,30 @@ const messageLeaksOf = Effect.fn("messageLeaksOf")(function* (messages: readonly
   return leaks.map((leak) => ({ ...leak, Commit: path.basename(leak.File) }));
 });
 
+const decodePullRequestEvent = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(Schema.Struct({ pull_request: Schema.Struct({}), sender: Schema.Struct({ login: Schema.String }) })),
+);
+
+// GitHub gives a run Dependabot starts only Dependabot secrets, so the repository secret that holds the pack never reaches it.
+// No account a person signs up for can carry the brackets of a bot login.
+const startedByDependabot = Effect.gen(function* () {
+  const eventPath = yield* Config.String("GITHUB_EVENT_PATH").pipe(Config.withDefault(""));
+  if (eventPath === "") return false;
+  return yield* (yield* FileSystem.FileSystem).readFileString(eventPath).pipe(
+    Effect.flatMap(decodePullRequestEvent),
+    Effect.map((event) => event.sender.login === DEPENDABOT),
+    Effect.orElseSucceed(() => false),
+  );
+});
+
+const configOf = Effect.fn("configOf")(function* (scratch: string) {
+  if (!(yield* startedByDependabot)) return yield* scanConfig(NAME, scratch);
+  return {
+    config: yield* kitRules(),
+    notice: `${NAME}: Dependabot started this pull request run, which GitHub gives no repository secret, so the kit's rules ran without the private pack`,
+  };
+});
+
 function leakLine({ File, StartLine, RuleID, Commit, Description }: Leak): string {
   return `  ${File}:${StartLine} ${RuleID} in ${Commit.slice(0, SHORT_SHA)}: ${Description}`;
 }
@@ -108,7 +133,7 @@ const secrets = Effect.gen(function* () {
   const revisions = yield* revisionsOf(process.argv.slice(2), root);
   const logOptions = yield* logOptionsOf(revisions, root);
   const ignoreDir = yield* fs.makeTempDirectoryScoped({ prefix: "checks-secrets-" });
-  const { config, notice } = yield* scanConfig(NAME, yield* fs.makeTempDirectoryScoped({ prefix: "checks-secrets-pack-" }));
+  const { config, notice } = yield* configOf(yield* fs.makeTempDirectoryScoped({ prefix: "checks-secrets-pack-" }));
   const binary = yield* pinnedGitleaks(yield* cacheRoot());
   const gitDir = (yield* git(["rev-parse", "--absolute-git-dir"], root)).trim();
   const reported = yield* scanCommits({ binary, gitDir, logOptions, config, ignoreDir });
