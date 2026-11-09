@@ -155,6 +155,16 @@ test("a wrapper outside the documented set is not judged instead of refused as i
   expect(runFaults("stdbuf -oL bash -c 'x'", undefined)).toEqual([]);
 });
 
+test("a php per-line code flag is refused instead of passed as an unknown flag", () => {
+  for (const run of ["php -R 'echo 1;'", "php -B 'echo 1;'", "php -E 'echo 1;'"]) {
+    expect(runFaults(run, undefined)).toEqual(["inline interpreter code"]);
+  }
+});
+
+test("a ruby encoding value is skipped instead of ending the search before -e", () => {
+  expect(runFaults("ruby -E UTF-8 -e 'puts 1; exit'", undefined)).toEqual(["inline interpreter code"]);
+});
+
 test("a flag after the script belongs to the script and is not read as inline code", () => {
   expect(runFaults("bun scripts/smoke-pack.ts -e staging", undefined)).toEqual([]);
   expect(runFaults("bash scripts/smoke.sh -c", undefined)).toEqual([]);

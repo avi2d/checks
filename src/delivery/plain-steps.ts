@@ -47,7 +47,7 @@ const INLINE_CODE_FLAGS = new Map<string, readonly string[]>([
   ["python3", ["-c"]],
   ["perl", ["-e", "-E"]],
   ["ruby", ["-e"]],
-  ["php", ["-r"]],
+  ["php", ["-r", "-R", "-B", "-E"]],
   ["osascript", ["-e"]],
   ["cmd", ["/c", "/k"]],
 ]);
@@ -184,7 +184,7 @@ const INLINE_LETTERS = new Map<string, readonly string[]>([
   ["python3", ["c"]],
   ["perl", ["e", "E"]],
   ["ruby", ["e"]],
-  ["php", ["r"]],
+  ["php", ["r", "R", "B", "E"]],
   ["osascript", ["e"]],
 ]);
 const VALUED_LETTERS = new Map<string, readonly string[]>([
@@ -194,7 +194,7 @@ const VALUED_LETTERS = new Map<string, readonly string[]>([
   ["python", ["W", "X"]],
   ["python3", ["W", "X"]],
   ["perl", ["M", "I"]],
-  ["ruby", ["r"]],
+  ["ruby", ["r", "E"]],
 ]);
 
 function scanBundle(letters: string, program: string): "inline" | "valued" | "none" {
