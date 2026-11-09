@@ -20,8 +20,8 @@ test("incremental candidates walk past a newer refresh run and stop at the newes
   ];
   expect(incrementalCandidates(runs).map((run) => run.databaseId)).toEqual([40, 20]);
   expect(incrementalCandidates(runs.slice(2)).map((run) => run.databaseId)).toEqual([20]);
-  expect(incrementalCandidates([runs[0]]).map((run) => run.databaseId)).toEqual([40]);
-  expect(incrementalCandidates([runs[1]])).toEqual([]);
+  expect(incrementalCandidates(runs.slice(0, 1)).map((run) => run.databaseId)).toEqual([40]);
+  expect(incrementalCandidates(runs.slice(1, 2))).toEqual([]);
 });
 
 test("full candidates from two event lists merge newest first by creation time", () => {
