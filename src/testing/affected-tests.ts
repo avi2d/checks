@@ -262,22 +262,41 @@ const pullRequestEvent = Config.all({
   path: Config.String("GITHUB_EVENT_PATH").pipe(Config.withDefault("")),
 });
 
+const decodeDispatchEvent = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ inputs: Schema.optionalKey(Schema.Struct({ base: Schema.optionalKey(Schema.String), head: Schema.optionalKey(Schema.String) })) })));
+
 export const readLocalNarrowing = Effect.fn("readLocalNarrowing")(function* (root: string, changed: readonly string[], tests: readonly string[]) {
   return narrowLocalTests(changed, yield* readRepository(root), tests);
 });
 
-// Only a pull_request run has a base to diff against; every other run keeps the suite whole.
+// A run without the pull request or its dispatched range keeps the suite whole.
 export const readPullRequestNarrowing = Effect.fn("readPullRequestNarrowing")(function* (root: string, tests: readonly string[]) {
   const event = yield* pullRequestEvent.pipe(Effect.orElseSucceed(() => ({ name: "", path: "" })));
-  if (event.name !== "pull_request" || event.path === "") return Option.none<Narrowing>();
-  const narrowing = Effect.gen(function* () {
-    const text = yield* (yield* FileSystem.FileSystem).readFileString(event.path);
-    const { pull_request: pullRequest } = yield* decodePullRequestEvent(text);
-    const { base, head } = pullRequestEndsOf(pullRequest);
-    const changed = yield* pathsSinceMergeBase(base, head, root);
-    return narrowTests(changed, yield* readRepository(root), tests);
-  });
-  return Option.some(yield* narrowing.pipe(
-    Effect.catch((cause) => Effect.succeed<Narrowing>({ kind: "full", because: "the pull request's changes cannot be read: " + cause.message })),
-  ));
+  if (event.path === "") return Option.none<Narrowing>();
+  if (event.name === "pull_request") {
+    const narrowing = Effect.gen(function* () {
+      const text = yield* (yield* FileSystem.FileSystem).readFileString(event.path);
+      const { pull_request: pullRequest } = yield* decodePullRequestEvent(text);
+      const { base, head } = pullRequestEndsOf(pullRequest);
+      const changed = yield* pathsSinceMergeBase(base, head, root);
+      return narrowTests(changed, yield* readRepository(root), tests);
+    });
+    return Option.some(yield* narrowing.pipe(
+      Effect.catch((cause) => Effect.succeed<Narrowing>({ kind: "full", because: "the pull request's changes cannot be read: " + cause.message })),
+    ));
+  }
+  if (event.name === "workflow_dispatch") {
+    const narrowing = Effect.gen(function* () {
+      const text = yield* (yield* FileSystem.FileSystem).readFileString(event.path);
+      const { inputs } = yield* decodeDispatchEvent(text);
+      const base = inputs?.base ?? "";
+      const head = inputs?.head ?? "";
+      if (base === "" || head === "") return { kind: "full", because: "the dispatched run names no base and head" } satisfies Narrowing;
+      const changed = yield* pathsSinceMergeBase(base, head, root);
+      return narrowTests(changed, yield* readRepository(root), tests);
+    });
+    return Option.some(yield* narrowing.pipe(
+      Effect.catch((cause) => Effect.succeed<Narrowing>({ kind: "full", because: "the dispatched range cannot be read: " + cause.message })),
+    ));
+  }
+  return Option.none<Narrowing>();
 });

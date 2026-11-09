@@ -17,7 +17,7 @@ When `npm publish` fails, it reads `latest` again.
 A newer version that published while it ran ends it cleanly as well, and any other failure fails it.
 
 Two uploads that overlap can still leave `latest` on the older version, since the order check runs before either upload completes.
-The kit cuts one release at a time through its single release pull request, while a release workflow dispatched or rerun by hand relies on this bin alone.
+The kit cuts one release at a time through its single release pull request, but a release pull request that merges while an earlier release still publishes overlaps too, as does a release workflow dispatched or rerun by hand, so each relies on this bin alone.
 If `latest` lands on the older version, `npm dist-tag add <package>@<newer version> latest` repairs it.
 
 ## What it reads

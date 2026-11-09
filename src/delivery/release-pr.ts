@@ -9,6 +9,7 @@ import { runMain, Usage } from "../core/main.ts";
 
 type Remote = {
   readonly parents: readonly string[];
+  readonly tip: string;
   readonly version: string | undefined;
 };
 
@@ -25,11 +26,12 @@ const readRemote = Effect.fn("readRemote")(function* (root: string, branch: stri
   const tracking = `refs/remotes/origin/${branch}`;
   yield* git(["fetch", "--quiet", "--no-tags", "origin", `+refs/heads/${branch}:${tracking}`], root);
   const [, ...parents] = (yield* git(["rev-list", "--parents", "-n", "1", tracking], root)).trim().split(" ");
+  const tip = (yield* git(["rev-parse", tracking], root)).trim();
   const version = yield* git(["show", `${tracking}:${MANIFEST}`], root).pipe(
     Effect.flatMap(versionIn),
     Effect.orElseSucceed(() => undefined),
   );
-  return { parents, version } satisfies Remote;
+  return { parents, tip, version } satisfies Remote;
 });
 
 const findOpen = Effect.fn("findOpen")(function* (base: string, branch: string) {
@@ -64,9 +66,10 @@ const releasePullRequest = Effect.gen(function* () {
     yield* Console.log(`release-pr: ${open.html_url} releases ${next} from ${head.slice(0, 12)} and is current`);
     return true;
   }
-  if (!current) yield* pointBranch(branch, yield* commitRelease(root, head, yield* buildRelease(NAME, root, bumped), next), remote !== undefined);
+  const sha = current && remote !== undefined ? remote.tip : yield* commitRelease(root, head, yield* buildRelease(NAME, root, bumped), next);
+  if (!current) yield* pointBranch(branch, sha, remote !== undefined);
   const { verb, url } = yield* titlePullRequest(open, base, branch, next);
-  yield* Effect.forEach(workflows, (workflow) => dispatch(workflow, branch));
+  yield* Effect.forEach(workflows, (workflow) => dispatch(workflow, branch, { base: head, head: sha }));
   yield* Console.log(`release-pr: ${verb} ${url} to release ${next}, and dispatched ${workflows.join(", ")} on ${branch}`);
   return true;
 });

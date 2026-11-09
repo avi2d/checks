@@ -27,7 +27,7 @@ It makes the commit through the GitHub API, which attributes it to `github-actio
 It checks that the tree GitHub built matches the tree the build wrote.
 It points the branch `release/<branch>` at the commit, where `<branch>` is the branch `HEAD` is on.
 It opens a pull request from that branch into `<branch>` titled `chore: release <version>`, with the body `Release <version>.`, or retitles the open one to the new version.
-It then dispatches each workflow its arguments name on the release branch.
+It then dispatches each workflow its arguments name on the release branch, passing the release base and head so the dispatched run checks only that range.
 GitHub holds the `pull_request` runs of a pull request the workflow token opens until a maintainer approves them, so the dispatch is what runs the required checks on the release head.
 GitHub keeps a dispatched run's checks off the pull request, so each dispatched job reports its result as a commit status named for the job, which the required check of that name counts.
 When the release branch already holds this version on top of `HEAD` and its pull request carries the right title, it pushes nothing and dispatches nothing.
@@ -157,7 +157,7 @@ Nothing requires them, and approving them runs the same checks again.
 
 The release pull request needs the repository's other workflows to accept the dispatch:
 
-- `.github/workflows/ci.yml` triggers on `workflow_dispatch`, grants `statuses: write` and `pull-requests: read`, and ends each required job with the step below.
+- `.github/workflows/ci.yml` triggers on `workflow_dispatch` with `base` and `head` inputs, grants `statuses: write` and `pull-requests: read`, and ends each required job with the step below.
 - The title lint reads the title of the one open pull request its branch heads when the event carries none, as [Commit messages](../configs/commit-messages.md) says.
 - `.github/workflows/release.yml` triggers on `workflow_dispatch` and refuses a ref that is not a tag, as [checks-release-notes](checks-release-notes.md) shows.
 - **Allow GitHub Actions to create and approve pull requests** is on, which the call after the step sets.

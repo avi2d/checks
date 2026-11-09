@@ -20,6 +20,7 @@ jobs:
     steps:
       - uses: avi2d/workflows/setup@v1
         with:
+          ref: ${{ github.ref }}
           fetch-depth: 0
       - name: fail fast when the release cannot plan
         run: bun src/delivery/release-preflight.ts release.yml
