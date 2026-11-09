@@ -2,7 +2,7 @@ import { slotLabel, type FixedSlot, type HeadingRule, type OpenSlot, type Presen
 
 export const MODES = ["tutorial", "how-to", "reference", "explanation"] as const;
 
-export const KINDS = ["readme", "changelog", "adr", "agents", "claude", ...MODES] as const;
+export const KINDS = ["readme", "changelog", "adr", "agents", "claude", "vision", ...MODES] as const;
 export type Kind = (typeof KINDS)[number];
 
 export type Title =
@@ -25,6 +25,8 @@ type Exact = {
 export type Template = Outlined | Exact;
 
 export const TEMPLATE_DIRECTORY = "dist/templates";
+
+export const VISION_PAGE = "VISION.md";
 
 export const ADR_STATUSES = ["Proposed", "Accepted", "Rejected", "Deprecated", "Superseded", "Retired"] as const;
 
@@ -129,6 +131,26 @@ export const TEMPLATES: Readonly<Record<Kind, Template>> = {
   claude: {
     shape: "exact",
     text: "<!-- Points Claude at AGENTS.md via import; edit AGENTS.md, not this file. -->\n@AGENTS.md\n",
+  },
+  vision: {
+    shape: "outline",
+    title: { type: "fixed", text: "Vision" },
+    lead: [
+      "<The outcome the repository exists for, in one line.>",
+      "<Who it serves, in one line.>",
+      "<The one thing it owns, in one line.>"
+    ],
+    sections: [
+      open("<A stance it holds, one of three to six>", "any", REQUIRED, [
+        "- <A rule naming what it allows, what it forbids and the trade it takes, in one line.>"
+      ]),
+      fixed("Scope", REQUIRED, [
+        "- <What it refuses and which neighbour owns it, in one line.>",
+        "",
+        "A change aligns when <what it deepens>.",
+        "A change should be resisted when <what it trades away>."
+      ])
+    ],
   },
   tutorial: {
     shape: "outline",

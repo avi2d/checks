@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect";
 import { ADR_DIRECTORY, ADR_INDEX, ROOT_FILES } from "../src/docs/doc-rules.ts";
-import { listed, MODES, templateFile } from "../src/docs/doc-templates.ts";
+import { listed, MODES, templateFile, VISION_PAGE } from "../src/docs/doc-templates.ts";
 import { EVERY_REPOSITORY, KIT_GATES, VECTORS, type KitGate } from "../src/core/gates.ts";
 import { AGENT_NAMES, DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, HISTORY_NAMES, LIVING_NAMES, PROSE_RULES } from "../src/docs/prose-matchers.ts";
 import starter from "../src/quality/browser/browser-checks.json" with { type: "json" };
@@ -162,6 +162,7 @@ const DOC_KINDS: Block = {
     "| File | Kind | Template |",
     "| --- | --- | --- |",
     ...[...ROOT_FILES].map(([path, kind]) => `| ${code(path)} | ${kind} | ${code(templateFile(kind))} |`),
+    `| ${code(VISION_PAGE)} | vision | ${code(templateFile("vision"))} |`,
     `| each file in ${code(ADR_DIRECTORY)} but its generated index, ${code(ADR_INDEX.slice(ADR_DIRECTORY.length))} | adr | ${code(templateFile("adr"))} |`,
     `| a page with ${code("kind")} in front matter | ${listed(MODES)} | ${code("dist/templates/<mode>.md")} |`,
   ],

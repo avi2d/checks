@@ -33,6 +33,7 @@ The table groups the gates by vector, the part of a repository each one judges.
 | delivery | [`checks-commit-identity`](gates/checks-commit-identity.md) | the range | every repository |
 | delivery | [`checks-ci-wiring`](gates/checks-ci-wiring.md) | the working tree | every repository |
 | delivery | [`checks-secrets`](gates/checks-secrets.md) | the range | every repository |
+| delivery | [`checks-no-mistakes-test`](gates/checks-no-mistakes-test.md) | the working tree | a repository tracking `.no-mistakes.yaml` |
 | dependencies | [`checks-advisories`](gates/checks-advisories.md) | the range | a repository tracking `bun.lock` |
 
 <!-- end generated gates -->

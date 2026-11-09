@@ -2,6 +2,30 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.90.0
+
+Released 2026-11-08.
+
+### Features
+
+- **docs:** move vision page to root VISION.md with stance shape and repeat check [#93](https://github.com/avi2d/checks/pull/93)
+
+## 0.89.0
+
+Released 2026-11-08.
+
+### Features
+
+- **docs:** add a vision doc kind and require docs/vision.md [#92](https://github.com/avi2d/checks/pull/92)
+
+## 0.88.0
+
+Released 2026-11-08.
+
+### Features
+
+- **delivery:** hold no-mistakes test command to touched-only runs [#89](https://github.com/avi2d/checks/pull/89)
+
 ## 0.87.0
 
 Released 2026-11-08.

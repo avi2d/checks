@@ -22,7 +22,8 @@ import {
   supersessionProblems,
   type GovernedRecord,
 } from "./doc-governs.ts";
-import { ADR_STATUSES, MODES, TEMPLATES, templateFile, type Kind, type Title } from "./doc-templates.ts";
+import { shapeFindings } from "./doc-vision.ts";
+import { ADR_STATUSES, MODES, TEMPLATES, templateFile, VISION_PAGE, type Kind, type Title } from "./doc-templates.ts";
 import { ADR_DIRECTORY, DOCS_DIRECTORY } from "./prose-matchers.ts";
 
 export type Placement =
@@ -69,6 +70,7 @@ export function placementOf(path: string, text = ""): Placement {
   if (root !== undefined) return { type: "judged", kind: root };
   if (!path.endsWith(".md") || path === ADR_INDEX) return { type: "unjudged" };
   if (path.startsWith(ADR_DIRECTORY)) return { type: "judged", kind: "adr" };
+  if (path === VISION_PAGE) return { type: "judged", kind: "vision" };
   const named = frontMatterOf(text).fields.kind;
   const mode = MODES.find((known) => known === named);
   if (mode !== undefined) return { type: "judged", kind: mode };
@@ -255,6 +257,7 @@ function kindProblems(kind: Kind, doc: Doc, outline: Outline, records: Records):
   if (kind === "adr") return adrProblems(doc.path, outline, records);
   if (kind === "changelog") return changelogProblems(outline);
   if (kind === "how-to" || kind === "tutorial") return stepsProblems(kind, outline);
+  if (kind === "vision") return shapeFindings(doc.text);
   return [];
 }
 

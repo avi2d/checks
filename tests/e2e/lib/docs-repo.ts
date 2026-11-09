@@ -1,7 +1,7 @@
 import { expect } from "bun:test";
-import { rm } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { fixtureRepo, releasedAfterEach, type Ran } from "./fixture-repo.ts";
+import { CHECKOUT, fixtureRepo, releasedAfterEach, type Ran } from "./fixture-repo.ts";
 
 export const GUIDE = "tools/README.md";
 export const OPENING = "# Tools\n\nThe tools build bills.\n";
@@ -11,6 +11,16 @@ export const ROOT_AGENTS = "# Project agent memory\n\nThe fixture builds bills, 
 export async function putAgentFiles(put: DocsRepo["put"]): Promise<void> {
   await put("AGENTS.md", ROOT_AGENTS);
   await put("CLAUDE.md", "<!-- Points Claude at AGENTS.md via import; edit AGENTS.md, not this file. -->\n@AGENTS.md\n");
+}
+
+export const VISION = "VISION.md";
+
+export async function visionPage(): Promise<string> {
+  return readFile(join(CHECKOUT, "tests", "fixtures", "docs", "vision.md"), "utf8");
+}
+
+export async function putVision(put: DocsRepo["put"]): Promise<void> {
+  await put(VISION, await visionPage());
 }
 
 export type Plant = {

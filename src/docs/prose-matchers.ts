@@ -24,7 +24,7 @@ export type MatchedRule = ProseRule & { readonly find: RegExp };
 
 export const ADR_DIRECTORY = "docs/adr/";
 export const DOCS_DIRECTORY = "docs/";
-export const LIVING_NAMES: readonly string[] = ["README.md", "CONTRIBUTING.md"];
+export const LIVING_NAMES: readonly string[] = ["README.md", "CONTRIBUTING.md", "VISION.md"];
 export const AGENT_NAMES: readonly string[] = ["AGENTS.md", "CLAUDE.md"];
 export const HISTORY_NAMES: readonly string[] = ["CHANGELOG.md"];
 export const DATED_RECORD_EXAMPLES: readonly string[] = ["0001-", "2026-05-08-"];
