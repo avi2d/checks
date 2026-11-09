@@ -1,0 +1,311 @@
+#!/usr/bin/env bun
+import { Effect, FileSystem, Path, Schema } from "effect";
+import { workingTreeFiles } from "../core/git.ts";
+import { runTreeGate } from "../core/main.ts";
+import { fromProgram, SHELLS, shellWords } from "./shell-command.ts";
+import { isRecord, scalarSource } from "./workflow-references.ts";
+
+export type YamlFile = {
+  readonly path: string;
+  readonly document: unknown;
+  readonly text: string;
+};
+
+export type StepFault = {
+  readonly location: string;
+  readonly faults: readonly string[];
+};
+
+type RunStep = {
+  readonly keys: readonly (string | number)[];
+  readonly label: string;
+  readonly run: string | undefined;
+  readonly shell: unknown;
+};
+
+const NAME = "plain-steps";
+const SWITCH = "checks.plainSteps";
+const WORKFLOWS = ".github/workflows/";
+const ACTION_FILES = new Set(["action.yml", "action.yaml"]);
+const UNJUDGED_PREFIXES = ["node_modules/", "repos/", "tests/fixtures/"] as const;
+const PLAIN_SHELLS = new Set(["bash", "sh", "pwsh", "powershell", "cmd"]);
+// GitHub substitutes an expression into the script before the shell reads it.
+const EXPRESSION = /\$\{\{[\s\S]*?\}\}/g;
+const SIMPLE_EXPANSION = /^\$\{[A-Za-z_][A-Za-z0-9_]*\}/;
+const REDIRECT_OPERATOR = /^[<>][<>&|]*/;
+const CONTROL_OPERATORS: readonly (readonly [string, string])[] = [
+  ["&&", "a command list"],
+  ["||", "a command list"],
+  [";", "a command list"],
+  ["|", "a pipe"],
+  ["&", "a background job"],
+  ["(", "a subshell"],
+  [")", "a subshell"],
+];
+const INLINE_CODE_FLAGS = new Map<string, readonly string[]>([
+  ...SHELLS.map((shell) => [shell, ["-c"]] as const),
+  ["node", ["-e", "--eval", "-p", "--print"]],
+  ["bun", ["-e", "--eval", "-p", "--print"]],
+  ["python", ["-c"]],
+  ["python3", ["-c"]],
+  ["perl", ["-e", "-E"]],
+  ["ruby", ["-e"]],
+  ["php", ["-r"]],
+  ["pwsh", ["-c", "-command", "-encodedcommand", "-ec"]],
+  ["powershell", ["-c", "-command", "-encodedcommand", "-ec"]],
+  ["osascript", ["-e"]],
+]);
+const SCRIPT_PROGRAMS = new Set(["eval", "awk", "gawk", "mawk", "nawk", "sed"]);
+
+const Manifest = Schema.Struct({
+  checks: Schema.optional(Schema.Struct({ plainSteps: Schema.optional(Schema.Boolean) })),
+});
+
+class PlainStepsError extends Schema.TaggedError<PlainStepsError>()("PlainStepsError", {
+  message: Schema.String,
+}) {}
+
+function baseNameOf(file: string): string {
+  return file.slice(file.lastIndexOf("/") + 1);
+}
+
+export function isJudged(file: string): boolean {
+  if (UNJUDGED_PREFIXES.some((prefix) => file.startsWith(prefix))) return false;
+  if (file.startsWith(WORKFLOWS)) return /^[^/]+\.ya?ml$/.test(file.slice(WORKFLOWS.length));
+  return ACTION_FILES.has(baseNameOf(file));
+}
+
+function singleQuotedEnd(line: string, open: number, found: Set<string>): number {
+  const close = line.indexOf("'", open + 1);
+  const end = close === -1 ? line.length : close;
+  if (line.slice(open + 1, end).includes("\\")) found.add("a backslash escape");
+  return end + 1;
+}
+
+function substitutionEnd(line: string, open: number): number {
+  let depth = 0;
+  for (let index = open; index < line.length; index += 1) {
+    if (line.charAt(index) === "(") depth += 1;
+    if (line.charAt(index) === ")") depth -= 1;
+    if (depth === 0) return index + 1;
+  }
+  return line.length;
+}
+
+function dollarEnd(line: string, index: number, found: Set<string>): number {
+  const next = line.charAt(index + 1);
+  if (next === "(") {
+    found.add("a command substitution");
+    return substitutionEnd(line, index + 1);
+  }
+  if (next !== "{") return index + 1;
+  const simple = SIMPLE_EXPANSION.exec(line.slice(index));
+  if (simple !== null) return index + simple[0].length;
+  found.add("a parameter expansion");
+  return index + 2;
+}
+
+function doubleQuotedEnd(line: string, open: number, found: Set<string>): number {
+  let index = open + 1;
+  while (index < line.length && line.charAt(index) !== '"') {
+    const char = line.charAt(index);
+    if (char === "\\") {
+      found.add("a backslash escape");
+      index += 2;
+    } else if (char === "`") {
+      found.add("a command substitution");
+      index += 1;
+    } else {
+      index = char === "$" ? dollarEnd(line, index, found) : index + 1;
+    }
+  }
+  return index + 1;
+}
+
+function operatorEnd(line: string, index: number, found: Set<string>): number | undefined {
+  if (line.startsWith("<<", index)) {
+    found.add("a here-document");
+    return index + 2;
+  }
+  const redirect = REDIRECT_OPERATOR.exec(line.slice(index));
+  if (redirect !== null) {
+    found.add("a redirect");
+    return index + redirect[0].length;
+  }
+  const control = CONTROL_OPERATORS.find(([operator]) => line.startsWith(operator, index));
+  if (control === undefined) return undefined;
+  found.add(control[1]);
+  return index + control[0].length;
+}
+
+function startsWord(line: string, index: number): boolean {
+  return index === 0 || /\s/.test(line.charAt(index - 1));
+}
+
+function unquotedEnd(line: string, index: number, found: Set<string>): number {
+  const char = line.charAt(index);
+  if (char === "'") return singleQuotedEnd(line, index, found);
+  if (char === '"') return doubleQuotedEnd(line, index, found);
+  if (char === "$") return dollarEnd(line, index, found);
+  if (char === "\\") {
+    found.add("a backslash escape");
+    return index + 2;
+  }
+  if (char === "`") {
+    found.add("a command substitution");
+    return index + 1;
+  }
+  if (char === "#" && startsWord(line, index)) {
+    found.add("a shell comment");
+    return line.length;
+  }
+  return operatorEnd(line, index, found) ?? index + 1;
+}
+
+export function shellConstructs(line: string): readonly string[] {
+  const found = new Set<string>();
+  let index = 0;
+  while (index < line.length) index = unquotedEnd(line, index, found);
+  return [...found];
+}
+
+function hasFlag(word: string, flags: readonly string[]): boolean {
+  const lower = word.toLowerCase();
+  if (flags.some((flag) => lower === flag || lower.startsWith(flag + "="))) return true;
+  const letters = flags.filter((flag) => /^-[a-z]$/i.test(flag)).map((flag) => flag.charAt(1));
+  return /^-[a-z]+$/i.test(word) && letters.some((letter) => word.slice(1).includes(letter));
+}
+
+function options(words: readonly string[]): readonly string[] {
+  const end = words.findIndex((word) => !word.startsWith("-"));
+  return end === -1 ? words : words.slice(0, end);
+}
+
+export function runsInlineCode(words: readonly string[]): boolean {
+  const [program = "", ...rest] = fromProgram(words);
+  const name = baseNameOf(program);
+  if (SCRIPT_PROGRAMS.has(name)) return !rest.includes("-f");
+  if (name === "deno" && rest[0] === "eval") return true;
+  const flags = INLINE_CODE_FLAGS.get(name);
+  return flags !== undefined && options(rest).some((word) => hasFlag(word, flags));
+}
+
+function shellFault(shell: unknown): string | undefined {
+  if (shell === undefined) return undefined;
+  if (typeof shell !== "string") return "a shell the check cannot read";
+  const [program = ""] = shell.trim().split(/\s+/);
+  return PLAIN_SHELLS.has(baseNameOf(program)) ? undefined : `inline code for the ${program} shell`;
+}
+
+export function runFaults(run: string, shell: unknown): readonly string[] {
+  const line = run.trim();
+  if (line === "") return ["no command"];
+  const plain = line.replace(EXPRESSION, (expression) => `$${"_".repeat(expression.length - 1)}`);
+  const faults = [...shellConstructs(plain)];
+  if (line.includes("\n")) faults.push("more than one line");
+  const [words = []] = shellWords(plain);
+  if (runsInlineCode(words.map(({ text }) => text))) faults.push("inline interpreter code");
+  if (words[0]?.text.includes("$") === true) faults.push("a command named only at run time");
+  const fault = shellFault(shell);
+  return fault === undefined ? faults : [...faults, fault];
+}
+
+function stepLabel(step: Readonly<Record<string, unknown>>, index: number): string {
+  if (typeof step["name"] === "string") return `step "${step["name"]}"`;
+  if (typeof step["id"] === "string") return `step ${step["id"]}`;
+  return `step ${index + 1}`;
+}
+
+function defaultShell(node: unknown): unknown {
+  const defaults = isRecord(node) ? node["defaults"] : undefined;
+  const run = isRecord(defaults) ? defaults["run"] : undefined;
+  return isRecord(run) ? run["shell"] : undefined;
+}
+
+function runSteps(steps: unknown, keys: readonly (string | number)[], prefix: string, inherited: unknown): readonly RunStep[] {
+  if (!Array.isArray(steps)) return [];
+  return steps.flatMap((step: unknown, index) => {
+    if (!isRecord(step) || step["run"] === undefined) return [];
+    return [{
+      keys: [...keys, index, "run"],
+      label: prefix + stepLabel(step, index),
+      run: typeof step["run"] === "string" || typeof step["run"] === "number" ? `${step["run"]}` : undefined,
+      shell: step["shell"] ?? inherited,
+    }];
+  });
+}
+
+function stepsOf(file: YamlFile): readonly RunStep[] {
+  const { document } = file;
+  if (!isRecord(document)) return [];
+  if (!file.path.startsWith(WORKFLOWS)) {
+    const runs = document["runs"];
+    return isRecord(runs) ? runSteps(runs["steps"], ["runs", "steps"], "", undefined) : [];
+  }
+  const jobs = document["jobs"];
+  if (!isRecord(jobs)) return [];
+  return Object.entries(jobs).flatMap(([id, job]) =>
+    isRecord(job) ? runSteps(job["steps"], ["jobs", id, "steps"], `job ${id} `, defaultShell(job) ?? defaultShell(document)) : [],
+  );
+}
+
+export function findStepFaults(files: readonly YamlFile[]): readonly StepFault[] {
+  return files.flatMap((file) => {
+    const lines = file.text.split("\n");
+    return stepsOf(file).flatMap((step) => {
+      const source = scalarSource(lines, step.keys);
+      const layout = source?.block === true ? ["a block scalar"] : source?.continued === true ? ["more than one line"] : [];
+      const read = step.run === undefined ? ["a run that is not text"] : runFaults(step.run, step.shell);
+      const faults = [...new Set([...layout, ...read])];
+      if (faults.length === 0) return [];
+      const at = source === undefined ? "" : ` line ${source.line + 1}`;
+      return [{ location: `${file.path}${at} ${step.label}`, faults }];
+    });
+  });
+}
+
+export type Result =
+  | { readonly enabled: false; readonly violations: readonly [] }
+  | { readonly enabled: true; readonly files: number; readonly violations: readonly StepFault[] };
+
+const readSwitch = Effect.fn("readSwitch")(function* (root: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const file = (yield* Path.Path).join(root, "package.json");
+  if (!(yield* fs.exists(file))) return false;
+  const { checks } = yield* fs.readFileString(file).pipe(
+    Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Manifest))),
+    Effect.mapError((cause) => new PlainStepsError({ message: `cannot read ${file}: ${cause.message}` })),
+  );
+  return checks?.plainSteps === true;
+});
+
+const parseYaml = (path: string, text: string): Effect.Effect<YamlFile, PlainStepsError> =>
+  Effect.try({
+    try: () => ({ path, document: Bun.YAML.parse(text), text }),
+    catch: (error) => new PlainStepsError({ message: `cannot parse ${path}: ${String(error)}` }),
+  });
+
+export const run = Effect.fn("run")(function* (root: string) {
+  if (!(yield* readSwitch(root))) return { enabled: false, violations: [] } satisfies Result;
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const listed = yield* workingTreeFiles(root).pipe(Effect.mapError((cause) => new PlainStepsError({ message: cause.message })));
+  const files = yield* Effect.forEach(listed.filter(isJudged).toSorted(), (file) =>
+    fs.readFileString(path.join(root, file)).pipe(
+      Effect.mapError((cause) => new PlainStepsError({ message: `cannot read ${file}: ${cause.message}` })),
+      Effect.flatMap((text) => parseYaml(file, text)),
+    ),
+  );
+  return { enabled: true, files: files.length, violations: findStepFaults(files) } satisfies Result;
+});
+
+export function report(result: Result): string {
+  if (!result.enabled) return `${NAME}: off; set ${SWITCH} to true in package.json to turn it on`;
+  if (result.violations.length === 0) return `${NAME}: every run step in ${result.files} workflow or action file(s) is one plain command`;
+  return [
+    `${NAME}: ${result.violations.length} run step(s) are not one plain command; run one command, or call a shared workflow or action that holds the logic:`,
+    ...result.violations.map(({ location, faults }) => `  ${location}: ${faults.join(", ")}`),
+  ].join("\n");
+}
+
+if (import.meta.main) runTreeGate(NAME, run, report);

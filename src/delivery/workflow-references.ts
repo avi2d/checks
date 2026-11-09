@@ -238,6 +238,19 @@ function scalarPieces(lines: readonly string[], node: Node): readonly Piece[] {
   return token === undefined ? plainPieces([head, ...body]) : quotedPieces(body.slice(first), token);
 }
 
+export type ScalarSource = { readonly line: number; readonly block: boolean; readonly continued: boolean };
+
+export function scalarSource(lines: readonly string[], keys: readonly Key[]): ScalarSource | undefined {
+  const node = nodeAt(lines, keys);
+  if (node === undefined) return undefined;
+  const [head, ...body] = rawPieces(lines, node);
+  return {
+    line: node.from,
+    block: BLOCK_HEADER.test(head?.text ?? ""),
+    continued: body.some((piece) => meaningful(piece.text)),
+  };
+}
+
 function scalarLine(lines: readonly string[], node: Node, value: string, offset: number): number {
   let line = node.from;
   let cursor = 0;
