@@ -501,7 +501,7 @@ test(
     const kit = await runScript("kit", withoutPullRequestEvent());
     expect(kit.text).toContain("from HEAD against origin/main");
     expect(kit.text).toContain("commit-identity: 1 commit(s)");
-    expect(kit.text).toContain("checks-lint: 13 gate(s) pass");
+    expect(kit.text).toContain("checks-lint: 14 gate(s) pass");
     expect(kit.exitCode).toBe(0);
   },
   180_000,
