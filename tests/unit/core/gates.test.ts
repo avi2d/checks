@@ -10,7 +10,6 @@ const OUTSIDE_LINT = {
   "checks-release-pr": "src/delivery/release-pr.ts",
   "checks-release-preflight": "src/delivery/release-preflight.ts",
   "checks-release-publish": "src/delivery/release-publish.ts",
-  "checks-release-push": "src/delivery/release-push.ts",
   "checks-release-tag": "src/delivery/release-tag.ts",
   "checks-commit-title": "src/delivery/commit-title.ts",
   "checks-pr-text": "src/delivery/pr-text.ts",

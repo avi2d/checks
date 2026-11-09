@@ -30,6 +30,7 @@ It opens a pull request from that branch into `<branch>` titled `chore: release 
 It then dispatches each workflow its arguments name on the release branch.
 GitHub holds the `pull_request` runs of a pull request the workflow token opens until a maintainer approves them, so the dispatch is what runs the required checks on the release head.
 GitHub keeps a dispatched run's checks off the pull request, so each dispatched job reports its result as a commit status named for the job, which the required check of that name counts.
+The dispatched run carries no pull request range, so it runs the whole suite.
 When the release branch already holds this version on top of `HEAD` and its pull request carries the right title, it pushes nothing and dispatches nothing.
 It leaves the working tree as it found it.
 
@@ -79,7 +80,6 @@ release-pr: https://github.com/acme/widget/pull/12 releases 0.4.0 from 3f2a9c81d
 The `release-pr` workflow below runs it on the default branch when someone starts it with `gh workflow run release-pr`.
 The workflow has no schedule, so a release is cut only when someone asks for one.
 A public package that publishes to npm may add one daily `cron` to it instead, such as `"7 3 * * *"`.
-A package published to npm releases each push to `main` through [checks-release-push](checks-release-push.md) instead, with no pull request.
 [checks-ci-wiring](checks-ci-wiring.md#release-schedule) refuses a schedule on any other workflow that releases, and one that runs more than once a day.
 
 ## Running it in CI
@@ -153,6 +153,7 @@ On a hosted runner the `pull-request` job takes about 25 seconds, which GitHub b
 A private repository runs it there too unless `CI_RUNS_ON` names its self-hosted runner, which bills no minutes.
 The `tag` job runs only when a release lands, and a job its `if` skips bills nothing.
 The checks it dispatches are the release pull request's own required checks, and they run again only when `main` moves under it.
+The release workflow publishes the tag with no test tiers, since the whole suite already ran on the release pull request.
 The pull request also lists its own `pull_request` runs as waiting for approval.
 Nothing requires them, and approving them runs the same checks again.
 
@@ -163,7 +164,11 @@ The release pull request needs the repository's other workflows to accept the di
 - `.github/workflows/release.yml` triggers on `workflow_dispatch` and refuses a ref that is not a tag, as [checks-release-notes](checks-release-notes.md) shows.
 - **Allow GitHub Actions to create and approve pull requests** is on, which the call after the step sets.
 - A release pull request holds current `main` when it merges.
-  One that merges behind `main` lands a changelog short of the commits `main` gained, and `checks-release-tag` refuses to tag it.
+  One that merges behind `main` lands a tree that differs from the tree the full suite tested.
+
+In this repository, a `tested-tree` step before the tag call fetches the pull request head the squash number names and refuses to tag a landed tree that differs from it.
+The release workflow runs the same check on the tag.
+Either step rejects a mismatched or unverifiable tree, while a tag on the tested tree still publishes.
 
 The step reports a dispatched run's result as a commit status on the head commit:
 
@@ -188,6 +193,5 @@ gh api --method PUT repos/<owner>/<repo>/actions/permissions/workflow -F can_app
 
 - [checks-release-report](checks-release-report.md)
 - [checks-release-tag](checks-release-tag.md)
-- [checks-release-push](checks-release-push.md)
 - [checks-changelog](checks-changelog.md)
 - [checks-release-notes](checks-release-notes.md)

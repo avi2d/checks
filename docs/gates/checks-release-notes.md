@@ -175,12 +175,12 @@ jobs:
 ```
 
 A `preflight` job runs `checks-release-preflight` before the publish step, so a release whose version disagrees with the last tag or whose run lacks the trusted publisher prerequisites fails before the build.
-An untagged bump also fails earlier, since `checks-release-pr` and `checks-release-push` refuse to plan a release the last tag does not name.
+An untagged bump also fails earlier, since `checks-release-pr` refuses to plan a release the last tag does not name.
 The approval setting has no read only check under the release token, so `checks-release-pr` fails while opening the pull request when the setting is off.
 A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on each job in either workflow, as [checks-ci-wiring](checks-ci-wiring.md#runners) requires.
 A release is one commit that holds only the version bump and the built changelog.
-A package repository lands it on every push to `main` through [checks-release-push](checks-release-push.md), which tags it and dispatches this workflow on the tag.
-Another repository takes it as the pull request [checks-release-pr](checks-release-pr.md) opens when someone runs the `release-pr` workflow.
+The kit releases on demand through the pull request [checks-release-pr](checks-release-pr.md) opens when someone runs the `release-pr` workflow.
+Firstmate decides when to release, only for a reason, such as another repository needing a merged change, a fix users need, or merged changes having waited a week.
 When it lands, [checks-release-tag](checks-release-tag.md) tags the merge commit and dispatches this workflow on the tag.
 A tag the workflow token pushes starts no `push` run, so the workflow triggers on `workflow_dispatch` as well, and refuses a dispatch on a ref that is not a tag.
 A tag a person pushes starts the same workflow through its `push` trigger.

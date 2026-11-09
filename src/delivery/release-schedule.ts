@@ -18,7 +18,7 @@ export type ScheduleOwner = {
   readonly publishes: boolean;
 };
 
-const RELEASE_BINS = ["pr", "push", "tag", "publish"].flatMap((bin) => [`checks-release-${bin}`, `release-${bin}.ts`]);
+const RELEASE_BINS = ["pr", "tag", "publish"].flatMap((bin) => [`checks-release-${bin}`, `release-${bin}.ts`]);
 const PUBLISH_BINS = ["checks-release-publish", "release-publish.ts"];
 const NUMBER = /^\d+$/;
 const BY_HAND = "drop the schedule, so a release runs only when someone starts it";

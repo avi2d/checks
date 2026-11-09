@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { $ } from "bun";
-import { mkdir, readFile, symlink, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isRecord } from "../../../src/delivery/workflow-references.ts";
 import { fakeGh, type FakeGh } from "../lib/fake-gh.ts";
@@ -242,29 +242,14 @@ function namedRun(text: string, jobId: string, stepName: string): string {
   return run;
 }
 
-async function pushPreflightRun(): Promise<string> {
-  const text = await readFile(join(CHECKOUT, ".github/workflows/release-push.yml"), "utf8");
-  return namedRun(text, "release", "fail fast when the release cannot plan");
-}
-
 async function templatePreflightRun(): Promise<string> {
   return namedRun(await pageWorkflow("docs/gates/checks-release-pr.md", "release-pr"), "pull-request", "fail fast when the release cannot plan");
-}
-
-async function linkSources(dir: string): Promise<void> {
-  await symlink(join(CHECKOUT, "src"), join(dir, "src"));
 }
 
 async function linkBin(dir: string): Promise<void> {
   const bin = join(dir, "node_modules", ".bin");
   await mkdir(bin, { recursive: true });
   await writeFile(join(bin, "checks-release-preflight"), `#!/bin/sh\nexec bun ${join(CHECKOUT, "src", "delivery", "release-preflight.ts")} "$@"\n`, { mode: 0o755 });
-}
-
-async function runPushStep(dir: string, script: string): Promise<Ran> {
-  const file = join(dir, "push-preflight-step.sh");
-  await writeFile(file, `set -e\n${script}\necho CONTINUES\n`);
-  return ran($`bash ${file}`.cwd(dir).env({ ...process.env, GITHUB_REPOSITORY: "acme/widget" }));
 }
 
 async function runTemplateStep(dir: string, script: string): Promise<Ran> {
@@ -282,48 +267,6 @@ test(
       exitCode: 0,
       text: "release-preflight: package.json holds 0.6.0, which matches v0.6.0\nrelease-preflight: release.yml publishes nothing to npm, so no trusted publisher has to match\n",
     });
-  },
-  60_000,
-);
-
-test(
-  "the push preflight step plans after it passes on a matching version",
-  async () => {
-    const preflight = await ready("0.6.0", "v0.6.0", "git+https://github.com/acme/widget.git", KIT_PUBLISH);
-    await linkSources(preflight.dir);
-
-    const passed = await runPushStep(preflight.dir, await pushPreflightRun());
-    expect(passed.exitCode).toBe(0);
-    expect(passed.text).toContain("CONTINUES\n");
-  },
-  60_000,
-);
-
-test(
-  "the push preflight step fails before planning on the recorded website mismatch",
-  async () => {
-    const preflight = await ready("0.7.0", "v0.6.0", "git+https://github.com/acme/widget.git", KIT_PUBLISH);
-    await linkSources(preflight.dir);
-
-    const refused = await runPushStep(preflight.dir, await pushPreflightRun());
-    expect(refused.exitCode).toBe(2);
-    expect(refused.text).toContain("checks-release-preflight: package.json holds 0.7.0, but the last release tag is v0.6.0, so v0.7.0 is untagged;");
-    expect(refused.text).not.toContain("CONTINUES\n");
-  },
-  60_000,
-);
-
-test(
-  "the push preflight step recovers the tag instead of running preflight on a release commit",
-  async () => {
-    const preflight = await ready("0.7.0", "v0.6.0", "git+https://github.com/acme/widget.git", KIT_PUBLISH, true, undefined, "", "", "chore: release 0.7.0");
-    await linkSources(preflight.dir);
-
-    const recovered = await runPushStep(preflight.dir, await pushPreflightRun());
-    expect(recovered.exitCode).toBe(0);
-    expect(recovered.text).toContain("recovers its tag");
-    expect(recovered.text).not.toContain("untagged");
-    expect(recovered.text).toContain("CONTINUES\n");
   },
   60_000,
 );

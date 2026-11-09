@@ -17,11 +17,8 @@ When `npm publish` fails, it reads `latest` again.
 A newer version that published while it ran ends it cleanly as well, and any other failure fails it.
 
 Two uploads that overlap can still leave `latest` on the older version, since the order check runs before either upload completes.
-`checks-release-push` holds its concurrency group until the release workflow it dispatched finishes for that reason, so releases it cuts publish one at a time, while a release workflow dispatched or rerun by hand relies on this bin alone.
-That hold ends early in two cases.
-One is when the 45 minute wait times out.
-The other is when polling fails past the retry bound or the dispatch of the release workflow fails after GitHub accepted it.
-In those cases an unfinished publisher can overlap the next release, and if `latest` lands on the older version, `npm dist-tag add <package>@<newer version> latest` repairs it.
+The kit cuts one release at a time through its single release pull request, but a release pull request that merges while an earlier release still publishes overlaps too, as does a release workflow dispatched or rerun by hand, so each relies on this bin alone.
+If `latest` lands on the older version, `npm dist-tag add <package>@<newer version> latest` repairs it.
 
 ## What it reads
 
@@ -55,9 +52,9 @@ release-publish: npm already holds @acme/widget@0.4.1, which carries every chang
 ## When it runs
 
 The release workflow of a package published to npm runs it in place of `npm publish`, as [checks-release-notes](checks-release-notes.md#release-workflow) shows.
+The whole suite already ran on the release pull request, so the tag run repeats no test tiers before it publishes.
 A repository that never publishes to npm does not need it.
 
 ## Related topics
 
 - [checks-release-notes](checks-release-notes.md)
-- [checks-release-push](checks-release-push.md)
