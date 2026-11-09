@@ -2,8 +2,8 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
 import { workingTreeFiles } from "../core/git.ts";
 import { runTreeGate } from "../core/main.ts";
-import { fromProgram, SHELLS, shellWords } from "./shell-command.ts";
-import { isRecord, scalarSource } from "./workflow-references.ts";
+import { REDIRECT_OPERATOR, SHELLS, shellWords, substitutionEnd } from "./shell-command.ts";
+import { isRecord, maskExpressions, scalarSource } from "./workflow-references.ts";
 
 export type YamlFile = {
   readonly path: string;
@@ -29,10 +29,7 @@ const WORKFLOWS = ".github/workflows/";
 const ACTION_FILES = new Set(["action.yml", "action.yaml"]);
 const UNJUDGED_PREFIXES = ["node_modules/", "repos/", "tests/fixtures/"] as const;
 const PLAIN_SHELLS = new Set(["bash", "sh", "pwsh", "powershell", "cmd"]);
-// GitHub substitutes an expression into the script before the shell reads it.
-const EXPRESSION = /\$\{\{[\s\S]*?\}\}/g;
 const SIMPLE_EXPANSION = /^\$\{[A-Za-z_][A-Za-z0-9_]*\}/;
-const REDIRECT_OPERATOR = /^[<>][<>&|]*/;
 const CONTROL_OPERATORS: readonly (readonly [string, string])[] = [
   ["&&", "a command list"],
   ["||", "a command list"],
@@ -51,8 +48,6 @@ const INLINE_CODE_FLAGS = new Map<string, readonly string[]>([
   ["perl", ["-e", "-E"]],
   ["ruby", ["-e"]],
   ["php", ["-r"]],
-  ["pwsh", ["-c", "-command", "-encodedcommand", "-ec"]],
-  ["powershell", ["-c", "-command", "-encodedcommand", "-ec"]],
   ["osascript", ["-e"]],
 ]);
 const SCRIPT_PROGRAMS = new Set(["eval", "awk", "gawk", "mawk", "nawk", "sed"]);
@@ -82,21 +77,11 @@ function singleQuotedEnd(line: string, open: number, found: Set<string>): number
   return end + 1;
 }
 
-function substitutionEnd(line: string, open: number): number {
-  let depth = 0;
-  for (let index = open; index < line.length; index += 1) {
-    if (line.charAt(index) === "(") depth += 1;
-    if (line.charAt(index) === ")") depth -= 1;
-    if (depth === 0) return index + 1;
-  }
-  return line.length;
-}
-
 function dollarEnd(line: string, index: number, found: Set<string>): number {
   const next = line.charAt(index + 1);
   if (next === "(") {
     found.add("a command substitution");
-    return substitutionEnd(line, index + 1);
+    return Math.min(substitutionEnd(line, index) + 1, line.length);
   }
   if (next !== "{") return index + 1;
   const simple = SIMPLE_EXPANSION.exec(line.slice(index));
@@ -169,11 +154,22 @@ export function shellConstructs(line: string): readonly string[] {
   return [...found];
 }
 
+function hasScriptFile(rest: readonly string[]): boolean {
+  return rest.some((word) => word === "-f" || word === "--file" || word.toLowerCase().startsWith("--file="));
+}
+
+function pwshInlineFlag(word: string): boolean {
+  const base = word.toLowerCase().split("=")[0] ?? "";
+  if (!base.startsWith("-") || base.startsWith("--")) return false;
+  const name = base.slice(1);
+  return name !== "" && ("command".startsWith(name) || "encodedcommand".startsWith(name));
+}
+
 function hasFlag(word: string, flags: readonly string[]): boolean {
   const lower = word.toLowerCase();
   if (flags.some((flag) => lower === flag || lower.startsWith(flag + "="))) return true;
-  const letters = flags.filter((flag) => /^-[a-z]$/i.test(flag)).map((flag) => flag.charAt(1));
-  return /^-[a-z]+$/i.test(word) && letters.some((letter) => word.slice(1).includes(letter));
+  const letters = flags.filter((flag) => /^-[a-z]$/i.test(flag)).map((flag) => flag.charAt(1).toLowerCase());
+  return /^-[a-z]+$/i.test(word) && letters.some((letter) => word.slice(1).toLowerCase().includes(letter));
 }
 
 function options(words: readonly string[]): readonly string[] {
@@ -181,13 +177,36 @@ function options(words: readonly string[]): readonly string[] {
   return end === -1 ? words : words.slice(0, end);
 }
 
+function npxUsesCall(rest: readonly string[]): boolean {
+  for (let index = 0; index < rest.length; index += 1) {
+    const word = rest[index] ?? "";
+    if (word === "--") return false;
+    if (!word.startsWith("-") || word === "-") return false;
+    const base = word.toLowerCase().split("=")[0] ?? "";
+    if (base === "-c" || base === "--call") return true;
+    if ((base === "-p" || base === "--package" || base === "-w" || base === "--workspace") && !word.includes("=")) index += 1;
+  }
+  return false;
+}
+
 export function runsInlineCode(words: readonly string[]): boolean {
-  const [program = "", ...rest] = fromProgram(words);
-  const name = baseNameOf(program);
-  if (SCRIPT_PROGRAMS.has(name)) return !rest.includes("-f");
-  if (name === "deno" && rest[0] === "eval") return true;
-  const flags = INLINE_CODE_FLAGS.get(name);
-  return flags !== undefined && options(rest).some((word) => hasFlag(word, flags));
+  for (let index = 0; index < words.length; index += 1) {
+    const name = baseNameOf(words[index] ?? "").toLowerCase();
+    const rest = words.slice(index + 1);
+    if (SCRIPT_PROGRAMS.has(name)) {
+      if (!hasScriptFile(rest)) return true;
+    } else if (name === "deno") {
+      if (rest[0] === "eval") return true;
+    } else if (name === "npx") {
+      if (npxUsesCall(rest)) return true;
+    } else if (name === "pwsh" || name === "powershell") {
+      if (options(rest).some((word) => pwshInlineFlag(word))) return true;
+    } else {
+      const flags = INLINE_CODE_FLAGS.get(name);
+      if (flags !== undefined && options(rest).some((word) => hasFlag(word, flags))) return true;
+    }
+  }
+  return false;
 }
 
 function shellFault(shell: unknown): string | undefined {
@@ -200,7 +219,7 @@ function shellFault(shell: unknown): string | undefined {
 export function runFaults(run: string, shell: unknown): readonly string[] {
   const line = run.trim();
   if (line === "") return ["no command"];
-  const plain = line.replace(EXPRESSION, (expression) => `$${"_".repeat(expression.length - 1)}`);
+  const plain = maskExpressions(line);
   const faults = [...shellConstructs(plain)];
   if (line.includes("\n")) faults.push("more than one line");
   const [words = []] = shellWords(plain);
@@ -254,7 +273,7 @@ export function findStepFaults(files: readonly YamlFile[]): readonly StepFault[]
     const lines = file.text.split("\n");
     return stepsOf(file).flatMap((step) => {
       const source = scalarSource(lines, step.keys);
-      const layout = source?.block === true ? ["a block scalar"] : source?.continued === true ? ["more than one line"] : [];
+      const layout = source === undefined ? ["a run the check cannot locate in the file"] : source.block === true ? ["a block scalar"] : source.continued === true ? ["more than one line"] : [];
       const read = step.run === undefined ? ["a run that is not text"] : runFaults(step.run, step.shell);
       const faults = [...new Set([...layout, ...read])];
       if (faults.length === 0) return [];

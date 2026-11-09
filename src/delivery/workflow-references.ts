@@ -80,6 +80,10 @@ const REUSABLE_PREFIX = "./.github/workflows/";
 // GitHub substitutes an expression into the script before the shell reads it.
 const EXPRESSION = /\$\{\{[\s\S]*?\}\}/g;
 
+export function maskExpressions(run: string): string {
+  return run.replace(EXPRESSION, (expression) => `$${"_".repeat(expression.length - 1)}`);
+}
+
 function isPathTo(word: string, files: readonly string[]): boolean {
   return files.some((file) => word.endsWith(`/${file}`));
 }
@@ -98,7 +102,7 @@ function releaseArguments(program: Command): readonly string[] {
 
 // The stand-in for an expression keeps its length, so each invocation starts at its offset in run.
 function literalTargets(run: string): readonly Target[] {
-  return shellWords(run.replace(EXPRESSION, (expression) => `$${"_".repeat(expression.length - 1)}`)).flatMap((words) => {
+  return shellWords(maskExpressions(run)).flatMap((words) => {
     const invocation = words[0]?.start ?? 0;
     return releaseArguments(fromProgram(words.map(({ text }) => text)))
       .filter((name) => !name.includes("$"))

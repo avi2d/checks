@@ -17,6 +17,7 @@ The check refuses a `run` that holds any of these:
 
 - a block scalar, `run: |` or `run: >`, even around a single command
 - a value that spans more than one line, quoted or plain
+- a `run` the check cannot locate in the file, such as through a YAML anchor or in flow style
 - a pipe, `|`
 - a command list, `&&`, `||` or `;`, or a background job, `&`
 - a redirect, such as `>`, `>>`, `<` or `2>&1`

@@ -71,7 +71,7 @@ type ShellPart = Span & { readonly substitutions: readonly Word[] };
 const COMMAND_BREAKS = new Set(["\n", ";", "&", "|", "(", ")", "`"]);
 const WORD_BREAKS = new Set([" ", "\t"]);
 const REDIRECTS = new Set(["<", ">"]);
-const REDIRECT_OPERATOR = /^[<>][<>&|]*/;
+export const REDIRECT_OPERATOR = /^[<>][<>&|]*/;
 const DELIMITER_BREAKS = new Set([...WORD_BREAKS, ...COMMAND_BREAKS, ...REDIRECTS]);
 const FILE_DESCRIPTOR = /^\d+$/;
 const DOUBLE_QUOTE_ESCAPES = new Set(["$", "`", '"', "\\"]);
@@ -87,7 +87,7 @@ const LAUNCHER_OPERANDS = new Map<string, ReadonlySet<string>>([
   ["npx", new Set(["-p", "--package", "-c", "--call", "-w", "--workspace"])],
 ]);
 
-function substitutionEnd(script: string, start: number): number {
+export function substitutionEnd(script: string, start: number): number {
   if (script.charAt(start) === "`") {
     for (let index = start + 1; index < script.length; index += 1) {
       if (script.charAt(index) === "\\") index += 1;
