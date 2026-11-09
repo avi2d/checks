@@ -36,7 +36,7 @@ export function testOptions(args: readonly string[]): TestOptions | undefined {
   return options;
 }
 
-const TEST_SCRIPTS: readonly string[] = [TEST_ENTRY_POINT.bin, `bun src/${TEST_ENTRY_POINT.script}`];
+const TEST_SCRIPTS: readonly string[] = [TEST_ENTRY_POINT.bin];
 
 export function scriptOptions(script: unknown): TestOptions | undefined {
   if (typeof script !== "string") return undefined;

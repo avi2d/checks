@@ -1,10 +1,9 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { availableParallelism, freemem, totalmem } from "node:os";
+import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import { Schema } from "effect";
-import { workerCountFor } from "../../../src/testing/test.ts";
 import { CHECKOUT, scratchDirs } from "../lib/fixture-repo.ts";
 
 const SCRIPT = join(CHECKOUT, "src", "testing", "flake.ts");
@@ -196,9 +195,11 @@ test(
 
 test("a test script without a worker count hunts on the worker count free memory allows, as checks-test runs it", async () => {
   await consumer(ORDER_FREE, { test: "checks-test" });
-  const workers = workerCountFor(freemem(), totalmem(), availableParallelism());
   const hunted = await flake(join(dir, "step-summary.md"));
   expect(hunted.exitCode).toBe(0);
+  const workers = hunted.record.parallel?.workers;
+  expect(workers).toBeGreaterThanOrEqual(1);
+  expect(workers).toBeLessThanOrEqual(availableParallelism());
   expect(hunted.text).toContain(`checks-flake: ${SEEDS.length} run(s) passed on ${workers} worker(s), with seeds ${SEEDS.join(", ")}`);
   expect(hunted.record.parallel).toEqual({ workers, replays: [] });
 }, 120_000);

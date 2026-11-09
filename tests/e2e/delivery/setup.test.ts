@@ -285,6 +285,23 @@ expect(refused.text).toContain("test:pixel");
 );
 
 test(
+"a fresh adopt with a unit tier gains the tier script",
+async () => {
+const repo = await open({
+"tests/unit/widget.test.ts": "import { test } from \"bun:test\";\ntest(\"adds\", () => {});\n",
+});
+const run = await setup(repo);
+expect(run.exitCode).toBe(0);
+const manifest = decodeManifest(await readFile(join(repo.dir, "package.json"), "utf8"));
+expect(manifest.scripts?.["test"]).toBe("checks-test");
+expect(manifest.scripts?.["test:fast"]).toBe("checks-test --changed");
+expect(manifest.scripts?.["test:unit"]).toBe("checks-test --tier=unit");
+expect(manifest.scripts?.["test:e2e"]).toBeUndefined();
+},
+60_000,
+);
+
+test(
 "it refuses a retained lint script that skips the oxlint half",
 async () => {
 const repo = await open({

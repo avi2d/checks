@@ -17,7 +17,7 @@ A run that fails with no failing test, such as a test file that throws while loa
 
 A repository whose `test` script runs [checks-test](checks-test.md#parallel-runs) is hunted with the worker count `checks-test` runs on.
 That is the count free memory allows, as [checks-test](checks-test.md#parallel-runs) says.
-So each run is `bun test --randomize --seed=<seed> --parallel=<workers>`, the mode CI runs in.
+So each run is `bun test --randomize --seed=<seed> --parallel=<workers>` with the worker count free memory allows when the hunt runs.
 A `test` script that does not run `checks-test` gets the serial hunt.
 
 Under workers a seed fixes the order Bun hands out the files.

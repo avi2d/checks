@@ -107,6 +107,11 @@ test(
 test(
   "the layout check sees an unstaged new violation and survives a tracked file removed from disk",
   async () => {
+    await mkdir(join(dir, "tests", "unit"), { recursive: true });
+    await mkdir(join(dir, "tests", "e2e"), { recursive: true });
+    await writeFile(join(dir, "tests", "unit", "widget.test.ts"), CLEAN_TEST);
+    await writeFile(join(dir, "tests", "e2e", "widget.test.ts"), `import { spawnSync } from "node:child_process";\n${CLEAN_TEST}`);
+    await writeFile(join(dir, "package.json"), `${JSON.stringify(TIERED_MANIFEST, null, 2)}\n`);
     expect((await layout()).exitCode).toBe(0);
 
     await writeFile(join(dir, "src", "unstaged.test.ts"), CLEAN_TEST);
@@ -223,7 +228,7 @@ test(
       const result = await $`bun ${CHECK} ${bare}`.cwd(bare).nothrow().quiet();
       const text = result.stdout.toString() + result.stderr.toString();
       expect(result.exitCode).toBe(1);
-      expect(text).toContain('scripts.test must be "checks-test", which runs the whole suite and judges its skips');
+      expect(text).toContain('scripts.test must be "checks-test", which runs the default suite and judges its skips');
       expect(text).toContain("scripts.lint must run the layout check");
       expect(text).toContain("bunfig.toml is missing");
     } finally {

@@ -273,11 +273,12 @@ const writeFreshPackage = Effect.fn("writeFreshPackage")(function* (
   const system = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const full = path.join(root, "package.json");
+  const scripts = yield* withTierDefaults({ ...DEFAULT_SCRIPTS }, root);
   const manifest = {
     name: fallbackName,
     type: "module",
     ...(isPrivate ? { private: true } : {}),
-    scripts: { ...DEFAULT_SCRIPTS },
+    scripts,
     devDependencies: { [KIT_ID]: pins.kit, ...pins.mutation },
   };
   yield* system.makeDirectory(path.dirname(full), { recursive: true });

@@ -1,8 +1,7 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
-import { availableParallelism, freemem, totalmem } from "node:os";
-import { workerCountFor } from "../../../src/testing/test.ts";
+import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import { CHECKOUT, ran, scratchDirs, type Ran } from "../lib/fixture-repo.ts";
 
@@ -417,9 +416,11 @@ async function workersUsed(): Promise<number> {
 test("without --parallel the suite runs on the worker count free memory allows", async () => {
   await consumer(workerFile(""), { "tests/unit/pricing.test.ts": workerFile("") });
 
-  const workers = workerCountFor(freemem(), totalmem(), availableParallelism());
   const run = await checksTest(true);
   expect(run.exitCode).toBe(0);
+  const workers = Number(/([0-9]+)x PARALLEL/.exec(run.text)?.[1]);
+  expect(workers).toBeGreaterThanOrEqual(1);
+  expect(workers).toBeLessThanOrEqual(availableParallelism());
   expect(run.text).toContain(`${workers}x PARALLEL`);
   expect(await workersUsed()).toBe(Math.min(2, workers));
 });

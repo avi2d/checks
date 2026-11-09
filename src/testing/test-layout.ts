@@ -232,7 +232,7 @@ export const isolationViolations = Effect.fn("isolationViolations")(function* (f
 function describeScriptFault(fault: ScriptFault): string {
   switch (fault.kind) {
     case "test":
-      return `scripts.test must be "${fault.expected}", which runs the whole suite and judges its skips, found ${JSON.stringify(fault.found ?? null)}`;
+      return `scripts.test must be "${fault.expected}", which runs the default suite and judges its skips, found ${JSON.stringify(fault.found ?? null)}`;
     case "fast":
       return `scripts["test:fast"] must be "${fault.expected}", which runs the test files the change reaches, found ${JSON.stringify(fault.found ?? null)}`;
     case "tier":

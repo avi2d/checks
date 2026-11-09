@@ -63,13 +63,14 @@ test("--changed combines with a worker count and a junit file, while a tier, --f
 test("a test script never takes --changed, so scripts.test cannot shrink the CI suite to the changed files", () => {
   expect(scriptOptions("checks-test --changed")).toBeUndefined();
   expect(scriptViolations({ scripts: { test: "checks-test --changed", "test:fast": "checks-test --changed", lint: "checks-lint" } }).map((violation) => violation.message)).toEqual([
-    'scripts.test must be "checks-test", which runs the whole suite and judges its skips, found "checks-test --changed"',
+    'scripts.test must be "checks-test", which runs the default suite and judges its skips, found "checks-test --changed"',
   ]);
 });
 
 test("the standard scripts are test, test:fast and one tier script per tier, with nothing else", () => {
   expect(standardScript("checks-test")).toEqual({ kind: "test" });
-  expect(standardScript("bun src/testing/test.ts")).toEqual({ kind: "test" });
+  expect(standardScript("bun src/testing/test.ts")).toBeUndefined();
+  expect(standardScript("bun src/testing/test.ts --changed")).toBeUndefined();
   expect(standardScript("checks-test --changed")).toEqual({ kind: "fast" });
   expect(standardScript("checks-test --tier=unit")).toEqual({ kind: "tier", tier: "unit" });
   expect(standardScript("checks-test --tier=e2e")).toEqual({ kind: "tier", tier: "e2e" });

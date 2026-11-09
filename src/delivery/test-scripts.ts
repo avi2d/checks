@@ -1,4 +1,5 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
+import { workingTreeFiles } from "../core/git.ts";
 import { scriptFaults, STANDARD_TIERS, tierCommand, type ScriptFault, type TestTier } from "../core/test-script.ts";
 
 class TestScriptsError extends Schema.TaggedError<TestScriptsError>()("TestScriptsError", {
@@ -10,6 +11,9 @@ export type MutableRecord = Record<string, unknown>;
 const TIER_TEST_FILE = /(?:[.](?:test|spec)|_test)[.](tsx?)$/;
 
 const tierHasTests = Effect.fn("tierHasTests")(function* (root: string, tier: TestTier) {
+  const prefix = `tests/${tier}/`;
+  const listed = yield* workingTreeFiles(root).pipe(Effect.orElseSucceed(() => undefined));
+  if (listed !== undefined) return listed.some((entry) => entry.startsWith(prefix) && TIER_TEST_FILE.test(entry));
   const system = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const dir = path.join(root, "tests", tier);

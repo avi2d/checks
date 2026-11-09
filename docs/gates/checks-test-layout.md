@@ -25,7 +25,7 @@ It fails unless the repository holds this shape, and names the file and the path
   It may not import `$`, `spawn`, `spawnSync`, `connect`, `serve` or `listen` from `bun`, may not touch `Bun.$` or `Bun.spawn`, and may not call `fetch`.
   A test at the `e2e`, `live` or `pixel` level may do all of it, under `tests/quarantine/` as well.
   Helpers in `tests/lib/**` answer to the same rule, since an in-process test reaches them.
-- `scripts.test` is `checks-test`, which runs the whole suite and judges its skips.
+- `scripts.test` is `checks-test`, which runs the default suite and judges its skips.
   `scripts["test:fast"]` is `checks-test --changed`, which runs the test files the change reaches.
   No test script takes `--parallel=<workers>`, `--full`, `--junit=<file>` or a tier outside its own script, as [checks-test](checks-test.md#parallel-runs) and [checks-test](checks-test.md#arguments) say.
   No other `test:*` script exists.
@@ -81,7 +81,7 @@ It checks the directory it runs in, or the directory it is given.
 ```
 test-layout: 4 violation(s)
   src/a.test.ts: a test file must live at tests/<level>/**/*.test.ts, or tests/quarantine/<level>/**/*.test.ts while quarantined, with unit, e2e, live, or pixel as the level; move it to tests/unit/a.test.ts
-  package.json: scripts.test must be "checks-test", which runs the whole suite and judges its skips, found "bun test"
+  package.json: scripts.test must be "checks-test", which runs the default suite and judges its skips, found "bun test"
   package.json: scripts.lint must run the layout check: add "checks-lint"
   bunfig.toml: bunfig.toml is missing; bun has no bunfig extends, so copy node_modules/@avi2dg/checks/bunfig.toml
 ```

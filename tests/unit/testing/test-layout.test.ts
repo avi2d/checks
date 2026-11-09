@@ -170,7 +170,7 @@ test("scripts.test must be the test entry point and scripts.lint must run the ch
         lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout",
       },
     }),
-  ).toBeEmpty();
+  ).toHaveLength(2);
 
   for (const lint of ["oxlint --type-aware && checks-lint && depcruise src", "oxlint && bun src/core/lint.ts"]) {
     expect(scriptViolations({ scripts: { test: "checks-test", "test:fast": "checks-test --changed", lint } })).toBeEmpty();
@@ -192,6 +192,9 @@ test("scripts.test must be the test entry point and scripts.lint must run the ch
     "checks-test --junit=reports/suite.xml",
     "checks-test --parallel=4",
     "checks-test  --parallel=6",
+    "bun src/testing/test.ts",
+    "bun src/testing/test.ts --changed",
+    "bun src/testing/test.ts --tier=unit",
     "bun src/testing/test.ts --parallel=4",
     "checks-test --parallel=0",
     "checks-test --parallel",
@@ -204,7 +207,7 @@ test("scripts.test must be the test entry point and scripts.lint must run the ch
   const violations = scriptViolations({ scripts: { test: "bun test", lint: "oxlint" } });
   expect(violations).toHaveLength(3);
   expect(violations[0]?.message).toContain(
-    'must be "checks-test", which runs the whole suite and judges its skips',
+    'must be "checks-test", which runs the default suite and judges its skips',
   );
   expect(violations[2]?.message).toContain("must run the layout check");
 });
@@ -216,7 +219,7 @@ test("each tier with test files requires its named checks-test script and no oth
     const files = [`tests/${tier}/screen.test.ts`];
     const violation = scriptViolations({ scripts }, files).find((candidate) => candidate.message.includes(`test:${tier}`));
     expect(violation?.message ?? "").toContain(`test:${tier} must be "checks-test --tier=${tier}"`);
-    for (const accepted of [`checks-test --tier=${tier}`, `bun src/testing/test.ts --tier=${tier}`]) {
+    for (const accepted of [`checks-test --tier=${tier}`]) {
       expect(scriptViolations({ scripts: { ...scripts, [`test:${tier}`]: accepted } }, files)).toBeEmpty();
     }
     for (const refused of ["checks-test", "checks-test --changed", "checks-test --parallel=4", `checks-test --tier=${tier} --parallel=4`, `checks-test --tier=${other}`]) {
