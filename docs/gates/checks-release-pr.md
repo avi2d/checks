@@ -165,8 +165,10 @@ The release pull request needs the repository's other workflows to accept the di
 - **Allow GitHub Actions to create and approve pull requests** is on, which the call after the step sets.
 - A release pull request holds current `main` when it merges.
   One that merges behind `main` lands a tree that differs from the tree the full suite tested.
-  The `tag` job fetches the pull request head the squash number names and refuses to tag a landed tree that differs from it.
-  The release workflow runs the same check on the tag, so a tag pushed by hand publishes nothing.
+
+In this repository, a `tested-tree` step before the tag call fetches the pull request head the squash number names and refuses to tag a landed tree that differs from it.
+The release workflow runs the same check on the tag.
+Either step rejects a mismatched or unverifiable tree, while a tag on the tested tree still publishes.
 
 The step reports a dispatched run's result as a commit status on the head commit:
 

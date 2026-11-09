@@ -24,6 +24,7 @@ type Released = {
   readonly inOrigin: (...args: readonly string[]) => Promise<string>;
   readonly pr: string;
   readonly landed: string;
+  readonly dir: string;
 };
 
 // The release pull request head as the origin keeps it after the squash merge deletes the branch:
@@ -69,6 +70,7 @@ async function released(refactors: readonly string[] = []): Promise<Released> {
     inOrigin: async (...args) => (await $`git ${args}`.cwd(origin).quiet()).stdout.toString().trim(),
     pr,
     landed,
+    dir: repo.dir,
   };
 }
 
@@ -101,6 +103,7 @@ test(
       `tested-tree: ${main.landed.slice(0, 12)} differs from the ${tested.slice(0, 12)} tree pull request #1 tested`,
     );
     expect(await main.isAncestor(main.pr, main.landed)).toBe(false);
+    expect(refused.text).not.toContain("already tags");
     expect(await main.inOrigin("tag", "-l", "v0.1.1")).toBe("");
     expect((await main.state()).dispatches).toEqual([]);
   },
@@ -108,14 +111,29 @@ test(
 );
 
 test(
-  "a commit that releases nothing passes the tree check through",
+  "an ordinary commit carrying a matching version tag is refused before it is published",
   async () => {
-    const repo: FixtureRepo = await repository({ "package.json": manifest("0.1.0") });
-    const head = await repo.commit("fix: paint a bill (#3)");
+    const repo: FixtureRepo = await repository({ "package.json": manifest("0.1.1") });
+    const head = await repo.commit("chore: correct the changelog");
+    await $`git tag v0.1.1`.cwd(repo.dir).quiet();
 
-    const checked = await ran($`bun ${SCRIPT}`.cwd(repo.dir).env(process.env));
-    expect(checked.exitCode).toBe(0);
-    expect(checked.text).toContain(`tested-tree: ${head.slice(0, 12)} is no release commit`);
+    const refused = await ran($`bun ${SCRIPT}`.cwd(repo.dir).env(process.env));
+    expect(refused.exitCode).toBe(2);
+    expect(refused.text).toContain(`tested-tree: ${head.slice(0, 12)} is no release commit`);
+  },
+  60_000,
+);
+
+test(
+  "a stale release that is already tagged names the blocking tag instead of a version rollback",
+  async () => {
+    const main = await released(["refactor: repaint a bill"]);
+    await $`git tag v0.1.1 ${main.landed}`.cwd(main.dir).quiet();
+
+    const refused = await main.run(SCRIPT);
+    expect(refused.exitCode).toBe(2);
+    expect(refused.text).toContain("v0.1.1 already tags this commit");
+    expect(refused.text).not.toContain("returns package.json to");
   },
   60_000,
 );

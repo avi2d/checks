@@ -18,8 +18,9 @@ const check = Effect.gen(function* () {
   const [head = "", subject = ""] = (yield* git(["log", "-1", "--format=%H%n%s", "HEAD"])).split("\n");
   const version = releasedVersionOf(subject);
   if (version === undefined) {
-    yield* Console.log(`${NAME}: ${head.slice(0, 12)} is no release commit`);
-    return true;
+    return yield* new TreeRefused({
+      message: `${head.slice(0, 12)} is no release commit, so no release pull request tested it; merge the release pull request to land the release, and tag nothing by hand`,
+    });
   }
   const [, number = ""] = PULL_NUMBER.exec(subject) ?? [];
   if (number === "") {
@@ -34,6 +35,12 @@ const check = Effect.gen(function* () {
   if (landed === tested) {
     yield* Console.log(`${NAME}: ${head.slice(0, 12)} matches the tree pull request #${number} tested`);
     return true;
+  }
+  const pointed = (yield* git(["tag", "--points-at", "HEAD"])).split("\n").map((line) => line.trim()).filter((line) => line !== "");
+  if (pointed.length > 0) {
+    return yield* new TreeRefused({
+      message: `${head.slice(0, 12)} differs from the ${tested.slice(0, 12)} tree pull request #${number} tested, so main moved after the full run; ${pointed.join(", ")} already tags this commit, so resolve that tag before the release can proceed`,
+    });
   }
   const since = yield* lastTag(process.cwd());
   const returned = since === undefined ? "the version it held before this release" : taggedVersion(since);
