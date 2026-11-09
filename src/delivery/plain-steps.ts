@@ -2,7 +2,8 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
 import { workingTreeFiles } from "../core/git.ts";
 import { runTreeGate } from "../core/main.ts";
-import { fromProgram, REDIRECT_OPERATOR, SHELLS, shellWords, substitutionEnd } from "./shell-command.ts";
+import { baseNameOf, isNpxCall, resolvedUsesInlineCode } from "./inline-code.ts";
+import { fromProgram, REDIRECT_OPERATOR, shellWords, substitutionEnd } from "./shell-command.ts";
 import { isRecord, maskExpressions, scalarSource } from "./workflow-references.ts";
 
 export type YamlFile = {
@@ -39,20 +40,6 @@ const CONTROL_OPERATORS: readonly (readonly [string, string])[] = [
   ["(", "a subshell"],
   [")", "a subshell"],
 ];
-const INLINE_CODE_FLAGS = new Map<string, readonly string[]>([
-  ...SHELLS.map((shell) => [shell, ["-c"]] as const),
-  ["node", ["-e", "--eval", "-p", "--print"]],
-  ["bun", ["-e", "--eval", "-p", "--print"]],
-  ["python", ["-c"]],
-  ["python3", ["-c"]],
-  ["perl", ["-e", "-E"]],
-  ["ruby", ["-e"]],
-  ["php", ["-r", "-R", "-B", "-E"]],
-  ["osascript", ["-e"]],
-  ["cmd", ["/c", "/k"]],
-]);
-const SCRIPT_PROGRAMS = new Set(["eval", "awk", "gawk", "mawk", "nawk", "sed"]);
-
 const Manifest = Schema.Struct({
   checks: Schema.optional(Schema.Struct({ plainSteps: Schema.optional(Schema.Boolean) })),
 });
@@ -60,11 +47,6 @@ const Manifest = Schema.Struct({
 class PlainStepsError extends Schema.TaggedError<PlainStepsError>()("PlainStepsError", {
   message: Schema.String,
 }) {}
-
-function baseNameOf(file: string): string {
-  const base = file.slice(file.lastIndexOf("/") + 1);
-  return base.toLowerCase().endsWith(".exe") ? base.slice(0, -4) : base;
-}
 
 export function isJudged(file: string): boolean {
   if (UNJUDGED_PREFIXES.some((prefix) => file.startsWith(prefix))) return false;
@@ -160,109 +142,10 @@ export function shellConstructs(line: string): readonly string[] {
   return [...found];
 }
 
-function hasScriptFile(rest: readonly string[]): boolean {
-  return rest.some((word) => word === "-f" || word === "--file" || word.toLowerCase().startsWith("--file="));
-}
-
-function pwshInlineFlag(word: string): boolean {
-  const base = word.toLowerCase().split("=")[0] ?? "";
-  if (!base.startsWith("-") || base.startsWith("--")) return false;
-  const name = base.slice(1);
-  return name !== "" && ("command".startsWith(name) || "encodedcommand".startsWith(name) || "commandwithargs".startsWith(name) || name === "ec" || name === "cwa");
-}
-
-function hasFlag(word: string, program: string, flags: readonly string[]): boolean {
-  const text = program === "cmd" ? word.toLowerCase() : word;
-  return flags.some((flag) => text === flag || text.startsWith(flag + "="));
-}
-
-const INLINE_LETTERS = new Map<string, readonly string[]>([
-  ...SHELLS.map((shell) => [shell, ["c"]] as const),
-  ["node", ["e", "p"]],
-  ["bun", ["e", "p"]],
-  ["python", ["c"]],
-  ["python3", ["c"]],
-  ["perl", ["e", "E"]],
-  ["ruby", ["e"]],
-  ["php", ["r", "R", "B", "E"]],
-  ["osascript", ["e"]],
-]);
-const VALUED_LETTERS = new Map<string, readonly string[]>([
-  ...SHELLS.map((shell) => [shell, ["o", "O"]] as const),
-  ["node", ["r", "C"]],
-  ["bun", ["r", "C"]],
-  ["python", ["W", "X"]],
-  ["python3", ["W", "X"]],
-  ["perl", ["M", "I"]],
-  ["ruby", ["r", "E"]],
-]);
-
-function scanBundle(letters: string, program: string): "inline" | "valued" | "none" {
-  const inline = INLINE_LETTERS.get(program) ?? [];
-  const valued = VALUED_LETTERS.get(program) ?? [];
-  for (let at = 0; at < letters.length; at += 1) {
-    const letter = letters.charAt(at);
-    if (inline.includes(letter)) return "inline";
-    if (valued.includes(letter)) return at === letters.length - 1 ? "valued" : "none";
-  }
-  return "none";
-}
-
-const SHELL_VALUE_OPTIONS = new Set(["-o", "+o", "-O", "+O"]);
-const NODE_VALUE_OPTIONS = new Set(["-r", "--require", "--import", "-C", "--cwd"]);
-const PYTHON_VALUE_OPTIONS = new Set(["-W", "-X"]);
-const PWSH_SWITCHES = new Set(["-nologo", "-noprofile", "-noninteractive", "-noexit", "-sta", "-mta", "-help", "-?"]);
 const TIMEOUT_VALUE_OPTIONS = new Set(["-k", "--kill-after", "-s", "--signal"]);
 const NICE_VALUE_OPTIONS = new Set(["-n", "--adjustment"]);
 const XARGS_VALUE_OPTIONS = new Set(["-a", "--arg-file", "-d", "--delimiter", "-E", "-e", "--eof", "-I", "--replace", "-L", "--max-lines", "-n", "--max-args", "-P", "--max-procs", "-s", "--max-chars"]);
 const DOCKER_VALUE_OPTIONS = new Set(["--add-host", "-c", "--cpu-shares", "--cpus", "--cap-add", "--cap-drop", "--cpuset-cpus", "--cpuset-mems", "--cidfile", "--detach-keys", "--device", "--dns", "--dns-option", "--dns-search", "--entrypoint", "-e", "--env", "--env-file", "--expose", "--group-add", "--gpus", "-h", "--hostname", "--health-cmd", "--health-interval", "--health-retries", "--health-start-period", "--health-timeout", "--ip", "--ipc", "-l", "--label", "--link", "--log-driver", "--log-opt", "--mac-address", "-m", "--memory", "--mount", "--name", "--network", "-p", "--publish", "--pid", "--pull", "--platform", "--restart", "--runtime", "--security-opt", "--shm-size", "--stop-signal", "--stop-timeout", "--storage-opt", "--sysctl", "--tmpfs", "-u", "--user", "--userns", "--ulimit", "-v", "--volume", "--volumes-from", "-w", "--workdir"]);
-
-function valueOptions(program: string): ReadonlySet<string> | undefined {
-  if (program === "node" || program === "bun") return NODE_VALUE_OPTIONS;
-  if (program === "python" || program === "python3") return PYTHON_VALUE_OPTIONS;
-  if (SHELLS.includes(program)) return SHELL_VALUE_OPTIONS;
-  return undefined;
-}
-
-function interpreterInlineArgs(rest: readonly string[], program: string, flags: readonly string[]): boolean {
-  const values = valueOptions(program);
-  const plus = SHELLS.includes(program);
-  for (let index = 0; index < rest.length; index += 1) {
-    const word = rest[index] ?? "";
-    if (word === "--") return false;
-    const slash = program === "cmd" && word.length > 1 && word.startsWith("/");
-    const dash = (word.startsWith("-") && word !== "-") || slash;
-    const bundle = !dash && plus && /^[+][A-Za-z]+$/.test(word) ? word.slice(1) : undefined;
-    if (!dash && bundle === undefined) return false;
-    if (dash && hasFlag(word, program, flags)) return true;
-    const letters = dash ? word.slice(1) : (bundle ?? "");
-    if (/^[A-Za-z]+$/.test(letters)) {
-      const found = scanBundle(letters, program);
-      if (found === "inline") return true;
-      if (found === "valued") index += 1;
-      continue;
-    }
-    const base = word.split("=")[0] ?? "";
-    if (values?.has(base) === true && !word.includes("=")) index += 1;
-  }
-  return false;
-}
-
-function pwshInlineArgs(rest: readonly string[]): boolean {
-  for (let index = 0; index < rest.length; index += 1) {
-    const word = rest[index] ?? "";
-    if (word === "--") return false;
-    if (!word.startsWith("-") || word === "-") {
-      const prev = (rest[index - 1] ?? "").toLowerCase().split("=")[0] ?? "";
-      if (index > 0 && prev.startsWith("-") && prev !== "-" && !PWSH_SWITCHES.has(prev)) continue;
-      return false;
-    }
-    const base = word.toLowerCase().split("=")[0] ?? "";
-    if (base === "-file" || base === "-f") return false;
-    if (pwshInlineFlag(word)) return true;
-  }
-  return false;
-}
 
 function afterOptions(words: readonly string[], from: number, values: ReadonlySet<string>): number {
   let index = from;
@@ -321,34 +204,15 @@ function handoffs(words: readonly string[]): readonly (readonly string[])[] {
 }
 
 function checkSlice(slice: readonly string[]): boolean {
-  if (baseNameOf(slice[0] ?? "").toLowerCase() === "npx" && npxUsesCall(slice.slice(1))) return true;
+  if (isNpxCall(slice)) return true;
   const resolved = fromProgram(slice);
-  const [program = "", ...rest] = resolved;
-  const name = baseNameOf(program).toLowerCase();
-  if (SCRIPT_PROGRAMS.has(name)) {
-    if (!hasScriptFile(rest)) return true;
-  } else if (name === "deno") {
-    if (rest[0] === "eval") return true;
-  } else if (name === "pwsh" || name === "powershell") {
-    if (pwshInlineArgs(rest)) return true;
-  } else {
-    const flags = INLINE_CODE_FLAGS.get(name);
-    if (flags !== undefined && interpreterInlineArgs(rest, name, flags)) return true;
-  }
-  if (handoffs(slice).some((sub) => checkSlice(sub))) return true;
-  return resolved !== slice && handoffs(resolved).some((sub) => checkSlice(sub));
+  if (resolvedUsesInlineCode(resolved)) return true;
+  return followsHandoff(slice, resolved);
 }
 
-function npxUsesCall(rest: readonly string[]): boolean {
-  for (let index = 0; index < rest.length; index += 1) {
-    const word = rest[index] ?? "";
-    if (word === "--") return false;
-    if (!word.startsWith("-") || word === "-") return false;
-    const base = word.toLowerCase().split("=")[0] ?? "";
-    if (base === "-c" || base === "--call") return true;
-    if ((base === "-p" || base === "--package" || base === "-w" || base === "--workspace") && !word.includes("=")) index += 1;
-  }
-  return false;
+function followsHandoff(slice: readonly string[], resolved: readonly string[]): boolean {
+  if (handoffs(slice).some((sub) => checkSlice(sub))) return true;
+  return resolved !== slice && handoffs(resolved).some((sub) => checkSlice(sub));
 }
 
 export function runsInlineCode(words: readonly string[]): boolean {
