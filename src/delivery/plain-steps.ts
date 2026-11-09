@@ -288,14 +288,14 @@ function dockerHandoff(words: readonly string[]): readonly string[] | undefined 
 }
 
 function findHandoffs(words: readonly string[]): readonly (readonly string[])[] {
-  const handoffs: (readonly string[])[] = [];
+  const found: (readonly string[])[] = [];
   for (let index = 0; index < words.length; index += 1) {
     if (words[index] === "-exec" || words[index] === "-execdir") {
       const sub = words.slice(index + 1);
-      if (sub.length > 0) handoffs.push(sub);
+      if (sub.length > 0) found.push(sub);
     }
   }
-  return handoffs;
+  return found;
 }
 
 function handoffs(words: readonly string[]): readonly (readonly string[])[] {
@@ -421,7 +421,7 @@ export function findStepFaults(files: readonly YamlFile[]): readonly StepFault[]
     const lines = file.text.split("\n");
     return stepsOf(file).flatMap((step) => {
       const source = scalarSource(lines, step.keys);
-      const layout = source === undefined ? ["a run the check cannot locate in the file"] : source.block === true ? ["a block scalar"] : source.continued === true ? ["more than one line"] : [];
+      const layout = source === undefined ? ["a run the check cannot locate in the file"] : source.block ? ["a block scalar"] : source.continued ? ["more than one line"] : [];
       const read = step.run === undefined ? ["a run that is not text"] : runFaults(step.run, step.shell);
       const faults = [...new Set([...layout, ...read])];
       if (faults.length === 0) return [];
