@@ -20,7 +20,7 @@ To check a change before opening a pull request:
 Declare each skip with `skipReason(reason, name)` beside the native Bun test call, as [checks-test](docs/gates/checks-test.md) says.
 A test that spawns `checks-lint` passes it `withoutPullRequestEvent()` from `tests/lib/env.ts`, so the CI event cannot decide the range.
 
-CI runs the commands in `.github/workflows/ci.yml` on each pull request, and on the release branch when `release-push` dispatches it.
+CI runs the commands in `.github/workflows/ci.yml` on each pull request, and on the release branch when `release-pr` dispatches it.
 A pull request runs only the tests it reaches, and the release runs the whole suite, as [checks-test](docs/gates/checks-test.md#pull-request-runs) says.
 `.github/workflows/pr-title.yml` lints the pull request title, so editing the title reruns only that.
 No workflow runs on a schedule except the weekly advisory scan, as [checks-ci-wiring](docs/gates/checks-ci-wiring.md#schedules) requires.
@@ -59,21 +59,19 @@ A release is a tag on `main`.
 The `release` workflow publishes it through npm trusted publishing.
 GitHub mints the publish credential for each run, so no npm token is stored anywhere.
 
-Every push to `main` runs the `release-push` workflow, which releases the next version when `main` holds a feature or a fix since the last tag, as [checks-release-push](docs/gates/checks-release-push.md) says.
+The kit releases on demand through a release pull request.
+Firstmate decides when to release, only for a reason, such as another repository needing a merged change, a fix users need, or merged changes having waited a week.
 
 To release a version:
 
-1. Merge the feature or fix through the repository's usual merge path.
+1. Run `gh workflow run release-pr` to open the release pull request.
+   It commits the version bump and the section the build writes into `CHANGELOG.md` as `chore: release <version>` on the `release/main` branch, and runs `ci` on that commit.
    Nothing else is needed, and the changelog is never edited by hand.
-1. Watch the `release-push` run of that push, or run `gh workflow run release-push` to start one.
-   It commits the version bump and the section the build writes into `CHANGELOG.md` as `chore: release <version>` on top of `main`, and runs `ci` on that commit from the `release/main` branch.
-   Once `ci` passes, it moves `main` to the release commit, tags it and dispatches the `release` workflow on the tag.
-   A failed `ci` leaves `main` and the tags alone, and the run names the failed run.
-   A `main` that moved while `ci` ran keeps its new head, and the run of that push releases it.
+1. Merge the release pull request through the repository's usual merge path once `ci` passes.
+   Merging it tags the release commit through the `tag` job and dispatches the `release` workflow on the tag.
 1. Watch the `release` workflow.
    The release workflow refuses a ref that is not a tag, a tag off `main` or one that disagrees with `package.json`.
-   When release-push dispatched the run after its ci run passed on the same commit, it runs only the tag, main ancestry and version guards before it publishes to npm through [checks-release-publish](docs/gates/checks-release-publish.md).
-   A tag a person pushes or a run a person dispatches also runs the build, the check that the build changed no committed file, lint, typecheck and the suite first.
+   The tag run always runs the build, the check that the build changed no committed file, lint, typecheck and the suite first.
    checks-release-publish leaves the version off npm when npm already holds a newer one.
    Once it passes, the workflow creates or updates the GitHub release with the matching `CHANGELOG.md` section.
 

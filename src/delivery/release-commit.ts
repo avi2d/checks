@@ -27,7 +27,7 @@ const RAW_ENTRY = /^:(\d{6}) (\d{6}) [0-9a-f]+ [0-9a-f]+ ([A-Z])/;
 
 const decodeVersion = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ version: Schema.String })));
 const decodeSha = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ sha: Schema.String })));
-export const decodeRef = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ ref: Schema.String })));
+const decodeRef = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ ref: Schema.String })));
 
 export function releaseBranchOf(base: string): string {
   return `release/${base}`;

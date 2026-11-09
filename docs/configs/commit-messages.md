@@ -42,7 +42,7 @@ The title is the enforced subject because a squash merge uses it as the main com
 GitHub appends the pull request number to the squashed subject, so the bin lints the title with ` (#0000)` attached.
 The header length limit applies to the landed subject, not the bare title, for any title the config does not skip.
 The bin moves the git comment character off `#`, so a title starting with `#` is linted like any other.
-The `ci` job also triggers on `workflow_dispatch`, as [checks-release-pr](../gates/checks-release-pr.md) and [checks-release-push](../gates/checks-release-push.md) say.
+The `ci` job also triggers on `workflow_dispatch`, as [checks-release-pr](../gates/checks-release-pr.md) says.
 GitHub holds the `pull_request` runs of a release pull request the workflow token opens until a maintainer approves them.
 A dispatched run carries no pull request, so the bin reads the title of the one open pull request its branch heads.
 When no open pull request heads the branch, the head commit lands as it is, so the bin lints its subject as it stands.

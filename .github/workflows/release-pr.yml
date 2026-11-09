@@ -1,0 +1,44 @@
+name: release-pr
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  pull-request:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: release-pull-request
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: avi2d/workflows/setup@v1
+        with:
+          fetch-depth: 0
+      - name: fail fast when the release cannot plan
+        run: bun src/delivery/release-preflight.ts release.yml
+      - name: open or refresh the release pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun src/delivery/release-pr.ts ci.yml
+  tag:
+    if: "github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: release ')"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: avi2d/workflows/setup@v1
+        with:
+          fetch-depth: 0
+      - name: tag the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun src/delivery/release-tag.ts release.yml

@@ -10,7 +10,7 @@ const PUBLIC_PACKAGE: ScheduleOwner = { visibility: "public", publishes: true };
 const PRIVATE_REPOSITORY: ScheduleOwner = { visibility: "private", publishes: true };
 const NONE = { scripts: new Map<string, string>(), files: new Map<string, string>() };
 const NOT_NPM = "only a public package that publishes to npm releases on a schedule; drop the schedule, so a release runs only when someone starts it";
-const RELEASE_STEP = /checks-release-(pr|push|tag|publish)\b|release-(pr|push|tag|publish)\.ts|npm publish/;
+const RELEASE_STEP = /checks-release-(pr|tag|publish)\b|release-(pr|tag|publish)\.ts|npm publish/;
 
 function triggers(document: unknown): readonly string[] {
   const on = isRecord(document) ? document["on"] : undefined;
@@ -95,7 +95,6 @@ test("each release bin and each way of calling one on a schedule is refused, not
     "bun src/delivery/release-pr.ts ci.yml",
     "bun run checks-release-pr ci.yml",
     "./node_modules/.bin/checks-release-pr ci.yml",
-    "bunx checks-release-push ci.yml",
     "bunx checks-release-tag release.yml",
     "bunx checks-release-publish",
     "npm publish --provenance",
