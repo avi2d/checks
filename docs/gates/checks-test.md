@@ -112,14 +112,11 @@ A shared file runs the whole suite instead:
 - a stylesheet, a font, or a layout under `layouts/` or named `layout.*`
 
 A dependency bump changes `package.json` or the lockfile, so it runs the whole suite in every repository.
-A release range of only the version in `package.json` and its `CHANGELOG.md` section runs only the tests it reaches instead of the whole suite.
 A workflow under `.github/` is not a shared file, since the suite runs under it rather than reading it.
 A pull request that changes no file a test reaches runs no test and passes.
 The run names how many test files it reached, or which shared file made it run the whole suite.
 A change whose paths cannot be read runs the whole suite.
-A `workflow_dispatch` run with `base` and `head` inputs narrows to that range, as a pull request run does.
-A `workflow_dispatch` run on a `release/` branch without inputs narrows to the release commit it heads.
-Any other event without a range runs the whole suite.
+A run on any other event, such as `workflow_dispatch` for a release, runs the whole suite.
 `--full` and the live and pixel tiers always run whole.
 A narrowed run judges only the skips the files it ran declare.
 

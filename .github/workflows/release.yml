@@ -37,7 +37,6 @@ jobs:
       - run: git diff --exit-code
       - run: bun run lint
       - run: bun run typecheck
-      - run: bun run test
       - name: tag matches package version
         run: test "v$(bun -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
       - uses: actions/setup-node@v4

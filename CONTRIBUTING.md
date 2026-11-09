@@ -21,7 +21,7 @@ Declare each skip with `skipReason(reason, name)` beside the native Bun test cal
 A test that spawns `checks-lint` passes it `withoutPullRequestEvent()` from `tests/lib/env.ts`, so the CI event cannot decide the range.
 
 CI runs the commands in `.github/workflows/ci.yml` on each pull request, and on the release branch when `release-pr` dispatches it.
-A pull request runs only the tests it reaches, and the release runs the whole suite, as [checks-test](docs/gates/checks-test.md#pull-request-runs) says.
+A pull request runs only the tests it reaches, and the release pull request runs the whole suite, as [checks-test](docs/gates/checks-test.md#pull-request-runs) says.
 `.github/workflows/pr-title.yml` lints the pull request title, so editing the title reruns only that.
 No workflow runs on a schedule except the weekly advisory scan, as [checks-ci-wiring](docs/gates/checks-ci-wiring.md#schedules) requires.
 No workflow runs mutation testing, the long test tiers, the whole-tree sweep or the issue filing on its own.
@@ -71,7 +71,9 @@ To release a version:
    Merging it tags the release commit through the `tag` job and dispatches the `release` workflow on the tag.
 1. Watch the `release` workflow.
    The release workflow refuses a ref that is not a tag, a tag off `main` or one that disagrees with `package.json`.
-   The tag run always runs the build, the check that the build changed no committed file, lint, typecheck and the suite first.
+   The tag run repeats no test tiers, since the whole suite already ran on the release pull request.
+   The release pull request holds current `main` when it merges.
+   When `main` moves after the full run, `checks-release-tag` refuses the stale release and tags nothing.
    checks-release-publish leaves the version off npm when npm already holds a newer one.
    Once it passes, the workflow creates or updates the GitHub release with the matching `CHANGELOG.md` section.
 

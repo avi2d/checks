@@ -202,8 +202,11 @@ The changelog arrives in the release commit, and no workflow pushes to a branch 
 
 The kit releases on demand through a release pull request.
 Firstmate decides when to release, only for a reason, such as another repository needing a merged change, a fix users need, or merged changes having waited a week.
-Merging the release pull request tags the release commit, and the tag runs the full suite.
-The full suite runs at release only, with no scheduled runs.
+The release pull request is the one place the full suite runs.
+Merging it tags the release commit, and the tag run publishes it with no test tiers.
+The release pull request holds current `main` when it merges.
+When `main` moves after the full run, `checks-release-tag` refuses the stale release and tags nothing.
+No schedule cuts a release.
 `checks-release-pr` writes only to the `release/<branch>` branch it owns, and rebuilds that branch on `main` rather than merging `main` into it, so the changelog it carries is the one the build writes.
 `checks-release-tag` writes only the `v*` tag of a release commit that already landed.
 The `github-release` job's `contents: write` creates or updates the GitHub release from the tag's `CHANGELOG.md` section.

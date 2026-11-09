@@ -30,6 +30,7 @@ It opens a pull request from that branch into `<branch>` titled `chore: release 
 It then dispatches each workflow its arguments name on the release branch.
 GitHub holds the `pull_request` runs of a pull request the workflow token opens until a maintainer approves them, so the dispatch is what runs the required checks on the release head.
 GitHub keeps a dispatched run's checks off the pull request, so each dispatched job reports its result as a commit status named for the job, which the required check of that name counts.
+The dispatched run carries no pull request range, so it runs the whole suite.
 When the release branch already holds this version on top of `HEAD` and its pull request carries the right title, it pushes nothing and dispatches nothing.
 It leaves the working tree as it found it.
 
@@ -152,6 +153,7 @@ On a hosted runner the `pull-request` job takes about 25 seconds, which GitHub b
 A private repository runs it there too unless `CI_RUNS_ON` names its self-hosted runner, which bills no minutes.
 The `tag` job runs only when a release lands, and a job its `if` skips bills nothing.
 The checks it dispatches are the release pull request's own required checks, and they run again only when `main` moves under it.
+The release workflow publishes the tag with no test tiers, since the whole suite already ran on the release pull request.
 The pull request also lists its own `pull_request` runs as waiting for approval.
 Nothing requires them, and approving them runs the same checks again.
 
