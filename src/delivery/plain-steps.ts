@@ -114,6 +114,10 @@ function operatorEnd(line: string, index: number, found: Set<string>): number | 
     found.add("a here-document");
     return index + 2;
   }
+  if (line.startsWith("&>", index)) {
+    found.add("a redirect");
+    return index + 2;
+  }
   const redirect = REDIRECT_OPERATOR.exec(line.slice(index));
   if (redirect !== null) {
     found.add("a redirect");
@@ -164,12 +168,12 @@ function pwshInlineFlag(word: string): boolean {
   const base = word.toLowerCase().split("=")[0] ?? "";
   if (!base.startsWith("-") || base.startsWith("--")) return false;
   const name = base.slice(1);
-  return name !== "" && ("command".startsWith(name) || "encodedcommand".startsWith(name));
+  return name !== "" && ("command".startsWith(name) || "encodedcommand".startsWith(name) || "commandwithargs".startsWith(name) || name === "ec" || name === "cwa");
 }
 
-function hasFlag(word: string, flags: readonly string[]): boolean {
-  const lower = word.toLowerCase();
-  return flags.some((flag) => lower === flag || lower.startsWith(flag + "="));
+function hasFlag(word: string, program: string, flags: readonly string[]): boolean {
+  const text = program === "cmd" ? word.toLowerCase() : word;
+  return flags.some((flag) => text === flag || text.startsWith(flag + "="));
 }
 
 const INLINE_LETTERS = new Map<string, readonly string[]>([
@@ -230,7 +234,7 @@ function interpreterInlineArgs(rest: readonly string[], program: string, flags: 
     const dash = (word.startsWith("-") && word !== "-") || slash;
     const bundle = !dash && plus && /^[+][A-Za-z]+$/.test(word) ? word.slice(1) : undefined;
     if (!dash && bundle === undefined) return false;
-    if (dash && hasFlag(word, flags)) return true;
+    if (dash && hasFlag(word, program, flags)) return true;
     const letters = dash ? word.slice(1) : (bundle ?? "");
     if (/^[A-Za-z]+$/.test(letters)) {
       const found = scanBundle(letters, program);
@@ -354,6 +358,7 @@ export function runsInlineCode(words: readonly string[]): boolean {
 function shellFault(shell: unknown): string | undefined {
   if (shell === undefined) return undefined;
   if (typeof shell !== "string") return "a shell the check cannot read";
+  if (shell.includes("${{")) return "a shell the check cannot read";
   const [program = ""] = shell.trim().split(/\s+/);
   return PLAIN_SHELLS.has(baseNameOf(program)) ? undefined : `inline code for the ${program} shell`;
 }
@@ -365,8 +370,9 @@ export function runFaults(run: string, shell: unknown): readonly string[] {
   const faults = [...shellConstructs(plain)];
   if (line.includes("\n")) faults.push("more than one line");
   const [words = []] = shellWords(plain);
-  if (runsInlineCode(words.map(({ text }) => text))) faults.push("inline interpreter code");
-  if (words[0]?.text.includes("$") === true) faults.push("a command named only at run time");
+  const texts = words.map(({ text }) => text);
+  if (runsInlineCode(texts)) faults.push("inline interpreter code");
+  if (fromProgram(texts)[0]?.includes("$") === true) faults.push("a command named only at run time");
   const fault = shellFault(shell);
   return fault === undefined ? faults : [...faults, fault];
 }

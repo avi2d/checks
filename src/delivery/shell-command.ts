@@ -299,7 +299,7 @@ export function withoutOptions(words: Command, operands: ReadonlySet<string>): C
 export function fromProgram(words: Command): Command {
   const [first = "", ...rest] = words;
   if (ASSIGNMENT.test(first) || RESERVED_WORDS.has(first)) return fromProgram(rest);
-  const operands = LAUNCHER_OPERANDS.get(first);
+  const operands = LAUNCHER_OPERANDS.get(first.slice(first.lastIndexOf("/") + 1));
   return operands === undefined ? words : fromProgram(withoutOptions(rest, operands));
 }
 

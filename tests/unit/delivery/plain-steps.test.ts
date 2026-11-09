@@ -121,6 +121,40 @@ test("a Windows program name and a cmd switch are judged like their bare names",
   expect(runFaults("cmd /c 'bun install && bun test'", undefined)).toEqual(["inline interpreter code"]);
 });
 
+test("a PowerShell encoded or with-args alias is refused instead of passing as an unknown switch", () => {
+  for (const run of ["pwsh -ec ZQBjAGgAbwA=", "powershell -ec ZQBjAGgAbwA=", "pwsh -cwa 'Write-Host a; b'"]) {
+    expect(runFaults(run, undefined)).toEqual(["inline interpreter code"]);
+  }
+});
+
+test("an uppercase flag that selects encoding or noclobber is not read as inline code", () => {
+  expect(runFaults("ruby -E UTF-8 scripts/a.rb", undefined)).toEqual([]);
+  expect(runFaults("bash -C scripts/a.sh", undefined)).toEqual([]);
+  expect(runFaults("perl -E 'say 1'", undefined)).toEqual(["inline interpreter code"]);
+});
+
+test("an environment assignment before the program is not read as the program", () => {
+  expect(runFaults("NODE_AUTH_TOKEN=${{ secrets.NPM_TOKEN }} npm publish", undefined)).toEqual([]);
+  expect(runFaults("FOO=$BAR bun test", undefined)).toEqual([]);
+  expect(runFaults("sudo $CMD", undefined)).toEqual(["a command named only at run time"]);
+});
+
+test("a bash and-redirect is named a redirect instead of a background job", () => {
+  expect(runFaults("bun test &> out", undefined)).toEqual(["a redirect"]);
+});
+
+test("a shell from an expression is reported as unreadable instead of naming its first word", () => {
+  expect(runFaults("print", "${{ matrix.shell }}")).toEqual(["a shell the check cannot read"]);
+});
+
+test("a shell through an absolute launcher path is refused instead of slipping past the launcher match", () => {
+  expect(runFaults("/usr/bin/env bash -c 'a && b'", undefined)).toEqual(["inline interpreter code"]);
+});
+
+test("a wrapper outside the documented set is not judged instead of refused as inline code", () => {
+  expect(runFaults("stdbuf -oL bash -c 'x'", undefined)).toEqual([]);
+});
+
 test("a flag after the script belongs to the script and is not read as inline code", () => {
   expect(runFaults("bun scripts/smoke-pack.ts -e staging", undefined)).toEqual([]);
   expect(runFaults("bash scripts/smoke.sh -c", undefined)).toEqual([]);

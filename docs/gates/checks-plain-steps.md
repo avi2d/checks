@@ -26,7 +26,8 @@ The check refuses a `run` that holds any of these:
 - a backslash, inside quotes or out, since an escape is data the command should read from a file
 - a parameter expansion other than `$NAME` or `${NAME}`, such as `${NAME:-default}`
 - a shell comment
-- inline interpreter code, such as `node -e`, `bun --eval`, `bash -c`, `python -c`, `perl -e`, `deno eval`, `eval`, `awk` or `sed` with the program on the line
+- inline interpreter code through a program the check reads, which is `sh`, `bash`, `dash`, `ksh` or `zsh` with `-c`, `node` or `bun` with `-e`, `--eval`, `-p` or `--print`, `python` or `python3` with `-c`, `perl` with `-e` or `-E`, `ruby` with `-e`, `php` with `-r`, `osascript` with `-e`, `deno eval`, `pwsh` or `powershell` with a `-Command`, `-EncodedCommand` or `-CommandWithArgs` parameter, `cmd` with `/c` or `/k`, `eval`, `awk` or `sed` with the program on the line, or `npx` with `-c` or `--call`
+- the check reads those programs through the launchers `time`, `env`, `exec`, `nohup`, `sudo` and `bunx` and the wrappers `timeout`, `nice`, `xargs`, `docker run` and `find -exec`, and a wrapper outside that set is not judged
 - a program named by an expression, such as `run: ${{ inputs.command }}`, since no one can read it before the run
 - a `shell` other than `bash`, `sh`, `pwsh`, `powershell` or `cmd`, set on the step or in `defaults.run.shell` of its job or workflow, since `shell: python` makes the `run` inline Python
 
