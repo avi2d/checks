@@ -88,6 +88,8 @@ const kitManifest = Schema.decodeSync(Schema.fromJsonString(KitVersion))(await k
 const manifest = decodeManifest(await readFile(join(dir, "package.json"), "utf8"));
 expect(manifest.devDependencies?.["@avi2dg/checks"]).toBe(kitManifest.version);
 expect(manifest.scripts?.["test"]).toBe("checks-test");
+expect(manifest.scripts?.["test:fast"]).toBe("checks-test --changed");
+expect(manifest.scripts?.["test:unit"]).toBeUndefined();
 expect(manifest.scripts?.["lint"]?.split("&&").map((part) => part.trim())).toContain("checks-lint");
 expect(manifest.scripts?.["typecheck"]).toBeDefined();
 const tsconfig = decodeTsconfig(await readFile(join(dir, "tsconfig.json"), "utf8"));
@@ -163,6 +165,8 @@ const kept = decodeManifest(await readFile(join(repo.dir, "package.json"), "utf8
 expect(kept.name).toBe("shop");
 expect(kept.devDependencies?.["@avi2dg/checks"]).toBeDefined();
 expect(kept.scripts?.["test"]).toBe("checks-test");
+expect(kept.scripts?.["test:fast"]).toBe("checks-test --changed");
+expect(kept.scripts?.["test:unit"]).toBeUndefined();
 expect(kept.scripts?.["lint"]?.split("&&").map((part) => part.trim())).toContain("checks-lint");
 expect(await readFile(join(repo.dir, ".gitignore"), "utf8")).toBe("dist/\nnode_modules/\n");
 expect(run.text).toContain("added node_modules/ to .gitignore");
@@ -215,6 +219,67 @@ const repo = await open({
 const run = await setup(repo);
 expect(run.exitCode).toBe(2);
 expect(run.text).toContain("scripts.test must be");
+},
+60_000,
+);
+
+test(
+"it refuses a retained test script that pins its own worker count",
+async () => {
+const repo = await open({
+"package.json": JSON.stringify({ name: "shop", type: "module", scripts: { lint: "oxlint && checks-lint", test: "checks-test --parallel=4" } }),
+});
+const run = await setup(repo);
+expect(run.exitCode).toBe(2);
+expect(run.text).toContain('scripts.test must be "checks-test"');
+},
+60_000,
+);
+
+test(
+"it refuses a retained fast script that does not run the changed files",
+async () => {
+const repo = await open({
+"package.json": JSON.stringify({ name: "shop", type: "module", scripts: { lint: "oxlint && checks-lint", test: "checks-test", "test:fast": "bun scripts/test-local.ts" } }),
+});
+const run = await setup(repo);
+expect(run.exitCode).toBe(2);
+expect(run.text).toContain('scripts["test:fast"] must be "checks-test --changed"');
+},
+60_000,
+);
+
+test(
+"it refuses a retained test script outside the standard",
+async () => {
+const repo = await open({
+"package.json": JSON.stringify({ name: "shop", type: "module", scripts: { lint: "oxlint && checks-lint", test: "checks-test", "test:fast": "checks-test --changed", "test:local": "bun scripts/test-local.ts" } }),
+});
+const run = await setup(repo);
+expect(run.exitCode).toBe(2);
+expect(run.text).toContain('scripts["test:local"] is not a standard test script');
+},
+60_000,
+);
+
+test(
+"it adds a tier script where the tier holds tests and refuses one where it does not",
+async () => {
+const repo = await open({
+"package.json": JSON.stringify({ name: "shop", type: "module" }),
+"tests/unit/widget.test.ts": "import { test } from \"bun:test\";\ntest(\"adds\", () => {});\n",
+});
+const run = await setup(repo);
+expect(run.exitCode).toBe(0);
+const manifest = decodeManifest(await readFile(join(repo.dir, "package.json"), "utf8"));
+expect(manifest.scripts?.["test:unit"]).toBe("checks-test --tier=unit");
+expect(manifest.scripts?.["test:e2e"]).toBeUndefined();
+const stray = await open({
+"package.json": JSON.stringify({ name: "shop", type: "module", scripts: { lint: "oxlint && checks-lint", test: "checks-test", "test:fast": "checks-test --changed", "test:pixel": "checks-test --tier=pixel" } }),
+});
+const refused = await setup(stray);
+expect(refused.exitCode).toBe(2);
+expect(refused.text).toContain("test:pixel");
 },
 60_000,
 );

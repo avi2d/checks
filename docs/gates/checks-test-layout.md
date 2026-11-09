@@ -18,16 +18,17 @@ It fails unless the repository holds this shape, and names the file and the path
   Under its level, a test may sit in groups nested as deep as it likes.
 - `tests/live/**` holds tests that need a live machine, and `tests/pixel/**` holds tests that need a display.
   Bun ignores both directories in the default suite.
-  A live tier with test files requires `test:live` set to `checks-test --tier=live`.
-  A pixel tier with test files requires `test:pixel` set to `checks-test --tier=pixel`.
-  Either tier script may add `--parallel=<workers>`.
+  Each tier with test files requires its named script: `test:unit` is `checks-test --tier=unit`, `test:e2e` is `checks-test --tier=e2e`, `test:live` is `checks-test --tier=live` and `test:pixel` is `checks-test --tier=pixel`.
+  A tier script exists only where its tier holds test files.
 - A test runs in-process or in a process of its own.
   A test outside the `e2e`, `live` and `pixel` levels runs in-process, quarantined or not, so it may not import `node:child_process`, `net`, `http`, `https`, `http2`, `tls` or `dgram`.
   It may not import `$`, `spawn`, `spawnSync`, `connect`, `serve` or `listen` from `bun`, may not touch `Bun.$` or `Bun.spawn`, and may not call `fetch`.
   A test at the `e2e`, `live` or `pixel` level may do all of it, under `tests/quarantine/` as well.
   Helpers in `tests/lib/**` answer to the same rule, since an in-process test reaches them.
-- `scripts.test` is `checks-test`, optionally with `--parallel=<workers>`, which runs `bun test --randomize --parallel=<workers>` as [checks-test](checks-test.md#parallel-runs) says.
-  It refuses `--full` and `--changed`, so a local run stays capped and CI still runs the suite it reaches.
+- `scripts.test` is `checks-test`, which runs the whole suite and judges its skips.
+  `scripts["test:fast"]` is `checks-test --changed`, which runs the test files the change reaches.
+  No test script takes `--parallel=<workers>`, `--full`, `--junit=<file>` or a tier outside its own script, as [checks-test](checks-test.md#parallel-runs) and [checks-test](checks-test.md#arguments) say.
+  No other `test:*` script exists.
 - `scripts.lint` runs this check, itself or through `checks-lint` called by its bare bin name.
 - `bunfig.toml` carries every `[test]` key of the shipped preset with the same value.
   `[test].pathIgnorePatterns` is the preset's `["**/tests/quarantine/**", "**/tests/live/**", "**/tests/pixel/**", "repos/**"]`, which the check pins itself, so the kit's own repository, whose bunfig is the preset, cannot drift it either.
@@ -56,8 +57,8 @@ It reads the working tree.
 It scans the tracked and untracked files that `git ls-files --exclude-standard` reports, so `node_modules/` and every gitignored tree are out of reach, and a local run agrees with CI before `git add`.
 It parses each test and helper with swc and reads import specifiers and identifier use, so a test that only carries `"node:child_process"` as a string is not a violation.
 `tests/fixtures/**` is data and is not parsed.
-It reads `package.json` for `scripts.test` and `scripts.lint`.
-It also checks `test:live` and `test:pixel` when their directories contain test files, and compares `bunfig.toml` with the preset the installed kit ships.
+It reads `package.json` for `scripts.test`, `scripts["test:fast"]`, each `test:<tier>` script and `scripts.lint`.
+It requires each `test:<tier>` script only when its directory contains test files, and compares `bunfig.toml` with the preset the installed kit ships.
 
 ## Arguments
 
@@ -80,7 +81,7 @@ It checks the directory it runs in, or the directory it is given.
 ```
 test-layout: 4 violation(s)
   src/a.test.ts: a test file must live at tests/<level>/**/*.test.ts, or tests/quarantine/<level>/**/*.test.ts while quarantined, with unit, e2e, live, or pixel as the level; move it to tests/unit/a.test.ts
-  package.json: scripts.test must be "checks-test", optionally with --parallel=<workers>, which runs bun test --randomize and judges its skips, found "bun test"
+  package.json: scripts.test must be "checks-test", which runs the whole suite and judges its skips, found "bun test"
   package.json: scripts.lint must run the layout check: add "checks-lint"
   bunfig.toml: bunfig.toml is missing; bun has no bunfig extends, so copy node_modules/@avi2dg/checks/bunfig.toml
 ```

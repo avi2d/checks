@@ -2,9 +2,9 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { workingTreeFiles } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
-import { ENTRY_POINT, TEST_ENTRY_POINT } from "../core/gates.ts";
+import { ENTRY_POINT } from "../core/gates.ts";
 import { identifierName, isRecord, lineOf, parseTypeScript, spanStart, stringValue } from "../core/swc.ts";
-import { scriptOptions } from "../core/test-script.ts";
+import { scriptFaults, type ScriptFault } from "../core/test-script.ts";
 
 export type Violation = {
   readonly file: string;
@@ -61,7 +61,6 @@ const ACCEPTED_IGNORES: readonly (readonly string[])[] = [
 export const LAYOUT_CHECK_MARK = "src/testing/test-layout.ts";
 export const LAYOUT_CHECK_BIN = "checks-test-layout";
 const OWN_ENTRY_POINT = `src/${ENTRY_POINT.script}`;
-const PARALLEL_OPTION = "optionally with --parallel=<workers>";
 
 export class LayoutError extends Schema.TaggedError<LayoutError>()("LayoutError", {
   message: Schema.String,
@@ -230,34 +229,29 @@ export const isolationViolations = Effect.fn("isolationViolations")(function* (f
   return violations;
 });
 
-function tierScriptViolation(scripts: unknown, files: readonly string[], tier: (typeof TEST_TIERS)[number]): Violation | undefined {
-  const file = "package.json";
-  const key = `test:${tier}`;
-  const found = isRecord(scripts) ? scripts[key] : undefined;
-  const expected = `${TEST_ENTRY_POINT.bin} --tier=${tier}`;
-  const hasTests = files.some((candidate) => candidate.startsWith(`tests/${tier}/`) && TEST_FILE.test(candidate));
-  if (!hasTests && found === undefined) return undefined;
-  if (scriptOptions(found)?.tier === tier) return undefined;
-  return {
-    file,
-    line: undefined,
-    message: `${key} must be "${expected}", ${PARALLEL_OPTION},${hasTests ? " when its test tier has files" : " when declared"}, found ${JSON.stringify(found ?? null)}`,
-  };
+function describeScriptFault(fault: ScriptFault): string {
+  switch (fault.kind) {
+    case "test":
+      return `scripts.test must be "${fault.expected}", which runs the whole suite and judges its skips, found ${JSON.stringify(fault.found ?? null)}`;
+    case "fast":
+      return `scripts["test:fast"] must be "${fault.expected}", which runs the test files the change reaches, found ${JSON.stringify(fault.found ?? null)}`;
+    case "tier":
+      return `${fault.key} must be "${fault.expected}", found ${JSON.stringify(fault.found ?? null)}`;
+    case "empty-tier":
+      return `${fault.key} names a tier with no test files, so remove it, found ${JSON.stringify(fault.found)}`;
+    case "stray":
+      return `scripts["${fault.key}"] is not a standard test script, so remove it, found ${JSON.stringify(fault.found)}`;
+  }
 }
 
 export function scriptViolations(manifest: unknown, files: readonly string[] = []): readonly Violation[] {
   const file = "package.json";
   const scripts = isRecord(manifest) ? manifest["scripts"] : undefined;
-  const test = isRecord(scripts) ? scripts["test"] : undefined;
   const lint = isRecord(scripts) ? scripts["lint"] : undefined;
   const violations: Violation[] = [];
-  const options = scriptOptions(test);
-  if (options === undefined || options.tier !== undefined || options.full === true) {
-    violations.push({
-      file,
-      line: undefined,
-      message: `scripts.test must be "${TEST_ENTRY_POINT.bin}", ${PARALLEL_OPTION}, which runs bun test --randomize and judges its skips, found ${JSON.stringify(test ?? null)}`,
-    });
+  const record: Readonly<Record<string, unknown>> = isRecord(scripts) ? scripts : {};
+  for (const fault of scriptFaults(record, (tier) => files.some((candidate) => candidate.startsWith(`tests/${tier}/`) && TEST_FILE.test(candidate)))) {
+    violations.push({ file, line: undefined, message: describeScriptFault(fault) });
   }
   if (typeof lint !== "string" || !runsLayoutCheck(lint)) {
     violations.push({
@@ -265,10 +259,6 @@ export function scriptViolations(manifest: unknown, files: readonly string[] = [
       line: undefined,
       message: `scripts.lint must run the layout check: add "${ENTRY_POINT.bin}"`,
     });
-  }
-  for (const tier of TEST_TIERS) {
-    const violation = tierScriptViolation(scripts, files, tier);
-    if (violation !== undefined) violations.push(violation);
   }
   return violations;
 }

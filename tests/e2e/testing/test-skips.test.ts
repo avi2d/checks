@@ -1,7 +1,8 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
-import { availableParallelism } from "node:os";
+import { availableParallelism, freemem, totalmem } from "node:os";
+import { workerCountFor } from "../../../src/testing/test.ts";
 import { join } from "node:path";
 import { CHECKOUT, ran, scratchDirs, type Ran } from "../lib/fixture-repo.ts";
 
@@ -413,13 +414,14 @@ async function workersUsed(): Promise<number> {
   return new Set((await readFile(join(dir, "workers.txt"), "utf8")).split("\n").filter(Boolean)).size;
 }
 
-test("without --parallel the suite runs on one worker per core", async () => {
+test("without --parallel the suite runs on the worker count free memory allows", async () => {
   await consumer(workerFile(""), { "tests/unit/pricing.test.ts": workerFile("") });
 
+  const workers = workerCountFor(freemem(), totalmem(), availableParallelism());
   const run = await checksTest(true);
   expect(run.exitCode).toBe(0);
-  expect(run.text).toContain(`${availableParallelism()}x PARALLEL`);
-  expect(await workersUsed()).toBe(Math.min(2, availableParallelism()));
+  expect(run.text).toContain(`${workers}x PARALLEL`);
+  expect(await workersUsed()).toBe(Math.min(2, workers));
 });
 
 function skippedWorker(condition: boolean): string {

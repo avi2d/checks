@@ -129,7 +129,7 @@
     "test": "bun src/testing/test.ts",
     "test:fast": "bun src/testing/test.ts --changed",
     "test:unit": "bun src/testing/test.ts --tier=unit",
-    "test:e2e": "bun src/testing/test.ts --tier=e2e --parallel=4",
+    "test:e2e": "bun src/testing/test.ts --tier=e2e",
     "test:live": "bun src/testing/test.ts --tier=live"
   },
   "peerDependencies": {

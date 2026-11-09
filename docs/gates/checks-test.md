@@ -10,7 +10,7 @@ audience: consumers
 
 It runs the unit tier plus the smoke list outside CI and the full suite under CI, except a `--changed` run, as [Changed-file runs](#changed-file-runs) says.
 It refuses `--full`, `--tier=e2e` and `--tier=pixel` outside CI, except a pixel run that approves pictures, as [Runs refused outside CI](#runs-refused-outside-ci) says.
-It runs them with `bun test --randomize --parallel=<workers>`, as [Parallel runs](#parallel-runs) says, and reads Bun's JUnit report from that run.
+It runs them with `bun test --randomize --parallel=<workers>`, where the count comes from free memory as [Parallel runs](#parallel-runs) says, and reads Bun's JUnit report from that run.
 It runs Bun with `CI=true`, so `test.only` fails the run in every environment.
 Bun exits zero when tests skip, so `checks-test` checks every skipped test against its source declaration.
 A test that `test.skip`, `test.skipIf`, `test.if`, `test.todo` or an enclosing `describe.skip` skips fails unless the test declares its reason.
@@ -148,39 +148,20 @@ A repository runs it from a script of its own, such as:
 Tests that need a live machine go in `tests/live/`, and tests that need a screen go in `tests/pixel/`.
 For example, a test under `tests/e2e/stack/` that skips when Nix is missing moves to the same path under `tests/live/stack/`.
 Its skip declares `skipReason("Nix is unavailable", name)` inside its `test.skipIf` call.
-Add the matching package scripts when either directory contains tests:
-
-```json
-{
-  "scripts": {
-    "test:live": "checks-test --tier=live",
-    "test:pixel": "checks-test --tier=pixel"
-  }
-}
-```
-
-Bun ignores both directories during the default run.
+Add the matching package script when its directory contains tests: `test:unit` is `checks-test --tier=unit`, `test:e2e` is `checks-test --tier=e2e`, `test:live` is `checks-test --tier=live` and `test:pixel` is `checks-test --tier=pixel`.
+Bun ignores the live and pixel directories during the default run.
 `checks-test-layout` requires each tier script when its directory contains a test file.
 
 ## Parallel runs
 
 `checks-test` runs `bun test --randomize --parallel=<workers>`, so Bun hands each test file to one of that many worker processes.
-Without `--parallel=<workers>`, the count is one worker per core, as `os.availableParallelism()` reports it, so a local run never oversubscribes the machine.
-A repository sets its own count by passing `--parallel=<workers>` in its `test` script:
-
-```json
-{
-  "scripts": {
-    "test": "checks-test --parallel=4"
-  }
-}
-```
-
+Without `--parallel=<workers>`, the count comes from free memory: one worker needs about a gigabyte, each further worker needs about a hundred megabytes more, a tenth of memory stays reserved, and the count never passes one worker per core.
+On macOS the count reads reclaimable pages too, since `freemem` leaves them out.
+No `package.json` script passes `--parallel=<workers>`, as [checks-test-layout](checks-test-layout.md) says.
 The count is a whole number from 1 up.
 Each file runs in a fresh global, so a file cannot lean on state another file left behind.
 Tests still run in random order, and `test.only` still fails the run.
 Bun merges every worker's results into the one JUnit report, so each skipped test and each todo is judged across the whole suite.
-A tier script takes the same option, as in `checks-test --tier=live --parallel=4`.
 [checks-flake](checks-flake.md#parallel-hunts) hunts with the same worker count.
 
 A file whose worker crashes, for example when a test calls `process.exit`, fails the run.
@@ -192,11 +173,12 @@ A timings option waits for Bun to honour timings under random order.
 ## Arguments
 
 The default command takes no arguments except `--parallel=<workers>`, as [Parallel runs](#parallel-runs) says, `--full`, `--changed` and `--junit=<file>`.
+`--parallel=<workers>` overrides the memory count for one run.
 `--full` runs the full suite in CI even when a pull request would narrow it, and is refused outside CI, as [Runs refused outside CI](#runs-refused-outside-ci) says.
 A `package.json` script never takes `--full`, as [checks-test-layout](checks-test-layout.md) says of `scripts.test`.
 `--changed` runs the test files the change reaches, as [Changed-file runs](#changed-file-runs) says, and takes neither a tier nor `--full`.
 `scripts.test` never takes `--changed` either, so CI still runs the suite it reaches.
-Its named tier options are `--tier=live`, `--tier=pixel`, `--tier=unit` and `--tier=e2e`, and a tier run takes `--parallel=<workers>` too, but not `--full`.
+Its named tier options are `--tier=live`, `--tier=pixel`, `--tier=unit` and `--tier=e2e`, and a tier run takes `--parallel=<workers>` for one run too, but not `--full`.
 `--junit=<file>` keeps the JUnit report Bun wrote at `<file>`, whether the tests passed or failed, so a whole-tree run hands it to [checks-whole-tree-run](checks-whole-tree-run.md).
 A `package.json` script never takes `--junit`, as [checks-test-layout](checks-test-layout.md) says of `scripts.test`.
 Each option appears at most once.

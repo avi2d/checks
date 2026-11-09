@@ -156,6 +156,7 @@ test("scripts.test must be the test entry point and scripts.lint must run the ch
     scriptViolations({
       scripts: {
         test: "checks-test",
+        "test:fast": "checks-test --changed",
         lint: "oxlint && bun ./node_modules/@avi2dg/checks/src/testing/test-layout.ts",
       },
     }),
@@ -165,57 +166,87 @@ test("scripts.test must be the test entry point and scripts.lint must run the ch
     scriptViolations({
       scripts: {
         test: "bun src/testing/test.ts",
+        "test:fast": "bun src/testing/test.ts --changed",
         lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout",
       },
     }),
   ).toBeEmpty();
 
   for (const lint of ["oxlint --type-aware && checks-lint && depcruise src", "oxlint && bun src/core/lint.ts"]) {
-    expect(scriptViolations({ scripts: { test: "checks-test", lint } })).toBeEmpty();
+    expect(scriptViolations({ scripts: { test: "checks-test", "test:fast": "checks-test --changed", lint } })).toBeEmpty();
   }
   for (const lint of [
     "oxlint && checks-lint-coverage",
     "bun ./node_modules/@avi2dg/checks/scripts/lint.ts",
     "bun .checks/scripts/lint.ts",
   ]) {
-    expect(scriptViolations({ scripts: { test: "checks-test", lint } })).toHaveLength(1);
-  }
-  for (const testScript of ["checks-test --parallel=4", "checks-test  --parallel=6", "bun src/testing/test.ts --parallel=4"]) {
-    expect(scriptViolations({ scripts: { test: testScript, lint: "checks-lint" } })).toBeEmpty();
+    expect(scriptViolations({ scripts: { test: "checks-test", "test:fast": "checks-test --changed", lint } })).toHaveLength(1);
   }
   for (const testScript of [
     "bun test --randomize",
     "checks-test && echo",
     "bunx checks-test",
     "checks-test --tier=live",
+    "checks-test --changed",
+    "checks-test --full",
+    "checks-test --junit=reports/suite.xml",
+    "checks-test --parallel=4",
+    "checks-test  --parallel=6",
+    "bun src/testing/test.ts --parallel=4",
     "checks-test --parallel=0",
     "checks-test --parallel",
     "checks-test --parallel=4 tests/unit",
     "checks-test--parallel=4",
   ]) {
-    expect(scriptViolations({ scripts: { test: testScript, lint: "checks-lint" } })).toHaveLength(1);
+    expect(scriptViolations({ scripts: { test: testScript, "test:fast": "checks-test --changed", lint: "checks-lint" } })).toHaveLength(1);
   }
 
   const violations = scriptViolations({ scripts: { test: "bun test", lint: "oxlint" } });
-  expect(violations).toHaveLength(2);
+  expect(violations).toHaveLength(3);
   expect(violations[0]?.message).toContain(
-    'must be "checks-test", optionally with --parallel=<workers>, which runs bun test --randomize and judges its skips',
+    'must be "checks-test", which runs the whole suite and judges its skips',
   );
-  expect(violations[1]?.message).toContain("must run the layout check");
+  expect(violations[2]?.message).toContain("must run the layout check");
 });
 
-test("a live or pixel test tier requires its named checks-test script", () => {
-  const scripts = { test: "checks-test", lint: "checks-lint" };
-  for (const tier of ["live", "pixel"] as const) {
+test("each tier with test files requires its named checks-test script and no other tier script", () => {
+  const scripts = { test: "checks-test", "test:fast": "checks-test --changed", lint: "checks-lint" };
+  for (const tier of ["unit", "e2e", "live", "pixel"] as const) {
+    const other = tier === "live" ? "pixel" : "live";
     const files = [`tests/${tier}/screen.test.ts`];
     const violation = scriptViolations({ scripts }, files).find((candidate) => candidate.message.includes(`test:${tier}`));
     expect(violation?.message ?? "").toContain(`test:${tier} must be "checks-test --tier=${tier}"`);
-    for (const accepted of [`checks-test --tier=${tier}`, `checks-test --parallel=4 --tier=${tier}`]) {
+    for (const accepted of [`checks-test --tier=${tier}`, `bun src/testing/test.ts --tier=${tier}`]) {
       expect(scriptViolations({ scripts: { ...scripts, [`test:${tier}`]: accepted } }, files)).toBeEmpty();
     }
-    for (const refused of ["checks-test", "checks-test --parallel=4", `checks-test --tier=${tier === "live" ? "pixel" : "live"}`]) {
+    for (const refused of ["checks-test", "checks-test --changed", "checks-test --parallel=4", `checks-test --tier=${tier} --parallel=4`, `checks-test --tier=${other}`]) {
       expect(scriptViolations({ scripts: { ...scripts, [`test:${tier}`]: refused } }, files)).toHaveLength(1);
     }
+  }
+});
+
+test("a tier script without test files is refused, so a removed tier also removes its script", () => {
+  const scripts = { test: "checks-test", "test:fast": "checks-test --changed", lint: "checks-lint", "test:pixel": "checks-test --tier=pixel" };
+  expect(scriptViolations({ scripts }, []).map((violation) => violation.message)).toEqual([
+    'test:pixel names a tier with no test files, so remove it, found "checks-test --tier=pixel"',
+  ]);
+});
+
+test("test:fast runs the changed files and no other test script exists", () => {
+  const scripts = { test: "checks-test", "test:fast": "checks-test --changed", lint: "checks-lint" };
+  expect(scriptViolations({ scripts }, [])).toBeEmpty();
+  expect(scriptViolations({ scripts: { test: "checks-test", lint: "checks-lint" } }, []).map((violation) => violation.message)).toEqual([
+    'scripts["test:fast"] must be "checks-test --changed", which runs the test files the change reaches, found null',
+  ]);
+  for (const fast of ["checks-test", "checks-test --tier=unit", "bun scripts/test-local.ts"]) {
+    expect(scriptViolations({ scripts: { ...scripts, "test:fast": fast } }, []).map((violation) => violation.message)).toEqual([
+      `scripts["test:fast"] must be "checks-test --changed", which runs the test files the change reaches, found ${JSON.stringify(fast)}`,
+    ]);
+  }
+  for (const extra of ["test:local", "test:smoke"]) {
+    expect(scriptViolations({ scripts: { ...scripts, [extra]: "bun scripts/local.ts" } }, []).map((violation) => violation.message)).toEqual([
+      `scripts["${extra}"] is not a standard test script, so remove it, found "bun scripts/local.ts"`,
+    ]);
   }
 });
 

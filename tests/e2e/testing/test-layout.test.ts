@@ -12,7 +12,16 @@ const MANIFEST = {
   name: "consumer",
   scripts: {
     test: "checks-test",
+    "test:fast": "checks-test --changed",
     lint: "oxlint && bun ./node_modules/@avi2dg/checks/src/testing/test-layout.ts",
+  },
+};
+const TIERED_MANIFEST = {
+  ...MANIFEST,
+  scripts: {
+    ...MANIFEST.scripts,
+    "test:unit": "checks-test --tier=unit",
+    "test:e2e": "checks-test --tier=e2e",
   },
 };
 const CLEAN_TEST = 'import { expect, test } from "bun:test";\ntest("adds", () => {\n  expect(1 + 1).toBe(2);\n});\n';
@@ -34,7 +43,6 @@ beforeAll(async () => {
   await writeFile(join(dir, "package.json"), `${JSON.stringify(MANIFEST, null, 2)}\n`);
   await writeFile(join(dir, "bunfig.toml"), UNVENDORED_BUNFIG);
   await writeFile(join(dir, "src", "widget.ts"), "export const widget = 1;\n");
-  await writeFile(join(dir, "tests", "unit", "widget.test.ts"), CLEAN_TEST);
   await writeFile(join(dir, ".gitignore"), "node_modules/\n");
   await $`git init -q`.cwd(dir).quiet();
 });
@@ -76,6 +84,7 @@ test(
 
     await writeFile(join(dir, "tests", "e2e", "widget.test.ts"), `import { spawnSync } from "node:child_process";\n${CLEAN_TEST}`);
     await writeFile(join(dir, "tests", "unit", "widget.test.ts"), CLEAN_TEST);
+    await writeFile(join(dir, "package.json"), `${JSON.stringify(TIERED_MANIFEST, null, 2)}\n`);
     expect((await layout()).exitCode).toBe(0);
 
     await writeFile(join(dir, "bunfig.toml"), "[test]\npathIgnorePatterns = []\n");
@@ -107,11 +116,16 @@ test(
     await rm(join(dir, "src", "unstaged.test.ts"));
 
     await rm(join(dir, "tests", "unit", "widget.test.ts"));
+    await writeFile(
+      join(dir, "package.json"),
+      `${JSON.stringify({ ...MANIFEST, scripts: { ...MANIFEST.scripts, "test:e2e": "checks-test --tier=e2e" } }, null, 2)}\n`,
+    );
     const removed = await layout(false);
     expect(removed.exitCode).toBe(0);
     expect(removed.text).toContain("satisfy the layout");
 
     await writeFile(join(dir, "tests", "unit", "widget.test.ts"), CLEAN_TEST);
+    await writeFile(join(dir, "package.json"), `${JSON.stringify(TIERED_MANIFEST, null, 2)}\n`);
     expect((await layout()).exitCode).toBe(0);
   },
   60_000,
@@ -122,8 +136,16 @@ test(
   async () => {
     const repos = fixtureRepos("checks-test-layout-tiers-");
     const spawning = `import { $ } from "bun";\nimport { spawnSync } from "node:child_process";\n${CLEAN_TEST}`;
+    const tierManifest = {
+      name: "consumer",
+      scripts: {
+        test: "checks-test",
+        "test:fast": "checks-test --changed",
+        lint: MANIFEST.scripts.lint,
+      },
+    };
     const repo = await repos({
-      "package.json": `${JSON.stringify(MANIFEST, null, 2)}\n`,
+      "package.json": `${JSON.stringify(tierManifest, null, 2)}\n`,
       "bunfig.toml": UNVENDORED_BUNFIG,
       "tests/live/machine.test.ts": spawning,
       "tests/pixel/display.test.ts": spawning,
@@ -136,7 +158,7 @@ test(
 
     await repo.write({
       "package.json": `${JSON.stringify(
-        { ...MANIFEST, scripts: { ...MANIFEST.scripts, "test:live": "checks-test --tier=live", "test:pixel": "checks-test --tier=pixel" } },
+        { ...tierManifest, scripts: { ...tierManifest.scripts, "test:live": "checks-test --tier=live", "test:pixel": "checks-test --tier=pixel" } },
         null,
         2,
       )}\n`,
@@ -152,7 +174,11 @@ test(
   "a spawning test quarantines under tests/quarantine/e2e/, which the layout check accepts, the default run skips and the clock counts",
   async () => {
     const repo = await quarantined({
-      "package.json": `${JSON.stringify(MANIFEST, null, 2)}\n`,
+      "package.json": `${JSON.stringify(
+        { ...MANIFEST, scripts: { ...MANIFEST.scripts, "test:unit": "checks-test --tier=unit" } },
+        null,
+        2,
+      )}\n`,
       "bunfig.toml": UNVENDORED_BUNFIG,
       "tests/unit/widget.test.ts": CLEAN_TEST,
       "tests/quarantine/e2e/flaky.test.ts": FAILING_SPAWN,
@@ -197,7 +223,7 @@ test(
       const result = await $`bun ${CHECK} ${bare}`.cwd(bare).nothrow().quiet();
       const text = result.stdout.toString() + result.stderr.toString();
       expect(result.exitCode).toBe(1);
-      expect(text).toContain('scripts.test must be "checks-test", optionally with --parallel=<workers>');
+      expect(text).toContain('scripts.test must be "checks-test", which runs the whole suite and judges its skips');
       expect(text).toContain("scripts.lint must run the layout check");
       expect(text).toContain("bunfig.toml is missing");
     } finally {

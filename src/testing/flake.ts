@@ -4,7 +4,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { runMain, Usage } from "../core/main.ts";
 import { NAME_SEPARATOR, parseReport, ReportError, reporterArgs, type TestResult } from "./test-report.ts";
 import { scriptOptions } from "../core/test-script.ts";
-import { workerCount } from "./test.ts";
+import { resolveWorkerCount } from "./test.ts";
 
 export type Run = {
   readonly seed: number;
@@ -92,7 +92,8 @@ const workersOf = Effect.fn("workersOf")(function* (root: string) {
     Effect.mapError((cause) => new ManifestError({ message: `cannot read ${file}: ${cause.message}` })),
   );
   const options = scriptOptions(scripts?.["test"]);
-  return options === undefined ? undefined : workerCount(options.workers);
+  if (options === undefined) return undefined;
+  return yield* resolveWorkerCount(options.workers);
 });
 
 const assignmentOf = Effect.fn("assignmentOf")(function* (log: string) {

@@ -16,7 +16,7 @@ A run that fails with no failing test, such as a test file that throws while loa
 ## Parallel hunts
 
 A repository whose `test` script runs [checks-test](checks-test.md#parallel-runs) is hunted with the worker count `checks-test` runs on.
-That is the `--parallel=<workers>` the script passes, or else one worker per core of the machine.
+That is the count free memory allows, as [checks-test](checks-test.md#parallel-runs) says.
 So each run is `bun test --randomize --seed=<seed> --parallel=<workers>`, the mode CI runs in.
 A `test` script that does not run `checks-test` gets the serial hunt.
 

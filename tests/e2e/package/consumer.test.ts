@@ -2,10 +2,11 @@ import { $ } from "bun";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { existsSync, realpathSync } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { availableParallelism, tmpdir } from "node:os";
+import { availableParallelism, freemem, tmpdir, totalmem } from "node:os";
 import { dirname, join } from "node:path";
 import { Schema } from "effect";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
+import { workerCountFor } from "../../../src/testing/test.ts";
 import { consumerManifest, installConsumer } from "../lib/consumer-install.ts";
 import { CHECKOUT, ran, UNVENDORED_BUNFIG, type Ran } from "../lib/fixture-repo.ts";
 
@@ -296,6 +297,8 @@ test(
     await useConsumer("file", {
       scripts: {
         test: "checks-test",
+        "test:fast": "checks-test --changed",
+        "test:unit": "checks-test --tier=unit",
         lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout",
       },
     });
@@ -324,6 +327,8 @@ test(
     await useConsumer("tarball", {
       scripts: {
         test: "checks-test",
+        "test:fast": "checks-test --changed",
+        "test:unit": "checks-test --tier=unit",
         lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout",
       },
     });
@@ -429,6 +434,8 @@ test(
     await useConsumer("tarball", {
       scripts: {
         test: "checks-test",
+        "test:fast": "checks-test --changed",
+        "test:unit": "checks-test --tier=unit",
         lint: "oxlint --type-aware && checks-lint-coverage && checks-test-layout && checks-commit-identity HEAD",
         gate: "checks-comment-gate HEAD",
         ratchet: "checks-suppressions-ratchet HEAD",
@@ -482,7 +489,7 @@ test(
 
     const { GITHUB_STEP_SUMMARY: _summary, ...withoutStepSummary } = process.env;
     const flake = await runScript("flake", withoutStepSummary);
-    expect(flake.stdout).toContain(`checks-flake: 2 run(s) passed on ${availableParallelism()} worker(s), with seeds `);
+    expect(flake.stdout).toContain(`checks-flake: 2 run(s) passed on ${workerCountFor(freemem(), totalmem(), availableParallelism())} worker(s), with seeds `);
     expect(flake.exitCode).toBe(0);
 
     for (const [script, report] of [

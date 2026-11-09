@@ -14,13 +14,13 @@ It adds the kit entry and any missing script to a `package.json` it finds.
 It replaces the kit version pin with its own version, and a `--private` run sets `private` to `true`.
 It stops when a `lint` script it finds does not run oxlint and the layout check, and names the script to fix.
 It stops when a `typecheck` script it finds does not run the Effect diagnostics, and names the script to fix.
-It stops when a `test` script it finds is not the kit suite, and names the script to fix.
+It stops when a `test` script it finds is not `checks-test`, when a `test:fast` script it finds is not `checks-test --changed`, when a `test:<tier>` script it finds is not `checks-test --tier=<tier>`, or when any other `test:*` script exists, and names the script to fix.
 It copies the fleet pin into `.bun-version` and the preset into `bunfig.toml`.
 It writes `oxlint.config.ts`, `tsconfig.json` and `knip.config.ts` from the kit builders, with Effect rules on.
 It writes `.jscpd.json` with the kit default.
 It writes the Effect paths of the `oxlint.config.ts` it finds or writes into the language service entry of `tsconfig.json`.
 The pair passes `checks-effect-scope --check` from the first write.
-It writes `package.json` with the kit in `devDependencies` and with `lint`, `typecheck` and `test` scripts.
+It writes `package.json` with the kit in `devDependencies` and with `lint`, `typecheck`, `test` and `test:fast` scripts, plus a `test:<tier>` script for each tier that holds test files.
 It writes `.github/workflows/ci.yml`, which installs with `bun install --frozen-lockfile` and then runs the `build` script when the manifest holds one.
 The workflow always runs `bun run lint`, `bun run typecheck` and `bun run test`.
 Once the install succeeds, `bun run typecheck` and `bun run test` run even when an earlier step fails, so each reports its own result.
