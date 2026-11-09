@@ -1,0 +1,37 @@
+tree cdba7a9d44faf5acb080d2927da19d08c5e9f48b
+parent 37dec501291f34c5b0e741e396db80a6d1a9bbc0
+author dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com> 1793993454 +0000
+committer GitHub <noreply@github.com> 1793993454 +0000
+gpgsig -----BEGIN PGP SIGNATURE-----
+ 
+ wsFcBAABCAAQBQJq7iruCRC1aQ7uu5UhlAAAN8YQAJ/Bc7tOltWCXHethcH7vQd9
+ wt1ou60/QRQvL8JoNhDSMhdC4ct93SkQSpUs8PeXWz/WfoSyWElzr9w2gMCBjdMF
+ k2pKEiho/XkvK3OfiA/YK2wsy9xAG8SwnSNrNHnECj+5o7Sch7Zy1h8SCWQfPsa8
+ 9tVSMBEDRr3/GS+rfEfrjoooWIk//2H+c2fJU0+VLysl/UsuZkUTi5hcMrGlQWBi
+ ih+r+WO5GxyPV+0fXwvRTEMmWp+AZkqpW1zBEi6BWmz5ZC8lLrz6xHJYMdvN2n6J
+ VlJziPtNdQFFz3VQDt6gMB2QnvroZiF77GQkajs56FyQRTVUTLMy2XKhzitveMTS
+ H8+Q4xVDIznEfPV380H26yZAgR/aa4MXP6ItQC+3dtJSg1Z3588tNmDzyoChzc2P
+ cxys2HJNEMsSlIHZsdcDDzBn4ZiDxeuh43GmSxIKDDg+nRPi3KrbFl4gbN1CzyRN
+ STaa9bGzrlEwHyF+FDZigTHL8ONfC0VncrGkT729xlsWznimTu+wUtSZ4PuP62gf
+ 10JzDFybVI34EUrNU+BZv3BxleC4UO1t7D8djimOxVv7xy/wCcdicc9P1FUSpKUg
+ xjevnNqyjzdju4DKBS8FA6x+FYL0k57dQgubnPk8TPrFiaXrLj8JfstaRzOdqfWm
+ wC0EdkNMDqb3lv+8z7r+
+ =fYky
+ -----END PGP SIGNATURE-----
+ 
+
+chore(deps): bump actions/upload-artifact from 4 to 7
+
+Bumps [actions/upload-artifact](https://github.com/actions/upload-artifact) from 4 to 7.
+- [Release notes](https://github.com/actions/upload-artifact/releases)
+- [Commits](https://github.com/actions/upload-artifact/compare/v4...v7)
+
+---
+updated-dependencies:
+- dependency-name: actions/upload-artifact
+  dependency-version: '7'
+  dependency-type: direct:production
+  update-type: version-update:semver-major
+...
+
+Signed-off-by: dependabot[bot] <support@github.com>

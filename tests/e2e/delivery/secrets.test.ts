@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { withoutPullRequestEvent } from "../../lib/env.ts";
 import { CHECKOUT, fixtureRepos, lintWiring, ran, scratchDirs, withOwnInstall, type FixtureRepo } from "../lib/fixture-repo.ts";
 
 const open = fixtureRepos("checks-secrets-");
@@ -407,7 +408,70 @@ async function packFile(terms: PackTerms): Promise<string> {
 }
 
 const withPack = (repo: FixtureRepo, pack: string, ...refs: readonly string[]) =>
-  ran($`bun ${join(CHECKOUT, "src", GATE)} ${refs}`.cwd(repo.dir).env({ ...process.env, CHECKS_SECRETS_PACK: pack }));
+  ran($`bun ${join(CHECKOUT, "src", GATE)} ${refs}`.cwd(repo.dir).env({ ...withoutPullRequestEvent(), CHECKS_SECRETS_PACK: pack }));
+
+type Run = { readonly event: string; readonly sender: string; readonly pullRequest: boolean };
+
+async function startedBy({ event, sender, pullRequest }: Run, repo: FixtureRepo, pack: string, ...refs: readonly string[]) {
+  const file = join(await scratch("checks-secrets-event-"), "event.json");
+  const pull = pullRequest ? { pull_request: { number: 7, user: { login: sender } } } : {};
+  await writeFile(file, JSON.stringify({ ...pull, sender: { login: sender } }));
+  const env = { ...withoutPullRequestEvent(), GITHUB_EVENT_NAME: event, GITHUB_EVENT_PATH: file, CHECKS_SECRETS_PACK: pack };
+  return ran($`bun ${join(CHECKOUT, "src", GATE)} ${refs}`.cwd(repo.dir).env(env));
+}
+
+const DEPENDABOT_RUN: Run = { event: "pull_request", sender: "dependabot[bot]", pullRequest: true };
+const DEPENDABOT_SKIP = "secrets: Dependabot started this pull request run, which GitHub gives no repository secret, so the kit's rules ran without the private pack\n";
+
+test(
+  "a pull request run Dependabot started skips the private pack with a note rather than fail on the secret GitHub withholds",
+  async () => {
+    const { repo, base } = await started();
+    await repo.write({ ".github/workflows/ci.yml": "jobs: {}\n" });
+    const head = await repo.commit("chore(deps): bump actions/upload-artifact from 4 to 7");
+    const dir = await scratch("checks-secrets-pack-");
+    await writeFile(join(dir, "broken.json"), "");
+    const skipped = { exitCode: 0, text: `secrets: the range adds no secret\n${DEPENDABOT_SKIP}` };
+    expect(await startedBy(DEPENDABOT_RUN, repo, "", base, head)).toEqual(skipped);
+    expect(await startedBy(DEPENDABOT_RUN, repo, join(dir, "broken.json"), base, head)).toEqual(skipped);
+  },
+  SCAN_MS,
+);
+
+test(
+  "a pull request run Dependabot started still fails on a secret the kit's rules find",
+  async () => {
+    const { repo, base } = await started();
+    await repo.write({ "vpn/wg0.conf": `PrivateKey = ${base64Key()}\n` });
+    const head = await repo.commit("chore(deps): bump wg-tools from 1 to 2");
+    const failed = await startedBy(DEPENDABOT_RUN, repo, "", base, head);
+    expect(failed.exitCode).toBe(1);
+    expect(failed.text).toContain(`  vpn/wg0.conf:1 wireguard-key in ${head.slice(0, 8)}`);
+    expect(failed.text).toContain(DEPENDABOT_SKIP);
+  },
+  SCAN_MS,
+);
+
+test(
+  "a run anyone but Dependabot started, or Dependabot started outside a pull request, still fails on an empty pack rather than skip it",
+  async () => {
+    const { repo, base } = await started();
+    await repo.write({ "README.md": "# fixture\nplain text\n" });
+    const head = await repo.commit("docs: plain text");
+    const empty = {
+      exitCode: 2,
+      text: "secrets: CHECKS_SECRETS_PACK is set but empty, so it names no private pack and the gate cannot scan for its terms\n",
+    };
+    const runs: readonly Run[] = [
+      { event: "pull_request", sender: "avi2d", pullRequest: true },
+      { event: "pull_request", sender: "dependabot", pullRequest: true },
+      { event: "pull_request", sender: "renovate[bot]", pullRequest: true },
+      { event: "push", sender: "dependabot[bot]", pullRequest: false },
+    ];
+    for (const run of runs) expect({ run, ...(await startedBy(run, repo, "", base, head)) }).toEqual({ run, ...empty });
+  },
+  SCAN_MS,
+);
 
 test(
   "a range adding a term of the private pack fails on its rule and never prints the term, and the same range passes with no pack",

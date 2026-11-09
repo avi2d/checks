@@ -118,7 +118,24 @@ In GitHub Actions a repository or organisation secret holds the JSON, and the jo
 ```
 
 A fork's `pull_request` run gets no secret, so the file is empty and the gate exits 2 rather than pass without the pack.
-Unlike [checks-pr-text](checks-pr-text.md), this gate has no skip: a job that writes the pack from an unset secret exits 2.
+A job that writes the pack from an unset secret exits 2 too.
+
+### When Dependabot starts the run
+
+GitHub gives a run Dependabot starts its Dependabot secrets and none of the repository's Actions secrets, so the pack never reaches it.
+So when the event GitHub writes at `GITHUB_EVENT_PATH` holds a pull request and its sender is `dependabot[bot]`, the gate skips the pack.
+It runs the kit's rules alone, whatever `CHECKS_SECRETS_PACK` holds, and its last line says so:
+
+```
+secrets: Dependabot started this pull request run, which GitHub gives no repository secret, so the kit's rules ran without the private pack
+```
+
+The kit's rules still fail the range on a secret they find.
+A skip is a coverage gap: no private term was checked on that pull request.
+Only GitHub writes the event, and no account a person signs up for can carry the brackets of a bot login.
+So no other author can cause the skip.
+A run any other account starts, and a run Dependabot starts on another event such as `push`, still needs a pack that can serve.
+An event file the gate cannot read or decode counts as no skip.
 [checks-pr-text](checks-pr-text.md) scans a pull request's title, body and comments with the same pack.
 
 ## What it reads
@@ -127,6 +144,7 @@ It reads the commits of the range and their messages from git, not the working t
 It needs git 2.36 or newer, which diffs a merge against the merge git would make on its own, and it exits 2 on an older git.
 It reads its rules from `src/delivery/gitleaks.toml` in the installed package.
 It reads the path of the private pack from `CHECKS_SECRETS_PACK`.
+It reads the event at `GITHUB_EVENT_PATH`, when set, for the pull request and its sender.
 It writes the kit's rules and the pack's into one config, and each commit message into a file of its own.
 Each goes in a temporary directory it deletes when the scan ends.
 
@@ -160,7 +178,7 @@ With one it scans that commit alone.
 | --- | --- |
 | 0 | no commit in the range adds a secret, in its files or its message |
 | 1 | a commit in the range adds a secret, in its files or its message |
-| 2 | a ref does not resolve, or a commit it scans is an octopus merge, or no verified scanner is at hand, or git is older than 2.36, or gitleaks fails, or `CHECKS_SECRETS_PACK` is set and the pack cannot serve |
+| 2 | a ref does not resolve, or a commit it scans is an octopus merge, or no verified scanner is at hand, or git is older than 2.36, or gitleaks fails, or `CHECKS_SECRETS_PACK` is set and the pack cannot serve on a run Dependabot did not start |
 
 ## Sample output
 

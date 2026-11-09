@@ -1,10 +1,11 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { writeFile } from "node:fs/promises";
+import { appendFile, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CHECKOUT, fixtureRepos, ran, type Ran } from "../lib/fixture-repo.ts";
 
 const SCRIPT = join(CHECKOUT, "src", "delivery", "commit-identity.ts");
+const FIXTURES = join(CHECKOUT, "tests", "fixtures", "commit-identity");
 
 const OWNER = { name: "avi2d", email: "avi2dg@gmail.com" };
 const STRANGER = { name: "Pat Stranger", email: "stranger@example.com" };
@@ -15,6 +16,7 @@ const ACTIONS_BOT = { name: "github-actions[bot]", email: "41898282+github-actio
 const DEPENDABOT = { name: "dependabot[bot]", email: "49699333+dependabot[bot]@users.noreply.github.com" };
 const DEPENDABOT_TITLE = "build(deps): bump actions/checkout from 5.1.0 to 7.0.1";
 const DEPENDABOT_SIGNOFF = "Signed-off-by: dependabot[bot] <support@github.com>";
+const UNSIGNED_DEPENDABOT = "dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com> on a commit GitHub's current key did not sign";
 
 type Identity = { name: string; email: string };
 
@@ -48,6 +50,18 @@ async function commit(options: Landing): Promise<string> {
   await $`git add -A && git commit -q --no-gpg-sign -m ${options.message}`.cwd(dir).env(env).quiet();
   const sha = await $`git rev-parse HEAD`.cwd(dir).quiet();
   return sha.stdout.toString().trim();
+}
+
+// The shallow entry lets git read the commit without the parents and tree the fixture leaves out.
+async function plant(raw: string): Promise<string> {
+  const written = await $`git hash-object -t commit -w --stdin < ${Buffer.from(raw)}`.cwd(dir).quiet();
+  const sha = written.stdout.toString().trim();
+  await appendFile(join(dir, ".git", "shallow"), `${sha}\n`);
+  return sha;
+}
+
+async function planted(fixture: string): Promise<string> {
+  return plant(await readFile(join(FIXTURES, fixture), "utf8"));
 }
 
 function check(...args: readonly string[]): Promise<Ran> {
@@ -209,39 +223,60 @@ test(
 );
 
 test(
-  "commit-identity lets dependabot[bot] author a Dependabot update with the Signed-off-by trailer it carries, as GitHub commits it",
+  "commit-identity lets dependabot[bot] author the update GitHub signed, Signed-off-by trailer and all",
   async () => {
     await initRepo();
-    const base = await commit({ message: "feat: base" });
-    await commit({
-      message: `${DEPENDABOT_TITLE}\n\nBumps actions/checkout from 5.1.0 to 7.0.1.\n\n${DEPENDABOT_SIGNOFF}\n`,
-      author: DEPENDABOT,
-      committer: SQUASH,
-    });
-    await commit({ message: "build(deps): Bump actions/checkout from 5.1.0 to 7.0.1 (#2)", author: DEPENDABOT, committer: SQUASH });
+    const update = await planted("dependabot-update.commit");
 
-    const green = await check(base, "HEAD");
-    expect(green.text).toContain("2 commit(s)");
+    const green = await check(update);
+    expect(green.text).toContain(`1 commit(s) in ${update} carry only allowed identities`);
     expect(green.exitCode).toBe(0);
   },
   60_000,
 );
 
 test(
-  "commit-identity refuses dependabot[bot] authoring a title no Dependabot shape matches",
+  "commit-identity refuses dependabot[bot] on a commit GitHub did not sign, whatever its title",
   async () => {
     await initRepo();
     const base = await commit({ message: "feat: base" });
-    const feature = await commit({ message: "feat: bump the thing", author: DEPENDABOT, committer: SQUASH });
-    const chore = await commit({ message: "chore(deps): bump actions/checkout from 5.1.0 to 7.0.1", author: DEPENDABOT, committer: SQUASH });
-    const stop = await commit({ message: `${DEPENDABOT_TITLE}.`, author: DEPENDABOT, committer: SQUASH });
+    const build = await commit({ message: `${DEPENDABOT_TITLE}\n\n${DEPENDABOT_SIGNOFF}\n`, author: DEPENDABOT, committer: SQUASH });
+    const chore = await commit({ message: "chore(deps): bump actions/upload-artifact from 4 to 7", author: DEPENDABOT, committer: SQUASH });
+    const feature = await commit({ message: "feat: bump the thing", author: DEPENDABOT });
 
     const red = await check(base, "HEAD");
     expect(red.exitCode).toBe(1);
     expect(red.text).toContain("3 of 3 commit(s)");
-    expect(red.text).toContain(`${feature.slice(0, 12)} feat: bump the thing\n    author dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>`);
-    expect(red.text).toContain(`${chore.slice(0, 12)} chore(deps): bump actions/checkout from 5.1.0 to 7.0.1\n    author dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>`);
-    expect(red.text).toContain(`${stop.slice(0, 12)} ${DEPENDABOT_TITLE}.\n    author dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>`);
+    expect(red.text).toContain(`${build.slice(0, 12)} ${DEPENDABOT_TITLE}\n    author ${UNSIGNED_DEPENDABOT}`);
+    expect(red.text).toContain(`${chore.slice(0, 12)} chore(deps): bump actions/upload-artifact from 4 to 7\n    author ${UNSIGNED_DEPENDABOT}`);
+    expect(red.text).toContain(`${feature.slice(0, 12)} feat: bump the thing\n    author ${UNSIGNED_DEPENDABOT}`);
+  },
+  60_000,
+);
+
+test(
+  "commit-identity refuses dependabot[bot] on a commit signed by the GitHub key that has expired",
+  async () => {
+    await initRepo();
+    const update = await planted("dependabot-expired-key.commit");
+
+    const red = await check(update);
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain(`${update.slice(0, 12)} Bump minimist from 1.2.5 to 1.2.6\n    author ${UNSIGNED_DEPENDABOT}`);
+  },
+  60_000,
+);
+
+test(
+  "commit-identity refuses a GitHub signature that no longer covers the commit it sits on",
+  async () => {
+    await initRepo();
+    const signed = await readFile(join(FIXTURES, "dependabot-update.commit"), "utf8");
+    const forged = await plant(signed.replace("from 4 to 7", "from 4 to 8"));
+
+    const red = await check(forged);
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain(`${forged.slice(0, 12)} chore(deps): bump actions/upload-artifact from 4 to 8\n    author ${UNSIGNED_DEPENDABOT}`);
   },
   60_000,
 );
@@ -289,40 +324,37 @@ test(
 );
 
 test(
-  "commit-identity refuses another co-author on a Dependabot commit and allows its Signed-off-by trailer",
+  "commit-identity lets a squash GitHub signed name dependabot[bot] as co-author and still refuses its other co-author",
   async () => {
     await initRepo();
-    const base = await commit({ message: "feat: base" });
-    const signed = await commit({ message: `${DEPENDABOT_TITLE}\n\n${DEPENDABOT_SIGNOFF}\n`, author: DEPENDABOT, committer: SQUASH });
-    const coauthored = await commit({
-      message: `${DEPENDABOT_TITLE}\n\n${DEPENDABOT_SIGNOFF}\nCo-authored-by: Pat Stranger <stranger@example.com>\n`,
-      author: DEPENDABOT,
-      committer: SQUASH,
-    });
+    const squash = await planted("dependabot-squash.commit");
 
-    const red = await check(base, "HEAD");
+    const red = await check(squash);
     expect(red.exitCode).toBe(1);
-    expect(red.text).toContain("1 of 2 commit(s)");
-    expect(red.text).toContain(`${coauthored.slice(0, 12)} ${DEPENDABOT_TITLE}\n    trailer Co-authored-by: Pat Stranger <stranger@example.com>`);
-    expect(red.text).not.toContain(signed.slice(0, 12));
+    expect(red.text).toContain(`${squash.slice(0, 12)} build(deps): bump actions/upload-artifact from 4 to 7 (#56)\n    trailer Co-authored-by: avi2d <avi2dg@gmail.com>\n  allowed:`);
   },
   60_000,
 );
 
 test(
-  "commit-identity lets an owner squash of a Dependabot update name dependabot[bot] as its co-author",
+  "commit-identity refuses the dependabot[bot] co-author trailer on a commit GitHub did not sign, even under a Dependabot title",
   async () => {
     await initRepo();
     const base = await commit({ message: "feat: base" });
-    await commit({
+    const update = await commit({
       message: `${DEPENDABOT_TITLE} (#2)\n\nBumps actions/checkout from 5.1.0 to 7.0.1.\n\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>\n`,
       author: OWNER,
       committer: SQUASH,
     });
+    const feature = await commit({
+      message: "feat: price a bill\n\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>\n",
+    });
 
-    const green = await check(base, "HEAD");
-    expect(green.exitCode).toBe(0);
-    expect(green.text).toContain("1 commit(s)");
+    const red = await check(base, "HEAD");
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain("2 of 2 commit(s)");
+    expect(red.text).toContain(`${update.slice(0, 12)} ${DEPENDABOT_TITLE} (#2)\n    trailer Co-authored-by: dependabot[bot]`);
+    expect(red.text).toContain(`${feature.slice(0, 12)} feat: price a bill\n    trailer Co-authored-by: dependabot[bot]`);
   },
   60_000,
 );
@@ -348,22 +380,6 @@ test(
     expect(red.text).toContain("2 of 2 commit(s)");
     expect(red.text).toContain(`${wrongEmail.slice(0, 12)} ${DEPENDABOT_TITLE}\n    trailer Co-authored-by: dependabot[bot] <intruder@example.com>`);
     expect(red.text).toContain(`${wrongName.slice(0, 12)} ${DEPENDABOT_TITLE}\n    trailer Co-authored-by: Pat Stranger <49699333+dependabot[bot]@users.noreply.github.com>`);
-  },
-  60_000,
-);
-
-test(
-  "commit-identity refuses the Dependabot co-author trailer on a title no Dependabot shape matches",
-  async () => {
-    await initRepo();
-    const base = await commit({ message: "feat: base" });
-    const landed = await commit({
-      message: "feat: price a bill\n\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>\n",
-    });
-
-    const red = await check(base, "HEAD");
-    expect(red.exitCode).toBe(1);
-    expect(red.text).toContain(`${landed.slice(0, 12)} feat: price a bill\n    trailer Co-authored-by: dependabot[bot]`);
   },
   60_000,
 );
