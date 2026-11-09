@@ -181,7 +181,8 @@ A baseline job on a self-hosted runner saves the state the incremental run wrote
 
 The saved baseline uses none of the account's Actions storage, which every private repository's artifacts share.
 That storage accrues by the hour over the month, so an artifact deleted early still counts until the month ends.
-A baseline job on a GitHub-hosted runner uploads the same two files as a `mutation-baseline` artifact with `retention-days: 7` instead, since the restore reads only the newest `main` run.
+A baseline job on a GitHub-hosted runner uploads the same two files as a `mutation-baseline` artifact with `retention-days: 7` instead.
+The restore reads only down to the newest push on `main`.
 
 A refresh job restores the previous full report with `--full` for shard balancing and runs the full suite with static mutants ignored:
 

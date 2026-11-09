@@ -84,7 +84,8 @@ A comparison job restores the saved `main` baseline and runs Stryker once at the
 The caller selects `compare` on each pull request, as [checks-setup](checks-setup.md) writes it.
 
 The scope step picks the files the branch changes and the sources its changed unit tests cover or kill, as [checks-mutation-scope](checks-mutation-scope.md) says.
-The head run mutates no file outside that scope, so the job's time follows the size of the change and not the size of the repository.
+The head run mutates no file outside that scope.
+The job time follows the size of the change and not the size of the repository.
 A scope file the saved baseline lacks matches nothing there, and Stryker still writes a report.
 An empty scope skips the head run and the comparison, and the notice names the skip on the run's summary.
 A scope past the mutant cap skips the comparison, and a note names the skip.
