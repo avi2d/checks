@@ -263,6 +263,9 @@ function describeUnmatched(mutant: UnmatchedMutant): string {
   return `${locate(mutant)} ${mutant.mutatorName} ${JSON.stringify(mutant.replacement)}: ${mutant.status}`;
 }
 
+// GitHub refuses a comment body past 65536 characters.
+const COMPARISON_LIMIT = 30000;
+
 export function formatComparison(comparison: Comparison, advisory: boolean): string {
   const lines: string[] = [];
   for (const change of comparison.regressions) lines.push(`  regression ${describeChange(change)}`);
@@ -272,7 +275,11 @@ export function formatComparison(comparison: Comparison, advisory: boolean): str
   const verdict = comparison.regression
     ? `mutation-compare: REGRESSION (${comparison.regressions.length} mutant(s))${advisory ? " in advisory mode, exit 0" : ""}`
     : `mutation-compare: no regression${advisory ? " (advisory mode, exit 0)" : ""}`;
-  return [verdict, ...lines].join("\n");
+  const full = [verdict, ...lines].join("\n");
+  if (full.length <= COMPARISON_LIMIT) return full;
+  const shown = full.slice(0, full.lastIndexOf("\n", COMPARISON_LIMIT));
+  const omitted = full.split("\n").length - shown.split("\n").length;
+  return `${shown}\n  … and ${omitted} more line(s) omitted`;
 }
 
 export const parseArgs = Effect.fnUntraced(function* (argv: readonly string[]): Effect.fn.Return<Options, Usage> {

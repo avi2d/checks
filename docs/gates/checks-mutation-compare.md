@@ -56,7 +56,8 @@ checks-mutation-compare [--advisory] <base-report> <head-report>
 
 ## Sample output
 
-It prints the verdict first, then each regression, each move into or out of a status that leaves the score, and each unmatched mutant:
+It prints the verdict first, then each regression, each move into or out of a status that leaves the score, and each unmatched mutant.
+It caps that list at 30000 characters and names the omitted count, so the advisory comment fits the GitHub body limit:
 
 ```
 mutation-compare: REGRESSION (1 mutant(s))

@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import { readFile } from "node:fs/promises";
 import { Usage } from "../../../src/core/main.ts";
 import {
+  type Comparison,
   compareReports,
   formatComparison,
   type Mutant,
@@ -186,6 +187,21 @@ test("advisory mode prints the same verdict and always exits 0", async () => {
   expect(passes(comparison, true)).toBe(true);
   expect(formatComparison(comparison, true)).toContain("REGRESSION");
   expect(formatComparison(comparison, true)).toContain("advisory");
+});
+
+test("a flood of unmatched mutants files a bounded note instead of every mutant", () => {
+  const headOnly = Array.from({ length: 1000 }, (_, index) => ({
+    path: "src/flood.ts",
+    location: at(index + 1, 1, 2),
+    mutatorName: "ArithmeticOperator",
+    replacement: "a - b",
+    status: "Survived" as const,
+  }));
+  const comparison: Comparison = { regressions: [], moves: [], baseOnly: [], headOnly, regression: false };
+  const report = formatComparison(comparison, true);
+  expect(report.length).toBeLessThan(65536);
+  expect(report).toContain("no regression");
+  expect(report).toContain("omitted");
 });
 
 test("only the --advisory flag turns on advisory mode", () => {
