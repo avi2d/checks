@@ -29,7 +29,7 @@ The same holds when the branch changes a preload or a file a preload imports, wh
 
 Each source whose mutants a changed unit test covers or kills in the full baseline report then enters the scope, when it still exists at `HEAD`.
 So a kill lost through a test change alone still shows in the comparison, in a source the branch leaves alone.
-A changed unit test with no baseline report fails the run rather than reading incomplete coverage.
+A changed unit test with no baseline report widens the scope to every file at `HEAD` the `mutate` globs match.
 Stryker records each test file's source in the report's `testFiles`.
 A changed unit test the merge base holds must have that recorded source match its content at the merge base.
 Otherwise the report ran an older test, so its coverage cannot say what the test covers now.
@@ -115,7 +115,7 @@ It also names each stale test that widens the scope.
 | Code | When |
 | --- | --- |
 | 0 | it printed the scope or the shards, an empty list included |
-| 2 | the arguments do not parse, git fails, the Stryker config, `bunfig.toml`, the baseline report or the last report does not load, a `mutate` entry names a mutation range, or a unit test changed with no baseline report |
+| 2 | the arguments do not parse, git fails, the Stryker config, `bunfig.toml`, the baseline report or the last report does not load, or a `mutate` entry names a mutation range |
 
 ## Sample output
 
@@ -137,10 +137,10 @@ mutation-scope: shard 3 holds 2 file(s) and about 8 mutant(s)
 SHARDS=["src/a.ts,src/b.ts","src/c.ts","src/d.ts,src/e.ts"]
 ```
 
-A changed unit test with no full baseline on `main`, on stderr:
+A changed unit test with no full baseline on `main` widens the scope to every mutated source, on stderr:
 
 ```
-mutation-scope: tests/unit/dashboard/snapshot.test.ts changed, but no baseline report at /runner/temp/baseline-full/mutation.json says which sources they cover
+mutation-scope: tests/unit/dashboard/snapshot.test.ts changed, but no baseline report at /runner/temp/baseline-full/mutation.json says which sources they cover, so every mutated source enters
 ```
 
 A changed unit test that `main` edited after its newest full baseline, on stderr:

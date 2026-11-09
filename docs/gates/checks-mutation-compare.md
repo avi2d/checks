@@ -89,7 +89,7 @@ The job time follows the size of the change and not the size of the repository.
 A scope file the saved baseline lacks matches nothing there, and Stryker still writes a report.
 An empty scope skips the head run and the comparison, and the notice names the skip on the run's summary.
 A scope past the mutant cap skips the comparison, and a note names the skip.
-A changed unit test with no full baseline on `main` fails the scope step, since no report then says which sources the test covers.
+A changed unit test with no full baseline on `main` widens the scope to every file the `mutate` globs match.
 A changed unit test that `main` edited after that baseline widens the scope to every file the `mutate` globs match.
 Refresh the full baseline with `gh workflow run mutation`, choosing `refresh` for the `mode` input, as [checks-mutation](checks-mutation.md#running-it-in-ci) shows.
 A run with `--mutate` is scoped, so the preset lets it through without `CI=true`.
