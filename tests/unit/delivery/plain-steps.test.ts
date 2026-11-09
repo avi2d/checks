@@ -59,6 +59,68 @@ test("inline interpreter code is refused rather than counted as one command", ()
   }
 });
 
+test("a run behind a YAML anchor is refused instead of passing as one trimmed line", () => {
+  const anchored = yamlFile(
+    ".github/workflows/ci.yml",
+    ["on: pull_request", "x-steps: &steps", "  - run: |", "      bun test", "jobs:", "  smoke:", "    runs-on: ubuntu-latest", "    steps: *steps"].join("\n"),
+  );
+  expect(findStepFaults([anchored])).toEqual([{ location: ".github/workflows/ci.yml job smoke step 1", faults: ["a run the check cannot locate in the file"] }]);
+});
+
+test("a run in a flow-style steps list is refused instead of passing as one trimmed line", () => {
+  const flow = yamlFile(".github/workflows/ci.yml", ["on: pull_request", "jobs:", "  smoke:", "    runs-on: ubuntu-latest", `    steps: [{run: "bun test\\n"}]`].join("\n"));
+  expect(findStepFaults([flow])).toEqual([{ location: ".github/workflows/ci.yml job smoke step 1", faults: ["a run the check cannot locate in the file"] }]);
+});
+
+test("a PowerShell file call passes instead of being read as inline code", () => {
+  expect(runFaults("pwsh -NoProfile -File scripts/a.ps1", undefined)).toEqual([]);
+  expect(runFaults("powershell -ExecutionPolicy Bypass -File a.ps1", undefined)).toEqual([]);
+});
+
+test("a PowerShell command call is refused instead of hiding behind an option value", () => {
+  expect(runFaults("pwsh -ExecutionPolicy Bypass -Command Get-Date", undefined)).toEqual(["inline interpreter code"]);
+  expect(runFaults("powershell -NoProfile -ExecutionPolicy Bypass -c 'a; b'", undefined)).toEqual(["inline interpreter code"]);
+});
+
+test("a shell behind timeout, xargs, find, npx or docker run is refused instead of passing as one wrapper call", () => {
+  for (const run of [
+    "timeout 600 bash -c 'bun install && bun test'",
+    "xargs -a list.txt sh -c 'bun x'",
+    "find . -exec sh -c 'echo hi' ';'",
+    "npx -c 'bun install && bun test'",
+    "docker run --rm --pull always node:20 sh -c 'a && b'",
+    "docker run --platform linux/amd64 node:20 node -e 'x;y'",
+  ]) {
+    expect(runFaults(run, undefined)).toEqual(["inline interpreter code"]);
+  }
+  expect(runFaults("docker run -e FOO=bar ubuntu bun run test", undefined)).toEqual([]);
+});
+
+test("a bundled option value is skipped instead of ending the search before the inline flag", () => {
+  for (const run of ["bash -eo pipefail -c 'a && b'", "bash -euo pipefail -c 'x'", "sh -eo pipefail -c 'a && b'", "bash -o pipefail -c 'a && b'", "node -r tsx -e 'x'", "bun --cwd app -e 'x;y'"]) {
+    expect(runFaults(run, undefined)).toEqual(["inline interpreter code"]);
+  }
+});
+
+test("a module taken as an option value is not read as an inline flag", () => {
+  expect(runFaults("ruby -rset scripts/a.rb", undefined)).toEqual([]);
+  expect(runFaults("perl -Mfeature scripts/a.pl", undefined)).toEqual([]);
+});
+
+test("a package or script name is not read as the interpreter it names", () => {
+  expect(runFaults("sudo apt-get install -y gawk", undefined)).toEqual([]);
+  expect(runFaults("brew install gawk", undefined)).toEqual([]);
+  expect(runFaults("bun run eval", undefined)).toEqual([]);
+  expect(runFaults("bun scripts/x.ts sed", undefined)).toEqual([]);
+  expect(runFaults("sed --file=prog.sed in.txt", undefined)).toEqual([]);
+});
+
+test("a Windows program name and a cmd switch are judged like their bare names", () => {
+  expect(runFaults("powershell.exe -Command 'a; b'", undefined)).toEqual(["inline interpreter code"]);
+  expect(runFaults("pwsh.exe -c 'a; b'", undefined)).toEqual(["inline interpreter code"]);
+  expect(runFaults("cmd /c 'bun install && bun test'", undefined)).toEqual(["inline interpreter code"]);
+});
+
 test("a flag after the script belongs to the script and is not read as inline code", () => {
   expect(runFaults("bun scripts/smoke-pack.ts -e staging", undefined)).toEqual([]);
   expect(runFaults("bash scripts/smoke.sh -c", undefined)).toEqual([]);
