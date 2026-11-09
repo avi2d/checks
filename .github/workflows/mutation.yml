@@ -12,7 +12,7 @@ on:
 
 jobs:
   mutation:
-    uses: avi2d/workflows/.github/workflows/mutation.yml@8abb279f65889f3c46b5513ccfdf88029b8900f4
+    uses: avi2d/workflows/.github/workflows/mutation.yml@d395ff24e0b8f98449a5242ab9624ffc5a7d41f8
     permissions: { contents: read, actions: write, pull-requests: write }
     with:
       mode: ${{ github.event_name == 'pull_request' && 'compare' || inputs.mode || 'baseline' }}
