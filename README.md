@@ -42,6 +42,7 @@ A repository the kit holds ends with `checks-lint: <count> gate(s) pass`.
 | move to a newer release | [Upgrade the kit](docs/how-to/upgrade-the-kit.md) |
 | turn on the CSS checks | [Turn on the CSS families](docs/how-to/turn-on-the-css-families.md) |
 | picture one block at each screen size and approve its pictures | [Test the screens of one block](docs/how-to/test-a-blocks-screens.md) |
+| serve a built site and test its pages in a browser | [Test a built site in a browser](docs/how-to/test-a-built-site.md) |
 | look up a gate or a bin | [The bins](docs/bins.md) |
 | look up a shared config | [Native settings](docs/configs/native-settings.md) |
 | find a file the package ships | [The shipped files](docs/shipped-files.md) |

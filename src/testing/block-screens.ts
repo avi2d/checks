@@ -1,7 +1,7 @@
 import { BunServices } from "@effect/platform-bun";
 import { afterAll, expect, test } from "bun:test";
 import { Config, Effect, FileSystem, Path, Schema } from "effect";
-import { chromium, devices, webkit, type Browser, type Page } from "playwright-core";
+import { chromium, devices, webkit, type Browser, type LaunchOptions, type Page } from "playwright-core";
 import { SCREEN_SIZES, screenSizeName, type ScreenSize, type ScreenSizeSet } from "../quality/browser/screen-sizes.ts";
 import { APPROVE_VARIABLE } from "./test-refusal.ts";
 
@@ -236,11 +236,11 @@ const SETTLED = `document.fonts.ready.then(() => Promise.all(document.getAnimati
 
 export const settled = (page: Page): Promise<unknown> => page.evaluate(SETTLED);
 
-const LAUNCHERS = {
-  // Headless shell snaps glyph advances to whole pixels, so a picture would not match one from a full Chromium.
-  chromium: () => chromium.launch({ args: ["--font-render-hinting=none"] }),
-  webkit: () => webkit.launch(),
-} as const satisfies Record<ScreenEngine, () => Promise<Browser>>;
+export const launchBrowser = (engine: ScreenEngine, options: LaunchOptions = {}): Promise<Browser> =>
+  engine === "webkit"
+    ? webkit.launch(options)
+    : // Headless shell snaps glyph advances to whole pixels, so a picture would not match one from a full Chromium.
+      chromium.launch({ ...options, args: ["--font-render-hinting=none", ...(options.args ?? [])] });
 
 export type BlockSuite = {
   readonly block: string;
@@ -275,7 +275,7 @@ export function blockScreens(engine: ScreenEngine, suite: BlockSuite): void {
     test(
       `${suite.block} at ${device.name} in ${engine} looks as approved, instead of changing its look with no picture approving it`,
       () => {
-        launched ??= LAUNCHERS[engine]();
+        launched ??= launchBrowser(engine);
         return launched
           .then((browser) => blockPicture(browser, suite, device))
           .then((picture) => matchesApproved(picture, { fixtures: suite.fixtures, engine, device, ...(suite.tolerance === undefined ? {} : { tolerance: suite.tolerance }) }))
