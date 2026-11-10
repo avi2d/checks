@@ -66,6 +66,10 @@ describe("the handhelds", () => {
     );
   });
 
+  test("picture each full size and handheld in its own file, instead of a handheld sharing a picture file with a full size", () => {
+    expect(new Set([...screenDevices("full"), ...HANDHELDS].map((device) => pictureFile("chromium", device))).size).toBe(25);
+  });
+
   test("send the user agent of the phone each names, instead of a desktop browser's", () => {
     expect(HANDHELDS.map(({ options: { userAgent } }) => /iPhone|iPad|Android/.exec(userAgent ?? "")?.[0])).toEqual(["iPhone", "iPhone", "iPhone", "Android", "Android", "iPad"]);
   });
