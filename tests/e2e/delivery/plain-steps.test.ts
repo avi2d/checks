@@ -53,3 +53,41 @@ test(
   },
   120_000,
 );
+
+test(
+  "passes a reusable workflow and a composite action that run the caller's command, and refuses the same run in an ordinary workflow",
+  async () => {
+    const { write, commit, script } = await open({
+      "package.json": JSON.stringify({ name: "plain-steps-fixture", type: "module", checks: { plainSteps: true } }),
+      ".github/workflows/release.yml": ["name: release", "on:", "  workflow_call:", "    inputs:", "      publish-command:", "        type: string", "jobs:", "  publish:", "    runs-on: ubuntu-latest", "    steps:", "      - run: ${{ inputs.publish-command }}", ""].join("\n"),
+      "actions/slot/action.yml": [
+        "name: slot",
+        "inputs:",
+        "  action:",
+        "    required: true",
+        "  command:",
+        "    required: true",
+        "runs:",
+        "  using: composite",
+        "  steps:",
+        "    - shell: bash",
+        "      env:",
+        "        ACTION: ${{ inputs.action }}",
+        "        COMMAND: ${{ inputs.command }}",
+        `      run: '"$COMMAND" "$ACTION"'`,
+        "",
+      ].join("\n"),
+    });
+    await commit("feat: base");
+
+    const green = await script("delivery/plain-steps.ts");
+    expect(green.exitCode).toBe(0);
+    expect(green.text).toContain("plain-steps: every run step in 2 workflow or action file(s) is one plain command\n");
+
+    await write({ ".github/workflows/smoke.yml": workflow(["      - run: ${{ inputs.publish-command }}"]) });
+    const red = await script("delivery/plain-steps.ts");
+    expect(red.exitCode).toBe(1);
+    expect(red.text).toContain("  .github/workflows/smoke.yml line 8 job smoke step 1: a command named only at run time\n");
+  },
+  120_000,
+);
