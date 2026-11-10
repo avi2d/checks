@@ -124,7 +124,7 @@ test("a changed test with no baseline report scopes no covered source instead of
 
   expect(done.exitCode).toBe(0);
   expect(done.text).toContain("SCOPE=\n");
-  expect(done.text).toContain("mutation-scope: tests/unit/covered.test.ts changed, but no full baseline report at");
+  expect(done.text).toContain("::warning::mutation-scope: tests/unit/covered.test.ts changed, but no full baseline report at");
   expect(done.text).toContain("so the scope holds no covered source");
 });
 
@@ -340,7 +340,7 @@ test("a changed helper with no baseline report scopes no covered source instead 
 
   expect(done.exitCode).toBe(0);
   expect(done.text).toContain("SCOPE=\n");
-  expect(done.text).toContain("mutation-scope: tests/unit/other.test.ts changed, but no full baseline report says which sources they cover, so the scope holds no covered source");
+  expect(done.text).toContain("::warning::mutation-scope: tests/unit/other.test.ts changed, but no full baseline report says which sources they cover, so the scope holds no covered source. Refresh the full baseline with `gh workflow run mutation -f mode=refresh`.");
 });
 
 async function preloadedRepo(): Promise<{ repo: FixtureRepo; base: string; baseline: string }> {

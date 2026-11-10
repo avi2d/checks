@@ -31,8 +31,8 @@ Each source whose mutants a changed unit test covers or kills in the full baseli
 So a kill lost through a test change alone still shows in the comparison, in a source the branch leaves alone.
 A changed unit test with no baseline report adds no covered source to the scope.
 With no other change the scope stays empty and the comparison skips.
-The scope step names the missing full baseline on stderr.
-Refresh the full baseline with gh workflow run mutation with mode refresh.
+The scope step files a warning annotation that names the missing full baseline.
+Refresh the full baseline with `gh workflow run mutation -f mode=refresh`.
 Stryker records each test file's source in the report's `testFiles`.
 A changed unit test the merge base holds must have that recorded source match its content at the merge base.
 Otherwise the report ran an older test, so its coverage cannot say what the test covers now.
@@ -141,10 +141,10 @@ mutation-scope: shard 3 holds 2 file(s) and about 8 mutant(s)
 SHARDS=["src/a.ts,src/b.ts","src/c.ts","src/d.ts,src/e.ts"]
 ```
 
-A changed unit test with no full baseline on `main` skips the comparison, on stderr:
+A changed unit test with no full baseline on `main` adds no covered source to the scope:
 
 ```
-mutation-scope: tests/unit/dashboard/snapshot.test.ts changed, but no full baseline report at /runner/temp/baseline-full/mutation.json says which sources they cover, so the scope holds no covered source. Refresh the full baseline with gh workflow run mutation with mode refresh.
+::warning::mutation-scope: tests/unit/dashboard/snapshot.test.ts changed, but no full baseline report at /runner/temp/baseline-full/mutation.json says which sources they cover, so the scope holds no covered source. Refresh the full baseline with `gh workflow run mutation -f mode=refresh`.
 ```
 
 A changed unit test that `main` edited after its newest full baseline, on stderr:

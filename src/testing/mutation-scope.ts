@@ -296,7 +296,7 @@ const enteringSources = Effect.fn("enteringSources")(function* (
   const candidates = [...atHead].filter(eligible).toSorted();
   if (report === undefined || !(yield* (yield* FileSystem.FileSystem).exists(report))) {
     const where = report === undefined ? "" : ` at ${report}`;
-    yield* Console.error(`${NAME}: ${[...tests].toSorted().join(",")} changed, but no full baseline report${where} says which sources they cover, so the scope holds no covered source. Refresh the full baseline with gh workflow run mutation with mode refresh.`);
+    yield* Console.error(`::warning::${NAME}: ${[...tests].toSorted().join(",")} changed, but no full baseline report${where} says which sources they cover, so the scope holds no covered source. Refresh the full baseline with \`gh workflow run mutation -f mode=refresh\`.`);
     return [];
   }
   const baseline = yield* loadBaseline(report);
