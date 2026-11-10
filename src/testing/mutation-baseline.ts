@@ -61,7 +61,7 @@ export function incrementalCandidates(runs: readonly Run[]): readonly Run[] {
 
 const latestCandidates = listed(undefined, LATEST_LIMIT).pipe(Effect.map(incrementalCandidates));
 
-const latestRuns = listed(undefined, LATEST_LIMIT).pipe(Effect.map((runs) => newestFirst(runs.filter((run) => run.event !== "pull_request"))));
+const latestRuns = listed(undefined, LATEST_LIMIT).pipe(Effect.map((runs) => newestFirst(incrementalCandidates(runs))));
 
 // Each full event is listed on its own, because one shared window lets push runs crowd out every full run.
 const fullCandidates = Effect.gen(function* () {

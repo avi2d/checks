@@ -3,7 +3,6 @@ import { Effect } from "effect";
 import { readFile } from "node:fs/promises";
 import { Usage } from "../../../src/core/main.ts";
 import {
-  type Comparison,
   compareReports,
   formatComparison,
   type Mutant,
@@ -189,19 +188,17 @@ test("advisory mode prints the same verdict and always exits 0", async () => {
   expect(formatComparison(comparison, true)).toContain("advisory");
 });
 
-test("a flood of unmatched mutants files a bounded note instead of every mutant", () => {
-  const headOnly = Array.from({ length: 1000 }, (_, index) => ({
-    path: "src/flood.ts",
-    location: at(index + 1, 1, 2),
-    mutatorName: "ArithmeticOperator",
-    replacement: "a - b",
-    status: "Survived" as const,
-  }));
-  const comparison: Comparison = { regressions: [], moves: [], baseOnly: [], headOnly, regression: false };
-  const report = formatComparison(comparison, true);
-  expect(report.length).toBeLessThan(65536);
-  expect(report).toContain("no regression");
-  expect(report).toContain("omitted");
+test("a base file the head run leaves out is not listed as base only", () => {
+  const source = "x\ny\nz\n";
+  const base = new Map([
+    ["src/a.ts", { source, mutants: [mutant({ status: "Killed", location: at(1, 1, 2) })] }],
+    ["src/b.ts", { source, mutants: [mutant({ status: "Killed", location: at(1, 1, 2) })] }],
+  ]);
+  const head = new Map([["src/a.ts", { source, mutants: [mutant({ status: "Killed", location: at(1, 1, 2) })] }]]);
+  const comparison = compareReports(base, head);
+  expect(comparison.regression).toBe(false);
+  expect(comparison.baseOnly).toHaveLength(0);
+  expect(comparison.headOnly).toHaveLength(0);
 });
 
 test("only the --advisory flag turns on advisory mode", () => {

@@ -11,7 +11,9 @@ audience: consumers
 A mutant regresses when it is `Killed` or `Timeout` at the base and `Survived` or `NoCoverage` at the head.
 The gate matches mutants between the two reports and judges each match, so a lost kill cannot hide behind mutants that move into the score and a mutant leaving the score cannot manufacture a false regression.
 A matched mutant that moves into or out of `RuntimeError`, `CompileError`, `Ignored` or `Pending` is reported apart from a regression, because that move only changes which mutants leave the score.
-A mutant present in only one report is listed and never fails the comparison.
+The comparison covers only the files the head report holds.
+A file the head report lacks is out of scope and is not listed.
+A mutant in a covered file with no counterpart in the other report is listed and never fails the comparison.
 
 ## How it matches mutants
 
@@ -25,7 +27,7 @@ Each list prints in order of file, then line, then column, and a matched mutant 
 ## What it reads
 
 It reads two Stryker `mutation.json` reports, the saved `main` baseline and the incremental head report.
-The shared Stryker preset's `json` reporter writes `reports/mutation/mutation.json` in each worktree.
+The shared Stryker preset's `json` reporter writes `reports/mutation/mutation.json` in the worktree.
 
 A repository that runs mutation testing installs `@stryker-mutator/core` and `@hughescr/stryker-bun-runner`, then spreads the shipped preset in `stryker.conf.mjs`.
 [checks-setup](checks-setup.md) writes both pins and this config:
@@ -56,8 +58,7 @@ checks-mutation-compare [--advisory] <base-report> <head-report>
 
 ## Sample output
 
-It prints the verdict first, then each regression, each move into or out of a status that leaves the score, and each unmatched mutant.
-It caps that list at 30000 characters and names the omitted count, so the advisory comment fits the GitHub body limit:
+It prints the verdict first, then each regression, each move into or out of a status that leaves the score, and each unmatched mutant:
 
 ```
 mutation-compare: REGRESSION (1 mutant(s))
@@ -90,7 +91,9 @@ The job time follows the size of the change and not the size of the repository.
 A scope file the saved baseline lacks matches nothing there, and Stryker still writes a report.
 An empty scope skips the head run and the comparison, and the notice names the skip on the run's summary.
 A scope past the mutant cap skips the comparison, and a note names the skip.
-A changed unit test with no full baseline on `main` widens the scope to every file the `mutate` globs match.
+A changed unit test with no full baseline on `main` adds no covered source to the scope.
+With no other change the scope stays empty and the comparison skips, and the scope step names the missing full baseline on stderr.
+Refresh the full baseline with gh workflow run mutation with mode refresh.
 A changed unit test that `main` edited after that baseline widens the scope to every file the `mutate` globs match.
 Refresh the full baseline with `gh workflow run mutation`, choosing `refresh` for the `mode` input, as [checks-mutation](checks-mutation.md#running-it-in-ci) shows.
 A run with `--mutate` is scoped, so the preset lets it through without `CI=true`.

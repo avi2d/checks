@@ -241,7 +241,7 @@ function compareFile(path: string, baseFile: ReportFile | undefined, headFile: R
 
 export function compareReports(baseFiles: ReadonlyMap<string, ReportFile>, headFiles: ReadonlyMap<string, ReportFile>): Comparison {
   const findings: Findings = { regressions: [], moves: [], baseOnly: [], headOnly: [] };
-  for (const path of new Set([...baseFiles.keys(), ...headFiles.keys()])) compareFile(path, baseFiles.get(path), headFiles.get(path), findings);
+  for (const path of headFiles.keys()) compareFile(path, baseFiles.get(path), headFiles.get(path), findings);
 
   findings.regressions.sort(byPosition);
   findings.moves.sort(byPosition);
@@ -263,9 +263,6 @@ function describeUnmatched(mutant: UnmatchedMutant): string {
   return `${locate(mutant)} ${mutant.mutatorName} ${JSON.stringify(mutant.replacement)}: ${mutant.status}`;
 }
 
-// GitHub refuses a comment body past 65536 characters.
-const COMPARISON_LIMIT = 30000;
-
 export function formatComparison(comparison: Comparison, advisory: boolean): string {
   const lines: string[] = [];
   for (const change of comparison.regressions) lines.push(`  regression ${describeChange(change)}`);
@@ -275,11 +272,7 @@ export function formatComparison(comparison: Comparison, advisory: boolean): str
   const verdict = comparison.regression
     ? `mutation-compare: REGRESSION (${comparison.regressions.length} mutant(s))${advisory ? " in advisory mode, exit 0" : ""}`
     : `mutation-compare: no regression${advisory ? " (advisory mode, exit 0)" : ""}`;
-  const full = [verdict, ...lines].join("\n");
-  if (full.length <= COMPARISON_LIMIT) return full;
-  const shown = full.slice(0, full.lastIndexOf("\n", COMPARISON_LIMIT));
-  const omitted = full.split("\n").length - shown.split("\n").length;
-  return `${shown}\n  … and ${omitted} more line(s) omitted`;
+  return [verdict, ...lines].join("\n");
 }
 
 export const parseArgs = Effect.fnUntraced(function* (argv: readonly string[]): Effect.fn.Return<Options, Usage> {

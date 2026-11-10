@@ -100,7 +100,7 @@ A baseline job takes these steps and keeps its report as an artifact:
 ```yaml
 - env:
     GH_TOKEN: ${{ github.token }}
-  run: bunx checks-mutation-baseline reports/stryker-incremental.json reports/mutation/mutation.json
+  run: bunx checks-mutation-baseline reports/stryker-incremental.json
 - run: bunx stryker run --incremental
 ```
 
