@@ -19,6 +19,8 @@ It tries no run older than that push, so a newest push without the artifact rest
 An artifact without `stryker-incremental.json` counts as no baseline.
 It copies `stryker-incremental.json` to the first destination, and `mutation/mutation.json` to the second destination when the artifact holds it.
 It then prunes the copied state the same way a full restore prunes its state.
+When the restored run's head commit is missing from the checkout, it fetches that one commit from origin at depth 1.
+When that fetch fails, it keeps the state unpruned and files a warning that the age check was skipped.
 
 With `--full` it lists up to 50 `schedule` runs and up to 50 `workflow_dispatch` runs apart, so pushes cannot crowd the full runs out of one list.
 It tries those runs newest first, and restores the first `mutation-baseline-full` artifact that has not expired, downloads and holds the report.
@@ -59,7 +61,7 @@ The `mutation-baseline-full` artifact holds `mutation.json` at its root, which t
 It reads `RUNNER_ENVIRONMENT` and `HOME` to place the runner cache, and `GITHUB_REPOSITORY_ID` to find the saved baselines.
 `--save` and `--prune` read `GITHUB_RUN_ID`.
 When it prunes a restored state it reads the run's head through `gh run view <run> --json headSha`.
-It diffs that head against `HEAD`, which needs the checkout's full history.
+It diffs that head against `HEAD`, so a depth-1 checkout is enough.
 It shows `bunfig.toml` and the files the active Stryker config imports at both revisions.
 It reads every tracked `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, and `.cjs` file from the working tree for their relative imports.
 Inputs a test reads at runtime without a static import, such as markdown files, escape invalidation until the next refresh window.
@@ -168,6 +170,8 @@ A baseline job restores the state the previous `main` run left before an increme
     GH_TOKEN: ${{ github.token }}
   run: bunx checks-mutation-baseline reports/stryker-incremental.json
 ```
+
+The restore fetches the restored run's head commit from origin when the checkout lacks it, so the checkout needs no full history.
 
 A baseline job on a self-hosted runner saves the state the incremental run wrote, then on `main` prunes the superseded baselines:
 

@@ -104,6 +104,8 @@ A baseline job takes these steps and keeps its report as an artifact:
 - run: bunx stryker run --incremental
 ```
 
+The restore fetches the restored run's head commit from origin when the checkout lacks it, so the checkout needs no full history.
+
 A first baseline with no state tests every mutant.
 Each later run restores the newest `main` baseline, drops each result the 28-day refresh window or a changed config made stale, and retests the mutants its changes reach.
 A result made stale by a file a test reads at runtime stays stale past refresh, since refresh uploads only `mutation-baseline-full`.

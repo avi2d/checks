@@ -36,6 +36,16 @@ const viewedHead = Effect.fn("viewedHead")(function* (run: number) {
   return (yield* gh(["run", "view", String(run), "--json", "headSha"]).pipe(Effect.flatMap(decodeHeadSha))).headSha;
 });
 
+const present = Effect.fn("present")(function* (sha: string) {
+  const checked = yield* collect("git", ["cat-file", "-e", `${sha}^{commit}`]).pipe(Effect.option);
+  return Option.isSome(checked) && checked.value.exitCode === ChildProcessSpawner.ExitCode(0);
+});
+
+const fetchedHead = Effect.fn("fetchedHead")(function* (sha: string) {
+  const fetched = yield* collect("git", ["fetch", "--depth=1", "origin", sha]).pipe(Effect.option);
+  return Option.isSome(fetched) && fetched.value.exitCode === ChildProcessSpawner.ExitCode(0);
+});
+
 export const pruneFullState = Effect.fn("pruneFullState")(function* (run: FullRun, state: string) {
   const fs = yield* FileSystem.FileSystem;
   if (!(yield* fs.exists(state))) return;
@@ -48,6 +58,10 @@ export const pruneFullState = Effect.fn("pruneFullState")(function* (run: FullRu
     return;
   }
   const base = yield* viewedHead(run.databaseId);
+  if (!(yield* present(base)) && !(yield* fetchedHead(base))) {
+    yield* Console.log(`::warning::mutation-baseline: skipped the age check and kept the restored state, since run ${run.databaseId}'s head commit is missing from this checkout and fetching it from origin failed`);
+    return;
+  }
   const { paths, preload, stale, config } = yield* stalenessSince(base, "HEAD");
   const changed = [...paths].filter((path) => FULL_CONFIGS.includes(path) || config.has(path)).toSorted();
   if (changed.length > 0 || preload !== undefined) {

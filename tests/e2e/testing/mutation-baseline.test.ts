@@ -2,7 +2,7 @@ import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { mkdir, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { baseline, fullBaseline, fullReport, gitRunner, MAIN_RUNS, run, savedEntry, SAVED_SHELF, selfHosted, SHELVES, type Runner } from "../lib/baseline-runner.ts";
+import { baseline, fullBaseline, fullReport, gitRunner, MAIN_RUNS, run, savedEntry, SAVED_SHELF, selfHosted, shallowRunner, SHELVES, type Runner } from "../lib/baseline-runner.ts";
 
 const NOW_MS = Number(process.env["CHECKS_MUTATION_BASELINE_NOW_MS"] ?? Date.now());
 process.env["CHECKS_MUTATION_BASELINE_NOW_MS"] = String(NOW_MS);
@@ -29,6 +29,32 @@ test("a plain restore drops a state older than the refresh window instead of reu
   expect(restored.text).toContain("mutation-baseline: dropped the restored state, run 20 started before the current 28-day refresh window\n");
   expect(await runner.read("reports/stryker-incremental.json")).toBeUndefined();
   expect(await runner.read("baseline/mutation.json")).toBe('{"report":"old push"}');
+}, 30_000);
+
+test("a plain restore fetches the restored run's missing head and drops the state its changes made stale", async () => {
+  const runner = await shallowRunner({ "stryker.conf.mjs": "export default {};\n" }, { "stryker.conf.mjs": "export default { allowEmpty: true };\n" }, (base) => [
+    run(20, "push", started(), [baseline(200, "mutation-baseline", "older push")], base),
+  ]);
+
+  const restored = await runner.run(["reports/stryker-incremental.json", "baseline/mutation.json"]);
+
+  expect(restored.exitCode).toBe(0);
+  expect(restored.text).toContain("mutation-baseline: dropped the restored state, stryker.conf.mjs changed since run 20\n");
+  expect(await runner.read("reports/stryker-incremental.json")).toBeUndefined();
+  expect(await runner.read("baseline/mutation.json")).toBe('{"report":"older push"}');
+}, 30_000);
+
+test("a plain restore keeps the state and files a warning when the missing head cannot be fetched", async () => {
+  const runner = await shallowRunner({ "stryker.conf.mjs": "export default {};\n" }, { "stryker.conf.mjs": "export default { allowEmpty: true };\n" }, (base) => [
+    run(20, "push", started(), [baseline(200, "mutation-baseline", "older push")], base),
+  ]);
+  await $`git remote remove origin`.cwd(runner.work).quiet();
+
+  const restored = await runner.run(["reports/stryker-incremental.json", "baseline/mutation.json"]);
+
+  expect(restored.exitCode).toBe(0);
+  expect(restored.text).toContain("::warning::mutation-baseline: skipped the age check and kept the restored state");
+  expect(await runner.read("reports/stryker-incremental.json")).toBe('{"state":"older push"}');
 }, 30_000);
 
 test("a newer refresh run without a baseline does not hide the newest push baseline", async () => {
