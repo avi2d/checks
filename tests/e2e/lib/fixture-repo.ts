@@ -123,7 +123,7 @@ export const UNVENDORED_BUNFIG = '[test]\npathIgnorePatterns = ["**/tests/quaran
 
 export function lintWiring(): Readonly<Record<string, string>> {
   return {
-    "package.json": JSON.stringify({ name: "lint-fixture", type: "module", author: AUTHOR, scripts: { lint: "checks-lint", test: "checks-test" } }),
+    "package.json": JSON.stringify({ name: "lint-fixture", type: "module", author: AUTHOR, scripts: { lint: "checks-lint", test: "checks-test", "test:fast": "checks-test --changed" } }),
     "knip.json": JSON.stringify({ entry: ["**/*.ts"], include: ["files"] }),
     ".jscpd.json": JSON.stringify({ path: ["."], format: ["typescript"] }),
     "dependency-cruiser.config.ts": `import { defineConfig } from "${join(CHECKOUT, "dist", "presets", "dependency-cruiser.js")}";\n\nexport default defineConfig({ orphans: ["[.]ts$"] });\n`,
