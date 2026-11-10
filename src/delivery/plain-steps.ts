@@ -19,8 +19,8 @@ export type StepFault = {
 
 export type StepContext =
   | { readonly kind: "workflow" }
-  | { readonly kind: "reusable" }
-  | { readonly kind: "composite"; readonly inputEnv: ReadonlySet<string> };
+  | { readonly kind: "reusable"; readonly inputDefaults?: ReadonlyMap<string, string> }
+  | { readonly kind: "composite"; readonly inputEnv: ReadonlySet<string>; readonly inputForEnv?: ReadonlyMap<string, string>; readonly inputDefaults?: ReadonlyMap<string, string> };
 
 type RunStep = {
   readonly keys: readonly (string | number)[];
@@ -37,7 +37,7 @@ const ACTION_FILES = new Set(["action.yml", "action.yaml"]);
 const UNJUDGED_PREFIXES = ["node_modules/", "repos/", "tests/fixtures/"] as const;
 const PLAIN_SHELLS = new Set(["bash", "sh", "pwsh", "powershell", "cmd"]);
 const SIMPLE_EXPANSION = /^\$\{[A-Za-z_][A-Za-z0-9_]*\}/;
-const INPUT_EXPRESSION = /^\$\{\{\s*inputs\.[A-Za-z_][A-Za-z0-9_-]*\s*\}\}$/;
+const INPUT_EXPRESSION = /^\$\{\{\s*inputs\.([A-Za-z_][A-Za-z0-9_-]*)\s*\}\}$/;
 const VARIABLE = String.raw`\$(?:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)\})`;
 const PROGRAM_VARIABLE = new RegExp(String.raw`^(?:"${VARIABLE}"|${VARIABLE})(?=\s|$)`);
 const ORDINARY: StepContext = { kind: "workflow" };
@@ -242,12 +242,63 @@ function programVariable(line: string): string | undefined {
   return match === null ? undefined : match.slice(1).join("");
 }
 
+function inputName(value: string): string | undefined {
+  const match = INPUT_EXPRESSION.exec(value);
+  return match?.[1];
+}
+
+function stringDefaults(inputs: unknown): ReadonlyMap<string, string> {
+  if (!isRecord(inputs)) return new Map();
+  const defaults = new Map<string, string>();
+  for (const [name, spec] of Object.entries(inputs)) {
+    if (isRecord(spec) && typeof spec["default"] === "string") defaults.set(name, spec["default"]);
+  }
+  return defaults;
+}
+
+function reusableDefaults(document: Readonly<Record<string, unknown>>): ReadonlyMap<string, string> {
+  const on = document["on"];
+  if (!isRecord(on)) return new Map();
+  const call = on["workflow_call"];
+  if (!isRecord(call)) return new Map();
+  return stringDefaults(call["inputs"]);
+}
+
+function compositeDefaults(document: Readonly<Record<string, unknown>>): ReadonlyMap<string, string> {
+  return stringDefaults(document["inputs"]);
+}
+
+function envInputs(step: Readonly<Record<string, unknown>>): ReadonlyMap<string, string> {
+  const env = step["env"];
+  if (!isRecord(env)) return new Map();
+  const found = new Map<string, string>();
+  for (const [name, value] of Object.entries(env)) {
+    if (typeof value !== "string") continue;
+    const input = inputName(value);
+    if (input !== undefined) found.set(name, input);
+  }
+  return found;
+}
+
 function runsCallerCommand(line: string, plain: string, context: StepContext): boolean {
   if (context.kind === "workflow") return false;
-  if (INPUT_EXPRESSION.test(line)) return true;
+  if (inputName(line) !== undefined) return true;
   if (context.kind === "reusable") return false;
   const name = programVariable(plain);
   return name !== undefined && context.inputEnv.has(name);
+}
+
+function callerDefault(line: string, plain: string, context: StepContext): string | undefined {
+  if (context.kind === "workflow") return undefined;
+  if (context.inputDefaults === undefined) return undefined;
+  const direct = inputName(line);
+  if (direct !== undefined) return context.inputDefaults.get(direct);
+  if (context.kind === "reusable") return undefined;
+  const name = programVariable(plain);
+  if (name === undefined) return undefined;
+  const input = context.inputForEnv?.get(name);
+  if (input === undefined) return undefined;
+  return context.inputDefaults.get(input);
 }
 
 export function runFaults(run: string, shell: unknown, context: StepContext = ORDINARY): readonly string[] {
@@ -259,7 +310,12 @@ export function runFaults(run: string, shell: unknown, context: StepContext = OR
   const [words = []] = shellWords(plain);
   const texts = words.map(({ text }) => text);
   if (runsInlineCode(texts)) faults.push("inline interpreter code");
-  if (fromProgram(texts)[0]?.includes("$") === true && !runsCallerCommand(line, plain, context)) faults.push("a command named only at run time");
+  const caller = runsCallerCommand(line, plain, context);
+  if (fromProgram(texts)[0]?.includes("$") === true && !caller) faults.push("a command named only at run time");
+  if (caller) {
+    const fallback = callerDefault(line, plain, context);
+    if (fallback !== undefined) faults.push(...runFaults(fallback, shell, ORDINARY));
+  }
   const fault = shellFault(shell);
   return fault === undefined ? faults : [...faults, fault];
 }
@@ -283,19 +339,20 @@ function triggers(on: unknown): readonly unknown[] {
 
 function workflowContext(document: Readonly<Record<string, unknown>>): StepContext {
   const events = triggers(document["on"]);
-  // A workflow_dispatch input is typed at run time, so no file names that command.
-  return events.includes("workflow_call") && !events.includes("workflow_dispatch") ? { kind: "reusable" } : ORDINARY;
+  if (!(events.includes("workflow_call") && !events.includes("workflow_dispatch"))) return ORDINARY;
+  return { kind: "reusable", inputDefaults: reusableDefaults(document) };
 }
 
 function inputEnv(step: Readonly<Record<string, unknown>>): ReadonlySet<string> {
-  const env = step["env"];
-  if (!isRecord(env)) return new Set();
-  return new Set(Object.entries(env).flatMap(([name, value]) => (typeof value === "string" && INPUT_EXPRESSION.test(value) ? [name] : [])));
+  return new Set(envInputs(step).keys());
 }
 
 type ContextOf = (step: Readonly<Record<string, unknown>>) => StepContext;
 
-const compositeContext: ContextOf = (step) => ({ kind: "composite", inputEnv: inputEnv(step) });
+function compositeContextFor(document: Readonly<Record<string, unknown>>): ContextOf {
+  const defaults = compositeDefaults(document);
+  return (step) => ({ kind: "composite", inputEnv: inputEnv(step), inputForEnv: envInputs(step), inputDefaults: defaults });
+}
 
 function runSteps(steps: unknown, keys: readonly (string | number)[], prefix: string, inherited: unknown, contextOf: ContextOf): readonly RunStep[] {
   if (!Array.isArray(steps)) return [];
@@ -316,7 +373,7 @@ function stepsOf(file: YamlFile): readonly RunStep[] {
   if (!isRecord(document)) return [];
   if (!file.path.startsWith(WORKFLOWS)) {
     const runs = document["runs"];
-    return isRecord(runs) ? runSteps(runs["steps"], ["runs", "steps"], "", undefined, compositeContext) : [];
+    return isRecord(runs) ? runSteps(runs["steps"], ["runs", "steps"], "", undefined, compositeContextFor(document)) : [];
   }
   const jobs = document["jobs"];
   if (!isRecord(jobs)) return [];

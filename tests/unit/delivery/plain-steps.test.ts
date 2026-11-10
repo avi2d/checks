@@ -203,6 +203,37 @@ test("a composite action step whose program is an env variable set from one call
   ]);
 });
 
+test("a reusable workflow judges the named input default that hides logic instead of passing as the caller command", () => {
+  const clean = yamlFile(
+    ".github/workflows/ci.yml",
+    ["on:", "  workflow_call:", "    inputs:", "      publish-command:", "        type: string", "        default: bun scripts/smoke-pack.ts", "jobs:", "  publish:", "    runs-on: ubuntu-latest", "    steps:", "      - run: ${{ inputs.publish-command }}"].join("\n"),
+  );
+  expect(findStepFaults([clean])).toEqual([]);
+  const dirty = yamlFile(
+    ".github/workflows/ci.yml",
+    ["on:", "  workflow_call:", "    inputs:", "      publish-command:", "        type: string", "        default: bun install && bun test", "jobs:", "  publish:", "    runs-on: ubuntu-latest", "    steps:", "      - run: ${{ inputs.publish-command }}"].join("\n"),
+  );
+  expect(findStepFaults([dirty]).map(({ faults }) => faults)).toEqual([["a command list"]]);
+});
+
+test("a composite action judges the named input default that hides logic instead of passing as the caller command", () => {
+  const clean = yamlFile(
+    "actions/slot/action.yml",
+    ["name: slot", "inputs:", "  command:", "    required: true", "    default: bun scripts/smoke-pack.ts", "runs:", "  using: composite", "  steps:", "    - shell: bash", "      env:", "        COMMAND: ${{ inputs.command }}", "      run: '\"$COMMAND\"'"].join("\n"),
+  );
+  expect(findStepFaults([clean])).toEqual([]);
+  const dirtyEnv = yamlFile(
+    "actions/slot/action.yml",
+    ["name: slot", "inputs:", "  command:", "    required: true", "    default: bun install && bun test", "runs:", "  using: composite", "  steps:", "    - shell: bash", "      env:", "        COMMAND: ${{ inputs.command }}", "      run: '\"$COMMAND\"'"].join("\n"),
+  );
+  expect(findStepFaults([dirtyEnv]).map(({ faults }) => faults)).toEqual([["a command list"]]);
+  const dirtyWhole = yamlFile(
+    "actions/slot/action.yml",
+    ["name: slot", "inputs:", "  command:", "    required: true", "    default: bun install && bun test", "runs:", "  using: composite", "  steps:", "    - shell: bash", "      run: ${{ inputs.command }}"].join("\n"),
+  );
+  expect(findStepFaults([dirtyWhole]).map(({ faults }) => faults)).toEqual([["a command list"]]);
+});
+
 test("a caller input run in a workflow that is not only called is refused instead of trusted as the caller's command", () => {
   for (const on of ["on: pull_request", "on: [workflow_call, workflow_dispatch]"]) {
     expect(findStepFaults([workflow("      - run: ${{ inputs.publish-command }}", on)])).toEqual([{ location: ".github/workflows/ci.yml line 6 job smoke step 1", faults: [LATE] }]);
