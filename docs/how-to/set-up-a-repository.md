@@ -99,8 +99,11 @@ To run the gates in CI:
    "build": "bun build src/index.ts --outdir dist --target node && checks-effect-scope",
    "lint": "oxlint && checks-lint",
    "typecheck": "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
-   "test": "checks-test"
+   "test": "checks-test",
+   "test:fast": "checks-test --changed"
    ```
+
+   Each tier with test files also needs its `test:<tier>` script, as [checks-test-layout](../gates/checks-test-layout.md) says.
 
 1. Run the scripts on every pull request in `.github/workflows/ci.yml`, fetching the whole history the range needs:
 

@@ -8,9 +8,7 @@ class TestScriptsError extends Schema.TaggedError<TestScriptsError>()("TestScrip
 
 export type MutableRecord = Record<string, unknown>;
 
-const tierHasTests = Effect.fn("tierHasTests")(function* (root: string, tier: TestTier) {
-  const listed = yield* workingTreeFiles(root).pipe(Effect.orElseSucceed(() => undefined));
-  if (listed !== undefined) return hasTierTests(listed, tier);
+const tierDirHasTests = Effect.fn("tierDirHasTests")(function* (root: string, tier: TestTier) {
   const system = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const dir = path.join(root, "tests", tier);
@@ -43,8 +41,15 @@ export type TestScriptContext = {
 
 export const readTestScriptContext = Effect.fn("readTestScriptContext")(function* (root: string, knownName: unknown) {
   const present = new Set<TestTier>();
-  for (const tier of STANDARD_TIERS) {
-    if (yield* tierHasTests(root, tier)) present.add(tier);
+  const listed = yield* workingTreeFiles(root).pipe(Effect.orElseSucceed(() => undefined));
+  if (listed !== undefined) {
+    for (const tier of STANDARD_TIERS) {
+      if (hasTierTests(listed, tier)) present.add(tier);
+    }
+  } else {
+    for (const tier of STANDARD_TIERS) {
+      if (yield* tierDirHasTests(root, tier)) present.add(tier);
+    }
   }
   return { present, isKit: knownName === KIT_PACKAGE_NAME } satisfies TestScriptContext;
 });
