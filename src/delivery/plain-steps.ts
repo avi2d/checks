@@ -17,11 +17,17 @@ export type StepFault = {
   readonly faults: readonly string[];
 };
 
+export type StepContext =
+  | { readonly kind: "workflow" }
+  | { readonly kind: "reusable" }
+  | { readonly kind: "composite"; readonly inputEnv: ReadonlySet<string> };
+
 type RunStep = {
   readonly keys: readonly (string | number)[];
   readonly label: string;
   readonly run: string | undefined;
   readonly shell: unknown;
+  readonly context: StepContext;
 };
 
 const NAME = "plain-steps";
@@ -31,6 +37,10 @@ const ACTION_FILES = new Set(["action.yml", "action.yaml"]);
 const UNJUDGED_PREFIXES = ["node_modules/", "repos/", "tests/fixtures/"] as const;
 const PLAIN_SHELLS = new Set(["bash", "sh", "pwsh", "powershell", "cmd"]);
 const SIMPLE_EXPANSION = /^\$\{[A-Za-z_][A-Za-z0-9_]*\}/;
+const INPUT_EXPRESSION = /^\$\{\{\s*inputs\.[A-Za-z_][A-Za-z0-9_-]*\s*\}\}$/;
+const VARIABLE = String.raw`\$(?:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)\})`;
+const PROGRAM_VARIABLE = new RegExp(String.raw`^(?:"${VARIABLE}"|${VARIABLE})(?=\s|$)`);
+const ORDINARY: StepContext = { kind: "workflow" };
 const CONTROL_OPERATORS: readonly (readonly [string, string])[] = [
   ["&&", "a command list"],
   ["||", "a command list"],
@@ -227,7 +237,20 @@ function shellFault(shell: unknown): string | undefined {
   return PLAIN_SHELLS.has(baseNameOf(program)) ? undefined : `inline code for the ${program} shell`;
 }
 
-export function runFaults(run: string, shell: unknown): readonly string[] {
+function programVariable(line: string): string | undefined {
+  const match = PROGRAM_VARIABLE.exec(line);
+  return match === null ? undefined : match.slice(1).join("");
+}
+
+function runsCallerCommand(line: string, plain: string, context: StepContext): boolean {
+  if (context.kind === "workflow") return false;
+  if (INPUT_EXPRESSION.test(line)) return true;
+  if (context.kind === "reusable") return false;
+  const name = programVariable(plain);
+  return name !== undefined && context.inputEnv.has(name);
+}
+
+export function runFaults(run: string, shell: unknown, context: StepContext = ORDINARY): readonly string[] {
   const line = run.trim();
   if (line === "") return ["no command"];
   const plain = maskExpressions(line);
@@ -236,7 +259,7 @@ export function runFaults(run: string, shell: unknown): readonly string[] {
   const [words = []] = shellWords(plain);
   const texts = words.map(({ text }) => text);
   if (runsInlineCode(texts)) faults.push("inline interpreter code");
-  if (fromProgram(texts)[0]?.includes("$") === true) faults.push("a command named only at run time");
+  if (fromProgram(texts)[0]?.includes("$") === true && !runsCallerCommand(line, plain, context)) faults.push("a command named only at run time");
   const fault = shellFault(shell);
   return fault === undefined ? faults : [...faults, fault];
 }
@@ -253,7 +276,28 @@ function defaultShell(node: unknown): unknown {
   return isRecord(run) ? run["shell"] : undefined;
 }
 
-function runSteps(steps: unknown, keys: readonly (string | number)[], prefix: string, inherited: unknown): readonly RunStep[] {
+function triggers(on: unknown): readonly unknown[] {
+  if (Array.isArray(on)) return on;
+  return isRecord(on) ? Object.keys(on) : [on];
+}
+
+function workflowContext(document: Readonly<Record<string, unknown>>): StepContext {
+  const events = triggers(document["on"]);
+  // A workflow_dispatch input is typed at run time, so no file names that command.
+  return events.includes("workflow_call") && !events.includes("workflow_dispatch") ? { kind: "reusable" } : ORDINARY;
+}
+
+function inputEnv(step: Readonly<Record<string, unknown>>): ReadonlySet<string> {
+  const env = step["env"];
+  if (!isRecord(env)) return new Set();
+  return new Set(Object.entries(env).flatMap(([name, value]) => (typeof value === "string" && INPUT_EXPRESSION.test(value) ? [name] : [])));
+}
+
+type ContextOf = (step: Readonly<Record<string, unknown>>) => StepContext;
+
+const compositeContext: ContextOf = (step) => ({ kind: "composite", inputEnv: inputEnv(step) });
+
+function runSteps(steps: unknown, keys: readonly (string | number)[], prefix: string, inherited: unknown, contextOf: ContextOf): readonly RunStep[] {
   if (!Array.isArray(steps)) return [];
   return steps.flatMap((step: unknown, index) => {
     if (!isRecord(step) || step["run"] === undefined) return [];
@@ -262,6 +306,7 @@ function runSteps(steps: unknown, keys: readonly (string | number)[], prefix: st
       label: prefix + stepLabel(step, index),
       run: typeof step["run"] === "string" || typeof step["run"] === "number" ? `${step["run"]}` : undefined,
       shell: step["shell"] ?? inherited,
+      context: contextOf(step),
     }];
   });
 }
@@ -271,12 +316,13 @@ function stepsOf(file: YamlFile): readonly RunStep[] {
   if (!isRecord(document)) return [];
   if (!file.path.startsWith(WORKFLOWS)) {
     const runs = document["runs"];
-    return isRecord(runs) ? runSteps(runs["steps"], ["runs", "steps"], "", undefined) : [];
+    return isRecord(runs) ? runSteps(runs["steps"], ["runs", "steps"], "", undefined, compositeContext) : [];
   }
   const jobs = document["jobs"];
   if (!isRecord(jobs)) return [];
+  const context = workflowContext(document);
   return Object.entries(jobs).flatMap(([id, job]) =>
-    isRecord(job) ? runSteps(job["steps"], ["jobs", id, "steps"], `job ${id} `, defaultShell(job) ?? defaultShell(document)) : [],
+    isRecord(job) ? runSteps(job["steps"], ["jobs", id, "steps"], `job ${id} `, defaultShell(job) ?? defaultShell(document), () => context) : [],
   );
 }
 
@@ -286,7 +332,7 @@ export function findStepFaults(files: readonly YamlFile[]): readonly StepFault[]
     return stepsOf(file).flatMap((step) => {
       const source = scalarSource(lines, step.keys);
       const layout = source === undefined ? ["a run the check cannot locate in the file"] : source.block ? ["a block scalar"] : source.continued ? ["more than one line"] : [];
-      const read = step.run === undefined ? ["a run that is not text"] : runFaults(step.run, step.shell);
+      const read = step.run === undefined ? ["a run that is not text"] : runFaults(step.run, step.shell, step.context);
       const faults = [...new Set([...layout, ...read])];
       if (faults.length === 0) return [];
       const at = source === undefined ? "" : ` line ${source.line + 1}`;

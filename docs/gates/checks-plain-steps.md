@@ -27,7 +27,7 @@ The check refuses a `run` that holds any of these:
 - a parameter expansion other than `$NAME` or `${NAME}`, such as `${NAME:-default}`
 - a shell comment
 - inline interpreter code through a program the check reads, which is `sh`, `bash`, `dash`, `ksh` or `zsh` with `-c`, `node` or `bun` with `-e`, `--eval`, `-p` or `--print`, `python` or `python3` with `-c`, `perl` with `-e` or `-E`, `ruby` with `-e`, `php` with `-r`, `-R`, `-B` or `-E`, `osascript` with `-e`, `deno eval`, `pwsh` or `powershell` with a `-Command`, `-EncodedCommand` or `-CommandWithArgs` parameter, `cmd` with `/c` or `/k`, `eval`, `awk`, `gawk`, `mawk`, `nawk` or `sed` with the program on the line, or `npx` with `-c` or `--call`
-- a program named by an expression, such as `run: ${{ inputs.command }}`, since no one can read it before the run
+- a program named by an expression or a variable, such as `run: ${{ matrix.command }}` or `run: sudo $CMD`, since no one can read it before the run, apart from the caller's command below
 - a `shell` other than `bash`, `sh`, `pwsh`, `powershell` or `cmd`, set on the step or in `defaults.run.shell` of its job or workflow, since `shell: python` makes the `run` inline Python
 
 The check reads those programs through the launchers `time`, `env`, `exec`, `nohup`, `sudo`, `bunx` and `npx`, where a launcher given by path counts as its base name, and through the wrappers `timeout`, `nice`, `xargs`, `docker run` and `find -exec`.
@@ -36,6 +36,18 @@ A launcher, wrapper or program outside those sets is not judged.
 An interpreter flag counts before the first operand, and the check skips the value of an option it knows for that program, while an option it does not know is not judged.
 So `bash -o pipefail -c 'bun install && bun test'` is refused, while `bun scripts/smoke-pack.ts -e staging` passes.
 GitHub substitutes an expression into the script before the shell reads it, so an argument such as `${{ github.ref_name }}` passes and the operators inside the expression are not shell.
+
+### The caller's command
+
+A shared workflow or action can run a command its caller names, since the caller's own file holds that command.
+Two shapes count as one plain command:
+
+- in a reusable workflow, a `run` whose whole value is one input, such as `run: ${{ inputs.publish-command }}`
+- in a composite action, a `run` whose program is one variable, `$NAME`, `${NAME}` or either in double quotes, that the step's own `env` sets to exactly one input, such as `COMMAND: ${{ inputs.command }}` with `run: '"$COMMAND" "$ACTION"'`, and whose arguments pass every other rule above
+
+A composite action also passes the first shape.
+A reusable workflow is one whose `on` holds `workflow_call` and not `workflow_dispatch`, since a dispatch input is typed at run time and no file holds it.
+The check still refuses an expression that is not `inputs.<name>`, such as `${{ matrix.command }}`, an input mixed with other words or operators, such as `${{ inputs.a || inputs.b }}` or `${{ inputs.a }} --verbose`, a variable set from anything other than one input, and either shape in any other workflow.
 
 This step fails, because it appends through a redirect and spells its data with escapes:
 
