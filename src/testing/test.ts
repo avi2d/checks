@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
-import { availableParallelism } from "node:os";
+import { availableParallelism, freemem, totalmem } from "node:os";
 import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { TEST_ENTRY_POINT } from "../core/gates.ts";
+import { collect } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { testOptions, type TestOptions, type TestTier } from "../core/test-script.ts";
 import { readLocalNarrowing, readPullRequestNarrowing } from "./affected-tests.ts";
@@ -49,7 +50,6 @@ export type EntryOptions = {
   readonly changed: boolean;
 };
 
-// Kept out of testOptions, so checks-test-layout still holds a package.json test script to --parallel alone.
 export function entryOptions(args: readonly string[]): EntryOptions | undefined {
   const junit = args.flatMap((arg) => JUNIT.exec(arg)?.[1] ?? []);
   const changed = args.filter((arg) => arg === CHANGED).length;
@@ -186,9 +186,40 @@ function tierArgs(tier: TestTier | undefined): readonly string[] {
   return [`./tests/${tier}`];
 }
 
-export function workerCount(workers: number | undefined): number {
-  return workers ?? availableParallelism();
+const FIRST_WORKER_BYTES = 1024 ** 3;
+const EXTRA_WORKER_BYTES = 100 * 1024 * 1024;
+const MEMORY_RESERVE_FRACTION = 0.1;
+
+export function workerCountFor(freeBytes: number, totalBytes: number, cpus: number): number {
+  const usable = freeBytes - MEMORY_RESERVE_FRACTION * totalBytes - FIRST_WORKER_BYTES;
+  return Math.max(1, Math.min(cpus, Math.floor(usable / EXTRA_WORKER_BYTES) + 1));
 }
+
+export function reclaimableBytes(vmStat: string): number | undefined {
+  const pageSize = /page size of (\d+) bytes/.exec(vmStat)?.[1];
+  if (pageSize === undefined) return undefined;
+  let pages = 0;
+  for (const label of ["free", "inactive", "speculative"]) {
+    const count = new RegExp(`Pages ${label}:\\s+(\\d+)\\.`).exec(vmStat)?.[1];
+    if (count === undefined) return undefined;
+    pages += Number(count);
+  }
+  return pages * Number(pageSize);
+}
+
+const availableBytes = Effect.fn("availableBytes")(function* () {
+  if (process.platform !== "darwin") return freemem();
+  const vmStat = yield* collect("vm_stat", []).pipe(
+    Effect.map(({ stdout }) => stdout),
+    Effect.orElseSucceed(() => ""),
+  );
+  return reclaimableBytes(vmStat) ?? freemem();
+});
+
+export const resolveWorkerCount = Effect.fn("resolveWorkerCount")(function* (workers: number | undefined) {
+  if (workers !== undefined) return workers;
+  return workerCountFor(yield* availableBytes(), totalmem(), availableParallelism());
+});
 
 const readSmokeList = Effect.fn("readSmokeList")(function* (root: string) {
   const file = (yield* Path.Path).join(root, "package.json");
@@ -247,7 +278,7 @@ const changedSelection = Effect.fn("changedSelection")(function* () {
 
 const runSuite = Effect.fn("runSuite")(function* (outfile: string, args: readonly string[], workers: number | undefined) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const command = ["test", "--randomize", `--parallel=${workerCount(workers)}`, ...args, ...reporterArgs(outfile)];
+  const command = ["test", "--randomize", `--parallel=${yield* resolveWorkerCount(workers)}`, ...args, ...reporterArgs(outfile)];
   return yield* spawner.exitCode(
     ChildProcess.make(process.execPath, command, {
       stdin: "ignore",

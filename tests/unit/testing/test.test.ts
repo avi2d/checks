@@ -1,12 +1,15 @@
 import { expect, test } from "bun:test";
 import {
   entryOptions,
+  reclaimableBytes,
   scriptOptions,
   selectSuite,
   smokeList,
   suiteArgs,
   testOptions,
+  workerCountFor,
 } from "../../../src/testing/test.ts";
+import { standardScript } from "../../../src/core/test-script.ts";
 import { scriptViolations } from "../../../src/testing/test-layout.ts";
 import { smokeFiles } from "../../../src/testing/test-skips.ts";
 
@@ -58,9 +61,61 @@ test("--changed combines with a worker count and a junit file, while a tier, --f
 
 test("a test script never takes --changed, so scripts.test cannot shrink the CI suite to the changed files", () => {
   expect(scriptOptions("checks-test --changed")).toBeUndefined();
-  expect(scriptViolations({ scripts: { test: "checks-test --changed", lint: "checks-lint" } }).map((violation) => violation.message)).toEqual([
-    'scripts.test must be "checks-test", optionally with --parallel=<workers>, which runs bun test --randomize and judges its skips, found "checks-test --changed"',
+  expect(scriptViolations({ scripts: { test: "checks-test --changed", "test:fast": "checks-test --changed", lint: "checks-lint" } }).map((violation) => violation.message)).toEqual([
+    'scripts.test must be "checks-test", which runs the default suite and judges its skips, found "checks-test --changed"',
   ]);
+});
+
+test("the standard scripts are test, test:fast and one tier script per tier, with nothing else", () => {
+  expect(standardScript("checks-test")).toEqual({ kind: "test" });
+  expect(standardScript("bun src/testing/test.ts")).toBeUndefined();
+  expect(standardScript("bun src/testing/test.ts --changed")).toBeUndefined();
+  expect(standardScript("checks-test --changed")).toEqual({ kind: "fast" });
+  expect(standardScript("checks-test --tier=unit")).toEqual({ kind: "tier", tier: "unit" });
+  expect(standardScript("checks-test --tier=e2e")).toEqual({ kind: "tier", tier: "e2e" });
+  expect(standardScript("checks-test --tier=live")).toEqual({ kind: "tier", tier: "live" });
+  expect(standardScript("checks-test --tier=pixel")).toEqual({ kind: "tier", tier: "pixel" });
+});
+
+test("a standard script never carries a worker count, so no repository pins its own parallelism", () => {
+  expect(standardScript("checks-test --parallel=4")).toBeUndefined();
+  expect(standardScript("checks-test --tier=live --parallel=4")).toBeUndefined();
+  expect(standardScript("checks-test --parallel=4 --tier=live")).toBeUndefined();
+});
+
+test("a standard script never forces the full suite, keeps the junit report or takes a filter", () => {
+  expect(standardScript("checks-test --full")).toBeUndefined();
+  expect(standardScript("checks-test --junit=reports/suite.xml")).toBeUndefined();
+  expect(standardScript("checks-test tests/unit")).toBeUndefined();
+  expect(standardScript("checks-test --changed --tier=unit")).toBeUndefined();
+  expect(standardScript("bun test")).toBeUndefined();
+});
+
+test("workerCountFor leaves a gigabyte for the first worker, a hundred megabytes per extra worker and a tenth in reserve", () => {
+  expect(workerCountFor(8 * 1024 ** 3, 16 * 1024 ** 3, 8)).toBe(8);
+  expect(workerCountFor(2 * 1024 ** 3, 8 * 1024 ** 3, 8)).toBe(3);
+  expect(workerCountFor(64 * 1024 ** 3, 64 * 1024 ** 3, 4)).toBe(4);
+});
+
+test("workerCountFor never drops below one worker on an exhausted machine", () => {
+  expect(workerCountFor(0, 8 * 1024 ** 3, 8)).toBe(1);
+});
+
+test("reclaimableBytes counts the free, inactive and speculative pages at the vm_stat page size", () => {
+  const vmStat = [
+    "Mach Virtual Memory Statistics: (page size of 16384 bytes)",
+    "Pages free: 100.",
+    "Pages active: 1000.",
+    "Pages inactive: 200.",
+    "Pages speculative: 300.",
+    "",
+  ].join("\n");
+  expect(reclaimableBytes(vmStat)).toBe(600 * 16384);
+});
+
+test("reclaimableBytes refuses a vm_stat report that names no page size or page class", () => {
+  expect(reclaimableBytes("Pages free: 100.\n")).toBeUndefined();
+  expect(reclaimableBytes("Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free: 100.\n")).toBeUndefined();
 });
 
 test("a --changed run passes only the files it reached to bun test, rather than the whole unit level", () => {
@@ -122,12 +177,12 @@ test("a smoke entry never names a test Bun's ignored paths drop", () => {
   }
 });
 
-test("scripts.test never forces the full suite, so a local run stays capped", () => {
+test("scripts.test never forces the full suite, so a local run stays on the smoke run", () => {
   expect(scriptOptions("checks-test --full")).toEqual({ full: true });
   expect(
-    scriptViolations({ scripts: { test: "checks-test --full", lint: "checks-lint" } }),
+    scriptViolations({ scripts: { test: "checks-test --full", "test:fast": "checks-test --changed", lint: "checks-lint" } }),
   ).toHaveLength(1);
   expect(
-    scriptViolations({ scripts: { test: "checks-test", lint: "checks-lint" } }),
+    scriptViolations({ scripts: { test: "checks-test", "test:fast": "checks-test --changed", lint: "checks-lint" } }),
   ).toBeEmpty();
 });

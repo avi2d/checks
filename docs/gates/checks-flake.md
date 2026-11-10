@@ -16,8 +16,8 @@ A run that fails with no failing test, such as a test file that throws while loa
 ## Parallel hunts
 
 A repository whose `test` script runs [checks-test](checks-test.md#parallel-runs) is hunted with the worker count `checks-test` runs on.
-That is the `--parallel=<workers>` the script passes, or else one worker per core of the machine.
-So each run is `bun test --randomize --seed=<seed> --parallel=<workers>`, the mode CI runs in.
+That is the count free memory allows, as [checks-test](checks-test.md#parallel-runs) says.
+So each run is `bun test --randomize --seed=<seed> --parallel=<workers>` with the worker count free memory allows when the hunt runs.
 A `test` script that does not run `checks-test` gets the serial hunt.
 
 Under workers a seed fixes the order Bun hands out the files.
@@ -44,8 +44,10 @@ A run whose worker crashed gets a replay of that worker's files up to the crashe
 ## What it reads
 
 It reads bun's JUnit report of each run.
-It reads the worker count from the `test` script in `package.json`, as [checks-test-layout](checks-test-layout.md) validates that script.
+It reads the test runner from the `test` script in `package.json`, as [checks-test-layout](checks-test-layout.md) validates that script.
 It hunts serially when the file is missing or its `test` script does not run `checks-test`.
+Under workers it reads the two inputs of the worker count when the hunt starts, never a per-repository setting.
+The first is the machine's memory, free and total, and the second is its core count, as [checks-test](checks-test.md#parallel-runs) says.
 Under workers it reads the record its preload writes of which worker ran each file.
 For each replay it reads the order Bun ran its placeholder files.
 Under GitHub Actions it appends its summary to the file `GITHUB_STEP_SUMMARY` names, which is the job summary.
