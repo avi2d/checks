@@ -24,7 +24,7 @@ export const visionRequiredAt = Effect.fn("visionRequiredAt")(function* (root: s
   const parsed = yield* Effect.try({
     try: (): unknown => JSON.parse(manifest.get(PACKAGE_MANIFEST) ?? ""),
     catch: () => new ManifestUnparseable({ message: `${PACKAGE_MANIFEST} does not parse as JSON` }),
-  }).pipe(Effect.catchTag("ManifestUnparseable", () => Effect.succeed(undefined)));
+  }).pipe(Effect.catchTag("ManifestUnparseable", () => Effect.void));
   return requiresName(parsed);
 });
 
