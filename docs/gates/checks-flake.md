@@ -46,7 +46,9 @@ A run whose worker crashed gets a replay of that worker's files up to the crashe
 It reads bun's JUnit report of each run.
 It reads the test runner from the `test` script in `package.json`, as [checks-test-layout](checks-test-layout.md) validates that script.
 It hunts serially when the file is missing or its `test` script does not run `checks-test`.
-Under workers it obtains the count from free memory through the same rule [checks-test](checks-test.md#parallel-runs) uses, never from a per-repository setting.
+Under workers it reads the two inputs of the worker count when the hunt starts, never a per-repository setting.
+The first is the machine's memory, free and total, and the second is its core count, as [checks-test](checks-test.md#parallel-runs) says.
+`CHECKS_TEST_FREE_BYTES`, `CHECKS_TEST_TOTAL_BYTES` and `CHECKS_TEST_CPUS` replace them, as they do for `checks-test`.
 Under workers it reads the record its preload writes of which worker ran each file.
 For each replay it reads the order Bun ran its placeholder files.
 Under GitHub Actions it appends its summary to the file `GITHUB_STEP_SUMMARY` names, which is the job summary.

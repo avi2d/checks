@@ -207,15 +207,15 @@ export function reclaimableBytes(vmStat: string): number | undefined {
   return pages * Number(pageSize);
 }
 
-const envBytes = (name: string): number | undefined => {
-  const raw = process.env[name];
-  if (raw === undefined) return undefined;
-  const value = Number(raw);
-  return Number.isInteger(value) && value >= 0 ? value : undefined;
-};
+const wholeNumberFrom = (name: string) =>
+  Config.schema(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)), name).pipe(
+    Config.option,
+    Effect.map(Option.getOrUndefined),
+    Effect.orElseSucceed(() => undefined),
+  );
 
 const availableBytes = Effect.fn("availableBytes")(function* () {
-  const freeOverride = envBytes("CHECKS_TEST_FREE_BYTES");
+  const freeOverride = yield* wholeNumberFrom("CHECKS_TEST_FREE_BYTES");
   if (freeOverride !== undefined) return freeOverride;
   if (process.platform !== "darwin") return freemem();
   const vmStat = yield* collect("vm_stat", []).pipe(
@@ -225,18 +225,12 @@ const availableBytes = Effect.fn("availableBytes")(function* () {
   return reclaimableBytes(vmStat) ?? freemem();
 });
 
-const totalBytes = (): number => envBytes("CHECKS_TEST_TOTAL_BYTES") ?? totalmem();
-
-const cpuCount = (): number => envBytes("CHECKS_TEST_CPUS") ?? availableParallelism();
-
 export const resolveWorkerCount = Effect.fn("resolveWorkerCount")(function* (workers: number | undefined) {
   if (workers !== undefined) return workers;
-  return workerCountFor(yield* availableBytes(), totalBytes(), cpuCount());
+  const total = (yield* wholeNumberFrom("CHECKS_TEST_TOTAL_BYTES")) ?? totalmem();
+  const cpus = (yield* wholeNumberFrom("CHECKS_TEST_CPUS")) ?? availableParallelism();
+  return workerCountFor(yield* availableBytes(), total, cpus);
 });
-
-export function workerCount(workers: number | undefined): number {
-  return workers ?? workerCountFor(envBytes("CHECKS_TEST_FREE_BYTES") ?? freemem(), totalBytes(), cpuCount());
-}
 
 const readSmokeList = Effect.fn("readSmokeList")(function* (root: string) {
   const file = (yield* Path.Path).join(root, "package.json");

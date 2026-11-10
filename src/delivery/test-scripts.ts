@@ -39,17 +39,18 @@ const describeFault = (fault: ScriptFault): string => {
   }
 };
 
+const decodeNamed = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ name: Schema.optionalKey(Schema.String) })));
+
 const kitNameOf = Effect.fn("kitNameOf")(function* (root: string) {
   const system = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const file = path.join(root, "package.json");
   if (!(yield* system.exists(file))) return undefined;
-  const text = yield* system.readFileString(file).pipe(Effect.orElseSucceed(() => undefined));
-  if (text === undefined) return undefined;
-  const parsed: unknown = yield* Effect.try(() => JSON.parse(text)).pipe(Effect.orElseSucceed(() => undefined));
-  if (typeof parsed !== "object" || parsed === null) return undefined;
-  const name = (parsed as Record<string, unknown>)["name"];
-  return typeof name === "string" ? name : undefined;
+  return yield* system.readFileString(file).pipe(
+    Effect.flatMap(decodeNamed),
+    Effect.map((manifest) => manifest.name),
+    Effect.orElseSucceed(() => undefined),
+  );
 });
 
 export const testScriptsFault = Effect.fn("testScriptsFault")(function* (scripts: MutableRecord, root: string) {

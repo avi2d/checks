@@ -155,8 +155,11 @@ Bun ignores the live and pixel directories during the default run.
 ## Parallel runs
 
 `checks-test` runs `bun test --randomize --parallel=<workers>`, so Bun hands each test file to one of that many worker processes.
-Without `--parallel=<workers>`, the count comes from free memory: one worker needs about a gigabyte, each further worker needs about a hundred megabytes more, a tenth of memory stays reserved, and the count never passes one worker per core.
+Without `--parallel=<workers>`, the count comes from free memory, and never passes one worker per core.
+One worker needs about a gigabyte, each further worker about a hundred megabytes more, and a tenth of memory stays reserved.
 On macOS the count reads reclaimable pages too, since `freemem` leaves them out.
+`CHECKS_TEST_FREE_BYTES`, `CHECKS_TEST_TOTAL_BYTES` and `CHECKS_TEST_CPUS` replace the free memory, total memory and core count the machine reports, each a whole number.
+For example, `CHECKS_TEST_FREE_BYTES=2147483648 CHECKS_TEST_TOTAL_BYTES=8589934592 CHECKS_TEST_CPUS=8` gives two workers.
 No `package.json` script passes `--parallel=<workers>`, as [checks-test-layout](checks-test-layout.md) says.
 The count is a whole number from 1 up.
 Each file runs in a fresh global, so a file cannot lean on state another file left behind.

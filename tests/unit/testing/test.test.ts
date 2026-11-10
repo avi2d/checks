@@ -7,7 +7,6 @@ import {
   smokeList,
   suiteArgs,
   testOptions,
-  workerCount,
   workerCountFor,
 } from "../../../src/testing/test.ts";
 import { standardScript } from "../../../src/core/test-script.ts";
@@ -100,11 +99,6 @@ test("workerCountFor leaves a gigabyte for the first worker, a hundred megabytes
 
 test("workerCountFor never drops below one worker on an exhausted machine", () => {
   expect(workerCountFor(0, 8 * 1024 ** 3, 8)).toBe(1);
-});
-
-test("an explicit worker count still overrides the memory count for one run", () => {
-  expect(workerCount(3)).toBe(3);
-  expect(workerCount(undefined)).toBeGreaterThanOrEqual(1);
 });
 
 test("reclaimableBytes counts the free, inactive and speculative pages at the vm_stat page size", () => {
