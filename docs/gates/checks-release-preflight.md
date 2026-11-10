@@ -74,8 +74,7 @@ checks-release-preflight: .github/workflows/release.yml grants the publishing jo
 
 ## When it runs
 
-The release planning boundary runs it before `checks-release-pr` plans and before `checks-release-push` plans a new release, and the `preflight` job of the release workflow keeps it as the prerequisite of the job that publishes.
-A checkout whose `HEAD` already holds the release commit skips it, so `checks-release-push` recovers the missing tag.
+The release planning boundary runs it before `checks-release-pr` plans a new release, and the `preflight` job of the release workflow keeps it as the prerequisite of the job that publishes.
 A version the last tag does not name and a run missing the trusted publisher prerequisites then fail before the build, the lint, the typecheck and the suite.
 A wrong trusted publisher setting on npm itself surfaces only at the publish step, through the publish refusal.
 
@@ -89,6 +88,5 @@ Turn on **Allow GitHub Actions to create and approve pull requests** under the r
 
 - [checks-release-notes](checks-release-notes.md)
 - [checks-release-publish](checks-release-publish.md)
-- [checks-release-push](checks-release-push.md)
 - [checks-release-pr](checks-release-pr.md)
 - [checks-release-tag](checks-release-tag.md)

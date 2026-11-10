@@ -74,11 +74,15 @@ type Locator = (keys: readonly Key[], needle: string, fallback: string) => strin
 type Node = { readonly from: number; readonly to: number; readonly column: number };
 
 const WORKFLOWS = ".github/workflows";
-const RELEASE_BINS = ["checks-release-pr", "checks-release-push", "checks-release-tag"];
-const RELEASE_SOURCES = ["release-pr.ts", "release-push.ts", "release-tag.ts"];
+const RELEASE_BINS = ["checks-release-pr", "checks-release-tag"];
+const RELEASE_SOURCES = ["release-pr.ts", "release-tag.ts"];
 const REUSABLE_PREFIX = "./.github/workflows/";
 // GitHub substitutes an expression into the script before the shell reads it.
 const EXPRESSION = /\$\{\{[\s\S]*?\}\}/g;
+
+export function maskExpressions(run: string): string {
+  return run.replace(EXPRESSION, (expression) => `$${"_".repeat(expression.length - 1)}`);
+}
 
 function isPathTo(word: string, files: readonly string[]): boolean {
   return files.some((file) => word.endsWith(`/${file}`));
@@ -98,7 +102,7 @@ function releaseArguments(program: Command): readonly string[] {
 
 // The stand-in for an expression keeps its length, so each invocation starts at its offset in run.
 function literalTargets(run: string): readonly Target[] {
-  return shellWords(run.replace(EXPRESSION, (expression) => `$${"_".repeat(expression.length - 1)}`)).flatMap((words) => {
+  return shellWords(maskExpressions(run)).flatMap((words) => {
     const invocation = words[0]?.start ?? 0;
     return releaseArguments(fromProgram(words.map(({ text }) => text)))
       .filter((name) => !name.includes("$"))
@@ -236,6 +240,19 @@ function scalarPieces(lines: readonly string[], node: Node): readonly Piece[] {
   const first = body.findIndex((piece) => piece.text !== "" && !piece.text.startsWith("#"));
   const token = first === -1 ? undefined : quoteOf(body[first]?.text ?? "");
   return token === undefined ? plainPieces([head, ...body]) : quotedPieces(body.slice(first), token);
+}
+
+export type ScalarSource = { readonly line: number; readonly block: boolean; readonly continued: boolean };
+
+export function scalarSource(lines: readonly string[], keys: readonly Key[]): ScalarSource | undefined {
+  const node = nodeAt(lines, keys);
+  if (node === undefined) return undefined;
+  const [head, ...body] = rawPieces(lines, node);
+  return {
+    line: node.from,
+    block: BLOCK_HEADER.test(head?.text ?? ""),
+    continued: body.some((piece) => meaningful(piece.text)),
+  };
 }
 
 function scalarLine(lines: readonly string[], node: Node, value: string, offset: number): number {

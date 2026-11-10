@@ -11,7 +11,7 @@ permissions:
   # A dispatched run carries no pull request, so the title lookup needs read access.
   pull-requests: read
 
-# release-push waits on a dispatched run, so it gets its own group.
+# A dispatched run gets its own group.
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true

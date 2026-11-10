@@ -2,6 +2,26 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.91.0
+
+Released 2026-11-09.
+
+### Features
+
+- **delivery:** release on demand through a release pull request [#97](https://github.com/avi2d/checks/pull/97)
+
+### Fixes
+
+- **delivery:** accept Dependabot only on GitHub-signed commits and skip its secrets pack [#98](https://github.com/avi2d/checks/pull/98)
+
+## 0.90.0
+
+Released 2026-11-08.
+
+### Features
+
+- **docs:** move vision page to root VISION.md with stance shape and repeat check [#93](https://github.com/avi2d/checks/pull/93)
+
 ## 0.89.0
 
 Released 2026-11-08.

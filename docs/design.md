@@ -198,18 +198,15 @@ Entries come from commit subjects, the squash-merged pull request titles commitl
 A commit body holds the branch's own messages, and nothing lints it, so no entry comes from a body.
 The changelog arrives in the release commit, and no workflow pushes to a branch a person works on.
 
-## A release is cut from every push
+## A release is cut on demand
 
-A release waits for no quiet moment, since a busy repository always has work under way.
-A package published to npm releases from every push to `main` that holds a feature or a fix since the last tag.
-A version only reaches its users once it is published.
-A daily release pull request would leave each merged change unpublished until a person merged the release too.
-`checks-release-push` builds the release commit on top of `main` and runs the required checks on it from the `release/<branch>` branch it owns.
-Only then does it move `main` to it without a force, so `main` only ever gains a release commit whose checks passed.
-It tags the commit it landed and nothing else.
-A repository that is no package keeps the release pull request, and it opens only when someone runs the workflow.
-Only a public package that publishes to npm may release on a schedule, at most once a day.
-A schedule elsewhere cuts releases no one asked for.
+The kit releases on demand through a release pull request.
+The release pull request is the one place the full suite runs.
+Merging it tags the release commit, and the tag run publishes it with no test tiers.
+The release pull request holds current `main` when it merges.
+In this repository, a `tested-tree` step fetches the pull request head the squash number names and refuses a landed tree that differs from the tree the pull request tested.
+Here the release workflow runs the same check on the tag, so either step rejects a mismatched or unverifiable tree.
+A release runs on a schedule only where [checks-ci-wiring](gates/checks-ci-wiring.md#release-schedule) allows it.
 `checks-release-pr` writes only to the `release/<branch>` branch it owns, and rebuilds that branch on `main` rather than merging `main` into it, so the changelog it carries is the one the build writes.
 `checks-release-tag` writes only the `v*` tag of a release commit that already landed.
 The `github-release` job's `contents: write` creates or updates the GitHub release from the tag's `CHANGELOG.md` section.
@@ -218,8 +215,8 @@ Every release bin acts with the workflow token.
 GitHub starts no run for a push that token makes, and holds the runs of a pull request it opens until a maintainer approves them.
 A GitHub App or a personal token would start them, but either is a credential each repository stores and someone rotates.
 A dispatch is the one run the token can start.
-So `checks-release-pr` and `checks-release-push` dispatch the required checks on the release head.
-`checks-release-tag` and `checks-release-push` dispatch the release workflow on the tag.
+So `checks-release-pr` dispatches the required checks on the release head.
+`checks-release-tag` dispatches the release workflow on the tag.
 GitHub keeps a dispatched run's checks off the pull request, and branch protection does not count them.
 So each dispatched job reports its result as a commit status named for the job, which a required check of that name counts.
 Where a status and a check share a name, branch protection requires both, so the status never passes a pull request whose own check failed.
@@ -328,6 +325,7 @@ A rule that names them would publish them, so the owner keeps the terms in a pri
 The pack is a file rather than an inline variable, so one file serves the shell and the runner, and no workflow names a term.
 A pack that is set but cannot serve fails the gate, because a scan that quietly dropped it would pass what it exists to catch.
 An empty `CHECKS_SECRETS_PACK` counts as set, since a CI secret that is missing expands to an empty value.
+A pull request run Dependabot started runs without the pack, because GitHub gives that run no repository secret.
 No report prints a matched term text or the pack path, because the report lands in a public CI log.
 A finding location prints as it stands, such as a file name or a link.
 So a term inside a file name or a repository name shows there.

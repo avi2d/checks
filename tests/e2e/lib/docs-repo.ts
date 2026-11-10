@@ -13,7 +13,7 @@ export async function putAgentFiles(put: DocsRepo["put"]): Promise<void> {
   await put("CLAUDE.md", "<!-- Points Claude at AGENTS.md via import; edit AGENTS.md, not this file. -->\n@AGENTS.md\n");
 }
 
-export const VISION = "docs/vision.md";
+export const VISION = "VISION.md";
 
 export async function visionPage(): Promise<string> {
   return readFile(join(CHECKOUT, "tests", "fixtures", "docs", "vision.md"), "utf8");

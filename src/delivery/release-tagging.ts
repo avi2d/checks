@@ -19,11 +19,11 @@ export function taggedCommitOf(listed: string): string | undefined {
   return peeled?.split("\t")[0];
 }
 
-export const taggedOn = Effect.fn("taggedOn")(function* (root: string, tag: string) {
+const taggedOn = Effect.fn("taggedOn")(function* (root: string, tag: string) {
   return taggedCommitOf(yield* git(["ls-remote", "--tags", "origin", `refs/tags/${tag}`, `refs/tags/${tag}^{}`], root));
 });
 
-export const pushTag = Effect.fn("pushTag")(function* (root: string, sha: string, tag: string, workflow: string) {
+const pushTag = Effect.fn("pushTag")(function* (root: string, sha: string, tag: string, workflow: string) {
   yield* git(["push", "--quiet", "origin", `${sha}:refs/tags/${tag}`], root);
   yield* dispatch(workflow, tag).pipe(
     Effect.mapError(
