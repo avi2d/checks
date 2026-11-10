@@ -36,6 +36,16 @@ const viewedHead = Effect.fn("viewedHead")(function* (run: number) {
   return (yield* gh(["run", "view", String(run), "--json", "headSha"]).pipe(Effect.flatMap(decodeHeadSha))).headSha;
 });
 
+const present = Effect.fn("present")(function* (sha: string) {
+  const checked = yield* collect("git", ["cat-file", "-e", `${sha}^{commit}`]).pipe(Effect.option);
+  return Option.isSome(checked) && checked.value.exitCode === ChildProcessSpawner.ExitCode(0);
+});
+
+const fetchedHead = Effect.fn("fetchedHead")(function* (sha: string) {
+  const fetched = yield* collect("git", ["fetch", "--depth=1", "origin", sha]).pipe(Effect.option);
+  return Option.isSome(fetched) && fetched.value.exitCode === ChildProcessSpawner.ExitCode(0);
+});
+
 export const pruneFullState = Effect.fn("pruneFullState")(function* (run: FullRun, state: string) {
   const fs = yield* FileSystem.FileSystem;
   if (!(yield* fs.exists(state))) return;
@@ -44,15 +54,19 @@ export const pruneFullState = Effect.fn("pruneFullState")(function* (run: FullRu
   if (Option.isSome(override)) now = override.value;
   if (!inRefreshWindow(run.createdAt, now)) {
     yield* fs.remove(state);
-    yield* Console.log(`mutation-baseline: dropped the restored full state, run ${run.databaseId} started before the current ${REFRESH_DAYS}-day refresh window`);
+    yield* Console.log(`mutation-baseline: dropped the restored state, run ${run.databaseId} started before the current ${REFRESH_DAYS}-day refresh window`);
     return;
   }
   const base = yield* viewedHead(run.databaseId);
+  if (!(yield* present(base)) && !(yield* fetchedHead(base))) {
+    yield* Console.log(`::warning::mutation-baseline: skipped the age check and kept the restored state, since run ${run.databaseId}'s head commit is missing from this checkout and fetching it from origin failed`);
+    return;
+  }
   const { paths, preload, stale, config } = yield* stalenessSince(base, "HEAD");
   const changed = [...paths].filter((path) => FULL_CONFIGS.includes(path) || config.has(path)).toSorted();
   if (changed.length > 0 || preload !== undefined) {
     yield* fs.remove(state);
-    yield* Console.log(`mutation-baseline: dropped the restored full state, ${preload ?? changed.join(" ")} changed since run ${run.databaseId}`);
+    yield* Console.log(`mutation-baseline: dropped the restored state, ${preload ?? changed.join(" ")} changed since run ${run.databaseId}`);
     return;
   }
   const text = yield* fs.readFileString(state);
@@ -64,5 +78,5 @@ export const pruneFullState = Effect.fn("pruneFullState")(function* (run: FullRu
   if (stripped.tests.length === 0 && stripped.sources.length === 0) return;
   yield* fs.writeFileString(state, JSON.stringify(stripped.state));
   const dropped = [...stripped.tests, ...stripped.sources.map((source) => `${source} results`)].join(" ");
-  yield* Console.log(`mutation-baseline: dropped ${dropped} from the restored full state`);
+  yield* Console.log(`mutation-baseline: dropped ${dropped} from the restored state`);
 });

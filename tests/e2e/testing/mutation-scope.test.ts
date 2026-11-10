@@ -116,15 +116,16 @@ function testedRepo(): Promise<{ repo: FixtureRepo; base: string }> {
 const testedBaseline = (repo: FixtureRepo, killsOnly = false): Promise<string> =>
   coverageBaseline(repo, [{ testFile: "tests/unit/covered.test.ts", sources: ["src/covered.ts"], killsOnly }], ["src/other.ts"]);
 
-test("a changed test with no baseline report fails rather than scoping nothing", async () => {
+test("a changed test with no baseline report scopes no covered source instead of every mutated source", async () => {
   const { repo, base } = await testedRepo();
   await repo.write({ "tests/unit/covered.test.ts": body("weakened") });
 
   const done = await scopeRun(repo, base, join(repo.dir, "no-baseline.json"));
 
-  expect(done.exitCode).toBe(2);
-  expect(done.text).toContain("mutation-scope: tests/unit/covered.test.ts changed, but no baseline report at");
-  expect(done.text).not.toContain("SCOPE=");
+  expect(done.exitCode).toBe(0);
+  expect(done.text).toContain("SCOPE=\n");
+  expect(done.text).toContain("::warning::mutation-scope: tests/unit/covered.test.ts changed, but no full baseline report at");
+  expect(done.text).toContain("so the scope holds no covered source");
 });
 
 test("a changed test pulls its covered source into scope", async () => {
@@ -331,14 +332,15 @@ test("a changed helper no unit test imports leaves the scope empty even with no 
   expect(await scopeOf(repo, base)).toEqual(NOTHING);
 });
 
-test("a changed helper with no baseline report fails rather than scoping nothing", async () => {
+test("a changed helper with no baseline report scopes no covered source instead of every mutated source", async () => {
   const { repo, base } = await helpedRepo();
   await repo.write({ "tests/lib/tree.ts": body("weakened") });
 
   const done = await scopeRun(repo, base);
 
-  expect(done.exitCode).toBe(2);
-  expect(done.text).toContain("mutation-scope: tests/unit/other.test.ts changed, but no baseline report says which sources they cover");
+  expect(done.exitCode).toBe(0);
+  expect(done.text).toContain("SCOPE=\n");
+  expect(done.text).toContain("::warning::mutation-scope: tests/unit/other.test.ts changed, but no full baseline report says which sources they cover, so the scope holds no covered source. Refresh the full baseline with `gh workflow run mutation -f mode=refresh`.");
 });
 
 async function preloadedRepo(): Promise<{ repo: FixtureRepo; base: string; baseline: string }> {

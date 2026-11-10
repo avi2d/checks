@@ -188,6 +188,19 @@ test("advisory mode prints the same verdict and always exits 0", async () => {
   expect(formatComparison(comparison, true)).toContain("advisory");
 });
 
+test("a base file the head run leaves out is not listed as base only", () => {
+  const source = "x\ny\nz\n";
+  const base = new Map([
+    ["src/a.ts", { source, mutants: [mutant({ status: "Killed", location: at(1, 1, 2) })] }],
+    ["src/b.ts", { source, mutants: [mutant({ status: "Killed", location: at(1, 1, 2) })] }],
+  ]);
+  const head = new Map([["src/a.ts", { source, mutants: [mutant({ status: "Killed", location: at(1, 1, 2) })] }]]);
+  const comparison = compareReports(base, head);
+  expect(comparison.regression).toBe(false);
+  expect(comparison.baseOnly).toHaveLength(0);
+  expect(comparison.headOnly).toHaveLength(0);
+});
+
 test("only the --advisory flag turns on advisory mode", () => {
   expect(Effect.runSync(parseArgs(["base.json", "head.json", "--advisory"])).advisory).toBe(true);
   expect(Effect.runSync(parseArgs(["base.json", "head.json"])).advisory).toBe(false);

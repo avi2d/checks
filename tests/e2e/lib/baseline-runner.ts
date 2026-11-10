@@ -67,12 +67,55 @@ export async function gitRunner(files: Readonly<Record<string, string>>, build: 
   };
 }
 
+export async function shallowRunner(
+  baseFiles: Readonly<Record<string, string>>,
+  headFiles: Readonly<Record<string, string>>,
+  build: (baseSha: string) => readonly FakeRun[],
+): Promise<Runner & { readonly work: string }> {
+  const home = await scratch("checks-mutation-baseline-shallow-");
+  const origin = join(home, "origin");
+  await mkdir(origin, { recursive: true });
+  await $`git init -q -b main && git config user.email fixture@example.com && git config user.name Fixture && git config uploadpack.allowReachableSHA1InWant true`.cwd(origin).quiet();
+  for (const [name, content] of Object.entries(baseFiles)) {
+    await mkdir(join(origin, name.slice(0, Math.max(name.lastIndexOf("/"), 0))), { recursive: true });
+    await writeFile(join(origin, name), content);
+  }
+  await $`git add -A && git commit -qm base`.cwd(origin).quiet();
+  const base = (await $`git rev-parse HEAD`.cwd(origin).quiet()).stdout.toString().trim();
+  for (const [name, content] of Object.entries(headFiles)) {
+    await mkdir(join(origin, name.slice(0, Math.max(name.lastIndexOf("/"), 0))), { recursive: true });
+    await writeFile(join(origin, name), content);
+  }
+  await $`git add -A && git commit -qm head`.cwd(origin).quiet();
+  const work = join(home, "work");
+  await $`git clone -q --depth=1 file://${origin} ${work}`.cwd(home).quiet();
+  await $`git config user.email fixture@example.com && git config user.name Fixture`.cwd(work).quiet();
+  const fake = await fakeActions(home, REPOSITORY_ID, build(base));
+  return {
+    home,
+    work,
+    run: (args, env = {}) =>
+      ran($`bun ${SCRIPT} ${args}`.cwd(work).env({ ...process.env, RUNNER_ENVIRONMENT: "self-hosted", GITHUB_RUN_ID: undefined, GITHUB_REPOSITORY_ID: String(REPOSITORY_ID), ...fake.env, HOME: home, ...env })),
+    downloads: fake.downloads,
+    calls: fake.calls,
+    read: (file) => readFile(join(work, file), "utf8").catch(() => undefined),
+    shelf: async (artifact) => (await readdir(join(home, SHELVES, artifact)).catch(() => [])).filter((entry) => !entry.startsWith(".")).sort(),
+  };
+}
+
 // HOME holds the runner's cache, so each runner starts with an empty one.
 export async function selfHosted(runs: readonly FakeRun[], options: FakeOptions = {}): Promise<Runner> {
   const home = await scratch("checks-mutation-baseline-");
-  const fake = await fakeActions(home, REPOSITORY_ID, runs, options);
   const work = join(home, "work");
   await mkdir(work);
+  await $`git init -q -b main && git config user.email fixture@example.com && git config user.name Fixture && git commit -q --allow-empty -m base`.cwd(work).quiet();
+  const sha = (await $`git rev-parse HEAD`.cwd(work).quiet()).stdout.toString().trim();
+  const fake = await fakeActions(
+    home,
+    REPOSITORY_ID,
+    runs.map((candidate) => (candidate.headSha === undefined ? { ...candidate, headSha: sha } : candidate)),
+    options,
+  );
   return {
     home,
     run: (args, env = {}) => ran($`bun ${SCRIPT} ${args}`.cwd(work).env({ ...process.env, RUNNER_ENVIRONMENT: "self-hosted", GITHUB_RUN_ID: undefined, GITHUB_REPOSITORY_ID: String(REPOSITORY_ID), ...fake.env, HOME: home, ...env })),
@@ -83,10 +126,14 @@ export async function selfHosted(runs: readonly FakeRun[], options: FakeOptions 
   };
 }
 
+const windowMs = 28 * 86_400_000;
+const windowStart = Math.floor(Number(process.env["CHECKS_MUTATION_BASELINE_NOW_MS"] ?? Date.now()) / windowMs) * windowMs;
+const recent = (offsetMs: number): string => new Date(windowStart + offsetMs).toISOString();
+
 export const MAIN_RUNS = [
-  run(30, "pull_request", "2026-10-03T00:00:00Z", [baseline(300, "mutation-baseline", "pull request")]),
-  run(20, "push", "2026-10-02T00:00:00Z", [baseline(200, "mutation-baseline", "newest push")]),
-  run(10, "push", "2026-10-01T00:00:00Z", [baseline(100, "mutation-baseline", "older push")]),
+  run(30, "pull_request", recent(26 * 86_400_000 + 2 * 3_600_000), [baseline(300, "mutation-baseline", "pull request")]),
+  run(20, "push", recent(26 * 86_400_000 + 3_600_000), [baseline(200, "mutation-baseline", "newest push")]),
+  run(10, "push", recent(26 * 86_400_000), [baseline(100, "mutation-baseline", "older push")]),
 ];
 
 export const SAVED_SHELF = join(SHELVES, "saved", "mutation-baseline");

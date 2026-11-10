@@ -29,7 +29,10 @@ The same holds when the branch changes a preload or a file a preload imports, wh
 
 Each source whose mutants a changed unit test covers or kills in the full baseline report then enters the scope, when it still exists at `HEAD`.
 So a kill lost through a test change alone still shows in the comparison, in a source the branch leaves alone.
-A changed unit test with no baseline report fails the run rather than reading incomplete coverage.
+A changed unit test with no baseline report adds no covered source to the scope.
+With no other change the scope stays empty and the comparison skips.
+The scope step files a warning annotation that names the missing full baseline.
+Refresh the full baseline with `gh workflow run mutation -f mode=refresh`.
 Stryker records each test file's source in the report's `testFiles`.
 A changed unit test the merge base holds must have that recorded source match its content at the merge base.
 Otherwise the report ran an older test, so its coverage cannot say what the test covers now.
@@ -81,7 +84,8 @@ checks-mutation-scope --shards <count> [<last-report>]
 ```
 
 `<base>` is the target branch, such as `origin/main`, or the merge base itself.
-`<full-baseline-report>` is the path the full baseline was restored to, and a path with no file reads as no report, which fails the run only when a unit test changed.
+`<full-baseline-report>` is the path the full baseline was restored to.
+A path with no file reads as no report, and a changed unit test then adds no covered source.
 `<count>` is a whole number from 1 to 256, the most jobs one GitHub Actions matrix runs.
 `<last-report>` is the path of the last whole-tree report.
 With no `<last-report>`, each file weighs one mutant, and a path with no file fails the run.
@@ -92,7 +96,7 @@ It prints one line for each list, as `NAME=a,b`, with each list sorted by path:
 
 | Line | What it lists |
 | --- | --- |
-| `SCOPE` | the files the base and head runs both mutate, empty when nothing in mutation scope changed |
+| `SCOPE` | the files the incremental head run mutates, empty when nothing in mutation scope changed |
 | `STALE_TESTS` | the unit tests that count as changed only because they read a changed file |
 
 Stryker reads each `--mutate` entry as a glob and turns each backslash into a `/`.
@@ -105,7 +109,7 @@ Each entry is one shard's files, escaped as `SCOPE` escapes them and joined with
 On stderr it names each shard's file count and mutant weight.
 
 Stryker compares only a test file's own source when it resumes from incremental state.
-A run that resumes from the merge base's state drops each `STALE_TESTS` entry from that state first, so Stryker retests the mutants those tests cover.
+A run that resumes from the saved `main` baseline drops each `STALE_TESTS` entry from that state first, so Stryker retests the mutants those tests cover.
 
 On stderr it names each unit test that reads a changed file, and each source a changed unit test brings in.
 It also names each stale test that widens the scope.
@@ -115,7 +119,7 @@ It also names each stale test that widens the scope.
 | Code | When |
 | --- | --- |
 | 0 | it printed the scope or the shards, an empty list included |
-| 2 | the arguments do not parse, git fails, the Stryker config, `bunfig.toml`, the baseline report or the last report does not load, a `mutate` entry names a mutation range, or a unit test changed with no baseline report |
+| 2 | the arguments do not parse, git fails, the Stryker config, `bunfig.toml`, the baseline report or the last report does not load, or a `mutate` entry names a mutation range |
 
 ## Sample output
 
@@ -137,10 +141,10 @@ mutation-scope: shard 3 holds 2 file(s) and about 8 mutant(s)
 SHARDS=["src/a.ts,src/b.ts","src/c.ts","src/d.ts,src/e.ts"]
 ```
 
-A changed unit test with no full baseline on `main`, on stderr:
+A changed unit test with no full baseline on `main` adds no covered source to the scope:
 
 ```
-mutation-scope: tests/unit/dashboard/snapshot.test.ts changed, but no baseline report at /runner/temp/baseline-full/mutation.json says which sources they cover
+::warning::mutation-scope: tests/unit/dashboard/snapshot.test.ts changed, but no full baseline report at /runner/temp/baseline-full/mutation.json says which sources they cover, so the scope holds no covered source. Refresh the full baseline with `gh workflow run mutation -f mode=refresh`.
 ```
 
 A changed unit test that `main` edited after its newest full baseline, on stderr:
@@ -151,7 +155,8 @@ mutation-scope: the baseline report did not run tests/unit/dashboard/snapshot.te
 
 ## When it runs
 
-Only a CI step the repository writes runs it, in a branch's mutation comparison, before either Stryker run:
+Only a CI step runs it, in a branch's mutation comparison before the incremental head run.
+The shared `mutation` workflow runs it in its compare and refresh jobs, and a step the repository writes runs it too:
 
 ```yaml
 - name: Select mutation scope
@@ -165,7 +170,7 @@ Only a CI step the repository writes runs it, in a branch's mutation comparison,
 ```
 
 Each later step reads `SCOPE` from the environment, and a failed scope step adds nothing to it.
-[checks-mutation-compare](checks-mutation-compare.md#running-it-in-ci) shows the whole job.
+[checks-mutation-compare](checks-mutation-compare.md#running-it-in-ci) shows the comparison it scopes.
 The full baseline comes from the `mutation` workflow, as [checks-mutation](checks-mutation.md#running-it-in-ci) shows.
 
 ## Related topics

@@ -241,7 +241,7 @@ function compareFile(path: string, baseFile: ReportFile | undefined, headFile: R
 
 export function compareReports(baseFiles: ReadonlyMap<string, ReportFile>, headFiles: ReadonlyMap<string, ReportFile>): Comparison {
   const findings: Findings = { regressions: [], moves: [], baseOnly: [], headOnly: [] };
-  for (const path of new Set([...baseFiles.keys(), ...headFiles.keys()])) compareFile(path, baseFiles.get(path), headFiles.get(path), findings);
+  for (const path of headFiles.keys()) compareFile(path, baseFiles.get(path), headFiles.get(path), findings);
 
   findings.regressions.sort(byPosition);
   findings.moves.sort(byPosition);

@@ -232,14 +232,9 @@ const readImportGraph = Effect.fn("readImportGraph")(function* (paths: Iterable<
   return yield* readFiles([...paths].filter((path) => GRAPH_FILE.test(path)));
 });
 
-const loadBaseline = Effect.fn("loadBaseline")(function* (report: string | undefined, tests: ReadonlySet<string>) {
-  const fs = yield* FileSystem.FileSystem;
-  if (report === undefined || !(yield* fs.exists(report))) {
-    const where = report === undefined ? "" : ` at ${report}`;
-    return yield* new ScopeError({ message: `${[...tests].toSorted().join(",")} changed, but no baseline report${where} says which sources they cover` });
-  }
+const loadBaseline = Effect.fn("loadBaseline")(function* (report: string) {
   const unparsed = (cause: { readonly message: string }) => new ScopeError({ message: `${report} is not a Stryker mutation report with its test files: ${cause.message}` });
-  return yield* fs.readFileString(report).pipe(Effect.flatMap(decodeBaseline), Effect.mapError(unparsed));
+  return yield* (yield* FileSystem.FileSystem).readFileString(report).pipe(Effect.flatMap(decodeBaseline), Effect.mapError(unparsed));
 });
 
 type Snapshots = { readonly base: string; readonly head: string; readonly atBase: ReadonlySet<string>; readonly atHead: ReadonlySet<string> };
@@ -297,9 +292,14 @@ const enteringSources = Effect.fn("enteringSources")(function* (
   scoped: ReadonlySet<string>,
 ) {
   if (tests.size === 0) return [];
-  const baseline = yield* loadBaseline(report, tests);
   const eligible = (source: string): boolean => mutated(source) && !scoped.has(source) && atHead.has(source);
   const candidates = [...atHead].filter(eligible).toSorted();
+  if (report === undefined || !(yield* (yield* FileSystem.FileSystem).exists(report))) {
+    const where = report === undefined ? "" : ` at ${report}`;
+    yield* Console.error(`::warning::${NAME}: ${[...tests].toSorted().join(",")} changed, but no full baseline report${where} says which sources they cover, so the scope holds no covered source. Refresh the full baseline with \`gh workflow run mutation -f mode=refresh\`.`);
+    return [];
+  }
+  const baseline = yield* loadBaseline(report);
   const stale = yield* staleIn(baseline, [...tests].filter((test) => atBase.has(test)), base);
   if (stale.length > 0) {
     yield* Console.error(`${NAME}: the baseline report did not run ${stale.join(" ")} as the merge base holds it, so every mutated source enters`);

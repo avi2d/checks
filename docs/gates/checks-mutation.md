@@ -89,65 +89,38 @@ An `--incremental` run with no report stops before instrumenting with the missin
 A repository runs its baselines through the `mutation` caller that [checks-setup](checks-setup.md) writes.
 A push to `main` that changes what Stryker mutates or tests starts one, and so does `gh workflow run mutation`.
 Run scoped checks locally during development.
-A first baseline with no state costs a full Stryker run, and each later one retests the mutants its changes reach, while a result made stale by a file a test reads at runtime lasts until the next 28-day refresh.
+A first baseline with no state costs a full Stryker run, and each later one restores the newest `main` baseline and retests the mutants its changes reach.
 
 ## Running it in CI
 
-Only `avi2d/workflows` holds a job like the one below, since [checks-ci-wiring](checks-ci-wiring.md#mutation-jobs) refuses it in any other repository.
+Only `avi2d/workflows` holds the baseline job, since [checks-ci-wiring](checks-ci-wiring.md#mutation-jobs) refuses it in any other repository.
 Any other repository calls that shared workflow from the caller [checks-setup](checks-setup.md) writes.
 A baseline job takes these steps and keeps its report as an artifact:
 
 ```yaml
-name: mutation
-on:
-  workflow_dispatch:
-jobs:
-  mutation:
-    permissions:
-      contents: read
-      actions: read
-    runs-on: [self-hosted, gpu, x64]
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-      - run: bun install --frozen-lockfile
-      - env:
-          GH_TOKEN: ${{ github.token }}
-        run: bunx checks-mutation-baseline --full reports/mutation/mutation.json reports/stryker-incremental.json
-      - run: bunx stryker run --incremental
-      - run: bunx checks-mutation-baseline --slim reports/mutation/mutation.json "$RUNNER_TEMP/full/mutation.json"
-      - run: bunx checks-mutation-baseline --slim reports/stryker-incremental.json "$RUNNER_TEMP/full/stryker-incremental.json"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: mutation-baseline-full
-          path: ${{ runner.temp }}/full/
-          retention-days: 30
+- env:
+    GH_TOKEN: ${{ github.token }}
+  run: bunx checks-mutation-baseline reports/stryker-incremental.json
+- run: bunx stryker run --incremental
 ```
 
-A first baseline with no state tests every mutant.
-Each later restore drops the tests that read a changed file and the mutant results for a changed source from the restored state, and drops non-killed results when any test goes stale.
-It drops the whole state when a Stryker config, stryker.preset.js, the lockfile, the Bun version, a file the active config reaches through a relative import at either revision, or the bunfig preload set or a file it reaches through a relative import changed.
-It fails the restore when the state does not parse.
-The run retests every mutant those changes reach and reuses the rest.
-A result made stale by a file a test reads at runtime lasts until the next 28-day refresh.
-A file a config or preload reaches only through a package main escapes invalidation until the next 28-day refresh.
-The checkout fetches the full history, so the restore can tell which files changed since the previous full run.
-Its report names every test that covers each covered mutant and the first test that killed each killed mutant.
-[checks-mutation-scope](checks-mutation-scope.md#what-it-reads) says why that one killer is enough.
-The upload is the `mutation-baseline-full` artifact that a branch comparison's scope step restores with `checks-mutation-baseline --full`.
-[checks-mutation-scope](checks-mutation-scope.md) reads it to bring in the sources a changed unit test covers or kills.
-The restore reads only a successful run of `mutation.yml` on `main`, so a sweep that fails publishes nothing a scope step reads.
-The artifact keeps 30 days, so the newest full baseline outlives the week between full runs.
-The upload holds the slimmed report and the slimmed state without each mutant's `statusReason`, as [checks-mutation-baseline](checks-mutation-baseline.md#the-saved-baselines) says, so the one directory holds about 10 MB in place of about 500 MB.
+The restore fetches the restored run's head commit from origin when the checkout lacks it, so the checkout needs no full history.
 
-The job runs on the self-hosted labels the repository declares in `package.json` under `checks.mutationRunner`, which is where a repository sends its full sweeps.
-It never reads `CI_RUNS_ON`, so an override that moves a repository's other jobs during a runner outage leaves the sweep waiting for those labels.
-[checks-ci-wiring](checks-ci-wiring.md#runners) refuses a mutation job that names it in `runs-on`.
+A first baseline with no state tests every mutant.
+Each later run restores the newest `main` baseline, drops each result the 28-day refresh window or a changed config made stale, and retests the mutants its changes reach.
+A result made stale by a file a test reads at runtime stays stale past refresh, since refresh uploads only `mutation-baseline-full`.
+The job uploads the Stryker report and the incremental state as the `mutation-baseline` artifact and keeps it for 7 days.
+The next baseline and each pull request comparison restore that artifact with the ordinary restore.
+The job posts the score in its summary.
+
+A refresh job restores the previous full report with `--full` for shard balancing and runs the full suite with static mutants ignored.
+It merges the shard reports into a fresh `mutation-baseline-full` artifact.
+It starts by hand every 28 days.
+[checks-mutation-scope](checks-mutation-scope.md) reads the full report to bring in the sources a changed unit test covers or kills.
+The restore reads only a successful run of `mutation.yml` on `main`, so a sweep that fails publishes nothing a scope step reads.
+
+The baseline job runs on `ubuntu-latest`.
+[checks-ci-wiring](checks-ci-wiring.md#runners) refuses a mutation job that names `CI_RUNS_ON` in `runs-on`.
 The `name: mutation` line is what `gh workflow run mutation` looks up.
 GitHub sets `CI=true` on every runner, so the preset lets the full run through there.
 

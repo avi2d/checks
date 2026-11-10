@@ -52,13 +52,16 @@ export function newestFirst(runs: readonly Run[]): readonly number[] {
   return byNewest(runs).map((run) => run.databaseId);
 }
 
-// All non-pull-request runs newest first: a newer full run holds no baseline, and the newest baseline must survive it.
-const latestCandidates = Effect.gen(function* () {
-  const newest = (yield* listed(undefined, LATEST_LIMIT)).find((run) => run.event !== "pull_request");
-  return newest === undefined ? [] : [newest];
-});
+// Runs newer than the newest push hold no baseline, and a newer push without one supersedes every older baseline.
+export function incrementalCandidates(runs: readonly Run[]): readonly Run[] {
+  const ordered = byNewest(runs.filter((run) => run.event !== "pull_request"));
+  const newestPush = ordered.findIndex((run) => run.event === "push");
+  return newestPush === -1 ? ordered : ordered.slice(0, newestPush + 1);
+}
 
-const latestRuns = listed(undefined, LATEST_LIMIT).pipe(Effect.map((runs) => newestFirst(runs.filter((run) => run.event !== "pull_request"))));
+const latestCandidates = listed(undefined, LATEST_LIMIT).pipe(Effect.map(incrementalCandidates));
+
+const latestRuns = latestCandidates.pipe(Effect.map((runs) => runs.map((run) => run.databaseId)));
 
 // Each full event is listed on its own, because one shared window lets push runs crowd out every full run.
 const fullCandidates = Effect.gen(function* () {
@@ -344,11 +347,14 @@ function parsed([first, ...rest]: readonly string[]): Command | undefined {
 }
 
 const restoredRun = Effect.fn("restoredRun")(function* (run: Run, name: string, root: Option.Option<string>, shelf: Option.Option<string>, request: Request) {
-  if (Option.isSome(shelf) && (yield* restoredFromSaved(shelf.value, run.databaseId, request))) return true;
+  const state = request.full ? request.optional[0]?.to : request.needed.to;
+  if (Option.isSome(shelf) && (yield* restoredFromSaved(shelf.value, run.databaseId, request))) {
+    if (state !== undefined) yield* pruneFullState(run, state);
+    return true;
+  }
   const artifact = yield* artifactOf(run.databaseId, name).pipe(Effect.catch(warned(Option.none<Artifact>())));
   if (Option.isNone(artifact) || !(yield* restoredFrom(run.databaseId, artifact.value, root, request))) return false;
-  const incremental = request.full ? request.optional[0] : undefined;
-  if (incremental !== undefined) yield* pruneFullState(run, incremental.to);
+  if (state !== undefined) yield* pruneFullState(run, state);
   return true;
 });
 
