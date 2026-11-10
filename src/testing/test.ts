@@ -186,7 +186,7 @@ function tierArgs(tier: TestTier | undefined): readonly string[] {
   return [`./tests/${tier}`];
 }
 
-const FIRST_WORKER_BYTES = 1074 * 1024 * 1024;
+const FIRST_WORKER_BYTES = 1024 ** 3;
 const EXTRA_WORKER_BYTES = 100 * 1024 * 1024;
 const MEMORY_RESERVE_FRACTION = 0.1;
 
@@ -207,16 +207,7 @@ export function reclaimableBytes(vmStat: string): number | undefined {
   return pages * Number(pageSize);
 }
 
-const wholeNumberFrom = (name: string) =>
-  Config.schema(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)), name).pipe(
-    Config.option,
-    Effect.map(Option.getOrUndefined),
-    Effect.orElseSucceed(() => undefined),
-  );
-
 const availableBytes = Effect.fn("availableBytes")(function* () {
-  const freeOverride = yield* wholeNumberFrom("CHECKS_TEST_FREE_BYTES");
-  if (freeOverride !== undefined) return freeOverride;
   if (process.platform !== "darwin") return freemem();
   const vmStat = yield* collect("vm_stat", []).pipe(
     Effect.map(({ stdout }) => stdout),
@@ -227,9 +218,7 @@ const availableBytes = Effect.fn("availableBytes")(function* () {
 
 export const resolveWorkerCount = Effect.fn("resolveWorkerCount")(function* (workers: number | undefined) {
   if (workers !== undefined) return workers;
-  const total = (yield* wholeNumberFrom("CHECKS_TEST_TOTAL_BYTES")) ?? totalmem();
-  const cpus = (yield* wholeNumberFrom("CHECKS_TEST_CPUS")) ?? availableParallelism();
-  return workerCountFor(yield* availableBytes(), total, cpus);
+  return workerCountFor(yield* availableBytes(), totalmem(), availableParallelism());
 });
 
 const readSmokeList = Effect.fn("readSmokeList")(function* (root: string) {

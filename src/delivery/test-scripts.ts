@@ -1,6 +1,6 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
 import { workingTreeFiles } from "../core/git.ts";
-import { KIT_PACKAGE_NAME, kitScriptsToBin, ownTierCommand, scriptFaults, STANDARD_TIERS, tierCommand, type ScriptFault, type TestTier } from "../core/test-script.ts";
+import { KIT_PACKAGE_NAME, TEST_FILE, hasTierTests, kitScriptsToBin, ownTierCommand, scriptFaults, STANDARD_TIERS, tierCommand, type ScriptFault, type TestTier } from "../core/test-script.ts";
 
 class TestScriptsError extends Schema.TaggedError<TestScriptsError>()("TestScriptsError", {
   message: Schema.String,
@@ -8,12 +8,9 @@ class TestScriptsError extends Schema.TaggedError<TestScriptsError>()("TestScrip
 
 export type MutableRecord = Record<string, unknown>;
 
-const TIER_TEST_FILE = /(?:[.](?:test|spec)|_test)[.](tsx?)$/;
-
 const tierHasTests = Effect.fn("tierHasTests")(function* (root: string, tier: TestTier) {
-  const prefix = `tests/${tier}/`;
   const listed = yield* workingTreeFiles(root).pipe(Effect.orElseSucceed(() => undefined));
-  if (listed !== undefined) return listed.some((entry) => entry.startsWith(prefix) && TIER_TEST_FILE.test(entry));
+  if (listed !== undefined) return hasTierTests(listed, tier);
   const system = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const dir = path.join(root, "tests", tier);
@@ -21,7 +18,7 @@ const tierHasTests = Effect.fn("tierHasTests")(function* (root: string, tier: Te
   const entries = yield* system.readDirectory(dir, { recursive: true }).pipe(
     Effect.mapError((cause) => new TestScriptsError({ message: "cannot read " + dir + ": " + cause.message })),
   );
-  return entries.some((entry) => TIER_TEST_FILE.test(entry));
+  return entries.some((entry) => TEST_FILE.test(entry));
 });
 
 const describeFault = (fault: ScriptFault): string => {
@@ -39,36 +36,30 @@ const describeFault = (fault: ScriptFault): string => {
   }
 };
 
-const decodeNamed = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ name: Schema.optionalKey(Schema.String) })));
+export type TestScriptContext = {
+  readonly present: ReadonlySet<TestTier>;
+  readonly isKit: boolean;
+};
 
-const kitNameOf = Effect.fn("kitNameOf")(function* (root: string) {
-  const system = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  const file = path.join(root, "package.json");
-  if (!(yield* system.exists(file))) return undefined;
-  return yield* system.readFileString(file).pipe(
-    Effect.flatMap(decodeNamed),
-    Effect.map((manifest) => manifest.name),
-    Effect.orElseSucceed(() => undefined),
-  );
-});
-
-export const testScriptsFault = Effect.fn("testScriptsFault")(function* (scripts: MutableRecord, root: string) {
-  const present: TestTier[] = [];
+export const readTestScriptContext = Effect.fn("readTestScriptContext")(function* (root: string, knownName: unknown) {
+  const present = new Set<TestTier>();
   for (const tier of STANDARD_TIERS) {
-    if (yield* tierHasTests(root, tier)) present.push(tier);
+    if (yield* tierHasTests(root, tier)) present.add(tier);
   }
-  const effective = (yield* kitNameOf(root)) === KIT_PACKAGE_NAME ? kitScriptsToBin(scripts) : scripts;
-  const fault = scriptFaults(effective, (tier) => present.includes(tier)).find((candidate) => candidate.found !== undefined);
-  return fault === undefined ? undefined : `package.json ${describeFault(fault)}`;
+  return { present, isKit: knownName === KIT_PACKAGE_NAME } satisfies TestScriptContext;
 });
 
-export const withTierDefaults = Effect.fn("withTierDefaults")(function* (scripts: MutableRecord, root: string) {
+export function testScriptsFault(scripts: MutableRecord, context: TestScriptContext): string | undefined {
+  const effective = context.isKit ? kitScriptsToBin(scripts) : scripts;
+  const fault = scriptFaults(effective, (tier) => context.present.has(tier)).find((candidate) => candidate.found !== undefined);
+  return fault === undefined ? undefined : `package.json ${describeFault(fault)}`;
+}
+
+export function withTierDefaults(scripts: MutableRecord, context: TestScriptContext): MutableRecord {
   const next: MutableRecord = { ...scripts };
-  const isKit = (yield* kitNameOf(root)) === KIT_PACKAGE_NAME;
   for (const tier of STANDARD_TIERS) {
     const key = `test:${tier}`;
-    if (typeof next[key] !== "string" && (yield* tierHasTests(root, tier))) next[key] = isKit ? ownTierCommand(tier) : tierCommand(tier);
+    if (typeof next[key] !== "string" && context.present.has(tier)) next[key] = context.isKit ? ownTierCommand(tier) : tierCommand(tier);
   }
   return next;
-});
+}

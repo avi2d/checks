@@ -487,13 +487,8 @@ test(
     expect(suite.exitCode).toBe(0);
 
     const { GITHUB_STEP_SUMMARY: _summary, ...withoutStepSummary } = process.env;
-    const flake = await runScript("flake", {
-      ...withoutStepSummary,
-      CHECKS_TEST_FREE_BYTES: String(2 * 1024 ** 3),
-      CHECKS_TEST_TOTAL_BYTES: String(8 * 1024 ** 3),
-      CHECKS_TEST_CPUS: "8",
-    });
-    expect(flake.stdout).toContain("checks-flake: 2 run(s) passed on 2 worker(s), with seeds ");
+    const flake = await runScript("flake", withoutStepSummary);
+    expect(flake.stdout).toMatch(/checks-flake: 2 run\(s\) passed on \d+ worker\(s\), with seeds /);
     expect(flake.exitCode).toBe(0);
 
     for (const [script, report] of [

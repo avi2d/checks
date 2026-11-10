@@ -93,7 +93,7 @@ test("a standard script never forces the full suite, keeps the junit report or t
 
 test("workerCountFor leaves a gigabyte for the first worker, a hundred megabytes per extra worker and a tenth in reserve", () => {
   expect(workerCountFor(8 * 1024 ** 3, 16 * 1024 ** 3, 8)).toBe(8);
-  expect(workerCountFor(2 * 1024 ** 3, 8 * 1024 ** 3, 8)).toBe(2);
+  expect(workerCountFor(2 * 1024 ** 3, 8 * 1024 ** 3, 8)).toBe(3);
   expect(workerCountFor(64 * 1024 ** 3, 64 * 1024 ** 3, 4)).toBe(4);
 });
 

@@ -79,9 +79,10 @@ It checks the directory it runs in, or the directory it is given.
 ## Sample output
 
 ```
-test-layout: 4 violation(s)
+test-layout: 5 violation(s)
   src/a.test.ts: a test file must live at tests/<level>/**/*.test.ts, or tests/quarantine/<level>/**/*.test.ts while quarantined, with unit, e2e, live, or pixel as the level; move it to tests/unit/a.test.ts
   package.json: scripts.test must be "checks-test", which runs the default suite and judges its skips, found "bun test"
+  package.json: scripts["test:fast"] must be "checks-test --changed", which runs the test files the change reaches, found null
   package.json: scripts.lint must run the layout check: add "checks-lint"
   bunfig.toml: bunfig.toml is missing; bun has no bunfig extends, so copy node_modules/@avi2dg/checks/bunfig.toml
 ```

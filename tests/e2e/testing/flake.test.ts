@@ -85,11 +85,11 @@ async function sharedSingleton(testScript: string): Promise<void> {
   await writeFile(join(dir, "tests", "own-preload.test.ts"), OWN_PRELOAD);
 }
 
-async function flake(summaryFile: string, memory: Readonly<Record<string, string>> = {}): Promise<{ exitCode: number; text: string; record: typeof FlakeRecord.Type }> {
+async function flake(summaryFile: string): Promise<{ exitCode: number; text: string; record: typeof FlakeRecord.Type }> {
   const seeds = SEEDS.flatMap((seed) => ["--seed", String(seed)]);
   const result = await $`bun ${SCRIPT} ${seeds} --report flake-report.json`
     .cwd(dir)
-    .env({ ...process.env, ...memory, GITHUB_STEP_SUMMARY: summaryFile })
+    .env({ ...process.env, GITHUB_STEP_SUMMARY: summaryFile })
     .nothrow()
     .quiet();
   const record = Schema.decodeSync(FlakeRecord)(await readFile(join(dir, "flake-report.json"), "utf8"));
@@ -191,16 +191,6 @@ test(
   },
   120_000,
 );
-
-test("controlled memory allowing two of eight workers hunts on two workers, as checks-test runs it", async () => {
-  await consumer(ORDER_FREE, { test: "checks-test" });
-  const memory = { CHECKS_TEST_FREE_BYTES: String(2 * 1024 ** 3), CHECKS_TEST_TOTAL_BYTES: String(8 * 1024 ** 3), CHECKS_TEST_CPUS: "8" };
-  const hunted = await flake(join(dir, "step-summary.md"), memory);
-  expect(hunted.exitCode).toBe(0);
-  expect(hunted.record.parallel?.workers).toBe(2);
-  expect(hunted.text).toContain(`checks-flake: ${SEEDS.length} run(s) passed on 2 worker(s), with seeds ${SEEDS.join(", ")}`);
-  expect(hunted.record.parallel).toEqual({ workers: 2, replays: [] });
-}, 120_000);
 
 test("a test script that does not run checks-test hunts serially", async () => {
   await consumer(ORDER_FREE, { test: "bun test" });

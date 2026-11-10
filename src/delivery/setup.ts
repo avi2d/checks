@@ -5,7 +5,7 @@ import { ciWorkflow, MUTATION_WORKFLOW, STRYKER_CONFIG } from "./setup-workflow.
 import { TEMPLATES, VISION_PAGE } from "../docs/doc-templates.ts";
 import { requiresName } from "../docs/doc-vision.ts";
 import { FAST_COMMAND, TEST_COMMAND } from "../core/test-script.ts";
-import { testScriptsFault, withTierDefaults, type MutableRecord } from "./test-scripts.ts";
+import { readTestScriptContext, testScriptsFault, withTierDefaults, type MutableRecord } from "./test-scripts.ts";
 import { withServiceOverrides, type ServiceOverride } from "../quality/effect-scope.ts";
 import { SOURCES, TESTS } from "../quality/presets/oxlint.ts";
 import severities from "../quality/presets/effect.language-service.json" with { type: "json" };
@@ -273,7 +273,7 @@ const writeFreshPackage = Effect.fn("writeFreshPackage")(function* (
   const system = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const full = path.join(root, "package.json");
-  const scripts = yield* withTierDefaults({ ...DEFAULT_SCRIPTS }, root);
+  const scripts = withTierDefaults({ ...DEFAULT_SCRIPTS }, yield* readTestScriptContext(root, undefined));
   const manifest = {
     name: fallbackName,
     type: "module",
@@ -302,11 +302,10 @@ const updatePackage = Effect.fn("updatePackage")(function* (
   const devDependencies: MutableRecord = { ...pins.mutation, ...baseDeps, [KIT_ID]: pins.kit };
   const fault = scriptFault(baseScripts);
   if (fault !== undefined) return yield* new SetupError({ message: fault });
-  const testFault = yield* testScriptsFault(baseScripts, root).pipe(
-    Effect.mapError((cause) => new SetupError({ message: cause.message })),
-  );
+  const context = yield* readTestScriptContext(root, record["name"]);
+  const testFault = testScriptsFault(baseScripts, context);
   if (testFault !== undefined) return yield* new SetupError({ message: testFault });
-  const scripts = yield* withTierDefaults(withKitDefaults(baseScripts), root);
+  const scripts = withTierDefaults(withKitDefaults(baseScripts), context);
   const finalized = finalizePackage(record, scripts, devDependencies, isPrivate, fallbackName);
   const next = JSON.stringify(finalized.merged, undefined, 2) + "\n";
   const name = typeof finalized.merged["name"] === "string" ? finalized.merged["name"] : fallbackName;

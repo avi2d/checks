@@ -65,7 +65,7 @@ With `--private` the jobs read the `CI_RUNS_ON` variable, and the run names the 
 | Code | When |
 | --- | --- |
 | 0 | every file is written or already there |
-| 2 | an argument is unknown, a file it needs cannot be read, or a `lint`, `typecheck` or `test` script it finds does not run the checks |
+| 2 | an argument is unknown, a file it needs cannot be read, or a `lint`, `typecheck`, `test`, `test:fast` or `test:*` script it finds does not run the checks |
 
 ## Sample output
 

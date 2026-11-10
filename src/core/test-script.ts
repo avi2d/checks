@@ -103,13 +103,14 @@ const fastFault = (scripts: Readonly<Record<string, unknown>>): ScriptFault | un
 
 const tierFault = (found: unknown, tier: TestTier, hasTests: boolean): ScriptFault | undefined => {
   const key = `test:${tier}`;
+  if (!hasTests) {
+    return typeof found === "string" ? { kind: "empty-tier", key, found } : undefined;
+  }
   if (typeof found !== "string") {
-    return hasTests ? { kind: "tier", key, expected: tierCommand(tier), found: undefined } : undefined;
+    return { kind: "tier", key, expected: tierCommand(tier), found: undefined };
   }
   const parsed = standardScript(found);
-  if (parsed?.kind === "tier" && parsed.tier === tier) {
-    return hasTests ? undefined : { kind: "empty-tier", key, found };
-  }
+  if (parsed?.kind === "tier" && parsed.tier === tier) return undefined;
   return { kind: "tier", key, expected: tierCommand(tier), found };
 };
 
@@ -132,6 +133,12 @@ export function scriptFaults(
   }
   faults.push(...strayFaults(scripts));
   return faults;
+}
+
+export const TEST_FILE = /(?:[.](?:test|spec)|_test)[.](tsx?)$/;
+
+export function hasTierTests(files: readonly string[], tier: TestTier): boolean {
+  return files.some((file) => file.startsWith(`tests/${tier}/`) && TEST_FILE.test(file));
 }
 
 export const STANDARD_TIERS: readonly TestTier[] = ["unit", "e2e", "live", "pixel"];

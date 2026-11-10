@@ -4,7 +4,7 @@ import { workingTreeFiles } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { ENTRY_POINT } from "../core/gates.ts";
 import { identifierName, isRecord, lineOf, parseTypeScript, spanStart, stringValue } from "../core/swc.ts";
-import { KIT_PACKAGE_NAME, kitScriptsToBin, scriptFaults, type ScriptFault } from "../core/test-script.ts";
+import { KIT_PACKAGE_NAME, TEST_FILE, hasTierTests, kitScriptsToBin, scriptFaults, type ScriptFault } from "../core/test-script.ts";
 
 export type Violation = {
   readonly file: string;
@@ -25,7 +25,7 @@ const LEVEL_DIR = new RegExp(`^tests/(?:quarantine/)?(?:${LEVELS.join("|")})/`);
 const QUARANTINE_BELOW_LEVEL = new RegExp(`^tests/(${LEVELS.join("|")})/((?:[^/]+/)*?)quarantine/(.+)$`);
 const LEVEL_NAMES = new Intl.ListFormat("en", { type: "disjunction" }).format(LEVELS);
 
-export const TEST_FILE = /(?:[.](?:test|spec)|_test)[.](tsx?)$/;
+export { TEST_FILE };
 const TARGET_FILE = new RegExp(`${LEVEL_DIR.source}(?:[^/]+/)*[^/]+[.]test[.]tsx?$`);
 const TYPESCRIPT = /[.]tsx?$/;
 
@@ -251,7 +251,7 @@ export function scriptViolations(manifest: unknown, files: readonly string[] = [
   const violations: Violation[] = [];
   const record: Readonly<Record<string, unknown>> = isRecord(scripts) ? scripts : {};
   const effective = isRecord(manifest) && manifest["name"] === KIT_PACKAGE_NAME ? kitScriptsToBin(record) : record;
-  for (const fault of scriptFaults(effective, (tier) => files.some((candidate) => candidate.startsWith(`tests/${tier}/`) && TEST_FILE.test(candidate)))) {
+  for (const fault of scriptFaults(effective, (tier) => hasTierTests(files, tier))) {
     violations.push({ file, line: undefined, message: describeScriptFault(fault) });
   }
   if (typeof lint !== "string" || !runsLayoutCheck(lint)) {

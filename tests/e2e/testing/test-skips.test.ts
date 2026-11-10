@@ -412,16 +412,6 @@ async function workersUsed(): Promise<number> {
   return new Set((await readFile(join(dir, "workers.txt"), "utf8")).split("\n").filter(Boolean)).size;
 }
 
-test("controlled memory allowing two of eight workers runs the suite on two workers", async () => {
-  await consumer(workerFile(""), { "tests/unit/pricing.test.ts": workerFile("") });
-
-  const memory = { CHECKS_TEST_FREE_BYTES: String(2 * 1024 ** 3), CHECKS_TEST_TOTAL_BYTES: String(8 * 1024 ** 3), CHECKS_TEST_CPUS: "8" };
-  const run = await checksTest(true, [], memory);
-  expect(run.exitCode).toBe(0);
-  expect(run.text).toContain("2x PARALLEL");
-  expect(await workersUsed()).toBe(2);
-});
-
 function skippedWorker(condition: boolean): string {
   return workerFile(
     `test.skipIf(${condition})(skipReason("waits for the rounding fix", "rounds half to even"), () => expect(1).toBe(1));`,
