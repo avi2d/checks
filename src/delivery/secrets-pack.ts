@@ -113,9 +113,13 @@ const packRulesAt = Effect.fn("packRulesAt")(function* (file: string) {
 
 type ScanConfig = { readonly config: string; readonly notice: string };
 
+export const kitRules = Effect.fn("kitRules")(function* () {
+  return (yield* Path.Path).join(import.meta.dir, "gitleaks.toml");
+});
+
 export const packConfig = Effect.fn("packConfig")(function* (name: string, scratch: string, file: Option.Option<string>) {
   const path = yield* Path.Path;
-  const kitConfig = path.join(import.meta.dir, "gitleaks.toml");
+  const kitConfig = yield* kitRules();
   if (Option.isNone(file)) {
     return { config: kitConfig, notice: `${name}: ${PACK_VARIABLE} is unset, so the kit's rules ran without a private pack` } satisfies ScanConfig;
   }

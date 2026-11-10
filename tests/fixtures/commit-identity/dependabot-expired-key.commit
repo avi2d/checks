@@ -1,0 +1,29 @@
+tree 828f64d87e92966a94f2f4238ab8ea369200f4d3
+parent ed960c9656f8a2da28b0133d2bba0c7b6f2728a1
+author dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com> 1648122886 +0000
+committer GitHub <noreply@github.com> 1648122886 +0000
+gpgsig -----BEGIN PGP SIGNATURE-----
+ 
+ wsBcBAABCAAQBQJiPFwGCRBK7hj4Ov3rIwAAtTsIAKsADAZcry4HQ3z7S4FfURvF
+ z+kkDUR6DlDH0GxJU8aevdVY9DlQ7lI3a1VexzB5XrSZUO8417DerdiKgAFNDcHS
+ ndcGdEiC8MXNkx4RP5Qsud0zJ2WCN5fN1IqWkWzNZFn0/144gEDlZrQ4IuOKvTkj
+ 7zr7xP3CBA2v6pwIuQ5XhMPbL+zh/EJxPcoRDcOTlaWJA3jp8x3CW8HFHnJ6RdpB
+ dm7CHT5qXCceQ8RLcBCak7meFw33gatkbyaHcpE9ALNMfpvrT8J+lKFO/YGa+mRc
+ 4+09RouIQ6jUDE57Rk8r2J1e2kn6Bvr17tD5F+efyosG6KwI6dQZIy9yWkdmMX8=
+ =2Qhw
+ -----END PGP SIGNATURE-----
+ 
+
+Bump minimist from 1.2.5 to 1.2.6
+
+Bumps [minimist](https://github.com/substack/minimist) from 1.2.5 to 1.2.6.
+- [Release notes](https://github.com/substack/minimist/releases)
+- [Commits](https://github.com/substack/minimist/compare/1.2.5...1.2.6)
+
+---
+updated-dependencies:
+- dependency-name: minimist
+  dependency-type: indirect
+...
+
+Signed-off-by: dependabot[bot] <support@github.com>
