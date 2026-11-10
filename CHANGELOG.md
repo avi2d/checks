@@ -2,6 +2,15 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.92.0
+
+Released 2026-11-10.
+
+### Features
+
+- **testing:** standardize test scripts and size workers from free memory [#101](https://github.com/avi2d/checks/pull/101)
+- **delivery:** add checks-plain-steps gate that refuses multi-command run steps [#100](https://github.com/avi2d/checks/pull/100)
+
 ## 0.91.0
 
 Released 2026-11-09.
