@@ -4,7 +4,10 @@ import { workingTreeFiles } from "../core/git.ts";
 import { runTreeGate } from "../core/main.ts";
 import { baseNameOf, isNpxCall, resolvedUsesInlineCode } from "./inline-code.ts";
 import { fromProgram, REDIRECT_OPERATOR, shellWords, substitutionEnd } from "./shell-command.ts";
+import { callerDefault, compositeDefaults, envInputs, ORDINARY, reusableDefaults, runsCallerCommand, type StepContext } from "./plain-steps-caller.ts";
 import { isRecord, maskExpressions, scalarSource } from "./workflow-references.ts";
+
+export type { StepContext };
 
 export type YamlFile = {
   readonly path: string;
@@ -16,11 +19,6 @@ export type StepFault = {
   readonly location: string;
   readonly faults: readonly string[];
 };
-
-export type StepContext =
-  | { readonly kind: "workflow" }
-  | { readonly kind: "reusable"; readonly inputDefaults: ReadonlyMap<string, string> }
-  | { readonly kind: "composite"; readonly inputForEnv: ReadonlyMap<string, string>; readonly inputDefaults: ReadonlyMap<string, string> };
 
 type RunStep = {
   readonly keys: readonly (string | number)[];
@@ -37,10 +35,6 @@ const ACTION_FILES = new Set(["action.yml", "action.yaml"]);
 const UNJUDGED_PREFIXES = ["node_modules/", "repos/", "tests/fixtures/"] as const;
 const PLAIN_SHELLS = new Set(["bash", "sh", "pwsh", "powershell", "cmd"]);
 const SIMPLE_EXPANSION = /^\$\{[A-Za-z_][A-Za-z0-9_]*\}/;
-const INPUT_EXPRESSION = /^\$\{\{\s*inputs\.([A-Za-z_][A-Za-z0-9_-]*)\s*\}\}$/;
-const VARIABLE = String.raw`\$(?:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)\})`;
-const PROGRAM_VARIABLE = new RegExp(String.raw`^(?:"${VARIABLE}"|${VARIABLE})(?=\s|$)`);
-const ORDINARY: StepContext = { kind: "workflow" };
 const CONTROL_OPERATORS: readonly (readonly [string, string])[] = [
   ["&&", "a command list"],
   ["||", "a command list"],
@@ -235,73 +229,6 @@ function shellFault(shell: unknown): string | undefined {
   if (shell.includes("${{")) return "a shell the check cannot read";
   const [program = ""] = shell.trim().split(/\s+/);
   return PLAIN_SHELLS.has(baseNameOf(program)) ? undefined : `inline code for the ${program} shell`;
-}
-
-function programVariable(line: string): string | undefined {
-  const match = PROGRAM_VARIABLE.exec(line);
-  return match === null ? undefined : match.slice(1).join("");
-}
-
-function inputName(value: string): string | undefined {
-  const match = INPUT_EXPRESSION.exec(value);
-  return match?.[1];
-}
-
-function stringDefaults(inputs: unknown): ReadonlyMap<string, string> {
-  if (!isRecord(inputs)) return new Map();
-  const defaults = new Map<string, string>();
-  for (const [name, spec] of Object.entries(inputs)) {
-    if (isRecord(spec) && typeof spec["default"] === "string" && spec["default"].trim() !== "") defaults.set(name, spec["default"]);
-  }
-  return defaults;
-}
-
-function reusableDefaults(document: Readonly<Record<string, unknown>>): ReadonlyMap<string, string> {
-  const on = document["on"];
-  if (!isRecord(on)) return new Map();
-  const call = on["workflow_call"];
-  if (!isRecord(call)) return new Map();
-  return stringDefaults(call["inputs"]);
-}
-
-function compositeDefaults(document: Readonly<Record<string, unknown>>): ReadonlyMap<string, string> {
-  return stringDefaults(document["inputs"]);
-}
-
-function envInputs(step: Readonly<Record<string, unknown>>): ReadonlyMap<string, string> {
-  const env = step["env"];
-  if (!isRecord(env)) return new Map();
-  const found = new Map<string, string>();
-  for (const [name, value] of Object.entries(env)) {
-    if (typeof value !== "string") continue;
-    const input = inputName(value);
-    if (input !== undefined) found.set(name, input);
-  }
-  return found;
-}
-
-function runsCallerCommand(line: string, plain: string, context: StepContext): boolean {
-  if (context.kind === "workflow") return false;
-  if (inputName(line) !== undefined) return true;
-  if (context.kind === "reusable") return false;
-  const name = programVariable(plain);
-  return name !== undefined && context.inputForEnv.has(name);
-}
-
-function callerDefault(line: string, plain: string, context: StepContext): { readonly name: string; readonly value: string } | undefined {
-  if (context.kind === "workflow") return undefined;
-  const direct = inputName(line);
-  if (direct !== undefined) {
-    const value = context.inputDefaults.get(direct);
-    return value === undefined ? undefined : { name: direct, value };
-  }
-  if (context.kind === "reusable") return undefined;
-  const name = programVariable(plain);
-  if (name === undefined) return undefined;
-  const input = context.inputForEnv.get(name);
-  if (input === undefined) return undefined;
-  const value = context.inputDefaults.get(input);
-  return value === undefined ? undefined : { name: input, value };
 }
 
 export function runFaults(run: string, shell: unknown, context: StepContext = ORDINARY): readonly string[] {
