@@ -62,7 +62,7 @@ describe("the handhelds", () => {
 
   test("name each picture for the phone it shows, instead of naming two handhelds of one size the same picture", () => {
     expect(HANDHELDS.map((device) => pictureFile("chromium", device))).toEqual(
-      ["iphone-13-and-14-390x844", "iphone-16-plus-430x932", "iphone-16-pro-max-440x956", "android-360x800", "android-384x854", "ipad-768x1024"].map((name) => `chromium/${name}.png`),
+      ["iphone-13-and-14-390x844", "iphone-16-plus-430x932", "iphone-16-pro-max-440x956", "android-360x800", "android-384x854", "ipad-gen-6-768x1024"].map((name) => `chromium/${name}.png`),
     );
   });
 

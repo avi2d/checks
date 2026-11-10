@@ -57,7 +57,7 @@ It waits for the fonts and every running animation that ends, runs `setup` and t
 
 Each picture is compared with `<fixtures>/<engine>/<device>.png`, where the device name is lowercased and each run of other characters becomes one hyphen, as in `iphone-se-375x667.png`.
 A phone picture comes from a phone the kit emulates, such as an iPhone SE at 375 by 667.
-Each device names one picture, so a suite that lists one device name twice fails a test that names it and pictures that device once.
+Each device names one picture.
 
 `HANDHELDS` holds six phones and tablets beyond the anchor sizes, each with its own user agent and pixel ratio:
 
@@ -68,9 +68,8 @@ Each device names one picture, so a suite that lists one device name twice fails
 | iPhone 16 Pro Max 440x956 | `iPhone 16 Pro Max` |
 | Android 360x800 | `Pixel 7` at a pixel ratio of 3 |
 | Android 384x854 | `Pixel 7` at a pixel ratio of 2.8125 |
-| iPad 768x1024 | `iPad (gen 6)` |
+| iPad gen 6 768x1024 | `iPad (gen 6)` |
 
-The `full` set already holds an `iPad 768x1024`, so `HANDHELDS` goes beside the `anchor` set.
 A picture that differs from its approved picture, or that has none, fails its test.
 The failure names the device, its size and the engine, and the new picture is written beside the approved one as `<device>.new.png`.
 A picture that matches removes any `.new.png` beside it.
