@@ -18,12 +18,15 @@ A run without the artifact counts as no baseline there, so a newer refresh run n
 It tries no run older than that push, so a newest push without the artifact restores nothing.
 An artifact without `stryker-incremental.json` counts as no baseline.
 It copies `stryker-incremental.json` to the first destination, and `mutation/mutation.json` to the second destination when the artifact holds it.
+It then prunes the copied state the same way a full restore prunes its state.
 
 With `--full` it lists up to 50 `schedule` runs and up to 50 `workflow_dispatch` runs apart, so pushes cannot crowd the full runs out of one list.
 It tries those runs newest first, and restores the first `mutation-baseline-full` artifact that has not expired, downloads and holds the report.
 It tries no run after that one.
 It takes the report from `mutation.json` at the artifact's root, or else from `mutation/mutation.json`, and copies it to the destination.
-With an incremental destination it also copies `stryker-incremental.json` when the artifact holds one, so the next full run retests the mutants its changes reach, while a result made stale by a file a test reads at runtime lasts until the next 28-day refresh.
+With an incremental destination it also copies `stryker-incremental.json` when the artifact holds one, so a later full run started with that destination retests the mutants its changes reach.
+The shared refresh job passes no incremental destination and tests every mutant.
+A result made stale by a file a test reads at runtime lasts until the next 28-day refresh.
 The restore then drops each test that reads a changed file and each mutant result for a changed source from the copied state.
 It drops non-killed results when any test goes stale.
 It drops the whole state when a Stryker config, stryker.preset.js, the lockfile, the Bun version, a file the active config reaches through a relative import at either revision, or the bunfig preload set or a file it reaches through a relative import changed.
@@ -31,7 +34,7 @@ It walks the config and preload dependencies at both revisions, so a file only t
 A file a config or preload reaches only through a package main escapes invalidation until the next 28-day refresh.
 A state that does not parse fails the restore instead of running on unknown results.
 It drops the whole state when the restored run started before the current 28-day refresh window, and the windows count from the Unix epoch.
-Every state a window keeps was built inside it, so each reused result is at most 28 days old, and a weekly full baseline retests every mutant every fourth week.
+Every state a window keeps was built inside it, so each reused result is at most 28 days old.
 Without the state file the report still restores.
 
 It creates the directories each destination needs.
@@ -55,7 +58,7 @@ The `mutation-baseline` artifact holds `stryker-incremental.json` and `mutation/
 The `mutation-baseline-full` artifact holds `mutation.json` at its root, which the `refresh-merge` job's upload of `${{ runner.temp }}/full/` writes.
 It reads `RUNNER_ENVIRONMENT` and `HOME` to place the runner cache, and `GITHUB_REPOSITORY_ID` to find the saved baselines.
 `--save` and `--prune` read `GITHUB_RUN_ID`.
-With `--full` and an incremental destination it reads the run's head through `gh run view <run> --json headSha`.
+When it prunes a restored state it reads the run's head through `gh run view <run> --json headSha`.
 It diffs that head against `HEAD`, which needs the checkout's full history.
 It shows `bunfig.toml` and the files the active Stryker config imports at both revisions.
 It reads every tracked `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, and `.cjs` file from the working tree for their relative imports.

@@ -89,7 +89,7 @@ An `--incremental` run with no report stops before instrumenting with the missin
 A repository runs its baselines through the `mutation` caller that [checks-setup](checks-setup.md) writes.
 A push to `main` that changes what Stryker mutates or tests starts one, and so does `gh workflow run mutation`.
 Run scoped checks locally during development.
-A first baseline with no state costs a full Stryker run, and each later one retests the mutants its changes reach.
+A first baseline with no state costs a full Stryker run, and each later one restores the newest `main` baseline and retests the mutants its changes reach.
 
 ## Running it in CI
 
@@ -105,7 +105,7 @@ A baseline job takes these steps and keeps its report as an artifact:
 ```
 
 A first baseline with no state tests every mutant.
-Each later run restores the newest `main` baseline and retests the mutants its changes reach.
+Each later run restores the newest `main` baseline, drops each result the 28-day refresh window or a changed config made stale, and retests the mutants its changes reach.
 A result made stale by a file a test reads at runtime stays stale past refresh, since refresh uploads only `mutation-baseline-full`.
 The job uploads the Stryker report and the incremental state as the `mutation-baseline` artifact and keeps it for 7 days.
 The next baseline and each pull request comparison restore that artifact with the ordinary restore.

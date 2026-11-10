@@ -22,11 +22,12 @@ It maps each base mutant to the place its lines moved to in the head, so a line 
 It then matches a mutant in the base report to a mutant in the head report by its file, that mapped location, its mutator and its replacement.
 Two mutants in the same report can share all four, so the gate also counts the position of each mutant among others with the same four, in the order the report lists them, and adds that position to the key.
 A mutant on a line the pull request added, removed or changed has no counterpart in the other report and lands in the unmatched list.
+A branch behind `main` can report a matched mutant as a regression when `main` gained the kill after the branch point.
 Each list prints in order of file, then line, then column, and a matched mutant prints at its place in the head.
 
 ## What it reads
 
-It reads two Stryker `mutation.json` reports, the saved `main` baseline and the incremental head report.
+It reads two Stryker `mutation.json` reports, the newest saved `main` baseline and the incremental head report from the pull request head.
 The shared Stryker preset's `json` reporter writes `reports/mutation/mutation.json` in the worktree.
 
 A repository that runs mutation testing installs `@stryker-mutator/core` and `@hughescr/stryker-bun-runner`, then spreads the shipped preset in `stryker.conf.mjs`.
@@ -69,11 +70,14 @@ mutation-compare: REGRESSION (1 mutant(s))
 ## When it runs
 
 The shared `mutation` workflow runs it on each pull request in `compare` mode.
-It scopes one incremental head run against the saved `main` baseline, with no second base run.
+It scopes one incremental head run at the pull request head against the newest saved `main` baseline, with no second base run.
 [checks-whole-tree-run](checks-whole-tree-run.md) judges the mutation score of `main` on each whole-tree run and opens an issue for each file whose score fell.
 A repository runs it with `--advisory`, so the comparison stays advisory and never fails the pull request.
 It posts one advisory comment on the pull request that lists each lost kill and each survivor on an added line.
 On a fork it writes that note to the job summary instead.
+The comment stays advisory.
+A branch behind `main` can report kills `main` gained after the branch point as regressions.
+Bringing the branch up to date removes them.
 A full sweep runs in CI and never on a laptop.
 Refresh the full baseline it scopes against with `gh workflow run mutation`, choosing `refresh` for the `mode` input.
 The shared preset refuses a full `stryker run` outside CI and names that workflow command instead, as [checks-mutation](checks-mutation.md) says.
@@ -82,7 +86,7 @@ The shared preset refuses a full `stryker run` outside CI and names that workflo
 
 Only `avi2d/workflows` holds the comparison job, since [checks-ci-wiring](checks-ci-wiring.md#mutation-jobs) refuses it in any other repository.
 Any other repository calls that shared workflow from the caller [checks-setup](checks-setup.md) writes.
-A comparison job restores the saved `main` baseline and runs Stryker once at the head over the same scope, with no second base run.
+A comparison job restores the newest saved `main` baseline and runs Stryker once at the pull request head over the same scope, with no second base run.
 The caller selects `compare` on each pull request, as [checks-setup](checks-setup.md) writes it.
 
 The scope step picks the files the branch changes and the sources its changed unit tests cover or kill, as [checks-mutation-scope](checks-mutation-scope.md) says.

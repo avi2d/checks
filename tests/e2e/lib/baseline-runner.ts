@@ -70,9 +70,16 @@ export async function gitRunner(files: Readonly<Record<string, string>>, build: 
 // HOME holds the runner's cache, so each runner starts with an empty one.
 export async function selfHosted(runs: readonly FakeRun[], options: FakeOptions = {}): Promise<Runner> {
   const home = await scratch("checks-mutation-baseline-");
-  const fake = await fakeActions(home, REPOSITORY_ID, runs, options);
   const work = join(home, "work");
   await mkdir(work);
+  await $`git init -q -b main && git config user.email fixture@example.com && git config user.name Fixture && git commit -q --allow-empty -m base`.cwd(work).quiet();
+  const sha = (await $`git rev-parse HEAD`.cwd(work).quiet()).stdout.toString().trim();
+  const fake = await fakeActions(
+    home,
+    REPOSITORY_ID,
+    runs.map((candidate) => (candidate.headSha === undefined ? { ...candidate, headSha: sha } : candidate)),
+    options,
+  );
   return {
     home,
     run: (args, env = {}) => ran($`bun ${SCRIPT} ${args}`.cwd(work).env({ ...process.env, RUNNER_ENVIRONMENT: "self-hosted", GITHUB_RUN_ID: undefined, GITHUB_REPOSITORY_ID: String(REPOSITORY_ID), ...fake.env, HOME: home, ...env })),
@@ -83,10 +90,14 @@ export async function selfHosted(runs: readonly FakeRun[], options: FakeOptions 
   };
 }
 
+const windowMs = 28 * 86_400_000;
+const windowStart = Math.floor(Number(process.env["CHECKS_MUTATION_BASELINE_NOW_MS"] ?? Date.now()) / windowMs) * windowMs;
+const recent = (offsetMs: number): string => new Date(windowStart + offsetMs).toISOString();
+
 export const MAIN_RUNS = [
-  run(30, "pull_request", "2026-10-03T00:00:00Z", [baseline(300, "mutation-baseline", "pull request")]),
-  run(20, "push", "2026-10-02T00:00:00Z", [baseline(200, "mutation-baseline", "newest push")]),
-  run(10, "push", "2026-10-01T00:00:00Z", [baseline(100, "mutation-baseline", "older push")]),
+  run(30, "pull_request", recent(26 * 86_400_000 + 2 * 3_600_000), [baseline(300, "mutation-baseline", "pull request")]),
+  run(20, "push", recent(26 * 86_400_000 + 3_600_000), [baseline(200, "mutation-baseline", "newest push")]),
+  run(10, "push", recent(26 * 86_400_000), [baseline(100, "mutation-baseline", "older push")]),
 ];
 
 export const SAVED_SHELF = join(SHELVES, "saved", "mutation-baseline");

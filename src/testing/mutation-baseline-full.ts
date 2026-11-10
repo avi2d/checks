@@ -44,7 +44,7 @@ export const pruneFullState = Effect.fn("pruneFullState")(function* (run: FullRu
   if (Option.isSome(override)) now = override.value;
   if (!inRefreshWindow(run.createdAt, now)) {
     yield* fs.remove(state);
-    yield* Console.log(`mutation-baseline: dropped the restored full state, run ${run.databaseId} started before the current ${REFRESH_DAYS}-day refresh window`);
+    yield* Console.log(`mutation-baseline: dropped the restored state, run ${run.databaseId} started before the current ${REFRESH_DAYS}-day refresh window`);
     return;
   }
   const base = yield* viewedHead(run.databaseId);
@@ -52,7 +52,7 @@ export const pruneFullState = Effect.fn("pruneFullState")(function* (run: FullRu
   const changed = [...paths].filter((path) => FULL_CONFIGS.includes(path) || config.has(path)).toSorted();
   if (changed.length > 0 || preload !== undefined) {
     yield* fs.remove(state);
-    yield* Console.log(`mutation-baseline: dropped the restored full state, ${preload ?? changed.join(" ")} changed since run ${run.databaseId}`);
+    yield* Console.log(`mutation-baseline: dropped the restored state, ${preload ?? changed.join(" ")} changed since run ${run.databaseId}`);
     return;
   }
   const text = yield* fs.readFileString(state);
@@ -64,5 +64,5 @@ export const pruneFullState = Effect.fn("pruneFullState")(function* (run: FullRu
   if (stripped.tests.length === 0 && stripped.sources.length === 0) return;
   yield* fs.writeFileString(state, JSON.stringify(stripped.state));
   const dropped = [...stripped.tests, ...stripped.sources.map((source) => `${source} results`)].join(" ");
-  yield* Console.log(`mutation-baseline: dropped ${dropped} from the restored full state`);
+  yield* Console.log(`mutation-baseline: dropped ${dropped} from the restored state`);
 });

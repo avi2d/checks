@@ -20,6 +20,17 @@ test("a cache miss downloads the newest main run's baseline that is not a pull r
   expect(await runner.shelf("mutation-baseline")).toEqual(["200"]);
 }, 30_000);
 
+test("a plain restore drops a state older than the refresh window instead of reusing it", async () => {
+  const runner = await selfHosted([run(20, "push", "2026-10-02T00:00:00Z", [baseline(200, "mutation-baseline", "old push")])]);
+
+  const restored = await runner.run(["reports/stryker-incremental.json", "baseline/mutation.json"]);
+
+  expect(restored.exitCode).toBe(0);
+  expect(restored.text).toContain("mutation-baseline: dropped the restored state, run 20 started before the current 28-day refresh window\n");
+  expect(await runner.read("reports/stryker-incremental.json")).toBeUndefined();
+  expect(await runner.read("baseline/mutation.json")).toBe('{"report":"old push"}');
+}, 30_000);
+
 test("a newer refresh run without a baseline does not hide the newest push baseline", async () => {
   const runner = await selfHosted([
     run(40, "workflow_dispatch", "2026-10-04T00:00:00Z", [fullReport(400, "refresh")]),
@@ -176,7 +187,7 @@ test("--full drops stale tests, changed sources, and static results from the res
   expect(restored.exitCode).toBe(0);
   expect(restored.text).toContain("mutation-baseline: downloaded it into the runner's cache, mutation-baseline-full artifact 350 from run 35\n");
   expect(restored.text).toContain(
-    "mutation-baseline: dropped tests/unit/a.test.ts src/changed.ts results src/other.ts results from the restored full state\n",
+    "mutation-baseline: dropped tests/unit/a.test.ts src/changed.ts results src/other.ts results from the restored state\n",
   );
   expect(await runner.read("full/mutation.json")).toBe('{"report":"with state"}');
   expect(JSON.parse((await runner.read("full/stryker-incremental.json")) ?? "")).toEqual({
@@ -193,7 +204,7 @@ test("--full drops the restored state when the config changed since the full run
   const restored = await runner.run(["--full", "full/mutation.json", "full/stryker-incremental.json"]);
 
   expect(restored.exitCode).toBe(0);
-  expect(restored.text).toContain("mutation-baseline: dropped the restored full state, stryker.conf.mjs changed since run 35\n");
+  expect(restored.text).toContain("mutation-baseline: dropped the restored state, stryker.conf.mjs changed since run 35\n");
   expect(await runner.read("full/mutation.json")).toBe('{"report":"with state"}');
   expect(await runner.read("full/stryker-incremental.json")).toBeUndefined();
 }, 30_000);
@@ -209,7 +220,7 @@ test("--full drops the restored state when the test preload changed since the fu
   const restored = await runner.run(["--full", "full/mutation.json", "full/stryker-incremental.json"]);
 
   expect(restored.exitCode).toBe(0);
-  expect(restored.text).toContain("mutation-baseline: dropped the restored full state, the [test] preload list in bunfig.toml changed since run 35\n");
+  expect(restored.text).toContain("mutation-baseline: dropped the restored state, the [test] preload list in bunfig.toml changed since run 35\n");
   expect(await runner.read("full/stryker-incremental.json")).toBeUndefined();
 }, 30_000);
 
@@ -220,7 +231,7 @@ test("--full drops the restored state when its full run started before the curre
   const restored = await runner.run(["--full", "full/mutation.json", "full/stryker-incremental.json"]);
 
   expect(restored.exitCode).toBe(0);
-  expect(restored.text).toContain("mutation-baseline: dropped the restored full state, run 35 started before the current 28-day refresh window\n");
+  expect(restored.text).toContain("mutation-baseline: dropped the restored state, run 35 started before the current 28-day refresh window\n");
   expect(await runner.read("full/mutation.json")).toBe('{"report":"with state"}');
   expect(await runner.read("full/stryker-incremental.json")).toBeUndefined();
 }, 30_000);
@@ -282,7 +293,10 @@ test("with no baseline to restore it writes nothing and still exits 0", async ()
   expect(await none.read("reports/stryker-incremental.json")).toBeUndefined();
   expect(await none.read("baseline/mutation.json")).toBeUndefined();
 
-  const unfinished = await selfHosted([run(20, "push", "2026-10-02T00:00:00Z", []), ...MAIN_RUNS.slice(2)]);
+  const unfinished = await selfHosted([
+    run(20, "push", "2026-10-02T00:00:00Z", []),
+    run(10, "push", "2026-10-01T00:00:00Z", [baseline(100, "mutation-baseline", "older push")]),
+  ]);
   const older = await unfinished.run(["reports/stryker-incremental.json"]);
   expect(older.text).toBe("mutation-baseline: no successful main run holds a mutation-baseline artifact, so nothing was restored\n");
   expect(await unfinished.read("reports/stryker-incremental.json")).toBeUndefined();
