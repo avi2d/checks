@@ -4,7 +4,8 @@ import { runMain, Usage } from "../core/main.ts";
 import { ciWorkflow, MUTATION_WORKFLOW, STRYKER_CONFIG } from "./setup-workflow.ts";
 import { TEMPLATES, VISION_PAGE } from "../docs/doc-templates.ts";
 import { requiresName } from "../docs/doc-vision.ts";
-import { scriptOptions } from "../core/test-script.ts";
+import { FAST_COMMAND, TEST_COMMAND } from "../core/test-script.ts";
+import { readTestScriptContext, testScriptsFault, withTierDefaults, type MutableRecord } from "./test-scripts.ts";
 import { withServiceOverrides, type ServiceOverride } from "../quality/effect-scope.ts";
 import { SOURCES, TESTS } from "../quality/presets/oxlint.ts";
 import severities from "../quality/presets/effect.language-service.json" with { type: "json" };
@@ -33,7 +34,8 @@ const decodeRecord = Schema.decodeUnknownEffect(JsonRecord);
 const DEFAULT_SCRIPTS: Record<string, string> = {
   lint: "oxlint && checks-lint",
   typecheck: "tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict",
-  test: "checks-test",
+  test: TEST_COMMAND,
+  "test:fast": FAST_COMMAND,
 };
 
 const OXLINT_CONFIG = [
@@ -173,8 +175,6 @@ const setupIgnore = Effect.fn("setupIgnore")(function* (root: string) {
   yield* Console.log(NAME + ": added " + IGNORE_ENTRY + " to .gitignore");
 });
 
-type MutableRecord = Record<string, unknown>;
-
 const parseRecord = (
   parse: () => unknown,
   toParseFault: (cause: unknown) => SetupError,
@@ -215,13 +215,6 @@ function scriptFault(scripts: Record<string, unknown>): string | undefined {
   const lint = scripts["lint"];
   if (typeof lint === "string" && (!lint.includes("oxlint") || !lint.includes("checks-lint"))) {
     return "package.json scripts.lint must run oxlint and the layout check: use \"oxlint && checks-lint\"";
-  }
-  const test = scripts["test"];
-  if (typeof test === "string") {
-    const options = scriptOptions(test);
-    if (options === undefined || options.tier !== undefined || options.full === true) {
-      return "package.json scripts.test must be \"checks-test\", optionally with --parallel=<workers>, found " + JSON.stringify(test);
-    }
   }
   const typecheck = scripts["typecheck"];
   if (typeof typecheck === "string" && (!typecheck.includes("tsc") || !typecheck.includes("effect-tsgo"))) {
@@ -280,11 +273,12 @@ const writeFreshPackage = Effect.fn("writeFreshPackage")(function* (
   const system = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const full = path.join(root, "package.json");
+  const scripts = withTierDefaults({ ...DEFAULT_SCRIPTS }, yield* readTestScriptContext(root, undefined));
   const manifest = {
     name: fallbackName,
     type: "module",
     ...(isPrivate ? { private: true } : {}),
-    scripts: { ...DEFAULT_SCRIPTS },
+    scripts,
     devDependencies: { [KIT_ID]: pins.kit, ...pins.mutation },
   };
   yield* system.makeDirectory(path.dirname(full), { recursive: true });
@@ -308,7 +302,10 @@ const updatePackage = Effect.fn("updatePackage")(function* (
   const devDependencies: MutableRecord = { ...pins.mutation, ...baseDeps, [KIT_ID]: pins.kit };
   const fault = scriptFault(baseScripts);
   if (fault !== undefined) return yield* new SetupError({ message: fault });
-  const scripts = withKitDefaults(baseScripts);
+  const context = yield* readTestScriptContext(root, record["name"]);
+  const testFault = testScriptsFault(baseScripts, context);
+  if (testFault !== undefined) return yield* new SetupError({ message: testFault });
+  const scripts = withTierDefaults(withKitDefaults(baseScripts), context);
   const finalized = finalizePackage(record, scripts, devDependencies, isPrivate, fallbackName);
   const next = JSON.stringify(finalized.merged, undefined, 2) + "\n";
   const name = typeof finalized.merged["name"] === "string" ? finalized.merged["name"] : fallbackName;
