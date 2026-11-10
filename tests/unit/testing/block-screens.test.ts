@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect } from "effect";
-import { AS_APPROVED, decodePng, matchesApproved, pictureFile, screenDevices, type ScreenDevice } from "../../../src/testing/block-screens.ts";
+import { AS_APPROVED, decodePng, HANDHELDS, matchesApproved, pictureFile, screenDevices, type ScreenDevice } from "../../../src/testing/block-screens.ts";
 
 const FIXTURES = join(import.meta.dir, "..", "..", "fixtures", "block-screens");
 const picture = (name: string): Promise<Uint8Array> => readFile(join(FIXTURES, `${name}.png`));
@@ -50,6 +50,24 @@ describe("the screen devices", () => {
     expect(screenDevices("anchor").map((device) => pictureFile("webkit", device))).toEqual(
       ["android-360x640", "iphone-se-375x667", "iphone-15-and-16-393x852", "android-412x915", "ipad-820x1180", "desktop-1366x768", "desktop-1440x900", "desktop-1920x1080"].map((name) => `webkit/${name}.png`),
     );
+  });
+});
+
+describe("the handhelds", () => {
+  test("open each phone and tablet at its CSS size and pixel ratio with touch on a mobile viewport, instead of a desktop window at a phone's size", () => {
+    const opened = HANDHELDS.map(({ options: { viewport, screen, deviceScaleFactor, isMobile, hasTouch } }) => [viewport, screen, deviceScaleFactor, isMobile, hasTouch]);
+    const handheld = (width: number, height: number, ratio: number) => [{ width, height }, { width, height }, ratio, true, true];
+    expect(opened).toEqual([handheld(390, 844, 3), handheld(430, 932, 3), handheld(440, 956, 3), handheld(360, 800, 3), handheld(384, 854, 2.8125), handheld(768, 1024, 2)]);
+  });
+
+  test("name each picture for the phone it shows, instead of naming two handhelds of one size the same picture", () => {
+    expect(HANDHELDS.map((device) => pictureFile("chromium", device))).toEqual(
+      ["iphone-13-and-14-390x844", "iphone-16-plus-430x932", "iphone-16-pro-max-440x956", "android-360x800", "android-384x854", "ipad-768x1024"].map((name) => `chromium/${name}.png`),
+    );
+  });
+
+  test("send the user agent of the phone each names, instead of a desktop browser's", () => {
+    expect(HANDHELDS.map(({ options: { userAgent } }) => /iPhone|iPad|Android/.exec(userAgent ?? "")?.[0])).toEqual(["iPhone", "iPhone", "iPhone", "Android", "Android", "iPad"]);
   });
 });
 

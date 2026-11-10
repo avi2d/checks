@@ -51,12 +51,26 @@ It waits for the fonts and every running animation that ends, runs `setup` and t
 | `selector` | the element in the picture, which is the whole window when the key is left out |
 | `setup` | a function that gets the page after it settles and before its picture, such as one that opens a menu |
 | `sizes` | `anchor`, the default, or `full`, the sets [Screen sizes](../gates/checks-browser.md#screen-sizes) lists |
-| `devices` | more devices of the repository's own, each made with `emulatedDevice` or `windowDevice` |
+| `devices` | more devices, such as the kit's `HANDHELDS` or the repository's own made with `emulatedDevice` or `windowDevice` |
 | `tolerance` | `channel`, how far a color channel may move before its pixel counts as changed, and `share`, the share of pixels that may change, both 0 when the key is left out |
 | `timeoutMs` | how long each size may take, 60 seconds when the key is left out |
 
 Each picture is compared with `<fixtures>/<engine>/<device>.png`, where the device name is lowercased and each run of other characters becomes one hyphen, as in `iphone-se-375x667.png`.
 A phone picture comes from a phone the kit emulates, such as an iPhone SE at 375 by 667.
+Each device names one picture, so a suite that lists one device name twice fails a test that names it and pictures that device once.
+
+`HANDHELDS` holds six phones and tablets beyond the anchor sizes, each with its own user agent and pixel ratio:
+
+| Device | Emulated as |
+| --- | --- |
+| iPhone 13 and 14 390x844 | `iPhone 14` |
+| iPhone 16 Plus 430x932 | `iPhone 16 Plus` |
+| iPhone 16 Pro Max 440x956 | `iPhone 16 Pro Max` |
+| Android 360x800 | `Pixel 7` at a pixel ratio of 3 |
+| Android 384x854 | `Pixel 7` at a pixel ratio of 2.8125 |
+| iPad 768x1024 | `iPad (gen 6)` |
+
+The `full` set already holds an `iPad 768x1024`, so `HANDHELDS` goes beside the `anchor` set.
 A picture that differs from its approved picture, or that has none, fails its test.
 The failure names the device, its size and the engine, and the new picture is written beside the approved one as `<device>.new.png`.
 A picture that matches removes any `.new.png` beside it.
@@ -76,7 +90,7 @@ Approve mode passes every size, so the review of the changed pictures is the onl
 
 A repository whose test already opens the page uses the parts `blockScreens` is built from:
 
-1. Take the devices from `screenDevices("anchor")`, and add the repository's own with `emulatedDevice` or `windowDevice`.
+1. Take the devices from `screenDevices("anchor")`, and add `HANDHELDS` or the repository's own made with `emulatedDevice` or `windowDevice`.
 1. Open each page in a browser context with the device's `options`.
 1. Wait with `settled(page)`, and take the picture with `pictureOf(page, selector)`.
 1. Pass the picture to `matchesApproved(picture, { fixtures, engine, device, tolerance })`, which resolves to `AS_APPROVED` or to the failure, and expect `AS_APPROVED`.
