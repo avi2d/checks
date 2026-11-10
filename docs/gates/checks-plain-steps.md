@@ -49,6 +49,8 @@ A composite action also passes the first shape.
 A reusable workflow is one whose `on` holds `workflow_call` and not `workflow_dispatch`, since a dispatch input is typed at run time and no file holds it.
 When the named input declares a string default, the check judges that default as an ordinary run value, since omitting the input runs the default the shared file holds.
 A default that is itself one plain command passes.
+An empty default is not judged, since it holds no command.
+A fault found in a default names the input that declares it.
 The check still refuses an expression that is not `inputs.<name>`, such as `${{ matrix.command }}`, an input mixed with other words or operators, such as `${{ inputs.a || inputs.b }}` or `${{ inputs.a }} --verbose`, a variable set from anything other than one input, and either shape in any other workflow.
 
 This step fails, because it appends through a redirect and spells its data with escapes:

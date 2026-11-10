@@ -213,7 +213,12 @@ test("a reusable workflow judges the named input default that hides logic instea
     ".github/workflows/ci.yml",
     ["on:", "  workflow_call:", "    inputs:", "      publish-command:", "        type: string", "        default: bun install && bun test", "jobs:", "  publish:", "    runs-on: ubuntu-latest", "    steps:", "      - run: ${{ inputs.publish-command }}"].join("\n"),
   );
-  expect(findStepFaults([dirty]).map(({ faults }) => faults)).toEqual([["a command list"]]);
+  expect(findStepFaults([dirty]).map(({ faults }) => faults)).toEqual([["a command list in the default of input publish-command"]]);
+  const empty = yamlFile(
+    ".github/workflows/ci.yml",
+    ["on:", "  workflow_call:", "    inputs:", "      publish-command:", "        type: string", "        default: ''", "jobs:", "  publish:", "    runs-on: ubuntu-latest", "    steps:", "      - run: ${{ inputs.publish-command }}"].join("\n"),
+  );
+  expect(findStepFaults([empty])).toEqual([]);
 });
 
 test("a composite action judges the named input default that hides logic instead of passing as the caller command", () => {
@@ -226,12 +231,22 @@ test("a composite action judges the named input default that hides logic instead
     "actions/slot/action.yml",
     ["name: slot", "inputs:", "  command:", "    required: true", "    default: bun install && bun test", "runs:", "  using: composite", "  steps:", "    - shell: bash", "      env:", "        COMMAND: ${{ inputs.command }}", "      run: '\"$COMMAND\"'"].join("\n"),
   );
-  expect(findStepFaults([dirtyEnv]).map(({ faults }) => faults)).toEqual([["a command list"]]);
+  expect(findStepFaults([dirtyEnv]).map(({ faults }) => faults)).toEqual([["a command list in the default of input command"]]);
   const dirtyWhole = yamlFile(
     "actions/slot/action.yml",
     ["name: slot", "inputs:", "  command:", "    required: true", "    default: bun install && bun test", "runs:", "  using: composite", "  steps:", "    - shell: bash", "      run: ${{ inputs.command }}"].join("\n"),
   );
-  expect(findStepFaults([dirtyWhole]).map(({ faults }) => faults)).toEqual([["a command list"]]);
+  expect(findStepFaults([dirtyWhole]).map(({ faults }) => faults)).toEqual([["a command list in the default of input command"]]);
+  const emptyEnv = yamlFile(
+    "actions/slot/action.yml",
+    ["name: slot", "inputs:", "  command:", "    required: true", "    default: ''", "runs:", "  using: composite", "  steps:", "    - shell: bash", "      env:", "        COMMAND: ${{ inputs.command }}", "      run: '\"$COMMAND\"'"].join("\n"),
+  );
+  expect(findStepFaults([emptyEnv])).toEqual([]);
+  const emptyWhole = yamlFile(
+    "actions/slot/action.yml",
+    ["name: slot", "inputs:", "  command:", "    required: true", "    default: ''", "runs:", "  using: composite", "  steps:", "    - shell: bash", "      run: ${{ inputs.command }}"].join("\n"),
+  );
+  expect(findStepFaults([emptyWhole])).toEqual([]);
 });
 
 test("a caller input run in a workflow that is not only called is refused instead of trusted as the caller's command", () => {
@@ -242,9 +257,9 @@ test("a caller input run in a workflow that is not only called is refused instea
 
 test("an expression that is not one bare caller input is refused even in a reusable workflow", () => {
   for (const run of ["${{ matrix.command }}", "${{ github.event.inputs.command }}", "${{ inputs.a || inputs.b }}", "${{ inputs.a }}${{ inputs.b }}", "${{ inputs.a }} --verbose", "sudo ${{ inputs.a }}"]) {
-    expect(runFaults(run, undefined, { kind: "reusable" })).toEqual([LATE]);
+    expect(runFaults(run, undefined, { kind: "reusable", inputDefaults: new Map() })).toEqual([LATE]);
   }
-  expect(runFaults("${{ inputs.a }} && bun test", undefined, { kind: "reusable" })).toEqual(["a command list", LATE]);
+  expect(runFaults("${{ inputs.a }} && bun test", undefined, { kind: "reusable", inputDefaults: new Map() })).toEqual(["a command list", LATE]);
 });
 
 test("a program variable is refused unless the step's own env sets it from exactly one caller input", () => {

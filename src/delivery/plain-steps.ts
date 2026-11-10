@@ -19,8 +19,8 @@ export type StepFault = {
 
 export type StepContext =
   | { readonly kind: "workflow" }
-  | { readonly kind: "reusable"; readonly inputDefaults?: ReadonlyMap<string, string> }
-  | { readonly kind: "composite"; readonly inputEnv: ReadonlySet<string>; readonly inputForEnv?: ReadonlyMap<string, string>; readonly inputDefaults?: ReadonlyMap<string, string> };
+  | { readonly kind: "reusable"; readonly inputDefaults: ReadonlyMap<string, string> }
+  | { readonly kind: "composite"; readonly inputForEnv: ReadonlyMap<string, string>; readonly inputDefaults: ReadonlyMap<string, string> };
 
 type RunStep = {
   readonly keys: readonly (string | number)[];
@@ -251,7 +251,7 @@ function stringDefaults(inputs: unknown): ReadonlyMap<string, string> {
   if (!isRecord(inputs)) return new Map();
   const defaults = new Map<string, string>();
   for (const [name, spec] of Object.entries(inputs)) {
-    if (isRecord(spec) && typeof spec["default"] === "string") defaults.set(name, spec["default"]);
+    if (isRecord(spec) && typeof spec["default"] === "string" && spec["default"].trim() !== "") defaults.set(name, spec["default"]);
   }
   return defaults;
 }
@@ -285,20 +285,23 @@ function runsCallerCommand(line: string, plain: string, context: StepContext): b
   if (inputName(line) !== undefined) return true;
   if (context.kind === "reusable") return false;
   const name = programVariable(plain);
-  return name !== undefined && context.inputEnv.has(name);
+  return name !== undefined && context.inputForEnv.has(name);
 }
 
-function callerDefault(line: string, plain: string, context: StepContext): string | undefined {
+function callerDefault(line: string, plain: string, context: StepContext): { readonly name: string; readonly value: string } | undefined {
   if (context.kind === "workflow") return undefined;
-  if (context.inputDefaults === undefined) return undefined;
   const direct = inputName(line);
-  if (direct !== undefined) return context.inputDefaults.get(direct);
+  if (direct !== undefined) {
+    const value = context.inputDefaults.get(direct);
+    return value === undefined ? undefined : { name: direct, value };
+  }
   if (context.kind === "reusable") return undefined;
   const name = programVariable(plain);
   if (name === undefined) return undefined;
-  const input = context.inputForEnv?.get(name);
+  const input = context.inputForEnv.get(name);
   if (input === undefined) return undefined;
-  return context.inputDefaults.get(input);
+  const value = context.inputDefaults.get(input);
+  return value === undefined ? undefined : { name: input, value };
 }
 
 export function runFaults(run: string, shell: unknown, context: StepContext = ORDINARY): readonly string[] {
@@ -314,7 +317,7 @@ export function runFaults(run: string, shell: unknown, context: StepContext = OR
   if (fromProgram(texts)[0]?.includes("$") === true && !caller) faults.push("a command named only at run time");
   if (caller) {
     const fallback = callerDefault(line, plain, context);
-    if (fallback !== undefined) faults.push(...runFaults(fallback, shell, ORDINARY));
+    if (fallback !== undefined) faults.push(...runFaults(fallback.value, shell, ORDINARY).map((fault) => `${fault} in the default of input ${fallback.name}`));
   }
   const fault = shellFault(shell);
   return fault === undefined ? faults : [...faults, fault];
@@ -343,15 +346,11 @@ function workflowContext(document: Readonly<Record<string, unknown>>): StepConte
   return { kind: "reusable", inputDefaults: reusableDefaults(document) };
 }
 
-function inputEnv(step: Readonly<Record<string, unknown>>): ReadonlySet<string> {
-  return new Set(envInputs(step).keys());
-}
-
 type ContextOf = (step: Readonly<Record<string, unknown>>) => StepContext;
 
 function compositeContextFor(document: Readonly<Record<string, unknown>>): ContextOf {
   const defaults = compositeDefaults(document);
-  return (step) => ({ kind: "composite", inputEnv: inputEnv(step), inputForEnv: envInputs(step), inputDefaults: defaults });
+  return (step) => ({ kind: "composite", inputForEnv: envInputs(step), inputDefaults: defaults });
 }
 
 function runSteps(steps: unknown, keys: readonly (string | number)[], prefix: string, inherited: unknown, contextOf: ContextOf): readonly RunStep[] {
