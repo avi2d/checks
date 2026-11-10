@@ -39,10 +39,20 @@ function answer(site: Site, request: Request): Response {
   return new Response("not found", { status: 404 });
 }
 
+export const sitePages = ({ files }: Site): readonly string[] =>
+  [...files.keys()].filter((url) => url.endsWith(".html")).map((url) => url.replace(/\/index\.html$/, "/")).toSorted();
+
+export type Listening = { readonly url: string; readonly stop: () => Promise<void> };
+
+export function listenSite(site: Site): Listening {
+  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: (request) => answer(site, request) });
+  return { url: `http://127.0.0.1:${String(server.port)}/`, stop: () => server.stop() };
+}
+
 export const serveSite = Effect.fn("serveSite")(function* (site: Site) {
-  const server = yield* Effect.acquireRelease(
-    Effect.sync(() => Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: (request) => answer(site, request) })),
-    (served) => Effect.promise(() => served.stop()),
+  const { url } = yield* Effect.acquireRelease(
+    Effect.sync(() => listenSite(site)),
+    (listening) => Effect.promise(listening.stop),
   );
-  return `http://127.0.0.1:${server.port}/`;
+  return url;
 });

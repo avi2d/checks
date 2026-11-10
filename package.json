@@ -51,6 +51,7 @@
     "./browser-checks.json": "./src/quality/browser/browser-checks.json",
     "./screen-sizes.ts": "./src/quality/browser/screen-sizes.ts",
     "./block-screens.ts": "./src/testing/block-screens.ts",
+    "./site-test.ts": "./src/testing/site-test.ts",
     "./core/git.ts": "./src/core/git.ts",
     "./core/main.ts": "./src/core/main.ts",
     "./delivery/gitleaks.ts": "./src/delivery/gitleaks.ts",

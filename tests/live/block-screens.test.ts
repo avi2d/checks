@@ -3,13 +3,12 @@ import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { Effect, Schema } from "effect";
+import { Effect } from "effect";
 import { decodePng } from "../../src/testing/block-screens.ts";
-import { CHECKOUT, ran, scratchDirs } from "../e2e/lib/fixture-repo.ts";
+import { ran, scratchDirs } from "../e2e/lib/fixture-repo.ts";
+import { browserConsumer } from "../e2e/lib/packed.ts";
 
 const scratch = scratchDirs();
-
-const Manifest = Schema.Struct({ devDependencies: Schema.Record(Schema.String, Schema.String) });
 
 const ANCHOR_PICTURES = ["android-360x640", "iphone-se-375x667", "iphone-15-and-16-393x852", "android-412x915", "ipad-820x1180", "desktop-1366x768", "desktop-1440x900", "desktop-1920x1080"];
 
@@ -31,13 +30,7 @@ const named = (suffix: string): readonly string[] => ["chromium", "webkit"].flat
 test(
   "a consumer's block suite fails and keeps new pictures with none approved, approves them on request, passes on them, and fails a changed look at each size, instead of passing pictures nobody approved",
   async () => {
-    const packDir = await scratch("checks-block-pack-");
-    const packed = await $`bun pm pack --destination ${packDir} --quiet --ignore-scripts`.cwd(CHECKOUT).quiet();
-    const manifest = Schema.decodeUnknownSync(Manifest)(JSON.parse(await readFile(join(CHECKOUT, "package.json"), "utf8")));
-    const dir = await scratch("checks-block-consumer-");
-    const dependencies = { "@avi2dg/checks": `file:${packed.stdout.toString().trim()}`, "playwright-core": manifest.devDependencies["playwright-core"] };
-    await writeFile(join(dir, "package.json"), JSON.stringify({ name: "block-consumer", type: "module", dependencies }));
-    await $`bun install --ignore-scripts`.cwd(dir).quiet();
+    const dir = await browserConsumer(scratch, "block");
     await mkdir(join(dir, "tests", "pixel"), { recursive: true });
     const fixtures = join(dir, "tests", "fixtures", "card-screens");
     const run = async (color: string, approve = false) => {
