@@ -60,6 +60,7 @@ var BASE = {
       files: ["**/*.ts", "**/*.tsx"],
       rules: { "data-shape/readonly-collection-param": "error", "data-shape/schema-twin": "error" }
     },
+    { files: [...TESTS], rules: { "data-shape/no-shell-in-strings": "off" } },
     {
       files: ["**/*.ts", "**/*.tsx"],
       excludeFiles: ["tests/**"],

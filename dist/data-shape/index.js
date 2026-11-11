@@ -1,3 +1,105 @@
+// src/quality/data-shape/no-shell-in-strings.ts
+var LEAST_SHELL_LINES = 5;
+var SHELL_MARKS = [
+  /^#!\/(?:usr\/)?bin\/(?:env\s+)?(?:ba|da|z)?sh\b/u,
+  /^(?:if|elif|while|until)\s+(?![\s(])/u,
+  /^(?:then|fi|do|done|esac)\s*(?:;|$)/u,
+  /^case\s.+\sin$/u,
+  /;\s*(?:then|do)$/u,
+  /;;/u,
+  /(?<![\w$])\$\((?!["'`])/u,
+  /"\$@"/u,
+  /\$\{[A-Za-z_]\w*[:#%/}]/u,
+  /&&|\|\|/u,
+  /^(?:trap|exec)\s/u
+];
+var JAVASCRIPT_MARKS = /\b(?:const|let|var|function|await|import|export|typeof|new)\s|=>|===|!==|\bconsole\.|[{(]$|^[)}]|(?<!;);$/u;
+function readsAsShell(text) {
+  const line = text.trim();
+  return SHELL_MARKS.some((mark) => mark.test(line)) && !JAVASCRIPT_MARKS.test(line);
+}
+function split(node, text) {
+  return text.split(`
+`).map((line) => ({ node, text: line }));
+}
+function joined(parts) {
+  const found = parts.flatMap((part) => part === null || part.type === "SpreadElement" ? [] : [textLines(part)]);
+  const lines = found.filter((one) => one !== undefined);
+  return lines.length === 0 ? undefined : lines.flat();
+}
+function chainSegments(node) {
+  if (node.type === "Literal")
+    return typeof node.value === "string" ? [{ node, text: node.value }] : undefined;
+  if (node.type === "TemplateLiteral")
+    return [{ node, text: node.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw).join("") }];
+  if (node.type === "BinaryExpression" && node.operator === "+") {
+    const left = chainSegments(node.left) ?? [];
+    const right = chainSegments(node.right) ?? [];
+    return left.length === 0 && right.length === 0 ? undefined : [...left, ...right];
+  }
+  return;
+}
+function textLines(node) {
+  if (node.type === "Literal")
+    return typeof node.value === "string" ? split(node, node.value) : undefined;
+  if (node.type === "TemplateLiteral")
+    return split(node, node.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw).join(""));
+  if (node.type === "ArrayExpression")
+    return joined(node.elements);
+  if (node.type === "BinaryExpression" && node.operator === "+")
+    return chainLines(chainSegments(node));
+  return;
+}
+function chainLines(segments) {
+  const first = segments?.[0];
+  if (segments === undefined || first === undefined)
+    return;
+  const lines = [];
+  let owner = first.node;
+  let current = "";
+  for (const segment of segments) {
+    const parts = segment.text.split(`
+`);
+    const [head = "", ...tail] = parts;
+    if (current === "")
+      owner = segment.node;
+    current += head;
+    for (const part of tail) {
+      lines.push({ node: owner, text: current });
+      owner = segment.node;
+      current = part;
+    }
+  }
+  lines.push({ node: owner, text: current });
+  return lines;
+}
+function insideLargerString(node) {
+  const { parent } = node;
+  return parent?.type === "ArrayExpression" || parent?.type === "BinaryExpression" && parent.operator === "+";
+}
+var rule = {
+  meta: {
+    type: "suggestion",
+    docs: { description: "Refuse a shell program written as TypeScript strings, which no linter of either language reads" }
+  },
+  create(context) {
+    const check = (node) => {
+      if (insideLargerString(node))
+        return;
+      const shell = (textLines(node) ?? []).filter((line) => readsAsShell(line.text));
+      const [first] = shell;
+      if (first === undefined || shell.length < LEAST_SHELL_LINES)
+        return;
+      context.report({
+        node: first.node,
+        message: `These strings hold ${shell.length} lines that read as shell, the first \`${first.text.trim()}\`. Move the program to a .sh file the code runs, where a shell linter reads it.`
+      });
+    };
+    return { Literal: check, TemplateLiteral: check, ArrayExpression: check, BinaryExpression: check };
+  }
+};
+var no_shell_in_strings_default = rule;
+
 // src/quality/data-shape/readonly-collection-param.ts
 var ARRAY_METHODS = new Set([
   "push",
@@ -105,7 +207,7 @@ function watch(params) {
 function fixOf(type, text) {
   return type.type === "TSArrayType" ? `readonly ${text}` : `Readonly${text}`;
 }
-var rule = {
+var rule2 = {
   meta: {
     type: "problem",
     docs: { description: "Type a collection parameter the function never mutates as readonly" }
@@ -216,7 +318,7 @@ var rule = {
     };
   }
 };
-var readonly_collection_param_default = rule;
+var readonly_collection_param_default = rule2;
 
 // src/quality/data-shape/schema-twin.ts
 var STRUCTS = new Set(["Struct", "TaggedStruct", "Class"]);
@@ -378,7 +480,7 @@ function describeTwin(type, schema) {
     return `${subject} repeats the fields of a Schema in this file. Derive it from the schema instead of writing both.`;
   return `${subject} repeats the fields of schema \`${schema}\` in this file. Derive it as \`typeof ${schema}.Type\` instead of writing both.`;
 }
-var rule2 = {
+var rule3 = {
   meta: {
     type: "problem",
     docs: { description: "Derive an object type from the Schema it repeats instead of writing both" }
@@ -412,12 +514,13 @@ var rule2 = {
     };
   }
 };
-var schema_twin_default = rule2;
+var schema_twin_default = rule3;
 
 // src/quality/data-shape/index.ts
 var plugin = {
   meta: { name: "data-shape" },
   rules: {
+    "no-shell-in-strings": no_shell_in_strings_default,
     "readonly-collection-param": readonly_collection_param_default,
     "schema-twin": schema_twin_default
   }
