@@ -28,7 +28,7 @@ So every unit test is changed when the preload list differs between the merge ba
 The same holds when the branch changes a preload or a file a preload imports, wherever that file lives.
 
 Each source whose mutants a changed unit test covers or kills in the full baseline report then enters the scope, when it still exists at `HEAD`.
-So a kill lost through a test change alone still shows in the comparison, in a source the branch leaves alone.
+So a kill lost through a test change alone still reaches the scoped run, in a source the branch leaves alone.
 A changed unit test with no baseline report adds no covered source to the scope.
 With no other change the scope stays empty and the head run skips.
 A run with no report reads no full baseline, so it says nothing about one.

@@ -36,7 +36,7 @@ When that timing run fails, the preset prints why on stderr and `unitTestFiles` 
 A run with `--ignoreStatic` on the command line or in a refresh tests no static mutant, so it skips the timing run.
 
 The preset sets `ignoreStatic` only when `CHECKS_MUTATION_MODE` is `refresh`.
-A baseline or a branch comparison leaves the variable at another value or unset, so it still tests each static mutant.
+A baseline or a scoped run leaves the variable at another value or unset, so it still tests each static mutant.
 
 The preset runs one Stryker worker per core when `RUNNER_ENVIRONMENT` is `github-hosted`, since a GitHub-hosted runner is a VM the job holds alone.
 Elsewhere it runs one worker per two cores, rounded down and at least one, since a self-hosted runner or a laptop shares its cores.

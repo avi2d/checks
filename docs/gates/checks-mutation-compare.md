@@ -97,7 +97,7 @@ With a report, a changed unit test that `main` edited after that baseline widens
 When that report path names no file, refresh the full baseline with `gh workflow run mutation`, as [checks-mutation](checks-mutation.md#running-it-in-ci) shows.
 A run with `--mutate` is scoped, so the preset lets it through without `CI=true`.
 A public repository keeps `runs-on: ubuntu-latest`, as [checks-ci-wiring](checks-ci-wiring.md#runners) requires of a job a fork can reach.
-[checks-ci-wiring](checks-ci-wiring.md#runners) refuses a mutation job that names it in `runs-on`.
+[checks-ci-wiring](checks-ci-wiring.md#runners) refuses a mutation job that names `CI_RUNS_ON` in `runs-on`.
 
 ## Related topics
 

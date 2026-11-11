@@ -161,7 +161,7 @@ With `--dry-run` the summary says what it would delete and what it would keep.
 
 ## When it runs
 
-Only a CI step runs it: the shared `mutation` workflow in its baseline, compare and refresh jobs, or a step the repository writes.
+Only a CI step runs it: the shared `mutation` workflow in its baseline and refresh jobs, or a step the repository writes.
 A baseline job restores the state the previous `main` run left before an incremental Stryker run:
 
 ```yaml
@@ -202,7 +202,7 @@ A refresh job restores the previous full report with `--full` for shard balancin
 
 The restore reads the repository's Actions through `gh`, so the job that holds it grants `contents: read` and `actions: read`.
 
-A refresh merge uploads its slimmed report as the `mutation-baseline-full` artifact, which a branch comparison's scope step reads on any runner.
+A refresh merge uploads its slimmed report as the `mutation-baseline-full` artifact, which a scope step with `--full` reads on any runner.
 It slims the report first:
 
 ```yaml
@@ -215,7 +215,7 @@ It slims the report first:
 ```
 
 The full upload keeps 30 days, so the newest full baseline outlives the gap between full runs.
-A branch comparison's scope step loses its coverage when no full baseline outlives the gap.
+A scope step with a full report loses its coverage when no full baseline outlives the gap.
 
 A branch comparison's scope step restores the full report with `--full`, and [checks-mutation-scope](checks-mutation-scope.md) reads it:
 
