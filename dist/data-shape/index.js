@@ -27,17 +27,15 @@ function joined(parts) {
   const lines = found.filter((one) => one !== undefined);
   return lines.length === 0 ? undefined : lines.flat();
 }
-function chainText(node) {
+function chainSegments(node) {
   if (node.type === "Literal")
-    return typeof node.value === "string" ? node.value : undefined;
+    return typeof node.value === "string" ? [{ node, text: node.value }] : undefined;
   if (node.type === "TemplateLiteral")
-    return node.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw).join("");
+    return [{ node, text: node.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw).join("") }];
   if (node.type === "BinaryExpression" && node.operator === "+") {
-    const left = chainText(node.left);
-    const right = chainText(node.right);
-    if (left === undefined && right === undefined)
-      return;
-    return (left ?? "") + (right ?? "");
+    const left = chainSegments(node.left) ?? [];
+    const right = chainSegments(node.right) ?? [];
+    return left.length === 0 && right.length === 0 ? undefined : [...left, ...right];
   }
   return;
 }
@@ -49,8 +47,29 @@ function textLines(node) {
   if (node.type === "ArrayExpression")
     return joined(node.elements);
   if (node.type === "BinaryExpression" && node.operator === "+") {
-    const text = chainText(node);
-    return text === undefined ? undefined : split(node, text);
+    const segments = chainSegments(node);
+    const first = segments?.[0];
+    if (segments === undefined || first === undefined)
+      return;
+    const lines = [];
+    let owner = first.node;
+    let current = "";
+    for (const segment of segments) {
+      for (const [index, part] of segment.text.split(`
+`).entries()) {
+        if (index === 0) {
+          if (current === "")
+            owner = segment.node;
+          current += part;
+        } else {
+          lines.push({ node: owner, text: current });
+          owner = segment.node;
+          current = part;
+        }
+      }
+    }
+    lines.push({ node: owner, text: current });
+    return lines;
   }
   return;
 }

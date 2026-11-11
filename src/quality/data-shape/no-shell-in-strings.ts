@@ -35,14 +35,13 @@ function joined(parts: readonly (ESTree.Node | null)[]): readonly Line[] | undef
   return lines.length === 0 ? undefined : lines.flat();
 }
 
-function chainText(node: ESTree.Node): string | undefined {
-  if (node.type === "Literal") return typeof node.value === "string" ? node.value : undefined;
-  if (node.type === "TemplateLiteral") return node.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw).join("");
+function chainSegments(node: ESTree.Node): readonly { readonly node: ESTree.Node; readonly text: string }[] | undefined {
+  if (node.type === "Literal") return typeof node.value === "string" ? [{ node, text: node.value }] : undefined;
+  if (node.type === "TemplateLiteral") return [{ node, text: node.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw).join("") }];
   if (node.type === "BinaryExpression" && node.operator === "+") {
-    const left = chainText(node.left);
-    const right = chainText(node.right);
-    if (left === undefined && right === undefined) return undefined;
-    return (left ?? "") + (right ?? "");
+    const left = chainSegments(node.left) ?? [];
+    const right = chainSegments(node.right) ?? [];
+    return left.length === 0 && right.length === 0 ? undefined : [...left, ...right];
   }
   return undefined;
 }
@@ -52,8 +51,26 @@ function textLines(node: ESTree.Node): readonly Line[] | undefined {
   if (node.type === "TemplateLiteral") return split(node, node.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw).join(""));
   if (node.type === "ArrayExpression") return joined(node.elements);
   if (node.type === "BinaryExpression" && node.operator === "+") {
-    const text = chainText(node);
-    return text === undefined ? undefined : split(node, text);
+    const segments = chainSegments(node);
+    const first = segments?.[0];
+    if (segments === undefined || first === undefined) return undefined;
+    const lines: Line[] = [];
+    let owner: ESTree.Node = first.node;
+    let current = "";
+    for (const segment of segments) {
+      for (const [index, part] of segment.text.split("\n").entries()) {
+        if (index === 0) {
+          if (current === "") owner = segment.node;
+          current += part;
+        } else {
+          lines.push({ node: owner, text: current });
+          owner = segment.node;
+          current = part;
+        }
+      }
+    }
+    lines.push({ node: owner, text: current });
+    return lines;
   }
   return undefined;
 }
