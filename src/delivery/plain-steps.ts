@@ -29,7 +29,6 @@ type RunStep = {
 };
 
 const NAME = "plain-steps";
-const SWITCH = "checks.plainSteps";
 const WORKFLOWS = ".github/workflows/";
 const ACTION_FILES = new Set(["action.yml", "action.yaml"]);
 const UNJUDGED_PREFIXES = ["node_modules/", "repos/", "tests/fixtures/"] as const;
@@ -44,9 +43,6 @@ const CONTROL_OPERATORS: readonly (readonly [string, string])[] = [
   ["(", "a subshell"],
   [")", "a subshell"],
 ];
-const Manifest = Schema.Struct({
-  checks: Schema.optional(Schema.Struct({ plainSteps: Schema.optional(Schema.Boolean) })),
-});
 
 class PlainStepsError extends Schema.TaggedError<PlainStepsError>()("PlainStepsError", {
   message: Schema.String,
@@ -324,20 +320,7 @@ export function findStepFaults(files: readonly YamlFile[]): readonly StepFault[]
   });
 }
 
-export type Result =
-  | { readonly enabled: false; readonly violations: readonly [] }
-  | { readonly enabled: true; readonly files: number; readonly violations: readonly StepFault[] };
-
-const readSwitch = Effect.fn("readSwitch")(function* (root: string) {
-  const fs = yield* FileSystem.FileSystem;
-  const file = (yield* Path.Path).join(root, "package.json");
-  if (!(yield* fs.exists(file))) return false;
-  const { checks } = yield* fs.readFileString(file).pipe(
-    Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Manifest))),
-    Effect.mapError((cause) => new PlainStepsError({ message: `cannot read ${file}: ${cause.message}` })),
-  );
-  return checks?.plainSteps === true;
-});
+export type Result = { readonly files: number; readonly violations: readonly StepFault[] };
 
 const parseYaml = (path: string, text: string): Effect.Effect<YamlFile, PlainStepsError> =>
   Effect.try({
@@ -346,7 +329,6 @@ const parseYaml = (path: string, text: string): Effect.Effect<YamlFile, PlainSte
   });
 
 export const run = Effect.fn("run")(function* (root: string) {
-  if (!(yield* readSwitch(root))) return { enabled: false, violations: [] } satisfies Result;
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const listed = yield* workingTreeFiles(root).pipe(Effect.mapError((cause) => new PlainStepsError({ message: cause.message })));
@@ -356,11 +338,10 @@ export const run = Effect.fn("run")(function* (root: string) {
       Effect.flatMap((text) => parseYaml(file, text)),
     ),
   );
-  return { enabled: true, files: files.length, violations: findStepFaults(files) } satisfies Result;
+  return { files: files.length, violations: findStepFaults(files) } satisfies Result;
 });
 
 export function report(result: Result): string {
-  if (!result.enabled) return `${NAME}: off; set ${SWITCH} to true in package.json to turn it on`;
   if (result.violations.length === 0) return `${NAME}: every run step in ${result.files} workflow or action file(s) is one plain command`;
   return [
     `${NAME}: ${result.violations.length} run step(s) are not one plain command; run one command, or call a shared workflow or action that holds the logic:`,
