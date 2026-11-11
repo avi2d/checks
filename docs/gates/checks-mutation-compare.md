@@ -97,7 +97,6 @@ An empty scope skips the head run and the comparison, and the notice names the s
 A scope past the mutant cap skips the comparison, and a note names the skip.
 A changed unit test with no full baseline on `main` adds no covered source to the scope.
 With no other change the scope stays empty and the comparison skips.
-The scope step files a warning annotation that names the missing full baseline.
 A changed unit test that `main` edited after that baseline widens the scope to every file the `mutate` globs match.
 Refresh the full baseline with `gh workflow run mutation`, choosing `refresh` for the `mode` input, as [checks-mutation](checks-mutation.md#running-it-in-ci) shows.
 A run with `--mutate` is scoped, so the preset lets it through without `CI=true`.

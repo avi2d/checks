@@ -31,7 +31,8 @@ Each source whose mutants a changed unit test covers or kills in the full baseli
 So a kill lost through a test change alone still shows in the comparison, in a source the branch leaves alone.
 A changed unit test with no baseline report adds no covered source to the scope.
 With no other change the scope stays empty and the comparison skips.
-The scope step files a warning annotation that names the missing full baseline.
+A run with no report reads no full baseline, so it says nothing about one.
+A report path that names no file files a warning annotation that names the missing full baseline.
 Refresh the full baseline with `gh workflow run mutation -f mode=refresh`.
 Stryker records each test file's source in the report's `testFiles`.
 A changed unit test the merge base holds must have that recorded source match its content at the merge base.
@@ -85,7 +86,7 @@ checks-mutation-scope --shards <count> [<last-report>]
 
 `<base>` is the target branch, such as `origin/main`, or the merge base itself.
 `<full-baseline-report>` is the path the full baseline was restored to.
-A path with no file reads as no report, and a changed unit test then adds no covered source.
+A path with no file adds no covered source for a changed unit test, and the scope step warns about it.
 `<count>` is a whole number from 1 to 256, the most jobs one GitHub Actions matrix runs.
 `<last-report>` is the path of the last whole-tree report.
 With no `<last-report>`, each file weighs one mutant, and a path with no file fails the run.
@@ -141,7 +142,7 @@ mutation-scope: shard 3 holds 2 file(s) and about 8 mutant(s)
 SHARDS=["src/a.ts,src/b.ts","src/c.ts","src/d.ts,src/e.ts"]
 ```
 
-A changed unit test with no full baseline on `main` adds no covered source to the scope:
+A changed unit test whose report path names no file adds no covered source to the scope:
 
 ```
 ::warning::mutation-scope: tests/unit/dashboard/snapshot.test.ts changed, but no full baseline report at /runner/temp/baseline-full/mutation.json says which sources they cover, so the scope holds no covered source. Refresh the full baseline with `gh workflow run mutation -f mode=refresh`.
