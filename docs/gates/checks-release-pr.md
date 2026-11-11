@@ -151,7 +151,9 @@ A public repository keeps `runs-on: ubuntu-latest`.
 A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on both jobs, as [checks-ci-wiring](checks-ci-wiring.md#runners) requires of every job but a mutation job.
 A repository whose build needs more than Bun adds the steps its `.github/workflows/ci.yml` runs before `bun run build` to both jobs, and nothing after it.
 Neither job runs a test suite or a mutation run.
-On a hosted runner the `pull-request` job takes about 25 seconds, and its `held-runs` step adds up to 30 seconds, so GitHub may bill it as two minutes whether it opens, refreshes or leaves the pull request alone.
+On a hosted runner the `pull-request` job takes about 25 seconds.
+Its `held-runs` step adds up to 30 seconds.
+GitHub may bill the job as two minutes whether it opens, refreshes or leaves the pull request alone.
 A private repository runs it there too unless `CI_RUNS_ON` names its self-hosted runner, which bills no minutes.
 The `tag` job runs only when a release lands, and a job its `if` skips bills nothing.
 The checks it dispatches are the release pull request's own required checks, and they run again only when `main` moves under it.
