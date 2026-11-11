@@ -73,7 +73,7 @@ The check refuses a `mutation.yml` that differs from that caller by a byte, so a
 It refuses every mutation job of the repository's own, a job with a run step that calls mutation as [Runners](#runners) defines it.
 A job that calls a reusable workflow has no run step, so the caller passes.
 The `avi2d/workflows` repository holds the shared workflow, so there it refuses none.
-Each refusal names the workflow file and the job.
+A hand-rolled job refusal names the workflow file and the job, and the caller refusal names only the file.
 
 ### Bun version
 

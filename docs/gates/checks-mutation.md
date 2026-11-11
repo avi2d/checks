@@ -94,9 +94,9 @@ Run scoped checks locally during development.
 
 ## Running it in CI
 
+The caller [checks-setup](checks-setup.md) writes reaches only the refresh job and the pull request run.
 Only `avi2d/workflows` holds the baseline job, since [checks-ci-wiring](checks-ci-wiring.md#mutation-jobs) refuses it in any other repository.
-Any other repository calls that shared workflow from the caller [checks-setup](checks-setup.md) writes.
-A baseline job takes these steps and keeps its report as an artifact:
+Only a caller that passes `mode: baseline` reaches that job, which takes these steps and keeps its report as an artifact:
 
 ```yaml
 - env:
