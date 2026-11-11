@@ -120,7 +120,7 @@ Each refusal names the workflow file, the line of its `schedule` trigger and wha
 ### Schedules
 
 It refuses every other workflow that triggers on `schedule`, since a test, flake, browser or whole-tree run starts only by hand, with `gh workflow run`.
-The `mutation` caller also starts on push and on pull requests.
+The `mutation` caller also starts on pull requests and by hand.
 The one schedule it keeps is a weekly advisory scan in a public repository.
 A workflow scans advisories when a run step calls `checks-advisories`, the same ways a release call counts, or a job calls the shared `avi2d/workflows/.github/workflows/advisories.yml` at any ref.
 Every other run step is then a `bun install`, and every other job that calls a workflow calls that one.
@@ -183,7 +183,7 @@ A job that runs Stryker itself produces a report like this:
 
 ```
 ci-wiring: 1 job(s) run mutation outside the shared workflow:
-  .github/workflows/mutation.yml job mutation: run mutation through a job with uses: avi2d/workflows/.github/workflows/mutation.yml@v1, as checks-setup writes it
+  .github/workflows/mutation.yml job mutation: run mutation through a job with uses: avi2d/workflows/.github/workflows/mutation.yml@v2, as checks-setup writes it
 ```
 
 A reference to a missing workflow produces a report like this:

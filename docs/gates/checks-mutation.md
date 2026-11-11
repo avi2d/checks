@@ -86,8 +86,10 @@ An `--incremental` run with no report stops before instrumenting with the missin
 
 ## When it runs
 
-A repository runs its baselines through the `mutation` caller that [checks-setup](checks-setup.md) writes.
-A push to `main` that changes what Stryker mutates or tests starts one, and so does `gh workflow run mutation`.
+A repository runs mutation through the `mutation` caller that [checks-setup](checks-setup.md) writes.
+A pull request runs `compare`.
+A manual start with `gh workflow run mutation` starts `refresh`.
+No push to `main` starts a run.
 Run scoped checks locally during development.
 A first baseline with no state costs a full Stryker run, and each later one restores the newest `main` baseline and retests the mutants its changes reach.
 

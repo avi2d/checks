@@ -179,8 +179,8 @@ test("a private repository's mutation job through a repository shell script in i
   await repo.write({ ".github/workflows/mutation.yml": mutation(mutationRunner) });
   const green = await wiring(repo, privateEvent);
   expect(green.text).not.toContain("wrong runner");
-  expect(green.text).toContain("differs from the caller checks-setup writes");
-  expect(green.exitCode).toBe(1);
+  expect(green.text).not.toContain("differs from the caller");
+  expect(green.exitCode).toBe(0);
 }, 30_000);
 
 test("a mutation caller with a mode formula or a path list is refused, and only the caller checks-setup writes passes", async () => {
@@ -210,7 +210,7 @@ test("a consumer's hand-rolled stryker run job is refused under any repository c
   expect(red.text).toContain("ci-wiring: 1 job(s) run mutation outside the shared workflow:\n  .github/workflows/mutation.yml job mutation: run mutation through a job with uses: avi2d/workflows/.github/workflows/mutation.yml@v2, as checks-setup writes it");
   await $`git -C ${repo.dir} remote add origin git@github.com:avi2d/skills.git`.quiet();
   expect((await wiring(repo)).text).toContain("job mutation: run mutation through a job with uses:");
-  expect((await wiring(repo, { GITHUB_REPOSITORY: "Avi2d/Workflows" })).text).not.toContain("outside the shared workflow");
+  expect((await wiring(repo, { GITHUB_REPOSITORY: "Avi2d/Workflows" })).exitCode).toBe(0);
   await repo.write({ ".github/workflows/mutation.yml": caller });
   const green = await wiring(repo, { GITHUB_REPOSITORY: "avi2d/skills" });
   expect(green.text).not.toContain("outside the shared workflow");

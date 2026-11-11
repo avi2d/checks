@@ -13,7 +13,7 @@ export type MutationCalls = {
 };
 
 // GitHub matches an owner and a repository name in any case.
-const holdsSharedWorkflow = (repository: string | undefined): boolean => repository?.toLowerCase() === SHARED_REPOSITORY;
+export const holdsSharedWorkflow = (repository: string | undefined): boolean => repository?.toLowerCase() === SHARED_REPOSITORY;
 
 export function findHandRolledMutation(workflows: readonly Workflow[], calls: MutationCalls, repository: string | undefined): readonly HandRolledJob[] {
   if (holdsSharedWorkflow(repository)) return [];

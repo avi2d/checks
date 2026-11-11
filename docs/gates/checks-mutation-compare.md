@@ -79,7 +79,7 @@ The comment stays advisory.
 A branch behind `main` can report kills `main` gained after the branch point as regressions.
 Bringing the branch up to date removes them.
 A full sweep runs in CI and never on a laptop.
-Refresh the full baseline with `gh workflow run mutation`, choosing `refresh` for the `mode` input.
+Refresh the full baseline with `gh workflow run mutation`.
 The shared preset refuses a full `stryker run` outside CI and names that workflow command instead, as [checks-mutation](checks-mutation.md) says.
 
 ## Running it in CI
@@ -100,7 +100,7 @@ A scope past the mutant cap skips the comparison, and a note names the skip.
 A changed unit test with no full baseline on `main` adds no covered source to the scope.
 With no other change the scope stays empty and the comparison skips.
 With a report, a changed unit test that `main` edited after that baseline widens the scope to every file the `mutate` globs match.
-When that report path names no file, refresh the full baseline with `gh workflow run mutation`, choosing `refresh` for the `mode` input, as [checks-mutation](checks-mutation.md#running-it-in-ci) shows.
+When that report path names no file, refresh the full baseline with `gh workflow run mutation`, as [checks-mutation](checks-mutation.md#running-it-in-ci) shows.
 A run with `--mutate` is scoped, so the preset lets it through without `CI=true`.
 A public repository keeps `runs-on: ubuntu-latest`, as [checks-ci-wiring](checks-ci-wiring.md#runners) requires of a job a fork can reach.
 A private repository runs the comparison on `ubuntu-latest` too, and the job never reads `CI_RUNS_ON`.
