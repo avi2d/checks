@@ -87,7 +87,7 @@ The shared preset refuses a full `stryker run` outside CI and names that workflo
 Only `avi2d/workflows` holds the comparison job, since [checks-ci-wiring](checks-ci-wiring.md#mutation-jobs) refuses it in any other repository.
 Any other repository calls that shared workflow from the caller [checks-setup](checks-setup.md) writes.
 A comparison job restores the newest saved `main` baseline and runs Stryker once at the pull request head over the same scope, with no second base run.
-The caller selects `compare` on each pull request, as [checks-setup](checks-setup.md) writes it.
+The caller selects `compare` on each pull request that changes more than `package.json` and `CHANGELOG.md`, as [checks-setup](checks-setup.md) writes it.
 
 The scope step picks the files the branch changes and the sources its changed unit tests cover or kill, as [checks-mutation-scope](checks-mutation-scope.md) says.
 The head run mutates no file outside that scope.
