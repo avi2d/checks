@@ -438,28 +438,24 @@ expect(privWiring.exitCode).toBe(0);
 const CallerSchema = Schema.Struct({
   on: Schema.Struct({
     pull_request: Schema.Struct({ types: Schema.Array(Schema.String) }),
-    push: Schema.Struct({ branches: Schema.Array(Schema.String), paths: Schema.Array(Schema.String) }),
-    workflow_dispatch: Schema.Struct({ inputs: Schema.Struct({ mode: Schema.Struct({ type: Schema.String, options: Schema.Array(Schema.String), default: Schema.String }) }) }),
+    workflow_dispatch: Schema.Null,
   }),
   jobs: Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.Unknown)),
 });
 
 test(
-"the generated mutation workflow hands every mode to the shared workflow at v1 and runs no stryker step of its own",
+"the generated mutation workflow names the shared workflow at v2 and nothing else, so no mode formula or path list reaches the caller",
 async () => {
 const dir = await scratch("mutation-caller");
 expect((await $`bun ${join(CHECKOUT, "src", "delivery", "setup.ts")}`.cwd(dir).nothrow().quiet()).exitCode).toBe(0);
 const text = await readFile(join(dir, ".github/workflows/mutation.yml"), "utf8");
 const caller = Schema.decodeUnknownSync(CallerSchema)(Bun.YAML.parse(text));
 expect(caller.on.pull_request.types).toEqual(["opened", "synchronize"]);
-expect(caller.on.push.branches).toEqual(["main"]);
-expect(caller.on.push.paths).toEqual(expect.arrayContaining(["src/**", "tests/unit/**", "stryker.conf.mjs", "bun.lock"]));
-expect(caller.on.workflow_dispatch.inputs.mode).toEqual({ type: "choice", options: ["baseline", "refresh"], default: "baseline" });
+expect(Object.keys(caller.on)).toEqual(["pull_request", "workflow_dispatch"]);
 expect(caller.jobs).toEqual({
   mutation: {
-    uses: "avi2d/workflows/.github/workflows/mutation.yml@v1",
+    uses: "avi2d/workflows/.github/workflows/mutation.yml@v2",
     permissions: { contents: "read", actions: "write", "pull-requests": "write" },
-    with: { mode: "${{ github.event_name == 'pull_request' && 'compare' || inputs.mode || 'baseline' }}" },
   },
 });
 expect(text.split("\n").length).toBeLessThanOrEqual(20);

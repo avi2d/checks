@@ -3,7 +3,7 @@ import { jobRuns } from "./runner-policy.ts";
 import { workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export const SHARED_REPOSITORY = "avi2d/workflows";
-export const SHARED_MUTATION = `${SHARED_REPOSITORY}/.github/workflows/mutation.yml@v1`;
+export const SHARED_MUTATION = `${SHARED_REPOSITORY}/.github/workflows/mutation.yml@v2`;
 
 export type HandRolledJob = { readonly location: string };
 
