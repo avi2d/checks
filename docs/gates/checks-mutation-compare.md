@@ -69,7 +69,7 @@ mutation-compare: REGRESSION (1 mutant(s))
 
 ## When it runs
 
-The shared `mutation` workflow runs it on each pull request in `compare` mode.
+The shared `mutation` workflow runs it in `compare` mode on each pull request that changes more than `package.json` and `CHANGELOG.md`.
 It scopes one incremental head run at the pull request head against the newest saved `main` baseline, with no second base run.
 [checks-whole-tree-run](checks-whole-tree-run.md) judges the mutation score of `main` on each whole-tree run and opens an issue for each file whose score fell.
 A repository runs it with `--advisory`, so the comparison stays advisory and never fails the pull request.
