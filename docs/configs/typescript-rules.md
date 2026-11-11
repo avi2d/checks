@@ -45,8 +45,8 @@ The base loads the kit's `data-shape` plugin from `dist/` and turns on two of it
 The plugin carries a third rule that the base leaves off:
 
 - `data-shape/no-shell-in-strings` refuses a string, a template literal, an array of them or a `+` chain of them that holds five or more lines that read as shell, and names the first such line and the count.
-- A line reads as shell when it holds `if` or `while` not followed by `(`, `then`, `fi`, `do`, `done`, `case … in`, `esac`, `;;`, `$(…)`, `"$@"`, `${NAME}`, `&&`, `||`, a leading `trap` or `exec`, or a `#!/bin/sh` line.
-- A line that also reads as JavaScript, such as one holding `const`, `=>`, `===` or `console.`, ending in `{` or `;`, or starting with `}`, does not count, so a script passed to `bun -e` passes.
+- A line reads as shell when `if`, `elif`, `while` or `until` starts the line without a following `(`, when `then`, `fi`, `do`, `done` or `esac` starts the line, when `then` or `do` closes the line after `;`, when the whole line is `case … in`, when it holds `;;`, `$(…)`, `"$@"`, `${NAME}`, `&&` or `||`, when `trap` or `exec` starts the line, or when it is a `#!/bin/sh` line.
+- A line that also reads as JavaScript does not count, such as one holding `const`, `=>`, `===` or `console.`, ending in `{` or `(` or in a single `;`, or starting with `}` or `)`, while a `;;` ending still counts as shell, so a script passed to `bun -e` passes.
 - Move such a program to a `.sh` file the code runs, where a shell linter reads it.
 - An override in `base` keeps it off in every test file `TESTS` names, so a test may still write a fake tool as a `#!/bin/sh` fixture.
 

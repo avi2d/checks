@@ -2,7 +2,7 @@
 var LEAST_SHELL_LINES = 5;
 var SHELL_MARKS = [
   /^#!\/(?:usr\/)?bin\/(?:env\s+)?(?:ba|da|z)?sh\b/u,
-  /^(?:if|elif|while|until)\s+(?!\()/u,
+  /^(?:if|elif|while|until)\s+(?![\s(])/u,
   /^(?:then|fi|do|done|esac)\s*(?:;|$)/u,
   /^case\s.+\sin$/u,
   /;\s*(?:then|do)$/u,
@@ -27,6 +27,20 @@ function joined(parts) {
   const lines = found.filter((one) => one !== undefined);
   return lines.length === 0 ? undefined : lines.flat();
 }
+function chainText(node) {
+  if (node.type === "Literal")
+    return typeof node.value === "string" ? node.value : undefined;
+  if (node.type === "TemplateLiteral")
+    return node.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw).join("");
+  if (node.type === "BinaryExpression" && node.operator === "+") {
+    const left = chainText(node.left);
+    const right = chainText(node.right);
+    if (left === undefined && right === undefined)
+      return;
+    return (left ?? "") + (right ?? "");
+  }
+  return;
+}
 function textLines(node) {
   if (node.type === "Literal")
     return typeof node.value === "string" ? split(node, node.value) : undefined;
@@ -34,8 +48,10 @@ function textLines(node) {
     return split(node, node.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw).join(""));
   if (node.type === "ArrayExpression")
     return joined(node.elements);
-  if (node.type === "BinaryExpression" && node.operator === "+")
-    return joined([node.left, node.right]);
+  if (node.type === "BinaryExpression" && node.operator === "+") {
+    const text = chainText(node);
+    return text === undefined ? undefined : split(node, text);
+  }
   return;
 }
 function insideLargerString(node) {

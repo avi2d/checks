@@ -6,7 +6,7 @@ const LEAST_SHELL_LINES = 5;
 
 const SHELL_MARKS: readonly RegExp[] = [
   /^#!\/(?:usr\/)?bin\/(?:env\s+)?(?:ba|da|z)?sh\b/u,
-  /^(?:if|elif|while|until)\s+(?!\()/u,
+  /^(?:if|elif|while|until)\s+(?![\s(])/u,
   /^(?:then|fi|do|done|esac)\s*(?:;|$)/u,
   /^case\s.+\sin$/u,
   /;\s*(?:then|do)$/u,
@@ -35,11 +35,26 @@ function joined(parts: readonly (ESTree.Node | null)[]): readonly Line[] | undef
   return lines.length === 0 ? undefined : lines.flat();
 }
 
+function chainText(node: ESTree.Node): string | undefined {
+  if (node.type === "Literal") return typeof node.value === "string" ? node.value : undefined;
+  if (node.type === "TemplateLiteral") return node.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw).join("");
+  if (node.type === "BinaryExpression" && node.operator === "+") {
+    const left = chainText(node.left);
+    const right = chainText(node.right);
+    if (left === undefined && right === undefined) return undefined;
+    return (left ?? "") + (right ?? "");
+  }
+  return undefined;
+}
+
 function textLines(node: ESTree.Node): readonly Line[] | undefined {
   if (node.type === "Literal") return typeof node.value === "string" ? split(node, node.value) : undefined;
   if (node.type === "TemplateLiteral") return split(node, node.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw).join(""));
   if (node.type === "ArrayExpression") return joined(node.elements);
-  if (node.type === "BinaryExpression" && node.operator === "+") return joined([node.left, node.right]);
+  if (node.type === "BinaryExpression" && node.operator === "+") {
+    const text = chainText(node);
+    return text === undefined ? undefined : split(node, text);
+  }
   return undefined;
 }
 
