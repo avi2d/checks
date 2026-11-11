@@ -61,6 +61,16 @@
     },
     {
       "files": [
+        "tests/**",
+        "**/*.test.ts",
+        "**/*.test.tsx"
+      ],
+      "rules": {
+        "data-shape/no-shell-in-strings": "off"
+      }
+    },
+    {
+      "files": [
         "**/*.ts",
         "**/*.tsx"
       ],
