@@ -3,9 +3,6 @@ name: mutation
 on:
   pull_request:
     types: [opened, synchronize]
-  push:
-    branches: [main]
-    paths: ["src/**", "tests/unit/**", "stryker.conf.mjs", "stryker.preset.js", "package.json", "bun.lock", ".bun-version", "bunfig.toml"]
   workflow_dispatch:
     inputs:
       mode: { type: choice, options: [baseline, refresh], default: baseline }

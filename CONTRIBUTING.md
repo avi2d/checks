@@ -24,8 +24,9 @@ CI runs the commands in `.github/workflows/ci.yml` on each pull request, and on 
 A pull request runs only the tests it reaches, and the release pull request runs the whole suite, as [checks-test](docs/gates/checks-test.md#pull-request-runs) says.
 `.github/workflows/pr-title.yml` lints the pull request title, so editing the title reruns only that.
 No workflow runs on a schedule except the weekly advisory scan, as [checks-ci-wiring](docs/gates/checks-ci-wiring.md#schedules) requires.
-No workflow runs mutation testing except the `mutation` caller that [checks-setup](docs/gates/checks-setup.md) writes.
-That caller runs `baseline` on each push to `main` that changes what Stryker mutates or tests.
+No workflow runs mutation testing except `.github/workflows/mutation.yml`, which calls the shared mutation workflow.
+Unlike the caller [checks-setup](docs/gates/checks-setup.md) writes, it starts on no push, so a merge to `main` starts no mutation run.
+It runs `baseline` only when started by hand with `gh workflow run mutation`.
 It runs `compare` on each pull request.
 It runs `refresh` by hand every 28 days.
 No workflow runs the long test tiers, the whole-tree sweep or the issue filing on its own.
