@@ -291,7 +291,7 @@ async function titleStatusSteps(): Promise<readonly Record<string, unknown>[]> {
   const steps = isRecord(jobs) ? Object.values(jobs).flatMap((job) => (isRecord(job) && Array.isArray(job["steps"]) ? job["steps"] : [])) : [];
   return steps.filter(
     (step): step is Record<string, unknown> =>
-      isRecord(step) && typeof step["uses"] === "string" && step["uses"].startsWith("avi2d/workflows/commitlint-status@"),
+      isRecord(step) && typeof step["uses"] === "string" && step["uses"].startsWith("avi2d/workflows/actions/commitlint-status@"),
   );
 }
 
@@ -302,7 +302,7 @@ test(
     expect(others).toEqual([]);
     if (step === undefined || !isRecord(step["with"])) throw new Error("no step reports the title outcome");
     expect(step["if"]).toBe("always()");
-    expect(step["uses"]).toBe("avi2d/workflows/commitlint-status@v1");
+    expect(step["uses"]).toBe("avi2d/workflows/actions/commitlint-status@v2");
     expect(step["with"]).toEqual({ outcome: "${{ steps.title.outcome }}" });
   },
   60_000,
