@@ -27,7 +27,7 @@ Each list prints in order of file, then line, then column, and a matched mutant 
 
 ## What it reads
 
-It reads two Stryker `mutation.json` reports, the newest saved `main` baseline and the incremental head report from the pull request head.
+It reads the two reports it is given, a base report and a head report.
 The shared Stryker preset's `json` reporter writes `reports/mutation/mutation.json` in the worktree.
 
 A repository that runs mutation testing installs `@stryker-mutator/core` and `@hughescr/stryker-bun-runner`, then spreads the shipped preset in `stryker.conf.mjs`.

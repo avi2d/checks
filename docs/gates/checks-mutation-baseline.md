@@ -217,7 +217,7 @@ It slims the report first:
 The full upload keeps 30 days, so the newest full baseline outlives the gap between full runs.
 A scope step with a full report loses its coverage when no full baseline outlives the gap.
 
-A branch comparison's scope step restores the full report with `--full`, and [checks-mutation-scope](checks-mutation-scope.md) reads it:
+A scope step which passes a full report restores it with `--full`, and [checks-mutation-scope](checks-mutation-scope.md) reads it:
 
 ```yaml
 - name: Select mutation scope

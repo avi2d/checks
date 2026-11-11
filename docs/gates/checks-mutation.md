@@ -12,7 +12,7 @@ It refuses a full mutation run when `CI` is not `true`.
 A full run is one with no `--mutate <glob>` and no `--incremental` flag.
 A `--mutate` without a glob, `--incrementalFile` alone or `--incremental` with `--force` is still a full run.
 Its refusal names `gh workflow run mutation` as the command that starts the same run in CI.
-A run scoped with `--mutate <glob>`, `--mutate=<glob>` or `-m <glob>` stays allowed locally, because a branch comparison scopes to named files.
+A run scoped with `--mutate <glob>`, `--mutate=<glob>` or `-m <glob>` stays allowed locally, because the pull request run scopes to named files.
 An incremental run stays allowed locally only when its incremental report exists, because it reuses the results of mutants that did not change.
 That report is the `incrementalFile` Stryker resolves from the command line and the config file, else `reports/stryker-incremental.json`.
 With no report there, the refusal says to pass `--mutate <glob>`, or to start the full baseline in CI with `gh workflow run mutation`.
@@ -87,7 +87,7 @@ An `--incremental` run with no report stops before instrumenting with the missin
 ## When it runs
 
 A repository runs mutation through the `mutation` caller that [checks-setup](checks-setup.md) writes.
-A pull request runs `compare`.
+A pull request runs a scoped score over the changed files.
 A manual start with `gh workflow run mutation` starts `refresh`.
 No push to `main` starts a run.
 Run scoped checks locally during development.
