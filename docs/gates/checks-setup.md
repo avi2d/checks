@@ -34,7 +34,9 @@ A `--private` run pins each job to `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
 Setting the `CI_RUNS_ON` variable to a self-hosted runner label then lands the jobs there.
 A public run pins each job to `ubuntu-latest`.
 It writes `mutation.yml` under `.github/workflows/`, which names the shared mutation workflow `avi2d/workflows/.github/workflows/mutation.yml@v2` and nothing else.
-The shared workflow picks the run from the event: a pull request runs `compare`, and a manual dispatch runs `refresh`, so a refresh starts by hand as [checks-ci-wiring](checks-ci-wiring.md#schedules) requires.
+The shared workflow picks the run from the event.
+A pull request runs `compare`, and a manual dispatch runs `refresh`.
+A refresh starts by hand, as [checks-ci-wiring](checks-ci-wiring.md#schedules) requires.
 No run starts after a merge to `main`.
 It writes `stryker.conf.mjs`, which spreads the kit's Stryker preset and sets the `mutate` globs to the sources under `src/`.
 It adds the kit's own pins of `@stryker-mutator/core` and `@hughescr/stryker-bun-runner` to `devDependencies`, and keeps a pin it finds.

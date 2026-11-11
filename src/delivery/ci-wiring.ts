@@ -6,7 +6,7 @@ import { ENTRY_POINT, KIT_GATES, type KitGate } from "../core/gates.ts";
 import { findBunPinFaults, formatBunPinReport, readBunPinPolicy } from "./bun-pin.ts";
 import { findLongJobs, formatLongJobReport } from "./job-timeout.ts";
 import { readScheduleFiles, readShellFiles } from "./mutation-job.ts";
-import { findHandRolledMutation, formatHandRolledReport, holdsSharedWorkflow } from "./mutation-workflow.ts";
+import { findHandRolledMutation, formatHandRolledReport, holdsSharedWorkflow, type MutationCalls } from "./mutation-workflow.ts";
 import { MUTATION_WORKFLOW } from "./setup-workflow.ts";
 import { ownerRepoOf } from "./release-preflight.ts";
 import { findScheduledReleases, formatScheduleReport } from "./release-schedule.ts";
@@ -303,6 +303,16 @@ const callerFits = Effect.fn("callerFits")(function* (root: string) {
   return false;
 });
 
+const reportHandRolled = Effect.fn("reportHandRolled")(function* (
+  workflows: readonly Workflow[],
+  calls: MutationCalls,
+  repository: string | undefined,
+) {
+  const handRolled = findHandRolledMutation(workflows, calls, repository);
+  if (handRolled.length > 0) yield* Console.error(formatHandRolledReport(handRolled));
+  return handRolled;
+});
+
 const wiring = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const workflows = yield* readWorkflows(root);
@@ -321,8 +331,7 @@ const wiring = Effect.gen(function* () {
   const faults = findRunnerFaults({ visibility, scripts, files: shellFiles, runners }, workflows);
   if (faults.length > 0) yield* Console.error(formatRunnerReport(faults));
   const repository = yield* readRepository(root);
-  const handRolled = findHandRolledMutation(workflows, { scripts, files: shellFiles }, repository);
-  if (handRolled.length > 0) yield* Console.error(formatHandRolledReport(handRolled));
+  const handRolled = yield* reportHandRolled(workflows, { scripts, files: shellFiles }, repository);
   const callerOk = holdsSharedWorkflow(repository) ? true : yield* callerFits(root);
   const bunFaults = findBunPinFaults(yield* readBunPinPolicy(root, workflows), workflows);
   if (bunFaults.length > 0) yield* Console.error(formatBunPinReport(bunFaults));

@@ -69,7 +69,8 @@ The check knows a repository is private only from GitHub's event, so a run outsi
 ### Mutation jobs
 
 A repository runs mutation through one job that calls `avi2d/workflows/.github/workflows/mutation.yml@v2`, the caller that [checks-setup](checks-setup.md) writes.
-The check refuses a `mutation.yml` that differs from that caller by a byte, so a mode formula, a path list or any other code in it fails here.
+The check refuses a `mutation.yml` that differs from that caller by a byte.
+A mode formula, a path list or any other code in it fails here.
 It refuses every mutation job of the repository's own, a job with a run step that calls mutation as [Runners](#runners) defines it.
 A job that calls a reusable workflow has no run step, so the caller passes.
 The `avi2d/workflows` repository holds the shared workflow, so there it refuses none.
