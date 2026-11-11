@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.93.1
+
+Released 2026-11-11.
+
+### Fixes
+
+- **delivery:** start no mutation run on a release pull request
+
 ## 0.93.0
 
 Released 2026-11-11.
