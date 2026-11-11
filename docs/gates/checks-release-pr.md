@@ -160,7 +160,8 @@ The checks it dispatches are the release pull request's own required checks, and
 The release workflow publishes the tag with no test tiers, since the whole suite already ran on the release pull request.
 GitHub also holds the `pull_request` runs of the release pull request for approval, and expires each one at merge as a failure with no job.
 The last step of `pull-request`, `avi2d/workflows/actions/held-runs@v2`, deletes those held runs on the release branch's tip right after the pull request opens or refreshes.
-It reads the held runs on that tip every 5 seconds until it has deleted them or 30 seconds pass, and deletes each one with the job's token.
+It reads the held runs on that tip every 5 seconds for up to 30 seconds.
+It deletes each held run with the job's token.
 The job grants `actions: write`, and the `contents: write` it grants covers the read the step needs.
 Nothing requires the held runs, and approving them runs the same checks again, so deleting them loses no check.
 
