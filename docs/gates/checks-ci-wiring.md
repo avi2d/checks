@@ -159,7 +159,7 @@ It takes no arguments.
 | Code | Result |
 | --- | --- |
 | 0 | Every required command has a reachable step. |
-| 1 | A required command is missing or blocked, a job runs on the wrong runner, a job runs mutation outside the shared workflow, a workflow names a missing workflow or job, a bun setup step drifts from the fleet bun version, a workflow that releases runs on a schedule outside a public npm package or more than once a day, a workflow other than a weekly public advisory scan runs on a schedule, or a job can run for more than 60 minutes. |
+| 1 | A required command is missing or blocked, a job runs on the wrong runner, a job runs mutation outside the shared workflow, a `mutation.yml` differs from the caller checks-setup writes, a workflow names a missing workflow or job, a bun setup step drifts from the fleet bun version, a workflow that releases runs on a schedule outside a public npm package or more than once a day, a workflow other than a weekly public advisory scan runs on a schedule, or a job can run for more than 60 minutes. |
 | 2 | A workflow or `package.json` cannot be decoded, or the kit's own `.bun-version` is missing, unreadable or blank. |
 
 ## Sample output
@@ -184,6 +184,12 @@ A job that runs Stryker itself produces a report like this:
 ```
 ci-wiring: 1 job(s) run mutation outside the shared workflow:
   .github/workflows/mutation.yml job mutation: run mutation through a job with uses: avi2d/workflows/.github/workflows/mutation.yml@v2, as checks-setup writes it
+```
+
+A `mutation.yml` that differs from the caller checks-setup writes produces a report like this:
+
+```
+ci-wiring: .github/workflows/mutation.yml differs from the caller checks-setup writes: delete it and run checks-setup to write it again
 ```
 
 A reference to a missing workflow produces a report like this:

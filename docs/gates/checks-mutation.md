@@ -91,7 +91,6 @@ A pull request runs `compare`.
 A manual start with `gh workflow run mutation` starts `refresh`.
 No push to `main` starts a run.
 Run scoped checks locally during development.
-A first baseline with no state costs a full Stryker run, and each later one restores the newest `main` baseline and retests the mutants its changes reach.
 
 ## Running it in CI
 
@@ -112,7 +111,7 @@ A first baseline with no state tests every mutant.
 Each later run restores the newest `main` baseline, drops each result the 28-day refresh window or a changed config made stale, and retests the mutants its changes reach.
 A result made stale by a file a test reads at runtime stays stale past refresh, since refresh uploads only `mutation-baseline-full`.
 The job uploads the Stryker report and the incremental state as the `mutation-baseline` artifact and keeps it for 7 days.
-The next baseline and each pull request comparison restore that artifact with the ordinary restore.
+The next baseline restores that artifact with the ordinary restore.
 The job posts the score in its summary.
 
 A refresh job restores the previous full report with `--full` for shard balancing and runs the full suite with static mutants ignored.
