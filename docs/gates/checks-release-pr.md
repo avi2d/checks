@@ -152,7 +152,7 @@ A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` o
 A repository whose build needs more than Bun adds the steps its `.github/workflows/ci.yml` runs before `bun run build` to both jobs, and nothing after it.
 Neither job runs a test suite or a mutation run.
 On a hosted runner the `pull-request` job takes about 25 seconds.
-Its `held-runs` step adds up to 30 seconds.
+Its `held-runs` step adds about 30 seconds.
 GitHub may bill the job as two minutes whether it opens, refreshes or leaves the pull request alone.
 A private repository runs it there too unless `CI_RUNS_ON` names its self-hosted runner, which bills no minutes.
 The `tag` job runs only when a release lands, and a job its `if` skips bills nothing.
@@ -160,7 +160,7 @@ The checks it dispatches are the release pull request's own required checks, and
 The release workflow publishes the tag with no test tiers, since the whole suite already ran on the release pull request.
 GitHub also holds the `pull_request` runs of the release pull request for approval, and expires each one at merge as a failure with no job.
 The last step of `pull-request`, `avi2d/workflows/actions/held-runs@v2`, deletes those held runs on the release branch's tip right after the pull request opens or refreshes.
-It reads that tip every 5 seconds for 30 seconds and deletes each held run it finds with the job's token.
+It reads the held runs on that tip every 5 seconds until it has deleted them or 30 seconds pass, and deletes each one with the job's token.
 The job grants `actions: write`, and the `contents: write` it grants covers the read the step needs.
 Nothing requires the held runs, and approving them runs the same checks again, so deleting them loses no check.
 
