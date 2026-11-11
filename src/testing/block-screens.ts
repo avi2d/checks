@@ -61,6 +61,15 @@ function sizeDevice(size: ScreenSize): ScreenDevice {
 
 export const screenDevices = (set: ScreenSizeSet): readonly ScreenDevice[] => SCREEN_SIZES[set].map(sizeDevice);
 
+export const HANDHELDS: readonly ScreenDevice[] = [
+  emulatedDevice("iPhone 13 and 14", "iPhone 14", { width: 390, height: 844 }),
+  emulatedDevice("iPhone 16 Plus", "iPhone 16 Plus", { width: 430, height: 932 }),
+  emulatedDevice("iPhone 16 Pro Max", "iPhone 16 Pro Max", { width: 440, height: 956 }),
+  emulatedDevice("Android", "Pixel 7", { width: 360, height: 800 }, 3),
+  emulatedDevice("Android", "Pixel 7", { width: 384, height: 854 }, 2.8125),
+  emulatedDevice("iPad gen 6", "iPad (gen 6)", { width: 768, height: 1024 }),
+];
+
 export const pictureFile = (engine: ScreenEngine, device: ScreenDevice): string =>
   `${engine}/${device.name.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}.png`;
 
@@ -271,7 +280,8 @@ const blockPicture = (browser: Browser, suite: BlockSuite, device: ScreenDevice)
 export function blockScreens(engine: ScreenEngine, suite: BlockSuite): void {
   let launched: Promise<Browser> | undefined;
   afterAll(() => launched?.then((browser) => browser.close()));
-  for (const device of [...screenDevices(suite.sizes ?? "anchor"), ...(suite.devices ?? [])]) {
+  const listed = [...screenDevices(suite.sizes ?? "anchor"), ...(suite.devices ?? [])];
+  for (const device of listed) {
     test(
       `${suite.block} at ${device.name} in ${engine} looks as approved, instead of changing its look with no picture approving it`,
       () => {
