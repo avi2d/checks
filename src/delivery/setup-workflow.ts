@@ -52,7 +52,6 @@ const MUTATE = ["src/**/*.{ts,tsx}", "!src/**/*.test.{ts,tsx}"];
 const flow = (values: readonly string[]): string => "[" + values.map((value) => JSON.stringify(value)).join(", ") + "]";
 
 // The shared workflow picks the run from the event, so the caller names it and nothing else.
-// A manual start of this workflow runs a refresh; no run starts after a merge to main.
 export const MUTATION_WORKFLOW = [
   "name: mutation",
   "",

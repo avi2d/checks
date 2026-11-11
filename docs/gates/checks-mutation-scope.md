@@ -30,7 +30,7 @@ The same holds when the branch changes a preload or a file a preload imports, wh
 Each source whose mutants a changed unit test covers or kills in the full baseline report then enters the scope, when it still exists at `HEAD`.
 So a kill lost through a test change alone still shows in the comparison, in a source the branch leaves alone.
 A changed unit test with no baseline report adds no covered source to the scope.
-With no other change the scope stays empty and the comparison skips.
+With no other change the scope stays empty and the head run skips.
 A run with no report reads no full baseline, so it says nothing about one.
 A report path that names no file files a warning annotation that names the missing full baseline.
 Refresh the full baseline with `gh workflow run mutation`.
@@ -156,7 +156,7 @@ mutation-scope: the baseline report did not run tests/unit/dashboard/snapshot.te
 
 ## When it runs
 
-Only a CI step runs it, in a branch's mutation comparison before the incremental head run.
+Only a CI step runs it, in a branch's scoped head run.
 The shared `mutation` workflow runs it in its compare and refresh jobs, and a step the repository writes runs it too:
 
 ```yaml
@@ -171,7 +171,7 @@ The shared `mutation` workflow runs it in its compare and refresh jobs, and a st
 ```
 
 Each later step reads `SCOPE` from the environment, and a failed scope step adds nothing to it.
-[checks-mutation-compare](checks-mutation-compare.md#running-it-in-ci) shows the comparison it scopes.
+The shared pull request run mutates and scores the files it lists, as [checks-mutation-compare](checks-mutation-compare.md#running-it-in-ci) shows.
 The full baseline comes from the `mutation` workflow, as [checks-mutation](checks-mutation.md#running-it-in-ci) shows.
 
 ## Related topics

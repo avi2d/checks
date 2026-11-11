@@ -79,7 +79,7 @@ The shared preset refuses a full `stryker run` outside CI and names that workflo
 
 ## Running it in CI
 
-No caller-started run invokes it, since the shared pull request run scores the scope instead of comparing reports.
+The shared pull request run scores the scope instead of comparing reports.
 Only `avi2d/workflows` holds the shared workflow, so each other repository calls it from the caller [checks-setup](checks-setup.md) writes.
 The shared pull request run runs Stryker once at the pull request head over that scope without reading `main`.
 The shared workflow picks `compare` from the event on each pull request.
@@ -89,15 +89,14 @@ No changed unit test widens that scope.
 A caller that passes a full baseline report also picks the sources its changed unit tests cover or kill.
 The head run mutates no file outside that scope.
 The job time follows the size of the change and not the size of the repository.
-An empty scope skips the head run and the comparison, and the notice names the skip on the run's summary.
-A scope past the mutant cap skips the comparison, and a note names the skip.
+An empty scope skips the head run, and the notice names the skip on the run's summary.
+A scope past the mutant cap skips the scoring, and a note names the skip.
 A changed unit test with no full baseline on `main` adds no covered source to the scope.
-With no other change the scope stays empty and the comparison skips.
+With no other change the scope stays empty and the head run skips.
 With a report, a changed unit test that `main` edited after that baseline widens the scope to every file the `mutate` globs match.
 When that report path names no file, refresh the full baseline with `gh workflow run mutation`, as [checks-mutation](checks-mutation.md#running-it-in-ci) shows.
 A run with `--mutate` is scoped, so the preset lets it through without `CI=true`.
 A public repository keeps `runs-on: ubuntu-latest`, as [checks-ci-wiring](checks-ci-wiring.md#runners) requires of a job a fork can reach.
-A private repository runs the comparison on `ubuntu-latest` too, and the job never reads `CI_RUNS_ON`.
 [checks-ci-wiring](checks-ci-wiring.md#runners) refuses a mutation job that names it in `runs-on`.
 
 ## Related topics

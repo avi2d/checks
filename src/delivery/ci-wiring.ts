@@ -294,7 +294,6 @@ export const readWorkflows = Effect.fn("readWorkflows")(function* (root: string)
   );
 });
 
-// The caller is written by checks-setup and checked by byte, so a formula, a path list or any code in it fails here.
 const callerFits = Effect.fn("callerFits")(function* (root: string) {
   const fs = yield* FileSystem.FileSystem;
   const full = (yield* Path.Path).join(root, WORKFLOWS, "mutation.yml");
