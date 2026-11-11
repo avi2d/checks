@@ -29,7 +29,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - id: skip
-        run: bash scripts/workflow-e2e-skip.sh ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}
+        run: bun scripts/e2e-skip.ts ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} >> "$GITHUB_OUTPUT"
   unit:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -41,7 +41,7 @@ jobs:
           fetch-depth: 0
       # A path filter would leave this required check unreported.
       - id: filter
-        run: bash scripts/workflow-docs-only.sh ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}
+        run: bun src/delivery/docs-only.ts ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} >> "$GITHUB_OUTPUT"
       - if: steps.filter.outputs.docs-only != 'true'
         run: bun run test:unit
   e2e:
@@ -80,7 +80,7 @@ jobs:
           outcome: ${{ steps.title.outcome }}
       # A path filter would leave this required check unreported.
       - id: filter
-        run: bash scripts/workflow-docs-only.sh ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}
+        run: bun src/delivery/docs-only.ts ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} >> "$GITHUB_OUTPUT"
       - run: bun run build
       - run: git diff --exit-code
       # checks-docs checks only the range it is given, so lint runs on docs-only changes.
@@ -94,9 +94,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: require every part
         env:
           CHANGES: ${{ needs.changes.result }}
@@ -104,7 +101,11 @@ jobs:
           E2E: ${{ needs.e2e.result }}
           E2E_SKIP: ${{ needs.changes.outputs.e2e-skip }}
           STATIC: ${{ needs.static.result }}
-        run: bash scripts/workflow-require-parts.sh
+        run: |
+          test "$CHANGES" = success
+          test "$UNIT" = success
+          test "$STATIC" = success
+          test "$E2E" = success || { test "$E2E" = skipped && test "$E2E_SKIP" = true; }
       # GitHub keeps a dispatched run's check off the pull request, so this posts a commit status.
       - name: report the result on the head commit
         if: always() && github.event_name == 'workflow_dispatch'

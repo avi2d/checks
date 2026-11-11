@@ -103,7 +103,8 @@ plain-steps: 2 run step(s) are not one plain command; run one command, or call a
 
 ## When it runs
 
-`checks-lint` runs it in the full run in every repository.
+The gate is on in every repository, with no setting to turn it off.
+`checks-lint` runs it in the full run.
 
 ## Related topics
 
