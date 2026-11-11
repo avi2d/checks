@@ -2,6 +2,16 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.93.0
+
+Released 2026-11-11.
+
+### Features
+
+- **testing:** add HANDHELDS set of six phones and tablets [#105](https://github.com/avi2d/checks/pull/105)
+- **testing:** serve a built site to browser tests [#103](https://github.com/avi2d/checks/pull/103)
+- **delivery:** let plain-steps pass a step that runs the caller's command [#104](https://github.com/avi2d/checks/pull/104)
+
 ## 0.92.0
 
 Released 2026-11-10.
