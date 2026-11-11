@@ -61,16 +61,13 @@ jobs:
         with:
           ref: ${{ github.ref_name }}
           persist-credentials: false
-      - uses: avi2d/workflows/actions/kit-bin@v2
-        with:
-          commands: checks-release-notes
       - id: version
         name: read the released version
         uses: avi2d/workflows/actions/release-version@v2
       - name: extract release notes
         env:
           VERSION: ${{ steps.version.outputs.version }}
-        run: checks-release-notes "$VERSION" "$RUNNER_TEMP/release-notes.md"
+        run: bun src/delivery/release-notes.ts "$VERSION" "$RUNNER_TEMP/release-notes.md"
       - name: create or update GitHub release
         uses: avi2d/workflows/actions/github-release@v2
         with:

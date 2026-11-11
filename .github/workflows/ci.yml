@@ -99,8 +99,11 @@ jobs:
     needs: [changes, unit, e2e, static]
     if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
+      - uses: avi2d/workflows/actions/setup@v2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: require every part
         uses: avi2d/workflows/actions/require-success@v2
         with:
