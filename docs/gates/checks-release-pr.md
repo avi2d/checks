@@ -156,6 +156,8 @@ The checks it dispatches are the release pull request's own required checks, and
 The release workflow publishes the tag with no test tiers, since the whole suite already ran on the release pull request.
 The pull request also lists its own `pull_request` runs as waiting for approval.
 Nothing requires them, and approving them runs the same checks again.
+A run still waiting when the pull request merges ends as failed, with no job and no log.
+The `mutation` caller that [checks-setup](checks-setup.md) writes ignores a pull request that changes only `package.json` and `CHANGELOG.md`, so a release pull request starts no mutation run.
 
 The release pull request needs the repository's other workflows to accept the dispatch:
 

@@ -1,3 +1,4 @@
+import { MANIFEST } from "../core/release-names.ts";
 import { SHARED_MUTATION } from "./mutation-workflow.ts";
 
 const HOSTED_FALLBACK = "ubuntu-latest";
@@ -52,6 +53,9 @@ const MUTATE = ["src/**/*.{ts,tsx}", "!src/**/*.test.{ts,tsx}"];
 // A reusable workflow cannot filter the push that calls it, so the caller holds the baseline's path filter.
 const BASELINE_PATHS = ["src/**", "tests/unit/**", "stryker.conf.mjs", "package.json", "bun.lock", ".bun-version", "bunfig.toml"];
 
+// A release pull request changes only these, and GitHub holds its run for approval, then fails it at the merge.
+const RELEASE_PATHS = ["CHANGELOG.md", MANIFEST];
+
 const flow = (values: readonly string[]): string => "[" + values.map((value) => JSON.stringify(value)).join(", ") + "]";
 
 // A schedule fails ci-wiring, so a refresh starts by hand.
@@ -61,6 +65,7 @@ export const MUTATION_WORKFLOW = [
   "on:",
   "  pull_request:",
   "    types: [opened, synchronize]",
+  "    paths-ignore: " + flow(RELEASE_PATHS),
   "  push:",
   "    branches: [main]",
   "    paths: " + flow(BASELINE_PATHS),

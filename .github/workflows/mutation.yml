@@ -3,6 +3,8 @@ name: mutation
 on:
   pull_request:
     types: [opened, synchronize]
+    # A release pull request changes only these, and GitHub holds its run for approval, then fails it at the merge.
+    paths-ignore: ["CHANGELOG.md", "package.json"]
   push:
     branches: [main]
     paths: ["src/**", "tests/unit/**", "stryker.conf.mjs", "stryker.preset.js", "package.json", "bun.lock", ".bun-version", "bunfig.toml"]

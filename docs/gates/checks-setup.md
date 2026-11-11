@@ -35,6 +35,8 @@ Setting the `CI_RUNS_ON` variable to a self-hosted runner label then lands the j
 A public run pins each job to `ubuntu-latest`.
 It writes `mutation.yml` under `.github/workflows/`, which calls the shared mutation workflow `avi2d/workflows/.github/workflows/mutation.yml@v1`.
 A pull request runs it in `compare` mode.
+A pull request that changes only `package.json` and `CHANGELOG.md` starts no run, since those are the files a release pull request changes.
+GitHub holds the runs of a release pull request for approval, as [checks-release-pr](checks-release-pr.md#running-it-in-ci) says, and a comparison of those two files mutates nothing.
 A push to `main` that touches `src/`, `tests/unit/`, the Stryker config, the manifest, the lockfile or the Bun pins runs it in `baseline` mode.
 A dispatch runs `baseline` or, by its `mode` input, `refresh`, so a refresh starts by hand as [checks-ci-wiring](checks-ci-wiring.md#schedules) requires.
 It writes `stryker.conf.mjs`, which spreads the kit's Stryker preset and sets the `mutate` globs to the sources under `src/`.
