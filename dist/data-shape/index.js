@@ -46,32 +46,32 @@ function textLines(node) {
     return split(node, node.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw).join(""));
   if (node.type === "ArrayExpression")
     return joined(node.elements);
-  if (node.type === "BinaryExpression" && node.operator === "+") {
-    const segments = chainSegments(node);
-    const first = segments?.[0];
-    if (segments === undefined || first === undefined)
-      return;
-    const lines = [];
-    let owner = first.node;
-    let current = "";
-    for (const segment of segments) {
-      for (const [index, part] of segment.text.split(`
-`).entries()) {
-        if (index === 0) {
-          if (current === "")
-            owner = segment.node;
-          current += part;
-        } else {
-          lines.push({ node: owner, text: current });
-          owner = segment.node;
-          current = part;
-        }
-      }
-    }
-    lines.push({ node: owner, text: current });
-    return lines;
-  }
+  if (node.type === "BinaryExpression" && node.operator === "+")
+    return chainLines(chainSegments(node));
   return;
+}
+function chainLines(segments) {
+  const first = segments?.[0];
+  if (segments === undefined || first === undefined)
+    return;
+  const lines = [];
+  let owner = first.node;
+  let current = "";
+  for (const segment of segments) {
+    const parts = segment.text.split(`
+`);
+    const [head = "", ...tail] = parts;
+    if (current === "")
+      owner = segment.node;
+    current += head;
+    for (const part of tail) {
+      lines.push({ node: owner, text: current });
+      owner = segment.node;
+      current = part;
+    }
+  }
+  lines.push({ node: owner, text: current });
+  return lines;
 }
 function insideLargerString(node) {
   const { parent } = node;
