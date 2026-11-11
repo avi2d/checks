@@ -27,7 +27,7 @@ It tries those runs newest first, and restores the first `mutation-baseline-full
 It tries no run after that one.
 It takes the report from `mutation.json` at the artifact's root, or else from `mutation/mutation.json`, and copies it to the destination.
 With an incremental destination it also copies `stryker-incremental.json` when the artifact holds one, so a later full run started with that destination retests the mutants its changes reach.
-The shared refresh job passes no incremental destination and tests every mutant.
+The shared refresh job passes no incremental destination and tests every mutant except static ones.
 A result made stale by a file a test reads at runtime lasts until the next 28-day refresh.
 The restore then drops each test that reads a changed file and each mutant result for a changed source from the copied state.
 It drops non-killed results when any test goes stale.

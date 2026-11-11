@@ -133,7 +133,6 @@ Only a whole-tree workflow the repository writes runs it, after that workflow's 
 `checks-repetition` runs on every pull request in a repository that tracks TypeScript.
 `checks-lint-coverage` reads the working tree, so a pull request run judges it only when the change selects the tree gates.
 On `main`, the `mutation` caller runs a full mutation run in `refresh` mode, which starts by hand every 28 days.
-A `refresh` run tests every mutant.
 No workflow under `.github/workflows` in checks, skills, career, dotfiles, home-vpn, orc or shopping runs the whole-tree sweep or the issue filing.
 
 The whole-tree sweep runs only by hand through `checks-lint --whole-tree`.
