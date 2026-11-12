@@ -177,6 +177,25 @@ test("keyboard is red on a hidden focus ring and on a target Tab skips, and gree
   expect(passed.exitCode).toBe(0);
 }, 120_000);
 
+test("keyboard lists a focus with no part on screen as no visible focus and still judges the other pages, rather than ending the run", async () => {
+  const pages = {
+    "off-screen.html": page(`<p><a href="/">Write to me</a></p>`, {
+      head: "<style>a:focus { position: fixed; left: 400px; width: 0; height: 0; padding: 0; overflow: hidden; }</style>",
+    }),
+    "clean.html": CLEAN_LINK,
+  };
+  const site = await browserSite({ ...sitePages(pages), "browser-checks.json": declaration({ routes: routesOf(pages), checks: ["keyboard"] }) });
+  const failed = await site.run();
+  expect(failuresOf(failed.text)).toEqual([`${at("keyboard", "/off-screen.html")} link shows no visible focus when Tab reaches it`]);
+  expect(failed.text).toContain(`browser: ${at("keyboard", "/clean.html").slice(0, -1)} scanned link 1`);
+  expect(failed.exitCode).toBe(1);
+
+  await site.write(sitePages({ "off-screen.html": CLEAN_LINK }));
+  const passed = await site.run();
+  expect(failuresOf(passed.text)).toEqual([]);
+  expect(passed.exitCode).toBe(0);
+}, 120_000);
+
 test("keyboard is red when Tab never leaves the page, and green once the trap is gone", async () => {
   const trap = `<button id="trap" type="button">Stay</button><script>document.getElementById("trap").addEventListener("keydown", (event) => { if (event.key === "Tab") event.preventDefault(); });</script>`;
   const site = await browserSite({
