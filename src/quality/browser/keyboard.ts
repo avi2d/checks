@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import type { Page } from "playwright-core";
 import type { Target } from "./declaration.ts";
-import { attempt } from "./page.ts";
+import { attempt, BrowserFailure } from "./page.ts";
 import { countVisible } from "./targets.ts";
 
 const FOCUS_RING_MARGIN_PX = 6;
@@ -25,16 +25,28 @@ const focusedTargets = Effect.fn("focusedTargets")(function* (page: Page, target
   return focused;
 });
 
+type Box = { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
+
+type Size = { readonly width: number; readonly height: number };
+
+// Playwright refuses a clip with no part on screen, so the focus box is cut to the viewport here, not caught from that refusal.
+const onScreen = (box: Box, screen: Size): Box | null => {
+  const left = Math.max(0, box.x - FOCUS_RING_MARGIN_PX);
+  const top = Math.max(0, box.y - FOCUS_RING_MARGIN_PX);
+  const right = Math.min(screen.width, box.x + box.width + FOCUS_RING_MARGIN_PX);
+  const bottom = Math.min(screen.height, box.y + box.height + FOCUS_RING_MARGIN_PX);
+  if (right <= left || bottom <= top) return null;
+  return { x: left, y: top, width: right - left, height: bottom - top };
+};
+
 const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page) {
   const focused = yield* attempt("cannot hold the focused element", () => page.locator(":focus").elementHandle());
   const box = yield* attempt("cannot measure the focused element", () => focused.boundingBox());
   if (box === null) return false;
-  const clip = {
-    x: Math.max(0, box.x - FOCUS_RING_MARGIN_PX),
-    y: Math.max(0, box.y - FOCUS_RING_MARGIN_PX),
-    width: box.width + 2 * FOCUS_RING_MARGIN_PX,
-    height: box.height + 2 * FOCUS_RING_MARGIN_PX,
-  };
+  const screen = page.viewportSize();
+  if (screen === null) return yield* new BrowserFailure({ message: "cannot read the viewport" });
+  const clip = onScreen(box, screen);
+  if (clip === null) return false;
   const withFocus = yield* attempt("cannot capture the focused element", () => page.screenshot({ clip }));
   yield* attempt("cannot blur the focused element", () => page.evaluate("document.activeElement.blur()"));
   const withoutFocus = yield* attempt("cannot capture the blurred element", () => page.screenshot({ clip }));
