@@ -23,6 +23,8 @@ So a control the page renders once for each breakpoint is judged where it shows.
 | `html` | an error from html-validate's `html-validate:standard` or `html-validate:a11y` preset, or from `input-missing-label`, in the page the server sends | html-validate on the page's HTML as the server sends it |
 | `assets` | a request that fails, and a response with a status of 400 or more, while the page loads to network idle | Playwright's request and response events |
 
+`html` runs once for each route, at the first declared viewport in the first declared state, because the page the server sends is the same at each.
+
 The `motion` check judges what moves on the rendered page, so a `prefers-reduced-motion` query in the source counts for nothing unless the motion stops.
 It runs only in a state whose `reducedMotion` is `reduce`.
 An animation that ends within one frame never moves, so the common reset that shortens every duration to near zero for reduced motion passes.
@@ -42,7 +44,7 @@ It does not yet check the rendered page against a product's declared design toke
 Text over a background image or a gradient is such a case, and the report lists each one under its own heading.
 `nested-interactive` catches a control inside an element whose role makes its children presentational, such as a link inside a `<button>` or inside a `role="button"`.
 `nesting` catches a control inside a link, which axe passes.
-`html` reads the page as the server sends it, so markup a script builds is judged only by `nesting`.
+`html` reads the page as the server sends it, so of its rules only the content model, through `nesting`, judges markup a script builds.
 None of these sees a parent click handler that fires with a child control's click, which a product hook tests.
 
 ### The inventory

@@ -307,9 +307,20 @@ test("html is red on an unlabelled input, a list item outside a list and an empt
     "stray-item.html": page(`<li>Orphan item</li><p><a href="/">Write to me</a></p>`),
     "empty-heading.html": page(`<h2></h2><p><a href="/">Write to me</a></p>`),
   };
-  const site = await browserSite({ ...sitePages(red), "browser-checks.json": declaration({ routes: routesOf(red), checks: ["html"] }) });
+  const site = await browserSite({
+    ...sitePages(red),
+    "browser-checks.json": declaration({
+      routes: routesOf(red),
+      checks: ["html"],
+      viewports: [{ name: "phone", width: 320, height: 640 }, { name: "tablet", width: 820, height: 1180 }],
+      states: [{ name: "default" }, { name: "alt" }],
+    }),
+  });
   const failed = await site.run();
   const failures = failuresOf(failed.text);
+  const htmlFailures = failures.filter((line) => line.startsWith("html at"));
+  expect(htmlFailures).toHaveLength(3);
+  expect(htmlFailures.filter((line) => line.includes("phone 320x640, default"))).toHaveLength(3);
   expect(failures.filter((line) => line.startsWith(at("html", "/unlabelled.html")) && line.includes("input-missing-label"))).toHaveLength(1);
   expect(failures.filter((line) => line.startsWith(at("html", "/stray-item.html")) && line.includes("element-permitted-parent"))).toHaveLength(1);
   expect(failures.filter((line) => line.startsWith(at("html", "/empty-heading.html")) && line.includes("empty-heading"))).toHaveLength(1);
@@ -324,6 +335,7 @@ test("html is red on an unlabelled input, a list item outside a list and an empt
   for (const path of ["/unlabelled.html", "/stray-item.html", "/empty-heading.html"]) {
     expect(passed.text).toContain(`browser: ${at("html", path).slice(0, -1)} scanned served page`);
   }
+  expect(passed.text.split("\n").filter((line) => line.startsWith("browser: html at"))).toHaveLength(3);
   expect(failuresOf(passed.text)).toEqual([]);
   expect(passed.exitCode).toBe(0);
 }, 120_000);
