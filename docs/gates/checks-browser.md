@@ -39,7 +39,7 @@ It reads no `robots` meta, so a page marked `noindex` or `nofollow` is judged li
 
 `assets` takes the page's own origin as the local server's, so a script, font or image from any other host, port or scheme fails it.
 A `data:` address has no origin and is left alone.
-Chrome logs a resource that fails to load as a console error, so such a resource is named twice, once by its request and once by the log.
+Chrome logs a failed resource as a console error, so the request and the log name it twice.
 
 The `motion` check judges what moves on the rendered page, so a `prefers-reduced-motion` query in the source counts for nothing unless the motion stops.
 It runs only in a state whose `reducedMotion` is `reduce`.
