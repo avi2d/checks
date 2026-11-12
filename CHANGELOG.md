@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.95.1
+
+Released 2026-11-12.
+
+### Fixes
+
+- **browser:** list unpicturable focus as finding instead of ending run [#119](https://github.com/avi2d/checks/pull/119)
+
 ## 0.95.0
 
 Released 2026-11-12.
