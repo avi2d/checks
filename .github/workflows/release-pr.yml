@@ -28,6 +28,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bun src/delivery/release-pr.ts ci.yml
+      - name: delete the held runs on the release head
+        uses: avi2d/workflows/actions/held-runs@v2
   tag:
     if: "github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: release ')"
     runs-on: ubuntu-latest
