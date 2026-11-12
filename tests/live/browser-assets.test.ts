@@ -27,27 +27,31 @@ test("assets is red on an image the site does not serve and on a request that fa
 
 test("assets is red on a console error, an uncaught error and a script from another origin, and green once each is fixed", async () => {
   const WIDGET = `document.querySelector("main").dataset.widget = "ready";`;
-  using outside = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => new Response(WIDGET, { headers: { "content-type": "text/javascript" } }) });
-  const red = {
-    "logged.html": page(`<p><a href="/">Write to me</a></p><script>console.error("the form never started")</script>`),
-    "thrown.html": page(`<p><a href="/">Write to me</a></p><script>throw new Error("the menu never opened")</script>`),
-    "outside.html": page(`<p><a href="/">Write to me</a></p><script src="${outside.url.origin}/widget.js"></script>`),
-  };
-  const site = await browserSite({ ...sitePages(red), "browser-checks.json": declaration({ routes: routesOf(red), checks: ["assets"] }) });
-  const failed = await site.run();
-  expect(failuresOf(failed.text)).toEqual([
-    `${at("assets", "/logged.html")} logs the error: the form never started`,
-    `${at("assets", "/thrown.html")} throws an uncaught Error: the menu never opened`,
-    `${at("assets", "/outside.html")} requests another origin: ${outside.url.origin}/widget.js`,
-  ]);
-  expect(failed.exitCode).toBe(1);
+  const outside = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => new Response(WIDGET, { headers: { "content-type": "text/javascript" } }) });
+  try {
+    const red = {
+      "logged.html": page(`<p><a href="/">Write to me</a></p><script>console.error("the form never started")</script>`),
+      "thrown.html": page(`<p><a href="/">Write to me</a></p><script>throw new Error("the menu never opened")</script>`),
+      "outside.html": page(`<p><a href="/">Write to me</a></p><script src="${outside.url.origin}/widget.js"></script>`),
+    };
+    const site = await browserSite({ ...sitePages(red), "browser-checks.json": declaration({ routes: routesOf(red), checks: ["assets"] }) });
+    const failed = await site.run();
+    expect(failuresOf(failed.text)).toEqual([
+      `${at("assets", "/logged.html")} logs the error: the form never started`,
+      `${at("assets", "/thrown.html")} throws an uncaught Error: the menu never opened`,
+      `${at("assets", "/outside.html")} requests another origin: ${outside.url.origin}/widget.js`,
+    ]);
+    expect(failed.exitCode).toBe(1);
 
-  await site.write({
-    ...sitePages(Object.fromEntries(Object.keys(red).map((path) => [path, page(`<p><a href="/">Write to me</a></p><script src="/widget.js"></script>`)]))),
-    "dist/widget.js": WIDGET,
-  });
-  const passed = await site.run();
-  expect(passed.text).toContain(`browser: ${at("assets", "/outside.html").slice(0, -1)} scanned 2 request(s)`);
-  expect(failuresOf(passed.text)).toEqual([]);
-  expect(passed.exitCode).toBe(0);
+    await site.write({
+      ...sitePages(Object.fromEntries(Object.keys(red).map((path) => [path, page(`<p><a href="/">Write to me</a></p><script src="/widget.js"></script>`)]))),
+      "dist/widget.js": WIDGET,
+    });
+    const passed = await site.run();
+    expect(passed.text).toContain(`browser: ${at("assets", "/outside.html").slice(0, -1)} scanned 2 request(s)`);
+    expect(failuresOf(passed.text)).toEqual([]);
+    expect(passed.exitCode).toBe(0);
+  } finally {
+    await outside.stop();
+  }
 }, 120_000);
