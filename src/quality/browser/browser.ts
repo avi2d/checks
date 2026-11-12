@@ -9,6 +9,7 @@ import { loadHooks, runHook, type ProductCheck } from "./hooks.ts";
 import { judgeHtml } from "./html.ts";
 import { judgeKeyboard } from "./keyboard.ts";
 import { judgeLayout } from "./layout.ts";
+import { judgeLinks } from "./links.ts";
 import { judgeStillness, recordMotion } from "./motion.ts";
 import { judgeNesting } from "./nesting.ts";
 import { attempt, launchChrome, load, openVisit, type BrowserFailure } from "./page.ts";
@@ -86,6 +87,12 @@ const htmlRun = Effect.fn("htmlRun")(function* ({ visit, url }: Visiting) {
   return run("html", visit, ["served page"], found);
 });
 
+const linksRun = Effect.fn("linksRun")(function* ({ browser, visit, url }: Visiting) {
+  const { page } = yield* openVisit(browser, visit);
+  const { found, links } = yield* judgeLinks(page, url);
+  return run("links", visit, [`${links} same-site link(s)`], found);
+}, Effect.scoped);
+
 const assetsRun = Effect.fn("assetsRun")(function* ({ browser, visit, url }: Visiting) {
   const { page } = yield* openVisit(browser, visit);
   const watch = watchAssets(page);
@@ -106,12 +113,13 @@ const BUILT_IN: Readonly<Record<CheckName, (visiting: Visiting) => Effect.Effect
   axe: axeRun,
   nesting: nestingRun,
   html: htmlRun,
+  links: linksRun,
   assets: assetsRun,
 };
 
 function applies(check: CheckName, visit: Visit, declaration: Declaration): boolean {
   if (check === "motion") return visit.state.reducedMotion === "reduce";
-  if (check === "html")
+  if (check === "html" || check === "links")
     return visit.viewport.name === declaration.viewports[0].name && visit.state.name === declaration.states[0].name;
   return true;
 }
