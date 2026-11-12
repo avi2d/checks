@@ -19,7 +19,7 @@ const ANCHORS = `({
     ...Array.from(document.querySelectorAll("[id]"), (element) => element.id),
     ...Array.from(document.querySelectorAll("a[name]"), (anchor) => anchor.getAttribute("name") ?? ""),
   ],
-  links: Array.from(document.querySelectorAll("a[href], area[href]"), (link) => link.href),
+  links: Array.from(document.querySelectorAll("a[href], area[href]"), (link) => typeof link.href === "string" ? link.href : new URL(link.getAttribute("href") ?? "", link.baseURI).href),
 })`;
 
 // The HTML standard sends a fragment of "top" in any case to the start of the document, with no element named so.
@@ -54,7 +54,11 @@ const anchorsOn = Effect.fn("anchorsOn")(function* (page: Page) {
 });
 
 const statusOf = (document: string): Effect.Effect<number, BrowserFailure> =>
-  attempt(`cannot fetch ${document}`, () => fetch(document).then((response) => response.arrayBuffer().then(() => response.status)));
+  attempt(`cannot fetch ${document}`, async () => {
+    const response = await fetch(document);
+    await response.body?.cancel();
+    return response.status;
+  });
 
 const namesAt = Effect.fn("namesAt")(function* (page: Page, document: string) {
   yield* load(page, document);
