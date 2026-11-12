@@ -21,6 +21,12 @@ export function page(body: string, { head = "", lang = "en", viewport = "width=d
   return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="${viewport}"><title>Fixture</title>${head}</head><body><main>${body}</main></body></html>`;
 }
 
+export const at = (check: string, path: string, state = "default", viewport = "phone 320x640"): string => `${check} at ${path} (en), ${viewport}, ${state}:`;
+
+export function sitePages(pages: Readonly<Record<string, string>>): Readonly<Record<string, string>> {
+  return Object.fromEntries(Object.entries(pages).map(([path, html]) => [`dist/${path}`, html]));
+}
+
 export function routesOf(pages: Readonly<Record<string, string>>): readonly { readonly path: string; readonly locale: string }[] {
   return Object.keys(pages).map((path) => ({ path: `/${path}`, locale: "en" }));
 }

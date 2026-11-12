@@ -15,5 +15,5 @@
     { "name": "headline", "selector": "main h1" },
     { "name": "link", "selector": "a[href]", "focusable": true }
   ],
-  "checks": ["layout", "keyboard", "motion", "axe", "nesting", "html", "assets"]
+  "checks": ["layout", "keyboard", "motion", "axe", "nesting", "html", "links", "assets"]
 }

@@ -4,7 +4,7 @@ import { DEVICES, ENLARGED_TEXT_PX, SCREEN_SIZE_SETS, SCREEN_SIZES, screenSizeNa
 
 const DECLARATION = "browser-checks.json";
 
-const CHECKS = ["layout", "keyboard", "motion", "axe", "nesting", "html", "assets"] as const;
+const CHECKS = ["layout", "keyboard", "motion", "axe", "nesting", "html", "links", "assets"] as const;
 
 export type CheckName = (typeof CHECKS)[number];
 

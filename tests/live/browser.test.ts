@@ -1,16 +1,10 @@
 import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { browserSite, declaration, failuresOf, HOOK_TYPES, page, routesOf } from "../e2e/lib/browser-site.ts";
+import { at, browserSite, declaration, failuresOf, HOOK_TYPES, page, routesOf, sitePages } from "../e2e/lib/browser-site.ts";
 import { CHECKOUT } from "../e2e/lib/fixture-repo.ts";
 
 const CLEAN_LINK = page(`<p><a href="/">Write to me</a></p>`);
-
-const at = (check: string, path: string, state = "default", viewport = "phone 320x640"): string => `${check} at ${path} (en), ${viewport}, ${state}:`;
-
-function sitePages(pages: Readonly<Record<string, string>>): Readonly<Record<string, string>> {
-  return Object.fromEntries(Object.entries(pages).map(([path, html]) => [`dist/${path}`, html]));
-}
 
 test("layout is red on sideways overflow, a clipped, cut off, covered or hidden label, overlapping targets and a missing or invisible target, and green once each is fixed", async () => {
   const red = {

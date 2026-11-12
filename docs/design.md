@@ -347,6 +347,7 @@ So a product opts in by declaring `browser-checks.json`, `checks-lint` never sta
 Each check wraps a detector that already works, and the kit writes a rule of its own only where none decides the constraint.
 The syntax gate runs two of stylelint's built-in rules and the stylelint team's shared configs, `axe` runs axe-core and `nesting` runs one html-validate rule.
 `html` runs two html-validate presets beside one rule.
+`links` is the kit's own, because linkinator takes a page that carries `noindex` and `nofollow` for a soft 404 and checks no fragment on it.
 Its Baseline family runs `stylelint-plugin-use-baseline`, the one stylelint rule that judges against the Baseline data rather than a browser list.
 Its design token family is stylelint's own colour and value rules and the kit's `checks/font-size-from-tokens`, applied outside the files a repository names as its tokens.
 A check of the rendered page against declared tokens would need a token format of the kit's own.

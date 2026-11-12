@@ -8,7 +8,8 @@ audience: consumers
 
 ## What it checks
 
-It visits each declared route at each declared viewport in each declared state, and runs each declared check that opens a page on its own fresh page.
+It visits each declared route at each declared viewport in each declared state.
+Each declared check that opens a page runs on its own fresh page.
 A visit is one route, one viewport and one state.
 Each check judges only the elements of a target that are visible at the visit.
 So a control the page renders once for each breakpoint is judged where it shows.
@@ -21,9 +22,20 @@ So a control the page renders once for each breakpoint is judged where it shows.
 | `axe` | each violation of axe's WCAG 2.2 AA rules, which include `color-contrast`, `nested-interactive`, `meta-viewport` and `target-size` | axe-core through `@axe-core/playwright` |
 | `nesting` | an element the HTML content model does not permit where it sits in the rendered page, such as a `<button>` inside an `<a>` | html-validate's `element-permitted-content` rule |
 | `html` | an error from html-validate's `html-validate:standard` or `html-validate:a11y` preset, or from `input-missing-label`, in the page the server sends | html-validate on the page's HTML as the server sends it |
+| `links` | a link on the rendered page to a page of the same site that answers with a status of 400 or more, and a link whose fragment names no element on the page it points at | the `href` of each `<a>` and `<area>`, fetched from the local server, and the `id` and `<a name>` of the page each fragment points at, loaded in Chrome |
 | `assets` | a request that fails, and a response with a status of 400 or more, while the page loads to network idle | Playwright's request and response events |
 
-`html` runs once for each route, at the first declared viewport in the first declared state, because the page the server sends is the same at each.
+`html` runs once for each route, at the first viewport in the first state, because the page the server sends is the same at each.
+`links` runs once at the same visit, since it reads every link in the page, whether the viewport shows it or not.
+
+`links` judges the links on each declared route.
+A page they point at is fetched, and loaded when a link names a fragment on it.
+Its own links are judged only when a route declares it.
+A link to another origin, or one such as `mailto:` that has none, is left alone.
+A fragment of `top`, in any case, points at the start of the page, as the HTML standard has it.
+So it needs no element of that name.
+A fragment is decoded before it is compared, so `#%D1%83%D1%81%D0%BB%D1%83%D0%B3%D0%B8` matches `id="услуги"`.
+It reads no `robots` meta, so a page marked `noindex` or `nofollow` is judged like any other.
 
 The `motion` check judges what moves on the rendered page, so a `prefers-reduced-motion` query in the source counts for nothing unless the motion stops.
 It runs only in a state whose `reducedMotion` is `reduce`.
@@ -44,12 +56,13 @@ It does not yet check the rendered page against a product's declared design toke
 Text over a background image or a gradient is such a case, and the report lists each one under its own heading.
 `nested-interactive` catches a control inside an element whose role makes its children presentational, such as a link inside a `<button>` or inside a `role="button"`.
 `nesting` catches a control inside a link, which axe passes.
-`html` reads the page as the server sends it, so it never sees markup a script builds, and of its rules only the content model, which `nesting` runs on the rendered page, reaches that markup.
+`html` reads the page as the server sends it, so it never sees markup a script builds.
+Of its rules, only the content model reaches that markup, through `nesting` on the rendered page.
 None of these sees a parent click handler that fires with a child control's click, which a product hook tests.
 
 ### The inventory
 
-The runner prints one line for each check at each visit, narrowed by the `html` and `motion` exceptions above.
+The runner prints one line for each check at each visit, narrowed by the `html`, `links` and `motion` exceptions above.
 The line names the route, its locale, the viewport, the state and what the check scanned.
 At every visit, whichever checks are declared, a `targets` run counts the visible elements each target that applies to the route matches.
 For `targets`, `layout`, `keyboard` and a hook, what it scanned is each target by name with the count of its elements.
@@ -138,7 +151,7 @@ It reads `browser-checks.json` in the directory it runs in:
     { "name": "email contact", "selector": "main a[href^='mailto:']", "routes": ["/", "/ru/"], "focusable": true },
     { "name": "headline", "selector": "main h1" }
   ],
-  "checks": ["layout", "keyboard", "motion", "axe", "nesting", "html", "assets"],
+  "checks": ["layout", "keyboard", "motion", "axe", "nesting", "html", "links", "assets"],
   "hooks": "tests/browser/hooks.ts"
 }
 ```
@@ -150,7 +163,7 @@ It reads `browser-checks.json` in the directory it runs in:
 | `viewports` | each window to visit in, with a `name`, a `width` and a `height` in pixels, `touch` for a phone that has touch and a mobile viewport, and `device` as `phone`, `tablet` or `desktop`, or a `preset` that stands for a set of screen sizes |
 | `states` | each condition to visit in, with a `name`, `textPx` for the browser's default text size, and `reducedMotion` as `reduce` or `no-preference`, or the `enlarged-text` preset |
 | `targets` | each named control or text the checks judge, with a CSS `selector`, the `routes` it is on when not every route, and `focusable` when Tab must reach it |
-| `checks` | the built-in checks to run, from `layout`, `keyboard`, `motion`, `axe`, `nesting`, `html` and `assets` |
+| `checks` | the built-in checks to run, from `layout`, `keyboard`, `motion`, `axe`, `nesting`, `html`, `links` and `assets` |
 | `hooks` | the module of product hooks, as a path from the directory the runner runs in |
 
 `textPx` sets the default font size, so text the page sizes in `rem` or `em` grows, as a visitor's own setting makes it grow.
@@ -229,7 +242,7 @@ A host resolves it as `@avi2dg/checks/browser-checks.json`.
     { "name": "headline", "selector": "main h1" },
     { "name": "link", "selector": "a[href]", "focusable": true }
   ],
-  "checks": ["layout", "keyboard", "motion", "axe", "nesting", "html", "assets"]
+  "checks": ["layout", "keyboard", "motion", "axe", "nesting", "html", "links", "assets"]
 }
 ```
 
