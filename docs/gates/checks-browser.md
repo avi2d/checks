@@ -8,7 +8,7 @@ audience: consumers
 
 ## What it checks
 
-It visits each declared route at each declared viewport in each declared state, and runs each declared check on its own fresh page.
+It visits each declared route at each declared viewport in each declared state, and runs each declared check that opens a page on its own fresh page.
 A visit is one route, one viewport and one state.
 Each check judges only the elements of a target that are visible at the visit.
 So a control the page renders once for each breakpoint is judged where it shows.
@@ -20,7 +20,10 @@ So a control the page renders once for each breakpoint is judged where it shows.
 | `motion` | an animation or a transition longer than one frame that starts during load, on hover, on leaving a hovered control or on focus, and smooth scrolling, for a visitor who turns motion off | the page's own `document.getAnimations()`, in each state whose `reducedMotion` is `reduce` |
 | `axe` | each violation of axe's WCAG 2.2 AA rules, which include `color-contrast`, `nested-interactive`, `meta-viewport` and `target-size` | axe-core through `@axe-core/playwright` |
 | `nesting` | an element the HTML content model does not permit where it sits in the rendered page, such as a `<button>` inside an `<a>` | html-validate's `element-permitted-content` rule |
+| `html` | an error from html-validate's `html-validate:standard` or `html-validate:a11y` preset, or from `input-missing-label`, in the page the server sends | html-validate on the page's HTML as the server sends it |
 | `assets` | a request that fails, and a response with a status of 400 or more, while the page loads to network idle | Playwright's request and response events |
+
+`html` runs once for each route, at the first declared viewport in the first declared state, because the page the server sends is the same at each.
 
 The `motion` check judges what moves on the rendered page, so a `prefers-reduced-motion` query in the source counts for nothing unless the motion stops.
 It runs only in a state whose `reducedMotion` is `reduce`.
@@ -41,11 +44,12 @@ It does not yet check the rendered page against a product's declared design toke
 Text over a background image or a gradient is such a case, and the report lists each one under its own heading.
 `nested-interactive` catches a control inside an element whose role makes its children presentational, such as a link inside a `<button>` or inside a `role="button"`.
 `nesting` catches a control inside a link, which axe passes.
-Neither sees a parent click handler that fires with a child control's click, which a product hook tests.
+`html` reads the page as the server sends it, so it never sees markup a script builds, and of its rules only the content model, which `nesting` runs on the rendered page, reaches that markup.
+None of these sees a parent click handler that fires with a child control's click, which a product hook tests.
 
 ### The inventory
 
-The runner prints one line for each check at each visit.
+The runner prints one line for each check at each visit, narrowed by the `html` and `motion` exceptions above.
 The line names the route, its locale, the viewport, the state and what the check scanned.
 At every visit, whichever checks are declared, a `targets` run counts the visible elements each target that applies to the route matches.
 For `targets`, `layout`, `keyboard` and a hook, what it scanned is each target by name with the count of its elements.
@@ -134,7 +138,7 @@ It reads `browser-checks.json` in the directory it runs in:
     { "name": "email contact", "selector": "main a[href^='mailto:']", "routes": ["/", "/ru/"], "focusable": true },
     { "name": "headline", "selector": "main h1" }
   ],
-  "checks": ["layout", "keyboard", "motion", "axe", "nesting", "assets"],
+  "checks": ["layout", "keyboard", "motion", "axe", "nesting", "html", "assets"],
   "hooks": "tests/browser/hooks.ts"
 }
 ```
@@ -146,7 +150,7 @@ It reads `browser-checks.json` in the directory it runs in:
 | `viewports` | each window to visit in, with a `name`, a `width` and a `height` in pixels, `touch` for a phone that has touch and a mobile viewport, and `device` as `phone`, `tablet` or `desktop`, or a `preset` that stands for a set of screen sizes |
 | `states` | each condition to visit in, with a `name`, `textPx` for the browser's default text size, and `reducedMotion` as `reduce` or `no-preference`, or the `enlarged-text` preset |
 | `targets` | each named control or text the checks judge, with a CSS `selector`, the `routes` it is on when not every route, and `focusable` when Tab must reach it |
-| `checks` | the built-in checks to run, from `layout`, `keyboard`, `motion`, `axe`, `nesting` and `assets` |
+| `checks` | the built-in checks to run, from `layout`, `keyboard`, `motion`, `axe`, `nesting`, `html` and `assets` |
 | `hooks` | the module of product hooks, as a path from the directory the runner runs in |
 
 `textPx` sets the default font size, so text the page sizes in `rem` or `em` grows, as a visitor's own setting makes it grow.
@@ -225,7 +229,7 @@ A host resolves it as `@avi2dg/checks/browser-checks.json`.
     { "name": "headline", "selector": "main h1" },
     { "name": "link", "selector": "a[href]", "focusable": true }
   ],
-  "checks": ["layout", "keyboard", "motion", "axe", "nesting", "assets"]
+  "checks": ["layout", "keyboard", "motion", "axe", "nesting", "html", "assets"]
 }
 ```
 

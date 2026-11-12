@@ -320,6 +320,43 @@ test("nesting is red on a button inside a link and on a link inside a button, an
   expect(passed.exitCode).toBe(0);
 }, 120_000);
 
+test("html is red on an unlabelled input, a list item outside a list and an empty heading, and green once each is fixed", async () => {
+  const red = {
+    "unlabelled.html": page(`<p><a href="/">Write to me</a></p><form><input type="text" name="name"><button type="submit">Send</button></form>`),
+    "stray-item.html": page(`<li>Orphan item</li><p><a href="/">Write to me</a></p>`),
+    "empty-heading.html": page(`<h2></h2><p><a href="/">Write to me</a></p>`),
+  };
+  const site = await browserSite({
+    ...sitePages(red),
+    "browser-checks.json": declaration({
+      routes: routesOf(red),
+      checks: ["html"],
+      viewports: [{ name: "phone", width: 320, height: 640 }, { name: "tablet", width: 820, height: 1180 }],
+      states: [{ name: "default" }, { name: "alt" }],
+    }),
+  });
+  const failed = await site.run();
+  const failures = failuresOf(failed.text);
+  expect(failures.filter((line) => line.startsWith("html at"))).toHaveLength(3);
+  expect(failures.filter((line) => line.startsWith("html at") && line.includes("phone 320x640, default"))).toHaveLength(3);
+  expect(failures.filter((line) => line.startsWith(at("html", "/unlabelled.html")) && line.includes("input-missing-label"))).toHaveLength(1);
+  expect(failures.filter((line) => line.startsWith(at("html", "/stray-item.html")) && line.includes("element-permitted-parent"))).toHaveLength(1);
+  expect(failures.filter((line) => line.startsWith(at("html", "/empty-heading.html")) && line.includes("empty-heading"))).toHaveLength(1);
+  expect(failed.exitCode).toBe(1);
+
+  await site.write(sitePages({
+    "unlabelled.html": page(`<p><a href="/">Write to me</a></p><form><label>Name <input type="text" name="name"></label><button type="submit">Send</button></form>`),
+    "stray-item.html": page(`<ul><li>Orphan item</li></ul><p><a href="/">Write to me</a></p>`),
+    "empty-heading.html": page(`<h2>Contact</h2><p><a href="/">Write to me</a></p>`),
+  }));
+  const passed = await site.run();
+  for (const path of ["/unlabelled.html", "/stray-item.html", "/empty-heading.html"])
+    expect(passed.text).toContain(`browser: ${at("html", path).slice(0, -1)} scanned served page`);
+  expect(passed.text.split("\n").filter((line) => line.startsWith("browser: html at"))).toHaveLength(3);
+  expect(failuresOf(passed.text)).toEqual([]);
+  expect(passed.exitCode).toBe(0);
+}, 120_000);
+
 test("assets is red on an image the site does not serve and on a request that fails, and green once both load", async () => {
   const pictured = (src: string): string => page(`<p><a href="/">Write to me</a></p><img src="${src}" alt="The owner" width="10" height="10">`);
   const site = await browserSite({
