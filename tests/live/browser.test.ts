@@ -301,6 +301,24 @@ test("nesting is red on a button inside a link and on a link inside a button, an
   expect(passed.exitCode).toBe(0);
 }, 120_000);
 
+test("html is red on an input with no label and green once the input has one", async () => {
+  const red = {
+    "unlabelled.html": page(`<p><a href="/">Write to me</a></p><form><input type="text" name="name"><button type="submit">Send</button></form>`),
+  };
+  const site = await browserSite({ ...sitePages(red), "browser-checks.json": declaration({ routes: routesOf(red), checks: ["html"] }) });
+  const failed = await site.run();
+  expect(failuresOf(failed.text).filter((line) => line.startsWith(at("html", "/unlabelled.html")) && line.includes("input-missing-label"))).toHaveLength(1);
+  expect(failed.exitCode).toBe(1);
+
+  await site.write(sitePages({
+    "unlabelled.html": page(`<p><a href="/">Write to me</a></p><form><label>Name <input type="text" name="name"></label><button type="submit">Send</button></form>`),
+  }));
+  const passed = await site.run();
+  expect(passed.text).toContain(`browser: ${at("html", "/unlabelled.html").slice(0, -1)} scanned served page`);
+  expect(failuresOf(passed.text)).toEqual([]);
+  expect(passed.exitCode).toBe(0);
+}, 120_000);
+
 test("assets is red on an image the site does not serve and on a request that fails, and green once both load", async () => {
   const pictured = (src: string): string => page(`<p><a href="/">Write to me</a></p><img src="${src}" alt="The owner" width="10" height="10">`);
   const site = await browserSite({
