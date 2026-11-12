@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.95.0
+
+Released 2026-11-12.
+
+### Features
+
+- **delivery:** run plain-steps with no opt-in switch [#116](https://github.com/avi2d/checks/pull/116)
+
 ## 0.94.0
 
 Released 2026-11-12.
