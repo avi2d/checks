@@ -2,6 +2,19 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.94.0
+
+Released 2026-11-12.
+
+### Features
+
+- **delivery:** simplify mutation caller to shared v2 workflow [#114](https://github.com/avi2d/checks/pull/114)
+- **quality:** add data-shape/no-shell-in-strings rule, off by default [#111](https://github.com/avi2d/checks/pull/111)
+
+### Fixes
+
+- **testing:** stop baseline refresh warning when mutation scope has no report [#110](https://github.com/avi2d/checks/pull/110)
+
 ## 0.93.0
 
 Released 2026-11-11.
