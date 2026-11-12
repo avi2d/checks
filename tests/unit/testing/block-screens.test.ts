@@ -4,7 +4,8 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect } from "effect";
-import { AS_APPROVED, decodePng, HANDHELDS, matchesApproved, pictureFile, screenDevices, type ScreenDevice } from "../../../src/testing/block-screens.ts";
+import { decodePng } from "../../../src/quality/browser/png.ts";
+import { AS_APPROVED, HANDHELDS, matchesApproved, pictureFile, screenDevices, type ScreenDevice } from "../../../src/testing/block-screens.ts";
 
 const FIXTURES = join(import.meta.dir, "..", "..", "fixtures", "block-screens");
 const picture = (name: string): Promise<Uint8Array> => readFile(join(FIXTURES, `${name}.png`));
