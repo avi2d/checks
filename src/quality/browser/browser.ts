@@ -109,8 +109,11 @@ const BUILT_IN: Readonly<Record<CheckName, (visiting: Visiting) => Effect.Effect
   assets: assetsRun,
 };
 
-function applies(check: CheckName, { state }: Visit): boolean {
-  return check !== "motion" || state.reducedMotion === "reduce";
+function applies(check: CheckName, visit: Visit, declaration: Declaration): boolean {
+  if (check === "motion") return visit.state.reducedMotion === "reduce";
+  if (check === "html")
+    return visit.viewport.name === declaration.viewports[0]?.name && visit.state.name === declaration.states[0]?.name;
+  return true;
 }
 
 const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: Declaration) {
@@ -124,7 +127,7 @@ const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: D
   for (const visit of visitsOf(declaration).filter(({ route }) => !missingRoutes.includes(route.path))) {
     const visiting = { browser, declaration, visit, url: new URL(visit.route.path, origin).href };
     runs.push(yield* targetsRun(visiting));
-    for (const check of declaration.checks.filter((one) => applies(one, visit))) runs.push(yield* BUILT_IN[check](visiting));
+    for (const check of declaration.checks.filter((one) => applies(one, visit, declaration))) runs.push(yield* BUILT_IN[check](visiting));
     for (const hook of hooks.filter(({ routes }) => routes === undefined || routes.includes(visit.route.path))) runs.push(yield* hookRun(hook, visiting));
   }
   return { runs, missingRoutes };

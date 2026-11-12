@@ -43,7 +43,7 @@ Text over a background image or a gradient is such a case, and the report lists 
 `nested-interactive` catches a control inside an element whose role makes its children presentational, such as a link inside a `<button>` or inside a `role="button"`.
 `nesting` catches a control inside a link, which axe passes.
 `html` reads the page as the server sends it, so markup a script builds is judged only by `nesting`.
-Neither sees a parent click handler that fires with a child control's click, which a product hook tests.
+None of these sees a parent click handler that fires with a child control's click, which a product hook tests.
 
 ### The inventory
 
@@ -136,7 +136,7 @@ It reads `browser-checks.json` in the directory it runs in:
     { "name": "email contact", "selector": "main a[href^='mailto:']", "routes": ["/", "/ru/"], "focusable": true },
     { "name": "headline", "selector": "main h1" }
   ],
-  "checks": ["layout", "keyboard", "motion", "axe", "nesting", "assets"],
+  "checks": ["layout", "keyboard", "motion", "axe", "nesting", "html", "assets"],
   "hooks": "tests/browser/hooks.ts"
 }
 ```
@@ -227,7 +227,7 @@ A host resolves it as `@avi2dg/checks/browser-checks.json`.
     { "name": "headline", "selector": "main h1" },
     { "name": "link", "selector": "a[href]", "focusable": true }
   ],
-  "checks": ["layout", "keyboard", "motion", "axe", "nesting", "assets"]
+  "checks": ["layout", "keyboard", "motion", "axe", "nesting", "html", "assets"]
 }
 ```
 

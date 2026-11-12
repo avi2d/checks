@@ -301,20 +301,29 @@ test("nesting is red on a button inside a link and on a link inside a button, an
   expect(passed.exitCode).toBe(0);
 }, 120_000);
 
-test("html is red on an input with no label and green once the input has one", async () => {
+test("html is red on an unlabelled input, a list item outside a list and an empty heading, and green once each is fixed", async () => {
   const red = {
     "unlabelled.html": page(`<p><a href="/">Write to me</a></p><form><input type="text" name="name"><button type="submit">Send</button></form>`),
+    "stray-item.html": page(`<li>Orphan item</li><p><a href="/">Write to me</a></p>`),
+    "empty-heading.html": page(`<h2></h2><p><a href="/">Write to me</a></p>`),
   };
   const site = await browserSite({ ...sitePages(red), "browser-checks.json": declaration({ routes: routesOf(red), checks: ["html"] }) });
   const failed = await site.run();
-  expect(failuresOf(failed.text).filter((line) => line.startsWith(at("html", "/unlabelled.html")) && line.includes("input-missing-label"))).toHaveLength(1);
+  const failures = failuresOf(failed.text);
+  expect(failures.filter((line) => line.startsWith(at("html", "/unlabelled.html")) && line.includes("input-missing-label"))).toHaveLength(1);
+  expect(failures.filter((line) => line.startsWith(at("html", "/stray-item.html")) && line.includes("element-permitted-parent"))).toHaveLength(1);
+  expect(failures.filter((line) => line.startsWith(at("html", "/empty-heading.html")) && line.includes("empty-heading"))).toHaveLength(1);
   expect(failed.exitCode).toBe(1);
 
   await site.write(sitePages({
     "unlabelled.html": page(`<p><a href="/">Write to me</a></p><form><label>Name <input type="text" name="name"></label><button type="submit">Send</button></form>`),
+    "stray-item.html": page(`<ul><li>Orphan item</li></ul><p><a href="/">Write to me</a></p>`),
+    "empty-heading.html": page(`<h2>Contact</h2><p><a href="/">Write to me</a></p>`),
   }));
   const passed = await site.run();
-  expect(passed.text).toContain(`browser: ${at("html", "/unlabelled.html").slice(0, -1)} scanned served page`);
+  for (const path of ["/unlabelled.html", "/stray-item.html", "/empty-heading.html"]) {
+    expect(passed.text).toContain(`browser: ${at("html", path).slice(0, -1)} scanned served page`);
+  }
   expect(failuresOf(passed.text)).toEqual([]);
   expect(passed.exitCode).toBe(0);
 }, 120_000);
