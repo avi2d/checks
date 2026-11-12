@@ -337,9 +337,8 @@ test("html is red on an unlabelled input, a list item outside a list and an empt
   });
   const failed = await site.run();
   const failures = failuresOf(failed.text);
-  const htmlFailures = failures.filter((line) => line.startsWith("html at"));
-  expect(htmlFailures).toHaveLength(3);
-  expect(htmlFailures.filter((line) => line.includes("phone 320x640, default"))).toHaveLength(3);
+  expect(failures.filter((line) => line.startsWith("html at"))).toHaveLength(3);
+  expect(failures.filter((line) => line.startsWith("html at") && line.includes("phone 320x640, default"))).toHaveLength(3);
   expect(failures.filter((line) => line.startsWith(at("html", "/unlabelled.html")) && line.includes("input-missing-label"))).toHaveLength(1);
   expect(failures.filter((line) => line.startsWith(at("html", "/stray-item.html")) && line.includes("element-permitted-parent"))).toHaveLength(1);
   expect(failures.filter((line) => line.startsWith(at("html", "/empty-heading.html")) && line.includes("empty-heading"))).toHaveLength(1);
@@ -351,9 +350,8 @@ test("html is red on an unlabelled input, a list item outside a list and an empt
     "empty-heading.html": page(`<h2>Contact</h2><p><a href="/">Write to me</a></p>`),
   }));
   const passed = await site.run();
-  for (const path of ["/unlabelled.html", "/stray-item.html", "/empty-heading.html"]) {
+  for (const path of ["/unlabelled.html", "/stray-item.html", "/empty-heading.html"])
     expect(passed.text).toContain(`browser: ${at("html", path).slice(0, -1)} scanned served page`);
-  }
   expect(passed.text.split("\n").filter((line) => line.startsWith("browser: html at"))).toHaveLength(3);
   expect(failuresOf(passed.text)).toEqual([]);
   expect(passed.exitCode).toBe(0);
