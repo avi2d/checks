@@ -291,12 +291,12 @@ const enteringSources = Effect.fn("enteringSources")(function* (
   { base, atBase, atHead }: Snapshots,
   scoped: ReadonlySet<string>,
 ) {
-  if (tests.size === 0) return [];
+  // A run with no report reads no full baseline, so it has nothing to warn about.
+  if (tests.size === 0 || report === undefined) return [];
   const eligible = (source: string): boolean => mutated(source) && !scoped.has(source) && atHead.has(source);
   const candidates = [...atHead].filter(eligible).toSorted();
-  if (report === undefined || !(yield* (yield* FileSystem.FileSystem).exists(report))) {
-    const where = report === undefined ? "" : ` at ${report}`;
-    yield* Console.error(`::warning::${NAME}: ${[...tests].toSorted().join(",")} changed, but no full baseline report${where} says which sources they cover, so the scope holds no covered source. Refresh the full baseline with \`gh workflow run mutation -f mode=refresh\`.`);
+  if (!(yield* (yield* FileSystem.FileSystem).exists(report))) {
+    yield* Console.error(`::warning::${NAME}: ${[...tests].toSorted().join(",")} changed, but no full baseline report at ${report} says which sources they cover, so the scope holds no covered source. Refresh the full baseline with \`gh workflow run mutation\`.`);
     return [];
   }
   const baseline = yield* loadBaseline(report);

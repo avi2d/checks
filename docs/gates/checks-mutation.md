@@ -12,7 +12,7 @@ It refuses a full mutation run when `CI` is not `true`.
 A full run is one with no `--mutate <glob>` and no `--incremental` flag.
 A `--mutate` without a glob, `--incrementalFile` alone or `--incremental` with `--force` is still a full run.
 Its refusal names `gh workflow run mutation` as the command that starts the same run in CI.
-A run scoped with `--mutate <glob>`, `--mutate=<glob>` or `-m <glob>` stays allowed locally, because a branch comparison scopes to named files.
+A run scoped with `--mutate <glob>`, `--mutate=<glob>` or `-m <glob>` stays allowed locally, because the pull request run scopes to named files.
 An incremental run stays allowed locally only when its incremental report exists, because it reuses the results of mutants that did not change.
 That report is the `incrementalFile` Stryker resolves from the command line and the config file, else `reports/stryker-incremental.json`.
 With no report there, the refusal says to pass `--mutate <glob>`, or to start the full baseline in CI with `gh workflow run mutation`.
@@ -36,7 +36,7 @@ When that timing run fails, the preset prints why on stderr and `unitTestFiles` 
 A run with `--ignoreStatic` on the command line or in a refresh tests no static mutant, so it skips the timing run.
 
 The preset sets `ignoreStatic` only when `CHECKS_MUTATION_MODE` is `refresh`.
-A baseline or a branch comparison leaves the variable at another value or unset, so it still tests each static mutant.
+A baseline or a scoped run leaves the variable at another value or unset, so it still tests each static mutant.
 
 The preset runs one Stryker worker per core when `RUNNER_ENVIRONMENT` is `github-hosted`, since a GitHub-hosted runner is a VM the job holds alone.
 Elsewhere it runs one worker per two cores, rounded down and at least one, since a self-hosted runner or a laptop shares its cores.
@@ -86,16 +86,17 @@ An `--incremental` run with no report stops before instrumenting with the missin
 
 ## When it runs
 
-A repository runs its baselines through the `mutation` caller that [checks-setup](checks-setup.md) writes.
-A push to `main` that changes what Stryker mutates or tests starts one, and so does `gh workflow run mutation`.
+A repository runs mutation through the `mutation` caller that [checks-setup](checks-setup.md) writes.
+A pull request runs a scoped score over the changed files.
+A manual start with `gh workflow run mutation` starts `refresh`.
+No push to `main` starts a run.
 Run scoped checks locally during development.
-A first baseline with no state costs a full Stryker run, and each later one restores the newest `main` baseline and retests the mutants its changes reach.
 
 ## Running it in CI
 
+The caller [checks-setup](checks-setup.md) writes reaches only the refresh job and the pull request run.
 Only `avi2d/workflows` holds the baseline job, since [checks-ci-wiring](checks-ci-wiring.md#mutation-jobs) refuses it in any other repository.
-Any other repository calls that shared workflow from the caller [checks-setup](checks-setup.md) writes.
-A baseline job takes these steps and keeps its report as an artifact:
+Only a caller that passes `mode: baseline` reaches that job, which takes these steps and keeps its report as an artifact:
 
 ```yaml
 - env:
@@ -110,7 +111,7 @@ A first baseline with no state tests every mutant.
 Each later run restores the newest `main` baseline, drops each result the 28-day refresh window or a changed config made stale, and retests the mutants its changes reach.
 A result made stale by a file a test reads at runtime stays stale past refresh, since refresh uploads only `mutation-baseline-full`.
 The job uploads the Stryker report and the incremental state as the `mutation-baseline` artifact and keeps it for 7 days.
-The next baseline and each pull request comparison restore that artifact with the ordinary restore.
+The next baseline restores that artifact with the ordinary restore.
 The job posts the score in its summary.
 
 A refresh job restores the previous full report with `--full` for shard balancing and runs the full suite with static mutants ignored.

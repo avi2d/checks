@@ -35,12 +35,28 @@ These rules read the types, so they run only with `oxlint-tsgolint` installed an
 
 ## Data-shape rules
 
-The base loads the kit's `data-shape` plugin from `dist/` with two rules for every TypeScript file, tests included.
+The base loads the kit's `data-shape` plugin from `dist/` and turns on two of its rules for every TypeScript file, tests included.
 
 - `data-shape/readonly-collection-param` refuses a parameter typed `T[]`, `Array<T>`, `Map` or `Set` that the function never mutates, stores, returns or passes on, and passing it to a readonly parameter of a function declared in the same file does not count as passing it on.
 - Type such a parameter `readonly T[]`, `ReadonlyArray<T>`, `ReadonlyMap` or `ReadonlySet`.
 - `data-shape/schema-twin` refuses an object type whose fields match a `Schema.Struct`, `TaggedStruct` or `Class` in the same file by name, count, optionality and kind.
 - Derive such a type from the schema with `typeof Name.Type` instead of writing both.
+
+The plugin carries a third rule that the base leaves off:
+
+- `data-shape/no-shell-in-strings` refuses a string, a template literal, an array of them or a `+` chain of them that holds five or more lines that read as shell, and names the first such line and the count.
+- A line reads as shell when `if`, `elif`, `while` or `until` starts the line without a following `(`, when the line is `then`, `fi`, `do`, `done` or `esac`, alone or followed by `;`, when `then` or `do` closes the line after `;`, when the whole line is `case … in`, when it holds `;;`, `$(…)`, `"$@"`, `${NAME}`, `&&` or `||`, when `trap` or `exec` starts the line, or when it is a `#!/bin/sh` line.
+- A line that also reads as JavaScript does not count, such as one holding `const`, `=>`, `===` or `console.`, ending in `{` or `(` or in a single `;`, or starting with `}` or `)`, while a `;;` ending still counts as shell, so a script passed to `bun -e` passes.
+- Move such a program to a `.sh` file the code runs, where a shell linter reads it.
+- An override in `base` keeps it off in every test file `TESTS` names, so a test may still write a fake tool as a `#!/bin/sh` fixture.
+
+A repository turns it on in its `oxlint.config.ts`:
+
+```ts
+import { defineConfig } from "@avi2dg/checks/oxlint";
+
+export default defineConfig({ effect: true, rules: { "data-shape/no-shell-in-strings": "error" } });
+```
 
 ## Astro rules
 

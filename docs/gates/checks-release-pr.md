@@ -52,7 +52,7 @@ checks-release-pr <workflow>...
 
 Each argument names a workflow file under `.github/workflows/` whose jobs report the checks the default branch requires, such as `ci.yml`.
 Each named workflow triggers on `workflow_dispatch`.
-Name no workflow that runs something else on dispatch, such as a mutation baseline.
+Name no workflow that runs something else on dispatch, such as a mutation refresh.
 
 ## Exit codes
 
@@ -123,6 +123,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./node_modules/.bin/checks-release-pr ci.yml
+      - name: delete the held runs on the release head
+        uses: avi2d/workflows/actions/held-runs@v2
   tag:
     if: "github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: release ')"
     runs-on: ubuntu-latest
@@ -149,13 +151,19 @@ A public repository keeps `runs-on: ubuntu-latest`.
 A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on both jobs, as [checks-ci-wiring](checks-ci-wiring.md#runners) requires of every job but a mutation job.
 A repository whose build needs more than Bun adds the steps its `.github/workflows/ci.yml` runs before `bun run build` to both jobs, and nothing after it.
 Neither job runs a test suite or a mutation run.
-On a hosted runner the `pull-request` job takes about 25 seconds, which GitHub bills as one minute, whether it opens, refreshes or leaves the pull request alone.
+On a hosted runner the `pull-request` job takes about 25 seconds.
+Its `held-runs` step adds about 30 seconds.
+GitHub may bill the job as two minutes whether it opens, refreshes or leaves the pull request alone.
 A private repository runs it there too unless `CI_RUNS_ON` names its self-hosted runner, which bills no minutes.
 The `tag` job runs only when a release lands, and a job its `if` skips bills nothing.
 The checks it dispatches are the release pull request's own required checks, and they run again only when `main` moves under it.
 The release workflow publishes the tag with no test tiers, since the whole suite already ran on the release pull request.
-The pull request also lists its own `pull_request` runs as waiting for approval.
-Nothing requires them, and approving them runs the same checks again.
+GitHub also holds the `pull_request` runs of the release pull request for approval, and expires each one at merge as a failure with no job.
+The last step of `pull-request`, `avi2d/workflows/actions/held-runs@v2`, deletes those held runs on the release branch's tip right after the pull request opens or refreshes.
+It reads the held runs on that tip every 5 seconds for up to 30 seconds.
+It deletes each held run with the job's token.
+The job grants `actions: write`, and the `contents: write` it grants covers the read the step needs.
+Nothing requires the held runs, and approving them runs the same checks again, so deleting them loses no check.
 
 The release pull request needs the repository's other workflows to accept the dispatch:
 

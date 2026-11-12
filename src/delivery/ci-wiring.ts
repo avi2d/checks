@@ -6,7 +6,8 @@ import { ENTRY_POINT, KIT_GATES, type KitGate } from "../core/gates.ts";
 import { findBunPinFaults, formatBunPinReport, readBunPinPolicy } from "./bun-pin.ts";
 import { findLongJobs, formatLongJobReport } from "./job-timeout.ts";
 import { readScheduleFiles, readShellFiles } from "./mutation-job.ts";
-import { findHandRolledMutation, formatHandRolledReport } from "./mutation-workflow.ts";
+import { findHandRolledMutation, formatHandRolledReport, holdsSharedWorkflow, type MutationCalls } from "./mutation-workflow.ts";
+import { MUTATION_WORKFLOW } from "./setup-workflow.ts";
 import { ownerRepoOf } from "./release-preflight.ts";
 import { findScheduledReleases, formatScheduleReport } from "./release-schedule.ts";
 import { findRunnerFaults, formatRunnerReport, jobRuns, readRunnerConfig } from "./runner-policy.ts";
@@ -293,6 +294,25 @@ export const readWorkflows = Effect.fn("readWorkflows")(function* (root: string)
   );
 });
 
+const callerFits = Effect.fn("callerFits")(function* (root: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const full = (yield* Path.Path).join(root, WORKFLOWS, "mutation.yml");
+  const caller = (yield* fs.exists(full)) ? yield* fs.readFileString(full) : MUTATION_WORKFLOW;
+  if (caller === MUTATION_WORKFLOW) return true;
+  yield* Console.error(`ci-wiring: ${WORKFLOWS}/mutation.yml differs from the caller checks-setup writes: delete it and run checks-setup to write it again`);
+  return false;
+});
+
+const reportHandRolled = Effect.fn("reportHandRolled")(function* (
+  workflows: readonly Workflow[],
+  calls: MutationCalls,
+  repository: string | undefined,
+) {
+  const handRolled = findHandRolledMutation(workflows, calls, repository);
+  if (handRolled.length > 0) yield* Console.error(formatHandRolledReport(handRolled));
+  return handRolled;
+});
+
 const wiring = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const workflows = yield* readWorkflows(root);
@@ -310,8 +330,9 @@ const wiring = Effect.gen(function* () {
   const shellFiles = yield* readShellFiles(root, scripts, runs);
   const faults = findRunnerFaults({ visibility, scripts, files: shellFiles, runners }, workflows);
   if (faults.length > 0) yield* Console.error(formatRunnerReport(faults));
-  const handRolled = findHandRolledMutation(workflows, { scripts, files: shellFiles }, yield* readRepository(root));
-  if (handRolled.length > 0) yield* Console.error(formatHandRolledReport(handRolled));
+  const repository = yield* readRepository(root);
+  const handRolled = yield* reportHandRolled(workflows, { scripts, files: shellFiles }, repository);
+  const callerOk = holdsSharedWorkflow(repository) ? true : yield* callerFits(root);
   const bunFaults = findBunPinFaults(yield* readBunPinPolicy(root, workflows), workflows);
   if (bunFaults.length > 0) yield* Console.error(formatBunPinReport(bunFaults));
   const scheduleFiles = yield* readScheduleFiles(root, scripts, runs);
@@ -322,7 +343,7 @@ const wiring = Effect.gen(function* () {
   if (scheduledRuns.length > 0) yield* Console.error(formatScheduledRunReport(scheduledRuns));
   const longJobs = findLongJobs(workflows);
   if (longJobs.length > 0) yield* Console.error(formatLongJobReport(longJobs));
-  return [gaps, faults, handRolled, missing, bunFaults, scheduled, scheduledRuns, longJobs].every((found) => found.length === 0);
+  return callerOk && [gaps, faults, handRolled, missing, bunFaults, scheduled, scheduledRuns, longJobs].every((found) => found.length === 0);
 });
 
 if (import.meta.main) runMain("ci-wiring", wiring);

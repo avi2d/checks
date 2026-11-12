@@ -32,48 +32,25 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
     steps:
-      - uses: avi2d/workflows/setup@v1
+      - uses: avi2d/workflows/actions/setup@v2
         with:
           ref: ${{ github.event.repository.default_branch }}
       # Only the repository secret decides the skip; no pull request value reaches this step.
       - id: pack
-        name: decide whether a private pack is configured
-        env:
-          PACK: ${{ secrets.CHECKS_SECRETS_PACK }}
-        run: |
-          if [ -n "$PACK" ]; then
-            echo "configured=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            message="pr-text scan skipped: no private pack is configured (CHECKS_SECRETS_PACK is unset), so this pull request's text was not scanned for private terms"
-            echo "::notice::$message"
-            echo "$message" >> "$GITHUB_STEP_SUMMARY"
-          fi
-      - name: write the private pack
-        if: steps.pack.outputs.configured == 'true'
-        env:
-          PACK: ${{ secrets.CHECKS_SECRETS_PACK }}
-        run: |
-          printf '%s' "$PACK" > "$RUNNER_TEMP/secrets-pack.json"
-          echo "CHECKS_SECRETS_PACK=$RUNNER_TEMP/secrets-pack.json" >> "$GITHUB_ENV"
+        name: write the private pack or skip when none is configured
+        uses: avi2d/workflows/actions/secrets-pack@v2
+        with:
+          pack: ${{ secrets.CHECKS_SECRETS_PACK }}
+          if-missing: skip
       - id: scan
         if: steps.pack.outputs.configured == 'true'
         run: bun src/delivery/pr-text.ts "$NUMBER"
       # A comment's run reports on no pull request, so this posts a commit status.
       - name: report the result on the head commit
         if: ${{ !cancelled() }}
-        env:
-          CONFIGURED: ${{ steps.pack.outputs.configured }}
-          OUTCOME: ${{ steps.scan.outcome }}
-        run: |
-          state=failure
-          description="the scan failed or did not run"
-          if [ "$CONFIGURED" = false ]; then
-            state=success
-            description="scan skipped: no private pack is configured (CHECKS_SECRETS_PACK is unset)"
-          elif [ "$CONFIGURED" = true ] && [ "$OUTCOME" = success ]; then
-            state=success
-            description="the scan passed"
-          fi
-          head=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$NUMBER" --jq .head.sha)
-          gh api "repos/$GITHUB_REPOSITORY/statuses/$head" -f state="$state" -f description="$description" -f context=pr-text -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --silent
+        uses: avi2d/workflows/actions/head-status@v2
+        with:
+          context: pr-text
+          pull-request: ${{ github.event.pull_request.number || github.event.issue.number }}
+          job-status: ${{ steps.pack.outputs.configured == 'false' && 'success' || steps.scan.outcome }}
+          description: "${{ steps.pack.outputs.configured == 'false' && 'scan skipped: no private pack is configured (CHECKS_SECRETS_PACK is unset)' || steps.scan.outcome == 'success' && 'the scan passed' || 'the scan failed or did not run' }}"

@@ -3,16 +3,9 @@ name: mutation
 on:
   pull_request:
     types: [opened, synchronize]
-  push:
-    branches: [main]
-    paths: ["src/**", "tests/unit/**", "stryker.conf.mjs", "stryker.preset.js", "package.json", "bun.lock", ".bun-version", "bunfig.toml"]
   workflow_dispatch:
-    inputs:
-      mode: { type: choice, options: [baseline, refresh], default: baseline }
 
 jobs:
   mutation:
-    uses: avi2d/workflows/.github/workflows/mutation.yml@4ac751c064c28d79887b28005c0d1a7e2c0c6488 # v2.0.0
+    uses: avi2d/workflows/.github/workflows/mutation.yml@v2
     permissions: { contents: read, actions: write, pull-requests: write }
-    with:
-      mode: ${{ github.event_name == 'pull_request' && 'compare' || inputs.mode || 'baseline' }}
