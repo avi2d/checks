@@ -49,31 +49,21 @@ export function ciWorkflow(isPrivate: boolean, hasBuild: boolean): string {
 
 const MUTATE = ["src/**/*.{ts,tsx}", "!src/**/*.test.{ts,tsx}"];
 
-// A reusable workflow cannot filter the push that calls it, so the caller holds the baseline's path filter.
-const BASELINE_PATHS = ["src/**", "tests/unit/**", "stryker.conf.mjs", "package.json", "bun.lock", ".bun-version", "bunfig.toml"];
-
 const flow = (values: readonly string[]): string => "[" + values.map((value) => JSON.stringify(value)).join(", ") + "]";
 
-// A schedule fails ci-wiring, so a refresh starts by hand.
+// The shared workflow picks the run from the event, so the caller names it and nothing else.
 export const MUTATION_WORKFLOW = [
   "name: mutation",
   "",
   "on:",
   "  pull_request:",
   "    types: [opened, synchronize]",
-  "  push:",
-  "    branches: [main]",
-  "    paths: " + flow(BASELINE_PATHS),
   "  workflow_dispatch:",
-  "    inputs:",
-  "      mode: { type: choice, options: [baseline, refresh], default: baseline }",
   "",
   "jobs:",
   "  mutation:",
   "    uses: " + SHARED_MUTATION,
   "    permissions: { contents: read, actions: write, pull-requests: write }",
-  "    with:",
-  "      mode: ${{ github.event_name == 'pull_request' && 'compare' || inputs.mode || 'baseline' }}",
   "",
 ].join("\n");
 

@@ -52,7 +52,7 @@ checks-release-pr <workflow>...
 
 Each argument names a workflow file under `.github/workflows/` whose jobs report the checks the default branch requires, such as `ci.yml`.
 Each named workflow triggers on `workflow_dispatch`.
-Name no workflow that runs something else on dispatch, such as a mutation baseline.
+Name no workflow that runs something else on dispatch, such as a mutation refresh.
 
 ## Exit codes
 

@@ -27,7 +27,7 @@ It tries those runs newest first, and restores the first `mutation-baseline-full
 It tries no run after that one.
 It takes the report from `mutation.json` at the artifact's root, or else from `mutation/mutation.json`, and copies it to the destination.
 With an incremental destination it also copies `stryker-incremental.json` when the artifact holds one, so a later full run started with that destination retests the mutants its changes reach.
-The shared refresh job passes no incremental destination and tests every mutant.
+The shared refresh job passes no incremental destination and tests every mutant except static ones.
 A result made stale by a file a test reads at runtime lasts until the next 28-day refresh.
 The restore then drops each test that reads a changed file and each mutant result for a changed source from the copied state.
 It drops non-killed results when any test goes stale.
@@ -161,7 +161,7 @@ With `--dry-run` the summary says what it would delete and what it would keep.
 
 ## When it runs
 
-Only a CI step runs it: the shared `mutation` workflow in its baseline, compare and refresh jobs, or a step the repository writes.
+Only a CI step runs it: the shared `mutation` workflow in its baseline and refresh jobs, or a step the repository writes.
 A baseline job restores the state the previous `main` run left before an incremental Stryker run:
 
 ```yaml
@@ -202,7 +202,7 @@ A refresh job restores the previous full report with `--full` for shard balancin
 
 The restore reads the repository's Actions through `gh`, so the job that holds it grants `contents: read` and `actions: read`.
 
-A refresh merge uploads its slimmed report as the `mutation-baseline-full` artifact, which a branch comparison's scope step reads on any runner.
+A refresh merge uploads its slimmed report as the `mutation-baseline-full` artifact, which a scope step with `--full` reads on any runner.
 It slims the report first:
 
 ```yaml
@@ -215,9 +215,9 @@ It slims the report first:
 ```
 
 The full upload keeps 30 days, so the newest full baseline outlives the gap between full runs.
-A branch comparison's scope step loses its coverage when no full baseline outlives the gap.
+A scope step with a full report loses its coverage when no full baseline outlives the gap.
 
-A branch comparison's scope step restores the full report with `--full`, and [checks-mutation-scope](checks-mutation-scope.md) reads it:
+A scope step which passes a full report restores it with `--full`, and [checks-mutation-scope](checks-mutation-scope.md) reads it:
 
 ```yaml
 - name: Select mutation scope

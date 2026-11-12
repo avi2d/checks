@@ -68,11 +68,13 @@ The check knows a repository is private only from GitHub's event, so a run outsi
 
 ### Mutation jobs
 
-A repository runs mutation through one job that calls `avi2d/workflows/.github/workflows/mutation.yml@v1`, the caller that [checks-setup](checks-setup.md) writes.
+A repository runs mutation through one job that calls `avi2d/workflows/.github/workflows/mutation.yml@v2`, the caller that [checks-setup](checks-setup.md) writes.
+The check refuses a `mutation.yml` that differs from that caller by a byte.
+A mode formula, a path list or any other code in it fails here.
 It refuses every mutation job of the repository's own, a job with a run step that calls mutation as [Runners](#runners) defines it.
 A job that calls a reusable workflow has no run step, so the caller passes.
 The `avi2d/workflows` repository holds the shared workflow, so there it refuses none.
-Each refusal names the workflow file and the job.
+A hand-rolled job refusal names the workflow file and the job, and the caller refusal names only the file.
 
 ### Bun version
 
@@ -119,7 +121,7 @@ Each refusal names the workflow file, the line of its `schedule` trigger and wha
 ### Schedules
 
 It refuses every other workflow that triggers on `schedule`, since a test, flake, browser or whole-tree run starts only by hand, with `gh workflow run`.
-The `mutation` caller also starts on push and on pull requests.
+The `mutation` caller also starts on pull requests and by hand.
 The one schedule it keeps is a weekly advisory scan in a public repository.
 A workflow scans advisories when a run step calls `checks-advisories`, the same ways a release call counts, or a job calls the shared `avi2d/workflows/.github/workflows/advisories.yml` at any ref.
 Every other run step is then a `bun install`, and every other job that calls a workflow calls that one.
@@ -158,7 +160,7 @@ It takes no arguments.
 | Code | Result |
 | --- | --- |
 | 0 | Every required command has a reachable step. |
-| 1 | A required command is missing or blocked, a job runs on the wrong runner, a job runs mutation outside the shared workflow, a workflow names a missing workflow or job, a bun setup step drifts from the fleet bun version, a workflow that releases runs on a schedule outside a public npm package or more than once a day, a workflow other than a weekly public advisory scan runs on a schedule, or a job can run for more than 60 minutes. |
+| 1 | A required command is missing or blocked, a job runs on the wrong runner, a job runs mutation outside the shared workflow, a `mutation.yml` differs from the caller checks-setup writes, a workflow names a missing workflow or job, a bun setup step drifts from the fleet bun version, a workflow that releases runs on a schedule outside a public npm package or more than once a day, a workflow other than a weekly public advisory scan runs on a schedule, or a job can run for more than 60 minutes. |
 | 2 | A workflow or `package.json` cannot be decoded, or the kit's own `.bun-version` is missing, unreadable or blank. |
 
 ## Sample output
@@ -182,7 +184,13 @@ A job that runs Stryker itself produces a report like this:
 
 ```
 ci-wiring: 1 job(s) run mutation outside the shared workflow:
-  .github/workflows/mutation.yml job mutation: run mutation through a job with uses: avi2d/workflows/.github/workflows/mutation.yml@v1, as checks-setup writes it
+  .github/workflows/mutation.yml job mutation: run mutation through a job with uses: avi2d/workflows/.github/workflows/mutation.yml@v2, as checks-setup writes it
+```
+
+A `mutation.yml` that differs from the caller checks-setup writes produces a report like this:
+
+```
+ci-wiring: .github/workflows/mutation.yml differs from the caller checks-setup writes: delete it and run checks-setup to write it again
 ```
 
 A reference to a missing workflow produces a report like this:

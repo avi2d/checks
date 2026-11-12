@@ -3,7 +3,7 @@ import { jobRuns } from "./runner-policy.ts";
 import { workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export const SHARED_REPOSITORY = "avi2d/workflows";
-export const SHARED_MUTATION = `${SHARED_REPOSITORY}/.github/workflows/mutation.yml@v1`;
+export const SHARED_MUTATION = `${SHARED_REPOSITORY}/.github/workflows/mutation.yml@v2`;
 
 export type HandRolledJob = { readonly location: string };
 
@@ -13,7 +13,7 @@ export type MutationCalls = {
 };
 
 // GitHub matches an owner and a repository name in any case.
-const holdsSharedWorkflow = (repository: string | undefined): boolean => repository?.toLowerCase() === SHARED_REPOSITORY;
+export const holdsSharedWorkflow = (repository: string | undefined): boolean => repository?.toLowerCase() === SHARED_REPOSITORY;
 
 export function findHandRolledMutation(workflows: readonly Workflow[], calls: MutationCalls, repository: string | undefined): readonly HandRolledJob[] {
   if (holdsSharedWorkflow(repository)) return [];
