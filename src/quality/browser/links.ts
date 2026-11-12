@@ -54,11 +54,9 @@ const anchorsOn = Effect.fn("anchorsOn")(function* (page: Page) {
 });
 
 const statusOf = (document: string): Effect.Effect<number, BrowserFailure> =>
-  attempt(`cannot fetch ${document}`, async () => {
-    const response = await fetch(document);
-    await response.body?.cancel();
-    return response.status;
-  });
+  attempt(`cannot fetch ${document}`, () =>
+    fetch(document).then((response) => Promise.resolve(response.body?.cancel()).then(() => response.status)),
+  );
 
 const namesAt = Effect.fn("namesAt")(function* (page: Page, document: string) {
   yield* load(page, document);
