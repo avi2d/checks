@@ -95,7 +95,7 @@ const linksRun = Effect.fn("linksRun")(function* ({ browser, visit, url }: Visit
 
 const assetsRun = Effect.fn("assetsRun")(function* ({ browser, visit, url }: Visiting) {
   const { page } = yield* openVisit(browser, visit);
-  const watch = watchAssets(page);
+  const watch = watchAssets(page, new URL(url).origin);
   yield* attempt(`cannot load ${url}`, () => page.goto(url, { waitUntil: "networkidle" }));
   return run("assets", visit, [`${watch.requested()} request(s)`], watch.found());
 }, Effect.scoped);

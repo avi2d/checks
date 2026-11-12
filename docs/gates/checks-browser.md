@@ -23,7 +23,7 @@ So a control the page renders once for each breakpoint is judged where it shows.
 | `nesting` | an element the HTML content model does not permit where it sits in the rendered page, such as a `<button>` inside an `<a>` | html-validate's `element-permitted-content` rule |
 | `html` | an error from html-validate's `html-validate:standard` or `html-validate:a11y` preset, or from `input-missing-label`, in the page the server sends | html-validate on the page's HTML as the server sends it |
 | `links` | a link on the rendered page to a page of the same site that answers with a status of 400 or more, and a link whose fragment names no element on the page it points at | the `href` of each `<a>` and `<area>`, fetched from the local server, and the `id` and `<a name>` of the page each fragment points at, loaded in Chrome |
-| `assets` | a request that fails, and a response with a status of 400 or more, while the page loads to network idle | Playwright's request and response events |
+| `assets` | a request that fails, a response with a status of 400 or more, a request to another origin, an error the page logs to the console and an error the page throws and never catches, while the page loads to network idle | Playwright's request, response, console and page error events |
 
 `html` runs once for each route, at the first viewport in the first state, because the page the server sends is the same at each.
 `links` runs once at the same visit, since it reads every link in the page, whether the viewport shows it or not.
@@ -36,6 +36,10 @@ A fragment of `top`, in any case, points at the start of the page, as the HTML s
 So it needs no element of that name.
 A fragment is decoded before it is compared, so `#%D1%83%D1%81%D0%BB%D1%83%D0%B3%D0%B8` matches `id="услуги"`.
 It reads no `robots` meta, so a page marked `noindex` or `nofollow` is judged like any other.
+
+`assets` takes the page's own origin as the local server's, so a script, font or image from any other host, port or scheme fails it.
+A `data:` address has no origin and is left alone.
+Chrome logs a resource that fails to load as a console error, so such a resource is named twice, once by its request and once by the log.
 
 The `motion` check judges what moves on the rendered page, so a `prefers-reduced-motion` query in the source counts for nothing unless the motion stops.
 It runs only in a state whose `reducedMotion` is `reduce`.
