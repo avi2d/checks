@@ -20,7 +20,7 @@ A consuming repository puts each setting in the file its tool reads, and no mani
 | `stylelint.config.ts` | The Baseline target, the token files, the CSS families the repository turns on, and any stylelint rule the repository sets over the kit's families | `checks-frontend-syntax` |
 | `dependency-cruiser.config.ts` | Entry points nothing imports, paths that may import dev dependencies, and import boundaries, when the kit's defaults do not fit | `checks-graphwalk` |
 | `tsconfig.json` | Compiler options, and the Effect language service plugin whose `overrides` and kit severities `checks-effect-scope` writes, keeping every other key | TypeScript and Effect language service |
-| `package.json` | `scripts` with the `checks-vendor` arguments in `prepare`, `author` and `contributors`, and `checks.plainSteps` | Bun, `checks-commit-identity`, `checks-vendor` and `checks-plain-steps` |
+| `package.json` | `scripts` with the `checks-vendor` arguments in `prepare`, `author` and `contributors` | Bun, `checks-commit-identity` and `checks-vendor` |
 | `bunfig.toml` | Test discovery and quarantine exclusion | Bun and `checks-test-layout` |
 | `stryker.conf.mjs` | Mutation settings | Stryker |
 | Each page under `docs/` | Diátaxis mode in `kind` front matter, and `audience: consumers` on a page that speaks to a consuming repository | `checks-docs` |

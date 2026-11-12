@@ -312,10 +312,9 @@ test("only top-level workflows and action files are judged, outside installed tr
   }
 });
 
-test("the report says how to turn the gate on when it is off, and names every step it refuses when on", () => {
-  expect(report({ enabled: false, violations: [] })).toBe("plain-steps: off; set checks.plainSteps to true in package.json to turn it on");
-  expect(report({ enabled: true, files: 2, violations: [] })).toBe("plain-steps: every run step in 2 workflow or action file(s) is one plain command");
-  expect(report({ enabled: true, files: 1, violations: [{ location: "action.yml line 4 step 1", faults: ["a pipe", "a redirect"] }] })).toBe(
+test("the report names every refused step rather than hiding faults", () => {
+  expect(report({ files: 2, violations: [] })).toBe("plain-steps: every run step in 2 workflow or action file(s) is one plain command");
+  expect(report({ files: 1, violations: [{ location: "action.yml line 4 step 1", faults: ["a pipe", "a redirect"] }] })).toBe(
     `plain-steps: 1 run step(s) are not one plain command; ${HINT}\n  action.yml line 4 step 1: a pipe, a redirect`,
   );
 });

@@ -9,7 +9,7 @@ const workflow = (steps: readonly string[]): string =>
   ["name: smoke", "on: pull_request", "jobs:", "  smoke:", "    runs-on: ubuntu-latest", "    timeout-minutes: 10", "    steps:", ...steps, ""].join("\n");
 
 test(
-  "passes while off, then refuses the redirect and the block scalar once turned on, and passes once each step is one command",
+  "refuses a redirect and block scalar without a manifest switch, then passes plain commands",
   async () => {
     const { write, commit, script } = await open({
       "package.json": JSON.stringify({ name: "plain-steps-fixture", type: "module" }),
@@ -24,11 +24,6 @@ test(
     });
     await commit("feat: base");
 
-    const off = await script("delivery/plain-steps.ts");
-    expect(off.exitCode).toBe(0);
-    expect(off.text).toContain("plain-steps: off; set checks.plainSteps to true in package.json to turn it on\n");
-
-    await write({ "package.json": JSON.stringify({ name: "plain-steps-fixture", type: "module", checks: { plainSteps: true } }) });
     const red = await script("delivery/plain-steps.ts");
     expect(red.exitCode).toBe(1);
     expect(red.text).toContain(
@@ -58,7 +53,7 @@ test(
   "passes a reusable workflow and a composite action that run the caller's command, and refuses the same run in an ordinary workflow",
   async () => {
     const { write, commit, script } = await open({
-      "package.json": JSON.stringify({ name: "plain-steps-fixture", type: "module", checks: { plainSteps: true } }),
+      "package.json": JSON.stringify({ name: "plain-steps-fixture", type: "module" }),
       ".github/workflows/release.yml": ["name: release", "on:", "  workflow_call:", "    inputs:", "      publish-command:", "        type: string", "jobs:", "  publish:", "    runs-on: ubuntu-latest", "    steps:", "      - run: ${{ inputs.publish-command }}", ""].join("\n"),
       "actions/slot/action.yml": [
         "name: slot",

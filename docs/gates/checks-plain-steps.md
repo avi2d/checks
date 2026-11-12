@@ -70,23 +70,9 @@ These steps pass:
 
 Each refusal names the file, the line of the `run` key when the check can locate it, the job and the step by its `name`, its `id` or its position, and each construct it found.
 
-### Turning it on
-
-The check is off until the repository sets `checks.plainSteps` to `true` in `package.json`:
-
-```json
-{
-  "checks": { "plainSteps": true }
-}
-```
-
-A repository turns it on in the pull request that cleans its workflows, so a kit release breaks no repository.
-While it is off, it passes and says how to turn it on.
-
 ## What it reads
 
-It reads `checks.plainSteps` from `package.json`.
-When that is `true`, it reads each `*.yml` or `*.yaml` file directly under `.github/workflows/` and every `action.yml` or `action.yaml` in the working tree.
+It reads each `*.yml` or `*.yaml` file directly under `.github/workflows/` and every `action.yml` or `action.yaml` in the working tree.
 It lists them from the tracked and untracked files that `git ls-files --exclude-standard` reports, and passes over `node_modules/`, `repos/` and `tests/fixtures/`.
 It parses each file with `Bun.YAML` without executing it, and reads the file's text for the line and layout of each `run` key.
 It judges the `steps` of every job in a workflow and the `runs.steps` of a composite action.
@@ -103,9 +89,9 @@ It checks the directory it runs in, or the directory it is given.
 
 | Code | When |
 | --- | --- |
-| 0 | the check is off, or every `run` step is one plain command |
+| 0 | every `run` step is one plain command |
 | 1 | a `run` step holds more than one plain command |
-| 2 | `package.json` or a workflow or action file cannot be read or parsed, or git does not list the working tree |
+| 2 | a workflow or action file cannot be read or parsed, or git does not list the working tree |
 
 ## Sample output
 
@@ -117,7 +103,8 @@ plain-steps: 2 run step(s) are not one plain command; run one command, or call a
 
 ## When it runs
 
-`checks-lint` runs it in the full run in every repository, and it judges only a repository that turns it on.
+The gate is on in every repository, with no setting to turn it off.
+`checks-lint` runs it in the full run.
 
 ## Related topics
 
