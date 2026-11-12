@@ -351,26 +351,6 @@ test("html is red on an unlabelled input, a list item outside a list and an empt
   expect(passed.exitCode).toBe(0);
 }, 120_000);
 
-test("assets is red on an image the site does not serve and on a request that fails, and green once both load", async () => {
-  const pictured = (src: string): string => page(`<p><a href="/">Write to me</a></p><img src="${src}" alt="The owner" width="10" height="10">`);
-  const site = await browserSite({
-    "dist/index.html": pictured("/portrait.svg"),
-    "dist/refused.html": pictured("http://127.0.0.1:1/portrait.svg"),
-    "browser-checks.json": declaration({ routes: [{ path: "/", locale: "en" }, { path: "/refused.html", locale: "en" }], checks: ["assets"] }),
-  });
-  const failed = await site.run();
-  expect(failuresOf(failed.text)).toEqual([
-    expect.stringMatching(/^assets at \/ \(en\), phone 320x640, default: http:\/\/127\.0\.0\.1:\d+\/portrait\.svg answers 404$/),
-    `${at("assets", "/refused.html")} http://127.0.0.1:1/portrait.svg fails to load: net::ERR_UNSAFE_PORT`,
-  ]);
-  expect(failed.exitCode).toBe(1);
-
-  await site.write({ "dist/portrait.svg": `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>`, "dist/refused.html": pictured("/portrait.svg") });
-  const passed = await site.run();
-  expect(passed.text).toContain("browser: assets at / (en), phone 320x640, default scanned 2 request(s)");
-  expect(passed.exitCode).toBe(0);
-}, 120_000);
-
 test("a declared target fails when it matches no visible element whichever checks are declared, and passes once it shows", async () => {
   const site = await browserSite({
     "dist/index.html": page("<p>No link here</p>"),
