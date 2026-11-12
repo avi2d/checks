@@ -10,7 +10,7 @@ export const judgeHtml = Effect.fn("judgeHtml")(function* (url: string) {
   const { HtmlValidate } = yield* attempt("cannot load html-validate, which a product that runs the html check installs beside the kit", () =>
     import("html-validate"),
   );
-  const html = yield* attempt(`cannot fetch ${url}`, async () => (await fetch(url)).text());
+  const html = yield* attempt(`cannot fetch ${url}`, () => fetch(url).then((response) => response.text()));
   const validator = new HtmlValidate({
     extends: ["html-validate:standard", "html-validate:a11y"],
     rules: { "input-missing-label": "error" },

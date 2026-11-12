@@ -112,7 +112,7 @@ const BUILT_IN: Readonly<Record<CheckName, (visiting: Visiting) => Effect.Effect
 function applies(check: CheckName, visit: Visit, declaration: Declaration): boolean {
   if (check === "motion") return visit.state.reducedMotion === "reduce";
   if (check === "html")
-    return visit.viewport.name === declaration.viewports[0]?.name && visit.state.name === declaration.states[0]?.name;
+    return visit.viewport.name === declaration.viewports[0].name && visit.state.name === declaration.states[0].name;
   return true;
 }
 
