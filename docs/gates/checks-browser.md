@@ -8,7 +8,7 @@ audience: consumers
 
 ## What it checks
 
-It visits each declared route at each declared viewport in each declared state, and runs each declared check on its own fresh page.
+It visits each declared route at each declared viewport in each declared state, and runs each declared check that opens a page on its own fresh page.
 A visit is one route, one viewport and one state.
 Each check judges only the elements of a target that are visible at the visit.
 So a control the page renders once for each breakpoint is judged where it shows.
@@ -44,12 +44,12 @@ It does not yet check the rendered page against a product's declared design toke
 Text over a background image or a gradient is such a case, and the report lists each one under its own heading.
 `nested-interactive` catches a control inside an element whose role makes its children presentational, such as a link inside a `<button>` or inside a `role="button"`.
 `nesting` catches a control inside a link, which axe passes.
-`html` reads the page as the server sends it, so of its rules only the content model, through `nesting`, judges markup a script builds.
+`html` reads the page as the server sends it, so it never sees markup a script builds, and of its rules only the content model, which `nesting` runs on the rendered page, reaches that markup.
 None of these sees a parent click handler that fires with a child control's click, which a product hook tests.
 
 ### The inventory
 
-The runner prints one line for each check at each visit.
+The runner prints one line for each check at each visit, narrowed by the `html` and `motion` exceptions above.
 The line names the route, its locale, the viewport, the state and what the check scanned.
 At every visit, whichever checks are declared, a `targets` run counts the visible elements each target that applies to the route matches.
 For `targets`, `layout`, `keyboard` and a hook, what it scanned is each target by name with the count of its elements.
