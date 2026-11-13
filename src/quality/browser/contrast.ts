@@ -83,7 +83,7 @@ const TEXT_BOXES = `(targets) => {
           const top = Math.floor(Math.max(0, rect.top));
           const right = Math.ceil(Math.min(innerWidth, rect.right));
           const bottom = Math.ceil(Math.min(innerHeight, rect.bottom));
-          if (bottom - top < 1) continue;
+          if (right - left <= 0 || bottom - top < 1) continue;
           box += 1;
           boxes.push({
             target: target.name,
@@ -111,8 +111,12 @@ const PAINT = `({ selectors, color }) => {
     }
   }
   const shadows = paintedAll.map((painted) => getComputedStyle(painted).textShadow);
+  const colors = paintedAll.map((painted) => getComputedStyle(painted).backgroundColor);
+  const images = paintedAll.map((painted) => getComputedStyle(painted).backgroundImage);
   paintedAll.forEach((painted, at) => {
     if (shadows[at] !== "none") painted.style.setProperty("text-shadow", shadows[at], "important");
+    painted.style.setProperty("background-color", colors[at], "important");
+    if (images[at] !== "none") painted.style.setProperty("background-image", images[at], "important");
   });
   for (const painted of paintedAll) {
     painted.style.setProperty("transition", "none", "important");

@@ -92,3 +92,24 @@ test("contrast measures a narrow run inside a passing heading, rather than skipp
   ]);
   expect(failed.exitCode).toBe(1);
 }, 120_000);
+
+test("contrast ignores a text run placed wholly beyond the viewport, rather than failing it as drawing no glyph", async () => {
+  const site = await browserSite({
+    "dist/index.html": page('<h1 style="font:400 16px/1.4 sans-serif;color:#000">Contracts <span style="position:absolute;left:-9999px">Elsewhere</span></h1>'),
+    "browser-checks.json": declaration({ targets: [HEADLINE], checks: ["contrast"] }),
+  });
+  const passed = await site.run();
+  expect(failuresOf(passed.text)).toEqual([]);
+  expect(passed.exitCode).toBe(0);
+}, 120_000);
+
+test("contrast keeps a currentColor backdrop behind the letters when the text is repainted", async () => {
+  const site = await browserSite({
+    "dist/index.html": page('<h1 style="font:400 16px/1.4 sans-serif;color:#000;background:linear-gradient(currentColor,currentColor)"><span style="color:#fff">Contracts</span></h1>'),
+    "browser-checks.json": declaration({ targets: [HEADLINE], checks: ["contrast"] }),
+  });
+  const passed = await site.run();
+  expect(failuresOf(passed.text)).toEqual([]);
+  expect(lowest(passed.text, "/")).toBeGreaterThan(15);
+  expect(passed.exitCode).toBe(0);
+}, 120_000);
