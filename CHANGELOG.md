@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.96.1
+
+Released 2026-11-13.
+
+### Fixes
+
+- **browser:** judge keyboard reach and focus the way a visitor meets the page [#127](https://github.com/avi2d/checks/pull/127)
+
 ## 0.96.0
 
 Released 2026-11-13.
