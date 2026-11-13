@@ -19,7 +19,7 @@ So a control the page renders once for each breakpoint is judged where it shows.
 | --- | --- | --- |
 | `layout` | a page wider than the viewport, and a target that overflows the viewport, is reachable only by scrolling sideways, is cut off by a container that cannot scroll, clips its own text or hides its text, overlaps another target, or is covered by any element | the DevTools protocol's boxes and hit test |
 | `keyboard` | a `focusable` target that Tab does not reach once for each element it matches that is visible before the first Tab press, and a Tab stop on a target that shows no visible focus | Playwright's keyboard, and viewport screenshots before and after blur compared within the crop of the focused element and the ancestors changed by focus, with what their pseudo-elements paint |
-| `motion` | an animation or a transition longer than one frame that starts during load, on hover, on leaving a hovered control or on focus, and smooth scrolling, for a visitor who turns motion off | the page's own `document.getAnimations()`, in each state whose `reducedMotion` is `reduce` |
+| `motion` | an animation or a transition longer than one frame that starts during load, on hover, on leaving a hovered control or on focus, and smooth scrolling, for a visitor who turns motion off | the page's own `document.getAnimations()`, in each state that runs it whose `reducedMotion` is `reduce` |
 | `axe` | each violation of axe's WCAG 2.2 AA rules, which include `color-contrast`, `nested-interactive`, `meta-viewport` and `target-size` | axe-core through `@axe-core/playwright` |
 | `nesting` | an element the HTML content model does not permit where it sits in the rendered page, such as a `<button>` inside an `<a>` | html-validate's `element-permitted-content` rule |
 | `html` | an error from html-validate's `html-validate:standard` or `html-validate:a11y` preset, or from `input-missing-label`, in the page the server sends | html-validate on the page's HTML as the server sends it |
@@ -46,7 +46,7 @@ A `data:` address has no origin and is left alone.
 Chrome logs a failed resource as a console error, so the request and the log name it twice.
 
 The `motion` check judges what moves on the rendered page, so a `prefers-reduced-motion` query in the source counts for nothing unless the motion stops.
-It runs only in a state whose `reducedMotion` is `reduce`.
+It runs only in a state that runs it whose `reducedMotion` is `reduce`.
 An animation that ends within one frame never moves, so the common reset that shortens every duration to near zero for reduced motion passes.
 Beyond that, durations, easing and how motion feels are judgement, so no check reads them.
 A control the pointer cannot reach, such as a skip link parked off the screen, is judged on focus alone, and the inventory counts it.
@@ -238,6 +238,7 @@ A site whose pages move on load or on scroll runs most checks with motion off, a
 ```
 
 The `targets` run still counts each target at every visit, in each state.
+A product hook runs at every visit in each state that names no `checks` of its own.
 
 ### Screen sizes
 
@@ -348,7 +349,7 @@ It reads the declaration in the directory it runs in, or in the directory it is 
 | --- | --- |
 | 0 | every check passes at every visit, and every declared route and target is there |
 | 1 | a check fails at a visit, a declared route is not served, a declared target matches no visible element, or a run scans no target |
-| 2 | `browser-checks.json` is missing, does not decode or contradicts itself, the site directory or the hooks module is missing, the site holds no `.html` page, a peer cannot load, or Chrome cannot start |
+| 2 | `browser-checks.json` is missing, does not decode or contradicts itself, the site directory or the hooks module is missing, the site holds no `.html` page while a route lists `every-page`, a peer cannot load, or Chrome cannot start |
 
 ## Sample output
 

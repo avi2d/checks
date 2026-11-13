@@ -142,7 +142,7 @@ function repeated(names: readonly string[]): readonly string[] {
   return [...new Set(names.filter((name, index) => names.indexOf(name) !== index))];
 }
 
-export function inconsistencies(declaration: Declaration): readonly string[] {
+export function inconsistencies(declaration: Declaration, skipTargetRoutes = false): readonly string[] {
   const paths = declaration.routes.map(({ path }) => path);
   const found = [
     ...repeated(paths).map((path) => `route ${path} is declared twice`),
@@ -150,9 +150,8 @@ export function inconsistencies(declaration: Declaration): readonly string[] {
     ...repeated(declaration.states.map(({ name }) => name)).map((name) => `state ${name} is declared twice`),
     ...repeated(declaration.targets.map(({ name }) => name)).map((name) => `target ${name} is declared twice`),
     ...repeated(declaration.checks).map((check) => `check ${check} is declared twice`),
-    ...declaration.targets.flatMap(({ name, routes = [] }) =>
-      routes.filter((path) => !paths.includes(path)).map((path) => `target ${name} names route ${path}, which no route declares`),
-    ),
+    ...(skipTargetRoutes ? [] : declaration.targets.flatMap(({ name, routes = [] }) =>
+      routes.filter((path) => !paths.includes(path)).map((path) => `target ${name} names route ${path}, which no route declares`))),
     ...stateInconsistencies(declaration),
   ];
   if (declaration.checks.includes("motion") && !declaration.states.some((state) => state.reducedMotion === "reduce" && runsIn(state, "motion"))) {
@@ -183,22 +182,15 @@ export const readDeclaration = Effect.fn("readDeclaration")(function* (root: str
     Effect.mapError(({ message }) => new Usage({ message: `${DECLARATION} does not decode: ${message}` })),
   );
   const hasPreset = listed.routes.some((entry) => "preset" in entry);
-  if (!hasPreset) {
-    const declaration = expanded(listed, []);
-    const found = inconsistencies(declaration);
-    if (found.length > 0) return yield* new Usage({ message: `${DECLARATION}: ${found.join("; ")}` });
-    const site = yield* readSite(root, listed.site);
-    return { declaration, site } satisfies { readonly declaration: Declaration; readonly site: Site };
-  }
-  const early = inconsistencies(expanded(listed, [])).filter((message) => !message.includes("which no route declares"));
+  const early = inconsistencies(expanded(listed, []), hasPreset);
   if (early.length > 0) return yield* new Usage({ message: `${DECLARATION}: ${early.join("; ")}` });
   const site = yield* readSite(root, listed.site);
   const pages = sitePages(site);
-  if (pages.length === 0) {
+  if (hasPreset && pages.length === 0) {
     return yield* new Usage({ message: `the declared site ${listed.site} holds no .html page, so build the site before the browser checks run` });
   }
-  const declaration = expanded(listed, pages);
-  const found = inconsistencies(declaration);
+  const declaration = hasPreset ? expanded(listed, pages) : expanded(listed, []);
+  const found = hasPreset ? inconsistencies(declaration) : early;
   if (found.length > 0) return yield* new Usage({ message: `${DECLARATION}: ${found.join("; ")}` });
   return { declaration, site } satisfies { readonly declaration: Declaration; readonly site: Site };
 });

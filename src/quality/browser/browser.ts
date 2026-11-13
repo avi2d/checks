@@ -6,7 +6,7 @@ import { watchAssets } from "./assets.ts";
 import { judgeAxe } from "./axe.ts";
 import { judgeContrast } from "./contrast.ts";
 import { readDeclaration, runsIn, targetsOn, visitsOf, type CheckName, type Declaration, type Visit } from "./declaration.ts";
-import { loadHooks, runHook, type ProductCheck } from "./hooks.ts";
+import { hookApplies, loadHooks, runHook, type ProductCheck } from "./hooks.ts";
 import { judgeHtml } from "./html.ts";
 import { judgeKeyboard } from "./keyboard.ts";
 import { judgeLayout } from "./layout.ts";
@@ -167,7 +167,7 @@ const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: D
     const visiting = { browser, declaration, visit, url: new URL(visit.route.path, origin).href };
     runs.push(yield* targetsRun(visiting));
     for (const check of declaration.checks.filter((one) => applies(one, visit, declaration))) runs.push(yield* BUILT_IN[check](visiting));
-    for (const hook of hooks.filter(({ routes }) => routes === undefined || routes.includes(visit.route.path))) runs.push(yield* hookRun(hook, visiting));
+    for (const hook of hooks.filter((hook) => hookApplies(hook, visit))) runs.push(yield* hookRun(hook, visiting));
   }
   return { runs, missingRoutes };
 }, Effect.scoped);

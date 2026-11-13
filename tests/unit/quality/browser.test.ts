@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { describeVisit, expanded as expandedOn, inconsistencies, runsIn, targetsOn, visitsOf, type Declaration, type Listed, type State } from "../../../src/quality/browser/declaration.ts";
 import { counted, passes, report, type Outcome } from "../../../src/quality/browser/report.ts";
+import { hookApplies } from "../../../src/quality/browser/hooks.ts";
 
 const DECLARATION: Declaration = {
   site: "dist",
@@ -220,4 +221,20 @@ test("a failure names its check and visit, unverified contrast is listed without
       "  the declaration leaves no check to run",
     ].join("\n"),
   );
+});
+
+test("a product hook runs only in states that name no checks, never in an axe-only default motion state", () => {
+  const gated: Declaration = {
+    ...DECLARATION,
+    routes: [{ path: "/", locale: "en" }],
+    viewports: [{ name: "phone", width: 320, height: 640 }],
+    states: [{ name: "reduced motion", reducedMotion: "reduce" }, { name: "default motion", checks: ["axe"] }],
+    checks: ["axe"],
+  };
+  const visits = visitsOf(gated);
+  expect(visits.map((visit) => describeVisit(visit))).toEqual([
+    "/ (en), phone 320x640, reduced motion",
+    "/ (en), phone 320x640, default motion",
+  ]);
+  expect(visits.map((visit) => hookApplies({}, visit))).toEqual([true, false]);
 });
