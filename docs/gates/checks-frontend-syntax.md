@@ -87,7 +87,7 @@ Any other keyword passes only when it adds no value of its own, and one that pic
 - `normal` for `line-height` is refused, since the font picks that leading and it differs from one font to the next.
 - `normal`, `bold`, `bolder` and `lighter` for `font-weight` are refused, since each names a point on the weight scale, as `font-size` refuses `medium`.
 
-A repository whose component files hold such literals fails these rules on the release that adds them.
+A component file that holds such a literal fails these rules.
 It moves each value into a token in a file `tokens` names and reads it through `var(--…)`, or counts the literals with `--suppress` until it does.
 A `font-weight` inside `@font-face` stays as written.
 
