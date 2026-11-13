@@ -121,7 +121,7 @@ Each refusal names the workflow file, the line of its `schedule` trigger and wha
 ### Schedules
 
 It refuses every other workflow that triggers on `schedule`, since a test, flake, browser or whole-tree run starts only by hand, with `gh workflow run`.
-The `mutation` caller also starts on pull requests and by hand.
+The `mutation` caller starts by hand.
 The one schedule it keeps is a weekly advisory scan in a public repository.
 A workflow scans advisories when a run step calls `checks-advisories`, the same ways a release call counts, or a job calls the shared `avi2d/workflows/.github/workflows/advisories.yml` at any ref.
 Every other run step is then a `bun install`, and every other job that calls a workflow calls that one.

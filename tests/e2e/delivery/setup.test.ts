@@ -437,7 +437,6 @@ expect(privWiring.exitCode).toBe(0);
 
 const CallerSchema = Schema.Struct({
   on: Schema.Struct({
-    pull_request: Schema.Struct({ types: Schema.Array(Schema.String) }),
     workflow_dispatch: Schema.Null,
   }),
   jobs: Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.Unknown)),
@@ -450,8 +449,7 @@ const dir = await scratch("mutation-caller");
 expect((await $`bun ${join(CHECKOUT, "src", "delivery", "setup.ts")}`.cwd(dir).nothrow().quiet()).exitCode).toBe(0);
 const text = await readFile(join(dir, ".github/workflows/mutation.yml"), "utf8");
 const caller = Schema.decodeUnknownSync(CallerSchema)(Bun.YAML.parse(text));
-expect(caller.on.pull_request.types).toEqual(["opened", "synchronize"]);
-expect(Object.keys(caller.on)).toEqual(["pull_request", "workflow_dispatch"]);
+expect(Object.keys(caller.on)).toEqual(["workflow_dispatch"]);
 expect(caller.jobs).toEqual({
   mutation: {
     uses: "avi2d/workflows/.github/workflows/mutation.yml@v2",
