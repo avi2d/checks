@@ -61,14 +61,14 @@ It does not yet check the rendered page against a product's declared design toke
 Text over a background image or a gradient is such a case, and the report lists each one under its own heading.
 `contrast` measures that text for the targets that set `contrast`.
 
-`contrast` waits for the page's images and for each entrance animation, up to ten seconds, then pauses every animation where it stands.
+`contrast` waits for the page's images in view and for each entrance animation, up to ten seconds, then pauses every animation where it stands.
 For each line of a target's text it compares the letters' pixels, read where the marker colour lands, with the backdrop's pixels in a ring two pixels wide around them.
 The letters' lightest or darkest pixels, whichever stand furthest from the backdrop, give their colour.
 The ratio it reports is the 5th percentile of the ring, so a bright stretch of a photo behind one letter is not averaged away.
 A shadow or a halo stays painted when the text is cleared, so it counts as backdrop.
 It needs 3:1 for text from 24px, as WCAG 2.2 counts 18pt large text, and 4.5:1 below that, without telling bold 14pt text from regular.
 It measures only what the viewport shows at the top of the page, so text below the fold reads as no text on screen.
-A line narrower than an em of its own text is skipped, since it may show only the space beside a glyph.
+Text that is only whitespace is left out, since it paints no letter to measure.
 Text a canvas or an image draws is not text it can find.
 Letters filled by `-webkit-text-fill-color` ignore the marker colour, so they read as drawing nothing.
 

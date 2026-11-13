@@ -40,26 +40,26 @@ export type Reading = {
 const ENTRANCE_LIMIT_MS = 10_000;
 
 // An entrance plays out before the text is read, since a reading mid-fade measures the fade, and a loop or a scroll-driven animation never ends, so it is paused where it stands.
-const SETTLED = `Promise.all(
-  Array.from(document.images).filter((image) => image.getClientRects().length > 0).map((image) => image.decode().catch(() => undefined)),
-).then(() => Promise.race([
-  Promise.all(document.getAnimations().filter((animation) => animation.playState !== "paused" && animation.timeline === document.timeline && animation.effect?.getTiming().iterations !== Infinity).map((animation) => animation.finished.catch(() => undefined))),
+const SETTLED = `Promise.race([
+  Promise.all(
+    Array.from(document.images).filter((image) => {
+      for (const rect of image.getClientRects()) {
+        if (rect.bottom > 0 && rect.top < innerHeight && rect.right > 0 && rect.left < innerWidth) return true;
+      }
+      return false;
+    }).map((image) => image.decode().catch(() => undefined)),
+  ).then(() => Promise.all(document.getAnimations().filter((animation) => animation.playState !== "paused" && animation.timeline === document.timeline && animation.effect?.getTiming().iterations !== Infinity).map((animation) => animation.finished.catch(() => undefined)))),
   new Promise((resolve) => setTimeout(resolve, ${ENTRANCE_LIMIT_MS})),
-])).then(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)))))`;
+]).then(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)))))`;
 
-// A box narrower than an em of its own text may hold only the space beside a glyph, so it is not measured.
 const TEXT_BOXES = `(targets) => {
   for (const animation of document.getAnimations()) animation.pause();
   const pixels = window.devicePixelRatio || 1;
   const shown = (el) => {
-    if (typeof el.checkVisibility === "function") {
-      try {
-        return el.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true });
-      } catch {}
-    }
+    const visibility = getComputedStyle(el).visibility;
+    if (visibility === "hidden" || visibility === "collapse") return false;
     for (let at = el; at; at = at.parentElement) {
-      const style = getComputedStyle(at);
-      if (style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse") return false;
+      if (getComputedStyle(at).display === "none") return false;
     }
     return true;
   };
@@ -72,6 +72,7 @@ const TEXT_BOXES = `(targets) => {
       while (walker.nextNode()) nodes.push(walker.currentNode);
       let box = 0;
       for (const node of nodes) {
+        if ((node.textContent ?? "").trim() === "") continue;
         const owner = node.parentElement;
         if (owner === null || !shown(owner)) continue;
         const sizePx = parseFloat(getComputedStyle(owner).fontSize) || parseFloat(getComputedStyle(element).fontSize);
@@ -82,7 +83,7 @@ const TEXT_BOXES = `(targets) => {
           const top = Math.floor(Math.max(0, rect.top));
           const right = Math.ceil(Math.min(innerWidth, rect.right));
           const bottom = Math.ceil(Math.min(innerHeight, rect.bottom));
-          if (right - left < sizePx || bottom - top < 1) continue;
+          if (bottom - top < 1) continue;
           box += 1;
           boxes.push({
             target: target.name,
@@ -103,15 +104,19 @@ const TEXT_BOXES = `(targets) => {
 
 // A transition on color would catch the paint halfway, and shadows stay painted, so a halo behind the letters counts as their backdrop.
 const PAINT = `({ selectors, color }) => {
+  const paintedAll = [];
   for (const selector of selectors) {
     for (const element of document.querySelectorAll(selector)) {
-      for (const painted of [element, ...element.querySelectorAll("*")]) {
-        const shadow = getComputedStyle(painted).textShadow;
-        if (shadow !== "none") painted.style.setProperty("text-shadow", shadow, "important");
-        painted.style.setProperty("transition", "none", "important");
-        painted.style.setProperty("color", color, "important");
-      }
+      paintedAll.push(element, ...element.querySelectorAll("*"));
     }
+  }
+  const shadows = paintedAll.map((painted) => getComputedStyle(painted).textShadow);
+  paintedAll.forEach((painted, at) => {
+    if (shadows[at] !== "none") painted.style.setProperty("text-shadow", shadows[at], "important");
+  });
+  for (const painted of paintedAll) {
+    painted.style.setProperty("transition", "none", "important");
+    painted.style.setProperty("color", color, "important");
   }
 }`;
 

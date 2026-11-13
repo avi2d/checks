@@ -80,3 +80,15 @@ test("contrast reads a headline after its entrance plays out, not at the transpa
   expect(lowest(passed.text, "/")).toBeGreaterThan(15);
   expect(passed.exitCode).toBe(0);
 }, 120_000);
+
+test("contrast measures a narrow run inside a passing heading, rather than skipping it", async () => {
+  const site = await browserSite({
+    "dist/index.html": page('<h1 style="font:400 16px/1.4 sans-serif;color:#000">Contracts <span style="color:#fff">I</span></h1>'),
+    "browser-checks.json": declaration({ targets: [HEADLINE], checks: ["contrast"] }),
+  });
+  const failed = await site.run();
+  expect(failuresOf(failed.text)).toEqual([
+    `${at("contrast", "/")} headline "Contracts I" box 2 reads at 1.00:1, needs 4.5:1`,
+  ]);
+  expect(failed.exitCode).toBe(1);
+}, 120_000);
