@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.97.0
+
+Released 2026-11-13.
+
+### Features
+
+- **browser:** visit every built page and run chosen checks per state [#132](https://github.com/avi2d/checks/pull/132)
+
 ## 0.96.3
 
 Released 2026-11-13.
