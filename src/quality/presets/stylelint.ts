@@ -150,7 +150,7 @@ function namedSize(position: string): string | undefined {
 }
 
 // A var() before the size var can be a weight, which leaves a family var() free to hold the size.
-function sizeCarriers(property: string, value: string): TokenCarrier[] {
+function sizeCarriers({ prop: property, value }: TokenDecl): TokenCarrier[] {
   const name = property.toLowerCase();
   if (name === "font-size") return oneVarCarriers(value);
   const font = name === "font" ? FONT_VALUE.exec(value)?.groups : undefined;
@@ -199,10 +199,16 @@ function fileDeclarations(document: DeclarationDocument): Map<string, string[]> 
 
 type Literal = { readonly word: string; readonly message: string };
 
+type TokenDecl = {
+  readonly prop: string;
+  readonly value: string;
+  readonly parent?: { readonly type?: string; readonly name?: string } | null;
+};
+
 type TokenRule = {
   readonly ruleName: string;
-  readonly literals: (property: string, value: string) => readonly Literal[];
-  readonly carriers: (property: string, value: string) => readonly TokenCarrier[];
+  readonly literals: (node: TokenDecl) => readonly Literal[];
+  readonly carriers: (node: TokenDecl) => readonly TokenCarrier[];
 };
 
 // postcss-html hands the rule one root per style block or attribute, so the file's declarations sit on the result's document.
@@ -211,8 +217,8 @@ function tokenPlugin({ ruleName, literals, carriers }: TokenRule) {
     const { utils } = (await import("stylelint")).default;
     const declared = fileDeclarations(result.root);
     root.walkDecls((node) => {
-      for (const { word, message } of literals(node.prop, node.value)) utils.report({ ruleName, result, node, word, message });
-      for (const carrier of carriers(node.prop, node.value)) {
+      for (const { word, message } of literals(node)) utils.report({ ruleName, result, node, word, message });
+      for (const carrier of carriers(node)) {
         if (fromTokens(carrier, declared, new Set([carrier.token]))) continue;
         utils.report({ ruleName, result, node, word: carrier.token, message: `Expected "${carrier.token}" from the token files rather than set in this file` });
       }
@@ -221,7 +227,7 @@ function tokenPlugin({ ruleName, literals, carriers }: TokenRule) {
   return { ruleName, rule: Object.assign(rule, { ruleName, messages: {} }) } satisfies Plugin;
 }
 
-function fontSizeLiterals(property: string, value: string): Literal[] {
+function fontSizeLiterals({ prop: property, value }: TokenDecl): Literal[] {
   const literal = literalSize(property, value);
   return literal === undefined ? [] : [{ word: literal, message: `Expected the font size from the token files rather than the literal "${literal}"` }];
 }
@@ -249,15 +255,34 @@ function typeRuleName(property: TypeProperty): string {
 }
 
 function typePropertyCarriers(property: TypeProperty): TokenRule["carriers"] {
-  return (name, value) => [
+  return ({ prop: name, value }) => [
     ...(name.toLowerCase() === property ? oneVarCarriers(value) : []),
     ...(property === "line-height" ? shorthandLineHeight(name, value) : []),
   ];
 }
 
+function isFontFaceDescriptor(node: TokenDecl): boolean {
+  return node.parent?.type === "atrule" && node.parent?.name?.toLowerCase() === "font-face";
+}
+
+function fontWeightLiterals(node: TokenDecl): Literal[] {
+  if (node.prop.toLowerCase() !== "font-weight" || isFontFaceDescriptor(node)) return [];
+  if (ONE_VAR.test(node.value) || /^inherit$/i.test(node.value)) return [];
+  return [{ word: node.value, message: `Expected the font weight from the token files rather than the literal "${node.value}"` }];
+}
+
+function fontWeightCarriers(node: TokenDecl): TokenCarrier[] {
+  if (node.prop.toLowerCase() !== "font-weight" || isFontFaceDescriptor(node)) return [];
+  return oneVarCarriers(node.value);
+}
+
 const TOKEN_PLUGINS = [
   tokenPlugin({ ruleName: FONT_SIZE_RULE, literals: fontSizeLiterals, carriers: sizeCarriers }),
-  ...TYPE_PROPERTIES.map(({ property }) => tokenPlugin({ ruleName: typeRuleName(property), literals: () => [], carriers: typePropertyCarriers(property) })),
+  ...TYPE_PROPERTIES.map(({ property }) =>
+    property === "font-weight"
+      ? tokenPlugin({ ruleName: typeRuleName(property), literals: fontWeightLiterals, carriers: fontWeightCarriers })
+      : tokenPlugin({ ruleName: typeRuleName(property), literals: () => [], carriers: typePropertyCarriers(property) }),
+  ),
 ];
 
 const DESIGN_TOKENS = {
@@ -267,7 +292,12 @@ const DESIGN_TOKENS = {
   "declaration-property-value-allowed-list": {
     "/^font-size$/i": [String(ONE_VAR), "/^inherit$/i"],
     "/^font$/i": [String(FONT_VALUE), "/^inherit$/i"],
-    ...Object.fromEntries(TYPE_PROPERTIES.map(({ property, keywords }) => [`/^${property}$/i`, [String(ONE_VAR), ...keywords.map((keyword) => `/^${keyword}$/i`)]])),
+    ...Object.fromEntries(
+      TYPE_PROPERTIES.filter(({ property }) => property !== "font-weight").map(({ property, keywords }) => [
+        `/^${property}$/i`,
+        [String(ONE_VAR), ...keywords.map((keyword) => `/^${keyword}$/i`)],
+      ]),
+    ),
   },
   ...Object.fromEntries(TOKEN_PLUGINS.map(({ ruleName }) => [ruleName, true])),
 } as const satisfies Rules;

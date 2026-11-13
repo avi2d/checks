@@ -311,6 +311,12 @@ const TYPE_PROPERTIES = [
   { property: "text-transform", literal: "uppercase", token: "--case" },
 ] as const;
 
+function typeRefusal(property: string, literal: string): string {
+  return property === "font-weight"
+    ? `Expected the font weight from the token files rather than the literal "${literal}" (checks/font-weight-from-tokens)`
+    : `Disallowed value "${literal}" for property "${property}" (declaration-property-value-allowed-list)`;
+}
+
 function typeRepository(tokens: string, component: string) {
   return open({
     "frontend-syntax.json": JSON.stringify({ inputs: ["src/**/*.css"] }),
@@ -337,10 +343,22 @@ for (const { property, literal, token } of TYPE_PROPERTIES) {
     await write({ "src/card.css": rule(".card", [`${property}: ${literal}`]) });
     const red = await script(GATE);
     expect(red.text).toStartWith("frontend-syntax: 1 problem(s) in 2 file(s) from 1 declared input(s):\n  src/card.css:2:");
-    expect(red.text).toContain(`Disallowed value "${literal}" for property "${property}" (declaration-property-value-allowed-list)`);
+    expect(red.text).toContain(typeRefusal(property, literal));
     expect(red.exitCode).toBe(1);
   }, 60_000);
 }
+
+test("a font weight inside @font-face passes while a literal weight in an ordinary rule of the same file fails", async () => {
+  const face = "@font-face {\n  font-family: Inter;\n  font-weight: 100 900;\n  src: url(inter.woff2);\n}\n";
+  const { write, script } = await typeRepository(TYPE_TOKENS, face);
+  expect(await script(GATE)).toEqual({ exitCode: 0, text: CLEAN });
+
+  await write({ "src/card.css": `${face}${rule(".card", ["font-weight: 600"])}` });
+  const red = await script(GATE);
+  expect(red.text).toStartWith("frontend-syntax: 1 problem(s) in 2 file(s) from 1 declared input(s):\n  src/card.css:");
+  expect(red.text).toContain(typeRefusal("font-weight", "600"));
+  expect(red.exitCode).toBe(1);
+}, 60_000);
 
 test("a type value a component file sets on its own custom property fails where the file reads it, while an alias of a token passes", async () => {
   const aliased = TYPE_PROPERTIES.map(({ property, token }) => rule(`.card-${property}`, [`--own: var(${token})`, `${property}: var(--own)`])).join("\n");
@@ -371,8 +389,11 @@ test("inherit, a normal letter spacing and no text transform pass, while a norma
   await write({ "src/card.css": refused.join("\n") });
   const red = await script(GATE);
   expect(red.text).toStartWith("frontend-syntax: 4 problem(s) in 2 file(s) from 1 declared input(s):\n");
-  for (const value of ['"normal" for property "line-height"', '"normal" for property "font-weight"', '"bold" for property "font-weight"', '"0" for property "letter-spacing"']) {
+  for (const value of ['"normal" for property "line-height"', '"0" for property "letter-spacing"']) {
     expect(red.text).toContain(`Disallowed value ${value} (declaration-property-value-allowed-list)`);
+  }
+  for (const literal of ["normal", "bold"]) {
+    expect(red.text).toContain(typeRefusal("font-weight", literal));
   }
   expect(red.exitCode).toBe(1);
 }, 60_000);
