@@ -70,7 +70,7 @@ export const weighPage = Effect.fn("weighPage")(function* (page: Page, url: stri
     received.push(
       response.body().then(
         (body) => ({ body, image: type === "image", script: type === "script" }),
-        (cause) => ({ failure: cause instanceof Error ? cause.message : String(cause) }),
+        (cause: unknown) => ({ failure: cause instanceof Error ? cause.message : String(cause) }),
       ),
     );
   });

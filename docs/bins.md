@@ -65,7 +65,7 @@ These bins run on their own:
 - [`checks-release-publish`](gates/checks-release-publish.md) publishes the version `package.json` holds to npm, unless npm already holds it or a newer version.
 - [`checks-release-tag`](gates/checks-release-tag.md) tags a landed release commit with its version and dispatches the release workflow on the tag.
 - [`checks-vendor`](gates/checks-vendor.md) pins each library its `prepare` arguments name to a shared read-only clone and links it under `repos/`.
-- [`checks-browser`](gates/checks-browser.md) opens a product's built pages in Chrome and fails on the layout, keyboard, motion, accessibility, nesting, html, link, asset and contrast checks its `browser-checks.json` declares.
+- [`checks-browser`](gates/checks-browser.md) opens a product's built pages in Chrome and fails on the checks its `browser-checks.json` declares.
 - [`checks-commit-title`](gates/checks-commit-title.md) lints the pull request title in one step of the `ci` job.
 - [`checks-pr-text`](gates/checks-pr-text.md) scans the title, body and comments of a pull request in a public repository for a secret or a term of the private pack.
 - [`checks-docs-only`](gates/checks-docs-only.md) tells whether a change touches only top-level Markdown and Markdown under `docs/`, so a docs-only change skips the full run.
