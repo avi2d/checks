@@ -42,7 +42,7 @@ test("a declaration that repeats a name, names an undeclared route or enables a 
       { name: "headline", selector: "h1", routes: ["/about/"] },
       { name: "headline", selector: "main h1" },
     ],
-    checks: ["layout", "keyboard", "motion", "layout"],
+    checks: ["layout", "keyboard", "motion", "contrast", "layout"],
   };
   expect(inconsistencies(contradicting)).toEqual([
     "route / is declared twice",
@@ -53,6 +53,7 @@ test("a declaration that repeats a name, names an undeclared route or enables a 
     "target headline names route /about/, which no route declares",
     "check motion judges a visitor who turns motion off, and no state sets reducedMotion to reduce",
     "check keyboard judges the targets Tab reaches, and no target sets focusable",
+    "check contrast measures the text over a photo or a gradient, and no target sets contrast",
   ]);
 });
 

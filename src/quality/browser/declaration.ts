@@ -4,7 +4,7 @@ import { DEVICES, ENLARGED_TEXT_PX, SCREEN_SIZE_SETS, SCREEN_SIZES, screenSizeNa
 
 const DECLARATION = "browser-checks.json";
 
-const CHECKS = ["layout", "keyboard", "motion", "axe", "nesting", "html", "links", "assets"] as const;
+const CHECKS = ["layout", "keyboard", "motion", "axe", "nesting", "html", "links", "assets", "contrast"] as const;
 
 export type CheckName = (typeof CHECKS)[number];
 
@@ -41,6 +41,7 @@ const Target = Schema.Struct({
   selector: Name,
   routes: Schema.optionalKey(Schema.NonEmptyArray(Name)),
   focusable: Schema.optionalKey(Schema.Boolean),
+  contrast: Schema.optionalKey(Schema.Boolean),
 });
 
 const Declaration = Schema.Struct({
@@ -113,6 +114,9 @@ export function inconsistencies(declaration: Declaration): readonly string[] {
   }
   if (declaration.checks.includes("keyboard") && !declaration.targets.some(({ focusable }) => focusable === true)) {
     found.push("check keyboard judges the targets Tab reaches, and no target sets focusable");
+  }
+  if (declaration.checks.includes("contrast") && !declaration.targets.some(({ contrast }) => contrast === true)) {
+    found.push("check contrast measures the text over a photo or a gradient, and no target sets contrast");
   }
   return found;
 }
