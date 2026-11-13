@@ -85,7 +85,7 @@ Nothing would then say which gate a helper serves.
 A mutation runner's default scope covers `src/`, so the kit's own Stryker run mutates its source with no `mutate` list.
 The testing directory is named `testing` rather than `tests`, because a `src/tests/` beside the root `tests/` would read as a second suite.
 
-Sixteen `exports` keys name a path the file does not sit at, because consumers resolve them by that name.
+Twenty `exports` keys name a path the file does not sit at, because consumers resolve them by that name.
 `@avi2dg/checks/scripts/test-skips.ts`, `@avi2dg/checks/scripts/comment-matchers.ts` and `@avi2dg/checks/scripts/prose-matchers.ts` point at their files under `src/`.
 `@avi2dg/checks/browser-hooks.ts` points at `src/quality/browser/hooks.ts`, whose types a product's browser hooks import.
 `@avi2dg/checks/browser-checks.json` points at `src/quality/browser/browser-checks.json`, the starter a product copies.
@@ -94,6 +94,7 @@ Sixteen `exports` keys name a path the file does not sit at, because consumers r
 `@avi2dg/checks/site-test.ts` points at `src/testing/site-test.ts`, which serves a product's built site to its browser tests.
 `@avi2dg/checks/core/git.ts`, `@avi2dg/checks/core/main.ts`, `@avi2dg/checks/testing/test.ts` and `@avi2dg/checks/testing/test-report.ts` point at their files under `src/`, whose git, entry-point, test-report and skip-judging helpers a repository's own test runner script builds on.
 `@avi2dg/checks/delivery/gitleaks.ts`, `@avi2dg/checks/delivery/gitleaks.toml` and `@avi2dg/checks/dependencies/cache-root.ts` point at their files under `src/`, whose pinned gitleaks, rules and shared cache root a repository's own secret scanner builds on.
+`@avi2dg/checks/core/bun-platform.ts`, `@avi2dg/checks/core/chrome-path.ts`, `@avi2dg/checks/core/command-output.ts` and `@avi2dg/checks/testing/run-effect.ts` point at their files under `src/`, whose Bun platform layer, Chrome lookup, command output and test runner a product's own scripts and tests build on.
 `@avi2dg/checks/templates/*` points at `dist/templates/`.
 A path read without the resolver, such as `node_modules/@avi2dg/checks/scripts/test-skips.ts`, does not exist.
 

@@ -54,11 +54,15 @@
     "./site-test.ts": "./src/testing/site-test.ts",
     "./core/git.ts": "./src/core/git.ts",
     "./core/main.ts": "./src/core/main.ts",
+    "./core/bun-platform.ts": "./src/core/bun-platform.ts",
+    "./core/chrome-path.ts": "./src/core/chrome-path.ts",
+    "./core/command-output.ts": "./src/core/command-output.ts",
     "./delivery/gitleaks.ts": "./src/delivery/gitleaks.ts",
     "./delivery/gitleaks.toml": "./src/delivery/gitleaks.toml",
     "./dependencies/cache-root.ts": "./src/dependencies/cache-root.ts",
     "./testing/test-report.ts": "./src/testing/test-report.ts",
     "./testing/test.ts": "./src/testing/test.ts",
+    "./testing/run-effect.ts": "./src/testing/run-effect.ts",
     "./oxlint": {
       "types": "./dist/presets/oxlint.d.ts",
       "default": "./dist/presets/oxlint.js"
