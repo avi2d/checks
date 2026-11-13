@@ -2,6 +2,22 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.96.0
+
+Released 2026-11-13.
+
+### Features
+
+- **browser:** judge page weight budgets and cold load layout shift [#124](https://github.com/avi2d/checks/pull/124)
+- **browser:** measure text contrast over photos and gradients [#123](https://github.com/avi2d/checks/pull/123)
+- **browser:** widen assets check to console errors, uncaught errors and other origins [#122](https://github.com/avi2d/checks/pull/122)
+- **browser:** add links check for same site targets and fragments [#121](https://github.com/avi2d/checks/pull/121)
+- **browser:** add an html check to checks-browser [#118](https://github.com/avi2d/checks/pull/118)
+
+### Fixes
+
+- **testing:** let Stryker deadlines end the dry run, not the runner [#125](https://github.com/avi2d/checks/pull/125)
+
 ## 0.95.1
 
 Released 2026-11-12.

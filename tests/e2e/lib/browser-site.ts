@@ -12,8 +12,10 @@ export type Declared = {
   readonly routes?: readonly { readonly path: string; readonly locale: string }[];
   readonly viewports?: readonly { readonly name: string; readonly width: number; readonly height: number; readonly touch?: boolean }[];
   readonly states?: readonly { readonly name: string; readonly textPx?: number; readonly reducedMotion?: "reduce" | "no-preference" }[];
-  readonly targets?: readonly { readonly name: string; readonly selector: string; readonly routes?: readonly string[]; readonly focusable?: boolean }[];
+  readonly targets?: readonly { readonly name: string; readonly selector: string; readonly routes?: readonly string[]; readonly focusable?: boolean; readonly contrast?: boolean }[];
   readonly checks: readonly string[];
+  readonly weight?: { readonly nonImageBytes: number; readonly scriptBytes: number; readonly imageBytes: number };
+  readonly shift?: { readonly max: number };
   readonly hooks?: string;
 };
 

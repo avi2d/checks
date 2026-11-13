@@ -4,6 +4,7 @@ import type { Browser } from "playwright-core";
 import { runMain } from "../../core/main.ts";
 import { watchAssets } from "./assets.ts";
 import { judgeAxe } from "./axe.ts";
+import { judgeContrast } from "./contrast.ts";
 import { readDeclaration, targetsOn, visitsOf, type CheckName, type Declaration, type Visit } from "./declaration.ts";
 import { loadHooks, runHook, type ProductCheck } from "./hooks.ts";
 import { judgeHtml } from "./html.ts";
@@ -12,9 +13,11 @@ import { judgeLayout } from "./layout.ts";
 import { judgeLinks } from "./links.ts";
 import { judgeStillness, recordMotion } from "./motion.ts";
 import { judgeNesting } from "./nesting.ts";
+import { coldShift, formatShift, judgeShift, recordShifts } from "./shift.ts";
 import { attempt, launchChrome, load, openVisit, type BrowserFailure } from "./page.ts";
 import { counted, NAME, passes, report, type Run } from "./report.ts";
 import { readSite, serveSite } from "./serve.ts";
+import { judgePageWeight, weighPage } from "./weight.ts";
 import { judgeTargets } from "./targets.ts";
 
 const NO_TARGET = "scanned no target";
@@ -100,6 +103,31 @@ const assetsRun = Effect.fn("assetsRun")(function* ({ browser, visit, url }: Vis
   return run("assets", visit, [`${watch.requested()} request(s)`], watch.found());
 }, Effect.scoped);
 
+const weightRun = Effect.fn("weightRun")(function* ({ browser, declaration, visit, url }: Visiting) {
+  const budgets = declaration.weight;
+  if (budgets === undefined) return run("weight", visit, [], ["check weight judges the bytes each page transfers, and no budgets declare them"]);
+  const { page } = yield* openVisit(browser, visit);
+  const weight = yield* weighPage(page, url);
+  return run("weight", visit, [`${weight.responses} response(s)`], judgePageWeight(budgets, weight));
+}, Effect.scoped);
+
+const shiftRun = Effect.fn("shiftRun")(function* ({ browser, declaration, visit, url }: Visiting) {
+  const bound = declaration.shift;
+  if (bound === undefined) return run("shift", visit, [], ["check shift judges the movement of a cold load, and no bound declares it"]);
+  const { page } = yield* openVisit(browser, visit, recordShifts);
+  yield* load(page, url);
+  const total = yield* coldShift(page, url);
+  return run("shift", visit, [`shift ${formatShift(total)}`], judgeShift(bound, total));
+}, Effect.scoped);
+
+const contrastRun = Effect.fn("contrastRun")(function* ({ browser, declaration, visit, url }: Visiting) {
+  const targets = targetsOn(declaration, visit.route.path).filter(({ contrast }) => contrast === true);
+  const { page } = yield* openVisit(browser, visit);
+  yield* load(page, url);
+  const { found, inventory } = yield* judgeContrast(page, targets);
+  return run("contrast", visit, inventory, targets.length === 0 ? [...found, NO_TARGET] : found);
+}, Effect.scoped);
+
 const hookRun = Effect.fn("hookRun")(function* (check: ProductCheck, { browser, visit, url }: Visiting) {
   const { page } = yield* openVisit(browser, visit);
   const { targets, found } = yield* runHook(check, page, { ...visit, url });
@@ -115,6 +143,9 @@ const BUILT_IN: Readonly<Record<CheckName, (visiting: Visiting) => Effect.Effect
   html: htmlRun,
   links: linksRun,
   assets: assetsRun,
+  contrast: contrastRun,
+  weight: weightRun,
+  shift: shiftRun,
 };
 
 function applies(check: CheckName, visit: Visit, declaration: Declaration): boolean {

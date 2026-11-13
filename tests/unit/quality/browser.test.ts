@@ -42,7 +42,7 @@ test("a declaration that repeats a name, names an undeclared route or enables a 
       { name: "headline", selector: "h1", routes: ["/about/"] },
       { name: "headline", selector: "main h1" },
     ],
-    checks: ["layout", "keyboard", "motion", "layout"],
+    checks: ["layout", "keyboard", "motion", "contrast", "layout"],
   };
   expect(inconsistencies(contradicting)).toEqual([
     "route / is declared twice",
@@ -53,6 +53,25 @@ test("a declaration that repeats a name, names an undeclared route or enables a 
     "target headline names route /about/, which no route declares",
     "check motion judges a visitor who turns motion off, and no state sets reducedMotion to reduce",
     "check keyboard judges the targets Tab reaches, and no target sets focusable",
+    "check contrast measures the text over a photo or a gradient, and no target sets contrast",
+  ]);
+});
+
+test("a declaration that budgets weight and bounds shift has no inconsistency", () => {
+  expect(
+    inconsistencies({
+      ...DECLARATION,
+      checks: [...DECLARATION.checks, "weight", "shift"],
+      weight: { nonImageBytes: 700_000, scriptBytes: 450_000, imageBytes: 500_000 },
+      shift: { max: 0.1 },
+    }),
+  ).toEqual([]);
+});
+
+test("a weight check with no budgets and a shift check with no bound are refused, not run unbounded", () => {
+  expect(inconsistencies({ ...DECLARATION, checks: [...DECLARATION.checks, "weight", "shift"] })).toEqual([
+    "check weight judges the bytes each page transfers, and no budgets declare them",
+    "check shift judges the movement of a cold load, and no bound declares it",
   ]);
 });
 
