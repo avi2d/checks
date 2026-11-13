@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.96.2
+
+Released 2026-11-13.
+
+### Fixes
+
+- **browser:** count pseudo element focus rings as visible focus [#129](https://github.com/avi2d/checks/pull/129)
+
 ## 0.96.1
 
 Released 2026-11-13.
