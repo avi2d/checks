@@ -383,12 +383,17 @@ test("a declared route the site does not serve fails, and the run passes once th
 
 test("without a declaration, with an empty target list, a missing site or a motion check no state can judge, the runner refuses before it starts a browser", async () => {
   const unlaunchable = { CHROME_PATH: "/nonexistent/chrome" };
-  const site = await browserSite({ "dist/index.html": CLEAN_LINK });
+  const site = await browserSite({ "dist/index.html": CLEAN_LINK, "unbuilt/site.css": "" });
   const cases = [
     [undefined, "browser: browser-checks.json is missing, and a product opts in to the browser checks by declaring its pages there"],
     [declaration({ targets: [], checks: ["layout"] }), "browser: browser-checks.json does not decode"],
     [declaration({ site: "build", checks: ["layout"] }), "browser: the declared site build is not a directory, so build the site before the browser checks run"],
-    [declaration({ checks: ["motion"] }), "check motion judges a visitor who turns motion off, and no state sets reducedMotion to reduce"],
+    [declaration({ checks: ["motion"] }), "check motion judges a visitor who turns motion off, and no state that runs it sets reducedMotion to reduce"],
+    [
+      declaration({ site: "unbuilt", routes: [{ preset: "every-page", locale: "en" }], checks: ["layout"] }),
+      "browser: the declared site unbuilt holds no .html page, so build the site before the browser checks run",
+    ],
+    [declaration({ states: [{ name: "default", checks: ["axe"] }], checks: ["layout"] }), "state default names check axe, which checks does not declare"],
     [declaration({ checks: ["weight"] }), "check weight judges the bytes each page transfers, and no budgets declare them"],
     [declaration({ checks: ["shift"] }), "check shift judges the movement of a cold load, and no bound declares it"],
     [

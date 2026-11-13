@@ -9,6 +9,7 @@ audience: consumers
 ## What it checks
 
 It visits each declared route at each declared viewport in each declared state.
+A state that names its own `checks` runs only those, and any other state runs every declared check.
 Each declared check that opens a page runs on its own fresh page.
 A visit is one route, one viewport and one state.
 Each check judges only the elements of a target that are visible at the visit.
@@ -18,7 +19,7 @@ So a control the page renders once for each breakpoint is judged where it shows.
 | --- | --- | --- |
 | `layout` | a page wider than the viewport, and a target that overflows the viewport, is reachable only by scrolling sideways, is cut off by a container that cannot scroll, clips its own text or hides its text, overlaps another target, or is covered by any element | the DevTools protocol's boxes and hit test |
 | `keyboard` | a `focusable` target that Tab does not reach once for each element it matches that is visible before the first Tab press, and a Tab stop on a target that shows no visible focus | Playwright's keyboard, and viewport screenshots before and after blur compared within the crop of the focused element and the ancestors changed by focus, with what their pseudo-elements paint |
-| `motion` | an animation or a transition longer than one frame that starts during load, on hover, on leaving a hovered control or on focus, and smooth scrolling, for a visitor who turns motion off | the page's own `document.getAnimations()`, in each state whose `reducedMotion` is `reduce` |
+| `motion` | an animation or a transition longer than one frame that starts during load, on hover, on leaving a hovered control or on focus, and smooth scrolling, for a visitor who turns motion off | the page's own `document.getAnimations()`, in each state whose `reducedMotion` is `reduce` and whose own `checks`, when it names any, include `motion` |
 | `axe` | each violation of axe's WCAG 2.2 AA rules, which include `color-contrast`, `nested-interactive`, `meta-viewport` and `target-size` | axe-core through `@axe-core/playwright` |
 | `nesting` | an element the HTML content model does not permit where it sits in the rendered page, such as a `<button>` inside an `<a>` | html-validate's `element-permitted-content` rule |
 | `html` | an error from html-validate's `html-validate:standard` or `html-validate:a11y` preset, or from `input-missing-label`, in the page the server sends | html-validate on the page's HTML as the server sends it |
@@ -28,7 +29,7 @@ So a control the page renders once for each breakpoint is judged where it shows.
 | `weight` | a page that transfers more bytes than the budgets in `weight` allow, counted apart as outside images, in scripts and in images | the body of each response from the page's own origin, gzipped outside images and raw in images |
 | `shift` | a cold load whose summed layout movement passes the bound in `shift` | a recorder that sums each `layout-shift` entry without a recent input |
 
-`html` runs once for each route, at the first viewport in the first state, because the page the server sends is the same at each.
+`html` runs once for each route, at the first viewport in the first state that runs it, because the page the server sends is the same at each.
 `links` runs once at the same visit, since it reads every link in the page, whether the viewport shows it or not.
 
 `links` judges the links on each declared route.
@@ -45,7 +46,7 @@ A `data:` address has no origin and is left alone.
 Chrome logs a failed resource as a console error, so the request and the log name it twice.
 
 The `motion` check judges what moves on the rendered page, so a `prefers-reduced-motion` query in the source counts for nothing unless the motion stops.
-It runs only in a state whose `reducedMotion` is `reduce`.
+It runs only in a state whose `reducedMotion` is `reduce` and whose own `checks`, when it names any, include `motion`.
 An animation that ends within one frame never moves, so the common reset that shortens every duration to near zero for reduced motion passes.
 Beyond that, durations, easing and how motion feels are judgement, so no check reads them.
 A control the pointer cannot reach, such as a skip link parked off the screen, is judged on focus alone, and the inventory counts it.
@@ -95,7 +96,7 @@ None of these sees a parent click handler that fires with a child control's clic
 
 ### The inventory
 
-The runner prints one line for each check at each visit, narrowed by the `html`, `links` and `motion` exceptions above.
+The runner prints one line for each check at each visit, narrowed by the `html`, `links` and `motion` exceptions above and by a state's own `checks` list.
 The line names the route, its locale, the viewport, the state and what the check scanned.
 At every visit, whichever checks are declared, a `targets` run counts the visible elements each target that applies to the route matches.
 For `targets`, `layout`, `keyboard`, `contrast` and a hook, what it scanned is each target by name with the count of its elements.
@@ -129,7 +130,7 @@ The same hook can hover a control and check that no application state changed.
 
 The declaration names the module in `hooks`.
 The module exports `checks`, each a name, an optional list of the routes it runs on, and a `run` function.
-The runner hands `run` a fresh page at each visit before it loads anything, so the hook can intercept requests, and the visit with its `url`.
+The runner hands `run` a fresh page at each visit in a state that names no `checks` before it loads anything, so the hook can intercept requests, and the visit with its `url`.
 `run` returns the names of the targets it scanned and what it found, and a hook that throws fails with its message:
 
 ```ts
@@ -197,9 +198,9 @@ It reads `browser-checks.json` in the directory it runs in:
 | Field | What it holds |
 | --- | --- |
 | `site` | the directory of the built site, which the runner serves on a local port, an `index.html` answering for its directory |
-| `routes` | each page to visit, as a `path` from the site root and the `locale` it renders |
+| `routes` | each page to visit, as a `path` from the site root and the `locale` it renders, or the `every-page` preset with a `locale` |
 | `viewports` | each window to visit in, with a `name`, a `width` and a `height` in pixels, `touch` for a phone that has touch and a mobile viewport, and `device` as `phone`, `tablet` or `desktop`, or a `preset` that stands for a set of screen sizes |
-| `states` | each condition to visit in, with a `name`, `textPx` for the browser's default text size, and `reducedMotion` as `reduce` or `no-preference`, or the `enlarged-text` preset |
+| `states` | each condition to visit in, with a `name`, `textPx` for the browser's default text size, `reducedMotion` as `reduce` or `no-preference`, and `checks` when it runs only some of the declared checks, or the `enlarged-text` preset |
 | `targets` | each named control or text the checks judge, with a CSS `selector`, the `routes` it is on when not every route, `focusable` when Tab must reach it, and `contrast` when `contrast` measures its text |
 | `checks` | the built-in checks to run, from `layout`, `keyboard`, `motion`, `axe`, `nesting`, `html`, `links`, `assets`, `contrast`, `weight` and `shift` |
 | `weight` | the byte budgets each page must hold, as `nonImageBytes` outside images, `scriptBytes` in scripts and `imageBytes` in images |
@@ -208,9 +209,37 @@ It reads `browser-checks.json` in the directory it runs in:
 
 `textPx` sets the default font size, so text the page sizes in `rem` or `em` grows, as a visitor's own setting makes it grow.
 A declaration that names a route, viewport, state, target or check twice is refused.
-So are a `motion` check with no state whose `reducedMotion` is `reduce` and a `keyboard` check with no `focusable` target.
+So are a `motion` check with no state whose `reducedMotion` is `reduce` and whose own `checks`, when it names any, include `motion`, and a `keyboard` check with no `focusable` target.
+So are a state that names a check twice, names an undeclared check or names `motion` without `reducedMotion` set to `reduce`, and a declared check no state runs.
 So is a `contrast` check with no `contrast` target, and a target or a hook that names an undeclared route.
 So is a `weight` check with no `weight` budgets, and a `shift` check with no `shift` bound.
+
+### Every built page and default motion
+
+A route `{ "preset": "every-page", "locale": "ru" }` stands for every `.html` page in the built `site`, each under the locale it names.
+A directory's `index.html` is visited as the directory, such as `/about/`, and any other page by its file, such as `/404.html`.
+So a page the site adds is visited without an edit to the declaration.
+An explicit route overrides the preset for its own path, so it carries its own locale.
+The preset listed twice is refused as declared twice.
+A site that holds no `.html` page is refused when a route lists every-page.
+A target that sets no `routes` applies to each page the preset finds, so it must show on each of them.
+
+A state with no `reducedMotion` visits with no preference for motion, as a visitor who leaves the setting alone.
+A site whose pages move on load or on scroll runs most checks with motion off, and `axe` with motion left on too, by naming the checks of the second state:
+
+```json
+{
+  "routes": [{ "preset": "every-page", "locale": "ru" }],
+  "states": [
+    { "name": "reduced motion", "reducedMotion": "reduce" },
+    { "name": "default motion", "checks": ["axe"] }
+  ]
+}
+```
+
+The `targets` run still counts each target at every visit, in each state.
+A product hook runs at every visit in each state that names no `checks` of its own.
+A declaration that sets `hooks` while every state names its own `checks` is refused.
 
 ### Screen sizes
 
@@ -321,7 +350,7 @@ It reads the declaration in the directory it runs in, or in the directory it is 
 | --- | --- |
 | 0 | every check passes at every visit, and every declared route and target is there |
 | 1 | a check fails at a visit, a declared route is not served, a declared target matches no visible element, or a run scans no target |
-| 2 | `browser-checks.json` is missing, does not decode or contradicts itself, the site directory or the hooks module is missing, a peer cannot load, or Chrome cannot start |
+| 2 | `browser-checks.json` is missing, does not decode or contradicts itself, the site directory or the hooks module is missing, the site holds no `.html` page while a route lists `every-page`, a peer cannot load, or Chrome cannot start |
 
 ## Sample output
 

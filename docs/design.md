@@ -361,7 +361,7 @@ So every run names what it scanned, and an empty input, an unserved route or a t
 A contrast axe cannot measure is listed as unverified, never counted as a pass.
 
 Valid choices and the order of async results depend on a product's own schema and requests, which no generic check knows.
-So the runner calls the product's hooks at each visit and holds them to the same inventory, rather than guessing at a product's domain.
+So the runner calls the product's hooks at each visit in a state that names no `checks` and holds them to the same inventory, rather than guessing at a product's domain.
 
 The runner drives the Chrome a machine already has through `playwright-core`, since Playwright's own browser builds are a separate download of their own.
 GitHub's hosted Ubuntu runners carry Chrome, and `CHROME_PATH` names any other build.

@@ -1,5 +1,6 @@
 import { Array as Arr, Effect, FileSystem, Path, Schema } from "effect";
 import { Usage } from "../../core/main.ts";
+import { readSite, sitePages, type Site } from "./serve.ts";
 import { DEVICES, ENLARGED_TEXT_PX, SCREEN_SIZE_SETS, SCREEN_SIZES, screenSizeName, type ScreenSize } from "./screen-sizes.ts";
 
 const DECLARATION = "browser-checks.json";
@@ -17,6 +18,10 @@ const Route = Schema.Struct({
   locale: Name,
 });
 
+const ROUTE_PRESETS = ["every-page"] as const;
+
+const RoutePreset = Schema.Struct({ preset: Schema.Literals(ROUTE_PRESETS), locale: Name });
+
 const Viewport = Schema.Struct({
   name: Name,
   width: Pixels,
@@ -31,6 +36,7 @@ const State = Schema.Struct({
   name: Name,
   textPx: Schema.optionalKey(Pixels),
   reducedMotion: Schema.optionalKey(Schema.Literals(["reduce", "no-preference"])),
+  checks: Schema.optionalKey(Schema.NonEmptyArray(Schema.Literals(CHECKS))),
 });
 
 const STATE_PRESETS = ["enlarged-text"] as const;
@@ -69,6 +75,7 @@ const Declaration = Schema.Struct({
 
 const Listed = Schema.Struct({
   ...Declaration.fields,
+  routes: Schema.NonEmptyArray(Schema.Union([Route, RoutePreset])),
   viewports: Schema.NonEmptyArray(Schema.Union([Viewport, ScreenSizeSet])),
   states: Schema.NonEmptyArray(Schema.Union([State, StatePreset])),
 });
@@ -80,6 +87,8 @@ export type Target = typeof Target.Type;
 export type WeightBudgets = typeof WeightBudgets.Type;
 export type ShiftBound = typeof ShiftBound.Type;
 export type Declaration = typeof Declaration.Type;
+
+export type ExpandedDeclaration = Omit<Declaration, "routes"> & { readonly routes: readonly Route[] };
 
 export type Visit = {
   readonly route: Route;
@@ -100,19 +109,42 @@ const STATES: Readonly<Record<(typeof STATE_PRESETS)[number], State>> = {
   "enlarged-text": { name: "enlarged text", textPx: ENLARGED_TEXT_PX },
 };
 
-export function expanded(listed: Listed): Declaration {
+export function expanded(listed: Listed, pages: readonly string[]): ExpandedDeclaration {
+  const explicit = new Set(listed.routes.flatMap((entry) => ("preset" in entry ? [] : [entry.path])));
   return {
     ...listed,
+    routes: Arr.flatMap(listed.routes, (entry) =>
+      "preset" in entry ? Arr.map(pages.filter((path) => !explicit.has(path)), (path) => ({ path, locale: entry.locale })) : [entry],
+    ),
     viewports: Arr.flatMap(listed.viewports, (entry) => ("preset" in entry ? Arr.map(SCREEN_SIZES[entry.preset], viewportOf) : [entry])),
     states: Arr.map(listed.states, (entry) => ("preset" in entry ? STATES[entry.preset] : entry)),
   };
+}
+
+export function runsIn(state: State, check: CheckName): boolean {
+  return state.checks === undefined || state.checks.includes(check);
+}
+
+function stateInconsistencies({ states, checks }: ExpandedDeclaration): readonly string[] {
+  return [
+    ...states.flatMap(({ name, checks: named = [] }) => [
+      ...repeated(named).map((check) => `state ${name} names check ${check} twice`),
+      ...named.filter((check) => !checks.includes(check)).map((check) => `state ${name} names check ${check}, which checks does not declare`),
+    ]),
+    ...states
+      .filter((state) => state.reducedMotion !== "reduce" && state.checks?.includes("motion") === true)
+      .map(({ name }) => `state ${name} names check motion, which runs only in a state whose reducedMotion is reduce`),
+    ...checks
+      .filter((check) => check !== "motion" && !states.some((state) => runsIn(state, check)))
+      .map((check) => `check ${check} runs in no state, since each state names its checks without it`),
+  ];
 }
 
 function repeated(names: readonly string[]): readonly string[] {
   return [...new Set(names.filter((name, index) => names.indexOf(name) !== index))];
 }
 
-export function inconsistencies(declaration: Declaration): readonly string[] {
+export function inconsistencies(declaration: ExpandedDeclaration, skipTargetRoutes = false): readonly string[] {
   const paths = declaration.routes.map(({ path }) => path);
   const found = [
     ...repeated(paths).map((path) => `route ${path} is declared twice`),
@@ -120,12 +152,12 @@ export function inconsistencies(declaration: Declaration): readonly string[] {
     ...repeated(declaration.states.map(({ name }) => name)).map((name) => `state ${name} is declared twice`),
     ...repeated(declaration.targets.map(({ name }) => name)).map((name) => `target ${name} is declared twice`),
     ...repeated(declaration.checks).map((check) => `check ${check} is declared twice`),
-    ...declaration.targets.flatMap(({ name, routes = [] }) =>
-      routes.filter((path) => !paths.includes(path)).map((path) => `target ${name} names route ${path}, which no route declares`),
-    ),
+    ...(skipTargetRoutes ? [] : declaration.targets.flatMap(({ name, routes = [] }) =>
+      routes.filter((path) => !paths.includes(path)).map((path) => `target ${name} names route ${path}, which no route declares`))),
+    ...stateInconsistencies(declaration),
   ];
-  if (declaration.checks.includes("motion") && !declaration.states.some(({ reducedMotion }) => reducedMotion === "reduce")) {
-    found.push("check motion judges a visitor who turns motion off, and no state sets reducedMotion to reduce");
+  if (declaration.checks.includes("motion") && !declaration.states.some((state) => state.reducedMotion === "reduce" && runsIn(state, "motion"))) {
+    found.push("check motion judges a visitor who turns motion off, and no state that runs it sets reducedMotion to reduce");
   }
   if (declaration.checks.includes("keyboard") && !declaration.targets.some(({ focusable }) => focusable === true)) {
     found.push("check keyboard judges the targets Tab reaches, and no target sets focusable");
@@ -139,6 +171,9 @@ export function inconsistencies(declaration: Declaration): readonly string[] {
   if (declaration.checks.includes("shift") && declaration.shift === undefined) {
     found.push("check shift judges the movement of a cold load, and no bound declares it");
   }
+  if (declaration.hooks !== undefined && declaration.states.every((state) => state.checks !== undefined)) {
+    found.push("hooks run in no state, since each state names its checks");
+  }
   return found;
 }
 
@@ -151,10 +186,19 @@ export const readDeclaration = Effect.fn("readDeclaration")(function* (root: str
   const listed = yield* decodeListed(yield* fs.readFileString(file)).pipe(
     Effect.mapError(({ message }) => new Usage({ message: `${DECLARATION} does not decode: ${message}` })),
   );
-  const declaration = expanded(listed);
+  const hasPreset = listed.routes.some((entry) => "preset" in entry);
+  const early = inconsistencies(expanded(listed, []), hasPreset);
+  if (early.length > 0) return yield* new Usage({ message: `${DECLARATION}: ${early.join("; ")}` });
+  const site = yield* readSite(root, listed.site);
+  const candidate = expanded(listed, sitePages(site));
+  const { routes } = candidate;
+  if (!Arr.isReadonlyArrayNonEmpty(routes)) {
+    return yield* new Usage({ message: `the declared site ${listed.site} holds no .html page, so build the site before the browser checks run` });
+  }
+  const declaration: Declaration = { ...candidate, routes };
   const found = inconsistencies(declaration);
   if (found.length > 0) return yield* new Usage({ message: `${DECLARATION}: ${found.join("; ")}` });
-  return declaration;
+  return { declaration, site } satisfies { readonly declaration: Declaration; readonly site: Site };
 });
 
 export function visitsOf({ routes, viewports, states }: Declaration): readonly Visit[] {

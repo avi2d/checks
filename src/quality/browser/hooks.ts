@@ -49,6 +49,10 @@ export const loadHooks = Effect.fn("loadHooks")(function* (root: string, hooks: 
   return checks;
 });
 
+export function hookApplies(check: Pick<ProductCheck, "routes">, visit: { readonly route: Route; readonly state: State }): boolean {
+  return (check.routes === undefined || check.routes.includes(visit.route.path)) && visit.state.checks === undefined;
+}
+
 export const runHook = Effect.fn("runHook")(function* (check: ProductCheck, page: Page, visit: HookVisit) {
   return yield* attempt(`hook ${check.name} throws`, () => check.run(page, visit)).pipe(
     Effect.flatMap((result) => decodeHookResult(result).pipe(Effect.mapError(({ message }) => ({ message: `hook ${check.name} returns no result: ${message}` })))),
