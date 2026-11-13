@@ -51,31 +51,50 @@ const SETTLED = `Promise.all(
 const TEXT_BOXES = `(targets) => {
   for (const animation of document.getAnimations()) animation.pause();
   const pixels = window.devicePixelRatio || 1;
+  const shown = (el) => {
+    if (typeof el.checkVisibility === "function") {
+      try {
+        return el.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true });
+      } catch {}
+    }
+    for (let at = el; at; at = at.parentElement) {
+      const style = getComputedStyle(at);
+      if (style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse") return false;
+    }
+    return true;
+  };
   const boxes = [];
   for (const target of targets) {
     for (const element of document.querySelectorAll(target.selector)) {
       const text = (element.textContent ?? "").replace(/\\s+/g, " ").trim().slice(0, ${LABEL_CHARS});
-      const sizePx = parseFloat(getComputedStyle(element).fontSize);
-      const range = document.createRange();
-      range.selectNodeContents(element);
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      const nodes = [];
+      while (walker.nextNode()) nodes.push(walker.currentNode);
       let box = 0;
-      for (const rect of range.getClientRects()) {
-        const left = Math.floor(Math.max(0, rect.left));
-        const top = Math.floor(Math.max(0, rect.top));
-        const right = Math.ceil(Math.min(innerWidth, rect.right));
-        const bottom = Math.ceil(Math.min(innerHeight, rect.bottom));
-        if (right - left < sizePx || bottom - top < 1) continue;
-        box += 1;
-        boxes.push({
-          target: target.name,
-          text,
-          sizePx,
-          box,
-          left: Math.round(left * pixels),
-          top: Math.round(top * pixels),
-          width: Math.round((right - left) * pixels),
-          height: Math.round((bottom - top) * pixels),
-        });
+      for (const node of nodes) {
+        const owner = node.parentElement;
+        if (owner === null || !shown(owner)) continue;
+        const sizePx = parseFloat(getComputedStyle(owner).fontSize) || parseFloat(getComputedStyle(element).fontSize);
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        for (const rect of range.getClientRects()) {
+          const left = Math.floor(Math.max(0, rect.left));
+          const top = Math.floor(Math.max(0, rect.top));
+          const right = Math.ceil(Math.min(innerWidth, rect.right));
+          const bottom = Math.ceil(Math.min(innerHeight, rect.bottom));
+          if (right - left < sizePx || bottom - top < 1) continue;
+          box += 1;
+          boxes.push({
+            target: target.name,
+            text,
+            sizePx,
+            box,
+            left: Math.round(left * pixels),
+            top: Math.round(top * pixels),
+            width: Math.round((right - left) * pixels),
+            height: Math.round((bottom - top) * pixels),
+          });
+        }
       }
     }
   }
@@ -87,6 +106,8 @@ const PAINT = `({ selectors, color }) => {
   for (const selector of selectors) {
     for (const element of document.querySelectorAll(selector)) {
       for (const painted of [element, ...element.querySelectorAll("*")]) {
+        const shadow = getComputedStyle(painted).textShadow;
+        if (shadow !== "none") painted.style.setProperty("text-shadow", shadow, "important");
         painted.style.setProperty("transition", "none", "important");
         painted.style.setProperty("color", color, "important");
       }
@@ -116,14 +137,18 @@ const clipped = (box: TextBox, { width, height }: Picture): Box => ({
   bottom: Math.min(height, box.top + box.height),
 });
 
-function glyphMask(glyphs: Picture, backdrop: Picture, box: Box): ReadonlySet<number> {
+function glyphMask(drawn: Picture, glyphs: Picture, backdrop: Picture, box: Box): ReadonlySet<number> {
   const mask = new Set<number>();
   for (let y = box.top; y < box.bottom; y += 1) {
     for (let x = box.left; x < box.right; x += 1) {
       const pixel = y * glyphs.width + x;
-      let moved = 0;
-      for (let at = 0; at < 3; at += 1) moved += Math.abs((glyphs.rgb[pixel * 3 + at] ?? 0) - (backdrop.rgb[pixel * 3 + at] ?? 0));
-      if (moved > GLYPH_CHANNEL_SUM) mask.add(pixel);
+      let marked = 0;
+      let painted = 0;
+      for (let at = 0; at < 3; at += 1) {
+        marked += Math.abs((glyphs.rgb[pixel * 3 + at] ?? 0) - (backdrop.rgb[pixel * 3 + at] ?? 0));
+        painted += Math.abs((drawn.rgb[pixel * 3 + at] ?? 0) - (backdrop.rgb[pixel * 3 + at] ?? 0));
+      }
+      if (marked > GLYPH_CHANNEL_SUM || painted > GLYPH_CHANNEL_SUM) mask.add(pixel);
     }
   }
   return mask;
@@ -144,7 +169,7 @@ export type Shots = { readonly drawn: Picture; readonly glyphs: Picture; readonl
 // The letters' extreme away from the backdrop stands for their colour, and the ring's low share for the stretch of backdrop nearest it.
 export function readBox({ drawn, glyphs, backdrop }: Shots, textBox: TextBox): Reading {
   const box = clipped(textBox, drawn);
-  const mask = glyphMask(glyphs, backdrop, box);
+  const mask = glyphMask(drawn, glyphs, backdrop, box);
   const letters: number[] = [];
   const ring: number[] = [];
   for (let y = box.top; y < box.bottom; y += 1) {
