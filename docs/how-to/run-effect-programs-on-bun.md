@@ -4,7 +4,7 @@ audience: consumers
 ---
 # Run Effect programs on Bun
 
-A repository owner follows these steps to run an Effect script or test on Bun with the kit's helpers instead of a copy of them in each repository.
+A repository owner follows these steps to run an Effect script or test on Bun with the kit's helpers instead of a local copy.
 
 ## Before you begin
 
