@@ -219,8 +219,9 @@ So is a `weight` check with no `weight` budgets, and a `shift` check with no `sh
 A route `{ "preset": "every-page", "locale": "ru" }` stands for every `.html` page in the built `site`, each under the locale it names.
 A directory's `index.html` is visited as the directory, such as `/about/`, and any other page by its file, such as `/404.html`.
 So a page the site adds is visited without an edit to the declaration.
-A path the preset finds that another route also declares is refused as declared twice, and so is the preset listed twice.
-A site that holds no `.html` page is refused, preset or not.
+An explicit route overrides the preset for its own path, so it carries its own locale.
+The preset listed twice is refused as declared twice.
+A site that holds no `.html` page is refused when a route lists every-page.
 A target that sets no `routes` applies to each page the preset finds, so it must show on each of them.
 
 A state with no `reducedMotion` visits with no preference for motion, as a visitor who leaves the setting alone.

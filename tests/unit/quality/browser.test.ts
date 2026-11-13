@@ -38,9 +38,15 @@ test("the every-page preset expands to each built page under its locale, leaving
   expect(inconsistencies(expanded({ ...DECLARATION, routes: [{ preset: "every-page", locale: "en" }] }))).toEqual([]);
 });
 
-test("a route the every-page preset also finds, or the preset listed twice, is refused as declared twice rather than visited twice", () => {
+test("an explicit route overrides the every-page preset for its own path, and the preset listed twice is refused as declared twice", () => {
   const beside = expanded({ ...DECLARATION, routes: [{ preset: "every-page", locale: "en" }, { path: "/ru/", locale: "ru" }] });
-  expect(inconsistencies(beside)).toEqual(["route /ru/ is declared twice"]);
+  expect(beside.routes).toEqual([
+    { path: "/", locale: "en" },
+    { path: "/about/", locale: "en" },
+    { path: "/notes.html", locale: "en" },
+    { path: "/ru/", locale: "ru" },
+  ]);
+  expect(inconsistencies(beside)).toEqual([]);
   const twice = expanded({ ...DECLARATION, routes: [{ preset: "every-page", locale: "en" }, { preset: "every-page", locale: "ru" }] });
   expect(inconsistencies(twice)).toEqual(BUILT.map((path) => `route ${path} is declared twice`));
 });

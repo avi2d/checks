@@ -107,10 +107,13 @@ const STATES: Readonly<Record<(typeof STATE_PRESETS)[number], State>> = {
   "enlarged-text": { name: "enlarged text", textPx: ENLARGED_TEXT_PX },
 };
 
-export function expanded(listed: Listed, pages: Arr.NonEmptyReadonlyArray<string>): Declaration {
+export function expanded(listed: Listed, pages: readonly string[]): Declaration {
+  const explicit = new Set(listed.routes.flatMap((entry) => ("preset" in entry ? [] : [entry.path])));
   return {
     ...listed,
-    routes: Arr.flatMap(listed.routes, (entry) => ("preset" in entry ? Arr.map(pages, (path) => ({ path, locale: entry.locale })) : [entry])),
+    routes: Arr.flatMap(listed.routes, (entry) =>
+      "preset" in entry ? Arr.map(pages.filter((path) => !explicit.has(path)), (path) => ({ path, locale: entry.locale })) : [entry],
+    ),
     viewports: Arr.flatMap(listed.viewports, (entry) => ("preset" in entry ? Arr.map(SCREEN_SIZES[entry.preset], viewportOf) : [entry])),
     states: Arr.map(listed.states, (entry) => ("preset" in entry ? STATES[entry.preset] : entry)),
   };
@@ -179,9 +182,19 @@ export const readDeclaration = Effect.fn("readDeclaration")(function* (root: str
   const listed = yield* decodeListed(yield* fs.readFileString(file)).pipe(
     Effect.mapError(({ message }) => new Usage({ message: `${DECLARATION} does not decode: ${message}` })),
   );
+  const hasPreset = listed.routes.some((entry) => "preset" in entry);
+  if (!hasPreset) {
+    const declaration = expanded(listed, []);
+    const found = inconsistencies(declaration);
+    if (found.length > 0) return yield* new Usage({ message: `${DECLARATION}: ${found.join("; ")}` });
+    const site = yield* readSite(root, listed.site);
+    return { declaration, site } satisfies { readonly declaration: Declaration; readonly site: Site };
+  }
+  const early = inconsistencies(expanded(listed, [])).filter((message) => !message.includes("which no route declares"));
+  if (early.length > 0) return yield* new Usage({ message: `${DECLARATION}: ${early.join("; ")}` });
   const site = yield* readSite(root, listed.site);
   const pages = sitePages(site);
-  if (!Arr.isReadonlyArrayNonEmpty(pages)) {
+  if (pages.length === 0) {
     return yield* new Usage({ message: `the declared site ${listed.site} holds no .html page, so build the site before the browser checks run` });
   }
   const declaration = expanded(listed, pages);
