@@ -92,9 +92,11 @@ const VAR = "var\\(\\s*--[^\\s,()]+\\s*\\)";
 
 const VAR_NAMES = /var\(\s*(--[^\s,()]+)\s*\)/gi;
 
-const FONT_SIZE_VALUE = new RegExp(`^${VAR}$`, "i");
+const ONE_VAR = new RegExp(`^${VAR}$`, "i");
 
-const FONT_STYLE_VARIANT_WEIGHT_OR_WIDTH = "(?:normal|italic|oblique(?:\\s+-?[\\d.]+(?:deg|grad|rad|turn))?|small-caps|bold|bolder|lighter|[1-9]\\d*(?:\\.\\d+)?|(?:ultra-|extra-|semi-)?(?:condensed|expanded))";
+const FONT_STYLE_VARIANT_OR_WIDTH = "(?:normal|italic|oblique(?:\\s+-?[\\d.]+(?:deg|grad|rad|turn))?|small-caps|(?:ultra-|extra-|semi-)?(?:condensed|expanded))";
+
+const FONT_WEIGHT_LITERAL = "(?:bold|bolder|lighter|[1-9]\\d*(?:\\.\\d+)?)";
 
 const FONT_FAMILY = `(?:"[^"]*"|'[^']*'|${VAR}|-?[a-z_][\\w-]*(?:\\s+-?[a-z_][\\w-]*)*)`;
 
@@ -116,10 +118,11 @@ const NAMED_FONT_SIZES = new Set([
   "math",
 ]);
 
-const SIZE_PRECEDER = new RegExp(`^${FONT_STYLE_VARIANT_WEIGHT_OR_WIDTH}$`, "i");
+// The family list after a var() can still hold a weight word the browser reads as the weight, so the size search skips it.
+const SIZE_PRECEDER = new RegExp(`^(?:${FONT_STYLE_VARIANT_OR_WIDTH}|${FONT_WEIGHT_LITERAL})$`, "i");
 
 const FONT_VALUE = new RegExp(
-  `^(?:${FONT_STYLE_VARIANT_WEIGHT_OR_WIDTH}\\s+)*(?<size>${VAR})(?<lineHeight>\\s*\\/\\s*(?:${VAR}|[\\w.%-]+))?(?:\\s+(?<families>${FONT_FAMILIES}))?$`,
+  `^(?:${FONT_STYLE_VARIANT_OR_WIDTH}\\s+)*(?<size>${VAR})(?<lineHeight>\\s*\\/\\s*${VAR})?(?:\\s+(?<families>${FONT_FAMILIES}))?$`,
   "i",
 );
 
@@ -129,7 +132,7 @@ function varNames(value: string): string[] {
   return [...value.matchAll(VAR_NAMES)].map(([, name]) => name).filter((name) => name !== undefined);
 }
 
-type SizeCarrier = { readonly token: string; readonly setTo: RegExp; readonly atSize: boolean };
+type TokenCarrier = { readonly token: string; readonly setTo: RegExp; readonly atSize: boolean };
 
 // The size follows any style, variant, weight and width, so the first other word or var() is the one place a family list can hold it.
 function sizePosition(families: string): string {
@@ -147,14 +150,14 @@ function namedSize(position: string): string | undefined {
 }
 
 // A var() before the size var can be a weight, which leaves a family var() free to hold the size.
-function sizeCarriers(property: string, value: string): SizeCarrier[] {
+function sizeCarriers(property: string, value: string): TokenCarrier[] {
   const name = property.toLowerCase();
-  if (name === "font-size" && FONT_SIZE_VALUE.test(value)) return varNames(value).map((token) => ({ token, setTo: FONT_SIZE_VALUE, atSize: false }));
+  if (name === "font-size") return oneVarCarriers(value);
   const font = name === "font" ? FONT_VALUE.exec(value)?.groups : undefined;
   if (font?.size === undefined) return [];
   const atSize = varNames(fontSizePosition(font));
   return [
-    ...varNames(font.size).map((token) => ({ token, setTo: FONT_SIZE_VALUE, atSize: false })),
+    ...varNames(font.size).map((token) => ({ token, setTo: ONE_VAR, atSize: false })),
     ...varNames(font.families ?? "").map((token) => ({ token, setTo: FONT_FAMILY_VALUE, atSize: atSize.includes(token) })),
   ];
 }
@@ -164,7 +167,7 @@ function literalSize(property: string, value: string): string | undefined {
   return font?.size === undefined ? undefined : namedSize(fontSizePosition(font));
 }
 
-function fromTokens({ token, setTo, atSize }: SizeCarrier, declared: ReadonlyMap<string, readonly string[]>, seen: ReadonlySet<string>): boolean {
+function fromTokens({ token, setTo, atSize }: TokenCarrier, declared: ReadonlyMap<string, readonly string[]>, seen: ReadonlySet<string>): boolean {
   const values = declared.get(token);
   if (values === undefined) return true;
   return values.every((value) => {
@@ -194,36 +197,79 @@ function fileDeclarations(document: DeclarationDocument): Map<string, string[]> 
   return fresh;
 }
 
-// postcss-html hands the rule one root per style block or attribute, so the file's declarations sit on the result's document.
-const fontSizeFromTokens: RuleBase = () => async (root, result) => {
-  const { utils } = (await import("stylelint")).default;
-  const declared = fileDeclarations(result.root);
-  root.walkDecls((node) => {
-    const literal = literalSize(node.prop, node.value);
-    if (literal !== undefined) {
-      utils.report({ ruleName: FONT_SIZE_RULE, result, node, word: literal, message: `Expected the font size from the token files rather than the literal "${literal}"` });
-    }
-    for (const carrier of sizeCarriers(node.prop, node.value)) {
-      if (fromTokens(carrier, declared, new Set([carrier.token]))) continue;
-      utils.report({ ruleName: FONT_SIZE_RULE, result, node, word: carrier.token, message: `Expected "${carrier.token}" from the token files rather than set in this file` });
-    }
-  });
+type Literal = { readonly word: string; readonly message: string };
+
+type TokenRule = {
+  readonly ruleName: string;
+  readonly literals: (property: string, value: string) => readonly Literal[];
+  readonly carriers: (property: string, value: string) => readonly TokenCarrier[];
 };
 
-const FONT_SIZE_PLUGIN = {
-  ruleName: FONT_SIZE_RULE,
-  rule: Object.assign(fontSizeFromTokens, { ruleName: FONT_SIZE_RULE, messages: {} }),
-} satisfies Plugin;
+// postcss-html hands the rule one root per style block or attribute, so the file's declarations sit on the result's document.
+function tokenPlugin({ ruleName, literals, carriers }: TokenRule) {
+  const rule: RuleBase = () => async (root, result) => {
+    const { utils } = (await import("stylelint")).default;
+    const declared = fileDeclarations(result.root);
+    root.walkDecls((node) => {
+      for (const { word, message } of literals(node.prop, node.value)) utils.report({ ruleName, result, node, word, message });
+      for (const carrier of carriers(node.prop, node.value)) {
+        if (fromTokens(carrier, declared, new Set([carrier.token]))) continue;
+        utils.report({ ruleName, result, node, word: carrier.token, message: `Expected "${carrier.token}" from the token files rather than set in this file` });
+      }
+    });
+  };
+  return { ruleName, rule: Object.assign(rule, { ruleName, messages: {} }) } satisfies Plugin;
+}
+
+function fontSizeLiterals(property: string, value: string): Literal[] {
+  const literal = literalSize(property, value);
+  return literal === undefined ? [] : [{ word: literal, message: `Expected the font size from the token files rather than the literal "${literal}"` }];
+}
+
+function oneVarCarriers(value: string): TokenCarrier[] {
+  return ONE_VAR.test(value) ? varNames(value).map((token) => ({ token, setTo: ONE_VAR, atSize: false })) : [];
+}
+
+function shorthandLineHeight(property: string, value: string): TokenCarrier[] {
+  const lineHeight = property.toLowerCase() === "font" ? FONT_VALUE.exec(value)?.groups?.lineHeight : undefined;
+  return varNames(lineHeight ?? "").map((token) => ({ token, setTo: ONE_VAR, atSize: false }));
+}
+
+const TYPE_PROPERTIES = [
+  { property: "line-height", keywords: ["inherit"] },
+  { property: "letter-spacing", keywords: ["inherit", "normal"] },
+  { property: "font-weight", keywords: ["inherit"] },
+  { property: "text-transform", keywords: ["inherit", "none"] },
+] as const;
+
+type TypeProperty = (typeof TYPE_PROPERTIES)[number]["property"];
+
+function typeRuleName(property: TypeProperty): string {
+  return `checks/${property}-from-tokens`;
+}
+
+function typePropertyCarriers(property: TypeProperty): TokenRule["carriers"] {
+  return (name, value) => [
+    ...(name.toLowerCase() === property ? oneVarCarriers(value) : []),
+    ...(property === "line-height" ? shorthandLineHeight(name, value) : []),
+  ];
+}
+
+const TOKEN_PLUGINS = [
+  tokenPlugin({ ruleName: FONT_SIZE_RULE, literals: fontSizeLiterals, carriers: sizeCarriers }),
+  ...TYPE_PROPERTIES.map(({ property }) => tokenPlugin({ ruleName: typeRuleName(property), literals: () => [], carriers: typePropertyCarriers(property) })),
+];
 
 const DESIGN_TOKENS = {
   "color-no-hex": true,
   "color-named": "never",
   "function-disallowed-list": COLOUR_FUNCTIONS.map((name) => `/^${name}$/i`),
   "declaration-property-value-allowed-list": {
-    "/^font-size$/i": [String(FONT_SIZE_VALUE), "/^inherit$/i"],
+    "/^font-size$/i": [String(ONE_VAR), "/^inherit$/i"],
     "/^font$/i": [String(FONT_VALUE), "/^inherit$/i"],
+    ...Object.fromEntries(TYPE_PROPERTIES.map(({ property, keywords }) => [`/^${property}$/i`, [String(ONE_VAR), ...keywords.map((keyword) => `/^${keyword}$/i`)]])),
   },
-  [FONT_SIZE_RULE]: true,
+  ...Object.fromEntries(TOKEN_PLUGINS.map(({ ruleName }) => [ruleName, true])),
 } as const satisfies Rules;
 
 const REFUSED_BASELINE = '@avi2dg/checks/stylelint: set baseline to "widely", "newly" or a year such as 2024';
@@ -286,7 +332,7 @@ export function defineConfig({ baseline, tokens, bem, flatSelectors, noPageHas, 
   return {
     ...rest,
     extends: [peer("stylelint-config-standard")],
-    plugins: [peer("stylelint-plugin-use-baseline"), FONT_SIZE_PLUGIN],
+    plugins: [peer("stylelint-plugin-use-baseline"), ...TOKEN_PLUGINS],
     rules: { ...merged, [BASELINE_RULE]: passProperty(merged[BASELINE_RULE]) },
     overrides: [
       { files: [...MARKUP], customSyntax: peer("postcss-html") },

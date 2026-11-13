@@ -91,7 +91,7 @@ const FAMILIES = [
     family: "G4 design tokens, a literal size in the font shorthand",
     options: '{ baseline: "widely", tokens: ["src/tokens.css"] }',
     red: "p { font: 12px serif; }\n",
-    green: "p { font: small-caps var(--text-small)/1.5 \"Roboto Medium\", serif; }\n",
+    green: "p { font: small-caps var(--text-small)/var(--leading) \"Roboto Medium\", serif; }\n",
     reported: "src/site.css:1:11 Disallowed value \"12px serif\" for property \"font\" (declaration-property-value-allowed-list)",
   },
   {
@@ -112,7 +112,7 @@ const FAMILIES = [
     family: "G4 design tokens, a literal size after a token weight in the font shorthand",
     options: '{ baseline: "widely", tokens: ["src/tokens.css"] }',
     red: "p { font: var(--weight) 12px serif; }\n",
-    green: "p { font: 450.5 var(--text-s) serif; }\n",
+    green: "p { font: var(--text-s) serif; }\n",
     reported: "(declaration-property-value-allowed-list)",
   },
   {
@@ -263,7 +263,7 @@ test("a named size in the font shorthand fails, directly and through a local ali
     "frontend-syntax.json": JSON.stringify({ inputs: ["src/**/*.css"] }),
     "stylelint.config.ts": stylelintConfig('{ baseline: "widely", tokens: ["src/tokens.css"] }'),
     "src/tokens.css": ":root {\n  --ink: #000;\n  --text-s: 0.875rem;\n  --weight: 400;\n}\n",
-    "src/site.css": "p { font: 400 var(--text-s) serif; }\n",
+    "src/site.css": "p { font: italic var(--text-s) serif; }\n",
   });
   expect(await script(GATE)).toEqual({ exitCode: 0, text: "frontend-syntax: no violation in 2 file(s) from 1 declared input(s)\n" });
 
@@ -285,7 +285,7 @@ test("a named size fails only where the font size can stand, so a family name ho
     "frontend-syntax.json": JSON.stringify({ inputs: ["src/**/*.css"] }),
     "stylelint.config.ts": stylelintConfig('{ baseline: "widely", tokens: ["src/tokens.css"] }'),
     "src/tokens.css": ":root {\n  --ink: #000;\n  --text-s: 0.875rem;\n  --weight: 400;\n}\n",
-    "src/site.css": ":root { --face: roboto medium, serif; }\np { font: var(--text-s) var(--face); }\nh1 { font: var(--text-s) / 1.5 large type, serif; }\n",
+    "src/site.css": ":root { --face: roboto medium, serif; }\np { font: var(--text-s) var(--face); }\nh1 { font: var(--text-s) / var(--leading) large type, serif; }\n",
   });
   expect(await script(GATE)).toEqual({ exitCode: 0, text: "frontend-syntax: no violation in 2 file(s) from 1 declared input(s)\n" });
 
@@ -300,6 +300,98 @@ test("a named size fails only where the font size can stand, so a family name ho
   expect(aliased.text).toStartWith("frontend-syntax: 1 problem(s) in 2 file(s) from 1 declared input(s):\n  src/site.css:1:");
   expect(aliased.text).toContain('Expected "--rest" from the token files rather than set in this file (checks/font-size-from-tokens)');
   expect(aliased.exitCode).toBe(1);
+}, 60_000);
+
+const TYPE_TOKENS = ":root {\n  --leading: 1.3;\n  --tracking: 0.02em;\n  --weight: 600;\n  --case: uppercase;\n  --size: 1rem;\n}\n";
+
+const TYPE_PROPERTIES = [
+  { property: "line-height", literal: "1.3", token: "--leading" },
+  { property: "letter-spacing", literal: "0.02em", token: "--tracking" },
+  { property: "font-weight", literal: "600", token: "--weight" },
+  { property: "text-transform", literal: "uppercase", token: "--case" },
+] as const;
+
+function typeRepository(tokens: string, component: string) {
+  return open({
+    "frontend-syntax.json": JSON.stringify({ inputs: ["src/**/*.css"] }),
+    "stylelint.config.ts": stylelintConfig('{ baseline: "widely", tokens: ["src/tokens.css"] }'),
+    "src/tokens.css": tokens,
+    "src/card.css": component,
+  });
+}
+
+function rule(selector: string, declarations: readonly string[]): string {
+  const custom = declarations.filter((declaration) => declaration.startsWith("--"));
+  const standard = declarations.filter((declaration) => !declaration.startsWith("--"));
+  const lines = (group: readonly string[]) => group.map((declaration) => `  ${declaration};\n`).join("");
+  return `${selector} {\n${[custom, standard].filter((group) => group.length > 0).map(lines).join("\n")}}\n`;
+}
+
+const CLEAN = "frontend-syntax: no violation in 2 file(s) from 1 declared input(s)\n";
+
+for (const { property, literal, token } of TYPE_PROPERTIES) {
+  test(`a literal ${property} fails in a component file rather than passing as it does in a token file, and a var() passes`, async () => {
+    const { write, script } = await typeRepository(`${TYPE_TOKENS}\n${rule(".lede", [`${property}: ${literal}`])}`, rule(".card", [`${property}: var(${token})`]));
+    expect(await script(GATE)).toEqual({ exitCode: 0, text: CLEAN });
+
+    await write({ "src/card.css": rule(".card", [`${property}: ${literal}`]) });
+    const red = await script(GATE);
+    expect(red.text).toStartWith("frontend-syntax: 1 problem(s) in 2 file(s) from 1 declared input(s):\n  src/card.css:2:");
+    expect(red.text).toContain(`Disallowed value "${literal}" for property "${property}" (declaration-property-value-allowed-list)`);
+    expect(red.exitCode).toBe(1);
+  }, 60_000);
+}
+
+test("a type value a component file sets on its own custom property fails where the file reads it, while an alias of a token passes", async () => {
+  const aliased = TYPE_PROPERTIES.map(({ property, token }) => rule(`.card-${property}`, [`--own: var(${token})`, `${property}: var(--own)`])).join("\n");
+  const { write, script } = await typeRepository(TYPE_TOKENS, aliased);
+  expect(await script(GATE)).toEqual({ exitCode: 0, text: CLEAN });
+
+  await write({ "src/card.css": TYPE_PROPERTIES.map(({ property, literal }) => rule(`.card-${property}`, [`--own: ${literal}`, `${property}: var(--own)`])).join("\n") });
+  const red = await script(GATE);
+  expect(red.text).toStartWith("frontend-syntax: 4 problem(s) in 2 file(s) from 1 declared input(s):\n");
+  for (const { property } of TYPE_PROPERTIES) expect(red.text).toContain(`Expected "--own" from the token files rather than set in this file (checks/${property}-from-tokens)`);
+  expect(red.exitCode).toBe(1);
+}, 60_000);
+
+test("inherit, a normal letter spacing and no text transform pass, while a normal line height or weight, bold and a zero letter spacing fail", async () => {
+  const kept = [
+    rule(".inherited", TYPE_PROPERTIES.map(({ property }) => `${property}: inherit`)),
+    rule(".reset", ["letter-spacing: normal", "text-transform: none"]),
+  ].join("\n");
+  const { write, script } = await typeRepository(TYPE_TOKENS, kept);
+  expect(await script(GATE)).toEqual({ exitCode: 0, text: CLEAN });
+
+  const refused = [
+    rule(".leading", ["line-height: normal"]),
+    rule(".regular", ["font-weight: normal"]),
+    rule(".strong", ["font-weight: bold"]),
+    rule(".tracking", ["letter-spacing: 0"]),
+  ];
+  await write({ "src/card.css": refused.join("\n") });
+  const red = await script(GATE);
+  expect(red.text).toStartWith("frontend-syntax: 4 problem(s) in 2 file(s) from 1 declared input(s):\n");
+  for (const value of ['"normal" for property "line-height"', '"normal" for property "font-weight"', '"bold" for property "font-weight"', '"0" for property "letter-spacing"']) {
+    expect(red.text).toContain(`Disallowed value ${value} (declaration-property-value-allowed-list)`);
+  }
+  expect(red.exitCode).toBe(1);
+}, 60_000);
+
+test("the font shorthand fails a literal line height, a literal weight and a line height set in the same file, and passes a token line height", async () => {
+  const { write, script } = await typeRepository(TYPE_TOKENS, rule(".card", ["font: var(--size)/var(--leading) serif"]));
+  expect(await script(GATE)).toEqual({ exitCode: 0, text: CLEAN });
+
+  for (const [component, reported] of [
+    [rule(".card", ["font: var(--size)/1.3 serif"]), '"var(--size)/1.3 serif" for property "font" (declaration-property-value-allowed-list)'],
+    [rule(".card", ["font: 600 var(--size) serif"]), '"600 var(--size) serif" for property "font" (declaration-property-value-allowed-list)'],
+    [rule(".card", ["--own: 1.3", "font: var(--size)/var(--own) serif"]), 'Expected "--own" from the token files rather than set in this file (checks/line-height-from-tokens)'],
+  ] as const) {
+    await write({ "src/card.css": component });
+    const red = await script(GATE);
+    expect(red.text, component).toStartWith("frontend-syntax: 1 problem(s) in 2 file(s) from 1 declared input(s):\n  src/card.css:");
+    expect(red.text, component).toContain(reported);
+    expect(red.exitCode, component).toBe(1);
+  }
 }, 60_000);
 
 test("a size custom property one style block of a page sets fails where another block or a style attribute reads it", async () => {

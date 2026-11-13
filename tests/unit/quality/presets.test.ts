@@ -151,12 +151,19 @@ const DESIGN_TOKEN_RULES = [
   "function-disallowed-list",
   "declaration-property-value-allowed-list",
   "checks/font-size-from-tokens",
+  "checks/line-height-from-tokens",
+  "checks/letter-spacing-from-tokens",
+  "checks/font-weight-from-tokens",
+  "checks/text-transform-from-tokens",
 ];
 
 test("the stylelint builder turns on the correctness, convention, selector, comment, language and Baseline families, and leaves design tokens off without token files", () => {
   const config = defineStylelint({ baseline: "widely", tokens: false });
   expect(config.extends).toEqual([expect.stringContaining("stylelint-config-standard")]);
-  expect(config.plugins).toEqual([expect.stringContaining("stylelint-plugin-use-baseline"), expect.objectContaining({ ruleName: "checks/font-size-from-tokens" })]);
+  expect(config.plugins).toEqual([
+    expect.stringContaining("stylelint-plugin-use-baseline"),
+    ...DESIGN_TOKEN_RULES.filter((rule) => rule.startsWith("checks/")).map((ruleName) => expect.objectContaining({ ruleName })),
+  ]);
   expect(config.rules).toMatchObject({
     "selector-max-specificity": "0,3,2",
     "selector-max-compound-selectors": 3,
