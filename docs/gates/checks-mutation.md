@@ -44,7 +44,8 @@ Elsewhere it runs one worker per two cores, rounded down and at least one, since
 Stryker's own deadlines end every run, and the preset sets them: `dryRunTimeoutMinutes` is 5, `timeoutMS` is 60000 and `timeoutFactor` is 1.5.
 So the dry run of a healthy unit suite passes for up to 5 minutes, however many tests it holds.
 A mutant run ends after 60 seconds plus 1.5 times the time its covering tests took in the dry run, plus the dry run's overhead.
-The bun runner's `bun.timeout` kills a whole `bun test` process rather than one test, so the preset sets it to 810000, past every deadline Stryker can reach with those values.
+The bun runner's `bun.timeout` kills a whole `bun test` process rather than one test.
+So the preset sets it to 810000, past every deadline Stryker reaches with those values.
 A test that never settles fails at Bun's own per-test limit, 5 seconds unless `bunfig.toml` sets `[test].timeout`.
 
 The config then reads:
