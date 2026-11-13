@@ -62,7 +62,8 @@ Text over a background image or a gradient is such a case, and the report lists 
 `contrast` measures that text for the targets that set `contrast`.
 
 `contrast` waits for the page's images in view and for each entrance animation, up to ten seconds, then pauses every animation where it stands.
-For each line of a target's text it compares the letters' pixels, read where the marker colour lands, with the backdrop's pixels in a ring two pixels wide around them.
+For each line of a target's text it compares the letters' pixels with the backdrop's pixels in a ring two pixels wide around them.
+It reads the letters' pixels where the marker colour lands.
 The letters' lightest or darkest pixels, whichever stand furthest from the backdrop, give their colour.
 The ratio it reports is the 5th percentile of the ring, so a bright stretch of a photo behind one letter is not averaged away.
 A shadow or a halo stays painted when the text is cleared, so it counts as backdrop.
@@ -85,7 +86,7 @@ None of these sees a parent click handler that fires with a child control's clic
 The runner prints one line for each check at each visit, narrowed by the `html`, `links` and `motion` exceptions above.
 The line names the route, its locale, the viewport, the state and what the check scanned.
 At every visit, whichever checks are declared, a `targets` run counts the visible elements each target that applies to the route matches.
-For `targets`, `layout`, `keyboard` and a hook, what it scanned is each target by name with the count of its elements.
+For `targets`, `layout`, `keyboard`, `contrast` and a hook, what it scanned is each target by name with the count of its elements.
 
 It fails, rather than passes, when a declaration leaves nothing to judge:
 
@@ -189,7 +190,8 @@ It reads `browser-checks.json` in the directory it runs in:
 
 `textPx` sets the default font size, so text the page sizes in `rem` or `em` grows, as a visitor's own setting makes it grow.
 A declaration that names a route, viewport, state, target or check twice is refused.
-So are a `motion` check with no state whose `reducedMotion` is `reduce`, a `keyboard` check with no `focusable` target, a `contrast` check with no `contrast` target, and a target or a hook that names an undeclared route.
+So are a `motion` check with no state whose `reducedMotion` is `reduce` and a `keyboard` check with no `focusable` target.
+So is a `contrast` check with no `contrast` target, and a target or a hook that names an undeclared route.
 
 ### Screen sizes
 
