@@ -32,6 +32,8 @@ type PageStyle = {
   readonly content: string;
   readonly opacity: string;
   readonly visibility: string;
+  readonly display: string;
+  readonly clipPath: string;
   readonly position: string;
   readonly top: string;
   readonly right: string;
@@ -119,7 +121,7 @@ export const scanRings = (el: PageElement): RingScan[] => {
   ] as const;
   const ringPaint = (painted: PageStyle): ReadonlyArray<string> => ringKeys.map((key) => key + "=" + painted[key]);
   const revealKeys = [
-    "content", "opacity", "visibility", "transform", "translate", "rotate", "scale",
+    "content", "opacity", "visibility", "display", "clipPath", "transform", "translate", "rotate", "scale",
     "position", "top", "right", "bottom", "left",
     "marginTop", "marginRight", "marginBottom", "marginLeft",
   ] as const;
