@@ -5,7 +5,7 @@ import { runMain } from "../../core/main.ts";
 import { watchAssets } from "./assets.ts";
 import { judgeAxe } from "./axe.ts";
 import { judgeContrast } from "./contrast.ts";
-import { readDeclaration, targetsOn, visitsOf, type CheckName, type Declaration, type Visit } from "./declaration.ts";
+import { readDeclaration, runsIn, targetsOn, visitsOf, type CheckName, type Declaration, type Visit } from "./declaration.ts";
 import { loadHooks, runHook, type ProductCheck } from "./hooks.ts";
 import { judgeHtml } from "./html.ts";
 import { judgeKeyboard } from "./keyboard.ts";
@@ -16,7 +16,7 @@ import { judgeNesting } from "./nesting.ts";
 import { coldShift, formatShift, judgeShift, recordShifts } from "./shift.ts";
 import { attempt, launchChrome, load, openVisit, type BrowserFailure } from "./page.ts";
 import { counted, NAME, passes, report, type Run } from "./report.ts";
-import { readSite, serveSite } from "./serve.ts";
+import { serveSite, type Site } from "./serve.ts";
 import { judgePageWeight, weighPage } from "./weight.ts";
 import { judgeTargets } from "./targets.ts";
 
@@ -149,14 +149,14 @@ const BUILT_IN: Readonly<Record<CheckName, (visiting: Visiting) => Effect.Effect
 };
 
 function applies(check: CheckName, visit: Visit, declaration: Declaration): boolean {
+  if (!runsIn(visit.state, check)) return false;
   if (check === "motion") return visit.state.reducedMotion === "reduce";
   if (check === "html" || check === "links")
-    return visit.viewport.name === declaration.viewports[0].name && visit.state.name === declaration.states[0].name;
+    return visit.viewport.name === declaration.viewports[0].name && visit.state.name === declaration.states.find((state) => runsIn(state, check))?.name;
   return true;
 }
 
-const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: Declaration) {
-  const site = yield* readSite(root, declaration.site);
+const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: Declaration, site: Site) {
   const paths = declaration.routes.map(({ path }) => path);
   const hooks = declaration.hooks === undefined ? [] : yield* loadHooks(root, declaration.hooks, paths);
   const missingRoutes = paths.filter((path) => !site.files.has(path));
@@ -174,8 +174,8 @@ const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: D
 
 const browserChecks = Effect.gen(function* () {
   const root = (yield* Path.Path).resolve(process.argv[2] ?? ".");
-  const declaration = yield* readDeclaration(root);
-  const outcome = yield* checkSite(root, declaration);
+  const { declaration, site } = yield* readDeclaration(root);
+  const outcome = yield* checkSite(root, declaration, site);
   yield* Console.log(report(declaration, outcome));
   return passes(outcome);
 });

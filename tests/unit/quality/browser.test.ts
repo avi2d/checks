@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { describeVisit, expanded, inconsistencies, targetsOn, visitsOf, type Declaration, type Listed } from "../../../src/quality/browser/declaration.ts";
+import { describeVisit, expanded as expandedOn, inconsistencies, runsIn, targetsOn, visitsOf, type Declaration, type Listed, type State } from "../../../src/quality/browser/declaration.ts";
 import { counted, passes, report, type Outcome } from "../../../src/quality/browser/report.ts";
 
 const DECLARATION: Declaration = {
@@ -28,6 +28,52 @@ test("visits cross every route with every viewport and state, and a target appli
   expect(targetsOn(DECLARATION, "/ru/").map(({ name }) => name)).toEqual(["language switch", "email contact"]);
 });
 
+const BUILT = ["/", "/about/", "/notes.html", "/ru/"] as const;
+
+const expanded = (listed: Listed): Declaration => expandedOn(listed, BUILT);
+
+test("the every-page preset expands to each built page under its locale, leaving none unvisited and none twice", () => {
+  const { routes } = expanded({ ...DECLARATION, routes: [{ preset: "every-page", locale: "en" }] });
+  expect([...routes]).toEqual(BUILT.map((path) => ({ path, locale: "en" })));
+  expect(inconsistencies(expanded({ ...DECLARATION, routes: [{ preset: "every-page", locale: "en" }] }))).toEqual([]);
+});
+
+test("a route the every-page preset also finds, or the preset listed twice, is refused as declared twice rather than visited twice", () => {
+  const beside = expanded({ ...DECLARATION, routes: [{ preset: "every-page", locale: "en" }, { path: "/ru/", locale: "ru" }] });
+  expect(inconsistencies(beside)).toEqual(["route /ru/ is declared twice"]);
+  const twice = expanded({ ...DECLARATION, routes: [{ preset: "every-page", locale: "en" }, { preset: "every-page", locale: "ru" }] });
+  expect(inconsistencies(twice)).toEqual(BUILT.map((path) => `route ${path} is declared twice`));
+});
+
+test("a state that names its checks runs only those, so an axe-only default motion state skips layout and motion", () => {
+  const reduced: State = { name: "reduced motion", reducedMotion: "reduce" };
+  const moving: State = { name: "default motion", checks: ["axe"] };
+  const states: Declaration["states"] = [reduced, moving];
+  const checks = ["layout", "motion", "axe"] as const;
+  expect(checks.map((check) => runsIn(reduced, check))).toEqual([true, true, true]);
+  expect(checks.map((check) => runsIn(moving, check))).toEqual([false, false, true]);
+  expect(inconsistencies({ ...DECLARATION, states, checks: ["layout", "keyboard", "motion", "axe"] })).toEqual([]);
+});
+
+test("a state that names an undeclared check, a check twice or motion without reduced motion, and a check no state runs, are refused rather than skipped", () => {
+  const contradicting: Declaration = {
+    ...DECLARATION,
+    states: [
+      { name: "default", checks: ["axe", "axe", "html"] },
+      { name: "moving", checks: ["motion"] },
+      { name: "reduced motion", reducedMotion: "reduce", checks: ["axe"] },
+    ],
+    checks: ["layout", "motion", "axe"],
+  };
+  expect(inconsistencies(contradicting)).toEqual([
+    "state default names check axe twice",
+    "state default names check html, which checks does not declare",
+    "state moving names check motion, which runs only in a state whose reducedMotion is reduce",
+    "check layout runs in no state, since each state names its checks without it",
+    "check motion judges a visitor who turns motion off, and no state that runs it sets reducedMotion to reduce",
+  ]);
+});
+
 test("a consistent declaration has no inconsistency", () => {
   expect(inconsistencies(DECLARATION)).toEqual([]);
 });
@@ -51,7 +97,7 @@ test("a declaration that repeats a name, names an undeclared route or enables a 
     "target headline is declared twice",
     "check layout is declared twice",
     "target headline names route /about/, which no route declares",
-    "check motion judges a visitor who turns motion off, and no state sets reducedMotion to reduce",
+    "check motion judges a visitor who turns motion off, and no state that runs it sets reducedMotion to reduce",
     "check keyboard judges the targets Tab reaches, and no target sets focusable",
     "check contrast measures the text over a photo or a gradient, and no target sets contrast",
   ]);
