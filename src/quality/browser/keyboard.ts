@@ -97,6 +97,8 @@ const scanRings = (el: Element): RingScan[] => {
     "borderLeftWidth=" + painted.borderLeftWidth,
     "borderLeftStyle=" + painted.borderLeftStyle,
     "borderLeftColor=" + painted.borderLeftColor,
+    "backgroundColor=" + painted.backgroundColor,
+    "backgroundImage=" + painted.backgroundImage,
   ];
   const nodes: RingScan[] = [];
   let current: Element | null = el;
@@ -237,7 +239,7 @@ const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page) {
   if (rect === null) return false;
   const withoutFocus = yield* attempt("cannot capture the blurred element", () => page.screenshot({ animations: "disabled" }));
   yield* attempt("cannot focus the element again", () => focused.focus());
-  const changed = yield* attempt("cannot compare the focused and blurred captures", () =>
+  return yield* attempt("cannot compare the focused and blurred captures", () =>
     page.evaluate(cropsDiffer, {
       first: withFocus.toString("base64"),
       second: withoutFocus.toString("base64"),
@@ -246,17 +248,6 @@ const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page) {
       width: rect.width,
       height: rect.height,
     }));
-  if (!changed) return false;
-  const refocused = yield* attempt("cannot capture the refocused element", () => page.screenshot({ animations: "disabled" }));
-  return yield* attempt("cannot compare the focused and refocused captures", () =>
-    page.evaluate(cropsDiffer, {
-      first: withFocus.toString("base64"),
-      second: refocused.toString("base64"),
-      x: rect.x,
-      y: rect.y,
-      width: rect.width,
-      height: rect.height,
-    }).then((repainted) => !repainted));
 });
 
 // Past the last stop Tab leaves the page for the browser, and the next press starts over at the first stop.

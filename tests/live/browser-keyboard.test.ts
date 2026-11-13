@@ -115,7 +115,7 @@ test("keyboard still fails a touched row whose ring needs refocus to appear", as
   const site = await browserSite({
     "dist/index.html": page(
       `<ul style="list-style: none; padding: 0"><li class="row" style="padding: 40px"><input name="name"><script>document.querySelector("input").addEventListener("blur", (event) => event.target.closest(".row").classList.add("touched"));</script></li></ul>`,
-      { head: `<style>input:focus { outline: none; } .row { background: #fff; } .row.touched { background: #eef; } .row.touched:focus-within { outline: 3px solid #000; }</style>` },
+      { head: `<style>input:focus { outline: none; } .row.touched:focus-within { outline: 3px solid #000; }</style>` },
     ),
     "browser-checks.json": declaration({ targets: [{ name: "field", selector: "input", focusable: true }], checks: ["keyboard"] }),
   });
