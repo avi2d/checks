@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { describeVisit, expanded as expandedOn, inconsistencies, runsIn, targetsOn, visitsOf, type Declaration, type Listed, type State } from "../../../src/quality/browser/declaration.ts";
+import { describeVisit, expanded as expandedOn, inconsistencies, runsIn, targetsOn, visitsOf, type Declaration, type ExpandedDeclaration, type Listed, type State } from "../../../src/quality/browser/declaration.ts";
 import { counted, passes, report, type Outcome } from "../../../src/quality/browser/report.ts";
 import { hookApplies } from "../../../src/quality/browser/hooks.ts";
 
@@ -31,7 +31,7 @@ test("visits cross every route with every viewport and state, and a target appli
 
 const BUILT = ["/", "/about/", "/notes.html", "/ru/"] as const;
 
-const expanded = (listed: Listed): Declaration => expandedOn(listed, BUILT);
+const expanded = (listed: Listed): ExpandedDeclaration => expandedOn(listed, BUILT);
 
 test("the every-page preset expands to each built page under its locale, leaving none unvisited and none twice", () => {
   const { routes } = expanded({ ...DECLARATION, routes: [{ preset: "every-page", locale: "en" }] });
@@ -139,7 +139,7 @@ function listing(viewports: Listed["viewports"], states: Listed["states"] = DECL
   return { ...DECLARATION, viewports, states };
 }
 
-function sizesOf({ viewports }: Declaration): readonly string[] {
+function sizesOf({ viewports }: ExpandedDeclaration): readonly string[] {
   return viewports.map(({ device, width, height }) => `${device ?? "unclassed"} ${width}x${height}`).toSorted();
 }
 

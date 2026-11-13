@@ -88,6 +88,8 @@ export type WeightBudgets = typeof WeightBudgets.Type;
 export type ShiftBound = typeof ShiftBound.Type;
 export type Declaration = typeof Declaration.Type;
 
+export type ExpandedDeclaration = Omit<Declaration, "routes"> & { readonly routes: readonly Route[] };
+
 export type Visit = {
   readonly route: Route;
   readonly viewport: Viewport;
@@ -107,7 +109,7 @@ const STATES: Readonly<Record<(typeof STATE_PRESETS)[number], State>> = {
   "enlarged-text": { name: "enlarged text", textPx: ENLARGED_TEXT_PX },
 };
 
-export function expanded(listed: Listed, pages: readonly string[]): Declaration {
+export function expanded(listed: Listed, pages: readonly string[]): ExpandedDeclaration {
   const explicit = new Set(listed.routes.flatMap((entry) => ("preset" in entry ? [] : [entry.path])));
   return {
     ...listed,
@@ -123,7 +125,7 @@ export function runsIn(state: State, check: CheckName): boolean {
   return state.checks === undefined || state.checks.includes(check);
 }
 
-function stateInconsistencies({ states, checks }: Declaration): readonly string[] {
+function stateInconsistencies({ states, checks }: ExpandedDeclaration): readonly string[] {
   return [
     ...states.flatMap(({ name, checks: named = [] }) => [
       ...repeated(named).map((check) => `state ${name} names check ${check} twice`),
@@ -142,7 +144,7 @@ function repeated(names: readonly string[]): readonly string[] {
   return [...new Set(names.filter((name, index) => names.indexOf(name) !== index))];
 }
 
-export function inconsistencies(declaration: Declaration, skipTargetRoutes = false): readonly string[] {
+export function inconsistencies(declaration: ExpandedDeclaration, skipTargetRoutes = false): readonly string[] {
   const paths = declaration.routes.map(({ path }) => path);
   const found = [
     ...repeated(paths).map((path) => `route ${path} is declared twice`),
@@ -188,11 +190,12 @@ export const readDeclaration = Effect.fn("readDeclaration")(function* (root: str
   const early = inconsistencies(expanded(listed, []), hasPreset);
   if (early.length > 0) return yield* new Usage({ message: `${DECLARATION}: ${early.join("; ")}` });
   const site = yield* readSite(root, listed.site);
-  const pages = sitePages(site);
-  if (hasPreset && pages.length === 0) {
+  const candidate = expanded(listed, sitePages(site));
+  const { routes } = candidate;
+  if (!Arr.isReadonlyArrayNonEmpty(routes)) {
     return yield* new Usage({ message: `the declared site ${listed.site} holds no .html page, so build the site before the browser checks run` });
   }
-  const declaration = expanded(listed, pages);
+  const declaration: Declaration = { ...candidate, routes };
   const found = inconsistencies(declaration);
   if (found.length > 0) return yield* new Usage({ message: `${DECLARATION}: ${found.join("; ")}` });
   return { declaration, site } satisfies { readonly declaration: Declaration; readonly site: Site };
