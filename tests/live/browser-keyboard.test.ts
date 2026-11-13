@@ -83,6 +83,27 @@ test("keyboard counts a row ring drawn by a pseudo-element or a large outline of
   expect(ran.exitCode).toBe(0);
 }, 120_000);
 
+test("keyboard counts a ring the link draws with its own focus-visible pseudo-element outside its box, and still fails a link with no focus indication", async () => {
+  const row = (ring: string) =>
+    page(`<ul style="list-style: none; padding: 0 24px"><li class="row" style="position: relative; padding: 40px 0"><h3 style="margin: 0"><a href="/">Family law</a></h3></li></ul>`, {
+      head: `<style>a { color: inherit; text-decoration: none; } a:focus-visible { outline: none; } ${ring}</style>`,
+    });
+  const pages = {
+    "before-ring.html": row(`a:focus-visible::before { content: ""; position: absolute; inset: 8px -16px; outline: 2px solid #000; }`),
+    "after-ring.html": row(`a:focus-visible::after { content: ""; position: absolute; inset: 8px -16px; border: 2px solid #000; }`),
+    "no-ring.html": row(""),
+  };
+  const site = await browserSite({
+    ...sitePages(pages),
+    "browser-checks.json": declaration({ routes: routesOf(pages), viewports: [{ name: "phone", width: 320, height: 640, touch: true }], checks: ["keyboard"] }),
+  });
+  const ran = await site.run();
+  expect(failuresOf(ran.text)).toEqual([`${at("keyboard", "/no-ring.html", "default", "phone 320x640 touch")} link shows no visible focus when Tab reaches it`]);
+  expect(ran.text).toContain(`browser: ${at("keyboard", "/before-ring.html", "default", "phone 320x640 touch").slice(0, -1)} scanned link 1`);
+  expect(ran.text).toContain(`browser: ${at("keyboard", "/after-ring.html", "default", "phone 320x640 touch").slice(0, -1)} scanned link 1`);
+  expect(ran.exitCode).toBe(1);
+}, 120_000);
+
 test("keyboard still fails a ring that appears only after blur", async () => {
   const site = await browserSite({
     "dist/index.html": page(

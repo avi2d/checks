@@ -9,8 +9,10 @@ import {
   decodeRingScans,
   recall,
   remember,
+  reachOf,
   RESOLVE_LEAF,
   scanRings,
+  union,
   type Box,
   type CropArgs,
   type PageElement,
@@ -30,20 +32,6 @@ type KeyboardReport = {
 type Size = { readonly width: number; readonly height: number };
 
 const count = (page: Page, selector: string) => attempt("cannot query " + selector, () => page.locator(selector).count());
-
-const union = (first: Box, second: Box): Box => ({
-  x: Math.min(first.x, second.x),
-  y: Math.min(first.y, second.y),
-  width: Math.max(first.x + first.width, second.x + second.width) - Math.min(first.x, second.x),
-  height: Math.max(first.y + first.height, second.y + second.height) - Math.min(first.y, second.y),
-});
-
-const grown = (box: Box, margin: number): Box => ({
-  x: box.x - margin,
-  y: box.y - margin,
-  width: box.width + margin * 2,
-  height: box.height + margin * 2,
-});
 
 const cropTo = (box: Box, screen: Size): Box | null => {
   const left = Math.max(0, box.x);
@@ -94,8 +82,7 @@ const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page) {
     const blurred = blurredRings[index];
     if (blurred === undefined) break;
     if (focused.paint.join("\n") !== blurred.paint.join("\n")) {
-      region = union(region, grown(focused.box, focused.grow));
-      region = union(region, grown(blurred.box, blurred.grow));
+      region = union(reachOf(focused, region), reachOf(blurred, region));
     }
   }
   const rect = cropTo(region, screen);
