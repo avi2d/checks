@@ -167,7 +167,7 @@ const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: D
     const visiting = { browser, declaration, visit, url: new URL(visit.route.path, origin).href };
     runs.push(yield* targetsRun(visiting));
     for (const check of declaration.checks.filter((one) => applies(one, visit, declaration))) runs.push(yield* BUILT_IN[check](visiting));
-    for (const hook of hooks.filter((hook) => hookApplies(hook, visit))) runs.push(yield* hookRun(hook, visiting));
+    for (const hook of hooks.filter((candidate) => hookApplies(candidate, visit))) runs.push(yield* hookRun(hook, visiting));
   }
   return { runs, missingRoutes };
 }, Effect.scoped);
