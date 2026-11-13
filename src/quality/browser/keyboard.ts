@@ -19,6 +19,30 @@ type Box = { readonly x: number; readonly y: number; readonly width: number; rea
 
 type Size = { readonly width: number; readonly height: number };
 
+type RingScan = { readonly box: Box; readonly paint: string };
+
+const scanPaint = (el: Element): RingScan[] => {
+  const nodes: RingScan[] = [];
+  let current: Element | null = el;
+  while (current !== null) {
+    const rect = current.getBoundingClientRect();
+    const painted = getComputedStyle(current);
+    nodes.push({
+      box: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+      paint: [painted.outlineStyle, painted.outlineWidth, painted.outlineColor, painted.outlineOffset, painted.boxShadow, painted.borderTopWidth, painted.borderTopStyle, painted.borderTopColor, painted.borderRightWidth, painted.borderRightStyle, painted.borderRightColor, painted.borderBottomWidth, painted.borderBottomStyle, painted.borderBottomColor, painted.borderLeftWidth, painted.borderLeftStyle, painted.borderLeftColor, painted.backgroundColor, painted.backgroundImage].join(" "),
+    });
+    current = current.parentElement;
+  }
+  return nodes;
+};
+
+const union = (first: Box, second: Box): Box => ({
+  x: Math.min(first.x, second.x),
+  y: Math.min(first.y, second.y),
+  width: Math.max(first.x + first.width, second.x + second.width) - Math.min(first.x, second.x),
+  height: Math.max(first.y + first.height, second.y + second.height) - Math.min(first.y, second.y),
+});
+
 const onScreen = (box: Box, screen: Size): Box | null => {
   const left = Math.max(0, box.x - FOCUS_RING_MARGIN_PX);
   const top = Math.max(0, box.y - FOCUS_RING_MARGIN_PX);
@@ -33,34 +57,22 @@ const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page) {
   if (focused === null) return false;
   const box = yield* attempt("cannot measure the focused element", () => focused.boundingBox());
   if (box === null) return false;
-  const parent = yield* attempt("cannot measure the parent of the focused element", () =>
-    focused.evaluate((el: Element): Box | null => {
-      const container = el.parentElement;
-      if (container === null) return null;
-      const tag = container.tagName;
-      if (tag === "BODY" || tag === "HTML") return null;
-      const rect = container.getBoundingClientRect();
-      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-    }));
   const screen = page.viewportSize();
   if (screen === null) return yield* new BrowserFailure({ message: "cannot read the viewport" });
-  const whole: Box =
-    parent === null
-      ? box
-      : {
-          x: Math.min(box.x, parent.x),
-          y: Math.min(box.y, parent.y),
-          width: Math.max(box.x + box.width, parent.x + parent.width) - Math.min(box.x, parent.x),
-          height: Math.max(box.y + box.height, parent.y + parent.height) - Math.min(box.y, parent.y),
-        };
-  const clip = onScreen(whole, screen);
-  if (clip === null) return false;
-  yield* attempt("cannot settle the focused element before capturing it", () => page.evaluate("document.activeElement.blur()"));
-  yield* attempt("cannot focus the element again", () => focused.focus());
-  const withFocus = yield* attempt("cannot capture the focused element", () => page.screenshot({ clip, animations: "disabled" }));
+  if (onScreen(box, screen) === null) return false;
+  const focusedPaint = yield* attempt("cannot read the focused element and its ancestors", () => focused.evaluate(scanPaint));
   yield* attempt("cannot blur the focused element", () => page.evaluate("document.activeElement.blur()"));
+  const blurredPaint = yield* attempt("cannot read the blurred element and its ancestors", () => focused.evaluate(scanPaint));
+  let region: Box = box;
+  const depth = Math.min(focusedPaint.length, blurredPaint.length);
+  for (let index = 0; index < depth; index += 1) {
+    if (focusedPaint[index].paint !== blurredPaint[index].paint) region = union(region, focusedPaint[index].box);
+  }
+  const clip = onScreen(region, screen);
+  if (clip === null) return false;
   const withoutFocus = yield* attempt("cannot capture the blurred element", () => page.screenshot({ clip, animations: "disabled" }));
   yield* attempt("cannot focus the element again", () => focused.focus());
+  const withFocus = yield* attempt("cannot capture the focused element", () => page.screenshot({ clip, animations: "disabled" }));
   return !withFocus.equals(withoutFocus);
 });
 

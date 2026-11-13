@@ -34,3 +34,31 @@ test("keyboard counts a focus ring drawn on the row far outside the link as visi
   expect(ran.text).toContain(`browser: ${at("keyboard", "/row-ring.html", "default", "phone 320x640 touch").slice(0, -1)} scanned link 1`);
   expect(ran.exitCode).toBe(1);
 }, 120_000);
+
+test("keyboard counts a row ring at any nesting depth, and still fails a distant message that blur shows", async () => {
+  const nestedRing = page(
+    `<ul style="list-style: none; padding: 0"><li class="row" style="padding: 40px; background: #eef"><span><a href="/">Family law</a></span></li></ul>`,
+    { head: `<style>a:focus { outline: none; } .row:focus-within { outline: 3px solid #000; outline-offset: -4px; }</style>` },
+  );
+  const tallForm = page(
+    `<form><input name="name"><div style="height: 200px"></div><p class="msg">Complete every field</p></form>`,
+    { head: `<style>input:focus { outline: none; } form:focus-within .msg { display: none; }</style>` },
+  );
+  const pages = { "nested-ring.html": nestedRing, "tall-form.html": tallForm };
+  const site = await browserSite({
+    ...sitePages(pages),
+    "browser-checks.json": declaration({
+      routes: routesOf(pages),
+      viewports: [{ name: "phone", width: 320, height: 640, touch: true }],
+      targets: [
+        { name: "link", selector: "main a", routes: ["/nested-ring.html"], focusable: true },
+        { name: "field", selector: "input", routes: ["/tall-form.html"], focusable: true },
+      ],
+      checks: ["keyboard"],
+    }),
+  });
+  const ran = await site.run();
+  expect(failuresOf(ran.text)).toEqual([`${at("keyboard", "/tall-form.html", "default", "phone 320x640 touch")} field shows no visible focus when Tab reaches it`]);
+  expect(ran.text).toContain(`browser: ${at("keyboard", "/nested-ring.html", "default", "phone 320x640 touch").slice(0, -1)} scanned link 1`);
+  expect(ran.exitCode).toBe(1);
+}, 120_000);
