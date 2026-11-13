@@ -144,9 +144,6 @@ export const scanRings = (el: PageElement): RingScan[] => {
     if (holder.clientWidth === 0 && holder.clientHeight === 0 && (rect.width !== 0 || rect.height !== 0)) {
       const holderStyle = view.getComputedStyle(holder);
       const toPx = (token: string): number => {
-        if (token === "thin") return 1;
-        if (token === "medium") return 3;
-        if (token === "thick") return 5;
         const parsed = parseFloat(token);
         return Number.isFinite(parsed) ? parsed : 0;
       };
