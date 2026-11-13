@@ -349,11 +349,11 @@ for (const { property, literal, token } of TYPE_PROPERTIES) {
 }
 
 test("a font weight inside @font-face passes while a literal weight in an ordinary rule of the same file fails", async () => {
-  const face = "@font-face {\n  font-family: Inter;\n  font-weight: 100 900;\n  src: url(inter.woff2);\n}\n";
+  const face = "@font-face {\n  font-family: Inter;\n  font-weight: 100 900;\n  src: url('inter.woff2');\n}\n";
   const { write, script } = await typeRepository(TYPE_TOKENS, face);
   expect(await script(GATE)).toEqual({ exitCode: 0, text: CLEAN });
 
-  await write({ "src/card.css": `${face}${rule(".card", ["font-weight: 600"])}` });
+  await write({ "src/card.css": `${face}\n${rule(".card", ["font-weight: 600"])}` });
   const red = await script(GATE);
   expect(red.text).toStartWith("frontend-syntax: 1 problem(s) in 2 file(s) from 1 declared input(s):\n  src/card.css:");
   expect(red.text).toContain(typeRefusal("font-weight", "600"));
