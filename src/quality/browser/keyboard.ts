@@ -2,7 +2,6 @@ import { Effect } from "effect";
 import type { Page } from "playwright-core";
 import type { Target } from "./declaration.ts";
 import { attempt, BrowserFailure } from "./page.ts";
-import { countVisible } from "./targets.ts";
 
 const FOCUS_RING_MARGIN_PX = 6;
 
@@ -14,40 +13,53 @@ type KeyboardReport = {
   readonly reached: ReadonlyMap<string, number>;
 };
 
-const count = (page: Page, selector: string) => attempt(`cannot query ${selector}`, () => page.locator(selector).count());
-
-const focusedTargets = Effect.fn("focusedTargets")(function* (page: Page, targets: readonly Target[]) {
-  const focused: Target[] = [];
-  for (const target of targets) {
-    const matches = yield* attempt(`cannot query ${target.selector}`, () => page.locator(target.selector).and(page.locator(":focus")).count());
-    if (matches > 0) focused.push(target);
-  }
-  return focused;
-});
+const count = (page: Page, selector: string) => attempt("cannot query " + selector, () => page.locator(selector).count());
 
 type Box = { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
 
 type Size = { readonly width: number; readonly height: number };
 
-const ringCanShow = (box: Box, screen: Size): boolean =>
-  box.x + box.width + FOCUS_RING_MARGIN_PX > 0 &&
-  box.y + box.height + FOCUS_RING_MARGIN_PX > 0 &&
-  box.x - FOCUS_RING_MARGIN_PX < screen.width &&
-  box.y - FOCUS_RING_MARGIN_PX < screen.height;
-
-// The whole viewport is compared, not a margin around the element, because an ancestor such as a row may draw the ring any distance outside it.
-const capture = (page: Page) => page.screenshot({ animations: "disabled" });
+const onScreen = (box: Box, screen: Size): Box | null => {
+  const left = Math.max(0, box.x - FOCUS_RING_MARGIN_PX);
+  const top = Math.max(0, box.y - FOCUS_RING_MARGIN_PX);
+  const right = Math.min(screen.width, box.x + box.width + FOCUS_RING_MARGIN_PX);
+  const bottom = Math.min(screen.height, box.y + box.height + FOCUS_RING_MARGIN_PX);
+  if (right <= left || bottom <= top) return null;
+  return { x: left, y: top, width: right - left, height: bottom - top };
+};
 
 const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page) {
   const focused = yield* attempt("cannot hold the focused element", () => page.locator(":focus").elementHandle());
+  if (focused === null) return false;
   const box = yield* attempt("cannot measure the focused element", () => focused.boundingBox());
   if (box === null) return false;
+  const parent = yield* attempt("cannot measure the parent of the focused element", () =>
+    focused.evaluate((el: Element): Box | null => {
+      const container = el.parentElement;
+      if (container === null) return null;
+      const tag = container.tagName;
+      if (tag === "BODY" || tag === "HTML") return null;
+      const rect = container.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    }));
   const screen = page.viewportSize();
   if (screen === null) return yield* new BrowserFailure({ message: "cannot read the viewport" });
-  if (!ringCanShow(box, screen)) return false;
-  const withFocus = yield* attempt("cannot capture the focused element", () => capture(page));
+  const whole: Box =
+    parent === null
+      ? box
+      : {
+          x: Math.min(box.x, parent.x),
+          y: Math.min(box.y, parent.y),
+          width: Math.max(box.x + box.width, parent.x + parent.width) - Math.min(box.x, parent.x),
+          height: Math.max(box.y + box.height, parent.y + parent.height) - Math.min(box.y, parent.y),
+        };
+  const clip = onScreen(whole, screen);
+  if (clip === null) return false;
+  yield* attempt("cannot settle the focused element before capturing it", () => page.evaluate("document.activeElement.blur()"));
+  yield* attempt("cannot focus the element again", () => focused.focus());
+  const withFocus = yield* attempt("cannot capture the focused element", () => page.screenshot({ clip, animations: "disabled" }));
   yield* attempt("cannot blur the focused element", () => page.evaluate("document.activeElement.blur()"));
-  const withoutFocus = yield* attempt("cannot capture the blurred element", () => capture(page));
+  const withoutFocus = yield* attempt("cannot capture the blurred element", () => page.screenshot({ clip, animations: "disabled" }));
   yield* attempt("cannot focus the element again", () => focused.focus());
   return !withFocus.equals(withoutFocus);
 });
@@ -60,25 +72,49 @@ const tabToNextStop = Effect.fn("tabToNextStop")(function* (page: Page) {
 
 export const judgeKeyboard = Effect.fn("judgeKeyboard")(function* (page: Page, targets: readonly Target[]) {
   const found: string[] = [];
-  const visibleAtVisit = new Map<string, number>();
-  for (const target of targets) visibleAtVisit.set(target.name, yield* countVisible(page, target.selector));
-  const reached = new Map<string, number>();
+  const snapshots: string[][] = [];
+  for (let index = 0; index < targets.length; index += 1) {
+    const handles = yield* attempt("cannot query " + targets[index].selector, () =>
+      page.locator(targets[index].selector).filter({ visible: true }).elementHandles());
+    const tokens: string[] = [];
+    for (let position = 0; position < handles.length; position += 1) {
+      const token = index + ":" + position;
+      yield* attempt("cannot mark the visible element", () =>
+        handles[position].evaluate((el: Element, id: string) => {
+          const current = el.getAttribute("data-checks-kb");
+          el.setAttribute("data-checks-kb", current === null || current === "" ? id : current + " " + id);
+        }, token));
+      tokens.push(token);
+    }
+    snapshots.push(tokens);
+  }
+  const reachedSets: Set<string>[] = snapshots.map(() => new Set<string>());
   let stops = 0;
   while (yield* tabToNextStop(page)) {
     stops += 1;
     if (stops > STOP_LIMIT) {
-      found.push(`Tab never leaves the page within ${STOP_LIMIT} stops`);
+      found.push("Tab never leaves the page within " + STOP_LIMIT + " stops");
       break;
     }
-    const focused = yield* focusedTargets(page, targets);
-    for (const target of focused) reached.set(target.name, (reached.get(target.name) ?? 0) + 1);
-    if (focused.length > 0 && !(yield* focusRingShows(page))) {
-      found.push(`${focused.map(({ name }) => name).join(" and ")} shows no visible focus when Tab reaches it`);
+    const focused = yield* attempt("cannot hold the focused element", () => page.locator(":focus").elementHandle());
+    if (focused === null) continue;
+    const marked = yield* attempt("cannot read the focused element", () => focused.evaluate((el: Element) => el.getAttribute("data-checks-kb") ?? ""));
+    const hit: Target[] = [];
+    for (const token of marked.split(" ").filter((part) => part !== "")) {
+      const targetIndex = Number(token.slice(0, token.indexOf(":")));
+      if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= targets.length) continue;
+      reachedSets[targetIndex].add(token);
+      if (!hit.includes(targets[targetIndex])) hit.push(targets[targetIndex]);
+    }
+    if (hit.length > 0 && !(yield* focusRingShows(page))) {
+      found.push(hit.map(({ name }) => name).join(" and ") + " shows no visible focus when Tab reaches it");
     }
   }
-  for (const [name, present] of visibleAtVisit) {
-    const times = reached.get(name) ?? 0;
-    if (times !== present) found.push(`Tab reached ${name} ${times} of ${present} time(s)`);
+  const reached = new Map<string, number>();
+  for (let index = 0; index < targets.length; index += 1) {
+    if (reachedSets[index].size > 0) reached.set(targets[index].name, reachedSets[index].size);
+    if (reachedSets[index].size !== snapshots[index].length) found.push("Tab reached " + targets[index].name + " " + reachedSets[index].size + " of " + snapshots[index].length + " time(s)");
   }
   return { found, reached } satisfies KeyboardReport;
 });
+
