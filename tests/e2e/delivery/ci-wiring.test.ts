@@ -184,7 +184,7 @@ test("a private repository's mutation job through a repository shell script in i
 }, 30_000);
 
 test("a mutation caller with a mode formula or a path list is refused, and only the caller checks-setup writes passes", async () => {
-  const written = ["name: mutation", "", "on:", "  pull_request:", "    types: [opened, synchronize]", "  workflow_dispatch:", "", "jobs:", "  mutation:", "    uses: avi2d/workflows/.github/workflows/mutation.yml@v2", "    permissions: { contents: read, actions: write, pull-requests: write }", ""].join("\n");
+  const written = ["name: mutation", "", "on:", "  workflow_dispatch:", "", "jobs:", "  mutation:", "    uses: avi2d/workflows/.github/workflows/mutation.yml@v2", "    permissions: { contents: read, actions: write, pull-requests: write }", ""].join("\n");
   const formula = written.replace("    permissions:", "    with:\n      mode: ${{ github.event_name == 'pull_request' && 'compare' || 'baseline' }}\n    permissions:");
   const paths = written.replace("  workflow_dispatch:", "  push:\n    branches: [main]\n    paths: [\"src/**\"]\n  workflow_dispatch:");
   const repo = await open({ "package.json": scripts(["lint", "test"]), ".github/workflows/ci.yml": workflow, ".github/workflows/mutation.yml": formula });
@@ -202,7 +202,7 @@ test("a mutation caller with a mode formula or a path list is refused, and only 
 
 test("a consumer's hand-rolled stryker run job is refused under any repository case and passes once it calls the shared workflow", async () => {
   const handRolled = `on: workflow_dispatch\njobs:\n  mutation:\n    runs-on: ubuntu-latest\n    timeout-minutes: 60\n    steps:\n      - run: bunx stryker run --incremental\n`;
-  const caller = `name: mutation\n\non:\n  pull_request:\n    types: [opened, synchronize]\n  workflow_dispatch:\n\njobs:\n  mutation:\n    uses: avi2d/workflows/.github/workflows/mutation.yml@v2\n    permissions: { contents: read, actions: write, pull-requests: write }\n`;
+  const caller = `name: mutation\n\non:\n  workflow_dispatch:\n\njobs:\n  mutation:\n    uses: avi2d/workflows/.github/workflows/mutation.yml@v2\n    permissions: { contents: read, actions: write, pull-requests: write }\n`;
   const repo = await open({ "package.json": scripts(["lint", "test"]), ".github/workflows/ci.yml": workflow, ".github/workflows/mutation.yml": handRolled });
   await repo.commit("start");
   const red = await wiring(repo, { GITHUB_REPOSITORY: "avi2d/skills" });
