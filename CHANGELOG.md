@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.96.3
+
+Released 2026-11-13.
+
+### Fixes
+
+- **ci:** start mutation by hand, not on pull requests [#131](https://github.com/avi2d/checks/pull/131)
+
 ## 0.96.2
 
 Released 2026-11-13.
