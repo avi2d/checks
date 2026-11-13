@@ -62,3 +62,51 @@ test("keyboard counts a row ring at any nesting depth, and still fails a distant
   expect(ran.text).toContain(`browser: ${at("keyboard", "/nested-ring.html", "default", "phone 320x640 touch").slice(0, -1)} scanned link 1`);
   expect(ran.exitCode).toBe(1);
 }, 120_000);
+
+test("keyboard counts a row ring drawn by a pseudo-element or a large outline offset", async () => {
+  const paint = (ring: string) =>
+    page(`<ul style="list-style: none; padding: 0"><li class="row" style="position: relative; padding: 40px; background: #eef"><a href="/">Family law</a></li></ul>`, {
+      head: `<style>a:focus { outline: none; } ${ring}</style>`,
+    });
+  const pages = {
+    "pseudo-ring.html": paint(`.row::after { content: ""; position: absolute; inset: 0; } .row:focus-within::after { outline: 3px solid #000; }`),
+    "offset-ring.html": paint(`.row:focus-within { outline: 3px solid #000; outline-offset: 12px; }`),
+  };
+  const site = await browserSite({
+    ...sitePages(pages),
+    "browser-checks.json": declaration({ routes: routesOf(pages), viewports: [{ name: "phone", width: 320, height: 640, touch: true }], checks: ["keyboard"] }),
+  });
+  const ran = await site.run();
+  expect(failuresOf(ran.text)).toEqual([]);
+  expect(ran.text).toContain(`browser: ${at("keyboard", "/pseudo-ring.html", "default", "phone 320x640 touch").slice(0, -1)} scanned link 1`);
+  expect(ran.text).toContain(`browser: ${at("keyboard", "/offset-ring.html", "default", "phone 320x640 touch").slice(0, -1)} scanned link 1`);
+  expect(ran.exitCode).toBe(0);
+}, 120_000);
+
+test("keyboard still fails a ring that appears only after blur", async () => {
+  const site = await browserSite({
+    "dist/index.html": page(
+      `<form><input name="name"><script>document.querySelector("input").addEventListener("blur", (event) => event.target.classList.add("touched"));</script></form>`,
+      { head: `<style>input:focus { outline: none; } input.touched:focus { outline: 3px solid #000; }</style>` },
+    ),
+    "browser-checks.json": declaration({ targets: [{ name: "field", selector: "input", focusable: true }], checks: ["keyboard"] }),
+  });
+  const ran = await site.run();
+  expect(failuresOf(ran.text)).toEqual([`${at("keyboard", "/")} field shows no visible focus when Tab reaches it`]);
+  expect(ran.exitCode).toBe(1);
+}, 120_000);
+
+test("keyboard does not credit a cloned control for the original it copied", async () => {
+  const site = await browserSite({
+    "dist/index.html": page(
+      `<nav inert><a href="/">Services</a></nav><div style="height: 3000px"></div><p><button type="button">Write to me</button></p><script>document.querySelector("button").addEventListener("focus", () => { if (document.querySelector(".clone")) return; const bar = document.createElement("nav"); bar.className = "clone"; bar.append(document.querySelector("nav a").cloneNode(true)); document.body.append(bar); });</script>`,
+    ),
+    "browser-checks.json": declaration({ targets: [{ name: "menu", selector: "nav a", focusable: true }], checks: ["keyboard"] }),
+  });
+  const ran = await site.run();
+  expect(failuresOf(ran.text)).toEqual([
+    `${at("keyboard", "/")} Tab reached menu 0 of 1 time(s)`,
+    `${at("keyboard", "/")} scanned no target`,
+  ]);
+  expect(ran.exitCode).toBe(1);
+}, 120_000);
