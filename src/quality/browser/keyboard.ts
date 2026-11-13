@@ -31,7 +31,7 @@ const scanRings = (el: Element): RingScan[] => {
     const made = /^(-?[\d.]+)px$/.exec(token);
     if (made === null) return undefined;
     const parsed = parseFloat(made[1]);
-    return Number.isFinite(parsed) ? Math.max(0, parsed) : undefined;
+    return Number.isFinite(parsed) ? parsed : undefined;
   };
   const split = (value: string): string[] => {
     const tokens: string[] = [];
@@ -67,12 +67,16 @@ const scanRings = (el: Element): RingScan[] => {
         const parsed = len(token);
         if (parsed !== undefined) made.push(parsed);
       }
-      extent = Math.max(extent, (made[0] ?? 0) + (made[1] ?? 0) + (made[2] ?? 0) + (made[3] ?? 0));
+      const horizontal = made[0] ?? 0;
+      const vertical = made[1] ?? 0;
+      const blur = Math.max(0, made[2] ?? 0);
+      const spread = made[3] ?? 0;
+      extent = Math.max(extent, 0, horizontal + blur + spread, -horizontal + blur + spread, vertical + blur + spread, -vertical + blur + spread);
     }
     return extent;
   };
   const ringOut = (painted: CSSStyleDeclaration): number => {
-    const outline = painted.outlineStyle === "none" ? 0 : (len(painted.outlineWidth) ?? 0) + (len(painted.outlineOffset) ?? 0);
+    const outline = painted.outlineStyle === "none" ? 0 : Math.max(0, (len(painted.outlineWidth) ?? 0) + (len(painted.outlineOffset) ?? 0));
     return Math.max(outline, shadowOut(painted.boxShadow));
   };
   const ringPaint = (painted: CSSStyleDeclaration): ReadonlyArray<string> => [
@@ -93,12 +97,6 @@ const scanRings = (el: Element): RingScan[] => {
     "borderLeftWidth=" + painted.borderLeftWidth,
     "borderLeftStyle=" + painted.borderLeftStyle,
     "borderLeftColor=" + painted.borderLeftColor,
-    "backgroundColor=" + painted.backgroundColor,
-    "backgroundImage=" + painted.backgroundImage,
-    "textDecorationLine=" + painted.textDecorationLine,
-    "textDecorationStyle=" + painted.textDecorationStyle,
-    "textDecorationColor=" + painted.textDecorationColor,
-    "textDecorationThickness=" + painted.textDecorationThickness,
   ];
   const nodes: RingScan[] = [];
   let current: Element | null = el;
@@ -152,27 +150,6 @@ const onScreen = (box: Box, screen: Size): Box | null => {
   return { x: left, y: top, width: right - left, height: bottom - top };
 };
 
-const ABSENT = new Set(["none", "0px", "0", "", "transparent", "rgba(0, 0, 0, 0)", "normal"]);
-
-const changedTowardFocus = (before: ReadonlyArray<string>, after: ReadonlyArray<string>): boolean => {
-  const drawn = ["", "before:", "after:"].some((layer) => {
-    const style = before.find((entry) => entry === layer + "outlineStyle=none");
-    if (style !== undefined) return false;
-    const width = before.find((entry) => entry.startsWith(layer + "outlineWidth="));
-    return width !== undefined && !ABSENT.has(width.slice(width.indexOf("=") + 1));
-  });
-  const depth = Math.min(before.length, after.length);
-  for (let index = 0; index < depth; index += 1) {
-    if (before[index] === after[index]) continue;
-    const cut = before[index].indexOf("=");
-    if (cut === -1) continue;
-    const name = before[index].slice(0, cut);
-    if ((name === "outlineOffset" || name.endsWith(":outlineOffset")) && !drawn) continue;
-    if (!ABSENT.has(before[index].slice(cut + 1))) return true;
-  }
-  return false;
-};
-
 const resolveLeaf = (): Element | null => {
   let leaf: Element | null = null;
   let scope: Document | ShadowRoot = document;
@@ -185,7 +162,7 @@ const resolveLeaf = (): Element | null => {
   return leaf;
 };
 
-type CropArgs = { readonly focused: string; readonly blurred: string; readonly x: number; readonly y: number; readonly width: number; readonly height: number };
+type CropArgs = { readonly first: string; readonly second: string; readonly x: number; readonly y: number; readonly width: number; readonly height: number };
 
 const cropsDiffer = async (args: CropArgs): Promise<boolean> => {
   const scale = window.devicePixelRatio || 1;
@@ -208,10 +185,10 @@ const cropsDiffer = async (args: CropArgs): Promise<boolean> => {
     context.drawImage(shot, left, top, width, height, 0, 0, width, height);
     return context.getImageData(0, 0, width, height).data;
   };
-  const first = await decode(args.focused);
+  const first = await decode(args.first);
   const a = pixels(first);
   first.close();
-  const second = await decode(args.blurred);
+  const second = await decode(args.second);
   const b = pixels(second);
   second.close();
   if (a.length !== b.length) return true;
@@ -250,28 +227,36 @@ const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page) {
   const blurredRings = yield* attempt("cannot read the blurred element and its ancestors", () => focused.evaluate(scanRings));
   let region: Box = box;
   const depth = Math.min(focusedRings.length, blurredRings.length);
-  let directed = false;
   for (let index = 0; index < depth; index += 1) {
     if (focusedRings[index].paint.join("\n") !== blurredRings[index].paint.join("\n")) {
       region = union(region, grown(focusedRings[index].box, focusedRings[index].grow));
       region = union(region, grown(blurredRings[index].box, blurredRings[index].grow));
-      if (changedTowardFocus(focusedRings[index].paint, blurredRings[index].paint)) directed = true;
     }
   }
   const rect = cropTo(region, screen);
   if (rect === null) return false;
   const withoutFocus = yield* attempt("cannot capture the blurred element", () => page.screenshot({ animations: "disabled" }));
   yield* attempt("cannot focus the element again", () => focused.focus());
-  if (!directed) return false;
-  return yield* attempt("cannot compare the focused and blurred captures", () =>
+  const changed = yield* attempt("cannot compare the focused and blurred captures", () =>
     page.evaluate(cropsDiffer, {
-      focused: withFocus.toString("base64"),
-      blurred: withoutFocus.toString("base64"),
+      first: withFocus.toString("base64"),
+      second: withoutFocus.toString("base64"),
       x: rect.x,
       y: rect.y,
       width: rect.width,
       height: rect.height,
     }));
+  if (!changed) return false;
+  const refocused = yield* attempt("cannot capture the refocused element", () => page.screenshot({ animations: "disabled" }));
+  return yield* attempt("cannot compare the focused and refocused captures", () =>
+    page.evaluate(cropsDiffer, {
+      first: withFocus.toString("base64"),
+      second: refocused.toString("base64"),
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+    }).then((repainted) => !repainted));
 });
 
 // Past the last stop Tab leaves the page for the browser, and the next press starts over at the first stop.

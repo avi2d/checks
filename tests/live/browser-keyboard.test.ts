@@ -115,7 +115,7 @@ test("keyboard still fails a touched row whose ring needs refocus to appear", as
   const site = await browserSite({
     "dist/index.html": page(
       `<ul style="list-style: none; padding: 0"><li class="row" style="padding: 40px"><input name="name"><script>document.querySelector("input").addEventListener("blur", (event) => event.target.closest(".row").classList.add("touched"));</script></li></ul>`,
-      { head: `<style>input:focus { outline: none; } .row.touched { background: #eef; } .row.touched:focus-within { outline: 3px solid #000; }</style>` },
+      { head: `<style>input:focus { outline: none; } .row { background: #fff; } .row.touched { background: #eef; } .row.touched:focus-within { outline: 3px solid #000; }</style>` },
     ),
     "browser-checks.json": declaration({ targets: [{ name: "field", selector: "input", focusable: true }], checks: ["keyboard"] }),
   });
@@ -158,5 +158,30 @@ test("keyboard walks past a shadow-root search into the declared menu", async ()
   const ran = await site.run();
   expect(failuresOf(ran.text)).toEqual([]);
   expect(ran.text).toContain(`browser: ${at("keyboard", "/").slice(0, -1)} scanned menu 1`);
+  expect(ran.exitCode).toBe(0);
+}, 120_000);
+
+test("keyboard counts a bolder label with no outline as visible focus", async () => {
+  const site = await browserSite({
+    "dist/index.html": page(`<p><a href="/">Family law</a></p>`, { head: `<style>a { font-weight: 400; } a:focus { outline: none; font-weight: 700; }</style>` }),
+    "browser-checks.json": declaration({ targets: [{ name: "link", selector: "main a", focusable: true }], checks: ["keyboard"] }),
+  });
+  const ran = await site.run();
+  expect(failuresOf(ran.text)).toEqual([]);
+  expect(ran.text).toContain(`browser: ${at("keyboard", "/").slice(0, -1)} scanned link 1`);
+  expect(ran.exitCode).toBe(0);
+}, 120_000);
+
+test("keyboard counts a shadow drawn left of the row as visible focus", async () => {
+  const site = await browserSite({
+    "dist/index.html": page(
+      `<ul style="list-style: none; padding: 0"><li class="row" style="margin-left: 40px; padding: 20px"><a href="/">Family law</a></li></ul>`,
+      { head: `<style>a:focus { outline: none; } .row:focus-within { box-shadow: -12px 0 0 #000; }</style>` },
+    ),
+    "browser-checks.json": declaration({ targets: [{ name: "link", selector: "main a", focusable: true }], checks: ["keyboard"] }),
+  });
+  const ran = await site.run();
+  expect(failuresOf(ran.text)).toEqual([]);
+  expect(ran.text).toContain(`browser: ${at("keyboard", "/").slice(0, -1)} scanned link 1`);
   expect(ran.exitCode).toBe(0);
 }, 120_000);
