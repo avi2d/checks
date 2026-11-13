@@ -79,11 +79,12 @@ const TEXT_BOXES = `(targets) => {
         const range = document.createRange();
         range.selectNodeContents(node);
         for (const rect of range.getClientRects()) {
+          if (Math.min(innerWidth, rect.right) - Math.max(0, rect.left) <= 0) continue;
+          if (Math.min(innerHeight, rect.bottom) - Math.max(0, rect.top) <= 0) continue;
           const left = Math.floor(Math.max(0, rect.left));
           const top = Math.floor(Math.max(0, rect.top));
           const right = Math.ceil(Math.min(innerWidth, rect.right));
           const bottom = Math.ceil(Math.min(innerHeight, rect.bottom));
-          if (right - left <= 0 || bottom - top < 1) continue;
           box += 1;
           boxes.push({
             target: target.name,
@@ -113,10 +114,23 @@ const PAINT = `({ selectors, color }) => {
   const shadows = paintedAll.map((painted) => getComputedStyle(painted).textShadow);
   const colors = paintedAll.map((painted) => getComputedStyle(painted).backgroundColor);
   const images = paintedAll.map((painted) => getComputedStyle(painted).backgroundImage);
+  const boxes = paintedAll.map((painted) => getComputedStyle(painted).boxShadow);
+  const borders = paintedAll.map((painted) => [getComputedStyle(painted).borderTopColor, getComputedStyle(painted).borderRightColor, getComputedStyle(painted).borderBottomColor, getComputedStyle(painted).borderLeftColor]);
+  const outlines = paintedAll.map((painted) => getComputedStyle(painted).outlineColor);
+  const decorations = paintedAll.map((painted) => getComputedStyle(painted).textDecorationColor);
+  const rules = paintedAll.map((painted) => getComputedStyle(painted).columnRuleColor);
   paintedAll.forEach((painted, at) => {
     if (shadows[at] !== "none") painted.style.setProperty("text-shadow", shadows[at], "important");
     painted.style.setProperty("background-color", colors[at], "important");
     if (images[at] !== "none") painted.style.setProperty("background-image", images[at], "important");
+    if (boxes[at] !== "none") painted.style.setProperty("box-shadow", boxes[at], "important");
+    painted.style.setProperty("border-top-color", borders[at][0], "important");
+    painted.style.setProperty("border-right-color", borders[at][1], "important");
+    painted.style.setProperty("border-bottom-color", borders[at][2], "important");
+    painted.style.setProperty("border-left-color", borders[at][3], "important");
+    painted.style.setProperty("outline-color", outlines[at], "important");
+    painted.style.setProperty("text-decoration-color", decorations[at], "important");
+    painted.style.setProperty("column-rule-color", rules[at], "important");
   });
   for (const painted of paintedAll) {
     painted.style.setProperty("transition", "none", "important");

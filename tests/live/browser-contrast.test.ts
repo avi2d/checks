@@ -113,3 +113,24 @@ test("contrast keeps a currentColor backdrop behind the letters when the text is
   expect(lowest(passed.text, "/")).toBeGreaterThan(15);
   expect(passed.exitCode).toBe(0);
 }, 120_000);
+
+test("contrast skips the empty line of preserved multiline text at a fractional offset, rather than failing it", async () => {
+  const site = await browserSite({
+    "dist/index.html": page('<h1 style="font:400 16px/1.4 sans-serif;color:#000;margin-left:20.5px;white-space:pre-line">I\n\nI</h1>'),
+    "browser-checks.json": declaration({ targets: [HEADLINE], checks: ["contrast"] }),
+  });
+  const passed = await site.run();
+  expect(failuresOf(passed.text)).toEqual([]);
+  expect(passed.exitCode).toBe(0);
+}, 120_000);
+
+test("contrast keeps an inset currentColor shadow behind the letters when the text is repainted", async () => {
+  const site = await browserSite({
+    "dist/index.html": page('<h1 style="font:400 16px/1.4 sans-serif;color:#000;background:linear-gradient(white,white);box-shadow:inset 0 0 0 1000px currentColor"><span style="color:#fff">Contracts</span></h1>'),
+    "browser-checks.json": declaration({ targets: [HEADLINE], checks: ["contrast"] }),
+  });
+  const passed = await site.run();
+  expect(failuresOf(passed.text)).toEqual([]);
+  expect(lowest(passed.text, "/")).toBeGreaterThan(15);
+  expect(passed.exitCode).toBe(0);
+}, 120_000);
