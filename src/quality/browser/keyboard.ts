@@ -201,15 +201,15 @@ const cropsDiffer = async (args: CropArgs): Promise<boolean> => {
 };
 
 const remember = (el: Element, id: string): void => {
-  const store = globalThis as unknown as { __checksKb?: WeakMap<Element, string> };
-  if (store.__checksKb === undefined) store.__checksKb = new WeakMap();
-  const seen = store.__checksKb.get(el);
-  store.__checksKb.set(el, seen === undefined ? id : seen + " " + id);
+  const store = globalThis as unknown as { checksKb?: WeakMap<Element, string> };
+  if (store.checksKb === undefined) store.checksKb = new WeakMap();
+  const seen = store.checksKb.get(el);
+  store.checksKb.set(el, seen === undefined ? id : seen + " " + id);
 };
 
 const recall = (el: Element): string => {
-  const store = globalThis as unknown as { __checksKb?: WeakMap<Element, string> };
-  const seen = store.__checksKb?.get(el);
+  const store = globalThis as unknown as { checksKb?: WeakMap<Element, string> };
+  const seen = store.checksKb?.get(el);
   return seen ?? "";
 };
 
