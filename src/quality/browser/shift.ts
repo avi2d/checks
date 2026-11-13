@@ -14,8 +14,19 @@ const RECORDER = `(() => {
   }).observe({ type: "layout-shift", buffered: true });
 })()`;
 
-const RENDERED_IMAGES =
-  "Promise.all([...document.images].filter((image) => image.getClientRects().length > 0).map((image) => image.decode().catch(() => undefined))).then(() => undefined)";
+const IMAGE_LIMIT_MS = 10_000;
+
+const COLD_IMAGES = `Promise.race([
+  Promise.all([...document.images].filter((image) => {
+    if (image.getClientRects().length === 0) return false;
+    if (image.loading !== "lazy") return true;
+    for (const rect of image.getClientRects()) {
+      if (rect.bottom > 0 && rect.top < window.innerHeight && rect.right > 0 && rect.left < window.innerWidth) return true;
+    }
+    return false;
+  }).map((image) => image.decode().catch(() => undefined))),
+  new Promise((_, reject) => setTimeout(() => reject(new Error("timed out")), ${IMAGE_LIMIT_MS})),
+]).then(() => undefined)`;
 
 const TWO_FRAMES = "new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined))))";
 
@@ -27,7 +38,7 @@ export function recordShifts(context: BrowserContext): Promise<unknown> {
 
 const settled = Effect.fn("settled")(function* (page: Page, url: string) {
   yield* attempt(`cannot settle ${url} to network idle`, () => page.waitForLoadState("networkidle"));
-  yield* attempt(`images never render on ${url}`, () => page.evaluate(RENDERED_IMAGES));
+  yield* attempt(`images never render on ${url}`, () => page.evaluate(COLD_IMAGES));
   yield* attempt(`cannot settle a frame on ${url}`, () => page.evaluate(TWO_FRAMES));
 });
 

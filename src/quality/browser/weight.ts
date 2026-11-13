@@ -18,6 +18,10 @@ type Received = {
   readonly script: boolean;
 };
 
+type ReadFailure = {
+  readonly failure: string;
+};
+
 type Weighed = {
   readonly bytes: number;
   readonly image: boolean;
@@ -32,28 +36,56 @@ const gzipped = (body: Uint8Array): Effect.Effect<number, BrowserFailure> =>
     });
   });
 
-const SCROLLED_TO_END = "window.scrollTo(0, document.body.scrollHeight)";
+const IMAGE_LIMIT_MS = 10_000;
 
-const RENDERED_IMAGES =
-  "Promise.all([...document.images].filter((image) => image.getClientRects().length > 0).map((image) => image.decode().catch(() => undefined))).then(() => undefined)";
+const SCROLL_THROUGH = `(async () => {
+  const step = Math.max(1, Math.floor(window.innerHeight / 2));
+  let at = 0;
+  while (at < document.body.scrollHeight) {
+    window.scrollTo(0, at);
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    at += step;
+  }
+  window.scrollTo(0, document.body.scrollHeight);
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+})()`;
+
+const RENDERED_IMAGES = `Promise.race([
+  Promise.all([...document.images].filter((image) => image.getClientRects().length > 0).map((image) => image.decode().catch(() => undefined))),
+  new Promise((_, reject) => setTimeout(() => reject(new Error("timed out")), ${IMAGE_LIMIT_MS})),
+]).then(() => undefined)`;
 
 const FONTS_READY = "document.fonts.ready.then(() => undefined)";
 
+const TWO_FRAMES = "new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined))))";
+
 export const weighPage = Effect.fn("weighPage")(function* (page: Page, url: string) {
   const origin = new URL(url).origin;
-  const received: Promise<Received>[] = [];
+  const received: Promise<Received | ReadFailure>[] = [];
   page.on("response", (response) => {
     if (fromAnotherOrigin(origin, response.url())) return;
+    const status = response.status();
+    if (status >= 300 && status <= 399) return;
     const type = response.request().resourceType();
-    received.push(response.body().then((body) => ({ body, image: type === "image", script: type === "script" })));
+    received.push(
+      response.body().then(
+        (body) => ({ body, image: type === "image", script: type === "script" }),
+        (cause) => ({ failure: cause instanceof Error ? cause.message : String(cause) }),
+      ),
+    );
   });
   yield* attempt(`cannot load ${url}`, () => page.goto(url, { waitUntil: "networkidle" }));
-  yield* attempt(`cannot scroll ${url} to its end`, () => page.evaluate(SCROLLED_TO_END));
+  yield* attempt(`cannot scroll ${url} to its end`, () => page.evaluate(SCROLL_THROUGH));
   yield* attempt(`images never render on ${url}`, () => page.evaluate(RENDERED_IMAGES));
   yield* attempt(`fonts never settle on ${url}`, () => page.evaluate(FONTS_READY));
+  yield* attempt(`cannot settle a frame on ${url}`, () => page.evaluate(TWO_FRAMES));
   yield* attempt(`cannot settle ${url} to network idle`, () => page.waitForLoadState("networkidle"));
   const bodies = yield* attempt(`cannot read the responses ${url} serves`, () => Promise.all(received));
-  const responses = yield* Effect.forEach(bodies, ({ body, image, script }): Effect.Effect<Weighed, BrowserFailure> =>
+  for (const entry of bodies) {
+    if ("failure" in entry) return yield* Effect.fail(new BrowserFailure({ message: `cannot read the responses ${url} serves: ${entry.failure}` }));
+  }
+  const readable = bodies.filter((entry): entry is Received => !("failure" in entry));
+  const responses = yield* Effect.forEach(readable, ({ body, image, script }): Effect.Effect<Weighed, BrowserFailure> =>
     image
       ? Effect.succeed({ bytes: body.length, image, script })
       : Effect.map(gzipped(body), (bytes) => ({ bytes, image, script })),
