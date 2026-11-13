@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import type { Page } from "playwright-core";
+import type { ElementHandle, Page } from "playwright-core";
 import type { Target } from "./declaration.ts";
 import { attempt, BrowserFailure } from "./page.ts";
 
@@ -19,7 +19,7 @@ type Box = { readonly x: number; readonly y: number; readonly width: number; rea
 
 type Size = { readonly width: number; readonly height: number };
 
-type RingScan = { readonly box: Box; readonly paint: string; readonly grow: number };
+type RingScan = { readonly box: Box; readonly paint: ReadonlyArray<string>; readonly grow: number };
 
 const scanRings = (el: Element): RingScan[] => {
   const len = (token: string | undefined): number | undefined => {
@@ -75,7 +75,31 @@ const scanRings = (el: Element): RingScan[] => {
     const outline = painted.outlineStyle === "none" ? 0 : (len(painted.outlineWidth) ?? 0) + (len(painted.outlineOffset) ?? 0);
     return Math.max(outline, shadowOut(painted.boxShadow));
   };
-  const ringPaint = (painted: CSSStyleDeclaration): string => [painted.outlineStyle, painted.outlineWidth, painted.outlineColor, painted.outlineOffset, painted.boxShadow, painted.borderTopWidth, painted.borderTopStyle, painted.borderTopColor, painted.borderRightWidth, painted.borderRightStyle, painted.borderRightColor, painted.borderBottomWidth, painted.borderBottomStyle, painted.borderBottomColor, painted.borderLeftWidth, painted.borderLeftStyle, painted.borderLeftColor, painted.backgroundColor, painted.backgroundImage].join(" ");
+  const ringPaint = (painted: CSSStyleDeclaration): ReadonlyArray<string> => [
+    "outlineStyle=" + painted.outlineStyle,
+    "outlineWidth=" + painted.outlineWidth,
+    "outlineColor=" + painted.outlineColor,
+    "outlineOffset=" + painted.outlineOffset,
+    "boxShadow=" + painted.boxShadow,
+    "borderTopWidth=" + painted.borderTopWidth,
+    "borderTopStyle=" + painted.borderTopStyle,
+    "borderTopColor=" + painted.borderTopColor,
+    "borderRightWidth=" + painted.borderRightWidth,
+    "borderRightStyle=" + painted.borderRightStyle,
+    "borderRightColor=" + painted.borderRightColor,
+    "borderBottomWidth=" + painted.borderBottomWidth,
+    "borderBottomStyle=" + painted.borderBottomStyle,
+    "borderBottomColor=" + painted.borderBottomColor,
+    "borderLeftWidth=" + painted.borderLeftWidth,
+    "borderLeftStyle=" + painted.borderLeftStyle,
+    "borderLeftColor=" + painted.borderLeftColor,
+    "backgroundColor=" + painted.backgroundColor,
+    "backgroundImage=" + painted.backgroundImage,
+    "textDecorationLine=" + painted.textDecorationLine,
+    "textDecorationStyle=" + painted.textDecorationStyle,
+    "textDecorationColor=" + painted.textDecorationColor,
+    "textDecorationThickness=" + painted.textDecorationThickness,
+  ];
   const nodes: RingScan[] = [];
   let current: Element | null = el;
   while (current !== null) {
@@ -88,7 +112,7 @@ const scanRings = (el: Element): RingScan[] => {
     if (after.content !== "none" && after.content !== "normal") grow = Math.max(grow, ringOut(after));
     nodes.push({
       box: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
-      paint: [ringPaint(self), ringPaint(before), ringPaint(after)].join(" | "),
+      paint: [...ringPaint(self), ...ringPaint(before).map((entry) => "before:" + entry), ...ringPaint(after).map((entry) => "after:" + entry)],
       grow,
     });
     current = current.parentElement;
@@ -110,8 +134,14 @@ const grown = (box: Box, margin: number): Box => ({
   height: box.height + margin * 2,
 });
 
-const covers = (outer: Box, inner: Box): boolean =>
-  outer.x <= inner.x && outer.y <= inner.y && outer.x + outer.width >= inner.x + inner.width && outer.y + outer.height >= inner.y + inner.height;
+const cropTo = (box: Box, screen: Size): Box | null => {
+  const left = Math.max(0, box.x);
+  const top = Math.max(0, box.y);
+  const right = Math.min(screen.width, box.x + box.width);
+  const bottom = Math.min(screen.height, box.y + box.height);
+  if (right <= left || bottom <= top) return null;
+  return { x: left, y: top, width: right - left, height: bottom - top };
+};
 
 const onScreen = (box: Box, screen: Size): Box | null => {
   const left = Math.max(0, box.x - FOCUS_RING_MARGIN_PX);
@@ -120,6 +150,75 @@ const onScreen = (box: Box, screen: Size): Box | null => {
   const bottom = Math.min(screen.height, box.y + box.height + FOCUS_RING_MARGIN_PX);
   if (right <= left || bottom <= top) return null;
   return { x: left, y: top, width: right - left, height: bottom - top };
+};
+
+const ABSENT = new Set(["none", "0px", "0", "", "transparent", "rgba(0, 0, 0, 0)", "normal"]);
+
+const changedTowardFocus = (before: ReadonlyArray<string>, after: ReadonlyArray<string>): boolean => {
+  const drawn = ["", "before:", "after:"].some((layer) => {
+    const style = before.find((entry) => entry === layer + "outlineStyle=none");
+    if (style !== undefined) return false;
+    const width = before.find((entry) => entry.startsWith(layer + "outlineWidth="));
+    return width !== undefined && !ABSENT.has(width.slice(width.indexOf("=") + 1));
+  });
+  const depth = Math.min(before.length, after.length);
+  for (let index = 0; index < depth; index += 1) {
+    if (before[index] === after[index]) continue;
+    const cut = before[index].indexOf("=");
+    if (cut === -1) continue;
+    const name = before[index].slice(0, cut);
+    if ((name === "outlineOffset" || name.endsWith(":outlineOffset")) && !drawn) continue;
+    if (!ABSENT.has(before[index].slice(cut + 1))) return true;
+  }
+  return false;
+};
+
+const resolveLeaf = (): Element | null => {
+  let leaf: Element | null = null;
+  let scope: Document | ShadowRoot = document;
+  while (scope.activeElement !== null && scope.activeElement !== leaf) {
+    leaf = scope.activeElement;
+    const inner = (leaf as unknown as { shadowRoot?: ShadowRoot | null }).shadowRoot;
+    if (inner === undefined || inner === null) return leaf;
+    scope = inner;
+  }
+  return leaf;
+};
+
+type CropArgs = { readonly focused: string; readonly blurred: string; readonly x: number; readonly y: number; readonly width: number; readonly height: number };
+
+const cropsDiffer = async (args: CropArgs): Promise<boolean> => {
+  const scale = window.devicePixelRatio || 1;
+  const left = Math.round(args.x * scale);
+  const top = Math.round(args.y * scale);
+  const width = Math.max(1, Math.round(args.width * scale));
+  const height = Math.max(1, Math.round(args.height * scale));
+  const decode = (raw: string): Promise<ImageBitmap> => {
+    const binary = atob(raw);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return createImageBitmap(new Blob([bytes], { type: "image/png" }));
+  };
+  const pixels = (shot: ImageBitmap): Uint8ClampedArray => {
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (context === null) throw new Error("cannot read the capture");
+    context.drawImage(shot, left, top, width, height, 0, 0, width, height);
+    return context.getImageData(0, 0, width, height).data;
+  };
+  const first = await decode(args.focused);
+  const a = pixels(first);
+  first.close();
+  const second = await decode(args.blurred);
+  const b = pixels(second);
+  second.close();
+  if (a.length !== b.length) return true;
+  for (let index = 0; index < a.length; index += 1) {
+    if (a[index] !== b[index]) return true;
+  }
+  return false;
 };
 
 const remember = (el: Element, id: string): void => {
@@ -136,47 +235,43 @@ const recall = (el: Element): string => {
 };
 
 const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page) {
-  const focused = yield* attempt("cannot hold the focused element", () => page.locator(":focus").elementHandle());
-  if (focused === null) return false;
+  const raw = yield* attempt("cannot hold the focused element", () => page.evaluateHandle(resolveLeaf));
+  const leaf = raw.asElement();
+  if (leaf === null) return false;
+  const focused = leaf as ElementHandle<Element>;
   const box = yield* attempt("cannot measure the focused element", () => focused.boundingBox());
   if (box === null) return false;
   const screen = page.viewportSize();
   if (screen === null) return yield* new BrowserFailure({ message: "cannot read the viewport" });
   if (onScreen(box, screen) === null) return false;
   const focusedRings = yield* attempt("cannot read the focused element and its ancestors", () => focused.evaluate(scanRings));
-  let capture: Box = box;
-  for (const node of focusedRings) {
-    if (node.grow > 0) capture = union(capture, grown(node.box, node.grow));
-  }
-  const clip = onScreen(capture, screen);
-  if (clip === null) return false;
-  const withFocus = yield* attempt("cannot capture the focused element", () => page.screenshot({ clip, animations: "disabled" }));
-  yield* attempt("cannot blur the focused element", () => page.evaluate("document.activeElement.blur()"));
+  const withFocus = yield* attempt("cannot capture the focused element", () => page.screenshot({ animations: "disabled" }));
+  yield* attempt("cannot blur the focused element", () => focused.evaluate((el: Element) => { el.blur(); }));
   const blurredRings = yield* attempt("cannot read the blurred element and its ancestors", () => focused.evaluate(scanRings));
   let region: Box = box;
   const depth = Math.min(focusedRings.length, blurredRings.length);
+  let directed = false;
   for (let index = 0; index < depth; index += 1) {
-    if (focusedRings[index].paint !== blurredRings[index].paint) {
+    if (focusedRings[index].paint.join("\n") !== blurredRings[index].paint.join("\n")) {
       region = union(region, grown(focusedRings[index].box, focusedRings[index].grow));
       region = union(region, grown(blurredRings[index].box, blurredRings[index].grow));
+      if (changedTowardFocus(focusedRings[index].paint, blurredRings[index].paint)) directed = true;
     }
   }
-  if (!covers(capture, region)) {
-    const wide = onScreen(region, screen);
-    if (wide === null) return false;
-    const blurredWide = yield* attempt("cannot capture the blurred element", () => page.screenshot({ clip: wide, animations: "disabled" }));
-    yield* attempt("cannot focus the element again", () => focused.focus());
-    const focusedWide = yield* attempt("cannot capture the focused element", () => page.screenshot({ clip: wide, animations: "disabled" }));
-    return !focusedWide.equals(blurredWide);
-  }
-  const withoutFocus = yield* attempt("cannot capture the blurred element", () => page.screenshot({ clip, animations: "disabled" }));
+  const rect = cropTo(region, screen);
+  if (rect === null) return false;
+  const withoutFocus = yield* attempt("cannot capture the blurred element", () => page.screenshot({ animations: "disabled" }));
   yield* attempt("cannot focus the element again", () => focused.focus());
-  let explained = depth > 0 && focusedRings[0].paint !== blurredRings[0].paint;
-  for (let index = 1; index < depth && !explained; index += 1) {
-    if (focusedRings[index].grow > 0 && focusedRings[index].paint !== blurredRings[index].paint) explained = true;
-  }
-  if (!explained) return false;
-  return !withFocus.equals(withoutFocus);
+  if (!directed) return false;
+  return yield* attempt("cannot compare the focused and blurred captures", () =>
+    page.evaluate(cropsDiffer, {
+      focused: withFocus.toString("base64"),
+      blurred: withoutFocus.toString("base64"),
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+    }));
 });
 
 // Past the last stop Tab leaves the page for the browser, and the next press starts over at the first stop.
@@ -204,8 +299,10 @@ export const judgeKeyboard = Effect.fn("judgeKeyboard")(function* (page: Page, t
       found.push("Tab never leaves the page within " + STOP_LIMIT + " stops");
       break;
     }
-    const focused = yield* attempt("cannot hold the focused element", () => page.locator(":focus").elementHandle());
-    if (focused === null) continue;
+    const raw = yield* attempt("cannot hold the focused element", () => page.evaluateHandle(resolveLeaf));
+    const leaf = raw.asElement();
+    if (leaf === null) continue;
+    const focused = leaf as ElementHandle<Element>;
     const marked = yield* attempt("cannot read the focused element", () => focused.evaluate(recall));
     const hit: Target[] = [];
     for (const token of marked.split(" ").filter((part) => part !== "")) {

@@ -110,3 +110,53 @@ test("keyboard does not credit a cloned control for the original it copied", asy
   ]);
   expect(ran.exitCode).toBe(1);
 }, 120_000);
+
+test("keyboard still fails a touched row whose ring needs refocus to appear", async () => {
+  const site = await browserSite({
+    "dist/index.html": page(
+      `<ul style="list-style: none; padding: 0"><li class="row" style="padding: 40px"><input name="name"><script>document.querySelector("input").addEventListener("blur", (event) => event.target.closest(".row").classList.add("touched"));</script></li></ul>`,
+      { head: `<style>input:focus { outline: none; } .row.touched { background: #eef; } .row.touched:focus-within { outline: 3px solid #000; }</style>` },
+    ),
+    "browser-checks.json": declaration({ targets: [{ name: "field", selector: "input", focusable: true }], checks: ["keyboard"] }),
+  });
+  const ran = await site.run();
+  expect(failuresOf(ran.text)).toEqual([`${at("keyboard", "/")} field shows no visible focus when Tab reaches it`]);
+  expect(ran.exitCode).toBe(1);
+}, 120_000);
+
+test("keyboard still fails a distant message in a shadowed card with a transparent outline", async () => {
+  const site = await browserSite({
+    "dist/index.html": page(
+      `<div class="card" style="box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); padding: 24px"><form><input name="name"><div style="height: 200px"></div><p class="msg">Complete every field</p></form></div>`,
+      { head: `<style>input:focus { outline: 3px solid transparent; } form:focus-within .msg { display: none; }</style>` },
+    ),
+    "browser-checks.json": declaration({ targets: [{ name: "field", selector: "input", focusable: true }], checks: ["keyboard"] }),
+  });
+  const ran = await site.run();
+  expect(failuresOf(ran.text)).toEqual([`${at("keyboard", "/")} field shows no visible focus when Tab reaches it`]);
+  expect(ran.exitCode).toBe(1);
+}, 120_000);
+
+test("keyboard counts an underline drawn inside the link as visible focus", async () => {
+  const site = await browserSite({
+    "dist/index.html": page(`<p><a href="/">Family law</a></p>`, { head: `<style>a { text-decoration: none; outline-offset: 0; } a:focus { outline: none; outline-offset: 0; text-decoration: underline; }</style>` }),
+    "browser-checks.json": declaration({ targets: [{ name: "link", selector: "main a", focusable: true }], checks: ["keyboard"] }),
+  });
+  const ran = await site.run();
+  expect(failuresOf(ran.text)).toEqual([]);
+  expect(ran.text).toContain(`browser: ${at("keyboard", "/").slice(0, -1)} scanned link 1`);
+  expect(ran.exitCode).toBe(0);
+}, 120_000);
+
+test("keyboard walks past a shadow-root search into the declared menu", async () => {
+  const site = await browserSite({
+    "dist/index.html": page(
+      `<search-box></search-box><nav><a href="/">Services</a></nav><script>class SearchBox extends HTMLElement { constructor() { super(); const root = this.attachShadow({ mode: "open", delegatesFocus: true }); root.innerHTML = "<input type=search aria-label=Search>"; } } customElements.define("search-box", SearchBox);</script>`,
+    ),
+    "browser-checks.json": declaration({ targets: [{ name: "menu", selector: "nav a", focusable: true }], checks: ["keyboard"] }),
+  });
+  const ran = await site.run();
+  expect(failuresOf(ran.text)).toEqual([]);
+  expect(ran.text).toContain(`browser: ${at("keyboard", "/").slice(0, -1)} scanned menu 1`);
+  expect(ran.exitCode).toBe(0);
+}, 120_000);
