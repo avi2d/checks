@@ -25,6 +25,8 @@ So a control the page renders once for each breakpoint is judged where it shows.
 | `links` | a link on the rendered page to a page of the same site that answers with a status of 400 or more, and a link whose fragment names no element on the page it points at | the `href` of each `<a>` and `<area>`, fetched from the local server, and the `id` and `<a name>` of the page each fragment points at, loaded in Chrome |
 | `assets` | a request that fails, a response with a status of 400 or more, a request to another origin, an error the page logs to the console and an error the page throws and never catches, while the page loads to network idle | Playwright's request, response, console and page error events |
 | `contrast` | a box of text in a `contrast` target whose letters, as drawn, fall below WCAG 2.2's 4.5:1 against the backdrop around them, or below 3:1 from 24px up, and a `contrast` target with no text on screen or whose letters draw nothing | three screenshots of the page: as drawn, with the targets' text painted one marker colour and with it cleared |
+| `weight` | a page that transfers more bytes than the budgets in `weight` allow, counted apart as outside images, in scripts and in images | the body of each response from the page's own origin, gzipped outside images and raw in images |
+| `shift` | a cold load whose summed layout movement passes the bound in `shift` | a recorder that sums each `layout-shift` entry without a recent input |
 
 `html` runs once for each route, at the first viewport in the first state, because the page the server sends is the same at each.
 `links` runs once at the same visit, since it reads every link in the page, whether the viewport shows it or not.
@@ -75,6 +77,16 @@ Letters filled by `-webkit-text-fill-color` ignore the marker colour, so they re
 A backdrop a pseudo-element or an SVG paints with `currentColor` changes with the marker, so its text reads as drawing nothing.
 The large-text threshold reads the CSS font-size, so text a transform or zoom scales is held to the threshold of its unscaled size.
 
+`weight` reads the body of each response the page serves from its own origin.
+It weighs images raw and gzips every other body, so the count reads the bytes on the wire.
+It scrolls to the page end and waits for the rendered images and the settled fonts, so lazy content and webfonts count.
+A run that weighs no response fails, since an empty measurement cannot pass.
+
+`shift` sums each layout shift entry without a recent input, from before the first paint until the load settles.
+It opens each visit in a fresh context, so each measurement is a cold load.
+It waits for the settled fonts, the rendered images and two frames before it sums.
+A run whose recorder never ran fails, since an empty measurement cannot pass.
+
 `nested-interactive` catches a control inside an element whose role makes its children presentational, such as a link inside a `<button>` or inside a `role="button"`.
 `nesting` catches a control inside a link, which axe passes.
 `html` reads the page as the server sends it, so it never sees markup a script builds.
@@ -97,6 +109,8 @@ It fails, rather than passes, when a declaration leaves nothing to judge:
 - a `keyboard` run in which Tab reaches no target
 - a `motion` run that finds no visible control
 - a `contrast` run with no `contrast` target on the route, a `contrast` target with no text on screen, and a line of text whose letters draw nothing
+- a `weight` run that weighs no response from the page's own origin
+- a `shift` run whose recorder never ran
 - an empty list of routes, viewports, states, targets or checks, which the declaration refuses
 
 Each failure names the check, the route, the locale, the viewport and the state, and the target or the element it found.
@@ -173,7 +187,9 @@ It reads `browser-checks.json` in the directory it runs in:
     { "name": "email contact", "selector": "main a[href^='mailto:']", "routes": ["/", "/ru/"], "focusable": true },
     { "name": "headline", "selector": "main h1" }
   ],
-  "checks": ["layout", "keyboard", "motion", "axe", "nesting", "html", "links", "assets"],
+  "checks": ["layout", "keyboard", "motion", "axe", "nesting", "html", "links", "assets", "weight", "shift"],
+  "weight": { "nonImageBytes": 700000, "scriptBytes": 450000, "imageBytes": 500000 },
+  "shift": { "max": 0.1 },
   "hooks": "tests/browser/hooks.ts"
 }
 ```
@@ -185,13 +201,16 @@ It reads `browser-checks.json` in the directory it runs in:
 | `viewports` | each window to visit in, with a `name`, a `width` and a `height` in pixels, `touch` for a phone that has touch and a mobile viewport, and `device` as `phone`, `tablet` or `desktop`, or a `preset` that stands for a set of screen sizes |
 | `states` | each condition to visit in, with a `name`, `textPx` for the browser's default text size, and `reducedMotion` as `reduce` or `no-preference`, or the `enlarged-text` preset |
 | `targets` | each named control or text the checks judge, with a CSS `selector`, the `routes` it is on when not every route, `focusable` when Tab must reach it, and `contrast` when `contrast` measures its text |
-| `checks` | the built-in checks to run, from `layout`, `keyboard`, `motion`, `axe`, `nesting`, `html`, `links`, `assets` and `contrast` |
+| `checks` | the built-in checks to run, from `layout`, `keyboard`, `motion`, `axe`, `nesting`, `html`, `links`, `assets`, `contrast`, `weight` and `shift` |
+| `weight` | the byte budgets each page must hold, as `nonImageBytes` outside images, `scriptBytes` in scripts and `imageBytes` in images |
+| `shift` | the largest total layout movement a cold load may report, as `max` |
 | `hooks` | the module of product hooks, as a path from the directory the runner runs in |
 
 `textPx` sets the default font size, so text the page sizes in `rem` or `em` grows, as a visitor's own setting makes it grow.
 A declaration that names a route, viewport, state, target or check twice is refused.
 So are a `motion` check with no state whose `reducedMotion` is `reduce` and a `keyboard` check with no `focusable` target.
 So is a `contrast` check with no `contrast` target, and a target or a hook that names an undeclared route.
+So is a `weight` check with no `weight` budgets, and a `shift` check with no `shift` bound.
 
 ### Screen sizes
 
