@@ -8,7 +8,7 @@ type TargetsReport = {
   readonly visible: ReadonlyMap<string, number>;
 };
 
-export const countVisible = (page: Page, selector: string): Effect.Effect<number, BrowserFailure> =>
+const countVisible = (page: Page, selector: string): Effect.Effect<number, BrowserFailure> =>
   attempt(`cannot query ${selector}`, () => page.locator(selector).filter({ visible: true }).count());
 
 export const judgeTargets = Effect.fn("judgeTargets")(function* (page: Page, targets: readonly Target[]) {
