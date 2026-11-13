@@ -9,6 +9,7 @@ A repository owner follows these steps to run an Effect script or test on Bun wi
 ## Before you begin
 
 - `effect` installed at the version the kit's `package.json` lists among its `peerDependencies`.
+- `playwright-core` installed at the version the kit's `package.json` lists among its `peerDependencies`, for the Find Chrome section alone.
 
 ## Run a script
 

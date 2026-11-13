@@ -14,7 +14,7 @@ async function script(body: string): Promise<{ exitCode: number; stdout: string;
   const dir = await mkdtemp(join(tmpdir(), "checks-bun-platform-"));
   dirs.push(dir);
   const file = join(dir, "script.ts");
-  await writeFile(file, `import { Console, Effect, FileSystem } from "effect";\nimport { main } from ${JSON.stringify(PLATFORM)};\n${body}\n`);
+  await writeFile(file, `import { Console, Effect, FileSystem } from ${JSON.stringify(Bun.resolveSync("effect", import.meta.dir))};\nimport { main } from ${JSON.stringify(PLATFORM)};\n${body}\n`);
   const ran = await $`bun ${file}`.nothrow().quiet();
   return { exitCode: ran.exitCode, stdout: ran.stdout.toString(), stderr: ran.stderr.toString() };
 }
