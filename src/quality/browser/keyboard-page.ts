@@ -30,6 +30,8 @@ type PageStyle = {
   readonly backgroundColor: string;
   readonly backgroundImage: string;
   readonly content: string;
+  readonly opacity: string;
+  readonly visibility: string;
   readonly position: string;
   readonly top: string;
   readonly right: string;
@@ -116,34 +118,52 @@ export const scanRings = (el: PageElement): RingScan[] => {
     "backgroundColor", "backgroundImage",
   ] as const;
   const ringPaint = (painted: PageStyle): ReadonlyArray<string> => ringKeys.map((key) => key + "=" + painted[key]);
+  const revealKeys = [
+    "content", "opacity", "visibility", "transform", "translate", "rotate", "scale",
+    "position", "top", "right", "bottom", "left",
+    "marginTop", "marginRight", "marginBottom", "marginLeft",
+  ] as const;
+  const pseudoPaint = (painted: PageStyle): ReadonlyArray<string> => [...ringPaint(painted), ...revealKeys.map((key) => key + "=" + painted[key])];
   const view = el.ownerDocument.defaultView;
   const root = el.ownerDocument.documentElement;
-  const holdsPlaced = (style: PageStyle, fixed: boolean): boolean =>
-    (!fixed && style.position !== "static") ||
+  const holdsPlaced = (style: PageStyle): boolean =>
+    style.position !== "static" ||
     [style.transform, style.translate, style.rotate, style.scale, style.perspective, style.filter, style.backdropFilter].some((value) => value !== "none") ||
     /layout|paint|strict|content/.test(style.contain) ||
     style.containerType !== "normal" ||
     /transform|perspective|filter/.test(style.willChange);
-  const frameOf = (host: PageElement, fixed: boolean): Box => {
+  const frameOf = (host: PageElement): Box => {
     let holder: PageElement | null = host;
-    while (holder !== null && holder !== root && !holdsPlaced(view.getComputedStyle(holder), fixed)) holder = holder.parentElement;
+    while (holder !== null && holder !== root && !holdsPlaced(view.getComputedStyle(holder))) holder = holder.parentElement;
     if (holder === null || holder === root) {
-      return fixed
-        ? { x: 0, y: 0, width: root.clientWidth, height: root.clientHeight }
-        : { x: -view.scrollX, y: -view.scrollY, width: root.clientWidth, height: root.clientHeight };
+      return { x: -view.scrollX, y: -view.scrollY, width: root.clientWidth, height: root.clientHeight };
     }
     const rect = holder.getBoundingClientRect();
+    if (holder.clientWidth === 0 && holder.clientHeight === 0 && (rect.width !== 0 || rect.height !== 0)) {
+      const holderStyle = view.getComputedStyle(holder);
+      const toPx = (token: string): number => {
+        if (token === "thin") return 1;
+        if (token === "medium") return 3;
+        if (token === "thick") return 5;
+        const parsed = parseFloat(token);
+        return Number.isFinite(parsed) ? parsed : 0;
+      };
+      const borderLeft = toPx(holderStyle.borderLeftWidth);
+      const borderTop = toPx(holderStyle.borderTopWidth);
+      const borderRight = toPx(holderStyle.borderRightWidth);
+      const borderBottom = toPx(holderStyle.borderBottomWidth);
+      return { x: rect.x + borderLeft - holder.scrollLeft, y: rect.y + borderTop - holder.scrollTop, width: Math.max(0, rect.width - borderLeft - borderRight), height: Math.max(0, rect.height - borderTop - borderBottom) };
+    }
     return { x: rect.x + holder.clientLeft - holder.scrollLeft, y: rect.y + holder.clientTop - holder.scrollTop, width: holder.clientWidth, height: holder.clientHeight };
   };
   const pseudoBox = (host: PageElement, painted: PageStyle, hostBox: Box): Box => {
-    const fixed = painted.position === "fixed";
-    if (!fixed && painted.position !== "absolute") return hostBox;
+    if (painted.position !== "absolute") return hostBox;
     const left = parseFloat(painted.left) + parseFloat(painted.marginLeft);
     const top = parseFloat(painted.top) + parseFloat(painted.marginTop);
     const right = parseFloat(painted.right) + parseFloat(painted.marginRight);
     const bottom = parseFloat(painted.bottom) + parseFloat(painted.marginBottom);
     if (![left, top, right, bottom].every((inset) => Number.isFinite(inset))) return hostBox;
-    const frame = frameOf(host, fixed);
+    const frame = frameOf(host);
     return { x: frame.x + left, y: frame.y + top, width: frame.width - left - right, height: frame.height - top - bottom };
   };
   const ringOf = (painted: PageStyle, box: Box): Ring => ({
@@ -167,7 +187,7 @@ export const scanRings = (el: PageElement): RingScan[] => {
     }
     nodes.push({
       rings,
-      paint: [...ringPaint(self), ...ringPaint(before).map((entry) => "before:" + entry), ...ringPaint(after).map((entry) => "after:" + entry)],
+      paint: [...ringPaint(self), ...pseudoPaint(before).map((entry) => "before:" + entry), ...pseudoPaint(after).map((entry) => "after:" + entry)],
     });
     current = current.parentElement;
   }
