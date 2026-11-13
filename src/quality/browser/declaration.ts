@@ -169,6 +169,9 @@ export function inconsistencies(declaration: Declaration, skipTargetRoutes = fal
   if (declaration.checks.includes("shift") && declaration.shift === undefined) {
     found.push("check shift judges the movement of a cold load, and no bound declares it");
   }
+  if (declaration.hooks !== undefined && declaration.states.every((state) => state.checks !== undefined)) {
+    found.push("hooks run in no state, since each state names its checks");
+  }
   return found;
 }
 
@@ -189,8 +192,8 @@ export const readDeclaration = Effect.fn("readDeclaration")(function* (root: str
   if (hasPreset && pages.length === 0) {
     return yield* new Usage({ message: `the declared site ${listed.site} holds no .html page, so build the site before the browser checks run` });
   }
-  const declaration = hasPreset ? expanded(listed, pages) : expanded(listed, []);
-  const found = hasPreset ? inconsistencies(declaration) : early;
+  const declaration = expanded(listed, pages);
+  const found = inconsistencies(declaration);
   if (found.length > 0) return yield* new Usage({ message: `${DECLARATION}: ${found.join("; ")}` });
   return { declaration, site } satisfies { readonly declaration: Declaration; readonly site: Site };
 });

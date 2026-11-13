@@ -96,7 +96,7 @@ None of these sees a parent click handler that fires with a child control's clic
 
 ### The inventory
 
-The runner prints one line for each check at each visit, narrowed by the `html`, `links` and `motion` exceptions above.
+The runner prints one line for each check at each visit, narrowed by the `html`, `links` and `motion` exceptions above and by a state's own `checks` list.
 The line names the route, its locale, the viewport, the state and what the check scanned.
 At every visit, whichever checks are declared, a `targets` run counts the visible elements each target that applies to the route matches.
 For `targets`, `layout`, `keyboard`, `contrast` and a hook, what it scanned is each target by name with the count of its elements.
@@ -130,7 +130,7 @@ The same hook can hover a control and check that no application state changed.
 
 The declaration names the module in `hooks`.
 The module exports `checks`, each a name, an optional list of the routes it runs on, and a `run` function.
-The runner hands `run` a fresh page at each visit before it loads anything, so the hook can intercept requests, and the visit with its `url`.
+The runner hands `run` a fresh page at each visit in a state that names no `checks` before it loads anything, so the hook can intercept requests, and the visit with its `url`.
 `run` returns the names of the targets it scanned and what it found, and a hook that throws fails with its message:
 
 ```ts
@@ -239,6 +239,7 @@ A site whose pages move on load or on scroll runs most checks with motion off, a
 
 The `targets` run still counts each target at every visit, in each state.
 A product hook runs at every visit in each state that names no `checks` of its own.
+A declaration that sets `hooks` while every state names its own `checks` is refused.
 
 ### Screen sizes
 

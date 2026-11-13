@@ -238,3 +238,22 @@ test("a product hook runs only in states that name no checks, never in an axe-on
   ]);
   expect(visits.map((visit) => hookApplies({}, visit))).toEqual([true, false]);
 });
+
+test("hooks that no state can run are refused rather than silently dropped, and a state without checks lets them run", () => {
+  const gated: Declaration = {
+    ...DECLARATION,
+    hooks: "tests/browser/hooks.ts",
+    states: [
+      { name: "reduced motion", reducedMotion: "reduce", checks: ["layout", "motion"] },
+      { name: "default motion", checks: ["axe"] },
+    ],
+    checks: ["layout", "motion", "axe"],
+  };
+  expect(inconsistencies(gated)).toEqual(["hooks run in no state, since each state names its checks"]);
+  const relieved: Declaration = { ...gated, states: [...gated.states, { name: "plain" }] };
+  expect(inconsistencies(relieved)).toEqual([]);
+  expect(visitsOf(relieved).filter((visit) => hookApplies({}, visit)).map(describeVisit)).toEqual([
+    "/ (en), phone 375x812 touch, plain",
+    "/ru/ (ru), phone 375x812 touch, plain",
+  ]);
+});
