@@ -4,12 +4,13 @@ import { DEVICES, ENLARGED_TEXT_PX, SCREEN_SIZE_SETS, SCREEN_SIZES, screenSizeNa
 
 const DECLARATION = "browser-checks.json";
 
-const CHECKS = ["layout", "keyboard", "motion", "axe", "nesting", "html", "links", "assets", "contrast"] as const;
+const CHECKS = ["layout", "keyboard", "motion", "axe", "nesting", "html", "links", "assets", "contrast", "weight", "shift"] as const;
 
 export type CheckName = (typeof CHECKS)[number];
 
 const Name = Schema.NonEmptyString;
 const Pixels = Schema.Int.check(Schema.isGreaterThan(0));
+const Bytes = Schema.Int.check(Schema.isGreaterThan(0));
 
 const Route = Schema.Struct({
   path: Schema.String.check(Schema.isPattern(/^\//, { message: "is not a path from the site root, such as /ru/" })),
@@ -44,6 +45,16 @@ const Target = Schema.Struct({
   contrast: Schema.optionalKey(Schema.Boolean),
 });
 
+const WeightBudgets = Schema.Struct({
+  nonImageBytes: Bytes,
+  scriptBytes: Bytes,
+  imageBytes: Bytes,
+});
+
+const ShiftBound = Schema.Struct({
+  max: Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0)),
+});
+
 const Declaration = Schema.Struct({
   site: Name,
   routes: Schema.NonEmptyArray(Route),
@@ -51,6 +62,8 @@ const Declaration = Schema.Struct({
   states: Schema.NonEmptyArray(State),
   targets: Schema.NonEmptyArray(Target),
   checks: Schema.NonEmptyArray(Schema.Literals(CHECKS)),
+  weight: Schema.optionalKey(WeightBudgets),
+  shift: Schema.optionalKey(ShiftBound),
   hooks: Schema.optionalKey(Name),
 });
 
@@ -64,6 +77,8 @@ export type Route = typeof Route.Type;
 export type Viewport = typeof Viewport.Type;
 export type State = typeof State.Type;
 export type Target = typeof Target.Type;
+export type WeightBudgets = typeof WeightBudgets.Type;
+export type ShiftBound = typeof ShiftBound.Type;
 export type Declaration = typeof Declaration.Type;
 
 export type Visit = {
@@ -117,6 +132,12 @@ export function inconsistencies(declaration: Declaration): readonly string[] {
   }
   if (declaration.checks.includes("contrast") && !declaration.targets.some(({ contrast }) => contrast === true)) {
     found.push("check contrast measures the text over a photo or a gradient, and no target sets contrast");
+  }
+  if (declaration.checks.includes("weight") && declaration.weight === undefined) {
+    found.push("check weight judges the bytes each page transfers, and no budgets declare them");
+  }
+  if (declaration.checks.includes("shift") && declaration.shift === undefined) {
+    found.push("check shift judges the movement of a cold load, and no bound declares it");
   }
   return found;
 }

@@ -389,6 +389,13 @@ test("without a declaration, with an empty target list, a missing site or a moti
     [declaration({ targets: [], checks: ["layout"] }), "browser: browser-checks.json does not decode"],
     [declaration({ site: "build", checks: ["layout"] }), "browser: the declared site build is not a directory, so build the site before the browser checks run"],
     [declaration({ checks: ["motion"] }), "check motion judges a visitor who turns motion off, and no state sets reducedMotion to reduce"],
+    [declaration({ checks: ["weight"] }), "check weight judges the bytes each page transfers, and no budgets declare them"],
+    [declaration({ checks: ["shift"] }), "check shift judges the movement of a cold load, and no bound declares it"],
+    [
+      declaration({ checks: ["weight"], weight: { nonImageBytes: 0, scriptBytes: 1, imageBytes: 1 } }),
+      "browser: browser-checks.json does not decode",
+    ],
+    [declaration({ checks: ["shift"], shift: { max: -0.1 } }), "browser: browser-checks.json does not decode"],
     [declaration({ checks: ["layout"], hooks: "tests/browser/hooks.ts" }), "browser: the declared hooks module tests/browser/hooks.ts is missing"],
   ] as const;
   for (const [declared, message] of cases) {

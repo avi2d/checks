@@ -13,9 +13,11 @@ import { judgeLayout } from "./layout.ts";
 import { judgeLinks } from "./links.ts";
 import { judgeStillness, recordMotion } from "./motion.ts";
 import { judgeNesting } from "./nesting.ts";
+import { coldShift, formatShift, judgeShift, recordShifts } from "./shift.ts";
 import { attempt, launchChrome, load, openVisit, type BrowserFailure } from "./page.ts";
 import { counted, NAME, passes, report, type Run } from "./report.ts";
 import { readSite, serveSite } from "./serve.ts";
+import { judgePageWeight, weighPage } from "./weight.ts";
 import { judgeTargets } from "./targets.ts";
 
 const NO_TARGET = "scanned no target";
@@ -101,6 +103,23 @@ const assetsRun = Effect.fn("assetsRun")(function* ({ browser, visit, url }: Vis
   return run("assets", visit, [`${watch.requested()} request(s)`], watch.found());
 }, Effect.scoped);
 
+const weightRun = Effect.fn("weightRun")(function* ({ browser, declaration, visit, url }: Visiting) {
+  const budgets = declaration.weight;
+  if (budgets === undefined) return run("weight", visit, [], ["check weight judges the bytes each page transfers, and no budgets declare them"]);
+  const { page } = yield* openVisit(browser, visit);
+  const weight = yield* weighPage(page, url);
+  return run("weight", visit, [`${weight.responses} response(s)`], judgePageWeight(budgets, weight));
+}, Effect.scoped);
+
+const shiftRun = Effect.fn("shiftRun")(function* ({ browser, declaration, visit, url }: Visiting) {
+  const bound = declaration.shift;
+  if (bound === undefined) return run("shift", visit, [], ["check shift judges the movement of a cold load, and no bound declares it"]);
+  const { page } = yield* openVisit(browser, visit, recordShifts);
+  yield* load(page, url);
+  const total = yield* coldShift(page, url);
+  return run("shift", visit, [`shift ${formatShift(total)}`], judgeShift(bound, total));
+}, Effect.scoped);
+
 const contrastRun = Effect.fn("contrastRun")(function* ({ browser, declaration, visit, url }: Visiting) {
   const targets = targetsOn(declaration, visit.route.path).filter(({ contrast }) => contrast === true);
   const { page } = yield* openVisit(browser, visit);
@@ -125,6 +144,8 @@ const BUILT_IN: Readonly<Record<CheckName, (visiting: Visiting) => Effect.Effect
   links: linksRun,
   assets: assetsRun,
   contrast: contrastRun,
+  weight: weightRun,
+  shift: shiftRun,
 };
 
 function applies(check: CheckName, visit: Visit, declaration: Declaration): boolean {

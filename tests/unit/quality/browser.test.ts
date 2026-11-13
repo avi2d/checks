@@ -57,6 +57,24 @@ test("a declaration that repeats a name, names an undeclared route or enables a 
   ]);
 });
 
+test("a declaration that budgets weight and bounds shift has no inconsistency", () => {
+  expect(
+    inconsistencies({
+      ...DECLARATION,
+      checks: [...DECLARATION.checks, "weight", "shift"],
+      weight: { nonImageBytes: 700_000, scriptBytes: 450_000, imageBytes: 500_000 },
+      shift: { max: 0.1 },
+    }),
+  ).toEqual([]);
+});
+
+test("a weight check with no budgets and a shift check with no bound are refused, not run unbounded", () => {
+  expect(inconsistencies({ ...DECLARATION, checks: [...DECLARATION.checks, "weight", "shift"] })).toEqual([
+    "check weight judges the bytes each page transfers, and no budgets declare them",
+    "check shift judges the movement of a cold load, and no bound declares it",
+  ]);
+});
+
 const ANCHOR_SIZES = ["phone 360x640", "phone 375x667", "phone 393x852", "phone 412x915", "tablet 820x1180", "desktop 1366x768", "desktop 1440x900", "desktop 1920x1080"];
 
 const NIGHTLY_SIZES = [
