@@ -36,6 +36,14 @@ export const unitTestFiles = () => timedUnitTests ?? listedUnitTests();
 
 const testFiles = unitTestFiles();
 
+const timeoutMS = 60000;
+const timeoutFactor = 1.5;
+const dryRunTimeoutMinutes = 5;
+
+// The bun runner holds bun.timeout over a whole bun test child rather than one test, so any value under Stryker's own deadlines kills a healthy suite that outruns it.
+// A mutant's Stryker deadline is timeoutFactor times its net time plus timeoutMS plus the dry run's overhead, and net time and overhead each stay under the dry-run deadline.
+const runnerChildTimeout = (timeoutFactor + 1) * dryRunTimeoutMinutes * 60000 + timeoutMS;
+
 export default {
   packageManager: "npm",
   plugins: [
@@ -46,12 +54,14 @@ export default {
   ignorers: [GUARD_IGNORER],
   testRunner: "bun",
   // The runner warns on an empty list before it finds every test itself, as it does for an absent one.
-  bun: { timeout: 60000, ...(testFiles.length > 0 ? { testFiles } : {}) },
+  bun: { timeout: runnerChildTimeout, ...(testFiles.length > 0 ? { testFiles } : {}) },
   inPlace: true,
   tempDirName: "../.stryker-tmp",
   coverageAnalysis: "perTest",
   reporters: ["html", "json", "clear-text", "progress"],
-  timeoutMS: 60000,
+  timeoutMS,
+  timeoutFactor,
+  dryRunTimeoutMinutes,
   concurrency: mutationConcurrency(process.env.RUNNER_ENVIRONMENT, availableParallelism()),
   ignoreStatic: ignoresStatic(process.env.CHECKS_MUTATION_MODE),
   thresholds: { high: 85, low: 70, break: null },

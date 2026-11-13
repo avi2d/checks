@@ -29,16 +29,40 @@ test("the preset carries exactly the agreed rollout settings, the full-run guard
     ],
     ignorers: ["checks-incremental-report-guard"],
     testRunner: "bun",
-    bun: { timeout: 60000, testFiles: expect.arrayContaining(["tests/unit/testing/stryker-preset.test.ts"]) },
+    bun: { timeout: 810000, testFiles: expect.arrayContaining(["tests/unit/testing/stryker-preset.test.ts"]) },
     inPlace: true,
     tempDirName: "../.stryker-tmp",
     coverageAnalysis: "perTest",
     reporters: ["html", "json", "clear-text", "progress"],
     timeoutMS: 60000,
+    timeoutFactor: 1.5,
+    dryRunTimeoutMinutes: 5,
     concurrency: expect.any(Number),
     ignoreStatic: expect.any(Boolean),
     thresholds: { high: 85, low: 70, break: null },
   });
+});
+
+const Deadlines = Schema.Struct({
+  bun: Schema.Struct({ timeout: Schema.Finite }),
+  timeoutMS: Schema.Finite,
+  timeoutFactor: Schema.Finite,
+  dryRunTimeoutMinutes: Schema.Finite,
+});
+
+const DRAIN_ACK_ABSOLUTE_CEILING_MS = 30000;
+
+test("rejects a runner kill that ends a healthy dry run before Stryker's dry-run deadline does", () => {
+  const deadlines = Schema.decodeUnknownSync(Deadlines)(preset);
+  const strykerDryRunDeadline = deadlines.dryRunTimeoutMinutes * 60_000;
+  expect(deadlines.bun.timeout + DRAIN_ACK_ABSOLUTE_CEILING_MS).toBeGreaterThan(strykerDryRunDeadline);
+});
+
+test("rejects a runner kill that ends a healthy mutant run before Stryker's mutant deadline does, even for a mutant that runs the whole suite", () => {
+  const deadlines = Schema.decodeUnknownSync(Deadlines)(preset);
+  const longestDryRun = deadlines.dryRunTimeoutMinutes * 60_000;
+  const longestMutantDeadline = deadlines.timeoutFactor * longestDryRun + deadlines.timeoutMS + longestDryRun;
+  expect(deadlines.bun.timeout).toBeGreaterThanOrEqual(longestMutantDeadline);
 });
 
 test("mutation concurrency takes every core of a GitHub-hosted runner rather than half of them", () => {
