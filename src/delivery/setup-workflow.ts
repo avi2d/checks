@@ -56,8 +56,6 @@ export const MUTATION_WORKFLOW = [
   "name: mutation",
   "",
   "on:",
-  "  pull_request:",
-  "    types: [opened, synchronize]",
   "  workflow_dispatch:",
   "",
   "jobs:",
