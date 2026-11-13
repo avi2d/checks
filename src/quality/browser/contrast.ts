@@ -72,13 +72,26 @@ const TEXT_BOXES = `(targets) => {
       while (walker.nextNode()) nodes.push(walker.currentNode);
       let box = 0;
       for (const node of nodes) {
-        if ((node.textContent ?? "").trim() === "") continue;
+        const value = node.textContent ?? "";
+        if (value.trim() === "") continue;
         const owner = node.parentElement;
         if (owner === null || !shown(owner)) continue;
         const sizePx = parseFloat(getComputedStyle(owner).fontSize) || parseFloat(getComputedStyle(element).fontSize);
-        const range = document.createRange();
-        range.selectNodeContents(node);
-        for (const rect of range.getClientRects()) {
+        const pattern = /\r\n|\r|\n/g;
+        const spans = [];
+        let from = 0;
+        let cut;
+        while ((cut = pattern.exec(value)) !== null) {
+          spans.push([from, cut.index]);
+          from = cut.index + cut[0].length;
+        }
+        spans.push([from, value.length]);
+        for (const [start, end] of spans) {
+          if (value.slice(start, end).trim() === "") continue;
+          const range = document.createRange();
+          range.setStart(node, start);
+          range.setEnd(node, end);
+          for (const rect of range.getClientRects()) {
           if (Math.min(innerWidth, rect.right) - Math.max(0, rect.left) <= 0) continue;
           if (Math.min(innerHeight, rect.bottom) - Math.max(0, rect.top) <= 0) continue;
           const left = Math.floor(Math.max(0, rect.left));
@@ -96,6 +109,7 @@ const TEXT_BOXES = `(targets) => {
             width: Math.round((right - left) * pixels),
             height: Math.round((bottom - top) * pixels),
           });
+          }
         }
       }
     }
