@@ -72,7 +72,8 @@ While G4 is on, each of four type properties takes, outside the token files, one
 `declaration-property-value-allowed-list` refuses any other value of `line-height`, `letter-spacing` and `text-transform`, such as `line-height: 1.3`.
 `checks/font-weight-from-tokens` refuses any other `font-weight` outside an `@font-face` rule, such as `font-weight: bold`.
 A `font-weight` descriptor inside `@font-face` passes, since `var()` is invalid there.
-Each rule in the table refuses a `var(--…)` naming a custom property the same file sets, unless the file sets it only to another such `var(--…)`, as `checks/font-size-from-tokens` does for a size.
+Each rule in the table refuses a `var(--…)` naming a custom property the same file sets.
+The file passes when it sets that property only to another such `var(--…)`, as `checks/font-size-from-tokens` does for a size.
 `checks/line-height-from-tokens` also judges the line height of the `font` shorthand.
 The shorthand takes no literal weight, so a component that sets a weight from a token writes `font-weight` beside it.
 

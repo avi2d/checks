@@ -202,7 +202,7 @@ type Literal = { readonly word: string; readonly message: string };
 type TokenDecl = {
   readonly prop: string;
   readonly value: string;
-  readonly parent?: { readonly type?: string; readonly name?: string } | null;
+  readonly parent?: { readonly type?: string; readonly name?: string } | null | undefined;
 };
 
 type TokenRule = {
@@ -269,7 +269,7 @@ const FONT_WEIGHT_KEYWORDS: readonly string[] =
   TYPE_PROPERTIES.find((entry) => entry.property === "font-weight")?.keywords ?? [];
 
 function isFontFaceDescriptor(node: TokenDecl): boolean {
-  return node.parent?.type === "atrule" && node.parent?.name?.toLowerCase() === "font-face";
+  return node.parent?.type === "atrule" && node.parent.name?.toLowerCase() === "font-face";
 }
 
 function fontWeightLiterals(node: TokenDecl): Literal[] {

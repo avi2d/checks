@@ -172,7 +172,7 @@ function usesAllowedList(property) {
 }
 var FONT_WEIGHT_KEYWORDS = TYPE_PROPERTIES.find((entry) => entry.property === "font-weight")?.keywords ?? [];
 function isFontFaceDescriptor(node) {
-  return node.parent?.type === "atrule" && node.parent?.name?.toLowerCase() === "font-face";
+  return node.parent?.type === "atrule" && node.parent.name?.toLowerCase() === "font-face";
 }
 function fontWeightLiterals(node) {
   if (node.prop.toLowerCase() !== "font-weight" || isFontFaceDescriptor(node))

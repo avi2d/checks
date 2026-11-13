@@ -349,7 +349,9 @@ The syntax gate runs two of stylelint's built-in rules and the stylelint team's 
 `html` runs two html-validate presets beside one rule.
 `links` is the kit's own, because linkinator takes a page that carries `noindex` and `nofollow` for a soft 404 and checks no fragment on it.
 Its Baseline family runs `stylelint-plugin-use-baseline`, the one stylelint rule that judges against the Baseline data rather than a browser list.
-Its design token family is stylelint's own colour and value rules and the kit's `checks/font-size-from-tokens`, with one rule of the same shape for each of `line-height`, `letter-spacing`, `font-weight` and `text-transform`, applied outside the files a repository names as its tokens.
+Its design token family is stylelint's own colour and value rules and the kit's `checks/font-size-from-tokens`.
+One rule of the same shape holds each of `line-height`, `letter-spacing`, `font-weight` and `text-transform`.
+Each applies outside the files a repository names as its tokens.
 A check of the rendered page against declared tokens would need a token format of the kit's own.
 The repository's `stylelint.config.ts` sets the Baseline target and the token files, since only the repository knows either.
 The gate imports that file itself, because stylelint's config loader calls `typescript.findConfigFile`, which TypeScript 7 lacks, and a JavaScript config is what [checks-no-plain-js](gates/checks-no-plain-js.md) refuses.
