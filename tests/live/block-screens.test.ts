@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Effect } from "effect";
-import { decodePng } from "../../src/testing/block-screens.ts";
+import { decodePng } from "../../src/quality/browser/png.ts";
 import { ran, scratchDirs } from "../e2e/lib/fixture-repo.ts";
 import { browserConsumer } from "../e2e/lib/packed.ts";
 

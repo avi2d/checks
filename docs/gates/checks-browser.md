@@ -24,6 +24,7 @@ So a control the page renders once for each breakpoint is judged where it shows.
 | `html` | an error from html-validate's `html-validate:standard` or `html-validate:a11y` preset, or from `input-missing-label`, in the page the server sends | html-validate on the page's HTML as the server sends it |
 | `links` | a link on the rendered page to a page of the same site that answers with a status of 400 or more, and a link whose fragment names no element on the page it points at | the `href` of each `<a>` and `<area>`, fetched from the local server, and the `id` and `<a name>` of the page each fragment points at, loaded in Chrome |
 | `assets` | a request that fails, a response with a status of 400 or more, a request to another origin, an error the page logs to the console and an error the page throws and never catches, while the page loads to network idle | Playwright's request, response, console and page error events |
+| `contrast` | a box of text in a `contrast` target whose letters, as drawn, fall below WCAG 2.2's 4.5:1 against the backdrop around them, or below 3:1 from 24px up, and a `contrast` target with no text on screen or whose letters draw nothing | three screenshots of the page: as drawn, with the targets' text painted one marker colour and with it cleared |
 
 `html` runs once for each route, at the first viewport in the first state, because the page the server sends is the same at each.
 `links` runs once at the same visit, since it reads every link in the page, whether the viewport shows it or not.
@@ -58,6 +59,22 @@ It does not yet check the rendered page against a product's declared design toke
 
 `axe` reports a contrast it cannot measure as unverified rather than as a pass or a failure.
 Text over a background image or a gradient is such a case, and the report lists each one under its own heading.
+`contrast` measures that text for the targets that set `contrast`.
+
+`contrast` waits for the page's images in view and for each entrance animation, up to ten seconds, then pauses every animation where it stands.
+For each line of a target's text it compares the letters' pixels with the backdrop's pixels in a ring two pixels wide around them.
+It reads the letters' pixels where the marker colour lands.
+The letters' lightest or darkest pixels, whichever stand furthest from the backdrop, give their colour.
+The ratio it reports is the 5th percentile of the ring, so a bright stretch of a photo behind one letter is not averaged away.
+A shadow or a halo stays painted when the text is cleared, so it counts as backdrop.
+It needs 3:1 for text from 24px, as WCAG 2.2 counts 18pt large text, and 4.5:1 below that, without telling bold 14pt text from regular.
+It measures only what the viewport shows at the top of the page, so text below the fold reads as no text on screen.
+Text that is only whitespace is left out, since it paints no letter to measure.
+Text a canvas or an image draws is not text it can find.
+Letters filled by `-webkit-text-fill-color` ignore the marker colour, so they read as drawing nothing.
+A backdrop a pseudo-element or an SVG paints with `currentColor` changes with the marker, so its text reads as drawing nothing.
+The large-text threshold reads the CSS font-size, so text a transform or zoom scales is held to the threshold of its unscaled size.
+
 `nested-interactive` catches a control inside an element whose role makes its children presentational, such as a link inside a `<button>` or inside a `role="button"`.
 `nesting` catches a control inside a link, which axe passes.
 `html` reads the page as the server sends it, so it never sees markup a script builds.
@@ -69,7 +86,7 @@ None of these sees a parent click handler that fires with a child control's clic
 The runner prints one line for each check at each visit, narrowed by the `html`, `links` and `motion` exceptions above.
 The line names the route, its locale, the viewport, the state and what the check scanned.
 At every visit, whichever checks are declared, a `targets` run counts the visible elements each target that applies to the route matches.
-For `targets`, `layout`, `keyboard` and a hook, what it scanned is each target by name with the count of its elements.
+For `targets`, `layout`, `keyboard`, `contrast` and a hook, what it scanned is each target by name with the count of its elements.
 
 It fails, rather than passes, when a declaration leaves nothing to judge:
 
@@ -79,6 +96,7 @@ It fails, rather than passes, when a declaration leaves nothing to judge:
 - a `layout` run or a hook that scans no target
 - a `keyboard` run in which Tab reaches no target
 - a `motion` run that finds no visible control
+- a `contrast` run with no `contrast` target on the route, a `contrast` target with no text on screen, and a line of text whose letters draw nothing
 - an empty list of routes, viewports, states, targets or checks, which the declaration refuses
 
 Each failure names the check, the route, the locale, the viewport and the state, and the target or the element it found.
@@ -166,13 +184,14 @@ It reads `browser-checks.json` in the directory it runs in:
 | `routes` | each page to visit, as a `path` from the site root and the `locale` it renders |
 | `viewports` | each window to visit in, with a `name`, a `width` and a `height` in pixels, `touch` for a phone that has touch and a mobile viewport, and `device` as `phone`, `tablet` or `desktop`, or a `preset` that stands for a set of screen sizes |
 | `states` | each condition to visit in, with a `name`, `textPx` for the browser's default text size, and `reducedMotion` as `reduce` or `no-preference`, or the `enlarged-text` preset |
-| `targets` | each named control or text the checks judge, with a CSS `selector`, the `routes` it is on when not every route, and `focusable` when Tab must reach it |
-| `checks` | the built-in checks to run, from `layout`, `keyboard`, `motion`, `axe`, `nesting`, `html`, `links` and `assets` |
+| `targets` | each named control or text the checks judge, with a CSS `selector`, the `routes` it is on when not every route, `focusable` when Tab must reach it, and `contrast` when `contrast` measures its text |
+| `checks` | the built-in checks to run, from `layout`, `keyboard`, `motion`, `axe`, `nesting`, `html`, `links`, `assets` and `contrast` |
 | `hooks` | the module of product hooks, as a path from the directory the runner runs in |
 
 `textPx` sets the default font size, so text the page sizes in `rem` or `em` grows, as a visitor's own setting makes it grow.
 A declaration that names a route, viewport, state, target or check twice is refused.
-So are a `motion` check with no state whose `reducedMotion` is `reduce`, a `keyboard` check with no `focusable` target, and a target or a hook that names an undeclared route.
+So are a `motion` check with no state whose `reducedMotion` is `reduce` and a `keyboard` check with no `focusable` target.
+So is a `contrast` check with no `contrast` target, and a target or a hook that names an undeclared route.
 
 ### Screen sizes
 

@@ -4,6 +4,7 @@ import type { Browser } from "playwright-core";
 import { runMain } from "../../core/main.ts";
 import { watchAssets } from "./assets.ts";
 import { judgeAxe } from "./axe.ts";
+import { judgeContrast } from "./contrast.ts";
 import { readDeclaration, targetsOn, visitsOf, type CheckName, type Declaration, type Visit } from "./declaration.ts";
 import { loadHooks, runHook, type ProductCheck } from "./hooks.ts";
 import { judgeHtml } from "./html.ts";
@@ -100,6 +101,14 @@ const assetsRun = Effect.fn("assetsRun")(function* ({ browser, visit, url }: Vis
   return run("assets", visit, [`${watch.requested()} request(s)`], watch.found());
 }, Effect.scoped);
 
+const contrastRun = Effect.fn("contrastRun")(function* ({ browser, declaration, visit, url }: Visiting) {
+  const targets = targetsOn(declaration, visit.route.path).filter(({ contrast }) => contrast === true);
+  const { page } = yield* openVisit(browser, visit);
+  yield* load(page, url);
+  const { found, inventory } = yield* judgeContrast(page, targets);
+  return run("contrast", visit, inventory, targets.length === 0 ? [...found, NO_TARGET] : found);
+}, Effect.scoped);
+
 const hookRun = Effect.fn("hookRun")(function* (check: ProductCheck, { browser, visit, url }: Visiting) {
   const { page } = yield* openVisit(browser, visit);
   const { targets, found } = yield* runHook(check, page, { ...visit, url });
@@ -115,6 +124,7 @@ const BUILT_IN: Readonly<Record<CheckName, (visiting: Visiting) => Effect.Effect
   html: htmlRun,
   links: linksRun,
   assets: assetsRun,
+  contrast: contrastRun,
 };
 
 function applies(check: CheckName, visit: Visit, declaration: Declaration): boolean {
