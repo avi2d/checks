@@ -82,7 +82,7 @@ export const weighPage = Effect.fn("weighPage")(function* (page: Page, url: stri
   yield* attempt(`cannot settle ${url} to network idle`, () => page.waitForLoadState("networkidle"));
   const bodies = yield* attempt(`cannot read the responses ${url} serves`, () => Promise.all(received));
   for (const entry of bodies) {
-    if ("failure" in entry) return yield* Effect.fail(new BrowserFailure({ message: `cannot read the responses ${url} serves: ${entry.failure}` }));
+    if ("failure" in entry) return yield* new BrowserFailure({ message: `cannot read the responses ${url} serves: ${entry.failure}` });
   }
   const readable = bodies.filter((entry): entry is Received => !("failure" in entry));
   const responses = yield* Effect.forEach(readable, ({ body, image, script }): Effect.Effect<Weighed, BrowserFailure> =>
