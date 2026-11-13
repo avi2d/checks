@@ -77,7 +77,7 @@ const TEXT_BOXES = `(targets) => {
         const owner = node.parentElement;
         if (owner === null || !shown(owner)) continue;
         const sizePx = parseFloat(getComputedStyle(owner).fontSize) || parseFloat(getComputedStyle(element).fontSize);
-        const pattern = /\r\n|\r|\n/g;
+        const pattern = /\\r\\n|\\r|\\n/g;
         const spans = [];
         let from = 0;
         let cut;
