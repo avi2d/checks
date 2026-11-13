@@ -71,6 +71,8 @@ It measures only what the viewport shows at the top of the page, so text below t
 Text that is only whitespace is left out, since it paints no letter to measure.
 Text a canvas or an image draws is not text it can find.
 Letters filled by `-webkit-text-fill-color` ignore the marker colour, so they read as drawing nothing.
+A backdrop a pseudo-element or an SVG paints with `currentColor` changes with the marker, so its text reads as drawing nothing.
+The large-text threshold reads the CSS font-size, so text a transform or zoom scales is held to the threshold of its unscaled size.
 
 `nested-interactive` catches a control inside an element whose role makes its children presentational, such as a link inside a `<button>` or inside a `role="button"`.
 `nesting` catches a control inside a link, which axe passes.
