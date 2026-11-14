@@ -64,3 +64,20 @@ export const load = Effect.fn("load")(function* (page: Page, url: string) {
   yield* attempt(`cannot load ${url}`, () => page.goto(url, { waitUntil: "load" }));
   yield* attempt(`fonts never settle on ${url}`, () => page.evaluate("document.fonts.ready.then(() => undefined)"));
 });
+
+const ENTRANCE_LIMIT_MS = 10_000;
+
+// A reading mid-fade measures the fade, so the page settles first. An infinite animation is left out of the wait, and the bound ends the wait for one that runs too long.
+const SETTLED = `Promise.race([
+  Promise.all(
+    Array.from(document.images).filter((image) => {
+      for (const rect of image.getClientRects()) {
+        if (rect.bottom > 0 && rect.top < innerHeight && rect.right > 0 && rect.left < innerWidth) return true;
+      }
+      return false;
+    }).map((image) => image.decode().catch(() => undefined)),
+  ).then(() => Promise.all(document.getAnimations().filter((animation) => animation.playState !== "paused" && animation.timeline === document.timeline && animation.effect?.getTiming().iterations !== Infinity).map((animation) => animation.finished.catch(() => undefined)))),
+  new Promise((resolve) => setTimeout(resolve, ${ENTRANCE_LIMIT_MS})),
+]).then(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)))))`;
+
+export const settle = (page: Page): Effect.Effect<unknown, BrowserFailure> => attempt("the page never settles to be read", () => page.evaluate(SETTLED));

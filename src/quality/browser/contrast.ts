@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect";
 import type { Page } from "playwright-core";
 import type { Target } from "./declaration.ts";
-import { attempt, BrowserFailure } from "./page.ts";
+import { attempt, BrowserFailure, settle } from "./page.ts";
 import { decodePng, type Picture } from "./png.ts";
 
 const LARGE_TEXT_PX = 24;
@@ -36,21 +36,6 @@ export type Reading = {
   readonly needs: number;
   readonly ratio: number | null;
 };
-
-const ENTRANCE_LIMIT_MS = 10_000;
-
-// An entrance plays out before the text is read, since a reading mid-fade measures the fade, and a loop or a scroll-driven animation never ends, so it is paused where it stands.
-const SETTLED = `Promise.race([
-  Promise.all(
-    Array.from(document.images).filter((image) => {
-      for (const rect of image.getClientRects()) {
-        if (rect.bottom > 0 && rect.top < innerHeight && rect.right > 0 && rect.left < innerWidth) return true;
-      }
-      return false;
-    }).map((image) => image.decode().catch(() => undefined)),
-  ).then(() => Promise.all(document.getAnimations().filter((animation) => animation.playState !== "paused" && animation.timeline === document.timeline && animation.effect?.getTiming().iterations !== Infinity).map((animation) => animation.finished.catch(() => undefined)))),
-  new Promise((resolve) => setTimeout(resolve, ${ENTRANCE_LIMIT_MS})),
-]).then(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)))))`;
 
 const TEXT_BOXES = `(targets) => {
   for (const animation of document.getAnimations()) animation.pause();
@@ -261,7 +246,7 @@ export function verdicts(targets: readonly Target[], readings: readonly Reading[
 
 export const judgeContrast = Effect.fn("judgeContrast")(function* (page: Page, targets: readonly Target[]) {
   if (targets.length === 0) return { found: [], inventory: [] } satisfies ContrastReport;
-  yield* attempt("the page never settles to be read", () => page.evaluate(SETTLED));
+  yield* settle(page);
   const boxes = yield* textBoxesOn(page, targets);
   const selectors = targets.map(({ selector }) => selector);
   const drawn = yield* shot(page, "as drawn");
