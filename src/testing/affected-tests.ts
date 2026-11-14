@@ -10,7 +10,9 @@ export type Narrowing =
 
 type SharedChange = { readonly path: string; readonly reason: string };
 
-export type LocalNarrowing = { readonly files: readonly string[]; readonly shared: readonly SharedChange[] };
+export type LocalNarrowing =
+  | { readonly kind: "full"; readonly because: string }
+  | { readonly kind: "files"; readonly files: readonly string[]; readonly shared: readonly SharedChange[] };
 
 type SelfReference = {
   readonly name: string;
@@ -88,6 +90,10 @@ function mappedTests(path: string, repository: Repository): readonly string[] | 
   if (rules.length === 0) return undefined;
   const patterns = rules.flatMap((rule) => rule.tests);
   return testFilesOf(repository).filter((file) => patterns.some((pattern) => globMatches(pattern, file)));
+}
+
+function refusedReachKeys(repository: Repository): readonly string[] {
+  return repository.reach.filter((rule) => rule.tests.length === 0).map((rule) => rule.changed);
 }
 
 // A test pattern that matches no test file would silently drop the tests a renamed file used to name.
@@ -228,6 +234,10 @@ function preloadClosure(repository: Repository): ReadonlySet<string> {
 // A test or its helper reads a file it imports or names by path or bin, and a source reads only what it imports, at any depth.
 // A source that names a path, as a registry does, would make every importer read every file it lists.
 export function narrowTests(changed: readonly string[], repository: Repository, tests: readonly string[]): Narrowing {
+  const refused = refusedReachKeys(repository);
+  if (refused.length > 0) {
+    return { kind: "full", because: `package.json: checks.reach lists no test file for ${refused.join(", ")}` };
+  }
   const stale = staleReachPatterns(repository);
   if (stale.length > 0) {
     return { kind: "full", because: `package.json: checks.reach names ${stale.map((entry) => `${entry.pattern} for ${entry.changed}`).join(", ")}, which matches no test file` };
@@ -239,17 +249,15 @@ export function narrowTests(changed: readonly string[], repository: Repository, 
 }
 
 export function narrowLocalTests(changed: readonly string[], repository: Repository, tests: readonly string[]): LocalNarrowing {
+  const refused = refusedReachKeys(repository);
+  if (refused.length > 0) {
+    return { kind: "full", because: `package.json: checks.reach lists no test file for ${refused.join(", ")}` };
+  }
   const stale = staleReachPatterns(repository);
   if (stale.length > 0) {
-    return {
-      files: [...tests],
-      shared: stale.map((entry) => ({
-        path: "package.json",
-        reason: `checks.reach names ${entry.pattern} for ${entry.changed}, which matches no test file`,
-      })),
-    };
+    return { kind: "full", because: `package.json: checks.reach names ${stale.map((entry) => `${entry.pattern} for ${entry.changed}`).join(", ")}, which matches no test file` };
   }
-  return { files: reachedTests(changed, repository, tests), shared: sharedChanges(changed, repository) };
+  return { kind: "files", files: reachedTests(changed, repository, tests), shared: sharedChanges(changed, repository) };
 }
 
 function sharedChanges(changed: readonly string[], repository: Repository): readonly SharedChange[] {
@@ -272,7 +280,7 @@ const Manifest = Schema.Struct({
   exports: Schema.optionalKey(Schema.Unknown),
   bin: Schema.optionalKey(Schema.Union([Schema.String, Schema.Record(Schema.String, Schema.String)])),
   checks: Schema.optionalKey(Schema.Struct({
-    reach: Schema.optionalKey(Schema.Record(Schema.NonEmptyString, Schema.Array(Schema.NonEmptyString))),
+    reach: Schema.optionalKey(Schema.Record(Schema.NonEmptyString, Schema.NonEmptyArray(Schema.NonEmptyString))),
   })),
 });
 const decodeManifest = Schema.decodeUnknownEffect(Schema.fromJsonString(Manifest));
@@ -295,7 +303,12 @@ const readRepository = Effect.fn("readRepository")(function* (root: string) {
   const read = (file: string) => fs.readFileString(path.join(root, file)).pipe(Effect.orElseSucceed(() => ""));
   const sources = new Map(yield* Effect.forEach(files.filter((file) => SOURCE_FILE.test(file)), (file) =>
     read(file).pipe(Effect.map((text) => [file, text] as const)), { concurrency: 16 }));
-  const manifest = files.includes("package.json") ? yield* read("package.json").pipe(Effect.flatMap(decodeManifest)) : {};
+  const manifest = files.includes("package.json")
+    ? yield* read("package.json").pipe(
+        Effect.flatMap(decodeManifest),
+        Effect.mapError((cause) => new NarrowingError({ message: "package.json: " + String((cause as { message?: unknown }).message ?? cause) })),
+      )
+    : {};
   const bunfig = files.includes("bunfig.toml")
     ? yield* read("bunfig.toml").pipe(
         Effect.flatMap((text) => Effect.try({ try: (): unknown => Bun.TOML.parse(text), catch: (cause) => new NarrowingError({ message: "cannot parse bunfig.toml: " + String(cause) }) })),
@@ -318,7 +331,9 @@ const pullRequestEvent = Config.all({
 });
 
 export const readLocalNarrowing = Effect.fn("readLocalNarrowing")(function* (root: string, changed: readonly string[], tests: readonly string[]) {
-  return narrowLocalTests(changed, yield* readRepository(root), tests);
+  return yield* Effect.gen(function* () {
+    return narrowLocalTests(changed, yield* readRepository(root), tests);
+  }).pipe(Effect.catchTag("NarrowingError", (cause) => Effect.succeed<LocalNarrowing>({ kind: "full", because: cause.message })));
 });
 
 // Only a pull_request run has a base to diff against; every other run keeps the suite whole.
@@ -333,6 +348,7 @@ export const readPullRequestNarrowing = Effect.fn("readPullRequestNarrowing")(fu
     return narrowTests(changed, yield* readRepository(root), tests);
   });
   return Option.some(yield* narrowing.pipe(
-    Effect.catch((cause) => Effect.succeed<Narrowing>({ kind: "full", because: "the pull request's changes cannot be read: " + cause.message })),
+    Effect.catchTag("NarrowingError", (cause) => Effect.succeed<Narrowing>({ kind: "full", because: cause.message })),
+    Effect.catch((cause) => Effect.succeed<Narrowing>({ kind: "full", because: "the pull request's changes cannot be read: " + String((cause as { message?: unknown }).message ?? cause) })),
   ));
 });

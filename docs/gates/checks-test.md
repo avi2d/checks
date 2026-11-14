@@ -146,6 +146,8 @@ A lockfile, a config, a tool pin, a preloaded file or a test helper still runs t
 A run on any other event, `--full` and the live and pixel tiers stay whole whatever the map says.
 A value that matches no test file stops the narrowing.
 A pull request run and a `--changed` run then run the whole suite and name the value and the key that lists it.
+An empty list or a malformed entry stops the narrowing the same way.
+A pull request run and a `--changed` run then run the whole suite and name package.json and the refused key.
 So a renamed test that the map still names surfaces on the next run rather than dropping its file.
 A stylesheet that reaches a block the map does not list ships untested on the pull request, and the whole run on `main` and at release still tests it.
 
@@ -159,6 +161,7 @@ A deleted file and the old name of a renamed file still count, so a test that im
 A quarantined, live or pixel test never runs.
 A shared file never widens the run to the whole suite.
 It runs only the tests the change reaches and names each shared file as left to the pull request's whole run.
+A reach map problem runs the whole suite instead.
 The run names each test file it reached, or says it reached none and runs no test.
 It judges the skips of the files it ran, as any other run does.
 A clone with no remote-tracking default branch fails before any test runs and asks for a fetch of it.

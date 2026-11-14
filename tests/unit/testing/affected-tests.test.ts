@@ -99,28 +99,35 @@ const SHOP = repository(SHOP_SOURCES, { files: [...Object.keys(SHOP_SOURCES), "b
 
 test("a local change to a source runs the unit and e2e tests that reach it, rather than the whole unit tier", () => {
   expect(narrowLocalTests(["src/price.ts"], SHOP, LOCAL_TESTS)).toEqual({
+    kind: "files",
     files: ["tests/e2e/checkout.test.ts", "tests/unit/cart.test.ts", "tests/unit/price.test.ts"],
     shared: [],
   });
 });
 
 test("a local change to a test file runs that file alone, not the tests beside it", () => {
-  expect(narrowLocalTests(["tests/unit/price.test.ts"], SHOP, LOCAL_TESTS)).toEqual({ files: ["tests/unit/price.test.ts"], shared: [] });
+  expect(narrowLocalTests(["tests/unit/price.test.ts"], SHOP, LOCAL_TESTS)).toEqual({
+    kind: "files",
+    files: ["tests/unit/price.test.ts"],
+    shared: [],
+  });
 });
 
 test("a local change to a shared file runs only the tests the change reaches and names the shared file, rather than the whole suite", () => {
   expect(narrowLocalTests(["bun.lock", "src/tax.ts"], SHOP, LOCAL_TESTS)).toEqual({
+    kind: "files",
     files: ["tests/unit/tax.test.ts"],
     shared: [{ path: "bun.lock", reason: "a lockfile" }],
   });
   expect(narrowLocalTests(["tests/lib/money.ts"], SHOP, LOCAL_TESTS)).toEqual({
+    kind: "files",
     files: ["tests/unit/tax.test.ts"],
     shared: [{ path: "tests/lib/money.ts", reason: "a test helper" }],
   });
 });
 
 test("no local change runs no test rather than the whole suite", () => {
-  expect(narrowLocalTests([], SHOP, LOCAL_TESTS)).toEqual({ files: [], shared: [] });
+  expect(narrowLocalTests([], SHOP, LOCAL_TESTS)).toEqual({ kind: "files", files: [], shared: [] });
 });
 
 const SITE_TESTS = ["tests/e2e/hero.test.ts", "tests/e2e/menu.test.ts", "tests/e2e/footer.test.ts"];
@@ -171,6 +178,7 @@ test("a lockfile or a config the reach map names still runs the whole suite rath
 
 test("a local change to a mapped stylesheet runs its mapped tests and leaves nothing to the pull request's whole run", () => {
   expect(narrowLocalTests(["src/styles/menu.css"], SITE, SITE_TESTS)).toEqual({
+    kind: "files",
     files: ["tests/e2e/hero.test.ts", "tests/e2e/menu.test.ts"],
     shared: [],
   });
@@ -193,12 +201,19 @@ test("a stale reach value runs the whole suite rather than narrowing to its mapp
 test("a stale reach value runs the whole local suite rather than failing the desk run", () => {
   const renamed = { ...SITE, reach: [...SITE.reach, { changed: "src/styles/menu.css", tests: ["tests/e2e/nav.test.ts"] }] };
   expect(narrowLocalTests(["src/styles/menu.css"], renamed, SITE_TESTS)).toEqual({
-    files: SITE_TESTS,
-    shared: [
-      {
-        path: "package.json",
-        reason: "checks.reach names tests/e2e/nav.test.ts for src/styles/menu.css, which matches no test file",
-      },
-    ],
+    kind: "full",
+    because: "package.json: checks.reach names tests/e2e/nav.test.ts for src/styles/menu.css, which matches no test file",
+  });
+});
+
+test("an empty reach list runs the whole suite rather than no test", () => {
+  const empty = { ...SITE, reach: [...SITE.reach, { changed: "src/styles/print.css", tests: [] }] };
+  expect(narrowTests(["src/styles/print.css"], empty, SITE_TESTS)).toEqual({
+    kind: "full",
+    because: "package.json: checks.reach lists no test file for src/styles/print.css",
+  });
+  expect(narrowLocalTests(["src/styles/print.css"], empty, SITE_TESTS)).toEqual({
+    kind: "full",
+    because: "package.json: checks.reach lists no test file for src/styles/print.css",
   });
 });
