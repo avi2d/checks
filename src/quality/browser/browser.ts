@@ -15,6 +15,7 @@ import { judgeLook, readLook, type FirstLooks } from "./look.ts";
 import { judgeStillness, recordMotion } from "./motion.ts";
 import { judgeNesting } from "./nesting.ts";
 import { coldShift, formatShift, judgeShift, recordShifts } from "./shift.ts";
+import { cellsAtOnce, walkCells, type Cell } from "./cells.ts";
 import { attempt, launchChrome, load, openVisit, type BrowserFailure } from "./page.ts";
 import { counted, NAME, passes, report, type Run } from "./report.ts";
 import { serveSite, type Site } from "./serve.ts";
@@ -28,8 +29,12 @@ type Visiting = {
   readonly declaration: Declaration;
   readonly visit: Visit;
   readonly url: string;
-  readonly firstLooks: FirstLooks;
 };
+
+// Look compares each text with the first of its role in the serial walk, so a cell that reads a page leaves that comparison until every cell has read.
+type Settle = (firstLooks: FirstLooks) => Run;
+
+const settled = (one: Run): Settle => () => one;
 
 const run = (check: string, visit: Visit, inventory: readonly string[], found: readonly string[], unverified: readonly string[] = []): Run => ({
   check,
@@ -130,13 +135,16 @@ const contrastRun = Effect.fn("contrastRun")(function* ({ browser, declaration, 
   return run("contrast", visit, inventory, targets.length === 0 ? [...found, NO_TARGET] : found);
 }, Effect.scoped);
 
-const lookRun = Effect.fn("lookRun")(function* ({ browser, declaration, visit, url, firstLooks }: Visiting) {
+const lookRun = Effect.fn("lookRun")(function* ({ browser, declaration, visit, url }: Visiting) {
   const roles = declaration.roles;
-  if (roles === undefined) return run("look", visit, [], ["check look judges each visible text by the role it plays, and no roles declare them"]);
+  if (roles === undefined) return settled(run("look", visit, [], ["check look judges each visible text by the role it plays, and no roles declare them"]));
   const { page } = yield* openVisit(browser, visit);
   yield* load(page, url);
-  const { found, inventory } = judgeLook(yield* readLook(page, roles), firstLooks, visit);
-  return run("look", visit, inventory, found);
+  const reading = yield* readLook(page, roles);
+  return (firstLooks: FirstLooks): Run => {
+    const { found, inventory } = judgeLook(reading, firstLooks, visit);
+    return run("look", visit, inventory, found);
+  };
 }, Effect.scoped);
 
 const hookRun = Effect.fn("hookRun")(function* (check: ProductCheck, { browser, visit, url }: Visiting) {
@@ -145,20 +153,30 @@ const hookRun = Effect.fn("hookRun")(function* (check: ProductCheck, { browser, 
   return run(`hook ${check.name}`, visit, counted(targets), targets.length === 0 ? [...found, NO_TARGET] : found);
 }, Effect.scoped);
 
-const BUILT_IN: Readonly<Record<CheckName, (visiting: Visiting) => Effect.Effect<Run, BrowserFailure>>> = {
-  layout: layoutRun,
-  keyboard: keyboardRun,
-  motion: motionRun,
-  axe: axeRun,
-  nesting: nestingRun,
-  html: htmlRun,
-  links: linksRun,
-  assets: assetsRun,
-  contrast: contrastRun,
-  weight: weightRun,
-  shift: shiftRun,
+type Reading = Effect.Effect<Settle, BrowserFailure>;
+
+const now =
+  (check: (visiting: Visiting) => Effect.Effect<Run, BrowserFailure>) =>
+  (visiting: Visiting): Reading =>
+    Effect.map(check(visiting), settled);
+
+const BUILT_IN: Readonly<Record<CheckName, (visiting: Visiting) => Reading>> = {
+  layout: now(layoutRun),
+  keyboard: now(keyboardRun),
+  motion: now(motionRun),
+  axe: now(axeRun),
+  nesting: now(nestingRun),
+  html: now(htmlRun),
+  links: now(linksRun),
+  assets: now(assetsRun),
+  contrast: now(contrastRun),
+  weight: now(weightRun),
+  shift: now(shiftRun),
   look: lookRun,
 };
+
+// Motion reads which transitions start in the moment after the pointer moves, and pages loading beside it on a busy machine moved that moment past the read.
+const ALONE: ReadonlySet<CheckName> = new Set(["motion"]);
 
 function applies(check: CheckName, visit: Visit, declaration: Declaration): boolean {
   if (!runsIn(visit.state, check)) return false;
@@ -174,16 +192,21 @@ const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: D
   const hooks = declaration.hooks === undefined ? [] : yield* loadHooks(root, declaration.hooks, paths);
   const missingRoutes = paths.filter((path) => !site.files.has(path));
   const origin = yield* serveSite(site);
+  const concurrency = yield* cellsAtOnce;
   const browser = yield* launchChrome;
-  const runs: Run[] = [];
+  const cells = visitsOf(declaration)
+    .filter(({ route }) => !missingRoutes.includes(route.path))
+    .flatMap((visit): readonly Cell<Settle, BrowserFailure>[] => {
+      const visiting = { browser, declaration, visit, url: new URL(visit.route.path, origin).href };
+      return [
+        { reading: Effect.map(targetsRun(visiting), settled), alone: false },
+        ...declaration.checks.filter((one) => applies(one, visit, declaration)).map((check) => ({ reading: BUILT_IN[check](visiting), alone: ALONE.has(check) })),
+        ...hooks.filter((candidate) => hookApplies(candidate, visit)).map((hook) => ({ reading: Effect.map(hookRun(hook, visiting), settled), alone: false })),
+      ];
+    });
+  const settles = yield* walkCells(cells, concurrency);
   const firstLooks: FirstLooks = new Map();
-  for (const visit of visitsOf(declaration).filter(({ route }) => !missingRoutes.includes(route.path))) {
-    const visiting = { browser, declaration, visit, url: new URL(visit.route.path, origin).href, firstLooks };
-    runs.push(yield* targetsRun(visiting));
-    for (const check of declaration.checks.filter((one) => applies(one, visit, declaration))) runs.push(yield* BUILT_IN[check](visiting));
-    for (const hook of hooks.filter((candidate) => hookApplies(candidate, visit))) runs.push(yield* hookRun(hook, visiting));
-  }
-  return { runs, missingRoutes };
+  return { runs: settles.map((settle) => settle(firstLooks)), missingRoutes };
 }, Effect.scoped);
 
 const browserChecks = Effect.gen(function* () {
