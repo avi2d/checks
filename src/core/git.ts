@@ -1,14 +1,12 @@
 import { Config, Effect, FileSystem, Path, Schema, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
+import { outputOf } from "./command-output.ts";
 import { DEFAULT_BRANCH } from "./gates.ts";
 import { Usage } from "./main.ts";
 
 export class GitFailure extends Schema.TaggedError<GitFailure>()("GitFailure", {
   message: Schema.String,
 }) {}
-
-const text = <E>(bytes: Stream.Stream<Uint8Array, E>): Effect.Effect<string, E> =>
-  bytes.pipe(Stream.decodeText(), Stream.mkString);
 
 export type Feed = {
   readonly env?: Readonly<Record<string, string>>;
@@ -18,19 +16,11 @@ export type Feed = {
 // Without a SIGKILL deadline, an interrupted child that ignores SIGTERM holds its scope open forever.
 const KILL_GRACE = "2 seconds";
 
-// Both pipes drain while the program runs: one left unread fills its buffer and stalls it.
-export const collect = Effect.fn("collect")(
-  function* (program: string, args: readonly string[], cwd?: string, { env, input }: Feed = {}) {
-    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-    const stdin = input === undefined ? undefined : Stream.make(new TextEncoder().encode(input));
-    const handle = yield* spawner.spawn(ChildProcess.make(program, args, { cwd, env, extendEnv: true, stdin, forceKillAfter: KILL_GRACE }));
-    const [stdout, stderr, exitCode] = yield* Effect.all([text(handle.stdout), text(handle.stderr), handle.exitCode], {
-      concurrency: "unbounded",
-    });
-    return { stdout, stderr, exitCode };
-  },
-  Effect.scoped,
-);
+export const collect = Effect.fn("collect")(function* (program: string, args: readonly string[], cwd?: string, { env, input }: Feed = {}) {
+  const stdin = input === undefined ? undefined : Stream.make(new TextEncoder().encode(input));
+  const { code, stdout, stderr } = yield* outputOf(ChildProcess.make(program, args, { cwd, env, extendEnv: true, stdin, forceKillAfter: KILL_GRACE }));
+  return { stdout, stderr, exitCode: ChildProcessSpawner.ExitCode(code) };
+});
 
 // Effect.filter with concurrency keeps the order its checks finish in, not the order it was given.
 export const existingFiles = Effect.fn("existingFiles")(function* (root: string, files: readonly string[]) {
