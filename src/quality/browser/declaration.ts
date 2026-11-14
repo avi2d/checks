@@ -5,7 +5,7 @@ import { DEVICES, ENLARGED_TEXT_PX, SCREEN_SIZE_SETS, SCREEN_SIZES, screenSizeNa
 
 const DECLARATION = "browser-checks.json";
 
-const CHECKS = ["layout", "keyboard", "motion", "axe", "nesting", "html", "links", "assets", "contrast", "weight", "shift"] as const;
+const CHECKS = ["layout", "keyboard", "motion", "axe", "nesting", "html", "links", "assets", "contrast", "weight", "shift", "look"] as const;
 
 export type CheckName = (typeof CHECKS)[number];
 
@@ -61,6 +61,8 @@ const ShiftBound = Schema.Struct({
   max: Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0)),
 });
 
+const Roles = Schema.Record(Name, Schema.NonEmptyArray(Name));
+
 const Declaration = Schema.Struct({
   site: Name,
   routes: Schema.NonEmptyArray(Route),
@@ -70,6 +72,7 @@ const Declaration = Schema.Struct({
   checks: Schema.NonEmptyArray(Schema.Literals(CHECKS)),
   weight: Schema.optionalKey(WeightBudgets),
   shift: Schema.optionalKey(ShiftBound),
+  roles: Schema.optionalKey(Roles),
   hooks: Schema.optionalKey(Name),
 });
 
@@ -86,6 +89,7 @@ export type State = typeof State.Type;
 export type Target = typeof Target.Type;
 export type WeightBudgets = typeof WeightBudgets.Type;
 export type ShiftBound = typeof ShiftBound.Type;
+export type Roles = typeof Roles.Type;
 export type Declaration = typeof Declaration.Type;
 
 export type ExpandedDeclaration = Omit<Declaration, "routes"> & { readonly routes: readonly Route[] };
@@ -144,6 +148,19 @@ function repeated(names: readonly string[]): readonly string[] {
   return [...new Set(names.filter((name, index) => names.indexOf(name) !== index))];
 }
 
+const checkInputs: readonly (readonly [CheckName, (declaration: ExpandedDeclaration) => boolean, string])[] = [
+  [
+    "motion",
+    ({ states }) => !states.some((state) => state.reducedMotion === "reduce" && runsIn(state, "motion")),
+    "check motion judges a visitor who turns motion off, and no state that runs it sets reducedMotion to reduce",
+  ],
+  ["keyboard", ({ targets }) => !targets.some(({ focusable }) => focusable === true), "check keyboard judges the targets Tab reaches, and no target sets focusable"],
+  ["contrast", ({ targets }) => !targets.some(({ contrast }) => contrast === true), "check contrast measures the text over a photo or a gradient, and no target sets contrast"],
+  ["weight", ({ weight }) => weight === undefined, "check weight judges the bytes each page transfers, and no budgets declare them"],
+  ["shift", ({ shift }) => shift === undefined, "check shift judges the movement of a cold load, and no bound declares it"],
+  ["look", ({ roles }) => roles === undefined, "check look judges each visible text by the role it plays, and no roles declare them"],
+];
+
 export function inconsistencies(declaration: ExpandedDeclaration, skipTargetRoutes = false): readonly string[] {
   const paths = declaration.routes.map(({ path }) => path);
   const found = [
@@ -156,20 +173,11 @@ export function inconsistencies(declaration: ExpandedDeclaration, skipTargetRout
       routes.filter((path) => !paths.includes(path)).map((path) => `target ${name} names route ${path}, which no route declares`))),
     ...stateInconsistencies(declaration),
   ];
-  if (declaration.checks.includes("motion") && !declaration.states.some((state) => state.reducedMotion === "reduce" && runsIn(state, "motion"))) {
-    found.push("check motion judges a visitor who turns motion off, and no state that runs it sets reducedMotion to reduce");
+  for (const [check, unmet, message] of checkInputs) {
+    if (declaration.checks.includes(check) && unmet(declaration)) found.push(message);
   }
-  if (declaration.checks.includes("keyboard") && !declaration.targets.some(({ focusable }) => focusable === true)) {
-    found.push("check keyboard judges the targets Tab reaches, and no target sets focusable");
-  }
-  if (declaration.checks.includes("contrast") && !declaration.targets.some(({ contrast }) => contrast === true)) {
-    found.push("check contrast measures the text over a photo or a gradient, and no target sets contrast");
-  }
-  if (declaration.checks.includes("weight") && declaration.weight === undefined) {
-    found.push("check weight judges the bytes each page transfers, and no budgets declare them");
-  }
-  if (declaration.checks.includes("shift") && declaration.shift === undefined) {
-    found.push("check shift judges the movement of a cold load, and no bound declares it");
+  if (declaration.roles !== undefined && Object.keys(declaration.roles).length === 0) {
+    found.push("roles declares no role, so every visible text would match none");
   }
   if (declaration.hooks !== undefined && declaration.states.every((state) => state.checks !== undefined)) {
     found.push("hooks run in no state, since each state names its checks");

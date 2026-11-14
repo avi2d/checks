@@ -28,6 +28,7 @@ So a control the page renders once for each breakpoint is judged where it shows.
 | `contrast` | a box of text in a `contrast` target whose letters, as drawn, fall below WCAG 2.2's 4.5:1 against the backdrop around them, or below 3:1 from 24px up, and a `contrast` target with no text on screen or whose letters draw nothing | three screenshots of the page: as drawn, with the targets' text painted one marker colour and with it cleared |
 | `weight` | a page that transfers more bytes than the budgets in `weight` allow, counted apart as outside images, in scripts and in images | the body of each response from the page's own origin, gzipped outside images and raw in images |
 | `shift` | a cold load whose summed layout movement passes the bound in `shift` | a recorder that sums each `layout-shift` entry without a recent input |
+| `look` | two texts of one role in `roles` that differ at one viewport in colour, font size, weight, line height, letter spacing, text transform or font family, a visible text no role matches, and a value of those seven that equals no custom property the page's stylesheets declare | each text's computed style, and each custom property resolved beside the text in the page itself |
 
 `html` runs once for each route, at the first viewport in the first state that runs it, because the page the server sends is the same at each.
 `links` runs once at the same visit, since it reads every link in the page, whether the viewport shows it or not.
@@ -58,7 +59,20 @@ Transparent, zero-size, `visibility: hidden` and zero-opacity text still fail.
 A `focusable` target parked off the screen or clipped until it is focused, such as a skip link, is left to `keyboard`.
 The `layout` inventory counts it as parked until focused.
 
-It does not yet check the rendered page against a product's declared design tokens, which needs a separate decision.
+`look` reads each element that holds visible text, at each route and viewport in each state that runs it.
+It scrolls through the page and back first, so text a page reveals on scroll is read too, and finishes each animation that ends.
+Text that is not rendered, invisible, zero-opacity, parked outside the page or clipped to a pixel, such as a visually hidden label, is left out.
+A text takes the first role in `roles` with a selector it matches, so a narrow role listed before a broad one wins.
+It reads a line height as a ratio of the font size and a letter spacing in em of the font size, so a token in `rem` and one with no unit compare by what they draw.
+It reads a font family as the first family the stack names, since the fallbacks after it draw only where that face fails to load.
+Two texts of one role are compared at one viewport in one state, across every route, so a role may change between a phone and a laptop.
+The first text of a role it reads is the one the others are compared with, and the failure names it and its route.
+The tokens are the custom properties the page's stylesheets declare, which it reads from the page, so a product needs no token file of the kit's own format.
+Each token is resolved where the text sits, so a token a class scopes, a media query changes or a container unit sizes counts with the value it has there.
+A value equals a token when the token, set on that property beside the text, computes to the same value.
+A letter spacing of `normal`, which a browser also reports for zero, and a text transform of `none` need no token, as [checks-frontend-syntax](checks-frontend-syntax.md) allows them in a stylesheet.
+It cannot tell whether the token set itself is good, and it reads no hover or focus look.
+Text a pseudo-element's `content` draws, a form control's value and text inside a shadow root are not read.
 
 `axe` reports a contrast it cannot measure as unverified rather than as a pass or a failure.
 Text over a background image or a gradient is such a case, and the report lists each one under its own heading.
@@ -100,6 +114,7 @@ The runner prints one line for each check at each visit, narrowed by the `html`,
 The line names the route, its locale, the viewport, the state and what the check scanned.
 At every visit, whichever checks are declared, a `targets` run counts the visible elements each target that applies to the route matches.
 For `targets`, `layout`, `keyboard`, `contrast` and a hook, what it scanned is each target by name with the count of its elements.
+For `look`, it is each role with the count of its texts, the count of texts no role matches and the count of tokens.
 
 It fails, rather than passes, when a declaration leaves nothing to judge:
 
@@ -112,6 +127,7 @@ It fails, rather than passes, when a declaration leaves nothing to judge:
 - a `contrast` run with no `contrast` target on the route, a `contrast` target with no text on screen, and a line of text whose letters draw nothing
 - a `weight` run that weighs no response from the page's own origin
 - a `shift` run whose recorder never ran
+- a `look` run that finds no visible text
 - an empty list of routes, viewports, states, targets or checks, which the declaration refuses
 
 Each failure names the check, the route, the locale, the viewport and the state, and the target or the element it found.
@@ -188,9 +204,14 @@ It reads `browser-checks.json` in the directory it runs in:
     { "name": "email contact", "selector": "main a[href^='mailto:']", "routes": ["/", "/ru/"], "focusable": true },
     { "name": "headline", "selector": "main h1" }
   ],
-  "checks": ["layout", "keyboard", "motion", "axe", "nesting", "html", "links", "assets", "weight", "shift"],
+  "checks": ["layout", "keyboard", "motion", "axe", "nesting", "html", "links", "assets", "weight", "shift", "look"],
   "weight": { "nonImageBytes": 700000, "scriptBytes": 450000, "imageBytes": 500000 },
   "shift": { "max": 0.1 },
+  "roles": {
+    "headline": ["main h1"],
+    "body": ["main p", "main li"],
+    "link": ["a[href]"]
+  },
   "hooks": "tests/browser/hooks.ts"
 }
 ```
@@ -202,9 +223,10 @@ It reads `browser-checks.json` in the directory it runs in:
 | `viewports` | each window to visit in, with a `name`, a `width` and a `height` in pixels, `touch` for a phone that has touch and a mobile viewport, and `device` as `phone`, `tablet` or `desktop`, or a `preset` that stands for a set of screen sizes |
 | `states` | each condition to visit in, with a `name`, `textPx` for the browser's default text size, `reducedMotion` as `reduce` or `no-preference`, and `checks` when it runs only some of the declared checks, or the `enlarged-text` preset |
 | `targets` | each named control or text the checks judge, with a CSS `selector`, the `routes` it is on when not every route, `focusable` when Tab must reach it, and `contrast` when `contrast` measures its text |
-| `checks` | the built-in checks to run, from `layout`, `keyboard`, `motion`, `axe`, `nesting`, `html`, `links`, `assets`, `contrast`, `weight` and `shift` |
+| `checks` | the built-in checks to run, from `layout`, `keyboard`, `motion`, `axe`, `nesting`, `html`, `links`, `assets`, `contrast`, `weight`, `shift` and `look` |
 | `weight` | the byte budgets each page must hold, as `nonImageBytes` outside images, `scriptBytes` in scripts and `imageBytes` in images |
 | `shift` | the largest total layout movement a cold load may report, as `max` |
+| `roles` | each role a text plays on the page, named, with the CSS selectors of the elements that play it, for `look` |
 | `hooks` | the module of product hooks, as a path from the directory the runner runs in |
 
 `textPx` sets the default font size, so text the page sizes in `rem` or `em` grows, as a visitor's own setting makes it grow.
@@ -213,6 +235,7 @@ So are a `motion` check with no state whose `reducedMotion` is `reduce` and whos
 So are a state that names a check twice, names an undeclared check or names `motion` without `reducedMotion` set to `reduce`, and a declared check no state runs.
 So is a `contrast` check with no `contrast` target, and a target or a hook that names an undeclared route.
 So is a `weight` check with no `weight` budgets, and a `shift` check with no `shift` bound.
+So is a `look` check with no `roles`, and a `roles` that names no role.
 
 ### Every built page and default motion
 
