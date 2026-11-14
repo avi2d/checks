@@ -91,7 +91,7 @@ test("layout reports shadow, scroll, static, clip, indent and perspective cuts",
 
 test("clipped vertical text is reported when a y-only line trim would hide it", async () => {
   const pages = {
-    "vertical-cut.html": page(`<p><a href="/" style="display: block; writing-mode: vertical-rl; height: 60px; overflow: hidden; line-height: 24px; white-space: nowrap">日本語テストです</a></p>`),
+    "vertical-cut.html": page(`<p><a href="/" style="display: block; writing-mode: vertical-rl; height: 60px; overflow: hidden; padding: 0 16px; font: 4px/24px sans-serif; letter-spacing: 62px; white-space: nowrap">日</a></p>`),
   };
   const site = await browserSite({
     ...sitePages(pages),
