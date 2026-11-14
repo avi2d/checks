@@ -114,9 +114,14 @@ const CLIPS_ITS_OWN_TEXT = `function () {
   const y = clips(style.overflowY);
   if (!x && !y) return false;
   const box = this.getBoundingClientRect();
-  const sx = this.offsetWidth ? box.width / this.offsetWidth : 1;
   const sy = this.offsetHeight ? box.height / this.offsetHeight : 1;
   const num = (v) => parseFloat(v) || 0;
+  const paddingBox = (el, s) => {
+    const q = el.getBoundingClientRect();
+    const ex = el.offsetWidth ? q.width / el.offsetWidth : 1;
+    const ey = el.offsetHeight ? q.height / el.offsetHeight : 1;
+    return [q.left + num(s.borderLeftWidth) * ex, q.top + num(s.borderTopWidth) * ey, q.left + q.width - num(s.borderRightWidth) * ex, q.top + q.height - num(s.borderBottomWidth) * ey];
+  };
   const cb = (s, fx) => {
     if (!fx && s.position !== "static") return true;
     if (s.transform !== "none") return true;
@@ -133,10 +138,7 @@ const CLIPS_ITS_OWN_TEXT = `function () {
     if ((s.containerType || "").indexOf("size") !== -1) return true;
     return false;
   };
-  const padLeft = box.left + num(style.borderLeftWidth) * sx;
-  const padTop = box.top + num(style.borderTopWidth) * sy;
-  const padRight = box.left + box.width - num(style.borderRightWidth) * sx;
-  const padBottom = box.top + box.height - num(style.borderBottomWidth) * sy;
+  const [padLeft, padTop, padRight, padBottom] = paddingBox(this, style);
   const flatParent = (n) => {
     if (n instanceof ShadowRoot) return n.host;
     if (n.assignedSlot) return n.assignedSlot;
@@ -197,40 +199,16 @@ const CLIPS_ITS_OWN_TEXT = `function () {
           if (cb(s, false)) absSeek = false;
         }
         if (!fixSeek && !absSeek) {
-          const cp = s.clipPath;
-          if (cp && cp !== "none") { empty = true; break; }
-          const cc = s.clip;
-          if (cc && cc !== "auto") {
-            if (cc.indexOf("rect(") === 0) {
-              const parts = cc.slice(cc.indexOf("(") + 1, cc.lastIndexOf(")")).split(",").flatMap((p) => p.trim().split(" ").filter((v) => v !== ""));
-              const nv = parts.map((p) => parseFloat(p));
-              if (nv.length < 4 || nv.some((v) => Number.isNaN(v))) { empty = true; break; }
-              const q = at.getBoundingClientRect();
-              const ex = at.offsetWidth ? q.width / at.offsetWidth : 1;
-              const ey = at.offsetHeight ? q.height / at.offsetHeight : 1;
-              if (l < q.left + nv[3] * ex) l = q.left + nv[3] * ex;
-              if (t < q.top + nv[0] * ey) t = q.top + nv[0] * ey;
-              if (r > q.left + nv[1] * ex) r = q.left + nv[1] * ex;
-              if (b > q.top + nv[2] * ey) b = q.top + nv[2] * ey;
-              if (r <= l || b <= t) { empty = true; break; }
-            } else { empty = true; break; }
-          }
           const cx = s.overflowX !== "visible";
           const cy = s.overflowY !== "visible";
           if (cx || cy) {
-            const q = at.getBoundingClientRect();
-            const ex = at.offsetWidth ? q.width / at.offsetWidth : 1;
-            const ey = at.offsetHeight ? q.height / at.offsetHeight : 1;
+            const [pl, pt, pr, pb] = paddingBox(at, s);
             if (cx) {
-              const pl = q.left + num(s.borderLeftWidth) * ex;
-              const pr = q.left + q.width - num(s.borderRightWidth) * ex;
               if (l < pl) l = pl;
               if (r > pr) r = pr;
               if (r <= l) { empty = true; break; }
             }
             if (cy) {
-              const pt = q.top + num(s.borderTopWidth) * ey;
-              const pb = q.top + q.height - num(s.borderBottomWidth) * ey;
               if (t < pt) t = pt;
               if (b > pb) b = pb;
               if (b <= t) { empty = true; break; }
@@ -241,13 +219,12 @@ const CLIPS_ITS_OWN_TEXT = `function () {
         else if (pp === "absolute" && !fixSeek && !absSeek) absSeek = true;
         at = flatParent(at);
       }
-      if (empty) continue;
+      if (empty || r - l <= 1 || b - t <= 1) continue;
       if (absSeek || fixSeek) {
-        const isCB = fixSeek ? cb(style, true) : cb(style, false);
-        if (!isCB) continue;
+        if (!cb(style, fixSeek)) continue;
       }
       const ti = parseFloat(getComputedStyle(node.parentElement ?? this).textIndent) || 0;
-      if (ti < 0 && (r < padLeft - ${EDGE_TOLERANCE_PX} || l > padRight + ${EDGE_TOLERANCE_PX} || b < padTop - ${EDGE_TOLERANCE_PX} || t > padBottom + ${EDGE_TOLERANCE_PX})) continue;
+      if (ti < 0 && (r < padLeft - ${EDGE_TOLERANCE_PX} || l > padRight + ${EDGE_TOLERANCE_PX})) continue;
       if (
         (x && (l < padLeft - ${EDGE_TOLERANCE_PX} || r > padRight + ${EDGE_TOLERANCE_PX})) ||
         (y && (t < padTop - ${EDGE_TOLERANCE_PX} || b > padBottom + ${EDGE_TOLERANCE_PX}))

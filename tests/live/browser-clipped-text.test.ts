@@ -70,11 +70,13 @@ test("layout reports shadow text and scrollable overflow", async () => {
     "shadow-clip.html": page(`<p><x-clip style="display: inline-block; width: 40px; height: 20px; overflow: hidden; white-space: nowrap"></x-clip></p>${SHADOW_CLIP}`),
     "auto-clip.html": page(`<p><a href="/" style="display: inline-block; width: 40px; overflow: auto; white-space: nowrap">Contact the owner with a long label</a></p>`),
     "static-cut.html": page(`<p><a href="/" style="display: inline-block; overflow: hidden; width: 40px; white-space: nowrap"><span>Contact the owner with a long label</span></a></p>`),
+    "clip-cut.html": page(`<p><a href="/" style="display: inline-block; overflow: hidden; width: 40px; white-space: nowrap"><span style="clip-path: inset(0)">Contact the owner with a long label</span></a></p>`),
+    "indent-cut.html": page(`<p><a href="/" style="display: block; overflow: hidden; width: 280px; height: 20px; padding-left: 16px; text-indent: -16px">Contact the owner of the site with a very long label that wraps onto more lines</a></p>`),
     "perspective.html": page(`<p><a href="/" style="display: inline-block; overflow: hidden; width: 60px; height: 20px; white-space: nowrap"><span style="display: block; perspective: 1px"><span style="position: absolute; white-space: nowrap">Contact the owner with a long label</span></span></a></p>`),
   };
   const site = await browserSite({
     ...sitePages(pages),
-    "browser-checks.json": declaration({ routes: routesOf(pages), targets: [{ name: "link", selector: "main a", routes: ["/auto-clip.html", "/static-cut.html", "/perspective.html"] }, { name: "clip", selector: "main x-clip", routes: ["/shadow-clip.html"] }], checks: ["layout"] }),
+    "browser-checks.json": declaration({ routes: routesOf(pages), targets: [{ name: "link", selector: "main a", routes: ["/auto-clip.html", "/static-cut.html", "/perspective.html", "/clip-cut.html", "/indent-cut.html"] }, { name: "clip", selector: "main x-clip", routes: ["/shadow-clip.html"] }], checks: ["layout"] }),
   });
   const failed = await site.run();
   const failures = failuresOf(failed.text);
@@ -82,6 +84,8 @@ test("layout reports shadow text and scrollable overflow", async () => {
   expect(failures.filter((line) => line.startsWith(at("layout", "/shadow-clip.html")) && line.includes("clips its own text"))).not.toEqual([]);
   expect(failures.filter((line) => line.startsWith(at("layout", "/static-cut.html")) && line.includes("clips its own text"))).not.toEqual([]);
   expect(failures.filter((line) => line.startsWith(at("layout", "/perspective.html")) && line.includes("clips its own text"))).not.toEqual([]);
+  expect(failures.filter((line) => line.startsWith(at("layout", "/clip-cut.html")) && line.includes("clips its own text"))).not.toEqual([]);
+  expect(failures.filter((line) => line.startsWith(at("layout", "/indent-cut.html")) && line.includes("clips its own text"))).not.toEqual([]);
   expect(failed.exitCode).toBe(1);
 }, 120_000);
 
