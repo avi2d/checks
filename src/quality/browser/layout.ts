@@ -108,7 +108,27 @@ const judgeLine = Effect.fn("judgeLine")(function* (dom: Dom, viewport: Viewport
 
 const CLIPS_ITS_OWN_TEXT = `function () {
   if (getComputedStyle(this).display === "inline") return false;
-  return this.scrollWidth > this.clientWidth + 1 || this.scrollHeight > this.clientHeight + 1;
+  const clips = (overflow) => overflow === "hidden" || overflow === "clip";
+  const style = getComputedStyle(this);
+  const x = clips(style.overflowX);
+  const y = clips(style.overflowY);
+  if (!x && !y) return false;
+  const left = this.getBoundingClientRect().left + this.clientLeft;
+  const top = this.getBoundingClientRect().top + this.clientTop;
+  const texts = document.createTreeWalker(this, NodeFilter.SHOW_TEXT);
+  for (let node = texts.nextNode(); node !== null; node = texts.nextNode()) {
+    if (node.textContent.trim() === "") continue;
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    for (const rect of range.getClientRects()) {
+      if (rect.width <= 0 || rect.height <= 0) continue;
+      if (
+        (x && (rect.left < left - ${EDGE_TOLERANCE_PX} || rect.right > left + this.clientWidth + ${EDGE_TOLERANCE_PX})) ||
+        (y && (rect.top < top - ${EDGE_TOLERANCE_PX} || rect.bottom > top + this.clientHeight + ${EDGE_TOLERANCE_PX}))
+      ) return true;
+    }
+  }
+  return false;
 }`;
 
 const FIRST_UNSHOWN_TEXT = `function () {
