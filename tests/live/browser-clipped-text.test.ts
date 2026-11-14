@@ -69,14 +69,32 @@ test("layout reports shadow text and scrollable overflow", async () => {
   const pages = {
     "shadow-clip.html": page(`<p><x-clip style="display: inline-block; width: 40px; height: 20px; overflow: hidden; white-space: nowrap"></x-clip></p>${SHADOW_CLIP}`),
     "auto-clip.html": page(`<p><a href="/" style="display: inline-block; width: 40px; overflow: auto; white-space: nowrap">Contact the owner with a long label</a></p>`),
+    "static-cut.html": page(`<p><a href="/" style="display: inline-block; overflow: hidden; width: 40px; white-space: nowrap"><span>Contact the owner with a long label</span></a></p>`),
   };
   const site = await browserSite({
     ...sitePages(pages),
-    "browser-checks.json": declaration({ routes: routesOf(pages), targets: [{ name: "link", selector: "main a", routes: ["/auto-clip.html"] }, { name: "clip", selector: "main x-clip", routes: ["/shadow-clip.html"] }], checks: ["layout"] }),
+    "browser-checks.json": declaration({ routes: routesOf(pages), targets: [{ name: "link", selector: "main a", routes: ["/auto-clip.html", "/static-cut.html"] }, { name: "clip", selector: "main x-clip", routes: ["/shadow-clip.html"] }], checks: ["layout"] }),
   });
   const failed = await site.run();
   const failures = failuresOf(failed.text);
   expect(failures.filter((line) => line.startsWith(at("layout", "/auto-clip.html")) && line.includes("clips its own text"))).not.toEqual([]);
   expect(failures.filter((line) => line.startsWith(at("layout", "/shadow-clip.html")) && line.includes("clips its own text"))).not.toEqual([]);
+  expect(failures.filter((line) => line.startsWith(at("layout", "/static-cut.html")) && line.includes("clips its own text"))).not.toEqual([]);
   expect(failed.exitCode).toBe(1);
+}, 120_000);
+
+test("layout leaves escaped and clipped-hidden text silent", async () => {
+  const SR = "position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;";
+  const pages = {
+    "abs-escape.html": page(`<p><a href="/" style="display: inline-block; overflow: hidden; width: 40px; height: 20px">Hi<span style="display: block; overflow: hidden"><span style="position: absolute; left: 100px; white-space: nowrap">A tooltip shown in full</span></span></a></p>`),
+    "sr-link.html": page(`<p><a href="/" style="display: inline-block; overflow: hidden; width: 40px; height: 40px"><span style="${SR}">Close the navigation menu with extra words</span></a></p>`),
+  };
+  const site = await browserSite({
+    ...sitePages(pages),
+    "browser-checks.json": declaration({ routes: routesOf(pages), checks: ["layout"] }),
+  });
+  const passed = await site.run();
+  expect(failuresOf(passed.text)).toEqual([]);
+  for (const path of Object.keys(pages)) expect(passed.text).toContain(`browser: ${at("layout", `/${path}`).slice(0, -1)} scanned link 1`);
+  expect(passed.exitCode).toBe(0);
 }, 120_000);

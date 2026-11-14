@@ -121,6 +121,11 @@ const CLIPS_ITS_OWN_TEXT = `function () {
   const padTop = box.top + num(style.borderTopWidth) * sy;
   const padRight = box.left + box.width - num(style.borderRightWidth) * sx;
   const padBottom = box.top + box.height - num(style.borderBottomWidth) * sy;
+  const flatParent = (n) => {
+    if (n instanceof ShadowRoot) return n.host;
+    if (n.assignedSlot) return n.assignedSlot;
+    return n.parentNode;
+  };
   const texts = [];
   const stack = [this];
   while (stack.length > 0) {
@@ -151,44 +156,79 @@ const CLIPS_ITS_OWN_TEXT = `function () {
         t = mid - h / 2;
         b = mid + h / 2;
       }
-      let at = node.parentNode;
+      let at = flatParent(node);
       let empty = false;
+      let absSeek = false;
+      let fixSeek = false;
       while (at !== null && at !== this) {
         if (at instanceof ShadowRoot) {
           at = at.host;
           continue;
         }
-        if (at instanceof Element) {
-          const s = getComputedStyle(at);
-          if (s.display !== "contents") {
-            const cx = s.overflowX !== "visible";
-            const cy = s.overflowY !== "visible";
-            if (cx || cy) {
+        if (!(at instanceof Element)) {
+          at = flatParent(at);
+          continue;
+        }
+        const s = getComputedStyle(at);
+        const pp = s.position;
+        const tr = s.transform;
+        if (fixSeek) {
+          if (tr !== "none") fixSeek = false;
+        } else if (absSeek) {
+          if (pp !== "static" || tr !== "none") absSeek = false;
+        }
+        if (!fixSeek && !absSeek && s.display !== "contents") {
+          const cp = s.clipPath;
+          if (cp && cp !== "none") { empty = true; break; }
+          const cc = s.clip;
+          if (cc && cc !== "auto") {
+            if (cc.indexOf("rect(") === 0) {
+              const parts = cc.slice(cc.indexOf("(") + 1, cc.lastIndexOf(")")).split(",").flatMap((p) => p.trim().split(" ").filter((v) => v !== ""));
+              const nv = parts.map((p) => parseFloat(p));
+              if (nv.length < 4 || nv.some((v) => Number.isNaN(v))) { empty = true; break; }
               const q = at.getBoundingClientRect();
               const ex = at.offsetWidth ? q.width / at.offsetWidth : 1;
               const ey = at.offsetHeight ? q.height / at.offsetHeight : 1;
-              if (cx) {
-                const pl = q.left + num(s.borderLeftWidth) * ex;
-                const pr = q.left + q.width - num(s.borderRightWidth) * ex;
-                if (l < pl) l = pl;
-                if (r > pr) r = pr;
-                if (r <= l) { empty = true; break; }
-              }
-              if (cy) {
-                const pt = q.top + num(s.borderTopWidth) * ey;
-                const pb = q.top + q.height - num(s.borderBottomWidth) * ey;
-                if (t < pt) t = pt;
-                if (b > pb) b = pb;
-                if (b <= t) { empty = true; break; }
-              }
+              if (l < q.left + nv[3] * ex) l = q.left + nv[3] * ex;
+              if (t < q.top + nv[0] * ey) t = q.top + nv[0] * ey;
+              if (r > q.left + nv[1] * ex) r = q.left + nv[1] * ex;
+              if (b > q.top + nv[2] * ey) b = q.top + nv[2] * ey;
+              if (r <= l || b <= t) { empty = true; break; }
+            } else { empty = true; break; }
+          }
+          const cx = s.overflowX !== "visible";
+          const cy = s.overflowY !== "visible";
+          if (cx || cy) {
+            const q = at.getBoundingClientRect();
+            const ex = at.offsetWidth ? q.width / at.offsetWidth : 1;
+            const ey = at.offsetHeight ? q.height / at.offsetHeight : 1;
+            if (cx) {
+              const pl = q.left + num(s.borderLeftWidth) * ex;
+              const pr = q.left + q.width - num(s.borderRightWidth) * ex;
+              if (l < pl) l = pl;
+              if (r > pr) r = pr;
+              if (r <= l) { empty = true; break; }
+            }
+            if (cy) {
+              const pt = q.top + num(s.borderTopWidth) * ey;
+              const pb = q.top + q.height - num(s.borderBottomWidth) * ey;
+              if (t < pt) t = pt;
+              if (b > pb) b = pb;
+              if (b <= t) { empty = true; break; }
             }
           }
-          at = at.parentNode;
-        } else {
-          at = at.parentNode;
         }
+        if (pp === "fixed") { fixSeek = true; absSeek = false; }
+        else if (pp === "absolute" && !fixSeek && !absSeek) absSeek = true;
+        at = flatParent(at);
       }
       if (empty) continue;
+      if (absSeek || fixSeek) {
+        const tp = style.position;
+        const tt = style.transform;
+        const isCB = fixSeek ? (tt !== "none") : (tp !== "static" || tt !== "none");
+        if (!isCB) continue;
+      }
       if (
         (x && (l < padLeft - ${EDGE_TOLERANCE_PX} || r > padRight + ${EDGE_TOLERANCE_PX})) ||
         (y && (t < padTop - ${EDGE_TOLERANCE_PX} || b > padBottom + ${EDGE_TOLERANCE_PX}))
