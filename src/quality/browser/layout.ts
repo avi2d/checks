@@ -108,7 +108,7 @@ const judgeLine = Effect.fn("judgeLine")(function* (dom: Dom, viewport: Viewport
 
 const CLIPS_ITS_OWN_TEXT = `function () {
   if (getComputedStyle(this).display === "inline") return false;
-  const clips = (overflow) => overflow === "hidden" || overflow === "clip";
+  const clips = (o) => o !== "visible";
   const style = getComputedStyle(this);
   const x = clips(style.overflowX);
   const y = clips(style.overflowY);
@@ -121,26 +121,77 @@ const CLIPS_ITS_OWN_TEXT = `function () {
   const padTop = box.top + num(style.borderTopWidth) * sy;
   const padRight = box.left + box.width - num(style.borderRightWidth) * sx;
   const padBottom = box.top + box.height - num(style.borderBottomWidth) * sy;
-  const texts = document.createTreeWalker(this, NodeFilter.SHOW_TEXT);
-  for (let node = texts.nextNode(); node !== null; node = texts.nextNode()) {
-    if (node.textContent.trim() === "") continue;
+  const texts = [];
+  const stack = [this];
+  while (stack.length > 0) {
+    const cur = stack.pop();
+    const tw = document.createTreeWalker(cur, NodeFilter.SHOW_TEXT);
+    for (let n = tw.nextNode(); n !== null; n = tw.nextNode()) texts.push(n);
+    if (cur instanceof Element && cur.shadowRoot) stack.push(cur.shadowRoot);
+    const ew = document.createTreeWalker(cur, NodeFilter.SHOW_ELEMENT);
+    for (let e = ew.nextNode(); e !== null; e = ew.nextNode()) {
+      if (e.shadowRoot) stack.push(e.shadowRoot);
+    }
+  }
+  for (const node of texts) {
+    if (!node.textContent || node.textContent.trim() === "") continue;
     const raw = getComputedStyle(node.parentElement ?? this).lineHeight;
     const line = raw === "normal" ? NaN : parseFloat(raw);
     const range = document.createRange();
     range.selectNodeContents(node);
     for (const rect of range.getClientRects()) {
       if (rect.width <= 0 || rect.height <= 0) continue;
-      let top = rect.top;
-      let bottom = rect.bottom;
+      let l = rect.left;
+      let r = rect.right;
+      let t = rect.top;
+      let b = rect.bottom;
       if (!Number.isNaN(line)) {
         const h = Math.min(rect.height, line * sy);
         const mid = (rect.top + rect.bottom) / 2;
-        top = mid - h / 2;
-        bottom = mid + h / 2;
+        t = mid - h / 2;
+        b = mid + h / 2;
       }
+      let at = node.parentNode;
+      let empty = false;
+      while (at !== null && at !== this) {
+        if (at instanceof ShadowRoot) {
+          at = at.host;
+          continue;
+        }
+        if (at instanceof Element) {
+          const s = getComputedStyle(at);
+          if (s.display !== "contents") {
+            const cx = s.overflowX !== "visible";
+            const cy = s.overflowY !== "visible";
+            if (cx || cy) {
+              const q = at.getBoundingClientRect();
+              const ex = at.offsetWidth ? q.width / at.offsetWidth : 1;
+              const ey = at.offsetHeight ? q.height / at.offsetHeight : 1;
+              if (cx) {
+                const pl = q.left + num(s.borderLeftWidth) * ex;
+                const pr = q.left + q.width - num(s.borderRightWidth) * ex;
+                if (l < pl) l = pl;
+                if (r > pr) r = pr;
+                if (r <= l) { empty = true; break; }
+              }
+              if (cy) {
+                const pt = q.top + num(s.borderTopWidth) * ey;
+                const pb = q.top + q.height - num(s.borderBottomWidth) * ey;
+                if (t < pt) t = pt;
+                if (b > pb) b = pb;
+                if (b <= t) { empty = true; break; }
+              }
+            }
+          }
+          at = at.parentNode;
+        } else {
+          at = at.parentNode;
+        }
+      }
+      if (empty) continue;
       if (
-        (x && (rect.left < padLeft - ${EDGE_TOLERANCE_PX} || rect.right > padRight + ${EDGE_TOLERANCE_PX})) ||
-        (y && (top < padTop - ${EDGE_TOLERANCE_PX} || bottom > padBottom + ${EDGE_TOLERANCE_PX}))
+        (x && (l < padLeft - ${EDGE_TOLERANCE_PX} || r > padRight + ${EDGE_TOLERANCE_PX})) ||
+        (y && (t < padTop - ${EDGE_TOLERANCE_PX} || b > padBottom + ${EDGE_TOLERANCE_PX}))
       ) return true;
     }
   }
