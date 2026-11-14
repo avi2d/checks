@@ -115,6 +115,7 @@ const CLIPS_ITS_OWN_TEXT = `function () {
   if (!x && !y) return false;
   const box = this.getBoundingClientRect();
   const sy = this.offsetHeight ? box.height / this.offsetHeight : 1;
+  const sx = this.offsetWidth ? box.width / this.offsetWidth : 1;
   const num = (v) => parseFloat(v) || 0;
   const paddingBox = (el, s) => {
     const q = el.getBoundingClientRect();
@@ -158,8 +159,11 @@ const CLIPS_ITS_OWN_TEXT = `function () {
   }
   for (const node of texts) {
     if (!node.textContent || node.textContent.trim() === "") continue;
-    const raw = getComputedStyle(node.parentElement ?? this).lineHeight;
+    const ps = getComputedStyle(node.parentElement ?? this);
+    const raw = ps.lineHeight;
     const line = raw === "normal" ? NaN : parseFloat(raw);
+    const wm = ps.writingMode || "";
+    const vert = wm.indexOf("vertical") === 0 || wm.indexOf("sideways") === 0;
     const run = document.createRange();
     const spans = [];
     const words = /\\S+/g;
@@ -176,10 +180,17 @@ const CLIPS_ITS_OWN_TEXT = `function () {
       let t = rect.top;
       let b = rect.bottom;
       if (!Number.isNaN(line)) {
-        const h = Math.min(rect.height, line * sy);
-        const mid = (rect.top + rect.bottom) / 2;
-        t = mid - h / 2;
-        b = mid + h / 2;
+        if (vert) {
+          const w = Math.min(rect.width, line * sx);
+          const mid = (rect.left + rect.right) / 2;
+          l = mid - w / 2;
+          r = mid + w / 2;
+        } else {
+          const h = Math.min(rect.height, line * sy);
+          const mid = (rect.top + rect.bottom) / 2;
+          t = mid - h / 2;
+          b = mid + h / 2;
+        }
       }
       let at = flatParent(node);
       let empty = false;
