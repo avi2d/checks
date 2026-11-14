@@ -12,5 +12,10 @@ test("run resolves with the value of a program that needs Bun's file system and 
 });
 
 test("run rejects when the program fails, rather than resolving with undefined", async () => {
-  await expect(run(Effect.fail(new Error("boom")))).rejects.toThrow("boom");
+  const failure = await run(Effect.fail(new Error("boom"))).then(
+    () => undefined,
+    (error: unknown) => error,
+  );
+  expect(failure).toBeInstanceOf(Error);
+  expect(String(failure)).toContain("boom");
 });
