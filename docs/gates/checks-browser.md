@@ -87,6 +87,8 @@ Text a pseudo-element's `content` draws, a form control's value and text inside 
 Text over a background image or a gradient is such a case, and the report lists each one under its own heading.
 `contrast` measures that text for the targets that set `contrast`.
 
+`axe` waits for the images in view and for each entrance animation, up to ten seconds, as `contrast` does, so it reads text at its settled colour.
+
 `contrast` waits for the page's images in view and for each entrance animation, up to ten seconds, then pauses every animation where it stands.
 For each line of a target's text it compares the letters' pixels with the backdrop's pixels in a ring two pixels wide around them.
 It reads the letters' pixels where the marker colour lands.
