@@ -2,6 +2,15 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.98.0
+
+Released 2026-11-14.
+
+### Features
+
+- **core:** publish shared Bun, Chrome, command, and test helpers [#136](https://github.com/avi2d/checks/pull/136)
+- **quality:** require type values from tokens outside token files [#135](https://github.com/avi2d/checks/pull/135)
+
 ## 0.97.0
 
 Released 2026-11-13.
