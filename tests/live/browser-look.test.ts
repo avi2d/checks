@@ -62,7 +62,16 @@ test("look judges text below a fixed panel fold instead of skipping it as parked
   expect(failuresOf(passed.text)).toEqual([]);
   expect(passed.text).toContain(`scanned title 1, body 2, 9 token(s)`);
   expect(passed.exitCode).toBe(0);
-}, 120_000);
+  const drifting = await browserSite({
+    "dist/index.html": styled("<h1>Contracts</h1><div class=\"panel\"><p>Top note.</p><div style=\"height: 1200px\"></div><p class=\"deep\">Deep note.</p></div>", ".panel { height: 100vh; overflow-y: auto; overflow-x: hidden; } .deep { line-height: var(--leading-title); }"),
+    "browser-checks.json": declaration({ targets: [{ name: "headline", selector: "h1" }], checks: ["look"], roles: ROLES }),
+  });
+  const failed = await drifting.run();
+  expect(failuresOf(failed.text)).toEqual([
+    `${at("look", "/")} role body p.deep "Deep note." differs from p "Top note." in line-height 1.2, not 1.5`,
+  ]);
+  expect(failed.exitCode).toBe(1);
+}, 180_000);
 
 test("look compares a role within one viewport, so body text a token enlarges on a wide screen is not drift", async () => {
   const site = await browserSite({

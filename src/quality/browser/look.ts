@@ -111,18 +111,21 @@ const READ_LOOK = `(roles) => {
     for (let at = owner; at; at = at.parentElement) {
       const around = getComputedStyle(at);
       if (around.opacity === "0") return false;
-      if (["auto", "scroll"].includes(around.overflowX)) pageClipsX = false;
-      if (["auto", "scroll"].includes(around.overflowY)) pageClipsY = false;
+      const scrollsX = ["auto", "scroll"].includes(around.overflowX);
+      const scrollsY = ["auto", "scroll"].includes(around.overflowY);
+      if (scrollsX) pageClipsX = false;
+      if (scrollsY) pageClipsY = false;
       const clipX = ["hidden", "clip"].includes(around.overflowX);
       const clipY = ["hidden", "clip"].includes(around.overflowY);
       const mask = around.clipPath !== "none" || around.clip !== "auto";
-      if (clipX || clipY || mask) {
+      if (clipX || clipY || mask || scrollsX || scrollsY) {
         const bounds = at.getBoundingClientRect();
+        const content = { left: bounds.left - at.scrollLeft, top: bounds.top - at.scrollTop, right: bounds.left - at.scrollLeft + at.scrollWidth, bottom: bounds.top - at.scrollTop + at.scrollHeight };
         rects = rects.map((rect) => ({
-          left: (clipX || mask) ? Math.max(rect.left, bounds.left) : rect.left,
-          right: (clipX || mask) ? Math.min(rect.right, bounds.right) : rect.right,
-          top: (clipY || mask) ? Math.max(rect.top, bounds.top) : rect.top,
-          bottom: (clipY || mask) ? Math.min(rect.bottom, bounds.bottom) : rect.bottom,
+          left: (clipX || mask) ? Math.max(rect.left, bounds.left) : scrollsX ? Math.max(rect.left, content.left) : rect.left,
+          right: (clipX || mask) ? Math.min(rect.right, bounds.right) : scrollsX ? Math.min(rect.right, content.right) : rect.right,
+          top: (clipY || mask) ? Math.max(rect.top, bounds.top) : scrollsY ? Math.max(rect.top, content.top) : rect.top,
+          bottom: (clipY || mask) ? Math.min(rect.bottom, bounds.bottom) : scrollsY ? Math.min(rect.bottom, content.bottom) : rect.bottom,
         }));
       }
     }

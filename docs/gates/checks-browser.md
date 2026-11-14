@@ -62,6 +62,7 @@ The `layout` inventory counts it as parked until focused.
 `look` reads each element that holds visible text, at each route and viewport in each state with no `textPx` and no `reducedMotion` of `reduce`.
 It scrolls through the page and back first, so text a page reveals on scroll is read too, and finishes each animation that ends.
 Text that is not rendered, invisible, zero-opacity, parked outside the page or clipped to a pixel, such as a visually hidden label, is left out.
+Text an inner scroller can reach counts as visible, even below its fold.
 A text takes the first role in `roles` with a selector it matches, so a narrow role listed before a broad one wins.
 It reads a line height as a ratio of the font size and a letter spacing in em.
 So a token in `rem` and one with no unit compare by what they draw.
