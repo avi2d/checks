@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.100.0
+
+Released 2026-11-14.
+
+### Features
+
+- **browser:** run gate cells four at a time [#143](https://github.com/avi2d/checks/pull/143)
+
 ## 0.99.0
 
 Released 2026-11-14.
