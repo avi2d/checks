@@ -5,12 +5,13 @@ import { runMain } from "../../core/main.ts";
 import { watchAssets } from "./assets.ts";
 import { judgeAxe } from "./axe.ts";
 import { judgeContrast } from "./contrast.ts";
-import { readDeclaration, runsIn, targetsOn, visitsOf, type CheckName, type Declaration, type Visit } from "./declaration.ts";
+import { isDefaultState, readDeclaration, runsIn, targetsOn, visitsOf, type CheckName, type Declaration, type Visit } from "./declaration.ts";
 import { hookApplies, loadHooks, runHook, type ProductCheck } from "./hooks.ts";
 import { judgeHtml } from "./html.ts";
 import { judgeKeyboard } from "./keyboard.ts";
 import { judgeLayout } from "./layout.ts";
 import { judgeLinks } from "./links.ts";
+import { judgeLook, readLook, type FirstLooks } from "./look.ts";
 import { judgeStillness, recordMotion } from "./motion.ts";
 import { judgeNesting } from "./nesting.ts";
 import { coldShift, formatShift, judgeShift, recordShifts } from "./shift.ts";
@@ -27,6 +28,7 @@ type Visiting = {
   readonly declaration: Declaration;
   readonly visit: Visit;
   readonly url: string;
+  readonly firstLooks: FirstLooks;
 };
 
 const run = (check: string, visit: Visit, inventory: readonly string[], found: readonly string[], unverified: readonly string[] = []): Run => ({
@@ -128,6 +130,15 @@ const contrastRun = Effect.fn("contrastRun")(function* ({ browser, declaration, 
   return run("contrast", visit, inventory, targets.length === 0 ? [...found, NO_TARGET] : found);
 }, Effect.scoped);
 
+const lookRun = Effect.fn("lookRun")(function* ({ browser, declaration, visit, url, firstLooks }: Visiting) {
+  const roles = declaration.roles;
+  if (roles === undefined) return run("look", visit, [], ["check look judges each visible text by the role it plays, and no roles declare them"]);
+  const { page } = yield* openVisit(browser, visit);
+  yield* load(page, url);
+  const { found, inventory } = judgeLook(yield* readLook(page, roles), firstLooks, visit);
+  return run("look", visit, inventory, found);
+}, Effect.scoped);
+
 const hookRun = Effect.fn("hookRun")(function* (check: ProductCheck, { browser, visit, url }: Visiting) {
   const { page } = yield* openVisit(browser, visit);
   const { targets, found } = yield* runHook(check, page, { ...visit, url });
@@ -146,10 +157,12 @@ const BUILT_IN: Readonly<Record<CheckName, (visiting: Visiting) => Effect.Effect
   contrast: contrastRun,
   weight: weightRun,
   shift: shiftRun,
+  look: lookRun,
 };
 
 function applies(check: CheckName, visit: Visit, declaration: Declaration): boolean {
   if (!runsIn(visit.state, check)) return false;
+  if (check === "look") return isDefaultState(visit.state);
   if (check === "motion") return visit.state.reducedMotion === "reduce";
   if (check === "html" || check === "links")
     return visit.viewport.name === declaration.viewports[0].name && visit.state.name === declaration.states.find((state) => runsIn(state, check))?.name;
@@ -163,8 +176,9 @@ const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: D
   const origin = yield* serveSite(site);
   const browser = yield* launchChrome;
   const runs: Run[] = [];
+  const firstLooks: FirstLooks = new Map();
   for (const visit of visitsOf(declaration).filter(({ route }) => !missingRoutes.includes(route.path))) {
-    const visiting = { browser, declaration, visit, url: new URL(visit.route.path, origin).href };
+    const visiting = { browser, declaration, visit, url: new URL(visit.route.path, origin).href, firstLooks };
     runs.push(yield* targetsRun(visiting));
     for (const check of declaration.checks.filter((one) => applies(one, visit, declaration))) runs.push(yield* BUILT_IN[check](visiting));
     for (const hook of hooks.filter((candidate) => hookApplies(candidate, visit))) runs.push(yield* hookRun(hook, visiting));

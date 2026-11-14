@@ -9,5 +9,6 @@
 | [0003](0003-the-kit-fails-a-repository-whose-bun-pin-drifts-from-the-fleet-version.md) | The kit fails a repository whose Bun pin drifts from the fleet version | Accepted | `src/delivery/bun-pin.ts`, `.bun-version` |
 | [0004](0004-the-css-families-ship-on-and-the-design-tokens-stay-opt-in.md) | The CSS families ship on, and the design tokens stay opt-in | Accepted | `src/quality/presets/stylelint.ts`, `src/quality/frontend-syntax.ts` |
 | [0005](0005-the-kit-releases-on-demand-through-a-release-pull-request.md) | The kit releases on demand through a release pull request | Accepted | `.github/workflows/release.yml` |
+| [0006](0006-the-look-check-reads-tokens-from-the-rendered-page.md) | The look check reads tokens from the rendered page | Accepted | `src/quality/browser/look.ts` |
 
 <!-- end generated adr-index -->

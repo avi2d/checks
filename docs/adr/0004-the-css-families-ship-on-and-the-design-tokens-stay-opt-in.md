@@ -7,7 +7,7 @@ Date: 2026-10-18
 
 ## Status
 
-Accepted.
+Accepted. The rendered-token sentence is superseded by 0006, which names this record back.
 
 ## Context
 

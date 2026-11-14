@@ -21,6 +21,7 @@ export type Declared = {
   readonly checks: readonly string[];
   readonly weight?: { readonly nonImageBytes: number; readonly scriptBytes: number; readonly imageBytes: number };
   readonly shift?: { readonly max: number };
+  readonly roles?: Readonly<Record<string, readonly string[]>>;
   readonly hooks?: string;
 };
 

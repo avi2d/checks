@@ -128,6 +128,14 @@ test("a weight check with no budgets and a shift check with no bound are refused
   ]);
 });
 
+test("a look check with no roles and a roles map that declares no role are refused, not run against nothing", () => {
+  expect(inconsistencies({ ...DECLARATION, checks: [...DECLARATION.checks, "look"] })).toEqual([
+    "check look judges each visible text by the role it plays, and no roles declare them",
+  ]);
+  expect(inconsistencies({ ...DECLARATION, checks: [...DECLARATION.checks, "look"], roles: {} })).toEqual(["roles declares no role, so every visible text would match none"]);
+  expect(inconsistencies({ ...DECLARATION, checks: [...DECLARATION.checks, "look"], roles: { body: ["main p"] } })).toEqual([]);
+});
+
 const ANCHOR_SIZES = ["phone 360x640", "phone 375x667", "phone 393x852", "phone 412x915", "tablet 820x1180", "desktop 1366x768", "desktop 1440x900", "desktop 1920x1080"];
 
 const NIGHTLY_SIZES = [
