@@ -64,7 +64,7 @@ test("layout ignores text a descendant already clips", async () => {
   expect(passed.exitCode).toBe(0);
 }, 120_000);
 
-test("layout reports cuts a y-only line trim would miss in vertical text", async () => {
+test("layout reports shadow, scroll, static, clip, indent and perspective cuts", async () => {
   const SHADOW_CLIP = `<script>customElements.define("x-clip", class extends HTMLElement { constructor() { super(); this.attachShadow({ mode: "open" }).innerHTML = "<span style='white-space: nowrap'>Contact the owner of the site</span>"; } });</` + `script>`;
   const pages = {
     "shadow-clip.html": page(`<p><x-clip style="display: inline-block; width: 40px; height: 20px; overflow: hidden; white-space: nowrap"></x-clip></p>${SHADOW_CLIP}`),
@@ -72,12 +72,11 @@ test("layout reports cuts a y-only line trim would miss in vertical text", async
     "static-cut.html": page(`<p><a href="/" style="display: inline-block; overflow: hidden; width: 40px; white-space: nowrap"><span>Contact the owner with a long label</span></a></p>`),
     "clip-cut.html": page(`<p><a href="/" style="display: inline-block; overflow: hidden; width: 40px; white-space: nowrap"><span style="clip-path: inset(0)">Contact the owner with a long label</span></a></p>`),
     "indent-cut.html": page(`<p><a href="/" style="display: block; overflow: hidden; width: 280px; height: 20px; padding-left: 16px; text-indent: -16px">Contact the owner of the site with a very long label that wraps onto more lines</a></p>`),
-    "vertical-cut.html": page(`<p><a href="/" style="display: block; writing-mode: vertical-rl; height: 60px; overflow: hidden; line-height: 24px; white-space: nowrap">日本語テストです</a></p>`),
     "perspective.html": page(`<p><a href="/" style="display: inline-block; overflow: hidden; width: 60px; height: 20px; white-space: nowrap"><span style="display: block; perspective: 1px"><span style="position: absolute; white-space: nowrap">Contact the owner with a long label</span></span></a></p>`),
   };
   const site = await browserSite({
     ...sitePages(pages),
-    "browser-checks.json": declaration({ routes: routesOf(pages), targets: [{ name: "link", selector: "main a", routes: ["/auto-clip.html", "/static-cut.html", "/perspective.html", "/clip-cut.html", "/indent-cut.html", "/vertical-cut.html"] }, { name: "clip", selector: "main x-clip", routes: ["/shadow-clip.html"] }], checks: ["layout"] }),
+    "browser-checks.json": declaration({ routes: routesOf(pages), targets: [{ name: "link", selector: "main a", routes: ["/auto-clip.html", "/static-cut.html", "/perspective.html", "/clip-cut.html", "/indent-cut.html"] }, { name: "clip", selector: "main x-clip", routes: ["/shadow-clip.html"] }], checks: ["layout"] }),
   });
   const failed = await site.run();
   const failures = failuresOf(failed.text);
@@ -87,6 +86,19 @@ test("layout reports cuts a y-only line trim would miss in vertical text", async
   expect(failures.filter((line) => line.startsWith(at("layout", "/perspective.html")) && line.includes("clips its own text"))).not.toEqual([]);
   expect(failures.filter((line) => line.startsWith(at("layout", "/clip-cut.html")) && line.includes("clips its own text"))).not.toEqual([]);
   expect(failures.filter((line) => line.startsWith(at("layout", "/indent-cut.html")) && line.includes("clips its own text"))).not.toEqual([]);
+  expect(failed.exitCode).toBe(1);
+}, 120_000);
+
+test("clipped vertical text is reported when a y-only line trim would hide it", async () => {
+  const pages = {
+    "vertical-cut.html": page(`<p><a href="/" style="display: block; writing-mode: vertical-rl; height: 60px; overflow: hidden; line-height: 24px; white-space: nowrap">日本語テストです</a></p>`),
+  };
+  const site = await browserSite({
+    ...sitePages(pages),
+    "browser-checks.json": declaration({ routes: routesOf(pages), targets: [{ name: "link", selector: "main a", routes: ["/vertical-cut.html"] }], checks: ["layout"] }),
+  });
+  const failed = await site.run();
+  const failures = failuresOf(failed.text);
   expect(failures.filter((line) => line.startsWith(at("layout", "/vertical-cut.html")) && line.includes("clips its own text"))).not.toEqual([]);
   expect(failed.exitCode).toBe(1);
 }, 120_000);
