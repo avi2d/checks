@@ -5,7 +5,7 @@ import { runMain } from "../../core/main.ts";
 import { watchAssets } from "./assets.ts";
 import { judgeAxe } from "./axe.ts";
 import { judgeContrast } from "./contrast.ts";
-import { readDeclaration, runsIn, targetsOn, visitsOf, type CheckName, type Declaration, type Visit } from "./declaration.ts";
+import { isDefaultState, readDeclaration, runsIn, targetsOn, visitsOf, type CheckName, type Declaration, type Visit } from "./declaration.ts";
 import { hookApplies, loadHooks, runHook, type ProductCheck } from "./hooks.ts";
 import { judgeHtml } from "./html.ts";
 import { judgeKeyboard } from "./keyboard.ts";
@@ -162,7 +162,7 @@ const BUILT_IN: Readonly<Record<CheckName, (visiting: Visiting) => Effect.Effect
 
 function applies(check: CheckName, visit: Visit, declaration: Declaration): boolean {
   if (!runsIn(visit.state, check)) return false;
-  if (check === "look") return visit.state.name === "default";
+  if (check === "look") return isDefaultState(visit.state);
   if (check === "motion") return visit.state.reducedMotion === "reduce";
   if (check === "html" || check === "links")
     return visit.viewport.name === declaration.viewports[0].name && visit.state.name === declaration.states.find((state) => runsIn(state, check))?.name;
