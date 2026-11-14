@@ -96,6 +96,7 @@ test("layout leaves escaped and clipped-hidden text silent", async () => {
     "sr-link.html": page(`<p><a href="/" style="position: relative; display: inline-block; overflow: hidden; width: 40px; height: 40px"><span style="${SR}">Close the navigation menu with extra words</span></a></p>`),
     "clip-hidden.html": page(`<p><a href="/" style="position: relative; display: inline-block; overflow: hidden; width: 40px; height: 40px"><span style="position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;">Close the navigation menu with extra words</span></a></p>`),
     "indent.html": page(`<p><a href="/" style="display: block; overflow: hidden; width: 40px; text-indent: -9999px; white-space: nowrap">Contact the owner with a long label</a></p>`),
+    "pre-wrap.html": page(`<p><a href="/" style="display: block; overflow: hidden; width: 120px; white-space: pre-wrap; font: 16px sans-serif">Write to me please, with  two spaces between words</a></p>`),
   };
   const site = await browserSite({
     ...sitePages(pages),

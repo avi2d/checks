@@ -160,9 +160,16 @@ const CLIPS_ITS_OWN_TEXT = `function () {
     if (!node.textContent || node.textContent.trim() === "") continue;
     const raw = getComputedStyle(node.parentElement ?? this).lineHeight;
     const line = raw === "normal" ? NaN : parseFloat(raw);
-    const range = document.createRange();
-    range.selectNodeContents(node);
-    for (const rect of range.getClientRects()) {
+    const run = document.createRange();
+    const spans = [];
+    const words = /\\S+/g;
+    let m;
+    while ((m = words.exec(node.textContent)) !== null) {
+      run.setStart(node, m.index);
+      run.setEnd(node, m.index + m[0].length);
+      for (const rect of run.getClientRects()) spans.push(rect);
+    }
+    for (const rect of spans) {
       if (rect.width <= 0 || rect.height <= 0) continue;
       let l = rect.left;
       let r = rect.right;
