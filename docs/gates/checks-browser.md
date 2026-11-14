@@ -63,14 +63,19 @@ The `layout` inventory counts it as parked until focused.
 It scrolls through the page and back first, so text a page reveals on scroll is read too, and finishes each animation that ends.
 Text that is not rendered, invisible, zero-opacity, parked outside the page or clipped to a pixel, such as a visually hidden label, is left out.
 A text takes the first role in `roles` with a selector it matches, so a narrow role listed before a broad one wins.
-It reads a line height as a ratio of the font size and a letter spacing in em of the font size, so a token in `rem` and one with no unit compare by what they draw.
+It reads a line height as a ratio of the font size and a letter spacing in em.
+So a token in `rem` and one with no unit compare by what they draw.
 It reads a font family as the first family the stack names, since the fallbacks after it draw only where that face fails to load.
-Two texts of one role are compared at one viewport in one state, across every route, so a role may change between a phone and a laptop.
+Two texts of one role are compared at one viewport in one state, across every route.
+So a role may change between a phone and a laptop.
 The first text of a role it reads is the one the others are compared with, and the failure names it and its route.
-The tokens are the custom properties the page's stylesheets declare, which it reads from the page, so a product needs no token file of the kit's own format.
-Each token is resolved where the text sits, so a token a class scopes, a media query changes or a container unit sizes counts with the value it has there.
+The tokens are the custom properties the page's stylesheets declare, read from the page itself.
+So a product needs no token file in a format of the kit's own.
+Each token is resolved where the text sits.
+So a token a class scopes, a media query changes or a container unit sizes counts with its value there.
 A value equals a token when the token, set on that property beside the text, computes to the same value.
-A letter spacing of `normal`, which a browser also reports for zero, and a text transform of `none` need no token, as [checks-frontend-syntax](checks-frontend-syntax.md) allows them in a stylesheet.
+A letter spacing of `normal` and a text transform of `none` need no token, as [checks-frontend-syntax](checks-frontend-syntax.md) allows both.
+A browser reports a letter spacing of zero as `normal` too.
 It cannot tell whether the token set itself is good, and it reads no hover or focus look.
 Text a pseudo-element's `content` draws, a form control's value and text inside a shadow root are not read.
 

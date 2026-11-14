@@ -353,7 +353,8 @@ Its Baseline family runs `stylelint-plugin-use-baseline`, the one stylelint rule
 Its design token family is stylelint's own colour and value rules and the kit's `checks/font-size-from-tokens`.
 One rule of the same shape holds each of `line-height`, `letter-spacing`, `font-weight` and `text-transform`.
 Each applies outside the files a repository names as its tokens.
-The rendered page is checked against its tokens by the `look` check of `checks-browser`, which reads them from the page's own custom properties, so it needs no token format of the kit's own.
+The `look` check of `checks-browser` holds the rendered page to its tokens.
+It reads them from the page's own custom properties, so it needs no token format of the kit's own.
 The repository's `stylelint.config.ts` sets the Baseline target and the token files, since only the repository knows either.
 The gate imports that file itself, because stylelint's config loader calls `typescript.findConfigFile`, which TypeScript 7 lacks, and a JavaScript config is what [checks-no-plain-js](gates/checks-no-plain-js.md) refuses.
 The `layout`, `keyboard` and `motion` probes are the website's own browser tests, generalized after they held on its English and Russian pages.
