@@ -91,9 +91,12 @@ function mappedTests(path: string, repository: Repository): readonly string[] | 
 }
 
 // A test pattern that matches no test file would silently drop the tests a renamed file used to name.
-export function staleReachPatterns(repository: Repository): readonly string[] {
+export function staleReachPatterns(repository: Repository): readonly { readonly changed: string; readonly pattern: string }[] {
   const tests = testFilesOf(repository);
-  return repository.reach.flatMap((rule) => rule.tests.filter((pattern) => !tests.some((file) => globMatches(pattern, file))));
+  return repository.reach.flatMap((rule) =>
+    rule.tests
+      .filter((pattern) => !tests.some((file) => globMatches(pattern, file)))
+      .map((pattern) => ({ changed: rule.changed, pattern })));
 }
 
 // A path mentioned by any trailing run of two or more of its segments, or in full, names it.
@@ -225,14 +228,27 @@ function preloadClosure(repository: Repository): ReadonlySet<string> {
 // A test or its helper reads a file it imports or names by path or bin, and a source reads only what it imports, at any depth.
 // A source that names a path, as a registry does, would make every importer read every file it lists.
 export function narrowTests(changed: readonly string[], repository: Repository, tests: readonly string[]): Narrowing {
+  const stale = staleReachPatterns(repository);
+  if (stale.length > 0) {
+    return { kind: "full", because: `package.json: checks.reach names ${stale.map((entry) => `${entry.pattern} for ${entry.changed}`).join(", ")}, which matches no test file` };
+  }
   if (changed.length === 0) return { kind: "full", because: "the pull request changes no file" };
   const [shared] = sharedChanges(changed, repository);
   if (shared !== undefined) return { kind: "full", because: `the pull request changes ${shared.path}, ${shared.reason}` };
   return { kind: "files", files: reachedTests(changed, repository, tests) };
 }
 
-// A local run never widens to the whole suite, so a shared file runs only the tests that reach it.
 export function narrowLocalTests(changed: readonly string[], repository: Repository, tests: readonly string[]): LocalNarrowing {
+  const stale = staleReachPatterns(repository);
+  if (stale.length > 0) {
+    return {
+      files: [...tests],
+      shared: stale.map((entry) => ({
+        path: "package.json",
+        reason: `checks.reach names ${entry.pattern} for ${entry.changed}, which matches no test file`,
+      })),
+    };
+  }
   return { files: reachedTests(changed, repository, tests), shared: sharedChanges(changed, repository) };
 }
 
@@ -286,7 +302,7 @@ const readRepository = Effect.fn("readRepository")(function* (root: string) {
         Effect.flatMap(decodeBunfig),
       )
     : {};
-  const repository = {
+  return {
     files,
     sources,
     bins: binsOf(manifest),
@@ -294,11 +310,6 @@ const readRepository = Effect.fn("readRepository")(function* (root: string) {
     preloads: preloadPaths(bunfig),
     reach: Object.entries(manifest.checks?.reach ?? {}).map(([changed, tests]) => ({ changed, tests })),
   } satisfies Repository;
-  const stale = staleReachPatterns(repository);
-  if (stale.length > 0) {
-    return yield* new NarrowingError({ message: "package.json: checks.reach names " + stale.join(", ") + ", which matches no test file, so fix or remove it" });
-  }
-  return repository;
 });
 
 const pullRequestEvent = Config.all({

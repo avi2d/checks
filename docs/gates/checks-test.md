@@ -144,7 +144,8 @@ A stylesheet, a font or a layout that a key matches runs only those tests, rathe
 A stylesheet, a font or a layout that no key matches still runs the whole suite.
 A lockfile, a config, a tool pin, a preloaded file or a test helper still runs the whole suite, even when a key matches it.
 A run on any other event, `--full` and the live and pixel tiers stay whole whatever the map says.
-A value that matches no test file stops the narrowing: a pull request run then runs the whole suite and names the value, and a `--changed` run fails with exit 2.
+A value that matches no test file stops the narrowing.
+A pull request run and a `--changed` run then run the whole suite and name the value and the key that lists it.
 So a renamed test that the map still names surfaces on the next run rather than dropping its file.
 A stylesheet that reaches a block the map does not list ships untested on the pull request, and the whole run on `main` and at release still tests it.
 
@@ -220,7 +221,7 @@ It refuses test filters because every test excluded by a filter would look skipp
 | --- | --- |
 | 0 | every test passed and every skip has a matching site reason |
 | 1 | a test failed, a parallel worker crashed, a skip lacks a site reason or a declaration is stale in CI |
-| 2 | an argument is not one it takes, a run outside CI is refused, `APPROVE_SCREENS` is not a boolean in a pixel run, a declaration or the smoke list cannot be read, a smoke entry names no runnable test, `CI` is not a boolean, Bun wrote no report or a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` or cannot read the reach map |
+| 2 | an argument is not one it takes, a run outside CI is refused, `APPROVE_SCREENS` is not a boolean in a pixel run, a declaration or the smoke list cannot be read, a smoke entry names no runnable test, `CI` is not a boolean, Bun wrote no report or a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` |
 
 ## Sample output
 

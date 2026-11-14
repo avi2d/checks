@@ -179,5 +179,26 @@ test("a local change to a mapped stylesheet runs its mapped tests and leaves not
 test("a reach map test pattern that matches no test file is reported stale rather than dropping its tests silently", () => {
   expect(staleReachPatterns(SITE)).toEqual([]);
   const renamed = { ...SITE, reach: [...SITE.reach, { changed: "src/styles/menu.css", tests: ["tests/e2e/nav.test.ts"] }] };
-  expect(staleReachPatterns(renamed)).toEqual(["tests/e2e/nav.test.ts"]);
+  expect(staleReachPatterns(renamed)).toEqual([{ changed: "src/styles/menu.css", pattern: "tests/e2e/nav.test.ts" }]);
+});
+
+test("a stale reach value runs the whole suite rather than narrowing to its mapped tests", () => {
+  const renamed = { ...SITE, reach: [...SITE.reach, { changed: "src/styles/menu.css", tests: ["tests/e2e/nav.test.ts"] }] };
+  expect(narrowTests(["src/styles/hero.css"], renamed, SITE_TESTS)).toEqual({
+    kind: "full",
+    because: "package.json: checks.reach names tests/e2e/nav.test.ts for src/styles/menu.css, which matches no test file",
+  });
+});
+
+test("a stale reach value runs the whole local suite rather than failing the desk run", () => {
+  const renamed = { ...SITE, reach: [...SITE.reach, { changed: "src/styles/menu.css", tests: ["tests/e2e/nav.test.ts"] }] };
+  expect(narrowLocalTests(["src/styles/menu.css"], renamed, SITE_TESTS)).toEqual({
+    files: SITE_TESTS,
+    shared: [
+      {
+        path: "package.json",
+        reason: "checks.reach names tests/e2e/nav.test.ts for src/styles/menu.css, which matches no test file",
+      },
+    ],
+  });
 });
