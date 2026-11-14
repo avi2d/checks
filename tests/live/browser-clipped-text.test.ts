@@ -64,7 +64,7 @@ test("layout ignores text a descendant already clips", async () => {
   expect(passed.exitCode).toBe(0);
 }, 120_000);
 
-test("layout reports shadow text and scrollable overflow", async () => {
+test("layout reports text its box really cuts in horizontal and vertical writing", async () => {
   const SHADOW_CLIP = `<script>customElements.define("x-clip", class extends HTMLElement { constructor() { super(); this.attachShadow({ mode: "open" }).innerHTML = "<span style='white-space: nowrap'>Contact the owner of the site</span>"; } });</` + `script>`;
   const pages = {
     "shadow-clip.html": page(`<p><x-clip style="display: inline-block; width: 40px; height: 20px; overflow: hidden; white-space: nowrap"></x-clip></p>${SHADOW_CLIP}`),
@@ -99,6 +99,7 @@ test("layout leaves escaped and clipped-hidden text silent", async () => {
     "clip-hidden.html": page(`<p><a href="/" style="position: relative; display: inline-block; overflow: hidden; width: 40px; height: 40px"><span style="position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;">Close the navigation menu with extra words</span></a></p>`),
     "indent.html": page(`<p><a href="/" style="display: block; overflow: hidden; width: 40px; text-indent: -9999px; white-space: nowrap">Contact the owner with a long label</a></p>`),
     "pre-wrap.html": page(`<p><a href="/" style="display: block; overflow: hidden; width: 120px; white-space: pre-wrap; font: 16px sans-serif">Write to me please, with  two spaces between words</a></p>`),
+    "vertical-tight.html": page(`<p><a href="/" style="display: block; writing-mode: vertical-rl; overflow: hidden; font: 16px/1 sans-serif">たて書き</a></p>`),
   };
   const site = await browserSite({
     ...sitePages(pages),
