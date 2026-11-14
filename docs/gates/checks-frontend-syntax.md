@@ -37,7 +37,7 @@ A control that needs selection off sets it on its own selector, such as `.drag-h
 | G1 correctness | `stylelint-config-recommended`, the stylelint team's rules for likely mistakes, such as `font-variant-numeric: oldstyle-num` for `oldstyle-nums` | on |
 | G2 conventions | `stylelint-config-standard`, which extends G1 with the stylelint team's notation and spacing rules | on |
 | G3 selector complexity | `selector-max-specificity` at `0,3,2` and `selector-max-compound-selectors` at 3 | on |
-| G4 design tokens | `color-no-hex`, `color-named: "never"`, `function-disallowed-list` over `rgb`, `rgba`, `hsl`, `hsla`, `hwb`, `lab`, `lch`, `oklab`, `oklch` and `color`, `font-size` only as one `var(--…)` with no fallback, or `inherit`, `font` only as `inherit`, or as such a `var(--…)` for its size after any literal style, variant, weight or width, and before an optional line height and a family list of names, strings and `var(--…)`s, and `checks/font-size-from-tokens`, which refuses a `var(--…)` for a size or a family naming a custom property that any style block or attribute of the same file sets, unless the file sets it only to another such `var(--…)`, or for a family to a family list, and refuses a named size such as `small` or `math` at the one place the size can still stand, the first family word after any style, variant, weight or width while no line height fixes the `var(--…)` as the size, written there or set there by such a property | off until `tokens` names the token files, and off in those files |
+| G4 design tokens | `color-no-hex`, `color-named: "never"`, `function-disallowed-list` over `rgb`, `rgba`, `hsl`, `hsla`, `hwb`, `lab`, `lch`, `oklab`, `oklch` and `color`, `font-size` only as one `var(--…)` with no fallback, or `inherit`, `font` only as `inherit`, or as such a `var(--…)` for its size after any literal style, variant or width, and before an optional line height as such a `var(--…)` and a family list of names, strings and `var(--…)`s, and `checks/font-size-from-tokens`, which refuses a `var(--…)` for a size or a family naming a custom property that any style block or attribute of the same file sets, unless the file sets it only to another such `var(--…)`, or for a family to a family list, and refuses a named size such as `small` or `math` at the one place the size can still stand, the first family word after any style, variant, weight or width while no line height fixes the `var(--…)` as the size, written there or set there by such a property, and the four rules of [The type token rules](#the-type-token-rules) | off until `tokens` names the token files, and off in those files |
 | G5 Baseline target | `plugin/use-baseline` from `stylelint-plugin-use-baseline`, which judges each property, value, function, at-rule, selector and unit against the Baseline data, and passes a property inside an `@supports` block. It passes `@property` at every target, since a browser without `@property` treats the declaration as an unregistered custom property | on, at the target `baseline` sets |
 | G6 comments refused | `comment-word-disallowed-list` over `/^[\s\S]*$/`, which refuses every comment, including an empty `/* */` | on |
 | G7 language-free selectors | `selector-disallowed-list` over `/[^\x00-\x7F]/`, which refuses any selector holding a non-ASCII character, in attribute values, class names and ids alike | on |
@@ -58,6 +58,40 @@ CSS repetition is not a family of this gate: a repository adds `"css"` to `forma
 [checks-repetition](checks-repetition.md) then fails when a stylesheet's repeated lines grow, and on the whole-tree run on every repeated line left.
 A stylesheet's length is not a family of this gate either, and [checks-css-size](checks-css-size.md) fails one that holds more than 400 lines.
 
+### The type token rules
+
+While G4 is on, each of four type properties takes, outside the token files, one `var(--…)` with no fallback or a keyword its row names:
+
+| Property | Rule | Keywords it also takes |
+| --- | --- | --- |
+| `line-height` | `checks/line-height-from-tokens` | `inherit` |
+| `letter-spacing` | `checks/letter-spacing-from-tokens` | `inherit`, `normal` |
+| `font-weight` | `checks/font-weight-from-tokens` | `inherit` |
+| `text-transform` | `checks/text-transform-from-tokens` | `inherit`, `none` |
+
+`declaration-property-value-allowed-list` refuses any other value of `line-height`, `letter-spacing` and `text-transform`, such as `line-height: 1.3`.
+`checks/font-weight-from-tokens` refuses any other `font-weight` outside an `@font-face` rule, such as `font-weight: bold`.
+A `font-weight` descriptor inside `@font-face` passes, since `var()` is invalid there.
+Each rule in the table refuses a `var(--…)` naming a custom property the same file sets.
+The file passes when it sets that property only to another such `var(--…)`, as `checks/font-size-from-tokens` does for a size.
+`checks/line-height-from-tokens` also judges the line height of the `font` shorthand.
+The shorthand takes no literal weight, so a component that sets a weight from a token writes `font-weight` beside it.
+
+`inherit` passes for the reason it passes for `font-size`: it takes the value a parent already set from a token.
+`initial`, `unset` and `revert` are refused, as they are for `font-size`.
+Any other keyword passes only when it adds no value of its own, and one that picks a point on a scale is refused:
+
+- `none` for `text-transform` passes, since it undoes the case a parent or the browser sets and has no value a token could hold.
+- `normal` for `letter-spacing` passes, since it is the font's own spacing with no tracking added.
+- `0` for `letter-spacing` is refused, although the browser renders and reports it as `normal`.
+  The rule keeps one spelling for that reset, since passing one length would leave it to tell a reset from a tracking value.
+- `normal` for `line-height` is refused, since the font picks that leading and it differs from one font to the next.
+- `normal`, `bold`, `bolder` and `lighter` for `font-weight` are refused, since each names a point on the weight scale, as `font-size` refuses `medium`.
+
+A component file that holds such a literal fails these rules.
+It moves each value into a token in a file `tokens` names and reads it through `var(--…)`, or counts the literals with `--suppress` until it does.
+A `font-weight` inside `@font-face` stays as written.
+
 ### What no comment turns off
 
 It sets stylelint's `ignoreDisables`, so a `stylelint-disable` comment silences nothing in either run, and [checks-comment-gate](checks-comment-gate.md) refuses one on the line that adds it.
@@ -76,7 +110,8 @@ These are outside what it decides:
 
 - A `transition` shorthand that names no property, such as `transition: 200ms`, which the browser reads as `all`.
 - A value it cannot see, such as `transition: var(--motion)`, a style a script sets, or a colour a build writes into CSS outside the declared inputs.
-- A font size custom property that one stylesheet outside the token files sets and another reads.
+- A font size or type custom property that one stylesheet outside the token files sets and another reads.
+- The weight and the line height a `font` shorthand resets to `normal` when it leaves them out.
 - `user-select: none` in a `style` attribute on `<body>`, which has no selector to judge.
 - A viewport that disables zoom, since stylelint reads only CSS.
   A repository that runs only this gate gets no viewport check, and [checks-browser](checks-browser.md) refuses one on the rendered page through axe's `meta-viewport` rule.
