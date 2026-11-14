@@ -108,7 +108,148 @@ const judgeLine = Effect.fn("judgeLine")(function* (dom: Dom, viewport: Viewport
 
 const CLIPS_ITS_OWN_TEXT = `function () {
   if (getComputedStyle(this).display === "inline") return false;
-  return this.scrollWidth > this.clientWidth + 1 || this.scrollHeight > this.clientHeight + 1;
+  const clips = (o) => o !== "visible";
+  const style = getComputedStyle(this);
+  const x = clips(style.overflowX);
+  const y = clips(style.overflowY);
+  if (!x && !y) return false;
+  const box = this.getBoundingClientRect();
+  const sy = this.offsetHeight ? box.height / this.offsetHeight : 1;
+  const sx = this.offsetWidth ? box.width / this.offsetWidth : 1;
+  const num = (v) => parseFloat(v) || 0;
+  const paddingBox = (el, s) => {
+    const q = el.getBoundingClientRect();
+    const ex = el.offsetWidth ? q.width / el.offsetWidth : 1;
+    const ey = el.offsetHeight ? q.height / el.offsetHeight : 1;
+    return [q.left + num(s.borderLeftWidth) * ex, q.top + num(s.borderTopWidth) * ey, q.left + q.width - num(s.borderRightWidth) * ex, q.top + q.height - num(s.borderBottomWidth) * ey];
+  };
+  const cb = (s, fx) => {
+    if (!fx && s.position !== "static") return true;
+    if (s.transform !== "none") return true;
+    if (s.perspective !== "none") return true;
+    if (s.filter !== "none") return true;
+    if (s.backdropFilter !== "none") return true;
+    if (s.translate !== "none") return true;
+    if (s.rotate !== "none") return true;
+    if (s.scale !== "none") return true;
+    const cn = s.contain || "";
+    if (cn.indexOf("paint") !== -1 || cn.indexOf("layout") !== -1 || cn === "strict" || cn === "content") return true;
+    const wc = s.willChange || "";
+    if (wc.indexOf("transform") !== -1 || wc.indexOf("perspective") !== -1 || wc.indexOf("filter") !== -1 || wc.indexOf("translate") !== -1 || wc.indexOf("rotate") !== -1 || wc.indexOf("scale") !== -1 || wc.indexOf("contain") !== -1) return true;
+    if ((s.containerType || "").indexOf("size") !== -1) return true;
+    return false;
+  };
+  const [padLeft, padTop, padRight, padBottom] = paddingBox(this, style);
+  const flatParent = (n) => {
+    if (n instanceof ShadowRoot) return n.host;
+    if (n.assignedSlot) return n.assignedSlot;
+    return n.parentNode;
+  };
+  const texts = [];
+  const stack = [this];
+  while (stack.length > 0) {
+    const cur = stack.pop();
+    const tw = document.createTreeWalker(cur, NodeFilter.SHOW_TEXT);
+    for (let n = tw.nextNode(); n !== null; n = tw.nextNode()) texts.push(n);
+    if (cur instanceof Element && cur.shadowRoot) stack.push(cur.shadowRoot);
+    const ew = document.createTreeWalker(cur, NodeFilter.SHOW_ELEMENT);
+    for (let e = ew.nextNode(); e !== null; e = ew.nextNode()) {
+      if (e.shadowRoot) stack.push(e.shadowRoot);
+    }
+  }
+  for (const node of texts) {
+    if (!node.textContent || node.textContent.trim() === "") continue;
+    const ps = getComputedStyle(node.parentElement ?? this);
+    const raw = ps.lineHeight;
+    const line = raw === "normal" ? NaN : parseFloat(raw);
+    const wm = ps.writingMode || "";
+    const vert = wm.indexOf("vertical") === 0 || wm.indexOf("sideways") === 0;
+    const ti = parseFloat(ps.textIndent) || 0;
+    const run = document.createRange();
+    const spans = [];
+    const words = /\\S+/g;
+    let m;
+    while ((m = words.exec(node.textContent)) !== null) {
+      run.setStart(node, m.index);
+      run.setEnd(node, m.index + m[0].length);
+      for (const rect of run.getClientRects()) spans.push(rect);
+    }
+    for (const rect of spans) {
+      if (rect.width <= 0 || rect.height <= 0) continue;
+      let l = rect.left;
+      let r = rect.right;
+      let t = rect.top;
+      let b = rect.bottom;
+      if (!Number.isNaN(line)) {
+        if (vert) {
+          const w = Math.min(rect.width, line * sx);
+          const mid = (rect.left + rect.right) / 2;
+          l = mid - w / 2;
+          r = mid + w / 2;
+        } else {
+          const h = Math.min(rect.height, line * sy);
+          const mid = (rect.top + rect.bottom) / 2;
+          t = mid - h / 2;
+          b = mid + h / 2;
+        }
+      }
+      let at = flatParent(node);
+      let empty = false;
+      let absSeek = false;
+      let fixSeek = false;
+      while (at !== null && at !== this) {
+        if (at instanceof ShadowRoot) {
+          at = at.host;
+          continue;
+        }
+        if (!(at instanceof Element)) {
+          at = flatParent(at);
+          continue;
+        }
+        const s = getComputedStyle(at);
+        if (s.display === "contents") {
+          at = flatParent(at);
+          continue;
+        }
+        const pp = s.position;
+        if (fixSeek) {
+          if (cb(s, true)) fixSeek = false;
+        } else if (absSeek) {
+          if (cb(s, false)) absSeek = false;
+        }
+        if (!fixSeek && !absSeek) {
+          const cx = s.overflowX !== "visible";
+          const cy = s.overflowY !== "visible";
+          if (cx || cy) {
+            const [pl, pt, pr, pb] = paddingBox(at, s);
+            if (cx) {
+              if (l < pl) l = pl;
+              if (r > pr) r = pr;
+              if (r <= l) { empty = true; break; }
+            }
+            if (cy) {
+              if (t < pt) t = pt;
+              if (b > pb) b = pb;
+              if (b <= t) { empty = true; break; }
+            }
+          }
+        }
+        if (pp === "fixed") { fixSeek = true; absSeek = false; }
+        else if (pp === "absolute" && !fixSeek && !absSeek) absSeek = true;
+        at = flatParent(at);
+      }
+      if (empty || r - l <= 1 || b - t <= 1) continue;
+      if (absSeek || fixSeek) {
+        if (!cb(style, fixSeek)) continue;
+      }
+      if (ti < 0 && (r < padLeft - ${EDGE_TOLERANCE_PX} || l > padRight + ${EDGE_TOLERANCE_PX})) continue;
+      if (
+        (x && (l < padLeft - ${EDGE_TOLERANCE_PX} || r > padRight + ${EDGE_TOLERANCE_PX})) ||
+        (y && (t < padTop - ${EDGE_TOLERANCE_PX} || b > padBottom + ${EDGE_TOLERANCE_PX}))
+      ) return true;
+    }
+  }
+  return false;
 }`;
 
 const FIRST_UNSHOWN_TEXT = `function () {

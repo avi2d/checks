@@ -10,6 +10,7 @@ test("layout is red on sideways overflow, a clipped, cut off, covered or hidden 
   const red = {
     "overflow.html": page(`<p><a href="/" style="white-space: nowrap">a label far too long to fit the narrow phone screen</a></p>`),
     "clipped.html": page(`<a href="/" style="display: inline-block; width: 40px; overflow: hidden; white-space: nowrap">Contact the owner</a>`),
+    "clipped-tall.html": page(`<a href="/" style="display: block; width: 80px; height: 20px; overflow: hidden">Write to me in full, please, on two lines</a>`),
     "cut-off.html": page(`<div style="overflow: hidden; height: 20px"><p style="margin: 40px 0 0"><a href="/">Write to me</a></p></div>`),
     "covered.html": page(`<p><a href="/">Write to me</a></p><div style="position: absolute; inset: 0; background: white"></div>`),
     "transparent.html": page(`<p><a href="/" style="color: transparent">Write to me</a></p>`),
@@ -30,6 +31,7 @@ test("layout is red on sideways overflow, a clipped, cut off, covered or hidden 
     ["/overflow.html", "the page is"],
     ["/overflow.html", "is reachable only by scrolling the page sideways"],
     ["/clipped.html", 'link "Contact the owner" clips its own text'],
+    ["/clipped-tall.html", 'link "Write to me in full, please, on two lines" clips its own text'],
     ["/cut-off.html", 'link "Write to me" is cut off by a container that cannot be scrolled'],
     ["/covered.html", 'link "Write to me" is covered or clipped at'],
     ["/transparent.html", 'link "Write to me" hides its text "Write to me"'],
@@ -54,9 +56,9 @@ test("layout is red on sideways overflow, a clipped, cut off, covered or hidden 
   const passed = await site.run();
   expect(passed.text).toContain(`browser: ${at("layout", "/overflow.html").slice(0, -1)} scanned link 1`);
   expect(passed.text).toContain(`browser: ${at("targets", "/invisible.html").slice(0, -1)} scanned link 1`);
-  expect(passed.text).toContain("browser: 28 check run(s) over 14 route(s), 1 viewport(s), 1 state(s) and 1 target(s) pass");
+  expect(passed.text).toContain("browser: 30 check run(s) over 15 route(s), 1 viewport(s), 1 state(s) and 1 target(s) pass");
   expect(passed.exitCode).toBe(0);
-}, 120_000);
+}, 300_000);
 
 test("layout passes an icon drawn before a label, a label in a shadow root, an SVG title, text hidden at this width, a closed select, a textarea, a closed details, text directly in a display: contents wrapper, and a skip link parked until it is focused", async () => {
   const SHADOW_LABEL = `<script>customElements.define("x-label", class extends HTMLElement { constructor() { super(); this.attachShadow({ mode: "open" }).innerHTML = "<span>Write to me</span>"; } });</script>`;

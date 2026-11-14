@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.98.1
+
+Released 2026-11-14.
+
+### Fixes
+
+- **browser:** report only text that a clipping box cuts [#138](https://github.com/avi2d/checks/pull/138)
+
 ## 0.98.0
 
 Released 2026-11-14.
