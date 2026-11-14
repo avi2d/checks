@@ -162,6 +162,7 @@ const BUILT_IN: Readonly<Record<CheckName, (visiting: Visiting) => Effect.Effect
 
 function applies(check: CheckName, visit: Visit, declaration: Declaration): boolean {
   if (!runsIn(visit.state, check)) return false;
+  if (check === "look") return visit.state.name === "default";
   if (check === "motion") return visit.state.reducedMotion === "reduce";
   if (check === "html" || check === "links")
     return visit.viewport.name === declaration.viewports[0].name && visit.state.name === declaration.states.find((state) => runsIn(state, check))?.name;

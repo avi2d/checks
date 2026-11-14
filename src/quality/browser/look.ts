@@ -42,10 +42,10 @@ const SCROLL_THROUGH = `(async () => {
   const frames = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   const step = Math.max(1, Math.floor(window.innerHeight / 2));
   for (let at = 0; at < document.documentElement.scrollHeight; at += step) {
-    window.scrollTo(0, at);
+    window.scrollTo({ top: at, behavior: "instant" });
     await frames();
   }
-  window.scrollTo(0, 0);
+  window.scrollTo({ top: 0, behavior: "instant" });
   await frames();
 })()`;
 
@@ -109,8 +109,18 @@ const READ_LOOK = `(roles) => {
     for (let at = owner; at; at = at.parentElement) {
       const around = getComputedStyle(at);
       if (around.opacity === "0") return false;
-      const clips = ["hidden", "clip"].includes(around.overflowX) || ["hidden", "clip"].includes(around.overflowY) || around.clipPath !== "none" || around.clip !== "auto";
-      if (clips) rects = rects.map((rect) => clip(rect, at.getBoundingClientRect()));
+      const clipX = ["hidden", "clip"].includes(around.overflowX);
+      const clipY = ["hidden", "clip"].includes(around.overflowY);
+      const mask = around.clipPath !== "none" || around.clip !== "auto";
+      if (clipX || clipY || mask) {
+        const bounds = at.getBoundingClientRect();
+        rects = rects.map((rect) => ({
+          left: (clipX || mask) ? Math.max(rect.left, bounds.left) : rect.left,
+          right: (clipX || mask) ? Math.min(rect.right, bounds.right) : rect.right,
+          top: (clipY || mask) ? Math.max(rect.top, bounds.top) : rect.top,
+          bottom: (clipY || mask) ? Math.min(rect.bottom, bounds.bottom) : rect.bottom,
+        }));
+      }
     }
     return rects.some((rect) => rect.right - rect.left > 1 && rect.bottom - rect.top > 1);
   };
@@ -162,7 +172,7 @@ const READ_LOOK = `(roles) => {
     const key = [property, stream, entry.size, entry.parentSize, entry.parentColor, local].join("|");
     if (resolved.has(key)) return resolved.get(key);
     const probe = probeIn(parent);
-    probe.style.cssText = "position:absolute!important;visibility:hidden!important;pointer-events:none!important";
+    probe.style.cssText = "position:absolute!important;visibility:hidden!important;pointer-events:none!important;transition:none!important;animation:none!important";
     if (property === "line-height" || property === "letter-spacing") probe.style.setProperty("font-size", entry.size, "important");
     probe.style.setProperty(property, stream, "important");
     const value = probe.style.getPropertyValue(property) === "" ? null : lookOf(getComputedStyle(probe))[property];

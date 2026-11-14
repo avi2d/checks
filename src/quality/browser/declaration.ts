@@ -138,9 +138,15 @@ function stateInconsistencies({ states, checks }: ExpandedDeclaration): readonly
     ...states
       .filter((state) => state.reducedMotion !== "reduce" && state.checks?.includes("motion") === true)
       .map(({ name }) => `state ${name} names check motion, which runs only in a state whose reducedMotion is reduce`),
+    ...states
+      .filter((state) => state.name !== "default" && state.checks?.includes("look") === true)
+      .map(({ name }) => `state ${name} names check look, which runs only in the default state`),
     ...checks
-      .filter((check) => check !== "motion" && !states.some((state) => runsIn(state, check)))
+      .filter((check) => check !== "motion" && check !== "look" && !states.some((state) => runsIn(state, check)))
       .map((check) => `check ${check} runs in no state, since each state names its checks without it`),
+    ...checks
+      .filter((check) => check === "look" && !states.some((state) => state.name === "default" && runsIn(state, check)))
+      .map(() => "check look runs only in the default state, and no default state runs it"),
   ];
 }
 

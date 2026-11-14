@@ -67,3 +67,21 @@ test("look compares a role within one viewport, so body text a token enlarges on
   expect(failuresOf(passed.text)).toEqual([]);
   expect(passed.exitCode).toBe(0);
 }, 120_000);
+
+test("look runs only in the default state, so an enlarged-text visit adds no second run", async () => {
+  const site = await browserSite({
+    "dist/index.html": styled("<h1>Contracts</h1><p>Five years of practice.</p>"),
+    "browser-checks.json": declaration({
+      targets: [{ name: "headline", selector: "h1" }],
+      checks: ["look"],
+      roles: ROLES,
+      states: [{ name: "default" }, { name: "enlarged text", textPx: 32 }],
+    }),
+  });
+  const passed = await site.run();
+  expect(failuresOf(passed.text)).toEqual([]);
+  const looks = passed.text.split("\n").filter((line) => line.startsWith("browser: look"));
+  expect(looks).toHaveLength(1);
+  expect(looks[0]).toContain(", default scanned");
+  expect(passed.exitCode).toBe(0);
+}, 120_000);
