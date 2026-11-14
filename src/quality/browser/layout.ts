@@ -164,6 +164,7 @@ const CLIPS_ITS_OWN_TEXT = `function () {
     const line = raw === "normal" ? NaN : parseFloat(raw);
     const wm = ps.writingMode || "";
     const vert = wm.indexOf("vertical") === 0 || wm.indexOf("sideways") === 0;
+    const ti = parseFloat(ps.textIndent) || 0;
     const run = document.createRange();
     const spans = [];
     const words = /\\S+/g;
@@ -241,7 +242,6 @@ const CLIPS_ITS_OWN_TEXT = `function () {
       if (absSeek || fixSeek) {
         if (!cb(style, fixSeek)) continue;
       }
-      const ti = parseFloat(getComputedStyle(node.parentElement ?? this).textIndent) || 0;
       if (ti < 0 && (r < padLeft - ${EDGE_TOLERANCE_PX} || l > padRight + ${EDGE_TOLERANCE_PX})) continue;
       if (
         (x && (l < padLeft - ${EDGE_TOLERANCE_PX} || r > padRight + ${EDGE_TOLERANCE_PX})) ||

@@ -72,7 +72,7 @@ test("layout reports text its box really cuts in horizontal and vertical writing
     "static-cut.html": page(`<p><a href="/" style="display: inline-block; overflow: hidden; width: 40px; white-space: nowrap"><span>Contact the owner with a long label</span></a></p>`),
     "clip-cut.html": page(`<p><a href="/" style="display: inline-block; overflow: hidden; width: 40px; white-space: nowrap"><span style="clip-path: inset(0)">Contact the owner with a long label</span></a></p>`),
     "indent-cut.html": page(`<p><a href="/" style="display: block; overflow: hidden; width: 280px; height: 20px; padding-left: 16px; text-indent: -16px">Contact the owner of the site with a very long label that wraps onto more lines</a></p>`),
-    "vertical-cut.html": page(`<p><a href="/" style="display: block; writing-mode: vertical-rl; height: 60px; overflow: hidden; line-height: 24px; white-space: nowrap">日本語のテスト</a></p>`),
+    "vertical-cut.html": page(`<p><a href="/" style="display: block; writing-mode: vertical-rl; height: 60px; overflow: hidden; line-height: 24px; white-space: nowrap">日本語テストです</a></p>`),
     "perspective.html": page(`<p><a href="/" style="display: inline-block; overflow: hidden; width: 60px; height: 20px; white-space: nowrap"><span style="display: block; perspective: 1px"><span style="position: absolute; white-space: nowrap">Contact the owner with a long label</span></span></a></p>`),
   };
   const site = await browserSite({
@@ -91,7 +91,7 @@ test("layout reports text its box really cuts in horizontal and vertical writing
   expect(failed.exitCode).toBe(1);
 }, 120_000);
 
-test("layout leaves escaped and clipped-hidden text silent", async () => {
+test("layout stays silent when no box cuts the text", async () => {
   const SR = "position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;";
   const pages = {
     "abs-escape.html": page(`<p><a href="/" style="display: inline-block; overflow: hidden; width: 40px; height: 20px">Hi<span style="display: block; overflow: hidden"><span style="position: absolute; left: 100px; white-space: nowrap">A tooltip shown in full</span></span></a></p>`),
