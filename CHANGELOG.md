@@ -2,6 +2,18 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.99.0
+
+Released 2026-11-14.
+
+### Features
+
+- **browser:** judge visible text by role and page tokens [#140](https://github.com/avi2d/checks/pull/140)
+
+### Fixes
+
+- **browser:** read axe after entrance animations settle [#141](https://github.com/avi2d/checks/pull/141)
+
 ## 0.98.1
 
 Released 2026-11-14.
