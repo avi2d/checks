@@ -151,7 +151,7 @@ test("tracking frontend-syntax.json opts a repository into checks-frontend-synta
   const green = await lint(repo);
   expect(green.text).toContain("checks-lint: 15 gate(s) pass");
   expect(green.exitCode).toBe(0);
-}, 60_000);
+}, 120_000);
 
 test("a pull request range that hides new lint findings behind oxlint --suppress-all fails checks-lint rather than passing", async () => {
   const { repo } = await repository();

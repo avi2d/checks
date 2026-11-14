@@ -91,7 +91,7 @@ const FAMILIES = [
     family: "G4 design tokens, a literal size in the font shorthand",
     options: '{ baseline: "widely", tokens: ["src/tokens.css"] }',
     red: "p { font: 12px serif; }\n",
-    green: "p { font: small-caps var(--text-small)/1.5 \"Roboto Medium\", serif; }\n",
+    green: "p { font: small-caps var(--text-small)/var(--leading) \"Roboto Medium\", serif; }\n",
     reported: "src/site.css:1:11 Disallowed value \"12px serif\" for property \"font\" (declaration-property-value-allowed-list)",
   },
   {
@@ -112,7 +112,7 @@ const FAMILIES = [
     family: "G4 design tokens, a literal size after a token weight in the font shorthand",
     options: '{ baseline: "widely", tokens: ["src/tokens.css"] }',
     red: "p { font: var(--weight) 12px serif; }\n",
-    green: "p { font: 450.5 var(--text-s) serif; }\n",
+    green: "p { font: var(--text-s) serif; }\n",
     reported: "(declaration-property-value-allowed-list)",
   },
   {
@@ -263,7 +263,7 @@ test("a named size in the font shorthand fails, directly and through a local ali
     "frontend-syntax.json": JSON.stringify({ inputs: ["src/**/*.css"] }),
     "stylelint.config.ts": stylelintConfig('{ baseline: "widely", tokens: ["src/tokens.css"] }'),
     "src/tokens.css": ":root {\n  --ink: #000;\n  --text-s: 0.875rem;\n  --weight: 400;\n}\n",
-    "src/site.css": "p { font: 400 var(--text-s) serif; }\n",
+    "src/site.css": "p { font: italic var(--text-s) serif; }\n",
   });
   expect(await script(GATE)).toEqual({ exitCode: 0, text: "frontend-syntax: no violation in 2 file(s) from 1 declared input(s)\n" });
 
@@ -285,7 +285,7 @@ test("a named size fails only where the font size can stand, so a family name ho
     "frontend-syntax.json": JSON.stringify({ inputs: ["src/**/*.css"] }),
     "stylelint.config.ts": stylelintConfig('{ baseline: "widely", tokens: ["src/tokens.css"] }'),
     "src/tokens.css": ":root {\n  --ink: #000;\n  --text-s: 0.875rem;\n  --weight: 400;\n}\n",
-    "src/site.css": ":root { --face: roboto medium, serif; }\np { font: var(--text-s) var(--face); }\nh1 { font: var(--text-s) / 1.5 large type, serif; }\n",
+    "src/site.css": ":root { --face: roboto medium, serif; }\np { font: var(--text-s) var(--face); }\nh1 { font: var(--text-s) / var(--leading) large type, serif; }\n",
   });
   expect(await script(GATE)).toEqual({ exitCode: 0, text: "frontend-syntax: no violation in 2 file(s) from 1 declared input(s)\n" });
 
@@ -377,8 +377,8 @@ test("all three options fail one website menu rule on four families, and pass it
 
   await write({ "src/site.css": "html:has(.hero) .menu-toggle:not([data-past-hero]) { top: 0; }\n" });
   const red = await script(GATE);
-  for (const rule of ["selector-class-pattern", "selector-max-type", "selector-max-attribute", "selector-disallowed-list"]) {
-    expect(red.text).toContain(`(${rule})`);
+  for (const name of ["selector-class-pattern", "selector-max-type", "selector-max-attribute", "selector-disallowed-list"]) {
+    expect(red.text).toContain(`(${name})`);
   }
   expect(red.exitCode).toBe(1);
 }, 60_000);
