@@ -15,7 +15,7 @@ import { judgeLook, readLook, type FirstLooks } from "./look.ts";
 import { judgeStillness, recordMotion } from "./motion.ts";
 import { judgeNesting } from "./nesting.ts";
 import { coldShift, formatShift, judgeShift, recordShifts } from "./shift.ts";
-import { cellsAtOnce, walkCells, type Cell } from "./cells.ts";
+import { walkCells, type Cell } from "./cells.ts";
 import { attempt, launchChrome, load, openVisit, type BrowserFailure } from "./page.ts";
 import { counted, NAME, passes, report, type Run } from "./report.ts";
 import { serveSite, type Site } from "./serve.ts";
@@ -192,7 +192,6 @@ const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: D
   const hooks = declaration.hooks === undefined ? [] : yield* loadHooks(root, declaration.hooks, paths);
   const missingRoutes = paths.filter((path) => !site.files.has(path));
   const origin = yield* serveSite(site);
-  const concurrency = yield* cellsAtOnce;
   const browser = yield* launchChrome;
   const cells = visitsOf(declaration)
     .filter(({ route }) => !missingRoutes.includes(route.path))
@@ -201,10 +200,10 @@ const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: D
       return [
         { reading: Effect.map(targetsRun(visiting), settled), alone: false },
         ...declaration.checks.filter((one) => applies(one, visit, declaration)).map((check) => ({ reading: BUILT_IN[check](visiting), alone: ALONE.has(check) })),
-        ...hooks.filter((candidate) => hookApplies(candidate, visit)).map((hook) => ({ reading: Effect.map(hookRun(hook, visiting), settled), alone: false })),
+        ...hooks.filter((candidate) => hookApplies(candidate, visit)).map((hook) => ({ reading: Effect.map(hookRun(hook, visiting), settled), alone: true })),
       ];
     });
-  const settles = yield* walkCells(cells, concurrency);
+  const settles = yield* walkCells(cells, 4);
   const firstLooks: FirstLooks = new Map();
   return { runs: settles.map((settle) => settle(firstLooks)), missingRoutes };
 }, Effect.scoped);

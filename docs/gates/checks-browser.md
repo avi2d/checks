@@ -362,9 +362,9 @@ It runs `checks-browser <directory>` on that directory.
 ### Chrome and the peers
 
 It drives the Chrome the machine has, which `CHROME_PATH` names, or Chrome's standard install when it is unset.
-It runs up to four cells at once, and `CHECKS_BROWSER_CELLS` sets that cap to any whole number from 1.
-The motion check runs alone, so its findings do not depend on the pages loading beside it.
-The findings come out in the same order at any cap.
+It runs up to four checks at once, each a check at one visit.
+The motion check and each product hook run alone, so their findings do not depend on the pages loading beside them.
+The findings come out in the listed order.
 The product installs the optional peers the runner loads, at the versions the kit pins:
 
 <!-- generated install: bun run build writes it from package.json and scripts/doc-blocks.ts -->
