@@ -113,18 +113,34 @@ const CLIPS_ITS_OWN_TEXT = `function () {
   const x = clips(style.overflowX);
   const y = clips(style.overflowY);
   if (!x && !y) return false;
-  const left = this.getBoundingClientRect().left + this.clientLeft;
-  const top = this.getBoundingClientRect().top + this.clientTop;
+  const box = this.getBoundingClientRect();
+  const sx = this.offsetWidth ? box.width / this.offsetWidth : 1;
+  const sy = this.offsetHeight ? box.height / this.offsetHeight : 1;
+  const num = (v) => parseFloat(v) || 0;
+  const padLeft = box.left + num(style.borderLeftWidth) * sx;
+  const padTop = box.top + num(style.borderTopWidth) * sy;
+  const padRight = box.left + box.width - num(style.borderRightWidth) * sx;
+  const padBottom = box.top + box.height - num(style.borderBottomWidth) * sy;
   const texts = document.createTreeWalker(this, NodeFilter.SHOW_TEXT);
   for (let node = texts.nextNode(); node !== null; node = texts.nextNode()) {
     if (node.textContent.trim() === "") continue;
+    const raw = getComputedStyle(node.parentElement ?? this).lineHeight;
+    const line = raw === "normal" ? NaN : parseFloat(raw);
     const range = document.createRange();
     range.selectNodeContents(node);
     for (const rect of range.getClientRects()) {
       if (rect.width <= 0 || rect.height <= 0) continue;
+      let top = rect.top;
+      let bottom = rect.bottom;
+      if (!Number.isNaN(line)) {
+        const h = Math.min(rect.height, line * sy);
+        const mid = (rect.top + rect.bottom) / 2;
+        top = mid - h / 2;
+        bottom = mid + h / 2;
+      }
       if (
-        (x && (rect.left < left - ${EDGE_TOLERANCE_PX} || rect.right > left + this.clientWidth + ${EDGE_TOLERANCE_PX})) ||
-        (y && (rect.top < top - ${EDGE_TOLERANCE_PX} || rect.bottom > top + this.clientHeight + ${EDGE_TOLERANCE_PX}))
+        (x && (rect.left < padLeft - ${EDGE_TOLERANCE_PX} || rect.right > padRight + ${EDGE_TOLERANCE_PX})) ||
+        (y && (top < padTop - ${EDGE_TOLERANCE_PX} || bottom > padBottom + ${EDGE_TOLERANCE_PX}))
       ) return true;
     }
   }
