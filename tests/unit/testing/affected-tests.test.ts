@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
-import { narrowLocalTests, narrowTests, sharedReason, type Repository } from "../../../src/testing/affected-tests.ts";
+import { narrowLocalTests, narrowTests, sharedReason, staleReachPatterns, type Repository } from "../../../src/testing/affected-tests.ts";
 
 function repository(sources: Readonly<Record<string, string>>, extra: Partial<Repository> = {}): Repository {
-  return { files: Object.keys(sources), sources: new Map(Object.entries(sources)), bins: new Map(), self: undefined, preloads: [], ...extra };
+  return { files: Object.keys(sources), sources: new Map(Object.entries(sources)), bins: new Map(), self: undefined, preloads: [], reach: [], ...extra };
 }
 
 const TESTS = ["tests/unit/a.test.ts", "tests/unit/b.test.ts", "tests/e2e/c.test.ts"];
@@ -121,4 +121,63 @@ test("a local change to a shared file runs only the tests the change reaches and
 
 test("no local change runs no test rather than the whole suite", () => {
   expect(narrowLocalTests([], SHOP, LOCAL_TESTS)).toEqual({ files: [], shared: [] });
+});
+
+const SITE_TESTS = ["tests/e2e/hero.test.ts", "tests/e2e/menu.test.ts", "tests/e2e/footer.test.ts"];
+const SITE_SOURCES = {
+  "src/components/Hero.astro": "<section></section>\n",
+  "src/components/Footer.astro": "<footer></footer>\n",
+  "src/styles/hero.css": ".hero {}\n",
+  "src/styles/menu.css": ".menu {}\n",
+  "src/styles/tokens.css": ":root {}\n",
+  "tests/e2e/hero.test.ts": "export {};\n",
+  "tests/e2e/menu.test.ts": "export {};\n",
+  "tests/e2e/footer.test.ts": "export {};\n",
+};
+const SITE = repository(SITE_SOURCES, {
+  files: [...Object.keys(SITE_SOURCES), "bun.lock", "astro.config.ts"],
+  reach: [
+    { changed: "src/{components/Hero.astro,styles/hero.css}", tests: ["tests/e2e/hero.test.ts"] },
+    { changed: "src/styles/menu.css", tests: ["tests/e2e/menu.test.ts", "tests/e2e/hero.test.ts"] },
+    { changed: "src/components/Footer.astro", tests: ["tests/e2e/foot*.test.ts"] },
+    { changed: "{bun.lock,astro.config.ts}", tests: ["tests/e2e/hero.test.ts"] },
+  ],
+});
+
+test("a stylesheet the site's reach map names runs the tests the map gives it, not the whole suite", () => {
+  expect(narrowTests(["src/styles/hero.css"], SITE, SITE_TESTS)).toEqual({ kind: "files", files: ["tests/e2e/hero.test.ts"] });
+  expect(narrowTests(["src/styles/menu.css", "src/styles/hero.css"], SITE, SITE_TESTS)).toEqual({
+    kind: "files",
+    files: ["tests/e2e/hero.test.ts", "tests/e2e/menu.test.ts"],
+  });
+});
+
+test("a component no test imports runs the tests the reach map gives it, matched by glob, rather than no test", () => {
+  expect(narrowTests(["src/components/Hero.astro"], SITE, SITE_TESTS)).toEqual({ kind: "files", files: ["tests/e2e/hero.test.ts"] });
+  expect(narrowTests(["src/components/Footer.astro"], SITE, SITE_TESTS)).toEqual({ kind: "files", files: ["tests/e2e/footer.test.ts"] });
+});
+
+test("a stylesheet the reach map does not name still runs the whole suite beside a mapped one", () => {
+  expect(narrowTests(["src/styles/hero.css", "src/styles/tokens.css"], SITE, SITE_TESTS)).toEqual({
+    kind: "full",
+    because: "the pull request changes src/styles/tokens.css, a stylesheet",
+  });
+});
+
+test("a lockfile or a config the reach map names still runs the whole suite rather than the mapped tests", () => {
+  expect(narrowTests(["bun.lock"], SITE, SITE_TESTS)).toEqual({ kind: "full", because: "the pull request changes bun.lock, a lockfile" });
+  expect(narrowTests(["astro.config.ts"], SITE, SITE_TESTS).kind).toBe("full");
+});
+
+test("a local change to a mapped stylesheet runs its mapped tests and leaves nothing to the pull request's whole run", () => {
+  expect(narrowLocalTests(["src/styles/menu.css"], SITE, SITE_TESTS)).toEqual({
+    files: ["tests/e2e/hero.test.ts", "tests/e2e/menu.test.ts"],
+    shared: [],
+  });
+});
+
+test("a reach map test pattern that matches no test file is reported stale rather than dropping its tests silently", () => {
+  expect(staleReachPatterns(SITE)).toEqual([]);
+  const renamed = { ...SITE, reach: [...SITE.reach, { changed: "src/styles/menu.css", tests: ["tests/e2e/nav.test.ts"] }] };
+  expect(staleReachPatterns(renamed)).toEqual(["tests/e2e/nav.test.ts"]);
 });

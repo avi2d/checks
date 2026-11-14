@@ -47,6 +47,7 @@ A skipped test or a todo without `skipReason` fails in every environment.
 
 `checks-test` reads test source files and the JUnit report written by its own run.
 A pull request run also reads the event file, the git history between the base and the head, the tracked sources, `package.json` and `bunfig.toml`.
+It reads the reach map under `checks.reach` in `package.json` too, as [The reach map](#the-reach-map) says.
 A `--changed` run also reads the git history since the merge base with `origin/<default branch>`, the working tree diff and the untracked files.
 It reads the sources, `package.json` and `bunfig.toml` too, as [Changed-file runs](#changed-file-runs) says.
 It reads no skip list from `package.json`, only the smoke list.
@@ -111,6 +112,7 @@ A shared file runs the whole suite instead:
 - a test helper, which is a file under `tests/` that is neither a test nor a fixture
 - a stylesheet, a font, or a layout under `layouts/` or named `layout.*`
 
+A stylesheet, a font or a layout the reach map names runs the tests the map gives it instead, as [The reach map](#the-reach-map) says.
 A dependency bump changes `package.json` or the lockfile, so it runs the whole suite in every repository.
 A workflow under `.github/` is not a shared file, since the suite runs under it rather than reading it.
 A pull request that changes no file a test reaches runs no test and passes.
@@ -120,11 +122,37 @@ A run on any other event, such as `workflow_dispatch` for a release, runs the wh
 `--full` and the live and pixel tiers always run whole.
 A narrowed run judges only the skips the files it ran declare.
 
+## The reach map
+
+A site's end-to-end and screen tests open built pages, so they import no stylesheet and no component.
+A site declares which tests each such file reaches under `checks.reach` in `package.json`.
+Each key is a glob of changed paths, and each value lists the test files it reaches, as paths or globs:
+
+```json
+{
+  "checks": {
+    "reach": {
+      "src/styles/hero.css": ["tests/e2e/hero.test.ts"],
+      "src/components/{Nav,Menu}.astro": ["tests/e2e/menu.test.ts", "tests/e2e/hero.test.ts"]
+    }
+  }
+}
+```
+
+A changed path runs the tests every key that matches it lists, beside the tests that reach it by import, path or bin.
+A stylesheet, a font or a layout that a key matches runs only those tests, rather than the whole suite.
+A stylesheet, a font or a layout that no key matches still runs the whole suite.
+A lockfile, a config, a tool pin, a preloaded file or a test helper still runs the whole suite, even when a key matches it.
+A run on any other event, `--full` and the live and pixel tiers stay whole whatever the map says.
+A value that matches no test file stops the narrowing: a pull request run then runs the whole suite and names the value, and a `--changed` run fails with exit 2.
+So a renamed test that the map still names surfaces on the next run rather than dropping its file.
+A stylesheet that reaches a block the map does not list ships untested on the pull request, and the whole run on `main` and at release still tests it.
+
 ## Changed-file runs
 
 `checks-test --changed` runs only the unit and e2e test files the change reaches, so a desk run stays short.
 The change is every path between where `HEAD` branched from `origin/<default branch>` and `HEAD`, plus the working tree's edits and its untracked files.
-A test reaches a changed file as [Pull request runs](#pull-request-runs) says, at any depth.
+A test reaches a changed file as [Pull request runs](#pull-request-runs) and [The reach map](#the-reach-map) say, at any depth.
 A changed test file runs alone, without the rest of its tier.
 A deleted file and the old name of a renamed file still count, so a test that imports one runs.
 A quarantined, live or pixel test never runs.
@@ -192,7 +220,7 @@ It refuses test filters because every test excluded by a filter would look skipp
 | --- | --- |
 | 0 | every test passed and every skip has a matching site reason |
 | 1 | a test failed, a parallel worker crashed, a skip lacks a site reason or a declaration is stale in CI |
-| 2 | an argument is not one it takes, a run outside CI is refused, `APPROVE_SCREENS` is not a boolean in a pixel run, a declaration or the smoke list cannot be read, a smoke entry names no runnable test, `CI` is not a boolean, Bun wrote no report or a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` |
+| 2 | an argument is not one it takes, a run outside CI is refused, `APPROVE_SCREENS` is not a boolean in a pixel run, a declaration or the smoke list cannot be read, a smoke entry names no runnable test, `CI` is not a boolean, Bun wrote no report or a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` or cannot read the reach map |
 
 ## Sample output
 

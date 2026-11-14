@@ -17,12 +17,15 @@ type SelfReference = {
   readonly exports: ReadonlyMap<string, string>;
 };
 
+type ReachRule = { readonly changed: string; readonly tests: readonly string[] };
+
 export type Repository = {
   readonly files: readonly string[];
   readonly sources: ReadonlyMap<string, string>;
   readonly bins: ReadonlyMap<string, string>;
   readonly self: SelfReference | undefined;
   readonly preloads: readonly string[];
+  readonly reach: readonly ReachRule[];
 };
 
 const FIXTURES = "tests/fixtures/";
@@ -47,20 +50,50 @@ const BUILT = "the build";
 const basenameOf = (path: string): string => path.slice(path.lastIndexOf("/") + 1);
 const directoryNode = (directory: string): string => directory + "/";
 
-export function sharedReason(path: string, preloads: ReadonlySet<string>): string | undefined {
-  if (path.startsWith(FIXTURES)) return undefined;
+// A site's reach map cannot lift these, since every test runs under them whichever page it opens.
+function runnerReason(path: string, preloads: ReadonlySet<string>): string | undefined {
   const name = basenameOf(path);
-  const directories = path.split("/").slice(0, -1);
   if (LOCKFILES.has(name)) return "a lockfile";
   if ((classifyPath(path) === "workflow" && !path.startsWith(WORKFLOWS)) || CONFIG.test(name) || TOOL_PINS.has(name)) {
     return "a config every test runs under";
   }
   if (preloads.has(path)) return "a file Bun preloads into every test";
   if (path.startsWith(TEST_TREE) && !TEST_FILE.test(path)) return "a test helper";
+  return undefined;
+}
+
+function renderedReason(path: string): string | undefined {
+  const name = basenameOf(path);
+  const directories = path.split("/").slice(0, -1);
   if (STYLESHEET.test(name)) return "a stylesheet";
   if (FONT.test(name) || directories.includes("fonts")) return "a font";
   if (directories.includes("layouts") || LAYOUT.test(name)) return "a layout";
   return undefined;
+}
+
+export function sharedReason(path: string, preloads: ReadonlySet<string>): string | undefined {
+  if (path.startsWith(FIXTURES)) return undefined;
+  return runnerReason(path, preloads) ?? renderedReason(path);
+}
+
+const globMatches = (pattern: string, path: string): boolean => new Bun.Glob(pattern).match(path);
+
+function testFilesOf(repository: Repository): readonly string[] {
+  return repository.files.filter((file) => TEST_FILE.test(file));
+}
+
+// Undefined when no rule names the path, so the path keeps the shared-file rule.
+function mappedTests(path: string, repository: Repository): readonly string[] | undefined {
+  const rules = repository.reach.filter((rule) => globMatches(rule.changed, path));
+  if (rules.length === 0) return undefined;
+  const patterns = rules.flatMap((rule) => rule.tests);
+  return testFilesOf(repository).filter((file) => patterns.some((pattern) => globMatches(pattern, file)));
+}
+
+// A test pattern that matches no test file would silently drop the tests a renamed file used to name.
+export function staleReachPatterns(repository: Repository): readonly string[] {
+  const tests = testFilesOf(repository);
+  return repository.reach.flatMap((rule) => rule.tests.filter((pattern) => !tests.some((file) => globMatches(pattern, file))));
 }
 
 // A path mentioned by any trailing run of two or more of its segments, or in full, names it.
@@ -206,20 +239,25 @@ export function narrowLocalTests(changed: readonly string[], repository: Reposit
 function sharedChanges(changed: readonly string[], repository: Repository): readonly SharedChange[] {
   const preloads = preloadClosure(repository);
   return changed.flatMap((path) => {
-    const reason = sharedReason(path, preloads);
+    if (path.startsWith(FIXTURES)) return [];
+    const reason = mappedTests(path, repository) === undefined ? sharedReason(path, preloads) : runnerReason(path, preloads);
     return reason === undefined ? [] : [{ path, reason }];
   });
 }
 
 function reachedTests(changed: readonly string[], repository: Repository, tests: readonly string[]): readonly string[] {
   const reached = reach(graphOf(repository, changed), changed, repository.sources);
-  return tests.filter((test) => reached.has(test));
+  const mapped = new Set(changed.flatMap((path) => mappedTests(path, repository) ?? []));
+  return tests.filter((test) => reached.has(test) || mapped.has(test));
 }
 
 const Manifest = Schema.Struct({
   name: Schema.optionalKey(Schema.String),
   exports: Schema.optionalKey(Schema.Unknown),
   bin: Schema.optionalKey(Schema.Union([Schema.String, Schema.Record(Schema.String, Schema.String)])),
+  checks: Schema.optionalKey(Schema.Struct({
+    reach: Schema.optionalKey(Schema.Record(Schema.NonEmptyString, Schema.Array(Schema.NonEmptyString))),
+  })),
 });
 const decodeManifest = Schema.decodeUnknownEffect(Schema.fromJsonString(Manifest));
 
@@ -248,13 +286,19 @@ const readRepository = Effect.fn("readRepository")(function* (root: string) {
         Effect.flatMap(decodeBunfig),
       )
     : {};
-  return {
+  const repository = {
     files,
     sources,
     bins: binsOf(manifest),
     self: manifest.name === undefined ? undefined : { name: manifest.name, exports: exportsMap(manifest.exports) },
     preloads: preloadPaths(bunfig),
+    reach: Object.entries(manifest.checks?.reach ?? {}).map(([changed, tests]) => ({ changed, tests })),
   } satisfies Repository;
+  const stale = staleReachPatterns(repository);
+  if (stale.length > 0) {
+    return yield* new NarrowingError({ message: "package.json: checks.reach names " + stale.join(", ") + ", which matches no test file, so fix or remove it" });
+  }
+  return repository;
 });
 
 const pullRequestEvent = Config.all({
