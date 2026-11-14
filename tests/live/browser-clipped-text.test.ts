@@ -65,7 +65,7 @@ test("layout ignores text a descendant already clips", async () => {
 }, 120_000);
 
 test("layout reports shadow, scroll, static, clip, indent and perspective cuts", async () => {
-  const SHADOW_CLIP = `<script>customElements.define("x-clip", class extends HTMLElement { constructor() { super(); this.attachShadow({ mode: "open" }).innerHTML = "<span style='white-space: nowrap'>Contact the owner of the site</span>"; } });</` + `script>`;
+  const SHADOW_CLIP = `<script>customElements.define("x-clip", class extends HTMLElement { constructor() { super(); this.attachShadow({ mode: "open" }).innerHTML = "<span style='white-space: nowrap'>Contact the owner of the site</span>"; } });</script>`;
   const pages = {
     "shadow-clip.html": page(`<p><x-clip style="display: inline-block; width: 40px; height: 20px; overflow: hidden; white-space: nowrap"></x-clip></p>${SHADOW_CLIP}`),
     "auto-clip.html": page(`<p><a href="/" style="display: inline-block; width: 40px; overflow: auto; white-space: nowrap">Contact the owner with a long label</a></p>`),

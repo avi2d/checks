@@ -55,6 +55,9 @@ A control the pointer cannot reach, such as a skip link parked off the screen, i
 Text that is not rendered includes `display: none`, `hidden`, the options of a closed `<select>` and a closed `<details>`.
 An element with `display: contents`, such as a framework island, has no box of its own but its content renders, so its text is judged.
 Transparent, zero-size, `visibility: hidden` and zero-opacity text still fail.
+`layout` reports clips its own text only where letters pass the padding box on an axis the target clips.
+Overflow from content other than text passes.
+Text that spills from a box that leaves overflow visible passes.
 A `focusable` target parked off the screen or clipped until it is focused, such as a skip link, is left to `keyboard`.
 The `layout` inventory counts it as parked until focused.
 
