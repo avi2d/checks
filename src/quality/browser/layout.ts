@@ -117,6 +117,22 @@ const CLIPS_ITS_OWN_TEXT = `function () {
   const sx = this.offsetWidth ? box.width / this.offsetWidth : 1;
   const sy = this.offsetHeight ? box.height / this.offsetHeight : 1;
   const num = (v) => parseFloat(v) || 0;
+  const cb = (s, fx) => {
+    if (!fx && s.position !== "static") return true;
+    if (s.transform !== "none") return true;
+    if (s.perspective !== "none") return true;
+    if (s.filter !== "none") return true;
+    if (s.backdropFilter !== "none") return true;
+    if (s.translate !== "none") return true;
+    if (s.rotate !== "none") return true;
+    if (s.scale !== "none") return true;
+    const cn = s.contain || "";
+    if (cn.indexOf("paint") !== -1 || cn.indexOf("layout") !== -1 || cn === "strict" || cn === "content") return true;
+    const wc = s.willChange || "";
+    if (wc.indexOf("transform") !== -1 || wc.indexOf("perspective") !== -1 || wc.indexOf("filter") !== -1 || wc.indexOf("translate") !== -1 || wc.indexOf("rotate") !== -1 || wc.indexOf("scale") !== -1 || wc.indexOf("contain") !== -1) return true;
+    if ((s.containerType || "").indexOf("size") !== -1) return true;
+    return false;
+  };
   const padLeft = box.left + num(style.borderLeftWidth) * sx;
   const padTop = box.top + num(style.borderTopWidth) * sy;
   const padRight = box.left + box.width - num(style.borderRightWidth) * sx;
@@ -170,14 +186,17 @@ const CLIPS_ITS_OWN_TEXT = `function () {
           continue;
         }
         const s = getComputedStyle(at);
-        const pp = s.position;
-        const tr = s.transform;
-        if (fixSeek) {
-          if (tr !== "none") fixSeek = false;
-        } else if (absSeek) {
-          if (pp !== "static" || tr !== "none") absSeek = false;
+        if (s.display === "contents") {
+          at = flatParent(at);
+          continue;
         }
-        if (!fixSeek && !absSeek && s.display !== "contents") {
+        const pp = s.position;
+        if (fixSeek) {
+          if (cb(s, true)) fixSeek = false;
+        } else if (absSeek) {
+          if (cb(s, false)) absSeek = false;
+        }
+        if (!fixSeek && !absSeek) {
           const cp = s.clipPath;
           if (cp && cp !== "none") { empty = true; break; }
           const cc = s.clip;
@@ -224,11 +243,11 @@ const CLIPS_ITS_OWN_TEXT = `function () {
       }
       if (empty) continue;
       if (absSeek || fixSeek) {
-        const tp = style.position;
-        const tt = style.transform;
-        const isCB = fixSeek ? (tt !== "none") : (tp !== "static" || tt !== "none");
+        const isCB = fixSeek ? cb(style, true) : cb(style, false);
         if (!isCB) continue;
       }
+      const ti = parseFloat(getComputedStyle(node.parentElement ?? this).textIndent) || 0;
+      if (ti < 0 && (r < padLeft - ${EDGE_TOLERANCE_PX} || l > padRight + ${EDGE_TOLERANCE_PX} || b < padTop - ${EDGE_TOLERANCE_PX} || t > padBottom + ${EDGE_TOLERANCE_PX})) continue;
       if (
         (x && (l < padLeft - ${EDGE_TOLERANCE_PX} || r > padRight + ${EDGE_TOLERANCE_PX})) ||
         (y && (t < padTop - ${EDGE_TOLERANCE_PX} || b > padBottom + ${EDGE_TOLERANCE_PX}))

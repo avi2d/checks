@@ -70,16 +70,18 @@ test("layout reports shadow text and scrollable overflow", async () => {
     "shadow-clip.html": page(`<p><x-clip style="display: inline-block; width: 40px; height: 20px; overflow: hidden; white-space: nowrap"></x-clip></p>${SHADOW_CLIP}`),
     "auto-clip.html": page(`<p><a href="/" style="display: inline-block; width: 40px; overflow: auto; white-space: nowrap">Contact the owner with a long label</a></p>`),
     "static-cut.html": page(`<p><a href="/" style="display: inline-block; overflow: hidden; width: 40px; white-space: nowrap"><span>Contact the owner with a long label</span></a></p>`),
+    "perspective.html": page(`<p><a href="/" style="display: inline-block; overflow: hidden; width: 60px; height: 20px; white-space: nowrap"><span style="display: block; perspective: 1px"><span style="position: absolute; white-space: nowrap">Contact the owner with a long label</span></span></a></p>`),
   };
   const site = await browserSite({
     ...sitePages(pages),
-    "browser-checks.json": declaration({ routes: routesOf(pages), targets: [{ name: "link", selector: "main a", routes: ["/auto-clip.html", "/static-cut.html"] }, { name: "clip", selector: "main x-clip", routes: ["/shadow-clip.html"] }], checks: ["layout"] }),
+    "browser-checks.json": declaration({ routes: routesOf(pages), targets: [{ name: "link", selector: "main a", routes: ["/auto-clip.html", "/static-cut.html", "/perspective.html"] }, { name: "clip", selector: "main x-clip", routes: ["/shadow-clip.html"] }], checks: ["layout"] }),
   });
   const failed = await site.run();
   const failures = failuresOf(failed.text);
   expect(failures.filter((line) => line.startsWith(at("layout", "/auto-clip.html")) && line.includes("clips its own text"))).not.toEqual([]);
   expect(failures.filter((line) => line.startsWith(at("layout", "/shadow-clip.html")) && line.includes("clips its own text"))).not.toEqual([]);
   expect(failures.filter((line) => line.startsWith(at("layout", "/static-cut.html")) && line.includes("clips its own text"))).not.toEqual([]);
+  expect(failures.filter((line) => line.startsWith(at("layout", "/perspective.html")) && line.includes("clips its own text"))).not.toEqual([]);
   expect(failed.exitCode).toBe(1);
 }, 120_000);
 
@@ -87,7 +89,9 @@ test("layout leaves escaped and clipped-hidden text silent", async () => {
   const SR = "position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;";
   const pages = {
     "abs-escape.html": page(`<p><a href="/" style="display: inline-block; overflow: hidden; width: 40px; height: 20px">Hi<span style="display: block; overflow: hidden"><span style="position: absolute; left: 100px; white-space: nowrap">A tooltip shown in full</span></span></a></p>`),
-    "sr-link.html": page(`<p><a href="/" style="display: inline-block; overflow: hidden; width: 40px; height: 40px"><span style="${SR}">Close the navigation menu with extra words</span></a></p>`),
+    "sr-link.html": page(`<p><a href="/" style="position: relative; display: inline-block; overflow: hidden; width: 40px; height: 40px"><span style="${SR}">Close the navigation menu with extra words</span></a></p>`),
+    "clip-hidden.html": page(`<p><a href="/" style="position: relative; display: inline-block; overflow: hidden; width: 40px; height: 40px"><span style="position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;">Close the navigation menu with extra words</span></a></p>`),
+    "indent.html": page(`<p><a href="/" style="display: block; overflow: hidden; width: 40px; text-indent: -9999px; white-space: nowrap">Contact the owner with a long label</a></p>`),
   };
   const site = await browserSite({
     ...sitePages(pages),
