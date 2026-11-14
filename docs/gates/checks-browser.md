@@ -281,11 +281,12 @@ A declaration that sets `hooks` while every state names its own `checks` is refu
 
 A viewport `{ "preset": "anchor" }` stands for the anchor set of screen sizes, and `{ "preset": "full" }` for the full set.
 The full set holds the anchors and eleven more sizes.
-A product runs the anchor set on every pull request and the full set on a run started by hand.
+A product runs the anchor set on every pull request and the full set on every other run.
 Each size in a set is a viewport named for its device and its size, with `device` set, and each phone also sets `touch`.
 A preset sits beside a product's own viewports.
 A name both declare is refused as declared twice, and so is a size that two listed presets both hold.
-A product's own code takes the sizes by importing `SCREEN_SIZES`, `screenSizeName` and `ENLARGED_TEXT_PX` from `@avi2dg/checks/screen-sizes.ts`.
+A product's own code takes the sizes by importing `SCREEN_SIZES`, `screenSizeName`, `screenSetFor` and `ENLARGED_TEXT_PX` from `@avi2dg/checks/screen-sizes.ts`.
+`screenSetFor` takes the run's `GITHUB_EVENT_NAME` and returns the name of the set to walk, the key of `SCREEN_SIZES`.
 A block's screenshot suite runs at the same sizes, as [Test the screens of one block](../how-to/test-a-blocks-screens.md) says.
 
 <!-- generated screen-sizes: bun run build writes it from SCREEN_SIZES in src/quality/browser/screen-sizes.ts and scripts/doc-blocks.ts -->
