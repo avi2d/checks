@@ -105,10 +105,14 @@ const READ_LOOK = `(roles) => {
     if (style.visibility !== "visible") return false;
     const range = document.createRange();
     range.selectNodeContents(node);
-    let rects = [...range.getClientRects()].map((rect) => clip(rect, { left: -scrollX, top: -scrollY, right: scrollWidth - scrollX, bottom: scrollHeight - scrollY }));
+    let rects = [...range.getClientRects()];
+    let pageClipsX = true;
+    let pageClipsY = true;
     for (let at = owner; at; at = at.parentElement) {
       const around = getComputedStyle(at);
       if (around.opacity === "0") return false;
+      if (["auto", "scroll"].includes(around.overflowX)) pageClipsX = false;
+      if (["auto", "scroll"].includes(around.overflowY)) pageClipsY = false;
       const clipX = ["hidden", "clip"].includes(around.overflowX);
       const clipY = ["hidden", "clip"].includes(around.overflowY);
       const mask = around.clipPath !== "none" || around.clip !== "auto";
@@ -122,6 +126,13 @@ const READ_LOOK = `(roles) => {
         }));
       }
     }
+    const page = { left: -scrollX, top: -scrollY, right: scrollWidth - scrollX, bottom: scrollHeight - scrollY };
+    rects = rects.map((rect) => ({
+      left: pageClipsX ? Math.max(rect.left, page.left) : rect.left,
+      top: pageClipsY ? Math.max(rect.top, page.top) : rect.top,
+      right: pageClipsX ? Math.min(rect.right, page.right) : rect.right,
+      bottom: pageClipsY ? Math.min(rect.bottom, page.bottom) : rect.bottom,
+    }));
     return rects.some((rect) => rect.right - rect.left > 1 && rect.bottom - rect.top > 1);
   };
   const describe = (owner) => {

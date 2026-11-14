@@ -53,6 +53,17 @@ test("look refuses a role drifting in line height from another page, text no rol
   expect(failed.exitCode).toBe(1);
 }, 120_000);
 
+test("look judges text below a fixed panel fold instead of skipping it as parked", async () => {
+  const site = await browserSite({
+    "dist/index.html": styled("<h1>Contracts</h1><div class=\"panel\"><p>Top note.</p><div style=\"height: 1200px\"></div><p>Deep note.</p></div>", ".panel { height: 100vh; overflow-y: auto; overflow-x: hidden; }"),
+    "browser-checks.json": declaration({ targets: [{ name: "headline", selector: "h1" }], checks: ["look"], roles: ROLES }),
+  });
+  const passed = await site.run();
+  expect(failuresOf(passed.text)).toEqual([]);
+  expect(passed.text).toContain(`scanned title 1, body 2, 9 token(s)`);
+  expect(passed.exitCode).toBe(0);
+}, 120_000);
+
 test("look compares a role within one viewport, so body text a token enlarges on a wide screen is not drift", async () => {
   const site = await browserSite({
     "dist/index.html": styled("<h1>Contracts</h1><p>Five years of practice.</p>", "@media (width >= 600px) { :root { --text-body: 1.25rem; } }"),
