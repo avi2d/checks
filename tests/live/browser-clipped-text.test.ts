@@ -64,7 +64,7 @@ test("layout ignores text a descendant already clips", async () => {
   expect(passed.exitCode).toBe(0);
 }, 120_000);
 
-test("layout reports text its box really cuts in horizontal and vertical writing", async () => {
+test("layout reports cuts a y-only line trim would miss in vertical text", async () => {
   const SHADOW_CLIP = `<script>customElements.define("x-clip", class extends HTMLElement { constructor() { super(); this.attachShadow({ mode: "open" }).innerHTML = "<span style='white-space: nowrap'>Contact the owner of the site</span>"; } });</` + `script>`;
   const pages = {
     "shadow-clip.html": page(`<p><x-clip style="display: inline-block; width: 40px; height: 20px; overflow: hidden; white-space: nowrap"></x-clip></p>${SHADOW_CLIP}`),
