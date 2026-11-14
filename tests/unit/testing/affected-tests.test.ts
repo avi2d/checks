@@ -1,5 +1,14 @@
 import { expect, test } from "bun:test";
-import { narrowLocalTests, narrowTests, sharedReason, staleReachPatterns, type Repository } from "../../../src/testing/affected-tests.ts";
+import { Schema } from "effect";
+import {
+  Manifest,
+  narrowLocalTests,
+  narrowTests,
+  refuseReachMap,
+  sharedReason,
+  staleReachPatterns,
+  type Repository,
+} from "../../../src/testing/affected-tests.ts";
 
 function repository(sources: Readonly<Record<string, string>>, extra: Partial<Repository> = {}): Repository {
   return { files: Object.keys(sources), sources: new Map(Object.entries(sources)), bins: new Map(), self: undefined, preloads: [], reach: [], ...extra };
@@ -206,14 +215,14 @@ test("a stale reach value runs the whole local suite rather than failing the des
   });
 });
 
-test("an empty reach list runs the whole suite rather than no test", () => {
-  const empty = { ...SITE, reach: [...SITE.reach, { changed: "src/styles/print.css", tests: [] }] };
-  expect(narrowTests(["src/styles/print.css"], empty, SITE_TESTS)).toEqual({
-    kind: "full",
-    because: "package.json: checks.reach lists no test file for src/styles/print.css",
-  });
-  expect(narrowLocalTests(["src/styles/print.css"], empty, SITE_TESTS)).toEqual({
-    kind: "full",
-    because: "package.json: checks.reach lists no test file for src/styles/print.css",
-  });
+test("an empty reach list is refused rather than running no test", () => {
+  const manifest = Schema.decodeUnknownSync(Schema.fromJsonString(Manifest))(
+    '{"checks":{"reach":{"src/styles/print.css":[]}}}',
+  );
+  expect(refuseReachMap(manifest.checks?.reach)).toBe("package.json: checks.reach lists no test file for src/styles/print.css");
+});
+
+test("an empty reach key is refused rather than vanishing silently", () => {
+  const manifest = Schema.decodeUnknownSync(Schema.fromJsonString(Manifest))('{"checks":{"reach":{"":["tests/e2e/x.test.ts"]}}}');
+  expect(refuseReachMap(manifest.checks?.reach)).toBe("package.json: checks.reach has an empty changed-path key");
 });

@@ -92,8 +92,18 @@ function mappedTests(path: string, repository: Repository): readonly string[] | 
   return testFilesOf(repository).filter((file) => patterns.some((pattern) => globMatches(pattern, file)));
 }
 
-function refusedReachKeys(repository: Repository): readonly string[] {
-  return repository.reach.filter((rule) => rule.tests.length === 0).map((rule) => rule.changed);
+export function refuseReachMap(reach: unknown): string | undefined {
+  if (reach === undefined) return undefined;
+  if (typeof reach !== "object" || reach === null || Array.isArray(reach)) {
+    return "package.json: checks.reach is not a map of changed paths to test files";
+  }
+  for (const [key, value] of Object.entries(reach)) {
+    if (key === "") return "package.json: checks.reach has an empty changed-path key";
+    if (!Array.isArray(value) || value.length === 0) return `package.json: checks.reach lists no test file for ${key}`;
+    const bad = value.find((entry) => typeof entry !== "string" || entry === "");
+    if (bad !== undefined) return `package.json: checks.reach names an empty test file for ${key}`;
+  }
+  return undefined;
 }
 
 // A test pattern that matches no test file would silently drop the tests a renamed file used to name.
@@ -233,15 +243,15 @@ function preloadClosure(repository: Repository): ReadonlySet<string> {
 
 // A test or its helper reads a file it imports or names by path or bin, and a source reads only what it imports, at any depth.
 // A source that names a path, as a registry does, would make every importer read every file it lists.
-export function narrowTests(changed: readonly string[], repository: Repository, tests: readonly string[]): Narrowing {
-  const refused = refusedReachKeys(repository);
-  if (refused.length > 0) {
-    return { kind: "full", because: `package.json: checks.reach lists no test file for ${refused.join(", ")}` };
-  }
+function reachMapProblem(repository: Repository): string | undefined {
   const stale = staleReachPatterns(repository);
-  if (stale.length > 0) {
-    return { kind: "full", because: `package.json: checks.reach names ${stale.map((entry) => `${entry.pattern} for ${entry.changed}`).join(", ")}, which matches no test file` };
-  }
+  if (stale.length === 0) return undefined;
+  return `package.json: checks.reach names ${stale.map((entry) => `${entry.pattern} for ${entry.changed}`).join(", ")}, which matches no test file`;
+}
+
+export function narrowTests(changed: readonly string[], repository: Repository, tests: readonly string[]): Narrowing {
+  const problem = reachMapProblem(repository);
+  if (problem !== undefined) return { kind: "full", because: problem };
   if (changed.length === 0) return { kind: "full", because: "the pull request changes no file" };
   const [shared] = sharedChanges(changed, repository);
   if (shared !== undefined) return { kind: "full", because: `the pull request changes ${shared.path}, ${shared.reason}` };
@@ -249,14 +259,8 @@ export function narrowTests(changed: readonly string[], repository: Repository, 
 }
 
 export function narrowLocalTests(changed: readonly string[], repository: Repository, tests: readonly string[]): LocalNarrowing {
-  const refused = refusedReachKeys(repository);
-  if (refused.length > 0) {
-    return { kind: "full", because: `package.json: checks.reach lists no test file for ${refused.join(", ")}` };
-  }
-  const stale = staleReachPatterns(repository);
-  if (stale.length > 0) {
-    return { kind: "full", because: `package.json: checks.reach names ${stale.map((entry) => `${entry.pattern} for ${entry.changed}`).join(", ")}, which matches no test file` };
-  }
+  const problem = reachMapProblem(repository);
+  if (problem !== undefined) return { kind: "full", because: problem };
   return { kind: "files", files: reachedTests(changed, repository, tests), shared: sharedChanges(changed, repository) };
 }
 
@@ -275,17 +279,21 @@ function reachedTests(changed: readonly string[], repository: Repository, tests:
   return tests.filter((test) => reached.has(test) || mapped.has(test));
 }
 
-const Manifest = Schema.Struct({
+export const Manifest = Schema.Struct({
   name: Schema.optionalKey(Schema.String),
   exports: Schema.optionalKey(Schema.Unknown),
   bin: Schema.optionalKey(Schema.Union([Schema.String, Schema.Record(Schema.String, Schema.String)])),
   checks: Schema.optionalKey(Schema.Struct({
-    reach: Schema.optionalKey(Schema.Record(Schema.NonEmptyString, Schema.NonEmptyArray(Schema.NonEmptyString))),
+    reach: Schema.optionalKey(Schema.Unknown),
   })),
 });
 const decodeManifest = Schema.decodeUnknownEffect(Schema.fromJsonString(Manifest));
 
 class NarrowingError extends Schema.TaggedError<NarrowingError>()("NarrowingError", {
+  message: Schema.String,
+}) {}
+
+export class ReachMapError extends Schema.TaggedError<ReachMapError>()("ReachMapError", {
   message: Schema.String,
 }) {}
 
@@ -303,25 +311,23 @@ const readRepository = Effect.fn("readRepository")(function* (root: string) {
   const read = (file: string) => fs.readFileString(path.join(root, file)).pipe(Effect.orElseSucceed(() => ""));
   const sources = new Map(yield* Effect.forEach(files.filter((file) => SOURCE_FILE.test(file)), (file) =>
     read(file).pipe(Effect.map((text) => [file, text] as const)), { concurrency: 16 }));
-  const manifest = files.includes("package.json")
-    ? yield* read("package.json").pipe(
-        Effect.flatMap(decodeManifest),
-        Effect.mapError((cause) => new NarrowingError({ message: "package.json: " + String((cause as { message?: unknown }).message ?? cause) })),
-      )
-    : {};
+  const manifest = files.includes("package.json") ? yield* read("package.json").pipe(Effect.flatMap(decodeManifest)) : {};
   const bunfig = files.includes("bunfig.toml")
     ? yield* read("bunfig.toml").pipe(
         Effect.flatMap((text) => Effect.try({ try: (): unknown => Bun.TOML.parse(text), catch: (cause) => new NarrowingError({ message: "cannot parse bunfig.toml: " + String(cause) }) })),
         Effect.flatMap(decodeBunfig),
       )
     : {};
+  const refusal = refuseReachMap(manifest.checks?.reach);
+  if (refusal !== undefined) return yield* new ReachMapError({ message: refusal });
+  const rawReach = manifest.checks?.reach as Record<string, ReadonlyArray<string>>;
   return {
     files,
     sources,
     bins: binsOf(manifest),
     self: manifest.name === undefined ? undefined : { name: manifest.name, exports: exportsMap(manifest.exports) },
     preloads: preloadPaths(bunfig),
-    reach: Object.entries(manifest.checks?.reach ?? {}).map(([changed, tests]) => ({ changed, tests })),
+    reach: Object.entries(rawReach ?? {}).map(([changed, tests]) => ({ changed, tests })),
   } satisfies Repository;
 });
 
@@ -333,7 +339,7 @@ const pullRequestEvent = Config.all({
 export const readLocalNarrowing = Effect.fn("readLocalNarrowing")(function* (root: string, changed: readonly string[], tests: readonly string[]) {
   return yield* Effect.gen(function* () {
     return narrowLocalTests(changed, yield* readRepository(root), tests);
-  }).pipe(Effect.catchTag("NarrowingError", (cause) => Effect.succeed<LocalNarrowing>({ kind: "full", because: cause.message })));
+  }).pipe(Effect.catchTag("ReachMapError", (cause) => Effect.succeed<LocalNarrowing>({ kind: "full", because: cause.message })));
 });
 
 // Only a pull_request run has a base to diff against; every other run keeps the suite whole.
@@ -348,6 +354,7 @@ export const readPullRequestNarrowing = Effect.fn("readPullRequestNarrowing")(fu
     return narrowTests(changed, yield* readRepository(root), tests);
   });
   return Option.some(yield* narrowing.pipe(
+    Effect.catchTag("ReachMapError", (cause) => Effect.succeed<Narrowing>({ kind: "full", because: cause.message })),
     Effect.catchTag("NarrowingError", (cause) => Effect.succeed<Narrowing>({ kind: "full", because: cause.message })),
     Effect.catch((cause) => Effect.succeed<Narrowing>({ kind: "full", because: "the pull request's changes cannot be read: " + String((cause as { message?: unknown }).message ?? cause) })),
   ));
