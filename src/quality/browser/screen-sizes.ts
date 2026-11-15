@@ -41,6 +41,10 @@ export type ScreenSizeSet = (typeof SCREEN_SIZE_SETS)[number];
 
 export const SCREEN_SIZES: Readonly<Record<ScreenSizeSet, NonEmptyReadonlyArray<ScreenSize>>> = { anchor: ANCHOR, full: [...ANCHOR, ...NIGHTLY] };
 
+export function screenSetFor(eventName: string | undefined): ScreenSizeSet {
+  return eventName === "pull_request" ? "anchor" : "full";
+}
+
 export function screenSizeName({ device, width, height }: ScreenSize): string {
   return `${device}-${width}x${height}`;
 }
