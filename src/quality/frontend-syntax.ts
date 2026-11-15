@@ -2,11 +2,12 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
 import type { Config, LinterOptions, LintResult } from "stylelint";
 import { declaredGate, emptyInputs, inputsReport, violationLine, type Declared, type Input, type Violation } from "../core/declared-inputs.ts";
+import { FRONTEND_SYNTAX_DECLARATION } from "../core/gates.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { SETTINGS_FILE } from "../core/settings.ts";
 import { MARKUP } from "./presets/stylelint.ts";
 
-const DECLARED: Declared = { name: "frontend-syntax", setting: "frontendSyntax", oldFile: "frontend-syntax.json", declares: "inputs" };
+const DECLARED: Declared = { name: "frontend-syntax", ...FRONTEND_SYNTAX_DECLARATION, declares: "inputs" };
 
 const STYLELINT_CONFIG = "stylelint.config.ts";
 

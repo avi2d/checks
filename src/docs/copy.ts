@@ -1,11 +1,12 @@
 #!/usr/bin/env bun
 import { Effect, FileSystem, Path, Schema } from "effect";
 import { emptyInputs, inputsReport, runDeclaredGate, violationLine, type Declared, type Input, type Violation } from "../core/declared-inputs.ts";
+import { COPY_DECLARATION } from "../core/gates.ts";
 import { Usage } from "../core/main.ts";
 import { SETTINGS_FILE } from "../core/settings.ts";
 import { markdownFindings } from "./copy-text.ts";
 
-const DECLARED: Declared = { name: "copy", setting: "copy", oldFile: "copy.json", declares: "copy" };
+const DECLARED: Declared = { name: "copy", ...COPY_DECLARATION, declares: "copy" };
 
 const MARKDOWN = ".md";
 const HTML = ".html";

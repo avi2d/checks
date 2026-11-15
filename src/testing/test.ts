@@ -5,7 +5,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { TEST_ENTRY_POINT } from "../core/gates.ts";
 import { collect } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
-import { readSetting, SETTINGS_FILE, Smoke } from "../core/settings.ts";
+import { readSetting, refuseOldPlace, SETTINGS_FILE, Smoke } from "../core/settings.ts";
 import { testOptions, type TestOptions, type TestTier } from "../core/test-script.ts";
 import { readRunScope } from "../core/pull-request-scope.ts";
 import { readChangedNarrowing, readLocalNarrowing } from "./affected-tests.ts";
@@ -320,6 +320,8 @@ const testEntry = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const environment = yield* environmentOf;
+  yield* refuseOldPlace(process.cwd(), "smoke", { manifestKey: "smoke" });
+  yield* refuseOldPlace(process.cwd(), "reach", { manifestKey: "reach" });
   const refusal =
     run === "pr" ? pullRequestRunRefusal(environment) : heavyRunRefusal(options, environment, options.tier === "pixel" && (yield* approvingScreens));
   if (refusal !== undefined) return yield* new RunRefusal({ message: refusal });

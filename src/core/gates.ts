@@ -48,11 +48,11 @@ const BUN_LOCKFILE: TrackedContent = { pathspecs: ["bun.lock"], content: "a bun 
 
 const OXLINT_CONFIG: TrackedContent = { pathspecs: ["oxlint.config.ts"], content: "an oxlint.config.ts" };
 
-const FRONTEND_SYNTAX_DECLARATION: DeclaredSetting = { setting: "frontendSyntax", oldFile: "frontend-syntax.json" };
+export const FRONTEND_SYNTAX_DECLARATION: DeclaredSetting = { setting: "frontendSyntax", oldFile: "frontend-syntax.json" };
 
 const STYLESHEET: TrackedContent = { pathspecs: ["*.css"], content: "a stylesheet" };
 
-const COPY_DECLARATION: DeclaredSetting = { setting: "copy", oldFile: "copy.json" };
+export const COPY_DECLARATION: DeclaredSetting = { setting: "copy", oldFile: "copy.json" };
 
 const NO_MISTAKES_CONFIG: TrackedContent = { pathspecs: [".no-mistakes.yaml"], content: "a no-mistakes config" };
 

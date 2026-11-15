@@ -32,13 +32,6 @@ export const KNIP_CONFIG = [
   "",
 ].join("\n");
 
-export const SETTINGS_CONFIG = [
-  "import { defineConfig } from \"@avi2dg/checks/config\";",
-  "",
-  "export default defineConfig({});",
-  "",
-].join("\n");
-
 export const JSCPD_CONFIG = [
   "{",
   "  \"path\": [\"src\"],",

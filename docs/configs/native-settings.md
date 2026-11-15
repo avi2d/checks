@@ -4,7 +4,7 @@ audience: consumers
 ---
 # Native settings
 
-A consuming repository puts each setting in the file its tool reads, and no manifest of the kit gathers them.
+A consuming repository puts each setting in the file its tool reads, and checks.config.ts gathers the settings no tool file owns.
 
 ## Settings by file
 
@@ -90,7 +90,8 @@ export default defineConfig({ baseline: "widely", tokens: false });
 
 ## The settings file
 
-`checks.config.ts` holds the settings the kit reads that no tool file owns, and `checks-setup` writes it.
+`checks.config.ts` holds the settings the kit reads that no tool file owns.
+A repository creates `checks.config.ts` only when it declares a setting, and a missing file reads as no settings.
 Its default export is the result of `defineConfig` from `@avi2dg/checks/config`, and every key is optional:
 
 ```ts
@@ -114,8 +115,8 @@ export default defineConfig({
 
 A key the kit does not know fails the reading gate.
 A setting left in its old place fails its gate with exit 2 and a message naming the key it moves to.
-One old place is the `checks` object of `package.json`, which held `smoke`, `reach`, `mutationRunner` and `selfHostedRunners`.
-The others are `browser-checks.json`, `copy.json` and `frontend-syntax.json` at the root.
+A `checks` object in `package.json` that sets `smoke`, `reach`, `mutationRunner` or `selfHostedRunners` fails the gate that reads that key with exit 2.
+A root `browser-checks.json`, `copy.json` or `frontend-syntax.json` fails the gate that reads that key with exit 2.
 `advisory-acks.json` stays a file of its own, since [checks-advisories](../gates/checks-advisories.md) reads it at a commit rather than from the working tree.
 
 `tsconfig.json` keeps the config files in its program, so `bun run typecheck` holds them to the builders' types.
