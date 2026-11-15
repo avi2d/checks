@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.102.0
+
+Released 2026-11-15.
+
+### Features
+
+- **delivery:** tell a site by its callers and pass the site names as inputs [#154](https://github.com/avi2d/checks/pull/154)
+
 ## 0.101.2
 
 Released 2026-11-15.
