@@ -55,7 +55,7 @@ With `--whole-tree`, it takes no other arguments and runs the four whole-tree ga
 | --- | --- |
 | 0 | Every gate that ran passed. |
 | 1 | At least one gate found a violation. |
-| 2 | The range could not resolve or no failed gate could decide. |
+| 2 | `checks.config.ts` does not load or sets an unknown key, the range could not resolve or no failed gate could decide. |
 
 ## Sample output
 

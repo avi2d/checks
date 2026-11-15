@@ -145,7 +145,7 @@ Each refusal names the workflow file, the job and the limit.
 
 ## What it reads
 
-The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts`, `private` and `checks` runners in `package.json` and the shell scripts those steps and scripts run from the working tree.
+The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts` and `private` fields in `package.json`, the `mutationRunner` and `selfHostedRunners` keys of `checks.config.ts` and the shell scripts those steps and scripts run from the working tree.
 It reads each shell script that a shell script it reads runs, until none is left.
 It reads each file a setup-bun step names for its version.
 It reads `.bun-version` for each step that uses the shared setup action.
@@ -165,7 +165,7 @@ It takes no arguments.
 | --- | --- |
 | 0 | Every required command has a reachable step. |
 | 1 | A required command is missing or blocked, a job runs on the wrong runner, a job runs mutation outside the shared workflow, a `mutation.yml` differs from the caller checks-setup writes, a workflow names a missing workflow or job, a bun setup step drifts from the fleet bun version, a workflow that releases runs on a schedule outside a public npm package or more than once a day, a workflow other than a weekly public advisory scan runs on a schedule, or a job can run for more than 60 minutes. |
-| 2 | A workflow or `package.json` cannot be decoded, or the kit's own `.bun-version` is missing, unreadable or blank. |
+| 2 | A workflow or `package.json` cannot be decoded, `checks.config.ts` does not load or sets an unknown key, a runner key does not decode, a `checks` object in `package.json` still sets a runner key, or the kit's own `.bun-version` is missing, unreadable or blank. |
 
 ## Sample output
 

@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Effect } from "effect";
 import { MutationRunner, readSetting, SelfHostedRunners, SETTINGS_FILE } from "../core/settings.ts";
 import { runsMutation, within, type Run } from "./mutation-job.ts";
 import { readsRunnerPick } from "./runner-pick.ts";
@@ -20,10 +20,6 @@ export type RunnerFault = {
   readonly location: string;
   readonly fault: string;
 };
-
-export class RunnerPolicyError extends Schema.TaggedError<RunnerPolicyError>()("RunnerPolicyError", {
-  message: Schema.String,
-}) {}
 
 // GitHub expressions match context and property names without regard to case.
 const OVERRIDE_ACCESS = String.raw`vars\s*(?:\.\s*CI_RUNS_ON\b|\[\s*'CI_RUNS_ON'\s*\])`;
