@@ -344,7 +344,8 @@ A pull request's title, body and comments reach the forge without a commit, so [
 
 A browser check needs a built site and a browser, and a backend repository has neither.
 So a product opts in by setting the `browser` key of `checks.config.ts`, `checks-lint` never starts a browser, and the browser libraries are optional peers a backend never installs.
-`checks-frontend-syntax` needs no browser and runs inside `checks-lint`, but only where the `frontendSyntax` key of `checks.config.ts` declares its inputs, since a repository with no interface has no CSS to hold to it.
+`checks-frontend-syntax` needs no browser and runs inside `checks-lint`, but only where the `frontendSyntax` key of `checks.config.ts` declares its inputs.
+A repository with no interface has no CSS to hold to it.
 
 Each check wraps a detector that already works, and the kit writes a rule of its own only where none decides the constraint.
 The syntax gate runs two of stylelint's built-in rules and the stylelint team's shared configs, `axe` runs axe-core and `nesting` runs one html-validate rule.

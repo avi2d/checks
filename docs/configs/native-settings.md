@@ -114,7 +114,8 @@ export default defineConfig({
 
 A key the kit does not know fails the reading gate.
 A setting left in its old place also fails the gate that reads it, with exit 2 and a message naming the key it moves to.
-The old places are `checks.smoke`, `checks.reach`, `checks.mutationRunner` and `checks.selfHostedRunners` in `package.json`, and `browser-checks.json`, `copy.json` and `frontend-syntax.json` at the root.
+One old place is the `checks` object of `package.json`, which held `smoke`, `reach`, `mutationRunner` and `selfHostedRunners`.
+The others are `browser-checks.json`, `copy.json` and `frontend-syntax.json` at the root.
 `advisory-acks.json` stays a file of its own, since [checks-advisories](../gates/checks-advisories.md) reads it at a commit rather than from the working tree.
 
 `tsconfig.json` keeps the config files in its program, so `bun run typecheck` holds them to the builders' types.

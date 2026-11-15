@@ -55,7 +55,7 @@ It reads no skip list from `checks.config.ts`, only the smoke list.
 It counts a run as `ci` when `CI` is true and as `local` otherwise.
 A local run covers `./tests/unit` plus the smoke list the repository declares, except a `--changed` run, as [Changed-file runs](#changed-file-runs) says.
 The smoke list lives in `checks.config.ts` under `smoke` as an array of test file paths.
-A `package.json` that still sets `checks.smoke` or `checks.reach` fails the run with exit 2, naming the key it moves to.
+A `checks` object in `package.json` that still sets `smoke` or `reach` fails the run with exit 2, naming the key it moves to.
 A repository with no smoke list runs the unit tier alone outside CI.
 A local run with no unit test and no smoke list runs nothing and passes.
 A `ci` run covers the full default suite, unless a pull request narrows it or `--changed` narrows it, as [Pull request runs](#pull-request-runs) and [Changed-file runs](#changed-file-runs) say.
