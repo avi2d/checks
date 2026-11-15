@@ -1,16 +1,19 @@
-import { Console, Effect, FileSystem, Path, Schema } from "effect";
-import { dispatch, GitHubFailure } from "../core/github.ts";
+import { Console, Effect, Option, Schema } from "effect";
+import { dispatch, GitHubFailure, gitHubJson, gitHubOptional, REPOSITORY } from "../core/github.ts";
 import { ChildProcessSpawner } from "effect/process";
-import { lastTag, releasedVersionOf, runBuild } from "./release.ts";
-import { git } from "../core/git.ts";
-import { MANIFEST, releaseTag, taggedVersion } from "../core/release-names.ts";
+import { lastTag, runBuild } from "./release.ts";
+import { extractReleaseNotes } from "./release-notes.ts";
+import { publishPackage } from "./release-publish.ts";
+import { checkTestedTreeOf } from "./tested-tree.ts";
+import { collect, git } from "../core/git.ts";
+import { MANIFEST, releasedVersionOf, releaseTag, taggedVersion } from "../core/release-names.ts";
 
 class TagRefused extends Schema.TaggedError<TagRefused>()("TagRefused", {
   message: Schema.String,
 }) {}
 
-
-const decodeVersion = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ version: Schema.String })));
+const decodeManifest = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ version: Schema.String, private: Schema.optionalKey(Schema.Boolean) })));
+const decodeRelease = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ id: Schema.Int })));
 
 // An annotated tag lists its own object first and the commit it tags on a `^{}` line after it.
 export function taggedCommitOf(listed: string): string | undefined {
@@ -19,40 +22,61 @@ export function taggedCommitOf(listed: string): string | undefined {
   return peeled?.split("\t")[0];
 }
 
-const taggedOn = Effect.fn("taggedOn")(function* (root: string, tag: string) {
+export const taggedOn = Effect.fn("taggedOn")(function* (root: string, tag: string) {
   return taggedCommitOf(yield* git(["ls-remote", "--tags", "origin", `refs/tags/${tag}`, `refs/tags/${tag}^{}`], root));
 });
 
-const pushTag = Effect.fn("pushTag")(function* (root: string, sha: string, tag: string, workflow: string) {
-  yield* git(["push", "--quiet", "origin", `${sha}:refs/tags/${tag}`], root);
-  yield* dispatch(workflow, tag).pipe(
-    Effect.mapError(
-      (failure) => new GitHubFailure({ message: `${failure.message}; ${tag} is pushed, so dispatch the release by hand with \`gh workflow run ${workflow} --ref ${tag}\`` }),
-    ),
-  );
+type Landed = { readonly head: string; readonly subject: string; readonly version: string; readonly tag: string; readonly publishes: boolean };
+
+const manifestAt = Effect.fn("manifestAt")(function* (root: string, head: string) {
+  const text = yield* git(["show", `${head}:${MANIFEST}`], root).pipe(Effect.mapError(() => new TagRefused({ message: `${head.slice(0, 12)} holds no ${MANIFEST}` })));
+  return yield* decodeManifest(text).pipe(Effect.mapError((cause) => new TagRefused({ message: `${MANIFEST}: ${cause.message}` })));
 });
 
-export const tagHead = Effect.fn("tagHead")(function* (
-  label: string,
-  root: string,
-  workflow: string,
-  cuttingWorkflow: string,
-  awaitRelease?: (workflow: string, sha: string) => Effect.Effect<void, { readonly message: string }, ChildProcessSpawner.ChildProcessSpawner>,
-) {
-  const [head = "", subject = ""] = (yield* git(["log", "-1", "--format=%H%n%s", "HEAD"], root)).split("\n");
+const landedOf = Effect.fn("landedOf")(function* (root: string, head: string, subject: string) {
   const version = releasedVersionOf(subject);
-  if (version === undefined) {
+  if (version === undefined) return undefined;
+  const held = yield* manifestAt(root, head);
+  if (held.version !== version) return yield* new TagRefused({ message: `${head.slice(0, 12)} releases ${version}, but ${MANIFEST} holds ${held.version}` });
+  return { head, subject, version, tag: releaseTag(version), publishes: held.private !== true } satisfies Landed;
+});
+
+const landedHead = Effect.fn("landedHead")(function* (label: string, root: string) {
+  const [head = "", subject = ""] = (yield* git(["log", "-1", "--format=%H%n%s", "HEAD"], root)).split("\n");
+  const landed = yield* landedOf(root, head, subject);
+  if (landed !== undefined) return landed;
+  yield* Console.log(`${label}: ${head.slice(0, 12)} is no release commit`);
+  return undefined;
+});
+
+const landedRelease = Effect.fn("landedRelease")(function* (label: string, root: string) {
+  const [head = "", subject = ""] = (yield* git(["log", "-1", "--format=%H%n%s", "HEAD"], root)).split("\n");
+  const landed = yield* landedOf(root, head, subject);
+  if (landed !== undefined) return landed;
+  const held = yield* manifestAt(root, head).pipe(Effect.option);
+  if (Option.isNone(held)) {
     yield* Console.log(`${label}: ${head.slice(0, 12)} is no release commit`);
-    return true;
+    return undefined;
   }
-  const manifest = yield* (yield* FileSystem.FileSystem).readFileString((yield* Path.Path).join(root, MANIFEST));
-  const { version: held } = yield* decodeVersion(manifest).pipe(Effect.mapError((cause) => new TagRefused({ message: `${MANIFEST}: ${cause.message}` })));
-  if (held !== version) return yield* new TagRefused({ message: `${head.slice(0, 12)} releases ${version}, but ${MANIFEST} holds ${held}` });
-  const tag = releaseTag(version);
+  const history = (yield* git(["log", "--first-parent", "--format=%H %s", "HEAD"], root)).split("\n").filter((line) => line !== "").slice(1);
+  for (const line of history) {
+    const sha = line.slice(0, 40);
+    const candidate = yield* landedOf(root, sha, line.slice(41));
+    if (candidate === undefined) continue;
+    if (candidate.version !== held.value.version) break;
+    if ((yield* taggedOn(root, candidate.tag)) === sha) break;
+    return candidate;
+  }
+  yield* Console.log(`${label}: ${head.slice(0, 12)} is no release commit; a release whose GitHub release or npm publish failed is finished by rerunning that release commit's own main run`);
+  return undefined;
+});
+
+// Returns false when the tag already tags the head, so a rerun pushes nothing.
+const pushReleaseTag = Effect.fn("pushReleaseTag")(function* (label: string, root: string, { head, version, tag }: Landed, cuttingWorkflow: string) {
   const tagged = yield* taggedOn(root, tag);
   if (tagged === head) {
     yield* Console.log(`${label}: ${tag} already tags ${head.slice(0, 12)}`);
-    return true;
+    return false;
   }
   if (tagged !== undefined) return yield* new TagRefused({ message: `${tag} already tags ${tagged.slice(0, 12)}, not ${head.slice(0, 12)}` });
   yield* runBuild(root);
@@ -64,11 +88,79 @@ export const tagHead = Effect.fn("tagHead")(function* (
       message: `the build rewrites ${rebuilt.join(", ")} at ${head.slice(0, 12)}, which the release workflow's build check refuses; open a \`chore: cancel the unpublished ${version}\` pull request that returns ${MANIFEST} to ${returned} and commits what \`bun run build\` then writes to CHANGELOG.md, and the next ${cuttingWorkflow} run cuts the release again with every change since ${since ?? "the first commit"}`,
     });
   }
-  yield* pushTag(root, head, tag, workflow);
+  yield* git(["push", "--quiet", "origin", `${head}:refs/tags/${tag}`], root);
+  return true;
+});
+
+export const tagHead = Effect.fn("tagHead")(function* (
+  label: string,
+  root: string,
+  workflow: string,
+  cuttingWorkflow: string,
+  awaitRelease?: (workflow: string, sha: string) => Effect.Effect<void, { readonly message: string }, ChildProcessSpawner.ChildProcessSpawner>,
+) {
+  const landed = yield* landedHead(label, root);
+  if (landed === undefined || !(yield* pushReleaseTag(label, root, landed, cuttingWorkflow))) return true;
+  const { head, tag } = landed;
+  yield* dispatch(workflow, tag).pipe(
+    Effect.mapError(
+      (failure) => new GitHubFailure({ message: `${failure.message}; ${tag} is pushed, so dispatch the release by hand with \`gh workflow run ${workflow} --ref ${tag}\`` }),
+    ),
+  );
   yield* Console.log(`${label}: tagged ${head.slice(0, 12)} as ${tag}, and dispatched ${workflow} on it`);
   if (awaitRelease !== undefined) {
     yield* awaitRelease(workflow, head);
     yield* Console.log(`${label}: ${workflow} finished on ${tag}`);
   }
   return true;
+});
+
+const existingRelease = Effect.fn("existingRelease")(function* (tag: string) {
+  const release = yield* gitHubOptional(decodeRelease, "GET", `${REPOSITORY}/releases/tags/${tag}`);
+  return Option.map(release, ({ id }) => id);
+});
+
+// A rerun finds the release a failed run made and rewrites its notes, so no tag ever holds two releases.
+const writeGitHubRelease = Effect.fn("writeGitHubRelease")(function* (label: string, root: string, { head, version, tag }: Landed) {
+  const changelog = yield* git(["show", `${head}:CHANGELOG.md`], root).pipe(Effect.mapError(() => new TagRefused({ message: `${head.slice(0, 12)} holds no CHANGELOG.md` })));
+  const notes = yield* extractReleaseNotes(changelog, version);
+  const release = { name: tag, body: notes, draft: false, prerelease: false };
+  const existing = yield* existingRelease(tag);
+  if (Option.isSome(existing)) {
+    yield* gitHubJson(decodeRelease, "PATCH", `${REPOSITORY}/releases/${existing.value}`, release);
+    yield* Console.log(`${label}: rewrote the notes of the GitHub release ${tag}`);
+    return;
+  }
+  yield* gitHubJson(decodeRelease, "POST", `${REPOSITORY}/releases`, { tag_name: tag, ...release });
+  yield* Console.log(`${label}: created the GitHub release ${tag} with the CHANGELOG.md section for ${version}`);
+});
+
+const checkoutRelease = Effect.fn("checkoutRelease")(function* (root: string, head: string) {
+  const current = (yield* git(["rev-parse", "HEAD"], root)).trim();
+  if (current === head) return;
+  const dirty = (yield* git(["status", "--porcelain"], root)).trim();
+  if (dirty !== "") {
+    return yield* new TagRefused({ message: `${head.slice(0, 12)} sits behind ${current.slice(0, 12)}, but the checkout holds uncommitted changes, so commit or discard them and run again` });
+  }
+  yield* git(["checkout", "--quiet", "--detach", head], root);
+  const installed = yield* collect("bun", ["install", "--frozen-lockfile"], root).pipe(
+    Effect.mapError((cause) => new TagRefused({ message: `bun install --frozen-lockfile: ${cause.message}` })),
+  );
+  if (installed.exitCode !== ChildProcessSpawner.ExitCode(0)) {
+    return yield* new TagRefused({ message: `bun install --frozen-lockfile exited ${installed.exitCode} at ${head.slice(0, 12)}: ${installed.stderr.trim()}` });
+  }
+});
+
+export const releaseHead = Effect.fn("releaseHead")(function* (label: string, root: string, cuttingWorkflow: string) {
+  const landed = yield* landedRelease(label, root);
+  if (landed === undefined) return true;
+  yield* checkoutRelease(root, landed.head);
+  yield* checkTestedTreeOf(label, root, cuttingWorkflow, landed.head, landed.subject);
+  if (yield* pushReleaseTag(label, root, landed, cuttingWorkflow)) yield* Console.log(`${label}: tagged ${landed.head.slice(0, 12)} as ${landed.tag}`);
+  yield* writeGitHubRelease(label, root, landed);
+  if (!landed.publishes) {
+    yield* Console.log(`${label}: ${MANIFEST} is private, so no package is published`);
+    return true;
+  }
+  return yield* publishPackage(root);
 });

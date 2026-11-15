@@ -48,18 +48,19 @@ const WorkflowStepSchema = Schema.Struct({ run: Schema.optional(Schema.Unknown) 
 const WorkflowJobSchema = Schema.Struct({
   steps: Schema.optional(Schema.Array(WorkflowStepSchema)),
   "runs-on": Schema.optional(Schema.Unknown),
+  uses: Schema.optional(Schema.String),
 });
 
 const WorkflowDocumentSchema = Schema.Struct({
   jobs: Schema.optional(Schema.Record(Schema.String, WorkflowJobSchema)),
 });
 
-function workflowSteps(text: string): { readonly runs: readonly string[]; readonly runsOn: unknown } {
+function workflowSteps(text: string): { readonly runs: readonly string[]; readonly runsOn: unknown; readonly uses: unknown } {
   const doc = Schema.decodeUnknownSync(WorkflowDocumentSchema)(Bun.YAML.parse(text));
   const job = doc.jobs?.["checks"];
   const runs = (job?.steps ?? []).flatMap((step) => (typeof step.run === "string" ? [step.run.trim()] : []));
   const runsOn = job?.["runs-on"];
-  return { runs, runsOn };
+  return { runs, runsOn, uses: job?.uses };
 }
 
 function decodeManifest(text: string): typeof WrittenManifest.Type {
@@ -97,13 +98,8 @@ expect(tsconfig.extends).toBe("@avi2dg/checks/tsconfig.effect.json");
 const service = tsconfig.compilerOptions?.plugins?.find((plugin) => plugin.name === "@effect/language-service");
 expect(service?.overrides?.[0]?.include).toEqual(EXPECTED_INCLUDE);
 expect(service?.overrides?.[0]?.exclude).toEqual(EXPECTED_EXCLUDE);
-const { runs, runsOn } = workflowSteps(await readFile(join(dir, ".github/workflows/ci.yml"), "utf8"));
-expect(runs).toContain("bun install --frozen-lockfile");
-expect(runs).toContain("bun run lint");
-expect(runs).toContain("bun run typecheck");
-expect(runs).toContain("bun run test");
-expect(runs).toContain("bunx checks-commit-title");
-expect(runsOn).toBe("ubuntu-latest");
+const { uses } = workflowSteps(await readFile(join(dir, ".github/workflows/ci.yml"), "utf8"));
+expect(uses).toBe("avi2d/workflows/.github/workflows/ci.yml@v3");
 },
 60_000,
 );
@@ -130,8 +126,8 @@ expect((await $`bun ${join(CHECKOUT, "src", "delivery", "setup.ts")}`.cwd(dir).n
 const workflow = Schema.decodeUnknownSync(
   Schema.Struct({ on: Schema.Record(Schema.String, Schema.Unknown), concurrency: Schema.Struct({ group: Schema.String, "cancel-in-progress": Schema.Boolean }) }),
 )(Bun.YAML.parse(await readFile(join(dir, ".github/workflows/ci.yml"), "utf8")));
-expect(Object.keys(workflow.on)).toEqual(["pull_request"]);
-expect(workflow.concurrency).toEqual({ group: "ci-${{ github.event.pull_request.number }}", "cancel-in-progress": true });
+expect(Object.keys(workflow.on)).toEqual(["pull_request", "workflow_dispatch"]);
+expect(workflow.concurrency).toEqual({ group: "ci-${{ github.event.pull_request.number || github.run_id }}", "cancel-in-progress": true });
 },
 60_000,
 );
@@ -172,24 +168,20 @@ expect(await readFile(join(repo.dir, ".gitignore"), "utf8")).toBe("dist/\nnode_m
 expect(run.text).toContain("added node_modules/ to .gitignore");
 const keptTsconfig = decodeTsconfig(await readFile(join(repo.dir, "tsconfig.json"), "utf8"));
 expect(keptTsconfig.extends).toBe("@avi2dg/checks/tsconfig.effect.json");
-const keptRuns = workflowSteps(await readFile(join(repo.dir, ".github/workflows/ci.yml"), "utf8")).runs;
-expect(keptRuns).toContain("bun run lint");
-expect(keptRuns).toContain("bun run test");
+const keptUses = workflowSteps(await readFile(join(repo.dir, ".github/workflows/ci.yml"), "utf8")).uses;
+expect(keptUses).toBe("avi2d/workflows/.github/workflows/ci.yml@v3");
 },
 60_000,
 );
 
 test(
-"a private run pins the hosted default runner and names the variable to set",
+"a private run marks the manifest private and names the variable to set",
 async () => {
 const repo = await open({});
 const run = await setup(repo, "--private");
 expect(run.exitCode).toBe(0);
-const { runsOn, runs } = workflowSteps(await readFile(join(repo.dir, ".github/workflows/ci.yml"), "utf8"));
-expect(runsOn).toBe("${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}");
-expect(runs).toContain("bun run lint");
-expect(runs).toContain("bun run test");
-expect(runs).toContain("bunx checks-commit-title");
+const { uses } = workflowSteps(await readFile(join(repo.dir, ".github/workflows/ci.yml"), "utf8"));
+expect(uses).toBe("avi2d/workflows/.github/workflows/ci.yml@v3");
 expect(run.text).toContain("set the CI_RUNS_ON variable to a self-hosted runner label");
 const manifest = decodeManifest(await readFile(join(repo.dir, "package.json"), "utf8"));
 expect(manifest.private).toBe(true);
@@ -441,6 +433,21 @@ const CallerSchema = Schema.Struct({
   }),
   jobs: Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.Unknown)),
 });
+
+test(
+"a site repository gains the site callers and no mutation workflow, and passes checks-workflows without --write",
+async () => {
+const repo = await open({ "package.json": JSON.stringify({ name: "shop", type: "module", site: { pages: "shop", domain: "shop.example.com", production: "shop/shop.example.com" } }) });
+const run = await setup(repo);
+expect(run.exitCode).toBe(0);
+expect(await Bun.file(join(repo.dir, ".github/workflows/mutation.yml")).exists()).toBe(false);
+const { uses } = workflowSteps(await readFile(join(repo.dir, ".github/workflows/ci.yml"), "utf8"));
+expect(uses).toBe("avi2d/workflows/.github/workflows/site-ci.yml@v3");
+const checked = await repo.script("delivery/workflows.ts");
+expect(checked.exitCode).toBe(0);
+},
+60_000,
+);
 
 test(
 "the generated mutation workflow names the shared workflow at v2 and nothing else, so no mode formula or path list reaches the caller",

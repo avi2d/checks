@@ -12,22 +12,25 @@ const scratch = scratchDirs();
 type Release = {
   readonly publish: (env?: Readonly<Record<string, string>>) => Promise<Ran>;
   readonly state: FakeNpm["state"];
+  readonly head: string;
 };
 
 // The release workflow's checkout of one version, with npm's `latest` dist-tag where the registry left it.
 async function release(version: string, latest: string | null): Promise<Release> {
-  const { dir } = await repository({ "package.json": JSON.stringify({ name: "@acme/widget", version }) });
+  const repo = await repository({ "package.json": JSON.stringify({ name: "@acme/widget", version }) });
+  const head = await repo.commit(`chore: release ${version}`);
   const npm = await fakeNpm(await scratch("checks-release-publish-npm-"), latest);
   return {
-    publish: (env = {}) => ran($`bun ${SCRIPT}`.cwd(dir).env({ ...process.env, ...npm.env, ...env })),
+    publish: (env = {}) => ran($`bun ${SCRIPT}`.cwd(repo.dir).env({ ...process.env, ...npm.env, ...env })),
     state: npm.state,
+    head,
   };
 }
 
 test("a version above npm's latest publishes and becomes latest", async () => {
   const a = await release("0.1.1", "0.1.0");
   expect(await a.publish()).toEqual({ exitCode: 0, text: "+ @acme/widget@0.1.1\nrelease-publish: published @acme/widget@0.1.1\n" });
-  expect(await a.state()).toEqual({ latest: "0.1.1", calls: ["view @acme/widget dist-tags --json", "publish"] });
+  expect(await a.state()).toEqual({ latest: "0.1.1", calls: ["view @acme/widget dist-tags --json", "publish"], published: [a.head] });
 }, 30_000);
 
 test("the first version of a package npm does not hold yet publishes", async () => {
@@ -42,7 +45,7 @@ test("a release that runs after a newer one published ends cleanly and leaves np
     exitCode: 0,
     text: "release-publish: npm already holds @acme/widget@0.1.2, which carries every change in 0.1.1, so 0.1.1 stays off npm\n",
   });
-  expect(await a.state()).toEqual({ latest: "0.1.2", calls: ["view @acme/widget dist-tags --json"] });
+  expect(await a.state()).toEqual({ latest: "0.1.2", calls: ["view @acme/widget dist-tags --json"], published: [] });
 }, 30_000);
 
 test("a newer release that publishes while this one runs ends this one cleanly", async () => {
@@ -50,7 +53,7 @@ test("a newer release that publishes while this one runs ends this one cleanly",
   const raced = await a.publish({ FAKE_NPM_PUBLISHED_FIRST: "0.1.2" });
   expect(raced.exitCode).toBe(0);
   expect(raced.text).toContain("release-publish: npm already holds @acme/widget@0.1.2, which carries every change in 0.1.1, so 0.1.1 stays off npm\n");
-  expect(await a.state()).toEqual({ latest: "0.1.2", calls: ["view @acme/widget dist-tags --json", "publish", "view @acme/widget dist-tags --json"] });
+  expect(await a.state()).toEqual({ latest: "0.1.2", calls: ["view @acme/widget dist-tags --json", "publish", "view @acme/widget dist-tags --json"], published: [] });
 }, 30_000);
 
 test("a rerun of a release npm already holds publishes nothing", async () => {

@@ -1,7 +1,9 @@
 #!/usr/bin/env bun
 import { Console, Effect, Path } from "effect";
 import type { Browser } from "playwright-core";
-import { runMain } from "../../core/main.ts";
+import { runMain, Usage } from "../../core/main.ts";
+import { readRunScope } from "../../core/pull-request-scope.ts";
+import { browserArgs } from "./args.ts";
 import { watchAssets } from "./assets.ts";
 import { judgeAxe } from "./axe.ts";
 import { judgeContrast } from "./contrast.ts";
@@ -208,9 +210,30 @@ const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: D
   return { runs: settles.map((settle) => settle(firstLooks)), missingRoutes };
 }, Effect.scoped);
 
+const USAGE = `usage: ${NAME} [--pr] [<directory>]`;
+
+const largestSet = Effect.fn("largestSet")(function* (pr: boolean, root: string) {
+  if (!pr) return "full" as const;
+  const scope = yield* readRunScope(root);
+  if (scope.kind === "docs-only") return undefined;
+  if (scope.kind === "pull-request") {
+    yield* Console.log(`${NAME}: a pull request run walks every preset at the anchor sizes`);
+    return "anchor" as const;
+  }
+  yield* Console.log(`${NAME}: ${scope.because}, so every preset walks the full size list`);
+  return "full" as const;
+});
+
 const browserChecks = Effect.gen(function* () {
-  const root = (yield* Path.Path).resolve(process.argv[2] ?? ".");
-  const { declaration, site } = yield* readDeclaration(root);
+  const args = browserArgs(process.argv.slice(2));
+  if (args === undefined) return yield* new Usage({ message: USAGE });
+  const root = (yield* Path.Path).resolve(args.directory);
+  const largest = yield* largestSet(args.pr, root);
+  if (largest === undefined) {
+    yield* Console.log(`${NAME}: the pull request changes only top-level and docs/ Markdown, so no page was checked`);
+    return true;
+  }
+  const { declaration, site } = yield* readDeclaration(root, largest);
   const outcome = yield* checkSite(root, declaration, site);
   yield* Console.log(report(declaration, outcome));
   return passes(outcome);

@@ -34,7 +34,7 @@ jobs:
       - name: tag is on main
         run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
       - name: landed tree matches the tested pull request tree
-        run: bun scripts/tested-tree.ts
+        run: bun src/delivery/tested-tree.ts
       - run: bun run build
       - run: git diff --exit-code
       - run: bun run lint

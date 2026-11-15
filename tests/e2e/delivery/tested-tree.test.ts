@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { fakeGh, type FakeGh } from "../lib/fake-gh.ts";
 import { CHECKOUT, type FixtureRepo, fixtureRepos, ran, type Ran, scratchDirs } from "../lib/fixture-repo.ts";
 
-const SCRIPT = join(CHECKOUT, "scripts", "tested-tree.ts");
+const SCRIPT = join(CHECKOUT, "src", "delivery", "tested-tree.ts");
 const TAG = join(CHECKOUT, "src", "delivery", "release-tag.ts");
 const CHANGELOG = join(CHECKOUT, "src", "delivery", "changelog-write.ts");
 

@@ -22,11 +22,21 @@ const Run = Schema.Struct({
   html_url: Schema.String,
 });
 
+const GitHubRelease = Schema.Struct({
+  id: Schema.Int,
+  tag_name: Schema.String,
+  name: Schema.String,
+  body: Schema.String,
+  draft: Schema.Boolean,
+  prerelease: Schema.Boolean,
+});
+
 const State = Schema.Struct({
   calls: Schema.Array(Schema.String),
   pulls: Schema.Array(Pull),
   dispatches: Schema.Array(Schema.Struct({ workflow: Schema.String, ref: Schema.String })),
   runs: Schema.Array(Run),
+  releases: Schema.Array(GitHubRelease),
 });
 
 type FakeState = typeof State.Type;
@@ -62,7 +72,7 @@ const ACTIONS_BOT = {
 export async function fakeGh(home: string, origin: string): Promise<FakeGh> {
   await writeFile(join(home, "gh"), `#!/bin/sh\nexec bun ${import.meta.path} "$@"\n`, { mode: 0o755 });
   const statePath = join(home, "state.json");
-  await writeFile(statePath, JSON.stringify({ calls: [], pulls: [], dispatches: [], runs: [] } satisfies FakeState));
+  await writeFile(statePath, JSON.stringify({ calls: [], pulls: [], dispatches: [], runs: [], releases: [] } satisfies FakeState));
   return {
     env: { PATH: `${home}:${process.env["PATH"] ?? ""}`, FAKE_GH_STATE: statePath, FAKE_GH_ORIGIN: origin },
     state: async () => decodeState(await readFile(statePath, "utf8")),
@@ -172,6 +182,39 @@ async function pullsApi(origin: string, state: FakeState, method: string, route:
   return undefined;
 }
 
+const releaseFields = (body: Body) => ({
+  name: decodeString(body["name"]),
+  body: decodeString(body["body"]),
+  draft: body["draft"] === true,
+  prerelease: body["prerelease"] === true,
+});
+
+// GitHub answers 404 for a tag no release holds yet.
+function releasesApi(state: FakeState, method: string, route: string, body: Body): Answer | "missing" | undefined {
+  const byTag = /^releases\/tags\/(.+)$/.exec(route)?.[1];
+  if (method === "GET" && byTag !== undefined) {
+    const held = state.releases.find((one) => one.tag_name === byTag);
+    if (held === undefined || held.draft) return "missing";
+    return { state, body: held };
+  }
+  if (method === "POST" && route === "releases") {
+    const release = { id: state.releases.length + 1, tag_name: decodeString(body["tag_name"]), ...releaseFields(body) };
+    return { state: { ...state, releases: [...state.releases, release] }, body: release };
+  }
+  const id = /^releases\/(\d+)$/.exec(route)?.[1];
+  const found = state.releases.find((one) => String(one.id) === id);
+  if (method !== "PATCH" || found === undefined) return undefined;
+  const edited = { ...found, ...releaseFields(body) };
+  return { state: { ...state, releases: state.releases.map((one) => (one === found ? edited : one)) }, body: edited };
+}
+
+async function answerOf(origin: string, state: FakeState, method: string, route: string, body: Body): Promise<Answer | "missing" | undefined> {
+  const released = releasesApi(state, method, route, body);
+  if (released !== undefined) return released;
+  const fromGit = await gitApi(origin, method, route, body);
+  return fromGit === undefined ? pullsApi(origin, state, method, route, body) : { state, body: fromGit };
+}
+
 // GitHub refuses an unforced ref update that would drop commits the ref holds.
 async function isForcedOver(origin: string, method: string, route: string, body: Body): Promise<boolean> {
   if (method !== "PATCH" || !route.startsWith("git/refs/") || body["force"] !== false) return false;
@@ -200,8 +243,8 @@ async function main(): Promise<number> {
   const body = rest.includes("--input") ? decodeBody(await Bun.stdin.text()) : {};
   const route = endpoint.slice(REPOSITORY.length);
   if (await isForcedOver(origin, method, route, body)) return refuse("gh: Update is not a fast forward (HTTP 422)");
-  const fromGit = await gitApi(origin, method, route, body);
-  const answer = fromGit === undefined ? await pullsApi(origin, state, method, route, body) : { state, body: fromGit };
+  const answer = await answerOf(origin, state, method, route, body);
+  if (answer === "missing") return refuse("gh: Not Found (HTTP 404)");
   if (answer === undefined) return refuse(`fake gh: no route for ${method} ${endpoint}`);
   await writeFile(statePath, JSON.stringify(answer.state));
   if (process.env["FAKE_GH_LOSE_REPLY"] === `${method} ${endpoint}`) {

@@ -105,66 +105,17 @@ To run the gates in CI:
 
    Each tier with test files also needs its `test:<tier>` script, as [checks-test-layout](../gates/checks-test-layout.md) says.
 
-1. Run the scripts on every pull request in `.github/workflows/ci.yml`, fetching the whole history the range needs:
+1. Write the workflow callers for the repository kind:
 
-   ```yaml
-   on:
-     pull_request:
-   concurrency:
-     group: ci-${{ github.event.pull_request.number }}
-     cancel-in-progress: true
-   jobs:
-     checks:
-       runs-on: ubuntu-latest
-       timeout-minutes: 30
-       steps:
-         - uses: actions/checkout@v5
-           with:
-             fetch-depth: 0
-         - uses: oven-sh/setup-bun@v2
-           with:
-             bun-version-file: .bun-version
-         - id: install
-           run: bun install --frozen-lockfile
-         - run: bun run build
-         - run: git diff --exit-code
-         - run: bun run lint
-         - if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-           run: bun run typecheck
-         - if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-           run: bun run test
+   ```sh
+   bunx checks-workflows --write
    ```
 
-The `if` on `typecheck` and `test` lets each run and report its own result after a failed `lint`, since a step without one is skipped once an earlier step fails.
+   The command writes the caller set [checks-workflows](../gates/checks-workflows.md) holds.
+   Each caller runs one shared workflow.
+   The first step of each run fails the pull request when a caller differs or an extra workflow file appears.
+   A new repository gets the same callers from [checks-setup](../gates/checks-setup.md).
 
-Lint the pull request title in the same job with one step:
-
-   ```yaml
-         - id: title
-           name: lint the title
-           env:
-             PR_TITLE: ${{ github.event.pull_request.title }}
-             GH_TOKEN: ${{ github.token }}
-           run: bunx checks-commit-title
-   ```
-
-A repository whose branch protection requires a `commitlint` status reports the title step under that name using the following step.
-The same job reports the title step's outcome under that name on every run, which needs `statuses: write`:
-
-   ```yaml
-         - name: report the title as commitlint
-           if: always()
-           env:
-             GH_TOKEN: ${{ github.token }}
-             HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-             OUTCOME: ${{ steps.title.outcome }}
-           run: |
-             state=failure
-             if [ "$OUTCOME" = success ]; then state=success; fi
-             gh api "repos/$GITHUB_REPOSITORY/statuses/${HEAD_SHA:-$GITHUB_SHA}" -f state="$state" -f context=commitlint -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --silent
-   ```
-
-A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on each job, as [checks-ci-wiring](../gates/checks-ci-wiring.md#runners) requires.
 To run the four whole-tree gates on demand, a repository adds a whole-tree-run workflow:
 
    ```yaml

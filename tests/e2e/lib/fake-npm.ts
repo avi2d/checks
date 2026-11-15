@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
+import { execFileSync } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Schema } from "effect";
 
-const State = Schema.Struct({ latest: Schema.NullOr(Schema.String), calls: Schema.Array(Schema.String) });
+const State = Schema.Struct({ latest: Schema.NullOr(Schema.String), calls: Schema.Array(Schema.String), published: Schema.Array(Schema.String) });
 type FakeState = typeof State.Type;
 
 const decodeState = Schema.decodeUnknownSync(Schema.fromJsonString(State));
@@ -18,7 +19,7 @@ export type FakeNpm = {
 export async function fakeNpm(home: string, latest: string | null): Promise<FakeNpm> {
   await writeFile(join(home, "npm"), `#!/bin/sh\nexec bun ${import.meta.path} "$@"\n`, { mode: 0o755 });
   const statePath = join(home, "npm-state.json");
-  await writeFile(statePath, JSON.stringify({ latest, calls: [] } satisfies FakeState));
+  await writeFile(statePath, JSON.stringify({ latest, calls: [], published: [] } satisfies FakeState));
   return {
     env: { PATH: `${home}:${process.env["PATH"] ?? ""}`, FAKE_NPM_STATE: statePath },
     state: async () => decodeState(await readFile(statePath, "utf8")),
@@ -40,7 +41,7 @@ function view(name: string, latest: string | null): number {
 }
 
 // FAKE_NPM_PUBLISHED_FIRST names a version another release publishes just before this one.
-async function publish(state: FakeState, save: (latest: string | null) => Promise<void>): Promise<number> {
+async function publish(state: FakeState, save: (latest: string | null, published?: readonly string[]) => Promise<void>): Promise<number> {
   if (process.env["FAKE_NPM_REFUSE"] !== undefined) return refuse(process.env["FAKE_NPM_REFUSE"]);
   const { name, version } = decodeManifest(await readFile("package.json", "utf8"));
   const latest = process.env["FAKE_NPM_PUBLISHED_FIRST"] ?? state.latest;
@@ -49,7 +50,8 @@ async function publish(state: FakeState, save: (latest: string | null) => Promis
   if (latest !== null && Bun.semver.order(latest, version) > 0) {
     return refuse(`Cannot implicitly apply the "latest" tag because previously published version ${latest} is higher than the new version ${version}. You must specify a tag using --tag.`);
   }
-  await save(version);
+  const head = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  await save(version, [...state.published, head]);
   process.stdout.write(`+ ${name}@${version}\n`);
   return 0;
 }
@@ -59,7 +61,7 @@ async function main(): Promise<number> {
   const statePath = process.env["FAKE_NPM_STATE"] ?? "";
   const recorded = decodeState(await readFile(statePath, "utf8"));
   const state = { ...recorded, calls: [...recorded.calls, args.join(" ")] };
-  const save = (latest: string | null) => writeFile(statePath, JSON.stringify({ ...state, latest }));
+  const save = (latest: string | null, published: readonly string[] = state.published) => writeFile(statePath, JSON.stringify({ ...state, latest, published }));
   await save(state.latest);
   const [command, name = ""] = args;
   if (command === "view" && args.slice(2).join(" ") === "dist-tags --json") return view(name, state.latest);

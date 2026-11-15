@@ -6,9 +6,10 @@ import { TEST_ENTRY_POINT } from "../core/gates.ts";
 import { collect } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { testOptions, type TestOptions, type TestTier } from "../core/test-script.ts";
-import { readLocalNarrowing, readPullRequestNarrowing } from "./affected-tests.ts";
+import { readRunScope } from "../core/pull-request-scope.ts";
+import { readChangedNarrowing, readLocalNarrowing } from "./affected-tests.ts";
 import { changedLocalPaths } from "./changed-tests.ts";
-import { APPROVE_VARIABLE, heavyRunRefusal } from "./test-refusal.ts";
+import { APPROVE_VARIABLE, heavyRunRefusal, pullRequestRunRefusal } from "./test-refusal.ts";
 import {
   readDeclarationsIn,
   readSkipDeclarations,
@@ -40,23 +41,30 @@ class RunRefusal extends Schema.TaggedError<RunRefusal>()("RunRefusal", {
 }) {}
 
 const NAME = TEST_ENTRY_POINT.bin;
-const USAGE = `usage: ${NAME} [--tier=live | --tier=pixel | --tier=unit | --tier=e2e | --full | --changed] [--parallel=<workers>] [--junit=<file>], and it refuses test filters`;
-const CHANGED = "--changed";
+const USAGE = `usage: ${NAME} [--tier=live | --tier=pixel | --tier=unit | --tier=e2e | --full | --changed | --pr] [--parallel=<workers>] [--junit=<file>], and it refuses test filters`;
 const JUNIT = /^--junit=(.+)$/;
+
+export type EntryRun = "default" | "changed" | "pr";
+
+const RUN_FLAGS: ReadonlyMap<string, EntryRun> = new Map([
+  ["--changed", "changed"],
+  ["--pr", "pr"],
+]);
 
 export type EntryOptions = {
   readonly options: TestOptions;
   readonly junit: Option.Option<string>;
-  readonly changed: boolean;
+  readonly run: EntryRun;
 };
 
 export function entryOptions(args: readonly string[]): EntryOptions | undefined {
   const junit = args.flatMap((arg) => JUNIT.exec(arg)?.[1] ?? []);
-  const changed = args.filter((arg) => arg === CHANGED).length;
-  const options = testOptions(args.filter((arg) => !JUNIT.test(arg) && arg !== CHANGED));
-  if (options === undefined || junit.length > 1 || changed > 1) return undefined;
-  if (changed === 1 && (options.tier !== undefined || options.full === true)) return undefined;
-  return { options, junit: Option.fromNullishOr(junit[0]), changed: changed === 1 };
+  const runs = args.flatMap((arg) => RUN_FLAGS.get(arg) ?? []);
+  const options = testOptions(args.filter((arg) => !JUNIT.test(arg) && !RUN_FLAGS.has(arg)));
+  if (options === undefined || junit.length > 1 || runs.length > 1) return undefined;
+  const [run = "default"] = runs;
+  if (run !== "default" && (options.tier !== undefined || options.full === true)) return undefined;
+  return { options, junit: Option.fromNullishOr(junit[0]), run };
 }
 
 function matches(declaration: SkipDeclaration, result: TestResult): boolean {
@@ -242,18 +250,27 @@ export function narrowedTier(options: TestOptions, selection: SuiteSelection): {
   return undefined;
 }
 
+// Returns undefined when a shared file widens the run, so the caller keeps the selection it already had.
+const reachedSelection = Effect.fn("reachedSelection")(function* (changed: readonly string[], tier: TestTier | undefined) {
+  const tests = (yield* scanTestFiles(process.cwd())).filter((file) => selectedTierFile(file, tier));
+  const narrowing = yield* readChangedNarrowing(process.cwd(), changed, tests);
+  if (narrowing.kind === "full") {
+    yield* Console.log(`${NAME}: ${narrowing.because}, so the whole suite runs`);
+    return undefined;
+  }
+  yield* Console.log(`${NAME}: the pull request reaches ${narrowing.files.length} of ${tests.length} test file(s)`);
+  return { kind: "files", files: narrowing.files } satisfies SuiteSelection;
+});
+
 const narrowSelection = Effect.fn("narrowSelection")(function* (options: TestOptions, selection: SuiteSelection, environment: Environment) {
   const narrowed = narrowedTier(options, selection);
   if (environment !== "ci" || narrowed === undefined) return selection;
-  const tests = (yield* scanTestFiles(process.cwd())).filter((file) => selectedTierFile(file, narrowed.tier));
-  const narrowing = yield* readPullRequestNarrowing(process.cwd(), tests);
-  if (Option.isNone(narrowing)) return selection;
-  if (narrowing.value.kind === "full") {
-    yield* Console.log(`${NAME}: ${narrowing.value.because}, so the whole suite runs`);
+  const scope = yield* readRunScope(process.cwd());
+  if (scope.kind === "whole") {
+    yield* Console.log(`${NAME}: ${scope.because}, so the whole suite runs`);
     return selection;
   }
-  yield* Console.log(`${NAME}: the pull request reaches ${narrowing.value.files.length} of ${tests.length} test file(s)`);
-  return { kind: "files", files: narrowing.value.files } satisfies SuiteSelection;
+  return (yield* reachedSelection(scope.changed, narrowed.tier)) ?? selection;
 });
 
 const readScope = Effect.fn("readScope")(function* (selection: SuiteSelection, smoke: readonly string[]) {
@@ -280,6 +297,25 @@ const changedSelection = Effect.fn("changedSelection")(function* () {
   return { kind: "changed", files: narrowing.files } satisfies SuiteSelection;
 });
 
+const pullRequestSelection = Effect.fn("pullRequestSelection")(function* () {
+  const scope = yield* readRunScope(process.cwd());
+  if (scope.kind === "whole") {
+    yield* Console.log(`${NAME}: ${scope.because}, so the whole suite runs`);
+    return { kind: "full" } satisfies SuiteSelection;
+  }
+  if (scope.kind === "docs-only") {
+    yield* Console.log(`${NAME}: the pull request changes only top-level and docs/ Markdown, so no test ran`);
+    return { kind: "files", files: [] } satisfies SuiteSelection;
+  }
+  return (yield* reachedSelection(scope.changed, undefined)) ?? ({ kind: "full" } satisfies SuiteSelection);
+});
+
+const entrySelection = Effect.fn("entrySelection")(function* (run: EntryRun, options: TestOptions, environment: Environment) {
+  if (run === "changed") return yield* changedSelection();
+  if (run === "pr") return yield* pullRequestSelection();
+  return yield* narrowSelection(options, selectSuite(options, environment), environment);
+});
+
 const runSuite = Effect.fn("runSuite")(function* (outfile: string, args: readonly string[], workers: number | undefined) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const command = ["test", "--randomize", `--parallel=${yield* resolveWorkerCount(workers)}`, ...args, ...reporterArgs(outfile)];
@@ -297,17 +333,16 @@ const runSuite = Effect.fn("runSuite")(function* (outfile: string, args: readonl
 const testEntry = Effect.gen(function* () {
   const entry = entryOptions(process.argv.slice(2));
   if (entry === undefined) return yield* new Usage({ message: USAGE });
-  const { options, junit, changed } = entry;
+  const { options, junit, run } = entry;
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const environment = yield* environmentOf;
-  const refusal = heavyRunRefusal(options, environment, options.tier === "pixel" && (yield* approvingScreens));
+  const refusal =
+    run === "pr" ? pullRequestRunRefusal(environment) : heavyRunRefusal(options, environment, options.tier === "pixel" && (yield* approvingScreens));
   if (refusal !== undefined) return yield* new RunRefusal({ message: refusal });
-  const selection = changed
-    ? yield* changedSelection()
-    : yield* narrowSelection(options, selectSuite(options, environment), environment);
+  const selection = yield* entrySelection(run, options, environment);
   if (selection.kind === "files" && selection.files.length === 0) {
-    yield* Console.log(`${NAME}: the pull request changes no file a test reads, so no test ran`);
+    if (run !== "pr") yield* Console.log(`${NAME}: the pull request changes no file a test reads, so no test ran`);
     return true;
   }
   if (selection.kind === "changed" && selection.files.length === 0) {

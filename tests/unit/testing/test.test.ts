@@ -45,18 +45,27 @@ test("--full combines with a worker count and a junit file but never with a tier
   expect(entryOptions(["--full", "--junit=reports/suite.xml"])).toEqual({
     options: { full: true },
     junit: expect.anything(),
-    changed: false,
+    run: "default",
   });
   expect(testOptions(["--tier=e2e", "--full"])).toBeUndefined();
   expect(testOptions(["--full", "--full"])).toBeUndefined();
 });
 
 test("--changed combines with a worker count and a junit file, while a tier, --full or a second --changed is refused", () => {
-  expect(entryOptions(["--changed", "--parallel=3"])).toEqual({ options: { workers: 3 }, junit: expect.anything(), changed: true });
-  expect(entryOptions(["--junit=reports/fast.xml", "--changed"])?.changed).toBe(true);
+  expect(entryOptions(["--changed", "--parallel=3"])).toEqual({ options: { workers: 3 }, junit: expect.anything(), run: "changed" });
+  expect(entryOptions(["--junit=reports/fast.xml", "--changed"])?.run).toBe("changed");
   expect(entryOptions(["--changed", "--tier=unit"])).toBeUndefined();
   expect(entryOptions(["--changed", "--full"])).toBeUndefined();
   expect(entryOptions(["--changed", "--changed"])).toBeUndefined();
+});
+
+test("--pr takes a worker count and a junit file, while a tier, --full, --changed or a second --pr is refused", () => {
+  expect(entryOptions(["--pr", "--junit=reports/pr.xml"])).toEqual({ options: {}, junit: expect.anything(), run: "pr" });
+  expect(entryOptions(["--parallel=2", "--pr"])?.run).toBe("pr");
+  expect(entryOptions(["--pr", "--tier=e2e"])).toBeUndefined();
+  expect(entryOptions(["--pr", "--full"])).toBeUndefined();
+  expect(entryOptions(["--pr", "--changed"])).toBeUndefined();
+  expect(entryOptions(["--pr", "--pr"])).toBeUndefined();
 });
 
 test("a test script never takes --changed, so scripts.test cannot shrink the CI suite to the changed files", () => {

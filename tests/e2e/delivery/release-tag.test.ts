@@ -1,8 +1,9 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fakeGh, type FakeGh } from "../lib/fake-gh.ts";
+import { releasedMains } from "../lib/released-main.ts";
 import { CHECKOUT, type FixtureRepo, fixtureRepos, ran, type Ran, scratchDirs } from "../lib/fixture-repo.ts";
 
 const SCRIPT = join(CHECKOUT, "src", "delivery", "release-tag.ts");
@@ -166,7 +167,139 @@ test(
     expect(clash.text).toContain(`checks-release-tag: v0.2.0 already tags ${elsewhere.slice(0, 12)}, not ${moved.head.slice(0, 12)}`);
 
     for (const run of [disagreeing, moved]) expect((await run.state()).dispatches).toEqual([]);
-    expect((await moved.run([])).text).toContain("usage: release-tag.ts <workflow>");
+    expect((await moved.run(["release.yml", "ci.yml"])).text).toContain("usage: release-tag.ts [<workflow>]");
+  },
+  60_000,
+);
+
+const onMain = releasedMains("checks-release-tag-main-");
+
+test(
+  "with no argument a release commit on main is tagged, released on GitHub with its changelog notes and published, and a rerun does each at most once",
+  async () => {
+    const main = await onMain("chore: release 0.2.0 (#7)");
+
+    const released = await main.run(SCRIPT, []);
+    expect(released.exitCode).toBe(0);
+    expect(released.text).toContain(`release-tag: ${main.head.slice(0, 12)} matches the tree pull request #7 tested\n`);
+    expect(released.text).toContain(`release-tag: tagged ${main.head.slice(0, 12)} as v0.2.0\n`);
+    expect(released.text).toContain("release-tag: created the GitHub release v0.2.0 with the CHANGELOG.md section for 0.2.0\n");
+    expect(released.text).toContain("release-publish: published widget@0.2.0\n");
+    expect(await main.inOrigin("rev-parse", "v0.2.0^{commit}")).toBe(main.head);
+    const [release, ...others] = (await main.state()).releases;
+    expect(others).toEqual([]);
+    expect(release?.tag_name).toBe("v0.2.0");
+    expect(release?.body).toContain("price a bill");
+    expect(main.changelog).toContain(release?.body ?? "no body");
+    expect((await main.state()).dispatches).toEqual([]);
+    expect((await main.npm()).latest).toBe("0.2.0");
+
+    const again = await main.run(SCRIPT, []);
+    expect(again.exitCode).toBe(0);
+    expect(again.text).toContain(`release-tag: v0.2.0 already tags ${main.head.slice(0, 12)}\n`);
+    expect(again.text).toContain("release-tag: rewrote the notes of the GitHub release v0.2.0\n");
+    expect(again.text).toContain("release-publish: npm already holds widget@0.2.0\n");
+    expect((await main.state()).releases).toHaveLength(1);
+    expect((await main.npm()).calls.filter((call) => call === "publish")).toHaveLength(1);
+  },
+  60_000,
+);
+
+test(
+  "with no argument a merge that releases nothing ends at once, calling neither GitHub nor npm",
+  async () => {
+    const main = await onMain("feat: price a bill (#8)");
+
+    expect(await main.run(SCRIPT, [])).toEqual({ exitCode: 0, text: `release-tag: ${main.head.slice(0, 12)} is no release commit; a release whose GitHub release or npm publish failed is finished by rerunning that release commit's own main run\n` });
+    expect(await main.inOrigin("tag", "--list")).toBe("");
+    expect((await main.state()).calls).toEqual([]);
+    expect((await main.npm()).calls).toEqual([]);
+  },
+  60_000,
+);
+
+test(
+  "with no argument a plain commit after a release commit releases the release commit behind it, publishing its tree",
+  async () => {
+    const main = await onMain("chore: release 0.2.0 (#7)");
+    const behind = main.head;
+    await writeFile(join(main.dir, "notes/3.txt"), "tampered\n");
+    await $`git add notes/3.txt && git commit -q -m ${"docs: fix a typo (#8)"}`.cwd(main.dir).quiet();
+    await $`rm -rf node_modules`.cwd(main.dir).quiet();
+
+    const released = await main.run(SCRIPT, []);
+    expect(released.exitCode).toBe(0);
+    expect(released.text).toContain(`${behind.slice(0, 12)} matches the tree pull request #7 tested`);
+    expect(released.text).toContain(`release-tag: tagged ${behind.slice(0, 12)} as v0.2.0`);
+    expect(await main.inOrigin("rev-parse", "v0.2.0^{commit}")).toBe(behind);
+    expect((await main.state()).releases.map(({ tag_name: tag }) => tag)).toEqual(["v0.2.0"]);
+    expect((await main.npm()).latest).toBe("0.2.0");
+    expect((await main.npm()).published).toEqual([behind]);
+  },
+  60_000,
+);
+
+test(
+  "with no argument a cancelled release behind later commits releases nothing",
+  async () => {
+    const main = await onMain("chore: release 0.2.0 (#7)");
+    await writeFile(join(main.dir, "package.json"), manifest("0.1.0"));
+    await $`git add package.json && git commit -q -m ${"chore: cancel the unpublished 0.2.0 (#8)"}`.cwd(main.dir).quiet();
+    await $`git commit -q --allow-empty -m ${"docs: fix a typo (#9)"}`.cwd(main.dir).quiet();
+    const plain = (await $`git rev-parse HEAD`.cwd(main.dir).quiet()).stdout.toString().trim();
+
+    expect(await main.run(SCRIPT, [])).toEqual({ exitCode: 0, text: `release-tag: ${plain.slice(0, 12)} is no release commit; a release whose GitHub release or npm publish failed is finished by rerunning that release commit's own main run\n` });
+    expect(await main.inOrigin("tag", "--list")).toBe("");
+    expect((await main.state()).releases).toEqual([]);
+    expect((await main.npm()).calls).toEqual([]);
+  },
+  60_000,
+);
+
+test(
+  "with no argument a release commit whose tag is already pushed but which has no GitHub release yet still creates the release and publishes",
+  async () => {
+    const main = await onMain("chore: release 0.2.0 (#7)");
+    await $`git push -q origin HEAD:refs/tags/v0.2.0`.cwd(main.dir).quiet();
+
+    const released = await main.run(SCRIPT, []);
+    expect(released.exitCode).toBe(0);
+    expect(released.text).toContain(`release-tag: v0.2.0 already tags ${main.head.slice(0, 12)}\n`);
+    expect(released.text).toContain("release-tag: created the GitHub release v0.2.0 with the CHANGELOG.md section for 0.2.0\n");
+    expect(released.text).toContain("release-publish: published widget@0.2.0\n");
+    expect((await main.state()).releases.map(({ tag_name: tag }) => tag)).toEqual(["v0.2.0"]);
+    expect((await main.npm()).latest).toBe("0.2.0");
+  },
+  60_000,
+);
+
+test(
+  "with no argument a private package is tagged and released on GitHub but never published to npm",
+  async () => {
+    const main = await onMain("chore: release 0.2.0 (#7)", { private: true });
+
+    const released = await main.run(SCRIPT, []);
+    expect(released.exitCode).toBe(0);
+    expect(released.text).toContain("release-tag: package.json is private, so no package is published\n");
+    expect((await main.state()).releases.map(({ tag_name: tag }) => tag)).toEqual(["v0.2.0"]);
+    expect((await main.npm()).calls).toEqual([]);
+  },
+  60_000,
+);
+
+test(
+  "with no argument a release commit whose tree is not the one its pull request tested is refused before any tag or release",
+  async () => {
+    const main = await onMain("chore: release 0.2.0 (#7)", { testedOther: true });
+
+    const refused = await main.run(SCRIPT, []);
+    expect(refused.exitCode).toBe(2);
+    expect(refused.text).toContain(`${main.head.slice(0, 12)} differs from the`);
+    expect(refused.text).toContain("tree pull request #7 tested, so main moved after the full run");
+    expect(refused.text).toContain("the next release run cuts the release again");
+    expect(await main.inOrigin("tag", "--list")).toBe("");
+    expect((await main.state()).releases).toEqual([]);
+    expect((await main.npm()).calls).toEqual([]);
   },
   60_000,
 );

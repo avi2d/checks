@@ -92,9 +92,9 @@ test("checks-test takes one --junit file beside its other options on the command
   expect(entryOptions(["--tier=live", "--junit=reports/live.xml"])).toEqual({
     options: { tier: "live" },
     junit: Option.some("reports/live.xml"),
-    changed: false,
+    run: "default",
   });
-  expect(entryOptions(["--parallel=4"])).toEqual({ options: { workers: 4 }, junit: Option.none(), changed: false });
+  expect(entryOptions(["--parallel=4"])).toEqual({ options: { workers: 4 }, junit: Option.none(), run: "default" });
   expect(entryOptions(["--junit=one.xml", "--junit=two.xml"])).toBeUndefined();
   expect(entryOptions(["--junit="])).toBeUndefined();
   expect(scriptOptions("checks-test --junit=reports/suite.xml")).toBeUndefined();

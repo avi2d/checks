@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-setup
 
-`checks-setup` writes the kit config, the CI and mutation workflows and the doc templates into a repository that does not hold them yet.
+`checks-setup` writes the kit config, the workflow callers and the doc templates into a repository that does not hold them yet.
 
 ## What it checks
 
@@ -22,18 +22,10 @@ It writes `.jscpd.json` with the kit default.
 It writes the Effect paths of the `oxlint.config.ts` it finds or writes into the language service entry of `tsconfig.json`.
 The pair passes `checks-effect-scope --check` from the first write.
 It writes `package.json` with the kit in `devDependencies` and with `lint`, `typecheck`, `test` and `test:fast` scripts, plus a `test:<tier>` script for each tier that holds test files.
-It writes `.github/workflows/ci.yml`, which installs with `bun install --frozen-lockfile` and then runs the `build` script when the manifest holds one.
-The workflow always runs `bun run lint`, `bun run typecheck` and `bun run test`.
-Once the install succeeds, `bun run typecheck` and `bun run test` run even when an earlier step fails, so each reports its own result.
-A `build` script there also brings a `git diff --exit-code` step.
-Other scripts a `package.json` it finds already holds stay, but the workflow never schedules them.
-The workflow always ends with a `bunx checks-commit-title` step for the pull request title.
-It runs on pull requests alone, so a merge to the default branch does not run the suite a second time.
-A newer push to the same pull request cancels the run in progress.
-A `--private` run pins each job to `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
-Setting the `CI_RUNS_ON` variable to a self-hosted runner label then lands the jobs there.
-A public run pins each job to `ubuntu-latest`.
-It writes `mutation.yml` under `.github/workflows/`, which names the shared mutation workflow `avi2d/workflows/.github/workflows/mutation.yml@v2` and nothing else.
+It writes the caller set `checks-workflows` writes for the repository kind.
+A repository whose `package.json` has a `site` field gets the site callers, and any other repository gets the code callers.
+A freshly set up repository passes `checks-workflows` without running `--write` first.
+In a repository with no `site` field it writes `mutation.yml` under `.github/workflows/`, which names the shared mutation workflow `avi2d/workflows/.github/workflows/mutation.yml@v2` and nothing else.
 The shared workflow picks the run from the event.
 A pull request runs `compare`, and a manual dispatch runs `refresh`.
 A refresh starts by hand, as [checks-ci-wiring](checks-ci-wiring.md#schedules) requires.
@@ -58,8 +50,8 @@ It reads the kit install for `.bun-version`, `bunfig.toml`, its version, its Str
 checks-setup [--private]
 ```
 
-With no arguments the repository is public, and its jobs run on `ubuntu-latest`.
-With `--private` the jobs read the `CI_RUNS_ON` variable, and the run names the value to set.
+With no arguments the repository is public.
+With `--private` it sets `private` to `true` in `package.json`, and the run names the `CI_RUNS_ON` value to set.
 
 ## Exit codes
 

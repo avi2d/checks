@@ -281,7 +281,7 @@ A declaration that sets `hooks` while every state names its own `checks` is refu
 
 A viewport `{ "preset": "anchor" }` stands for the anchor set of screen sizes, and `{ "preset": "full" }` for the full set.
 The full set holds the anchors and eleven more sizes.
-A product runs the anchor set on every pull request and the full set on a run started by hand.
+A normal pull request runs the anchor set, while a release pull request or a run started by hand runs the full set.
 Each size in a set is a viewport named for its device and its size, with `device` set, and each phone also sets `touch`.
 A preset sits beside a product's own viewports.
 A name both declare is refused as declared twice, and so is a size that two listed presets both hold.
@@ -380,10 +380,14 @@ bun add -d @axe-core/playwright@4.13.0 html-validate@11.16.0 playwright-core@1.6
 ## Arguments
 
 ```sh
-checks-browser [<directory>]
+checks-browser [--pr] [<directory>]
 ```
 
 It reads the declaration in the directory it runs in, or in the directory it is given.
+`--pr` is the browser step a CI workflow runs.
+On a pull request it walks each viewport preset at the eight anchor sizes only, while a viewport the declaration lists by hand stays.
+A pull request that changes only top-level and `docs/` Markdown checks no page and passes.
+A release pull request and a run that is not a pull request, such as `workflow_dispatch`, walk the full size list.
 
 ## Exit codes
 
@@ -391,7 +395,7 @@ It reads the declaration in the directory it runs in, or in the directory it is 
 | --- | --- |
 | 0 | every check passes at every visit, and every declared route and target is there |
 | 1 | a check fails at a visit, a declared route is not served, a declared target matches no visible element, or a run scans no target |
-| 2 | `browser-checks.json` is missing, does not decode or contradicts itself, the site directory or the hooks module is missing, the site holds no `.html` page while a route lists `every-page`, a peer cannot load, or Chrome cannot start |
+| 2 | an argument is not one it takes, `browser-checks.json` is missing, does not decode or contradicts itself, the site directory or the hooks module is missing, the site holds no `.html` page while a route lists `every-page`, a peer cannot load, or Chrome cannot start |
 
 ## Sample output
 

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { groupOf } from "../../../src/delivery/changelog.ts";
-import { nextVersion, releasedVersionOf, releaseTitle, unreleasedOf, withVersion } from "../../../src/delivery/release.ts";
+import { releasedVersionOf } from "../../../src/core/release-names.ts";
+import { nextVersion, releaseTitle, unreleasedOf, withVersion } from "../../../src/delivery/release.ts";
 
 test("only the changelog groups count as unreleased", () => {
   expect(

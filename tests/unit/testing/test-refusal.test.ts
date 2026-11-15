@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { heavyRunRefusal } from "../../../src/testing/test-refusal.ts";
+import { heavyRunRefusal, pullRequestRunRefusal } from "../../../src/testing/test-refusal.ts";
 
 test("a --full or e2e run outside CI is refused rather than run, and names the pull request", () => {
   expect(heavyRunRefusal({ full: true }, "local", false)).toBe("refusing a `--full` run outside CI; push the branch and open or update its pull request so CI runs the checks, and the full suite runs at release");
@@ -34,4 +34,9 @@ test("no run is refused under CI", () => {
   expect(heavyRunRefusal({ full: true }, "ci", false)).toBeUndefined();
   expect(heavyRunRefusal({ tier: "e2e" }, "ci", false)).toBeUndefined();
   expect(heavyRunRefusal({ tier: "pixel" }, "ci", false)).toBeUndefined();
+});
+
+test("a --pr run is refused on a local machine and runs in CI, so a desk never starts the pull request's suite", () => {
+  expect(pullRequestRunRefusal("local")).toBe("refusing a `--pr` run outside CI; push the branch and open or update its pull request so CI runs the checks, and the full suite runs at release");
+  expect(pullRequestRunRefusal("ci")).toBeUndefined();
 });

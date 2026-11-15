@@ -63,13 +63,15 @@ These bins run on their own:
 - [`checks-release-pr`](gates/checks-release-pr.md) opens or refreshes the pull request that releases the next version, and dispatches its checks.
 - [`checks-release-preflight`](gates/checks-release-preflight.md) refuses the release before it starts when the version disagrees with the last tag or the run lacks the trusted publisher prerequisites.
 - [`checks-release-publish`](gates/checks-release-publish.md) publishes the version `package.json` holds to npm, unless npm already holds it or a newer version.
-- [`checks-release-tag`](gates/checks-release-tag.md) tags a landed release commit with its version and dispatches the release workflow on the tag.
+- [`checks-release-tag`](gates/checks-release-tag.md) releases a landed release commit: it tags it, and then releases and publishes it or dispatches the release workflow on the tag.
+- [`checks-production-gate`](gates/checks-production-gate.md) refuses to publish a commit to production unless it is a published release.
 - [`checks-vendor`](gates/checks-vendor.md) pins each library its `prepare` arguments name to a shared read-only clone and links it under `repos/`.
 - [`checks-browser`](gates/checks-browser.md) opens a product's built pages in Chrome and fails on the checks its `browser-checks.json` declares.
 - [`checks-commit-title`](gates/checks-commit-title.md) lints the pull request title in one step of the `ci` job.
 - [`checks-pr-text`](gates/checks-pr-text.md) scans the title, body and comments of a pull request in a public repository for a secret or a term of the private pack.
 - [`checks-docs-only`](gates/checks-docs-only.md) tells whether a change touches only top-level Markdown and Markdown under `docs/`, so a docs-only change skips the full run.
-- [`checks-setup`](gates/checks-setup.md) writes the kit config, the CI workflow and the doc templates into a new repository.
+- [`checks-workflows`](gates/checks-workflows.md) holds the workflow files to the set of shared-workflow callers the repository kind takes, and `--write` writes them.
+- [`checks-setup`](gates/checks-setup.md) writes the kit config, the workflow callers and the doc templates into a new repository.
 
 `checks-lint` has [its own page](gates/checks-lint.md), which says which range it resolves.
 oxlint runs through its own tool, as [Native settings](configs/native-settings.md) says.

@@ -1,7 +1,7 @@
 import { Array as Arr, Effect, FileSystem, Path, Schema } from "effect";
 import { Usage } from "../../core/main.ts";
 import { readSite, sitePages, type Site } from "./serve.ts";
-import { DEVICES, ENLARGED_TEXT_PX, SCREEN_SIZE_SETS, SCREEN_SIZES, screenSizeName, type ScreenSize } from "./screen-sizes.ts";
+import { DEVICES, ENLARGED_TEXT_PX, SCREEN_SIZE_SETS, SCREEN_SIZES, screenSizeName, type ScreenSize, type ScreenSizeSet } from "./screen-sizes.ts";
 
 const DECLARATION = "browser-checks.json";
 
@@ -113,14 +113,19 @@ const STATES: Readonly<Record<(typeof STATE_PRESETS)[number], State>> = {
   "enlarged-text": { name: "enlarged text", textPx: ENLARGED_TEXT_PX },
 };
 
-export function expanded(listed: Listed, pages: readonly string[]): ExpandedDeclaration {
+// A preset expands to at most the largest set, so an anchor run turns a full preset into the anchor sizes.
+function presetSizes(preset: ScreenSizeSet, largest: ScreenSizeSet): Arr.NonEmptyReadonlyArray<ScreenSize> {
+  return SCREEN_SIZES[largest === "anchor" ? "anchor" : preset];
+}
+
+export function expanded(listed: Listed, pages: readonly string[], largest: ScreenSizeSet = "full"): ExpandedDeclaration {
   const explicit = new Set(listed.routes.flatMap((entry) => ("preset" in entry ? [] : [entry.path])));
   return {
     ...listed,
     routes: Arr.flatMap(listed.routes, (entry) =>
       "preset" in entry ? Arr.map(pages.filter((path) => !explicit.has(path)), (path) => ({ path, locale: entry.locale })) : [entry],
     ),
-    viewports: Arr.flatMap(listed.viewports, (entry) => ("preset" in entry ? Arr.map(SCREEN_SIZES[entry.preset], viewportOf) : [entry])),
+    viewports: Arr.flatMap(listed.viewports, (entry) => ("preset" in entry ? Arr.map(presetSizes(entry.preset, largest), viewportOf) : [entry])),
     states: Arr.map(listed.states, (entry) => ("preset" in entry ? STATES[entry.preset] : entry)),
   };
 }
@@ -195,7 +200,7 @@ export function inconsistencies(declaration: ExpandedDeclaration, skipTargetRout
   return found;
 }
 
-export const readDeclaration = Effect.fn("readDeclaration")(function* (root: string) {
+export const readDeclaration = Effect.fn("readDeclaration")(function* (root: string, largest: ScreenSizeSet = "full") {
   const fs = yield* FileSystem.FileSystem;
   const file = (yield* Path.Path).join(root, DECLARATION);
   if (!(yield* fs.exists(file))) {
@@ -208,7 +213,7 @@ export const readDeclaration = Effect.fn("readDeclaration")(function* (root: str
   const early = inconsistencies(expanded(listed, []), hasPreset);
   if (early.length > 0) return yield* new Usage({ message: `${DECLARATION}: ${early.join("; ")}` });
   const site = yield* readSite(root, listed.site);
-  const candidate = expanded(listed, sitePages(site));
+  const candidate = expanded(listed, sitePages(site), largest);
   const { routes } = candidate;
   if (!Arr.isReadonlyArrayNonEmpty(routes)) {
     return yield* new Usage({ message: `the declared site ${listed.site} holds no .html page, so build the site before the browser checks run` });

@@ -18,7 +18,6 @@ export type Pending = {
 };
 
 const PLAIN_VERSION = /^(\d+)\.(\d+)\.(\d+)$/;
-const RELEASE_SUBJECT = /^chore: release (\d+\.\d+\.\d+)(?: \(#\d+\))?$/;
 
 export function unreleasedOf(subjects: readonly string[]): readonly string[] {
   return subjects.filter((subject) => groupOf(subject) !== undefined);
@@ -44,10 +43,6 @@ export const runningWorkflow = Config.String("GITHUB_WORKFLOW").pipe(Config.with
 
 export function releaseTitle(version: string): string {
   return `chore: release ${version}`;
-}
-
-export function releasedVersionOf(subject: string): string | undefined {
-  return RELEASE_SUBJECT.exec(subject)?.[1];
 }
 
 export const runBuild = Effect.fn("runBuild")(function* (root: string) {

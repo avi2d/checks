@@ -93,7 +93,7 @@ test(
     expect(refused.text).toContain(
       "checks-release-preflight: package.json holds 0.7.0, but the last release tag is v0.6.0, so v0.7.0 is untagged; rerun the release that bumped it, whose refusal says what to fix, or return package.json to 0.6.0\n",
     );
-    expect(await preflight.state()).toEqual({ calls: [], pulls: [], dispatches: [], runs: [] });
+    expect(await preflight.state()).toEqual({ calls: [], pulls: [], dispatches: [], runs: [], releases: [] });
   },
   60_000,
 );
