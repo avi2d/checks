@@ -5,7 +5,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { TEST_ENTRY_POINT } from "../core/gates.ts";
 import { collect } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
-import { readSetting, refuseOldPlace, SETTINGS_FILE, Smoke } from "../core/settings.ts";
+import { decodeSetting, loadSettings, refuseOldPlace, SETTINGS_FILE, Smoke } from "../core/settings.ts";
 import { testOptions, type TestOptions, type TestTier } from "../core/test-script.ts";
 import { readRunScope } from "../core/pull-request-scope.ts";
 import { readChangedNarrowing, readLocalNarrowing } from "./affected-tests.ts";
@@ -222,7 +222,9 @@ export const resolveWorkerCount = Effect.fn("resolveWorkerCount")(function* (wor
 });
 
 const readSmokeList = Effect.fn("readSmokeList")(function* (root: string) {
-  return (yield* readSetting(root, "smoke", Smoke, { manifestKey: "smoke" })) ?? [];
+  const value = (yield* loadSettings(root))["smoke"];
+  if (value === undefined) return [];
+  return yield* decodeSetting("smoke", Smoke, value);
 });
 
 // A live or pixel tier and --full run whole, since no pull request picks them.
