@@ -295,7 +295,7 @@ class NarrowingError extends Schema.TaggedError<NarrowingError>()("NarrowingErro
   message: Schema.String,
 }) {}
 
-export class ReachMapError extends Schema.TaggedError<ReachMapError>()("ReachMapError", {
+class ReachMapError extends Schema.TaggedError<ReachMapError>()("ReachMapError", {
   message: Schema.String,
 }) {}
 
