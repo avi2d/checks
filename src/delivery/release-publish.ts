@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { Console, Effect, FileSystem, Option, Schema } from "effect";
+import { Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { collect } from "../core/git.ts";
 import { MANIFEST } from "../core/release-names.ts";
@@ -35,9 +35,9 @@ const latestOnNpm = Effect.fn("latestOnNpm")(function* (name: string) {
 });
 
 const npmPublish = Effect.fn("npmPublish")(
-  function* () {
+  function* (root: string) {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-    const handle = yield* spawner.spawn(ChildProcess.make("npm", ["publish"], { stdin: "ignore", stdout: "inherit", stderr: "inherit" }));
+    const handle = yield* spawner.spawn(ChildProcess.make("npm", ["publish"], { cwd: root, stdin: "ignore", stdout: "inherit", stderr: "inherit" }));
     return (yield* handle.exitCode) === ChildProcessSpawner.ExitCode(0);
   },
   Effect.scoped,
@@ -48,9 +48,8 @@ const settled = (name: string, version: string, standing: Standing, latest: stri
     ? `${LABEL}: npm already holds ${name}@${version}`
     : `${LABEL}: npm already holds ${name}@${latest ?? ""}, which carries every change in ${version}, so ${version} stays off npm`;
 
-const releasePublish = Effect.gen(function* () {
-  if (process.argv.length > 2) return yield* new Usage({ message: USAGE });
-  const manifest = yield* (yield* FileSystem.FileSystem).readFileString(MANIFEST);
+export const publishPackage = Effect.fn("publishPackage")(function* (root: string) {
+  const manifest = yield* (yield* FileSystem.FileSystem).readFileString((yield* Path.Path).join(root, MANIFEST));
   const { name, version } = yield* decodeManifest(manifest).pipe(Effect.mapError((cause) => new PublishFailed({ message: `${MANIFEST}: ${cause.message}` })));
   const before = yield* latestOnNpm(name);
   const standing = standingOf(version, before);
@@ -58,7 +57,7 @@ const releasePublish = Effect.gen(function* () {
     yield* Console.log(settled(name, version, standing, before));
     return true;
   }
-  if (yield* npmPublish()) {
+  if (yield* npmPublish(root)) {
     yield* Console.log(`${LABEL}: published ${name}@${version}`);
     return true;
   }
@@ -68,6 +67,11 @@ const releasePublish = Effect.gen(function* () {
   if (now === "unpublished") return yield* new PublishFailed({ message: `npm publish refused ${name}@${version}` });
   yield* Console.log(settled(name, version, now, after));
   return true;
+});
+
+const releasePublish = Effect.gen(function* () {
+  if (process.argv.length > 2) return yield* new Usage({ message: USAGE });
+  return yield* publishPackage(process.cwd());
 });
 
 if (import.meta.main) runMain(NAME, releasePublish);

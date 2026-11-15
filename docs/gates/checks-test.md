@@ -8,7 +8,8 @@ audience: consumers
 
 ## What it checks
 
-It runs the unit tier plus the smoke list outside CI and the full suite under CI, except a `--changed` or `--pr` run, as [Changed-file runs](#changed-file-runs) and [The pull request entry](#the-pull-request-entry) say.
+It runs the unit tier plus the smoke list outside CI and the full suite under CI.
+A `--changed` run narrows that, as [Changed-file runs](#changed-file-runs) says, and so does a `--pr` run, as [The pull request entry](#the-pull-request-entry) says.
 It refuses `--full`, `--tier=e2e` and `--tier=pixel` outside CI, except a pixel run that approves pictures, as [Runs refused outside CI](#runs-refused-outside-ci) says.
 It runs them with `bun test --randomize --parallel=<workers>`, where the count comes from free memory as [Parallel runs](#parallel-runs) says, and reads Bun's JUnit report from that run.
 It runs Bun with `CI=true`, so `test.only` fails the run in every environment.

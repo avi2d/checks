@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fakeGh, type FakeGh } from "../lib/fake-gh.ts";
+import { fakeNpm, type FakeNpm } from "../lib/fake-npm.ts";
 import { CHECKOUT, type FixtureRepo, fixtureRepos, ran, type Ran, scratchDirs } from "../lib/fixture-repo.ts";
 
 const SCRIPT = join(CHECKOUT, "src", "delivery", "release-tag.ts");
@@ -166,7 +167,120 @@ test(
     expect(clash.text).toContain(`checks-release-tag: v0.2.0 already tags ${elsewhere.slice(0, 12)}, not ${moved.head.slice(0, 12)}`);
 
     for (const run of [disagreeing, moved]) expect((await run.state()).dispatches).toEqual([]);
-    expect((await moved.run([])).text).toContain("usage: release-tag.ts <workflow>");
+    expect((await moved.run(["release.yml", "ci.yml"])).text).toContain("usage: release-tag.ts [<workflow>]");
+  },
+  60_000,
+);
+
+type OnMain = Landed & { readonly npm: FakeNpm["state"]; readonly changelog: string };
+
+function releasable(version: string, extra: Readonly<Record<string, unknown>>): string {
+  const scripts = { build: `bun ${CHANGELOG}` };
+  return `${JSON.stringify({ name: "widget", version, ...extra, repository: { type: "git", url: "git+https://github.com/acme/widget.git" }, scripts }, null, 2)}\n`;
+}
+
+// main after the release pull request squash-merged, with the origin keeping the head that pull request tested.
+async function onMain(subject: string, options: { readonly private?: boolean; readonly testedOther?: boolean } = {}): Promise<OnMain> {
+  const extra = options.private === true ? { private: true } : {};
+  const repo = await repository({ "package.json": releasable("0.1.0", extra) });
+  await repo.commit("chore: add the manifest");
+  await repo.write({ "notes/3.txt": "price\n" });
+  await repo.commit("feat: price a bill (#3)");
+  await repo.write({ "package.json": releasable("0.2.0", extra) });
+  await $`bun ${CHANGELOG}`.cwd(repo.dir).quiet();
+  const head = await repo.commit(subject);
+  const home = await scratch("checks-release-tag-main-");
+  const origin = join(home, "origin.git");
+  await $`git init -q --bare -b main ${origin} && git remote add origin ${origin} && git push -q origin main`.cwd(repo.dir).quiet();
+  const tested =
+    options.testedOther === true
+      ? (await $`git -c user.name=Wren -c user.email=wren@example.com commit-tree ${head}~1^{tree} -p ${head} -m tested`.cwd(origin).quiet()).stdout.toString().trim()
+      : head;
+  await $`git update-ref refs/pull/7/head ${tested}`.cwd(origin).quiet();
+  const gh = await fakeGh(home, origin);
+  const npm = await fakeNpm(home, "0.1.0");
+  const env = { ...gh.env, ...npm.env };
+  return {
+    head,
+    run: (args, more = {}) => ran($`bun ${SCRIPT} ${args}`.cwd(repo.dir).env({ ...process.env, ...env, ...more })),
+    state: gh.state,
+    npm: npm.state,
+    inOrigin: async (...args) => (await $`git ${args}`.cwd(origin).quiet()).stdout.toString().trim(),
+    changelog: await readFile(join(repo.dir, "CHANGELOG.md"), "utf8"),
+  };
+}
+
+test(
+  "with no argument a release commit on main is tagged, released on GitHub with its changelog notes and published, and a rerun does each at most once",
+  async () => {
+    const main = await onMain("chore: release 0.2.0 (#7)");
+
+    const released = await main.run([]);
+    expect(released.exitCode).toBe(0);
+    expect(released.text).toContain(`release-tag: ${main.head.slice(0, 12)} matches the tree pull request #7 tested\n`);
+    expect(released.text).toContain(`release-tag: tagged ${main.head.slice(0, 12)} as v0.2.0\n`);
+    expect(released.text).toContain("release-tag: created the GitHub release v0.2.0 with the CHANGELOG.md section for 0.2.0\n");
+    expect(released.text).toContain("release-publish: published widget@0.2.0\n");
+    expect(await main.inOrigin("rev-parse", "v0.2.0^{commit}")).toBe(main.head);
+    const [release, ...others] = (await main.state()).releases;
+    expect(others).toEqual([]);
+    expect(release?.tag_name).toBe("v0.2.0");
+    expect(release?.body).toContain("price a bill");
+    expect(main.changelog).toContain(release?.body ?? "no body");
+    expect((await main.state()).dispatches).toEqual([]);
+    expect((await main.npm()).latest).toBe("0.2.0");
+
+    const again = await main.run([]);
+    expect(again.exitCode).toBe(0);
+    expect(again.text).toContain(`release-tag: v0.2.0 already tags ${main.head.slice(0, 12)}\n`);
+    expect(again.text).toContain("release-tag: rewrote the notes of the GitHub release v0.2.0\n");
+    expect(again.text).toContain("release-publish: npm already holds widget@0.2.0\n");
+    expect((await main.state()).releases).toHaveLength(1);
+    expect((await main.npm()).calls.filter((call) => call === "publish")).toHaveLength(1);
+  },
+  60_000,
+);
+
+test(
+  "with no argument a merge that releases nothing ends at once, calling neither GitHub nor npm",
+  async () => {
+    const main = await onMain("feat: price a bill (#8)");
+
+    expect(await main.run([])).toEqual({ exitCode: 0, text: `release-tag: ${main.head.slice(0, 12)} is no release commit\n` });
+    expect(await main.inOrigin("tag", "--list")).toBe("");
+    expect((await main.state()).calls).toEqual([]);
+    expect((await main.npm()).calls).toEqual([]);
+  },
+  60_000,
+);
+
+test(
+  "with no argument a private package is tagged and released on GitHub but never published to npm",
+  async () => {
+    const main = await onMain("chore: release 0.2.0 (#7)", { private: true });
+
+    const released = await main.run([]);
+    expect(released.exitCode).toBe(0);
+    expect(released.text).toContain("release-tag: package.json is private, so no package is published\n");
+    expect((await main.state()).releases.map(({ tag_name: tag }) => tag)).toEqual(["v0.2.0"]);
+    expect((await main.npm()).calls).toEqual([]);
+  },
+  60_000,
+);
+
+test(
+  "with no argument a release commit whose tree is not the one its pull request tested is refused before any tag or release",
+  async () => {
+    const main = await onMain("chore: release 0.2.0 (#7)", { testedOther: true });
+
+    const refused = await main.run([]);
+    expect(refused.exitCode).toBe(2);
+    expect(refused.text).toContain(`${main.head.slice(0, 12)} differs from the`);
+    expect(refused.text).toContain("tree pull request #7 tested, so main moved after the full run");
+    expect(refused.text).toContain("the next release run cuts the release again");
+    expect(await main.inOrigin("tag", "--list")).toBe("");
+    expect((await main.state()).releases).toEqual([]);
+    expect((await main.npm()).calls).toEqual([]);
   },
   60_000,
 );
