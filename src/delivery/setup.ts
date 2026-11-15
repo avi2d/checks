@@ -353,7 +353,7 @@ const argumentsOf = Effect.fn("argumentsOf")(function* (root: string) {
   const callers = (yield* readWorkflowFiles(root)).map(({ workflow }) => workflow);
   const mismatch = flagMismatchOf(callers, parsed.flags);
   if (mismatch !== undefined) return yield* new Usage({ message: mismatch });
-  const set = yield* callerSetOf(callers, parsed.flags, NAME).pipe(Effect.mapError((fault) => new Usage({ message: fault.message }))));
+  const set = yield* callerSetOf(callers, parsed.flags, NAME).pipe(Effect.mapError((fault) => new Usage({ message: fault.message })));
   return { isPrivate: parsed.rest.includes(PRIVATE), set };
 });
 
