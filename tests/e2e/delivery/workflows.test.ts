@@ -33,7 +33,7 @@ test("a code repository without workflow files is refused until --write writes c
   expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 4 workflow file(s) of the code set\n" });
   expect(await held(repo)).toEqual(["ci.yml", "main.yml", "pr-title.yml", "release.yml"]);
   expect(await parsed(repo, "ci.yml")).toMatchObject({
-    on: { pull_request: { types: ["opened", "synchronize", "reopened"] }, workflow_dispatch: null },
+    on: { pull_request: { types: ["opened", "synchronize", "reopened", "ready_for_review"] }, workflow_dispatch: null },
     concurrency: { "cancel-in-progress": true },
     jobs: { checks: { uses: "avi2d/workflows/.github/workflows/ci.yml@v3" } },
   });

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { byHandSet, differencesOf, requiredSet } from "../../../src/delivery/workflow-set.ts";
+import { isRecord } from "../../../src/delivery/workflow-references.ts";
 import { MUTATION_WORKFLOW } from "../../../src/delivery/setup-workflow.ts";
 
 test("the code set is ci, pr-title, main and release, and the site set adds preview-close and production", () => {
@@ -24,20 +25,28 @@ test("an absent by-hand caller is no difference, but one that runs its own steps
   expect(differencesOf("site", [...requiredSet("site"), handRolled]).map(({ kind, name }) => [kind, name])).toEqual([["extra", "mutation.yml"]]);
 });
 
-// The files avi2d/workflows at tag v3 holds, which every caller the generator writes must name at v3.
 const SHARED_V3_FILES = ["advisories.yml", "ci.yml", "mutation.yml", "pr-title.yml", "preview-remove.yml", "release-main.yml", "release-pr.yml", "site-ci.yml", "site-main.yml", "site-production.yml"];
 
-test("no caller the set writes pins below v3, and none names a file the v3 tag lacks", () => {
+test("advisories, mutation and required callers pin v3 and name a file the v3 tag holds", () => {
   const callers = [...requiredSet("code"), ...requiredSet("site"), ...byHandSet("site"), { name: "mutation.yml", text: MUTATION_WORKFLOW }];
-  const pins = callers.flatMap(({ text }) => [...text.matchAll(/avi2d\/workflows\/\.github\/workflows\/([\w.-]+)@(\S+)/g)].map(([, file, ref]) => `${file}@${ref}`));
+  const pins = callers.flatMap(({ text }) => {
+    const document = Bun.YAML.parse(text);
+    const jobs = isRecord(document) ? document["jobs"] : undefined;
+    if (!isRecord(jobs)) return [];
+    return Object.values(jobs).flatMap((job) => (isRecord(job) && typeof job["uses"] === "string" ? [job["uses"]] : []));
+  });
   expect(pins.length).toBeGreaterThan(0);
-  const v3Pins = SHARED_V3_FILES.map((file) => `${file}@v3`);
+  const v3Pins = SHARED_V3_FILES.map((file) => `avi2d/workflows/.github/workflows/${file}@v3`);
   expect(pins.filter((pin) => !v3Pins.includes(pin))).toEqual([]);
 });
 
 test("a ci caller that omits ready_for_review never starts when a draft is marked ready, so the draft hold never releases", () => {
   for (const kind of ["code", "site"] as const) {
     const ci = requiredSet(kind).find(({ name }) => name === "ci.yml");
-    expect(ci?.text).toContain("  types: [opened, synchronize, reopened, ready_for_review]\n");
+    const document = Bun.YAML.parse(ci?.text ?? "");
+    const on = isRecord(document) ? document["on"] : undefined;
+    const pullRequest = isRecord(on) ? on["pull_request"] : undefined;
+    const types = isRecord(pullRequest) ? pullRequest["types"] : undefined;
+    expect(types).toContain("ready_for_review");
   }
 });
