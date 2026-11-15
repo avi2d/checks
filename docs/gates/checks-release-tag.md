@@ -10,7 +10,7 @@ With a workflow argument it tags the commit and dispatches that workflow on the 
 
 ## What it checks
 
-It reads the subject of `HEAD`, and does nothing unless the subject is `chore: release <version>`, with or without the pull request number a squash merge appends.
+With a workflow argument it reads the subject of `HEAD`, and does nothing unless the subject is `chore: release <version>`, with or without the pull request number a squash merge appends.
 It refuses a release commit whose `package.json` holds another version.
 It tags that commit as `v<version>` and pushes the tag to `origin`.
 
@@ -29,7 +29,8 @@ That check is what lets the release run no tests: the release pull request ran t
 It then pushes the tag and creates the GitHub release `v<version>`, whose notes are the `CHANGELOG.md` section for that version.
 It publishes the package to npm as [checks-release-publish](checks-release-publish.md) says, unless `package.json` holds `"private": true`.
 The changelog is built once, by the release pull request, and this run reads the committed file.
-A rerun finds the tag, rewrites the release notes in place, and finds the version on npm, so it neither tags, releases nor publishes twice.
+When `HEAD` is the release commit, a rerun finds the tag, rewrites the release notes in place, and finds the version on npm, so it neither tags, releases nor publishes twice.
+A release whose GitHub release or npm publish failed is finished by rerunning that release commit's own `main` run.
 
 ### With a workflow argument
 
@@ -47,7 +48,8 @@ The next run of the workflow that tags it then cuts the release again with every
 ## What it reads
 
 It reads the subject of `HEAD` and of each commit behind it, `package.json` at each of those commits and `CHANGELOG.md` at the release commit, and the tag from `origin` with `git ls-remote`.
-It names the workflow it runs in by `GITHUB_WORKFLOW`, or as `release-pr` when that is unset.
+With a workflow argument it names the workflow it runs in by `GITHUB_WORKFLOW`, or as `release-pr` when that is unset.
+With no argument it names `release`.
 The build it runs reads the whole history, so the checkout fetches all of it.
 It pushes the tag with the credentials the checkout holds.
 It calls the GitHub API through `gh api`, which takes the repository from the checkout's remote and the token from `GH_TOKEN`.

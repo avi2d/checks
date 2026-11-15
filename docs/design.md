@@ -212,7 +212,8 @@ In this repository, a `tested-tree` step fetches the pull request head the squas
 Here the release workflow runs the same check on the tag, so either step rejects a mismatched or unverifiable tree.
 A release runs on a schedule only where [checks-ci-wiring](gates/checks-ci-wiring.md#release-schedule) allows it.
 `checks-release-pr` writes only to the `release/<branch>` branch it owns, and rebuilds that branch on `main` rather than merging `main` into it, so the changelog it carries is the one the build writes.
-`checks-release-tag` writes only the `v*` tag of a release commit that already landed.
+`checks-release-tag` with a workflow argument writes only the `v*` tag of a release commit that already landed.
+With no argument it also writes the GitHub release and publishes the package.
 The `github-release` job's `contents: write` creates or updates the GitHub release from the tag's `CHANGELOG.md` section.
 
 Every release bin acts with the workflow token.

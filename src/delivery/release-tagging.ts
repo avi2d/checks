@@ -67,7 +67,7 @@ const landedRelease = Effect.fn("landedRelease")(function* (label: string, root:
     if ((yield* taggedOn(root, candidate.tag)) === sha) break;
     return candidate;
   }
-  yield* Console.log(`${label}: ${head.slice(0, 12)} is no release commit`);
+  yield* Console.log(`${label}: ${head.slice(0, 12)} is no release commit; a release whose GitHub release or npm publish failed is finished by rerunning that release commit's own main run`);
   return undefined;
 });
 

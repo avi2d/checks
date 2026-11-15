@@ -210,7 +210,7 @@ test(
   async () => {
     const main = await onMain("feat: price a bill (#8)");
 
-    expect(await main.run(SCRIPT, [])).toEqual({ exitCode: 0, text: `release-tag: ${main.head.slice(0, 12)} is no release commit\n` });
+    expect(await main.run(SCRIPT, [])).toEqual({ exitCode: 0, text: `release-tag: ${main.head.slice(0, 12)} is no release commit; a release whose GitHub release or npm publish failed is finished by rerunning that release commit's own main run\n` });
     expect(await main.inOrigin("tag", "--list")).toBe("");
     expect((await main.state()).calls).toEqual([]);
     expect((await main.npm()).calls).toEqual([]);
@@ -248,10 +248,27 @@ test(
     await $`git commit -q --allow-empty -m ${"docs: fix a typo (#9)"}`.cwd(main.dir).quiet();
     const plain = (await $`git rev-parse HEAD`.cwd(main.dir).quiet()).stdout.toString().trim();
 
-    expect(await main.run(SCRIPT, [])).toEqual({ exitCode: 0, text: `release-tag: ${plain.slice(0, 12)} is no release commit\n` });
+    expect(await main.run(SCRIPT, [])).toEqual({ exitCode: 0, text: `release-tag: ${plain.slice(0, 12)} is no release commit; a release whose GitHub release or npm publish failed is finished by rerunning that release commit's own main run\n` });
     expect(await main.inOrigin("tag", "--list")).toBe("");
     expect((await main.state()).releases).toEqual([]);
     expect((await main.npm()).calls).toEqual([]);
+  },
+  60_000,
+);
+
+test(
+  "with no argument a release commit whose tag is already pushed but which has no GitHub release yet still creates the release and publishes",
+  async () => {
+    const main = await onMain("chore: release 0.2.0 (#7)");
+    await $`git push -q origin HEAD:refs/tags/v0.2.0`.cwd(main.dir).quiet();
+
+    const released = await main.run(SCRIPT, []);
+    expect(released.exitCode).toBe(0);
+    expect(released.text).toContain(`release-tag: v0.2.0 already tags ${main.head.slice(0, 12)}\n`);
+    expect(released.text).toContain("release-tag: created the GitHub release v0.2.0 with the CHANGELOG.md section for 0.2.0\n");
+    expect(released.text).toContain("release-publish: published widget@0.2.0\n");
+    expect((await main.state()).releases.map(({ tag_name: tag }) => tag)).toEqual(["v0.2.0"]);
+    expect((await main.npm()).latest).toBe("0.2.0");
   },
   60_000,
 );
