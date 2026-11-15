@@ -22,7 +22,7 @@ export function taggedCommitOf(listed: string): string | undefined {
   return peeled?.split("\t")[0];
 }
 
-const taggedOn = Effect.fn("taggedOn")(function* (root: string, tag: string) {
+export const taggedOn = Effect.fn("taggedOn")(function* (root: string, tag: string) {
   return taggedCommitOf(yield* git(["ls-remote", "--tags", "origin", `refs/tags/${tag}`, `refs/tags/${tag}^{}`], root));
 });
 

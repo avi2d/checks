@@ -22,7 +22,14 @@ const Run = Schema.Struct({
   html_url: Schema.String,
 });
 
-const GitHubRelease = Schema.Struct({ id: Schema.Int, tag_name: Schema.String, name: Schema.String, body: Schema.String });
+const GitHubRelease = Schema.Struct({
+  id: Schema.Int,
+  tag_name: Schema.String,
+  name: Schema.String,
+  body: Schema.String,
+  draft: Schema.Boolean,
+  prerelease: Schema.Boolean,
+});
 
 const State = Schema.Struct({
   calls: Schema.Array(Schema.String),
@@ -175,6 +182,13 @@ async function pullsApi(origin: string, state: FakeState, method: string, route:
   return undefined;
 }
 
+const releaseFields = (body: Body) => ({
+  name: decodeString(body["name"]),
+  body: decodeString(body["body"]),
+  draft: body["draft"] === true,
+  prerelease: body["prerelease"] === true,
+});
+
 // GitHub answers 404 for a tag no release holds yet.
 function releasesApi(state: FakeState, method: string, route: string, body: Body): Answer | "missing" | undefined {
   const byTag = /^releases\/tags\/(.+)$/.exec(route)?.[1];
@@ -183,13 +197,13 @@ function releasesApi(state: FakeState, method: string, route: string, body: Body
     return held === undefined ? "missing" : { state, body: held };
   }
   if (method === "POST" && route === "releases") {
-    const release = { id: state.releases.length + 1, tag_name: decodeString(body["tag_name"]), name: decodeString(body["name"]), body: decodeString(body["body"]) };
+    const release = { id: state.releases.length + 1, tag_name: decodeString(body["tag_name"]), ...releaseFields(body) };
     return { state: { ...state, releases: [...state.releases, release] }, body: release };
   }
   const id = /^releases\/(\d+)$/.exec(route)?.[1];
   const found = state.releases.find((one) => String(one.id) === id);
   if (method !== "PATCH" || found === undefined) return undefined;
-  const edited = { ...found, name: decodeString(body["name"]), body: decodeString(body["body"]) };
+  const edited = { ...found, ...releaseFields(body) };
   return { state: { ...state, releases: state.releases.map((one) => (one === found ? edited : one)) }, body: edited };
 }
 

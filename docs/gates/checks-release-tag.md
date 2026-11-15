@@ -16,7 +16,8 @@ It tags `HEAD` as `v<version>` and pushes the tag to `origin`.
 
 ### With no argument
 
-It is the one release step a `main.yml` caller runs on each push to `main`, so a merge that is no release commit ends at once, before any API call.
+It is the one release step a `main.yml` caller runs on each push to `main`.
+A merge that is no release commit ends at once, before any API call.
 On a release commit it first fetches the head of the pull request the squash subject names, such as `(#7)`.
 It refuses unless the tree of `HEAD` equals the tree that pull request tested.
 That check is what lets the release run no tests: the release pull request ran the whole suite on that tree.
