@@ -22,13 +22,15 @@ It writes `.jscpd.json` with the kit default.
 It writes the Effect paths of the `oxlint.config.ts` it finds or writes into the language service entry of `tsconfig.json`.
 The pair passes `checks-effect-scope --check` from the first write.
 It writes `package.json` with the kit in `devDependencies` and with `lint`, `typecheck`, `test` and `test:fast` scripts, plus a `test:<tier>` script for each tier that holds test files.
-It writes the caller set `checks-workflows` writes for the repository kind.
+It writes the caller set `checks-workflows` writes.
 A repository whose workflow callers already call a shared site workflow gets the site callers, and so does a run given the site name flags.
 Any other repository gets the code callers.
 Each site caller passes the Pages project, the domain and the production repository, taken from the callers it finds.
+The `site` job of `ci.yml` passes the Pages project alone.
 Each flag fills only a name no caller passes.
 It stops before writing anything when a site run lacks one of the three names, and names the fix.
 The same stop covers two values of one name, an unparsable name, and a flag that differs from a name its callers pass.
+The same stop covers a test job of `ci.yml` that passes an unparsable input or holds a fixed job name.
 A freshly set up repository passes `checks-workflows` without running `--write` first.
 In a code repository it writes `mutation.yml` under `.github/workflows/`, which names the shared mutation workflow `avi2d/workflows/.github/workflows/mutation.yml@v3` and nothing else.
 The shared workflow picks the run from the event.
@@ -67,7 +69,7 @@ With `--private` it sets `private` to `true` in `package.json`, and the run name
 | Code | When |
 | --- | --- |
 | 0 | every file is written or already there |
-| 2 | an argument is unknown, a site lacks one of its three names, passes two values of one, names one that does not parse, or passes a flag that differs from the name a present caller passes, a file it needs cannot be read, or a `lint`, `typecheck`, `test`, `test:fast` or `test:*` script it finds does not run the checks |
+| 2 | an argument is unknown, a site lacks one of its three names, passes two values of one, names one that does not parse, passes a flag that differs from the name a present caller passes, a test job of `ci.yml` passes an unparsable input or holds a fixed job name, a file it needs cannot be read, or a `lint`, `typecheck`, `test`, `test:fast` or `test:*` script it finds does not run the checks |
 
 ## Sample output
 

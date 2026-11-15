@@ -119,8 +119,11 @@ To run the gates in CI:
    ```
 
    A later `--write` keeps the names the site callers pass.
-   Each caller runs one shared workflow.
-   The first step of each run fails the pull request when a caller differs or an extra workflow file appears.
+   `ci.yml` composes the CI parts into jobs that run side by side, and each other caller runs one shared workflow.
+   A first write gives `ci.yml` the default test jobs of the kind: `test` in a code repository, and `unit` and `browser` in a site.
+   To run another test command, add a job that calls `test.yml` with that command in `run` and run `--write` again.
+   A later `--write` keeps the test jobs `ci.yml` holds and rewrites the rest of the file.
+   The `static` job fails the pull request when a caller differs or an extra workflow file appears.
    A new repository gets the same callers from [checks-setup](../gates/checks-setup.md).
 
 To run the four whole-tree gates on demand, a repository adds a whole-tree-run workflow:

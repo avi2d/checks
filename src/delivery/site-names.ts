@@ -1,5 +1,5 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
-import { SHARED_REPOSITORY } from "./mutation-workflow.ts";
+import { ciJobsOf, sharedFileOf, type CiJobs } from "./ci-jobs.ts";
 import { isRecord, workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export const WORKFLOWS = ".github/workflows";
@@ -24,15 +24,15 @@ const decodeSiteNames = Schema.decodeUnknownEffect(SiteNames);
 
 export type SiteNameFlags = Readonly<Partial<Record<SiteNameKey, string>>>;
 
-export type CallerSet = { readonly kind: "code" } | { readonly kind: "site"; readonly names: SiteNames };
+export type CallerSet = { readonly kind: "code"; readonly ci: CiJobs } | { readonly kind: "site"; readonly names: SiteNames; readonly ci: CiJobs };
 
-class SiteNamesFault extends Schema.TaggedError<SiteNamesFault>()("SiteNamesFault", {
+class CallerSetFault extends Schema.TaggedError<CallerSetFault>()("CallerSetFault", {
   message: Schema.String,
 }) {}
 
 const NAMED_SITE_WORKFLOWS = ["site-ci.yml", "site-main.yml", "site-production.yml", "preview-remove.yml"] as const;
 
-const SHARED_WORKFLOWS = `${SHARED_REPOSITORY}/.github/workflows/`;
+const SITE_WORKFLOWS: readonly string[] = [...NAMED_SITE_WORKFLOWS, "site-preview.yml"];
 
 export function takesSiteNames(shared: string): boolean {
   const [file] = shared.split("@");
@@ -40,7 +40,8 @@ export function takesSiteNames(shared: string): boolean {
 }
 
 function calledSiteWorkflow(uses: unknown): boolean {
-  return typeof uses === "string" && uses.startsWith(SHARED_WORKFLOWS) && takesSiteNames(uses.slice(SHARED_WORKFLOWS.length));
+  const file = sharedFileOf(uses);
+  return file !== undefined && SITE_WORKFLOWS.some((name) => name === file);
 }
 
 type HeldName = { readonly key: SiteNameKey; readonly value: string; readonly path: string };
@@ -93,19 +94,25 @@ function flagsOf(keys: readonly SiteNameKey[]): string {
   return keys.map((key) => `--${key} ${PLACEHOLDERS[key]}`).join(" ");
 }
 
+const heldCiJobs = (kind: CallerSet["kind"], workflows: readonly Workflow[]) =>
+  ciJobsOf(
+    kind,
+    workflows.find(({ path }) => path === `${WORKFLOWS}/ci.yml`),
+  ).pipe(Effect.mapError((fault) => new CallerSetFault({ message: fault.message })));
+
 export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string) {
   const flagged = SITE_NAME_KEYS.some((key) => flags[key] !== undefined);
-  if (!callsSiteWorkflow(workflows) && !flagged) return { kind: "code" } satisfies CallerSet;
+  if (!callsSiteWorkflow(workflows) && !flagged) return { kind: "code", ci: yield* heldCiJobs("code", workflows) } satisfies CallerSet;
   const held = workflows.flatMap(heldNames).filter(({ key }) => flags[key] === undefined);
   const conflict = conflictOf(held);
-  if (conflict !== undefined) return yield* new SiteNamesFault({ message: conflict });
+  if (conflict !== undefined) return yield* new CallerSetFault({ message: conflict });
   const named: Partial<Record<SiteNameKey, string>> = { ...Object.fromEntries(held.map(({ key, value }) => [key, value])), ...flags };
   const missing = SITE_NAME_KEYS.filter((key) => named[key] === undefined);
   if (missing.length > 0) {
-    return yield* new SiteNamesFault({ message: `the site callers pass no ${listed(missing)}, so run ${rerun} ${flagsOf(missing)}` });
+    return yield* new CallerSetFault({ message: `the site callers pass no ${listed(missing)}, so run ${rerun} ${flagsOf(missing)}` });
   }
-  const names = yield* decodeSiteNames(named).pipe(Effect.mapError((issue) => new SiteNamesFault({ message: `a site name ${issue.message}` })));
-  return { kind: "site", names } satisfies CallerSet;
+  const names = yield* decodeSiteNames(named).pipe(Effect.mapError((issue) => new CallerSetFault({ message: `a site name ${issue.message}` })));
+  return { kind: "site", names, ci: yield* heldCiJobs("site", workflows) } satisfies CallerSet;
 });
 
 const FLAGS = new Map(SITE_NAME_KEYS.map((key) => [`--${key}`, key]));

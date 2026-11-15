@@ -5,7 +5,7 @@ import { runMain, Usage } from "../core/main.ts";
 import { readRepository } from "./ci-wiring.ts";
 import { holdsSharedWorkflow } from "./mutation-workflow.ts";
 import { callerSetOf, parseSiteNameFlags, readWorkflowFiles, WORKFLOWS, type CallerSet, type HeldFile, type SiteNameFlags } from "./site-names.ts";
-import { byHandSet, differenceLines, differencesOf, isIgnoredWorkflow, requiredSet, type WorkflowFile } from "./workflow-set.ts";
+import { byHandSet, differenceLines, differencesOf, holdsSingleJobCi, isIgnoredWorkflow, requiredSet, type WorkflowFile } from "./workflow-set.ts";
 
 const NAME = "workflows";
 const USAGE = "usage: workflows.ts [--write [--pages <project>] [--domain <domain>] [--production <owner/name>]]";
@@ -43,11 +43,14 @@ const checkSet = Effect.fn("checkSet")(function* (present: readonly HeldFile[]) 
     present.map(({ workflow }) => workflow),
     {},
     REWRITE,
-  ).pipe(Effect.catchTag("SiteNamesFault", (fault) => Console.error(`${NAME}: ${fault.message}`).pipe(Effect.as(undefined))));
+  ).pipe(Effect.catchTag("CallerSetFault", (fault) => Console.error(`${NAME}: ${fault.message}`).pipe(Effect.as(undefined))));
   if (set === undefined) return false;
   const differences = differencesOf(set, present);
   if (differences.length === 0) {
     yield* Console.log(`${NAME}: ${WORKFLOWS} holds the ${set.kind} set checks-workflows writes`);
+    if (holdsSingleJobCi(set, present)) {
+      yield* Console.log(`${NAME}: ${WORKFLOWS}/ci.yml is the single-job caller, so run ${REWRITE} to write the composed ci.yml`);
+    }
     return true;
   }
   yield* Console.error(

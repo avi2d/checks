@@ -99,7 +99,7 @@ const service = tsconfig.compilerOptions?.plugins?.find((plugin) => plugin.name 
 expect(service?.overrides?.[0]?.include).toEqual(EXPECTED_INCLUDE);
 expect(service?.overrides?.[0]?.exclude).toEqual(EXPECTED_EXCLUDE);
 const { uses } = workflowSteps(await readFile(join(dir, ".github/workflows/ci.yml"), "utf8"));
-expect(uses).toBe("avi2d/workflows/.github/workflows/ci.yml@v3");
+expect(uses).toBe("avi2d/workflows/.github/workflows/gate.yml@v3");
 },
 60_000,
 );
@@ -169,7 +169,7 @@ expect(run.text).toContain("added node_modules/ to .gitignore");
 const keptTsconfig = decodeTsconfig(await readFile(join(repo.dir, "tsconfig.json"), "utf8"));
 expect(keptTsconfig.extends).toBe("@avi2dg/checks/tsconfig.effect.json");
 const keptUses = workflowSteps(await readFile(join(repo.dir, ".github/workflows/ci.yml"), "utf8")).uses;
-expect(keptUses).toBe("avi2d/workflows/.github/workflows/ci.yml@v3");
+expect(keptUses).toBe("avi2d/workflows/.github/workflows/gate.yml@v3");
 },
 60_000,
 );
@@ -181,7 +181,7 @@ const repo = await open({});
 const run = await setup(repo, "--private");
 expect(run.exitCode).toBe(0);
 const { uses } = workflowSteps(await readFile(join(repo.dir, ".github/workflows/ci.yml"), "utf8"));
-expect(uses).toBe("avi2d/workflows/.github/workflows/ci.yml@v3");
+expect(uses).toBe("avi2d/workflows/.github/workflows/gate.yml@v3");
 expect(run.text).toContain("set the CI_RUNS_ON variable to a self-hosted runner label");
 const manifest = decodeManifest(await readFile(join(repo.dir, "package.json"), "utf8"));
 expect(manifest.private).toBe(true);
@@ -442,7 +442,10 @@ const run = await setup(repo, "--pages", "shop", "--domain", "shop.example.com",
 expect(run.exitCode).toBe(0);
 expect(await Bun.file(join(repo.dir, ".github/workflows/mutation.yml")).exists()).toBe(false);
 const { uses } = workflowSteps(await readFile(join(repo.dir, ".github/workflows/ci.yml"), "utf8"));
-expect(uses).toBe("avi2d/workflows/.github/workflows/site-ci.yml@v3");
+expect(uses).toBe("avi2d/workflows/.github/workflows/gate.yml@v3");
+expect(Bun.YAML.parse(await readFile(join(repo.dir, ".github/workflows/ci.yml"), "utf8"))).toMatchObject({
+  jobs: { site: { uses: "avi2d/workflows/.github/workflows/site-preview.yml@v3", with: { pages: "shop" } } },
+});
 const checked = await repo.script("delivery/workflows.ts");
 expect(checked.exitCode).toBe(0);
 },
