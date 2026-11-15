@@ -86,12 +86,18 @@ test("each caller grants exactly the scopes its v3 job declares, so a spare depl
   }
 });
 
-test("only the ci and pr-title callers hold a workflow-level group, so a release, main or production caller cannot hold one its shared job also holds", () => {
+test("only the ci, pr-title and code main callers hold a workflow-level group, so the site main caller cannot cancel a pending release", () => {
   const held = callers()
     .filter(({ text }) => {
       const document = Bun.YAML.parse(text);
       return isRecord(document) && document["concurrency"] !== undefined;
     })
     .map(({ name }) => name);
-  expect(held).toEqual(["ci.yml", "pr-title.yml", "ci.yml", "pr-title.yml"]);
+  expect(held).toEqual(["ci.yml", "pr-title.yml", "main.yml", "ci.yml", "pr-title.yml"]);
+  const codeMain = requiredSet("code").find(({ name }) => name === "main.yml");
+  const codeDocument = Bun.YAML.parse(codeMain?.text ?? "");
+  expect(isRecord(codeDocument) ? codeDocument["concurrency"] : undefined).toEqual({ group: "main", "cancel-in-progress": false });
+  const siteMain = requiredSet("site").find(({ name }) => name === "main.yml");
+  const siteDocument = Bun.YAML.parse(siteMain?.text ?? "");
+  expect(isRecord(siteDocument) ? siteDocument["concurrency"] : undefined).toBeUndefined();
 });

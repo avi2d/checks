@@ -65,10 +65,11 @@ const PR_TITLE: Caller = {
   permissions: "contents: read, statuses: write, pull-requests: read",
 };
 
-// The shared job holds a group for each release commit, so a caller-level group would cancel a pending release run.
-const mainCaller = (shared: string, permissions: string, secrets: boolean): Caller => ({
+// site-main queues each release commit in its shared job, so a caller group would cancel a pending release.
+const mainCaller = (shared: string, permissions: string, secrets: boolean, concurrency?: Caller["concurrency"]): Caller => ({
   name: "main",
   on: ["push:", "  branches: [main]"],
+  ...(concurrency === undefined ? {} : { concurrency }),
   job: "release",
   uses: `${SHARED_WORKFLOWS}/${shared}@v3`,
   permissions,
@@ -110,7 +111,8 @@ const SITE: readonly Caller[] = [
 const CODE: readonly Caller[] = [
   ciCaller("ci.yml", "contents: read, actions: write, statuses: write, pull-requests: read", false),
   PR_TITLE,
-  mainCaller("release-main.yml", "contents: write, id-token: write, actions: read, pull-requests: read", false),
+// release-main holds no group, so the caller serializes pushes to main.
+  mainCaller("release-main.yml", "contents: write, id-token: write, actions: read, pull-requests: read", false, { group: "main", cancel: false }),
   RELEASE,
 ];
 
