@@ -27,7 +27,7 @@ test("an absent by-hand caller is no difference, but one that runs its own steps
 
 const SHARED_V3_FILES = ["advisories.yml", "ci.yml", "mutation.yml", "pr-title.yml", "preview-remove.yml", "release-main.yml", "release-pr.yml", "site-ci.yml", "site-main.yml", "site-production.yml"];
 
-test("advisories, mutation and required callers pin v3 and name a file the v3 tag holds", () => {
+test("no advisories, mutation or required caller pins below v3 or names a file the v3 tag lacks", () => {
   const callers = [...requiredSet("code"), ...requiredSet("site"), ...byHandSet("site"), { name: "mutation.yml", text: MUTATION_WORKFLOW }];
   const pins = callers.flatMap(({ text }) => {
     const document = Bun.YAML.parse(text);
