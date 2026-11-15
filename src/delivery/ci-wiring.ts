@@ -13,7 +13,8 @@ import { findScheduledReleases, formatScheduleReport } from "./release-schedule.
 import { findRunnerFaults, formatRunnerReport, jobRuns, readRunnerConfig } from "./runner-policy.ts";
 import { findScheduledRuns, formatScheduledRunReport } from "./schedule-policy.ts";
 import { invokes, mentions, plainCommand, type Command } from "./shell-command.ts";
-import { differencesOf, kindOf } from "./workflow-set.ts";
+import { callerSetOf } from "./site-names.ts";
+import { differencesOf } from "./workflow-set.ts";
 import { findMissingWorkflows, formatMissingReport, isRecord, localUses, names, skippedBy, switchedOff, workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export { BunPinError, findBunPinFaults, formatBunPinReport } from "./bun-pin.ts";
@@ -72,7 +73,6 @@ const TITLE_CALLS = ["bun src/delivery/commit-title.ts", "./node_modules/.bin/co
 const ScriptsManifest = Schema.Struct({
   scripts: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
   private: Schema.optionalKey(Schema.Boolean),
-  site: Schema.optionalKey(Schema.Unknown),
 });
 // Without these a pull_request workflow never sees the commits a pull request pushes.
 const GATING_TYPES = ["opened", "synchronize"];
@@ -316,13 +316,17 @@ const reportHandRolled = Effect.fn("reportHandRolled")(function* (
 });
 
 // The shared workflows the set calls run every gate, and this check does not follow a remote workflow.
-function callsSharedSet(manifest: typeof ScriptsManifest.Type, workflows: readonly Workflow[]): boolean {
+const callsSharedSet = Effect.fn("callsSharedSet")(function* (workflows: readonly Workflow[]) {
   const present = workflows.map(({ path, text }) => ({ name: path.slice(WORKFLOWS.length + 1), text }));
-  return present.length > 0 && differencesOf(kindOf(manifest.site), present).length === 0;
-}
+  if (present.length === 0) return false;
+  return yield* callerSetOf(workflows, {}, "checks-workflows --write").pipe(
+    Effect.map((set) => differencesOf(set, present).length === 0),
+    Effect.orElseSucceed(() => false),
+  );
+});
 
-const reportGaps = Effect.fn("reportGaps")(function* (root: string, manifest: typeof ScriptsManifest.Type, workflows: readonly Workflow[]) {
-  if (callsSharedSet(manifest, workflows)) {
+const reportGaps = Effect.fn("reportGaps")(function* (root: string, workflows: readonly Workflow[]) {
+  if (yield* callsSharedSet(workflows)) {
     yield* Console.log(`ci-wiring: ${WORKFLOWS} holds the set checks-workflows writes, so the shared workflows run every gate`);
     return [];
   }
@@ -337,7 +341,7 @@ const wiring = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const workflows = yield* readWorkflows(root);
   const manifest = yield* readManifest(root);
-  const gaps = yield* reportGaps(root, manifest, workflows);
+  const gaps = yield* reportGaps(root, workflows);
   const missing = findMissingWorkflows(workflows);
   if (missing.length > 0) yield* Console.error(formatMissingReport(missing));
   const scripts = new Map(Object.entries(manifest.scripts ?? {}));

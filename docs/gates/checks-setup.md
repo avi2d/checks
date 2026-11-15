@@ -23,9 +23,12 @@ It writes the Effect paths of the `oxlint.config.ts` it finds or writes into the
 The pair passes `checks-effect-scope --check` from the first write.
 It writes `package.json` with the kit in `devDependencies` and with `lint`, `typecheck`, `test` and `test:fast` scripts, plus a `test:<tier>` script for each tier that holds test files.
 It writes the caller set `checks-workflows` writes for the repository kind.
-A repository whose `package.json` has a `site` field gets the site callers, and any other repository gets the code callers.
+A repository whose workflow callers already call a shared site workflow gets the site callers, and so does a run given the site name flags.
+Any other repository gets the code callers.
+Each site caller passes the Pages project, the domain and the production repository, taken from the callers it finds or from the flags.
+It stops before writing anything when a site run lacks one of the three names, and names the flags to pass.
 A freshly set up repository passes `checks-workflows` without running `--write` first.
-In a repository with no `site` field it writes `mutation.yml` under `.github/workflows/`, which names the shared mutation workflow `avi2d/workflows/.github/workflows/mutation.yml@v3` and nothing else.
+In a code repository it writes `mutation.yml` under `.github/workflows/`, which names the shared mutation workflow `avi2d/workflows/.github/workflows/mutation.yml@v3` and nothing else.
 The shared workflow picks the run from the event.
 A pull request runs `compare`, and a manual dispatch runs `refresh`.
 A refresh starts by hand, as [checks-ci-wiring](checks-ci-wiring.md#schedules) requires.
@@ -41,16 +44,19 @@ It tells the owner to declare the repository owners in `package.json` `author` o
 ## What it reads
 
 It reads the working tree, which is the repository it sets up.
+It reads the `.yml` and `.yaml` files under `.github/workflows/` to tell a site from a code repository and to take the site names its callers pass.
 It reads a `package.json` it finds for the fields and scripts it keeps, replaces or refuses.
 It reads the kit install for `.bun-version`, `bunfig.toml`, its version, its Stryker pins and each template.
 
 ## Arguments
 
 ```sh
-checks-setup [--private]
+checks-setup [--private] [--pages <project>] [--domain <domain>] [--production <owner/name>]
 ```
 
 With no arguments the repository is public.
+With `--pages`, `--domain` and `--production` the repository is a site with those names, and a flag replaces the name the site callers pass.
+The three flags set up a site that has no site caller yet.
 With `--private` it sets `private` to `true` in `package.json`, and the run names the `CI_RUNS_ON` value to set.
 
 ## Exit codes
@@ -58,7 +64,7 @@ With `--private` it sets `private` to `true` in `package.json`, and the run name
 | Code | When |
 | --- | --- |
 | 0 | every file is written or already there |
-| 2 | an argument is unknown, a file it needs cannot be read, or a `lint`, `typecheck`, `test`, `test:fast` or `test:*` script it finds does not run the checks |
+| 2 | an argument is unknown, a site lacks one of its three names, a file it needs cannot be read, or a `lint`, `typecheck`, `test`, `test:fast` or `test:*` script it finds does not run the checks |
 
 ## Sample output
 

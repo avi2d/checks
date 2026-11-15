@@ -2,7 +2,8 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { runMain, Usage } from "../core/main.ts";
 import { STRYKER_CONFIG } from "./setup-workflow.ts";
-import { byHandSet, kindOf, requiredSet, type RepositoryKind } from "./workflow-set.ts";
+import { callerSetOf, parseSiteNameFlags, readWorkflowFiles, type CallerSet } from "./site-names.ts";
+import { byHandSet, requiredSet } from "./workflow-set.ts";
 import { TEMPLATES, VISION_PAGE } from "../docs/doc-templates.ts";
 import { requiresName } from "../docs/doc-vision.ts";
 import { FAST_COMMAND, TEST_COMMAND } from "../core/test-script.ts";
@@ -12,7 +13,7 @@ import { SOURCES, TESTS } from "../quality/presets/oxlint.ts";
 import severities from "../quality/presets/effect.language-service.json" with { type: "json" };
 
 const NAME = "checks-setup";
-const USAGE = "usage: " + NAME + " [--private]";
+const USAGE = "usage: " + NAME + " [--private] [--pages <project>] [--domain <domain>] [--production <owner/name>]";
 const PRIVATE = "--private";
 const IGNORE_ENTRY = "node_modules/";
 const KIT_ID = "@avi2dg/checks";
@@ -265,12 +266,7 @@ function finalizePackage(
   return { merged, hasBuild, hasOwner };
 }
 
-const writeFreshPackage = Effect.fn("writeFreshPackage")(function* (
-  root: string,
-  isPrivate: boolean,
-  pins: Pins,
-  fallbackName: string,
-) {
+const writeFreshPackage = Effect.fn("writeFreshPackage")(function* (root: string, isPrivate: boolean, pins: Pins, fallbackName: string) {
   const system = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const full = path.join(root, "package.json");
@@ -285,7 +281,7 @@ const writeFreshPackage = Effect.fn("writeFreshPackage")(function* (
   yield* system.makeDirectory(path.dirname(full), { recursive: true });
   yield* system.writeFileString(full, JSON.stringify(manifest, undefined, 2) + "\n");
   yield* Console.log(NAME + ": wrote package.json");
-  return { hasBuild: false, hasOwner: false, name: fallbackName, kind: "code" as const };
+  return { hasBuild: false, hasOwner: false, name: fallbackName };
 });
 
 const updatePackage = Effect.fn("updatePackage")(function* (
@@ -312,18 +308,13 @@ const updatePackage = Effect.fn("updatePackage")(function* (
   const name = typeof finalized.merged["name"] === "string" ? finalized.merged["name"] : fallbackName;
   if (next === raw) {
     yield* Console.log(NAME + ": kept package.json, already there");
-    return { hasBuild: finalized.hasBuild, hasOwner: finalized.hasOwner, name, kind: kindOf(record["site"]) };
+    return { hasBuild: finalized.hasBuild, hasOwner: finalized.hasOwner, name };
   }
   yield* system.writeFileString(full, next);
   yield* Console.log(NAME + ": wrote package.json");
-  return { hasBuild: finalized.hasBuild, hasOwner: finalized.hasOwner, name, kind: kindOf(record["site"]) };
+  return { hasBuild: finalized.hasBuild, hasOwner: finalized.hasOwner, name };
 });
-const setupPackage = Effect.fn("setupPackage")(function* (
-  root: string,
-  isPrivate: boolean,
-  pins: Pins,
-  fallbackName: string,
-) {
+const setupPackage = Effect.fn("setupPackage")(function* (root: string, isPrivate: boolean, pins: Pins, fallbackName: string) {
   const system = yield* FileSystem.FileSystem;
   const full = (yield* Path.Path).join(root, "package.json");
   if (!(yield* system.exists(full))) {
@@ -336,9 +327,9 @@ const setupPackage = Effect.fn("setupPackage")(function* (
   return yield* updatePackage(root, raw, record, isPrivate, fallbackName, pins);
 });
 
-const setupWorkflows = Effect.fn("setupWorkflows")(function* (root: string, kind: RepositoryKind) {
-  for (const { name, text } of requiredSet(kind)) yield* setupFile(root, `.github/workflows/${name}`, text);
-  const mutation = byHandSet(kind).find((file) => file.name === "mutation.yml");
+const setupWorkflows = Effect.fn("setupWorkflows")(function* (root: string, set: CallerSet) {
+  for (const { name, text } of requiredSet(set)) yield* setupFile(root, `.github/workflows/${name}`, text);
+  const mutation = byHandSet(set.kind).find((file) => file.name === "mutation.yml");
   if (mutation !== undefined) yield* setupFile(root, `.github/workflows/${mutation.name}`, mutation.text);
   yield* setupFile(root, "stryker.conf.mjs", STRYKER_CONFIG);
 });
@@ -353,12 +344,20 @@ const setupDocFiles = Effect.fn("setupDocFiles")(function* (root: string, vision
   return { wroteAgents, wroteVision };
 });
 
-const check = Effect.gen(function* () {
-  const args = process.argv.slice(2);
-  const unknown = args.find((arg) => arg !== PRIVATE);
+// The kind and the site names settle before any write, so a refused site run leaves the repository as it was.
+const argumentsOf = Effect.fn("argumentsOf")(function* (root: string) {
+  const parsed = parseSiteNameFlags(process.argv.slice(2));
+  if (parsed === undefined) return yield* new Usage({ message: USAGE });
+  const unknown = parsed.rest.find((arg) => arg !== PRIVATE);
   if (unknown !== undefined) return yield* new Usage({ message: unknown + " is not an argument\n" + USAGE });
-  const isPrivate = args.includes(PRIVATE);
+  const callers = (yield* readWorkflowFiles(root)).map(({ workflow }) => workflow);
+  const set = yield* callerSetOf(callers, parsed.flags, NAME).pipe(Effect.mapError((fault) => new Usage({ message: fault.message })));
+  return { isPrivate: parsed.rest.includes(PRIVATE), set };
+});
+
+const check = Effect.gen(function* () {
   const root = yield* Effect.sync(() => process.cwd());
+  const { isPrivate, set } = yield* argumentsOf(root);
   const path = yield* Path.Path;
 
   const kit = yield* decodeKitManifest(yield* kitText("package.json")).pipe(
@@ -381,7 +380,7 @@ const check = Effect.gen(function* () {
   yield* setupTsconfig(root, oxlintText);
   yield* setupFile(root, "knip.config.ts", KNIP_CONFIG);
   yield* setupFile(root, ".jscpd.json", JSCPD_CONFIG);
-  yield* setupWorkflows(root, outcome.kind);
+  yield* setupWorkflows(root, set);
   const { wroteAgents, wroteVision } = yield* setupDocFiles(root, requiresName({ name: outcome.name }));
   if (isPrivate) yield* Console.log(NAME + ": set the CI_RUNS_ON variable to a self-hosted runner label so the new jobs land there");
   if (!outcome.hasOwner) {

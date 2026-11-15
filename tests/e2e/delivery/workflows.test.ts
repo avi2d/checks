@@ -48,9 +48,11 @@ test("a code repository without workflow files is refused until --write writes c
   expect(wiring.exitCode).toBe(0);
 }, 30_000);
 
-test("a site repository gets the six site callers, keeps advisories in its caller form, and loses the workflow files the set replaces", async () => {
+const SITE_FLAGS = ["--pages", SITE.pages, "--domain", SITE.domain, "--production", SITE.production];
+
+test("a first site write takes the three names as flags, gets the six site callers, keeps advisories in its caller form, and loses the workflow files the set replaces", async () => {
   const repo = await open({
-    "package.json": manifest({ site: SITE }),
+    "package.json": manifest(),
     ".github/workflows/pages.yml": "name: pages\non: push\n",
     ".github/workflows/advisories.yml": "name: advisories\non:\n  schedule:\n    - cron: \"15 5 * * 1\"\n",
   });
@@ -60,9 +62,8 @@ test("a site repository gets the six site callers, keeps advisories in its calle
   expect(refused.exitCode).toBe(1);
   expect(refused.text).toContain("  .github/workflows/pages.yml: no workflow of the set, so delete it\n");
   expect(refused.text).toContain("  .github/workflows/advisories.yml: differs from the caller checks-workflows writes\n");
-  expect(refused.text).toContain("  .github/workflows/production.yml: missing\n");
 
-  expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 7 workflow file(s) of the site set, and deleted pages.yml\n" });
+  expect(await workflows(repo, ["--write", ...SITE_FLAGS])).toEqual({ exitCode: 0, text: "workflows: wrote the 7 workflow file(s) of the site set, and deleted pages.yml\n" });
   expect(await held(repo)).toEqual(["advisories.yml", "ci.yml", "main.yml", "pr-title.yml", "preview-close.yml", "production.yml", "release.yml"]);
   expect(await parsed(repo, "advisories.yml")).toEqual({
     name: "advisories",
@@ -73,14 +74,40 @@ test("a site repository gets the six site callers, keeps advisories in its calle
     jobs: {
       checks: {
         uses: "avi2d/workflows/.github/workflows/site-ci.yml@v3",
+        with: SITE,
         secrets: { CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}", CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" },
       },
     },
   });
   expect(await parsed(repo, "preview-close.yml")).toMatchObject({ on: { pull_request: { types: ["closed"] } } });
   expect(await parsed(repo, "main.yml")).toMatchObject({ jobs: { release: { uses: "avi2d/workflows/.github/workflows/site-main.yml@v3" } } });
-  expect(await parsed(repo, "production.yml")).toMatchObject({ on: { workflow_dispatch: null }, jobs: { production: { uses: "avi2d/workflows/.github/workflows/site-production.yml@v3" } } });
-  expect((await workflows(repo)).exitCode).toBe(0);
+  expect(await parsed(repo, "production.yml")).toMatchObject({
+    on: { workflow_dispatch: null },
+    jobs: { production: { uses: "avi2d/workflows/.github/workflows/site-production.yml@v3", with: SITE } },
+  });
+  expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the site set checks-workflows writes\n" });
+
+  await repo.commit("ci: write the site set");
+  expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 7 workflow file(s) of the site set\n" });
+  expect((await $`git status --porcelain`.cwd(repo.dir).text()).trim()).toBe("");
+}, 30_000);
+
+test("a package.json site field makes no site, so a repository with one and no site caller is judged as code", async () => {
+  const repo = await open({ "package.json": manifest({ site: SITE }) });
+  await repo.commit("start");
+  expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 4 workflow file(s) of the code set\n" });
+}, 30_000);
+
+test("site callers that pass no names are refused with the flags to pass, and --write without them writes nothing", async () => {
+  const unnamed = "name: ci\non: pull_request\njobs:\n  checks:\n    uses: avi2d/workflows/.github/workflows/site-ci.yml@v3\n";
+  const repo = await open({ "package.json": manifest(), ".github/workflows/ci.yml": unnamed });
+  await repo.commit("start");
+  const advice = "the site callers pass no pages, domain and production, so run checks-workflows --write --pages <project> --domain <domain> --production <owner/name>\n";
+
+  expect(await workflows(repo)).toEqual({ exitCode: 1, text: `workflows: ${advice}` });
+  expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 2, text: `workflows: ${advice}` });
+  expect(await held(repo)).toEqual(["ci.yml"]);
+  expect(await workflows(repo, ["--write", ...SITE_FLAGS])).toEqual({ exitCode: 0, text: "workflows: wrote the 6 workflow file(s) of the site set\n" });
 }, 30_000);
 
 test("an edited line in a written caller is refused with the line it holds and the line the caller holds", async () => {
@@ -125,5 +152,6 @@ test("the shared workflow repository keeps its own files and an unknown flag is 
 
   const flagged = await workflows(repo, ["--force"]);
   expect(flagged.exitCode).toBe(2);
-  expect(flagged.text).toContain("usage: workflows.ts [--write]");
+  expect(flagged.text).toContain("usage: workflows.ts [--write [--pages <project>] [--domain <domain>] [--production <owner/name>]]");
+  expect((await workflows(repo, SITE_FLAGS)).exitCode).toBe(2);
 }, 30_000);

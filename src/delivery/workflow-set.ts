@@ -1,11 +1,8 @@
 import { SHARED_REPOSITORY } from "./mutation-workflow.ts";
 import { MUTATION_WORKFLOW } from "./setup-workflow.ts";
+import { SITE_NAME_KEYS, takesSiteNames, type CallerSet, type SiteNames } from "./site-names.ts";
 
-export type RepositoryKind = "site" | "code";
-
-export function kindOf(site: unknown): RepositoryKind {
-  return site === undefined ? "code" : "site";
-}
+export type RepositoryKind = CallerSet["kind"];
 
 export function isIgnoredWorkflow(name: string): boolean {
   return name === "pr-text.yml";
@@ -45,14 +42,16 @@ type Caller = {
   readonly job: string;
   readonly shared: SharedWorkflow;
   readonly permissions: string;
+  readonly with?: SiteNames;
 };
 
-function callerText({ name, on, concurrency, job, shared, permissions }: Caller): string {
+function callerText({ name, with: names, on, concurrency, job, shared, permissions }: Caller): string {
   const lines = [`name: ${name}`, "", "on:", ...on.map((line) => `  ${line}`), ""];
   if (concurrency !== undefined) {
     lines.push("concurrency:", `  group: ${concurrency.group}`, `  cancel-in-progress: ${String(concurrency.cancel)}`, "");
   }
   lines.push("jobs:", `  ${job}:`, `    uses: ${SHARED_WORKFLOWS}/${shared}`, `    permissions: { ${permissions} }`);
+  if (names !== undefined) lines.push("    with:", ...SITE_NAME_KEYS.map((key) => `      ${key}: ${names[key]}`));
   const secrets: readonly string[] = SHARED_SECRETS[shared];
   if (secrets.length > 0) lines.push("    secrets:", ...secrets.map((secret) => `      ${secret}: \${{ secrets.${secret} }}`));
   return [...lines, ""].join("\n");
@@ -120,6 +119,8 @@ const SITE: readonly Caller[] = [
   },
 ];
 
+const siteCallers = (names: SiteNames): readonly Caller[] => SITE.map((caller) => (takesSiteNames(caller.shared) ? { ...caller, with: names } : caller));
+
 const CODE: readonly Caller[] = [
   ciCaller("ci.yml@v3", "contents: read, actions: write, statuses: write, pull-requests: read"),
   PR_TITLE,
@@ -142,8 +143,8 @@ const FLAKE: WorkflowFile = {
 
 const MUTATION: WorkflowFile = { name: "mutation.yml", text: MUTATION_WORKFLOW };
 
-export function requiredSet(kind: RepositoryKind): readonly WorkflowFile[] {
-  return filesOf(kind === "site" ? SITE : CODE);
+export function requiredSet(set: CallerSet): readonly WorkflowFile[] {
+  return filesOf(set.kind === "site" ? siteCallers(set.names) : CODE);
 }
 
 // A by-hand caller may be absent, but a present one holds exactly this text.
@@ -159,10 +160,10 @@ function differentLines(holds: string, writes: string): readonly DifferentLine[]
   );
 }
 
-export function differencesOf(kind: RepositoryKind, present: readonly WorkflowFile[]): readonly Difference[] {
+export function differencesOf(set: CallerSet, present: readonly WorkflowFile[]): readonly Difference[] {
   const held = new Map(present.filter(({ name }) => !isIgnoredWorkflow(name)).map(({ name, text }) => [name, text]));
-  const required = requiredSet(kind);
-  const byHand = byHandSet(kind);
+  const required = requiredSet(set);
+  const byHand = byHandSet(set.kind);
   const known = new Set([...required, ...byHand].map(({ name }) => name));
   const judged = [...required, ...byHand.filter(({ name }) => held.has(name))];
   return [

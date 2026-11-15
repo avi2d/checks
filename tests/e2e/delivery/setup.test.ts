@@ -435,16 +435,34 @@ const CallerSchema = Schema.Struct({
 });
 
 test(
-"a site repository gains the site callers and no mutation workflow, and passes checks-workflows without --write",
+"a site repository named by the three flags gains the site callers and no mutation workflow, and passes checks-workflows without --write",
 async () => {
-const repo = await open({ "package.json": JSON.stringify({ name: "shop", type: "module", site: { pages: "shop", domain: "shop.example.com", production: "shop/shop.example.com" } }) });
-const run = await setup(repo);
+const repo = await open({ "package.json": JSON.stringify({ name: "shop", type: "module" }) });
+const run = await setup(repo, "--pages", "shop", "--domain", "shop.example.com", "--production", "shop/shop.example.com");
 expect(run.exitCode).toBe(0);
 expect(await Bun.file(join(repo.dir, ".github/workflows/mutation.yml")).exists()).toBe(false);
 const { uses } = workflowSteps(await readFile(join(repo.dir, ".github/workflows/ci.yml"), "utf8"));
 expect(uses).toBe("avi2d/workflows/.github/workflows/site-ci.yml@v3");
 const checked = await repo.script("delivery/workflows.ts");
 expect(checked.exitCode).toBe(0);
+},
+60_000,
+);
+
+test(
+"a site whose callers pass the names gets a missing caller with the same names and no flag, and a site whose callers pass none is refused",
+async () => {
+const named = "name: ci\non: pull_request\njobs:\n  checks:\n    uses: avi2d/workflows/.github/workflows/site-ci.yml@v3\n    with:\n      pages: shop\n      domain: shop.example.com\n      production: shop/shop.example.com\n";
+const repo = await open({ "package.json": JSON.stringify({ name: "shop", type: "module" }), ".github/workflows/ci.yml": named });
+expect((await setup(repo)).exitCode).toBe(0);
+expect(Bun.YAML.parse(await readFile(join(repo.dir, ".github/workflows/main.yml"), "utf8"))).toMatchObject({
+  jobs: { release: { uses: "avi2d/workflows/.github/workflows/site-main.yml@v3", with: { pages: "shop", domain: "shop.example.com", production: "shop/shop.example.com" } } },
+});
+const unnamed = await open({ "package.json": JSON.stringify({ name: "shop", type: "module" }), ".github/workflows/ci.yml": "name: ci\non: pull_request\njobs:\n  checks:\n    uses: avi2d/workflows/.github/workflows/site-ci.yml@v3\n" });
+const refused = await setup(unnamed);
+expect(refused.exitCode).toBe(2);
+expect(refused.text).toContain("the site callers pass no pages, domain and production, so run checks-setup --pages <project> --domain <domain> --production <owner/name>");
+expect(await Bun.file(join(unnamed.dir, ".github/workflows/main.yml")).exists()).toBe(false);
 },
 60_000,
 );
