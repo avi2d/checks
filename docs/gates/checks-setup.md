@@ -22,10 +22,11 @@ It writes `.jscpd.json` with the kit default.
 It writes the Effect paths of the `oxlint.config.ts` it finds or writes into the language service entry of `tsconfig.json`.
 The pair passes `checks-effect-scope --check` from the first write.
 It writes `package.json` with the kit in `devDependencies` and with `lint`, `typecheck`, `test` and `test:fast` scripts, plus a `test:<tier>` script for each tier that holds test files.
-It writes the caller set `checks-workflows` writes for the repository kind.
+It writes the caller set `checks-workflows` writes.
 A repository whose workflow callers already call a shared site workflow gets the site callers, and so does a run given the site name flags.
 Any other repository gets the code callers.
-Each site caller passes the Pages project, the domain and the production repository, taken from the callers it finds, and the `site` job of `ci.yml` passes the Pages project alone.
+Each site caller passes the Pages project, the domain and the production repository, taken from the callers it finds.
+The `site` job of `ci.yml` passes the Pages project alone.
 Each flag fills only a name no caller passes.
 It stops before writing anything when a site run lacks one of the three names, and names the fix.
 The same stop covers two values of one name, an unparsable name, and a flag that differs from a name its callers pass.
