@@ -16,7 +16,7 @@ A site takes these files under `.github/workflows/`:
 
 | File | Event | Calls |
 | --- | --- | --- |
-| `ci.yml` | a pull request opened, pushed to or reopened, and `workflow_dispatch` | `site-ci.yml@v3` |
+| `ci.yml` | a pull request opened, pushed to, reopened or marked ready for review, and `workflow_dispatch` | `site-ci.yml@v3` |
 | `pr-title.yml` | a pull request title edit | `pr-title.yml@v3` |
 | `preview-close.yml` | a pull request closed | `preview-remove.yml@v3` |
 | `main.yml` | a push to `main` | `site-main.yml@v3` |
@@ -27,7 +27,7 @@ A code repository takes these files:
 
 | File | Event | Calls |
 | --- | --- | --- |
-| `ci.yml` | a pull request opened, pushed to or reopened, and `workflow_dispatch` | `ci.yml@v3` |
+| `ci.yml` | a pull request opened, pushed to, reopened or marked ready for review, and `workflow_dispatch` | `ci.yml@v3` |
 | `pr-title.yml` | a pull request title edit | `pr-title.yml@v3` |
 | `main.yml` | a push to `main` | `release-main.yml@v3` |
 | `release.yml` | `workflow_dispatch` | `release-pr.yml@v3` |

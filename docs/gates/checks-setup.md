@@ -25,7 +25,7 @@ It writes `package.json` with the kit in `devDependencies` and with `lint`, `typ
 It writes the caller set `checks-workflows` writes for the repository kind.
 A repository whose `package.json` has a `site` field gets the site callers, and any other repository gets the code callers.
 A freshly set up repository passes `checks-workflows` without running `--write` first.
-In a repository with no `site` field it writes `mutation.yml` under `.github/workflows/`, which names the shared mutation workflow `avi2d/workflows/.github/workflows/mutation.yml@v2` and nothing else.
+In a repository with no `site` field it writes `mutation.yml` under `.github/workflows/`, which names the shared mutation workflow `avi2d/workflows/.github/workflows/mutation.yml@v3` and nothing else.
 The shared workflow picks the run from the event.
 A pull request runs `compare`, and a manual dispatch runs `refresh`.
 A refresh starts by hand, as [checks-ci-wiring](checks-ci-wiring.md#schedules) requires.

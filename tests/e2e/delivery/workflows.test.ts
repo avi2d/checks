@@ -67,7 +67,7 @@ test("a site repository gets the six site callers, keeps advisories in its calle
   expect(await parsed(repo, "advisories.yml")).toEqual({
     name: "advisories",
     on: { workflow_dispatch: null },
-    jobs: { advisories: { uses: "avi2d/workflows/.github/workflows/advisories.yml@v1", permissions: { contents: "read", issues: "write" } } },
+    jobs: { advisories: { uses: "avi2d/workflows/.github/workflows/advisories.yml@v3", permissions: { contents: "read", issues: "write" } } },
   });
   expect(await parsed(repo, "ci.yml")).toMatchObject({ jobs: { checks: { uses: "avi2d/workflows/.github/workflows/site-ci.yml@v3", secrets: "inherit" } } });
   expect(await parsed(repo, "preview-close.yml")).toMatchObject({ on: { pull_request: { types: ["closed"] } } });
