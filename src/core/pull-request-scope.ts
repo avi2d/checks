@@ -38,7 +38,7 @@ export const readRunScope = Effect.fn("readRunScope")(function* (root: string) {
   const scope = Effect.gen(function* () {
     const { pull_request: pullRequest } = yield* decodePullRequestEvent(yield* (yield* FileSystem.FileSystem).readFileString(event.path));
     const ends = pullRequestEndsOf(pullRequest);
-    return scopeOfChanges(pullRequest.title, yield* pathsSinceMergeBase(ends.base, ends.head, root));
+    return scopeOfChanges(pullRequest.title ?? "", yield* pathsSinceMergeBase(ends.base, ends.head, root));
   });
   return yield* scope.pipe(
     Effect.catch((cause) => Effect.succeed<RunScope>({ kind: "whole", because: `the pull request's changes cannot be read: ${cause.message}` })),

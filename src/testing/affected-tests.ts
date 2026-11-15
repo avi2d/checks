@@ -1,6 +1,5 @@
-import { Config, Effect, FileSystem, Option, Path, Schema } from "effect";
-import { pathsSinceMergeBase, workingTreeFiles } from "../core/git.ts";
-import { decodePullRequestEvent, pullRequestEndsOf } from "../core/lint.ts";
+import { Effect, FileSystem, Path, Schema } from "effect";
+import { workingTreeFiles } from "../core/git.ts";
 import { classifyPath } from "../core/scope.ts";
 import { decodeBunfig, importedFile, importsOf, preloadPaths, resolved, TEST_TREE } from "./mutation-scope-graph.ts";
 
@@ -342,30 +341,8 @@ export const readChangedNarrowing = Effect.fn("readChangedNarrowing")(function* 
   return narrowTests(changed, yield* readRepository(root), tests);
 });
 
-const pullRequestEvent = Config.all({
-  name: Config.String("GITHUB_EVENT_NAME").pipe(Config.withDefault("")),
-  path: Config.String("GITHUB_EVENT_PATH").pipe(Config.withDefault("")),
-});
-
 export const readLocalNarrowing = Effect.fn("readLocalNarrowing")(function* (root: string, changed: readonly string[], tests: readonly string[]) {
   return yield* Effect.gen(function* () {
     return narrowLocalTests(changed, yield* readRepository(root), tests);
   }).pipe(Effect.catchTag("ReachMapError", (cause) => Effect.succeed<LocalNarrowing>({ kind: "full", because: cause.message })));
-});
-
-// Only a pull_request run has a base to diff against; every other run keeps the suite whole.
-export const readPullRequestNarrowing = Effect.fn("readPullRequestNarrowing")(function* (root: string, tests: readonly string[]) {
-  const event = yield* pullRequestEvent.pipe(Effect.orElseSucceed(() => ({ name: "", path: "" })));
-  if (event.name !== "pull_request" || event.path === "") return Option.none<Narrowing>();
-  const narrowing = Effect.gen(function* () {
-    const text = yield* (yield* FileSystem.FileSystem).readFileString(event.path);
-    const { pull_request: pullRequest } = yield* decodePullRequestEvent(text);
-    const { base, head } = pullRequestEndsOf(pullRequest);
-    const changed = yield* pathsSinceMergeBase(base, head, root);
-    return narrowTests(changed, yield* readRepository(root), tests);
-  });
-  return Option.some(yield* narrowing.pipe(
-    Effect.catchTag("ReachMapError", (cause) => Effect.succeed<Narrowing>({ kind: "full", because: cause.message })),
-    Effect.catch((cause) => Effect.succeed<Narrowing>({ kind: "full", because: "the pull request's changes cannot be read: " + cause.message })),
-  ));
 });

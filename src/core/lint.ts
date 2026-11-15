@@ -28,7 +28,7 @@ const SHALLOW_HINT = "a CI checkout needs actions/checkout fetch-depth: 0";
 
 export const PullRequest = Schema.Struct({
   number: Schema.Int,
-  title: Schema.String,
+  title: Schema.optionalKey(Schema.String),
   base: Schema.Struct({ ref: Schema.String }),
   head: Schema.Struct({ sha: Schema.String }),
 });
