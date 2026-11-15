@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.101.2
+
+Released 2026-11-15.
+
+### Fixes
+
+- **delivery:** pass shared v3 workflow secrets by name instead of inherit [#152](https://github.com/avi2d/checks/pull/152)
+
 ## 0.101.1
 
 Released 2026-11-15.
