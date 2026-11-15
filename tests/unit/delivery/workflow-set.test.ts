@@ -50,3 +50,54 @@ test("a ci caller that omits ready_for_review never starts when a draft is marke
     expect(types).toContain("ready_for_review");
   }
 });
+
+const CALLEE_GRANTS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  "advisories.yml": { contents: "read", issues: "write" },
+  "ci.yml": { contents: "read", actions: "write", statuses: "write", "pull-requests": "read" },
+  "mutation.yml": { contents: "read", actions: "write", "pull-requests": "write" },
+  "pr-title.yml": { contents: "read", statuses: "write", "pull-requests": "read" },
+  "preview-remove.yml": { contents: "read", "pull-requests": "write" },
+  "release-main.yml": { contents: "write", "id-token": "write", actions: "read", "pull-requests": "read" },
+  "release-pr.yml": { contents: "write", "pull-requests": "write", actions: "write" },
+  "site-ci.yml": { contents: "read", actions: "write", statuses: "write", "pull-requests": "write" },
+  "site-main.yml": { contents: "write", actions: "read", "pull-requests": "read" },
+  "site-production.yml": { contents: "read", actions: "read", "pull-requests": "read" },
+};
+
+const callers = (): readonly { name: string; text: string }[] => [
+  ...requiredSet("code"),
+  ...requiredSet("site"),
+  ...byHandSet("site"),
+  { name: "mutation.yml", text: MUTATION_WORKFLOW },
+];
+
+const callerJob = (text: string): Record<string, unknown> => {
+  const document = Bun.YAML.parse(text);
+  const jobs = isRecord(document) ? document["jobs"] : undefined;
+  const job = isRecord(jobs) ? Object.values(jobs)[0] : undefined;
+  return isRecord(job) ? job : {};
+};
+
+test("each caller grants exactly the scopes its v3 job declares, so a spare deployments: write or a missing actions: write fails here", () => {
+  for (const { name, text } of callers()) {
+    const job = callerJob(text);
+    const file = String(job["uses"]).split("/").pop()?.replace(/@v3$/, "");
+    expect([name, job["permissions"]]).toEqual([name, CALLEE_GRANTS[file ?? ""]]);
+  }
+});
+
+test("only the ci, pr-title and code main callers hold a workflow-level group, so the site main caller cannot cancel a pending release", () => {
+  const held = callers()
+    .filter(({ text }) => {
+      const document = Bun.YAML.parse(text);
+      return isRecord(document) && document["concurrency"] !== undefined;
+    })
+    .map(({ name }) => name);
+  expect(held).toEqual(["ci.yml", "pr-title.yml", "main.yml", "ci.yml", "pr-title.yml"]);
+  const codeMain = requiredSet("code").find(({ name }) => name === "main.yml");
+  const codeDocument = Bun.YAML.parse(codeMain?.text ?? "");
+  expect(isRecord(codeDocument) ? codeDocument["concurrency"] : undefined).toEqual({ group: "main", "cancel-in-progress": false });
+  const siteMain = requiredSet("site").find(({ name }) => name === "main.yml");
+  const siteDocument = Bun.YAML.parse(siteMain?.text ?? "");
+  expect(isRecord(siteDocument) ? siteDocument["concurrency"] : undefined).toBeUndefined();
+});

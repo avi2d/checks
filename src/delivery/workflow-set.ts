@@ -65,53 +65,54 @@ const PR_TITLE: Caller = {
   permissions: "contents: read, statuses: write, pull-requests: read",
 };
 
-const mainCaller = (shared: string, permissions: string, secrets: boolean): Caller => ({
+// site-main queues each release commit in its shared job, so a caller group would cancel a pending release.
+const mainCaller = (shared: string, permissions: string, secrets: boolean, concurrency?: Caller["concurrency"]): Caller => ({
   name: "main",
   on: ["push:", "  branches: [main]"],
-  concurrency: { group: "main", cancel: false },
+  ...(concurrency === undefined ? {} : { concurrency }),
   job: "release",
   uses: `${SHARED_WORKFLOWS}/${shared}@v3`,
   permissions,
   ...(secrets ? { secrets: true } : {}),
 });
 
+// A caller-level group of the same name deadlocks the shared job that holds release-pull-request.
 const RELEASE: Caller = {
   name: "release",
   on: BY_HAND,
-  concurrency: { group: "release-pull-request", cancel: false },
   job: "pull-request",
   uses: `${SHARED_WORKFLOWS}/release-pr.yml@v3`,
   permissions: "contents: write, pull-requests: write, actions: write",
 };
 
 const SITE: readonly Caller[] = [
-  ciCaller("site-ci.yml", "contents: read, statuses: write, pull-requests: write, deployments: write", true),
+  ciCaller("site-ci.yml", "contents: read, actions: write, statuses: write, pull-requests: write", true),
   PR_TITLE,
   {
     name: "preview-close",
     on: ["pull_request:", "  types: [closed]"],
     job: "preview",
     uses: `${SHARED_WORKFLOWS}/preview-remove.yml@v3`,
-    permissions: "contents: read, pull-requests: write, deployments: write",
+    permissions: "contents: read, pull-requests: write",
     secrets: true,
   },
-  mainCaller("site-main.yml", "contents: write, deployments: write", true),
+  mainCaller("site-main.yml", "contents: write, actions: read, pull-requests: read", true),
   RELEASE,
   {
     name: "production",
     on: BY_HAND,
-    concurrency: { group: "production", cancel: false },
     job: "production",
     uses: `${SHARED_WORKFLOWS}/site-production.yml@v3`,
-    permissions: "contents: read, deployments: write",
+    permissions: "contents: read, actions: read, pull-requests: read",
     secrets: true,
   },
 ];
 
 const CODE: readonly Caller[] = [
-  ciCaller("ci.yml", "contents: read, statuses: write, pull-requests: read", false),
+  ciCaller("ci.yml", "contents: read, actions: write, statuses: write, pull-requests: read", false),
   PR_TITLE,
-  mainCaller("release-main.yml", "contents: write, id-token: write", false),
+// release-main holds no group, so the caller serializes pushes to main.
+  mainCaller("release-main.yml", "contents: write, id-token: write, actions: read, pull-requests: read", false, { group: "main", cancel: false }),
   RELEASE,
 ];
 

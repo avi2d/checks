@@ -33,6 +33,9 @@ A code repository takes these files:
 | `release.yml` | `workflow_dispatch` | `release-pr.yml@v3` |
 
 The `ci.yml` caller runs one run per pull request and cancels the run a newer push replaces.
+Each caller grants exactly the permissions its shared job declares.
+The release, site main and production callers hold no concurrency group, since their shared jobs hold their own.
+The code main caller holds group `main` without cancellation, since `release-main.yml` holds no group.
 The files each kind takes are byte-identical in every repository of that kind, and `pr-title.yml` and `release.yml` are the same in both kinds.
 
 `pr-text.yml` stays as it is in both kinds.
