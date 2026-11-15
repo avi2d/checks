@@ -29,6 +29,11 @@ const STYLELINT_CONFIG = `import { defineConfig } from "@avi2dg/checks/stylelint
 export default defineConfig({ baseline: "widely", tokens: ["src/tokens.css"] });
 `;
 
+const SETTINGS_CONFIG = `import { defineConfig } from "@avi2dg/checks/config";
+
+export default defineConfig({ frontendSyntax: { inputs: ["src/**/*.css"] } });
+`;
+
 const TREE: Readonly<Record<string, string>> = {
   ".gitignore": "node_modules/\n",
   "src/index.ts": `import { Effect } from "effect";\nimport { double } from "./double.ts";\n\nexport const program = Effect.succeed(double(21));\n`,
@@ -38,7 +43,7 @@ const TREE: Readonly<Record<string, string>> = {
   "knip.config.ts": KNIP_CONFIG,
   "dependency-cruiser.config.ts": CRUISE_CONFIG,
   "stylelint.config.ts": STYLELINT_CONFIG,
-  "frontend-syntax.json": JSON.stringify({ inputs: ["src/**/*.css"] }),
+  "checks.config.ts": SETTINGS_CONFIG,
   "src/tokens.css": ":root {\n  --ink: #1c1d20;\n}\n",
   "src/site.css": "a {\n  color: var(--ink);\n}\n",
   "tsconfig.json": JSON.stringify({
@@ -68,6 +73,9 @@ const REFUSED_TYPES: Readonly<Record<string, readonly [config: string, code: str
   "stylelint-missing-baseline.ts": [`import { defineConfig } from "@avi2dg/checks/stylelint";\nexport default defineConfig({ tokens: false });\n`, "TS2345"],
   "stylelint-baseline-string-year.ts": [`import { defineConfig } from "@avi2dg/checks/stylelint";\nexport default defineConfig({ baseline: "2024", tokens: false });\n`, "TS2322"],
   "stylelint-empty-tokens.ts": [`import { defineConfig } from "@avi2dg/checks/stylelint";\nexport default defineConfig({ baseline: "widely", tokens: [] });\n`, "TS2322"],
+  "settings-unknown-key.ts": [`import { defineConfig } from "@avi2dg/checks/config";\nexport default defineConfig({ budget: 3 });\n`, "TS2353"],
+  "settings-smoke-string.ts": [`import { defineConfig } from "@avi2dg/checks/config";\nexport default defineConfig({ smoke: "tests/e2e/home.test.ts" });\n`, "TS2322"],
+  "settings-empty-inputs.ts": [`import { defineConfig } from "@avi2dg/checks/config";\nexport default defineConfig({ copy: { inputs: [] } });\n`, "TS2322"],
   "stylelint-kit-owned-extends.ts": [
     `import { defineConfig } from "@avi2dg/checks/stylelint";\nexport default defineConfig({ baseline: "widely", tokens: false, extends: ["stylelint-config-recommended"] });\n`,
     "TS2353",
@@ -241,6 +249,18 @@ test(
     expect(red.text).toBe('frontend-syntax: 1 problem(s) in 2 file(s) from 1 declared input(s):\n  src/site.css:2:10 Disallowed hex color "#1c1d20" (color-no-hex)\n');
     expect(red.exitCode).toBe(1);
     await put({ "src/site.css": TREE["src/site.css"] ?? "" });
+  },
+  180_000,
+);
+
+test(
+  "checks-frontend-syntax refuses a frontend-syntax.json left beside checks.config.ts and names the key it moves to, instead of reading either",
+  async () => {
+    await put({ "frontend-syntax.json": JSON.stringify({ inputs: ["src/**/*.css"] }) });
+    const refused = await bin("checks-frontend-syntax");
+    expect(refused.text).toContain("frontend-syntax: frontend-syntax.json is no longer read; move it to the frontendSyntax key of checks.config.ts");
+    expect(refused.exitCode).toBe(2);
+    await rm(join(dir, "frontend-syntax.json"));
   },
   180_000,
 );

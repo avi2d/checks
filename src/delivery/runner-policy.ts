@@ -1,4 +1,5 @@
-import { Effect, FileSystem, Path, Schema } from "effect";
+import { Effect, Schema } from "effect";
+import { MutationRunner, readSetting, SelfHostedRunners, SETTINGS_FILE } from "../core/settings.ts";
 import { runsMutation, within, type Run } from "./mutation-job.ts";
 import { readsRunnerPick } from "./runner-pick.ts";
 import { isRecord, names, workflowJobs, workflowTitle, type Workflow } from "./workflow-references.ts";
@@ -24,13 +25,6 @@ export class RunnerPolicyError extends Schema.TaggedError<RunnerPolicyError>()("
   message: Schema.String,
 }) {}
 
-const Runners = Schema.Struct({
-  mutationRunner: Schema.optional(Schema.NonEmptyArray(Schema.NonEmptyString)),
-  selfHostedRunners: Schema.optional(Schema.Array(Schema.NonEmptyArray(Schema.NonEmptyString))),
-});
-const Manifest = Schema.Struct({
-  checks: Schema.optional(Runners),
-});
 // GitHub expressions match context and property names without regard to case.
 const OVERRIDE_ACCESS = String.raw`vars\s*(?:\.\s*CI_RUNS_ON\b|\[\s*'CI_RUNS_ON'\s*\])`;
 const RUNNER_OVERRIDE = new RegExp(String.raw`\b${OVERRIDE_ACCESS}`, "i");
@@ -75,12 +69,12 @@ function mutationFault(runsOn: unknown, labels: readonly string[] | undefined, v
       return "a mutation job reads CI_RUNS_ON, so an override moves its mutation runs; set runs-on: ubuntu-latest";
     }
     return pin === undefined
-      ? "a mutation job reads CI_RUNS_ON, so an override moves its mutation runs; declare the mutation runner labels in package.json checks.mutationRunner"
+      ? `a mutation job reads CI_RUNS_ON, so an override moves its mutation runs; declare the mutation runner labels in the mutationRunner key of ${SETTINGS_FILE}`
       : `a mutation job reads CI_RUNS_ON, so an override moves its mutation runs off ${pin}; set runs-on: ${pin}`;
   }
   if (visibility !== "private") return undefined;
   if (labels === undefined) {
-    return "a mutation job in a private repository names no checks.mutationRunner in package.json; declare the mutation runner labels there";
+    return `a mutation job in a private repository has no mutationRunner in ${SETTINGS_FILE}; declare the mutation runner labels there`;
   }
   return sameLabels(runsOn, labels) ? undefined : `a mutation job in a private repository runs off ${pin}; set runs-on: ${pin}`;
 }
@@ -386,12 +380,7 @@ export function formatRunnerReport(faults: readonly RunnerFault[]): string {
 }
 
 export const readRunnerConfig = Effect.fn("readRunnerConfig")(function* (root: string) {
-  const fs = yield* FileSystem.FileSystem;
-  const file = (yield* Path.Path).join(root, "package.json");
-  if (!(yield* fs.exists(file))) return { mutation: undefined, selfHosted: [] } satisfies RunnerConfig;
-  const { checks } = yield* fs.readFileString(file).pipe(
-    Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Manifest))),
-    Effect.mapError((cause) => new RunnerPolicyError({ message: `cannot read ${file}: ${cause.message}` })),
-  );
-  return { mutation: checks?.mutationRunner, selfHosted: checks?.selfHostedRunners ?? [] } satisfies RunnerConfig;
+  const mutation = yield* readSetting(root, "mutationRunner", MutationRunner, { manifestKey: "mutationRunner" });
+  const selfHosted = yield* readSetting(root, "selfHostedRunners", SelfHostedRunners, { manifestKey: "selfHostedRunners" });
+  return { mutation, selfHosted: selfHosted ?? [] } satisfies RunnerConfig;
 });

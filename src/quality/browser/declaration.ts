@@ -1,9 +1,12 @@
-import { Array as Arr, Effect, FileSystem, Path, Schema } from "effect";
+import { Array as Arr, Effect, Schema } from "effect";
 import { Usage } from "../../core/main.ts";
+import { readSetting, SETTINGS_FILE } from "../../core/settings.ts";
 import { readSite, sitePages, type Site } from "./serve.ts";
 import { DEVICES, ENLARGED_TEXT_PX, SCREEN_SIZE_SETS, SCREEN_SIZES, screenSizeName, type ScreenSize, type ScreenSizeSet } from "./screen-sizes.ts";
 
-const DECLARATION = "browser-checks.json";
+const OLD_DECLARATION = "browser-checks.json";
+
+const DECLARATION = `${SETTINGS_FILE} browser`;
 
 const CHECKS = ["layout", "keyboard", "motion", "axe", "nesting", "html", "links", "assets", "contrast", "weight", "shift", "look"] as const;
 
@@ -76,7 +79,7 @@ const Declaration = Schema.Struct({
   hooks: Schema.optionalKey(Name),
 });
 
-const Listed = Schema.Struct({
+export const Listed = Schema.Struct({
   ...Declaration.fields,
   routes: Schema.NonEmptyArray(Schema.Union([Route, RoutePreset])),
   viewports: Schema.NonEmptyArray(Schema.Union([Viewport, ScreenSizeSet])),
@@ -101,8 +104,6 @@ export type Visit = {
 };
 
 export type Listed = typeof Listed.Type;
-
-const decodeListed = Schema.decodeUnknownEffect(Schema.fromJsonString(Listed));
 
 function viewportOf(size: ScreenSize): Viewport {
   const { device, width, height } = size;
@@ -201,14 +202,10 @@ export function inconsistencies(declaration: ExpandedDeclaration, skipTargetRout
 }
 
 export const readDeclaration = Effect.fn("readDeclaration")(function* (root: string, largest: ScreenSizeSet = "full") {
-  const fs = yield* FileSystem.FileSystem;
-  const file = (yield* Path.Path).join(root, DECLARATION);
-  if (!(yield* fs.exists(file))) {
-    return yield* new Usage({ message: `${DECLARATION} is missing, and a product opts in to the browser checks by declaring its pages there` });
+  const listed = yield* readSetting(root, "browser", Listed, { file: OLD_DECLARATION });
+  if (listed === undefined) {
+    return yield* new Usage({ message: `${SETTINGS_FILE} sets no browser key, and a product opts in to the browser checks by declaring its pages there` });
   }
-  const listed = yield* decodeListed(yield* fs.readFileString(file)).pipe(
-    Effect.mapError(({ message }) => new Usage({ message: `${DECLARATION} does not decode: ${message}` })),
-  );
   const hasPreset = listed.routes.some((entry) => "preset" in entry);
   const early = inconsistencies(expanded(listed, []), hasPreset);
   if (early.length > 0) return yield* new Usage({ message: `${DECLARATION}: ${early.join("; ")}` });

@@ -2,6 +2,7 @@ import { $ } from "bun";
 import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { CHECKOUT, ran, scratchDirs, type Ran } from "./fixture-repo.ts";
+import { settingsFile } from "./settings-file.ts";
 
 const RUNNER = join(CHECKOUT, "src", "quality", "browser", "browser.ts");
 
@@ -40,13 +41,15 @@ export function routesOf(pages: Readonly<Record<string, string>>): readonly { re
 }
 
 export function declaration(declared: Declared): string {
-  return JSON.stringify({
-    site: "dist",
-    routes: [{ path: "/", locale: "en" }],
-    viewports: [{ name: "phone", width: 320, height: 640 }],
-    states: [{ name: "default" }],
-    targets: [{ name: "link", selector: "main a", focusable: true }],
-    ...declared,
+  return settingsFile({
+    browser: {
+      site: "dist",
+      routes: [{ path: "/", locale: "en" }],
+      viewports: [{ name: "phone", width: 320, height: 640 }],
+      states: [{ name: "default" }],
+      targets: [{ name: "link", selector: "main a", focusable: true }],
+      ...declared,
+    },
   });
 }
 

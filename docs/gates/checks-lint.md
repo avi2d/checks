@@ -19,8 +19,8 @@ Gates requiring tracked TypeScript files begin running when the repository track
 `checks-lint-coverage` and `checks-graphwalk` also begin running when the repository tracks an `.astro` file.
 `checks-advisories` begins running when the repository tracks `bun.lock`.
 `checks-lint` defers its scan to the weekly run, so the desk and the pull request fetch no database.
-`checks-frontend-syntax` begins running when the repository tracks `frontend-syntax.json` at its root.
-`checks-copy` begins running when the repository tracks `copy.json` at its root.
+`checks-frontend-syntax` begins running when `checks.config.ts` sets `frontendSyntax`, or when the repository still tracks `frontend-syntax.json` at its root, which the gate then refuses.
+`checks-copy` begins running when `checks.config.ts` sets `copy`, or when the repository still tracks `copy.json` at its root, which the gate then refuses.
 `checks-css-size` begins running when the repository tracks a `*.css` file.
 `checks-no-mistakes-test` begins running when the repository tracks `.no-mistakes.yaml` at its root.
 All other gates run for every repository.

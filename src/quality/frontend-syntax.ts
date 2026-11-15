@@ -3,9 +3,10 @@ import { Effect, FileSystem, Path, Schema } from "effect";
 import type { Config, LinterOptions, LintResult } from "stylelint";
 import { declaredGate, emptyInputs, inputsReport, violationLine, type Declared, type Input, type Violation } from "../core/declared-inputs.ts";
 import { runMain, Usage } from "../core/main.ts";
+import { SETTINGS_FILE } from "../core/settings.ts";
 import { MARKUP } from "./presets/stylelint.ts";
 
-const DECLARED: Declared = { name: "frontend-syntax", file: "frontend-syntax.json", declares: "inputs" };
+const DECLARED: Declared = { name: "frontend-syntax", setting: "frontendSyntax", oldFile: "frontend-syntax.json", declares: "inputs" };
 
 const STYLELINT_CONFIG = "stylelint.config.ts";
 
@@ -56,7 +57,7 @@ const loadPeer = <A>(name: string, load: () => Promise<A>) =>
   Effect.tryPromise({
     try: load,
     catch: () =>
-      new Usage({ message: `cannot load ${name}, which a repository that declares ${DECLARED.file} installs beside the kit as an optional peer` }),
+      new Usage({ message: `cannot load ${name}, which a repository that declares ${DECLARED.setting} in ${SETTINGS_FILE} installs beside the kit as an optional peer` }),
   });
 
 const ConfigModule = Schema.Struct({ default: Schema.Record(Schema.String, Schema.Unknown) });
@@ -68,7 +69,7 @@ const loadRepositoryConfig = Effect.fn("loadRepositoryConfig")(function* (root: 
   const file = (yield* Path.Path).join(root, STYLELINT_CONFIG);
   if (!(yield* fs.exists(file))) {
     return yield* new Usage({
-      message: `${STYLELINT_CONFIG} is missing, and a repository that declares ${DECLARED.file} writes it with defineConfig from @avi2dg/checks/stylelint`,
+      message: `${STYLELINT_CONFIG} is missing, and a repository that declares ${DECLARED.setting} in ${SETTINGS_FILE} writes it with defineConfig from @avi2dg/checks/stylelint`,
     });
   }
   const loaded: unknown = yield* Effect.tryPromise({

@@ -51,13 +51,17 @@ These are outside what it decides:
 
 ## What it reads
 
-It reads `copy.json` in the directory it runs in, which lists the inputs as globs:
+It reads the `copy` key of `checks.config.ts` in the directory it runs in, which lists the inputs as globs:
 
-```json
-{
-  "inputs": ["src/content/**/*.md", "dist/**/*.html"]
-}
+```ts
+import { defineConfig } from "@avi2dg/checks/config";
+
+export default defineConfig({
+  copy: { inputs: ["src/content/**/*.md", "dist/**/*.html"] },
+});
 ```
+
+A `copy.json` left in that directory fails the run and names the key it moves to.
 
 A glob over built output, such as `dist/**/*.html`, judges every string a site renders, and needs the build to run first.
 Each glob resolves from that directory, matches only files and skips `node_modules/`.
@@ -88,7 +92,7 @@ It checks the directory it runs in, or the directory it is given.
 | --- | --- |
 | 0 | every declared input matches a Markdown or HTML file, and no file carries a refused separator |
 | 1 | a file carries a refused separator or does not parse, a declared input matches no Markdown or HTML file, or an input matches a file of another kind |
-| 2 | `copy.json` is missing or does not decode, its input list is empty, or html-validate cannot load |
+| 2 | `checks.config.ts` sets no `copy` key, the key does not decode, `copy.json` is still there, its input list is empty, or html-validate cannot load |
 
 ## Sample output
 
@@ -107,8 +111,8 @@ copy: no violation in 2 file(s) from 2 declared input(s)
 
 ## When it runs
 
-`checks-lint` runs it in the full run when the repository tracks `copy.json` at its root.
-A repository without that file never runs it and needs no html-validate.
+`checks-lint` runs it in the full run when `checks.config.ts` sets `copy`, or when the repository still tracks `copy.json` at its root.
+A repository with neither never runs it and needs no html-validate.
 
 ## Related topics
 

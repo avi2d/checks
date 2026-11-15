@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CHECKOUT, ran, scratchDirs, type Ran } from "../lib/fixture-repo.ts";
+import { settingsFile } from "../lib/settings-file.ts";
 
 const SCRIPT = join(CHECKOUT, "src", "testing", "test.ts");
 const BUNFIG = '[test]\npathIgnorePatterns = ["**/tests/quarantine/**", "**/tests/live/**", "**/tests/pixel/**"]\n';
@@ -291,7 +292,7 @@ test("a tier run never runs the other tier's files", async () => {
 });
 
 async function declareSmoke(smoke: readonly string[]): Promise<void> {
-  await writeFile(join(dir, "package.json"), JSON.stringify({ name: "consumer", scripts: { test: "checks-test" }, checks: { smoke } }));
+  await writeFile(join(dir, "checks.config.ts"), settingsFile({ smoke }));
 }
 
 async function smokeConsumer(): Promise<void> {
@@ -366,7 +367,16 @@ test("a smoke entry Bun's ignored paths would drop is refused before the suite r
 
   const refused = await checksTest(false);
   expect(refused.exitCode).toBe(2);
-  expect(refused.text).toContain("checks.smoke cannot name a quarantined, live or pixel test at tests/live/machine.test.ts");
+  expect(refused.text).toContain("checks.config.ts smoke cannot name a quarantined, live or pixel test at tests/live/machine.test.ts");
+});
+
+test("a smoke list left under package.json checks.smoke is refused naming the checks.config.ts key, instead of running without it", async () => {
+  await consumer('import { expect, test } from "bun:test";\ntest("default test", () => expect(1).toBe(1));\n');
+  await writeFile(join(dir, "package.json"), JSON.stringify({ name: "consumer", scripts: { test: "checks-test" }, checks: { smoke: ["tests/unit/suite.test.ts"] } }));
+
+  const refused = await checksTest(false);
+  expect(refused.exitCode).toBe(2);
+  expect(refused.text).toContain("package.json checks.smoke is no longer read; move it to the smoke key of checks.config.ts");
 });
 
 test("--junit keeps the report of a failing run at the path it names", async () => {

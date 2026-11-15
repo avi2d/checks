@@ -12,7 +12,7 @@ const CONTRAST_FAILURE = "color-contrast (serious): h1: Elements must meet minim
 test("axe reads a headline after its entrance plays out, not at its faded first frame, and still fails it once settled at a low contrast", async () => {
   const faded = await browserSite({
     "dist/index.html": fading("#000"),
-    "browser-checks.json": declaration({ targets: [HEADLINE], checks: ["axe"] }),
+    "checks.config.ts": declaration({ targets: [HEADLINE], checks: ["axe"] }),
   });
   const passed = await faded.run();
   expect(failuresOf(passed.text)).toEqual([]);
@@ -20,7 +20,7 @@ test("axe reads a headline after its entrance plays out, not at its faded first 
 
   const low = await browserSite({
     "dist/index.html": fading("#999"),
-    "browser-checks.json": declaration({ targets: [HEADLINE], checks: ["axe"] }),
+    "checks.config.ts": declaration({ targets: [HEADLINE], checks: ["axe"] }),
   });
   const failed = await low.run();
   expect(failuresOf(failed.text)).toEqual([`${at("axe", "/")} ${CONTRAST_FAILURE}`]);

@@ -8,6 +8,11 @@ export type TrackedContent = {
   readonly content: string;
 };
 
+export type DeclaredSetting = {
+  readonly setting: "copy" | "frontendSyntax";
+  readonly oldFile: string;
+};
+
 // checks-lint sets this when it spawns the advisories gate, so the desk and pull request runs leave the database fetch and the scan to the scheduled --all run.
 export const ADVISORIES_DEFER_SCAN = "CHECKS_ADVISORIES_DEFER_SCAN";
 
@@ -25,7 +30,7 @@ export type KitGate = {
   readonly alsoReads?: string;
   readonly args?: readonly string[];
   readonly env?: Readonly<Record<string, string>>;
-  readonly appliesTo: typeof EVERY_REPOSITORY | TrackedContent;
+  readonly appliesTo: typeof EVERY_REPOSITORY | TrackedContent | DeclaredSetting;
   readonly wholeTree?: true;
 };
 
@@ -43,11 +48,11 @@ const BUN_LOCKFILE: TrackedContent = { pathspecs: ["bun.lock"], content: "a bun 
 
 const OXLINT_CONFIG: TrackedContent = { pathspecs: ["oxlint.config.ts"], content: "an oxlint.config.ts" };
 
-const FRONTEND_SYNTAX_DECLARATION: TrackedContent = { pathspecs: ["frontend-syntax.json"], content: "a frontend syntax declaration" };
+const FRONTEND_SYNTAX_DECLARATION: DeclaredSetting = { setting: "frontendSyntax", oldFile: "frontend-syntax.json" };
 
 const STYLESHEET: TrackedContent = { pathspecs: ["*.css"], content: "a stylesheet" };
 
-const COPY_DECLARATION: TrackedContent = { pathspecs: ["copy.json"], content: "a copy declaration" };
+const COPY_DECLARATION: DeclaredSetting = { setting: "copy", oldFile: "copy.json" };
 
 const NO_MISTAKES_CONFIG: TrackedContent = { pathspecs: [".no-mistakes.yaml"], content: "a no-mistakes config" };
 

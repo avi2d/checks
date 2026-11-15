@@ -1,6 +1,7 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
 import { identifierName, isRecord, lineOf, parseTypeScript, spanStart, stringValue } from "../core/swc.ts";
 import type { TestTier } from "../core/test-script.ts";
+import { SETTINGS_FILE } from "../core/settings.ts";
 
 export type Environment = "ci" | "local";
 export type { TestTier };
@@ -17,6 +18,7 @@ export class SkipDeclarationError extends Schema.TaggedError<SkipDeclarationErro
 }) {}
 
 const TEST_FILES = ["tests/**/*.test.ts", "tests/**/*.test.tsx"] as const;
+const SMOKE = `${SETTINGS_FILE} smoke`;
 const SKIP_HELPER_MODULE = "test-skips.ts";
 const whenSchema = Schema.Literals(["ci", "local"]);
 
@@ -194,12 +196,12 @@ export type SmokeScope =
 
 export function smokeFiles(scanned: readonly string[], smoke: readonly string[]): SmokeScope {
   const missing = smoke.filter((file) => !scanned.includes(file));
-  if (missing.length > 0) return { kind: "invalid", message: "checks.smoke names no test file at " + missing.join(", ") };
+  if (missing.length > 0) return { kind: "invalid", message: SMOKE + " names no test file at " + missing.join(", ") };
   const ignored = smoke.filter((file) => !selectedTierFile(file, undefined));
   if (ignored.length > 0) {
     return {
       kind: "invalid",
-      message: "checks.smoke cannot name a quarantined, live or pixel test at " + ignored.join(", "),
+      message: SMOKE + " cannot name a quarantined, live or pixel test at " + ignored.join(", "),
     };
   }
   return { kind: "valid", files: unitTierPlus(scanned, smoke) };

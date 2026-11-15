@@ -4,7 +4,6 @@ import {
   reclaimableBytes,
   scriptOptions,
   selectSuite,
-  smokeList,
   suiteArgs,
   testOptions,
   workerCountFor,
@@ -145,23 +144,6 @@ test("an explicit tier still runs only that tier in either environment", () => {
   ]);
 });
 
-test("the smoke list lives under checks.smoke in package.json and defaults to empty", () => {
-  expect(smokeList({})).toEqual([]);
-  expect(smokeList({ scripts: { test: "checks-test" } })).toEqual([]);
-  expect(smokeList({ checks: {} })).toEqual([]);
-  expect(smokeList({ checks: { smoke: [] } })).toEqual([]);
-  expect(smokeList({ checks: { smoke: ["tests/e2e/checkout.test.ts"] } })).toEqual([
-    "tests/e2e/checkout.test.ts",
-  ]);
-});
-
-test("a smoke list of the wrong shape is refused", () => {
-  expect(smokeList({ checks: null })).toBeUndefined();
-  expect(smokeList({ checks: { smoke: "tests/e2e/checkout.test.ts" } })).toBeUndefined();
-  expect(smokeList({ checks: { smoke: [""] } })).toBeUndefined();
-  expect(smokeList({ checks: { smoke: [42] } })).toBeUndefined();
-});
-
 test("the smoke scope is the unit tier plus the declared files", () => {
   const scoped = smokeFiles(
     ["tests/unit/a.test.ts", "tests/e2e/b.test.ts", "tests/live/c.test.ts"],
@@ -173,7 +155,7 @@ test("the smoke scope is the unit tier plus the declared files", () => {
 test("a smoke entry that names no test file is refused", () => {
   expect(smokeFiles(["tests/unit/a.test.ts"], ["tests/e2e/nope.test.ts"])).toEqual({
     kind: "invalid",
-    message: "checks.smoke names no test file at tests/e2e/nope.test.ts",
+    message: "checks.config.ts smoke names no test file at tests/e2e/nope.test.ts",
   });
 });
 
@@ -181,7 +163,7 @@ test("a smoke entry never names a test Bun's ignored paths drop", () => {
   for (const file of ["tests/quarantine/unit/q.test.ts", "tests/live/l.test.ts", "tests/pixel/p.test.ts"]) {
     expect(smokeFiles([file], [file])).toEqual({
       kind: "invalid",
-      message: `checks.smoke cannot name a quarantined, live or pixel test at ${file}`,
+      message: `checks.config.ts smoke cannot name a quarantined, live or pixel test at ${file}`,
     });
   }
 });

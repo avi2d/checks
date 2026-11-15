@@ -192,7 +192,18 @@ export const checks: readonly ProductCheck[] = [
 
 ## What it reads
 
-It reads `browser-checks.json` in the directory it runs in:
+It reads the `browser` key of `checks.config.ts` in the directory it runs in:
+
+```ts
+import { defineConfig } from "@avi2dg/checks/config";
+
+export default defineConfig({
+  browser: { site: "dist", routes: [{ path: "/", locale: "en" }], targets: [{ name: "headline", selector: "main h1" }], checks: ["layout"] },
+});
+```
+
+A `browser-checks.json` left in that directory fails the run and names the key it moves to.
+A full value of the key takes this shape:
 
 ```json
 {
@@ -323,10 +334,10 @@ They are due for a recheck against those sources once a year.
 
 ### Start from the shipped declaration
 
-The kit ships a starter declaration, which a product copies and then edits to its own routes and targets:
+The kit ships a starter declaration, which a product copies under the `browser` key of `checks.config.ts` and then edits to its own routes and targets:
 
 ```sh
-cp node_modules/@avi2dg/checks/src/quality/browser/browser-checks.json browser-checks.json
+cat node_modules/@avi2dg/checks/src/quality/browser/browser-checks.json
 ```
 
 A host resolves it as `@avi2dg/checks/browser-checks.json`.
@@ -395,7 +406,7 @@ A release pull request and a run that is not a pull request, such as `workflow_d
 | --- | --- |
 | 0 | every check passes at every visit, and every declared route and target is there |
 | 1 | a check fails at a visit, a declared route is not served, a declared target matches no visible element, or a run scans no target |
-| 2 | an argument is not one it takes, `browser-checks.json` is missing, does not decode or contradicts itself, the site directory or the hooks module is missing, the site holds no `.html` page while a route lists `every-page`, a peer cannot load, or Chrome cannot start |
+| 2 | an argument is not one it takes, `checks.config.ts` sets no `browser` key, the key does not decode or contradicts itself, `browser-checks.json` is still there, the site directory or the hooks module is missing, the site holds no `.html` page while a route lists `every-page`, a peer cannot load, or Chrome cannot start |
 
 ## Sample output
 
@@ -414,7 +425,7 @@ browser: 2 failure(s) in 4 check run(s) over 1 route(s), 1 viewport(s), 1 state(
 ## When it runs
 
 A product runs it after it builds its site, in a script of its own such as `"test:browser": "astro build && checks-browser"`.
-`checks-lint` never runs it, and a repository without `browser-checks.json` never starts a browser or needs the peers.
+`checks-lint` never runs it, and a repository whose `checks.config.ts` sets no `browser` key never starts a browser or needs the peers.
 
 ## Related topics
 

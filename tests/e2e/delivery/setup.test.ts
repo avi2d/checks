@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { readFile, writeFile } from "node:fs/promises";
 import { Schema } from "effect";
 import { join } from "node:path";
-import { CHECKOUT, fixtureRepos, ran, scratchDirs, type FixtureRepo } from "../lib/fixture-repo.ts";
+import { CHECKOUT, fixtureRepos, ran, scratchDirs, withKitPackage, type FixtureRepo } from "../lib/fixture-repo.ts";
 
 const open = fixtureRepos("checks-setup-");
 const scratch = scratchDirs();
@@ -114,6 +114,21 @@ expect(config).toEqual({ path: ["src"], format: ["typescript"], ignore: ["**/*.d
 const retained = await open({ ".jscpd.json": JSON.stringify({ path: ["src"], format: ["typescript"], ignore: ["**/*.d.ts", "src/generated/**"] }) });
 expect((await setup(retained)).exitCode).toBe(0);
 expect(await readFile(join(retained.dir, ".jscpd.json"), "utf8")).toBe(JSON.stringify({ path: ["src"], format: ["typescript"], ignore: ["**/*.d.ts", "src/generated/**"] }));
+},
+60_000,
+);
+
+test(
+"writes a checks.config.ts that defines its settings with the kit's defineConfig, and keeps a retained one rather than writing package.json settings",
+async () => {
+const dir = await scratch("settings-file");
+expect((await $`bun ${join(CHECKOUT, "src", "delivery", "setup.ts")}`.cwd(dir).nothrow().quiet()).exitCode).toBe(0);
+expect(await readFile(join(dir, "checks.config.ts"), "utf8")).toBe('import { defineConfig } from "@avi2dg/checks/config";\n\nexport default defineConfig({});\n');
+expect(JSON.parse(await readFile(join(dir, "package.json"), "utf8"))).not.toHaveProperty("checks");
+const kept = 'export default { smoke: ["tests/e2e/home.test.ts"] };\n';
+const retained = await open({ "checks.config.ts": kept });
+expect((await setup(retained)).exitCode).toBe(0);
+expect(await readFile(join(retained.dir, "checks.config.ts"), "utf8")).toBe(kept);
 },
 60_000,
 );
@@ -417,10 +432,12 @@ test(
 async () => {
 const pub = await open({});
 await setup(pub);
+await withKitPackage(pub);
 const pubWiring = await ran($`bun ${join(CHECKOUT, "src", "delivery", "ci-wiring.ts")}`.cwd(pub.dir).env({ ...process.env, GITHUB_EVENT_PATH: await gateEvent(pub, false) }));
 expect(pubWiring.exitCode).toBe(0);
 const priv = await open({});
 await setup(priv, "--private");
+await withKitPackage(priv);
 const privWiring = await ran($`bun ${join(CHECKOUT, "src", "delivery", "ci-wiring.ts")}`.cwd(priv.dir).env({ ...process.env, GITHUB_EVENT_PATH: await gateEvent(priv, true) }));
 expect(privWiring.exitCode).toBe(0);
 },

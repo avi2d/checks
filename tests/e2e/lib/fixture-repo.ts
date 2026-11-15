@@ -118,6 +118,11 @@ export async function withOwnInstall(repo: FixtureRepo): Promise<void> {
   await symlink(join(CHECKOUT, "node_modules", ".bin"), join(repo.dir, "node_modules", ".bin"));
 }
 
+export async function withKitPackage(repo: FixtureRepo): Promise<void> {
+  await mkdir(join(repo.dir, "node_modules", "@avi2dg"), { recursive: true });
+  await symlink(CHECKOUT, join(repo.dir, "node_modules", "@avi2dg", "checks"));
+}
+
 export const UNVENDORED_BUNFIG = '[test]\npathIgnorePatterns = ["**/tests/quarantine/**", "**/tests/live/**", "**/tests/pixel/**"]\n';
 
 

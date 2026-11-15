@@ -1,3 +1,0 @@
-{
-  "inputs": ["README.md", "CONTRIBUTING.md", "docs/design.md", "docs/configs/*.md", "docs/gates/*.md"]
-}

@@ -22,11 +22,14 @@ test("a docs-only change runs a tree gate", () => {
   expect(scope.gates).toContain("checks-copy");
 });
 
-test("a copy change skips checks-copy", () => {
-  const scope = selectScope(["copy.json"]);
-  expect(scope.full).toBe(false);
-  expect(scope.gates).toContain("checks-copy");
-  expect(scope.gates.filter((bin) => TREE_GATES.includes(bin))).toEqual(["checks-copy"]);
+test("a checks.config.ts change takes the full run instead of the copy subset", () => {
+  expect(classifyPath("checks.config.ts")).toBe("workflow");
+  expect(selectScope(["checks.config.ts"]).full).toBe(true);
+});
+
+test("a copy.json left at the root takes the full run instead of the copy subset", () => {
+  expect(classifyPath("copy.json")).toBe("unknown");
+  expect(selectScope(["copy.json"]).full).toBe(true);
 });
 
 const FULL_GATES = [
@@ -132,6 +135,5 @@ test("an uppercase markdown suffix takes the full run instead of the docs subset
 
 test("a nested copy declaration takes the full run instead of the copy subset", () => {
   expect(classifyPath("content/copy.json")).toBe("unknown");
-  expect(classifyPath("copy.json")).toBe("copy");
   expect(selectScope(["content/copy.json"]).full).toBe(true);
 });

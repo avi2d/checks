@@ -4,6 +4,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { EVERY_REPOSITORY, KIT_GATES, WHOLE_TREE, WHOLE_TREE_GATES, type KitGate } from "./gates.ts";
 import { changedPaths, defaultBranch, git, pathsOf } from "./git.ts";
 import { runMain, Usage } from "./main.ts";
+import { loadSettings } from "./settings.ts";
 import { FAST_TREE_GATES, selectScope } from "./scope.ts";
 
 type Range = {
@@ -226,6 +227,17 @@ function selectionDetail(wholeTree: boolean, mode: LintMode, scopeDetail: string
   return scopeDetail === "" ? undefined : scopeDetail;
 }
 
+const tracks = (pathspecs: readonly string[], root: string) =>
+  git(["ls-files", "--", ...pathspecs], root).pipe(Effect.map((files) => files.trim() !== ""));
+
+// A tracked old file still runs the gate, so the gate fails naming the key the file moves to.
+const applies = Effect.fn("applies")(function* (appliesTo: KitGate["appliesTo"], root: string) {
+  if (appliesTo === EVERY_REPOSITORY) return true;
+  if ("pathspecs" in appliesTo) return yield* tracks(appliesTo.pathspecs, root);
+  if (Object.hasOwn(yield* loadSettings(root), appliesTo.setting)) return true;
+  return yield* tracks([appliesTo.oldFile], root);
+});
+
 const lint = Effect.gen(function* () {
   const raw = process.argv.slice(2);
   const wholeTree = raw.includes(WHOLE_TREE);
@@ -235,11 +247,7 @@ const lint = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const range = wholeTree ? yield* wholeTreeRange() : yield* resolveRange(split.rest);
   yield* Console.log(`${NAME}: ${describe(range)} from ${range.source}`);
-  const applicable = yield* Effect.filter(wholeTree ? WHOLE_TREE_GATES : KIT_GATES, (gate) =>
-    gate.appliesTo === EVERY_REPOSITORY
-      ? Effect.succeed(true)
-      : git(["ls-files", "--", ...gate.appliesTo.pathspecs], root).pipe(Effect.map((files) => files.trim() !== "")),
-  );
+  const applicable = yield* Effect.filter(wholeTree ? WHOLE_TREE_GATES : KIT_GATES, (gate) => applies(gate.appliesTo, root));
   const scoped = wholeTree
     ? { bins: applicable.map((gate) => gate.bin) as readonly string[] | undefined, detail: "" }
     : yield* pullRequestSelection(split, range, root, applicable);

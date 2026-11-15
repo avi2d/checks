@@ -11,7 +11,7 @@ A repository owner follows these steps to judge the repository's CSS with the st
 To turn on the CSS families:
 
 1. Install the peers [checks-frontend-syntax](../gates/checks-frontend-syntax.md#what-it-reads) loads, with the `bun add` line on its page.
-1. Declare `frontend-syntax.json`, which turns the gate on, as its page says.
+1. Set the `frontendSyntax` key of `checks.config.ts`, which turns the gate on, as its page says.
 1. Write `stylelint.config.ts` with the families the repository needs:
 
    ```ts

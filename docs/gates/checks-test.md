@@ -47,26 +47,25 @@ A skipped test or a todo without `skipReason` fails in every environment.
 ## What it reads
 
 `checks-test` reads test source files and the JUnit report written by its own run.
-A pull request run also reads the event file, the git history between the base and the head, the tracked sources, `package.json` and `bunfig.toml`.
-It reads the reach map under `checks.reach` in `package.json` too, as [The reach map](#the-reach-map) says.
+A pull request run also reads the event file, the git history between the base and the head, the tracked sources, `package.json`, `checks.config.ts` and `bunfig.toml`.
+It reads the reach map under `reach` in `checks.config.ts` too, as [The reach map](#the-reach-map) says.
 A `--changed` run also reads the git history since the merge base with `origin/<default branch>`, the working tree diff and the untracked files.
 It reads the sources, `package.json` and `bunfig.toml` too, as [Changed-file runs](#changed-file-runs) says.
-It reads no skip list from `package.json`, only the smoke list.
+It reads no skip list from `checks.config.ts`, only the smoke list.
 It counts a run as `ci` when `CI` is true and as `local` otherwise.
 A local run covers `./tests/unit` plus the smoke list the repository declares, except a `--changed` run, as [Changed-file runs](#changed-file-runs) says.
-The smoke list lives in `package.json` under `checks.smoke` as an array of test file paths.
+The smoke list lives in `checks.config.ts` under `smoke` as an array of test file paths.
+A `package.json` that still sets `checks.smoke` or `checks.reach` fails the run with exit 2, naming the key it moves to.
 A repository with no smoke list runs the unit tier alone outside CI.
 A local run with no unit test and no smoke list runs nothing and passes.
 A `ci` run covers the full default suite, unless a pull request narrows it or `--changed` narrows it, as [Pull request runs](#pull-request-runs) and [Changed-file runs](#changed-file-runs) say.
 A smoke entry that names no test file fails the run.
 A smoke entry under `tests/quarantine/`, `tests/live/` or `tests/pixel/` fails the run, since Bun's ignored paths would drop it.
 
-```json
-{
-  "checks": {
-    "smoke": ["tests/e2e/checkout.test.ts"]
-  }
-}
+```ts
+import { defineConfig } from "@avi2dg/checks/config";
+
+export default defineConfig({ smoke: ["tests/e2e/checkout.test.ts"] });
 ```
 
 The default suite takes only the arguments [Arguments](#arguments) lists.
@@ -136,18 +135,18 @@ Outside CI it is refused, as [Runs refused outside CI](#runs-refused-outside-ci)
 ## The reach map
 
 A site's end-to-end and screen tests open built pages, so they import no stylesheet and no component.
-A site declares which tests each such file reaches under `checks.reach` in `package.json`.
+A site declares which tests each such file reaches under `reach` in `checks.config.ts`.
 Each key is a glob of changed paths, and each value lists the test files it reaches, as paths or globs:
 
-```json
-{
-  "checks": {
-    "reach": {
-      "src/styles/hero.css": ["tests/e2e/hero.test.ts"],
-      "src/components/{Nav,Menu}.astro": ["tests/e2e/menu.test.ts", "tests/e2e/hero.test.ts"]
-    }
-  }
-}
+```ts
+import { defineConfig } from "@avi2dg/checks/config";
+
+export default defineConfig({
+  reach: {
+    "src/styles/hero.css": ["tests/e2e/hero.test.ts"],
+    "src/components/{Nav,Menu}.astro": ["tests/e2e/menu.test.ts", "tests/e2e/hero.test.ts"],
+  },
+});
 ```
 
 A changed path runs the tests every key that matches it lists, beside the tests that reach it by import, path or bin.
@@ -158,7 +157,7 @@ A run on any other event, `--full` and the live and pixel tiers stay whole whate
 A value that matches no test file stops the narrowing.
 A pull request run and a `--changed` run then run the whole suite and name the value and the key that lists it.
 An empty list or a malformed entry stops the narrowing the same way.
-A pull request run and a `--changed` run then run the whole suite and name package.json and the refused key.
+A pull request run and a `--changed` run then run the whole suite and name `checks.config.ts` `reach` and what it gets wrong.
 So a renamed test that the map still names surfaces on the next run rather than dropping its file.
 A stylesheet that reaches a block the map does not list ships untested on the pull request, and the whole run on `main` and at release still tests it.
 

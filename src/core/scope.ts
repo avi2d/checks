@@ -1,11 +1,12 @@
 import { KIT_GATES } from "./gates.ts";
+import { SETTINGS_FILE } from "./settings.ts";
 
 export type Scope = {
   readonly full: boolean;
   readonly gates: readonly string[];
 };
 
-export type ChangeShape = "docs" | "copy" | "typescript" | "workflow" | "lockfile" | "unknown";
+export type ChangeShape = "docs" | "typescript" | "workflow" | "lockfile" | "unknown";
 
 const TREE_GATES = KIT_GATES.filter((gate) => gate.reads === "tree").map((gate) => gate.bin);
 
@@ -16,6 +17,7 @@ export const FAST_TREE_GATES: readonly string[] = TREE_GATES.filter((bin) => !SL
 
 const CI_CONFIGS = new Set([
   "package.json",
+  SETTINGS_FILE,
   "bunfig.toml",
   "commitlint.config.ts",
   "oxlint.config.ts",
@@ -32,7 +34,6 @@ export function classifyPath(path: string): ChangeShape {
   if (path.startsWith(".github/") || CI_CONFIGS.has(basename) || /^tsconfig(\..*)?\.json$/.test(basename)) {
     return "workflow";
   }
-  if (path === "copy.json") return "copy";
   if (/\.(?:ts|tsx|mts|cts|astro)$/.test(path)) return "typescript";
   if (path.endsWith(".md")) return "docs";
   return "unknown";
@@ -44,8 +45,7 @@ export function selectScope(paths: readonly string[]): Scope {
   if (paths.length === 0) return fullScope();
   const shapes = new Set(paths.map(classifyPath));
   if (shapes.has("unknown") || shapes.has("workflow") || shapes.has("lockfile")) return fullScope();
-  const copyContent = shapes.has("copy") || shapes.has("docs");
-  const tree = shapes.has("typescript") ? TREE_GATES : copyContent ? ["checks-copy"] : [];
+  const tree = shapes.has("typescript") ? TREE_GATES : shapes.has("docs") ? ["checks-copy"] : [];
   return {
     full: false,
     gates: KIT_GATES.filter((gate) => gate.reads === "range" || tree.includes(gate.bin)).map((gate) => gate.bin),

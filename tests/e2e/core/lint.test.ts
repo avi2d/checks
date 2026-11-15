@@ -5,6 +5,7 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
 import { CHECKOUT, fixtureRepos, lintWiring, ran, withOwnInstall, type FixtureRepo, type Ran } from "../lib/fixture-repo.ts";
+import { settingsFile } from "../lib/settings-file.ts";
 
 const SCRIPT = join(CHECKOUT, "src", "core", "lint.ts");
 const OWNER = ["-c", "user.name=Wren Fixture", "-c", "user.email=wren@example.com"];
@@ -119,25 +120,35 @@ test("a workflow omission makes the lint gate fail and restoring it makes it pas
   expect(green.exitCode).toBe(0);
 }, 60_000);
 
-test("tracking copy.json opts a repository into checks-copy, which fails lint on a hyphen used as a dash in the declared copy", async () => {
+test("declaring copy in checks.config.ts opts a repository into checks-copy, which fails lint on a hyphen used as a dash in the declared copy", async () => {
   const { repo } = await repository();
-  await repo.write({ "copy.json": JSON.stringify({ inputs: ["content/*.md"] }), "content/home.md": "Example - a site.\n" });
+  await repo.write({ "checks.config.ts": settingsFile({ copy: { inputs: ["content/*.md"] } }), "content/home.md": "Example - a site.\n" });
   await commit(repo, "feat: declare the copy");
   const red = await lint(repo);
   expect(red.text).toContain("content/home.md:1:9 carries `-`, a hyphen used as a dash");
-  expect(red.text).toContain("checks-lint: 1 of 9 gate(s) failed: checks-copy");
+  expect(red.text).toContain("checks-lint: 1 of 14 gate(s) failed: checks-copy");
   expect(red.exitCode).toBe(1);
   await repo.write({ "content/home.md": "Example, a site.\n" });
   await commit(repo, "fix: use a comma");
   const green = await lint(repo);
-  expect(green.text).toContain("checks-lint: 9 gate(s) pass");
+  expect(green.text).toContain("checks-lint: 14 gate(s) pass");
   expect(green.exitCode).toBe(0);
 }, 60_000);
 
-test("tracking frontend-syntax.json opts a repository into checks-frontend-syntax, which fails lint on a seeded transition all", async () => {
+test("a copy.json still tracked runs checks-copy, which fails lint naming the checks.config.ts key instead of skipping the gate", async () => {
+  const { repo } = await repository();
+  await repo.write({ "copy.json": JSON.stringify({ inputs: ["content/*.md"] }), "content/home.md": "Example - a site.\n" });
+  await commit(repo, "feat: declare the copy the old way");
+  const red = await lint(repo);
+  expect(red.text).toContain("copy: copy.json is no longer read; move it to the copy key of checks.config.ts");
+  expect(red.text).toContain("checks-copy");
+  expect(red.exitCode).not.toBe(0);
+}, 60_000);
+
+test("declaring frontendSyntax in checks.config.ts opts a repository into checks-frontend-syntax, which fails lint on a seeded transition all", async () => {
   const { repo } = await repository();
   await repo.write({
-    "frontend-syntax.json": JSON.stringify({ inputs: ["styles/*.css"] }),
+    "checks.config.ts": settingsFile({ frontendSyntax: { inputs: ["styles/*.css"] } }),
     "stylelint.config.ts": `import { defineConfig } from ${JSON.stringify(join(CHECKOUT, "src", "quality", "presets", "stylelint.ts"))};\n\nexport default defineConfig({ baseline: "widely", tokens: false });\n`,
     "styles/site.css": "a { transition: all 1s; }\n",
   });

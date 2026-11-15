@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CHECKOUT, fixtureRepos } from "../lib/fixture-repo.ts";
+import { settingsFile } from "../lib/settings-file.ts";
 
 const open = fixtureRepos("checks-frontend-syntax-families-");
 
@@ -15,7 +16,7 @@ function stylelintConfig(options: string): string {
 
 function repository(options: string, files: Readonly<Record<string, string>>) {
   return open({
-    "frontend-syntax.json": JSON.stringify({ inputs: ["src/**/*.css"] }),
+    "checks.config.ts": settingsFile({ frontendSyntax: { inputs: ["src/**/*.css"] } }),
     "stylelint.config.ts": stylelintConfig(options),
     ...files,
   });
@@ -260,7 +261,7 @@ for (const { family, options, red, green, reported } of FAMILIES) {
 
 test("a named size in the font shorthand fails, directly and through a local alias holding it", async () => {
   const { write, script } = await open({
-    "frontend-syntax.json": JSON.stringify({ inputs: ["src/**/*.css"] }),
+    "checks.config.ts": settingsFile({ frontendSyntax: { inputs: ["src/**/*.css"] } }),
     "stylelint.config.ts": stylelintConfig('{ baseline: "widely", tokens: ["src/tokens.css"] }'),
     "src/tokens.css": ":root {\n  --ink: #000;\n  --text-s: 0.875rem;\n  --weight: 400;\n}\n",
     "src/site.css": "p { font: italic var(--text-s) serif; }\n",
@@ -282,7 +283,7 @@ test("a named size in the font shorthand fails, directly and through a local ali
 
 test("a named size fails only where the font size can stand, so a family name holding one passes", async () => {
   const { write, script } = await open({
-    "frontend-syntax.json": JSON.stringify({ inputs: ["src/**/*.css"] }),
+    "checks.config.ts": settingsFile({ frontendSyntax: { inputs: ["src/**/*.css"] } }),
     "stylelint.config.ts": stylelintConfig('{ baseline: "widely", tokens: ["src/tokens.css"] }'),
     "src/tokens.css": ":root {\n  --ink: #000;\n  --text-s: 0.875rem;\n  --weight: 400;\n}\n",
     "src/site.css": ":root { --face: roboto medium, serif; }\np { font: var(--text-s) var(--face); }\nh1 { font: var(--text-s) / var(--leading) large type, serif; }\n",
@@ -304,7 +305,7 @@ test("a named size fails only where the font size can stand, so a family name ho
 
 test("a size custom property one style block of a page sets fails where another block or a style attribute reads it", async () => {
   const { write, script } = await open({
-    "frontend-syntax.json": JSON.stringify({ inputs: ["src/**/*.html"] }),
+    "checks.config.ts": settingsFile({ frontendSyntax: { inputs: ["src/**/*.html"] } }),
     "stylelint.config.ts": stylelintConfig('{ baseline: "widely", tokens: ["src/tokens.css"] }'),
     "src/page.html": '<style>:root { --gap: 12px; }</style>\n<p style="font-size: var(--text-s)"></p>\n',
   });
@@ -321,7 +322,7 @@ test("a size custom property one style block of a page sets fails where another 
 
 test("a size custom property hundreds of style attributes read fails once per attribute", async () => {
   const { script } = await open({
-    "frontend-syntax.json": JSON.stringify({ inputs: ["src/**/*.html"] }),
+    "checks.config.ts": settingsFile({ frontendSyntax: { inputs: ["src/**/*.html"] } }),
     "stylelint.config.ts": stylelintConfig('{ baseline: "widely", tokens: ["src/tokens.css"] }'),
     "src/page.html": `<style>:root { --size: 12px; }</style>\n${'<p style="font-size: var(--size)"></p>\n'.repeat(200)}`,
   });
@@ -513,7 +514,7 @@ test("a declaration without stylelint.config.ts, a config that does not load, an
   const { dir, write, script } = await repository(WIDELY, { "src/site.css": "a { top: 0; }\n" });
   await Bun.$`rm stylelint.config.ts`.cwd(dir).quiet();
   const missing = await script(GATE);
-  expect(missing.text).toContain("frontend-syntax: stylelint.config.ts is missing, and a repository that declares frontend-syntax.json writes it with defineConfig from @avi2dg/checks/stylelint");
+  expect(missing.text).toContain("frontend-syntax: stylelint.config.ts is missing, and a repository that declares frontendSyntax in checks.config.ts writes it with defineConfig from @avi2dg/checks/stylelint");
   expect(missing.exitCode).toBe(2);
 
   await write({ "stylelint.config.ts": stylelintConfig('{ baseline: "someday", tokens: false }') });

@@ -88,7 +88,7 @@ The testing directory is named `testing` rather than `tests`, because a `src/tes
 Twenty `exports` keys name a path the file does not sit at, because consumers resolve them by that name.
 `@avi2dg/checks/scripts/test-skips.ts`, `@avi2dg/checks/scripts/comment-matchers.ts` and `@avi2dg/checks/scripts/prose-matchers.ts` point at their files under `src/`.
 `@avi2dg/checks/browser-hooks.ts` points at `src/quality/browser/hooks.ts`, whose types a product's browser hooks import.
-`@avi2dg/checks/browser-checks.json` points at `src/quality/browser/browser-checks.json`, the starter a product copies.
+`@avi2dg/checks/browser-checks.json` points at `src/quality/browser/browser-checks.json`, the starter a product copies under the `browser` key of `checks.config.ts`.
 `@avi2dg/checks/screen-sizes.ts` points at `src/quality/browser/screen-sizes.ts`, whose sizes a product imports.
 `@avi2dg/checks/block-screens.ts` points at `src/testing/block-screens.ts`, whose screenshot suite a product's pixel tests call.
 `@avi2dg/checks/site-test.ts` points at `src/testing/site-test.ts`, which serves a product's built site to its browser tests.
@@ -343,8 +343,8 @@ A pull request's title, body and comments reach the forge without a commit, so [
 ## The frontend checks are opt-in
 
 A browser check needs a built site and a browser, and a backend repository has neither.
-So a product opts in by declaring `browser-checks.json`, `checks-lint` never starts a browser, and the browser libraries are optional peers a backend never installs.
-`checks-frontend-syntax` needs no browser and runs inside `checks-lint`, but only where `frontend-syntax.json` declares its inputs, since a repository with no interface has no CSS to hold to it.
+So a product opts in by setting the `browser` key of `checks.config.ts`, `checks-lint` never starts a browser, and the browser libraries are optional peers a backend never installs.
+`checks-frontend-syntax` needs no browser and runs inside `checks-lint`, but only where the `frontendSyntax` key of `checks.config.ts` declares its inputs, since a repository with no interface has no CSS to hold to it.
 
 Each check wraps a detector that already works, and the kit writes a rule of its own only where none decides the constraint.
 The syntax gate runs two of stylelint's built-in rules and the stylelint team's shared configs, `axe` runs axe-core and `nesting` runs one html-validate rule.
@@ -386,7 +386,7 @@ It found mostly code inside a string, test fixtures and error messages.
 The few hits that were copy, such as a line a CLI prints, look to a program like `scrollHeight - innerHeight` in a test script.
 A site's strings all reach its built pages, so a glob over the built HTML judges each one where a visitor reads it.
 
-Only a repository knows which of its files are copy, so it opts in by declaring them in `copy.json`.
+Only a repository knows which of its files are copy, so it opts in by declaring them under the `copy` key of `checks.config.ts`.
 The gate judges every line of each declared file, unlike the prose rules in `checks-docs`, which judge only the lines a change edits.
 A visitor reads the whole page, so a dash on a line the change left alone is as wrong as one it added.
 

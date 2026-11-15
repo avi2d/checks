@@ -1,6 +1,7 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { CHECKOUT, fixtureRepos } from "../lib/fixture-repo.ts";
+import { settingsFile } from "../lib/settings-file.ts";
 
 const open = fixtureRepos("checks-frontend-syntax-");
 
@@ -8,7 +9,7 @@ const GATE = "quality/frontend-syntax.ts";
 
 const RULES_OFF = `export default { rules: {}, overrides: [{ files: ["**/*.html", "**/*.astro"], customSyntax: ${JSON.stringify(Bun.resolveSync("postcss-html", CHECKOUT))} }] };\n`;
 
-const DECLARED = { "frontend-syntax.json": JSON.stringify({ inputs: ["src/**/*.css", "src/**/*.astro"] }), "stylelint.config.ts": RULES_OFF };
+const DECLARED = { "checks.config.ts": settingsFile({ frontendSyntax: { inputs: ["src/**/*.css", "src/**/*.astro"] } }), "stylelint.config.ts": RULES_OFF };
 
 const CLEAN = {
   ...DECLARED,
@@ -80,7 +81,7 @@ for (const seeded of SEEDED) {
 }
 
 test("a declared input that matches no file fails, and the gate passes once a file matches it", async () => {
-  const { write, script } = await open({ ...CLEAN, "frontend-syntax.json": JSON.stringify({ inputs: ["src/**/*.css", "dist/**/*.html"] }) });
+  const { write, script } = await open({ ...CLEAN, "checks.config.ts": settingsFile({ frontendSyntax: { inputs: ["src/**/*.css", "dist/**/*.html"] } }) });
   const red = await script(GATE);
   expect(red.text).toBe("frontend-syntax: 1 problem(s) in 1 file(s) from 2 declared input(s):\n  dist/**/*.html: the declared input matches no file\n");
   expect(red.exitCode).toBe(1);
@@ -94,14 +95,14 @@ test("a declared input that matches no file fails, and the gate passes once a fi
 test("a repository without the declaration, or with an empty input list, is refused before anything is judged", async () => {
   const { dir, write, script } = await open({ "src/styles/site.css": "a { transition: all 1s; }\n" });
   const undeclared = await script(GATE);
-  expect(undeclared.text).toContain("frontend-syntax: frontend-syntax.json is missing, and a repository opts in to this gate by declaring its inputs there");
+  expect(undeclared.text).toContain("frontend-syntax: checks.config.ts sets no frontendSyntax key, and a repository opts in to this gate by declaring its inputs there");
   expect(undeclared.exitCode).toBe(2);
 
-  await write({ "frontend-syntax.json": JSON.stringify({ inputs: [] }) });
+  await write({ "checks.config.ts": settingsFile({ frontendSyntax: { inputs: [] } }) });
   const empty = await script(GATE);
-  expect(empty.text).toContain("frontend-syntax: frontend-syntax.json does not decode");
+  expect(empty.text).toContain("frontend-syntax: checks.config.ts key frontendSyntax does not decode");
   expect(empty.exitCode).toBe(2);
 
-  await $`rm frontend-syntax.json`.cwd(dir).quiet();
+  await $`rm checks.config.ts`.cwd(dir).quiet();
   expect((await script(GATE)).exitCode).toBe(2);
 }, 60_000);

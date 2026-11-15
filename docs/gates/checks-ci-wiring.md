@@ -52,14 +52,15 @@ A mutation job never names `CI_RUNS_ON` directly in `runs-on`, as `vars.CI_RUNS_
 In a private repository any other job that names `CI_RUNS_ON` in `runs-on` carries exactly the hosted-default expression `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
 A public repository carries no self-hosted runner on a job a fork can reach, because a pull request from a fork would run its own code on that runner.
 A fork reaches a job through `pull_request`, `pull_request_target`, `pull_request_review`, `pull_request_review_comment` or `issue_comment`, directly, through a local reusable workflow a reached job calls, or through a `workflow_run` trigger that names a reached workflow.
-Such a job refuses a literal `self-hosted` label, a label that interpolates an expression, a label in a set declared under `checks.mutationRunner` or `checks.selfHostedRunners`, a runner `group` and any other expression.
+Such a job refuses a literal `self-hosted` label, a label that interpolates an expression, a label in a set declared under `mutationRunner` or `selfHostedRunners` in `checks.config.ts`, a runner `group` and any other expression.
 A `runs-on` that is exactly `${{ matrix.<key> }}` judges each matrix value as its own labels.
 The values for the key are the combinations its axis values form, without combinations an `exclude` entry removes, plus its `include` rows, which merge into the original combinations they match and otherwise run as their own combinations.
-It refuses a value that names `self-hosted` or falls inside a label set declared under `checks.mutationRunner` or `checks.selfHostedRunners`.
+It refuses a value that names `self-hosted` or falls inside a label set declared under `mutationRunner` or `selfHostedRunners` in `checks.config.ts`.
 Any other expression refuses as unresolvable.
 A job on `push` or another trigger no fork reaches may still name self-hosted labels.
-In a private repository each mutation job carries exactly the labels the consumer declares in `package.json` under `checks.mutationRunner`.
-Every other job there carries exactly the hosted-default expression, or exactly one of the label sets the consumer declares under `checks.selfHostedRunners`.
+In a private repository each mutation job carries exactly the labels the consumer declares under `mutationRunner` in `checks.config.ts`.
+Every other job there carries exactly the hosted-default expression, or exactly one of the label sets the consumer declares under `selfHostedRunners` in `checks.config.ts`.
+A `package.json` that still sets `checks.mutationRunner` or `checks.selfHostedRunners` fails the gate with exit 2, naming the key it moves to.
 A job there also carries `runs-on: ${{ needs.<job>.outputs.runs-on }}` when the same workflow needs that job and that job calls the runner pick.
 The pick is the repository file `runner.yml` under `.github/workflows/` or `avi2d/workflows/.github/workflows/runner.yml` at a full SHA or at a version tag, `v<major>` or `v<major>.<minor>.<patch>`.
 A branch name or a missing ref is not the pick.

@@ -2,6 +2,7 @@ import { Effect, Schema } from "effect";
 import { ADR_DIRECTORY, ADR_INDEX, ROOT_FILES } from "../src/docs/doc-rules.ts";
 import { listed, MODES, templateFile, VISION_PAGE } from "../src/docs/doc-templates.ts";
 import { EVERY_REPOSITORY, KIT_GATES, VECTORS, type KitGate } from "../src/core/gates.ts";
+import { SETTINGS_FILE } from "../src/core/settings.ts";
 import { AGENT_NAMES, DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, HISTORY_NAMES, LIVING_NAMES, PROSE_RULES } from "../src/docs/prose-matchers.ts";
 import starter from "../src/quality/browser/browser-checks.json" with { type: "json" };
 import { SCREEN_SIZE_SETS, SCREEN_SIZES, screenSizeName } from "../src/quality/browser/screen-sizes.ts";
@@ -149,7 +150,11 @@ const GATES: Block = {
     "| Vector | Gate | Reads | Runs in |",
     "| --- | --- | --- | --- |",
     ...KIT_GATES.toSorted((a, b) => VECTORS.indexOf(a.vector) - VECTORS.indexOf(b.vector)).map(({ vector, bin, reads, alsoReads, appliesTo }: KitGate) => {
-      const runsIn = appliesTo === EVERY_REPOSITORY ? appliesTo : `a repository tracking ${appliesTo.pathspecs.map(code).join(" or ")}`;
+      const runsIn = appliesTo === EVERY_REPOSITORY
+        ? appliesTo
+        : "pathspecs" in appliesTo
+          ? `a repository tracking ${appliesTo.pathspecs.map(code).join(" or ")}`
+          : `a repository whose ${code(SETTINGS_FILE)} sets ${code(appliesTo.setting)}`;
       return `| ${vector} | [${code(bin)}](gates/${bin}.md) | ${READS[reads]}${alsoReads === undefined ? "" : `, and ${alsoReads}`} | ${runsIn} |`;
     }),
   ],

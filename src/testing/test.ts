@@ -5,6 +5,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { TEST_ENTRY_POINT } from "../core/gates.ts";
 import { collect } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
+import { readSetting, SETTINGS_FILE, Smoke } from "../core/settings.ts";
 import { testOptions, type TestOptions, type TestTier } from "../core/test-script.ts";
 import { readRunScope } from "../core/pull-request-scope.ts";
 import { readChangedNarrowing, readLocalNarrowing } from "./affected-tests.ts";
@@ -171,15 +172,6 @@ export function selectSuite(options: TestOptions, environment: Environment): Sui
   return { kind: "smoke" };
 }
 
-const SmokeManifest = Schema.Struct({
-  checks: Schema.optional(Schema.Struct({ smoke: Schema.optional(Schema.Array(Schema.NonEmptyString)) })),
-});
-
-export function smokeList(manifest: unknown): readonly string[] | undefined {
-  if (!Schema.is(SmokeManifest)(manifest)) return undefined;
-  return manifest.checks?.smoke ?? [];
-}
-
 export function suiteArgs(selection: SuiteSelection, smoke: readonly string[]): readonly string[] {
   if (selection.kind === "tier") return tierArgs(selection.tier);
   if (selection.kind === "smoke") return ["./tests/unit", ...smoke.map((file) => `./${file}`)];
@@ -230,16 +222,7 @@ export const resolveWorkerCount = Effect.fn("resolveWorkerCount")(function* (wor
 });
 
 const readSmokeList = Effect.fn("readSmokeList")(function* (root: string) {
-  const file = (yield* Path.Path).join(root, "package.json");
-  const text = yield* (yield* FileSystem.FileSystem).readFileString(file);
-  const manifest = yield* Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown))(text).pipe(
-    Effect.mapError((cause) => new SkipGateError({ message: "cannot read " + file + " as JSON: " + cause.message })),
-  );
-  const smoke = smokeList(manifest);
-  if (smoke === undefined) {
-    return yield* new SkipGateError({ message: file + ": checks.smoke must be an array of test file paths" });
-  }
-  return smoke;
+  return (yield* readSetting(root, "smoke", Smoke, { manifestKey: "smoke" })) ?? [];
 });
 
 // A live or pixel tier and --full run whole, since no pull request picks them.
@@ -352,7 +335,7 @@ const testEntry = Effect.gen(function* () {
   const smoke = selection.kind === "smoke" ? yield* readSmokeList(process.cwd()) : [];
   const scope = yield* readScope(selection, smoke);
   if (scope.files?.length === 0) {
-    yield* Console.log(`${NAME}: no unit test and no smoke list, so this local run ran nothing; declare checks.smoke`);
+    yield* Console.log(`${NAME}: no unit test and no smoke list, so this local run ran nothing; declare the smoke key of ${SETTINGS_FILE}`);
     return true;
   }
   const { declarations } = scope;

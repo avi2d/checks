@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
 import { CHECKOUT, fixtureRepos } from "../lib/fixture-repo.ts";
+import { settingsFile } from "../lib/settings-file.ts";
 
 const open = fixtureRepos("checks-frontend-syntax-type-tokens-");
 
@@ -29,7 +30,7 @@ function typeRefusal(property: string, literal: string): string {
 
 function typeRepository(tokens: string, component: string) {
   return open({
-    "frontend-syntax.json": JSON.stringify({ inputs: ["src/**/*.css"] }),
+    "checks.config.ts": settingsFile({ frontendSyntax: { inputs: ["src/**/*.css"] } }),
     "stylelint.config.ts": stylelintConfig('{ baseline: "widely", tokens: ["src/tokens.css"] }'),
     "src/tokens.css": tokens,
     "src/card.css": component,

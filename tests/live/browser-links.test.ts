@@ -20,7 +20,7 @@ test("links is red on a dead fragment on a noindex page, a fragment no element o
   };
   const site = await browserSite({
     ...sitePages({ ...pages, ...red }),
-    "browser-checks.json": declaration({
+    "checks.config.ts": declaration({
       routes: routesOf({ ...pages, ...red }),
       checks: ["links"],
       viewports: [{ name: "phone", width: 320, height: 640 }, { name: "tablet", width: 820, height: 1180 }],

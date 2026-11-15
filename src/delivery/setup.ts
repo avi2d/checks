@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { runMain, Usage } from "../core/main.ts";
-import { STRYKER_CONFIG } from "./setup-workflow.ts";
+import { SETTINGS_FILE } from "../core/settings.ts";
+import { JSCPD_CONFIG, KNIP_CONFIG, SETTINGS_CONFIG, STRYKER_CONFIG } from "./setup-workflow.ts";
 import { callerSetOf, flagMismatchOf, parseSiteNameFlags, readWorkflowFiles, type CallerSet } from "./site-names.ts";
 import { byHandSet, requiredSet } from "./workflow-set.ts";
 import { TEMPLATES, VISION_PAGE } from "../docs/doc-templates.ts";
@@ -117,22 +118,6 @@ const effectScopeOf = (text: string): Effect.Effect<readonly ServiceOverride[], 
   if (files === undefined) return Effect.succeed([{ include: [...SOURCES], exclude: [...TESTS, ...excludeFiles], options: severities }]);
   return Effect.succeed([{ include: files, exclude: excludeFiles, options: severities }]);
 };
-
-const KNIP_CONFIG = [
-  "import { defineConfig } from \"@avi2dg/checks/knip\";",
-  "",
-  "export default defineConfig({ entry: [\"src/index.ts\"] });",
-  "",
-].join("\n");
-
-const JSCPD_CONFIG = [
-  "{",
-  "  \"path\": [\"src\"],",
-  "  \"format\": [\"typescript\"],",
-  "  \"ignore\": [\"**/*.d.ts\"]",
-  "}",
-  "",
-].join("\n");
 
 const kitText = Effect.fn("kitText")(function* (file: string) {
   const system = yield* FileSystem.FileSystem;
@@ -382,6 +367,7 @@ const check = Effect.gen(function* () {
   yield* setupTsconfig(root, oxlintText);
   yield* setupFile(root, "knip.config.ts", KNIP_CONFIG);
   yield* setupFile(root, ".jscpd.json", JSCPD_CONFIG);
+  yield* setupFile(root, SETTINGS_FILE, SETTINGS_CONFIG);
   yield* setupWorkflows(root, set);
   const { wroteAgents, wroteVision } = yield* setupDocFiles(root, requiresName({ name: outcome.name }));
   if (isPrivate) yield* Console.log(NAME + ": set the CI_RUNS_ON variable to a self-hosted runner label so the new jobs land there");
