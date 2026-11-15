@@ -22,23 +22,39 @@ type DifferentLine = { readonly line: number; readonly holds: string | undefined
 
 const SHARED_WORKFLOWS = `${SHARED_REPOSITORY}/.github/workflows`;
 
+// GitHub passes `secrets: inherit` only to a workflow of the same organization or enterprise, so each caller names what its shared workflow declares.
+const SHARED_SECRETS = {
+  "advisories.yml@v3": [],
+  "ci.yml@v3": [],
+  "flake.yml@v3": [],
+  "pr-title.yml@v3": [],
+  "preview-remove.yml@v3": ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"],
+  "release-main.yml@v3": [],
+  "release-pr.yml@v3": [],
+  "site-ci.yml@v3": ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"],
+  "site-main.yml@v3": ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"],
+  "site-production.yml@v3": ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "PRODUCTION_DEPLOY_KEY"],
+} as const satisfies Readonly<Record<string, readonly string[]>>;
+
+type SharedWorkflow = keyof typeof SHARED_SECRETS;
+
 type Caller = {
   readonly name: string;
   readonly on: readonly string[];
   readonly concurrency?: { readonly group: string; readonly cancel: boolean };
   readonly job: string;
-  readonly uses: string;
+  readonly shared: SharedWorkflow;
   readonly permissions: string;
-  readonly secrets?: true;
 };
 
-function callerText({ name, on, concurrency, job, uses, permissions, secrets }: Caller): string {
+function callerText({ name, on, concurrency, job, shared, permissions }: Caller): string {
   const lines = [`name: ${name}`, "", "on:", ...on.map((line) => `  ${line}`), ""];
   if (concurrency !== undefined) {
     lines.push("concurrency:", `  group: ${concurrency.group}`, `  cancel-in-progress: ${String(concurrency.cancel)}`, "");
   }
-  lines.push("jobs:", `  ${job}:`, `    uses: ${uses}`, `    permissions: { ${permissions} }`);
-  if (secrets === true) lines.push("    secrets: inherit");
+  lines.push("jobs:", `  ${job}:`, `    uses: ${SHARED_WORKFLOWS}/${shared}`, `    permissions: { ${permissions} }`);
+  const secrets: readonly string[] = SHARED_SECRETS[shared];
+  if (secrets.length > 0) lines.push("    secrets:", ...secrets.map((secret) => `      ${secret}: \${{ secrets.${secret} }}`));
   return [...lines, ""].join("\n");
 }
 
@@ -46,14 +62,13 @@ const PULL_REQUEST = ["pull_request:", "  types: [opened, synchronize, reopened,
 const BY_HAND = ["workflow_dispatch:"];
 const PER_PULL_REQUEST = { group: "ci-${{ github.event.pull_request.number || github.run_id }}", cancel: true };
 
-const ciCaller = (shared: string, permissions: string, secrets: boolean): Caller => ({
+const ciCaller = (shared: SharedWorkflow, permissions: string): Caller => ({
   name: "ci",
   on: PULL_REQUEST,
   concurrency: PER_PULL_REQUEST,
   job: "checks",
-  uses: `${SHARED_WORKFLOWS}/${shared}@v3`,
+  shared,
   permissions,
-  ...(secrets ? { secrets: true } : {}),
 });
 
 const PR_TITLE: Caller = {
@@ -61,19 +76,18 @@ const PR_TITLE: Caller = {
   on: ["pull_request:", "  types: [edited]"],
   concurrency: { group: "pr-title-${{ github.event.pull_request.number }}", cancel: true },
   job: "title",
-  uses: `${SHARED_WORKFLOWS}/pr-title.yml@v3`,
+  shared: "pr-title.yml@v3",
   permissions: "contents: read, statuses: write, pull-requests: read",
 };
 
 // site-main queues each release commit in its shared job, so a caller group would cancel a pending release.
-const mainCaller = (shared: string, permissions: string, secrets: boolean, concurrency?: Caller["concurrency"]): Caller => ({
+const mainCaller = (shared: SharedWorkflow, permissions: string, concurrency?: Caller["concurrency"]): Caller => ({
   name: "main",
   on: ["push:", "  branches: [main]"],
   ...(concurrency === undefined ? {} : { concurrency }),
   job: "release",
-  uses: `${SHARED_WORKFLOWS}/${shared}@v3`,
+  shared,
   permissions,
-  ...(secrets ? { secrets: true } : {}),
 });
 
 // A caller-level group of the same name deadlocks the shared job that holds release-pull-request.
@@ -81,38 +95,36 @@ const RELEASE: Caller = {
   name: "release",
   on: BY_HAND,
   job: "pull-request",
-  uses: `${SHARED_WORKFLOWS}/release-pr.yml@v3`,
+  shared: "release-pr.yml@v3",
   permissions: "contents: write, pull-requests: write, actions: write",
 };
 
 const SITE: readonly Caller[] = [
-  ciCaller("site-ci.yml", "contents: read, actions: write, statuses: write, pull-requests: write", true),
+  ciCaller("site-ci.yml@v3", "contents: read, actions: write, statuses: write, pull-requests: write"),
   PR_TITLE,
   {
     name: "preview-close",
     on: ["pull_request:", "  types: [closed]"],
     job: "preview",
-    uses: `${SHARED_WORKFLOWS}/preview-remove.yml@v3`,
+    shared: "preview-remove.yml@v3",
     permissions: "contents: read, pull-requests: write",
-    secrets: true,
   },
-  mainCaller("site-main.yml", "contents: write, actions: read, pull-requests: read", true),
+  mainCaller("site-main.yml@v3", "contents: write, actions: read, pull-requests: read"),
   RELEASE,
   {
     name: "production",
     on: BY_HAND,
     job: "production",
-    uses: `${SHARED_WORKFLOWS}/site-production.yml@v3`,
+    shared: "site-production.yml@v3",
     permissions: "contents: read, actions: read, pull-requests: read",
-    secrets: true,
   },
 ];
 
 const CODE: readonly Caller[] = [
-  ciCaller("ci.yml", "contents: read, actions: write, statuses: write, pull-requests: read", false),
+  ciCaller("ci.yml@v3", "contents: read, actions: write, statuses: write, pull-requests: read"),
   PR_TITLE,
 // release-main holds no group, so the caller serializes pushes to main.
-  mainCaller("release-main.yml", "contents: write, id-token: write, actions: read, pull-requests: read", false, { group: "main", cancel: false }),
+  mainCaller("release-main.yml@v3", "contents: write, id-token: write, actions: read, pull-requests: read", { group: "main", cancel: false }),
   RELEASE,
 ];
 
@@ -120,12 +132,12 @@ const filesOf = (callers: readonly Caller[]): readonly WorkflowFile[] => callers
 
 const ADVISORIES: WorkflowFile = {
   name: "advisories.yml",
-  text: callerText({ name: "advisories", on: BY_HAND, job: "advisories", uses: `${SHARED_WORKFLOWS}/advisories.yml@v3`, permissions: "contents: read, issues: write" }),
+  text: callerText({ name: "advisories", on: BY_HAND, job: "advisories", shared: "advisories.yml@v3", permissions: "contents: read, issues: write" }),
 };
 
 const FLAKE: WorkflowFile = {
   name: "flake.yml",
-  text: callerText({ name: "flake", on: BY_HAND, job: "flake", uses: `${SHARED_WORKFLOWS}/flake.yml@v3`, permissions: "contents: read" }),
+  text: callerText({ name: "flake", on: BY_HAND, job: "flake", shared: "flake.yml@v3", permissions: "contents: read" }),
 };
 
 const MUTATION: WorkflowFile = { name: "mutation.yml", text: MUTATION_WORKFLOW };

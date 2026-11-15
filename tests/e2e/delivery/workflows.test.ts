@@ -69,7 +69,14 @@ test("a site repository gets the six site callers, keeps advisories in its calle
     on: { workflow_dispatch: null },
     jobs: { advisories: { uses: "avi2d/workflows/.github/workflows/advisories.yml@v3", permissions: { contents: "read", issues: "write" } } },
   });
-  expect(await parsed(repo, "ci.yml")).toMatchObject({ jobs: { checks: { uses: "avi2d/workflows/.github/workflows/site-ci.yml@v3", secrets: "inherit" } } });
+  expect(await parsed(repo, "ci.yml")).toMatchObject({
+    jobs: {
+      checks: {
+        uses: "avi2d/workflows/.github/workflows/site-ci.yml@v3",
+        secrets: { CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}", CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" },
+      },
+    },
+  });
   expect(await parsed(repo, "preview-close.yml")).toMatchObject({ on: { pull_request: { types: ["closed"] } } });
   expect(await parsed(repo, "main.yml")).toMatchObject({ jobs: { release: { uses: "avi2d/workflows/.github/workflows/site-main.yml@v3" } } });
   expect(await parsed(repo, "production.yml")).toMatchObject({ on: { workflow_dispatch: null }, jobs: { production: { uses: "avi2d/workflows/.github/workflows/site-production.yml@v3" } } });
