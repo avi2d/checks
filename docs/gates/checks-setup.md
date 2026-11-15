@@ -25,7 +25,7 @@ It writes `package.json` with the kit in `devDependencies` and with `lint`, `typ
 It writes the caller set `checks-workflows` writes for the repository kind.
 A repository whose workflow callers already call a shared site workflow gets the site callers, and so does a run given the site name flags.
 Any other repository gets the code callers.
-Each site caller passes the Pages project, the domain and the production repository, taken from the callers it finds.
+Each site caller passes the Pages project, the domain and the production repository, taken from the callers it finds, and the `site` job of `ci.yml` passes the Pages project alone.
 Each flag fills only a name no caller passes.
 It stops before writing anything when a site run lacks one of the three names, and names the fix.
 The same stop covers two values of one name, an unparsable name, and a flag that differs from a name its callers pass.

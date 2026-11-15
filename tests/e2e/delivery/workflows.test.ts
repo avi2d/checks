@@ -35,7 +35,11 @@ test("a code repository without workflow files is refused until --write writes c
   expect(await parsed(repo, "ci.yml")).toMatchObject({
     on: { pull_request: { types: ["opened", "synchronize", "reopened", "ready_for_review"] }, workflow_dispatch: null },
     concurrency: { "cancel-in-progress": true },
-    jobs: { checks: { uses: "avi2d/workflows/.github/workflows/ci.yml@v3" } },
+    jobs: {
+      static: { uses: "avi2d/workflows/.github/workflows/static.yml@v3" },
+      test: { uses: "avi2d/workflows/.github/workflows/test.yml@v3" },
+      checks: { needs: ["changes", "static", "test"], uses: "avi2d/workflows/.github/workflows/gate.yml@v3" },
+    },
   });
   expect(await parsed(repo, "pr-title.yml")).toMatchObject({ on: { pull_request: { types: ["edited"] } } });
   expect(await parsed(repo, "main.yml")).toMatchObject({ on: { push: { branches: ["main"] } }, jobs: { release: { uses: "avi2d/workflows/.github/workflows/release-main.yml@v3" } } });
@@ -72,11 +76,13 @@ test("a first site write takes the three names as flags, gets the six site calle
   });
   expect(await parsed(repo, "ci.yml")).toMatchObject({
     jobs: {
-      checks: {
-        uses: "avi2d/workflows/.github/workflows/site-ci.yml@v3",
-        with: SITE,
+      site: {
+        uses: "avi2d/workflows/.github/workflows/site-preview.yml@v3",
+        with: { pages: SITE.pages },
         secrets: { CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}", CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" },
       },
+      browser: { needs: "site", uses: "avi2d/workflows/.github/workflows/test.yml@v3" },
+      checks: { needs: ["changes", "static", "site", "unit", "browser"], uses: "avi2d/workflows/.github/workflows/gate.yml@v3" },
     },
   });
   expect(await parsed(repo, "preview-close.yml")).toMatchObject({ on: { pull_request: { types: ["closed"] } } });
@@ -154,4 +160,53 @@ test("the shared workflow repository keeps its own files and an unknown flag is 
   expect(flagged.exitCode).toBe(2);
   expect(flagged.text).toContain("usage: workflows.ts [--write [--pages <project>] [--domain <domain>] [--production <owner/name>]]");
   expect((await workflows(repo, SITE_FLAGS)).exitCode).toBe(2);
+}, 30_000);
+
+test("a code repository on the single-job ci.yml passes with the command that writes the composed one, and --write keeps the test jobs it then holds", async () => {
+  const single = [
+    "name: ci",
+    "",
+    "on:",
+    "  pull_request:",
+    "    types: [opened, synchronize, reopened, ready_for_review]",
+    "  workflow_dispatch:",
+    "",
+    "concurrency:",
+    "  group: ci-${{ github.event.pull_request.number || github.run_id }}",
+    "  cancel-in-progress: true",
+    "",
+    "jobs:",
+    "  checks:",
+    "    uses: avi2d/workflows/.github/workflows/ci.yml@v3",
+    "    permissions: { contents: read, actions: write, statuses: write, pull-requests: read }",
+    "",
+  ].join("\n");
+  const repo = await open({ "package.json": manifest() });
+  await repo.commit("start");
+  await workflows(repo, ["--write"]);
+  await Bun.write(join(repo.dir, ".github", "workflows", "ci.yml"), single);
+
+  expect(await workflows(repo)).toEqual({
+    exitCode: 0,
+    text: [
+      "workflows: .github/workflows holds the code set checks-workflows writes",
+      "workflows: .github/workflows/ci.yml is the single-job caller, so run checks-workflows --write to write the composed ci.yml",
+      "",
+    ].join("\n"),
+  });
+
+  expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 4 workflow file(s) of the code set\n" });
+  const ci = join(repo.dir, ".github", "workflows", "ci.yml");
+  const e2e = "  e2e:\n    uses: avi2d/workflows/.github/workflows/test.yml@v3\n    with:\n      run: bun run test:e2e\n";
+  await Bun.write(ci, (await readFile(ci, "utf8")).replace("  checks:\n", `${e2e}  checks:\n`));
+  expect((await workflows(repo)).exitCode).toBe(1);
+
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  expect(await parsed(repo, "ci.yml")).toMatchObject({
+    jobs: {
+      e2e: { needs: "changes", uses: "avi2d/workflows/.github/workflows/test.yml@v3", with: { run: "bun run test:e2e" } },
+      checks: { needs: ["changes", "static", "test", "e2e"], with: { skips: "${{ needs.changes.outputs.docs-only == 'true' && 'test e2e' || '' }}" } },
+    },
+  });
+  expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the code set checks-workflows writes\n" });
 }, 30_000);
