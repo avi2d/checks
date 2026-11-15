@@ -16,6 +16,8 @@ A `build` script also requires `git diff --exit-code`.
 The target branch is the pull request base in CI, else the branch `refs/remotes/origin/HEAD` names, else the default branch of the repository in GitHub's event, else `main`.
 A `pull_request` trigger without a branch filter covers every target branch.
 
+A repository whose workflow files are the set [checks-workflows](checks-workflows.md) writes passes this part, since the shared workflows the set calls run every gate.
+
 Each command needs its own plain `run` step.
 A step can call a path command through `bun run`.
 The check follows local reusable workflows but not remote reusable workflows.
