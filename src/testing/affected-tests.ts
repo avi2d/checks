@@ -92,15 +92,15 @@ function mappedTests(path: string, repository: Repository): readonly string[] | 
   return testFilesOf(repository).filter((file) => patterns.some((pattern) => globMatches(pattern, file)));
 }
 
-export function refuseReachMap(reach: unknown): string | undefined {
-  if (reach === undefined) return undefined;
-  if (typeof reach !== "object" || reach === null || Array.isArray(reach)) {
+export function refuseReachMap(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return "package.json: checks.reach is not a map of changed paths to test files";
   }
-  for (const [key, value] of Object.entries(reach)) {
+  for (const [key, entry] of Object.entries(value)) {
     if (key === "") return "package.json: checks.reach has an empty changed-path key";
-    if (!Array.isArray(value) || value.length === 0) return `package.json: checks.reach lists no test file for ${key}`;
-    const bad = value.find((entry) => typeof entry !== "string" || entry === "");
+    if (!Array.isArray(entry) || entry.length === 0) return `package.json: checks.reach lists no test file for ${key}`;
+    const bad = entry.find((candidate) => typeof candidate !== "string" || candidate === "");
     if (bad !== undefined) return `package.json: checks.reach names an empty test file for ${key}`;
   }
   return undefined;
