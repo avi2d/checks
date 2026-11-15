@@ -285,7 +285,7 @@ const writeFreshPackage = Effect.fn("writeFreshPackage")(function* (
   yield* system.makeDirectory(path.dirname(full), { recursive: true });
   yield* system.writeFileString(full, JSON.stringify(manifest, undefined, 2) + "\n");
   yield* Console.log(NAME + ": wrote package.json");
-  return { hasBuild: false, hasOwner: false, name: fallbackName };
+  return { hasBuild: false, hasOwner: false, name: fallbackName, kind: "code" as const };
 });
 
 const updatePackage = Effect.fn("updatePackage")(function* (
@@ -312,11 +312,11 @@ const updatePackage = Effect.fn("updatePackage")(function* (
   const name = typeof finalized.merged["name"] === "string" ? finalized.merged["name"] : fallbackName;
   if (next === raw) {
     yield* Console.log(NAME + ": kept package.json, already there");
-    return { hasBuild: finalized.hasBuild, hasOwner: finalized.hasOwner, name };
+    return { hasBuild: finalized.hasBuild, hasOwner: finalized.hasOwner, name, kind: kindOf(record["site"]) };
   }
   yield* system.writeFileString(full, next);
   yield* Console.log(NAME + ": wrote package.json");
-  return { hasBuild: finalized.hasBuild, hasOwner: finalized.hasOwner, name };
+  return { hasBuild: finalized.hasBuild, hasOwner: finalized.hasOwner, name, kind: kindOf(record["site"]) };
 });
 const setupPackage = Effect.fn("setupPackage")(function* (
   root: string,
@@ -341,15 +341,6 @@ const setupWorkflows = Effect.fn("setupWorkflows")(function* (root: string, kind
   const mutation = byHandSet(kind).find((file) => file.name === "mutation.yml");
   if (mutation !== undefined) yield* setupFile(root, `.github/workflows/${mutation.name}`, mutation.text);
   yield* setupFile(root, "stryker.conf.mjs", STRYKER_CONFIG);
-});
-
-const setupKind = Effect.fn("setupKind")(function* (root: string) {
-  const full = (yield* Path.Path).join(root, "package.json");
-  const raw = yield* (yield* FileSystem.FileSystem).readFileString(full).pipe(
-    Effect.mapError((cause) => new SetupError({ message: "cannot read package.json: " + cause.message })),
-  );
-  const record = yield* parsePackageRecord(raw);
-  return kindOf(record["site"]);
 });
 
 const setupDocFiles = Effect.fn("setupDocFiles")(function* (root: string, visionRequired: boolean) {
@@ -390,7 +381,7 @@ const check = Effect.gen(function* () {
   yield* setupTsconfig(root, oxlintText);
   yield* setupFile(root, "knip.config.ts", KNIP_CONFIG);
   yield* setupFile(root, ".jscpd.json", JSCPD_CONFIG);
-  yield* setupWorkflows(root, yield* setupKind(root));
+  yield* setupWorkflows(root, outcome.kind);
   const { wroteAgents, wroteVision } = yield* setupDocFiles(root, requiresName({ name: outcome.name }));
   if (isPrivate) yield* Console.log(NAME + ": set the CI_RUNS_ON variable to a self-hosted runner label so the new jobs land there");
   if (!outcome.hasOwner) {

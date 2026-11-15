@@ -41,7 +41,7 @@ function view(name: string, latest: string | null): number {
 }
 
 // FAKE_NPM_PUBLISHED_FIRST names a version another release publishes just before this one.
-async function publish(state: FakeState, save: (latest: string | null) => Promise<void>): Promise<number> {
+async function publish(state: FakeState, save: (latest: string | null, published?: readonly string[]) => Promise<void>): Promise<number> {
   if (process.env["FAKE_NPM_REFUSE"] !== undefined) return refuse(process.env["FAKE_NPM_REFUSE"]);
   const { name, version } = decodeManifest(await readFile("package.json", "utf8"));
   const latest = process.env["FAKE_NPM_PUBLISHED_FIRST"] ?? state.latest;

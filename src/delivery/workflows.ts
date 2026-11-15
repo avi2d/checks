@@ -5,7 +5,7 @@ import { runMain, Usage } from "../core/main.ts";
 import { MANIFEST } from "../core/release-names.ts";
 import { readRepository } from "./ci-wiring.ts";
 import { holdsSharedWorkflow } from "./mutation-workflow.ts";
-import { byHandSet, differenceLines, differencesOf, isIgnoredWorkflow, kindOf, requiredSet, type WorkflowFile } from "./workflow-set.ts";
+import { byHandSet, differenceLines, differencesOf, isIgnoredWorkflow, kindOf, requiredSet, type RepositoryKind, type WorkflowFile } from "./workflow-set.ts";
 
 const NAME = "workflows";
 const USAGE = "usage: workflows.ts [--write]";
