@@ -1,6 +1,5 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
-import { ciJobsOf, type CiJobs } from "./ci-jobs.ts";
-import { SHARED_REPOSITORY } from "./mutation-workflow.ts";
+import { ciJobsOf, sharedFileOf, type CiJobs } from "./ci-jobs.ts";
 import { isRecord, workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export const WORKFLOWS = ".github/workflows";
@@ -35,17 +34,14 @@ const NAMED_SITE_WORKFLOWS = ["site-ci.yml", "site-main.yml", "site-production.y
 
 const SITE_WORKFLOWS: readonly string[] = [...NAMED_SITE_WORKFLOWS, "site-preview.yml"];
 
-const SHARED_WORKFLOWS = `${SHARED_REPOSITORY}/.github/workflows/`;
-
 export function takesSiteNames(shared: string): boolean {
   const [file] = shared.split("@");
   return NAMED_SITE_WORKFLOWS.some((name) => name === file);
 }
 
 function calledSiteWorkflow(uses: unknown): boolean {
-  if (typeof uses !== "string" || !uses.startsWith(SHARED_WORKFLOWS)) return false;
-  const [file] = uses.slice(SHARED_WORKFLOWS.length).split("@");
-  return SITE_WORKFLOWS.some((name) => name === file);
+  const file = sharedFileOf(uses);
+  return file !== undefined && SITE_WORKFLOWS.some((name) => name === file);
 }
 
 type HeldName = { readonly key: SiteNameKey; readonly value: string; readonly path: string };

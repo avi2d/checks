@@ -32,15 +32,20 @@ export const DEFAULT_CI_JOBS: Readonly<Record<RepositoryKind, CiJobs>> = {
   site: { changes: true, tests: [UNIT, BROWSER] },
 };
 
-const PARTS = `${SHARED_REPOSITORY}/.github/workflows/`;
+const SHARED_WORKFLOWS_PREFIX = `${SHARED_REPOSITORY}/.github/workflows/`;
+
+export function sharedFileOf(uses: unknown): string | undefined {
+  if (typeof uses !== "string" || !uses.startsWith(SHARED_WORKFLOWS_PREFIX)) return undefined;
+  const [file] = uses.slice(SHARED_WORKFLOWS_PREFIX.length).split("@");
+  return file;
+}
 
 const PART_FILES = ["changes.yml", "static.yml", "test.yml", "site-preview.yml", "gate.yml"] as const;
 
 type Part = (typeof PART_FILES)[number];
 
 function partOf(uses: unknown): Part | undefined {
-  if (typeof uses !== "string" || !uses.startsWith(PARTS)) return undefined;
-  const [file] = uses.slice(PARTS.length).split("@");
+  const file = sharedFileOf(uses);
   return PART_FILES.find((part) => part === file);
 }
 

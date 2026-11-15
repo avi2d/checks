@@ -56,9 +56,9 @@ A code caller passes no secret, since its shared workflow declares none.
 GitHub passes `secrets: inherit` only to a workflow in the same organization or enterprise, so a caller that holds it differs from the set.
 The release, site main and production callers hold no concurrency group, since their shared jobs hold their own.
 The code main caller holds group `main` without cancellation, since `release-main.yml` holds no group.
-The files a code repository takes are byte-identical in every code repository.
-The files a site takes differ between sites only in the three names they pass and the test jobs of `ci.yml`.
-A code repository's `ci.yml` differs from another only in its test jobs.
+Every file a code repository takes except `ci.yml` is byte-identical in every code repository.
+The files a site takes differ between sites only in the three names they pass, the test jobs of `ci.yml` and whether `ci.yml` holds the `changes` job.
+A code repository's `ci.yml` differs from another only in its test jobs and whether it holds the `changes` job.
 `pr-title.yml` and `release.yml` are the same in both kinds.
 
 `pr-text.yml` stays as it is in both kinds.
@@ -95,9 +95,9 @@ The jobs `ci.yml` holds are the record of what the repository runs, and `package
 A `ci.yml` that calls a part keeps its `changes` job, or its lack of one, and each job that calls `test.yml`, with its name.
 Each test job keeps the `run`, `browsers`, `heavy` and `runs-on` inputs it passes.
 In a site, a test job that passes `artifact: "site-dist"` reads the build, so it waits for the `site` job.
-`static`, `site` in a site and `checks` are always there, and no test job takes their names.
+`static`, `site` in a site and `checks` are always there, and no test job is named `changes`, `static`, `site` or `checks`.
 Every other line of the file is the shape the kit writes: the order of the jobs, `needs`, `if`, the pins, the permissions, the secrets and `hold`.
-In a site, the jobs that start before the preview pass `hold: false`, so a draft still gets its preview link.
+In a site, `static` and each test job that does not read the build pass `hold: false`, so a draft still gets its preview link.
 
 A `ci.yml` that calls no part gets the default jobs of its kind:
 
@@ -118,7 +118,7 @@ To add a test job, add a job to `ci.yml` that calls `test.yml` and passes its co
       run: bun run test:e2e
 ```
 
-The single-job `ci.yml` that calls `ci.yml@v3` or `site-ci.yml@v3`, as earlier kit versions wrote it, still passes.
+A single-job `ci.yml` that calls `ci.yml@v3` or `site-ci.yml@v3` still passes.
 It passes until `checks-workflows --write` replaces it with the composed `ci.yml`, and each passing run names that command.
 
 ## What it reads
