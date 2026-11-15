@@ -2,6 +2,20 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.101.0
+
+Released 2026-11-15.
+
+### Features
+
+- **delivery:** enforce shared workflow callers with single release and production gate [#147](https://github.com/avi2d/checks/pull/147)
+- **testing:** narrow pull request runs by the site's reach map [#146](https://github.com/avi2d/checks/pull/146)
+- **browser:** pick the anchor screen set on pull requests [#145](https://github.com/avi2d/checks/pull/145)
+
+### Fixes
+
+- **delivery:** pin shared callers at v3 and start ci when a draft is ready [#148](https://github.com/avi2d/checks/pull/148)
+
 ## 0.100.0
 
 Released 2026-11-14.
