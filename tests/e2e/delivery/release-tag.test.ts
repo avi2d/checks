@@ -225,6 +225,7 @@ test(
     const behind = main.head;
     await writeFile(join(main.dir, "notes/3.txt"), "tampered\n");
     await $`git add notes/3.txt && git commit -q -m ${"docs: fix a typo (#8)"}`.cwd(main.dir).quiet();
+    await $`rm -rf node_modules`.cwd(main.dir).quiet();
 
     const released = await main.run(SCRIPT, []);
     expect(released.exitCode).toBe(0);

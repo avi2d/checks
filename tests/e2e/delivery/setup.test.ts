@@ -175,7 +175,7 @@ expect(keptUses).toBe("avi2d/workflows/.github/workflows/ci.yml@v3");
 );
 
 test(
-"a private run pins the hosted default runner and names the variable to set",
+"a private run marks the manifest private and names the variable to set",
 async () => {
 const repo = await open({});
 const run = await setup(repo, "--private");

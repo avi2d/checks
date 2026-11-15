@@ -1,14 +1,11 @@
 import { Console, Effect, Option, Schema } from "effect";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { dispatch, GitHubFailure, gitHubJson, gitHubOptional, REPOSITORY } from "../core/github.ts";
 import { ChildProcessSpawner } from "effect/process";
 import { lastTag, runBuild } from "./release.ts";
 import { extractReleaseNotes } from "./release-notes.ts";
 import { publishPackage } from "./release-publish.ts";
 import { checkTestedTreeOf } from "./tested-tree.ts";
-import { git } from "../core/git.ts";
+import { collect, git } from "../core/git.ts";
 import { MANIFEST, releasedVersionOf, releaseTag, taggedVersion } from "../core/release-names.ts";
 
 class TagRefused extends Schema.TaggedError<TagRefused>()("TagRefused", {
@@ -138,34 +135,32 @@ const writeGitHubRelease = Effect.fn("writeGitHubRelease")(function* (label: str
   yield* Console.log(`${label}: created the GitHub release ${tag} with the CHANGELOG.md section for ${version}`);
 });
 
-const releaseTree = Effect.fn("releaseTree")(function* (root: string, head: string) {
+const checkoutRelease = Effect.fn("checkoutRelease")(function* (root: string, head: string) {
   const current = (yield* git(["rev-parse", "HEAD"], root)).trim();
-  if (current === head) return root;
-  return yield* Effect.acquireRelease(
-    Effect.tryPromise({
-      try: async () => join(await mkdtemp(join(tmpdir(), "checks-release-")), "tree"),
-      catch: (cause) => new TagRefused({ message: `cannot make a temporary directory: ${cause instanceof Error ? cause.message : String(cause)}` }),
-    }).pipe(Effect.tap((tree) => git(["worktree", "add", "--detach", tree, head], root))),
-    (tree) =>
-      git(["worktree", "remove", "--force", tree], root).pipe(
-        Effect.andThen(Effect.tryPromise(() => rm(join(tree, ".."), { recursive: true, force: true }))),
-        Effect.ignore,
-      ),
+  if (current === head) return;
+  const dirty = (yield* git(["status", "--porcelain"], root)).trim();
+  if (dirty !== "") {
+    return yield* new TagRefused({ message: `${head.slice(0, 12)} sits behind ${current.slice(0, 12)}, but the checkout holds uncommitted changes, so commit or discard them and run again` });
+  }
+  yield* git(["checkout", "--quiet", "--detach", head], root);
+  const installed = yield* collect("bun", ["install", "--frozen-lockfile"], root).pipe(
+    Effect.mapError((cause) => new TagRefused({ message: `bun install --frozen-lockfile: ${cause.message}` })),
   );
+  if (installed.exitCode !== ChildProcessSpawner.ExitCode(0)) {
+    return yield* new TagRefused({ message: `bun install --frozen-lockfile exited ${installed.exitCode} at ${head.slice(0, 12)}: ${installed.stderr.trim()}` });
+  }
 });
 
 export const releaseHead = Effect.fn("releaseHead")(function* (label: string, root: string, cuttingWorkflow: string) {
   const landed = yield* landedRelease(label, root);
   if (landed === undefined) return true;
-  return yield* Effect.scoped(Effect.gen(function* () {
-    const tree = yield* releaseTree(root, landed.head);
-    yield* checkTestedTreeOf(label, tree, cuttingWorkflow, landed.head, landed.subject);
-    if (yield* pushReleaseTag(label, tree, landed, cuttingWorkflow)) yield* Console.log(`${label}: tagged ${landed.head.slice(0, 12)} as ${landed.tag}`);
-    yield* writeGitHubRelease(label, tree, landed);
-    if (!landed.publishes) {
-      yield* Console.log(`${label}: ${MANIFEST} is private, so no package is published`);
-      return true;
-    }
-    return yield* publishPackage(tree);
-  }));
+  yield* checkoutRelease(root, landed.head);
+  yield* checkTestedTreeOf(label, root, cuttingWorkflow, landed.head, landed.subject);
+  if (yield* pushReleaseTag(label, root, landed, cuttingWorkflow)) yield* Console.log(`${label}: tagged ${landed.head.slice(0, 12)} as ${landed.tag}`);
+  yield* writeGitHubRelease(label, root, landed);
+  if (!landed.publishes) {
+    yield* Console.log(`${label}: ${MANIFEST} is private, so no package is published`);
+    return true;
+  }
+  return yield* publishPackage(root);
 });

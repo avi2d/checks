@@ -21,9 +21,9 @@ export type OnMain = {
 type Shape = { readonly private?: boolean; readonly testedOther?: boolean };
 
 function releasable(version: string, shape: Shape): string {
-  const scripts = { build: `bun ${CHANGELOG}` };
+  const scripts = { build: "bun ./scripts/build.ts" };
   const extra = shape.private === true ? { private: true } : {};
-  return `${JSON.stringify({ name: "widget", version, ...extra, repository: { type: "git", url: "git+https://github.com/acme/widget.git" }, scripts }, null, 2)}\n`;
+  return `${JSON.stringify({ name: "widget", version, ...extra, repository: { type: "git", url: "git+https://github.com/acme/widget.git" }, scripts, dependencies: { "fixture-helper": "file:./vendor/fixture-helper" } }, null, 2)}\n`;
 }
 
 // main after its release pull request squash-merged, with the origin keeping the head that pull request tested.
@@ -32,6 +32,13 @@ export function releasedMains(prefix: string): (subject: string, shape?: Shape) 
   const scratch = scratchDirs();
   return async (subject, shape = {}) => {
     const repo = await repository({ "package.json": releasable("0.1.0", shape) });
+    await repo.write({
+      "scripts/build.ts": `import "fixture-helper";\nawait import(${JSON.stringify(CHANGELOG)});\n`,
+      "vendor/fixture-helper/package.json": JSON.stringify({ name: "fixture-helper", version: "1.0.0", type: "module" }),
+      "vendor/fixture-helper/index.js": "export default 1;\n",
+      ".gitignore": "node_modules/\n",
+    });
+    await $`bun install`.cwd(repo.dir).quiet();
     await repo.commit("chore: add the manifest");
     await repo.write({ "notes/3.txt": "price\n" });
     await repo.commit("feat: price a bill (#3)");

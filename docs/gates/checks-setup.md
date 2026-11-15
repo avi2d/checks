@@ -50,8 +50,8 @@ It reads the kit install for `.bun-version`, `bunfig.toml`, its version, its Str
 checks-setup [--private]
 ```
 
-With no arguments the repository is public, and its jobs run on `ubuntu-latest`.
-With `--private` the jobs read the `CI_RUNS_ON` variable, and the run names the value to set.
+With no arguments the repository is public.
+With `--private` it sets `private` to `true` in `package.json`, and the run names the `CI_RUNS_ON` value to set.
 
 ## Exit codes
 

@@ -20,7 +20,8 @@ It is the one release step a `main.yml` caller runs on each push to `main`.
 When `HEAD` is no release commit, it walks the first parent history back to the newest release commit whose tag already tags it, or to the root.
 It releases the newest untagged release commit found there with the same steps as for `HEAD`.
 The walk stops with no release once the version `package.json` holds at `HEAD` is not the candidate's version, so a cancel commit ends it.
-When the release commit sits behind `HEAD`, the build check and the publish run in a checkout of that commit, so npm ships the tree the release pull request tested.
+When the release commit sits behind `HEAD`, it checks out the release commit in the same checkout and installs its dependencies with `bun install --frozen-lockfile`, refusing when the checkout holds uncommitted changes.
+It then runs the build check and the publish there, so npm ships the tree the release pull request tested.
 A merge with no untagged release commit behind it ends at once, before any API call.
 On a release commit it first fetches the head of the pull request the squash subject names, such as `(#7)`.
 It refuses unless the tree of that commit equals the tree that pull request tested.
@@ -69,7 +70,7 @@ That workflow triggers on `workflow_dispatch` and keeps its own guards, as [chec
 | Code | When |
 | --- | --- |
 | 0 | `HEAD` is no release commit, its tag already tags it, the tag is pushed and the release workflow dispatched, or the release is tagged, released on GitHub and published |
-| 2 | the arguments do not parse, `package.json` disagrees with the subject, the tree differs from the one the release pull request tested, the publish fails, the tag tags another commit, the build fails or rewrites a committed file, or the push or a GitHub API call fails |
+| 2 | the arguments do not parse, `package.json` disagrees with the subject, the tree differs from the one the release pull request tested, the publish fails, the tag tags another commit, the build or the install fails, the build rewrites a committed file, the checkout holds uncommitted changes, or the push or a GitHub API call fails |
 
 ## Sample output
 
