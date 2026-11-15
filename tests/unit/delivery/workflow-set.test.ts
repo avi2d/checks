@@ -50,3 +50,48 @@ test("a ci caller that omits ready_for_review never starts when a draft is marke
     expect(types).toContain("ready_for_review");
   }
 });
+
+const CALLEE_GRANTS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  "advisories.yml": { contents: "read", issues: "write" },
+  "ci.yml": { contents: "read", actions: "write", statuses: "write", "pull-requests": "read" },
+  "mutation.yml": { contents: "read", actions: "write", "pull-requests": "write" },
+  "pr-title.yml": { contents: "read", statuses: "write", "pull-requests": "read" },
+  "preview-remove.yml": { contents: "read", "pull-requests": "write" },
+  "release-main.yml": { contents: "write", "id-token": "write", actions: "read", "pull-requests": "read" },
+  "release-pr.yml": { contents: "write", "pull-requests": "write", actions: "write" },
+  "site-ci.yml": { contents: "read", actions: "write", statuses: "write", "pull-requests": "write" },
+  "site-main.yml": { contents: "write", actions: "read", "pull-requests": "read" },
+  "site-production.yml": { contents: "read", actions: "read", "pull-requests": "read" },
+};
+
+const callers = (): readonly { name: string; text: string }[] => [
+  ...requiredSet("code"),
+  ...requiredSet("site"),
+  ...byHandSet("site"),
+  { name: "mutation.yml", text: MUTATION_WORKFLOW },
+];
+
+const callerJob = (text: string): Record<string, unknown> => {
+  const document = Bun.YAML.parse(text);
+  const jobs = isRecord(document) ? document["jobs"] : undefined;
+  const job = isRecord(jobs) ? Object.values(jobs)[0] : undefined;
+  return isRecord(job) ? job : {};
+};
+
+test("each caller grants exactly the scopes its v3 job declares, so a spare deployments: write or a missing actions: write fails here", () => {
+  for (const { name, text } of callers()) {
+    const job = callerJob(text);
+    const file = String(job["uses"]).split("/").pop()?.replace(/@v3$/, "");
+    expect([name, job["permissions"]]).toEqual([name, CALLEE_GRANTS[file ?? ""]]);
+  }
+});
+
+test("only the ci and pr-title callers hold a workflow-level group, so a release, main or production caller cannot hold one its shared job also holds", () => {
+  const held = callers()
+    .filter(({ text }) => {
+      const document = Bun.YAML.parse(text);
+      return isRecord(document) && document["concurrency"] !== undefined;
+    })
+    .map(({ name }) => name);
+  expect(held).toEqual(["ci.yml", "pr-title.yml", "ci.yml", "pr-title.yml"]);
+});
