@@ -25,8 +25,10 @@ It writes `package.json` with the kit in `devDependencies` and with `lint`, `typ
 It writes the caller set `checks-workflows` writes for the repository kind.
 A repository whose workflow callers already call a shared site workflow gets the site callers, and so does a run given the site name flags.
 Any other repository gets the code callers.
-Each site caller passes the Pages project, the domain and the production repository, taken from the callers it finds, with each flag filling only a name no caller passes.
-It stops before writing anything when a site run lacks one of the three names, passes two values of one, names one that does not parse, or passes a flag that differs from a name a present caller passes, and names the fix.
+Each site caller passes the Pages project, the domain and the production repository, taken from the callers it finds.
+Each flag fills only a name no caller passes.
+It stops before writing anything when a site run lacks one of the three names, and names the fix.
+The same stop covers two values of one name, an unparsable name, and a flag that differs from a name its callers pass.
 A freshly set up repository passes `checks-workflows` without running `--write` first.
 In a code repository it writes `mutation.yml` under `.github/workflows/`, which names the shared mutation workflow `avi2d/workflows/.github/workflows/mutation.yml@v3` and nothing else.
 The shared workflow picks the run from the event.

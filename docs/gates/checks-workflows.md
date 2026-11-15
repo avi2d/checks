@@ -65,7 +65,7 @@ A site may hold `advisories.yml`.
 A code repository may hold `advisories.yml`, `mutation.yml` and `flake.yml`, and its `mutation.yml` is the caller [checks-setup](checks-setup.md) writes.
 
 It fails when a file of the set is missing or differs by a byte, or when a workflow file outside the set appears.
-In a site it also fails when the site callers miss a name or pass two values of one.
+In a site it also fails when the site callers miss a name, pass two values of one, or pass one that does not parse.
 The message names the callers or the flags that fix it.
 Each difference names the file, and each changed line names what the file holds and what the caller holds.
 The `avi2d/workflows` repository holds the shared workflows, so there it passes and keeps its own files.
@@ -86,7 +86,8 @@ checks-workflows --write --pages acme --domain acme.example --production acme/ac
 With `--write` it writes every file of the set, rewrites a present by-hand caller to its caller form, and deletes every other workflow file except `pr-text.yml`.
 A rewrite of a site keeps the three names its callers pass.
 `--pages`, `--domain` and `--production` name a site with no site caller yet, and each replaces the name the callers pass.
-A site write that lacks one of the three names, passes two values of one, or names one that does not parse writes nothing and names the fix.
+A site write with a missing name, two values of one, or an unparsable name writes nothing.
+It names the fix.
 
 ## Exit codes
 
