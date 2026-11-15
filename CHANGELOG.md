@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.103.0
+
+Released 2026-11-15.
+
+### Features
+
+- **delivery:** compose ci.yml from CI parts and keep caller test jobs [#156](https://github.com/avi2d/checks/pull/156)
+
 ## 0.102.0
 
 Released 2026-11-15.
