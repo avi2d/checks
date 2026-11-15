@@ -14,8 +14,7 @@ class TreeRefused extends Schema.TaggedError<TreeRefused>()("TreeRefused", {
 // The squash merge names the pull request it landed.
 const PULL_NUMBER = / \(#(\d+)\)$/;
 
-export const checkTestedTree = Effect.fn("checkTestedTree")(function* (label: string, root: string, cuttingWorkflow: string) {
-  const [head = "", subject = ""] = (yield* git(["log", "-1", "--format=%H%n%s", "HEAD"], root)).split("\n");
+export const checkTestedTreeOf = Effect.fn("checkTestedTreeOf")(function* (label: string, root: string, cuttingWorkflow: string, head: string, subject: string) {
   const version = releasedVersionOf(subject);
   if (version === undefined) {
     return yield* new TreeRefused({
@@ -29,14 +28,14 @@ export const checkTestedTree = Effect.fn("checkTestedTree")(function* (label: st
     });
   }
   yield* git(["fetch", "--quiet", "origin", `refs/pull/${number}/head`], root);
-  const [landed = "", tested = ""] = (yield* git(["rev-parse", "HEAD^{tree}", "FETCH_HEAD^{tree}"], root))
+  const [landed = "", tested = ""] = (yield* git(["rev-parse", `${head}^{tree}`, "FETCH_HEAD^{tree}"], root))
     .split("\n")
     .map((line) => line.trim());
   if (landed === tested) {
     yield* Console.log(`${label}: ${head.slice(0, 12)} matches the tree pull request #${number} tested`);
     return true;
   }
-  const pointed = (yield* git(["tag", "--points-at", "HEAD"], root)).split("\n").map((line) => line.trim()).filter((line) => line !== "");
+  const pointed = (yield* git(["tag", "--points-at", head], root)).split("\n").map((line) => line.trim()).filter((line) => line !== "");
   if (pointed.length > 0) {
     return yield* new TreeRefused({
       message: `${head.slice(0, 12)} differs from the ${tested.slice(0, 12)} tree pull request #${number} tested, so main moved after the full run; ${pointed.join(", ")} already tags this commit, so resolve that tag before the release can proceed`,
@@ -47,6 +46,11 @@ export const checkTestedTree = Effect.fn("checkTestedTree")(function* (label: st
   return yield* new TreeRefused({
     message: `${head.slice(0, 12)} differs from the ${tested.slice(0, 12)} tree pull request #${number} tested, so main moved after the full run; open a \`chore: cancel the unpublished ${version}\` pull request that returns ${MANIFEST} to ${returned} and commits what \`bun run build\` then writes to CHANGELOG.md, and the next ${cuttingWorkflow} run cuts the release again with every change since ${since ?? "the first commit"}`,
   });
+});
+
+export const checkTestedTree = Effect.fn("checkTestedTree")(function* (label: string, root: string, cuttingWorkflow: string) {
+  const [head = "", subject = ""] = (yield* git(["log", "-1", "--format=%H%n%s", "HEAD"], root)).split("\n");
+  return yield* checkTestedTreeOf(label, root, cuttingWorkflow, head, subject);
 });
 
 if (import.meta.main) runMain(NAME, checkTestedTree(NAME, process.cwd(), "release-pr"));

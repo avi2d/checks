@@ -3,6 +3,14 @@ import { MUTATION_WORKFLOW } from "./setup-workflow.ts";
 
 export type RepositoryKind = "site" | "code";
 
+export function kindOf(site: unknown): RepositoryKind {
+  return site === undefined ? "code" : "site";
+}
+
+export function isIgnoredWorkflow(name: string): boolean {
+  return name === "pr-text.yml";
+}
+
 export type WorkflowFile = { readonly name: string; readonly text: string };
 
 export type Difference =
@@ -139,7 +147,7 @@ function differentLines(holds: string, writes: string): readonly DifferentLine[]
 }
 
 export function differencesOf(kind: RepositoryKind, present: readonly WorkflowFile[]): readonly Difference[] {
-  const held = new Map(present.map(({ name, text }) => [name, text]));
+  const held = new Map(present.filter(({ name }) => !isIgnoredWorkflow(name)).map(({ name, text }) => [name, text]));
   const required = requiredSet(kind);
   const byHand = byHandSet(kind);
   const known = new Set([...required, ...byHand].map(({ name }) => name));
@@ -150,7 +158,7 @@ export function differencesOf(kind: RepositoryKind, present: readonly WorkflowFi
       if (text === undefined) return [{ kind: "missing", name: file.name }];
       return text === file.text ? [] : [{ kind: "differs", name: file.name, lines: differentLines(text, file.text) }];
     }),
-    ...present.filter(({ name }) => !known.has(name)).map(({ name }): Difference => ({ kind: "extra", name })),
+    ...present.filter(({ name }) => !known.has(name) && !isIgnoredWorkflow(name)).map(({ name }): Difference => ({ kind: "extra", name })),
   ];
 }
 

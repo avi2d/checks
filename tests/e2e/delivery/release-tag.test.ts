@@ -219,6 +219,24 @@ test(
 );
 
 test(
+  "with no argument a plain commit after a release commit releases the release commit behind it",
+  async () => {
+    const main = await onMain("chore: release 0.2.0 (#7)");
+    const behind = main.head;
+    await $`git commit -q --allow-empty -m ${"docs: fix a typo (#8)"}`.cwd(main.dir).quiet();
+
+    const released = await main.run(SCRIPT, []);
+    expect(released.exitCode).toBe(0);
+    expect(released.text).toContain(`${behind.slice(0, 12)} matches the tree pull request #7 tested`);
+    expect(released.text).toContain(`release-tag: tagged ${behind.slice(0, 12)} as v0.2.0`);
+    expect(await main.inOrigin("rev-parse", "v0.2.0^{commit}")).toBe(behind);
+    expect((await main.state()).releases.map(({ tag_name: tag }) => tag)).toEqual(["v0.2.0"]);
+    expect((await main.npm()).latest).toBe("0.2.0");
+  },
+  60_000,
+);
+
+test(
   "with no argument a private package is tagged and released on GitHub but never published to npm",
   async () => {
     const main = await onMain("chore: release 0.2.0 (#7)", { private: true });

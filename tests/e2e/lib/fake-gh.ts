@@ -194,7 +194,8 @@ function releasesApi(state: FakeState, method: string, route: string, body: Body
   const byTag = /^releases\/tags\/(.+)$/.exec(route)?.[1];
   if (method === "GET" && byTag !== undefined) {
     const held = state.releases.find((one) => one.tag_name === byTag);
-    return held === undefined ? "missing" : { state, body: held };
+    if (held === undefined || held.draft) return "missing";
+    return { state, body: held };
   }
   if (method === "POST" && route === "releases") {
     const release = { id: state.releases.length + 1, tag_name: decodeString(body["tag_name"]), ...releaseFields(body) };

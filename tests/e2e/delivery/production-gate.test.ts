@@ -64,7 +64,7 @@ test(
       ran($`gh api --method PATCH repos/{owner}/{repo}/releases/1 --input - < ${Buffer.from(JSON.stringify(body))}`.cwd(main.dir).env({ ...process.env, ...main.env }));
 
     await edit({ name: "v0.2.0", body: "price a bill", draft: true, prerelease: false });
-    expect((await main.run(GATE, [])).text).toContain("has only the draft release v0.2.0;");
+    expect((await main.run(GATE, [])).text).toContain("has the tag v0.2.0 but no GitHub release;");
 
     await edit({ name: "v0.2.0", body: "nothing", draft: false, prerelease: false });
     expect((await main.run(GATE, [])).text).toContain("has the release v0.2.0, whose notes lack the CHANGELOG.md section for 0.2.0;");

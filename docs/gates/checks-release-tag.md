@@ -11,15 +11,18 @@ With a workflow argument it tags the commit and dispatches that workflow on the 
 ## What it checks
 
 It reads the subject of `HEAD`, and does nothing unless the subject is `chore: release <version>`, with or without the pull request number a squash merge appends.
+When `HEAD` is no release commit, it walks the first parent history back to the newest release commit whose tag already tags it, or to the root.
+It releases the newest untagged release commit found there with the same steps as for `HEAD`.
+A plain merge with no untagged release commit behind it ends at once, before any API call.
 It refuses a release commit whose `package.json` holds another version.
-It tags `HEAD` as `v<version>` and pushes the tag to `origin`.
+It tags that commit as `v<version>` and pushes the tag to `origin`.
 
 ### With no argument
 
 It is the one release step a `main.yml` caller runs on each push to `main`.
-A merge that is no release commit ends at once, before any API call.
+A merge with no untagged release commit behind it ends at once, before any API call.
 On a release commit it first fetches the head of the pull request the squash subject names, such as `(#7)`.
-It refuses unless the tree of `HEAD` equals the tree that pull request tested.
+It refuses unless the tree of that commit equals the tree that pull request tested.
 That check is what lets the release run no tests: the release pull request ran the whole suite on that tree.
 It then pushes the tag and creates the GitHub release `v<version>`, whose notes are the `CHANGELOG.md` section for that version.
 It publishes the package to npm as [checks-release-publish](checks-release-publish.md) says, unless `package.json` holds `"private": true`.

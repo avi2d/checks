@@ -26,8 +26,9 @@ const USAGE = "usage: lint.ts [--full | --desk] [<base-ref> <head-ref>] | --whol
 const PULL_REQUEST_EVENT = "pull_request";
 const SHALLOW_HINT = "a CI checkout needs actions/checkout fetch-depth: 0";
 
-const PullRequest = Schema.Struct({
+export const PullRequest = Schema.Struct({
   number: Schema.Int,
+  title: Schema.String,
   base: Schema.Struct({ ref: Schema.String }),
   head: Schema.Struct({ sha: Schema.String }),
 });

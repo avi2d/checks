@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import { ChildProcessSpawner } from "effect/process";
 import { collect, type Feed } from "./git.ts";
 
@@ -27,6 +27,16 @@ export function gitHubJson<A>(decode: Decode<A>, method: Method, path: string, b
   return gitHub(method, path, body).pipe(
     Effect.flatMap((text) =>
       decode(text).pipe(Effect.mapError((cause) => new GitHubFailure({ message: `gh api ${method} ${path} answered ${cause.message}` }))),
+    ),
+  );
+}
+
+export function gitHubOptional<A>(decode: Decode<A>, method: Method, path: string): Effect.Effect<Option.Option<A>, GitHubFailure, ChildProcessSpawner.ChildProcessSpawner> {
+  return gitHubJson(decode, method, path).pipe(
+    Effect.map((value) => Option.some(value)),
+    Effect.catchIf(
+      (failure) => failure.message.includes("(HTTP 404)"),
+      () => Effect.succeed(Option.none<A>()),
     ),
   );
 }

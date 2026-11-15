@@ -13,7 +13,7 @@ import { findScheduledReleases, formatScheduleReport } from "./release-schedule.
 import { findRunnerFaults, formatRunnerReport, jobRuns, readRunnerConfig } from "./runner-policy.ts";
 import { findScheduledRuns, formatScheduledRunReport } from "./schedule-policy.ts";
 import { invokes, mentions, plainCommand, type Command } from "./shell-command.ts";
-import { differencesOf } from "./workflow-set.ts";
+import { differencesOf, kindOf } from "./workflow-set.ts";
 import { findMissingWorkflows, formatMissingReport, isRecord, localUses, names, skippedBy, switchedOff, workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export { BunPinError, findBunPinFaults, formatBunPinReport } from "./bun-pin.ts";
@@ -318,7 +318,7 @@ const reportHandRolled = Effect.fn("reportHandRolled")(function* (
 // The shared workflows the set calls run every gate, and this check does not follow a remote workflow.
 function callsSharedSet(manifest: typeof ScriptsManifest.Type, workflows: readonly Workflow[]): boolean {
   const present = workflows.map(({ path, text }) => ({ name: path.slice(WORKFLOWS.length + 1), text }));
-  return present.length > 0 && differencesOf(manifest.site === undefined ? "code" : "site", present).length === 0;
+  return present.length > 0 && differencesOf(kindOf(manifest.site), present).length === 0;
 }
 
 const reportGaps = Effect.fn("reportGaps")(function* (root: string, manifest: typeof ScriptsManifest.Type, workflows: readonly Workflow[]) {

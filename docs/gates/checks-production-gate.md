@@ -39,7 +39,7 @@ Without it the gate judges `HEAD`.
 | --- | --- |
 | 0 | the commit is a published release |
 | 1 | the commit is no published release |
-| 2 | the arguments do not parse, the commit does not exist, its `package.json` does not parse, or a GitHub API call fails |
+| 2 | the arguments do not parse, the commit does not exist, the commit holds no `package.json` or no `CHANGELOG.md`, its `package.json` does not parse, `git ls-remote` to `origin` fails, or a GitHub API call fails |
 
 ## Sample output
 

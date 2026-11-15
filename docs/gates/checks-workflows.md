@@ -35,6 +35,9 @@ A code repository takes these files:
 The `ci.yml` caller runs one run per pull request and cancels the run a newer push replaces.
 The files each kind takes are byte-identical in every repository of that kind, and `pr-title.yml` and `release.yml` are the same in both kinds.
 
+`pr-text.yml` stays as it is in both kinds.
+It runs on `pull_request_target` and comment events, so no `ci.yml` caller replaces it.
+`checks-workflows` never compares it, `--write` neither writes nor deletes it, and it is no extra.
 A by-hand caller may be absent, but a present one holds exactly its caller form, which starts only on `workflow_dispatch`.
 A site may hold `advisories.yml`.
 A code repository may hold `advisories.yml`, `mutation.yml` and `flake.yml`, and its `mutation.yml` is the caller [checks-setup](checks-setup.md) writes.
@@ -55,7 +58,7 @@ checks-workflows
 checks-workflows --write
 ```
 
-With `--write` it writes every file of the set, rewrites a present by-hand caller to its caller form, and deletes every other workflow file.
+With `--write` it writes every file of the set, rewrites a present by-hand caller to its caller form, and deletes every other workflow file except `pr-text.yml`.
 
 ## Exit codes
 

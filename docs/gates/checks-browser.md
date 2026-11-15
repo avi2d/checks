@@ -281,7 +281,7 @@ A declaration that sets `hooks` while every state names its own `checks` is refu
 
 A viewport `{ "preset": "anchor" }` stands for the anchor set of screen sizes, and `{ "preset": "full" }` for the full set.
 The full set holds the anchors and eleven more sizes.
-A product runs the anchor set on every pull request and the full set on a run started by hand.
+A normal pull request runs the anchor set, while a release pull request or a run started by hand runs the full set.
 Each size in a set is a viewport named for its device and its size, with `device` set, and each phone also sets `touch`.
 A preset sits beside a product's own viewports.
 A name both declare is refused as declared twice, and so is a size that two listed presets both hold.

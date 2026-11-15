@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { runMain, Usage } from "../core/main.ts";
-import { ciWorkflow, MUTATION_WORKFLOW, STRYKER_CONFIG } from "./setup-workflow.ts";
+import { MUTATION_WORKFLOW, STRYKER_CONFIG } from "./setup-workflow.ts";
+import { kindOf, requiredSet, type RepositoryKind } from "./workflow-set.ts";
 import { TEMPLATES, VISION_PAGE } from "../docs/doc-templates.ts";
 import { requiresName } from "../docs/doc-vision.ts";
 import { FAST_COMMAND, TEST_COMMAND } from "../core/test-script.ts";
@@ -335,10 +336,19 @@ const setupPackage = Effect.fn("setupPackage")(function* (
   return yield* updatePackage(root, raw, record, isPrivate, fallbackName, pins);
 });
 
-const setupWorkflows = Effect.fn("setupWorkflows")(function* (root: string, isPrivate: boolean, hasBuild: boolean) {
-  yield* setupFile(root, ".github/workflows/ci.yml", ciWorkflow(isPrivate, hasBuild));
+const setupWorkflows = Effect.fn("setupWorkflows")(function* (root: string, kind: RepositoryKind) {
+  for (const { name, text } of requiredSet(kind)) yield* setupFile(root, `.github/workflows/${name}`, text);
   yield* setupFile(root, ".github/workflows/mutation.yml", MUTATION_WORKFLOW);
   yield* setupFile(root, "stryker.conf.mjs", STRYKER_CONFIG);
+});
+
+const setupKind = Effect.fn("setupKind")(function* (root: string) {
+  const full = (yield* Path.Path).join(root, "package.json");
+  const raw = yield* (yield* FileSystem.FileSystem).readFileString(full).pipe(
+    Effect.mapError((cause) => new SetupError({ message: "cannot read package.json: " + cause.message })),
+  );
+  const record = yield* parsePackageRecord(raw);
+  return kindOf(record["site"]);
 });
 
 const setupDocFiles = Effect.fn("setupDocFiles")(function* (root: string, visionRequired: boolean) {
@@ -379,7 +389,7 @@ const check = Effect.gen(function* () {
   yield* setupTsconfig(root, oxlintText);
   yield* setupFile(root, "knip.config.ts", KNIP_CONFIG);
   yield* setupFile(root, ".jscpd.json", JSCPD_CONFIG);
-  yield* setupWorkflows(root, isPrivate, outcome.hasBuild);
+  yield* setupWorkflows(root, yield* setupKind(root));
   const { wroteAgents, wroteVision } = yield* setupDocFiles(root, requiresName({ name: outcome.name }));
   if (isPrivate) yield* Console.log(NAME + ": set the CI_RUNS_ON variable to a self-hosted runner label so the new jobs land there");
   if (!outcome.hasOwner) {

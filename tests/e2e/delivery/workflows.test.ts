@@ -95,6 +95,20 @@ test("an edited line in a written caller is refused with the line it holds and t
   );
 }, 30_000);
 
+test("a pr-text.yml scan stays as it is: it is no extra, --write keeps it, and it is never compared", async () => {
+  const scan = "name: pr-text\non:\n  pull_request_target:\n    types: [opened]\n";
+  const repo = await open({ "package.json": manifest(), ".github/workflows/pr-text.yml": scan });
+  await repo.commit("start");
+
+  const refused = await workflows(repo);
+  expect(refused.exitCode).toBe(1);
+  expect(refused.text).toContain("  .github/workflows/ci.yml: missing\n");
+  expect(refused.text).not.toContain("pr-text");
+  expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 4 workflow file(s) of the code set\n" });
+  expect(await readFile(join(repo.dir, ".github", "workflows", "pr-text.yml"), "utf8")).toBe(scan);
+  expect((await workflows(repo)).exitCode).toBe(0);
+}, 30_000);
+
 test("the shared workflow repository keeps its own files and an unknown flag is refused", async () => {
   const repo = await open({ "package.json": manifest(), ".github/workflows/ci.yml": "name: ci\n" });
   await repo.commit("start");

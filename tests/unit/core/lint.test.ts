@@ -54,7 +54,7 @@ test("selectEnds reads explicit refs, refuses one alone, and otherwise defers to
 });
 
 test("pullRequestEndsOf reads the range ends an already-decoded pull request event describes", () => {
-  expect(pullRequestEndsOf({ number: 7, base: { ref: "main" }, head: { sha: "abc123" } })).toEqual({
+  expect(pullRequestEndsOf({ number: 7, title: "Add a widget", base: { ref: "main" }, head: { sha: "abc123" } })).toEqual({
     base: "origin/main",
     head: "abc123",
     source: "pull request #7 into main",
@@ -62,9 +62,9 @@ test("pullRequestEndsOf reads the range ends an already-decoded pull request eve
 });
 
 test("decodePullRequestEvent decodes a well-formed event and refuses one missing the head sha", () => {
-  const event = JSON.stringify({ pull_request: { number: 7, base: { ref: "main" }, head: { sha: "abc123" } } });
+  const event = JSON.stringify({ pull_request: { number: 7, title: "Add a widget", base: { ref: "main" }, head: { sha: "abc123" } } });
   expect(Effect.runSync(decodePullRequestEvent(event))).toEqual({
-    pull_request: { number: 7, base: { ref: "main" }, head: { sha: "abc123" } },
+    pull_request: { number: 7, title: "Add a widget", base: { ref: "main" }, head: { sha: "abc123" } },
   });
 
   const malformed = JSON.stringify({ pull_request: { base: { ref: "main" } } });

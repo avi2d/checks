@@ -5,7 +5,7 @@ import { runMain, Usage } from "../core/main.ts";
 import { MANIFEST } from "../core/release-names.ts";
 import { readRepository } from "./ci-wiring.ts";
 import { holdsSharedWorkflow } from "./mutation-workflow.ts";
-import { byHandSet, differenceLines, differencesOf, requiredSet, type RepositoryKind, type WorkflowFile } from "./workflow-set.ts";
+import { byHandSet, differenceLines, differencesOf, isIgnoredWorkflow, kindOf, requiredSet, type WorkflowFile } from "./workflow-set.ts";
 
 const NAME = "workflows";
 const USAGE = "usage: workflows.ts [--write]";
@@ -20,7 +20,7 @@ const decodeManifest = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.S
 const readKind = Effect.fn("readKind")(function* (root: string) {
   const text = yield* (yield* FileSystem.FileSystem).readFileString((yield* Path.Path).join(root, MANIFEST));
   const manifest = yield* decodeManifest(text).pipe(Effect.mapError((cause) => new WorkflowsFailed({ message: `${MANIFEST}: ${cause.message}` })));
-  return (manifest.site === undefined ? "code" : "site") satisfies RepositoryKind;
+  return kindOf(manifest.site);
 });
 
 const readWorkflowFiles = Effect.fn("readWorkflowFiles")(function* (root: string) {
@@ -40,7 +40,7 @@ const writeSet = Effect.fn("writeSet")(function* (root: string, kind: Repository
   const written = [...requiredSet(kind), ...byHand];
   for (const { name, text } of written) yield* fs.writeFileString(`${directory}/${name}`, text);
   const kept = new Set(written.map(({ name }) => name));
-  const removed = present.filter(({ name }) => !kept.has(name));
+  const removed = present.filter(({ name }) => !kept.has(name) && !isIgnoredWorkflow(name));
   for (const { name } of removed) yield* fs.remove(`${directory}/${name}`);
   const deleted = removed.length === 0 ? "" : `, and deleted ${removed.map(({ name }) => name).join(", ")}`;
   yield* Console.log(`${NAME}: wrote the ${written.length} workflow file(s) of the ${kind} set${deleted}`);

@@ -1,5 +1,6 @@
-import { Config, Effect, FileSystem, Schema } from "effect";
+import { Config, Effect, FileSystem } from "effect";
 import { pathsSinceMergeBase } from "./git.ts";
+import { decodePullRequestEvent, pullRequestEndsOf } from "./lint.ts";
 import { releasedVersionOf } from "./release-names.ts";
 
 export type RunScope =
@@ -12,17 +13,7 @@ export function isDocsPath(path: string): boolean {
   return lower.endsWith(".md") && (!lower.includes("/") || lower.startsWith("docs/"));
 }
 
-const decodePullRequestEvent = Schema.decodeUnknownEffect(
-  Schema.fromJsonString(
-    Schema.Struct({
-      pull_request: Schema.Struct({
-        title: Schema.String,
-        base: Schema.Struct({ ref: Schema.String }),
-        head: Schema.Struct({ sha: Schema.String }),
-      }),
-    }),
-  ),
-);
+
 
 const eventOf = Config.all({
   name: Config.String("GITHUB_EVENT_NAME").pipe(Config.withDefault("")),
@@ -46,7 +37,8 @@ export const readRunScope = Effect.fn("readRunScope")(function* (root: string) {
   if (outside !== undefined) return outside;
   const scope = Effect.gen(function* () {
     const { pull_request: pullRequest } = yield* decodePullRequestEvent(yield* (yield* FileSystem.FileSystem).readFileString(event.path));
-    return scopeOfChanges(pullRequest.title, yield* pathsSinceMergeBase(`origin/${pullRequest.base.ref}`, pullRequest.head.sha, root));
+    const ends = pullRequestEndsOf(pullRequest);
+    return scopeOfChanges(pullRequest.title, yield* pathsSinceMergeBase(ends.base, ends.head, root));
   });
   return yield* scope.pipe(
     Effect.catch((cause) => Effect.succeed<RunScope>({ kind: "whole", because: `the pull request's changes cannot be read: ${cause.message}` })),
