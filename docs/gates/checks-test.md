@@ -50,7 +50,7 @@ A skipped test or a todo without `skipReason` fails in every environment.
 A pull request run also reads the event file, the git history between the base and the head, the tracked sources, `package.json`, `checks.config.ts` and `bunfig.toml`.
 It reads the reach map under `reach` in `checks.config.ts` too, as [The reach map](#the-reach-map) says.
 A `--changed` run also reads the git history since the merge base with `origin/<default branch>`, the working tree diff and the untracked files.
-It reads the sources, `package.json` and `bunfig.toml` too, as [Changed-file runs](#changed-file-runs) says.
+It reads the sources, `package.json`, `checks.config.ts` and `bunfig.toml` too, as [Changed-file runs](#changed-file-runs) says.
 It reads no skip list from `checks.config.ts`, only the smoke list.
 It counts a run as `ci` when `CI` is true and as `local` otherwise.
 A local run covers `./tests/unit` plus the smoke list the repository declares, except a `--changed` run, as [Changed-file runs](#changed-file-runs) says.

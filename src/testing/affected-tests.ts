@@ -1,7 +1,7 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
 import { workingTreeFiles } from "../core/git.ts";
 import { classifyPath } from "../core/scope.ts";
-import { decodeSetting, loadSettings, Reach, refuseOldPlace, SETTINGS_FILE } from "../core/settings.ts";
+import { decodeSetting, loadSettings, Reach, SETTINGS_FILE } from "../core/settings.ts";
 import { decodeBunfig, importedFile, importsOf, preloadPaths, resolved, TEST_TREE } from "./mutation-scope-graph.ts";
 
 export type Narrowing =
@@ -316,7 +316,6 @@ const readRepository = Effect.fn("readRepository")(function* (root: string) {
         Effect.flatMap(decodeBunfig),
       )
     : {};
-  yield* refuseOldPlace(root, "reach", { manifestKey: "reach" });
   const rawReach = (yield* loadSettings(root))["reach"];
   const refusal = refuseReachMap(rawReach);
   if (refusal !== undefined) return yield* new ReachMapError({ message: refusal });

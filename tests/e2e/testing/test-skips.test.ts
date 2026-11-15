@@ -379,6 +379,24 @@ test("a smoke list left under package.json checks.smoke is refused naming the ch
   expect(refused.text).toContain("package.json checks.smoke is no longer read; move it to the smoke key of checks.config.ts");
 });
 
+test("a CI run with a smoke list left under package.json checks.smoke is refused instead of passing green", async () => {
+  await consumer('import { expect, test } from "bun:test";\ntest("default test", () => expect(1).toBe(1));\n');
+  await writeFile(join(dir, "package.json"), JSON.stringify({ name: "consumer", scripts: { test: "checks-test" }, checks: { smoke: ["tests/unit/suite.test.ts"] } }));
+
+  const refused = await checksTest(true);
+  expect(refused.exitCode).toBe(2);
+  expect(refused.text).toContain("package.json checks.smoke is no longer read; move it to the smoke key of checks.config.ts");
+});
+
+test("a CI run with a reach map left under package.json checks.reach is refused instead of passing green", async () => {
+  await consumer('import { expect, test } from "bun:test";\ntest("default test", () => expect(1).toBe(1));\n');
+  await writeFile(join(dir, "package.json"), JSON.stringify({ name: "consumer", scripts: { test: "checks-test" }, checks: { reach: { "src/index.ts": ["tests/unit/suite.test.ts"] } } }));
+
+  const refused = await checksTest(true);
+  expect(refused.exitCode).toBe(2);
+  expect(refused.text).toContain("package.json checks.reach is no longer read; move it to the reach key of checks.config.ts");
+});
+
 test("--junit keeps the report of a failing run at the path it names", async () => {
   await consumer('import { expect, test } from "bun:test";\ntest("breaks on purpose", () => expect(1).toBe(2));\n');
 

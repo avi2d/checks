@@ -39,7 +39,7 @@ import { defineConfig } from "@avi2dg/checks/knip";
 export default defineConfig({ entry: ["src/index.ts"] });
 ```
 
-The builder sets `include` to unreferenced files alone, and adds `tests/**/*.test.ts`, `dependency-cruiser.config.ts` and `oxlint.config.ts` to the entries.
+The builder sets `include` to unreferenced files alone, and adds `tests/**/*.test.ts`, `dependency-cruiser.config.ts`, `oxlint.config.ts` and `checks.config.ts` to the entries.
 In a repository that depends on `astro`, Knip reads `.astro` imports, so a file only an `.astro` entry imports counts as used and an `.astro` file no entry reaches is named.
 The gate resolves the Knip binary from the installed kit, so a consumer installs nothing beyond the kit.
 It reads `exports-baseline.json` in the repository root, which holds each accepted unused export as a file, kind and name triple.
