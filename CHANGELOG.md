@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.101.1
+
+Released 2026-11-15.
+
+### Fixes
+
+- **delivery:** align shared caller permissions and concurrency with v3 jobs [#150](https://github.com/avi2d/checks/pull/150)
+
 ## 0.101.0
 
 Released 2026-11-15.
