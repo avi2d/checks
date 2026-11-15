@@ -33,7 +33,7 @@ test("a code repository without workflow files is refused until --write writes c
   expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 4 workflow file(s) of the code set\n" });
   expect(await held(repo)).toEqual(["ci.yml", "main.yml", "pr-title.yml", "release.yml"]);
   expect(await parsed(repo, "ci.yml")).toMatchObject({
-    on: { pull_request: { types: ["opened", "synchronize", "reopened"] }, workflow_dispatch: null },
+    on: { pull_request: { types: ["opened", "synchronize", "reopened", "ready_for_review"] }, workflow_dispatch: null },
     concurrency: { "cancel-in-progress": true },
     jobs: { checks: { uses: "avi2d/workflows/.github/workflows/ci.yml@v3" } },
   });
@@ -67,7 +67,7 @@ test("a site repository gets the six site callers, keeps advisories in its calle
   expect(await parsed(repo, "advisories.yml")).toEqual({
     name: "advisories",
     on: { workflow_dispatch: null },
-    jobs: { advisories: { uses: "avi2d/workflows/.github/workflows/advisories.yml@v1", permissions: { contents: "read", issues: "write" } } },
+    jobs: { advisories: { uses: "avi2d/workflows/.github/workflows/advisories.yml@v3", permissions: { contents: "read", issues: "write" } } },
   });
   expect(await parsed(repo, "ci.yml")).toMatchObject({ jobs: { checks: { uses: "avi2d/workflows/.github/workflows/site-ci.yml@v3", secrets: "inherit" } } });
   expect(await parsed(repo, "preview-close.yml")).toMatchObject({ on: { pull_request: { types: ["closed"] } } });

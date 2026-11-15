@@ -459,7 +459,7 @@ const caller = Schema.decodeUnknownSync(CallerSchema)(Bun.YAML.parse(text));
 expect(Object.keys(caller.on)).toEqual(["workflow_dispatch"]);
 expect(caller.jobs).toEqual({
   mutation: {
-    uses: "avi2d/workflows/.github/workflows/mutation.yml@v2",
+    uses: "avi2d/workflows/.github/workflows/mutation.yml@v3",
     permissions: { contents: "read", actions: "write", "pull-requests": "write" },
   },
 });

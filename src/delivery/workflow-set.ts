@@ -42,7 +42,7 @@ function callerText({ name, on, concurrency, job, uses, permissions, secrets }: 
   return [...lines, ""].join("\n");
 }
 
-const PULL_REQUEST = ["pull_request:", "  types: [opened, synchronize, reopened]", "workflow_dispatch:"];
+const PULL_REQUEST = ["pull_request:", "  types: [opened, synchronize, reopened, ready_for_review]", "workflow_dispatch:"];
 const BY_HAND = ["workflow_dispatch:"];
 const PER_PULL_REQUEST = { group: "ci-${{ github.event.pull_request.number || github.run_id }}", cancel: true };
 
@@ -119,7 +119,7 @@ const filesOf = (callers: readonly Caller[]): readonly WorkflowFile[] => callers
 
 const ADVISORIES: WorkflowFile = {
   name: "advisories.yml",
-  text: callerText({ name: "advisories", on: BY_HAND, job: "advisories", uses: `${SHARED_WORKFLOWS}/advisories.yml@v1`, permissions: "contents: read, issues: write" }),
+  text: callerText({ name: "advisories", on: BY_HAND, job: "advisories", uses: `${SHARED_WORKFLOWS}/advisories.yml@v3`, permissions: "contents: read, issues: write" }),
 };
 
 const FLAKE: WorkflowFile = {

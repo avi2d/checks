@@ -154,7 +154,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   mutation:
-    uses: avi2d/workflows/.github/workflows/mutation.yml@v2
+    uses: avi2d/workflows/.github/workflows/mutation.yml@v3
     permissions: { contents: read, actions: write, pull-requests: write }
     with:
       mode: refresh
