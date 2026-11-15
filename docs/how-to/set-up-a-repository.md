@@ -112,6 +112,13 @@ To run the gates in CI:
    ```
 
    The command writes the caller set [checks-workflows](../gates/checks-workflows.md) holds.
+   A site with no site caller yet passes its three names on the first write:
+
+   ```sh
+   bunx checks-workflows --write --pages acme --domain acme.example --production acme/acme.example
+   ```
+
+   A later `--write` keeps the names the site callers pass.
    Each caller runs one shared workflow.
    The first step of each run fails the pull request when a caller differs or an extra workflow file appears.
    A new repository gets the same callers from [checks-setup](../gates/checks-setup.md).

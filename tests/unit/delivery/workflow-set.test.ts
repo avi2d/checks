@@ -2,33 +2,37 @@ import { expect, test } from "bun:test";
 import { byHandSet, differencesOf, requiredSet } from "../../../src/delivery/workflow-set.ts";
 import { isRecord } from "../../../src/delivery/workflow-references.ts";
 import { MUTATION_WORKFLOW } from "../../../src/delivery/setup-workflow.ts";
+import type { CallerSet } from "../../../src/delivery/site-names.ts";
+
+const CODE: CallerSet = { kind: "code" };
+const SITE: CallerSet = { kind: "site", names: { pages: "acme", domain: "acme.example", production: "acme/acme.example" } };
 
 test("the code set is ci, pr-title, main and release, and the site set adds preview-close and production", () => {
-  expect(requiredSet("code").map(({ name }) => name)).toEqual(["ci.yml", "pr-title.yml", "main.yml", "release.yml"]);
-  expect(requiredSet("site").map(({ name }) => name)).toEqual(["ci.yml", "pr-title.yml", "preview-close.yml", "main.yml", "release.yml", "production.yml"]);
+  expect(requiredSet(CODE).map(({ name }) => name)).toEqual(["ci.yml", "pr-title.yml", "main.yml", "release.yml"]);
+  expect(requiredSet(SITE).map(({ name }) => name)).toEqual(["ci.yml", "pr-title.yml", "preview-close.yml", "main.yml", "release.yml", "production.yml"]);
 });
 
 test("the two kinds share pr-title and release byte for byte, so neither drifts between sites and code", () => {
-  const code = new Map(requiredSet("code").map(({ name, text }) => [name, text]));
-  const site = new Map(requiredSet("site").map(({ name, text }) => [name, text]));
+  const code = new Map(requiredSet(CODE).map(({ name, text }) => [name, text]));
+  const site = new Map(requiredSet(SITE).map(({ name, text }) => [name, text]));
   expect(site.get("pr-title.yml")).toBe(code.get("pr-title.yml") ?? "no pr-title.yml");
   expect(site.get("release.yml")).toBe(code.get("release.yml") ?? "no release.yml");
   expect(site.get("ci.yml")).not.toBe(code.get("ci.yml"));
 });
 
 test("an absent by-hand caller is no difference, but one that runs its own steps is", () => {
-  const written = requiredSet("code");
-  expect(differencesOf("code", written)).toEqual([]);
+  const written = requiredSet(CODE);
+  expect(differencesOf(CODE, written)).toEqual([]);
   expect(byHandSet("site").map(({ name }) => name)).toEqual(["advisories.yml"]);
   const handRolled = { name: "mutation.yml", text: "name: mutation\non:\n  workflow_dispatch:\n" };
-  expect(differencesOf("code", [...written, handRolled]).map(({ kind, name }) => [kind, name])).toEqual([["differs", "mutation.yml"]]);
-  expect(differencesOf("site", [...requiredSet("site"), handRolled]).map(({ kind, name }) => [kind, name])).toEqual([["extra", "mutation.yml"]]);
+  expect(differencesOf(CODE, [...written, handRolled]).map(({ kind, name }) => [kind, name])).toEqual([["differs", "mutation.yml"]]);
+  expect(differencesOf(SITE, [...requiredSet(SITE), handRolled]).map(({ kind, name }) => [kind, name])).toEqual([["extra", "mutation.yml"]]);
 });
 
 const SHARED_V3_FILES = ["advisories.yml", "ci.yml", "mutation.yml", "pr-title.yml", "preview-remove.yml", "release-main.yml", "release-pr.yml", "site-ci.yml", "site-main.yml", "site-production.yml"];
 
 test("no advisories, mutation or required caller pins below v3 or names a file the v3 tag lacks", () => {
-  const callers = [...requiredSet("code"), ...requiredSet("site"), ...byHandSet("site"), { name: "mutation.yml", text: MUTATION_WORKFLOW }];
+  const callers = [...requiredSet(CODE), ...requiredSet(SITE), ...byHandSet("site"), { name: "mutation.yml", text: MUTATION_WORKFLOW }];
   const pins = callers.flatMap(({ text }) => {
     const document = Bun.YAML.parse(text);
     const jobs = isRecord(document) ? document["jobs"] : undefined;
@@ -41,8 +45,8 @@ test("no advisories, mutation or required caller pins below v3 or names a file t
 });
 
 test("a ci caller that omits ready_for_review never starts when a draft is marked ready, so the draft hold never releases", () => {
-  for (const kind of ["code", "site"] as const) {
-    const ci = requiredSet(kind).find(({ name }) => name === "ci.yml");
+  for (const set of [CODE, SITE]) {
+    const ci = requiredSet(set).find(({ name }) => name === "ci.yml");
     const document = Bun.YAML.parse(ci?.text ?? "");
     const on = isRecord(document) ? document["on"] : undefined;
     const pullRequest = isRecord(on) ? on["pull_request"] : undefined;
@@ -65,8 +69,8 @@ const CALLEE_GRANTS: Readonly<Record<string, Readonly<Record<string, string>>>> 
 };
 
 const callers = (): readonly { name: string; text: string }[] => [
-  ...requiredSet("code"),
-  ...requiredSet("site"),
+  ...requiredSet(CODE),
+  ...requiredSet(SITE),
   ...byHandSet("site"),
   { name: "mutation.yml", text: MUTATION_WORKFLOW },
 ];
@@ -94,10 +98,10 @@ test("only the ci, pr-title and code main callers hold a workflow-level group, s
     })
     .map(({ name }) => name);
   expect(held).toEqual(["ci.yml", "pr-title.yml", "main.yml", "ci.yml", "pr-title.yml"]);
-  const codeMain = requiredSet("code").find(({ name }) => name === "main.yml");
+  const codeMain = requiredSet(CODE).find(({ name }) => name === "main.yml");
   const codeDocument = Bun.YAML.parse(codeMain?.text ?? "");
   expect(isRecord(codeDocument) ? codeDocument["concurrency"] : undefined).toEqual({ group: "main", "cancel-in-progress": false });
-  const siteMain = requiredSet("site").find(({ name }) => name === "main.yml");
+  const siteMain = requiredSet(SITE).find(({ name }) => name === "main.yml");
   const siteDocument = Bun.YAML.parse(siteMain?.text ?? "");
   expect(isRecord(siteDocument) ? siteDocument["concurrency"] : undefined).toBeUndefined();
 });
@@ -122,23 +126,23 @@ const passedSecrets = (text: string): readonly string[] => {
 
 const declaredSecrets = (text: string): readonly string[] => CALLEE_SECRETS[String(callerJob(text)["uses"]).split("/").pop()?.replace(/@v3$/, "") ?? ""] ?? ["no such shared workflow"];
 
-const siteCaller = (name: string): string => requiredSet("site").find((file) => file.name === name)?.text ?? `no ${name}`;
+const siteCaller = (name: string): string => requiredSet(SITE).find((file) => file.name === name)?.text ?? `no ${name}`;
 
 const withSiteCaller = (name: string, text: string): readonly { name: string; text: string }[] =>
-  requiredSet("site").map((file) => (file.name === name ? { name, text } : file));
+  requiredSet(SITE).map((file) => (file.name === name ? { name, text } : file));
 
 test("a caller written with secrets: inherit passes nothing to a shared workflow of another organization, so it is drift", () => {
   for (const { name, text } of callers()) expect([name, callerJob(text)["secrets"]]).not.toEqual([name, "inherit"]);
   const inherited = siteCaller("ci.yml").replace(/ {4}secrets:\n(?: {6}.*\n)+/, "    secrets: inherit\n");
   expect(inherited).toContain("    secrets: inherit\n");
-  expect(differencesOf("site", withSiteCaller("ci.yml", inherited)).map(({ kind, name }) => [kind, name])).toEqual([["differs", "ci.yml"]]);
+  expect(differencesOf(SITE, withSiteCaller("ci.yml", inherited)).map(({ kind, name }) => [kind, name])).toEqual([["differs", "ci.yml"]]);
 });
 
 test("a caller that passes a secret its v3 shared workflow does not declare, such as PRODUCTION_DEPLOY_KEY to site-ci, fails here", () => {
   for (const { name, text } of callers()) expect([name, passedSecrets(text).filter((secret) => !declaredSecrets(text).includes(secret))]).toEqual([name, []]);
   const spare = `${siteCaller("ci.yml")}      PRODUCTION_DEPLOY_KEY: \${{ secrets.PRODUCTION_DEPLOY_KEY }}\n`;
   expect(passedSecrets(spare)).toContain("PRODUCTION_DEPLOY_KEY");
-  expect(differencesOf("site", withSiteCaller("ci.yml", spare)).map(({ kind, name }) => [kind, name])).toEqual([["differs", "ci.yml"]]);
+  expect(differencesOf(SITE, withSiteCaller("ci.yml", spare)).map(({ kind, name }) => [kind, name])).toEqual([["differs", "ci.yml"]]);
 });
 
 test("a caller missing a secret its v3 shared workflow declares, such as production without PRODUCTION_DEPLOY_KEY, fails here", () => {
@@ -149,5 +153,22 @@ test("a caller missing a secret its v3 shared workflow declares, such as product
   }
   const missing = siteCaller("production.yml").replace("      PRODUCTION_DEPLOY_KEY: ${{ secrets.PRODUCTION_DEPLOY_KEY }}\n", "");
   expect(passedSecrets(missing)).toEqual(["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"]);
-  expect(differencesOf("site", withSiteCaller("production.yml", missing)).map(({ kind, name }) => [kind, name])).toEqual([["differs", "production.yml"]]);
+  expect(differencesOf(SITE, withSiteCaller("production.yml", missing)).map(({ kind, name }) => [kind, name])).toEqual([["differs", "production.yml"]]);
+});
+
+test("each site caller of a shared workflow that reads the site names passes pages, domain and production, and no other caller passes an input", () => {
+  const passed = callers().map(({ name, text }) => [String(callerJob(text)["uses"]).split("/").pop(), name, callerJob(text)["with"]]);
+  const names = { pages: "acme", domain: "acme.example", production: "acme/acme.example" };
+  expect(passed.filter(([, , inputs]) => inputs !== undefined)).toEqual([
+    ["site-ci.yml@v3", "ci.yml", names],
+    ["preview-remove.yml@v3", "preview-close.yml", names],
+    ["site-main.yml@v3", "main.yml", names],
+    ["site-production.yml@v3", "production.yml", names],
+  ]);
+});
+
+test("a site caller that passes another domain than the one the set names differs, so a caller cannot drift from its siblings", () => {
+  const moved = siteCaller("main.yml").replace('      domain: "acme.example"\n', '      domain: "other.example"\n');
+  expect(moved).toContain('      domain: "other.example"\n');
+  expect(differencesOf(SITE, withSiteCaller("main.yml", moved)).map(({ kind, name }) => [kind, name])).toEqual([["differs", "main.yml"]]);
 });
