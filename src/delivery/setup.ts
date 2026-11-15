@@ -2,7 +2,7 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { runMain, Usage } from "../core/main.ts";
 import { STRYKER_CONFIG } from "./setup-workflow.ts";
-import { callerSetOf, parseSiteNameFlags, readWorkflowFiles, type CallerSet } from "./site-names.ts";
+import { callerSetOf, flagMismatchOf, parseSiteNameFlags, readWorkflowFiles, type CallerSet } from "./site-names.ts";
 import { byHandSet, requiredSet } from "./workflow-set.ts";
 import { TEMPLATES, VISION_PAGE } from "../docs/doc-templates.ts";
 import { requiresName } from "../docs/doc-vision.ts";
@@ -351,7 +351,9 @@ const argumentsOf = Effect.fn("argumentsOf")(function* (root: string) {
   const unknown = parsed.rest.find((arg) => arg !== PRIVATE);
   if (unknown !== undefined) return yield* new Usage({ message: unknown + " is not an argument\n" + USAGE });
   const callers = (yield* readWorkflowFiles(root)).map(({ workflow }) => workflow);
-  const set = yield* callerSetOf(callers, parsed.flags, NAME).pipe(Effect.mapError((fault) => new Usage({ message: fault.message })));
+  const mismatch = flagMismatchOf(callers, parsed.flags);
+  if (mismatch !== undefined) return yield* new Usage({ message: mismatch });
+  const set = yield* callerSetOf(callers, parsed.flags, NAME).pipe(Effect.mapError((fault) => new Usage({ message: fault.message }))));
   return { isPrivate: parsed.rest.includes(PRIVATE), set };
 });
 

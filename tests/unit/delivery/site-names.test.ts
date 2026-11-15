@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
-import { callerSetOf, parseSiteNameFlags, type SiteNameFlags } from "../../../src/delivery/site-names.ts";
+import { callerSetOf, flagMismatchOf, parseSiteNameFlags, type SiteNameFlags } from "../../../src/delivery/site-names.ts";
 import type { Workflow } from "../../../src/delivery/workflow-references.ts";
 
 const AZALIALAW = { pages: "azalialaw", domain: "azalialaw.com", production: "azalialaw/azalialaw.com" };
@@ -42,6 +42,14 @@ test("the three flags make a site of a repository with no caller, so a first sit
 
 test("a flag replaces the name the callers pass and the other names stay, so a renamed domain is not lost to the old one", () => {
   expect(setOf([caller("ci.yml", SITE_CI, AZALIALAW)], { domain: "azalia.law" })).toEqual({ kind: "site", names: { ...AZALIALAW, domain: "azalia.law" } });
+});
+
+test("a flag that differs from the name a present caller passes is refused, so setup never keeps the old caller beside the renamed one", () => {
+  expect(flagMismatchOf([caller("ci.yml", SITE_CI, AZALIALAW)], { domain: "azalia.law" })).toBe(
+    ".github/workflows/ci.yml passes domain azalialaw.com and --domain passes azalia.law, so rename with checks-workflows --write",
+  );
+  expect(flagMismatchOf([caller("ci.yml", SITE_CI, AZALIALAW)], { domain: "azalialaw.com" })).toBeUndefined();
+  expect(flagMismatchOf([], AZALIALAW)).toBeUndefined();
 });
 
 test("two callers that pass different names are refused rather than one silently winning", () => {

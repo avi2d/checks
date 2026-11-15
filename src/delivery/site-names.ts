@@ -74,6 +74,17 @@ function conflictOf(held: readonly HeldName[]): string | undefined {
   return undefined;
 }
 
+export function flagMismatchOf(workflows: readonly Workflow[], flags: SiteNameFlags): string | undefined {
+  const held = workflows.flatMap(heldNames);
+  for (const key of SITE_NAME_KEYS) {
+    const flag = flags[key];
+    if (flag === undefined) continue;
+    const other = held.find((name) => name.key === key && name.value !== flag);
+    if (other !== undefined) return `${other.path} passes ${key} ${other.value} and --${key} passes ${flag}, so rename with checks-workflows --write`;
+  }
+  return undefined;
+}
+
 function listed(keys: readonly SiteNameKey[]): string {
   return keys.length > 1 ? `${keys.slice(0, -1).join(", ")} and ${keys.at(-1) ?? ""}` : keys.join("");
 }
