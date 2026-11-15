@@ -53,7 +53,7 @@ function heldNames(workflow: Workflow): readonly HeldName[] {
       if (!isRecord(inputs)) return [];
       return SITE_NAME_KEYS.flatMap((key): readonly HeldName[] => {
         const value = inputs[key];
-        return typeof value === "string" || typeof value === "number" ? [{ key, value: String(value), path: workflow.path }] : [];
+        return typeof value === "string" ? [{ key, value, path: workflow.path }] : [];
       });
     });
 }

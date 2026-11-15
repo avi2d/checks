@@ -168,7 +168,7 @@ test("each site caller of a shared workflow that reads the site names passes pag
 });
 
 test("a site caller that passes another domain than the one the set names differs, so a caller cannot drift from its siblings", () => {
-  const moved = siteCaller("main.yml").replace("      domain: acme.example\n", "      domain: other.example\n");
-  expect(moved).toContain("      domain: other.example\n");
+  const moved = siteCaller("main.yml").replace('      domain: "acme.example"\n', '      domain: "other.example"\n');
+  expect(moved).toContain('      domain: "other.example"\n');
   expect(differencesOf(SITE, withSiteCaller("main.yml", moved)).map(({ kind, name }) => [kind, name])).toEqual([["differs", "main.yml"]]);
 });

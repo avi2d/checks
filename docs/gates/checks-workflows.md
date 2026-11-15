@@ -16,9 +16,9 @@ Each site caller of those four shared workflows passes the three site names as i
 
 ```yaml
     with:
-      pages: acme
-      domain: acme.example
-      production: acme/acme.example
+      pages: "acme"
+      domain: "acme.example"
+      production: "acme/acme.example"
 ```
 
 `pages` is the Cloudflare Pages project the previews and the staging site go to.
@@ -86,7 +86,7 @@ checks-workflows --write --pages acme --domain acme.example --production acme/ac
 With `--write` it writes every file of the set, rewrites a present by-hand caller to its caller form, and deletes every other workflow file except `pr-text.yml`.
 A rewrite of a site keeps the three names its callers pass.
 `--pages`, `--domain` and `--production` name a site with no site caller yet, and each replaces the name the callers pass.
-A site write that lacks one of the three names writes nothing and names the flag to pass.
+A site write that lacks one of the three names, passes two values of one, or names one that does not parse writes nothing and names the fix.
 
 ## Exit codes
 
@@ -94,7 +94,7 @@ A site write that lacks one of the three names writes nothing and names the flag
 | --- | --- |
 | 0 | the workflow files are the set, or `--write` wrote it |
 | 1 | a file of the set is missing or differs, another workflow file appears, or the site callers pass none, two values or an unparsable value of a name |
-| 2 | the arguments do not parse, a workflow file cannot be read, or a site write lacks one of the three names or names one that does not parse |
+| 2 | the arguments do not parse, a workflow file cannot be read, or a site write lacks one of the three names, passes two values of one, or names one that does not parse |
 
 ## Sample output
 

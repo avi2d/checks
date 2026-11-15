@@ -51,7 +51,7 @@ function callerText({ name, with: names, on, concurrency, job, shared, permissio
     lines.push("concurrency:", `  group: ${concurrency.group}`, `  cancel-in-progress: ${String(concurrency.cancel)}`, "");
   }
   lines.push("jobs:", `  ${job}:`, `    uses: ${SHARED_WORKFLOWS}/${shared}`, `    permissions: { ${permissions} }`);
-  if (names !== undefined) lines.push("    with:", ...SITE_NAME_KEYS.map((key) => `      ${key}: ${names[key]}`));
+  if (names !== undefined) lines.push("    with:", ...SITE_NAME_KEYS.map((key) => `      ${key}: "${names[key]}"`));
   const secrets: readonly string[] = SHARED_SECRETS[shared];
   if (secrets.length > 0) lines.push("    secrets:", ...secrets.map((secret) => `      ${secret}: \${{ secrets.${secret} }}`));
   return [...lines, ""].join("\n");
