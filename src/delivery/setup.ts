@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { runMain, Usage } from "../core/main.ts";
-import { MUTATION_WORKFLOW, STRYKER_CONFIG } from "./setup-workflow.ts";
-import { kindOf, requiredSet, type RepositoryKind } from "./workflow-set.ts";
+import { STRYKER_CONFIG } from "./setup-workflow.ts";
+import { byHandSet, kindOf, requiredSet, type RepositoryKind } from "./workflow-set.ts";
 import { TEMPLATES, VISION_PAGE } from "../docs/doc-templates.ts";
 import { requiresName } from "../docs/doc-vision.ts";
 import { FAST_COMMAND, TEST_COMMAND } from "../core/test-script.ts";
@@ -338,7 +338,8 @@ const setupPackage = Effect.fn("setupPackage")(function* (
 
 const setupWorkflows = Effect.fn("setupWorkflows")(function* (root: string, kind: RepositoryKind) {
   for (const { name, text } of requiredSet(kind)) yield* setupFile(root, `.github/workflows/${name}`, text);
-  yield* setupFile(root, ".github/workflows/mutation.yml", MUTATION_WORKFLOW);
+  const mutation = byHandSet(kind).find((file) => file.name === "mutation.yml");
+  if (mutation !== undefined) yield* setupFile(root, `.github/workflows/${mutation.name}`, mutation.text);
   yield* setupFile(root, "stryker.conf.mjs", STRYKER_CONFIG);
 });
 

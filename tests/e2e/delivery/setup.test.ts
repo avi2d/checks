@@ -435,6 +435,21 @@ const CallerSchema = Schema.Struct({
 });
 
 test(
+"a site repository gains the site callers and no mutation workflow, and passes checks-workflows without --write",
+async () => {
+const repo = await open({ "package.json": JSON.stringify({ name: "shop", type: "module", site: { pages: "shop", domain: "shop.example.com", production: "shop/shop.example.com" } }) });
+const run = await setup(repo);
+expect(run.exitCode).toBe(0);
+expect(await Bun.file(join(repo.dir, ".github/workflows/mutation.yml")).exists()).toBe(false);
+const { uses } = workflowSteps(await readFile(join(repo.dir, ".github/workflows/ci.yml"), "utf8"));
+expect(uses).toBe("avi2d/workflows/.github/workflows/site-ci.yml@v3");
+const checked = await repo.script("delivery/workflows.ts");
+expect(checked.exitCode).toBe(0);
+},
+60_000,
+);
+
+test(
 "the generated mutation workflow names the shared workflow at v2 and nothing else, so no mode formula or path list reaches the caller",
 async () => {
 const dir = await scratch("mutation-caller");

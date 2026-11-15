@@ -1,4 +1,7 @@
 import { Console, Effect, Option, Schema } from "effect";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { dispatch, GitHubFailure, gitHubJson, gitHubOptional, REPOSITORY } from "../core/github.ts";
 import { ChildProcessSpawner } from "effect/process";
 import { lastTag, runBuild } from "./release.ts";
@@ -53,11 +56,17 @@ const landedRelease = Effect.fn("landedRelease")(function* (label: string, root:
   const [head = "", subject = ""] = (yield* git(["log", "-1", "--format=%H%n%s", "HEAD"], root)).split("\n");
   const landed = yield* landedOf(root, head, subject);
   if (landed !== undefined) return landed;
+  const held = yield* manifestAt(root, head).pipe(Effect.option);
+  if (Option.isNone(held)) {
+    yield* Console.log(`${label}: ${head.slice(0, 12)} is no release commit`);
+    return undefined;
+  }
   const history = (yield* git(["log", "--first-parent", "--format=%H %s", "HEAD"], root)).split("\n").filter((line) => line !== "").slice(1);
   for (const line of history) {
     const sha = line.slice(0, 40);
     const candidate = yield* landedOf(root, sha, line.slice(41));
     if (candidate === undefined) continue;
+    if (candidate.version !== held.value.version) break;
     if ((yield* taggedOn(root, candidate.tag)) === sha) break;
     return candidate;
   }
@@ -129,15 +138,34 @@ const writeGitHubRelease = Effect.fn("writeGitHubRelease")(function* (label: str
   yield* Console.log(`${label}: created the GitHub release ${tag} with the CHANGELOG.md section for ${version}`);
 });
 
+const releaseTree = Effect.fn("releaseTree")(function* (root: string, head: string) {
+  const current = (yield* git(["rev-parse", "HEAD"], root)).trim();
+  if (current === head) return root;
+  return yield* Effect.acquireRelease(
+    Effect.tryPromise({
+      try: async () => join(await mkdtemp(join(tmpdir(), "checks-release-")), "tree"),
+      catch: (cause) => new TagRefused({ message: `cannot make a temporary directory: ${cause instanceof Error ? cause.message : String(cause)}` }),
+    }).pipe(Effect.tap((tree) => git(["worktree", "add", "--detach", tree, head], root))),
+    (tree) =>
+      git(["worktree", "remove", "--force", tree], root).pipe(
+        Effect.andThen(Effect.tryPromise(() => rm(join(tree, ".."), { recursive: true, force: true }))),
+        Effect.ignore,
+      ),
+  );
+});
+
 export const releaseHead = Effect.fn("releaseHead")(function* (label: string, root: string, cuttingWorkflow: string) {
   const landed = yield* landedRelease(label, root);
   if (landed === undefined) return true;
-  yield* checkTestedTreeOf(label, root, cuttingWorkflow, landed.head, landed.subject);
-  if (yield* pushReleaseTag(label, root, landed, cuttingWorkflow)) yield* Console.log(`${label}: tagged ${landed.head.slice(0, 12)} as ${landed.tag}`);
-  yield* writeGitHubRelease(label, root, landed);
-  if (!landed.publishes) {
-    yield* Console.log(`${label}: ${MANIFEST} is private, so no package is published`);
-    return true;
-  }
-  return yield* publishPackage(root);
+  return yield* Effect.scoped(Effect.gen(function* () {
+    const tree = yield* releaseTree(root, landed.head);
+    yield* checkTestedTreeOf(label, tree, cuttingWorkflow, landed.head, landed.subject);
+    if (yield* pushReleaseTag(label, tree, landed, cuttingWorkflow)) yield* Console.log(`${label}: tagged ${landed.head.slice(0, 12)} as ${landed.tag}`);
+    yield* writeGitHubRelease(label, tree, landed);
+    if (!landed.publishes) {
+      yield* Console.log(`${label}: ${MANIFEST} is private, so no package is published`);
+      return true;
+    }
+    return yield* publishPackage(tree);
+  }));
 });

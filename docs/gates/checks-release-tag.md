@@ -11,15 +11,16 @@ With a workflow argument it tags the commit and dispatches that workflow on the 
 ## What it checks
 
 It reads the subject of `HEAD`, and does nothing unless the subject is `chore: release <version>`, with or without the pull request number a squash merge appends.
-When `HEAD` is no release commit, it walks the first parent history back to the newest release commit whose tag already tags it, or to the root.
-It releases the newest untagged release commit found there with the same steps as for `HEAD`.
-A plain merge with no untagged release commit behind it ends at once, before any API call.
 It refuses a release commit whose `package.json` holds another version.
 It tags that commit as `v<version>` and pushes the tag to `origin`.
 
 ### With no argument
 
 It is the one release step a `main.yml` caller runs on each push to `main`.
+When `HEAD` is no release commit, it walks the first parent history back to the newest release commit whose tag already tags it, or to the root.
+It releases the newest untagged release commit found there with the same steps as for `HEAD`.
+The walk stops with no release once the version `package.json` holds at `HEAD` is not the candidate's version, so a cancel commit ends it.
+When the release commit sits behind `HEAD`, the build check and the publish run in a checkout of that commit, so npm ships the tree the release pull request tested.
 A merge with no untagged release commit behind it ends at once, before any API call.
 On a release commit it first fetches the head of the pull request the squash subject names, such as `(#7)`.
 It refuses unless the tree of that commit equals the tree that pull request tested.
@@ -44,7 +45,7 @@ The next run of the workflow that tags it then cuts the release again with every
 
 ## What it reads
 
-It reads the subject of `HEAD` and `package.json` from the checkout, and the tag from `origin` with `git ls-remote`.
+It reads the subject of `HEAD` and of each commit behind it, `package.json` at each of those commits and `CHANGELOG.md` at the release commit, and the tag from `origin` with `git ls-remote`.
 It names the workflow it runs in by `GITHUB_WORKFLOW`, or as `release-pr` when that is unset.
 The build it runs reads the whole history, so the checkout fetches all of it.
 It pushes the tag with the credentials the checkout holds.

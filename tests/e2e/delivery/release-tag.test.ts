@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fakeGh, type FakeGh } from "../lib/fake-gh.ts";
 import { releasedMains } from "../lib/released-main.ts";
@@ -219,11 +219,12 @@ test(
 );
 
 test(
-  "with no argument a plain commit after a release commit releases the release commit behind it",
+  "with no argument a plain commit after a release commit releases the release commit behind it, publishing its tree",
   async () => {
     const main = await onMain("chore: release 0.2.0 (#7)");
     const behind = main.head;
-    await $`git commit -q --allow-empty -m ${"docs: fix a typo (#8)"}`.cwd(main.dir).quiet();
+    await writeFile(join(main.dir, "notes/3.txt"), "tampered\n");
+    await $`git add notes/3.txt && git commit -q -m ${"docs: fix a typo (#8)"}`.cwd(main.dir).quiet();
 
     const released = await main.run(SCRIPT, []);
     expect(released.exitCode).toBe(0);
@@ -232,6 +233,24 @@ test(
     expect(await main.inOrigin("rev-parse", "v0.2.0^{commit}")).toBe(behind);
     expect((await main.state()).releases.map(({ tag_name: tag }) => tag)).toEqual(["v0.2.0"]);
     expect((await main.npm()).latest).toBe("0.2.0");
+    expect((await main.npm()).published).toEqual([behind]);
+  },
+  60_000,
+);
+
+test(
+  "with no argument a cancelled release behind later commits releases nothing",
+  async () => {
+    const main = await onMain("chore: release 0.2.0 (#7)");
+    await writeFile(join(main.dir, "package.json"), manifest("0.1.0"));
+    await $`git add package.json && git commit -q -m ${"chore: cancel the unpublished 0.2.0 (#8)"}`.cwd(main.dir).quiet();
+    await $`git commit -q --allow-empty -m ${"docs: fix a typo (#9)"}`.cwd(main.dir).quiet();
+    const plain = (await $`git rev-parse HEAD`.cwd(main.dir).quiet()).stdout.toString().trim();
+
+    expect(await main.run(SCRIPT, [])).toEqual({ exitCode: 0, text: `release-tag: ${plain.slice(0, 12)} is no release commit\n` });
+    expect(await main.inOrigin("tag", "--list")).toBe("");
+    expect((await main.state()).releases).toEqual([]);
+    expect((await main.npm()).calls).toEqual([]);
   },
   60_000,
 );
