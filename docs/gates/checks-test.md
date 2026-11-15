@@ -8,7 +8,7 @@ audience: consumers
 
 ## What it checks
 
-It runs the unit tier plus the smoke list outside CI and the full suite under CI, except a `--changed` run, as [Changed-file runs](#changed-file-runs) says.
+It runs the unit tier plus the smoke list outside CI and the full suite under CI, except a `--changed` or `--pr` run, as [Changed-file runs](#changed-file-runs) and [The pull request entry](#the-pull-request-entry) say.
 It refuses `--full`, `--tier=e2e` and `--tier=pixel` outside CI, except a pixel run that approves pictures, as [Runs refused outside CI](#runs-refused-outside-ci) says.
 It runs them with `bun test --randomize --parallel=<workers>`, where the count comes from free memory as [Parallel runs](#parallel-runs) says, and reads Bun's JUnit report from that run.
 It runs Bun with `CI=true`, so `test.only` fails the run in every environment.
@@ -79,7 +79,7 @@ Files under `tests/quarantine/` are not run or judged, as [checks-test-layout](c
 
 ## Runs refused outside CI
 
-Outside CI, `checks-test` refuses `--full`, `--tier=e2e` and a `--tier=pixel` run that does not approve pictures before any test runs, and exits 2.
+Outside CI, `checks-test` refuses `--full`, `--pr`, `--tier=e2e` and a `--tier=pixel` run that does not approve pictures before any test runs, and exits 2.
 `CI` counts as unset when it is missing or false.
 A refused `--full` or `--tier=e2e` run tells the reader to push the branch and open or update its pull request, so CI runs the checks.
 The full suite runs at release.
@@ -116,9 +116,19 @@ A workflow under `.github/` is not a shared file, since the suite runs under it 
 A pull request that changes no file a test reaches runs no test and passes.
 The run names how many test files it reached, or which shared file made it run the whole suite.
 A change whose paths cannot be read runs the whole suite.
+A release pull request, whose title is `chore: release <version>`, runs the whole suite.
 A run on any other event, such as `workflow_dispatch` for a release, runs the whole suite.
 `--full` and the live and pixel tiers always run whole.
 A narrowed run judges only the skips the files it ran declare.
+
+## The pull request entry
+
+`checks-test --pr` is the one test step a CI workflow runs, on a pull request and on `workflow_dispatch` alike.
+It runs the unit and e2e test files the pull request reaches, as [Pull request runs](#pull-request-runs) says.
+A pull request that changes only top-level and `docs/` Markdown runs no test and passes.
+A release pull request and any run that is not a pull request run the whole suite.
+A shared file runs the whole suite too.
+Outside CI it is refused, as [Runs refused outside CI](#runs-refused-outside-ci) says of `--full`.
 
 ## Changed-file runs
 
@@ -174,12 +184,13 @@ A timings option waits for Bun to honour timings under random order.
 
 ## Arguments
 
-The default command takes no arguments except `--parallel=<workers>`, as [Parallel runs](#parallel-runs) says, `--full`, `--changed` and `--junit=<file>`.
+The default command takes no arguments except `--parallel=<workers>`, as [Parallel runs](#parallel-runs) says, `--full`, `--changed`, `--pr` and `--junit=<file>`.
 `--parallel=<workers>` overrides the memory count for one run.
 `--full` runs the full suite in CI even when a pull request would narrow it, and is refused outside CI, as [Runs refused outside CI](#runs-refused-outside-ci) says.
 A `package.json` script never takes `--full`, as [checks-test-layout](checks-test-layout.md) says of `scripts.test`.
 `--changed` runs the test files the change reaches, as [Changed-file runs](#changed-file-runs) says, and takes neither a tier nor `--full`.
 `scripts.test` never takes `--changed` either, so CI still runs the suite it reaches.
+`--pr` runs the tests a pull request reaches, as [The pull request entry](#the-pull-request-entry) says, and takes neither a tier, `--full` nor `--changed`.
 Its named tier options are `--tier=live`, `--tier=pixel`, `--tier=unit` and `--tier=e2e`, and a tier run takes `--parallel=<workers>` for one run too, but not `--full`.
 `--junit=<file>` keeps the JUnit report Bun wrote at `<file>`, whether the tests passed or failed, so a whole-tree run hands it to [checks-whole-tree-run](checks-whole-tree-run.md).
 A `package.json` script never takes `--junit`, as [checks-test-layout](checks-test-layout.md) says of `scripts.test`.

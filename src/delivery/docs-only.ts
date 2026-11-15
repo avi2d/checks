@@ -2,13 +2,9 @@
 import { Console, Effect } from "effect";
 import { pathsSinceMergeBase } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
+import { isDocsPath } from "../core/pull-request-scope.ts";
 
 const NAME = "docs-only";
-
-export function isDocsPath(path: string): boolean {
-  const lower = path.toLowerCase();
-  return lower.endsWith(".md") && (!lower.includes("/") || lower.startsWith("docs/"));
-}
 
 // The verdict goes to stdout as one line, so a step appends it to GITHUB_OUTPUT; the detail goes to stderr.
 const check = Effect.gen(function* () {

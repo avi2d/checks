@@ -1,9 +1,9 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { dispatch, GitHubFailure } from "../core/github.ts";
 import { ChildProcessSpawner } from "effect/process";
-import { lastTag, releasedVersionOf, runBuild } from "./release.ts";
+import { lastTag, runBuild } from "./release.ts";
 import { git } from "../core/git.ts";
-import { MANIFEST, releaseTag, taggedVersion } from "../core/release-names.ts";
+import { MANIFEST, releasedVersionOf, releaseTag, taggedVersion } from "../core/release-names.ts";
 
 class TagRefused extends Schema.TaggedError<TagRefused>()("TagRefused", {
   message: Schema.String,

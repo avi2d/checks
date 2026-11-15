@@ -2,7 +2,7 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import * as Base64 from "effect/encoding/Base64";
 import { ChildProcessSpawner } from "effect/process";
-import { releasedVersionOf } from "./release.ts";
+import { releasedVersionOf } from "../core/release-names.ts";
 import { collect, git, refArgs } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 

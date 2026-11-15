@@ -2,8 +2,8 @@
 import { Console, Effect, Schema } from "effect";
 import { git } from "../src/core/git.ts";
 import { runMain } from "../src/core/main.ts";
-import { MANIFEST, taggedVersion } from "../src/core/release-names.ts";
-import { lastTag, releasedVersionOf } from "../src/delivery/release.ts";
+import { MANIFEST, releasedVersionOf, taggedVersion } from "../src/core/release-names.ts";
+import { lastTag } from "../src/delivery/release.ts";
 
 const NAME = "tested-tree";
 

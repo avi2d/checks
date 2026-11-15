@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { describeVisit, expanded as expandedOn, inconsistencies, runsIn, targetsOn, visitsOf, type Declaration, type ExpandedDeclaration, type Listed, type State } from "../../../src/quality/browser/declaration.ts";
 import { counted, passes, report, type Outcome } from "../../../src/quality/browser/report.ts";
 import { hookApplies } from "../../../src/quality/browser/hooks.ts";
+import { browserArgs } from "../../../src/quality/browser/args.ts";
 
 const DECLARATION: Declaration = {
   site: "dist",
@@ -264,4 +265,23 @@ test("hooks that no state can run are refused rather than silently dropped, and 
     "/ (en), phone 375x812 touch, plain",
     "/ru/ (ru), phone 375x812 touch, plain",
   ]);
+});
+
+test("a pull request run caps the full preset at the eight anchor sizes, never the nineteen", () => {
+  expect(sizesOf(expandedOn(listing([{ preset: "full" }]), BUILT, "anchor"))).toEqual(ANCHOR_SIZES.toSorted());
+  expect(sizesOf(expandedOn(listing([{ preset: "anchor" }]), BUILT, "anchor"))).toEqual(ANCHOR_SIZES.toSorted());
+});
+
+test("a pull request run keeps a hand-listed viewport, so the cap never drops a size the product names", () => {
+  const { viewports } = expandedOn(DECLARATION, BUILT, "anchor");
+  expect(viewports).toEqual(DECLARATION.viewports);
+});
+
+test("checks-browser takes --pr and one directory in either order, and refuses a second --pr, a second directory or another flag", () => {
+  expect(browserArgs([])).toEqual({ pr: false, directory: "." });
+  expect(browserArgs(["--pr", "site"])).toEqual({ pr: true, directory: "site" });
+  expect(browserArgs(["site", "--pr"])).toEqual({ pr: true, directory: "site" });
+  expect(browserArgs(["--pr", "--pr"])).toBeUndefined();
+  expect(browserArgs(["one", "two"])).toBeUndefined();
+  expect(browserArgs(["--full"])).toBeUndefined();
 });
