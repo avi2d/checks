@@ -101,3 +101,53 @@ test("only the ci, pr-title and code main callers hold a workflow-level group, s
   const siteDocument = Bun.YAML.parse(siteMain?.text ?? "");
   expect(isRecord(siteDocument) ? siteDocument["concurrency"] : undefined).toBeUndefined();
 });
+
+const CALLEE_SECRETS: Readonly<Record<string, readonly string[]>> = {
+  "advisories.yml": [],
+  "ci.yml": [],
+  "mutation.yml": [],
+  "pr-title.yml": [],
+  "preview-remove.yml": ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"],
+  "release-main.yml": [],
+  "release-pr.yml": [],
+  "site-ci.yml": ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"],
+  "site-main.yml": ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"],
+  "site-production.yml": ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "PRODUCTION_DEPLOY_KEY"],
+};
+
+const passedSecrets = (text: string): readonly string[] => {
+  const secrets = callerJob(text)["secrets"];
+  return isRecord(secrets) ? Object.keys(secrets) : [];
+};
+
+const declaredSecrets = (text: string): readonly string[] => CALLEE_SECRETS[String(callerJob(text)["uses"]).split("/").pop()?.replace(/@v3$/, "") ?? ""] ?? ["no such shared workflow"];
+
+const siteCaller = (name: string): string => requiredSet("site").find((file) => file.name === name)?.text ?? `no ${name}`;
+
+const withSiteCaller = (name: string, text: string): readonly { name: string; text: string }[] =>
+  requiredSet("site").map((file) => (file.name === name ? { name, text } : file));
+
+test("a caller written with secrets: inherit passes nothing to a shared workflow of another organization, so it is drift", () => {
+  for (const { name, text } of callers()) expect([name, callerJob(text)["secrets"]]).not.toEqual([name, "inherit"]);
+  const inherited = siteCaller("ci.yml").replace(/ {4}secrets:\n(?: {6}.*\n)+/, "    secrets: inherit\n");
+  expect(inherited).toContain("    secrets: inherit\n");
+  expect(differencesOf("site", withSiteCaller("ci.yml", inherited)).map(({ kind, name }) => [kind, name])).toEqual([["differs", "ci.yml"]]);
+});
+
+test("a caller that passes a secret its v3 shared workflow does not declare, such as PRODUCTION_DEPLOY_KEY to site-ci, fails here", () => {
+  for (const { name, text } of callers()) expect([name, passedSecrets(text).filter((secret) => !declaredSecrets(text).includes(secret))]).toEqual([name, []]);
+  const spare = `${siteCaller("ci.yml")}      PRODUCTION_DEPLOY_KEY: \${{ secrets.PRODUCTION_DEPLOY_KEY }}\n`;
+  expect(passedSecrets(spare)).toContain("PRODUCTION_DEPLOY_KEY");
+  expect(differencesOf("site", withSiteCaller("ci.yml", spare)).map(({ kind, name }) => [kind, name])).toEqual([["differs", "ci.yml"]]);
+});
+
+test("a caller missing a secret its v3 shared workflow declares, such as production without PRODUCTION_DEPLOY_KEY, fails here", () => {
+  for (const { name, text } of callers()) {
+    const secrets = callerJob(text)["secrets"];
+    const passed = isRecord(secrets) ? secrets : {};
+    expect([name, passed]).toEqual([name, Object.fromEntries(declaredSecrets(text).map((secret) => [secret, `\${{ secrets.${secret} }}`]))]);
+  }
+  const missing = siteCaller("production.yml").replace("      PRODUCTION_DEPLOY_KEY: ${{ secrets.PRODUCTION_DEPLOY_KEY }}\n", "");
+  expect(passedSecrets(missing)).toEqual(["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"]);
+  expect(differencesOf("site", withSiteCaller("production.yml", missing)).map(({ kind, name }) => [kind, name])).toEqual([["differs", "production.yml"]]);
+});

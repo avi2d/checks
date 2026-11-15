@@ -14,14 +14,14 @@ Any other repository is a code repository.
 
 A site takes these files under `.github/workflows/`:
 
-| File | Event | Calls |
-| --- | --- | --- |
-| `ci.yml` | a pull request opened, pushed to, reopened or marked ready for review, and `workflow_dispatch` | `site-ci.yml@v3` |
-| `pr-title.yml` | a pull request title edit | `pr-title.yml@v3` |
-| `preview-close.yml` | a pull request closed | `preview-remove.yml@v3` |
-| `main.yml` | a push to `main` | `site-main.yml@v3` |
-| `release.yml` | `workflow_dispatch` | `release-pr.yml@v3` |
-| `production.yml` | `workflow_dispatch` | `site-production.yml@v3` |
+| File | Event | Calls | Passes |
+| --- | --- | --- | --- |
+| `ci.yml` | a pull request opened, pushed to, reopened or marked ready for review, and `workflow_dispatch` | `site-ci.yml@v3` | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` |
+| `pr-title.yml` | a pull request title edit | `pr-title.yml@v3` | no secret |
+| `preview-close.yml` | a pull request closed | `preview-remove.yml@v3` | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` |
+| `main.yml` | a push to `main` | `site-main.yml@v3` | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` |
+| `release.yml` | `workflow_dispatch` | `release-pr.yml@v3` | no secret |
+| `production.yml` | `workflow_dispatch` | `site-production.yml@v3` | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `PRODUCTION_DEPLOY_KEY` |
 
 A code repository takes these files:
 
@@ -34,6 +34,9 @@ A code repository takes these files:
 
 The `ci.yml` caller runs one run per pull request and cancels the run a newer push replaces.
 Each caller grants exactly the permissions its shared job declares.
+Each caller passes, by name, exactly the secrets its shared workflow declares under `workflow_call`, each as `NAME: ${{ secrets.NAME }}`.
+A code caller passes no secret, since its shared workflow declares none.
+GitHub passes `secrets: inherit` only to a workflow in the same organization or enterprise, so a caller that holds it differs from the set.
 The release, site main and production callers hold no concurrency group, since their shared jobs hold their own.
 The code main caller holds group `main` without cancellation, since `release-main.yml` holds no group.
 The files each kind takes are byte-identical in every repository of that kind, and `pr-title.yml` and `release.yml` are the same in both kinds.
