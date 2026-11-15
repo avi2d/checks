@@ -285,12 +285,16 @@ const readScope = Effect.fn("readScope")(function* (selection: SuiteSelection, s
 const changedSelection = Effect.fn("changedSelection")(function* () {
   const changed = yield* changedLocalPaths(process.cwd());
   const tests = (yield* scanTestFiles(process.cwd())).filter((file) => selectedTierFile(file, undefined));
-  const { files, shared } = yield* readLocalNarrowing(process.cwd(), changed, tests);
-  for (const { path, reason } of shared) {
+  const narrowing = yield* readLocalNarrowing(process.cwd(), changed, tests);
+  if (narrowing.kind === "full") {
+    yield* Console.log(`${NAME}: ${narrowing.because}, so the whole suite runs`);
+    return { kind: "changed", files: tests } satisfies SuiteSelection;
+  }
+  for (const { path, reason } of narrowing.shared) {
     yield* Console.log(`${NAME}: the change touches ${path}, ${reason}, so the whole suite is left to the pull request`);
   }
-  if (files.length > 0) yield* Console.log(`${NAME}: the change reaches ${files.length} of ${tests.length} test file(s): ${files.join(" ")}`);
-  return { kind: "changed", files } satisfies SuiteSelection;
+  if (narrowing.files.length > 0) yield* Console.log(`${NAME}: the change reaches ${narrowing.files.length} of ${tests.length} test file(s): ${narrowing.files.join(" ")}`);
+  return { kind: "changed", files: narrowing.files } satisfies SuiteSelection;
 });
 
 const pullRequestSelection = Effect.fn("pullRequestSelection")(function* () {

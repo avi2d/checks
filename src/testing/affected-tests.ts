@@ -1,5 +1,6 @@
-import { Effect, FileSystem, Path, Schema } from "effect";
-import { workingTreeFiles } from "../core/git.ts";
+import { Config, Effect, FileSystem, Option, Path, Schema } from "effect";
+import { pathsSinceMergeBase, workingTreeFiles } from "../core/git.ts";
+import { decodePullRequestEvent, pullRequestEndsOf } from "../core/lint.ts";
 import { classifyPath } from "../core/scope.ts";
 import { decodeBunfig, importedFile, importsOf, preloadPaths, resolved, TEST_TREE } from "./mutation-scope-graph.ts";
 
@@ -9,12 +10,16 @@ export type Narrowing =
 
 type SharedChange = { readonly path: string; readonly reason: string };
 
-export type LocalNarrowing = { readonly files: readonly string[]; readonly shared: readonly SharedChange[] };
+export type LocalNarrowing =
+  | { readonly kind: "full"; readonly because: string }
+  | { readonly kind: "files"; readonly files: readonly string[]; readonly shared: readonly SharedChange[] };
 
 type SelfReference = {
   readonly name: string;
   readonly exports: ReadonlyMap<string, string>;
 };
+
+type ReachRule = { readonly changed: string; readonly tests: readonly string[] };
 
 export type Repository = {
   readonly files: readonly string[];
@@ -22,6 +27,7 @@ export type Repository = {
   readonly bins: ReadonlyMap<string, string>;
   readonly self: SelfReference | undefined;
   readonly preloads: readonly string[];
+  readonly reach: readonly ReachRule[];
 };
 
 const FIXTURES = "tests/fixtures/";
@@ -46,20 +52,67 @@ const BUILT = "the build";
 const basenameOf = (path: string): string => path.slice(path.lastIndexOf("/") + 1);
 const directoryNode = (directory: string): string => directory + "/";
 
-export function sharedReason(path: string, preloads: ReadonlySet<string>): string | undefined {
-  if (path.startsWith(FIXTURES)) return undefined;
+// A site's reach map cannot lift these, since every test runs under them whichever page it opens.
+function runnerReason(path: string, preloads: ReadonlySet<string>): string | undefined {
   const name = basenameOf(path);
-  const directories = path.split("/").slice(0, -1);
   if (LOCKFILES.has(name)) return "a lockfile";
   if ((classifyPath(path) === "workflow" && !path.startsWith(WORKFLOWS)) || CONFIG.test(name) || TOOL_PINS.has(name)) {
     return "a config every test runs under";
   }
   if (preloads.has(path)) return "a file Bun preloads into every test";
   if (path.startsWith(TEST_TREE) && !TEST_FILE.test(path)) return "a test helper";
+  return undefined;
+}
+
+function renderedReason(path: string): string | undefined {
+  const name = basenameOf(path);
+  const directories = path.split("/").slice(0, -1);
   if (STYLESHEET.test(name)) return "a stylesheet";
   if (FONT.test(name) || directories.includes("fonts")) return "a font";
   if (directories.includes("layouts") || LAYOUT.test(name)) return "a layout";
   return undefined;
+}
+
+export function sharedReason(path: string, preloads: ReadonlySet<string>): string | undefined {
+  if (path.startsWith(FIXTURES)) return undefined;
+  return runnerReason(path, preloads) ?? renderedReason(path);
+}
+
+const globMatches = (pattern: string, path: string): boolean => new Bun.Glob(pattern).match(path);
+
+function testFilesOf(repository: Repository): readonly string[] {
+  return repository.files.filter((file) => TEST_FILE.test(file));
+}
+
+// Undefined when no rule names the path, so the path keeps the shared-file rule.
+function mappedTests(path: string, repository: Repository): readonly string[] | undefined {
+  const rules = repository.reach.filter((rule) => globMatches(rule.changed, path));
+  if (rules.length === 0) return undefined;
+  const patterns = rules.flatMap((rule) => rule.tests);
+  return testFilesOf(repository).filter((file) => patterns.some((pattern) => globMatches(pattern, file)));
+}
+
+export function refuseReachMap(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return "package.json: checks.reach is not a map of changed paths to test files";
+  }
+  for (const [key, entry] of Object.entries(value)) {
+    if (key === "") return "package.json: checks.reach has an empty changed-path key";
+    if (!Array.isArray(entry) || entry.length === 0) return `package.json: checks.reach lists no test file for ${key}`;
+    const bad = entry.find((candidate) => typeof candidate !== "string" || candidate === "");
+    if (bad !== undefined) return `package.json: checks.reach names an empty test file for ${key}`;
+  }
+  return undefined;
+}
+
+// A test pattern that matches no test file would silently drop the tests a renamed file used to name.
+export function staleReachPatterns(repository: Repository): readonly { readonly changed: string; readonly pattern: string }[] {
+  const tests = testFilesOf(repository);
+  return repository.reach.flatMap((rule) =>
+    rule.tests
+      .filter((pattern) => !tests.some((file) => globMatches(pattern, file)))
+      .map((pattern) => ({ changed: rule.changed, pattern })));
 }
 
 // A path mentioned by any trailing run of two or more of its segments, or in full, names it.
@@ -190,39 +243,59 @@ function preloadClosure(repository: Repository): ReadonlySet<string> {
 
 // A test or its helper reads a file it imports or names by path or bin, and a source reads only what it imports, at any depth.
 // A source that names a path, as a registry does, would make every importer read every file it lists.
+function reachMapProblem(repository: Repository): string | undefined {
+  const stale = staleReachPatterns(repository);
+  if (stale.length === 0) return undefined;
+  return `package.json: checks.reach names ${stale.map((entry) => `${entry.pattern} for ${entry.changed}`).join(", ")}, which matches no test file`;
+}
+
 export function narrowTests(changed: readonly string[], repository: Repository, tests: readonly string[]): Narrowing {
+  const problem = reachMapProblem(repository);
+  if (problem !== undefined) return { kind: "full", because: problem };
   if (changed.length === 0) return { kind: "full", because: "the pull request changes no file" };
   const [shared] = sharedChanges(changed, repository);
   if (shared !== undefined) return { kind: "full", because: `the pull request changes ${shared.path}, ${shared.reason}` };
   return { kind: "files", files: reachedTests(changed, repository, tests) };
 }
 
-// A local run never widens to the whole suite, so a shared file runs only the tests that reach it.
 export function narrowLocalTests(changed: readonly string[], repository: Repository, tests: readonly string[]): LocalNarrowing {
-  return { files: reachedTests(changed, repository, tests), shared: sharedChanges(changed, repository) };
+  const problem = reachMapProblem(repository);
+  if (problem !== undefined) return { kind: "full", because: problem };
+  return { kind: "files", files: reachedTests(changed, repository, tests), shared: sharedChanges(changed, repository) };
 }
 
 function sharedChanges(changed: readonly string[], repository: Repository): readonly SharedChange[] {
   const preloads = preloadClosure(repository);
   return changed.flatMap((path) => {
-    const reason = sharedReason(path, preloads);
+    if (path.startsWith(FIXTURES)) return [];
+    const reason = mappedTests(path, repository) === undefined ? sharedReason(path, preloads) : runnerReason(path, preloads);
     return reason === undefined ? [] : [{ path, reason }];
   });
 }
 
 function reachedTests(changed: readonly string[], repository: Repository, tests: readonly string[]): readonly string[] {
   const reached = reach(graphOf(repository, changed), changed, repository.sources);
-  return tests.filter((test) => reached.has(test));
+  const mapped = new Set(changed.flatMap((path) => mappedTests(path, repository) ?? []));
+  return tests.filter((test) => reached.has(test) || mapped.has(test));
 }
 
-const Manifest = Schema.Struct({
+export const Manifest = Schema.Struct({
   name: Schema.optionalKey(Schema.String),
   exports: Schema.optionalKey(Schema.Unknown),
   bin: Schema.optionalKey(Schema.Union([Schema.String, Schema.Record(Schema.String, Schema.String)])),
+  checks: Schema.optionalKey(Schema.Struct({
+    reach: Schema.optionalKey(Schema.Unknown),
+  })),
 });
 const decodeManifest = Schema.decodeUnknownEffect(Schema.fromJsonString(Manifest));
+const ReachMap = Schema.Record(Schema.String, Schema.Array(Schema.String));
+const decodeReachMap = Schema.decodeUnknownEffect(ReachMap);
 
 class NarrowingError extends Schema.TaggedError<NarrowingError>()("NarrowingError", {
+  message: Schema.String,
+}) {}
+
+class ReachMapError extends Schema.TaggedError<ReachMapError>()("ReachMapError", {
   message: Schema.String,
 }) {}
 
@@ -247,12 +320,21 @@ const readRepository = Effect.fn("readRepository")(function* (root: string) {
         Effect.flatMap(decodeBunfig),
       )
     : {};
+  const rawReach = manifest.checks?.reach;
+  const refusal = refuseReachMap(rawReach);
+  if (refusal !== undefined) return yield* new ReachMapError({ message: refusal });
+  const decoded = rawReach === undefined
+    ? undefined
+    : yield* decodeReachMap(rawReach).pipe(
+      Effect.mapError((cause) => new ReachMapError({ message: `package.json: ${cause.message}` })),
+    );
   return {
     files,
     sources,
     bins: binsOf(manifest),
     self: manifest.name === undefined ? undefined : { name: manifest.name, exports: exportsMap(manifest.exports) },
     preloads: preloadPaths(bunfig),
+    reach: Object.entries(decoded ?? {}).map(([changed, tests]) => ({ changed, tests })),
   } satisfies Repository;
 });
 
@@ -260,6 +342,30 @@ export const readChangedNarrowing = Effect.fn("readChangedNarrowing")(function* 
   return narrowTests(changed, yield* readRepository(root), tests);
 });
 
+const pullRequestEvent = Config.all({
+  name: Config.String("GITHUB_EVENT_NAME").pipe(Config.withDefault("")),
+  path: Config.String("GITHUB_EVENT_PATH").pipe(Config.withDefault("")),
+});
+
 export const readLocalNarrowing = Effect.fn("readLocalNarrowing")(function* (root: string, changed: readonly string[], tests: readonly string[]) {
-  return narrowLocalTests(changed, yield* readRepository(root), tests);
+  return yield* Effect.gen(function* () {
+    return narrowLocalTests(changed, yield* readRepository(root), tests);
+  }).pipe(Effect.catchTag("ReachMapError", (cause) => Effect.succeed<LocalNarrowing>({ kind: "full", because: cause.message })));
+});
+
+// Only a pull_request run has a base to diff against; every other run keeps the suite whole.
+export const readPullRequestNarrowing = Effect.fn("readPullRequestNarrowing")(function* (root: string, tests: readonly string[]) {
+  const event = yield* pullRequestEvent.pipe(Effect.orElseSucceed(() => ({ name: "", path: "" })));
+  if (event.name !== "pull_request" || event.path === "") return Option.none<Narrowing>();
+  const narrowing = Effect.gen(function* () {
+    const text = yield* (yield* FileSystem.FileSystem).readFileString(event.path);
+    const { pull_request: pullRequest } = yield* decodePullRequestEvent(text);
+    const { base, head } = pullRequestEndsOf(pullRequest);
+    const changed = yield* pathsSinceMergeBase(base, head, root);
+    return narrowTests(changed, yield* readRepository(root), tests);
+  });
+  return Option.some(yield* narrowing.pipe(
+    Effect.catchTag("ReachMapError", (cause) => Effect.succeed<Narrowing>({ kind: "full", because: cause.message })),
+    Effect.catch((cause) => Effect.succeed<Narrowing>({ kind: "full", because: "the pull request's changes cannot be read: " + cause.message })),
+  ));
 });
