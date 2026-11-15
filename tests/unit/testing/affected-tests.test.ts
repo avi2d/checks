@@ -216,13 +216,13 @@ test("a stale reach value runs the whole local suite rather than failing the des
 });
 
 test("an empty reach list is refused rather than running no test", () => {
-  const manifest = Schema.decodeUnknownSync(Schema.fromJsonString(Manifest))(
+  const manifest = Schema.decodeSync(Schema.fromJsonString(Manifest))(
     '{"checks":{"reach":{"src/styles/print.css":[]}}}',
   );
   expect(refuseReachMap(manifest.checks?.reach)).toBe("package.json: checks.reach lists no test file for src/styles/print.css");
 });
 
 test("an empty reach key is refused rather than vanishing silently", () => {
-  const manifest = Schema.decodeUnknownSync(Schema.fromJsonString(Manifest))('{"checks":{"reach":{"":["tests/e2e/x.test.ts"]}}}');
+  const manifest = Schema.decodeSync(Schema.fromJsonString(Manifest))('{"checks":{"reach":{"":["tests/e2e/x.test.ts"]}}}');
   expect(refuseReachMap(manifest.checks?.reach)).toBe("package.json: checks.reach has an empty changed-path key");
 });

@@ -288,6 +288,8 @@ export const Manifest = Schema.Struct({
   })),
 });
 const decodeManifest = Schema.decodeUnknownEffect(Schema.fromJsonString(Manifest));
+const ReachMap = Schema.Record(Schema.String, Schema.Array(Schema.String));
+const decodeReachMap = Schema.decodeUnknownEffect(ReachMap);
 
 class NarrowingError extends Schema.TaggedError<NarrowingError>()("NarrowingError", {
   message: Schema.String,
@@ -318,16 +320,21 @@ const readRepository = Effect.fn("readRepository")(function* (root: string) {
         Effect.flatMap(decodeBunfig),
       )
     : {};
-  const refusal = refuseReachMap(manifest.checks?.reach);
+  const rawReach = manifest.checks?.reach;
+  const refusal = refuseReachMap(rawReach);
   if (refusal !== undefined) return yield* new ReachMapError({ message: refusal });
-  const rawReach = manifest.checks?.reach as Record<string, ReadonlyArray<string>>;
+  const decoded = rawReach === undefined
+    ? undefined
+    : yield* decodeReachMap(rawReach).pipe(
+      Effect.mapError((cause) => new ReachMapError({ message: `package.json: ${cause.message}` })),
+    );
   return {
     files,
     sources,
     bins: binsOf(manifest),
     self: manifest.name === undefined ? undefined : { name: manifest.name, exports: exportsMap(manifest.exports) },
     preloads: preloadPaths(bunfig),
-    reach: Object.entries(rawReach ?? {}).map(([changed, tests]) => ({ changed, tests })),
+    reach: Object.entries(decoded ?? {}).map(([changed, tests]) => ({ changed, tests })),
   } satisfies Repository;
 });
 
@@ -355,7 +362,6 @@ export const readPullRequestNarrowing = Effect.fn("readPullRequestNarrowing")(fu
   });
   return Option.some(yield* narrowing.pipe(
     Effect.catchTag("ReachMapError", (cause) => Effect.succeed<Narrowing>({ kind: "full", because: cause.message })),
-    Effect.catchTag("NarrowingError", (cause) => Effect.succeed<Narrowing>({ kind: "full", because: cause.message })),
-    Effect.catch((cause) => Effect.succeed<Narrowing>({ kind: "full", because: "the pull request's changes cannot be read: " + String((cause as { message?: unknown }).message ?? cause) })),
+    Effect.catch((cause) => Effect.succeed<Narrowing>({ kind: "full", because: "the pull request's changes cannot be read: " + cause.message })),
   ));
 });
