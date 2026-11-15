@@ -94,6 +94,7 @@ A repository with no `changes` job runs every job on every pull request.
 The jobs `ci.yml` holds are the record of what the repository runs, and `package.json` names none of them.
 A `ci.yml` that calls a part keeps its `changes` job, or its lack of one, and each job that calls `test.yml`, with its name.
 Each test job keeps the `run`, `browsers`, `heavy` and `runs-on` inputs it passes.
+A test job that passes no `runs-on` gets the `CI_RUNS_ON` one, and an input equal to the `test.yml` default is left out, such as `run: bunx checks-test --pr`.
 In a site, a test job that passes `artifact: "site-dist"` reads the build, so it waits for the `site` job.
 `static`, `site` in a site and `checks` are always there, and no test job is named `changes`, `static`, `site` or `checks`.
 Every other line of the file is the shape the kit writes: the order of the jobs, `needs`, `if`, the pins, the permissions, the secrets and `hold`.
@@ -107,7 +108,7 @@ A `ci.yml` that calls no part gets the default jobs of its kind:
 | site | `unit`, which runs `bunx checks-test --pr`, and `browser`, which runs `bunx checks-browser --pr` on `webkit` against the `site-dist` build and holds the heavy slot |
 
 Both kinds also get the `changes` job by default.
-Each default test job passes `runs-on: "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}"`, so the `CI_RUNS_ON` variable still picks the runner.
+Each test job passes `runs-on: "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}"`, so the `CI_RUNS_ON` variable still picks the runner.
 
 To add a test job, add a job to `ci.yml` that calls `test.yml` and passes its command, then run `checks-workflows --write`:
 
