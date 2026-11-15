@@ -198,7 +198,7 @@ It reads the `browser` key of `checks.config.ts` in the directory it runs in:
 import { defineConfig } from "@avi2dg/checks/config";
 
 export default defineConfig({
-  browser: { site: "dist", routes: [{ path: "/", locale: "en" }], targets: [{ name: "headline", selector: "main h1" }], checks: ["layout"] },
+  browser: { site: "dist", routes: [{ path: "/", locale: "en" }], viewports: [{ preset: "anchor" }], states: [{ name: "default" }], targets: [{ name: "headline", selector: "main h1" }], checks: ["layout"] },
 });
 ```
 
