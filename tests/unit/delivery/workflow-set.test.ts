@@ -1,3 +1,4 @@
+import { Evaluator, Lexer, Parser, data } from "@actions/expressions";
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
 import { DEFAULT_CI_JOBS } from "../../../src/delivery/ci-jobs.ts";
@@ -213,104 +214,35 @@ const NOT_RELEASE = `\${{ !${RELEASE_RUN} }}`;
 type ReleaseContext = { readonly eventName: string; readonly refName: string; readonly headRef: string; readonly baseRef: string; readonly headRepo: string; readonly repository: string };
 
 const releaseInner = (job: unknown): string => {
-  const condition = (job as { if?: unknown } | undefined)?.if;
-  const text = typeof condition === 'string' ? condition : '';
-  const open = '${{ !';
-  const close = ' }}';
-  return text.startsWith(open) && text.endsWith(close) ? text.slice(open.length, -close.length) : text;
+  if (!isRecord(job)) return "";
+  const condition = job["if"];
+  if (typeof condition !== "string") return "";
+  const open = "${{ !";
+  const close = " }}";
+  return condition.startsWith(open) && condition.endsWith(close) ? condition.slice(open.length, -close.length) : condition;
 };
 
 const decidesReleaseRun = (inner: string, ctx: ReleaseContext): boolean => {
-  const firstQuote = (): string => String.fromCharCode(39);
-  const secondQuote = (): string => String.fromCharCode(34);
-  const unquote = (token: string): string => (token[0] === firstQuote() ? token.slice(1, -1) : (JSON.parse(token) as string));
-  const valueOf = (name: string): string => {
-    if (name === 'github.event.pull_request.head.repo.full_name') return ctx.headRepo;
-    if (name === 'github.repository') return ctx.repository;
-    if (name === 'github.event_name') return ctx.eventName;
-    if (name === 'github.ref_name') return ctx.refName;
-    if (name === 'github.head_ref') return ctx.headRef;
-    if (name === 'github.base_ref') return ctx.baseRef;
-    throw new Error(`unknown context: ${name}`);
-  };
-  const readTokens = (source: string): readonly string[] => {
-    const stops = [firstQuote(), secondQuote(), ' ', '!', '(', ')', ',', '&', '|', '='];
-    const tokens: string[] = [];
-    let index = 0;
-    while (index < source.length) {
-      const char = source[index] ?? '';
-      if (char.trim() === '') { index += 1; continue; }
-      if (char === firstQuote() || char === secondQuote()) {
-        const end = source.indexOf(char, index + 1);
-        tokens.push(source.slice(index, end + 1));
-        index = end + 1;
-        continue;
-      }
-      const two = source.slice(index, index + 2);
-      if (two === '&&' || two === '||' || two === '==') { tokens.push(two); index += 2; continue; }
-      if (char === '!' || char === '(' || char === ')' || char === ',') { tokens.push(char); index += 1; continue; }
-      let end = index;
-      while (end < source.length && !stops.includes(source[end] ?? '')) end += 1;
-      tokens.push(source.slice(index, end));
-      index = end;
-    }
-    return tokens;
-  };
-  const equalText = (left: string | boolean, right: string | boolean): boolean => {
-    if (typeof left === 'boolean' || typeof right === 'boolean') return left === right;
-    return left.toLowerCase() === right.toLowerCase();
-  };
-  const tokens = readTokens(inner);
-  let at = 0;
-  const peek = (): string => tokens[at] ?? '';
-  const advance = (): string => tokens[at++] ?? '';
-  const toBool = (value: string | boolean): boolean => (typeof value === 'boolean' ? value : value !== '');
-  const parseOr = (): string | boolean => {
-    let left = toBool(parseAnd());
-    while (peek() === '||') { advance(); const right = toBool(parseAnd()); left = left || right; }
-    return left;
-  };
-  const parseAnd = (): string | boolean => {
-    let left = toBool(parseEquality());
-    while (peek() === '&&') { advance(); const right = toBool(parseEquality()); left = left && right; }
-    return left;
-  };
-  const parseEquality = (): string | boolean => {
-    let left = parseUnary();
-    while (peek() === '==') { advance(); const right = parseUnary(); left = equalText(left, right); }
-    return left;
-  };
-  const parseUnary = (): string | boolean => {
-    if (peek() === '!') { advance(); return !toBool(parseUnary()); }
-    return parsePrimary();
-  };
-  const parsePrimary = (): string | boolean => {
-    const token = advance();
-    if (token === '(') {
-      const value = parseOr();
-      if (advance() !== ')') throw new Error('unbalanced parentheses');
-      return value;
-    }
-    if (token === 'startsWith') {
-      if (advance() !== '(') throw new Error('unbalanced parentheses');
-      const left = parseEquality() as string;
-      if (advance() !== ',') throw new Error('unbalanced parentheses');
-      const right = parseEquality() as string;
-      if (advance() !== ')') throw new Error('unbalanced parentheses');
-      return left.toLowerCase().startsWith(right.toLowerCase());
-    }
-    if (token === 'format') {
-      if (advance() !== '(') throw new Error('unbalanced parentheses');
-      const template = parseEquality() as string;
-      if (advance() !== ',') throw new Error('unbalanced parentheses');
-      const base = parseEquality() as string;
-      if (advance() !== ')') throw new Error('unbalanced parentheses');
-      return template.replace('{0}', base);
-    }
-    if (token[0] === firstQuote() || token[0] === secondQuote()) return unquote(token);
-    return valueOf(token);
-  };
-  return toBool(parseOr());
+  const github = new data.Dictionary(
+    { key: "event_name", value: new data.StringData(ctx.eventName) },
+    { key: "ref_name", value: new data.StringData(ctx.refName) },
+    { key: "head_ref", value: new data.StringData(ctx.headRef) },
+    { key: "base_ref", value: new data.StringData(ctx.baseRef) },
+    { key: "repository", value: new data.StringData(ctx.repository) },
+    {
+      key: "event",
+      value: new data.Dictionary({
+        key: "pull_request",
+        value: new data.Dictionary({
+          key: "head",
+          value: new data.Dictionary({ key: "repo", value: new data.Dictionary({ key: "full_name", value: new data.StringData(ctx.headRepo) }) }),
+        }),
+      }),
+    },
+  );
+  const parser = new Parser(new Lexer(inner).lex().tokens, ["github"], []);
+  const result = new Evaluator(parser.parse(), new data.Dictionary({ key: "github", value: github })).evaluate();
+  return result.kind === data.Kind.Boolean ? result.value : result.coerceString() !== "";
 };
 
 const ciJobs = (set: CallerSet): Record<string, unknown> => {
