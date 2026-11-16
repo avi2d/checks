@@ -81,8 +81,8 @@ The `avi2d/workflows` repository holds the shared workflows, so there it passes 
 
 | Job | Calls | Runs |
 | --- | --- | --- |
-| `changes` | `changes.yml` | first, and tells whether the pull request changes only documentation |
-| `static` | `static.yml` | at once, and checks the workflow files and the title, builds, lints and typechecks |
+| `changes` | `changes.yml` | first, and tells whether the run checks the release pull request and whether the pull request changes only documentation |
+| `static` | `static.yml` | after `changes`, or at once with no `changes` job, and checks the workflow files and the title, builds, lints and typechecks |
 | `site` | `site-preview.yml` | in a site, after `changes`, and builds the site, deploys the preview and uploads the build as `site-dist` |
 | each test job | `test.yml` | after `changes`, or after `site` when it reads the build, and runs its one command |
 | `checks` | `gate.yml` | always, after every other job, and fails unless each one passed or skipped as allowed |
@@ -93,10 +93,12 @@ A repository with no `changes` job runs every job on every pull request but the 
 Only two runs count as the release pull request.
 One is the `workflow_dispatch` run on a `release/` branch, which [checks-release-pr](checks-release-pr.md) dispatches.
 The other is the same repository pull request from `release/<base>` into `<base>`.
-On those runs every job but `checks` skips, and the gate passes those skips.
-So the release pull request runs nothing, and its required check still passes.
+On those runs every job but `changes` and `checks` skips, and the gate passes those skips.
+So the release pull request runs no test, and its required check still passes.
 A fork pull request from a `release/` branch and a pull request from a `release/` branch that does not match `release/<base>` run every job.
-Each job that needs no other job tests the branch in its `if`, and every other job skips with the job it needs.
+With a `changes` job, each job reads the rule once from its `release` output, as `if: needs.changes.outputs.release != 'true'`.
+Without one, each job that needs no other job writes the rule in its `if`, and every other job skips with the job it needs.
+A comment above the gate's `skips` input and above each `if` that writes the rule says what it decides.
 
 The jobs `ci.yml` holds are the record of what the repository runs, and `package.json` names none of them.
 A `ci.yml` that calls a part keeps its `changes` job, or its lack of one, and each job that calls `test.yml`, with its name.

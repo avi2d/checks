@@ -50,21 +50,27 @@ type Caller = {
   readonly with?: SiteNames;
 };
 
+type Input = readonly [key: string, value: string, note?: string];
+
+type Condition = { readonly test: string; readonly note?: string };
+
 type CallingJob = {
   readonly job: string;
   readonly needs?: string;
-  readonly condition?: string;
+  readonly condition?: Condition;
   readonly shared: SharedWorkflow;
   readonly permissions: string;
-  readonly inputs?: readonly (readonly [string, string])[];
+  readonly inputs?: readonly Input[];
 };
+
+const noted = (indent: string, line: string, note: string | undefined): readonly string[] => (note === undefined ? [indent + line] : [`${indent}# ${note}`, indent + line]);
 
 function callingJobLines({ job, needs, condition, shared, permissions, inputs = [] }: CallingJob): readonly string[] {
   const lines = [`  ${job}:`];
   if (needs !== undefined) lines.push(`    needs: ${needs}`);
-  if (condition !== undefined) lines.push(`    if: ${condition}`);
+  if (condition !== undefined) lines.push(...noted("    ", `if: ${condition.test}`, condition.note));
   lines.push(`    uses: ${SHARED_WORKFLOWS}/${shared}`, `    permissions: { ${permissions} }`);
-  if (inputs.length > 0) lines.push("    with:", ...inputs.map(([key, value]) => `      ${key}: ${value}`));
+  if (inputs.length > 0) lines.push("    with:", ...inputs.flatMap(([key, value, note]) => noted("      ", `${key}: ${value}`, note)));
   const secrets: readonly string[] = SHARED_SECRETS[shared];
   if (secrets.length > 0) lines.push("    secrets:", ...secrets.map((secret) => `      ${secret}: \${{ secrets.${secret} }}`));
   return lines;
@@ -92,20 +98,25 @@ const CI = { name: "ci", on: PULL_REQUEST, concurrency: PER_PULL_REQUEST } as co
 
 const singleJobCaller = (shared: SharedWorkflow, permissions: string): Caller => ({ ...CI, job: "checks", shared, permissions });
 
-const DOCS_CHANGED = "needs.changes.outputs.docs-only != 'true'";
+const NOT_RELEASED = "needs.changes.outputs.release != 'true'";
+
+const CHANGED = { test: `${NOT_RELEASED} && needs.changes.outputs.docs-only != 'true'` };
 
 // A fork can name its head release/, and a dispatch holds no head_ref, so only the dispatch and the same-repository release/<base> pull request count.
 const RELEASE_RUN = `((github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, '${RELEASE_BRANCH_PREFIX}')) || (github.event_name == 'pull_request' && github.head_ref == format('${RELEASE_BRANCH_PREFIX}{0}', github.base_ref) && github.event.pull_request.head.repo.full_name == github.repository))`;
 
 // A job that needs another skips with it, so only a job that needs none tests the release branch itself.
-const NOT_RELEASE = `\${{ !${RELEASE_RUN} }}`;
+const NOT_RELEASE: Condition = {
+  test: `\${{ !${RELEASE_RUN} }}`,
+  note: `Runs on every run but the release run: a dispatch on a ${RELEASE_BRANCH_PREFIX} branch, or the pull request from ${RELEASE_BRANCH_PREFIX}<base> in this repository.`,
+};
 
 type Gated = Pick<CallingJob, "needs" | "condition">;
 
 const quoted = (value: string): string => JSON.stringify(value);
 
 function testCallingJob(test: TestJob, kind: RepositoryKind, gated: Gated): CallingJob {
-  const inputs: (readonly [string, string])[] = [];
+  const inputs: Input[] = [];
   if (test.run !== DEFAULT_TEST_RUN) inputs.push(["run", quoted(test.run)]);
   if (test.browsers !== "") inputs.push(["browsers", quoted(test.browsers)]);
   if (test.readsBuild) inputs.push(["artifact", quoted(SITE_BUILD)]);
@@ -116,23 +127,29 @@ function testCallingJob(test: TestJob, kind: RepositoryKind, gated: Gated): Call
   return { job: test.name, ...(test.readsBuild ? { needs: "site" } : gated), shared: "test.yml@v3", permissions: "contents: read, actions: write", inputs };
 }
 
+function skipsInput(needed: readonly string[], changes: boolean): Input {
+  if (!changes) return ["skips", `\${{ ${RELEASE_RUN} && '${needed.join(" ")}' || '' }}`, "The jobs the gate passes as skipped: every job on the release run."];
+  const parts = needed.filter((job) => job !== "changes");
+  const skipped = parts.filter((job) => job !== "static");
+  const docsOnly = skipped.length > 0 ? `needs.changes.outputs.docs-only == 'true' && '${skipped.join(" ")}' || ` : "";
+  const note = "The jobs the gate passes as skipped: every job but changes on the release run, and every job but changes and static on a docs-only change.";
+  return ["skips", `\${{ needs.changes.outputs.release == 'true' && '${parts.join(" ")}' || ${docsOnly}'' }}`, note];
+}
+
 function gateJob(needed: readonly string[], changes: boolean): CallingJob {
-  const skipped = needed.filter((job) => job !== "changes" && job !== "static");
-  const docsOnly = changes && skipped.length > 0 ? `needs.changes.outputs.docs-only == 'true' && '${skipped.join(" ")}' || ` : "";
-  const skips = `\${{ ${RELEASE_RUN} && '${needed.join(" ")}' || ${docsOnly}'' }}`;
-  const inputs: (readonly [string, string])[] = [["results", "${{ toJSON(needs) }}"], ["skips", skips]];
+  const inputs: Input[] = [["results", "${{ toJSON(needs) }}"], skipsInput(needed, changes)];
   // Without always() a failed part skips the gate, and the required check never reports.
-  return { job: "checks", needs: `[${needed.join(", ")}]`, condition: "always()", shared: "gate.yml@v3", permissions: "contents: read, statuses: write", inputs };
+  return { job: "checks", needs: `[${needed.join(", ")}]`, condition: { test: "always()" }, shared: "gate.yml@v3", permissions: "contents: read, statuses: write", inputs };
 }
 
 function composedCiText(set: CallerSet): string {
   const { changes, tests } = set.ci;
-  const gated: Gated = changes ? { needs: "changes", condition: DOCS_CHANGED } : { condition: NOT_RELEASE };
+  const gated: Gated = changes ? { needs: "changes", condition: CHANGED } : { condition: NOT_RELEASE };
   const jobs: CallingJob[] = [];
-  if (changes) jobs.push({ job: "changes", condition: NOT_RELEASE, shared: "changes.yml@v3", permissions: "contents: read" });
+  if (changes) jobs.push({ job: "changes", shared: "changes.yml@v3", permissions: "contents: read" });
   jobs.push({
     job: "static",
-    condition: NOT_RELEASE,
+    ...(changes ? { needs: "changes", condition: { test: NOT_RELEASED } } : { condition: NOT_RELEASE }),
     shared: "static.yml@v3",
     permissions: "contents: read, actions: write, statuses: write, pull-requests: read",
     inputs: set.kind === "site" ? [["hold", "false"]] : [],
