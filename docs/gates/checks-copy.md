@@ -112,6 +112,8 @@ copy: no violation in 2 file(s) from 2 declared input(s)
 ## When it runs
 
 `checks-lint` runs it in the full run when `checks.config.ts` sets `copy`, or when the repository still tracks `copy.json` at its root.
+When an input the `copy` key declares matches no file git tracks, such as built pages, the gate reads build output.
+Then `checks-lint --stage source` leaves it out and `checks-lint --stage built` runs it after the build, as [Stages](checks-lint.md#stages) says.
 A repository with neither never runs it and needs no html-validate.
 
 ## Related topics

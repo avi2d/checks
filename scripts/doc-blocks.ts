@@ -3,6 +3,7 @@ import { ADR_DIRECTORY, ADR_INDEX, ROOT_FILES } from "../src/docs/doc-rules.ts";
 import { listed, MODES, templateFile, VISION_PAGE } from "../src/docs/doc-templates.ts";
 import { EVERY_REPOSITORY, KIT_GATES, VECTORS, type KitGate } from "../src/core/gates.ts";
 import { SETTINGS_FILE } from "../src/core/settings.ts";
+import { isDeclaredGate } from "../src/core/stage.ts";
 import { AGENT_NAMES, DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, HISTORY_NAMES, LIVING_NAMES, PROSE_RULES } from "../src/docs/prose-matchers.ts";
 import starter from "../src/quality/browser/browser-checks.json" with { type: "json" };
 import { SCREEN_SIZE_SETS, SCREEN_SIZES, screenSizeName } from "../src/quality/browser/screen-sizes.ts";
@@ -145,17 +146,19 @@ const READS = { tree: "the working tree", range: "the range" } as const;
 
 const GATES: Block = {
   name: "gates",
-  from: ["KIT_GATES in src/core/gates.ts"],
+  from: ["KIT_GATES in src/core/gates.ts", "src/core/stage.ts"],
   render: () => [
-    "| Vector | Gate | Reads | Runs in |",
-    "| --- | --- | --- | --- |",
-    ...KIT_GATES.toSorted((a, b) => VECTORS.indexOf(a.vector) - VECTORS.indexOf(b.vector)).map(({ vector, bin, reads, alsoReads, appliesTo }: KitGate) => {
+    "| Vector | Gate | Reads | Runs in | Stage |",
+    "| --- | --- | --- | --- | --- |",
+    ...KIT_GATES.toSorted((a, b) => VECTORS.indexOf(a.vector) - VECTORS.indexOf(b.vector)).map((gate: KitGate) => {
+      const { vector, bin, reads, alsoReads, appliesTo } = gate;
       const runsIn = appliesTo === EVERY_REPOSITORY
         ? appliesTo
         : "pathspecs" in appliesTo
           ? `a repository tracking ${appliesTo.pathspecs.map(code).join(" or ")}`
           : `a repository whose ${code(SETTINGS_FILE)} sets ${code(appliesTo.setting)}`;
-      return `| ${vector} | [${code(bin)}](gates/${bin}.md) | ${READS[reads]}${alsoReads === undefined ? "" : `, and ${alsoReads}`} | ${runsIn} |`;
+      const stage = isDeclaredGate(gate) ? "built, when a declared input matches no tracked file, else source" : "source";
+      return `| ${vector} | [${code(bin)}](gates/${bin}.md) | ${READS[reads]}${alsoReads === undefined ? "" : `, and ${alsoReads}`} | ${runsIn} | ${stage} |`;
     }),
   ],
 };

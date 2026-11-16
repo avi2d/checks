@@ -6,6 +6,7 @@ import { changedPaths, defaultBranch, git, pathsOf } from "./git.ts";
 import { runMain, Usage } from "./main.ts";
 import { loadSettings } from "./settings.ts";
 import { FAST_TREE_GATES, selectScope } from "./scope.ts";
+import { isDeclaredGate, parseStage, stageOf, trackedFiles } from "./stage.ts";
 
 type Range = {
   readonly refs: readonly [tip: string] | readonly [base: string, head: string];
@@ -23,7 +24,7 @@ class GatesUndecided extends Schema.TaggedError<GatesUndecided>()("GatesUndecide
 }) {}
 
 const NAME = "checks-lint";
-const USAGE = "usage: lint.ts [--full | --desk] [<base-ref> <head-ref>] | --whole-tree";
+const USAGE = "usage: lint.ts [--stage source] [--full | --desk] [<base-ref> <head-ref>] | --stage built | --whole-tree";
 const PULL_REQUEST_EVENT = "pull_request";
 const SHALLOW_HINT = "a CI checkout needs actions/checkout fetch-depth: 0";
 
@@ -165,15 +166,15 @@ export function summaryOf(names: readonly string[], total: number, outcome: "fai
   return `${names.length} of ${total} gate(s) ${outcome}: ${names.join(", ")}`;
 }
 
-const runGate = Effect.fn("runGate")(function* (gate: KitGate, range: Range, wholeTree: boolean) {
+const runGate = Effect.fn("runGate")(function* (gate: KitGate, refs: readonly string[], wholeTree: boolean) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const script = (yield* Path.Path).join(import.meta.dir, "..", gate.vector, gate.file);
   const program = gate.file.endsWith(".sh") ? "sh" : process.execPath;
   const args =
     gate.reads === "range"
       ? wholeTree
-        ? [script, WHOLE_TREE, ...range.refs]
-        : [script, ...range.refs]
+        ? [script, WHOLE_TREE, ...refs]
+        : [script, ...refs]
       : [script, ...(gate.args ?? [])];
   const extra = gate.env === undefined ? {} : { env: gate.env, extendEnv: true };
   const exitCode = yield* spawner
@@ -238,24 +239,8 @@ const applies = Effect.fn("applies")(function* (appliesTo: KitGate["appliesTo"],
   return yield* tracks([appliesTo.oldFile], root);
 });
 
-const lint = Effect.gen(function* () {
-  const raw = process.argv.slice(2);
-  const wholeTree = raw.includes(WHOLE_TREE);
-  if (wholeTree && raw.length > 1) return yield* new Usage({ message: USAGE });
-  const split = wholeTree ? { mode: "full" as const, rest: [] as readonly string[] } : splitMode(raw);
-  if (split === undefined) return yield* new Usage({ message: USAGE });
-  const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
-  const range = wholeTree ? yield* wholeTreeRange() : yield* resolveRange(split.rest);
-  yield* Console.log(`${NAME}: ${describe(range)} from ${range.source}`);
-  const applicable = yield* Effect.filter(wholeTree ? WHOLE_TREE_GATES : KIT_GATES, (gate) => applies(gate.appliesTo, root));
-  const scoped = wholeTree
-    ? { bins: applicable.map((gate) => gate.bin) as readonly string[] | undefined, detail: "" }
-    : yield* pullRequestSelection(split, range, root, applicable);
-  const bins = scoped.bins;
-  const gates = bins === undefined ? applicable : applicable.filter((gate) => bins.includes(gate.bin));
-  const detail = selectionDetail(wholeTree, split.mode, scoped.detail, gates.length);
-  if (detail !== undefined) yield* Console.log(`${NAME}: ${detail}`);
-  const verdicts = yield* Effect.forEach(gates, (gate) => runGate(gate, range, wholeTree));
+const judge = Effect.fn("judge")(function* (gates: readonly KitGate[], refs: readonly string[], wholeTree: boolean) {
+  const verdicts = yield* Effect.forEach(gates, (gate) => runGate(gate, refs, wholeTree));
   const failed = verdicts.filter((verdict) => verdict.outcome !== "passed");
   if (failed.length === 0) {
     yield* Console.log(`${NAME}: ${gates.length} gate(s) pass`);
@@ -268,6 +253,50 @@ const lint = Effect.gen(function* () {
   const summary = summaryOf(names, gates.length, "failed");
   yield* Console.error(`${NAME}: ${summary}`);
   return false;
+});
+
+const builtGatesOf = Effect.fn("builtGatesOf")(function* (gates: readonly KitGate[], root: string) {
+  const tracked = gates.some(isDeclaredGate) ? yield* trackedFiles(root) : [];
+  return yield* Effect.filter(gates, (gate) => stageOf(gate, root, tracked).pipe(Effect.map((stage) => stage === "built")));
+});
+
+const sourceStage = Effect.fn("sourceStage")(function* (gates: readonly KitGate[], root: string) {
+  const built = yield* builtGatesOf(gates, root);
+  if (built.length > 0) yield* Console.log(`${NAME}: the source stage leaves ${built.map((gate) => gate.bin).join(", ")} to the built stage`);
+  return gates.filter((gate) => !built.includes(gate));
+});
+
+// Every gate of the built stage reads the working tree, so the stage resolves no range and a shallow checkout serves it.
+const builtStage = Effect.fn("builtStage")(function* (args: readonly string[]) {
+  if (args.length > 0) return yield* new Usage({ message: USAGE });
+  const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
+  yield* Console.log(`${NAME}: the built stage judges the working tree`);
+  const applicable = yield* Effect.filter(KIT_GATES.filter(isDeclaredGate), (gate) => applies(gate.appliesTo, root));
+  return yield* judge(yield* builtGatesOf(applicable, root), [], false);
+});
+
+const lint = Effect.gen(function* () {
+  const staged = parseStage(process.argv.slice(2));
+  if (staged === undefined) return yield* new Usage({ message: USAGE });
+  if (staged.stage === "built") return yield* builtStage(staged.rest);
+  const raw = staged.rest;
+  const wholeTree = raw.includes(WHOLE_TREE);
+  if (wholeTree && (raw.length > 1 || staged.stage !== undefined)) return yield* new Usage({ message: USAGE });
+  const split = wholeTree ? { mode: "full" as const, rest: [] as readonly string[] } : splitMode(raw);
+  if (split === undefined) return yield* new Usage({ message: USAGE });
+  const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
+  const range = wholeTree ? yield* wholeTreeRange() : yield* resolveRange(split.rest);
+  yield* Console.log(`${NAME}: ${describe(range)} from ${range.source}`);
+  const applicable = yield* Effect.filter(wholeTree ? WHOLE_TREE_GATES : KIT_GATES, (gate) => applies(gate.appliesTo, root));
+  const scoped = wholeTree
+    ? { bins: applicable.map((gate) => gate.bin) as readonly string[] | undefined, detail: "" }
+    : yield* pullRequestSelection(split, range, root, applicable);
+  const bins = scoped.bins;
+  const selected = bins === undefined ? applicable : applicable.filter((gate) => bins.includes(gate.bin));
+  const detail = selectionDetail(wholeTree, split.mode, scoped.detail, selected.length);
+  if (detail !== undefined) yield* Console.log(`${NAME}: ${detail}`);
+  const gates = staged.stage === "source" ? yield* sourceStage(selected, root) : selected;
+  return yield* judge(gates, range.refs, wholeTree);
 });
 
 if (import.meta.main) runMain(NAME, lint);
