@@ -400,6 +400,24 @@ On a pull request it walks each viewport preset at the eight anchor sizes only, 
 A pull request that changes only top-level and `docs/` Markdown checks no page and passes.
 A release pull request and a run that is not a pull request, such as `workflow_dispatch`, walk the full size list.
 
+The optional `browserRoutes` setting maps exact repository paths to the routes each path can change.
+For example, `browserRoutes: { "src/home.ts": ["/"] }` assigns the home source to the root route.
+When every changed path has a mapping to declared routes, the runner narrows targets, product hooks, and per-route checks to those routes.
+The `links` and `look` checks still visit every declared route, since they compare or reach across routes.
+Missing routes are still reported across the whole declaration.
+An unmapped path, an empty change, an unknown route, or a shared input makes every route run.
+Shared inputs include layouts, styles, fonts, configuration, lockfiles, package manifests, files under `public/`, and workflows.
+The map is separate from the test selection in `reach`.
+
+The optional `browserBuild` setting is an array holding the build command and its arguments, such as `["bun", "run", "build"]`.
+For a change confined to test paths, the runner builds the merge base and the head in temporary source trees.
+It compares both output directories byte for byte and compares the head output with the site being checked.
+The runner skips the browser pass only when all three outputs agree and contain files without symbolic links.
+If a build or comparison fails, the runner checks the routes the change reaches.
+The output directory must be a single directory name at the repository root for this comparison.
+Each build runs without the checkout's `node_modules`, so its command must install the dependencies it needs.
+Without `browserBuild`, the browser pass runs as usual.
+
 ## Exit codes
 
 | Code | When |
