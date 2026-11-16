@@ -70,7 +70,7 @@ These bins run on their own:
 - [`checks-commit-title`](gates/checks-commit-title.md) lints the pull request title in one step of the `ci` job.
 - [`checks-pr-text`](gates/checks-pr-text.md) scans the title, body and comments of a pull request in a public repository for a secret or a term of the private pack.
 - [`checks-docs-only`](gates/checks-docs-only.md) tells whether a change touches only top-level Markdown and Markdown under `docs/`, so a docs-only change skips the full run.
-- [`checks-workflows`](gates/checks-workflows.md) holds the workflow files to the set of shared-workflow callers the repository kind takes, and `--write` writes them.
+- [`checks-workflows`](gates/checks-workflows.md) holds the workflow files to the set of shared-workflow callers its kind and its `ci.yml` jobs take, and `--write` writes them.
 - [`checks-setup`](gates/checks-setup.md) writes the kit config, the workflow callers and the doc templates into a new repository.
 
 `checks-lint` has [its own page](gates/checks-lint.md), which says which range it resolves.
