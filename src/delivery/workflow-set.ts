@@ -1,5 +1,6 @@
 import { DEFAULT_TEST_RUN, SITE_BUILD, type RepositoryKind, type TestJob } from "./ci-jobs.ts";
 import { SHARED_REPOSITORY } from "./mutation-workflow.ts";
+import { RELEASE_BRANCH_PREFIX } from "./release-commit.ts";
 import { MUTATION_WORKFLOW } from "./setup-workflow.ts";
 import { SITE_NAME_KEYS, takesSiteNames, type CallerSet, type SiteNames } from "./site-names.ts";
 
@@ -93,6 +94,12 @@ const singleJobCaller = (shared: SharedWorkflow, permissions: string): Caller =>
 
 const DOCS_CHANGED = "needs.changes.outputs.docs-only != 'true'";
 
+// checks-release-pr dispatches ci on the release branch, where a dispatched run holds no head_ref.
+const RELEASE_RUN = `startsWith(github.head_ref || github.ref_name, '${RELEASE_BRANCH_PREFIX}')`;
+
+// A job that needs another skips with it, so only a job that needs none tests the release branch itself.
+const NOT_RELEASE = `\${{ !${RELEASE_RUN} }}`;
+
 type Gated = Pick<CallingJob, "needs" | "condition">;
 
 const quoted = (value: string): string => JSON.stringify(value);
@@ -111,19 +118,21 @@ function testCallingJob(test: TestJob, kind: RepositoryKind, gated: Gated): Call
 
 function gateJob(needed: readonly string[], changes: boolean): CallingJob {
   const skipped = needed.filter((job) => job !== "changes" && job !== "static");
-  const inputs: (readonly [string, string])[] = [["results", "${{ toJSON(needs) }}"]];
-  if (changes && skipped.length > 0) inputs.push(["skips", `\${{ needs.changes.outputs.docs-only == 'true' && '${skipped.join(" ")}' || '' }}`]);
+  const docsOnly = changes && skipped.length > 0 ? `needs.changes.outputs.docs-only == 'true' && '${skipped.join(" ")}' || ` : "";
+  const skips = `\${{ ${RELEASE_RUN} && '${needed.join(" ")}' || ${docsOnly}'' }}`;
+  const inputs: (readonly [string, string])[] = [["results", "${{ toJSON(needs) }}"], ["skips", skips]];
   // Without always() a failed part skips the gate, and the required check never reports.
   return { job: "checks", needs: `[${needed.join(", ")}]`, condition: "always()", shared: "gate.yml@v3", permissions: "contents: read, statuses: write", inputs };
 }
 
 function composedCiText(set: CallerSet): string {
   const { changes, tests } = set.ci;
-  const gated: Gated = changes ? { needs: "changes", condition: DOCS_CHANGED } : {};
+  const gated: Gated = changes ? { needs: "changes", condition: DOCS_CHANGED } : { condition: NOT_RELEASE };
   const jobs: CallingJob[] = [];
-  if (changes) jobs.push({ job: "changes", shared: "changes.yml@v3", permissions: "contents: read" });
+  if (changes) jobs.push({ job: "changes", condition: NOT_RELEASE, shared: "changes.yml@v3", permissions: "contents: read" });
   jobs.push({
     job: "static",
+    condition: NOT_RELEASE,
     shared: "static.yml@v3",
     permissions: "contents: read, actions: write, statuses: write, pull-requests: read",
     inputs: set.kind === "site" ? [["hold", "false"]] : [],

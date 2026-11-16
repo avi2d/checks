@@ -205,7 +205,7 @@ test("a code repository on the single-job ci.yml passes with the command that wr
   expect(await parsed(repo, "ci.yml")).toMatchObject({
     jobs: {
       e2e: { needs: "changes", uses: "avi2d/workflows/.github/workflows/test.yml@v3", with: { run: "bun run test:e2e" } },
-      checks: { needs: ["changes", "static", "test", "e2e"], with: { skips: "${{ needs.changes.outputs.docs-only == 'true' && 'test e2e' || '' }}" } },
+      checks: { needs: ["changes", "static", "test", "e2e"], with: { skips: "${{ startsWith(github.head_ref || github.ref_name, 'release/') && 'changes static test e2e' || needs.changes.outputs.docs-only == 'true' && 'test e2e' || '' }}" } },
     },
   });
   expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the code set checks-workflows writes\n" });

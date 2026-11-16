@@ -29,8 +29,10 @@ const decodeVersion = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.St
 const decodeSha = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ sha: Schema.String })));
 const decodeRef = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ ref: Schema.String })));
 
+export const RELEASE_BRANCH_PREFIX = "release/";
+
 export function releaseBranchOf(base: string): string {
-  return `release/${base}`;
+  return `${RELEASE_BRANCH_PREFIX}${base}`;
 }
 
 export function stagedOf(raw: string): readonly Staged[] {

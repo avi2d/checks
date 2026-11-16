@@ -30,7 +30,8 @@ It opens a pull request from that branch into `<branch>` titled `chore: release 
 It then dispatches each workflow its arguments name on the release branch.
 GitHub holds the `pull_request` runs of a pull request the workflow token opens until a maintainer approves them, so the dispatch is what runs the required checks on the release head.
 GitHub keeps a dispatched run's checks off the pull request, so each dispatched job reports its result as a commit status named for the job, which the required check of that name counts.
-The dispatched run carries no pull request range, so it runs the whole suite.
+The dispatched run carries no pull request range, so a `ci.yml` that runs its jobs runs the whole suite.
+The composed `ci.yml` [checks-workflows](checks-workflows.md) writes skips every job on the release branch, so there only the gate runs.
 When the release branch already holds this version on top of `HEAD` and its pull request carries the right title, it pushes nothing and dispatches nothing.
 It leaves the working tree as it found it.
 
