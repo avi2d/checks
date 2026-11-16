@@ -230,7 +230,8 @@ const decidesReleaseRun = (inner: string, ctx: ReleaseContext): boolean => {
     if (name === 'github.event_name') return ctx.eventName;
     if (name === 'github.ref_name') return ctx.refName;
     if (name === 'github.head_ref') return ctx.headRef;
-    return ctx.baseRef;
+    if (name === 'github.base_ref') return ctx.baseRef;
+    throw new Error(`unknown context: ${name}`);
   };
   const readTokens = (source: string): readonly string[] => {
     const stops = [firstQuote(), secondQuote(), ' ', '!', '(', ')', ',', '&', '|', '='];
@@ -255,6 +256,10 @@ const decidesReleaseRun = (inner: string, ctx: ReleaseContext): boolean => {
     }
     return tokens;
   };
+  const equalText = (left: string | boolean, right: string | boolean): boolean => {
+    if (typeof left === 'boolean' || typeof right === 'boolean') return left === right;
+    return left.toLowerCase() === right.toLowerCase();
+  };
   const tokens = readTokens(inner);
   let at = 0;
   const peek = (): string => tokens[at] ?? '';
@@ -272,7 +277,7 @@ const decidesReleaseRun = (inner: string, ctx: ReleaseContext): boolean => {
   };
   const parseEquality = (): string | boolean => {
     let left = parseUnary();
-    while (peek() === '==') { advance(); const right = parseUnary(); left = (left as string) === (right as string); }
+    while (peek() === '==') { advance(); const right = parseUnary(); left = equalText(left, right); }
     return left;
   };
   const parseUnary = (): string | boolean => {
@@ -292,7 +297,7 @@ const decidesReleaseRun = (inner: string, ctx: ReleaseContext): boolean => {
       if (advance() !== ',') throw new Error('unbalanced parentheses');
       const right = parseEquality() as string;
       if (advance() !== ')') throw new Error('unbalanced parentheses');
-      return left.startsWith(right);
+      return left.toLowerCase().startsWith(right.toLowerCase());
     }
     if (token === 'format') {
       if (advance() !== '(') throw new Error('unbalanced parentheses');
@@ -349,11 +354,9 @@ test("the default code ci.yml runs changes, static and one test job beside each 
 
 test('a fork pull request from a release/ branch still runs every job instead of skipping as the release run', () => {
   const inner = releaseInner(ciJobs(CODE)['changes']);
-  expect(inner).toContain('github.event.pull_request.head.repo.full_name == github.repository');
-  expect(inner).toContain("format('release/{0}', github.base_ref)");
-  expect(inner).toContain("github.event_name == 'workflow_dispatch'");
   expect(decidesReleaseRun(inner, { eventName: 'pull_request', refName: 'release/main', headRef: 'release/main', baseRef: 'main', headRepo: 'fork/acme', repository: 'acme/acme' })).toBe(false);
   expect(decidesReleaseRun(inner, { eventName: 'pull_request', refName: 'release/main', headRef: 'release/main', baseRef: 'main', headRepo: 'acme/acme', repository: 'acme/acme' })).toBe(true);
+  expect(decidesReleaseRun(inner, { eventName: 'PULL_REQUEST', refName: 'release/main', headRef: 'release/main', baseRef: 'main', headRepo: 'acme/acme', repository: 'acme/acme' })).toBe(true);
 });
 
 test('a release/ branch that does not match release/<base> still runs every job instead of skipping as the release run', () => {

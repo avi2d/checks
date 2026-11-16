@@ -95,7 +95,7 @@ const singleJobCaller = (shared: SharedWorkflow, permissions: string): Caller =>
 const DOCS_CHANGED = "needs.changes.outputs.docs-only != 'true'";
 
 // A fork can name its head release/, and a dispatch holds no head_ref, so only the dispatch and the same-repository release/<base> pull request count.
-const RELEASE_RUN = `((github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, '${RELEASE_BRANCH_PREFIX}')) || (github.event_name == 'pull_request' && github.head_ref == format('release/{0}', github.base_ref) && github.event.pull_request.head.repo.full_name == github.repository))`;
+const RELEASE_RUN = `((github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, '${RELEASE_BRANCH_PREFIX}')) || (github.event_name == 'pull_request' && github.head_ref == format('${RELEASE_BRANCH_PREFIX}{0}', github.base_ref) && github.event.pull_request.head.repo.full_name == github.repository))`;
 
 // A job that needs another skips with it, so only a job that needs none tests the release branch itself.
 const NOT_RELEASE = `\${{ !${RELEASE_RUN} }}`;

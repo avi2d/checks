@@ -24,13 +24,13 @@ The table groups the gates by vector, the part of a repository each one judges.
 | quality | [`checks-lint-coverage`](gates/checks-lint-coverage.md) | the working tree | a repository tracking `*.ts` or `*.tsx` or `*.astro` | source |
 | quality | [`checks-comment-gate`](gates/checks-comment-gate.md) | the range | every repository | source |
 | quality | [`checks-effect-scope`](gates/checks-effect-scope.md) | the working tree | a repository tracking `oxlint.config.ts` | source |
-| quality | [`checks-frontend-syntax`](gates/checks-frontend-syntax.md) | the working tree | a repository whose `checks.config.ts` sets `frontendSyntax` | built, when a declared input matches no tracked file, else source |
+| quality | [`checks-frontend-syntax`](gates/checks-frontend-syntax.md) | the working tree | a repository whose `checks.config.ts` sets `frontendSyntax` | built, when a declared input matches no tracked file and every unmatched input has a static prefix git ignores, else source |
 | quality | [`checks-css-size`](gates/checks-css-size.md) | the working tree | a repository tracking `*.css` | source |
 | quality | [`checks-no-plain-js`](gates/checks-no-plain-js.md) | the working tree | a repository tracking `*.ts` or `*.tsx` | source |
 | testing | [`checks-test-layout`](gates/checks-test-layout.md) | the working tree | a repository tracking `*.ts` or `*.tsx` | source |
 | testing | [`checks-quarantine-clock`](gates/checks-quarantine-clock.md) | the range | every repository | source |
 | docs | [`checks-docs`](gates/checks-docs.md) | the range, and every agent file at the head commit and every live record's governed paths | every repository | source |
-| docs | [`checks-copy`](gates/checks-copy.md) | the working tree | a repository whose `checks.config.ts` sets `copy` | built, when a declared input matches no tracked file, else source |
+| docs | [`checks-copy`](gates/checks-copy.md) | the working tree | a repository whose `checks.config.ts` sets `copy` | built, when a declared input matches no tracked file and every unmatched input has a static prefix git ignores, else source |
 | delivery | [`checks-commit-identity`](gates/checks-commit-identity.md) | the range | every repository | source |
 | delivery | [`checks-ci-wiring`](gates/checks-ci-wiring.md) | the working tree | every repository | source |
 | delivery | [`checks-plain-steps`](gates/checks-plain-steps.md) | the working tree | every repository | source |

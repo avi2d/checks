@@ -31,18 +31,19 @@ Each gate belongs to one of two stages, by what it reads:
 
 | Stage | Gates |
 | --- | --- |
-| built | `checks-copy` and `checks-frontend-syntax`, when a declared input matches no tracked file and git ignores the static prefix before its first glob character |
+| built | `checks-copy` and `checks-frontend-syntax`, when a declared input matches no tracked file and every unmatched input has a static prefix git ignores |
 | source | every other gate |
 
 A build writes files git does not track, so an input that matches no tracked file and whose static prefix git ignores, such as `dist/**/*.html` where `dist/` is ignored, reads build output.
 An input that matches no tracked file and whose static prefix git does not ignore stays in the source stage, where the gate fails naming it.
-A gate whose declared inputs include build output runs whole in the built stage, so its other inputs are checked only where the built stage runs.
+A gate that reads build output runs whole in the built stage, so its other inputs are checked only where the built stage runs.
 A gate whose declared inputs do not decode stays in the source stage, where it fails naming what is wrong.
 `--stage source` runs the selected gates of the source stage, and names each gate it leaves to the built stage.
 It reads only what a clean checkout holds, so it runs before any build.
 `--stage built` runs every applicable gate of the built stage over the working tree, after the build.
 It resolves no range, so a shallow checkout serves it.
-A declared input that matches no file fails the gate in the built stage, so a run that never runs the built stage checks none of the inputs that gate declares.
+The built stage fails the gate on an input that matches no file.
+A run that never reaches the built stage checks none of that gate's inputs.
 With no stage, `checks-lint` runs the gates of both stages.
 
 ## What it reads

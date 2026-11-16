@@ -157,7 +157,7 @@ const GATES: Block = {
         : "pathspecs" in appliesTo
           ? `a repository tracking ${appliesTo.pathspecs.map(code).join(" or ")}`
           : `a repository whose ${code(SETTINGS_FILE)} sets ${code(appliesTo.setting)}`;
-      const stage = isDeclaredGate(gate) ? "built, when a declared input matches no tracked file, else source" : "source";
+      const stage = isDeclaredGate(gate) ? "built, when a declared input matches no tracked file and every unmatched input has a static prefix git ignores, else source" : "source";
       return `| ${vector} | [${code(bin)}](gates/${bin}.md) | ${READS[reads]}${alsoReads === undefined ? "" : `, and ${alsoReads}`} | ${runsIn} | ${stage} |`;
     }),
   ],
