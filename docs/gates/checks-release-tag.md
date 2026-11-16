@@ -25,9 +25,9 @@ It then runs the build check and the publish there, so npm ships the tree the re
 A merge with no untagged release commit behind it ends at once, before any API call.
 On a release commit it first fetches the head of the pull request the squash subject names, such as `(#7)`.
 It refuses unless the tree of that commit equals the tree the required checks of that pull request passed on.
-That check is what lets the release run pass without running a test.
+That check is what lets the release publish a tested tree even though the release pull request runs no test.
 It matches the tree the required checks of the release pull request passed on.
-In a repository whose `ci.yml` is the one [checks-workflows](checks-workflows.md) composes, those checks skip every job, so the tag publishes code the pull requests into `main` tested, and the release commit adds only the version and the changelog.
+In a repository whose `ci.yml` is the one [checks-workflows](checks-workflows.md) composes, those checks skip every job but `changes`, so the tag publishes code the pull requests into `main` tested, and the release commit adds only the version and the changelog.
 It then pushes the tag and creates the GitHub release `v<version>`, whose notes are the `CHANGELOG.md` section for that version.
 It publishes the package to npm as [checks-release-publish](checks-release-publish.md) says, unless `package.json` holds `"private": true`.
 The changelog is built once, by the release pull request, and this run reads the committed file.

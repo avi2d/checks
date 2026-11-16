@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
+import { NO_CALLER_OPTIONS } from "../../../src/delivery/caller-options.ts";
 import { DEFAULT_CI_JOBS } from "../../../src/delivery/ci-jobs.ts";
 import { callerSetOf, flagMismatchOf, parseSiteNameFlags, type SiteNameFlags } from "../../../src/delivery/site-names.ts";
 import type { Workflow } from "../../../src/delivery/workflow-references.ts";
@@ -13,18 +14,18 @@ const caller = (name: string, uses: string, inputs?: Readonly<Record<string, str
 
 const SITE_CI = "avi2d/workflows/.github/workflows/site-ci.yml@v3";
 
-const setOf = (workflows: readonly Workflow[], flags: SiteNameFlags = {}) => Effect.runSync(callerSetOf(workflows, flags, "checks-workflows --write"));
+const setOf = (workflows: readonly Workflow[], flags: SiteNameFlags = {}) => Effect.runSync(callerSetOf(workflows, flags, "checks-workflows --write", false));
 const faultOf = (workflows: readonly Workflow[], flags: SiteNameFlags = {}) =>
-  Effect.runSync(Effect.flip(callerSetOf(workflows, flags, "checks-workflows --write"))).message;
+  Effect.runSync(Effect.flip(callerSetOf(workflows, flags, "checks-workflows --write", false))).message;
 
 test("a repository whose callers call only code workflows is a code repository, so a ci.yml caller is never read as a site", () => {
-  expect(setOf([])).toEqual({ kind: "code", ci: DEFAULT_CI_JOBS.code });
-  expect(setOf([caller("ci.yml", "avi2d/workflows/.github/workflows/ci.yml@v3"), caller("pr-title.yml", "avi2d/workflows/.github/workflows/pr-title.yml@v3")])).toEqual({ kind: "code", ci: DEFAULT_CI_JOBS.code });
+  expect(setOf([])).toEqual({ kind: "code", ci: DEFAULT_CI_JOBS.code, options: NO_CALLER_OPTIONS });
+  expect(setOf([caller("ci.yml", "avi2d/workflows/.github/workflows/ci.yml@v3"), caller("pr-title.yml", "avi2d/workflows/.github/workflows/pr-title.yml@v3")])).toEqual({ kind: "code", ci: DEFAULT_CI_JOBS.code, options: NO_CALLER_OPTIONS });
 });
 
 test("a caller of a shared site workflow makes a site, and the three names come from what the callers pass rather than from package.json", () => {
   const callers = [caller("ci.yml", SITE_CI, AZALIALAW), caller("main.yml", "avi2d/workflows/.github/workflows/site-main.yml@v3", AZALIALAW)];
-  expect(setOf(callers)).toEqual({ kind: "site", names: AZALIALAW, ci: DEFAULT_CI_JOBS.site });
+  expect(setOf(callers)).toEqual({ kind: "site", names: AZALIALAW, ci: DEFAULT_CI_JOBS.site, options: NO_CALLER_OPTIONS });
 });
 
 test("a site caller that passes no names is refused with the flags that name them, so a site set is never written with blank names", () => {
@@ -37,12 +38,12 @@ test("a site caller that passes no names is refused with the flags that name the
 });
 
 test("the three flags make a site of a repository with no caller, so a first site write needs no package.json field", () => {
-  expect(setOf([], AZALIALAW)).toEqual({ kind: "site", names: AZALIALAW, ci: DEFAULT_CI_JOBS.site });
+  expect(setOf([], AZALIALAW)).toEqual({ kind: "site", names: AZALIALAW, ci: DEFAULT_CI_JOBS.site, options: NO_CALLER_OPTIONS });
   expect(faultOf([], { pages: "azalialaw" })).toContain("--domain <domain> --production <owner/name>");
 });
 
 test("a flag replaces the name the callers pass and the other names stay, so a renamed domain is not lost to the old one", () => {
-  expect(setOf([caller("ci.yml", SITE_CI, AZALIALAW)], { domain: "azalia.law" })).toEqual({ kind: "site", names: { ...AZALIALAW, domain: "azalia.law" }, ci: DEFAULT_CI_JOBS.site });
+  expect(setOf([caller("ci.yml", SITE_CI, AZALIALAW)], { domain: "azalia.law" })).toEqual({ kind: "site", names: { ...AZALIALAW, domain: "azalia.law" }, ci: DEFAULT_CI_JOBS.site, options: NO_CALLER_OPTIONS });
 });
 
 test("a flag that differs from the name a present caller passes is refused, so setup never keeps the old caller beside the renamed one", () => {

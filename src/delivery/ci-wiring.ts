@@ -315,17 +315,17 @@ const reportHandRolled = Effect.fn("reportHandRolled")(function* (
 });
 
 // The shared workflows the set calls run every gate, and this check does not follow a remote workflow.
-const callsSharedSet = Effect.fn("callsSharedSet")(function* (workflows: readonly Workflow[]) {
+const callsSharedSet = Effect.fn("callsSharedSet")(function* (workflows: readonly Workflow[], publishes: boolean) {
   const present = workflows.map(({ path, text }) => ({ name: path.slice(WORKFLOWS.length + 1), text }));
   if (present.length === 0) return false;
-  return yield* callerSetOf(workflows, {}, "checks-workflows --write").pipe(
+  return yield* callerSetOf(workflows, {}, "checks-workflows --write", publishes).pipe(
     Effect.map((set) => differencesOf(set, present).length === 0),
     Effect.orElseSucceed(() => false),
   );
 });
 
-const reportGaps = Effect.fn("reportGaps")(function* (root: string, workflows: readonly Workflow[]) {
-  if (yield* callsSharedSet(workflows)) {
+const reportGaps = Effect.fn("reportGaps")(function* (root: string, workflows: readonly Workflow[], publishes: boolean) {
+  if (yield* callsSharedSet(workflows, publishes)) {
     yield* Console.log(`ci-wiring: ${WORKFLOWS} holds the set checks-workflows writes, so the shared workflows run every gate`);
     return [];
   }
@@ -340,7 +340,7 @@ const wiring = Effect.gen(function* () {
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   const workflows = yield* readWorkflows(root);
   const manifest = yield* readManifest(root);
-  const gaps = yield* reportGaps(root, workflows);
+  const gaps = yield* reportGaps(root, workflows, manifest.private !== true);
   const missing = findMissingWorkflows(workflows);
   if (missing.length > 0) yield* Console.error(formatMissingReport(missing));
   const scripts = new Map(Object.entries(manifest.scripts ?? {}));

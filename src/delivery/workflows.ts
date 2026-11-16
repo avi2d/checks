@@ -4,7 +4,7 @@ import { git } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { readRepository } from "./ci-wiring.ts";
 import { holdsSharedWorkflow } from "./mutation-workflow.ts";
-import { callerSetOf, parseSiteNameFlags, readWorkflowFiles, WORKFLOWS, type CallerSet, type HeldFile, type SiteNameFlags } from "./site-names.ts";
+import { callerSetOf, parseSiteNameFlags, readsPrivatePackage, readWorkflowFiles, WORKFLOWS, type CallerSet, type HeldFile, type SiteNameFlags } from "./site-names.ts";
 import { byHandSet, differenceLines, differencesOf, holdsSingleJobCi, isIgnoredWorkflow, requiredSet, type WorkflowFile } from "./workflow-set.ts";
 
 const NAME = "workflows";
@@ -27,7 +27,7 @@ const writeSet = Effect.fn("writeSet")(function* (root: string, set: CallerSet, 
   const directory = (yield* Path.Path).join(root, WORKFLOWS);
   yield* fs.makeDirectory(directory, { recursive: true });
   const held = new Set(present.map(({ name }) => name));
-  const byHand = byHandSet(set.kind).filter(({ name }) => held.has(name));
+  const byHand = byHandSet(set).filter(({ name }) => held.has(name));
   const written = [...requiredSet(set), ...byHand];
   for (const { name, text } of written) yield* fs.writeFileString(`${directory}/${name}`, text);
   const kept = new Set(written.map(({ name }) => name));
@@ -38,11 +38,12 @@ const writeSet = Effect.fn("writeSet")(function* (root: string, set: CallerSet, 
   return true;
 });
 
-const checkSet = Effect.fn("checkSet")(function* (present: readonly HeldFile[]) {
+const checkSet = Effect.fn("checkSet")(function* (present: readonly HeldFile[], publishes: boolean) {
   const set = yield* callerSetOf(
     present.map(({ workflow }) => workflow),
     {},
     REWRITE,
+    publishes,
   ).pipe(Effect.catchTag("CallerSetFault", (fault) => Console.error(`${NAME}: ${fault.message}`).pipe(Effect.as(undefined))));
   if (set === undefined) return false;
   const differences = differencesOf(set, present);
@@ -72,11 +73,13 @@ const workflows = Effect.gen(function* () {
     return true;
   }
   const present = yield* readWorkflowFiles(root);
-  if (!mode.write) return yield* checkSet(present);
+  const publishes = !(yield* readsPrivatePackage(root).pipe(Effect.mapError((fault) => new Usage({ message: fault.message }))));
+  if (!mode.write) return yield* checkSet(present, publishes);
   const set = yield* callerSetOf(
     present.map(({ workflow }) => workflow),
     mode.flags,
     REWRITE,
+    publishes,
   ).pipe(Effect.mapError((fault) => new Usage({ message: fault.message })));
   return yield* writeSet(root, set, present);
 });

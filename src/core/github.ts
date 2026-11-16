@@ -33,7 +33,7 @@ export function gitHubJson<A>(decode: Decode<A>, method: Method, path: string, b
 
 export function gitHubOptional<A>(decode: Decode<A>, method: Method, path: string): Effect.Effect<Option.Option<A>, GitHubFailure, ChildProcessSpawner.ChildProcessSpawner> {
   return gitHubJson(decode, method, path).pipe(
-    Effect.map((value) => Option.some(value)),
+    Effect.asSome,
     Effect.catchIf(
       (failure) => failure.message.includes("(HTTP 404)"),
       () => Effect.succeed(Option.none<A>()),

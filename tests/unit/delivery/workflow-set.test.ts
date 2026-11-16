@@ -1,6 +1,7 @@
 import { Evaluator, Lexer, Parser, data } from "@actions/expressions";
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
+import { NO_CALLER_OPTIONS } from "../../../src/delivery/caller-options.ts";
 import { DEFAULT_CI_JOBS } from "../../../src/delivery/ci-jobs.ts";
 import { callerSetOf } from "../../../src/delivery/site-names.ts";
 import { byHandSet, differencesOf, holdsSingleJobCi, requiredSet } from "../../../src/delivery/workflow-set.ts";
@@ -8,8 +9,8 @@ import { isRecord } from "../../../src/delivery/workflow-references.ts";
 import { MUTATION_WORKFLOW } from "../../../src/delivery/setup-workflow.ts";
 import type { CallerSet } from "../../../src/delivery/site-names.ts";
 
-const CODE: CallerSet = { kind: "code", ci: DEFAULT_CI_JOBS.code };
-const SITE: CallerSet = { kind: "site", names: { pages: "acme", domain: "acme.example", production: "acme/acme.example" }, ci: DEFAULT_CI_JOBS.site };
+const CODE: CallerSet = { kind: "code", ci: DEFAULT_CI_JOBS.code, options: NO_CALLER_OPTIONS };
+const SITE: CallerSet = { kind: "site", names: { pages: "acme", domain: "acme.example", production: "acme/acme.example" }, ci: DEFAULT_CI_JOBS.site, options: NO_CALLER_OPTIONS };
 
 test("the code set is ci, pr-title, main and release, and the site set adds preview-close and production", () => {
   expect(requiredSet(CODE).map(({ name }) => name)).toEqual(["ci.yml", "pr-title.yml", "main.yml", "release.yml"]);
@@ -24,10 +25,10 @@ test("the two kinds share pr-title and release byte for byte, so neither drifts 
   expect(site.get("ci.yml")).not.toBe(code.get("ci.yml"));
 });
 
-test("an absent by-hand caller is no difference, but one that runs its own steps is", () => {
+test("an absent optional caller is no difference, but one that runs its own steps is", () => {
   const written = requiredSet(CODE);
   expect(differencesOf(CODE, written)).toEqual([]);
-  expect(byHandSet("site").map(({ name }) => name)).toEqual(["advisories.yml"]);
+  expect(byHandSet(SITE).map(({ name }) => name)).toEqual(["advisories.yml"]);
   const handRolled = { name: "mutation.yml", text: "name: mutation\non:\n  workflow_dispatch:\n" };
   expect(differencesOf(CODE, [...written, handRolled]).map(({ kind, name }) => [kind, name])).toEqual([["differs", "mutation.yml"]]);
   expect(differencesOf(SITE, [...requiredSet(SITE), handRolled]).map(({ kind, name }) => [kind, name])).toEqual([["extra", "mutation.yml"]]);
@@ -50,7 +51,7 @@ const SHARED_V3_FILES = [
 ];
 
 test("no advisories, mutation or required caller pins below v3 or names a file outside the v3 shared workflows", () => {
-  const callers = [...requiredSet(CODE), ...requiredSet(SITE), ...byHandSet("site"), { name: "mutation.yml", text: MUTATION_WORKFLOW }];
+  const callers = [...requiredSet(CODE), ...requiredSet(SITE), ...byHandSet(SITE), { name: "mutation.yml", text: MUTATION_WORKFLOW }];
   const pins = callers.flatMap(({ text }) => {
     const document = Bun.YAML.parse(text);
     const jobs = isRecord(document) ? document["jobs"] : undefined;
@@ -87,12 +88,14 @@ const CALLEE_GRANTS: Readonly<Record<string, Readonly<Record<string, string>>>> 
   "release-pr.yml": { contents: "write", "pull-requests": "write", actions: "write" },
   "site-main.yml": { contents: "write", actions: "read", "pull-requests": "read" },
   "site-production.yml": { contents: "read", actions: "read", "pull-requests": "read" },
+  "flake.yml": { contents: "read" },
+  "github-pages.yml": { contents: "read", pages: "write", "id-token": "write" },
 };
 
 const callers = (): readonly { name: string; text: string }[] => [
   ...requiredSet(CODE),
   ...requiredSet(SITE),
-  ...byHandSet("site"),
+  ...byHandSet(SITE),
   { name: "mutation.yml", text: MUTATION_WORKFLOW },
 ];
 
@@ -200,6 +203,70 @@ test("each site caller of a shared workflow that reads the site names passes pag
   ]);
 });
 
+const EVERY_OPTION: CallerSet = {
+  kind: "code",
+  ci: DEFAULT_CI_JOBS.code,
+  options: {
+    advisoriesCron: "21 5 * * 1",
+    flake: { nodeVersionFile: ".node-version" },
+    pages: { build: "bun run docs:build", path: "docs/.vitepress/dist" },
+    secretsPack: true,
+    fullTest: true,
+  },
+};
+
+const everyOptionFiles = (): readonly { name: string; text: string }[] => [...requiredSet(EVERY_OPTION), ...byHandSet(EVERY_OPTION)];
+
+const everyOptionFile = (name: string): unknown => Bun.YAML.parse(everyOptionFiles().find((file) => file.name === name)?.text ?? `no ${name}`);
+
+const DECLARED_INPUTS: Readonly<Record<string, readonly string[]>> = {
+  "advisories.yml": [],
+  "changes.yml": ["paths"],
+  "static.yml": ["hold", "secrets-pack"],
+  "test.yml": ["run", "browsers", "artifact", "artifact-path", "heavy", "hold", "runs-on"],
+  "gate.yml": ["results", "skips"],
+  "release-main.yml": ["full-test"],
+  "release-pr.yml": [],
+  "pr-title.yml": [],
+  "flake.yml": ["node-version-file"],
+  "github-pages.yml": ["build", "path"],
+};
+
+test("a caller with every option passes only inputs its v3 shared workflow declares, so a misspelt full_test or secretsPack fails here", () => {
+  const passed = everyOptionFiles()
+    .filter(({ name }) => name !== "mutation.yml")
+    .flatMap(({ name, text }) => callerJobs(text).map((job) => [name, sharedFile(job), Object.keys(isRecord(job["with"]) ? job["with"] : {})] as const));
+  for (const [name, shared, inputs] of passed) {
+    expect([name, shared, inputs.filter((input) => !(DECLARED_INPUTS[shared] ?? []).includes(input))]).toEqual([name, shared, []]);
+  }
+  for (const { text } of everyOptionFiles().filter(({ name }) => name === "flake.yml" || name === "docs.yml")) {
+    for (const job of callerJobs(text)) expect(job["permissions"]).toEqual(CALLEE_GRANTS[sharedFile(job)]);
+  }
+});
+
+test("every option lands where the shared-ci page puts it, so a pack lint without the secret or a publish without the full suite fails here", () => {
+  expect(everyOptionFile("ci.yml")).toMatchObject({
+    jobs: { static: { with: { "secrets-pack": true }, secrets: { CHECKS_SECRETS_PACK: "${{ secrets.CHECKS_SECRETS_PACK }}" } } },
+  });
+  expect(everyOptionFile("main.yml")).toMatchObject({ jobs: { release: { uses: PART("release-main.yml"), with: { "full-test": true } } } });
+  expect(everyOptionFile("advisories.yml")).toMatchObject({ on: { schedule: [{ cron: "21 5 * * 1" }] } });
+  expect(everyOptionFile("flake.yml")).toMatchObject({ on: { workflow_dispatch: null }, jobs: { flake: { with: { "node-version-file": ".node-version" } } } });
+  const docs = everyOptionFile("docs.yml");
+  expect(docs).toMatchObject({
+    on: { push: { branches: ["main"] } },
+    jobs: { pages: { uses: PART("github-pages.yml"), with: { build: "bun run docs:build", path: "docs/.vitepress/dist" } } },
+  });
+  expect(isRecord(docs) ? docs["concurrency"] : "no document").toBeUndefined();
+});
+
+test("a set written with every option reads back as the same set, so a check right after --write never reports the file it just wrote", () => {
+  const written = everyOptionFiles();
+  const held = written.map(({ name, text }) => ({ path: `.github/workflows/${name}`, document: Bun.YAML.parse(text), text }));
+  const reread = Effect.runSync(callerSetOf(held, {}, "checks-workflows --write", true));
+  expect(reread.options).toEqual(EVERY_OPTION.options);
+  expect(differencesOf(reread, written)).toEqual([]);
+});
+
 test("a site caller that passes another domain than the one the set names differs, so a caller cannot drift from its siblings", () => {
   const moved = siteCaller("main.yml").replace('      domain: "acme.example"\n', '      domain: "other.example"\n');
   expect(moved).toContain('      domain: "other.example"\n');
@@ -207,43 +274,39 @@ test("a site caller that passes another domain than the one the set names differ
 });
 
 const PART = (file: string): string => `avi2d/workflows/.github/workflows/${file}@v3`;
-const DOCS_CHANGED = "needs.changes.outputs.docs-only != 'true'";
+const NOT_RELEASED = "needs.changes.outputs.release != 'true'";
+const CHANGED = `${NOT_RELEASED} && needs.changes.outputs.docs-only != 'true'`;
 const RELEASE_RUN = "((github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release/')) || (github.event_name == 'pull_request' && github.head_ref == format('release/{0}', github.base_ref) && github.event.pull_request.head.repo.full_name == github.repository))";
 const NOT_RELEASE = `\${{ !${RELEASE_RUN} }}`;
+const LIBRARY: CallerSet = { kind: "code", ci: { ...DEFAULT_CI_JOBS.code, changes: false }, options: NO_CALLER_OPTIONS };
 
 type ReleaseContext = { readonly eventName: string; readonly refName: string; readonly headRef: string; readonly baseRef: string; readonly headRepo: string; readonly repository: string };
 
-const releaseInner = (job: unknown): string => {
-  if (!isRecord(job)) return "";
-  const condition = job["if"];
-  if (typeof condition !== "string") return "";
-  const open = "${{ !";
-  const close = " }}";
-  return condition.startsWith(open) && condition.endsWith(close) ? condition.slice(open.length, -close.length) : condition;
+type Plain = string | { readonly [key: string]: Plain };
+
+const dictionaryOf = (record: { readonly [key: string]: Plain }): data.Dictionary =>
+  new data.Dictionary(...Object.entries(record).map(([key, inner]) => ({ key, value: typeof inner === "string" ? new data.StringData(inner) : dictionaryOf(inner) })));
+
+const githubOf = (ctx: ReleaseContext): Plain => ({
+  event_name: ctx.eventName,
+  ref_name: ctx.refName,
+  head_ref: ctx.headRef,
+  base_ref: ctx.baseRef,
+  repository: ctx.repository,
+  event: { pull_request: { head: { repo: { full_name: ctx.headRepo } } } },
+});
+
+const evaluated = (expression: string, contexts: Readonly<Record<string, Plain>>): data.ExpressionData => {
+  const inner = expression.startsWith("${{") && expression.endsWith("}}") ? expression.slice(3, -2).trim() : expression;
+  const parser = new Parser(new Lexer(inner).lex().tokens, Object.keys(contexts), []);
+  return new Evaluator(parser.parse(), dictionaryOf(contexts)).evaluate();
 };
 
-const decidesReleaseRun = (inner: string, ctx: ReleaseContext): boolean => {
-  const github = new data.Dictionary(
-    { key: "event_name", value: new data.StringData(ctx.eventName) },
-    { key: "ref_name", value: new data.StringData(ctx.refName) },
-    { key: "head_ref", value: new data.StringData(ctx.headRef) },
-    { key: "base_ref", value: new data.StringData(ctx.baseRef) },
-    { key: "repository", value: new data.StringData(ctx.repository) },
-    {
-      key: "event",
-      value: new data.Dictionary({
-        key: "pull_request",
-        value: new data.Dictionary({
-          key: "head",
-          value: new data.Dictionary({ key: "repo", value: new data.Dictionary({ key: "full_name", value: new data.StringData(ctx.headRepo) }) }),
-        }),
-      }),
-    },
-  );
-  const parser = new Parser(new Lexer(inner).lex().tokens, ["github"], []);
-  const result = new Evaluator(parser.parse(), new data.Dictionary({ key: "github", value: github })).evaluate();
-  return result.kind === data.Kind.Boolean ? result.value : result.coerceString() !== "";
-};
+const truthy = (result: data.ExpressionData): boolean => (result.kind === data.Kind.Boolean ? result.value : result.coerceString() !== "");
+
+const conditionOf = (job: unknown): string => (isRecord(job) && typeof job["if"] === "string" ? job["if"] : "no if");
+
+const decidesReleaseRun = (condition: string, ctx: ReleaseContext): boolean => !truthy(evaluated(condition, { github: githubOf(ctx) }));
 
 const ciJobs = (set: CallerSet): Record<string, unknown> => {
   const ci = requiredSet(set).find(({ name }) => name === "ci.yml");
@@ -252,70 +315,122 @@ const ciJobs = (set: CallerSet): Record<string, unknown> => {
   return isRecord(jobs) ? jobs : {};
 };
 
+const ciText = (set: CallerSet): string => requiredSet(set).find(({ name }) => name === "ci.yml")?.text ?? "no ci.yml";
+
 test("the default site ci.yml composes the jobs of the shared-ci site example, so a gate without always() or a browser job that does not wait for the preview fails here", () => {
   const jobs = ciJobs(SITE);
   expect(Object.keys(jobs)).toEqual(["changes", "static", "site", "unit", "browser", "checks"]);
   expect(jobs).toMatchObject({
-    changes: { if: NOT_RELEASE, uses: PART("changes.yml") },
-    static: { if: NOT_RELEASE, uses: PART("static.yml"), with: { hold: false } },
-    site: { needs: "changes", if: DOCS_CHANGED, uses: PART("site-preview.yml"), with: { pages: "acme" } },
-    unit: { needs: "changes", if: DOCS_CHANGED, uses: PART("test.yml"), with: { hold: false } },
+    changes: { uses: PART("changes.yml") },
+    static: { needs: "changes", if: NOT_RELEASED, uses: PART("static.yml"), with: { hold: false } },
+    site: { needs: "changes", if: CHANGED, uses: PART("site-preview.yml"), with: { pages: "acme" } },
+    unit: { needs: "changes", if: CHANGED, uses: PART("test.yml"), with: { hold: false } },
     browser: { needs: "site", uses: PART("test.yml"), with: { run: "bunx checks-browser --pr", browsers: "webkit", artifact: "site-dist", heavy: true } },
     checks: {
       needs: ["changes", "static", "site", "unit", "browser"],
       if: "always()",
       uses: PART("gate.yml"),
-      with: { results: "${{ toJSON(needs) }}", skips: `\${{ ${RELEASE_RUN} && 'changes static site unit browser' || needs.changes.outputs.docs-only == 'true' && 'site unit browser' || '' }}` },
+      with: {
+        results: "${{ toJSON(needs) }}",
+        skips: "${{ needs.changes.outputs.release == 'true' && 'static site unit browser' || needs.changes.outputs.docs-only == 'true' && 'site unit browser' || '' }}",
+      },
     },
   });
+  expect(jobs["changes"]).not.toHaveProperty("if");
   expect(jobs["browser"]).not.toHaveProperty("if");
   expect(jobs["browser"]).not.toHaveProperty(["with", "hold"]);
 });
 
-test("the default code ci.yml runs changes, static and one test job beside each other, and the gate passes the test job only when it skips on a docs-only change", () => {
+test("the default code ci.yml reads the release rule from the changes output as the shared-ci example does, and the gate passes the test job only when it skips on a docs-only change", () => {
   const jobs = ciJobs(CODE);
   expect(Object.keys(jobs)).toEqual(["changes", "static", "test", "checks"]);
   expect(jobs).toMatchObject({
-    static: { if: NOT_RELEASE, uses: PART("static.yml") },
-    test: { needs: "changes", if: DOCS_CHANGED, uses: PART("test.yml"), with: { "runs-on": "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}" } },
-    checks: { needs: ["changes", "static", "test"], if: "always()", uses: PART("gate.yml"), with: { skips: `\${{ ${RELEASE_RUN} && 'changes static test' || needs.changes.outputs.docs-only == 'true' && 'test' || '' }}` } },
+    static: { needs: "changes", if: NOT_RELEASED, uses: PART("static.yml") },
+    test: { needs: "changes", if: CHANGED, uses: PART("test.yml"), with: { "runs-on": "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}" } },
+    checks: {
+      needs: ["changes", "static", "test"],
+      if: "always()",
+      uses: PART("gate.yml"),
+      with: { skips: "${{ needs.changes.outputs.release == 'true' && 'static test' || needs.changes.outputs.docs-only == 'true' && 'test' || '' }}" },
+    },
   });
   expect(jobs["static"]).not.toHaveProperty("with");
   expect(jobs["test"]).not.toHaveProperty(["with", "hold"]);
 });
 
+test("a ci.yml with a changes job that writes the long release rule into any job instead of reading the changes output fails here", () => {
+  for (const set of [CODE, SITE, { ...CODE, ci: { ...CODE.ci, tests: [...CODE.ci.tests, ...CODE.ci.tests.map((job) => ({ ...job, name: "e2e" }))] } }]) expect(ciText(set)).not.toContain("github.head_ref");
+  expect(ciText(LIBRARY).split("github.head_ref").length - 1).toBe(3);
+});
+
+test("a skips input or an inline release rule with no comment above it to say what it decides fails here", () => {
+  for (const set of [CODE, SITE, LIBRARY]) {
+    const lines = ciText(set).split("\n");
+    const unexplained = lines.filter((line, index) => /^\s+(?:skips|if): \$\{\{/.test(line) && !/^\s+# \S/.test(lines[index - 1] ?? ""));
+    expect(unexplained).toEqual([]);
+  }
+});
+
 test('a fork pull request from a release/ branch still runs every job instead of skipping as the release run', () => {
-  const inner = releaseInner(ciJobs(CODE)['changes']);
-  expect(decidesReleaseRun(inner, { eventName: 'pull_request', refName: 'release/main', headRef: 'release/main', baseRef: 'main', headRepo: 'fork/acme', repository: 'acme/acme' })).toBe(false);
-  expect(decidesReleaseRun(inner, { eventName: 'pull_request', refName: 'release/main', headRef: 'release/main', baseRef: 'main', headRepo: 'acme/acme', repository: 'acme/acme' })).toBe(true);
-  expect(decidesReleaseRun(inner, { eventName: 'PULL_REQUEST', refName: 'release/main', headRef: 'release/main', baseRef: 'main', headRepo: 'acme/acme', repository: 'acme/acme' })).toBe(true);
+  const condition = conditionOf(ciJobs(LIBRARY)['static']);
+  expect(decidesReleaseRun(condition, { eventName: 'pull_request', refName: 'release/main', headRef: 'release/main', baseRef: 'main', headRepo: 'fork/acme', repository: 'acme/acme' })).toBe(false);
+  expect(decidesReleaseRun(condition, { eventName: 'pull_request', refName: 'release/main', headRef: 'release/main', baseRef: 'main', headRepo: 'acme/acme', repository: 'acme/acme' })).toBe(true);
+  expect(decidesReleaseRun(condition, { eventName: 'PULL_REQUEST', refName: 'release/main', headRef: 'release/main', baseRef: 'main', headRepo: 'acme/acme', repository: 'acme/acme' })).toBe(true);
 });
 
 test('a release/ branch that does not match release/<base> still runs every job instead of skipping as the release run', () => {
-  const inner = releaseInner(ciJobs(CODE)['changes']);
-  expect(decidesReleaseRun(inner, { eventName: 'pull_request', refName: 'release/v2-prep', headRef: 'release/v2-prep', baseRef: 'main', headRepo: 'acme/acme', repository: 'acme/acme' })).toBe(false);
-  expect(decidesReleaseRun(inner, { eventName: 'pull_request', refName: 'feature', headRef: 'feature', baseRef: 'main', headRepo: 'acme/acme', repository: 'acme/acme' })).toBe(false);
-  expect(decidesReleaseRun(inner, { eventName: 'workflow_dispatch', refName: 'release/main', headRef: '', baseRef: 'main', headRepo: 'acme/acme', repository: 'acme/acme' })).toBe(true);
-  expect(decidesReleaseRun(inner, { eventName: 'workflow_dispatch', refName: 'main', headRef: '', baseRef: 'main', headRepo: 'acme/acme', repository: 'acme/acme' })).toBe(false);
+  const condition = conditionOf(ciJobs(LIBRARY)['static']);
+  expect(decidesReleaseRun(condition, { eventName: 'pull_request', refName: 'release/v2-prep', headRef: 'release/v2-prep', baseRef: 'main', headRepo: 'acme/acme', repository: 'acme/acme' })).toBe(false);
+  expect(decidesReleaseRun(condition, { eventName: 'pull_request', refName: 'feature', headRef: 'feature', baseRef: 'main', headRepo: 'acme/acme', repository: 'acme/acme' })).toBe(false);
+  expect(decidesReleaseRun(condition, { eventName: 'workflow_dispatch', refName: 'release/main', headRef: '', baseRef: 'main', headRepo: 'acme/acme', repository: 'acme/acme' })).toBe(true);
+  expect(decidesReleaseRun(condition, { eventName: 'workflow_dispatch', refName: 'main', headRef: '', baseRef: 'main', headRepo: 'acme/acme', repository: 'acme/acme' })).toBe(false);
 });
-test("on the release branch checks-release-pr dispatches ci on, every job skips and the gate passes each skip, rather than the release pull request running the suite", () => {
-  for (const set of [SITE, CODE, { ...SITE, ci: { ...SITE.ci, changes: false } }]) {
-    const jobs = ciJobs(set);
-    const parts = Object.keys(jobs).filter((name) => name !== "checks");
-    const unconditioned = parts.filter((name) => {
-      const job = jobs[name];
-      return !isRecord(job) || (job["needs"] === undefined && job["if"] !== NOT_RELEASE);
-    });
-    expect(unconditioned).toEqual([]);
-    expect(jobs["checks"]).toMatchObject({ if: "always()", with: { skips: expect.stringContaining(`${RELEASE_RUN} && '${parts.join(" ")}'`) } });
+
+type Run = { readonly github: ReleaseContext; readonly release: boolean; readonly docsOnly: boolean };
+
+const RELEASE_DISPATCH: Run = {
+  github: { eventName: "workflow_dispatch", refName: "release/main", headRef: "", baseRef: "", headRepo: "", repository: "acme/acme" },
+  release: true,
+  docsOnly: false,
+};
+const FEATURE: ReleaseContext = { eventName: "pull_request", refName: "1/merge", headRef: "feature", baseRef: "main", headRepo: "acme/acme", repository: "acme/acme" };
+
+function skippedAndPassed(set: CallerSet, run: Run): readonly (readonly string[])[] {
+  const outputs = { release: String(run.release), "docs-only": String(run.docsOnly && !run.release) };
+  const contexts = { github: githubOf(run.github), needs: { changes: { outputs } } };
+  const jobs = Object.entries(ciJobs(set)).filter(([name]) => name !== "checks");
+  const skipped: string[] = [];
+  for (const [name, job] of jobs) {
+    const needs = isRecord(job) ? job["needs"] : undefined;
+    const condition = isRecord(job) ? job["if"] : undefined;
+    if ((typeof needs === "string" && skipped.includes(needs)) || (typeof condition === "string" && !truthy(evaluated(condition, contexts)))) skipped.push(name);
   }
+  const gate = ciJobs(set)["checks"];
+  const inputs = isRecord(gate) ? gate["with"] : undefined;
+  const skips = isRecord(inputs) && typeof inputs["skips"] === "string" ? evaluated(inputs["skips"], contexts).coerceString() : "no skips";
+  return [skipped, skips.split(" ").filter((job) => job !== "")];
+}
+
+test("on the release run every job but changes skips and the gate passes exactly those skips, rather than the release pull request running the suite", () => {
+  expect(skippedAndPassed(SITE, RELEASE_DISPATCH)).toEqual([["static", "site", "unit", "browser"], ["static", "site", "unit", "browser"]]);
+  expect(skippedAndPassed(CODE, RELEASE_DISPATCH)).toEqual([["static", "test"], ["static", "test"]]);
+  expect(skippedAndPassed(LIBRARY, RELEASE_DISPATCH)).toEqual([["static", "test"], ["static", "test"]]);
+});
+
+test("on a docs-only change the site and test jobs skip and the gate passes them, while static still runs and a library without changes runs all", () => {
+  const docsOnly: Run = { github: FEATURE, release: false, docsOnly: true };
+  expect(skippedAndPassed(SITE, docsOnly)).toEqual([["site", "unit", "browser"], ["site", "unit", "browser"]]);
+  expect(skippedAndPassed(CODE, docsOnly)).toEqual([["test"], ["test"]]);
+  expect(skippedAndPassed(LIBRARY, docsOnly)).toEqual([[], []]);
+  const code: Run = { github: FEATURE, release: false, docsOnly: false };
+  for (const set of [SITE, CODE, LIBRARY]) expect(skippedAndPassed(set, code)).toEqual([[], []]);
 });
 
 const heldCi = (text: string) => ({ path: ".github/workflows/ci.yml", document: Bun.YAML.parse(text), text });
 
-const setOfCi = (text: string): CallerSet => Effect.runSync(callerSetOf([heldCi(text)], {}, "checks-workflows --write"));
+const setOfCi = (text: string): CallerSet => Effect.runSync(callerSetOf([heldCi(text)], {}, "checks-workflows --write", false));
 
-const faultOfCi = (text: string): string => Effect.runSync(Effect.flip(callerSetOf([heldCi(text)], {}, "checks-workflows --write"))).message;
+const faultOfCi = (text: string): string => Effect.runSync(Effect.flip(callerSetOf([heldCi(text)], {}, "checks-workflows --write", false))).message;
 
 const HAND_EDITED = [
   "name: ci",

@@ -1,4 +1,5 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
+import { callerOptionsOf, type CallerOptions } from "./caller-options.ts";
 import { ciJobsOf, sharedFileOf, type CiJobs } from "./ci-jobs.ts";
 import { isRecord, workflowJobs, type Workflow } from "./workflow-references.ts";
 
@@ -24,7 +25,9 @@ const decodeSiteNames = Schema.decodeUnknownEffect(SiteNames);
 
 export type SiteNameFlags = Readonly<Partial<Record<SiteNameKey, string>>>;
 
-export type CallerSet = { readonly kind: "code"; readonly ci: CiJobs } | { readonly kind: "site"; readonly names: SiteNames; readonly ci: CiJobs };
+export type CallerSet =
+  | { readonly kind: "code"; readonly ci: CiJobs; readonly options: CallerOptions }
+  | { readonly kind: "site"; readonly names: SiteNames; readonly ci: CiJobs; readonly options: CallerOptions };
 
 class CallerSetFault extends Schema.TaggedError<CallerSetFault>()("CallerSetFault", {
   message: Schema.String,
@@ -94,15 +97,15 @@ function flagsOf(keys: readonly SiteNameKey[]): string {
   return keys.map((key) => `--${key} ${PLACEHOLDERS[key]}`).join(" ");
 }
 
-const heldCiJobs = (kind: CallerSet["kind"], workflows: readonly Workflow[]) =>
-  ciJobsOf(
-    kind,
-    workflows.find(({ path }) => path === `${WORKFLOWS}/ci.yml`),
-  ).pipe(Effect.mapError((fault) => new CallerSetFault({ message: fault.message })));
+const heldWorkflow = (workflows: readonly Workflow[]) => (name: string) => workflows.find(({ path }) => path === `${WORKFLOWS}/${name}`);
 
-export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string) {
+const heldCiJobs = (kind: CallerSet["kind"], workflows: readonly Workflow[]) =>
+  ciJobsOf(kind, heldWorkflow(workflows)("ci.yml")).pipe(Effect.mapError((fault) => new CallerSetFault({ message: fault.message })));
+
+export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean) {
   const flagged = SITE_NAME_KEYS.some((key) => flags[key] !== undefined);
-  if (!callsSiteWorkflow(workflows) && !flagged) return { kind: "code", ci: yield* heldCiJobs("code", workflows) } satisfies CallerSet;
+  const options = callerOptionsOf(heldWorkflow(workflows), publishes);
+  if (!callsSiteWorkflow(workflows) && !flagged) return { kind: "code", ci: yield* heldCiJobs("code", workflows), options } satisfies CallerSet;
   const held = workflows.flatMap(heldNames).filter(({ key }) => flags[key] === undefined);
   const conflict = conflictOf(held);
   if (conflict !== undefined) return yield* new CallerSetFault({ message: conflict });
@@ -112,7 +115,7 @@ export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readon
     return yield* new CallerSetFault({ message: `the site callers pass no ${listed(missing)}, so run ${rerun} ${flagsOf(missing)}` });
   }
   const names = yield* decodeSiteNames(named).pipe(Effect.mapError((issue) => new CallerSetFault({ message: `a site name ${issue.message}` })));
-  return { kind: "site", names, ci: yield* heldCiJobs("site", workflows) } satisfies CallerSet;
+  return { kind: "site", names, ci: yield* heldCiJobs("site", workflows), options } satisfies CallerSet;
 });
 
 const FLAGS = new Map(SITE_NAME_KEYS.map((key) => [`--${key}`, key]));
@@ -141,6 +144,20 @@ export type HeldFile = { readonly name: string; readonly text: string; readonly 
 
 // A file that does not parse calls no shared workflow, and the comparison still names it.
 const parsedOrNothing = (text: string): Effect.Effect<unknown> => Effect.try(() => Bun.YAML.parse(text)).pipe(Effect.orElseSucceed(() => undefined));
+
+const decodePrivacy = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ private: Schema.optionalKey(Schema.Boolean) })));
+
+// checks-release-tag publishes every package.json that is not private, so a repository without one is no private package either.
+export const readsPrivatePackage = Effect.fn("readsPrivatePackage")(function* (root: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const file = (yield* Path.Path).join(root, "package.json");
+  if (!(yield* fs.exists(file))) return false;
+  const manifest = yield* fs.readFileString(file).pipe(
+    Effect.flatMap(decodePrivacy),
+    Effect.mapError((cause) => new CallerSetFault({ message: `cannot read package.json: ${cause.message}` })),
+  );
+  return manifest.private === true;
+});
 
 export const readWorkflowFiles = Effect.fn("readWorkflowFiles")(function* (root: string) {
   const fs = yield* FileSystem.FileSystem;

@@ -16,7 +16,7 @@ It refuses when the release notes lack the `CHANGELOG.md` section for that versi
 A release passes without running a test.
 [checks-release-tag](checks-release-tag.md) creates the GitHub release only after the landed tree matches the tree the required checks of its release pull request passed on.
 Those checks passed on that tree, so a published release is a tree that passed them.
-In a repository whose `ci.yml` is the one [checks-workflows](checks-workflows.md) composes, those checks skip every job, so the tag publishes code the pull requests into `main` tested, and the release commit adds only the version and the changelog.
+In a repository whose `ci.yml` is the one [checks-workflows](checks-workflows.md) composes, those checks skip every job but `changes`, so the tag publishes code the pull requests into `main` tested, and the release commit adds only the version and the changelog.
 
 ## What it reads
 
