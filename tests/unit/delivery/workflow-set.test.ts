@@ -207,8 +207,106 @@ test("a site caller that passes another domain than the one the set names differ
 
 const PART = (file: string): string => `avi2d/workflows/.github/workflows/${file}@v3`;
 const DOCS_CHANGED = "needs.changes.outputs.docs-only != 'true'";
-const RELEASE_RUN = "startsWith(github.head_ref || github.ref_name, 'release/')";
+const RELEASE_RUN = "((github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release/')) || (github.event_name == 'pull_request' && github.head_ref == format('release/{0}', github.base_ref) && github.event.pull_request.head.repo.full_name == github.repository))";
 const NOT_RELEASE = `\${{ !${RELEASE_RUN} }}`;
+
+type ReleaseContext = { readonly eventName: string; readonly refName: string; readonly headRef: string; readonly baseRef: string; readonly headRepo: string; readonly repository: string };
+
+const releaseInner = (job: unknown): string => {
+  const condition = (job as { if?: unknown } | undefined)?.if;
+  const text = typeof condition === 'string' ? condition : '';
+  const open = '${{ !';
+  const close = ' }}';
+  return text.startsWith(open) && text.endsWith(close) ? text.slice(open.length, -close.length) : text;
+};
+
+const decidesReleaseRun = (inner: string, ctx: ReleaseContext): boolean => {
+  const firstQuote = (): string => String.fromCharCode(39);
+  const secondQuote = (): string => String.fromCharCode(34);
+  const unquote = (token: string): string => (token[0] === firstQuote() ? token.slice(1, -1) : (JSON.parse(token) as string));
+  const valueOf = (name: string): string => {
+    if (name === 'github.event.pull_request.head.repo.full_name') return ctx.headRepo;
+    if (name === 'github.repository') return ctx.repository;
+    if (name === 'github.event_name') return ctx.eventName;
+    if (name === 'github.ref_name') return ctx.refName;
+    if (name === 'github.head_ref') return ctx.headRef;
+    return ctx.baseRef;
+  };
+  const readTokens = (source: string): readonly string[] => {
+    const stops = [firstQuote(), secondQuote(), ' ', '!', '(', ')', ',', '&', '|', '='];
+    const tokens: string[] = [];
+    let index = 0;
+    while (index < source.length) {
+      const char = source[index] ?? '';
+      if (char.trim() === '') { index += 1; continue; }
+      if (char === firstQuote() || char === secondQuote()) {
+        const end = source.indexOf(char, index + 1);
+        tokens.push(source.slice(index, end + 1));
+        index = end + 1;
+        continue;
+      }
+      const two = source.slice(index, index + 2);
+      if (two === '&&' || two === '||' || two === '==') { tokens.push(two); index += 2; continue; }
+      if (char === '!' || char === '(' || char === ')' || char === ',') { tokens.push(char); index += 1; continue; }
+      let end = index;
+      while (end < source.length && !stops.includes(source[end] ?? '')) end += 1;
+      tokens.push(source.slice(index, end));
+      index = end;
+    }
+    return tokens;
+  };
+  const tokens = readTokens(inner);
+  let at = 0;
+  const peek = (): string => tokens[at] ?? '';
+  const advance = (): string => tokens[at++] ?? '';
+  const toBool = (value: string | boolean): boolean => (typeof value === 'boolean' ? value : value !== '');
+  const parseOr = (): string | boolean => {
+    let left = toBool(parseAnd());
+    while (peek() === '||') { advance(); const right = toBool(parseAnd()); left = left || right; }
+    return left;
+  };
+  const parseAnd = (): string | boolean => {
+    let left = toBool(parseEquality());
+    while (peek() === '&&') { advance(); const right = toBool(parseEquality()); left = left && right; }
+    return left;
+  };
+  const parseEquality = (): string | boolean => {
+    let left = parseUnary();
+    while (peek() === '==') { advance(); const right = parseUnary(); left = (left as string) === (right as string); }
+    return left;
+  };
+  const parseUnary = (): string | boolean => {
+    if (peek() === '!') { advance(); return !toBool(parseUnary()); }
+    return parsePrimary();
+  };
+  const parsePrimary = (): string | boolean => {
+    const token = advance();
+    if (token === '(') {
+      const value = parseOr();
+      if (advance() !== ')') throw new Error('unbalanced parentheses');
+      return value;
+    }
+    if (token === 'startsWith') {
+      if (advance() !== '(') throw new Error('unbalanced parentheses');
+      const left = parseEquality() as string;
+      if (advance() !== ',') throw new Error('unbalanced parentheses');
+      const right = parseEquality() as string;
+      if (advance() !== ')') throw new Error('unbalanced parentheses');
+      return left.startsWith(right);
+    }
+    if (token === 'format') {
+      if (advance() !== '(') throw new Error('unbalanced parentheses');
+      const template = parseEquality() as string;
+      if (advance() !== ',') throw new Error('unbalanced parentheses');
+      const base = parseEquality() as string;
+      if (advance() !== ')') throw new Error('unbalanced parentheses');
+      return template.replace('{0}', base);
+    }
+    if (token[0] === firstQuote() || token[0] === secondQuote()) return unquote(token);
+    return valueOf(token);
+  };
+  return toBool(parseOr());
+};
 
 const ciJobs = (set: CallerSet): Record<string, unknown> => {
   const ci = requiredSet(set).find(({ name }) => name === "ci.yml");
@@ -249,6 +347,22 @@ test("the default code ci.yml runs changes, static and one test job beside each 
   expect(jobs["test"]).not.toHaveProperty(["with", "hold"]);
 });
 
+test('a fork pull request from a release/ branch still runs every job instead of skipping as the release run', () => {
+  const inner = releaseInner(ciJobs(CODE)['changes']);
+  expect(inner).toContain('github.event.pull_request.head.repo.full_name == github.repository');
+  expect(inner).toContain("format('release/{0}', github.base_ref)");
+  expect(inner).toContain("github.event_name == 'workflow_dispatch'");
+  expect(decidesReleaseRun(inner, { eventName: 'pull_request', refName: 'release/main', headRef: 'release/main', baseRef: 'main', headRepo: 'fork/acme', repository: 'acme/acme' })).toBe(false);
+  expect(decidesReleaseRun(inner, { eventName: 'pull_request', refName: 'release/main', headRef: 'release/main', baseRef: 'main', headRepo: 'acme/acme', repository: 'acme/acme' })).toBe(true);
+});
+
+test('a release/ branch that does not match release/<base> still runs every job instead of skipping as the release run', () => {
+  const inner = releaseInner(ciJobs(CODE)['changes']);
+  expect(decidesReleaseRun(inner, { eventName: 'pull_request', refName: 'release/v2-prep', headRef: 'release/v2-prep', baseRef: 'main', headRepo: 'acme/acme', repository: 'acme/acme' })).toBe(false);
+  expect(decidesReleaseRun(inner, { eventName: 'pull_request', refName: 'feature', headRef: 'feature', baseRef: 'main', headRepo: 'acme/acme', repository: 'acme/acme' })).toBe(false);
+  expect(decidesReleaseRun(inner, { eventName: 'workflow_dispatch', refName: 'release/main', headRef: '', baseRef: 'main', headRepo: 'acme/acme', repository: 'acme/acme' })).toBe(true);
+  expect(decidesReleaseRun(inner, { eventName: 'workflow_dispatch', refName: 'main', headRef: '', baseRef: 'main', headRepo: 'acme/acme', repository: 'acme/acme' })).toBe(false);
+});
 test("on the release branch checks-release-pr dispatches ci on, every job skips and the gate passes each skip, rather than the release pull request running the suite", () => {
   for (const set of [SITE, CODE, { ...SITE, ci: { ...SITE.ci, changes: false } }]) {
     const jobs = ciJobs(set);

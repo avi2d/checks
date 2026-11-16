@@ -180,6 +180,17 @@ test("the source stage still runs copy over tracked Markdown, rather than leavin
   expect(mixed.exitCode).toBe(2);
 }, 60_000);
 
+test("a stale non-ignored input is not left to the built stage to pass silently", async () => {
+  const { repo } = await repository();
+  await repo.write({ "checks.config.ts": settingsFile({ copy: { inputs: ["content/*.md", "deleted/*.md"] } }), "content/guide.md": "Example, a site.\n" });
+  await commit(repo, "feat: declare the copy");
+  const source = await lint(repo, ["--stage", "source"]);
+  expect(source.text).not.toContain("leaves checks-copy to the built stage");
+  expect(source.text).toContain("deleted/*.md: the declared input matches no Markdown or HTML file");
+  expect(source.text).toContain("checks-lint: 1 of 14 gate(s) failed: checks-copy");
+  expect(source.exitCode).toBe(1);
+}, 60_000);
+
 test("a copy.json still tracked runs checks-copy, which fails lint naming the checks.config.ts key instead of skipping the gate", async () => {
   const { repo } = await repository();
   await repo.write({ "copy.json": JSON.stringify({ inputs: ["content/*.md"] }), "content/home.md": "Example - a site.\n" });

@@ -89,9 +89,13 @@ The `avi2d/workflows` repository holds the shared workflows, so there it passes 
 
 The gate job is named `checks` and its shared job is named `checks`, so branch protection reads `checks / checks`.
 On a pull request that changes only documentation, the `site` job and the test jobs skip, and the gate passes those skips.
-A repository with no `changes` job runs every job on every pull request.
-On the release pull request, whose `release/` branch [checks-release-pr](checks-release-pr.md) dispatches `ci` on, every job but `checks` skips, and the gate passes those skips.
+A repository with no `changes` job runs every job on every pull request but the release pull request.
+Only two runs count as the release pull request.
+One is the `workflow_dispatch` run on a `release/` branch, which [checks-release-pr](checks-release-pr.md) dispatches.
+The other is the same repository pull request from `release/<base>` into `<base>`.
+On those runs every job but `checks` skips, and the gate passes those skips.
 So the release pull request runs nothing, and its required check still passes.
+A fork branch named `release/` and a `release/` branch that does not match `release/<base>` run every job.
 Each job that needs no other job tests the branch in its `if`, and every other job skips with the job it needs.
 
 The jobs `ci.yml` holds are the record of what the repository runs, and `package.json` names none of them.
