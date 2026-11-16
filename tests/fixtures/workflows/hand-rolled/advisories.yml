@@ -1,0 +1,13 @@
+name: advisories
+
+on:
+  schedule:
+    - cron: "21 5 * * 1"
+  workflow_dispatch:
+
+jobs:
+  advisories:
+    permissions:
+      contents: read
+      issues: write
+    uses: avi2d/workflows/.github/workflows/advisories.yml@v1

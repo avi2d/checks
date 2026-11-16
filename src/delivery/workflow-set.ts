@@ -1,3 +1,4 @@
+import type { CallerOptions, Flake, Pages } from "./caller-options.ts";
 import { DEFAULT_TEST_RUN, SITE_BUILD, type RepositoryKind, type TestJob } from "./ci-jobs.ts";
 import { SHARED_REPOSITORY } from "./mutation-workflow.ts";
 import { RELEASE_BRANCH_PREFIX } from "./release-commit.ts";
@@ -24,6 +25,7 @@ const SHARED_SECRETS = {
   "advisories.yml@v3": [],
   "ci.yml@v3": [],
   "flake.yml@v3": [],
+  "github-pages.yml@v3": [],
   "pr-title.yml@v3": [],
   "preview-remove.yml@v3": ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"],
   "release-main.yml@v3": [],
@@ -48,6 +50,7 @@ type Caller = {
   readonly shared: SharedWorkflow;
   readonly permissions: string;
   readonly with?: SiteNames;
+  readonly inputs?: readonly Input[];
 };
 
 type Input = readonly [key: string, value: string, note?: string];
@@ -61,17 +64,17 @@ type CallingJob = {
   readonly shared: SharedWorkflow;
   readonly permissions: string;
   readonly inputs?: readonly Input[];
+  readonly secrets?: readonly string[];
 };
 
 const noted = (indent: string, line: string, note: string | undefined): readonly string[] => (note === undefined ? [indent + line] : [`${indent}# ${note}`, indent + line]);
 
-function callingJobLines({ job, needs, condition, shared, permissions, inputs = [] }: CallingJob): readonly string[] {
+function callingJobLines({ job, needs, condition, shared, permissions, inputs = [], secrets = SHARED_SECRETS[shared] }: CallingJob): readonly string[] {
   const lines = [`  ${job}:`];
   if (needs !== undefined) lines.push(`    needs: ${needs}`);
   if (condition !== undefined) lines.push(...noted("    ", `if: ${condition.test}`, condition.note));
   lines.push(`    uses: ${SHARED_WORKFLOWS}/${shared}`, `    permissions: { ${permissions} }`);
   if (inputs.length > 0) lines.push("    with:", ...inputs.flatMap(([key, value, note]) => noted("      ", `${key}: ${value}`, note)));
-  const secrets: readonly string[] = SHARED_SECRETS[shared];
   if (secrets.length > 0) lines.push("    secrets:", ...secrets.map((secret) => `      ${secret}: \${{ secrets.${secret} }}`));
   return lines;
 }
@@ -86,7 +89,7 @@ function workflowText({ name, on, concurrency }: Pick<Caller, "name" | "on" | "c
 
 function callerText(caller: Caller): string {
   const names = caller.with;
-  const inputs = names === undefined ? [] : SITE_NAME_KEYS.map((key) => [key, `"${names[key]}"`] as const);
+  const inputs = names === undefined ? (caller.inputs ?? []) : SITE_NAME_KEYS.map((key) => [key, `"${names[key]}"`] as const);
   return workflowText(caller, [{ job: caller.job, shared: caller.shared, permissions: caller.permissions, inputs }]);
 }
 
@@ -114,6 +117,10 @@ const NOT_RELEASE: Condition = {
 type Gated = Pick<CallingJob, "needs" | "condition">;
 
 const quoted = (value: string): string => JSON.stringify(value);
+
+const HOLD_OFF: Input = ["hold", "false"];
+
+const SECRETS_PACK: Input = ["secrets-pack", "true"];
 
 function testCallingJob(test: TestJob, kind: RepositoryKind, gated: Gated): CallingJob {
   const inputs: Input[] = [];
@@ -152,7 +159,8 @@ function composedCiText(set: CallerSet): string {
     ...(changes ? { needs: "changes", condition: { test: NOT_RELEASED } } : { condition: NOT_RELEASE }),
     shared: "static.yml@v3",
     permissions: "contents: read, actions: write, statuses: write, pull-requests: read",
-    inputs: set.kind === "site" ? [["hold", "false"]] : [],
+    inputs: [...(set.kind === "site" ? [HOLD_OFF] : []), ...(set.options.secretsPack ? [SECRETS_PACK] : [])],
+    ...(set.options.secretsPack ? { secrets: ["CHECKS_SECRETS_PACK"] } : {}),
   });
   if (set.kind === "site") {
     jobs.push({ job: "site", ...gated, shared: "site-preview.yml@v3", permissions: "contents: read, pull-requests: write", inputs: [["pages", quoted(set.names.pages)]] });
@@ -211,29 +219,60 @@ const SITE: readonly Caller[] = [
 
 const siteCallers = (names: SiteNames): readonly Caller[] => SITE.map((caller) => (takesSiteNames(caller.shared) ? { ...caller, with: names } : caller));
 
-const CODE: readonly Caller[] = [
-  PR_TITLE,
 // release-main holds no group, so the caller serializes pushes to main.
-  mainCaller("release-main.yml@v3", "contents: write, id-token: write, actions: read, pull-requests: read", { group: "main", cancel: false }),
-  RELEASE,
-];
+const releaseMain = (fullTest: boolean): Caller => ({
+  ...mainCaller("release-main.yml@v3", "contents: write, id-token: write, actions: read, pull-requests: read", { group: "main", cancel: false }),
+  ...(fullTest ? { inputs: [["full-test", "true"]] } : {}),
+});
+
+const codeCallers = (options: CallerOptions): readonly Caller[] => [PR_TITLE, releaseMain(options.fullTest), RELEASE];
 
 const filesOf = (callers: readonly Caller[]): readonly WorkflowFile[] => callers.map((caller) => ({ name: `${caller.name}.yml`, text: callerText(caller) }));
 
-const ADVISORIES: WorkflowFile = {
+// The shared workflow's own schedule fires only in its own repository, so a caller that scans weekly holds its cron.
+const advisoriesFile = (cron: string | undefined): WorkflowFile => ({
   name: "advisories.yml",
-  text: callerText({ name: "advisories", on: BY_HAND, job: "advisories", shared: "advisories.yml@v3", permissions: "contents: read, issues: write" }),
-};
+  text: callerText({
+    name: "advisories",
+    on: cron === undefined ? BY_HAND : [...BY_HAND, "schedule:", `  - cron: ${quoted(cron)}`],
+    job: "advisories",
+    shared: "advisories.yml@v3",
+    permissions: "contents: read, issues: write",
+  }),
+});
 
-const FLAKE: WorkflowFile = {
+const flakeFile = ({ runs, nodeVersionFile }: Flake): WorkflowFile => ({
   name: "flake.yml",
-  text: callerText({ name: "flake", on: BY_HAND, job: "flake", shared: "flake.yml@v3", permissions: "contents: read" }),
-};
+  text: callerText({
+    name: "flake",
+    on: BY_HAND,
+    job: "flake",
+    shared: "flake.yml@v3",
+    permissions: "contents: read",
+    inputs: [...(runs === undefined ? [] : [["runs", quoted(runs)] as const]), ...(nodeVersionFile === undefined ? [] : [["node-version-file", quoted(nodeVersionFile)] as const])],
+  }),
+});
+
+// github-pages.yml holds the deploy group itself, so a caller group would only queue a second run behind the first.
+const docsFile = ({ build, path }: Pages): WorkflowFile => ({
+  name: "docs.yml",
+  text: callerText({
+    name: "docs",
+    on: ["push:", "  branches: [main]", "workflow_dispatch:"],
+    job: "pages",
+    shared: "github-pages.yml@v3",
+    permissions: "contents: read, pages: write, id-token: write",
+    inputs: [
+      ["build", quoted(build)],
+      ["path", quoted(path)],
+    ],
+  }),
+});
 
 const MUTATION: WorkflowFile = { name: "mutation.yml", text: MUTATION_WORKFLOW };
 
 export function requiredSet(set: CallerSet): readonly WorkflowFile[] {
-  return [{ name: "ci.yml", text: composedCiText(set) }, ...filesOf(set.kind === "site" ? siteCallers(set.names) : CODE)];
+  return [{ name: "ci.yml", text: composedCiText(set) }, ...filesOf(set.kind === "site" ? siteCallers(set.names) : codeCallers(set.options))];
 }
 
 function singleJobCiText(set: CallerSet): string {
@@ -248,8 +287,10 @@ export function holdsSingleJobCi(set: CallerSet, present: readonly WorkflowFile[
 }
 
 // A by-hand caller may be absent, but a present one holds exactly this text.
-export function byHandSet(kind: RepositoryKind): readonly WorkflowFile[] {
-  return kind === "site" ? [ADVISORIES] : [ADVISORIES, MUTATION, FLAKE];
+export function byHandSet(set: CallerSet): readonly WorkflowFile[] {
+  const { advisoriesCron, flake, pages } = set.options;
+  const docs = pages === undefined ? [] : [docsFile(pages)];
+  return set.kind === "site" ? [advisoriesFile(advisoriesCron), ...docs] : [advisoriesFile(advisoriesCron), MUTATION, flakeFile(flake), ...docs];
 }
 
 function differentLines(holds: string, writes: string): readonly DifferentLine[] {
@@ -263,7 +304,7 @@ function differentLines(holds: string, writes: string): readonly DifferentLine[]
 export function differencesOf(set: CallerSet, present: readonly WorkflowFile[]): readonly Difference[] {
   const held = new Map(present.filter(({ name }) => !isIgnoredWorkflow(name)).map(({ name, text }) => [name, text]));
   const required = requiredSet(set);
-  const byHand = byHandSet(set.kind);
+  const byHand = byHandSet(set);
   const known = new Set([...required, ...byHand].map(({ name }) => name));
   const judged = [...required, ...byHand.filter(({ name }) => held.has(name))];
   const singleJob = holdsSingleJobCi(set, present);

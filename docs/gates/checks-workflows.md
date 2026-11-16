@@ -49,14 +49,18 @@ A code repository takes these files:
 | `main.yml` | a push to `main` | `release-main.yml@v3` |
 | `release.yml` | `workflow_dispatch` | `release-pr.yml@v3` |
 
+A code repository whose `package.json` does not set `private: true` publishes to npm, so its `main.yml` passes `full-test: true`.
+Then a push of a release commit runs `bun run test --full` once before the tag and the publish.
+A repository without a `package.json` counts as one that publishes.
+
 The `ci.yml` caller runs one run per pull request and cancels the run a newer push replaces.
 Each calling job grants exactly the permissions its shared job declares.
 Each caller passes, by name, exactly the secrets its shared workflow declares under `workflow_call`, each as `NAME: ${{ secrets.NAME }}`.
-A code caller passes no secret, since its shared workflow declares none.
+A code caller passes no secret, except `CHECKS_SECRETS_PACK` to `static.yml` where lint reads the secrets pack.
 GitHub passes `secrets: inherit` only to a workflow in the same organization or enterprise, so a caller that holds it differs from the set.
 The release, site main and production callers hold no concurrency group, since their shared jobs hold their own.
 The code main caller holds group `main` without cancellation, since `release-main.yml` holds no group.
-Every file a code repository takes except `ci.yml` is byte-identical in every code repository.
+Every file a code repository takes except `ci.yml` and `main.yml` is byte-identical in every code repository, and `main.yml` differs only in `full-test`.
 The files a site takes differ between sites only in the three names they pass, the test jobs of `ci.yml` and whether `ci.yml` holds the `changes` job.
 A code repository's `ci.yml` differs from another only in its test jobs and whether it holds the `changes` job.
 `pr-title.yml` and `release.yml` are the same in both kinds.
@@ -64,9 +68,19 @@ A code repository's `ci.yml` differs from another only in its test jobs and whet
 `pr-text.yml` stays as it is in both kinds.
 It runs on `pull_request_target` and comment events, so no `ci.yml` caller replaces it.
 `checks-workflows` never compares it, `--write` neither writes nor deletes it, and it is no extra.
-A by-hand caller may be absent, but a present one holds exactly its caller form, which starts only on `workflow_dispatch`.
-A site may hold `advisories.yml`.
-A code repository may hold `advisories.yml`, `mutation.yml` and `flake.yml`, and its `mutation.yml` is the caller [checks-setup](checks-setup.md) writes.
+An optional caller may be absent, but a present one holds exactly its caller form.
+A site may hold `advisories.yml` and `docs.yml`.
+A code repository may hold `advisories.yml`, `mutation.yml`, `flake.yml` and `docs.yml`, and its `mutation.yml` is the caller [checks-setup](checks-setup.md) writes.
+Each caller form keeps what the file it replaces does:
+
+| File | Calls | Starts on | Keeps |
+| --- | --- | --- | --- |
+| `advisories.yml` | `advisories.yml@v3` | `workflow_dispatch` | one weekly `schedule` cron, such as `"21 5 * * 1"`, and drops any other |
+| `flake.yml` | `flake.yml@v3` | `workflow_dispatch` | the `runs` and `node-version-file` a caller passes, or the `node-version-file` an `actions/setup-node` step sets up |
+| `docs.yml` | `github-pages.yml@v3` | a push to `main` and `workflow_dispatch` | the `build` and `path` a caller passes, or the one `run` step and the `actions/upload-pages-artifact` path of the job that uploads the site |
+
+A `docs.yml` that gives no `build` and `path` is no workflow of the set.
+Its caller holds no concurrency group, since `github-pages.yml` holds its own.
 
 It fails when a file of the set is missing or differs by a byte, or when a workflow file outside the set appears.
 In a site it also fails when the site callers miss a name, pass two values of one, or pass one that does not parse.
@@ -107,6 +121,7 @@ A test job that passes no `runs-on` gets the `CI_RUNS_ON` one, and a `run`, `bro
 In a site, a test job that passes `artifact: "site-dist"` reads the build, so it waits for the `site` job.
 `static`, `site` in a site and `checks` are always there, and no test job is named `changes`, `static`, `site` or `checks`.
 Every other line of the file is the shape the kit writes: the order of the jobs, `needs`, `if`, the pins, the permissions, the secrets and `hold`.
+A `ci.yml` that writes the secrets pack, through `static.yml` with `secrets-pack: true` or an `actions/secrets-pack` step, gets a `static` job that passes `secrets-pack: true` and `CHECKS_SECRETS_PACK`.
 In a site, `static` and each test job that does not read the build pass `hold: false`, so a draft still gets its preview link.
 
 A `ci.yml` that calls no part gets the default jobs of its kind:
@@ -133,7 +148,7 @@ It passes until `checks-workflows --write` replaces it with the composed `ci.yml
 
 ## What it reads
 
-It reads the `.yml` and `.yaml` files under `.github/workflows/` from the repository root.
+It reads the `.yml` and `.yaml` files under `.github/workflows/` from the repository root, and `private` in `package.json`.
 It names the repository by `GITHUB_REPOSITORY`, or by the `origin` remote outside CI.
 
 ## Arguments
@@ -157,7 +172,7 @@ It names the fix.
 | --- | --- |
 | 0 | the workflow files are the set, or `--write` wrote it |
 | 1 | a file of the set is missing or differs, another workflow file appears, the site callers pass none, two values or an unparsable value of a name, or a test job of `ci.yml` passes an unparsable input or holds a fixed job's name |
-| 2 | the arguments do not parse, a workflow file cannot be read, a site write lacks one of the three names, passes two values of one, or names one that does not parse, or a test job of `ci.yml` passes an unparsable input or holds a fixed job's name |
+| 2 | the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, passes two values of one, or names one that does not parse, or a test job of `ci.yml` passes an unparsable input or holds a fixed job's name |
 
 ## Sample output
 

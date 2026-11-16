@@ -54,7 +54,7 @@ test("a code repository without workflow files is refused until --write writes c
 
 const SITE_FLAGS = ["--pages", SITE.pages, "--domain", SITE.domain, "--production", SITE.production];
 
-test("a first site write takes the three names as flags, gets the six site callers, keeps advisories in its caller form, and loses the workflow files the set replaces", async () => {
+test("a first site write takes the three names as flags, gets the six site callers, keeps advisories in its caller form with its weekly cron, and loses the workflow files the set replaces", async () => {
   const repo = await open({
     "package.json": manifest(),
     ".github/workflows/pages.yml": "name: pages\non: push\n",
@@ -71,7 +71,7 @@ test("a first site write takes the three names as flags, gets the six site calle
   expect(await held(repo)).toEqual(["advisories.yml", "ci.yml", "main.yml", "pr-title.yml", "preview-close.yml", "production.yml", "release.yml"]);
   expect(await parsed(repo, "advisories.yml")).toEqual({
     name: "advisories",
-    on: { workflow_dispatch: null },
+    on: { workflow_dispatch: null, schedule: [{ cron: "15 5 * * 1" }] },
     jobs: { advisories: { uses: "avi2d/workflows/.github/workflows/advisories.yml@v3", permissions: { contents: "read", issues: "write" } } },
   });
   expect(await parsed(repo, "ci.yml")).toMatchObject({
@@ -209,4 +209,37 @@ test("a code repository on the single-job ci.yml passes with the command that wr
     },
   });
   expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the code set checks-workflows writes\n" });
+}, 30_000);
+
+const HAND_ROLLED = join(CHECKOUT, "tests", "fixtures", "workflows", "hand-rolled");
+
+const handRolled = async (name: string): Promise<string> => readFile(join(HAND_ROLLED, name), "utf8");
+
+test("--write turns a hand-rolled Pages deploy, secrets pack, flake run and weekly scan into callers that keep them, instead of deleting docs.yml or dropping the cron", async () => {
+  const files = Object.fromEntries(
+    await Promise.all(["ci.yml", "docs.yml", "flake.yml", "advisories.yml"].map(async (name) => [`.github/workflows/${name}`, await handRolled(name)] as const)),
+  );
+  const repo = await open({ "package.json": manifest(), ...files });
+  await repo.commit("start");
+
+  expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 7 workflow file(s) of the code set\n" });
+  expect(await held(repo)).toEqual(["advisories.yml", "ci.yml", "docs.yml", "flake.yml", "main.yml", "pr-title.yml", "release.yml"]);
+  expect(await parsed(repo, "docs.yml")).toMatchObject({
+    on: { push: { branches: ["main"] } },
+    jobs: { pages: { uses: "avi2d/workflows/.github/workflows/github-pages.yml@v3", with: { build: "bun run docs:build", path: "docs/.vitepress/dist" } } },
+  });
+  expect(await parsed(repo, "ci.yml")).toMatchObject({ jobs: { static: { with: { "secrets-pack": true }, secrets: { CHECKS_SECRETS_PACK: "${{ secrets.CHECKS_SECRETS_PACK }}" } } } });
+  expect(await parsed(repo, "flake.yml")).toMatchObject({ jobs: { flake: { uses: "avi2d/workflows/.github/workflows/flake.yml@v3", with: { "node-version-file": ".node-version" } } } });
+  expect(await parsed(repo, "advisories.yml")).toMatchObject({ on: { schedule: [{ cron: "21 5 * * 1" }] } });
+  expect(await parsed(repo, "main.yml")).toMatchObject({ jobs: { release: { with: { "full-test": true } } } });
+  expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the code set checks-workflows writes\n" });
+}, 30_000);
+
+test("a private package's main.yml runs no full suite before the release, since checks-release-tag publishes nothing for it", async () => {
+  const repo = await open({ "package.json": manifest({ private: true }) });
+  await repo.commit("start");
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  const main = await parsed(repo, "main.yml");
+  expect(main).toMatchObject({ jobs: { release: { uses: "avi2d/workflows/.github/workflows/release-main.yml@v3" } } });
+  expect(JSON.stringify(main)).not.toContain("full-test");
 }, 30_000);
