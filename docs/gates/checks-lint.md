@@ -35,7 +35,7 @@ Each gate belongs to one of two stages, by what it reads:
 | source | every other gate |
 
 A build writes files git does not track, so an input that matches no tracked file and whose static prefix git ignores, such as `dist/**/*.html` where `dist/` is ignored, reads build output.
-An input that matches no tracked file and whose static prefix git does not ignore stays in the source stage, where the gate fails naming it.
+An input that matches no tracked file and whose static prefix git does not ignore keeps the gate in the source stage, where the gate fails naming it.
 A gate that reads build output runs whole in the built stage, so its other inputs are checked only where the built stage runs.
 A gate whose declared inputs do not decode stays in the source stage, where it fails naming what is wrong.
 `--stage source` runs the selected gates of the source stage, and names each gate it leaves to the built stage.
