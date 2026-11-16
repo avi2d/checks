@@ -135,6 +135,62 @@ test("declaring copy in checks.config.ts opts a repository into checks-copy, whi
   expect(green.exitCode).toBe(0);
 }, 60_000);
 
+test("the source stage leaves copy over the built pages to the built stage, which fails on a page the build never wrote instead of passing", async () => {
+  const { repo } = await repository();
+  await repo.write({
+    ".gitignore": "node_modules/\ndist/\n",
+    "checks.config.ts": settingsFile({ copy: { inputs: ["content/*.md", "dist/*.html"] } }),
+    "content/home.md": "Example, a site.\n",
+  });
+  await commit(repo, "feat: declare the built copy");
+  const source = await lint(repo, ["--stage", "source"]);
+  expect(source.text).toContain("checks-lint: the source stage leaves checks-copy to the built stage");
+  expect(source.text).toContain("checks-lint: 13 gate(s) pass");
+  expect(source.exitCode).toBe(0);
+  const unbuilt = await lint(repo, ["--stage", "built"]);
+  expect(unbuilt.text).toContain("checks-lint: the built stage judges the working tree");
+  expect(unbuilt.text).toContain("dist/*.html: the declared input matches no Markdown or HTML file");
+  expect(unbuilt.text).toContain("checks-lint: 1 of 1 gate(s) failed: checks-copy");
+  expect(unbuilt.exitCode).toBe(1);
+  await repo.write({ "dist/index.html": "<!doctype html><html lang=\"en\"><head><title>Home</title></head><body><p>Example - a site.</p></body></html>\n" });
+  const dashed = await lint(repo, ["--stage", "built"]);
+  expect(dashed.text).toContain("dist/index.html:1:");
+  expect(dashed.text).toContain("a hyphen used as a dash");
+  expect(dashed.exitCode).toBe(1);
+  await repo.write({ "dist/index.html": "<!doctype html><html lang=\"en\"><head><title>Home</title></head><body><p>Example, a site.</p></body></html>\n" });
+  const built = await lint(repo, ["--stage", "built"]);
+  expect(built.text).toContain("checks-lint: 1 gate(s) pass");
+  expect(built.exitCode).toBe(0);
+  const every = await lint(repo);
+  expect(every.text).toContain("checks-lint: 14 gate(s) pass");
+  expect(every.exitCode).toBe(0);
+}, 120_000);
+
+test("the source stage still runs copy over tracked Markdown, rather than leaving every declared gate to the built stage", async () => {
+  const { repo } = await repository();
+  await repo.write({ "checks.config.ts": settingsFile({ copy: { inputs: ["content/*.md"] } }), "content/home.md": "Example - a site.\n" });
+  await commit(repo, "feat: declare the copy");
+  const source = await lint(repo, ["--stage", "source"]);
+  expect(source.text).toContain("checks-lint: 1 of 14 gate(s) failed: checks-copy");
+  expect(source.exitCode).toBe(1);
+  const built = await lint(repo, ["--stage", "built"]);
+  expect(built.text).toContain("checks-lint: 0 gate(s) pass");
+  expect(built.exitCode).toBe(0);
+  const mixed = await lint(repo, ["--stage", "built", "--full"]);
+  expect(mixed.exitCode).toBe(2);
+}, 60_000);
+
+test("a stale non-ignored input is not left to the built stage to pass silently", async () => {
+  const { repo } = await repository();
+  await repo.write({ "checks.config.ts": settingsFile({ copy: { inputs: ["content/*.md", "deleted/*.md"] } }), "content/guide.md": "Example, a site.\n" });
+  await commit(repo, "feat: declare the copy");
+  const source = await lint(repo, ["--stage", "source"]);
+  expect(source.text).not.toContain("leaves checks-copy to the built stage");
+  expect(source.text).toContain("deleted/*.md: the declared input matches no Markdown or HTML file");
+  expect(source.text).toContain("checks-lint: 1 of 14 gate(s) failed: checks-copy");
+  expect(source.exitCode).toBe(1);
+}, 60_000);
+
 test("a copy.json still tracked runs checks-copy, which fails lint naming the checks.config.ts key instead of skipping the gate", async () => {
   const { repo } = await repository();
   await repo.write({ "copy.json": JSON.stringify({ inputs: ["content/*.md"] }), "content/home.md": "Example - a site.\n" });

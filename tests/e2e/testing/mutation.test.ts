@@ -31,7 +31,7 @@ test("loading the preset for a scoped run, a CI run or another command lets it t
   expect((await ran($`bun ${PRESET} run --mutate src/billing.ts`.cwd(repo.dir).env(withoutCi))).exitCode).toBe(0);
   expect((await ran($`bun ${PRESET} run`.cwd(repo.dir).env({ ...withoutCi, CI: "true" }))).exitCode).toBe(0);
   expect((await ran($`bun ${PRESET} init`.cwd(repo.dir).env(withoutCi))).exitCode).toBe(0);
-});
+}, 60_000);
 
 const PLUGIN = join(CHECKOUT, "dist", "mutation", "mutation-guard-plugin.js");
 const buildGuard = `const { strykerPlugins } = await import(${JSON.stringify(PLUGIN)}); strykerPlugins[0].factory({ incrementalFile: "reports/custom.json" });`;

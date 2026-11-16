@@ -185,6 +185,7 @@
     }
   },
   "devDependencies": {
+    "@actions/expressions": "^0.3.61",
     "@axe-core/playwright": "4.13.0",
     "@effect/tsgo": "0.45.0",
     "@hughescr/stryker-bun-runner": "1.4.0",

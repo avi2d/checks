@@ -219,6 +219,9 @@ frontend-syntax: no violation in 2 file(s) from 2 declared input(s)
 ## When it runs
 
 `checks-lint` runs it in the full run when `checks.config.ts` sets `frontendSyntax`, or when the repository still tracks `frontend-syntax.json` at its root.
+An input the `frontendSyntax` key declares reads build output when it matches no file git tracks and git ignores the static prefix before its first glob character, such as `dist/` for built pages.
+Then `checks-lint --stage source` leaves out a gate that reads build output, and `checks-lint --stage built` runs it after the build, as [Stages](checks-lint.md#stages) says.
+A declared input that matches no tracked file without an ignored static prefix keeps the gate in the source stage.
 A repository with neither never runs it and needs neither `stylelint.config.ts` nor the peers.
 
 ## Related topics

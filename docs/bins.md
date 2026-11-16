@@ -11,31 +11,32 @@ The kit ships one bin per check, each named `checks-` and called from a package 
 `checks-lint` runs each of these gates that applies to the repository, and names every one that fails.
 A gate reads either the working tree or the range `checks-lint` resolves, or the whole tree at the head under `checks-lint --whole-tree`.
 It scopes tree gates to the change unless `--full` forces the full run, and `--desk` runs the fast tree gates.
+With `--stage source` it leaves out the gates of the built stage, and with `--stage built` it runs only them, as [Stages](gates/checks-lint.md#stages) says.
 The table groups the gates by vector, the part of a repository each one judges.
 
-<!-- generated gates: bun run build writes it from KIT_GATES in src/core/gates.ts and scripts/doc-blocks.ts -->
+<!-- generated gates: bun run build writes it from KIT_GATES in src/core/gates.ts, src/core/stage.ts and scripts/doc-blocks.ts -->
 
-| Vector | Gate | Reads | Runs in |
-| --- | --- | --- | --- |
-| complexity | [`checks-suppressions-ratchet`](gates/checks-suppressions-ratchet.md) | the range | every repository |
-| complexity | [`checks-repetition`](gates/checks-repetition.md) | the range | a repository tracking `*.ts` or `*.tsx` |
-| complexity | [`checks-graphwalk`](gates/checks-graphwalk.md) | the range | a repository tracking `*.ts` or `*.tsx` or `*.astro` |
-| quality | [`checks-lint-coverage`](gates/checks-lint-coverage.md) | the working tree | a repository tracking `*.ts` or `*.tsx` or `*.astro` |
-| quality | [`checks-comment-gate`](gates/checks-comment-gate.md) | the range | every repository |
-| quality | [`checks-effect-scope`](gates/checks-effect-scope.md) | the working tree | a repository tracking `oxlint.config.ts` |
-| quality | [`checks-frontend-syntax`](gates/checks-frontend-syntax.md) | the working tree | a repository whose `checks.config.ts` sets `frontendSyntax` |
-| quality | [`checks-css-size`](gates/checks-css-size.md) | the working tree | a repository tracking `*.css` |
-| quality | [`checks-no-plain-js`](gates/checks-no-plain-js.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
-| testing | [`checks-test-layout`](gates/checks-test-layout.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
-| testing | [`checks-quarantine-clock`](gates/checks-quarantine-clock.md) | the range | every repository |
-| docs | [`checks-docs`](gates/checks-docs.md) | the range, and every agent file at the head commit and every live record's governed paths | every repository |
-| docs | [`checks-copy`](gates/checks-copy.md) | the working tree | a repository whose `checks.config.ts` sets `copy` |
-| delivery | [`checks-commit-identity`](gates/checks-commit-identity.md) | the range | every repository |
-| delivery | [`checks-ci-wiring`](gates/checks-ci-wiring.md) | the working tree | every repository |
-| delivery | [`checks-plain-steps`](gates/checks-plain-steps.md) | the working tree | every repository |
-| delivery | [`checks-secrets`](gates/checks-secrets.md) | the range | every repository |
-| delivery | [`checks-no-mistakes-test`](gates/checks-no-mistakes-test.md) | the working tree | a repository tracking `.no-mistakes.yaml` |
-| dependencies | [`checks-advisories`](gates/checks-advisories.md) | the range | a repository tracking `bun.lock` |
+| Vector | Gate | Reads | Runs in | Stage |
+| --- | --- | --- | --- | --- |
+| complexity | [`checks-suppressions-ratchet`](gates/checks-suppressions-ratchet.md) | the range | every repository | source |
+| complexity | [`checks-repetition`](gates/checks-repetition.md) | the range | a repository tracking `*.ts` or `*.tsx` | source |
+| complexity | [`checks-graphwalk`](gates/checks-graphwalk.md) | the range | a repository tracking `*.ts` or `*.tsx` or `*.astro` | source |
+| quality | [`checks-lint-coverage`](gates/checks-lint-coverage.md) | the working tree | a repository tracking `*.ts` or `*.tsx` or `*.astro` | source |
+| quality | [`checks-comment-gate`](gates/checks-comment-gate.md) | the range | every repository | source |
+| quality | [`checks-effect-scope`](gates/checks-effect-scope.md) | the working tree | a repository tracking `oxlint.config.ts` | source |
+| quality | [`checks-frontend-syntax`](gates/checks-frontend-syntax.md) | the working tree | a repository whose `checks.config.ts` sets `frontendSyntax` | built, when a declared input matches no tracked file and every unmatched input has a static prefix git ignores, else source |
+| quality | [`checks-css-size`](gates/checks-css-size.md) | the working tree | a repository tracking `*.css` | source |
+| quality | [`checks-no-plain-js`](gates/checks-no-plain-js.md) | the working tree | a repository tracking `*.ts` or `*.tsx` | source |
+| testing | [`checks-test-layout`](gates/checks-test-layout.md) | the working tree | a repository tracking `*.ts` or `*.tsx` | source |
+| testing | [`checks-quarantine-clock`](gates/checks-quarantine-clock.md) | the range | every repository | source |
+| docs | [`checks-docs`](gates/checks-docs.md) | the range, and every agent file at the head commit and every live record's governed paths | every repository | source |
+| docs | [`checks-copy`](gates/checks-copy.md) | the working tree | a repository whose `checks.config.ts` sets `copy` | built, when a declared input matches no tracked file and every unmatched input has a static prefix git ignores, else source |
+| delivery | [`checks-commit-identity`](gates/checks-commit-identity.md) | the range | every repository | source |
+| delivery | [`checks-ci-wiring`](gates/checks-ci-wiring.md) | the working tree | every repository | source |
+| delivery | [`checks-plain-steps`](gates/checks-plain-steps.md) | the working tree | every repository | source |
+| delivery | [`checks-secrets`](gates/checks-secrets.md) | the range | every repository | source |
+| delivery | [`checks-no-mistakes-test`](gates/checks-no-mistakes-test.md) | the working tree | a repository tracking `.no-mistakes.yaml` | source |
+| dependencies | [`checks-advisories`](gates/checks-advisories.md) | the range | a repository tracking `bun.lock` | source |
 
 <!-- end generated gates -->
 
