@@ -25,7 +25,7 @@ test("the two kinds share pr-title and release byte for byte, so neither drifts 
   expect(site.get("ci.yml")).not.toBe(code.get("ci.yml"));
 });
 
-test("an absent by-hand caller is no difference, but one that runs its own steps is", () => {
+test("an absent optional caller is no difference, but one that runs its own steps is", () => {
   const written = requiredSet(CODE);
   expect(differencesOf(CODE, written)).toEqual([]);
   expect(byHandSet(SITE).map(({ name }) => name)).toEqual(["advisories.yml"]);
@@ -208,7 +208,7 @@ const EVERY_OPTION: CallerSet = {
   ci: DEFAULT_CI_JOBS.code,
   options: {
     advisoriesCron: "21 5 * * 1",
-    flake: { runs: "20", nodeVersionFile: ".node-version" },
+    flake: { nodeVersionFile: ".node-version" },
     pages: { build: "bun run docs:build", path: "docs/.vitepress/dist" },
     secretsPack: true,
     fullTest: true,
@@ -228,7 +228,7 @@ const DECLARED_INPUTS: Readonly<Record<string, readonly string[]>> = {
   "release-main.yml": ["full-test"],
   "release-pr.yml": [],
   "pr-title.yml": [],
-  "flake.yml": ["runs", "node-version-file"],
+  "flake.yml": ["node-version-file"],
   "github-pages.yml": ["build", "path"],
 };
 
@@ -250,7 +250,7 @@ test("every option lands where the shared-ci page puts it, so a pack lint withou
   });
   expect(everyOptionFile("main.yml")).toMatchObject({ jobs: { release: { uses: PART("release-main.yml"), with: { "full-test": true } } } });
   expect(everyOptionFile("advisories.yml")).toMatchObject({ on: { schedule: [{ cron: "21 5 * * 1" }] } });
-  expect(everyOptionFile("flake.yml")).toMatchObject({ on: { workflow_dispatch: null }, jobs: { flake: { with: { runs: "20", "node-version-file": ".node-version" } } } });
+  expect(everyOptionFile("flake.yml")).toMatchObject({ on: { workflow_dispatch: null }, jobs: { flake: { with: { "node-version-file": ".node-version" } } } });
   const docs = everyOptionFile("docs.yml");
   expect(docs).toMatchObject({
     on: { push: { branches: ["main"] } },

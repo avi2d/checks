@@ -55,7 +55,7 @@ A repository without a `package.json` counts as one that publishes.
 
 The `ci.yml` caller runs one run per pull request and cancels the run a newer push replaces.
 Each calling job grants exactly the permissions its shared job declares.
-Each caller passes, by name, exactly the secrets its shared workflow declares under `workflow_call`, each as `NAME: ${{ secrets.NAME }}`.
+Each caller passes, by name, only the secrets its run needs from what its shared workflow declares under `workflow_call`, each as `NAME: ${{ secrets.NAME }}`.
 A code caller passes no secret, except `CHECKS_SECRETS_PACK` to `static.yml` where lint reads the secrets pack.
 GitHub passes `secrets: inherit` only to a workflow in the same organization or enterprise, so a caller that holds it differs from the set.
 The release, site main and production callers hold no concurrency group, since their shared jobs hold their own.
@@ -75,8 +75,8 @@ Each caller form keeps what the file it replaces does:
 
 | File | Calls | Starts on | Keeps |
 | --- | --- | --- | --- |
-| `advisories.yml` | `advisories.yml@v3` | `workflow_dispatch` | one weekly `schedule` cron, such as `"21 5 * * 1"`, and drops any other |
-| `flake.yml` | `flake.yml@v3` | `workflow_dispatch` | the `runs` and `node-version-file` a caller passes, or the `node-version-file` an `actions/setup-node` step sets up |
+| `advisories.yml` | `advisories.yml@v3` | `workflow_dispatch` | its `schedule` cron when it holds exactly one and that one is weekly, such as `"21 5 * * 1"`, and drops any other schedule |
+| `flake.yml` | `flake.yml@v3` | `workflow_dispatch` | the `node-version-file` a caller passes, or the `node-version-file` an `actions/setup-node` step sets up |
 | `docs.yml` | `github-pages.yml@v3` | a push to `main` and `workflow_dispatch` | the `build` and `path` a caller passes, or the one `run` step and the `actions/upload-pages-artifact` path of the job that uploads the site |
 
 A `docs.yml` that gives no `build` and `path` is no workflow of the set.
@@ -159,7 +159,7 @@ checks-workflows --write
 checks-workflows --write --pages acme --domain acme.example --production acme/acme.example
 ```
 
-With `--write` it writes every file of the set, rewrites a present by-hand caller to its caller form, and deletes every other workflow file except `pr-text.yml`.
+With `--write` it writes every file of the set, rewrites a present optional caller to its caller form, and deletes every other workflow file except `pr-text.yml`.
 It writes `ci.yml` with the jobs the present `ci.yml` holds, in the shape the kit writes.
 A rewrite of a site keeps the three names its callers pass.
 `--pages`, `--domain` and `--production` name a site with no site caller yet, and each replaces the name the callers pass.

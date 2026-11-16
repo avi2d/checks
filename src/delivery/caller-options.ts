@@ -4,7 +4,7 @@ import { crons } from "./release-schedule.ts";
 import { weekly } from "./schedule-policy.ts";
 import { workflowJobs, type Workflow } from "./workflow-references.ts";
 
-export type Flake = { readonly runs: string | undefined; readonly nodeVersionFile: string | undefined };
+export type Flake = { readonly nodeVersionFile: string | undefined };
 
 export type CallerOptions = {
   readonly advisoriesCron: string | undefined;
@@ -16,15 +16,13 @@ export type CallerOptions = {
 
 export const NO_CALLER_OPTIONS: CallerOptions = {
   advisoriesCron: undefined,
-  flake: { runs: undefined, nodeVersionFile: undefined },
+  flake: { nodeVersionFile: undefined },
   pages: undefined,
   secretsPack: false,
   fullTest: false,
 };
 
 export type HeldWorkflow = (name: string) => Workflow | undefined;
-
-const Text = Schema.Union([Schema.String, Schema.Finite]);
 
 const Step = Schema.Struct({
   uses: Schema.optionalKey(Schema.String),
@@ -33,7 +31,7 @@ const Step = Schema.Struct({
 });
 
 const decodeSteps = Schema.decodeUnknownOption(Schema.Struct({ steps: Schema.Array(Step) }));
-const decodeFlakeInputs = Schema.decodeUnknownOption(Schema.Struct({ runs: Schema.optionalKey(Text), "node-version-file": Schema.optionalKey(Schema.String) }));
+const decodeFlakeInputs = Schema.decodeUnknownOption(Schema.Struct({ "node-version-file": Schema.optionalKey(Schema.String) }));
 const PagesInputs = Schema.Struct({ build: Schema.String, path: Schema.String });
 
 export type Pages = typeof PagesInputs.Type;
@@ -69,10 +67,10 @@ function flakeOf(flake: Workflow | undefined): Flake {
   if (call !== undefined) {
     return Option.match(decodeFlakeInputs(call), {
       onNone: () => NO_CALLER_OPTIONS.flake,
-      onSome: (inputs) => ({ runs: inputs.runs === undefined ? undefined : String(inputs.runs), nodeVersionFile: inputs["node-version-file"] }),
+      onSome: (inputs) => ({ nodeVersionFile: inputs["node-version-file"] }),
     });
   }
-  return { runs: undefined, nodeVersionFile: flake === undefined ? undefined : heldNodeVersionFile(flake) };
+  return { nodeVersionFile: flake === undefined ? undefined : heldNodeVersionFile(flake) };
 }
 
 // A hand-rolled deploy builds with its one run step in the job that uploads the Pages artifact.

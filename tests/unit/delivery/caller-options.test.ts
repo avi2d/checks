@@ -93,10 +93,10 @@ test("a weekly advisories cron is kept, and a daily or doubled one is dropped ra
   expect(optionsOf({ "advisories.yml": advisories(["21 5 * * 1", "21 5 * * 4"]) }).advisoriesCron).toBeUndefined();
 });
 
-test("a hand-rolled flake run keeps the Node version file it sets up, and a caller keeps runs written as a YAML number", () => {
-  expect(optionsOf({ "flake.yml": HAND_ROLLED_FLAKE }).flake).toEqual({ runs: undefined, nodeVersionFile: ".node-version" });
+test("a hand-rolled flake run keeps the Node version file it sets up, and a caller drops a runs count it passes", () => {
+  expect(optionsOf({ "flake.yml": HAND_ROLLED_FLAKE }).flake).toEqual({ nodeVersionFile: ".node-version" });
   const caller = "name: flake\non: workflow_dispatch\njobs:\n  flake:\n    uses: avi2d/workflows/.github/workflows/flake.yml@v3\n    with:\n      runs: 20\n";
-  expect(optionsOf({ "flake.yml": caller }).flake).toEqual({ runs: "20", nodeVersionFile: undefined });
+  expect(optionsOf({ "flake.yml": caller }).flake).toEqual({ nodeVersionFile: undefined });
 });
 
 test("lint reads the secrets pack where ci.yml writes it in a step or passes secrets-pack to static.yml, and not where static.yml gets false", () => {

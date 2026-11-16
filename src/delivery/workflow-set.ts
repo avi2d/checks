@@ -241,7 +241,7 @@ const advisoriesFile = (cron: string | undefined): WorkflowFile => ({
   }),
 });
 
-const flakeFile = ({ runs, nodeVersionFile }: Flake): WorkflowFile => ({
+const flakeFile = ({ nodeVersionFile }: Flake): WorkflowFile => ({
   name: "flake.yml",
   text: callerText({
     name: "flake",
@@ -249,7 +249,7 @@ const flakeFile = ({ runs, nodeVersionFile }: Flake): WorkflowFile => ({
     job: "flake",
     shared: "flake.yml@v3",
     permissions: "contents: read",
-    inputs: [...(runs === undefined ? [] : [["runs", quoted(runs)] as const]), ...(nodeVersionFile === undefined ? [] : [["node-version-file", quoted(nodeVersionFile)] as const])],
+    inputs: [...(nodeVersionFile === undefined ? [] : [["node-version-file", quoted(nodeVersionFile)] as const])],
   }),
 });
 
@@ -286,7 +286,7 @@ export function holdsSingleJobCi(set: CallerSet, present: readonly WorkflowFile[
   return present.some((file) => file.name === "ci.yml" && file.text === text);
 }
 
-// A by-hand caller may be absent, but a present one holds exactly this text.
+// An optional caller may be absent, but a present one holds exactly this text.
 export function byHandSet(set: CallerSet): readonly WorkflowFile[] {
   const { advisoriesCron, flake, pages } = set.options;
   const docs = pages === undefined ? [] : [docsFile(pages)];

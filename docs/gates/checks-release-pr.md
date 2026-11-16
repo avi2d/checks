@@ -158,8 +158,8 @@ GitHub may bill the job as two minutes whether it opens, refreshes or leaves the
 A private repository runs it there too unless `CI_RUNS_ON` names its self-hosted runner, which bills no minutes.
 The `tag` job runs only when a release lands, and a job its `if` skips bills nothing.
 The checks it dispatches are the release pull request's own required checks, and they run again only when `main` moves under it.
-The release workflow publishes the tag with no test tiers, since the required checks of the release pull request already passed on that tree.
-In a repository whose `ci.yml` is the one [checks-workflows](checks-workflows.md) composes, those checks skip every job, so the tag publishes code the pull requests into `main` tested, and the release commit adds only the version and the changelog.
+The release workflow publishes the tag after the full suite runs once where the package publishes, since the required checks of the release pull request already passed on that tree.
+In a repository whose `ci.yml` is the one [checks-workflows](checks-workflows.md) composes, those checks skip every job but `changes`, so the tag publishes code the pull requests into `main` tested, and the release commit adds only the version and the changelog.
 GitHub also holds the `pull_request` runs of the release pull request for approval, and expires each one at merge as a failure with no job.
 The last step of `pull-request`, `avi2d/workflows/actions/held-runs@v2`, deletes those held runs on the release branch's tip right after the pull request opens or refreshes.
 It reads the held runs on that tip every 5 seconds for up to 30 seconds.
