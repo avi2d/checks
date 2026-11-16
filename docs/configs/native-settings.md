@@ -4,7 +4,7 @@ audience: consumers
 ---
 # Native settings
 
-A consuming repository puts each setting in the file its tool reads, and no manifest of the kit gathers them.
+A consuming repository puts each setting in the file its tool reads, and checks.config.ts gathers the settings no tool file owns.
 
 ## Settings by file
 
@@ -20,6 +20,7 @@ A consuming repository puts each setting in the file its tool reads, and no mani
 | `stylelint.config.ts` | The Baseline target, the token files, the CSS families the repository turns on, and any stylelint rule the repository sets over the kit's families | `checks-frontend-syntax` |
 | `dependency-cruiser.config.ts` | Entry points nothing imports, paths that may import dev dependencies, and import boundaries, when the kit's defaults do not fit | `checks-graphwalk` |
 | `tsconfig.json` | Compiler options, and the Effect language service plugin whose `overrides` and kit severities `checks-effect-scope` writes, keeping every other key | TypeScript and Effect language service |
+| `checks.config.ts` | The settings no tool file owns: `smoke`, `reach`, `mutationRunner`, `selfHostedRunners`, `browser`, `copy` and `frontendSyntax` | `checks-test`, `checks-ci-wiring`, `checks-browser`, `checks-copy`, `checks-frontend-syntax` and `checks-lint` |
 | `package.json` | `scripts` with the `checks-vendor` arguments in `prepare`, `author` and `contributors` | Bun, `checks-commit-identity` and `checks-vendor` |
 | `bunfig.toml` | Test discovery and quarantine exclusion | Bun and `checks-test-layout` |
 | `stryker.conf.mjs` | Mutation settings | Stryker |
@@ -79,13 +80,44 @@ export default defineConfig({ devOnly: ["^(?:evals|tests)/"] });
 
 [The dependency rules](dependency-rules.md) lists its keys.
 
-A repository that declares `frontend-syntax.json` writes `stylelint.config.ts`, which [checks-frontend-syntax](../gates/checks-frontend-syntax.md) loads and describes:
+A repository whose `checks.config.ts` sets `frontendSyntax` writes `stylelint.config.ts`, which [checks-frontend-syntax](../gates/checks-frontend-syntax.md) loads and describes:
 
 ```ts
 import { defineConfig } from "@avi2dg/checks/stylelint";
 
 export default defineConfig({ baseline: "widely", tokens: false });
 ```
+
+## The settings file
+
+`checks.config.ts` holds the settings the kit reads that no tool file owns.
+A repository creates `checks.config.ts` only when it declares a setting, and a missing file reads as no settings.
+Its default export is the result of `defineConfig` from `@avi2dg/checks/config`, and every key is optional:
+
+```ts
+import { defineConfig } from "@avi2dg/checks/config";
+
+export default defineConfig({
+  smoke: ["tests/e2e/checkout.test.ts"],
+  copy: { inputs: ["src/content/**/*.md"] },
+});
+```
+
+| Key | What it holds | Reader |
+| --- | --- | --- |
+| `smoke` | the test files a local run adds to the unit tier | [checks-test](../gates/checks-test.md) |
+| `reach` | the tests each changed path a site's import graph misses reaches | [checks-test](../gates/checks-test.md#the-reach-map) |
+| `mutationRunner` | the runner labels of a private repository's mutation jobs | [checks-ci-wiring](../gates/checks-ci-wiring.md) |
+| `selfHostedRunners` | the other self-hosted label sets a private repository's jobs may carry | [checks-ci-wiring](../gates/checks-ci-wiring.md) |
+| `browser` | the browser declaration | [checks-browser](../gates/checks-browser.md#what-it-reads) |
+| `copy` | the copy inputs | [checks-copy](../gates/checks-copy.md) |
+| `frontendSyntax` | the frontend syntax inputs | [checks-frontend-syntax](../gates/checks-frontend-syntax.md) |
+
+A key the kit does not know fails the reading gate.
+A setting left in its old place fails its gate with exit 2 and a message naming the key it moves to.
+A `checks` object in `package.json` that sets `smoke`, `reach`, `mutationRunner` or `selfHostedRunners` fails the gate that reads that key with exit 2.
+A root `browser-checks.json`, `copy.json` or `frontend-syntax.json` fails the gate that reads that key with exit 2.
+`advisory-acks.json` stays a file of its own, since [checks-advisories](../gates/checks-advisories.md) reads it at a commit rather than from the working tree.
 
 `tsconfig.json` keeps the config files in its program, so `bun run typecheck` holds them to the builders' types.
 

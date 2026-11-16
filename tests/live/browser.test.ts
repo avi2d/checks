@@ -24,7 +24,7 @@ test("layout is red on sideways overflow, a clipped, cut off, covered or hidden 
     "missing.html": page("<p>No link here</p>"),
     "invisible.html": page(`<p><a href="/" style="display: none">Write to me</a></p>`),
   };
-  const site = await browserSite({ ...sitePages(red), "browser-checks.json": declaration({ routes: routesOf(red), checks: ["layout"] }) });
+  const site = await browserSite({ ...sitePages(red), "checks.config.ts": declaration({ routes: routesOf(red), checks: ["layout"] }) });
   const failed = await site.run();
   const failures = failuresOf(failed.text);
   for (const [path, part] of [
@@ -83,7 +83,7 @@ test("layout passes an icon drawn before a label, a label in a shadow root, an S
   };
   const site = await browserSite({
     ...sitePages(pages),
-    "browser-checks.json": declaration({
+    "checks.config.ts": declaration({
       routes: routesOf(pages),
       targets: [
         { name: "skip link", selector: "a.skip", routes: Object.keys(parked).map((path) => `/${path}`), focusable: true },
@@ -114,7 +114,7 @@ test("a long Russian action that fits at default text but clips at enlarged text
     page(`<p><a href="mailto:wren@example.com" style="display: inline-block; ${style}">Написать письмо владельцу</a></p>`, { lang: "ru" });
   const site = await browserSite({
     "dist/ru/index.html": action("width: 260px; white-space: nowrap; overflow: hidden"),
-    "browser-checks.json": declaration({
+    "checks.config.ts": declaration({
       routes: [{ path: "/ru/", locale: "ru" }],
       viewports: [{ name: "phone", width: 375, height: 812, touch: true }],
       states: [{ name: "default" }, { name: "enlarged text", textPx: 32 }],
@@ -139,7 +139,7 @@ test("the shipped starter declaration visits every anchor size in every state it
   ] as const;
   const site = await browserSite({
     "dist/index.html": page(`<h1>Fixture</h1><p><a href="/">Write to me</a></p>`),
-    "browser-checks.json": await readFile(join(CHECKOUT, "src", "quality", "browser", "browser-checks.json"), "utf8"),
+    "checks.config.ts": `export default { browser: ${await readFile(join(CHECKOUT, "src", "quality", "browser", "browser-checks.json"), "utf8")} };\n`,
   });
   const passed = await site.run();
   expect(failuresOf(passed.text)).toEqual([]);
@@ -158,7 +158,7 @@ test("keyboard is red on a hidden focus ring and on a target Tab skips, and gree
     "ringless.html": page(`<p><a href="/">Write to me</a></p>`, { head: "<style>a:focus { outline: none; }</style>" }),
     "skipped.html": page(`<p><a href="/" tabindex="-1">Write to me</a></p>`),
   };
-  const site = await browserSite({ ...sitePages(red), "browser-checks.json": declaration({ routes: routesOf(red), checks: ["keyboard"] }) });
+  const site = await browserSite({ ...sitePages(red), "checks.config.ts": declaration({ routes: routesOf(red), checks: ["keyboard"] }) });
   const failed = await site.run();
   expect(failuresOf(failed.text)).toEqual([
     `${at("keyboard", "/ringless.html")} link shows no visible focus when Tab reaches it`,
@@ -180,7 +180,7 @@ test("keyboard lists a focus with no part on screen as no visible focus and stil
     }),
     "clean.html": CLEAN_LINK,
   };
-  const site = await browserSite({ ...sitePages(pages), "browser-checks.json": declaration({ routes: routesOf(pages), checks: ["keyboard"] }) });
+  const site = await browserSite({ ...sitePages(pages), "checks.config.ts": declaration({ routes: routesOf(pages), checks: ["keyboard"] }) });
   const failed = await site.run();
   expect(failuresOf(failed.text)).toEqual([`${at("keyboard", "/off-screen.html")} link shows no visible focus when Tab reaches it`]);
   expect(failed.text).toContain(`browser: ${at("keyboard", "/clean.html").slice(0, -1)} scanned link 1`);
@@ -196,7 +196,7 @@ test("keyboard is red when Tab never leaves the page, and green once the trap is
   const trap = `<button id="trap" type="button">Stay</button><script>document.getElementById("trap").addEventListener("keydown", (event) => { if (event.key === "Tab") event.preventDefault(); });</script>`;
   const site = await browserSite({
     "dist/index.html": page(`<p><a href="/">Write to me</a></p>${trap}`),
-    "browser-checks.json": declaration({ checks: ["keyboard"] }),
+    "checks.config.ts": declaration({ checks: ["keyboard"] }),
   });
   const failed = await site.run();
   expect(failuresOf(failed.text)).toEqual([`${at("keyboard", "/")} Tab never leaves the page within 500 stops`]);
@@ -213,7 +213,7 @@ test("a control the page renders once for each breakpoint is judged only where i
     "dist/index.html": page(`<p><a class="phone" href="/">Write</a><a class="desktop" href="/">Write to me</a></p>`, {
       head: "<style>.desktop { display: none; } @media (min-width: 1000px) { .phone { display: none; } .desktop { display: inline; } }</style>",
     }),
-    "browser-checks.json": declaration({
+    "checks.config.ts": declaration({
       viewports: [
         { name: "phone", width: 320, height: 640 },
         { name: "desktop", width: 1280, height: 800 },
@@ -234,7 +234,7 @@ test("motion is red on a hover transition a visitor who turns motion off still s
   const hovered = (css: string): string => page(`<p><a href="/">Write to me</a></p>${SLOW_POINTER}`, { head: `<style>${css}</style>` });
   const site = await browserSite({
     "dist/index.html": hovered("a { transition: color 300ms; } a:hover { color: red; }"),
-    "browser-checks.json": declaration({ states: [{ name: "default" }, { name: "reduced motion", reducedMotion: "reduce" }], checks: ["motion"] }),
+    "checks.config.ts": declaration({ states: [{ name: "default" }, { name: "reduced motion", reducedMotion: "reduce" }], checks: ["motion"] }),
   });
   const failed = await site.run();
   const reversed = "motion at / (en), phone 320x640, reduced motion: color animated on leaving control 1";
@@ -257,7 +257,7 @@ test("motion is red on an animation during load, a focus transition and smooth s
     });
   const site = await browserSite({
     "dist/index.html": moving(""),
-    "browser-checks.json": declaration({ states: [{ name: "reduced motion", reducedMotion: "reduce" }], checks: ["motion"] }),
+    "checks.config.ts": declaration({ states: [{ name: "reduced motion", reducedMotion: "reduce" }], checks: ["motion"] }),
   });
   const failed = await site.run();
   expect(failuresOf(failed.text)).toEqual([
@@ -280,7 +280,7 @@ test("axe is red on nested interactive markup, low contrast and a viewport that 
     "zoomless.html": page(`<p><a href="/">Write to me</a></p>`, { viewport: "width=device-width, maximum-scale=1, user-scalable=no" }),
     "pictured.html": page(`<p style="background-image: url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22/>'); color: #000">Over a picture <a href="/">Write to me</a></p>`),
   };
-  const site = await browserSite({ ...sitePages(red), "browser-checks.json": declaration({ routes: routesOf(red), checks: ["axe"] }) });
+  const site = await browserSite({ ...sitePages(red), "checks.config.ts": declaration({ routes: routesOf(red), checks: ["axe"] }) });
   const failed = await site.run();
   const failures = failuresOf(failed.text);
   expect(failures.filter((line) => line.startsWith(`${at("axe", "/nested.html")} nested-interactive (serious): button`))).toHaveLength(1);
@@ -302,7 +302,7 @@ test("nesting is red on a button inside a link and on a link inside a button, an
     "button-in-link.html": page(`<p><a href="/">Open the row <button type="button">Archive</button></a></p>`),
     "link-in-button.html": page(`<p><button type="button">Open <a href="/">the row</a></button></p>`),
   };
-  const site = await browserSite({ ...sitePages(red), "browser-checks.json": declaration({ routes: routesOf(red), checks: ["nesting"] }) });
+  const site = await browserSite({ ...sitePages(red), "checks.config.ts": declaration({ routes: routesOf(red), checks: ["nesting"] }) });
   const failed = await site.run();
   expect(failuresOf(failed.text)).toEqual([
     `${at("nesting", "/button-in-link.html")} <button> element is not permitted as a descendant of <a> at 1:198 of the rendered page`,
@@ -324,7 +324,7 @@ test("html is red on an unlabelled input, a list item outside a list and an empt
   };
   const site = await browserSite({
     ...sitePages(red),
-    "browser-checks.json": declaration({
+    "checks.config.ts": declaration({
       routes: routesOf(red),
       checks: ["html"],
       viewports: [{ name: "phone", width: 320, height: 640 }, { name: "tablet", width: 820, height: 1180 }],
@@ -356,7 +356,7 @@ test("html is red on an unlabelled input, a list item outside a list and an empt
 test("a declared target fails when it matches no visible element whichever checks are declared, and passes once it shows", async () => {
   const site = await browserSite({
     "dist/index.html": page("<p>No link here</p>"),
-    "browser-checks.json": declaration({ targets: [{ name: "link", selector: "main a" }], checks: ["assets"] }),
+    "checks.config.ts": declaration({ targets: [{ name: "link", selector: "main a" }], checks: ["assets"] }),
   });
   const failed = await site.run();
   expect(failuresOf(failed.text)).toEqual([`${at("targets", "/")} link (main a) matches no visible element`]);
@@ -371,7 +371,7 @@ test("a declared target fails when it matches no visible element whichever check
 test("a declared route the site does not serve fails, and the run passes once the route is built", async () => {
   const site = await browserSite({
     "dist/index.html": CLEAN_LINK,
-    "browser-checks.json": declaration({ routes: [{ path: "/", locale: "en" }, { path: "/ru/", locale: "ru" }], checks: ["layout"] }),
+    "checks.config.ts": declaration({ routes: [{ path: "/", locale: "en" }, { path: "/ru/", locale: "ru" }], checks: ["layout"] }),
   });
   const failed = await site.run();
   expect(failuresOf(failed.text)).toEqual(["route /ru/ serves no page from the declared site"]);
@@ -383,12 +383,12 @@ test("a declared route the site does not serve fails, and the run passes once th
   expect(passed.exitCode).toBe(0);
 }, 120_000);
 
-test("without a declaration, with an empty target list, a missing site or a motion check no state can judge, the runner refuses before it starts a browser", async () => {
+test("without a declaration, with an empty target list, a missing site, a motion check no state can judge or a browser-checks.json left behind, the runner refuses before it starts a browser", async () => {
   const unlaunchable = { CHROME_PATH: "/nonexistent/chrome" };
   const site = await browserSite({ "dist/index.html": CLEAN_LINK, "unbuilt/site.css": "" });
   const cases = [
-    [undefined, "browser: browser-checks.json is missing, and a product opts in to the browser checks by declaring its pages there"],
-    [declaration({ targets: [], checks: ["layout"] }), "browser: browser-checks.json does not decode"],
+    [undefined, "browser: checks.config.ts sets no browser key, and a product opts in to the browser checks by declaring its pages there"],
+    [declaration({ targets: [], checks: ["layout"] }), "browser: checks.config.ts key browser does not decode"],
     [declaration({ site: "build", checks: ["layout"] }), "browser: the declared site build is not a directory, so build the site before the browser checks run"],
     [declaration({ checks: ["motion"] }), "check motion judges a visitor who turns motion off, and no state that runs it sets reducedMotion to reduce"],
     [
@@ -400,17 +400,23 @@ test("without a declaration, with an empty target list, a missing site or a moti
     [declaration({ checks: ["shift"] }), "check shift judges the movement of a cold load, and no bound declares it"],
     [
       declaration({ checks: ["weight"], weight: { nonImageBytes: 0, scriptBytes: 1, imageBytes: 1 } }),
-      "browser: browser-checks.json does not decode",
+      "browser: checks.config.ts key browser does not decode",
     ],
-    [declaration({ checks: ["shift"], shift: { max: -0.1 } }), "browser: browser-checks.json does not decode"],
+    [declaration({ checks: ["shift"], shift: { max: -0.1 } }), "browser: checks.config.ts key browser does not decode"],
     [declaration({ checks: ["layout"], hooks: "tests/browser/hooks.ts" }), "browser: the declared hooks module tests/browser/hooks.ts is missing"],
   ] as const;
   for (const [declared, message] of cases) {
-    if (declared !== undefined) await site.write({ "browser-checks.json": declared });
+    if (declared !== undefined) await site.write({ "checks.config.ts": declared });
     const refused = await site.run(unlaunchable);
     expect({ text: refused.text, exitCode: refused.exitCode }).toEqual({ text: expect.stringContaining(message), exitCode: 2 });
     expect(refused.text).not.toContain("Chrome");
   }
+  await site.write({ "checks.config.ts": declaration({ checks: ["layout"] }), "browser-checks.json": "{}" });
+  const moved = await site.run(unlaunchable);
+  expect({ text: moved.text, exitCode: moved.exitCode }).toEqual({
+    text: expect.stringContaining("browser: browser-checks.json is no longer read; move it to the browser key of checks.config.ts"),
+    exitCode: 2,
+  });
 }, 120_000);
 
 const SAVES = (ordered: boolean): string =>
@@ -547,7 +553,7 @@ test("product hooks are red on a late reply that replaces a newer save, a refuse
   const site = await browserSite({
     "dist/index.html": SAVES(false),
     "tests/browser/hooks.ts": HOOKS(HOOK_TYPES),
-    "browser-checks.json": declaration({ checks: ["layout"], targets: [{ name: "save button", selector: "#save-a, #save-b" }], hooks: "tests/browser/hooks.ts" }),
+    "checks.config.ts": declaration({ checks: ["layout"], targets: [{ name: "save button", selector: "#save-a, #save-b" }], hooks: "tests/browser/hooks.ts" }),
   });
   const failed = await site.run();
   expect(failuresOf(failed.text)).toEqual([
@@ -576,7 +582,7 @@ test("a hook that throws or scans no target fails at its visit", async () => {
   { name: "empty", run: async () => ({ targets: [], found: [] }) },
 ];
 `,
-    "browser-checks.json": declaration({ checks: ["layout"], hooks: "tests/browser/hooks.ts" }),
+    "checks.config.ts": declaration({ checks: ["layout"], hooks: "tests/browser/hooks.ts" }),
   });
   const failed = await site.run();
   expect(failuresOf(failed.text)).toEqual([

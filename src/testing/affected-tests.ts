@@ -1,6 +1,7 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
 import { workingTreeFiles } from "../core/git.ts";
 import { classifyPath } from "../core/scope.ts";
+import { decodeSetting, loadSettings, Reach, SETTINGS_FILE } from "../core/settings.ts";
 import { decodeBunfig, importedFile, importsOf, preloadPaths, resolved, TEST_TREE } from "./mutation-scope-graph.ts";
 
 export type Narrowing =
@@ -30,6 +31,7 @@ export type Repository = {
 };
 
 const FIXTURES = "tests/fixtures/";
+const REACH = `${SETTINGS_FILE} reach`;
 // A workflow runs the suite rather than being read by it, so a test that reads one names its path.
 const WORKFLOWS = ".github/";
 const TEST_FILE = /\.test\.tsx?$/;
@@ -94,13 +96,13 @@ function mappedTests(path: string, repository: Repository): readonly string[] | 
 export function refuseReachMap(value: unknown): string | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return "package.json: checks.reach is not a map of changed paths to test files";
+    return `${REACH} is not a map of changed paths to test files`;
   }
   for (const [key, entry] of Object.entries(value)) {
-    if (key === "") return "package.json: checks.reach has an empty changed-path key";
-    if (!Array.isArray(entry) || entry.length === 0) return `package.json: checks.reach lists no test file for ${key}`;
+    if (key === "") return `${REACH} has an empty changed-path key`;
+    if (!Array.isArray(entry) || entry.length === 0) return `${REACH} lists no test file for ${key}`;
     const bad = entry.find((candidate) => typeof candidate !== "string" || candidate === "");
-    if (bad !== undefined) return `package.json: checks.reach names an empty test file for ${key}`;
+    if (bad !== undefined) return `${REACH} names an empty test file for ${key}`;
   }
   return undefined;
 }
@@ -245,7 +247,7 @@ function preloadClosure(repository: Repository): ReadonlySet<string> {
 function reachMapProblem(repository: Repository): string | undefined {
   const stale = staleReachPatterns(repository);
   if (stale.length === 0) return undefined;
-  return `package.json: checks.reach names ${stale.map((entry) => `${entry.pattern} for ${entry.changed}`).join(", ")}, which matches no test file`;
+  return `${REACH} names ${stale.map((entry) => `${entry.pattern} for ${entry.changed}`).join(", ")}, which matches no test file`;
 }
 
 export function narrowTests(changed: readonly string[], repository: Repository, tests: readonly string[]): Narrowing {
@@ -278,17 +280,12 @@ function reachedTests(changed: readonly string[], repository: Repository, tests:
   return tests.filter((test) => reached.has(test) || mapped.has(test));
 }
 
-export const Manifest = Schema.Struct({
+const Manifest = Schema.Struct({
   name: Schema.optionalKey(Schema.String),
   exports: Schema.optionalKey(Schema.Unknown),
   bin: Schema.optionalKey(Schema.Union([Schema.String, Schema.Record(Schema.String, Schema.String)])),
-  checks: Schema.optionalKey(Schema.Struct({
-    reach: Schema.optionalKey(Schema.Unknown),
-  })),
 });
 const decodeManifest = Schema.decodeUnknownEffect(Schema.fromJsonString(Manifest));
-const ReachMap = Schema.Record(Schema.String, Schema.Array(Schema.String));
-const decodeReachMap = Schema.decodeUnknownEffect(ReachMap);
 
 class NarrowingError extends Schema.TaggedError<NarrowingError>()("NarrowingError", {
   message: Schema.String,
@@ -319,14 +316,10 @@ const readRepository = Effect.fn("readRepository")(function* (root: string) {
         Effect.flatMap(decodeBunfig),
       )
     : {};
-  const rawReach = manifest.checks?.reach;
+  const rawReach = (yield* loadSettings(root))["reach"];
   const refusal = refuseReachMap(rawReach);
   if (refusal !== undefined) return yield* new ReachMapError({ message: refusal });
-  const decoded = rawReach === undefined
-    ? undefined
-    : yield* decodeReachMap(rawReach).pipe(
-      Effect.mapError((cause) => new ReachMapError({ message: `package.json: ${cause.message}` })),
-    );
+  const decoded = rawReach === undefined ? undefined : yield* decodeSetting("reach", Reach, rawReach);
   return {
     files,
     sources,

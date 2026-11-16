@@ -49,6 +49,7 @@
     "./tsconfig.effect.json": "./tsconfig.effect.json",
     "./browser-hooks.ts": "./src/quality/browser/hooks.ts",
     "./browser-checks.json": "./src/quality/browser/browser-checks.json",
+    "./config": "./src/quality/config.ts",
     "./screen-sizes.ts": "./src/quality/browser/screen-sizes.ts",
     "./block-screens.ts": "./src/testing/block-screens.ts",
     "./site-test.ts": "./src/testing/site-test.ts",

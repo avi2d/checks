@@ -1,6 +1,7 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { fixtureRepos } from "../lib/fixture-repo.ts";
+import { settingsFile } from "../lib/settings-file.ts";
 
 const open = fixtureRepos("checks-copy-");
 
@@ -12,7 +13,7 @@ const REPORTED = "## Что уже запущено\n\n- [example.com](https://e
 const FIXED = "## Что уже запущено\n\n- [example.com](https://example.com/ru), платформа заметок и личных\n  задач\n";
 const BUILT = '<!doctype html>\n<html lang="ru"><head><title>Example</title></head>\n<body><p><a href="https://example.com/ru">example.com</a> - платформа</p></body></html>\n';
 
-const DECLARED = { "copy.json": JSON.stringify({ inputs: ["src/content/**/*.md", "dist/**/*.html"] }) };
+const DECLARED = { "checks.config.ts": settingsFile({ copy: { inputs: ["src/content/**/*.md", "dist/**/*.html"] } }) };
 
 test("red on a site's home page line, in its Markdown and its built page, and green on the comma form", async () => {
   const { write, script } = await open({ ...DECLARED, "src/content/home.ru.md": REPORTED, "dist/index.html": BUILT });
@@ -34,7 +35,7 @@ test("red on a site's home page line, in its Markdown and its built page, and gr
 }, 60_000);
 
 test("a declared input that matches no file, or a file of another kind, fails until the declaration names copy", async () => {
-  const { write, script } = await open({ "copy.json": JSON.stringify({ inputs: ["src/content/*", "dist/**/*.html"] }), "src/content/home.ru.md": FIXED, "src/content/site.ts": "export {};\n" });
+  const { write, script } = await open({ "checks.config.ts": settingsFile({ copy: { inputs: ["src/content/*", "dist/**/*.html"] } }), "src/content/home.ru.md": FIXED, "src/content/site.ts": "export {};\n" });
   const red = await script(GATE);
   expect(red.text).toBe(
     [
@@ -46,7 +47,7 @@ test("a declared input that matches no file, or a file of another kind, fails un
   );
   expect(red.exitCode).toBe(1);
 
-  await write({ "copy.json": JSON.stringify({ inputs: ["src/content/*.md"] }) });
+  await write({ "checks.config.ts": settingsFile({ copy: { inputs: ["src/content/*.md"] } }) });
   const green = await script(GATE);
   expect(green.text).toBe("copy: no violation in 1 file(s) from 1 declared input(s)\n");
   expect(green.exitCode).toBe(0);
@@ -55,14 +56,14 @@ test("a declared input that matches no file, or a file of another kind, fails un
 test("a repository without the declaration, or with an empty input list, is refused before anything is judged", async () => {
   const { dir, write, script } = await open({ "src/content/home.ru.md": REPORTED });
   const undeclared = await script(GATE);
-  expect(undeclared.text).toContain("copy: copy.json is missing, and a repository opts in to this gate by declaring its copy there");
+  expect(undeclared.text).toContain("copy: checks.config.ts sets no copy key, and a repository opts in to this gate by declaring its copy there");
   expect(undeclared.exitCode).toBe(2);
 
-  await write({ "copy.json": JSON.stringify({ inputs: [] }) });
+  await write({ "checks.config.ts": settingsFile({ copy: { inputs: [] } }) });
   const empty = await script(GATE);
-  expect(empty.text).toContain("copy: copy.json does not decode");
+  expect(empty.text).toContain("copy: checks.config.ts key copy does not decode");
   expect(empty.exitCode).toBe(2);
 
-  await $`rm copy.json`.cwd(dir).quiet();
+  await $`rm checks.config.ts`.cwd(dir).quiet();
   expect((await script(GATE)).exitCode).toBe(2);
 }, 60_000);

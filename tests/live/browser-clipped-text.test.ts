@@ -10,7 +10,7 @@ test("layout reports only text that a box really clips: a decorative svg overflo
   };
   const site = await browserSite({
     ...sitePages(pages),
-    "browser-checks.json": declaration({ routes: routesOf(pages), targets: [{ name: "note", selector: "main p" }], checks: ["layout"] }),
+    "checks.config.ts": declaration({ routes: routesOf(pages), targets: [{ name: "note", selector: "main p" }], checks: ["layout"] }),
   });
   const passed = await site.run();
   expect(failuresOf(passed.text)).toEqual([]);
@@ -24,7 +24,7 @@ test("layout stays silent when tight leading fits and when a scaled box fits", a
   };
   const site = await browserSite({
     ...sitePages(pages),
-    "browser-checks.json": declaration({ routes: routesOf(pages), checks: ["layout"] }),
+    "checks.config.ts": declaration({ routes: routesOf(pages), checks: ["layout"] }),
   });
   const passed = await site.run();
   expect(failuresOf(passed.text)).toEqual([]);
@@ -38,7 +38,7 @@ test("layout is red when a scaled box cuts its text", async () => {
   };
   const site = await browserSite({
     ...sitePages(pages),
-    "browser-checks.json": declaration({ routes: routesOf(pages), checks: ["layout"] }),
+    "checks.config.ts": declaration({ routes: routesOf(pages), checks: ["layout"] }),
   });
   const failed = await site.run();
   const failures = failuresOf(failed.text);
@@ -55,7 +55,7 @@ test("layout ignores text a descendant already clips", async () => {
   };
   const site = await browserSite({
     ...sitePages(pages),
-    "browser-checks.json": declaration({ routes: routesOf(pages), targets: [{ name: "link", selector: "main a", routes: ["/ellipsis-child.html"] }, { name: "button", selector: "main button", routes: ["/sr-button.html"] }], checks: ["layout"] }),
+    "checks.config.ts": declaration({ routes: routesOf(pages), targets: [{ name: "link", selector: "main a", routes: ["/ellipsis-child.html"] }, { name: "button", selector: "main button", routes: ["/sr-button.html"] }], checks: ["layout"] }),
   });
   const passed = await site.run();
   expect(failuresOf(passed.text)).toEqual([]);
@@ -76,7 +76,7 @@ test("layout reports shadow, scroll, static, clip, indent and perspective cuts",
   };
   const site = await browserSite({
     ...sitePages(pages),
-    "browser-checks.json": declaration({ routes: routesOf(pages), targets: [{ name: "link", selector: "main a", routes: ["/auto-clip.html", "/static-cut.html", "/perspective.html", "/clip-cut.html", "/indent-cut.html"] }, { name: "clip", selector: "main x-clip", routes: ["/shadow-clip.html"] }], checks: ["layout"] }),
+    "checks.config.ts": declaration({ routes: routesOf(pages), targets: [{ name: "link", selector: "main a", routes: ["/auto-clip.html", "/static-cut.html", "/perspective.html", "/clip-cut.html", "/indent-cut.html"] }, { name: "clip", selector: "main x-clip", routes: ["/shadow-clip.html"] }], checks: ["layout"] }),
   });
   const failed = await site.run();
   const failures = failuresOf(failed.text);
@@ -95,7 +95,7 @@ test("clipped vertical text is reported when a y-only line trim would hide it", 
   };
   const site = await browserSite({
     ...sitePages(pages),
-    "browser-checks.json": declaration({ routes: routesOf(pages), targets: [{ name: "link", selector: "main a", routes: ["/vertical-cut.html"] }], checks: ["layout"] }),
+    "checks.config.ts": declaration({ routes: routesOf(pages), targets: [{ name: "link", selector: "main a", routes: ["/vertical-cut.html"] }], checks: ["layout"] }),
   });
   const failed = await site.run();
   const failures = failuresOf(failed.text);
@@ -115,7 +115,7 @@ test("layout stays silent when no box cuts the text", async () => {
   };
   const site = await browserSite({
     ...sitePages(pages),
-    "browser-checks.json": declaration({ routes: routesOf(pages), checks: ["layout"] }),
+    "checks.config.ts": declaration({ routes: routesOf(pages), checks: ["layout"] }),
   });
   const passed = await site.run();
   expect(failuresOf(passed.text)).toEqual([]);

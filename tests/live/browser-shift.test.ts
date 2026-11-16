@@ -12,7 +12,7 @@ test("shift is red on a cold load the page moves, and green once the page holds 
   const site = await browserSite({
     "dist/index.html": shifting(),
     "dist/still.html": still(),
-    "browser-checks.json": declaration({
+    "checks.config.ts": declaration({
       routes: [{ path: "/", locale: "en" }, { path: "/still.html", locale: "en" }],
       checks: ["shift"],
       shift: { max: 0.1 },

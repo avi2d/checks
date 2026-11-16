@@ -23,13 +23,13 @@ The table groups the gates by vector, the part of a repository each one judges.
 | quality | [`checks-lint-coverage`](gates/checks-lint-coverage.md) | the working tree | a repository tracking `*.ts` or `*.tsx` or `*.astro` |
 | quality | [`checks-comment-gate`](gates/checks-comment-gate.md) | the range | every repository |
 | quality | [`checks-effect-scope`](gates/checks-effect-scope.md) | the working tree | a repository tracking `oxlint.config.ts` |
-| quality | [`checks-frontend-syntax`](gates/checks-frontend-syntax.md) | the working tree | a repository tracking `frontend-syntax.json` |
+| quality | [`checks-frontend-syntax`](gates/checks-frontend-syntax.md) | the working tree | a repository whose `checks.config.ts` sets `frontendSyntax` |
 | quality | [`checks-css-size`](gates/checks-css-size.md) | the working tree | a repository tracking `*.css` |
 | quality | [`checks-no-plain-js`](gates/checks-no-plain-js.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
 | testing | [`checks-test-layout`](gates/checks-test-layout.md) | the working tree | a repository tracking `*.ts` or `*.tsx` |
 | testing | [`checks-quarantine-clock`](gates/checks-quarantine-clock.md) | the range | every repository |
 | docs | [`checks-docs`](gates/checks-docs.md) | the range, and every agent file at the head commit and every live record's governed paths | every repository |
-| docs | [`checks-copy`](gates/checks-copy.md) | the working tree | a repository tracking `copy.json` |
+| docs | [`checks-copy`](gates/checks-copy.md) | the working tree | a repository whose `checks.config.ts` sets `copy` |
 | delivery | [`checks-commit-identity`](gates/checks-commit-identity.md) | the range | every repository |
 | delivery | [`checks-ci-wiring`](gates/checks-ci-wiring.md) | the working tree | every repository |
 | delivery | [`checks-plain-steps`](gates/checks-plain-steps.md) | the working tree | every repository |
@@ -66,7 +66,7 @@ These bins run on their own:
 - [`checks-release-tag`](gates/checks-release-tag.md) releases a landed release commit: it tags it, and then releases and publishes it or dispatches the release workflow on the tag.
 - [`checks-production-gate`](gates/checks-production-gate.md) refuses to publish a commit to production unless it is a published release.
 - [`checks-vendor`](gates/checks-vendor.md) pins each library its `prepare` arguments name to a shared read-only clone and links it under `repos/`.
-- [`checks-browser`](gates/checks-browser.md) opens a product's built pages in Chrome and fails on the checks its `browser-checks.json` declares.
+- [`checks-browser`](gates/checks-browser.md) opens a product's built pages in Chrome and fails on the checks the `browser` key of its `checks.config.ts` declares.
 - [`checks-commit-title`](gates/checks-commit-title.md) lints the pull request title in one step of the `ci` job.
 - [`checks-pr-text`](gates/checks-pr-text.md) scans the title, body and comments of a pull request in a public repository for a secret or a term of the private pack.
 - [`checks-docs-only`](gates/checks-docs-only.md) tells whether a change touches only top-level Markdown and Markdown under `docs/`, so a docs-only change skips the full run.

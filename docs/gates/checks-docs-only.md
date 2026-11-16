@@ -44,8 +44,7 @@ docs-only=true
 The `static` and `unit` jobs of the `ci` workflow append the verdict to `GITHUB_OUTPUT` in a filter step.
 Their typecheck and test steps skip when the verdict reads `true`.
 The `e2e` job does not read this verdict.
-The `changes` job's `docs-only` action with `paths: "*.[mM][dD] copy.json"` covers Markdown and the root `copy.json`.
-That set is wider than this bin's.
+The `changes` job's `docs-only` action with `paths: "*.[mM][dD]"` covers Markdown.
 The build, its `git diff --exit-code` and `bun run lint` still run, so `checks-docs` and the generated blocks hold on a docs-only change.
 The `checks` job still runs and reports, so its required check stays green on a docs-only change.
 

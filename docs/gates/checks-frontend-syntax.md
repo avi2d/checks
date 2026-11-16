@@ -120,13 +120,17 @@ These are outside what it decides:
 
 ## What it reads
 
-It reads `frontend-syntax.json` in the directory it runs in, which lists the inputs as globs:
+It reads the `frontendSyntax` key of `checks.config.ts` in the directory it runs in, which lists the inputs as globs:
 
-```json
-{
-  "inputs": ["src/**/*.css", "src/**/*.astro", "dist/**/*.html"]
-}
+```ts
+import { defineConfig } from "@avi2dg/checks/config";
+
+export default defineConfig({
+  frontendSyntax: { inputs: ["src/**/*.css", "src/**/*.astro", "dist/**/*.html"] },
+});
 ```
+
+A `frontend-syntax.json` left in that directory fails the run and names the key it moves to.
 
 A glob over built output, such as `dist/**/*.html`, judges the styles a framework or a CSS tool generates, and needs the build to run first.
 stylelint resolves each glob from that directory, skips `node_modules/` and honours `.stylelintignore`.
@@ -194,7 +198,7 @@ It checks the directory it runs in, or the directory it is given.
 | --- | --- |
 | 0 | every declared input matches a file, and no file holds a problem beyond its suppressed count |
 | 1 | a file holds a problem or does not parse, or a declared input matches no file |
-| 2 | `frontend-syntax.json` is missing or does not decode, its input list is empty, `stylelint.config.ts` is missing or does not load, stylelint refuses an option, a peer cannot load, or an argument is unknown |
+| 2 | `checks.config.ts` sets no `frontendSyntax` key, the key does not decode, `frontend-syntax.json` is still there, its input list is empty, `stylelint.config.ts` is missing or does not load, stylelint refuses an option, a peer cannot load, or an argument is unknown |
 
 ## Sample output
 
@@ -214,8 +218,8 @@ frontend-syntax: no violation in 2 file(s) from 2 declared input(s)
 
 ## When it runs
 
-`checks-lint` runs it in the full run when the repository tracks `frontend-syntax.json` at its root.
-A repository without that file never runs it and needs neither `stylelint.config.ts` nor the peers.
+`checks-lint` runs it in the full run when `checks.config.ts` sets `frontendSyntax`, or when the repository still tracks `frontend-syntax.json` at its root.
+A repository with neither never runs it and needs neither `stylelint.config.ts` nor the peers.
 
 ## Related topics
 

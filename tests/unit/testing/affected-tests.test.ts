@@ -1,7 +1,5 @@
 import { expect, test } from "bun:test";
-import { Schema } from "effect";
 import {
-  Manifest,
   narrowLocalTests,
   narrowTests,
   refuseReachMap,
@@ -203,7 +201,7 @@ test("a stale reach value runs the whole suite rather than narrowing to its mapp
   const renamed = { ...SITE, reach: [...SITE.reach, { changed: "src/styles/menu.css", tests: ["tests/e2e/nav.test.ts"] }] };
   expect(narrowTests(["src/styles/hero.css"], renamed, SITE_TESTS)).toEqual({
     kind: "full",
-    because: "package.json: checks.reach names tests/e2e/nav.test.ts for src/styles/menu.css, which matches no test file",
+    because: "checks.config.ts reach names tests/e2e/nav.test.ts for src/styles/menu.css, which matches no test file",
   });
 });
 
@@ -211,18 +209,14 @@ test("a stale reach value runs the whole local suite rather than failing the des
   const renamed = { ...SITE, reach: [...SITE.reach, { changed: "src/styles/menu.css", tests: ["tests/e2e/nav.test.ts"] }] };
   expect(narrowLocalTests(["src/styles/menu.css"], renamed, SITE_TESTS)).toEqual({
     kind: "full",
-    because: "package.json: checks.reach names tests/e2e/nav.test.ts for src/styles/menu.css, which matches no test file",
+    because: "checks.config.ts reach names tests/e2e/nav.test.ts for src/styles/menu.css, which matches no test file",
   });
 });
 
 test("an empty reach list is refused rather than running no test", () => {
-  const manifest = Schema.decodeSync(Schema.fromJsonString(Manifest))(
-    '{"checks":{"reach":{"src/styles/print.css":[]}}}',
-  );
-  expect(refuseReachMap(manifest.checks?.reach)).toBe("package.json: checks.reach lists no test file for src/styles/print.css");
+  expect(refuseReachMap({ "src/styles/print.css": [] })).toBe("checks.config.ts reach lists no test file for src/styles/print.css");
 });
 
 test("an empty reach key is refused rather than vanishing silently", () => {
-  const manifest = Schema.decodeSync(Schema.fromJsonString(Manifest))('{"checks":{"reach":{"":["tests/e2e/x.test.ts"]}}}');
-  expect(refuseReachMap(manifest.checks?.reach)).toBe("package.json: checks.reach has an empty changed-path key");
+  expect(refuseReachMap({ "": ["tests/e2e/x.test.ts"] })).toBe("checks.config.ts reach has an empty changed-path key");
 });

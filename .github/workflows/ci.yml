@@ -32,7 +32,7 @@ jobs:
         uses: avi2d/workflows/actions/docs-only@v2
         with:
           head: ${{ github.event.pull_request.head.sha }}
-          paths: "*.[mM][dD] copy.json"
+          paths: "*.[mM][dD]"
   unit:
     runs-on: ubuntu-latest
     timeout-minutes: 15

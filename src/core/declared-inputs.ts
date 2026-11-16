@@ -1,10 +1,11 @@
 import type { BunServices } from "@effect/platform-bun";
-import { Console, Effect, FileSystem, Path, Schema } from "effect";
+import { Console, Effect, Path } from "effect";
+import type { DeclaredSetting } from "./gates.ts";
 import { runMain, Usage } from "./main.ts";
+import { Inputs, readSetting, SETTINGS_FILE } from "./settings.ts";
 
-export type Declared = {
+export type Declared = DeclaredSetting & {
   readonly name: string;
-  readonly file: string;
   readonly declares: string;
 };
 
@@ -25,20 +26,12 @@ export type Verdict<S> = {
   readonly passes: (scan: S) => boolean;
 };
 
-const Declaration = Schema.Struct({ inputs: Schema.NonEmptyArray(Schema.NonEmptyString) });
-
-const decodeDeclaration = Schema.decodeUnknownEffect(Schema.fromJsonString(Declaration));
-
-const readInputs = Effect.fn("readInputs")(function* (root: string, { file, declares }: Declared) {
-  const fs = yield* FileSystem.FileSystem;
-  const path = (yield* Path.Path).join(root, file);
-  if (!(yield* fs.exists(path))) {
-    return yield* new Usage({ message: `${file} is missing, and a repository opts in to this gate by declaring its ${declares} there` });
+const readInputs = Effect.fn("readInputs")(function* (root: string, { setting, oldFile, declares }: Declared) {
+  const declared = yield* readSetting(root, setting, Inputs, { file: oldFile });
+  if (declared === undefined) {
+    return yield* new Usage({ message: `${SETTINGS_FILE} sets no ${setting} key, and a repository opts in to this gate by declaring its ${declares} there` });
   }
-  const { inputs } = yield* decodeDeclaration(yield* fs.readFileString(path)).pipe(
-    Effect.mapError(({ message }) => new Usage({ message: `${file} does not decode: ${message}` })),
-  );
-  return inputs;
+  return declared.inputs;
 });
 
 export function emptyInputs(inputs: readonly Input[]): readonly Input[] {

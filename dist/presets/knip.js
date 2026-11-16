@@ -1,5 +1,5 @@
 // src/quality/presets/knip.ts
-var DEFAULT_ENTRY = ["tests/**/*.test.ts", "dependency-cruiser.config.ts", "oxlint.config.ts"];
+var DEFAULT_ENTRY = ["tests/**/*.test.ts", "dependency-cruiser.config.ts", "oxlint.config.ts", "checks.config.ts"];
 var REFUSED_ENTRY = "@avi2dg/checks/knip: set entry to the files nothing imports, or [] when package.json scripts and tests name them all";
 function isGlobList(value) {
   return Array.isArray(value) && value.every((glob) => typeof glob === "string" && glob !== "");

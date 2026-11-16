@@ -18,7 +18,6 @@ import { differencesOf } from "./workflow-set.ts";
 import { findMissingWorkflows, formatMissingReport, isRecord, localUses, names, skippedBy, switchedOff, workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export { BunPinError, findBunPinFaults, formatBunPinReport } from "./bun-pin.ts";
-export { RunnerPolicyError } from "./runner-policy.ts";
 export type { BunPinFault, BunPinPolicy } from "./bun-pin.ts";
 
 export type { Command };
