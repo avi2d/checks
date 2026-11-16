@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.105.0
+
+Released 2026-11-16.
+
+### Features
+
+- split lint into source and built stages and skip release pull request jobs [#160](https://github.com/avi2d/checks/pull/160)
+
 ## 0.104.0
 
 Released 2026-11-16.
