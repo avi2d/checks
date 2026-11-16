@@ -207,8 +207,7 @@ The changelog arrives in the release commit, and no workflow pushes to a branch 
 ## A release is cut on demand
 
 The kit releases on demand through a release pull request.
-Every pull request but the release pull request runs the full suite.
-The release pull request runs nothing, and its required check still passes.
+The release pull request is the one place the full suite runs.
 Merging it tags the release commit, and the tag run publishes it with no test tiers.
 The release pull request holds current `main` when it merges.
 In this repository, a `tested-tree` step fetches the pull request head the squash number names and refuses a landed tree that differs from the tree the pull request tested.
