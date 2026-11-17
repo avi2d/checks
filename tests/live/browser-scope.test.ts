@@ -54,7 +54,7 @@ test("a mapped home change leaves unrelated content checks out but still checks 
   expect(result.text).toContain("links at /other/ (en)");
 }, 60_000);
 
-test("a shared stylesheet widens the route selection even when it has a mapping", async () => {
+test("a mapped stylesheet narrows the route selection instead of widening it", async () => {
   const repo = await open({
     ".gitignore": "event.json\n",
     "checks.config.ts": settings('browserRoutes: { "src/site.css": ["/"] },'),
@@ -66,7 +66,8 @@ test("a shared stylesheet widens the route selection even when it has a mapping"
   await repo.write({ "src/site.css": "body { color: black; }\n" });
   const result = await run(repo, await repo.commit("style"));
   expect(result.exitCode).toBe(0);
-  expect(result.text).toContain("html at /other/ (en)");
+  expect(result.text).toContain("html at / (en)");
+  expect(result.text).not.toContain("html at /other/ (en)");
 }, 60_000);
 
 test("test-only changes skip the browser only when both builds match the served site", async () => {

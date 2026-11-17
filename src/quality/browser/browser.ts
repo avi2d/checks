@@ -237,7 +237,7 @@ const browserChecks = Effect.gen(function* () {
     return true;
   }
   const { declaration, site } = yield* readDeclaration(root, largest);
-  if (scope?.kind === "pull-request" && (yield* identicalTestBuild(root, declaration.site, scope))) {
+  if (scope?.kind === "pull-request" && (yield* identicalTestBuild(root, declaration.site, scope, declaration.hooks))) {
     yield* Console.log(`${NAME}: the test-only change builds the same site, so no page was checked`);
     return true;
   }

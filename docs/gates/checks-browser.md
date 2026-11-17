@@ -192,7 +192,8 @@ export const checks: readonly ProductCheck[] = [
 
 ## What it reads
 
-It reads the `browser` key of `checks.config.ts` in the directory it runs in:
+It reads the `browser`, `browserRoutes` and `browserBuild` keys of `checks.config.ts` in the directory it runs in.
+On a pull request it also reads the changed paths since the merge base:
 
 ```ts
 import { defineConfig } from "@avi2dg/checks/config";
@@ -405,12 +406,12 @@ For example, `browserRoutes: { "src/home.ts": ["/"] }` assigns the home source t
 When every changed path has a mapping to declared routes, the runner narrows targets, product hooks, and per-route checks to those routes.
 The `links` and `look` checks still visit every declared route, since they compare or reach across routes.
 Missing routes are still reported across the whole declaration.
-An unmapped path, an empty change, an unknown route, or a shared input makes every route run.
-Shared inputs include layouts, styles, fonts, configuration, lockfiles, package manifests, files under `public/`, and workflows.
+An unmapped path, an empty change, or an unknown route makes every route run.
+A path mapped to no routes reaches no route.
 The map is separate from the test selection in `reach`.
 
 The optional `browserBuild` setting is an array holding the build command and its arguments, such as `["bun", "run", "build"]`.
-For a change confined to test paths, the runner builds the merge base and the head in temporary source trees.
+For a change confined to test paths outside the hooks module, the runner builds the merge base and the head in temporary source trees.
 It compares both output directories byte for byte and compares the head output with the site being checked.
 The runner skips the browser pass only when all three outputs agree and contain files without symbolic links.
 If a build or comparison fails, the runner checks the routes the change reaches.

@@ -5,8 +5,10 @@ import { BrowserBuild, decodeSetting, loadSettings } from "../../core/settings.t
 
 type PullRequest = Extract<RunScope, { readonly kind: "pull-request" }>;
 
-function testOnly(changed: readonly string[]): boolean {
-  return changed.length > 0 && changed.every((file) => file.startsWith("tests/") || /\.test\.[cm]?[jt]sx?$/.test(file));
+function testOnly(changed: readonly string[], hooks: string | undefined): boolean {
+  if (changed.length === 0) return false;
+  if (hooks !== undefined && changed.includes(hooks)) return false;
+  return changed.every((file) => file.startsWith("tests/") || /\.test\.[cm]?[jt]sx?$/.test(file));
 }
 
 const outputIsComplete = Effect.fn("outputIsComplete")(function* (directory: string) {
@@ -32,8 +34,8 @@ const buildAt = Effect.fn("buildAt")(function* (root: string, revision: string, 
   return built.exitCode === 0 ? output : undefined;
 });
 
-export const identicalTestBuild = Effect.fn("identicalTestBuild")(function* (root: string, site: string, scope: PullRequest) {
-  if (!testOnly(scope.changed) || scope.ends === undefined || !/^[a-zA-Z0-9_-]+$/.test(site)) return false;
+export const identicalTestBuild = Effect.fn("identicalTestBuild")(function* (root: string, site: string, scope: PullRequest, hooks: string | undefined = undefined) {
+  if (!testOnly(scope.changed, hooks) || scope.ends === undefined || !/^[a-zA-Z0-9_-]+$/.test(site)) return false;
   const ends = scope.ends;
   const raw = (yield* loadSettings(root))["browserBuild"];
   if (raw === undefined) return false;
