@@ -134,6 +134,9 @@ export const buildRelease = Effect.fn("buildRelease")(function* (name: string, r
     if (readsPublishWorkspaces((yield* readWorkflowFiles(root)).map(({ workflow }) => workflow))) {
       const workspaces = yield* publicWorkspaces(root);
       for (const workspace of workspaces) {
+        if (Bun.semver.order(version, workspace.version) < 0) {
+          return yield* refused(`${workspace.path} holds ${workspace.version}, which is ahead of the release version ${version}; raise the root version past ${workspace.version} first`);
+        }
         const rewritten = withVersion(workspace.text, workspace.version, version);
         if (rewritten === undefined) return yield* refused(`${workspace.path}: cannot rewrite version ${workspace.version}`);
         yield* fs.writeFileString(path.join(root, workspace.path), rewritten);
@@ -157,6 +160,9 @@ const syncWorkspaceLock = Effect.fn("syncWorkspaceLock")(function* (root: string
   let updated = lock;
   for (const workspace of workspaces) {
     const dir = path.dirname(workspace.path);
+    if (Bun.semver.order(version, workspace.version) < 0) {
+      return yield* refused(`${file} workspaces["${dir}"] holds ${workspace.version}, which is ahead of the release version ${version}; raise the root version past ${workspace.version} first`);
+    }
     const rewritten = withWorkspaceVersion(updated, dir, workspace.version, version);
     if (rewritten === undefined) return yield* refused(`${file} holds no workspaces["${dir}"] version ${workspace.version}; run bun install and commit bun.lock`);
     updated = rewritten;
