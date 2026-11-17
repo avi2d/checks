@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.106.1
+
+Released 2026-11-17.
+
+### Fixes
+
+- **browser:** wait until no entrance starts before settle returns [#164](https://github.com/avi2d/checks/pull/164)
+
 ## 0.106.0
 
 Released 2026-11-16.
