@@ -114,6 +114,7 @@ export default defineConfig({
 | `browserBuild` | the build command the browser test-only proof runs | [checks-browser](../gates/checks-browser.md#what-it-reads) |
 | `copy` | the copy inputs | [checks-copy](../gates/checks-copy.md) |
 | `frontendSyntax` | the frontend syntax inputs | [checks-frontend-syntax](../gates/checks-frontend-syntax.md) |
+| `localTests` | whether agents may run tests outside CI, `"blocked"` by default or `"allowed"` | [checks-local-tests](../gates/checks-local-tests.md) |
 
 A key the kit does not know fails the reading gate.
 A setting left in its old place fails its gate with exit 2 and a message naming the key it moves to.

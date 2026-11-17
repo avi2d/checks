@@ -33,6 +33,7 @@ The guard does not restrict build, lint, or typecheck commands.
 
 The preload is in the `[test]` table of the shipped `bunfig.toml`.
 `checks-setup` copies that file into a new repository, and `checks-test-layout` checks its test settings.
+The preload runs only when Bun starts in the directory that holds `bunfig.toml`.
 A consumer with its own Playwright config can call the same guard before exporting the config:
 
 ```ts

@@ -120,7 +120,7 @@ This repository holds itself to the kit through its own `oxlint.config.ts`, `kni
 
 - Its `oxlint.config.ts` lifts `effect-channel/no-throw` from `src/quality/comment-matchers.ts`, whose synchronous `refused()` a host loads without `node_modules`.
 - It keeps the oxlint plugins and the oxlint, Knip, dependency-cruiser and stylelint builders outside its Effect paths, since a tool loads each synchronously.
-- It keeps the `checks-flake` and `local-test` preloads outside its Effect paths, since Bun loads each into every test file.
+- It keeps `src/testing/flake-preload.ts` and `src/testing/local-test-preload.ts` outside its Effect paths, since Bun loads each into every test file.
 - It lifts `eslint/no-restricted-properties` from `src/testing/local-test-preload.ts`, whose guard exits the process on a refusal.
 - Its `dependency-cruiser.config.ts` names each plugin entry in `orphans`, and adds `host-loaded-imports-nothing`.
 - Its `dependency-cruiser.config.ts` adds one rule per area under `src/`, which lets the area import `src/core/` and only the other areas `AREA_IMPORTS` lists for it.

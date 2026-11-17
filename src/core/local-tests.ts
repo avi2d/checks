@@ -2,8 +2,9 @@ import { NodeFileSystem, NodePath } from "@effect/platform-node-shared";
 import { Config, Effect, Layer } from "effect";
 import { Usage } from "./main.ts";
 import { decodeSetting, loadSettings, LocalTests, SETTINGS_FILE } from "./settings.ts";
+import { AGENT_MARKER } from "./agent-marker.ts";
 
-export const AGENT_MARKER = "CHECKS_AGENT";
+export { AGENT_MARKER };
 const platform = Layer.merge(NodeFileSystem.layer, NodePath.layer);
 
 export const localTestsSetting = Effect.fn("localTestsSetting")(function* (root: string) {
