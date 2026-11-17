@@ -13,8 +13,9 @@ import { findScheduledReleases, formatScheduleReport } from "./release-schedule.
 import { findRunnerFaults, formatRunnerReport, jobRuns, readRunnerConfig } from "./runner-policy.ts";
 import { findScheduledRuns, formatScheduledRunReport } from "./schedule-policy.ts";
 import { invokes, mentions, plainCommand, type Command } from "./shell-command.ts";
-import { callerSetOf } from "./site-names.ts";
+import { callerSetOf, readsTestScript } from "./site-names.ts";
 import { differencesOf } from "./workflow-set.ts";
+import { publicWorkspaces } from "./workspace-packages.ts";
 import { findMissingWorkflows, formatMissingReport, isRecord, localUses, names, skippedBy, switchedOff, workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export { BunPinError, findBunPinFaults, formatBunPinReport } from "./bun-pin.ts";
@@ -315,17 +316,19 @@ const reportHandRolled = Effect.fn("reportHandRolled")(function* (
 });
 
 // The shared workflows the set calls run every gate, and this check does not follow a remote workflow.
-const callsSharedSet = Effect.fn("callsSharedSet")(function* (workflows: readonly Workflow[], publishes: boolean) {
+const callsSharedSet = Effect.fn("callsSharedSet")(function* (root: string, workflows: readonly Workflow[], publishes: boolean) {
   const present = workflows.map(({ path, text }) => ({ name: path.slice(WORKFLOWS.length + 1), text }));
   if (present.length === 0) return false;
-  return yield* callerSetOf(workflows, {}, "checks-workflows --write", publishes).pipe(
+  const publishWorkspaces = (yield* publicWorkspaces(root)).length > 0;
+  const needsReleaseChecks = yield* readsTestScript(root);
+  return yield* callerSetOf(workflows, {}, "checks-workflows --write", publishes, publishWorkspaces, needsReleaseChecks).pipe(
     Effect.map((set) => differencesOf(set, present).length === 0),
     Effect.orElseSucceed(() => false),
   );
 });
 
 const reportGaps = Effect.fn("reportGaps")(function* (root: string, workflows: readonly Workflow[], publishes: boolean) {
-  if (yield* callsSharedSet(workflows, publishes)) {
+  if (yield* callsSharedSet(root, workflows, publishes)) {
     yield* Console.log(`ci-wiring: ${WORKFLOWS} holds the set checks-workflows writes, so the shared workflows run every gate`);
     return [];
   }

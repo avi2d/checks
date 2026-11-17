@@ -102,9 +102,9 @@ const heldWorkflow = (workflows: readonly Workflow[]) => (name: string) => workf
 const heldCiJobs = (kind: CallerSet["kind"], workflows: readonly Workflow[]) =>
   ciJobsOf(kind, heldWorkflow(workflows)("ci.yml")).pipe(Effect.mapError((fault) => new CallerSetFault({ message: fault.message })));
 
-export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean) {
+export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean, publishWorkspaces?: boolean, needsReleaseChecks?: boolean) {
   const flagged = SITE_NAME_KEYS.some((key) => flags[key] !== undefined);
-  const options = callerOptionsOf(heldWorkflow(workflows), publishes);
+  const options = callerOptionsOf(heldWorkflow(workflows), publishes, publishWorkspaces === true, needsReleaseChecks !== false);
   if (!callsSiteWorkflow(workflows) && !flagged) return { kind: "code", ci: yield* heldCiJobs("code", workflows), options } satisfies CallerSet;
   const held = workflows.flatMap(heldNames).filter(({ key }) => flags[key] === undefined);
   const conflict = conflictOf(held);
@@ -146,6 +146,18 @@ export type HeldFile = { readonly name: string; readonly text: string; readonly 
 const parsedOrNothing = (text: string): Effect.Effect<unknown> => Effect.try(() => Bun.YAML.parse(text)).pipe(Effect.orElseSucceed(() => undefined));
 
 const decodePrivacy = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ private: Schema.optionalKey(Schema.Boolean) })));
+const decodeScripts = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ scripts: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)) })));
+
+export const readsTestScript = Effect.fn("readsTestScript")(function* (root: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const file = (yield* Path.Path).join(root, "package.json");
+  if (!(yield* fs.exists(file))) return false;
+  const manifest = yield* fs.readFileString(file).pipe(
+    Effect.flatMap(decodeScripts),
+    Effect.mapError((cause) => new CallerSetFault({ message: `cannot read package.json: ${cause.message}` })),
+  );
+  return manifest.scripts?.["test"] !== undefined;
+});
 
 // checks-release-tag publishes every package.json that is not private, so a repository without one is no private package either.
 export const readsPrivatePackage = Effect.fn("readsPrivatePackage")(function* (root: string) {

@@ -52,6 +52,10 @@ A code repository takes these files:
 A code repository whose `package.json` does not set `private: true` publishes to npm, so its `main.yml` passes `full-test: true`.
 Then a push of a release commit runs `bun run test --full` once before the tag and the publish.
 A repository without a `package.json` counts as one that publishes.
+A private root with public workspace packages passes `publish-workspaces: true` instead.
+A private root with a `test` script and no public workspace packages passes `full-test: true` and runs static checks and tests on release pull requests.
+The generated callers pin the shared workflows to `v3.4.0`.
+A Claude Code version pinned by an install step or a caller input is passed to the test and flake callers.
 
 The `ci.yml` caller runs one run per pull request and cancels the run a newer push replaces.
 Each calling job grants exactly the permissions its shared job declares.
@@ -60,7 +64,7 @@ A code caller passes no secret, except `CHECKS_SECRETS_PACK` to `static.yml` whe
 GitHub passes `secrets: inherit` only to a workflow in the same organization or enterprise, so a caller that holds it differs from the set.
 The release, site main and production callers hold no concurrency group, since their shared jobs hold their own.
 The code main caller holds group `main` without cancellation, since `release-main.yml` holds no group.
-Every file a code repository takes except `ci.yml` and `main.yml` is byte-identical in every code repository, and `main.yml` differs only in `full-test`.
+The code callers retain the inputs each repository needs for its release and tests.
 The files a site takes differ between sites only in the three names they pass, the test jobs of `ci.yml` and whether `ci.yml` holds the `changes` job.
 A code repository's `ci.yml` differs from another only in its test jobs and whether it holds the `changes` job.
 `pr-title.yml` and `release.yml` are the same in both kinds.
@@ -76,7 +80,7 @@ Each caller form keeps what the file it replaces does:
 | File | Calls | Starts on | Keeps |
 | --- | --- | --- | --- |
 | `advisories.yml` | `advisories.yml@v3` | `workflow_dispatch` | its `schedule` cron when it holds exactly one and that one is weekly, such as `"21 5 * * 1"`, and drops any other schedule |
-| `flake.yml` | `flake.yml@v3` | `workflow_dispatch` | the `node-version-file` a caller passes, or the `node-version-file` an `actions/setup-node` step sets up |
+| `flake.yml` | `flake.yml@v3` | `workflow_dispatch` | the Claude Code version and the `node-version-file` a caller passes, or the `node-version-file` an `actions/setup-node` step sets up |
 | `docs.yml` | `github-pages.yml@v3` | a push to `main` and `workflow_dispatch` | the `build` and `path` a caller passes, or the one `run` step and the `actions/upload-pages-artifact` path of the job that uploads the site |
 
 A `docs.yml` that gives no `build` and `path` is no workflow of the set.
@@ -107,12 +111,12 @@ A repository with no `changes` job runs every job on every pull request but the 
 Only two runs count as the release pull request.
 One is the `workflow_dispatch` run on a `release/` branch, which [checks-release-pr](checks-release-pr.md) dispatches.
 The other is the same repository pull request from `release/<base>` into `<base>`.
-On those runs every job but `changes` and `checks` skips, and the gate passes those skips.
-So the release pull request runs no test, and its required check still passes.
+On those runs every job but `changes` and `checks` skips unless the caller passes `check-release: true`.
+With `check-release: true`, the static and test jobs run and the gate does not accept their skips.
 A fork pull request from a `release/` branch and a pull request from a `release/` branch that does not match `release/<base>` run every job.
 With a `changes` job, each job reads the rule once from its `release` output, as `if: needs.changes.outputs.release != 'true'`.
 Without one, each job that needs no other job writes the rule in its `if`, and every other job skips with the job it needs.
-A comment above the gate's `skips` input and above each `if` that writes the rule says what it decides.
+The gate's `skips` input accepts only the jobs skipped by the release or docs-only conditions.
 
 The jobs `ci.yml` holds are the record of what the repository runs, and `package.json` names none of them.
 A `ci.yml` that calls a part keeps its `changes` job, or its lack of one, and each job that calls `test.yml`, with its name.
@@ -148,7 +152,7 @@ It passes until `checks-workflows --write` replaces it with the composed `ci.yml
 
 ## What it reads
 
-It reads the `.yml` and `.yaml` files under `.github/workflows/` from the repository root, and `private` in `package.json`.
+It reads the `.yml` and `.yaml` files under `.github/workflows/` from the repository root, and the root and workspace `package.json` files.
 It names the repository by `GITHUB_REPOSITORY`, or by the `origin` remote outside CI.
 
 ## Arguments

@@ -59,7 +59,7 @@ test("no advisories, mutation or required caller pins below v3 or names a file o
     return Object.values(jobs).flatMap((job) => (isRecord(job) && typeof job["uses"] === "string" ? [job["uses"]] : []));
   });
   expect(pins.length).toBeGreaterThan(0);
-  const v3Pins = SHARED_V3_FILES.map((file) => `avi2d/workflows/.github/workflows/${file}@v3`);
+  const v3Pins = SHARED_V3_FILES.map((file) => `avi2d/workflows/.github/workflows/${file}@v3.4.0`);
   expect(pins.filter((pin) => !v3Pins.includes(pin))).toEqual([]);
 });
 
@@ -107,7 +107,7 @@ const callerJobs = (text: string): readonly Record<string, unknown>[] => {
 
 const callerJob = (text: string): Record<string, unknown> => callerJobs(text)[0] ?? {};
 
-const sharedFile = (job: Record<string, unknown>): string => String(job["uses"]).split("/").pop()?.replace(/@v3$/, "") ?? "";
+const sharedFile = (job: Record<string, unknown>): string => String(job["uses"]).split("/").pop()?.replace(/@v3\.4\.0$/, "") ?? "";
 
 test("each calling job grants exactly the scopes its v3 job declares, so a spare deployments: write or a missing actions: write fails here", () => {
   for (const { name, text } of callers()) {
@@ -197,9 +197,9 @@ test("each site caller of a shared workflow that reads the site names passes pag
     .map(({ name, text }) => [String(callerJob(text)["uses"]).split("/").pop(), name, callerJob(text)["with"]]);
   const names = { pages: "acme", domain: "acme.example", production: "acme/acme.example" };
   expect(passed.filter(([, , inputs]) => inputs !== undefined)).toEqual([
-    ["preview-remove.yml@v3", "preview-close.yml", names],
-    ["site-main.yml@v3", "main.yml", names],
-    ["site-production.yml@v3", "production.yml", names],
+    ["preview-remove.yml@v3.4.0", "preview-close.yml", names],
+    ["site-main.yml@v3.4.0", "main.yml", names],
+    ["site-production.yml@v3.4.0", "production.yml", names],
   ]);
 });
 
@@ -212,6 +212,9 @@ const EVERY_OPTION: CallerSet = {
     pages: { build: "bun run docs:build", path: "docs/.vitepress/dist" },
     secretsPack: true,
     fullTest: true,
+    claudeVersion: undefined,
+    publishWorkspaces: false,
+    checkRelease: false,
   },
 };
 
@@ -273,7 +276,7 @@ test("a site caller that passes another domain than the one the set names differ
   expect(differencesOf(SITE, withSiteCaller("main.yml", moved)).map(({ kind, name }) => [kind, name])).toEqual([["differs", "main.yml"]]);
 });
 
-const PART = (file: string): string => `avi2d/workflows/.github/workflows/${file}@v3`;
+const PART = (file: string): string => `avi2d/workflows/.github/workflows/${file}@v3.4.0`;
 const NOT_RELEASED = "needs.changes.outputs.release != 'true'";
 const CHANGED = `${NOT_RELEASED} && needs.changes.outputs.docs-only != 'true'`;
 const RELEASE_RUN = "((github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release/')) || (github.event_name == 'pull_request' && github.head_ref == format('release/{0}', github.base_ref) && github.event.pull_request.head.repo.full_name == github.repository))";
@@ -363,14 +366,6 @@ test("a ci.yml with a changes job that writes the long release rule into any job
   expect(ciText(LIBRARY).split("github.head_ref").length - 1).toBe(3);
 });
 
-test("a skips input or an inline release rule with no comment above it to say what it decides fails here", () => {
-  for (const set of [CODE, SITE, LIBRARY]) {
-    const lines = ciText(set).split("\n");
-    const unexplained = lines.filter((line, index) => /^\s+(?:skips|if): \$\{\{/.test(line) && !/^\s+# \S/.test(lines[index - 1] ?? ""));
-    expect(unexplained).toEqual([]);
-  }
-});
-
 test('a fork pull request from a release/ branch still runs every job instead of skipping as the release run', () => {
   const condition = conditionOf(ciJobs(LIBRARY)['static']);
   expect(decidesReleaseRun(condition, { eventName: 'pull_request', refName: 'release/main', headRef: 'release/main', baseRef: 'main', headRepo: 'fork/acme', repository: 'acme/acme' })).toBe(false);
@@ -437,14 +432,14 @@ const HAND_EDITED = [
   "on: pull_request",
   "jobs:",
   "  static:",
-  "    uses: avi2d/workflows/.github/workflows/static.yml@v3",
+  "    uses: avi2d/workflows/.github/workflows/static.yml@v3.4.0",
   "  unit:",
   "    uses: avi2d/workflows/.github/workflows/test.yml@main",
   "    with:",
   "      hold: true",
   "  e2e:",
   "    needs: unit",
-  "    uses: avi2d/workflows/.github/workflows/test.yml@v3",
+  "    uses: avi2d/workflows/.github/workflows/test.yml@v3.4.0",
   "    with:",
   "      run: bun run test:e2e",
   "      browsers: chromium webkit",
@@ -455,7 +450,7 @@ const HAND_EDITED = [
   "    steps:",
   "      - run: bun run lint",
   "  checks:",
-  "    uses: avi2d/workflows/.github/workflows/gate.yml@v3",
+  "    uses: avi2d/workflows/.github/workflows/gate.yml@v3.4.0",
   "",
 ].join("\n");
 
@@ -502,7 +497,7 @@ const SINGLE_JOB_CODE_CI = [
   "",
   "jobs:",
   "  checks:",
-  "    uses: avi2d/workflows/.github/workflows/ci.yml@v3",
+  "    uses: avi2d/workflows/.github/workflows/ci.yml@v3.4.0",
   "    permissions: { contents: read, actions: write, statuses: write, pull-requests: read }",
   "",
 ].join("\n");

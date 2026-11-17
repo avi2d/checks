@@ -4,6 +4,7 @@ import { gitHubJson, REPOSITORY } from "../core/github.ts";
 import { nextVersion, type Pending, readPending, releaseTitle, runBuild, withVersion } from "./release.ts";
 import { git } from "../core/git.ts";
 import { MANIFEST, releaseTag, taggedVersion } from "../core/release-names.ts";
+import { publicWorkspaces } from "./workspace-packages.ts";
 
 export class ReleaseRefused extends Schema.TaggedError<ReleaseRefused>()("ReleaseRefused", {
   message: Schema.String,
@@ -123,7 +124,16 @@ export const buildRelease = Effect.fn("buildRelease")(function* (name: string, r
     Effect.catchTag("GitFailure", (failure) => Console.error(`${name}: cannot restore the working tree: ${failure.message}`)),
   );
   return yield* Effect.gen(function* () {
-    yield* (yield* FileSystem.FileSystem).writeFileString((yield* Path.Path).join(root, MANIFEST), bumped);
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    yield* fs.writeFileString(path.join(root, MANIFEST), bumped);
+    const version = yield* versionIn(bumped);
+    if (version === undefined) return yield* refused(`${MANIFEST} has no version`);
+    for (const workspace of yield* publicWorkspaces(root)) {
+      const rewritten = withVersion(workspace.text, workspace.version, version);
+      if (rewritten === undefined) return yield* refused(`${workspace.path}: cannot rewrite version ${workspace.version}`);
+      yield* fs.writeFileString(path.join(root, workspace.path), rewritten);
+    }
     yield* runBuild(root);
     yield* git(["add", "--update"], root);
     const tree = (yield* git(["write-tree"], root)).trim();

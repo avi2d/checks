@@ -27,9 +27,13 @@ On a release commit it first fetches the head of the pull request the squash sub
 It refuses unless the tree of that commit equals the tree the required checks of that pull request passed on.
 That check is what lets the release publish a tested tree even though the release pull request runs no test.
 It matches the tree the required checks of the release pull request passed on.
-In a repository whose `ci.yml` is the one [checks-workflows](checks-workflows.md) composes, those checks skip every job but `changes`, so the tag publishes code the pull requests into `main` tested, and the release commit adds only the version and the changelog.
+In a repository whose `ci.yml` is the one [checks-workflows](checks-workflows.md) composes, release checks run when the caller passes `check-release: true`.
+Other release checks skip every job but `changes`.
 It then pushes the tag and creates the GitHub release `v<version>`, whose notes are the `CHANGELOG.md` section for that version.
 It publishes the package to npm as [checks-release-publish](checks-release-publish.md) says, unless `package.json` holds `"private": true`.
+When the root is private and `CHECKS_PUBLISH_WORKSPACES` is `true`, it publishes each public workspace package instead.
+Each public workspace version must equal the root release version before it tags anything.
+The release pull request sets those versions before its checks run.
 The changelog is built once, by the release pull request, and this run reads the committed file.
 When `HEAD` is the release commit, a rerun finds the tag, rewrites the release notes in place, and finds the version on npm, so it neither tags, releases nor publishes twice.
 A release whose GitHub release or npm publish failed is finished by rerunning that release commit's own `main` run.
@@ -50,6 +54,7 @@ The next run of the workflow that tags it then cuts the release again with every
 ## What it reads
 
 It reads the subject of `HEAD` and of each commit behind it, `package.json` at each of those commits and `CHANGELOG.md` at the release commit, and the tag from `origin` with `git ls-remote`.
+When workspace publishing is enabled, it reads the workspace patterns and each workspace `package.json`.
 With a workflow argument it names the workflow it runs in by `GITHUB_WORKFLOW`, or as `release-pr` when that is unset.
 With no argument it names `release`.
 The build it runs reads the whole history, so the checkout fetches all of it.

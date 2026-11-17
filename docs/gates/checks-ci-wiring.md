@@ -72,7 +72,7 @@ The check knows a repository is private only from GitHub's event, so a run outsi
 
 ### Mutation jobs
 
-A repository runs mutation through one job that calls `avi2d/workflows/.github/workflows/mutation.yml@v3`, the caller that [checks-setup](checks-setup.md) writes.
+A repository runs mutation through one job that calls `avi2d/workflows/.github/workflows/mutation.yml@v3.4.0`, the caller that [checks-setup](checks-setup.md) writes.
 The check refuses a `mutation.yml` that differs from that caller by a byte.
 A mode formula, a path list or any other code in it fails here.
 It refuses every mutation job of the repository's own, a job with a run step that calls mutation as [Runners](#runners) defines it.
@@ -188,7 +188,7 @@ A job that runs Stryker itself produces a report like this:
 
 ```
 ci-wiring: 1 job(s) run mutation outside the shared workflow:
-  .github/workflows/mutation.yml job mutation: run mutation through a job with uses: avi2d/workflows/.github/workflows/mutation.yml@v3, as checks-setup writes it
+  .github/workflows/mutation.yml job mutation: run mutation through a job with uses: avi2d/workflows/.github/workflows/mutation.yml@v3.4.0, as checks-setup writes it
 ```
 
 A `mutation.yml` that differs from the caller checks-setup writes produces a report like this:

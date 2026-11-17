@@ -288,6 +288,19 @@ test(
 );
 
 test(
+  "workspace publishing does not publish the private root or private workspace",
+  async () => {
+    const main = await onMain("chore: release 0.2.0 (#7)", { private: true, workspace: true });
+    const released = await ran($`bun ${SCRIPT}`.cwd(main.dir).env({ ...process.env, ...main.env, CHECKS_PUBLISH_WORKSPACES: "true" }));
+    expect(released.exitCode).toBe(0);
+    expect(released.text).toContain("release-publish: published @acme/public@0.2.0");
+    expect((await main.npm()).calls.filter((call) => call === "publish")).toHaveLength(1);
+    expect(await main.inOrigin("rev-parse", "v0.2.0^{commit}")).toBe(main.head);
+  },
+  60_000,
+);
+
+test(
   "with no argument a release commit whose tree is not the one its pull request tested is refused before any tag or release",
   async () => {
     const main = await onMain("chore: release 0.2.0 (#7)", { testedOther: true });

@@ -1,4 +1,4 @@
-import { Console, Effect, Option, Schema } from "effect";
+import { Config, Console, Effect, Option, Path, Schema } from "effect";
 import { dispatch, GitHubFailure, gitHubJson, gitHubOptional, REPOSITORY } from "../core/github.ts";
 import { ChildProcessSpawner } from "effect/process";
 import { lastTag, runBuild } from "./release.ts";
@@ -7,6 +7,7 @@ import { publishPackage } from "./release-publish.ts";
 import { checkTestedTreeOf } from "./tested-tree.ts";
 import { collect, git } from "../core/git.ts";
 import { MANIFEST, releasedVersionOf, releaseTag, taggedVersion } from "../core/release-names.ts";
+import { publicWorkspaces } from "./workspace-packages.ts";
 
 class TagRefused extends Schema.TaggedError<TagRefused>()("TagRefused", {
   message: Schema.String,
@@ -156,10 +157,17 @@ export const releaseHead = Effect.fn("releaseHead")(function* (label: string, ro
   if (landed === undefined) return true;
   yield* checkoutRelease(root, landed.head);
   yield* checkTestedTreeOf(label, root, cuttingWorkflow, landed.head, landed.subject);
+  const publishWorkspaces = (yield* Config.String("CHECKS_PUBLISH_WORKSPACES").pipe(Config.withDefault("false"))) === "true";
+  const workspaces = !landed.publishes && publishWorkspaces ? yield* publicWorkspaces(root) : [];
+  for (const workspace of workspaces) {
+    if (workspace.version !== landed.version) return yield* new TagRefused({ message: `${workspace.path} holds ${workspace.version}, not the tested release version ${landed.version}` });
+  }
   if (yield* pushReleaseTag(label, root, landed, cuttingWorkflow)) yield* Console.log(`${label}: tagged ${landed.head.slice(0, 12)} as ${landed.tag}`);
   yield* writeGitHubRelease(label, root, landed);
   if (!landed.publishes) {
-    yield* Console.log(`${label}: ${MANIFEST} is private, so no package is published`);
+    if (workspaces.length === 0) yield* Console.log(`${label}: ${MANIFEST} is private, so no package is published`);
+    const path = yield* Path.Path;
+    for (const workspace of workspaces) yield* publishPackage(path.dirname(path.join(root, workspace.path)));
     return true;
   }
   return yield* publishPackage(root);

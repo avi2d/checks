@@ -36,14 +36,14 @@ test("a code repository without workflow files is refused until --write writes c
     on: { pull_request: { types: ["opened", "synchronize", "reopened", "ready_for_review"] }, workflow_dispatch: null },
     concurrency: { "cancel-in-progress": true },
     jobs: {
-      static: { uses: "avi2d/workflows/.github/workflows/static.yml@v3" },
-      test: { uses: "avi2d/workflows/.github/workflows/test.yml@v3" },
-      checks: { needs: ["changes", "static", "test"], uses: "avi2d/workflows/.github/workflows/gate.yml@v3" },
+      static: { uses: "avi2d/workflows/.github/workflows/static.yml@v3.4.0" },
+      test: { uses: "avi2d/workflows/.github/workflows/test.yml@v3.4.0" },
+      checks: { needs: ["changes", "static", "test"], uses: "avi2d/workflows/.github/workflows/gate.yml@v3.4.0" },
     },
   });
   expect(await parsed(repo, "pr-title.yml")).toMatchObject({ on: { pull_request: { types: ["edited"] } } });
-  expect(await parsed(repo, "main.yml")).toMatchObject({ on: { push: { branches: ["main"] } }, jobs: { release: { uses: "avi2d/workflows/.github/workflows/release-main.yml@v3" } } });
-  expect(await parsed(repo, "release.yml")).toMatchObject({ on: { workflow_dispatch: null }, jobs: { "pull-request": { uses: "avi2d/workflows/.github/workflows/release-pr.yml@v3" } } });
+  expect(await parsed(repo, "main.yml")).toMatchObject({ on: { push: { branches: ["main"] } }, jobs: { release: { uses: "avi2d/workflows/.github/workflows/release-main.yml@v3.4.0" } } });
+  expect(await parsed(repo, "release.yml")).toMatchObject({ on: { workflow_dispatch: null }, jobs: { "pull-request": { uses: "avi2d/workflows/.github/workflows/release-pr.yml@v3.4.0" } } });
 
   expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the code set checks-workflows writes\n" });
   await repo.commit("ci: write the workflow set");
@@ -72,24 +72,24 @@ test("a first site write takes the three names as flags, gets the six site calle
   expect(await parsed(repo, "advisories.yml")).toEqual({
     name: "advisories",
     on: { workflow_dispatch: null, schedule: [{ cron: "15 5 * * 1" }] },
-    jobs: { advisories: { uses: "avi2d/workflows/.github/workflows/advisories.yml@v3", permissions: { contents: "read", issues: "write" } } },
+    jobs: { advisories: { uses: "avi2d/workflows/.github/workflows/advisories.yml@v3.4.0", permissions: { contents: "read", issues: "write" } } },
   });
   expect(await parsed(repo, "ci.yml")).toMatchObject({
     jobs: {
       site: {
-        uses: "avi2d/workflows/.github/workflows/site-preview.yml@v3",
+        uses: "avi2d/workflows/.github/workflows/site-preview.yml@v3.4.0",
         with: { pages: SITE.pages },
         secrets: { CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}", CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" },
       },
-      browser: { needs: "site", uses: "avi2d/workflows/.github/workflows/test.yml@v3" },
-      checks: { needs: ["changes", "static", "site", "unit", "browser"], uses: "avi2d/workflows/.github/workflows/gate.yml@v3" },
+      browser: { needs: "site", uses: "avi2d/workflows/.github/workflows/test.yml@v3.4.0" },
+      checks: { needs: ["changes", "static", "site", "unit", "browser"], uses: "avi2d/workflows/.github/workflows/gate.yml@v3.4.0" },
     },
   });
   expect(await parsed(repo, "preview-close.yml")).toMatchObject({ on: { pull_request: { types: ["closed"] } } });
-  expect(await parsed(repo, "main.yml")).toMatchObject({ jobs: { release: { uses: "avi2d/workflows/.github/workflows/site-main.yml@v3" } } });
+  expect(await parsed(repo, "main.yml")).toMatchObject({ jobs: { release: { uses: "avi2d/workflows/.github/workflows/site-main.yml@v3.4.0" } } });
   expect(await parsed(repo, "production.yml")).toMatchObject({
     on: { workflow_dispatch: null },
-    jobs: { production: { uses: "avi2d/workflows/.github/workflows/site-production.yml@v3", with: SITE } },
+    jobs: { production: { uses: "avi2d/workflows/.github/workflows/site-production.yml@v3.4.0", with: SITE } },
   });
   expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the site set checks-workflows writes\n" });
 
@@ -105,7 +105,7 @@ test("a package.json site field makes no site, so a repository with one and no s
 }, 30_000);
 
 test("site callers that pass no names are refused with the flags to pass, and --write without them writes nothing", async () => {
-  const unnamed = "name: ci\non: pull_request\njobs:\n  checks:\n    uses: avi2d/workflows/.github/workflows/site-ci.yml@v3\n";
+  const unnamed = "name: ci\non: pull_request\njobs:\n  checks:\n    uses: avi2d/workflows/.github/workflows/site-ci.yml@v3.4.0\n";
   const repo = await open({ "package.json": manifest(), ".github/workflows/ci.yml": unnamed });
   await repo.commit("start");
   const advice = "the site callers pass no pages, domain and production, so run checks-workflows --write --pages <project> --domain <domain> --production <owner/name>\n";
@@ -177,7 +177,7 @@ test("a code repository on the single-job ci.yml passes with the command that wr
     "",
     "jobs:",
     "  checks:",
-    "    uses: avi2d/workflows/.github/workflows/ci.yml@v3",
+    "    uses: avi2d/workflows/.github/workflows/ci.yml@v3.4.0",
     "    permissions: { contents: read, actions: write, statuses: write, pull-requests: read }",
     "",
   ].join("\n");
@@ -197,14 +197,14 @@ test("a code repository on the single-job ci.yml passes with the command that wr
 
   expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 4 workflow file(s) of the code set\n" });
   const ci = join(repo.dir, ".github", "workflows", "ci.yml");
-  const e2e = "  e2e:\n    uses: avi2d/workflows/.github/workflows/test.yml@v3\n    with:\n      run: bun run test:e2e\n";
+  const e2e = "  e2e:\n    uses: avi2d/workflows/.github/workflows/test.yml@v3.4.0\n    with:\n      run: bun run test:e2e\n";
   await Bun.write(ci, (await readFile(ci, "utf8")).replace("  checks:\n", `${e2e}  checks:\n`));
   expect((await workflows(repo)).exitCode).toBe(1);
 
   expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
   expect(await parsed(repo, "ci.yml")).toMatchObject({
     jobs: {
-      e2e: { needs: "changes", uses: "avi2d/workflows/.github/workflows/test.yml@v3", with: { run: "bun run test:e2e" } },
+      e2e: { needs: "changes", uses: "avi2d/workflows/.github/workflows/test.yml@v3.4.0", with: { run: "bun run test:e2e" } },
       checks: { needs: ["changes", "static", "test", "e2e"], with: { skips: "${{ needs.changes.outputs.release == 'true' && 'static test e2e' || needs.changes.outputs.docs-only == 'true' && 'test e2e' || '' }}" } },
     },
   });
@@ -226,20 +226,45 @@ test("--write turns a hand-rolled Pages deploy, secrets pack, flake run and week
   expect(await held(repo)).toEqual(["advisories.yml", "ci.yml", "docs.yml", "flake.yml", "main.yml", "pr-title.yml", "release.yml"]);
   expect(await parsed(repo, "docs.yml")).toMatchObject({
     on: { push: { branches: ["main"] } },
-    jobs: { pages: { uses: "avi2d/workflows/.github/workflows/github-pages.yml@v3", with: { build: "bun run docs:build", path: "docs/.vitepress/dist" } } },
+    jobs: { pages: { uses: "avi2d/workflows/.github/workflows/github-pages.yml@v3.4.0", with: { build: "bun run docs:build", path: "docs/.vitepress/dist" } } },
   });
   expect(await parsed(repo, "ci.yml")).toMatchObject({ jobs: { static: { with: { "secrets-pack": true }, secrets: { CHECKS_SECRETS_PACK: "${{ secrets.CHECKS_SECRETS_PACK }}" } } } });
-  expect(await parsed(repo, "flake.yml")).toMatchObject({ jobs: { flake: { uses: "avi2d/workflows/.github/workflows/flake.yml@v3", with: { "node-version-file": ".node-version" } } } });
+  expect(await parsed(repo, "flake.yml")).toMatchObject({ jobs: { flake: { uses: "avi2d/workflows/.github/workflows/flake.yml@v3.4.0", with: { "node-version-file": ".node-version" } } } });
   expect(await parsed(repo, "advisories.yml")).toMatchObject({ on: { schedule: [{ cron: "21 5 * * 1" }] } });
   expect(await parsed(repo, "main.yml")).toMatchObject({ jobs: { release: { with: { "full-test": true } } } });
   expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the code set checks-workflows writes\n" });
 }, 30_000);
 
-test("a private package's main.yml runs no full suite before the release, since checks-release-tag publishes nothing for it", async () => {
+test("a private package's release runs the full suite instead of skipping it", async () => {
   const repo = await open({ "package.json": manifest({ private: true }) });
   await repo.commit("start");
   expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
   const main = await parsed(repo, "main.yml");
-  expect(main).toMatchObject({ jobs: { release: { uses: "avi2d/workflows/.github/workflows/release-main.yml@v3" } } });
-  expect(JSON.stringify(main)).not.toContain("full-test");
+  expect(main).toMatchObject({ jobs: { release: { uses: "avi2d/workflows/.github/workflows/release-main.yml@v3.4.0" } } });
+  expect(main).toMatchObject({ jobs: { release: { with: { "full-test": true } } } });
+  expect(await parsed(repo, "ci.yml")).toMatchObject({ jobs: { changes: { with: { "check-release": true } }, test: { with: { run: "${{ needs.changes.outputs.check-release == 'true' && 'bun run test' || 'bunx checks-test --pr' }}" } } } });
+  expect((await workflows(repo)).exitCode).toBe(0);
+}, 30_000);
+
+test("a private root with a public workspace does not omit workspace publishing", async () => {
+  const repo = await open({
+    "package.json": manifest({ private: true, workspaces: ["packages/*"] }),
+    "packages/public/package.json": JSON.stringify({ name: "@acme/public", version: "1.0.0" }),
+    "packages/private/package.json": JSON.stringify({ name: "@acme/private", version: "1.0.0", private: true }),
+  });
+  await repo.commit("start");
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  expect(await parsed(repo, "main.yml")).toMatchObject({ jobs: { release: { with: { "publish-workspaces": true } } } });
+  expect((await workflows(repo)).exitCode).toBe(0);
+}, 30_000);
+
+test("a pinned Claude Code install is not dropped from test and flake callers", async () => {
+  const install = "npm install -g @anthropic-ai/claude-code@2.1.280";
+  const workflow = `name: ci\non: workflow_dispatch\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ${install}\n`;
+  const repo = await open({ "package.json": manifest(), ".github/workflows/ci.yml": workflow, ".github/workflows/flake.yml": workflow });
+  await repo.commit("start");
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  expect(await parsed(repo, "ci.yml")).toMatchObject({ jobs: { test: { with: { "claude-version": "2.1.280" } } } });
+  expect(await parsed(repo, "flake.yml")).toMatchObject({ jobs: { flake: { with: { "claude-version": "2.1.280" } } } });
+  expect((await workflows(repo)).exitCode).toBe(0);
 }, 30_000);
