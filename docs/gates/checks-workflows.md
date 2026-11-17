@@ -54,7 +54,7 @@ Then a push of a release commit runs `bun run test --full` once before the tag a
 A repository without a `package.json` counts as one that publishes.
 A private root with public workspace packages passes `publish-workspaces: true` instead.
 A private root with a `test` script and no public workspace packages passes `full-test: true` and runs static checks and tests on release pull requests.
-The generated callers pin the shared workflows to `v3.4.0`.
+The generated callers pin the shared workflows to `v3`.
 A Claude Code version pinned by an install step or a caller input is passed to the test and flake callers.
 
 The `ci.yml` caller runs one run per pull request and cancels the run a newer push replaces.
@@ -64,9 +64,9 @@ A code caller passes no secret, except `CHECKS_SECRETS_PACK` to `static.yml` whe
 GitHub passes `secrets: inherit` only to a workflow in the same organization or enterprise, so a caller that holds it differs from the set.
 The release, site main and production callers hold no concurrency group, since their shared jobs hold their own.
 The code main caller holds group `main` without cancellation, since `release-main.yml` holds no group.
-The code callers retain the inputs each repository needs for its release and tests.
-The files a site takes differ between sites only in the three names they pass, the test jobs of `ci.yml` and whether `ci.yml` holds the `changes` job.
-A code repository's `ci.yml` differs from another only in its test jobs and whether it holds the `changes` job.
+Every file a code repository takes except `ci.yml` and `main.yml` is byte-identical in every code repository, and `main.yml` differs only in `full-test` and `publish-workspaces`.
+The files a site takes differ between sites only in the three names they pass, the test jobs of `ci.yml`, whether `ci.yml` holds the `changes` job, and the `claude-version` input those jobs pass.
+A code repository's `ci.yml` differs from another only in its test jobs, whether it holds the `changes` job, and the `check-release`, `claude-version` and test `run` inputs those jobs pass.
 `pr-title.yml` and `release.yml` are the same in both kinds.
 
 `pr-text.yml` stays as it is in both kinds.
@@ -115,12 +115,15 @@ On those runs every job but `changes` and `checks` skips unless the caller passe
 With `check-release: true`, the static and test jobs run and the gate does not accept their skips.
 A fork pull request from a `release/` branch and a pull request from a `release/` branch that does not match `release/<base>` run every job.
 With a `changes` job, each job reads the rule once from its `release` output, as `if: needs.changes.outputs.release != 'true'`.
+With `check-release: true` the rule also passes when `check-release` is `true`, as `if: (needs.changes.outputs.release != 'true' || needs.changes.outputs.check-release == 'true')`.
 Without one, each job that needs no other job writes the rule in its `if`, and every other job skips with the job it needs.
-The gate's `skips` input accepts only the jobs skipped by the release or docs-only conditions.
+A comment above the gate's `skips` input and above each `if` that writes the rule says what it decides.
 
 The jobs `ci.yml` holds are the record of what the repository runs, and `package.json` names none of them.
-A `ci.yml` that calls a part keeps its `changes` job, or its lack of one, and each job that calls `test.yml`, with its name.
-Each test job keeps the `run`, `browsers`, `heavy` and `runs-on` inputs it passes.
+A `ci.yml` that calls a part keeps its `changes` job, or its lack of one, and each job that calls `test.yml` keeps its name.
+With `check-release: true` the set adds the `changes` job that returns `check-release`.
+Each test job keeps the `run`, `browsers`, `heavy`, `runs-on` and `claude-version` inputs it passes.
+With `check-release: true` a default `run` becomes the release-aware expression that runs `bun run test` on the release pull request.
 A test job that passes no `runs-on` gets the `CI_RUNS_ON` one, and a `run`, `browsers` or `heavy` input equal to the `test.yml` default is left out, such as `run: bunx checks-test --pr`.
 In a site, a test job that passes `artifact: "site-dist"` reads the build, so it waits for the `site` job.
 `static`, `site` in a site and `checks` are always there, and no test job is named `changes`, `static`, `site` or `checks`.

@@ -16,9 +16,9 @@ const PRIVATE_OPTIONS = { ...NO_CALLER_OPTIONS, checkRelease: true };
 
 const SITE_CI = "avi2d/workflows/.github/workflows/site-ci.yml@v3";
 
-const setOf = (workflows: readonly Workflow[], flags: SiteNameFlags = {}) => Effect.runSync(callerSetOf(workflows, flags, "checks-workflows --write", false));
+const setOf = (workflows: readonly Workflow[], flags: SiteNameFlags = {}) => Effect.runSync(callerSetOf(workflows, flags, "checks-workflows --write", false, false, true));
 const faultOf = (workflows: readonly Workflow[], flags: SiteNameFlags = {}) =>
-  Effect.runSync(Effect.flip(callerSetOf(workflows, flags, "checks-workflows --write", false))).message;
+  Effect.runSync(Effect.flip(callerSetOf(workflows, flags, "checks-workflows --write", false, false, true))).message;
 
 test("a repository whose callers call only code workflows is a code repository, so a ci.yml caller is never read as a site", () => {
   expect(setOf([])).toEqual({ kind: "code", ci: DEFAULT_CI_JOBS.code, options: PRIVATE_OPTIONS });

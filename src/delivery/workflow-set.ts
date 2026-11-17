@@ -53,9 +53,9 @@ type Caller = {
   readonly inputs?: readonly Input[];
 };
 
-type Input = readonly [key: string, value: string];
+type Input = readonly [key: string, value: string, note?: string];
 
-type Condition = { readonly test: string };
+type Condition = { readonly test: string; readonly note?: string };
 
 type CallingJob = {
   readonly job: string;
@@ -67,12 +67,14 @@ type CallingJob = {
   readonly secrets?: readonly string[];
 };
 
+const noted = (indent: string, line: string, note: string | undefined): readonly string[] => (note === undefined ? [indent + line] : [`${indent}# ${note}`, indent + line]);
+
 function callingJobLines({ job, needs, condition, shared, permissions, inputs = [], secrets = SHARED_SECRETS[shared] }: CallingJob): readonly string[] {
   const lines = [`  ${job}:`];
   if (needs !== undefined) lines.push(`    needs: ${needs}`);
-  if (condition !== undefined) lines.push(`    if: ${condition.test}`);
-  lines.push(`    uses: ${SHARED_WORKFLOWS}/${shared.replace(/@v3$/, "@v3.4.0")}`, `    permissions: { ${permissions} }`);
-  if (inputs.length > 0) lines.push("    with:", ...inputs.map(([key, value]) => `      ${key}: ${value}`));
+  if (condition !== undefined) lines.push(...noted("    ", `if: ${condition.test}`, condition.note));
+  lines.push(`    uses: ${SHARED_WORKFLOWS}/${shared}`, `    permissions: { ${permissions} }`);
+  if (inputs.length > 0) lines.push("    with:", ...inputs.flatMap(([key, value, note]) => noted("      ", `${key}: ${value}`, note)));
   if (secrets.length > 0) lines.push("    secrets:", ...secrets.map((secret) => `      ${secret}: \${{ secrets.${secret} }}`));
   return lines;
 }
@@ -107,6 +109,7 @@ const RELEASE_RUN = `((github.event_name == 'workflow_dispatch' && startsWith(gi
 // A job that needs another skips with it, so only a job that needs none tests the release branch itself.
 const NOT_RELEASE: Condition = {
   test: `\${{ !${RELEASE_RUN} }}`,
+  note: `Runs on every run but the release run: a dispatch on a ${RELEASE_BRANCH_PREFIX} branch, or the pull request from ${RELEASE_BRANCH_PREFIX}<base> in this repository.`,
 };
 
 type Gated = Pick<CallingJob, "needs" | "condition">;
@@ -132,12 +135,12 @@ function testCallingJob(test: TestJob, kind: RepositoryKind, gated: Gated, claud
 }
 
 function skipsInput(needed: readonly string[], changes: boolean, checkRelease: boolean): Input {
-  if (!changes) return ["skips", `\${{ ${RELEASE_RUN} && '${needed.join(" ")}' || '' }}`];
+  if (!changes) return ["skips", `\${{ ${RELEASE_RUN} && '${needed.join(" ")}' || '' }}`, "The jobs the gate passes as skipped: every job on the release run."];
   const parts = needed.filter((job) => job !== "changes");
   const skipped = parts.filter((job) => job !== "static");
   const docsOnly = skipped.length > 0 ? `needs.changes.outputs.docs-only == 'true' && '${skipped.join(" ")}' || ` : "";
-  const releaseSkip = checkRelease ? "needs.changes.outputs.release == 'true' && needs.changes.outputs.check-release != 'true'" : "needs.changes.outputs.release == 'true'";
-  return ["skips", `\${{ ${releaseSkip} && '${parts.join(" ")}' || ${docsOnly}'' }}`];
+  if (!checkRelease) return ["skips", `\${{ needs.changes.outputs.release == 'true' && '${parts.join(" ")}' || ${docsOnly}'' }}`, "The jobs the gate passes as skipped: every job but changes on the release run, and every job but changes and static on a docs-only change."];
+  return ["skips", `\${{ needs.changes.outputs.release == 'true' && needs.changes.outputs.check-release != 'true' && '${parts.join(" ")}' || ${docsOnly}'' }}`, "The jobs the gate passes as skipped: every job but changes on the release run without check-release, and every job but changes and static on a docs-only change."];
 }
 
 function gateJob(needed: readonly string[], changes: boolean, checkRelease: boolean): CallingJob {
@@ -283,7 +286,7 @@ function singleJobCiText(set: CallerSet): string {
 // The single-job ci.yml stays accepted until the repository runs --write, so a kit upgrade alone fails no pull request.
 export function holdsSingleJobCi(set: CallerSet, present: readonly WorkflowFile[]): boolean {
   const text = singleJobCiText(set);
-  return present.some((file) => file.name === "ci.yml" && (file.text === text || file.text === text.replaceAll("@v3.4.0", "@v3")));
+  return present.some((file) => file.name === "ci.yml" && file.text === text);
 }
 
 // An optional caller may be absent, but a present one holds exactly this text.

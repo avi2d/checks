@@ -32,7 +32,7 @@ It stops before writing anything when a site run lacks one of the three names, a
 The same stop covers two values of one name, an unparsable name, and a flag that differs from a name its callers pass.
 The same stop covers a test job of `ci.yml` that passes an unparsable input or holds a fixed job name.
 A freshly set up repository passes `checks-workflows` without running `--write` first.
-In a code repository it writes `mutation.yml` under `.github/workflows/`, which names the shared mutation workflow `avi2d/workflows/.github/workflows/mutation.yml@v3.4.0` and nothing else.
+In a code repository it writes `mutation.yml` under `.github/workflows/`, which names the shared mutation workflow `avi2d/workflows/.github/workflows/mutation.yml@v3` and nothing else.
 The shared workflow picks the run from the event.
 A pull request runs `compare`, and a manual dispatch runs `refresh`.
 A refresh starts by hand, as [checks-ci-wiring](checks-ci-wiring.md#schedules) requires.

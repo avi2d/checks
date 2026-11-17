@@ -123,7 +123,7 @@ function claudeVersionOf(workflows: readonly (Workflow | undefined)[]): string |
   return undefined;
 }
 
-export function callerOptionsOf(held: HeldWorkflow, publishes: boolean, publishWorkspaces = false, needsReleaseChecks = true): CallerOptions {
+export function callerOptionsOf(held: HeldWorkflow, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean): CallerOptions {
   return {
     advisoriesCron: weeklyCronOf(held("advisories.yml")),
     flake: flakeOf(held("flake.yml")),

@@ -4,11 +4,11 @@ import type { Workflow } from "../../../src/delivery/workflow-references.ts";
 
 const workflow = (name: string, text: string): Workflow => ({ path: `.github/workflows/${name}`, document: Bun.YAML.parse(text), text });
 
-const optionsOf = (files: Readonly<Record<string, string>>, publishes = false) =>
+const optionsOf = (files: Readonly<Record<string, string>>, publishes = false, publishWorkspaces = false, needsReleaseChecks = false) =>
   callerOptionsOf((name) => {
     const text = files[name];
     return text === undefined ? undefined : workflow(name, text);
-  }, publishes);
+  }, publishes, publishWorkspaces, needsReleaseChecks);
 
 const HAND_ROLLED_DOCS = [
   "name: docs",

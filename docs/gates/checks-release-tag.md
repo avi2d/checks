@@ -25,7 +25,7 @@ It then runs the build check and the publish there, so npm ships the tree the re
 A merge with no untagged release commit behind it ends at once, before any API call.
 On a release commit it first fetches the head of the pull request the squash subject names, such as `(#7)`.
 It refuses unless the tree of that commit equals the tree the required checks of that pull request passed on.
-That check is what lets the release publish a tested tree even though the release pull request runs no test.
+That check is what lets the release publish a tested tree even though a release pull request without release checks runs no test.
 It matches the tree the required checks of the release pull request passed on.
 In a repository whose `ci.yml` is the one [checks-workflows](checks-workflows.md) composes, release checks run when the caller passes `check-release: true`.
 Other release checks skip every job but `changes`.

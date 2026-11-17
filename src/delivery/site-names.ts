@@ -1,6 +1,7 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
 import { callerOptionsOf, type CallerOptions } from "./caller-options.ts";
 import { ciJobsOf, sharedFileOf, type CiJobs } from "./ci-jobs.ts";
+import { publicWorkspaces } from "./workspace-packages.ts";
 import { isRecord, workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export const WORKFLOWS = ".github/workflows";
@@ -102,9 +103,9 @@ const heldWorkflow = (workflows: readonly Workflow[]) => (name: string) => workf
 const heldCiJobs = (kind: CallerSet["kind"], workflows: readonly Workflow[]) =>
   ciJobsOf(kind, heldWorkflow(workflows)("ci.yml")).pipe(Effect.mapError((fault) => new CallerSetFault({ message: fault.message })));
 
-export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean, publishWorkspaces?: boolean, needsReleaseChecks?: boolean) {
+export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean) {
   const flagged = SITE_NAME_KEYS.some((key) => flags[key] !== undefined);
-  const options = callerOptionsOf(heldWorkflow(workflows), publishes, publishWorkspaces === true, needsReleaseChecks !== false);
+  const options = callerOptionsOf(heldWorkflow(workflows), publishes, publishWorkspaces, needsReleaseChecks);
   if (!callsSiteWorkflow(workflows) && !flagged) return { kind: "code", ci: yield* heldCiJobs("code", workflows), options } satisfies CallerSet;
   const held = workflows.flatMap(heldNames).filter(({ key }) => flags[key] === undefined);
   const conflict = conflictOf(held);
@@ -166,6 +167,15 @@ export const readsTestScript = Effect.fn("readsTestScript")(function* (root: str
 
 export const readsPrivatePackage = Effect.fn("readsPrivatePackage")(function* (root: string) {
   return (yield* readPackage(root))?.private === true;
+});
+
+export type CallerInputs = { readonly publishes: boolean; readonly publishWorkspaces: boolean; readonly needsReleaseChecks: boolean };
+
+export const callerInputsOf = Effect.fn("callerInputsOf")(function* (root: string, isPrivate: boolean) {
+  const heldPrivate = yield* readsPrivatePackage(root);
+  const workspaces = yield* publicWorkspaces(root);
+  const needsReleaseChecks = yield* readsTestScript(root);
+  return { publishes: !isPrivate && !heldPrivate, publishWorkspaces: workspaces.length > 0, needsReleaseChecks } satisfies CallerInputs;
 });
 
 export const readWorkflowFiles = Effect.fn("readWorkflowFiles")(function* (root: string) {

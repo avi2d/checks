@@ -2,7 +2,7 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { runMain, Usage } from "../core/main.ts";
 import { JSCPD_CONFIG, KNIP_CONFIG, STRYKER_CONFIG } from "./setup-workflow.ts";
-import { callerSetOf, flagMismatchOf, parseSiteNameFlags, readsPrivatePackage, readWorkflowFiles, type CallerSet } from "./site-names.ts";
+import { callerInputsOf, callerSetOf, flagMismatchOf, parseSiteNameFlags, readWorkflowFiles, type CallerSet } from "./site-names.ts";
 import { byHandSet, requiredSet } from "./workflow-set.ts";
 import { TEMPLATES, VISION_PAGE } from "../docs/doc-templates.ts";
 import { requiresName } from "../docs/doc-vision.ts";
@@ -338,8 +338,8 @@ const argumentsOf = Effect.fn("argumentsOf")(function* (root: string) {
   const mismatch = flagMismatchOf(callers, parsed.flags);
   if (mismatch !== undefined) return yield* new Usage({ message: mismatch });
   const isPrivate = parsed.rest.includes(PRIVATE);
-  const set = yield* readsPrivatePackage(root).pipe(
-    Effect.flatMap((heldPrivate) => callerSetOf(callers, parsed.flags, NAME, !isPrivate && !heldPrivate)),
+  const inputs = yield* callerInputsOf(root, isPrivate).pipe(Effect.mapError((fault) => new Usage({ message: fault.message })));
+  const set = yield* callerSetOf(callers, parsed.flags, NAME, inputs.publishes, inputs.publishWorkspaces, inputs.needsReleaseChecks).pipe(
     Effect.mapError((fault) => new Usage({ message: fault.message })),
   );
   return { isPrivate, set };

@@ -3,9 +3,8 @@ import { Console, Effect, FileSystem, Path } from "effect";
 import { git } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { readRepository } from "./ci-wiring.ts";
-import { publicWorkspaces } from "./workspace-packages.ts";
 import { holdsSharedWorkflow } from "./mutation-workflow.ts";
-import { callerSetOf, parseSiteNameFlags, readsPrivatePackage, readsTestScript, readWorkflowFiles, WORKFLOWS, type CallerSet, type HeldFile, type SiteNameFlags } from "./site-names.ts";
+import { callerInputsOf, callerSetOf, parseSiteNameFlags, readWorkflowFiles, WORKFLOWS, type CallerSet, type HeldFile, type SiteNameFlags } from "./site-names.ts";
 import { byHandSet, differenceLines, differencesOf, holdsSingleJobCi, isIgnoredWorkflow, requiredSet, type WorkflowFile } from "./workflow-set.ts";
 
 const NAME = "workflows";
@@ -76,17 +75,15 @@ const workflows = Effect.gen(function* () {
     return true;
   }
   const present = yield* readWorkflowFiles(root);
-  const publishes = !(yield* readsPrivatePackage(root).pipe(Effect.mapError((fault) => new Usage({ message: fault.message }))));
-  const publishWorkspaces = (yield* publicWorkspaces(root)).length > 0;
-  const needsReleaseChecks = yield* readsTestScript(root);
-  if (!mode.write) return yield* checkSet(present, publishes, publishWorkspaces, needsReleaseChecks);
+  const inputs = yield* callerInputsOf(root, false).pipe(Effect.mapError((fault) => new Usage({ message: fault.message })));
+  if (!mode.write) return yield* checkSet(present, inputs.publishes, inputs.publishWorkspaces, inputs.needsReleaseChecks);
   const set = yield* callerSetOf(
     present.map(({ workflow }) => workflow),
     mode.flags,
     REWRITE,
-    publishes,
-    publishWorkspaces,
-    needsReleaseChecks,
+    inputs.publishes,
+    inputs.publishWorkspaces,
+    inputs.needsReleaseChecks,
   ).pipe(Effect.mapError((fault) => new Usage({ message: fault.message })));
   return yield* writeSet(root, set, present);
 });
