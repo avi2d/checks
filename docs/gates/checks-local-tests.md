@@ -6,7 +6,7 @@ audience: consumers
 
 `checks-local-tests` reports whether the current repository allows local tests for agents.
 
-## Setting
+## What it checks
 
 The `localTests` key in `checks.config.ts` is `"blocked"` by default.
 Set it to `"allowed"` to allow agents to run tests locally:
@@ -17,10 +17,39 @@ import { defineConfig } from "@avi2dg/checks/config";
 export default defineConfig({ localTests: "allowed" });
 ```
 
-`checks-local-tests` prints exactly `blocked\n` or `allowed\n` to standard output and exits 0.
-It reports an invalid or unreadable config on standard error and exits 2.
+The bin prints exactly `blocked\n` or `allowed\n` to standard output.
+An invalid or unreadable config is reported on standard error.
+
+## What it reads
+
+It reads the `localTests` key of `checks.config.ts` in the current repository.
+A missing file or a missing key means `blocked`.
+It reads no environment marker and no CI value.
+
+## Arguments
+
+```sh
+checks-local-tests
+```
+
 It takes no arguments.
-The answer is independent of the environment marker and CI.
+
+## Exit codes
+
+| Code | Result |
+| --- | --- |
+| 0 | The bin printed `blocked` or `allowed`. |
+| 2 | An argument was passed, or `checks.config.ts` does not load or holds an invalid `localTests` value. |
+
+## Sample output
+
+```
+blocked
+```
+
+## When it runs
+
+A person runs it by hand to read the switch before starting a local test run.
 
 ## Agent marker
 
