@@ -160,9 +160,6 @@ const syncWorkspaceLock = Effect.fn("syncWorkspaceLock")(function* (root: string
   let updated = lock;
   for (const workspace of workspaces) {
     const dir = path.dirname(workspace.path);
-    if (Bun.semver.order(version, workspace.version) < 0) {
-      return yield* refused(`${file} workspaces["${dir}"] holds ${workspace.version}, which is ahead of the release version ${version}; raise the root version past ${workspace.version} first`);
-    }
     const rewritten = withWorkspaceVersion(updated, dir, workspace.version, version);
     if (rewritten === undefined) return yield* refused(`${file} holds no workspaces["${dir}"] version ${workspace.version}; run bun install and commit bun.lock`);
     updated = rewritten;
