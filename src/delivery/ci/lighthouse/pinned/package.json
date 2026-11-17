@@ -1,0 +1,8 @@
+{
+  "name": "lighthouse-pinned",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "lighthouse": "13.6.0"
+  }
+}
