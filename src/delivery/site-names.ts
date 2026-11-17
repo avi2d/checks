@@ -1,4 +1,5 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
+import { KIT_PACKAGE_NAME } from "../core/test-script.ts";
 import { callerOptionsOf, type CallerOptions } from "./caller-options.ts";
 import { ciJobsOf, sharedFileOf, type CiJobs } from "./ci-jobs.ts";
 import { WorkspacePatterns, publicWorkspacesOf } from "./workspace-packages.ts";
@@ -9,6 +10,8 @@ export const WORKFLOWS = ".github/workflows";
 export const SITE_NAME_KEYS = ["pages", "domain", "production"] as const;
 
 type SiteNameKey = (typeof SITE_NAME_KEYS)[number];
+
+export const SITE_NAME_VARIABLES = { pages: "SITE_PAGES", domain: "SITE_DOMAIN", production: "SITE_PRODUCTION" } as const satisfies Readonly<Record<SiteNameKey, string>>;
 
 const PLACEHOLDERS = { pages: "<project>", domain: "<domain>", production: "<owner/name>" } as const satisfies Readonly<Record<SiteNameKey, string>>;
 
@@ -50,7 +53,20 @@ function calledSiteWorkflow(uses: unknown): boolean {
 
 type HeldName = { readonly key: SiteNameKey; readonly value: string; readonly path: string };
 
+function writtenNames(workflow: Workflow): readonly HeldName[] {
+  const env = isRecord(workflow.document) ? workflow.document["env"] : undefined;
+  if (!isRecord(env)) return [];
+  return SITE_NAME_KEYS.flatMap((key): readonly HeldName[] => {
+    const value = env[SITE_NAME_VARIABLES[key]];
+    return typeof value === "string" ? [{ key, value, path: workflow.path }] : [];
+  });
+}
+
 function heldNames(workflow: Workflow): readonly HeldName[] {
+  return [...writtenNames(workflow), ...calledNames(workflow)];
+}
+
+function calledNames(workflow: Workflow): readonly HeldName[] {
   return workflowJobs(workflow)
     .filter(([, job]) => calledSiteWorkflow(job["uses"]))
     .flatMap(([, job]) => {
@@ -63,8 +79,8 @@ function heldNames(workflow: Workflow): readonly HeldName[] {
     });
 }
 
-function callsSiteWorkflow(workflows: readonly Workflow[]): boolean {
-  return workflows.some((workflow) => workflowJobs(workflow).some(([, job]) => calledSiteWorkflow(job["uses"])));
+function holdsSiteWorkflow(workflows: readonly Workflow[]): boolean {
+  return workflows.some((workflow) => writtenNames(workflow).length > 0 || workflowJobs(workflow).some(([, job]) => calledSiteWorkflow(job["uses"])));
 }
 
 function conflictOf(held: readonly HeldName[]): string | undefined {
@@ -106,7 +122,7 @@ const heldCiJobs = (kind: CallerSet["kind"], workflows: readonly Workflow[]) =>
 export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean) {
   const flagged = SITE_NAME_KEYS.some((key) => flags[key] !== undefined);
   const options = callerOptionsOf(heldWorkflow(workflows), publishes, publishWorkspaces, needsReleaseChecks);
-  if (!callsSiteWorkflow(workflows) && !flagged) return { kind: "code", ci: yield* heldCiJobs("code", workflows), options } satisfies CallerSet;
+  if (!holdsSiteWorkflow(workflows) && !flagged) return { kind: "code", ci: yield* heldCiJobs("code", workflows), options } satisfies CallerSet;
   const held = workflows.flatMap(heldNames).filter(({ key }) => flags[key] === undefined);
   const conflict = conflictOf(held);
   if (conflict !== undefined) return yield* new CallerSetFault({ message: conflict });
@@ -147,6 +163,7 @@ export type HeldFile = { readonly name: string; readonly text: string; readonly 
 const parsedOrNothing = (text: string): Effect.Effect<unknown> => Effect.try(() => Bun.YAML.parse(text)).pipe(Effect.orElseSucceed(() => undefined));
 
 const decodePackage = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({
+  name: Schema.optionalKey(Schema.String),
   private: Schema.optionalKey(Schema.Boolean),
   scripts: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
   workspaces: Schema.optionalKey(WorkspacePatterns),
@@ -162,7 +179,7 @@ const readPackage = Effect.fn("readPackage")(function* (root: string) {
   );
 });
 
-type CallerInputs = { readonly publishes: boolean; readonly publishWorkspaces: boolean; readonly needsReleaseChecks: boolean };
+export type CallerInputs = { readonly publishes: boolean; readonly publishWorkspaces: boolean; readonly needsReleaseChecks: boolean; readonly kit: boolean };
 
 export type CallerInputOverrides = { readonly private?: boolean; readonly hasTestScript?: boolean };
 
@@ -171,7 +188,7 @@ export const callerInputsOf = Effect.fn("callerInputsOf")(function* (root: strin
   const isPrivate = overrides?.private ?? held?.private === true;
   const needsReleaseChecks = overrides?.hasTestScript ?? held?.scripts?.["test"] !== undefined;
   const workspaces = yield* publicWorkspacesOf(root, { private: isPrivate, workspaces: held?.workspaces });
-  return { publishes: !isPrivate, publishWorkspaces: workspaces.length > 0, needsReleaseChecks } satisfies CallerInputs;
+  return { publishes: !isPrivate, publishWorkspaces: workspaces.length > 0, needsReleaseChecks, kit: held?.name === KIT_PACKAGE_NAME } satisfies CallerInputs;
 });
 
 export const readWorkflowFiles = Effect.fn("readWorkflowFiles")(function* (root: string) {

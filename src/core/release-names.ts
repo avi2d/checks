@@ -2,6 +2,8 @@ export const MANIFEST = "package.json";
 
 export const TAG_PREFIX = "v";
 
+export const RELEASE_BRANCH_PREFIX = "release/";
+
 export const RELEASE_TAG_GLOB = `${TAG_PREFIX}[0-9]*.[0-9]*.[0-9]*`;
 
 export function releaseTag(version: string): string {

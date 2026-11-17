@@ -48,7 +48,7 @@ test("a code repository without workflow files is refused until --write writes c
   expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the code set checks-workflows writes\n" });
   await repo.commit("ci: write the workflow set");
   const wiring = await ran($`bun ${WIRING}`.cwd(repo.dir).env(withoutPullRequestEvent()));
-  expect(wiring.text).toContain("ci-wiring: .github/workflows holds the set checks-workflows writes, so the shared workflows run every gate\n");
+  expect(wiring.text).toContain("ci-wiring: .github/workflows holds the set checks-workflows writes, so the set runs every gate\n");
   expect(wiring.exitCode).toBe(0);
 }, 30_000);
 
@@ -64,7 +64,7 @@ test("a first site write takes the three names as flags, gets the six site calle
 
   const refused = await workflows(repo);
   expect(refused.exitCode).toBe(1);
-  expect(refused.text).toContain("  .github/workflows/pages.yml: no workflow of the set, so delete it\n");
+  expect(refused.text).toContain("  .github/workflows/pages.yml: no file of the set, so delete it\n");
   expect(refused.text).toContain("  .github/workflows/advisories.yml: differs from the caller checks-workflows writes\n");
 
   expect(await workflows(repo, ["--write", ...SITE_FLAGS])).toEqual({ exitCode: 0, text: "workflows: wrote the 7 workflow file(s) of the site set, and deleted pages.yml\n" });
@@ -158,7 +158,7 @@ test("the shared workflow repository keeps its own files and an unknown flag is 
 
   const flagged = await workflows(repo, ["--force"]);
   expect(flagged.exitCode).toBe(2);
-  expect(flagged.text).toContain("usage: workflows.ts [--write [--pages <project>] [--domain <domain>] [--production <owner/name>]]");
+  expect(flagged.text).toContain("usage: workflows.ts [--write [--full] [--pages <project>] [--domain <domain>] [--production <owner/name>]]");
   expect((await workflows(repo, SITE_FLAGS)).exitCode).toBe(2);
 }, 30_000);
 

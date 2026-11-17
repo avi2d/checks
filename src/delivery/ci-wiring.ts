@@ -14,7 +14,8 @@ import { findRunnerFaults, formatRunnerReport, jobRuns, readRunnerConfig } from 
 import { findScheduledRuns, formatScheduledRunReport } from "./schedule-policy.ts";
 import { invokes, mentions, plainCommand, type Command } from "./shell-command.ts";
 import { callerInputsOf, callerSetOf } from "./site-names.ts";
-import { differencesOf } from "./workflow-set.ts";
+import { countOf, heldDifferences, layoutOf, readActionFiles } from "./held-set.ts";
+import { fullRefusal } from "./workflow-set.ts";
 import { findMissingWorkflows, formatMissingReport, isRecord, localUses, names, skippedBy, switchedOff, workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export { BunPinError, findBunPinFaults, formatBunPinReport } from "./bun-pin.ts";
@@ -321,13 +322,15 @@ const callsSharedSet = Effect.fn("callsSharedSet")(function* (root: string, work
   return yield* Effect.gen(function* () {
     const inputs = yield* callerInputsOf(root);
     const set = yield* callerSetOf(workflows, {}, "checks-workflows --write", inputs.publishes, inputs.publishWorkspaces, inputs.needsReleaseChecks);
-    return differencesOf(set, present).length === 0;
+    const layout = yield* layoutOf(root, inputs.kit, false);
+    if (layout.full && fullRefusal(set) !== undefined) return false;
+    return countOf(heldDifferences(set, present, yield* readActionFiles(root), layout)) === 0;
   }).pipe(Effect.catch((fault) => Console.error(`ci-wiring: ${fault.message}`).pipe(Effect.as(false))));
 });
 
 const reportGaps = Effect.fn("reportGaps")(function* (root: string, workflows: readonly Workflow[]) {
   if (yield* callsSharedSet(root, workflows)) {
-    yield* Console.log(`ci-wiring: ${WORKFLOWS} holds the set checks-workflows writes, so the shared workflows run every gate`);
+    yield* Console.log(`ci-wiring: ${WORKFLOWS} holds the set checks-workflows writes, so the set runs every gate`);
     return [];
   }
   const declaration = yield* readDeclaration(root);

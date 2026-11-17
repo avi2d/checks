@@ -1,36 +1,42 @@
 name: pr-title
 
-# A title edit reruns only this workflow, not the suite ci runs on each push.
 on:
   pull_request:
-    types: [edited]
-
-permissions:
-  contents: read
-  statuses: write
+    types: [opened, synchronize, reopened, edited]
 
 concurrency:
   group: pr-title-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   title:
-    if: github.event.changes.title
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 10
+    permissions:
+      contents: read
+      statuses: write
+      pull-requests: read
     steps:
-      - uses: avi2d/workflows/setup@v1
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup
       - id: title
-        name: lint the title
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           GH_TOKEN: ${{ github.token }}
-        run: bun src/delivery/commit-title.ts
-      # Branch protection requires a commitlint check that no job of that name reports.
-      - name: report the title as commitlint
-        if: always()
-        uses: avi2d/workflows/commitlint-status@v1
-        with:
-          outcome: ${{ steps.title.outcome }}
+        run: bunx checks-commit-title
+      # Branch protection reads the title as the commitlint status, which an edit to the title rewrites.
+      - if: always()
+        name: report the commitlint status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          JOB_STATUS: ${{ steps.title.outcome }}
+          CONTEXT: commitlint
+          ATTEMPTS: "5"
+        run: bunx checks-ci commit-status

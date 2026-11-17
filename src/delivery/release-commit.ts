@@ -3,7 +3,7 @@ import * as Base64 from "effect/encoding/Base64";
 import { gitHubJson, REPOSITORY } from "../core/github.ts";
 import { nextVersion, type Pending, readPending, releaseTitle, runBuild, withVersion, withWorkspaceVersion } from "./release.ts";
 import { git } from "../core/git.ts";
-import { MANIFEST, releaseTag, taggedVersion } from "../core/release-names.ts";
+import { MANIFEST, RELEASE_BRANCH_PREFIX, releaseTag, taggedVersion } from "../core/release-names.ts";
 import { publicWorkspaces, type Workspace } from "./workspace-packages.ts";
 import { readsPublishWorkspaces } from "./caller-options.ts";
 import { readWorkflowFiles } from "./site-names.ts";
@@ -31,8 +31,6 @@ const RAW_ENTRY = /^:(\d{6}) (\d{6}) [0-9a-f]+ [0-9a-f]+ ([A-Z])/;
 const decodeVersion = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ version: Schema.String })));
 const decodeSha = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ sha: Schema.String })));
 const decodeRef = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ ref: Schema.String })));
-
-export const RELEASE_BRANCH_PREFIX = "release/";
 
 export function releaseBranchOf(base: string): string {
   return `${RELEASE_BRANCH_PREFIX}${base}`;

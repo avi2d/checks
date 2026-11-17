@@ -1,6 +1,7 @@
 import { Effect, Schema } from "effect";
 import { SHARED_REPOSITORY } from "./mutation-workflow.ts";
-import { workflowJobs, type Workflow } from "./workflow-references.ts";
+import { RELEASE_BRANCH_PREFIX } from "../core/release-names.ts";
+import { isRecord, workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export type RepositoryKind = "code" | "site";
 
@@ -8,6 +9,9 @@ export const DEFAULT_TEST_RUN = "bunx checks-test --pr";
 export const RELEASE_TEST_RUN = "${{ needs.changes.outputs.check-release == 'true' && 'bun run test' || 'bunx checks-test --pr' }}";
 
 const SHARED_RUNNER = "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}";
+
+// A fork can name its head release/, and a dispatch holds no head_ref, so only the dispatch and the same-repository release/<base> pull request count.
+export const RELEASE_RUN = `((github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, '${RELEASE_BRANCH_PREFIX}')) || (github.event_name == 'pull_request' && github.head_ref == format('${RELEASE_BRANCH_PREFIX}{0}', github.base_ref) && github.event.pull_request.head.repo.full_name == github.repository))`;
 
 export const SITE_BUILD = "site-dist";
 
@@ -83,6 +87,51 @@ const testJobOf = Effect.fn("testJobOf")(function* (kind: RepositoryKind, path: 
   } satisfies TestJob;
 });
 
+export const TEST_STEP = "test";
+
+export const PLAYWRIGHT_USES = "./.github/actions/playwright";
+
+const FullStep = Schema.Struct({
+  id: Schema.optionalKey(Schema.String),
+  uses: Schema.optionalKey(Schema.String),
+  run: Schema.optionalKey(Schema.String),
+  with: Schema.optionalKey(Schema.Record(Schema.String, Schema.Unknown)),
+});
+
+const FullTestJob = Schema.Struct({
+  needs: Schema.optionalKey(Schema.String),
+  "runs-on": Schema.String,
+  steps: Schema.Array(FullStep),
+});
+
+const decodeFullTestJob = Schema.decodeUnknownEffect(FullTestJob);
+
+const fullTestJobOf = Effect.fn("fullTestJobOf")(function* (kind: RepositoryKind, path: string, name: string, job: unknown) {
+  const held = yield* decodeFullTestJob(job).pipe(Effect.mapError((issue) => new CiJobsFault({ message: `${path} job ${name} is not a test job checks-workflows writes: ${issue.message}` })));
+  const run = held.steps.find((step) => step.id === TEST_STEP)?.run;
+  const browsers = held.steps.find((step) => step.uses === PLAYWRIGHT_USES)?.with?.["browsers"];
+  return {
+    name,
+    run: run ?? DEFAULT_TEST_RUN,
+    browsers: typeof browsers === "string" ? browsers : "",
+    readsBuild: kind === "site" && held.needs === "site",
+    heavy: false,
+    runsOn: held["runs-on"],
+  } satisfies TestJob;
+});
+
+const holdsTestStep = (job: Readonly<Record<string, unknown>>): boolean => {
+  const steps = job["steps"];
+  return Array.isArray(steps) && steps.some((step) => isRecord(step) && step["id"] === TEST_STEP);
+};
+
+// A written ci.yml marks each test job by the step whose id is test.
+const fullCiJobsOf = Effect.fn("fullCiJobsOf")(function* (kind: RepositoryKind, ci: Workflow) {
+  const held = workflowJobs(ci).filter(([name, job]) => !FIXED_JOBS.some((fixed) => fixed === name) && holdsTestStep(job));
+  if (held.length === 0) return DEFAULT_CI_JOBS[kind];
+  return { changes: true, tests: yield* Effect.forEach(held, ([name, job]) => fullTestJobOf(kind, ci.path, name, job)) } satisfies CiJobs;
+});
+
 // A ci.yml that calls no part, such as the single-job caller, records no choice, so it gets the default jobs of its kind.
 export const ciJobsOf = Effect.fn("ciJobsOf")(function* (kind: RepositoryKind, ci: Workflow | undefined) {
   if (ci === undefined) return DEFAULT_CI_JOBS[kind];
@@ -90,7 +139,7 @@ export const ciJobsOf = Effect.fn("ciJobsOf")(function* (kind: RepositoryKind, c
     const part = partOf(job["uses"]);
     return part === undefined ? [] : [{ name, job, part }];
   });
-  if (parts.length === 0) return DEFAULT_CI_JOBS[kind];
+  if (parts.length === 0) return yield* fullCiJobsOf(kind, ci);
   const tests = yield* Effect.forEach(
     parts.filter(({ part }) => part === "test.yml"),
     ({ name, job }) => testJobOf(kind, ci.path, name, job["with"]),

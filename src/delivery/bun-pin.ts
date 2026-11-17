@@ -17,7 +17,7 @@ export type BunPinFault = {
 
 const SETUP_BUN = /^oven-sh\/setup-bun(?:@(?<ref>.*))?$/i;
 const V2_REF = /^v2(?:\.\d+){0,2}$/;
-const SHARED_SETUP = /^avi2d\/workflows\/(?:actions\/)?setup(?:@.*)?$/i;
+const SHARED_SETUP = /^(?:avi2d\/workflows\/(?:actions\/)?setup(?:@.*)?|\.\/\.github\/actions\/setup)$/i;
 const SETUP_VERSION_FILE = ".bun-version";
 
 function setupBunRef(uses: unknown): string | undefined {

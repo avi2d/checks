@@ -32,9 +32,11 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
     steps:
-      - uses: avi2d/workflows/actions/setup@v2
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup
       # Only the repository secret decides the skip; no pull request value reaches this step.
       - id: pack
         name: write the private pack or skip when none is configured
@@ -48,9 +50,9 @@ jobs:
       # A comment's run reports on no pull request, so this posts a commit status.
       - name: report the result on the head commit
         if: ${{ !cancelled() }}
-        uses: avi2d/workflows/actions/head-status@v2
-        with:
-          context: pr-text
-          pull-request: ${{ github.event.pull_request.number || github.event.issue.number }}
-          job-status: ${{ steps.pack.outputs.configured == 'false' && 'success' || steps.scan.outcome }}
-          description: "${{ steps.pack.outputs.configured == 'false' && 'scan skipped: no private pack is configured (CHECKS_SECRETS_PACK is unset)' || steps.scan.outcome == 'success' && 'the scan passed' || 'the scan failed or did not run' }}"
+        env:
+          CONTEXT: pr-text
+          PULL_REQUEST: ${{ github.event.pull_request.number || github.event.issue.number }}
+          JOB_STATUS: ${{ steps.pack.outputs.configured == 'false' && 'success' || steps.scan.outcome }}
+          DESCRIPTION: "${{ steps.pack.outputs.configured == 'false' && 'scan skipped: no private pack is configured (CHECKS_SECRETS_PACK is unset)' || steps.scan.outcome == 'success' && 'the scan passed' || 'the scan failed or did not run' }}"
+        run: bunx checks-ci commit-status
