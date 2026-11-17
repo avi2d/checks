@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CHECKOUT, fixtureRepos, ran, LAYOUT_BUNFIG, type Ran } from "../lib/fixture-repo.ts";
@@ -188,6 +188,8 @@ test(
       "tests/unit/widget.test.ts": CLEAN_TEST,
       "tests/quarantine/e2e/flaky.test.ts": FAILING_SPAWN,
     });
+    await mkdir(join(repo.dir, "node_modules", "@avi2dg"), { recursive: true });
+    await symlink(CHECKOUT, join(repo.dir, "node_modules", "@avi2dg", "checks"), "dir");
 
     const accepted = await repo.script("testing/test-layout.ts", repo.dir);
     expect(accepted.text).toContain("satisfy the layout");
