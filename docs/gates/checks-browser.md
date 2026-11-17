@@ -9,6 +9,7 @@ audience: consumers
 ## What it checks
 
 It visits each declared route at each declared viewport in each declared state.
+`checks-browser` refuses to start for an agent when `localTests` is blocked, as [checks-local-tests](checks-local-tests.md) says.
 A state that names its own `checks` runs only those, and any other state runs every declared check.
 Each declared check that opens a page runs on its own fresh page.
 A visit is one route, one viewport and one state.
@@ -195,6 +196,7 @@ export const checks: readonly ProductCheck[] = [
 ## What it reads
 
 It reads the `browser`, `browserRoutes` and `browserBuild` keys of `checks.config.ts` in the directory it runs in.
+It reads `CHECKS_AGENT` and `CI` from the environment and the `localTests` key of `checks.config.ts`, and refuses an agent run while `localTests` is blocked, as [checks-local-tests](checks-local-tests.md) says.
 On a pull request it also reads the changed paths since the merge base:
 
 ```ts
@@ -428,7 +430,7 @@ Without `browserBuild`, the browser pass runs as usual.
 | --- | --- |
 | 0 | every check passes at every visit, and every declared route and target is there |
 | 1 | a check fails at a visit, a declared route is not served, a declared target matches no visible element, or a run scans no target |
-| 2 | an argument is not one it takes, `checks.config.ts` sets no `browser` key, the key does not decode or contradicts itself, `browser-checks.json` is still there, the site directory or the hooks module is missing, the site holds no `.html` page while a route lists `every-page`, a peer cannot load, or Chrome cannot start |
+| 2 | an argument is not one it takes, `checks.config.ts` sets no `browser` key, the key does not decode or contradicts itself, `browser-checks.json` is still there, the site directory or the hooks module is missing, the site holds no `.html` page while a route lists `every-page`, a peer cannot load, Chrome cannot start, or an agent run is refused while `localTests` is blocked |
 
 ## Sample output
 

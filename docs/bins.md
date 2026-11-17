@@ -46,6 +46,7 @@ They are `checks-lint-coverage`, `checks-quarantine-clock`, `checks-repetition` 
 
 These bins run on their own:
 
+- [`checks-local-tests`](gates/checks-local-tests.md) reports whether agents may run local tests.
 - [`checks-test`](gates/checks-test.md) runs the suite as `scripts.test`, refuses a skip without a reason at its test site and refuses a full, e2e or pixel run outside CI.
   With `--changed` it narrows the run as [Changed-file runs](gates/checks-test.md#changed-file-runs) says.
 - [`checks-flake`](gates/checks-flake.md) runs the suite when started by hand and records the seeds a flaky test fails with.

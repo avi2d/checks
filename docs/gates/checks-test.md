@@ -9,6 +9,7 @@ audience: consumers
 ## What it checks
 
 It runs the unit tier plus the smoke list outside CI and the full suite under CI.
+`checks-test` refuses to start for an agent when `localTests` is blocked, as [checks-local-tests](checks-local-tests.md) says.
 A `--changed` run narrows that, as [Changed-file runs](#changed-file-runs) says, and so does a `--pr` run, as [The pull request entry](#the-pull-request-entry) says.
 It refuses `--full`, `--tier=e2e` and `--tier=pixel` outside CI, except a pixel run that approves pictures, as [Runs refused outside CI](#runs-refused-outside-ci) says.
 It runs them with `bun test --randomize --parallel=<workers>`, where the count comes from free memory as [Parallel runs](#parallel-runs) says, and reads Bun's JUnit report from that run.
@@ -52,6 +53,7 @@ It reads the reach map under `reach` in `checks.config.ts` too, as [The reach ma
 A `--changed` run also reads the git history since the merge base with `origin/<default branch>`, the working tree diff and the untracked files.
 It reads the sources, `package.json`, `checks.config.ts` and `bunfig.toml` too, as [Changed-file runs](#changed-file-runs) says.
 It reads no skip list from `checks.config.ts`, only the smoke list.
+It reads `CHECKS_AGENT` and `CI` from the environment and the `localTests` key of `checks.config.ts`, and refuses an agent run while `localTests` is blocked, as [checks-local-tests](checks-local-tests.md) says.
 It counts a run as `ci` when `CI` is true and as `local` otherwise.
 A local run covers `./tests/unit` plus the smoke list the repository declares, except a `--changed` run, as [Changed-file runs](#changed-file-runs) says.
 The smoke list lives in `checks.config.ts` under `smoke` as an array of test file paths.
@@ -86,9 +88,9 @@ A refused `--full` or `--tier=e2e` run tells the reader to push the branch and o
 The full suite runs at release.
 A refused `--tier=pixel` run names `gh workflow run whole-tree-run --ref <branch>`, the workflow [checks-whole-tree-run](checks-whole-tree-run.md#running-it-by-hand) describes.
 Push the branch first, so the dispatched run tests the branch instead of the default branch.
-A pixel run with `APPROVE_SCREENS` true still runs outside CI, since a CI run cannot write approved pictures back.
+A pixel run with `APPROVE_SCREENS` true still runs outside CI for a person, since a CI run cannot write approved pictures back, but an agent run is refused while `localTests` is blocked, as [checks-local-tests](checks-local-tests.md) says.
 [Test the screens of one block](../how-to/test-a-blocks-screens.md#approve-new-pictures) shows that run.
-`--tier=live` runs outside CI, since the full suite never includes it and it needs credentials on the local machine.
+`--tier=live` runs outside CI for a person, since the full suite never includes it and it needs credentials on the local machine, but an agent run is refused while `localTests` is blocked, as [checks-local-tests](checks-local-tests.md) says.
 With `CI` true, every option runs as the rest of this page says.
 
 ```
@@ -235,7 +237,7 @@ It refuses test filters because every test excluded by a filter would look skipp
 | --- | --- |
 | 0 | every test passed and every skip has a matching site reason |
 | 1 | a test failed, a parallel worker crashed, a skip lacks a site reason or a declaration is stale in CI |
-| 2 | an argument is not one it takes, a run outside CI is refused, `APPROVE_SCREENS` is not a boolean in a pixel run, a declaration or the smoke list cannot be read, a `checks` object in `package.json` still sets `smoke` or `reach`, a smoke entry names no runnable test, `CI` is not a boolean, Bun wrote no report or a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` |
+| 2 | an argument is not one it takes, a run outside CI is refused, `APPROVE_SCREENS` is not a boolean in a pixel run, a declaration or the smoke list cannot be read, a `checks` object in `package.json` still sets `smoke` or `reach`, a smoke entry names no runnable test, `CI` is not a boolean, Bun wrote no report, a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` or an agent run is refused while `localTests` is blocked |
 
 ## Sample output
 

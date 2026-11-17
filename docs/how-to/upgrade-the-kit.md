@@ -30,7 +30,7 @@ To move a repository to a newer release of the kit:
    A repository that opted in to `checks-browser`, `checks-frontend-syntax` or `checks-copy` also reruns the `bun add` line on its page.
 1. Run `bun run build`, whose `checks-effect-scope` rewrites the Effect override and the kit's severities in `tsconfig.json` when a release changes them.
    A severity key the release drops stays in `tsconfig.json` until the repository removes it.
-1. Copy `node_modules/@avi2dg/checks/bunfig.toml` over `bunfig.toml` again, since `checks-test-layout` compares the copy with the installed preset.
+1. Copy `node_modules/@avi2dg/checks/bunfig.toml` over `bunfig.toml` again, then restore any own preload entry beside the shipped one, since `checks-test-layout` compares the copy with the installed preset.
 1. When the repository still holds the workflow the previous kit wrote for the whole-tree gates, delete that workflow.
    Run the gates with `checks-lint --whole-tree` instead.
    [Set up a repository](set-up-a-repository.md) and [checks-whole-tree-run](../gates/checks-whole-tree-run.md#running-it-by-hand) show the current names.

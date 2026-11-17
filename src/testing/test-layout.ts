@@ -49,6 +49,14 @@ const BANNED_BUN_NAMES: readonly string[] = [
 const BANNED_GLOBAL_CALLS: readonly string[] = ["fetch"];
 
 const IGNORES_KEY = "pathIgnorePatterns";
+const PRELOAD_KEY = "preload";
+
+function preloadEntries(value: unknown): readonly string[] {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.filter((entry): entry is string => typeof entry === "string");
+  return [];
+}
+
 const QUARANTINE = "**/tests/quarantine/**";
 const LIVE_TESTS = "**/tests/live/**";
 const PIXEL_TESTS = "**/tests/pixel/**";
@@ -283,7 +291,12 @@ export function bunfigViolations(consumer: unknown, preset: unknown): readonly V
   });
   const violations: Violation[] = [];
   for (const [key, value] of Object.entries(presetTest)) {
-    if (key !== IGNORES_KEY && !Bun.deepEquals(found(key), value)) violations.push(drifted(key, JSON.stringify(value), copy));
+    if (key !== IGNORES_KEY && key !== PRELOAD_KEY && !Bun.deepEquals(found(key), value)) violations.push(drifted(key, JSON.stringify(value), copy));
+  }
+  const required = preloadEntries(presetTest[PRELOAD_KEY]);
+  const seen = preloadEntries(found(PRELOAD_KEY));
+  if (required.length > 0 && !required.every((entry) => seen.includes(entry))) {
+    violations.push(drifted(PRELOAD_KEY, `${JSON.stringify(presetTest[PRELOAD_KEY])} or a string or list containing it`, copy));
   }
   if (!ACCEPTED_IGNORES.some((ignores) => Bun.deepEquals(found(IGNORES_KEY), ignores))) {
     const wanted = ACCEPTED_IGNORES.map((ignores) => JSON.stringify(ignores)).join(" or ");

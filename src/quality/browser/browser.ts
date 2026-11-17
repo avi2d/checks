@@ -2,6 +2,7 @@
 import { Console, Effect, Path } from "effect";
 import type { Browser } from "playwright-core";
 import { runMain, Usage } from "../../core/main.ts";
+import { refuseLocalTests } from "../../core/local-tests.ts";
 import { readRunScope, type RunScope } from "../../core/pull-request-scope.ts";
 import { browserArgs } from "./args.ts";
 import { identicalTestBuild } from "./build-proof.ts";
@@ -230,6 +231,7 @@ const browserChecks = Effect.gen(function* () {
   const args = browserArgs(process.argv.slice(2));
   if (args === undefined) return yield* new Usage({ message: USAGE });
   const root = (yield* Path.Path).resolve(args.directory);
+  yield* refuseLocalTests(root);
   const scope = args.pr ? yield* readRunScope(root) : undefined;
   const largest = yield* largestSet(scope);
   if (largest === undefined) {

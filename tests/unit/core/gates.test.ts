@@ -25,6 +25,7 @@ const OUTSIDE_LINT = {
   "checks-subsumed-tests": "src/testing/subsumed-tests.ts",
   "checks-whole-tree-run": "src/testing/whole-tree-run.ts",
   "checks-flake": "src/testing/flake.ts",
+  "checks-local-tests": "src/testing/local-tests-command.ts",
   "checks-vendor": "src/dependencies/vendor.ts",
   "checks-browser": "src/quality/browser/browser.ts",
   "checks-adr-index": "src/docs/adr-index.ts",

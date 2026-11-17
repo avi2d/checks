@@ -1,9 +1,9 @@
 import { $ } from "bun";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CHECKOUT, fixtureRepos, ran, UNVENDORED_BUNFIG, type Ran } from "../lib/fixture-repo.ts";
+import { CHECKOUT, fixtureRepos, ran, LAYOUT_BUNFIG, type Ran } from "../lib/fixture-repo.ts";
 
 const CHECK = join(CHECKOUT, "src", "testing", "test-layout.ts");
 const PRESET = join(CHECKOUT, "bunfig.toml");
@@ -41,7 +41,7 @@ beforeAll(async () => {
   await mkdir(join(dir, "tests", "e2e"), { recursive: true });
   await mkdir(join(dir, "tests", "unit"), { recursive: true });
   await writeFile(join(dir, "package.json"), `${JSON.stringify(MANIFEST, null, 2)}\n`);
-  await writeFile(join(dir, "bunfig.toml"), UNVENDORED_BUNFIG);
+  await writeFile(join(dir, "bunfig.toml"), LAYOUT_BUNFIG);
   await writeFile(join(dir, "src", "widget.ts"), "export const widget = 1;\n");
   await writeFile(join(dir, ".gitignore"), "node_modules/\n");
   await $`git init -q`.cwd(dir).quiet();
@@ -93,7 +93,7 @@ test(
     expect(drifted.text).toContain('[test].pathIgnorePatterns must be ["**/tests/quarantine/**","**/tests/live/**","**/tests/pixel/**","repos/**"] or ["**/tests/quarantine/**","**/tests/live/**","**/tests/pixel/**"]');
     expect(drifted.text).toContain("the check pins it");
 
-    await writeFile(join(dir, "bunfig.toml"), UNVENDORED_BUNFIG);
+    await writeFile(join(dir, "bunfig.toml"), LAYOUT_BUNFIG);
     const green = await layout();
     expect(green.exitCode).toBe(0);
     expect(green.text).toContain("satisfy the layout");
@@ -151,7 +151,7 @@ test(
     };
     const repo = await repos({
       "package.json": `${JSON.stringify(tierManifest, null, 2)}\n`,
-      "bunfig.toml": UNVENDORED_BUNFIG,
+      "bunfig.toml": LAYOUT_BUNFIG,
       "tests/live/machine.test.ts": spawning,
       "tests/pixel/display.test.ts": spawning,
     });
@@ -184,10 +184,12 @@ test(
         null,
         2,
       )}\n`,
-      "bunfig.toml": UNVENDORED_BUNFIG,
+      "bunfig.toml": LAYOUT_BUNFIG,
       "tests/unit/widget.test.ts": CLEAN_TEST,
       "tests/quarantine/e2e/flaky.test.ts": FAILING_SPAWN,
     });
+    await mkdir(join(repo.dir, "node_modules", "@avi2dg"), { recursive: true });
+    await symlink(CHECKOUT, join(repo.dir, "node_modules", "@avi2dg", "checks"), "dir");
 
     const accepted = await repo.script("testing/test-layout.ts", repo.dir);
     expect(accepted.text).toContain("satisfy the layout");

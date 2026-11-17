@@ -2,6 +2,7 @@
 import { Config, Effect, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { runMain } from "../core/main.ts";
+import { refuseLocalTests } from "../core/local-tests.ts";
 import { fullRunRefusal } from "./mutation-refusal.ts";
 
 export class MutationError extends Schema.TaggedError<MutationError>()("MutationError", {
@@ -26,6 +27,7 @@ const runStryker = Effect.fn("runStryker")(function* (args: readonly string[]) {
 });
 
 const mutation = Effect.gen(function* () {
+  yield* refuseLocalTests(process.cwd());
   const args = process.argv.slice(2);
   const refusal = fullRunRefusal(args, yield* readCi);
   if (refusal !== undefined) return yield* new MutationError({ message: refusal });

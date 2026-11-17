@@ -276,6 +276,17 @@ test("the consumer bunfig must carry every [test] key of the shipped preset", ()
   expect(drifted[0]?.message).toContain("the check pins it");
 });
 
+test("a bunfig that drops the shipped preload entry fails, and one that keeps it beside its own passes", () => {
+  const shipped = { test: { ...PRESET.test, preload: ["@avi2dg/checks/local-test-preload"] } };
+  const patterns = { pathIgnorePatterns: PRESET.test.pathIgnorePatterns };
+  expect(bunfigViolations({ test: { ...patterns, preload: ["@avi2dg/checks/local-test-preload", "./tests/setup.ts"] } }, shipped)).toBeEmpty();
+  expect(bunfigViolations({ test: { ...patterns, preload: "@avi2dg/checks/local-test-preload" } }, shipped)).toBeEmpty();
+  for (const preload of [["./tests/setup.ts"], undefined]) {
+    const violations = bunfigViolations({ test: { ...patterns, ...(preload === undefined ? {} : { preload }) } }, shipped);
+    expect(violations.map((violation) => violation.message.split(" must be ")[0])).toEqual(["[test].preload"]);
+  }
+});
+
 test("the preset's ignores and the base list alone both pass, and nothing else does", () => {
   const base = {
     test: { pathIgnorePatterns: ["**/tests/quarantine/**", "**/tests/live/**", "**/tests/pixel/**"] },

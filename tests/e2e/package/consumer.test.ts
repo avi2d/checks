@@ -7,7 +7,7 @@ import { dirname, join } from "node:path";
 import { Schema } from "effect";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
 import { consumerManifest, installConsumer } from "../lib/consumer-install.ts";
-import { CHECKOUT, ran, UNVENDORED_BUNFIG, type Ran } from "../lib/fixture-repo.ts";
+import { CHECKOUT, ran, LAYOUT_BUNFIG, type Ran } from "../lib/fixture-repo.ts";
 
 const WIDGET = "export const widget = 42;\n";
 
@@ -95,7 +95,7 @@ async function writeOxlintrc(own: Readonly<Record<string, unknown>> = {}): Promi
 }
 
 async function writeWidgetRepo(testFile: string, widget: string): Promise<void> {
-  await writeFile(join(dir, "bunfig.toml"), UNVENDORED_BUNFIG);
+  await writeFile(join(dir, "bunfig.toml"), LAYOUT_BUNFIG);
   const compilerOptions = { module: "preserve", moduleResolution: "bundler", allowImportingTsExtensions: true, noEmit: true, strict: true, types: ["bun"] };
   await writeFile(join(dir, "tsconfig.json"), JSON.stringify({ extends: "@avi2dg/checks/tsconfig.effect.json", compilerOptions }));
   await writeFile(join(dir, "widget.ts"), WIDGET);
@@ -335,7 +335,7 @@ test(
     const installed = join(dir, "node_modules", "@avi2dg", "checks");
     const manifest = Schema.decodeSync(Manifest)(await readFile(join(CHECKOUT, "package.json"), "utf8"));
     expect(Object.keys(manifest.exports).toSorted()).toEqual([
-      ...["./block-screens.ts", "./browser-checks.json", "./browser-hooks.ts", "./config", "./core/bun-platform.ts", "./core/chrome-path.ts", "./core/command-output.ts", "./core/git.ts", "./core/main.ts", "./delivery/gitleaks.toml", "./delivery/gitleaks.ts", "./dependencies/cache-root.ts", "./dependency-cruiser", "./dependency-cruiser.config.js", "./knip", "./knip-base.json", "./oxlint", "./screen-sizes.ts"],
+      ...["./block-screens.ts", "./browser-checks.json", "./browser-hooks.ts", "./config", "./core/bun-platform.ts", "./core/chrome-path.ts", "./core/command-output.ts", "./core/git.ts", "./core/main.ts", "./delivery/gitleaks.toml", "./delivery/gitleaks.ts", "./dependencies/cache-root.ts", "./dependency-cruiser", "./dependency-cruiser.config.js", "./knip", "./knip-base.json", "./local-test-preload", "./local-tests", "./oxlint", "./screen-sizes.ts"],
       ...["./scripts/comment-matchers.ts", "./scripts/prose-matchers.ts", "./scripts/test-skips.ts", "./site-test.ts", "./stryker.preset.js", "./stylelint", "./templates/*", "./testing/run-effect.ts", "./testing/test-report.ts", "./testing/test.ts", "./tsconfig.effect.json"],
     ]);
     const resolved = Object.entries(manifest.exports).map(([key, exported]) => {
