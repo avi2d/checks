@@ -65,7 +65,6 @@ test("an empty change widens instead of reaching no route", async () => {
 test("a missing map widens instead of narrowing", async () => {
   const dir = await mkdtemp(join(tmpdir(), "checks-route-scope-"));
   dirs.push(dir);
-  await writeFile(join(dir, "checks.config.ts"), "export default {};
-");
+  await writeFile(join(dir, "checks.config.ts"), "export default {};\n");
   expect(await selected(dir, ["src/home.ts"])).toBeUndefined();
 });

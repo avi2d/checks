@@ -408,6 +408,7 @@ The `links` and `look` checks still visit every declared route, since they compa
 Missing routes are still reported across the whole declaration.
 An unmapped path, an empty change, or an unknown route makes every route run.
 A path mapped to no routes reaches no route.
+A change whose every path maps to no routes checks no page and passes.
 The map is separate from the test selection in `reach`.
 
 The optional `browserBuild` setting is an array holding the build command and its arguments, such as `["bun", "run", "build"]`.

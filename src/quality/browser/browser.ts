@@ -242,6 +242,10 @@ const browserChecks = Effect.gen(function* () {
     return true;
   }
   const selected = scope?.kind === "pull-request" ? yield* reachedRoutes(root, scope.changed, declaration) : undefined;
+  if (selected?.size === 0) {
+    yield* Console.log(`${NAME}: the pull request reaches no route, so no page was checked`);
+    return true;
+  }
   if (selected !== undefined) yield* Console.log(`${NAME}: the pull request reaches ${selected.size} of ${declaration.routes.length} route(s)`);
   const outcome = yield* checkSite(root, declaration, site, selected);
   yield* Console.log(report(declaration, outcome));
