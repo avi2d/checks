@@ -18,11 +18,11 @@ export type OnMain = {
   readonly changelog: string;
 };
 
-type Shape = { readonly private?: boolean; readonly testedOther?: boolean };
+type Shape = { readonly private?: boolean; readonly testedOther?: boolean; readonly workspace?: boolean };
 
 function releasable(version: string, shape: Shape): string {
   const scripts = { build: "bun ./scripts/build.ts" };
-  const extra = shape.private === true ? { private: true } : {};
+  const extra = { ...(shape.private === true ? { private: true } : {}), ...(shape.workspace === true ? { workspaces: ["packages/*"] } : {}) };
   return `${JSON.stringify({ name: "widget", version, ...extra, repository: { type: "git", url: "git+https://github.com/acme/widget.git" }, scripts, dependencies: { "fixture-helper": "file:./vendor/fixture-helper" } }, null, 2)}\n`;
 }
 
@@ -38,11 +38,15 @@ export function releasedMains(prefix: string): (subject: string, shape?: Shape) 
       "vendor/fixture-helper/index.js": "export default 1;\n",
       ".gitignore": "node_modules/\n",
     });
+    if (shape.workspace === true) {
+      await repo.write({ "packages/public/package.json": JSON.stringify({ name: "@acme/public", version: "0.1.0" }), "packages/private/package.json": JSON.stringify({ name: "@acme/private", version: "0.1.0", private: true }) });
+    }
     await $`bun install`.cwd(repo.dir).quiet();
     await repo.commit("chore: add the manifest");
     await repo.write({ "notes/3.txt": "price\n" });
     await repo.commit("feat: price a bill (#3)");
     await repo.write({ "package.json": releasable("0.2.0", shape) });
+    if (shape.workspace === true) await repo.write({ "packages/public/package.json": JSON.stringify({ name: "@acme/public", version: "0.2.0" }) });
     await $`bun ${CHANGELOG}`.cwd(repo.dir).quiet();
     const head = await repo.commit(subject);
     const home = await scratch(`${prefix}home-`);

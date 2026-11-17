@@ -21,7 +21,9 @@ It refuses when the last release tag names a version other than the one `package
 The refusal points at the `tag` job of the workflow it runs in, rerun on the release commit, rather than at a tag pushed by hand.
 That job's own refusal says what to fix.
 It refuses a version that is not a plain `major.minor.patch`.
-It writes the next version into `package.json`, runs `bun run build` so the build writes `CHANGELOG.md`, and commits every tracked file the build changed as `chore: release <version>`.
+It writes the next version into `package.json`, and into each public workspace package and its `bun.lock` entry where a caller of `release-main.yml` passes `publish-workspaces: true`.
+It runs `bun run build` so the build writes `CHANGELOG.md`.
+It commits every tracked file the build changed as `chore: release <version>`.
 The commit's one parent is `HEAD`.
 It makes the commit through the GitHub API, which attributes it to `github-actions[bot]` and signs it, so the job sets no git identity.
 It checks that the tree GitHub built matches the tree the build wrote.
@@ -31,13 +33,14 @@ It then dispatches each workflow its arguments name on the release branch.
 GitHub holds the `pull_request` runs of a pull request the workflow token opens until a maintainer approves them, so the dispatch is what runs the required checks on the release head.
 GitHub keeps a dispatched run's checks off the pull request, so each dispatched job reports its result as a commit status named for the job, which the required check of that name counts.
 The dispatched run carries no pull request range, so a `ci.yml` that runs its jobs runs the whole suite.
-The composed `ci.yml` [checks-workflows](checks-workflows.md) writes skips every job but `changes` on the dispatched `release/` run and on the same repository `release/<base>` pull request, so there only `changes` and the gate run.
+Without `check-release: true`, the composed `ci.yml` [checks-workflows](checks-workflows.md) writes skips every job but `changes` on the dispatched `release/` run and on the same repository `release/<base>` pull request, so there only `changes` and the gate run.
 When the release branch already holds this version on top of `HEAD` and its pull request carries the right title, it pushes nothing and dispatches nothing.
 It leaves the working tree as it found it.
 
 ## What it reads
 
-It reads the `v*` tags, the commit subjects since the last one and `package.json` from the checkout.
+It reads the `v*` tags, the commit subjects since the last one, `package.json` and `bun.lock` from the checkout.
+It also reads each workspace `package.json` and each caller of `release-main.yml` for the workspace publishing opt-in.
 It names the workflow it runs in by `GITHUB_WORKFLOW`, or as `release-pr` when that is unset.
 It refuses a shallow checkout, a detached `HEAD` and a working tree with changes to tracked files.
 It reads the release branch from `origin` with `git ls-remote` and `git fetch`.
@@ -158,9 +161,10 @@ GitHub may bill the job as two minutes whether it opens, refreshes or leaves the
 A private repository runs it there too unless `CI_RUNS_ON` names its self-hosted runner, which bills no minutes.
 The `tag` job runs only when a release lands, and a job its `if` skips bills nothing.
 The checks it dispatches are the release pull request's own required checks, and they run again only when `main` moves under it.
-On a composed `ci.yml` the release pull request skips every job but `changes`, and `checks` passes those skips, so the release pull request runs no test.
+Without `check-release: true`, on a composed `ci.yml` the release pull request skips every job but `changes`, and `checks` passes those skips, so the release pull request runs no test.
 A code repository whose `package.json` is not private passes `full-test: true` in `main.yml`, so its publish run runs the full suite once before the tag and the publish.
-In a repository whose `ci.yml` is the one [checks-workflows](checks-workflows.md) composes, those checks skip every job but `changes`, so the tag publishes code the pull requests into `main` tested, and the release commit adds only the version and the changelog.
+In a repository whose `ci.yml` is the one [checks-workflows](checks-workflows.md) composes, release checks run when the caller passes `check-release: true`.
+Without it, those checks skip every job but `changes`.
 GitHub also holds the `pull_request` runs of the release pull request for approval, and expires each one at merge as a failure with no job.
 The last step of `pull-request`, `avi2d/workflows/actions/held-runs@v2`, deletes those held runs on the release branch's tip right after the pull request opens or refreshes.
 It reads the held runs on that tip every 5 seconds for up to 30 seconds.

@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fakeGh, type FakeGh } from "../lib/fake-gh.ts";
 import { CHECKOUT, fixtureRepos, ran, type Ran, scratchDirs } from "../lib/fixture-repo.ts";
@@ -92,6 +92,25 @@ test(
     ]);
     expect((await $`git status --porcelain`.cwd(widget.dir).quiet()).stdout.toString()).toBe("");
     expect(await readFile(join(widget.dir, "package.json"), "utf8")).toBe(manifest("0.1.0"));
+  },
+  60_000,
+);
+
+test(
+  "the release pull request does not leave public workspace versions at the old root version",
+  async () => {
+    const widget = await consumer();
+    await mkdir(join(widget.dir, "packages", "public"), { recursive: true });
+    await writeFile(join(widget.dir, "packages", "public", "package.json"), '{"name":"@acme/public","version":"0.1.0"}\n');
+    await writeFile(join(widget.dir, "package.json"), manifest("0.1.0").replace('"name": "widget",', '"name": "widget",\n  "private": true,\n  "workspaces": ["packages/*"],'));
+    await mkdir(join(widget.dir, ".github", "workflows"), { recursive: true });
+    await writeFile(
+      join(widget.dir, ".github", "workflows", "main.yml"),
+      ["name: main", "on:", "  push:", "    branches: [main]", "jobs:", "  release:", "    uses: avi2d/workflows/.github/workflows/release-main.yml@v3", "    with:", "      publish-workspaces: true", ""].join("\n"),
+    );
+    await $`git add package.json packages/public/package.json .github/workflows/main.yml && git commit -q -m ${"fix: include the public workspace"} && git push -q origin main`.cwd(widget.dir).quiet();
+    expect((await widget.run(["ci.yml"])).exitCode).toBe(0);
+    expect(await widget.inOrigin("show", "release/main:packages/public/package.json")).toBe('{"name":"@acme/public","version":"0.1.1"}');
   },
   60_000,
 );

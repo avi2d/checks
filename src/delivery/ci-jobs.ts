@@ -5,6 +5,7 @@ import { workflowJobs, type Workflow } from "./workflow-references.ts";
 export type RepositoryKind = "code" | "site";
 
 export const DEFAULT_TEST_RUN = "bunx checks-test --pr";
+export const RELEASE_TEST_RUN = "${{ needs.changes.outputs.check-release == 'true' && 'bun run test' || 'bunx checks-test --pr' }}";
 
 const SHARED_RUNNER = "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}";
 
@@ -74,7 +75,7 @@ const testJobOf = Effect.fn("testJobOf")(function* (kind: RepositoryKind, path: 
   );
   return {
     name,
-    run: held.run ?? DEFAULT_TEST_RUN,
+    run: held.run === RELEASE_TEST_RUN ? DEFAULT_TEST_RUN : (held.run ?? DEFAULT_TEST_RUN),
     browsers: held.browsers ?? "",
     readsBuild: kind === "site" && held.artifact === SITE_BUILD,
     heavy: held.heavy ?? false,

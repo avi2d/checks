@@ -1,6 +1,7 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
 import { callerOptionsOf, type CallerOptions } from "./caller-options.ts";
 import { ciJobsOf, sharedFileOf, type CiJobs } from "./ci-jobs.ts";
+import { WorkspacePatterns, publicWorkspacesOf } from "./workspace-packages.ts";
 import { isRecord, workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export const WORKFLOWS = ".github/workflows";
@@ -102,9 +103,9 @@ const heldWorkflow = (workflows: readonly Workflow[]) => (name: string) => workf
 const heldCiJobs = (kind: CallerSet["kind"], workflows: readonly Workflow[]) =>
   ciJobsOf(kind, heldWorkflow(workflows)("ci.yml")).pipe(Effect.mapError((fault) => new CallerSetFault({ message: fault.message })));
 
-export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean) {
+export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean) {
   const flagged = SITE_NAME_KEYS.some((key) => flags[key] !== undefined);
-  const options = callerOptionsOf(heldWorkflow(workflows), publishes);
+  const options = callerOptionsOf(heldWorkflow(workflows), publishes, publishWorkspaces, needsReleaseChecks);
   if (!callsSiteWorkflow(workflows) && !flagged) return { kind: "code", ci: yield* heldCiJobs("code", workflows), options } satisfies CallerSet;
   const held = workflows.flatMap(heldNames).filter(({ key }) => flags[key] === undefined);
   const conflict = conflictOf(held);
@@ -145,18 +146,32 @@ export type HeldFile = { readonly name: string; readonly text: string; readonly 
 // A file that does not parse calls no shared workflow, and the comparison still names it.
 const parsedOrNothing = (text: string): Effect.Effect<unknown> => Effect.try(() => Bun.YAML.parse(text)).pipe(Effect.orElseSucceed(() => undefined));
 
-const decodePrivacy = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ private: Schema.optionalKey(Schema.Boolean) })));
+const decodePackage = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({
+  private: Schema.optionalKey(Schema.Boolean),
+  scripts: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
+  workspaces: Schema.optionalKey(WorkspacePatterns),
+})));
 
-// checks-release-tag publishes every package.json that is not private, so a repository without one is no private package either.
-export const readsPrivatePackage = Effect.fn("readsPrivatePackage")(function* (root: string) {
+const readPackage = Effect.fn("readPackage")(function* (root: string) {
   const fs = yield* FileSystem.FileSystem;
   const file = (yield* Path.Path).join(root, "package.json");
-  if (!(yield* fs.exists(file))) return false;
-  const manifest = yield* fs.readFileString(file).pipe(
-    Effect.flatMap(decodePrivacy),
+  if (!(yield* fs.exists(file))) return undefined;
+  return yield* fs.readFileString(file).pipe(
+    Effect.flatMap(decodePackage),
     Effect.mapError((cause) => new CallerSetFault({ message: `cannot read package.json: ${cause.message}` })),
   );
-  return manifest.private === true;
+});
+
+type CallerInputs = { readonly publishes: boolean; readonly publishWorkspaces: boolean; readonly needsReleaseChecks: boolean };
+
+export type CallerInputOverrides = { readonly private?: boolean; readonly hasTestScript?: boolean };
+
+export const callerInputsOf = Effect.fn("callerInputsOf")(function* (root: string, overrides?: CallerInputOverrides) {
+  const held = yield* readPackage(root);
+  const isPrivate = overrides?.private ?? held?.private === true;
+  const needsReleaseChecks = overrides?.hasTestScript ?? held?.scripts?.["test"] !== undefined;
+  const workspaces = yield* publicWorkspacesOf(root, { private: isPrivate, workspaces: held?.workspaces });
+  return { publishes: !isPrivate, publishWorkspaces: workspaces.length > 0, needsReleaseChecks } satisfies CallerInputs;
 });
 
 export const readWorkflowFiles = Effect.fn("readWorkflowFiles")(function* (root: string) {

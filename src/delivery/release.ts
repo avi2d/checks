@@ -41,6 +41,18 @@ export function withVersion(manifest: string, from: string, to: string): string 
 
 export const runningWorkflow = Config.String("GITHUB_WORKFLOW").pipe(Config.withDefault("release-pr"));
 
+export function withWorkspaceVersion(lock: string, dir: string, from: string, to: string): string | undefined {
+  const head = `"${dir}": {`;
+  const start = lock.indexOf(head);
+  if (start === -1) return undefined;
+  const after = lock.slice(start + head.length);
+  const end = after.search(/\n {4}"|\n {2}\}/);
+  const block = end === -1 ? after : after.slice(0, end);
+  const field = new RegExp(`("version"\\s*:\\s*")${from.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&")}(")`);
+  if (!field.test(block)) return undefined;
+  return `${lock.slice(0, start + head.length)}${block.replace(field, `$1${to}$2`)}${end === -1 ? "" : after.slice(end)}`;
+}
+
 export function releaseTitle(version: string): string {
   return `chore: release ${version}`;
 }

@@ -12,6 +12,9 @@ export type CallerOptions = {
   readonly pages: Pages | undefined;
   readonly secretsPack: boolean;
   readonly fullTest: boolean;
+  readonly claudeVersion: string | undefined;
+  readonly publishWorkspaces: boolean;
+  readonly checkRelease: boolean;
 };
 
 export const NO_CALLER_OPTIONS: CallerOptions = {
@@ -20,6 +23,9 @@ export const NO_CALLER_OPTIONS: CallerOptions = {
   pages: undefined,
   secretsPack: false,
   fullTest: false,
+  claudeVersion: undefined,
+  publishWorkspaces: false,
+  checkRelease: false,
 };
 
 export type HeldWorkflow = (name: string) => Workflow | undefined;
@@ -97,12 +103,45 @@ function readsSecretsPack(ci: Workflow | undefined): boolean {
   return passed || written;
 }
 
-export function callerOptionsOf(held: HeldWorkflow, publishes: boolean): CallerOptions {
+function claudeInputOf(inputs: unknown): string | undefined {
+  if (typeof inputs !== "object" || inputs === null || !("claude-version" in inputs)) return undefined;
+  return typeof inputs["claude-version"] === "string" ? inputs["claude-version"] : undefined;
+}
+
+function claudeVersionOf(workflows: readonly (Workflow | undefined)[]): string | undefined {
+  for (const workflow of workflows) {
+    if (workflow === undefined) continue;
+    for (const [, job] of workflowJobs(workflow)) {
+      const version = claudeInputOf(job["with"]);
+      if (version !== undefined) return version;
+      for (const step of stepsOf(job)) {
+        const installed = /(?:^|\s)@anthropic-ai\/claude-code@(\d+\.\d+\.\d+)(?=\s|$)/.exec(step.run ?? "")?.[1];
+        if (installed !== undefined) return installed;
+      }
+    }
+  }
+  return undefined;
+}
+
+const decodePublishWorkspaces = Schema.decodeUnknownOption(Schema.Struct({ "publish-workspaces": Schema.optionalKey(Schema.Boolean) }));
+
+export function readsPublishWorkspaces(workflows: readonly Workflow[]): boolean {
+  return workflows.some((workflow) =>
+    callsOf(workflow, "release-main.yml").some((call) =>
+      Option.match(decodePublishWorkspaces(call), { onNone: () => false, onSome: (inputs) => inputs["publish-workspaces"] === true }),
+    ),
+  );
+}
+
+export function callerOptionsOf(held: HeldWorkflow, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean): CallerOptions {
   return {
     advisoriesCron: weeklyCronOf(held("advisories.yml")),
     flake: flakeOf(held("flake.yml")),
     pages: pagesOf(held("docs.yml")),
     secretsPack: readsSecretsPack(held("ci.yml")),
     fullTest: publishes,
+    claudeVersion: claudeVersionOf([held("ci.yml"), held("flake.yml")]),
+    publishWorkspaces,
+    checkRelease: !publishes && needsReleaseChecks,
   };
 }

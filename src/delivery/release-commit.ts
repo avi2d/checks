@@ -1,9 +1,12 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import * as Base64 from "effect/encoding/Base64";
 import { gitHubJson, REPOSITORY } from "../core/github.ts";
-import { nextVersion, type Pending, readPending, releaseTitle, runBuild, withVersion } from "./release.ts";
+import { nextVersion, type Pending, readPending, releaseTitle, runBuild, withVersion, withWorkspaceVersion } from "./release.ts";
 import { git } from "../core/git.ts";
 import { MANIFEST, releaseTag, taggedVersion } from "../core/release-names.ts";
+import { publicWorkspaces, type Workspace } from "./workspace-packages.ts";
+import { readsPublishWorkspaces } from "./caller-options.ts";
+import { readWorkflowFiles } from "./site-names.ts";
 
 export class ReleaseRefused extends Schema.TaggedError<ReleaseRefused>()("ReleaseRefused", {
   message: Schema.String,
@@ -123,13 +126,45 @@ export const buildRelease = Effect.fn("buildRelease")(function* (name: string, r
     Effect.catchTag("GitFailure", (failure) => Console.error(`${name}: cannot restore the working tree: ${failure.message}`)),
   );
   return yield* Effect.gen(function* () {
-    yield* (yield* FileSystem.FileSystem).writeFileString((yield* Path.Path).join(root, MANIFEST), bumped);
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    yield* fs.writeFileString(path.join(root, MANIFEST), bumped);
+    const version = yield* versionIn(bumped);
+    if (version === undefined) return yield* refused(`${MANIFEST} has no version`);
+    if (readsPublishWorkspaces((yield* readWorkflowFiles(root)).map(({ workflow }) => workflow))) {
+      const workspaces = yield* publicWorkspaces(root);
+      for (const workspace of workspaces) {
+        if (Bun.semver.order(version, workspace.version) < 0) {
+          return yield* refused(`${workspace.path} holds ${workspace.version}, which is ahead of the release version ${version}; raise the root version past ${workspace.version} first`);
+        }
+        const rewritten = withVersion(workspace.text, workspace.version, version);
+        if (rewritten === undefined) return yield* refused(`${workspace.path}: cannot rewrite version ${workspace.version}`);
+        yield* fs.writeFileString(path.join(root, workspace.path), rewritten);
+      }
+      yield* syncWorkspaceLock(root, workspaces, version);
+    }
     yield* runBuild(root);
     yield* git(["add", "--update"], root);
     const tree = (yield* git(["write-tree"], root)).trim();
     const staged = stagedOf(yield* git(["diff", "--cached", "--raw", "-z", "--no-renames", "HEAD"], root));
     return { tree, files: yield* Effect.forEach(staged, (one) => readStaged(root, one)) } satisfies Built;
   }).pipe(Effect.ensuring(restore));
+});
+
+const syncWorkspaceLock = Effect.fn("syncWorkspaceLock")(function* (root: string, workspaces: readonly Workspace[], version: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const file = path.join(root, "bun.lock");
+  if (!(yield* fs.exists(file))) return;
+  const lock = yield* fs.readFileString(file);
+  let updated = lock;
+  for (const workspace of workspaces) {
+    const dir = path.dirname(workspace.path);
+    const rewritten = withWorkspaceVersion(updated, dir, workspace.version, version);
+    if (rewritten === undefined) return yield* refused(`${file} holds no workspaces["${dir}"] version ${workspace.version}; run bun install and commit bun.lock`);
+    updated = rewritten;
+  }
+  if (updated !== lock) yield* fs.writeFileString(file, updated);
 });
 
 const treeEntry = Effect.fn("treeEntry")(function* (file: Read) {

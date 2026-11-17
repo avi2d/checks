@@ -145,7 +145,7 @@ Each refusal names the workflow file, the job and the limit.
 
 ## What it reads
 
-The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts` and `private` fields in `package.json`, the `mutationRunner` and `selfHostedRunners` keys of `checks.config.ts` and the shell scripts those steps and scripts run from the working tree.
+The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts`, `private` and `workspaces` fields in `package.json`, each workspace `package.json`, the `mutationRunner` and `selfHostedRunners` keys of `checks.config.ts` and the shell scripts those steps and scripts run from the working tree.
 It reads each shell script that a shell script it reads runs, until none is left.
 It reads each file a setup-bun step names for its version.
 It reads `.bun-version` for each step that uses the shared setup action.

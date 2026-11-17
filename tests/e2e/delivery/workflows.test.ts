@@ -235,11 +235,36 @@ test("--write turns a hand-rolled Pages deploy, secrets pack, flake run and week
   expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the code set checks-workflows writes\n" });
 }, 30_000);
 
-test("a private package's main.yml runs no full suite before the release, since checks-release-tag publishes nothing for it", async () => {
+test("a private package's release runs the full suite instead of skipping it", async () => {
   const repo = await open({ "package.json": manifest({ private: true }) });
   await repo.commit("start");
   expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
   const main = await parsed(repo, "main.yml");
   expect(main).toMatchObject({ jobs: { release: { uses: "avi2d/workflows/.github/workflows/release-main.yml@v3" } } });
-  expect(JSON.stringify(main)).not.toContain("full-test");
+  expect(main).toMatchObject({ jobs: { release: { with: { "full-test": true } } } });
+  expect(await parsed(repo, "ci.yml")).toMatchObject({ jobs: { changes: { with: { "check-release": true } }, test: { with: { run: "${{ needs.changes.outputs.check-release == 'true' && 'bun run test' || 'bunx checks-test --pr' }}" } } } });
+  expect((await workflows(repo)).exitCode).toBe(0);
+}, 30_000);
+
+test("a private root with a public workspace does not omit workspace publishing", async () => {
+  const repo = await open({
+    "package.json": manifest({ private: true, workspaces: ["packages/*"] }),
+    "packages/public/package.json": JSON.stringify({ name: "@acme/public", version: "1.0.0" }),
+    "packages/private/package.json": JSON.stringify({ name: "@acme/private", version: "1.0.0", private: true }),
+  });
+  await repo.commit("start");
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  expect(await parsed(repo, "main.yml")).toMatchObject({ jobs: { release: { with: { "publish-workspaces": true } } } });
+  expect((await workflows(repo)).exitCode).toBe(0);
+}, 30_000);
+
+test("a pinned Claude Code install is not dropped from test and flake callers", async () => {
+  const install = "npm install -g @anthropic-ai/claude-code@2.1.280";
+  const workflow = `name: ci\non: workflow_dispatch\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ${install}\n`;
+  const repo = await open({ "package.json": manifest(), ".github/workflows/ci.yml": workflow, ".github/workflows/flake.yml": workflow });
+  await repo.commit("start");
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  expect(await parsed(repo, "ci.yml")).toMatchObject({ jobs: { test: { with: { "claude-version": "2.1.280" } } } });
+  expect(await parsed(repo, "flake.yml")).toMatchObject({ jobs: { flake: { with: { "claude-version": "2.1.280" } } } });
+  expect((await workflows(repo)).exitCode).toBe(0);
 }, 30_000);

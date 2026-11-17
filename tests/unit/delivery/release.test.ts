@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { groupOf } from "../../../src/delivery/changelog.ts";
 import { releasedVersionOf } from "../../../src/core/release-names.ts";
-import { nextVersion, releaseTitle, unreleasedOf, withVersion } from "../../../src/delivery/release.ts";
+import { nextVersion, releaseTitle, unreleasedOf, withVersion, withWorkspaceVersion } from "../../../src/delivery/release.ts";
 
 test("only the changelog groups count as unreleased", () => {
   expect(
@@ -54,6 +54,34 @@ test("the bump rewrites the version's text and leaves the manifest's own formatt
   expect(withVersion('{ "version": "0.1.0" }', "0.1.0", "0.1.1")).toBe('{ "version": "0.1.1" }');
   expect(withVersion('{ "version": "0x1x0" }', "0.1.0", "0.2.0")).toBeUndefined();
   expect(withVersion('{ "name": "widget" }', "0.1.0", "0.2.0")).toBeUndefined();
+});
+
+test("the lock rewrite moves only the bumped workspace entry to the release version", () => {
+  const lock = [
+    '{',
+    '  "workspaces": {',
+    '    "": {',
+    '      "name": "widget",',
+    '      "version": "0.1.0"',
+    '    },',
+    '    "packages/public": {',
+    '      "name": "@acme/public",',
+    '      "version": "0.1.0"',
+    '    },',
+    '    "packages/other": {',
+    '      "name": "@acme/other",',
+    '      "version": "0.1.0"',
+    '    }',
+    '  }',
+    '}',
+    '',
+  ].join("\n");
+  const rewritten = withWorkspaceVersion(lock, "packages/public", "0.1.0", "0.1.1");
+  expect(rewritten).toContain('    "packages/public": {\n      "name": "@acme/public",\n      "version": "0.1.1"');
+  expect(rewritten).toContain('    "packages/other": {\n      "name": "@acme/other",\n      "version": "0.1.0"');
+  expect(rewritten).toContain('    "": {\n      "name": "widget",\n      "version": "0.1.0"');
+  expect(withWorkspaceVersion(lock, "packages/missing", "0.1.0", "0.1.1")).toBeUndefined();
+  expect(withWorkspaceVersion(lock, "packages/public", "0.2.0", "0.2.1")).toBeUndefined();
 });
 
 test("a release subject names its version, whether or not the squash merge added the pull request", () => {
