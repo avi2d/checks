@@ -103,7 +103,12 @@ test(
     await mkdir(join(widget.dir, "packages", "public"), { recursive: true });
     await writeFile(join(widget.dir, "packages", "public", "package.json"), '{"name":"@acme/public","version":"0.1.0"}\n');
     await writeFile(join(widget.dir, "package.json"), manifest("0.1.0").replace('"name": "widget",', '"name": "widget",\n  "private": true,\n  "workspaces": ["packages/*"],'));
-    await $`git add package.json packages/public/package.json && git commit -q -m ${"fix: include the public workspace"} && git push -q origin main`.cwd(widget.dir).quiet();
+    await mkdir(join(widget.dir, ".github", "workflows"), { recursive: true });
+    await writeFile(
+      join(widget.dir, ".github", "workflows", "main.yml"),
+      ["name: main", "on:", "  push:", "    branches: [main]", "jobs:", "  release:", "    uses: avi2d/workflows/.github/workflows/release-main.yml@v3", "    with:", "      publish-workspaces: true", ""].join("\n"),
+    );
+    await $`git add package.json packages/public/package.json .github/workflows/main.yml && git commit -q -m ${"fix: include the public workspace"} && git push -q origin main`.cwd(widget.dir).quiet();
     expect((await widget.run(["ci.yml"])).exitCode).toBe(0);
     expect(await widget.inOrigin("show", "release/main:packages/public/package.json")).toBe('{"name":"@acme/public","version":"0.1.1"}');
   },

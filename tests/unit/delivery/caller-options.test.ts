@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { callerOptionsOf, NO_CALLER_OPTIONS } from "../../../src/delivery/caller-options.ts";
+import { callerOptionsOf, NO_CALLER_OPTIONS, readsPublishWorkspaces } from "../../../src/delivery/caller-options.ts";
 import type { Workflow } from "../../../src/delivery/workflow-references.ts";
 
 const workflow = (name: string, text: string): Workflow => ({ path: `.github/workflows/${name}`, document: Bun.YAML.parse(text), text });
@@ -104,6 +104,15 @@ test("lint reads the secrets pack where ci.yml writes it in a step or passes sec
   const composed = (value: string) => `name: ci\non: pull_request\njobs:\n  static:\n    uses: avi2d/workflows/.github/workflows/static.yml@v3\n    with:\n      secrets-pack: ${value}\n`;
   expect(optionsOf({ "ci.yml": composed("true") }).secretsPack).toBe(true);
   expect(optionsOf({ "ci.yml": composed("false") }).secretsPack).toBe(false);
+});
+
+test("only a release-main caller that passes publish-workspaces opts the repository into workspace publishing", () => {
+  const main = (inputs: string) => `name: main\non: push\njobs:\n  release:\n    uses: avi2d/workflows/.github/workflows/release-main.yml@v3\n${inputs}`;
+  const opted = { path: ".github/workflows/main.yml", document: Bun.YAML.parse(main("    with:\n      publish-workspaces: true\n")), text: "" };
+  expect(readsPublishWorkspaces([opted])).toBe(true);
+  expect(readsPublishWorkspaces([{ ...opted, document: Bun.YAML.parse(main("    with:\n      publish-workspaces: false\n")) }])).toBe(false);
+  expect(readsPublishWorkspaces([{ ...opted, document: Bun.YAML.parse(main("")) }])).toBe(false);
+  expect(readsPublishWorkspaces([])).toBe(false);
 });
 
 test("the full test before a publish follows whether the package publishes, not what main.yml held", () => {

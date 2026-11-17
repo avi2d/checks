@@ -123,6 +123,16 @@ function claudeVersionOf(workflows: readonly (Workflow | undefined)[]): string |
   return undefined;
 }
 
+const decodePublishWorkspaces = Schema.decodeUnknownOption(Schema.Struct({ "publish-workspaces": Schema.optionalKey(Schema.Boolean) }));
+
+export function readsPublishWorkspaces(workflows: readonly Workflow[]): boolean {
+  return workflows.some((workflow) =>
+    callsOf(workflow, "release-main.yml").some((call) =>
+      Option.match(decodePublishWorkspaces(call), { onNone: () => false, onSome: (inputs) => inputs["publish-workspaces"] === true }),
+    ),
+  );
+}
+
 export function callerOptionsOf(held: HeldWorkflow, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean): CallerOptions {
   return {
     advisoriesCron: weeklyCronOf(held("advisories.yml")),
@@ -132,6 +142,6 @@ export function callerOptionsOf(held: HeldWorkflow, publishes: boolean, publishW
     fullTest: publishes,
     claudeVersion: claudeVersionOf([held("ci.yml"), held("flake.yml")]),
     publishWorkspaces,
-    checkRelease: !publishes && !publishWorkspaces && needsReleaseChecks,
+    checkRelease: !publishes && needsReleaseChecks,
   };
 }

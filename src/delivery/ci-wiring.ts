@@ -322,7 +322,7 @@ const callsSharedSet = Effect.fn("callsSharedSet")(function* (root: string, work
     const inputs = yield* callerInputsOf(root);
     const set = yield* callerSetOf(workflows, {}, "checks-workflows --write", inputs.publishes, inputs.publishWorkspaces, inputs.needsReleaseChecks);
     return differencesOf(set, present).length === 0;
-  }).pipe(Effect.orElseSucceed(() => false));
+  }).pipe(Effect.catch((fault) => Console.error(`ci-wiring: ${fault.message}`).pipe(Effect.as(false))));
 });
 
 const reportGaps = Effect.fn("reportGaps")(function* (root: string, workflows: readonly Workflow[]) {

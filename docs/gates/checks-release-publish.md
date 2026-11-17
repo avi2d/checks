@@ -54,7 +54,7 @@ release-publish: npm already holds @acme/widget@0.4.1, which carries every chang
 The release workflow of a package published to npm runs it in place of `npm publish`, as [checks-release-notes](checks-release-notes.md#release-workflow) shows.
 Without `check-release: true`, on a composed `ci.yml` the release pull request skips every job but `changes`, and `checks` passes those skips, so the release pull request runs no test.
 A code repository whose `package.json` is not private passes `full-test: true` in `main.yml`, so its publish run runs the full suite once before the tag and the publish.
-The tag publishes code the pull requests into `main` tested, since the required checks of the release pull request already passed on that tree, and the release commit adds only the version and the changelog.
+The tag publishes code the pull requests into `main` tested, since the required checks of the release pull request already passed on that tree, and the release commit adds only the version, the changelog, each public workspace version and its `bun.lock` entry where the caller publishes workspaces.
 A repository that never publishes to npm does not need it.
 
 ## Related topics

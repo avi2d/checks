@@ -28,7 +28,7 @@ It refuses unless the tree of that commit equals the tree the required checks of
 That check is what lets the release publish a tested tree even though a release pull request without release checks runs no test.
 It matches the tree the required checks of the release pull request passed on.
 In a repository whose `ci.yml` is the one [checks-workflows](checks-workflows.md) composes, release checks run when the caller passes `check-release: true`.
-Other release checks skip every job but `changes`.
+Without it, those checks skip every job but `changes`.
 It then pushes the tag and creates the GitHub release `v<version>`, whose notes are the `CHANGELOG.md` section for that version.
 It publishes the package to npm as [checks-release-publish](checks-release-publish.md) says, unless `package.json` holds `"private": true`.
 When the root is private and `CHECKS_PUBLISH_WORKSPACES` is `true`, it publishes each public workspace package instead.

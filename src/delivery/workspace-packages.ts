@@ -16,7 +16,7 @@ const WorkspaceManifest = Schema.Struct({
 export type WorkspaceRoot = Pick<typeof WorkspaceManifest.Type, "private" | "workspaces">;
 const decodeManifest = Schema.decodeUnknownEffect(Schema.fromJsonString(WorkspaceManifest));
 
-type Workspace = { readonly path: string; readonly name: string; readonly version: string; readonly text: string };
+export type Workspace = { readonly path: string; readonly name: string; readonly version: string; readonly text: string };
 
 const workspacePaths = Effect.fn("workspacePaths")(function* (root: string, patterns: readonly string[]) {
   const selected = new Set<string>();
@@ -57,8 +57,7 @@ export const publicWorkspacesOf = Effect.fn("publicWorkspacesOf")(function* (
   const packages: Workspace[] = [];
   for (const file of paths) {
     const { manifest: held, text } = yield* readDecoded(path.join(root, file));
-    if (held.private === true) continue;
-    if (held.name === undefined || held.version === undefined) return yield* new WorkspaceFault({ message: `${file}: a public workspace needs a name and version` });
+    if (held.private === true || held.name === undefined || held.version === undefined) continue;
     packages.push({ path: file, name: held.name, version: held.version, text });
   }
   return packages;

@@ -52,7 +52,7 @@ A code repository takes these files:
 A code repository whose `package.json` does not set `private: true` publishes to npm, so its `main.yml` passes `full-test: true`.
 Then a push of a release commit runs `bun run test --full` once before the tag and the publish.
 A repository without a `package.json` counts as one that publishes.
-A private root with public workspace packages passes `publish-workspaces: true` instead.
+A private root with public workspace packages passes `publish-workspaces: true`, and with a `test` script it also passes `full-test: true`, so the release runs the full suite and publishes the workspaces.
 A private root with a `test` script and no public workspace packages passes `full-test: true` and runs static checks and tests on release pull requests.
 The generated callers pin the shared workflows to `v3`.
 A Claude Code version pinned by an install step or a caller input is passed to the test and flake callers.
@@ -122,7 +122,7 @@ A comment above the gate's `skips` input and above each `if` that writes the rul
 The jobs `ci.yml` holds are the record of what the repository runs, and `package.json` names none of them.
 A `ci.yml` that calls a part keeps its `changes` job, or its lack of one, and each job that calls `test.yml` keeps its name.
 With `check-release: true` the set adds the `changes` job that returns `check-release`.
-Each test job keeps the `run`, `browsers`, `heavy`, `runs-on` and `claude-version` inputs it passes.
+Each test job keeps the `run`, `browsers`, `heavy` and `runs-on` inputs it passes, and every test job and flake pass the one `claude-version` the set keeps: the first version a held caller passes, reading each job input before its install steps and `ci.yml` before `flake.yml`.
 With `check-release: true` a default `run` becomes the release-aware expression that runs `bun run test` on the release pull request.
 A test job that passes no `runs-on` gets the `CI_RUNS_ON` one, and a `run`, `browsers` or `heavy` input equal to the `test.yml` default is left out, such as `run: bunx checks-test --pr`.
 In a site, a test job that passes `artifact: "site-dist"` reads the build, so it waits for the `site` job.

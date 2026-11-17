@@ -21,7 +21,7 @@ It refuses when the last release tag names a version other than the one `package
 The refusal points at the `tag` job of the workflow it runs in, rerun on the release commit, rather than at a tag pushed by hand.
 That job's own refusal says what to fix.
 It refuses a version that is not a plain `major.minor.patch`.
-It writes the next version into `package.json` and into each public workspace of a private root.
+It writes the next version into `package.json`, and into each public workspace package and its `bun.lock` entry where `main.yml` passes `publish-workspaces: true`.
 It runs `bun run build` so the build writes `CHANGELOG.md`.
 It commits every tracked file the build changed as `chore: release <version>`.
 The commit's one parent is `HEAD`.
@@ -39,7 +39,7 @@ It leaves the working tree as it found it.
 
 ## What it reads
 
-It reads the `v*` tags, the commit subjects since the last one, `package.json` and each public workspace `package.json` from the checkout.
+It reads the `v*` tags, the commit subjects since the last one, `package.json`, each workspace `package.json`, the `main.yml` caller that opts in to workspace publishing, and `bun.lock` from the checkout.
 It names the workflow it runs in by `GITHUB_WORKFLOW`, or as `release-pr` when that is unset.
 It refuses a shallow checkout, a detached `HEAD` and a working tree with changes to tracked files.
 It reads the release branch from `origin` with `git ls-remote` and `git fetch`.
@@ -163,7 +163,7 @@ The checks it dispatches are the release pull request's own required checks, and
 Without `check-release: true`, on a composed `ci.yml` the release pull request skips every job but `changes`, and `checks` passes those skips, so the release pull request runs no test.
 A code repository whose `package.json` is not private passes `full-test: true` in `main.yml`, so its publish run runs the full suite once before the tag and the publish.
 In a repository whose `ci.yml` is the one [checks-workflows](checks-workflows.md) composes, release checks run when the caller passes `check-release: true`.
-Other release checks skip every job but `changes`.
+Without it, those checks skip every job but `changes`.
 GitHub also holds the `pull_request` runs of the release pull request for approval, and expires each one at merge as a failure with no job.
 The last step of `pull-request`, `avi2d/workflows/actions/held-runs@v2`, deletes those held runs on the release branch's tip right after the pull request opens or refreshes.
 It reads the held runs on that tip every 5 seconds for up to 30 seconds.
