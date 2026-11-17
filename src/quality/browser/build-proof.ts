@@ -34,7 +34,7 @@ const buildAt = Effect.fn("buildAt")(function* (root: string, revision: string, 
   return built.exitCode === 0 ? output : undefined;
 });
 
-export const identicalTestBuild = Effect.fn("identicalTestBuild")(function* (root: string, site: string, scope: PullRequest, hooks: string | undefined = undefined) {
+export const identicalTestBuild = Effect.fn("identicalTestBuild")(function* (root: string, site: string, scope: PullRequest, hooks?: string) {
   if (!testOnly(scope.changed, hooks) || scope.ends === undefined || !/^[a-zA-Z0-9_-]+$/.test(site)) return false;
   const ends = scope.ends;
   const raw = (yield* loadSettings(root))["browserBuild"];
