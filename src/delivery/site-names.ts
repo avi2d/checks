@@ -1,7 +1,7 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
 import { callerOptionsOf, type CallerOptions } from "./caller-options.ts";
 import { ciJobsOf, sharedFileOf, type CiJobs } from "./ci-jobs.ts";
-import { publicWorkspaces } from "./workspace-packages.ts";
+import { WorkspacePatterns, publicWorkspacesOf } from "./workspace-packages.ts";
 import { isRecord, workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export const WORKFLOWS = ".github/workflows";
@@ -149,6 +149,7 @@ const parsedOrNothing = (text: string): Effect.Effect<unknown> => Effect.try(() 
 const decodePackage = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({
   private: Schema.optionalKey(Schema.Boolean),
   scripts: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
+  workspaces: Schema.optionalKey(WorkspacePatterns),
 })));
 
 const readPackage = Effect.fn("readPackage")(function* (root: string) {
@@ -161,21 +162,16 @@ const readPackage = Effect.fn("readPackage")(function* (root: string) {
   );
 });
 
-export const readsTestScript = Effect.fn("readsTestScript")(function* (root: string) {
-  return (yield* readPackage(root))?.scripts?.["test"] !== undefined;
-});
-
-export const readsPrivatePackage = Effect.fn("readsPrivatePackage")(function* (root: string) {
-  return (yield* readPackage(root))?.private === true;
-});
-
 export type CallerInputs = { readonly publishes: boolean; readonly publishWorkspaces: boolean; readonly needsReleaseChecks: boolean };
 
-export const callerInputsOf = Effect.fn("callerInputsOf")(function* (root: string, isPrivate: boolean) {
-  const heldPrivate = yield* readsPrivatePackage(root);
-  const workspaces = yield* publicWorkspaces(root);
-  const needsReleaseChecks = yield* readsTestScript(root);
-  return { publishes: !isPrivate && !heldPrivate, publishWorkspaces: workspaces.length > 0, needsReleaseChecks } satisfies CallerInputs;
+export type CallerInputOverrides = { readonly private?: boolean; readonly hasTestScript?: boolean };
+
+export const callerInputsOf = Effect.fn("callerInputsOf")(function* (root: string, overrides?: CallerInputOverrides) {
+  const held = yield* readPackage(root);
+  const isPrivate = overrides?.private ?? held?.private === true;
+  const needsReleaseChecks = overrides?.hasTestScript ?? held?.scripts?.["test"] !== undefined;
+  const workspaces = yield* publicWorkspacesOf(root, { private: isPrivate, workspaces: held?.workspaces });
+  return { publishes: !isPrivate, publishWorkspaces: workspaces.length > 0, needsReleaseChecks } satisfies CallerInputs;
 });
 
 export const readWorkflowFiles = Effect.fn("readWorkflowFiles")(function* (root: string) {

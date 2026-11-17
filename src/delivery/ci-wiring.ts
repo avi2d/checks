@@ -319,7 +319,7 @@ const callsSharedSet = Effect.fn("callsSharedSet")(function* (root: string, work
   const present = workflows.map(({ path, text }) => ({ name: path.slice(WORKFLOWS.length + 1), text }));
   if (present.length === 0) return false;
   return yield* Effect.gen(function* () {
-    const inputs = yield* callerInputsOf(root, false);
+    const inputs = yield* callerInputsOf(root);
     const set = yield* callerSetOf(workflows, {}, "checks-workflows --write", inputs.publishes, inputs.publishWorkspaces, inputs.needsReleaseChecks);
     return differencesOf(set, present).length === 0;
   }).pipe(Effect.orElseSucceed(() => false));

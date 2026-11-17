@@ -75,7 +75,7 @@ const workflows = Effect.gen(function* () {
     return true;
   }
   const present = yield* readWorkflowFiles(root);
-  const inputs = yield* callerInputsOf(root, false).pipe(Effect.mapError((fault) => new Usage({ message: fault.message })));
+  const inputs = yield* callerInputsOf(root).pipe(Effect.mapError((fault) => new Usage({ message: fault.message })));
   if (!mode.write) return yield* checkSet(present, inputs.publishes, inputs.publishWorkspaces, inputs.needsReleaseChecks);
   const set = yield* callerSetOf(
     present.map(({ workflow }) => workflow),

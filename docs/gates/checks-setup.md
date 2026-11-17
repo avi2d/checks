@@ -50,6 +50,7 @@ It tells the owner to declare the repository owners in `package.json` `author` o
 It reads the working tree, which is the repository it sets up.
 It reads the `.yml` and `.yaml` files under `.github/workflows/` to tell a site from a code repository and to take the site names its callers pass.
 It reads a `package.json` it finds for the fields and scripts it keeps, replaces or refuses.
+It reads the workspace patterns and each workspace `package.json` for the caller inputs the written manifest will hold.
 It reads the kit install for `.bun-version`, `bunfig.toml`, its version, its Stryker pins and each template.
 
 ## Arguments

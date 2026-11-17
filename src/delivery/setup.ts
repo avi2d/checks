@@ -338,7 +338,9 @@ const argumentsOf = Effect.fn("argumentsOf")(function* (root: string) {
   const mismatch = flagMismatchOf(callers, parsed.flags);
   if (mismatch !== undefined) return yield* new Usage({ message: mismatch });
   const isPrivate = parsed.rest.includes(PRIVATE);
-  const inputs = yield* callerInputsOf(root, isPrivate).pipe(Effect.mapError((fault) => new Usage({ message: fault.message })));
+  const inputs = yield* callerInputsOf(root, isPrivate ? { private: true, hasTestScript: true } : { hasTestScript: true }).pipe(
+    Effect.mapError((fault) => new Usage({ message: fault.message })),
+  );
   const set = yield* callerSetOf(callers, parsed.flags, NAME, inputs.publishes, inputs.publishWorkspaces, inputs.needsReleaseChecks).pipe(
     Effect.mapError((fault) => new Usage({ message: fault.message })),
   );
