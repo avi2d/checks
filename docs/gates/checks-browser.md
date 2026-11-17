@@ -8,6 +8,7 @@ audience: consumers
 
 ## What it checks
 
+[checks-local-tests](checks-local-tests.md) describes the agent guard and its per-repository setting.
 It visits each declared route at each declared viewport in each declared state.
 A state that names its own `checks` runs only those, and any other state runs every declared check.
 Each declared check that opens a page runs on its own fresh page.

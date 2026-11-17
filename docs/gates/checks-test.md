@@ -8,6 +8,7 @@ audience: consumers
 
 ## What it checks
 
+[checks-local-tests](checks-local-tests.md) describes the agent guard and its per-repository setting.
 It runs the unit tier plus the smoke list outside CI and the full suite under CI.
 A `--changed` run narrows that, as [Changed-file runs](#changed-file-runs) says, and so does a `--pr` run, as [The pull request entry](#the-pull-request-entry) says.
 It refuses `--full`, `--tier=e2e` and `--tier=pixel` outside CI, except a pixel run that approves pictures, as [Runs refused outside CI](#runs-refused-outside-ci) says.
