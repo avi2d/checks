@@ -5,13 +5,17 @@ export const SETTINGS_FILE = "checks.config.ts";
 
 const MANIFEST = "package.json";
 
-const SETTING_KEYS = ["smoke", "reach", "mutationRunner", "selfHostedRunners", "browser", "copy", "frontendSyntax"] as const;
+const SETTING_KEYS = ["smoke", "reach", "mutationRunner", "selfHostedRunners", "browser", "browserRoutes", "browserBuild", "copy", "frontendSyntax"] as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[number];
 
 export const Smoke = Schema.Array(Schema.NonEmptyString);
 
 export const Reach = Schema.Record(Schema.String, Schema.Array(Schema.String));
+
+export const BrowserRoutes = Schema.Record(Schema.NonEmptyString, Schema.Array(Schema.NonEmptyString));
+
+export const BrowserBuild = Schema.NonEmptyArray(Schema.NonEmptyString);
 
 export const MutationRunner = Schema.NonEmptyArray(Schema.NonEmptyString);
 

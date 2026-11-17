@@ -2,8 +2,9 @@
 import { Console, Effect, Path } from "effect";
 import type { Browser } from "playwright-core";
 import { runMain, Usage } from "../../core/main.ts";
-import { readRunScope } from "../../core/pull-request-scope.ts";
+import { readRunScope, type RunScope } from "../../core/pull-request-scope.ts";
 import { browserArgs } from "./args.ts";
+import { identicalTestBuild } from "./build-proof.ts";
 import { watchAssets } from "./assets.ts";
 import { judgeAxe } from "./axe.ts";
 import { judgeContrast } from "./contrast.ts";
@@ -23,6 +24,7 @@ import { counted, NAME, passes, report, type Run } from "./report.ts";
 import { serveSite, type Site } from "./serve.ts";
 import { judgePageWeight, weighPage } from "./weight.ts";
 import { judgeTargets } from "./targets.ts";
+import { reachedRoutes } from "./route-scope.ts";
 
 const NO_TARGET = "scanned no target";
 
@@ -189,7 +191,7 @@ function applies(check: CheckName, visit: Visit, declaration: Declaration): bool
   return true;
 }
 
-const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: Declaration, site: Site) {
+const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: Declaration, site: Site, selected: ReadonlySet<string> | undefined) {
   const paths = declaration.routes.map(({ path }) => path);
   const hooks = declaration.hooks === undefined ? [] : yield* loadHooks(root, declaration.hooks, paths);
   const missingRoutes = paths.filter((path) => !site.files.has(path));
@@ -199,10 +201,11 @@ const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: D
     .filter(({ route }) => !missingRoutes.includes(route.path))
     .flatMap((visit): readonly Cell<Settle, BrowserFailure>[] => {
       const visiting = { browser, declaration, visit, url: new URL(visit.route.path, origin).href };
+      const reached = selected === undefined || selected.has(visit.route.path);
       return [
-        { reading: Effect.map(targetsRun(visiting), settled), alone: false },
-        ...declaration.checks.filter((one) => applies(one, visit, declaration)).map((check) => ({ reading: BUILT_IN[check](visiting), alone: ALONE.has(check) })),
-        ...hooks.filter((candidate) => hookApplies(candidate, visit)).map((hook) => ({ reading: Effect.map(hookRun(hook, visiting), settled), alone: true })),
+        ...(reached ? [{ reading: Effect.map(targetsRun(visiting), settled), alone: false }] : []),
+        ...declaration.checks.filter((one) => (reached || one === "look" || one === "links") && applies(one, visit, declaration)).map((check) => ({ reading: BUILT_IN[check](visiting), alone: ALONE.has(check) })),
+        ...(reached ? hooks.filter((candidate) => hookApplies(candidate, visit)).map((hook) => ({ reading: Effect.map(hookRun(hook, visiting), settled), alone: true })) : []),
       ];
     });
   const settles = yield* walkCells(cells, 4);
@@ -212,9 +215,8 @@ const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: D
 
 const USAGE = `usage: ${NAME} [--pr] [<directory>]`;
 
-const largestSet = Effect.fn("largestSet")(function* (pr: boolean, root: string) {
-  if (!pr) return "full" as const;
-  const scope = yield* readRunScope(root);
+const largestSet = Effect.fn("largestSet")(function* (scope: RunScope | undefined) {
+  if (scope === undefined) return "full" as const;
   if (scope.kind === "docs-only") return undefined;
   if (scope.kind === "pull-request") {
     yield* Console.log(`${NAME}: a pull request run walks every preset at the anchor sizes`);
@@ -228,13 +230,24 @@ const browserChecks = Effect.gen(function* () {
   const args = browserArgs(process.argv.slice(2));
   if (args === undefined) return yield* new Usage({ message: USAGE });
   const root = (yield* Path.Path).resolve(args.directory);
-  const largest = yield* largestSet(args.pr, root);
+  const scope = args.pr ? yield* readRunScope(root) : undefined;
+  const largest = yield* largestSet(scope);
   if (largest === undefined) {
     yield* Console.log(`${NAME}: the pull request changes only top-level and docs/ Markdown, so no page was checked`);
     return true;
   }
   const { declaration, site } = yield* readDeclaration(root, largest);
-  const outcome = yield* checkSite(root, declaration, site);
+  if (scope?.kind === "pull-request" && (yield* identicalTestBuild(root, declaration.site, scope, declaration.hooks))) {
+    yield* Console.log(`${NAME}: the test-only change builds the same site, so no page was checked`);
+    return true;
+  }
+  const selected = scope?.kind === "pull-request" ? yield* reachedRoutes(root, scope.changed, declaration) : undefined;
+  if (selected?.size === 0) {
+    yield* Console.log(`${NAME}: the pull request reaches no route, so no page was checked`);
+    return true;
+  }
+  if (selected !== undefined) yield* Console.log(`${NAME}: the pull request reaches ${selected.size} of ${declaration.routes.length} route(s)`);
+  const outcome = yield* checkSite(root, declaration, site, selected);
   yield* Console.log(report(declaration, outcome));
   return passes(outcome);
 });
