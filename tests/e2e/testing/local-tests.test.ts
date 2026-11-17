@@ -8,6 +8,8 @@ const scratch = scratchDirs();
 const command = join(CHECKOUT, "src", "testing", "local-tests-command.ts");
 const runner = join(CHECKOUT, "src", "testing", "test.ts");
 const browser = join(CHECKOUT, "src", "quality", "browser", "browser.ts");
+const flake = join(CHECKOUT, "src", "testing", "flake.ts");
+const mutation = join(CHECKOUT, "src", "testing", "mutation.ts");
 const { CI: _ci, CHECKS_AGENT: _agent, ...cleanEnv } = process.env;
 
 async function repository(config?: string): Promise<string> {
@@ -56,11 +58,15 @@ test("the guarded entry points refuse before starting a local agent test", async
   const bun = await ran($`bun test sample.test.ts`.cwd(dir).env(env));
   const entry = await ran($`bun ${runner} --invalid`.cwd(dir).env(env));
   const site = await ran($`bun ${browser} .`.cwd(dir).env(env));
-  for (const result of [bun, entry, site]) {
+  const flaky = await ran($`bun ${flake}`.cwd(dir).env(env));
+  const mutate = await ran($`bun ${mutation} --mutate src/x.ts`.cwd(dir).env(env));
+  for (const result of [bun, entry, site, flaky]) {
     expect(result.exitCode).not.toBe(0);
     expect(result.text).toContain("checks.config.ts localTests is blocked");
     expect(result.text).not.toContain("test started");
   }
+  expect(mutate.exitCode).toBe(2);
+  expect(mutate.text).toContain("checks.config.ts localTests is blocked");
 });
 
 test("the preload does not block a person or CI", async () => {

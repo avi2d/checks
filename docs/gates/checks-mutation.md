@@ -78,7 +78,7 @@ Every argument after the bin name forwards to `stryker run`.
 | --- | --- |
 | 0 | Stryker exited 0 |
 | 1 | Stryker exited nonzero, including an incremental run refused for a missing report |
-| 2 | a full run outside CI was refused, an agent run is refused while `localTests` is blocked, `checks.config.ts` does not load, or Stryker could not start |
+| 2 | a full run outside CI was refused, an agent run is refused while `localTests` is blocked, an agent run outside CI whose `checks.config.ts` does not load, or Stryker could not start |
 
 ## Sample output
 

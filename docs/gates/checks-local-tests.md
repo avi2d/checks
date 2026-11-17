@@ -34,7 +34,7 @@ The guard does not restrict build, lint, or typecheck commands.
 The preload is in the `[test]` table of the shipped `bunfig.toml`.
 `checks-setup` copies that file into a new repository, and `checks-test-layout` checks its test settings.
 The preload runs only when Bun starts in the directory that holds `bunfig.toml`.
-The guard covers only callers that invoke it.
+The guard does not cover a `bun test` run started outside the directory that holds `bunfig.toml` or a test runner other than the kit bins.
 
 ## Related topics
 

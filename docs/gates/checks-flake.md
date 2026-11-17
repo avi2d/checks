@@ -70,7 +70,7 @@ Under workers the record also holds `parallel`, the worker count and each replay
 | --- | --- |
 | 0 | every run passed |
 | 1 | a run failed |
-| 2 | an argument does not parse, `package.json` or the worker record does not decode, bun passed without writing its report, a replay's placeholder files did not each run once, or an agent run is refused while `localTests` is blocked |
+| 2 | an argument does not parse, `package.json` or the worker record does not decode, bun passed without writing its report, a replay's placeholder files did not each run once, an agent run is refused while `localTests` is blocked, or an agent run outside CI whose `checks.config.ts` does not load |
 
 ## Sample output
 
