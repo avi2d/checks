@@ -162,7 +162,7 @@ const readPackage = Effect.fn("readPackage")(function* (root: string) {
   );
 });
 
-export type CallerInputs = { readonly publishes: boolean; readonly publishWorkspaces: boolean; readonly needsReleaseChecks: boolean };
+type CallerInputs = { readonly publishes: boolean; readonly publishWorkspaces: boolean; readonly needsReleaseChecks: boolean };
 
 export type CallerInputOverrides = { readonly private?: boolean; readonly hasTestScript?: boolean };
 
