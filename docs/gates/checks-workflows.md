@@ -52,8 +52,8 @@ A code repository takes these files:
 A code repository whose `package.json` does not set `private: true` publishes to npm, so its `main.yml` passes `full-test: true`.
 Then a push of a release commit runs `bun run test --full` once before the tag and the publish.
 A repository without a `package.json` counts as one that publishes.
-A private root with public workspace packages passes `publish-workspaces: true`, and with a `test` script it also passes `full-test: true`, so the release runs the full suite and publishes the workspaces.
-A private root with a `test` script and no public workspace packages passes `full-test: true` and runs static checks and tests on release pull requests.
+A private root with public workspace packages passes `publish-workspaces: true`.
+A private root with a `test` script passes `full-test: true` and runs static checks and tests on release pull requests.
 The generated callers pin the shared workflows to `v3`.
 A Claude Code version pinned by an install step or a caller input is passed to the test and flake callers.
 

@@ -21,7 +21,7 @@ It refuses when the last release tag names a version other than the one `package
 The refusal points at the `tag` job of the workflow it runs in, rerun on the release commit, rather than at a tag pushed by hand.
 That job's own refusal says what to fix.
 It refuses a version that is not a plain `major.minor.patch`.
-It writes the next version into `package.json`, and into each public workspace package and its `bun.lock` entry where `main.yml` passes `publish-workspaces: true`.
+It writes the next version into `package.json`, and into each public workspace package and its `bun.lock` entry where a caller of `release-main.yml` passes `publish-workspaces: true`.
 It runs `bun run build` so the build writes `CHANGELOG.md`.
 It commits every tracked file the build changed as `chore: release <version>`.
 The commit's one parent is `HEAD`.
@@ -39,7 +39,8 @@ It leaves the working tree as it found it.
 
 ## What it reads
 
-It reads the `v*` tags, the commit subjects since the last one, `package.json`, each workspace `package.json`, the `main.yml` caller that opts in to workspace publishing, and `bun.lock` from the checkout.
+It reads the `v*` tags, the commit subjects since the last one, `package.json` and `bun.lock` from the checkout.
+It also reads each workspace `package.json` and each caller of `release-main.yml` for the workspace publishing opt-in.
 It names the workflow it runs in by `GITHUB_WORKFLOW`, or as `release-pr` when that is unset.
 It refuses a shallow checkout, a detached `HEAD` and a working tree with changes to tracked files.
 It reads the release branch from `origin` with `git ls-remote` and `git fetch`.
