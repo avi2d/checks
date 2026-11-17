@@ -145,30 +145,27 @@ export type HeldFile = { readonly name: string; readonly text: string; readonly 
 // A file that does not parse calls no shared workflow, and the comparison still names it.
 const parsedOrNothing = (text: string): Effect.Effect<unknown> => Effect.try(() => Bun.YAML.parse(text)).pipe(Effect.orElseSucceed(() => undefined));
 
-const decodePrivacy = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ private: Schema.optionalKey(Schema.Boolean) })));
-const decodeScripts = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ scripts: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)) })));
+const decodePackage = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({
+  private: Schema.optionalKey(Schema.Boolean),
+  scripts: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
+})));
 
-export const readsTestScript = Effect.fn("readsTestScript")(function* (root: string) {
+const readPackage = Effect.fn("readPackage")(function* (root: string) {
   const fs = yield* FileSystem.FileSystem;
   const file = (yield* Path.Path).join(root, "package.json");
-  if (!(yield* fs.exists(file))) return false;
-  const manifest = yield* fs.readFileString(file).pipe(
-    Effect.flatMap(decodeScripts),
+  if (!(yield* fs.exists(file))) return undefined;
+  return yield* fs.readFileString(file).pipe(
+    Effect.flatMap(decodePackage),
     Effect.mapError((cause) => new CallerSetFault({ message: `cannot read package.json: ${cause.message}` })),
   );
-  return manifest.scripts?.["test"] !== undefined;
 });
 
-// checks-release-tag publishes every package.json that is not private, so a repository without one is no private package either.
+export const readsTestScript = Effect.fn("readsTestScript")(function* (root: string) {
+  return (yield* readPackage(root))?.scripts?.["test"] !== undefined;
+});
+
 export const readsPrivatePackage = Effect.fn("readsPrivatePackage")(function* (root: string) {
-  const fs = yield* FileSystem.FileSystem;
-  const file = (yield* Path.Path).join(root, "package.json");
-  if (!(yield* fs.exists(file))) return false;
-  const manifest = yield* fs.readFileString(file).pipe(
-    Effect.flatMap(decodePrivacy),
-    Effect.mapError((cause) => new CallerSetFault({ message: `cannot read package.json: ${cause.message}` })),
-  );
-  return manifest.private === true;
+  return (yield* readPackage(root))?.private === true;
 });
 
 export const readWorkflowFiles = Effect.fn("readWorkflowFiles")(function* (root: string) {
