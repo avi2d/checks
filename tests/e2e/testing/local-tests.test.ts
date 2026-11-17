@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { CHECKOUT, ran, scratchDirs, type Ran } from "../lib/fixture-repo.ts";
 
 const scratch = scratchDirs();
-const command = join(CHECKOUT, "src", "core", "local-tests-command.ts");
+const command = join(CHECKOUT, "src", "testing", "local-tests-command.ts");
 const runner = join(CHECKOUT, "src", "testing", "test.ts");
 const browser = join(CHECKOUT, "src", "quality", "browser", "browser.ts");
 const { CI: _ci, CHECKS_AGENT: _agent, ...cleanEnv } = process.env;

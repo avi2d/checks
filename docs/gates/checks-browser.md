@@ -429,7 +429,7 @@ Without `browserBuild`, the browser pass runs as usual.
 | --- | --- |
 | 0 | every check passes at every visit, and every declared route and target is there |
 | 1 | a check fails at a visit, a declared route is not served, a declared target matches no visible element, or a run scans no target |
-| 2 | an argument is not one it takes, `checks.config.ts` sets no `browser` key, the key does not decode or contradicts itself, `browser-checks.json` is still there, the site directory or the hooks module is missing, the site holds no `.html` page while a route lists `every-page`, a peer cannot load, or Chrome cannot start |
+| 2 | an argument is not one it takes, `checks.config.ts` sets no `browser` key, the key does not decode or contradicts itself, `browser-checks.json` is still there, the site directory or the hooks module is missing, the site holds no `.html` page while a route lists `every-page`, a peer cannot load, Chrome cannot start, or an agent run is refused while `localTests` is blocked |
 
 ## Sample output
 

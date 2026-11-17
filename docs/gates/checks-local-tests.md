@@ -26,7 +26,7 @@ The answer is independent of the environment marker and CI.
 
 The kit exports the marker name as `AGENT_MARKER` from `@avi2dg/checks/local-tests`.
 Set `CHECKS_AGENT=1` when starting an agent.
-When that marker is set, `CI` is not true, and `localTests` is blocked, `checks-test`, `checks-browser`, and the Bun test preload refuse to start.
+When that marker is set, `CI` is not true, and `localTests` is blocked, `checks-test`, `checks-browser`, `checks-flake`, `checks-mutation`, and the Bun test preload refuse to start.
 The refusal names `localTests`.
 Without the marker or with `CI=true`, the guard allows the run.
 The guard does not restrict build, lint, or typecheck commands.
@@ -34,18 +34,6 @@ The guard does not restrict build, lint, or typecheck commands.
 The preload is in the `[test]` table of the shipped `bunfig.toml`.
 `checks-setup` copies that file into a new repository, and `checks-test-layout` checks its test settings.
 The preload runs only when Bun starts in the directory that holds `bunfig.toml`.
-A consumer with its own Playwright config can call the same guard before exporting the config:
-
-```ts
-import { guardLocalTests } from "@avi2dg/checks/local-tests";
-
-await guardLocalTests();
-
-export default {};
-```
-
-The guard returns a promise that rejects when the run is refused or its settings cannot be read.
-It reads `checks.config.ts` from the current directory unless passed a repository root.
 The guard covers only callers that invoke it.
 
 ## Related topics

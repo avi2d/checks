@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect } from "effect";
-import { localTestsSetting } from "./local-tests.ts";
-import { runMain, Usage } from "./main.ts";
+import { localTestsSetting } from "../core/local-tests.ts";
+import { runMain, Usage } from "../core/main.ts";
 
 const check = Effect.gen(function* () {
   if (process.argv.length !== 2) return yield* new Usage({ message: "usage: checks-local-tests" });
