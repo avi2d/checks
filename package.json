@@ -1,6 +1,6 @@
 {
   "name": "@avi2dg/checks",
-  "version": "0.106.1",
+  "version": "0.108.0",
   "description": "Deterministic checks shared across a set of TypeScript repositories",
   "author": {
     "name": "avi2d",
@@ -50,6 +50,8 @@
     "./browser-hooks.ts": "./src/quality/browser/hooks.ts",
     "./browser-checks.json": "./src/quality/browser/browser-checks.json",
     "./config": "./src/quality/config.ts",
+    "./local-tests": "./src/core/agent-marker.ts",
+    "./local-test-preload": "./src/testing/local-test-preload.ts",
     "./screen-sizes.ts": "./src/quality/browser/screen-sizes.ts",
     "./block-screens.ts": "./src/testing/block-screens.ts",
     "./site-test.ts": "./src/testing/site-test.ts",
@@ -94,6 +96,7 @@
     "checks-lint-coverage": "src/quality/lint-coverage.sh",
     "checks-test-layout": "src/testing/test-layout.ts",
     "checks-test": "src/testing/test.ts",
+    "checks-local-tests": "src/testing/local-tests-command.ts",
     "checks-flake": "src/testing/flake.ts",
     "checks-commit-identity": "src/delivery/commit-identity.ts",
     "checks-commit-title": "src/delivery/commit-title.ts",

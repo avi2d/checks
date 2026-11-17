@@ -5,6 +5,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { TEST_ENTRY_POINT } from "../core/gates.ts";
 import { collect } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
+import { refuseLocalTests } from "../core/local-tests.ts";
 import { decodeSetting, loadSettings, refuseOldPlace, SETTINGS_FILE, Smoke } from "../core/settings.ts";
 import { testOptions, type TestOptions, type TestTier } from "../core/test-script.ts";
 import { readRunScope } from "../core/pull-request-scope.ts";
@@ -316,6 +317,7 @@ const runSuite = Effect.fn("runSuite")(function* (outfile: string, args: readonl
 });
 
 const testEntry = Effect.gen(function* () {
+  yield* refuseLocalTests(process.cwd());
   const entry = entryOptions(process.argv.slice(2));
   if (entry === undefined) return yield* new Usage({ message: USAGE });
   const { options, junit, run } = entry;

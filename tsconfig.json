@@ -43,6 +43,7 @@
               "src/quality/presets/dependency-cruiser.ts",
               "src/quality/presets/stylelint.ts",
               "src/testing/flake-preload.ts",
+              "src/testing/local-test-preload.ts",
               "src/testing/mutation-guard-plugin.ts"
             ],
             "options": {

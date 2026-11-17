@@ -2,6 +2,22 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.108.0
+
+Released 2026-11-17.
+
+### Features
+
+- **testing:** block agent local test runs behind localTests switch [#168](https://github.com/avi2d/checks/pull/168)
+
+## 0.107.0
+
+Released 2026-11-17.
+
+### Features
+
+- **browser:** scope pull request checks to reached routes [#166](https://github.com/avi2d/checks/pull/166)
+
 ## 0.106.1
 
 Released 2026-11-17.

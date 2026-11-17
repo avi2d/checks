@@ -1,2 +1,3 @@
 [test]
+preload = ["@avi2dg/checks/local-test-preload"]
 pathIgnorePatterns = ["**/tests/quarantine/**", "**/tests/live/**", "**/tests/pixel/**", "repos/**"]

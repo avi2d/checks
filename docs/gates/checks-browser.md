@@ -9,6 +9,7 @@ audience: consumers
 ## What it checks
 
 It visits each declared route at each declared viewport in each declared state.
+`checks-browser` refuses to start for an agent when `localTests` is blocked, as [checks-local-tests](checks-local-tests.md) says.
 A state that names its own `checks` runs only those, and any other state runs every declared check.
 Each declared check that opens a page runs on its own fresh page.
 A visit is one route, one viewport and one state.
@@ -194,7 +195,9 @@ export const checks: readonly ProductCheck[] = [
 
 ## What it reads
 
-It reads the `browser` key of `checks.config.ts` in the directory it runs in:
+It reads the `browser`, `browserRoutes` and `browserBuild` keys of `checks.config.ts` in the directory it runs in.
+It reads `CHECKS_AGENT` and `CI` from the environment and the `localTests` key of `checks.config.ts`, and refuses an agent run while `localTests` is blocked, as [checks-local-tests](checks-local-tests.md) says.
+On a pull request it also reads the changed paths since the merge base:
 
 ```ts
 import { defineConfig } from "@avi2dg/checks/config";
@@ -402,13 +405,32 @@ On a pull request it walks each viewport preset at the eight anchor sizes only, 
 A pull request that changes only top-level and `docs/` Markdown checks no page and passes.
 A release pull request and a run that is not a pull request, such as `workflow_dispatch`, walk the full size list.
 
+The optional `browserRoutes` setting maps exact repository paths to the routes each path can change.
+For example, `browserRoutes: { "src/home.ts": ["/"] }` assigns the home source to the root route.
+When every changed path has a mapping to declared routes, the runner narrows targets, product hooks, and per-route checks to those routes.
+The `links` and `look` checks still visit every declared route, since they compare or reach across routes.
+Missing routes are still reported across the whole declaration.
+An unmapped path, an empty change, or an unknown route makes every route run.
+A path mapped to no routes reaches no route.
+A change whose every path maps to no routes checks no page and passes.
+The map is separate from the test selection in `reach`.
+
+The optional `browserBuild` setting is an array holding the build command and its arguments, such as `["bun", "run", "build"]`.
+For a change confined to test paths outside the hooks module, the runner builds the merge base and the head in temporary source trees.
+It compares both output directories byte for byte and compares the head output with the site being checked.
+The runner skips the browser pass only when all three outputs agree and contain files without symbolic links.
+If a build or comparison fails, the runner checks the routes the change reaches.
+The output directory must be a single directory name at the repository root for this comparison.
+Each build runs without the checkout's `node_modules`, so its command must install the dependencies it needs.
+Without `browserBuild`, the browser pass runs as usual.
+
 ## Exit codes
 
 | Code | When |
 | --- | --- |
 | 0 | every check passes at every visit, and every declared route and target is there |
 | 1 | a check fails at a visit, a declared route is not served, a declared target matches no visible element, or a run scans no target |
-| 2 | an argument is not one it takes, `checks.config.ts` sets no `browser` key, the key does not decode or contradicts itself, `browser-checks.json` is still there, the site directory or the hooks module is missing, the site holds no `.html` page while a route lists `every-page`, a peer cannot load, or Chrome cannot start |
+| 2 | an argument is not one it takes, `checks.config.ts` sets no `browser` key, the key does not decode or contradicts itself, `browser-checks.json` is still there, the site directory or the hooks module is missing, the site holds no `.html` page while a route lists `every-page`, a peer cannot load, Chrome cannot start, or an agent run is refused while `localTests` is blocked |
 
 ## Sample output
 

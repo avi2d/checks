@@ -30,7 +30,8 @@ It fails unless the repository holds this shape, and names the file and the path
   No test script takes `--parallel=<workers>`, `--full`, `--junit=<file>` or a tier outside its own script, as [checks-test](checks-test.md#parallel-runs) and [checks-test](checks-test.md#arguments) say.
   No other `test:*` script exists.
 - `scripts.lint` runs this check, itself or through `checks-lint` called by its bare bin name.
-- `bunfig.toml` carries every `[test]` key of the shipped preset with the same value.
+- `bunfig.toml` carries every `[test]` key of the shipped preset with the same value, except `preload`, which may carry more entries.
+  Its preload includes the shipped guard entry described by [checks-local-tests](checks-local-tests.md), beside any entry of its own.
   `[test].pathIgnorePatterns` is the preset's `["**/tests/quarantine/**", "**/tests/live/**", "**/tests/pixel/**", "repos/**"]`, which the check pins itself, so the kit's own repository, whose bunfig is the preset, cannot drift it either.
   The check also accepts the list without `repos/**`, so a repository that links no library under `repos/` may drop it.
   Other tables, and extra `[test]` keys, are the repository's own.

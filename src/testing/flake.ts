@@ -4,6 +4,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { runMain, Usage } from "../core/main.ts";
 import { NAME_SEPARATOR, parseReport, ReportError, reporterArgs, type TestResult } from "./test-report.ts";
 import { KIT_PACKAGE_NAME, ownTestScriptToBin, scriptOptions } from "../core/test-script.ts";
+import { refuseLocalTests } from "../core/local-tests.ts";
 import { resolveWorkerCount } from "./test.ts";
 
 export type Run = {
@@ -254,6 +255,7 @@ export function summary(record: FlakeRecord): string {
 }
 
 const flake = Effect.gen(function* () {
+  yield* refuseLocalTests(process.cwd());
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const { plan, report } = yield* parseArgs(process.argv.slice(2));

@@ -12,8 +12,9 @@ export default defineConfig({
       "src/quality/presets/knip.ts",
       "src/quality/presets/dependency-cruiser.ts",
       "src/quality/presets/stylelint.ts",
-      // Bun loads the flake preload into the fresh global of every test file under --parallel, so an Effect import there would load into each file.
+      // Bun loads each test preload into the fresh global of every test file under --parallel, so an Effect import there would load into each file.
       "src/testing/flake-preload.ts",
+      "src/testing/local-test-preload.ts",
       // Stryker loads this plugin synchronously and stops the run on a throw, so it cannot run an Effect.
       "src/testing/mutation-guard-plugin.ts",
     ],
@@ -30,5 +31,8 @@ export default defineConfig({
       },
     ],
   },
-  overrides: [{ files: ["src/quality/comment-matchers.ts"], rules: { "effect-channel/no-throw": "off" } }],
+  overrides: [
+    { files: ["src/quality/comment-matchers.ts"], rules: { "effect-channel/no-throw": "off" } },
+    { files: ["src/testing/local-test-preload.ts"], rules: { "eslint/no-restricted-properties": "off" } },
+  ],
 });

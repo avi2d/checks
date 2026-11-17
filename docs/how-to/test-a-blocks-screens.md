@@ -38,7 +38,7 @@ To add a suite for one block:
 1. Start a compare run in CI with `gh workflow run whole-tree-run --ref <branch>`.
 1. Read the pixel failures in the `tests` job's `whole-tree-run-tests` artifact and the `checks-whole-tree-run` log.
 
-A compare run happens in CI, since `checks-test` refuses a pixel run outside CI unless it approves, as [checks-test](../gates/checks-test.md#runs-refused-outside-ci) says.
+A compare run happens in CI, since `checks-test` refuses a pixel run outside CI for a person unless it approves, as [checks-test](../gates/checks-test.md#runs-refused-outside-ci) says, but an agent run is refused while `localTests` is blocked, as [checks-local-tests](../gates/checks-local-tests.md) says.
 
 `blockScreens` registers one test for each size, and each test opens the page in a fresh browser context for its device.
 It waits for the fonts and every running animation that ends, runs `setup` and takes the picture with animations stopped.
@@ -82,7 +82,7 @@ To approve the pictures of a block that changed on purpose:
 1. Look at every changed file in the fixtures folder before you commit it.
 1. Restore with git each changed picture that looks wrong and delete each new one that does.
 
-Approve mode is the one pixel run `checks-test` takes outside CI, since a CI run cannot write the approved pictures back.
+Approve mode is the one pixel run `checks-test` takes outside CI for a person, since a CI run cannot write the approved pictures back, but an agent run is refused while `localTests` is blocked, as [checks-local-tests](../gates/checks-local-tests.md) says.
 Approve mode passes every size, so the review of the changed pictures is the only check on them.
 
 ## Build a suite from the parts
