@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.106.0
+
+Released 2026-11-16.
+
+### Features
+
+- **delivery:** keep optional callers and read release rule from changes [#162](https://github.com/avi2d/checks/pull/162)
+
 ## 0.105.0
 
 Released 2026-11-16.
