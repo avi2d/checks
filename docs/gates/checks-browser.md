@@ -196,6 +196,7 @@ export const checks: readonly ProductCheck[] = [
 ## What it reads
 
 It reads the `browser`, `browserRoutes` and `browserBuild` keys of `checks.config.ts` in the directory it runs in.
+It reads `CHECKS_AGENT` and `CI` from the environment and the `localTests` key of `checks.config.ts`, and refuses an agent run while `localTests` is blocked, as [checks-local-tests](checks-local-tests.md) says.
 On a pull request it also reads the changed paths since the merge base:
 
 ```ts

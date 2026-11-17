@@ -53,6 +53,7 @@ It reads the reach map under `reach` in `checks.config.ts` too, as [The reach ma
 A `--changed` run also reads the git history since the merge base with `origin/<default branch>`, the working tree diff and the untracked files.
 It reads the sources, `package.json`, `checks.config.ts` and `bunfig.toml` too, as [Changed-file runs](#changed-file-runs) says.
 It reads no skip list from `checks.config.ts`, only the smoke list.
+It reads `CHECKS_AGENT` and `CI` from the environment and the `localTests` key of `checks.config.ts`, and refuses an agent run while `localTests` is blocked, as [checks-local-tests](checks-local-tests.md) says.
 It counts a run as `ci` when `CI` is true and as `local` otherwise.
 A local run covers `./tests/unit` plus the smoke list the repository declares, except a `--changed` run, as [Changed-file runs](#changed-file-runs) says.
 The smoke list lives in `checks.config.ts` under `smoke` as an array of test file paths.
