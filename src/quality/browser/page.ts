@@ -67,17 +67,35 @@ export const load = Effect.fn("load")(function* (page: Page, url: string) {
 
 const ENTRANCE_LIMIT_MS = 10_000;
 
+// An entrance can start after the first look at the page, so the wait ends only once no entrance has run for this long.
+const QUIET_MS = 500;
+
 // A reading mid-fade measures the fade, so the page settles first. An infinite animation is left out of the wait, and the bound ends the wait for one that runs too long.
 const SETTLED = `Promise.race([
-  Promise.all(
-    Array.from(document.images).filter((image) => {
-      for (const rect of image.getClientRects()) {
-        if (rect.bottom > 0 && rect.top < innerHeight && rect.right > 0 && rect.left < innerWidth) return true;
+  (async () => {
+    await Promise.all(
+      Array.from(document.images).filter((image) => {
+        for (const rect of image.getClientRects()) {
+          if (rect.bottom > 0 && rect.top < innerHeight && rect.right > 0 && rect.left < innerWidth) return true;
+        }
+        return false;
+      }).map((image) => image.decode().catch(() => undefined)),
+    );
+    const entering = () => document.getAnimations().filter((animation) => animation.playState === "running" && animation.timeline === document.timeline && animation.effect?.getTiming().iterations !== Infinity);
+    const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    let quietSince = performance.now();
+    while (performance.now() - quietSince < ${QUIET_MS}) {
+      const running = entering();
+      if (running.length === 0) {
+        await pause(16);
+        continue;
       }
-      return false;
-    }).map((image) => image.decode().catch(() => undefined)),
-  ).then(() => Promise.all(document.getAnimations().filter((animation) => animation.playState !== "paused" && animation.timeline === document.timeline && animation.effect?.getTiming().iterations !== Infinity).map((animation) => animation.finished.catch(() => undefined)))),
+      quietSince = performance.now();
+      await Promise.race([Promise.all(running.map((animation) => animation.finished.catch(() => undefined))), pause(50)]);
+    }
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined))));
+  })(),
   new Promise((resolve) => setTimeout(resolve, ${ENTRANCE_LIMIT_MS})),
-]).then(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)))))`;
+])`;
 
 export const settle = (page: Page): Effect.Effect<unknown, BrowserFailure> => attempt("the page never settles to be read", () => page.evaluate(SETTLED));

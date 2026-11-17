@@ -1,0 +1,32 @@
+name: ci
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  checks:
+    # Untrusted PR code must not run on the self-hosted runner.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: avi2d/workflows/setup@v1
+        with:
+          fetch-depth: 0
+      - run: bun run build
+      - run: git diff --exit-code
+      - run: bun run docs:build
+      - uses: avi2d/workflows/actions/secrets-pack@v2
+        with:
+          pack: ${{ secrets.CHECKS_SECRETS_PACK }}
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun run test
+      - id: title
+        name: lint the title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          GH_TOKEN: ${{ github.token }}
+        run: bunx checks-commit-title

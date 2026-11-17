@@ -1,3 +1,4 @@
+import type { CallerOptions, Flake, Pages } from "./caller-options.ts";
 import { DEFAULT_TEST_RUN, SITE_BUILD, type RepositoryKind, type TestJob } from "./ci-jobs.ts";
 import { SHARED_REPOSITORY } from "./mutation-workflow.ts";
 import { RELEASE_BRANCH_PREFIX } from "./release-commit.ts";
@@ -24,6 +25,7 @@ const SHARED_SECRETS = {
   "advisories.yml@v3": [],
   "ci.yml@v3": [],
   "flake.yml@v3": [],
+  "github-pages.yml@v3": [],
   "pr-title.yml@v3": [],
   "preview-remove.yml@v3": ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"],
   "release-main.yml@v3": [],
@@ -48,24 +50,31 @@ type Caller = {
   readonly shared: SharedWorkflow;
   readonly permissions: string;
   readonly with?: SiteNames;
+  readonly inputs?: readonly Input[];
 };
+
+type Input = readonly [key: string, value: string, note?: string];
+
+type Condition = { readonly test: string; readonly note?: string };
 
 type CallingJob = {
   readonly job: string;
   readonly needs?: string;
-  readonly condition?: string;
+  readonly condition?: Condition;
   readonly shared: SharedWorkflow;
   readonly permissions: string;
-  readonly inputs?: readonly (readonly [string, string])[];
+  readonly inputs?: readonly Input[];
+  readonly secrets?: readonly string[];
 };
 
-function callingJobLines({ job, needs, condition, shared, permissions, inputs = [] }: CallingJob): readonly string[] {
+const noted = (indent: string, line: string, note: string | undefined): readonly string[] => (note === undefined ? [indent + line] : [`${indent}# ${note}`, indent + line]);
+
+function callingJobLines({ job, needs, condition, shared, permissions, inputs = [], secrets = SHARED_SECRETS[shared] }: CallingJob): readonly string[] {
   const lines = [`  ${job}:`];
   if (needs !== undefined) lines.push(`    needs: ${needs}`);
-  if (condition !== undefined) lines.push(`    if: ${condition}`);
+  if (condition !== undefined) lines.push(...noted("    ", `if: ${condition.test}`, condition.note));
   lines.push(`    uses: ${SHARED_WORKFLOWS}/${shared}`, `    permissions: { ${permissions} }`);
-  if (inputs.length > 0) lines.push("    with:", ...inputs.map(([key, value]) => `      ${key}: ${value}`));
-  const secrets: readonly string[] = SHARED_SECRETS[shared];
+  if (inputs.length > 0) lines.push("    with:", ...inputs.flatMap(([key, value, note]) => noted("      ", `${key}: ${value}`, note)));
   if (secrets.length > 0) lines.push("    secrets:", ...secrets.map((secret) => `      ${secret}: \${{ secrets.${secret} }}`));
   return lines;
 }
@@ -80,7 +89,7 @@ function workflowText({ name, on, concurrency }: Pick<Caller, "name" | "on" | "c
 
 function callerText(caller: Caller): string {
   const names = caller.with;
-  const inputs = names === undefined ? [] : SITE_NAME_KEYS.map((key) => [key, `"${names[key]}"`] as const);
+  const inputs = names === undefined ? (caller.inputs ?? []) : SITE_NAME_KEYS.map((key) => [key, `"${names[key]}"`] as const);
   return workflowText(caller, [{ job: caller.job, shared: caller.shared, permissions: caller.permissions, inputs }]);
 }
 
@@ -92,20 +101,29 @@ const CI = { name: "ci", on: PULL_REQUEST, concurrency: PER_PULL_REQUEST } as co
 
 const singleJobCaller = (shared: SharedWorkflow, permissions: string): Caller => ({ ...CI, job: "checks", shared, permissions });
 
-const DOCS_CHANGED = "needs.changes.outputs.docs-only != 'true'";
+const NOT_RELEASED = "needs.changes.outputs.release != 'true'";
+
+const CHANGED = { test: `${NOT_RELEASED} && needs.changes.outputs.docs-only != 'true'` };
 
 // A fork can name its head release/, and a dispatch holds no head_ref, so only the dispatch and the same-repository release/<base> pull request count.
 const RELEASE_RUN = `((github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, '${RELEASE_BRANCH_PREFIX}')) || (github.event_name == 'pull_request' && github.head_ref == format('${RELEASE_BRANCH_PREFIX}{0}', github.base_ref) && github.event.pull_request.head.repo.full_name == github.repository))`;
 
 // A job that needs another skips with it, so only a job that needs none tests the release branch itself.
-const NOT_RELEASE = `\${{ !${RELEASE_RUN} }}`;
+const NOT_RELEASE: Condition = {
+  test: `\${{ !${RELEASE_RUN} }}`,
+  note: `Runs on every run but the release run: a dispatch on a ${RELEASE_BRANCH_PREFIX} branch, or the pull request from ${RELEASE_BRANCH_PREFIX}<base> in this repository.`,
+};
 
 type Gated = Pick<CallingJob, "needs" | "condition">;
 
 const quoted = (value: string): string => JSON.stringify(value);
 
+const HOLD_OFF: Input = ["hold", "false"];
+
+const SECRETS_PACK: Input = ["secrets-pack", "true"];
+
 function testCallingJob(test: TestJob, kind: RepositoryKind, gated: Gated): CallingJob {
-  const inputs: (readonly [string, string])[] = [];
+  const inputs: Input[] = [];
   if (test.run !== DEFAULT_TEST_RUN) inputs.push(["run", quoted(test.run)]);
   if (test.browsers !== "") inputs.push(["browsers", quoted(test.browsers)]);
   if (test.readsBuild) inputs.push(["artifact", quoted(SITE_BUILD)]);
@@ -116,26 +134,33 @@ function testCallingJob(test: TestJob, kind: RepositoryKind, gated: Gated): Call
   return { job: test.name, ...(test.readsBuild ? { needs: "site" } : gated), shared: "test.yml@v3", permissions: "contents: read, actions: write", inputs };
 }
 
+function skipsInput(needed: readonly string[], changes: boolean): Input {
+  if (!changes) return ["skips", `\${{ ${RELEASE_RUN} && '${needed.join(" ")}' || '' }}`, "The jobs the gate passes as skipped: every job on the release run."];
+  const parts = needed.filter((job) => job !== "changes");
+  const skipped = parts.filter((job) => job !== "static");
+  const docsOnly = skipped.length > 0 ? `needs.changes.outputs.docs-only == 'true' && '${skipped.join(" ")}' || ` : "";
+  const note = "The jobs the gate passes as skipped: every job but changes on the release run, and every job but changes and static on a docs-only change.";
+  return ["skips", `\${{ needs.changes.outputs.release == 'true' && '${parts.join(" ")}' || ${docsOnly}'' }}`, note];
+}
+
 function gateJob(needed: readonly string[], changes: boolean): CallingJob {
-  const skipped = needed.filter((job) => job !== "changes" && job !== "static");
-  const docsOnly = changes && skipped.length > 0 ? `needs.changes.outputs.docs-only == 'true' && '${skipped.join(" ")}' || ` : "";
-  const skips = `\${{ ${RELEASE_RUN} && '${needed.join(" ")}' || ${docsOnly}'' }}`;
-  const inputs: (readonly [string, string])[] = [["results", "${{ toJSON(needs) }}"], ["skips", skips]];
+  const inputs: Input[] = [["results", "${{ toJSON(needs) }}"], skipsInput(needed, changes)];
   // Without always() a failed part skips the gate, and the required check never reports.
-  return { job: "checks", needs: `[${needed.join(", ")}]`, condition: "always()", shared: "gate.yml@v3", permissions: "contents: read, statuses: write", inputs };
+  return { job: "checks", needs: `[${needed.join(", ")}]`, condition: { test: "always()" }, shared: "gate.yml@v3", permissions: "contents: read, statuses: write", inputs };
 }
 
 function composedCiText(set: CallerSet): string {
   const { changes, tests } = set.ci;
-  const gated: Gated = changes ? { needs: "changes", condition: DOCS_CHANGED } : { condition: NOT_RELEASE };
+  const gated: Gated = changes ? { needs: "changes", condition: CHANGED } : { condition: NOT_RELEASE };
   const jobs: CallingJob[] = [];
-  if (changes) jobs.push({ job: "changes", condition: NOT_RELEASE, shared: "changes.yml@v3", permissions: "contents: read" });
+  if (changes) jobs.push({ job: "changes", shared: "changes.yml@v3", permissions: "contents: read" });
   jobs.push({
     job: "static",
-    condition: NOT_RELEASE,
+    ...(changes ? { needs: "changes", condition: { test: NOT_RELEASED } } : { condition: NOT_RELEASE }),
     shared: "static.yml@v3",
     permissions: "contents: read, actions: write, statuses: write, pull-requests: read",
-    inputs: set.kind === "site" ? [["hold", "false"]] : [],
+    inputs: [...(set.kind === "site" ? [HOLD_OFF] : []), ...(set.options.secretsPack ? [SECRETS_PACK] : [])],
+    ...(set.options.secretsPack ? { secrets: ["CHECKS_SECRETS_PACK"] } : {}),
   });
   if (set.kind === "site") {
     jobs.push({ job: "site", ...gated, shared: "site-preview.yml@v3", permissions: "contents: read, pull-requests: write", inputs: [["pages", quoted(set.names.pages)]] });
@@ -194,29 +219,60 @@ const SITE: readonly Caller[] = [
 
 const siteCallers = (names: SiteNames): readonly Caller[] => SITE.map((caller) => (takesSiteNames(caller.shared) ? { ...caller, with: names } : caller));
 
-const CODE: readonly Caller[] = [
-  PR_TITLE,
 // release-main holds no group, so the caller serializes pushes to main.
-  mainCaller("release-main.yml@v3", "contents: write, id-token: write, actions: read, pull-requests: read", { group: "main", cancel: false }),
-  RELEASE,
-];
+const releaseMain = (fullTest: boolean): Caller => ({
+  ...mainCaller("release-main.yml@v3", "contents: write, id-token: write, actions: read, pull-requests: read", { group: "main", cancel: false }),
+  ...(fullTest ? { inputs: [["full-test", "true"]] } : {}),
+});
+
+const codeCallers = (options: CallerOptions): readonly Caller[] => [PR_TITLE, releaseMain(options.fullTest), RELEASE];
 
 const filesOf = (callers: readonly Caller[]): readonly WorkflowFile[] => callers.map((caller) => ({ name: `${caller.name}.yml`, text: callerText(caller) }));
 
-const ADVISORIES: WorkflowFile = {
+// The shared workflow's own schedule fires only in its own repository, so a caller that scans weekly holds its cron.
+const advisoriesFile = (cron: string | undefined): WorkflowFile => ({
   name: "advisories.yml",
-  text: callerText({ name: "advisories", on: BY_HAND, job: "advisories", shared: "advisories.yml@v3", permissions: "contents: read, issues: write" }),
-};
+  text: callerText({
+    name: "advisories",
+    on: cron === undefined ? BY_HAND : [...BY_HAND, "schedule:", `  - cron: ${quoted(cron)}`],
+    job: "advisories",
+    shared: "advisories.yml@v3",
+    permissions: "contents: read, issues: write",
+  }),
+});
 
-const FLAKE: WorkflowFile = {
+const flakeFile = ({ nodeVersionFile }: Flake): WorkflowFile => ({
   name: "flake.yml",
-  text: callerText({ name: "flake", on: BY_HAND, job: "flake", shared: "flake.yml@v3", permissions: "contents: read" }),
-};
+  text: callerText({
+    name: "flake",
+    on: BY_HAND,
+    job: "flake",
+    shared: "flake.yml@v3",
+    permissions: "contents: read",
+    inputs: [...(nodeVersionFile === undefined ? [] : [["node-version-file", quoted(nodeVersionFile)] as const])],
+  }),
+});
+
+// github-pages.yml holds the deploy group itself, so a caller group would only queue a second run behind the first.
+const docsFile = ({ build, path }: Pages): WorkflowFile => ({
+  name: "docs.yml",
+  text: callerText({
+    name: "docs",
+    on: ["push:", "  branches: [main]", "workflow_dispatch:"],
+    job: "pages",
+    shared: "github-pages.yml@v3",
+    permissions: "contents: read, pages: write, id-token: write",
+    inputs: [
+      ["build", quoted(build)],
+      ["path", quoted(path)],
+    ],
+  }),
+});
 
 const MUTATION: WorkflowFile = { name: "mutation.yml", text: MUTATION_WORKFLOW };
 
 export function requiredSet(set: CallerSet): readonly WorkflowFile[] {
-  return [{ name: "ci.yml", text: composedCiText(set) }, ...filesOf(set.kind === "site" ? siteCallers(set.names) : CODE)];
+  return [{ name: "ci.yml", text: composedCiText(set) }, ...filesOf(set.kind === "site" ? siteCallers(set.names) : codeCallers(set.options))];
 }
 
 function singleJobCiText(set: CallerSet): string {
@@ -230,9 +286,11 @@ export function holdsSingleJobCi(set: CallerSet, present: readonly WorkflowFile[
   return present.some((file) => file.name === "ci.yml" && file.text === text);
 }
 
-// A by-hand caller may be absent, but a present one holds exactly this text.
-export function byHandSet(kind: RepositoryKind): readonly WorkflowFile[] {
-  return kind === "site" ? [ADVISORIES] : [ADVISORIES, MUTATION, FLAKE];
+// An optional caller may be absent, but a present one holds exactly this text.
+export function byHandSet(set: CallerSet): readonly WorkflowFile[] {
+  const { advisoriesCron, flake, pages } = set.options;
+  const docs = pages === undefined ? [] : [docsFile(pages)];
+  return set.kind === "site" ? [advisoriesFile(advisoriesCron), ...docs] : [advisoriesFile(advisoriesCron), MUTATION, flakeFile(flake), ...docs];
 }
 
 function differentLines(holds: string, writes: string): readonly DifferentLine[] {
@@ -246,7 +304,7 @@ function differentLines(holds: string, writes: string): readonly DifferentLine[]
 export function differencesOf(set: CallerSet, present: readonly WorkflowFile[]): readonly Difference[] {
   const held = new Map(present.filter(({ name }) => !isIgnoredWorkflow(name)).map(({ name, text }) => [name, text]));
   const required = requiredSet(set);
-  const byHand = byHandSet(set.kind);
+  const byHand = byHandSet(set);
   const known = new Set([...required, ...byHand].map(({ name }) => name));
   const judged = [...required, ...byHand.filter(({ name }) => held.has(name))];
   const singleJob = holdsSingleJobCi(set, present);

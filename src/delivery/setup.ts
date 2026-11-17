@@ -2,7 +2,7 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { runMain, Usage } from "../core/main.ts";
 import { JSCPD_CONFIG, KNIP_CONFIG, STRYKER_CONFIG } from "./setup-workflow.ts";
-import { callerSetOf, flagMismatchOf, parseSiteNameFlags, readWorkflowFiles, type CallerSet } from "./site-names.ts";
+import { callerSetOf, flagMismatchOf, parseSiteNameFlags, readsPrivatePackage, readWorkflowFiles, type CallerSet } from "./site-names.ts";
 import { byHandSet, requiredSet } from "./workflow-set.ts";
 import { TEMPLATES, VISION_PAGE } from "../docs/doc-templates.ts";
 import { requiresName } from "../docs/doc-vision.ts";
@@ -313,7 +313,7 @@ const setupPackage = Effect.fn("setupPackage")(function* (root: string, isPrivat
 
 const setupWorkflows = Effect.fn("setupWorkflows")(function* (root: string, set: CallerSet) {
   for (const { name, text } of requiredSet(set)) yield* setupFile(root, `.github/workflows/${name}`, text);
-  const mutation = byHandSet(set.kind).find((file) => file.name === "mutation.yml");
+  const mutation = byHandSet(set).find((file) => file.name === "mutation.yml");
   if (mutation !== undefined) yield* setupFile(root, `.github/workflows/${mutation.name}`, mutation.text);
   yield* setupFile(root, "stryker.conf.mjs", STRYKER_CONFIG);
 });
@@ -337,8 +337,12 @@ const argumentsOf = Effect.fn("argumentsOf")(function* (root: string) {
   const callers = (yield* readWorkflowFiles(root)).map(({ workflow }) => workflow);
   const mismatch = flagMismatchOf(callers, parsed.flags);
   if (mismatch !== undefined) return yield* new Usage({ message: mismatch });
-  const set = yield* callerSetOf(callers, parsed.flags, NAME).pipe(Effect.mapError((fault) => new Usage({ message: fault.message })));
-  return { isPrivate: parsed.rest.includes(PRIVATE), set };
+  const isPrivate = parsed.rest.includes(PRIVATE);
+  const set = yield* readsPrivatePackage(root).pipe(
+    Effect.flatMap((heldPrivate) => callerSetOf(callers, parsed.flags, NAME, !isPrivate && !heldPrivate)),
+    Effect.mapError((fault) => new Usage({ message: fault.message })),
+  );
+  return { isPrivate, set };
 });
 
 const check = Effect.gen(function* () {
