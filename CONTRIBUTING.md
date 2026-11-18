@@ -80,7 +80,7 @@ To release a version:
    The release workflow refuses a ref that is not a tag, a tag off `main` or one that disagrees with `package.json`.
    The tag run runs the whole suite, since the release pull request runs no test tiers.
    The release pull request holds current `main` when it merges.
-   A `tested-tree` step fetches the pull request head the squash number names and refuses a landed tree that differs from the tree the pull request tested.
+   A `tested-tree` step fetches the pull request head the squash number names and refuses a landed tree that differs from that head.
    The `release` workflow runs the same check on the tag, so either step rejects a mismatched or unverifiable tree.
    checks-release-publish leaves the version off npm when npm already holds a newer one.
    Once it passes, the workflow creates or updates the GitHub release with the matching `CHANGELOG.md` section.
