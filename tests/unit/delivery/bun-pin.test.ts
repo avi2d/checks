@@ -236,6 +236,13 @@ test("a shared setup step at the short path is not passed unjudged at a tag, a S
   }
 });
 
+test("the local setup action of the full set passes a drifted .bun-version unseen", () => {
+  expect(bunFaults(sharedSetupSteps("./.github/actions/setup"), bunPolicy({ ".bun-version": `${drifted}\n` }))).toEqual([
+    { location: ".github/workflows/ci.yml line 6", fault: `requests bun ${drifted} from .bun-version, want ${FLEET_BUN_VERSION}` },
+  ]);
+  expect(bunFaults(sharedSetupSteps("./.github/actions/setup"), bunPolicy({ ".bun-version": `${FLEET_BUN_VERSION}\n` }))).toEqual([]);
+});
+
 test("the bun pin report names each step and the fleet version", () => {
   const faults = bunFaults(bunSteps(`        with:\n          bun-version: ${drifted}\n`), bunPolicy());
   expect(formatBunPinReport(faults)).toBe(

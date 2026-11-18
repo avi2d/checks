@@ -1,12 +1,27 @@
 import type { CallerOptions, Flake, Pages } from "./caller-options.ts";
-import { DEFAULT_TEST_RUN, RELEASE_TEST_RUN, SITE_BUILD, type RepositoryKind, type TestJob } from "./ci-jobs.ts";
+import { DEFAULT_TEST_RUN, RELEASE_RUN, RELEASE_TEST_RUN, SITE_BUILD, type RepositoryKind, type TestJob } from "./ci-jobs.ts";
 import { SHARED_REPOSITORY } from "./mutation-workflow.ts";
-import { RELEASE_BRANCH_PREFIX } from "./release-commit.ts";
+import { RELEASE_BRANCH_PREFIX } from "../core/release-names.ts";
+import { fullAdvisories, fullFlake, fullRequiredSet } from "./full-set.ts";
 import { MUTATION_WORKFLOW } from "./setup-workflow.ts";
 import { SITE_NAME_KEYS, takesSiteNames, type CallerSet, type SiteNames } from "./site-names.ts";
 
-export function isIgnoredWorkflow(name: string): boolean {
-  return name === "pr-text.yml";
+// The kit publishes through the release.yml that npm's trusted publishing names, so it writes its release files by hand.
+const KIT_OWN = ["release.yml", "release-pr.yml"];
+
+export type Layout = { readonly full: false } | { readonly full: true; readonly kit: boolean };
+
+const CALLERS: Layout = { full: false };
+
+export function isIgnoredWorkflow(name: string, layout: Layout = CALLERS): boolean {
+  return name === "pr-text.yml" || (layout.full && layout.kit && KIT_OWN.includes(name));
+}
+
+// The full set carries neither choice yet, so a repository that takes one keeps the callers.
+export function fullRefusal(set: CallerSet): string | undefined {
+  if (set.options.secretsPack) return "the full set does not unpack a private secrets pack, so keep the callers";
+  if (set.kind === "code" && set.options.checkRelease) return "the full set does not check release pull requests, so keep the callers";
+  return undefined;
 }
 
 export type WorkflowFile = { readonly name: string; readonly text: string };
@@ -102,9 +117,6 @@ const CI = { name: "ci", on: PULL_REQUEST, concurrency: PER_PULL_REQUEST } as co
 const singleJobCaller = (shared: SharedWorkflow, permissions: string): Caller => ({ ...CI, job: "checks", shared, permissions });
 
 const NOT_RELEASED = "needs.changes.outputs.release != 'true'";
-
-// A fork can name its head release/, and a dispatch holds no head_ref, so only the dispatch and the same-repository release/<base> pull request count.
-const RELEASE_RUN = `((github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, '${RELEASE_BRANCH_PREFIX}')) || (github.event_name == 'pull_request' && github.head_ref == format('${RELEASE_BRANCH_PREFIX}{0}', github.base_ref) && github.event.pull_request.head.repo.full_name == github.repository))`;
 
 // A job that needs another skips with it, so only a job that needs none tests the release branch itself.
 const NOT_RELEASE: Condition = {
@@ -228,7 +240,12 @@ const releaseMain = (fullTest: boolean, publishWorkspaces: boolean): Caller => (
   inputs: [...(fullTest ? [["full-test", "true"] as const] : []), ...(publishWorkspaces ? [["publish-workspaces", "true"] as const] : [])],
 });
 
-const codeCallers = (options: CallerOptions): readonly Caller[] => [PR_TITLE, releaseMain(options.fullTest || options.checkRelease, options.publishWorkspaces), RELEASE];
+const codeMain = (options: CallerOptions): Caller => releaseMain(options.fullTest || options.checkRelease, options.publishWorkspaces);
+
+const codeCallers = (options: CallerOptions): readonly Caller[] => [PR_TITLE, codeMain(options), RELEASE];
+
+// The full set ports no npm publish, so a code repository keeps the main.yml caller of release-main.yml.
+const codeMainFile = (options: CallerOptions): WorkflowFile => ({ name: "main.yml", text: callerText(codeMain(options)) });
 
 const filesOf = (callers: readonly Caller[]): readonly WorkflowFile[] => callers.map((caller) => ({ name: `${caller.name}.yml`, text: callerText(caller) }));
 
@@ -274,7 +291,8 @@ const docsFile = ({ build, path }: Pages): WorkflowFile => ({
 
 const MUTATION: WorkflowFile = { name: "mutation.yml", text: MUTATION_WORKFLOW };
 
-export function requiredSet(set: CallerSet): readonly WorkflowFile[] {
+export function requiredSet(set: CallerSet, layout: Layout = CALLERS): readonly WorkflowFile[] {
+  if (layout.full) return fullRequiredSet(set, layout.kit, codeMainFile(set.options));
   return [{ name: "ci.yml", text: composedCiText(set) }, ...filesOf(set.kind === "site" ? siteCallers(set.names) : codeCallers(set.options))];
 }
 
@@ -290,13 +308,17 @@ export function holdsSingleJobCi(set: CallerSet, present: readonly WorkflowFile[
 }
 
 // An optional caller may be absent, but a present one holds exactly this text.
-export function byHandSet(set: CallerSet): readonly WorkflowFile[] {
+export function byHandSet(set: CallerSet, layout: Layout = CALLERS): readonly WorkflowFile[] {
   const { advisoriesCron, flake, pages } = set.options;
   const docs = pages === undefined ? [] : [docsFile(pages)];
+  if (layout.full) {
+    const advisories = fullAdvisories(advisoriesCron);
+    return set.kind === "site" ? [advisories, ...docs] : [advisories, MUTATION, fullFlake(flake, set.options.claudeVersion), ...docs];
+  }
   return set.kind === "site" ? [advisoriesFile(advisoriesCron), ...docs] : [advisoriesFile(advisoriesCron), MUTATION, flakeFile(flake, set.options.claudeVersion), ...docs];
 }
 
-function differentLines(holds: string, writes: string): readonly DifferentLine[] {
+export function differentLines(holds: string, writes: string): readonly DifferentLine[] {
   const held = holds.split("\n");
   const written = writes.split("\n");
   return Array.from({ length: Math.max(held.length, written.length) }, (_, index) => ({ line: index + 1, holds: held[index], writes: written[index] })).filter(
@@ -304,13 +326,14 @@ function differentLines(holds: string, writes: string): readonly DifferentLine[]
   );
 }
 
-export function differencesOf(set: CallerSet, present: readonly WorkflowFile[]): readonly Difference[] {
-  const held = new Map(present.filter(({ name }) => !isIgnoredWorkflow(name)).map(({ name, text }) => [name, text]));
-  const required = requiredSet(set);
-  const byHand = byHandSet(set);
+export function differencesOf(set: CallerSet, present: readonly WorkflowFile[], layout: Layout = CALLERS): readonly Difference[] {
+  const ignored = (name: string): boolean => isIgnoredWorkflow(name, layout);
+  const held = new Map(present.filter(({ name }) => !ignored(name)).map(({ name, text }) => [name, text]));
+  const required = requiredSet(set, layout);
+  const byHand = byHandSet(set, layout);
   const known = new Set([...required, ...byHand].map(({ name }) => name));
   const judged = [...required, ...byHand.filter(({ name }) => held.has(name))];
-  const singleJob = holdsSingleJobCi(set, present);
+  const singleJob = !layout.full && holdsSingleJobCi(set, present);
   return [
     ...judged.flatMap((file): readonly Difference[] => {
       const text = held.get(file.name);
@@ -318,18 +341,17 @@ export function differencesOf(set: CallerSet, present: readonly WorkflowFile[]):
       if (text === file.text || (file.name === "ci.yml" && singleJob)) return [];
       return [{ kind: "differs", name: file.name, lines: differentLines(text, file.text) }];
     }),
-    ...present.filter(({ name }) => !known.has(name) && !isIgnoredWorkflow(name)).map(({ name }): Difference => ({ kind: "extra", name })),
+    ...present.filter(({ name }) => !known.has(name) && !ignored(name)).map(({ name }): Difference => ({ kind: "extra", name })),
   ];
 }
 
 const shown = (text: string | undefined): string => (text === undefined ? "no line" : JSON.stringify(text));
 
-export function differenceLines(directory: string, difference: Difference): readonly string[] {
-  const path = `${directory}/${difference.name}`;
+export function differenceLines(path: string, difference: Difference, written: "caller" | "file" = "caller"): readonly string[] {
   if (difference.kind === "missing") return [`  ${path}: missing`];
-  if (difference.kind === "extra") return [`  ${path}: no workflow of the set, so delete it`];
+  if (difference.kind === "extra") return [`  ${path}: no file of the set, so delete it`];
   return [
-    `  ${path}: differs from the caller checks-workflows writes`,
+    `  ${path}: differs from the ${written} checks-workflows writes`,
     ...difference.lines.map(({ line, holds, writes }) => `    line ${line}: holds ${shown(holds)}, the caller holds ${shown(writes)}`),
   ];
 }

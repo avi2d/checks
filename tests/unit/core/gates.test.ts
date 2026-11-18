@@ -17,6 +17,7 @@ const OUTSIDE_LINT = {
   "checks-docs-only": "src/delivery/docs-only.ts",
   "checks-setup": "src/delivery/setup.ts",
   "checks-workflows": "src/delivery/workflows.ts",
+  "checks-ci": "src/delivery/ci/main.ts",
   "checks-mutation": "src/testing/mutation.ts",
   "checks-mutation-compare": "src/testing/mutation-compare.ts",
   "checks-mutation-baseline": "src/testing/mutation-baseline.ts",

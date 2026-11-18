@@ -4,11 +4,11 @@ audience: consumers
 ---
 # checks-workflows
 
-`checks-workflows` holds a repository's workflow files to the set of shared-workflow callers its kind and its `ci.yml` jobs take, and `--write` writes that set.
+`checks-workflows` holds a repository's workflow files to the caller set its kind and its `ci.yml` jobs take, or to the full set [The full set](#the-full-set) names, and `--write` writes that set.
 
 ## What it checks
 
-Every workflow file in the set calls shared workflows in `avi2d/workflows`, so every step lives there once.
+In the caller set, every workflow file calls shared workflows in `avi2d/workflows`, so every step lives there once.
 `ci.yml` composes the CI parts into jobs that run side by side, as [The composed ci.yml](#the-composed-ciyml) says.
 Every other file is a short caller of one shared workflow.
 A repository with a workflow file that calls `site-ci.yml`, `site-preview.yml`, `site-main.yml`, `site-production.yml` or `preview-remove.yml` from `avi2d/workflows` is a site.
@@ -153,9 +153,40 @@ To add a test job, add a job to `ci.yml` that calls `test.yml` and passes its co
 A single-job `ci.yml` that calls `ci.yml@v3` or `site-ci.yml@v3` still passes.
 It passes until `checks-workflows --write` replaces it with the composed `ci.yml`, and each passing run names that command.
 
+## The full set
+
+`checks-workflows --write --full` writes the full set in place of the callers.
+Each file of the full set holds its own steps, except the callers of `avi2d/workflows` the list below keeps: `mutation.yml`, `docs.yml` and a code repository's `main.yml`.
+Each step that needs more than one plain command runs `bunx checks-ci <command>`, as [checks-ci](checks-ci.md) says.
+`--write --full` also writes the two local actions the workflows use:
+
+| File | Holds |
+| --- | --- |
+| `.github/actions/setup/action.yml` and `bun-without-unzip.sh` | the install of the Bun `.bun-version` pins, through npm where the image holds no unzip, and of the locked dependencies, after the job checks out the repository |
+| the `playwright` action under `.github/actions/` | the install of the Playwright browsers and their system packages, written in a site or when a test job passes `browsers` |
+
+A repository that holds `.github/actions/setup/action.yml` is held to the full set, and `checks-workflows` and `--write` keep it there.
+Any other repository keeps the callers, so a kit bump changes nothing in a repository that has not opted in.
+The full set compares the action files byte for byte too, and names each one that is missing or differs.
+
+The full set holds the files the caller set holds, with these differences:
+
+- `ci.yml` holds the same jobs, and its `checks` job holds no shared job, so branch protection reads `checks`.
+- `pr-title.yml` runs on every push to a pull request and every title edit, and posts the `commitlint` status.
+- On a dispatched run, the `checks` job posts its result as the `checks` status and the title as the `commitlint` status.
+- A job that runs the suite cancels its run when a push to a draft pull request started it.
+  In a site only the jobs that read the build do so, so a draft still gets its preview link.
+- `advisories.yml` and `flake.yml` hold their own steps, and `mutation.yml` and `docs.yml` stay callers.
+- A code repository keeps its `main.yml` caller of `release-main.yml`, since the full set holds no npm publish.
+- The site workflows hold the three site names as the workflow `env` `SITE_PAGES`, `SITE_DOMAIN` and `SITE_PRODUCTION`.
+- The kit itself keeps its own `release.yml` and `release-pr.yml`, since npm's trusted publishing names `release.yml`.
+
+The full set refuses a repository whose `static` job passes `secrets-pack: true`, and a code repository that passes `check-release: true`.
+Each refusal says to keep the callers.
+
 ## What it reads
 
-It reads the `.yml` and `.yaml` files under `.github/workflows/` from the repository root, and the root and workspace `package.json` files.
+It reads the `.yml` and `.yaml` files under `.github/workflows/` and the files under `.github/actions/` from the repository root, and the root and workspace `package.json` files.
 It names the repository by `GITHUB_REPOSITORY`, or by the `origin` remote outside CI.
 
 ## Arguments
@@ -163,6 +194,7 @@ It names the repository by `GITHUB_REPOSITORY`, or by the `origin` remote outsid
 ```sh
 checks-workflows
 checks-workflows --write
+checks-workflows --write --full
 checks-workflows --write --pages acme --domain acme.example --production acme/acme.example
 ```
 
@@ -170,6 +202,7 @@ With `--write` it writes every file of the set, rewrites a present optional call
 It writes `ci.yml` with the jobs the present `ci.yml` holds, in the shape the kit writes.
 A rewrite of a site keeps the three names its callers pass.
 `--pages`, `--domain` and `--production` name a site with no site caller yet, and each replaces the name the callers pass.
+`--full` writes the full set, as [The full set](#the-full-set) says.
 A site write with a missing name, two values of one, or an unparsable name writes nothing.
 It names the fix.
 
@@ -179,7 +212,7 @@ It names the fix.
 | --- | --- |
 | 0 | the workflow files are the set, or `--write` wrote it |
 | 1 | a file of the set is missing or differs, another workflow file appears, the site callers pass none, two values or an unparsable value of a name, or a test job of `ci.yml` passes an unparsable input or holds a fixed job's name |
-| 2 | the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, passes two values of one, or names one that does not parse, or a test job of `ci.yml` passes an unparsable input or holds a fixed job's name |
+| 2 | the full set refuses the repository, the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, passes two values of one, or names one that does not parse, or a test job of `ci.yml` passes an unparsable input or holds a fixed job's name |
 
 ## Sample output
 
@@ -187,7 +220,7 @@ It names the fix.
 workflows: .github/workflows differs from the code set in 2 file(s):
   .github/workflows/ci.yml: differs from the caller checks-workflows writes
     line 10: holds "  cancel-in-progress: false", the caller holds "  cancel-in-progress: true"
-  .github/workflows/pages.yml: no workflow of the set, so delete it
+  .github/workflows/pages.yml: no file of the set, so delete it
   run checks-workflows --write to write the set
 ```
 
@@ -199,6 +232,7 @@ So a pull request that edits a caller or adds a workflow file fails.
 
 ## Related topics
 
+- [checks-ci](checks-ci.md)
 - [checks-ci-wiring](checks-ci-wiring.md)
 - [checks-release-tag](checks-release-tag.md)
 - [checks-production-gate](checks-production-gate.md)

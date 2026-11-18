@@ -209,10 +209,10 @@ The changelog arrives in the release commit, and no workflow pushes to a branch 
 ## A release is cut on demand
 
 The kit releases on demand through a release pull request.
-The release pull request is the one place the full suite runs.
-Merging it tags the release commit, and the tag run publishes it with no test tiers.
+The release pull request runs no test tiers.
+Merging it tags the release commit, and the tag run runs the whole suite before it publishes.
 The release pull request holds current `main` when it merges.
-In this repository, a `tested-tree` step fetches the pull request head the squash number names and refuses a landed tree that differs from the tree the pull request tested.
+In this repository, a `tested-tree` step fetches the pull request head the squash number names and refuses a landed tree that differs from that head.
 Here the release workflow runs the same check on the tag, so either step rejects a mismatched or unverifiable tree.
 A release runs on a schedule only where [checks-ci-wiring](gates/checks-ci-wiring.md#release-schedule) allows it.
 `checks-release-pr` writes only to the `release/<branch>` branch it owns, and rebuilds that branch on `main` rather than merging `main` into it, so the changelog it carries is the one the build writes.

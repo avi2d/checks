@@ -285,25 +285,36 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-async function titleStatusSteps(): Promise<readonly Record<string, unknown>[]> {
-  const workflow: unknown = Bun.YAML.parse(await Bun.file(join(CHECKOUT, ".github", "workflows", "ci.yml")).text());
-  const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
+async function workflowOf(name: string): Promise<Record<string, unknown>> {
+  const workflow: unknown = Bun.YAML.parse(await Bun.file(join(CHECKOUT, ".github", "workflows", name)).text());
+  if (!isRecord(workflow)) throw new Error(`${name} holds no workflow`);
+  return workflow;
+}
+
+async function triggers(name: string): Promise<unknown> {
+  return (await workflowOf(name))["on"];
+}
+
+async function commitlintSteps(name: string): Promise<readonly Record<string, unknown>[]> {
+  const jobs = (await workflowOf(name))["jobs"];
   const steps = isRecord(jobs) ? Object.values(jobs).flatMap((job) => (isRecord(job) && Array.isArray(job["steps"]) ? job["steps"] : [])) : [];
   return steps.filter(
     (step): step is Record<string, unknown> =>
-      isRecord(step) && typeof step["uses"] === "string" && step["uses"].startsWith("avi2d/workflows/actions/commitlint-status@"),
+      isRecord(step) && step["run"] === "bunx checks-ci commit-status" && isRecord(step["env"]) && step["env"]["CONTEXT"] === "commitlint",
   );
 }
 
 test(
-  "the ci job always posts the title outcome as a commitlint status on pull_request and dispatch alike",
+  "a pull request push, a title edit or a dispatched run that leaves the commitlint status unposted fails",
   async () => {
-    const [step, ...others] = await titleStatusSteps();
-    expect(others).toEqual([]);
-    if (step === undefined || !isRecord(step["with"])) throw new Error("no step reports the title outcome");
-    expect(step["if"]).toBe("always()");
-    expect(step["uses"]).toBe("avi2d/workflows/actions/commitlint-status@v2");
-    expect(step["with"]).toEqual({ outcome: "${{ steps.title.outcome }}" });
+    const [onPullRequest, ...othersOnPullRequest] = await commitlintSteps("pr-title.yml");
+    expect(othersOnPullRequest).toEqual([]);
+    expect(onPullRequest).toMatchObject({ if: "always()", env: { JOB_STATUS: "${{ steps.title.outcome }}" } });
+    expect(await triggers("pr-title.yml")).toMatchObject({ pull_request: { types: expect.arrayContaining(["opened", "synchronize", "edited"]) } });
+
+    const [onDispatch, ...othersOnDispatch] = await commitlintSteps("ci.yml");
+    expect(othersOnDispatch).toEqual([]);
+    expect(onDispatch).toMatchObject({ if: "always() && github.event_name == 'workflow_dispatch'", env: { JOB_STATUS: "${{ steps.title.outcome }}" } });
   },
   60_000,
 );

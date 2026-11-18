@@ -16,9 +16,11 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: avi2d/workflows/actions/setup@v2
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup
       - name: fail fast when the release cannot run
         run: bun src/delivery/release-preflight.ts release.yml
   publish:
@@ -28,9 +30,11 @@ jobs:
     steps:
       - name: ref is a tag
         run: test "$GITHUB_REF_TYPE" = tag
-      - uses: avi2d/workflows/actions/setup@v2
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup
       - name: tag is on main
         run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
       - name: landed tree matches the tested pull request tree
@@ -39,6 +43,7 @@ jobs:
       - run: git diff --exit-code
       - run: bun run lint
       - run: bun run typecheck
+      - run: bun run test --full
       - name: tag matches package version
         uses: avi2d/workflows/actions/release-version@v2
       - uses: actions/setup-node@v7
@@ -57,10 +62,11 @@ jobs:
       group: github-release
       cancel-in-progress: false
     steps:
-      - uses: avi2d/workflows/actions/setup@v2
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ github.ref_name }}
           persist-credentials: false
+      - uses: ./.github/actions/setup
       - id: version
         name: read the released version
         uses: avi2d/workflows/actions/release-version@v2

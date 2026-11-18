@@ -16,7 +16,7 @@ A `build` script also requires `git diff --exit-code`.
 The target branch is the pull request base in CI, else the branch `refs/remotes/origin/HEAD` names, else the default branch of the repository in GitHub's event, else `main`.
 A `pull_request` trigger without a branch filter covers every target branch.
 
-A repository whose workflow files are the set [checks-workflows](checks-workflows.md) writes passes this part, since the shared workflows the set calls run every gate.
+A repository whose workflow files are the set [checks-workflows](checks-workflows.md) writes passes this part, since the set runs every gate.
 
 Each command needs its own plain `run` step.
 A step can call a path command through `bun run`.
@@ -100,8 +100,9 @@ The step fails the check when the version is missing or differs from the fleet b
 A range fails because it differs from the fleet version.
 A version built from an expression fails because it cannot be shown equal before the run.
 A step that uses `avi2d/workflows/setup` or `avi2d/workflows/actions/setup`, at any ref or none, reads `.bun-version`.
+So does a step that uses `./.github/actions/setup`, the setup action of the full set [checks-workflows](checks-workflows.md#the-full-set) writes.
 The step fails the check when `.bun-version` is missing or differs from the fleet bun version.
-This rule skips a repository with no setup-bun step and no shared setup step.
+This rule skips a repository with no setup-bun step and no setup step.
 A kit release that moves the fleet version turns each consumer red until its pin follows.
 Each refusal names the workflow file and line, the version found and where it was read, and the fleet version.
 

@@ -166,7 +166,8 @@ A code repository whose `package.json` is not private passes `full-test: true` i
 In a repository whose `ci.yml` is the one [checks-workflows](checks-workflows.md) composes, release checks run when the caller passes `check-release: true`.
 Without it, those checks skip every job but `changes`.
 GitHub also holds the `pull_request` runs of the release pull request for approval, and expires each one at merge as a failure with no job.
-The last step of `pull-request`, `avi2d/workflows/actions/held-runs@v2`, deletes those held runs on the release branch's tip right after the pull request opens or refreshes.
+The last step of `pull-request` deletes those held runs on the release branch's tip right after the pull request opens or refreshes.
+In the full set and in the kit's own `release-pr.yml`, that step runs `bunx checks-ci held-runs`, as [checks-ci](checks-ci.md) says.
 It reads the held runs on that tip every 5 seconds for up to 30 seconds.
 It deletes each held run with the job's token.
 The job grants `actions: write`, and the `contents: write` it grants covers the read the step needs.

@@ -18,10 +18,11 @@ jobs:
       pull-requests: write
       actions: write
     steps:
-      - uses: avi2d/workflows/setup@v1
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
+      - uses: ./.github/actions/setup
       - name: fail fast when the release cannot plan
         run: bun src/delivery/release-preflight.ts release.yml
       - name: open or refresh the release pull request
@@ -29,7 +30,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bun src/delivery/release-pr.ts ci.yml
       - name: delete the held runs on the release head
-        uses: avi2d/workflows/actions/held-runs@v2
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: release/${{ github.ref_name }}
+        run: bunx checks-ci held-runs
   tag:
     if: "github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: release ')"
     runs-on: ubuntu-latest
@@ -38,9 +42,10 @@ jobs:
       contents: write
       actions: write
     steps:
-      - uses: avi2d/workflows/setup@v1
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
+      - uses: ./.github/actions/setup
       - name: landed tree matches the tested pull request tree
         run: bun src/delivery/tested-tree.ts
       - name: tag the release
