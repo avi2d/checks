@@ -2,6 +2,15 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.109.0
+
+Released 2026-11-18.
+
+### Features
+
+- **delivery:** ship checks-ci commands and full workflow files [#171](https://github.com/avi2d/checks/pull/171)
+- **delivery:** support v3.4.0 release callers and workspace publishing [#170](https://github.com/avi2d/checks/pull/170)
+
 ## 0.108.0
 
 Released 2026-11-17.
