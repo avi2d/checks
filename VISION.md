@@ -20,6 +20,11 @@ It owns the judgment of whether a change belongs, and nothing past that judgment
 
 - It allows an untouched file or line to keep passing, it forbids failing what the range leaves alone, and it takes the trade of a slow migration for a gate that never blocks unrelated work.
 
+## The kit is for any public user
+
+- It allows the kit to stay close to the native tools it wraps and flexible in use, it forbids a built-in choice that one project alone wants, and it takes the trade of a setting each repository writes over a default that fits only one.
+- It forbids project-specific names in the kit, so its commands and text read the same for every public user.
+
 ## Scope
 
 - Releasing belongs to the release workflow, and editing belongs to the person or the agent making the change.
