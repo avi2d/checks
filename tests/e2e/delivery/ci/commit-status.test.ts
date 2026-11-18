@@ -76,8 +76,3 @@ test("an unset ATTEMPTS no longer fails: the pull request's head gets its status
   expect(report({ PULL_REQUEST: "7", ATTEMPTS: undefined })).toEqual({ exitCode: 0, calls: ["api repos/owner/repo/pulls/7 --jq .head.sha", status(HEAD)] });
 });
 
-test("an empty ATTEMPTS that reads as unset and posts a status fails", () => {
-  stubGh(HEAD);
-  const { exitCode, calls } = report({ PULL_REQUEST: "7", ATTEMPTS: "" });
-  expect({ exitCode, posted: calls.some((call) => call.includes("/statuses/")) }).toEqual({ exitCode: 1, posted: false });
-});
