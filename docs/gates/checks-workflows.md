@@ -220,7 +220,7 @@ It names the fix.
 workflows: .github/workflows differs from the code set in 2 file(s):
   .github/workflows/ci.yml: differs from the caller checks-workflows writes
     line 10: holds "  cancel-in-progress: false", the caller holds "  cancel-in-progress: true"
-  .github/workflows/pages.yml: no workflow of the set, so delete it
+  .github/workflows/pages.yml: no file of the set, so delete it
   run checks-workflows --write to write the set
 ```
 

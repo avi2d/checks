@@ -15,18 +15,18 @@ Each command runs one step and reads its inputs from the environment the step se
 | `changes` | classifies the change as docs-only, tests-only or full and writes `docs-only` and `tests-only` to `GITHUB_OUTPUT` | `BASE_SHA` |
 | `draft-hold` | cancels its own run when a push to a draft pull request started it, and fails the job when the job outlives the cancel | `DRAFT`, `GH_TOKEN`, `WAIT_SECONDS` |
 | `require-success` | fails unless every job the gate needs passed, or skipped where `SKIPS` allows | `RESULTS`, `SKIPS` |
-| `commit-status` | posts a job's result as a commit status, since GitHub keeps a dispatched run's checks off the pull request | `JOB_STATUS`, `CONTEXT`, `HEAD_SHA`, `PULL_REQUEST`, `DESCRIPTION`, `ATTEMPTS`, `GH_TOKEN` |
+| `commit-status` | posts a job's result as a commit status. `ci.yml` uses it on a dispatched run, and `pr-title.yml` uses it on every pull request event to post the commitlint status | `JOB_STATUS`, `CONTEXT`, `HEAD_SHA`, `PULL_REQUEST`, `DESCRIPTION`, `ATTEMPTS`, `GH_TOKEN` |
 | `held-runs` | deletes the pull request runs GitHub holds for approval on a branch's tip | `BRANCH`, `GH_TOKEN` |
 | `playwright` | installs the browsers `BROWSERS` names with `install`, or their system packages with `install-deps` | `BROWSERS` |
-| `preview-address` | reads the preview address of the branch | the Cloudflare credentials |
-| `preview-deploy` | deploys the preview | the Cloudflare credentials, `ORIGIN` |
-| `preview-comment` | posts the preview link on the pull request | `ORIGIN`, `HEAD_SHA`, `GH_TOKEN` |
-| `preview-remove` | deletes the branch's deployments and says so on the pull request | the Cloudflare credentials, `GH_TOKEN` |
-| `pages-deploy` | deploys the built pages | the Cloudflare credentials |
+| `preview-address` | reads the preview address of the branch | `PROJECT`, `BRANCH`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` |
+| `preview-deploy` | deploys the preview | `PROJECT`, `BRANCH`, `DIRECTORY`, `WRANGLER_VERSION`, `COMMIT_HASH`, `COMMIT_MESSAGE`, `COMMIT_DIRTY`, `ORIGIN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` |
+| `preview-comment` | posts the preview link on the pull request | `PULL_REQUEST`, `MARKER`, `AUTHOR`, `ORIGIN`, `HEAD_SHA`, `GH_TOKEN` |
+| `preview-remove` | deletes the branch's deployments and says so on the pull request | `PROJECT`, `BRANCH`, `PULL_REQUEST`, `MARKER`, `AUTHOR`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `GH_TOKEN` |
+| `pages-deploy` | deploys the built pages | `PROJECT`, `BRANCH`, `DIRECTORY`, `WRANGLER_VERSION`, `COMMIT_HASH`, `COMMIT_MESSAGE`, `COMMIT_DIRTY`, `ADDRESS`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` |
 | `pages-served` | waits until the origin serves every built file as built | `ORIGIN`, `DIRECTORY`, `ATTEMPTS` |
-| `pages-staged-commit` | reads the commit the Pages project serves | the Cloudflare credentials |
-| `pages-publish` | pushes the build to the production repository | `DEPLOY_KEY`, `REPOSITORY`, `SOURCE_SHA` |
-| `lighthouse` | audits each page and writes the median scores to the job summary | `ORIGIN`, `LIGHTHOUSE` |
+| `pages-staged-commit` | reads the commit the Pages project serves | `DEPLOY_KEY`, `PROJECT`, `BRANCH`, `WORKFLOW`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `GH_TOKEN` |
+| `pages-publish` | pushes the build to the production repository | `DEPLOY_KEY`, `SITE_PATH`, `DIRECTORY`, `REPOSITORY`, `CNAME`, `BRANCH`, `COMMIT_MESSAGE`, `SOURCE_SHA` |
+| `lighthouse` | audits each page and writes the median scores to the job summary | `SITE`, `REPORTS`, `RUNS`, `CHROME`, `PAGES`, `ORIGIN`, `LIGHTHOUSE` |
 
 `lighthouse` installs the Lighthouse the kit pins unless `LIGHTHOUSE` names one.
 
@@ -40,6 +40,8 @@ The commands that call GitHub read `GITHUB_REPOSITORY` and `GH_TOKEN`.
 ```sh
 checks-ci <command>
 checks-ci playwright install
+checks-ci pages-publish guard
+checks-ci pages-publish publish
 ```
 
 ## Exit codes
@@ -47,7 +49,7 @@ checks-ci playwright install
 | Code | When |
 | --- | --- |
 | 0 | the step passed |
-| 1 | the step failed, and the failure prints as an `::error::` annotation |
+| 1 | the step failed, and a thrown failure prints as an `::error::` annotation |
 | 2 | the command is not one `checks-ci` takes |
 
 ## Sample output

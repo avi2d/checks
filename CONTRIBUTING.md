@@ -20,8 +20,10 @@ To check a change before opening a pull request:
 Declare each skip with `skipReason(reason, name)` beside the native Bun test call, as [checks-test](docs/gates/checks-test.md) says.
 A test that spawns `checks-lint` passes it `withoutPullRequestEvent()` from `tests/lib/env.ts`, so the CI event cannot decide the range.
 
-CI runs the commands in `.github/workflows/ci.yml` on each pull request, and on the release branch when `release-pr` dispatches it.
-A pull request runs only the tests it reaches, and the release pull request runs the whole suite, as [checks-test](docs/gates/checks-test.md#pull-request-runs) says.
+CI runs the commands in `.github/workflows/ci.yml` on each pull request.
+When `release-pr` dispatches `ci` on the release branch, `static`, `unit` and `e2e` skip and `checks` accepts those skips.
+A pull request runs only the tests it reaches.
+The `release` workflow runs the whole suite with `bun run test --full` before it publishes, as [checks-test](docs/gates/checks-test.md#pull-request-runs) says.
 `.github/workflows/pr-title.yml` lints the pull request title, so editing the title reruns only that.
 No workflow runs on a schedule except the weekly advisory scan, as [checks-ci-wiring](docs/gates/checks-ci-wiring.md#schedules) requires.
 No workflow runs mutation testing except `.github/workflows/mutation.yml`, which calls the shared mutation workflow.
@@ -76,7 +78,7 @@ To release a version:
    Merging it tags the release commit through the `tag` job and dispatches the `release` workflow on the tag.
 1. Watch the `release` workflow.
    The release workflow refuses a ref that is not a tag, a tag off `main` or one that disagrees with `package.json`.
-   The tag run repeats no test tiers, since the whole suite already ran on the release pull request.
+   The tag run runs the whole suite, since the release pull request runs no test tiers.
    The release pull request holds current `main` when it merges.
    A `tested-tree` step fetches the pull request head the squash number names and refuses a landed tree that differs from the tree the pull request tested.
    The `release` workflow runs the same check on the tag, so either step rejects a mismatched or unverifiable tree.

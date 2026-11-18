@@ -1,18 +1,3 @@
-test(
-  "a pull request push, a title edit or a dispatched run that leaves the commitlint status unposted fails",
-  async () => {
-    const [onPullRequest, ...othersOnPullRequest] = await commitlintSteps("pr-title.yml");
-    expect(othersOnPullRequest).toEqual([]);
-    expect(onPullRequest).toMatchObject({ if: "always()", env: { JOB_STATUS: "${{ steps.title.outcome }}" } });
-    expect(await triggers("pr-title.yml")).toMatchObject({ pull_request: { types: expect.arrayContaining(["opened", "synchronize", "edited"]) } });
-
-    const [onDispatch, ...othersOnDispatch] = await commitlintSteps("ci.yml");
-    expect(othersOnDispatch).toEqual([]);
-    expect(onDispatch).toMatchObject({ if: "always() && github.event_name == 'workflow_dispatch'", env: { JOB_STATUS: "${{ steps.title.outcome }}" } });
-  },
-  60_000,
-);
-
 import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { symlink } from "node:fs/promises";
@@ -318,3 +303,18 @@ async function commitlintSteps(name: string): Promise<readonly Record<string, un
       isRecord(step) && step["run"] === "bunx checks-ci commit-status" && isRecord(step["env"]) && step["env"]["CONTEXT"] === "commitlint",
   );
 }
+
+test(
+  "a pull request push, a title edit or a dispatched run that leaves the commitlint status unposted fails",
+  async () => {
+    const [onPullRequest, ...othersOnPullRequest] = await commitlintSteps("pr-title.yml");
+    expect(othersOnPullRequest).toEqual([]);
+    expect(onPullRequest).toMatchObject({ if: "always()", env: { JOB_STATUS: "${{ steps.title.outcome }}" } });
+    expect(await triggers("pr-title.yml")).toMatchObject({ pull_request: { types: expect.arrayContaining(["opened", "synchronize", "edited"]) } });
+
+    const [onDispatch, ...othersOnDispatch] = await commitlintSteps("ci.yml");
+    expect(othersOnDispatch).toEqual([]);
+    expect(onDispatch).toMatchObject({ if: "always() && github.event_name == 'workflow_dispatch'", env: { JOB_STATUS: "${{ steps.title.outcome }}" } });
+  },
+  60_000,
+);

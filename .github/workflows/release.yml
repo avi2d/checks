@@ -43,6 +43,7 @@ jobs:
       - run: git diff --exit-code
       - run: bun run lint
       - run: bun run typecheck
+      - run: bun run test --full
       - name: tag matches package version
         uses: avi2d/workflows/actions/release-version@v2
       - uses: actions/setup-node@v7
