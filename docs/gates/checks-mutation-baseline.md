@@ -207,7 +207,7 @@ It slims the report first:
 
 ```yaml
 - run: bunx checks-mutation-baseline --slim reports/mutation/mutation.json "$RUNNER_TEMP/full/mutation.json"
-- uses: actions/upload-artifact@v4
+- uses: actions/upload-artifact@v7
   with:
     name: mutation-baseline-full
     path: ${{ runner.temp }}/full/

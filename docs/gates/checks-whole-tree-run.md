@@ -162,7 +162,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
@@ -170,7 +170,7 @@ jobs:
       - run: |
           bunx checks-test --tier=live --junit=reports/whole-tree-run-tests/live.xml || true
           bunx checks-test --tier=pixel --junit=reports/whole-tree-run-tests/pixel.xml || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: whole-tree-run-tests
           path: reports/whole-tree-run-tests/
@@ -179,7 +179,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
@@ -187,7 +187,7 @@ jobs:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - run: mkdir -p reports/whole-tree-run-gates && bunx checks-lint --whole-tree > reports/whole-tree-run-gates/gates.log 2>&1 || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: whole-tree-run-gates
           path: reports/whole-tree-run-gates/
@@ -202,28 +202,28 @@ jobs:
       actions: read
       issues: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: mutation-refresh
           path: reports/mutation
       - if: needs.gates.result == 'success'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: whole-tree-run-gates
           path: reports/whole-tree-run-gates
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: whole-tree-run-tests
           path: reports/whole-tree-run-tests
       - env:
           GH_TOKEN: ${{ github.token }}
         run: bunx checks-whole-tree-run --mutation reports/mutation/mutation-refresh/mutation.json --tests reports/whole-tree-run-tests/live.xml --tests reports/whole-tree-run-tests/pixel.xml ${{ needs.gates.result == 'success' && '--gates reports/whole-tree-run-gates/gates.log' || '' }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: whole-tree-run
           path: reports/whole-tree-run.json
