@@ -4,11 +4,11 @@ audience: consumers
 ---
 # checks-workflows
 
-`checks-workflows` holds a repository's workflow files to the set of shared-workflow callers its kind and its `ci.yml` jobs take, and `--write` writes that set.
+`checks-workflows` holds a repository's workflow files to the caller set its kind and its `ci.yml` jobs take, or to the full set [The full set](#the-full-set) names, and `--write` writes that set.
 
 ## What it checks
 
-Every workflow file in the set calls shared workflows in `avi2d/workflows`, so every step lives there once.
+In the caller set, every workflow file calls shared workflows in `avi2d/workflows`, so every step lives there once.
 `ci.yml` composes the CI parts into jobs that run side by side, as [The composed ci.yml](#the-composed-ciyml) says.
 Every other file is a short caller of one shared workflow.
 A repository with a workflow file that calls `site-ci.yml`, `site-preview.yml`, `site-main.yml`, `site-production.yml` or `preview-remove.yml` from `avi2d/workflows` is a site.
