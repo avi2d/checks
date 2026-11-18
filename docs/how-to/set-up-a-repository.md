@@ -137,7 +137,7 @@ To run the four whole-tree gates on demand, a repository adds a whole-tree-run w
        runs-on: ubuntu-latest
        timeout-minutes: 20
        steps:
-         - uses: actions/checkout@v5
+         - uses: actions/checkout@v7
            with:
              fetch-depth: 0
          - uses: oven-sh/setup-bun@v2
