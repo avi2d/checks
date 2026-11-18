@@ -31,9 +31,9 @@ export const main = Effect.gen(function* () {
     context: optional("CONTEXT"),
     headSha: optional("HEAD_SHA"),
     description: optional("DESCRIPTION"),
-    attempts: optional("ATTEMPTS"),
   });
+  const tries = yield* parseAttempts(yield* Config.String("ATTEMPTS").pipe(Config.withDefault("1")));
   const pullRequest = yield* optional("PULL_REQUEST");
-  const headSha = request.headSha === "" && pullRequest !== "" ? yield* pullRequestHead(pullRequest, yield* parseAttempts(request.attempts)) : request.headSha;
-  return yield* reportStatus({ ...request, headSha });
+  const headSha = request.headSha === "" && pullRequest !== "" ? yield* pullRequestHead(pullRequest, tries) : request.headSha;
+  return yield* reportStatus({ ...request, headSha, attempts: tries });
 });
