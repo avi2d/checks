@@ -94,6 +94,7 @@ export function workflowText(workflow: Workflow): string {
 export const HEAD = expression("github.event.pull_request.head.sha || github.sha");
 export const TOKEN: Pair = ["GH_TOKEN", expression("github.token")];
 export const RUNNER = expression("vars.CI_RUNS_ON || 'ubuntu-latest'");
+export const HOSTED = "ubuntu-latest";
 
 export type Checkout = { readonly ref?: string; readonly history?: true; readonly credentials?: true };
 

@@ -1,6 +1,6 @@
 import { type CallerSet } from "../site-names.ts";
 import { type TestJob, TEST_STEP, PLAYWRIGHT_USES, RELEASE_RUN, SITE_BUILD } from "../ci-jobs.ts";
-import { CACHE, UPLOAD, DOWNLOAD, WRANGLER_VERSION, type Step, type Job, type Workflow, expression, scalar, HEAD, TOKEN, RUNNER, checkout, SETUP, ciCommand, DRAFT_HOLD, keepArtifacts, claudeInstall, node24, cloudflare, CLOUDFLARE_SET, ASTRO_QUIET, PREVIEW_PROJECT, PREVIEW_MARKER, siteEnv } from "./steps.ts";
+import { CACHE, UPLOAD, DOWNLOAD, WRANGLER_VERSION, type Step, type Job, type Workflow, expression, scalar, HEAD, TOKEN, HOSTED, checkout, SETUP, ciCommand, DRAFT_HOLD, keepArtifacts, claudeInstall, node24, cloudflare, CLOUDFLARE_SET, ASTRO_QUIET, PREVIEW_PROJECT, PREVIEW_MARKER, siteEnv } from "./steps.ts";
 
 const NOT_RELEASED = "needs.changes.outputs.release != 'true'";
 const NOT_DOCS_ONLY = "needs.changes.outputs.docs-only != 'true'";
@@ -8,7 +8,7 @@ const NOT_TESTS_ONLY = "needs.changes.outputs.tests-only != 'true'";
 
 const changesJob: Job = {
   id: "changes",
-  runsOn: RUNNER,
+  runsOn: HOSTED,
   timeout: 10,
   permissions: ["contents: read"],
   env: [["RELEASE", expression(RELEASE_RUN)]],
@@ -38,7 +38,7 @@ function staticJob(set: CallerSet, kit: boolean): Job {
     id: "static",
     needs: "changes",
     if: NOT_RELEASED,
-    runsOn: RUNNER,
+    runsOn: HOSTED,
     timeout: 20,
     permissions: holdPermissions(hold),
     steps: [
@@ -71,7 +71,7 @@ const siteJob: Job = {
   id: "site",
   needs: "changes",
   if: [NOT_RELEASED, NOT_DOCS_ONLY, NOT_TESTS_ONLY].join(" && "),
-  runsOn: RUNNER,
+  runsOn: HOSTED,
   timeout: 15,
   permissions: ["contents: read", "pull-requests: write"],
   env: [ASTRO_QUIET, CLOUDFLARE_SET],
@@ -176,7 +176,7 @@ function gateJob(set: CallerSet): Job {
     id: "checks",
     needs: "[" + needed.join(", ") + "]",
     if: "always()",
-    runsOn: RUNNER,
+    runsOn: HOSTED,
     timeout: 5,
     permissions: ["contents: read", "statuses: write", "pull-requests: read"],
     steps: [

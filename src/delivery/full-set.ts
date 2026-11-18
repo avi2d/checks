@@ -1,6 +1,6 @@
 import { type CallerSet } from "./site-names.ts";
 import { type Flake } from "./caller-options.ts";
-import { SETUP_NODE, type Step, type Workflow, expression, workflowText, TOKEN, RUNNER, checkout, SETUP, ciCommand, keepArtifacts, claudeInstall } from "./full-set/steps.ts";
+import { SETUP_NODE, type Step, type Workflow, expression, workflowText, TOKEN, RUNNER, HOSTED, checkout, SETUP, ciCommand, keepArtifacts, claudeInstall } from "./full-set/steps.ts";
 import { PULL_REQUEST_HEAD, PULL_REQUEST_NUMBER, BY_HAND, ciWorkflow } from "./full-set/ci.ts";
 import { PREVIEW_CLOSE, SITE_MAIN, PRODUCTION } from "./full-set/site.ts";
 
@@ -11,7 +11,7 @@ const PR_TITLE: Workflow = {
   jobs: [
     {
       id: "title",
-      runsOn: RUNNER,
+      runsOn: HOSTED,
       timeout: 10,
       permissions: ["contents: read", "statuses: write", "pull-requests: read"],
       steps: [
