@@ -15,19 +15,20 @@ function stubGh(pullHead: string): void {
   chmodSync(scratch.at("bin/gh"), 0o755);
 }
 
-function report(inputs: Readonly<Record<string, string>>) {
+function report(inputs: Readonly<Record<string, string | undefined>>) {
+  const env: Record<string, string | undefined> = {
+    PATH: `${scratch.at("bin")}:${process.env["PATH"] ?? ""}`,
+    GITHUB_REPOSITORY: "owner/repo",
+    GITHUB_SHA: RUN_SHA,
+    GITHUB_SERVER_URL: "https://github.com",
+    GITHUB_RUN_ID: "42",
+    JOB_STATUS: "success",
+    CONTEXT: "pr-text",
+    ATTEMPTS: "1",
+    ...inputs,
+  };
   const result = Bun.spawnSync([process.execPath, CI_MAIN, "commit-status"], {
-    env: {
-      PATH: `${scratch.at("bin")}:${process.env["PATH"] ?? ""}`,
-      GITHUB_REPOSITORY: "owner/repo",
-      GITHUB_SHA: RUN_SHA,
-      GITHUB_SERVER_URL: "https://github.com",
-      GITHUB_RUN_ID: "42",
-      JOB_STATUS: "success",
-      CONTEXT: "pr-text",
-      ATTEMPTS: "1",
-      ...inputs,
-    },
+    env: Object.fromEntries(Object.entries(env).filter(([, value]) => value !== undefined)),
   });
   return { exitCode: result.exitCode, calls: scratch.read("calls").trim().split("\n") };
 }
@@ -69,3 +70,14 @@ test("a head read that fails once and posts no status without a retry fails", ()
     calls: ["api repos/owner/repo/pulls/7 --jq .head.sha", "api repos/owner/repo/pulls/7 --jq .head.sha", status(HEAD)],
   });
 }, 30000);
+
+test("an unset ATTEMPTS no longer fails: the pull request's head gets its status with one try", () => {
+  stubGh(HEAD);
+  expect(report({ PULL_REQUEST: "7", ATTEMPTS: undefined })).toEqual({ exitCode: 0, calls: ["api repos/owner/repo/pulls/7 --jq .head.sha", status(HEAD)] });
+});
+
+test("an empty ATTEMPTS that reads as unset and posts a status fails", () => {
+  stubGh(HEAD);
+  const { exitCode, calls } = report({ PULL_REQUEST: "7", ATTEMPTS: "" });
+  expect({ exitCode, posted: calls.some((call) => call.includes("/statuses/")) }).toEqual({ exitCode: 1, posted: false });
+});

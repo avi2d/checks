@@ -1,4 +1,4 @@
-import { Config, Duration, Effect, Schema } from "effect";
+import { Config, ConfigProvider, Duration, Effect, Schema } from "effect";
 import { STATUS_WAIT, reportStatus } from "./lib/commit-status.ts";
 import { parseAttempts } from "./lib/retry.ts";
 import { commandOutput } from "./lib/run.ts";
@@ -31,9 +31,10 @@ export const main = Effect.gen(function* () {
     context: optional("CONTEXT"),
     headSha: optional("HEAD_SHA"),
     description: optional("DESCRIPTION"),
-    attempts: optional("ATTEMPTS"),
   });
+  // The default provider reads an empty ATTEMPTS as unset, so only this read keeps the empty value and fails it.
+  const tries = yield* parseAttempts(yield* Config.String("ATTEMPTS").pipe(Config.withDefault("1")).parse(ConfigProvider.fromEnv({ preserveEmptyStrings: true })));
   const pullRequest = yield* optional("PULL_REQUEST");
-  const headSha = request.headSha === "" && pullRequest !== "" ? yield* pullRequestHead(pullRequest, yield* parseAttempts(request.attempts)) : request.headSha;
-  return yield* reportStatus({ ...request, headSha });
+  const headSha = request.headSha === "" && pullRequest !== "" ? yield* pullRequestHead(pullRequest, tries) : request.headSha;
+  return yield* reportStatus({ ...request, headSha, attempts: tries });
 });

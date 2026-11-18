@@ -1,5 +1,5 @@
 import { Config, Duration, Effect } from "effect";
-import { parseAttempts, retryWithGrowingWait } from "./retry.ts";
+import { retryWithGrowingWait } from "./retry.ts";
 import { commandPasses } from "./run.ts";
 
 export type State = "success" | "failure";
@@ -37,13 +37,12 @@ export type StatusRequest = {
   readonly context: string;
   readonly headSha: string;
   readonly description: string;
-  readonly attempts: string;
+  readonly attempts: number;
 };
 
 export const STATUS_WAIT = Duration.seconds(10);
 
 export const reportStatus = Effect.fn("reportStatus")(function* ({ outcome, context, headSha, description, attempts }: StatusRequest) {
-  const tries = yield* parseAttempts(attempts);
   const run = yield* Config.all({
     repository: Config.String("GITHUB_REPOSITORY"),
     sha: Config.String("GITHUB_SHA"),
@@ -58,5 +57,5 @@ export const reportStatus = Effect.fn("reportStatus")(function* ({ outcome, cont
     description,
     targetUrl: `${run.server}/${run.repository}/actions/runs/${run.runId}`,
   };
-  return yield* retryWithGrowingWait(commandPasses("gh", statusArgs(status)), { attempts: tries, wait: STATUS_WAIT, onRetry: () => Effect.void });
+  return yield* retryWithGrowingWait(commandPasses("gh", statusArgs(status)), { attempts, wait: STATUS_WAIT, onRetry: () => Effect.void });
 });
