@@ -156,7 +156,7 @@ It passes until `checks-workflows --write` replaces it with the composed `ci.yml
 ## The full set
 
 `checks-workflows --write --full` writes the full set in place of the callers.
-Each file of the full set holds its own steps, and no file calls a workflow in `avi2d/workflows`.
+Each file of the full set holds its own steps, except the callers of `avi2d/workflows` the list below keeps: `mutation.yml`, `docs.yml` and a code repository's `main.yml`.
 Each step that needs more than one plain command runs `bunx checks-ci <command>`, as [checks-ci](checks-ci.md) says.
 `--write --full` also writes the two local actions the workflows use:
 
