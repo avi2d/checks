@@ -270,6 +270,20 @@ test("a caller with an input the set cannot carry refuses --write with the input
   expect(await held(repo)).toEqual(["site-ci.yml"]);
 }, 30_000);
 
+test("a test.yml caller with an artifact the set cannot carry refuses --write and writes nothing", async () => {
+  const caller = "name: ci\non: pull_request\njobs:\n  e2e:\n    uses: acme/workflows/.github/workflows/test.yml@v3\n    with:\n      run: bun run test:e2e\n      artifact: dist\n      runs-on: ubuntu-latest\n";
+  const repo = await open({ "package.json": manifest(), ".github/workflows/ci.yml": caller });
+  await repo.commit("start");
+  const before = await text(repo, "ci.yml");
+
+  expect(await workflows(repo, ["--write"])).toEqual({
+    exitCode: 2,
+    text: "workflows: .github/workflows/ci.yml job e2e passes artifact to test.yml, an input the written ci.yml cannot carry, so remove it by hand\n",
+  });
+  expect(await held(repo)).toEqual(["ci.yml"]);
+  expect(await text(repo, "ci.yml")).toBe(before);
+}, 30_000);
+
 test("a test job a person adds to the written ci.yml is refused until --write, which keeps it and makes checks need it", async () => {
   const repo = await open({ "package.json": manifest() });
   await repo.commit("start");

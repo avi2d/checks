@@ -106,6 +106,11 @@ const testJobOf = Effect.fn("testJobOf")(function* (kind: RepositoryKind, path: 
   const held = yield* decodeTestInputs(inputs).pipe(
     Effect.mapError((issue) => new CiJobsFault({ message: `${path} job ${name} passes a test.yml input that does not parse: ${issue.message}` })),
   );
+  if (held.artifact !== undefined && !(kind === "site" && held.artifact === SITE_BUILD)) {
+    return yield* new CiJobsFault({
+      message: `${path} job ${name} passes artifact to test.yml, an input the written ci.yml cannot carry, so remove it by hand`,
+    });
+  }
   return {
     name,
     run: held.run === RELEASE_TEST_RUN ? DEFAULT_TEST_RUN : (held.run ?? DEFAULT_TEST_RUN),

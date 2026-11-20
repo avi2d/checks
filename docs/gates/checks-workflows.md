@@ -163,6 +163,8 @@ It writes `ci.yml` with the jobs the present `ci.yml` holds, in the shape the ki
 A rewrite of a site keeps the three names its workflows hold.
 A job that calls `site-ci.yml`, `site-main.yml`, `site-production.yml`, `site-preview.yml` or `preview-remove.yml` passes the three names in `with`, and `--write` keeps them as the site names.
 A job that calls the shared `test.yml` keeps its `run`, its `browsers` and its `runs-on`.
+In a site, `artifact: site-dist` keeps the job on the `site` build, and any other `artifact` refuses the write.
+The set replaces `hold`, `heavy` and `claude-version`, so `--write` drops them.
 A caller input the set cannot carry refuses the write, and the message names the input.
 `--pages`, `--domain` and `--production` name a site with no site workflow yet, and each replaces the name the workflows hold.
 A site write with a missing name, two values of one, or an unparsable name writes nothing.
