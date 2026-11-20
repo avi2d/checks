@@ -30,7 +30,7 @@ test("a missing report that prints a score of zero fails", () => {
 });
 
 test("a scope line that is read past the SHARDS prefix fails", () => {
-  expect(shardsOf("mutation-scope: shard 1 holds 2 file(s) and about 9 mutant(s)\nSHARDS=[\"src/a.ts,src/b.ts\",\"src/c.ts\"]\n")).toBe('[\"src/a.ts,src/b.ts\",\"src/c.ts\"]');
+  expect(shardsOf("mutation-scope: shard 1 holds 2 file(s) and about 9 mutant(s)\nSHARDS=[\"src/a.ts,src/b.ts\",\"src/c.ts\"]\n")).toBe('["src/a.ts,src/b.ts","src/c.ts"]');
 });
 
 test("a scope output with no SHARDS line that returns an empty shard list fails", () => {
