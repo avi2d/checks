@@ -26,7 +26,7 @@ import { serveSite, type Site } from "./serve.ts";
 import { judgePageWeight, weighPage } from "./weight.ts";
 import { judgeTargets } from "./targets.ts";
 import { reachedRoutes } from "./route-scope.ts";
-import { compareReport, PAGE_OF, planCells, type PagePlan, type PlannedCheckName } from "./schedule.ts";
+import { compareReport, PAGE_OF, planCells } from "./schedule.ts";
 
 const NO_TARGET = "scanned no target";
 
@@ -171,28 +171,19 @@ const now =
 const shared = (read: SharedCheck["read"]): SharedCheck => ({ mode: "shared", alone: false, read });
 const independent = (read: (visiting: Visiting) => Reading, alone = false): PlannedCheck => ({ mode: "independent", read, alone });
 
-const plan = <Name extends PlannedCheckName>(
-  check: Name,
-  read: Name extends "nesting" | "targets" ? (loaded: LoadedVisit) => Reading : (visiting: Visiting) => Reading,
-): PlannedCheck => {
-  const page: PagePlan = PAGE_OF[check];
-  if (page.sharing === "shared") return shared(read as (loaded: LoadedVisit) => Reading);
-  return independent(read as (visiting: Visiting) => Reading, page.alone);
-};
-
 const BUILT_IN: Readonly<Record<CheckName, PlannedCheck>> = {
-  layout: plan("layout", now(layoutRun)),
-  keyboard: plan("keyboard", now(keyboardRun)),
-  motion: plan("motion", now(motionRun)),
-  axe: plan("axe", now(axeRun)),
-  nesting: plan("nesting", now(nestingRun)),
-  html: plan("html", now(htmlRun)),
-  links: plan("links", now(linksRun)),
-  assets: plan("assets", now(assetsRun)),
-  contrast: plan("contrast", now(contrastRun)),
-  weight: plan("weight", now(weightRun)),
-  shift: plan("shift", now(shiftRun)),
-  look: plan("look", lookRun),
+  layout: independent(now(layoutRun), PAGE_OF.layout.alone),
+  keyboard: independent(now(keyboardRun), PAGE_OF.keyboard.alone),
+  motion: independent(now(motionRun), PAGE_OF.motion.alone),
+  axe: independent(now(axeRun), PAGE_OF.axe.alone),
+  nesting: shared(now(nestingRun)),
+  html: independent(now(htmlRun), PAGE_OF.html.alone),
+  links: independent(now(linksRun), PAGE_OF.links.alone),
+  assets: independent(now(assetsRun), PAGE_OF.assets.alone),
+  contrast: independent(now(contrastRun), PAGE_OF.contrast.alone),
+  weight: independent(now(weightRun), PAGE_OF.weight.alone),
+  shift: independent(now(shiftRun), PAGE_OF.shift.alone),
+  look: independent(lookRun, PAGE_OF.look.alone),
 };
 
 type OrderedReading = {
@@ -246,9 +237,9 @@ const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: D
       const visiting = { browser, declaration, visit, url: new URL(visit.route.path, origin).href };
       const reached = selected === undefined || selected.has(visit.route.path);
       return visitCells(visiting, visitIndex, [
-        ...(reached ? [plan("targets", now(targetsRun))] : []),
+        ...(reached ? [shared(now(targetsRun))] : []),
         ...declaration.checks.filter((one) => (reached || one === "look" || one === "links") && applies(one, visit, declaration)).map((check) => BUILT_IN[check]),
-        ...(reached ? hooks.filter((candidate) => hookApplies(candidate, visit)).map((hook) => plan("hook", now((one) => hookRun(hook, one)))) : []),
+        ...(reached ? hooks.filter((candidate) => hookApplies(candidate, visit)).map((hook) => independent(now((one) => hookRun(hook, one)), PAGE_OF.hook.alone)) : []),
       ]);
     });
   const readings = (yield* walkCells(cells, 4)).flat().sort(compareReport);

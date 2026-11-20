@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import { compareReport, PAGE_OF, planCells, type PlannedCheckName } from "../../../src/quality/browser/schedule.ts";
 
+const isPlanned = (name: string): name is PlannedCheckName => Object.hasOwn(PAGE_OF, name);
+
 const scheduled = (names: readonly PlannedCheckName[]) =>
   names.map((name) => {
     const page = PAGE_OF[name];
@@ -16,7 +18,7 @@ test("target discovery and nesting share one load within a visit rather than ope
 });
 
 test("every other check loads its own page rather than joining the shared one", () => {
-  const names = (Object.keys(PAGE_OF) as readonly PlannedCheckName[]).filter((name) => name !== "targets" && name !== "nesting");
+  const names = Object.keys(PAGE_OF).filter(isPlanned).filter((name) => name !== "targets" && name !== "nesting");
   expect(names).toEqual(["layout", "keyboard", "motion", "axe", "html", "links", "assets", "contrast", "weight", "shift", "look", "hook"]);
   expect(names.filter((name) => PAGE_OF[name].alone)).toEqual(["motion", "hook"]);
   for (const name of names) {
