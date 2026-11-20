@@ -238,6 +238,7 @@ It always passes `--mutation`, so a mutation job that failed or timed out leaves
 The download names the artifact by `pattern`, which downloads nothing rather than failing when the artifact is missing.
 The mutation job calls the `mutation.yml` [checks-setup](checks-setup.md) writes, since [checks-ci-wiring](checks-ci-wiring.md#mutation-jobs) refuses a mutation job of the repository's own.
 That workflow splits the full run into shards and uploads the merged report as the `mutation-baseline-full` artifact.
+A whole-tree run's mutation report is used only by that run and does not refresh the baseline.
 It passes `--gates` only when the gates job succeeded, and the failed gates job still fails the run.
 The concurrency group queues a run behind one already going, so two runs never file the same finding twice.
 A dispatch on a branch runs both jobs and lists its findings in the report job's log, and `if-no-files-found: ignore` lets that run upload no record.
