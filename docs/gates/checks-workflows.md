@@ -62,14 +62,14 @@ The files a site takes differ between sites only in the three names, the test jo
 A job that runs the suite cancels its run when a push to a draft pull request started it.
 In a site only the jobs that read the build do so, so a draft still gets its preview link.
 The kit itself keeps its own `release.yml` and `release-pr.yml`, since npm's trusted publishing names `release.yml`.
-The refusal still reads those files.
-Replace such a job with its own steps by hand.
+A job in those files that calls another repository's workflow is still refused.
+Replace it with its own steps by hand.
 
 `pr-text.yml` stays as it is in both kinds.
 It runs on `pull_request_target` and comment events, so no `ci.yml` job replaces it.
 `checks-workflows` never compares it, `--write` neither writes nor deletes it, and it is no extra.
 The refusal of a call to another repository's workflow still reads it.
-Replace such a job with its own steps by hand.
+Replace a job that calls another repository's workflow with its own steps by hand.
 
 An optional file may be absent, but a present one holds exactly the file the set writes.
 A site may hold `advisories.yml` and `docs.yml`.
