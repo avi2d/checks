@@ -40,10 +40,10 @@ jobs:
       # Only the repository secret decides the skip; no pull request value reaches this step.
       - id: pack
         name: write the private pack or skip when none is configured
-        uses: avi2d/workflows/actions/secrets-pack@v2
-        with:
-          pack: ${{ secrets.CHECKS_SECRETS_PACK }}
-          if-missing: skip
+        env:
+          PACK: ${{ secrets.CHECKS_SECRETS_PACK }}
+          IF_MISSING: skip
+        run: bunx checks-ci secrets-pack
       - id: scan
         if: steps.pack.outputs.configured == 'true'
         run: bun src/delivery/pr-text.ts "$NUMBER"

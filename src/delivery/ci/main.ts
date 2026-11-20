@@ -5,6 +5,7 @@ import { runExitMain, UNDECIDED } from "../../core/main.ts";
 import { main as changes } from "./changes.ts";
 import { main as commitStatus } from "./commit-status.ts";
 import { main as draftHold } from "./draft-hold.ts";
+import { main as githubRelease } from "./github-release.ts";
 import { main as heldRuns } from "./held-runs.ts";
 import { runCheck } from "./lib/run.ts";
 import { main as lighthouse } from "./lighthouse/lighthouse.ts";
@@ -17,12 +18,15 @@ import { main as previewAddress } from "./preview-address.ts";
 import { main as previewComment } from "./preview-comment.ts";
 import { main as previewDeploy } from "./preview-deploy.ts";
 import { main as previewRemove } from "./preview-remove.ts";
+import { main as releaseVersion } from "./release-version.ts";
 import { main as requireSuccess } from "./require-success.ts";
+import { main as secretsPack } from "./secrets-pack.ts";
 
 const COMMANDS = {
   changes: () => changes,
   "commit-status": () => commitStatus,
   "draft-hold": () => draftHold,
+  "github-release": () => githubRelease,
   "held-runs": () => heldRuns,
   lighthouse: () => lighthouse,
   "pages-deploy": () => pagesDeploy,
@@ -34,7 +38,9 @@ const COMMANDS = {
   "preview-comment": () => previewComment,
   "preview-deploy": () => previewDeploy,
   "preview-remove": () => previewRemove,
+  "release-version": () => releaseVersion,
   "require-success": () => requireSuccess.pipe(Effect.as(true)),
+  "secrets-pack": () => secretsPack,
 } as const;
 
 const isCommand = (name: string | undefined): name is keyof typeof COMMANDS => name !== undefined && Object.hasOwn(COMMANDS, name);
