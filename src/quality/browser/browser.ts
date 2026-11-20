@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Console, Effect, Path } from "effect";
-import type { Browser } from "playwright-core";
+import type { Browser, Page } from "playwright-core";
 import { runMain, Usage } from "../../core/main.ts";
 import { refuseLocalTests } from "../../core/local-tests.ts";
 import { readRunScope, type RunScope } from "../../core/pull-request-scope.ts";
@@ -36,7 +36,9 @@ type Visiting = {
   readonly url: string;
 };
 
-// Look compares each text with the first of its role in the serial walk, so a cell that reads a page leaves that comparison until every cell has read.
+type LoadedVisit = Pick<Visiting, "declaration" | "visit"> & { readonly page: Page };
+
+// Look needs the first text of each role in visit order, not in completion order.
 type Settle = (firstLooks: FirstLooks) => Run;
 
 const settled = (one: Run): Settle => () => one;
@@ -49,14 +51,12 @@ const run = (check: string, visit: Visit, inventory: readonly string[], found: r
   unverified,
 });
 
-const targetsRun = Effect.fn("targetsRun")(function* ({ browser, declaration, visit, url }: Visiting) {
+const targetsRun = Effect.fn("targetsRun")(function* ({ declaration, visit, page }: LoadedVisit) {
   const targets = targetsOn(declaration, visit.route.path);
-  const { page } = yield* openVisit(browser, visit);
-  yield* load(page, url);
   const { found, visible } = yield* judgeTargets(page, targets);
   const inventory = [...visible].map(([name, count]) => `${name} ${count}`);
   return run("targets", visit, inventory, targets.length === 0 ? [...found, NO_TARGET] : found);
-}, Effect.scoped);
+});
 
 const layoutRun = Effect.fn("layoutRun")(function* ({ browser, declaration, visit, url }: Visiting) {
   const { cdp, page } = yield* openVisit(browser, visit);
@@ -90,12 +90,10 @@ const axeRun = Effect.fn("axeRun")(function* ({ browser, visit, url }: Visiting)
   return run("axe", visit, [`${rules} rule(s)`], rules === 0 ? [...found, "axe ran no rule"] : found, unverified);
 }, Effect.scoped);
 
-const nestingRun = Effect.fn("nestingRun")(function* ({ browser, visit, url }: Visiting) {
-  const { page } = yield* openVisit(browser, visit);
-  yield* load(page, url);
+const nestingRun = Effect.fn("nestingRun")(function* ({ visit, page }: LoadedVisit) {
   const { found, elements } = yield* judgeNesting(page);
   return run("nesting", visit, [`${elements} element(s)`], found);
-}, Effect.scoped);
+});
 
 const htmlRun = Effect.fn("htmlRun")(function* ({ visit, url }: Visiting) {
   const { found } = yield* judgeHtml(url);
@@ -160,28 +158,63 @@ const hookRun = Effect.fn("hookRun")(function* (check: ProductCheck, { browser, 
 
 type Reading = Effect.Effect<Settle, BrowserFailure>;
 
-const now =
-  (check: (visiting: Visiting) => Effect.Effect<Run, BrowserFailure>) =>
-  (visiting: Visiting): Reading =>
-    Effect.map(check(visiting), settled);
+type SharedCheck = { readonly mode: "shared"; readonly read: (loaded: LoadedVisit) => Reading };
+type PlannedCheck = SharedCheck
+  | { readonly mode: "independent"; readonly read: (visiting: Visiting) => Reading; readonly alone: boolean };
 
-const BUILT_IN: Readonly<Record<CheckName, (visiting: Visiting) => Reading>> = {
-  layout: now(layoutRun),
-  keyboard: now(keyboardRun),
-  motion: now(motionRun),
-  axe: now(axeRun),
-  nesting: now(nestingRun),
-  html: now(htmlRun),
-  links: now(linksRun),
-  assets: now(assetsRun),
-  contrast: now(contrastRun),
-  weight: now(weightRun),
-  shift: now(shiftRun),
-  look: lookRun,
+const now =
+  <Input>(check: (input: Input) => Effect.Effect<Run, BrowserFailure>) =>
+  (input: Input): Reading =>
+    Effect.map(check(input), settled);
+
+const shared = (read: SharedCheck["read"]): SharedCheck => ({ mode: "shared", read });
+const independent = (read: (visiting: Visiting) => Reading, alone = false): PlannedCheck => ({ mode: "independent", read, alone });
+
+const BUILT_IN: Readonly<Record<CheckName, PlannedCheck>> = {
+  layout: independent(now(layoutRun)),
+  keyboard: independent(now(keyboardRun)),
+  // Other page loads can delay the motion read until after the transition ends.
+  motion: independent(now(motionRun), true),
+  axe: independent(now(axeRun)),
+  nesting: shared(now(nestingRun)),
+  html: independent(now(htmlRun)),
+  links: independent(now(linksRun)),
+  assets: independent(now(assetsRun)),
+  contrast: independent(now(contrastRun)),
+  weight: independent(now(weightRun)),
+  shift: independent(now(shiftRun)),
+  look: independent(lookRun),
 };
 
-// Motion reads which transitions start in the moment after the pointer moves, and pages loading beside it on a busy machine moved that moment past the read.
-const ALONE: ReadonlySet<CheckName> = new Set(["motion"]);
+type OrderedReading = {
+  readonly visitIndex: number;
+  readonly checkIndex: number;
+  readonly settle: Settle;
+};
+
+const readShared = Effect.fn("readShared")(function* (
+  { browser, declaration, visit, url }: Visiting,
+  visitIndex: number,
+  checks: readonly (SharedCheck & { readonly checkIndex: number })[],
+) {
+  const { page } = yield* openVisit(browser, visit);
+  yield* load(page, url);
+  return yield* Effect.forEach(checks, ({ read, checkIndex }) =>
+    Effect.map(read({ declaration, visit, page }), (settle) => ({ visitIndex, checkIndex, settle })),
+  );
+}, Effect.scoped);
+
+function visitCells(visiting: Visiting, visitIndex: number, checks: readonly PlannedCheck[]): readonly Cell<readonly OrderedReading[], BrowserFailure>[] {
+  const indexed = checks.map((check, checkIndex) => ({ ...check, checkIndex }));
+  const sharedChecks = indexed.filter((check) => check.mode === "shared");
+  const separate = indexed.flatMap((check) =>
+    check.mode === "shared" ? [] : [{
+      reading: Effect.map(check.read(visiting), (settle) => [{ visitIndex, checkIndex: check.checkIndex, settle }]),
+      alone: check.alone,
+    }],
+  );
+  return sharedChecks.length === 0 ? separate : [{ reading: readShared(visiting, visitIndex, sharedChecks), alone: false }, ...separate];
+}
 
 function applies(check: CheckName, visit: Visit, declaration: Declaration): boolean {
   if (!runsIn(visit.state, check)) return false;
@@ -200,18 +233,18 @@ const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: D
   const browser = yield* launchChrome;
   const cells = visitsOf(declaration)
     .filter(({ route }) => !missingRoutes.includes(route.path))
-    .flatMap((visit): readonly Cell<Settle, BrowserFailure>[] => {
+    .flatMap((visit, visitIndex) => {
       const visiting = { browser, declaration, visit, url: new URL(visit.route.path, origin).href };
       const reached = selected === undefined || selected.has(visit.route.path);
-      return [
-        ...(reached ? [{ reading: Effect.map(targetsRun(visiting), settled), alone: false }] : []),
-        ...declaration.checks.filter((one) => (reached || one === "look" || one === "links") && applies(one, visit, declaration)).map((check) => ({ reading: BUILT_IN[check](visiting), alone: ALONE.has(check) })),
-        ...(reached ? hooks.filter((candidate) => hookApplies(candidate, visit)).map((hook) => ({ reading: Effect.map(hookRun(hook, visiting), settled), alone: true })) : []),
-      ];
+      return visitCells(visiting, visitIndex, [
+        ...(reached ? [shared(now(targetsRun))] : []),
+        ...declaration.checks.filter((one) => (reached || one === "look" || one === "links") && applies(one, visit, declaration)).map((check) => BUILT_IN[check]),
+        ...(reached ? hooks.filter((candidate) => hookApplies(candidate, visit)).map((hook) => independent(now((one) => hookRun(hook, one)), true)) : []),
+      ]);
     });
-  const settles = yield* walkCells(cells, 4);
+  const readings = (yield* walkCells(cells, 4)).flat().sort((a, b) => a.visitIndex - b.visitIndex || a.checkIndex - b.checkIndex);
   const firstLooks: FirstLooks = new Map();
-  return { runs: settles.map((settle) => settle(firstLooks)), missingRoutes };
+  return { runs: readings.map(({ settle }) => settle(firstLooks)), missingRoutes };
 }, Effect.scoped);
 
 const USAGE = `usage: ${NAME} [--pr] [<directory>]`;
