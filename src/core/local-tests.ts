@@ -1,12 +1,8 @@
 import { NodeFileSystem, NodePath } from "@effect/platform-node-shared";
-import { Config, Effect, Layer, Schema } from "effect";
+import { Config, Effect, Layer } from "effect";
 import { Usage } from "./main.ts";
 import { AgentTests, decodeSetting, DEFAULT_AGENT_TESTS, loadSettings, SETTINGS_FILE } from "./settings.ts";
 import { AGENT_MARKER, AI_AGENT_MARKER, isAgent } from "./agent-marker.ts";
-
-export class AgentTestsBlocked extends Schema.TaggedError<AgentTestsBlocked>()("AgentTestsBlocked", {
-  message: Schema.String,
-}) {}
 
 const platform = Layer.merge(NodeFileSystem.layer, NodePath.layer);
 
@@ -25,7 +21,7 @@ export const refuseLocalTests = Effect.fn("refuseLocalTests")(function* (root: s
   const ci = yield* Config.Boolean("CI").pipe(Config.withDefault(false), Effect.mapError((cause) => new Usage({ message: cause.message })));
   if (ci) return;
   if (!(yield* allowsLocalAgentTests(root))) {
-    return yield* new AgentTestsBlocked({ message: `${SETTINGS_FILE}: agent tests are blocked outside CI; set agentTests.allowLocal to true to allow them` });
+    return yield* new Usage({ message: `${SETTINGS_FILE}: agent tests are blocked outside CI; set agentTests.allowLocal to true to allow them` });
   }
 });
 

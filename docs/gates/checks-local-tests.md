@@ -23,7 +23,7 @@ An invalid or unreadable config is reported on standard error.
 ## What it reads
 
 It reads `agentTests.allowLocal` from `checks.config.ts` in the current repository.
-If the file or the `agentTests` key is missing, it prints `blocked`.
+If the file, the `agentTests` key or its `allowLocal` key is missing, it prints `blocked`.
 It does not read the environment.
 If the config sets `localTests`, the bin exits 2 and names `agentTests.allowLocal` as the replacement.
 

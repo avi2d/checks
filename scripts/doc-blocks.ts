@@ -2,7 +2,7 @@ import { Effect, Schema } from "effect";
 import { ADR_DIRECTORY, ADR_INDEX, ROOT_FILES } from "../src/docs/doc-rules.ts";
 import { listed, MODES, templateFile, VISION_PAGE } from "../src/docs/doc-templates.ts";
 import { EVERY_REPOSITORY, KIT_GATES, VECTORS, type KitGate } from "../src/core/gates.ts";
-import { AgentTests, SETTINGS_FILE, Settings } from "../src/core/settings.ts";
+import { AgentTests, SETTINGS_FILE, Settings, type SettingKey } from "../src/core/settings.ts";
 import { isDeclaredGate } from "../src/core/stage.ts";
 import { AGENT_NAMES, DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, HISTORY_NAMES, LIVING_NAMES, PROSE_RULES } from "../src/docs/prose-matchers.ts";
 import starter from "../src/quality/browser/browser-checks.json" with { type: "json" };
@@ -35,7 +35,7 @@ const SHIPPED = {
   "stryker.preset.js": "the Stryker mutation-testing preset, which refuses a full run outside CI",
   "tsconfig.effect.json": "the tsconfig fragment with the shared compiler options and the Effect language-service block",
   "ts-reset.d.ts": "the two ts-reset rules `tsconfig.effect.json` lists in `files`",
-  "dist/": "the compiled oxlint plugins, the config builders `@avi2dg/checks/oxlint`, `@avi2dg/checks/knip`, `@avi2dg/checks/dependency-cruiser` and `@avi2dg/checks/stylelint` resolve to, and the doc templates, one template per kind of doc file",
+  "dist/": "the compiled oxlint plugins, the config builders `@avi2dg/checks/oxlint`, `@avi2dg/checks/knip`, `@avi2dg/checks/dependency-cruiser` and `@avi2dg/checks/stylelint` resolve to, the doc templates, one template per kind of doc file, and the JSON Schema of `checks.config.ts`",
 } as const;
 
 type ShippedPath = keyof typeof SHIPPED;
@@ -205,7 +205,7 @@ const PROSE: Block = {
   ],
 };
 
-const SETTING_READERS: Readonly<Record<string, string>> = {
+const SETTING_READERS = {
   smoke: "[checks-test](../gates/checks-test.md)",
   reach: "[checks-test](../gates/checks-test.md#the-reach-map)",
   mutationRunner: "[checks-ci-wiring](../gates/checks-ci-wiring.md)",
@@ -218,12 +218,14 @@ const SETTING_READERS: Readonly<Record<string, string>> = {
   agentTests: "[checks-local-tests](../gates/checks-local-tests.md)",
   "agentTests.allowLocal": "[checks-local-tests](../gates/checks-local-tests.md)",
   testFileMaxSeconds: "[checks-test](../gates/checks-test.md#test-file-time-limit)",
-};
+} satisfies Record<SettingKey | "agentTests.allowLocal", string>;
 
 function settingRow([key, schema]: readonly [string, Schema.Top]): string {
   const annotations = Schema.resolveAnnotations(schema);
   const fallback = annotations?.default === undefined ? "None" : code(JSON.stringify(annotations.default));
-  return `| ${code(key)} | ${fallback} | ${annotations?.description ?? ""} | ${SETTING_READERS[key] ?? ""} |`;
+  const description = annotations?.description;
+  if (description === undefined) throw new Error(`settings-keys: no description for ${key}`);
+  return `| ${code(key)} | ${fallback} | ${description} | ${SETTING_READERS[key as keyof typeof SETTING_READERS] ?? ""} |`;
 }
 
 const SETTINGS: Block = {
