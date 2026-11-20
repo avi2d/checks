@@ -291,6 +291,33 @@ test("a tier run never runs the other tier's files", async () => {
   expect(unit.exitCode).toBe(1);
 });
 
+test("CI rejects slow file setup even when every test passes, but a local run does not enforce the limit", async () => {
+  await consumer(
+    'import { describe, test } from "bun:test";\nawait Bun.sleep(250);\ndescribe("nested", () => { test("passes", () => {}); });\n',
+  );
+  await writeFile(join(dir, "checks.config.ts"), settingsFile({ testFileMaxSeconds: 0.1 }));
+  const args = ["--tier=unit", "--parallel=2"];
+
+  const ci = await checksTest(true, args);
+  expect(ci.exitCode).toBe(1);
+  expect(ci.text).toContain("1 pass");
+  expect(ci.text).toMatch(/tests\/unit\/suite\.test\.ts took [\d.]+s \(limit 0\.1s\)/);
+
+  const local = await checksTest(false, args);
+  expect(local.exitCode).toBe(0);
+  expect(local.text).not.toContain("limit 0.1s");
+});
+
+test("CI refuses a zero file limit instead of treating it as disabled", async () => {
+  await consumer('import { test } from "bun:test";\ntest("does not start", () => {});\n');
+  await writeFile(join(dir, "checks.config.ts"), settingsFile({ testFileMaxSeconds: 0 }));
+
+  const ci = await checksTest(true);
+  expect(ci.exitCode).toBe(2);
+  expect(ci.text).toContain("checks.config.ts key testFileMaxSeconds does not decode");
+  expect(ci.text).not.toContain("1 pass");
+});
+
 async function declareSmoke(smoke: readonly string[]): Promise<void> {
   await writeFile(join(dir, "checks.config.ts"), settingsFile({ smoke }));
 }

@@ -20,7 +20,7 @@ A consuming repository puts each setting in the file its tool reads, and checks.
 | `stylelint.config.ts` | The Baseline target, the token files, the CSS families the repository turns on, and any stylelint rule the repository sets over the kit's families | `checks-frontend-syntax` |
 | `dependency-cruiser.config.ts` | Entry points nothing imports, paths that may import dev dependencies, and import boundaries, when the kit's defaults do not fit | `checks-graphwalk` |
 | `tsconfig.json` | Compiler options, and the Effect language service plugin whose `overrides` and kit severities `checks-effect-scope` writes, keeping every other key | TypeScript and Effect language service |
-| `checks.config.ts` | The settings no tool file owns: `smoke`, `reach`, `mutationRunner`, `selfHostedRunners`, `browser`, `browserRoutes`, `browserBuild`, `copy`, `frontendSyntax` and `localTests` | `checks-test`, `checks-ci-wiring`, `checks-browser`, `checks-copy`, `checks-frontend-syntax`, `checks-lint`, `checks-local-tests`, `checks-flake`, `checks-mutation` and the Bun test preload |
+| `checks.config.ts` | The settings no tool file owns: `smoke`, `reach`, `mutationRunner`, `selfHostedRunners`, `browser`, `browserRoutes`, `browserBuild`, `copy`, `frontendSyntax`, `localTests` and `testFileMaxSeconds` | `checks-test`, `checks-ci-wiring`, `checks-browser`, `checks-copy`, `checks-frontend-syntax`, `checks-lint`, `checks-local-tests`, `checks-flake`, `checks-mutation` and the Bun test preload |
 | `package.json` | `scripts` with the `checks-vendor` arguments in `prepare`, `author` and `contributors` | Bun, `checks-commit-identity` and `checks-vendor` |
 | `bunfig.toml` | Test discovery, quarantine exclusion and the preload that guards agent runs | Bun and `checks-test-layout` |
 | `stryker.conf.mjs` | Mutation settings | Stryker |
@@ -105,6 +105,7 @@ export default defineConfig({
 
 | Key | What it holds | Reader |
 | --- | --- | --- |
+| `testFileMaxSeconds` | the per-file time limit in CI, in seconds, with a default of 300 | [checks-test](../gates/checks-test.md#test-file-time-limit) |
 | `smoke` | the test files a local run adds to the unit tier | [checks-test](../gates/checks-test.md) |
 | `reach` | the tests each changed path a site's import graph misses reaches | [checks-test](../gates/checks-test.md#the-reach-map) |
 | `mutationRunner` | the runner labels of a private repository's mutation jobs | [checks-ci-wiring](../gates/checks-ci-wiring.md) |

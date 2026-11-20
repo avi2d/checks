@@ -5,11 +5,13 @@ export const SETTINGS_FILE = "checks.config.ts";
 
 const MANIFEST = "package.json";
 
-const SETTING_KEYS = ["smoke", "reach", "mutationRunner", "selfHostedRunners", "browser", "browserRoutes", "browserBuild", "copy", "frontendSyntax", "localTests"] as const;
+const SETTING_KEYS = ["smoke", "reach", "mutationRunner", "selfHostedRunners", "browser", "browserRoutes", "browserBuild", "copy", "frontendSyntax", "localTests", "testFileMaxSeconds"] as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[number];
 
 export const LocalTests = Schema.Literals(["blocked", "allowed"]);
+
+export const TestFileMaxSeconds = Schema.Finite.check(Schema.isGreaterThan(0));
 
 export const Smoke = Schema.Array(Schema.NonEmptyString);
 
