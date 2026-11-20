@@ -5,7 +5,7 @@ on:
   workflow_call:
 
 concurrency:
-  group: mutation-refresh
+  group: mutation-${{ github.workflow }}
   cancel-in-progress: true
 
 permissions:
