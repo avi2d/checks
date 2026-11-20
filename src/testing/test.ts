@@ -22,7 +22,7 @@ import {
   type Environment,
   type SkipDeclaration,
 } from "./test-skips.ts";
-import { NAME_SEPARATOR, parseReport, reporterArgs, type TestResult } from "./test-report.ts";
+import { NAME_SEPARATOR, parseReport, ReportError, reporterArgs, type TestResult } from "./test-report.ts";
 
 export type { Environment, SkipDeclaration } from "./test-skips.ts";
 export { scriptOptions, testOptions, type TestOptions } from "../core/test-script.ts";
@@ -378,7 +378,10 @@ const judgeRun = Effect.fn("judgeRun")(function* (
       yield* Console.error(`${NAME}: bun test failed before it wrote a report, so no skip was judged`);
       return false;
     }
-    yield* Console.log(`${NAME}: no test file found or no tests registered`);
+    if ((yield* scanTestFiles(process.cwd())).length > 0) {
+      return yield* new ReportError({ message: `bun test passed but wrote no report to ${outfile}` });
+    }
+    yield* Console.log(`${NAME}: no test file found`);
     return true;
   }
 

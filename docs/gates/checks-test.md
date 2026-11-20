@@ -254,7 +254,7 @@ It refuses test filters because every test excluded by a filter would look skipp
 
 | Code | When |
 | --- | --- |
-| 0 | every test passed, every skip has a matching site reason, and no file exceeds the time limit in CI |
+| 0 | every test passed, every skip has a matching site reason, and no file exceeds the time limit in CI, or no test file was found |
 | 1 | a test failed, a parallel worker crashed, a skip lacks a site reason, a declaration is stale in CI, or a file exceeds the time limit in CI |
 | 2 | an argument is not one it takes, a run outside CI is refused, `APPROVE_SCREENS` is not a boolean in a pixel run, a declaration, the smoke list, or the time limit in CI cannot be read, a `checks` object in `package.json` still sets `smoke` or `reach`, a smoke entry names no runnable test, `CI` is not a boolean, Bun wrote no report, a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` or an agent run is refused while `localTests` is blocked |
 
