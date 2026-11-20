@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect";
 import { RELEASE_BRANCH_PREFIX } from "../core/release-names.ts";
-import { isRecord, workflowJobs, type Workflow } from "./workflow-references.ts";
+import { calledFileOf, isRecord, workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export type RepositoryKind = "code" | "site";
 
@@ -75,6 +75,42 @@ const fullTestJobOf = Effect.fn("fullTestJobOf")(function* (kind: RepositoryKind
   } satisfies TestJob;
 });
 
+const TestInputs = Schema.Struct({
+  run: Schema.optionalKey(Schema.String),
+  browsers: Schema.optionalKey(Schema.String),
+  "runs-on": Schema.optionalKey(Schema.String),
+});
+
+const decodeTestInputs = Schema.decodeUnknownEffect(TestInputs);
+
+const TEST_INPUTS = ["run", "browsers", "runs-on"] as const;
+
+const testJobOf = Effect.fn("testJobOf")(function* (path: string, name: string, job: Readonly<Record<string, unknown>>) {
+  if (!JOB_ID.test(name) || FIXED_JOBS.some((fixed) => fixed === name)) {
+    return yield* new CiJobsFault({ message: `${path} calls test.yml from job ${name}, a name the written ci.yml cannot give a test job, so rename it` });
+  }
+  const inputs = job["with"] ?? {};
+  if (!isRecord(inputs)) {
+    return yield* new CiJobsFault({ message: `${path} job ${name} passes a test.yml input that does not parse, so remove it by hand` });
+  }
+  const extra = Object.keys(inputs).find((input) => !TEST_INPUTS.some((key) => key === input));
+  if (extra !== undefined) {
+    return yield* new CiJobsFault({
+      message: `${path} job ${name} passes ${extra} to test.yml, an input the written ci.yml cannot carry, so remove it by hand`,
+    });
+  }
+  const held = yield* decodeTestInputs(inputs).pipe(
+    Effect.mapError((issue) => new CiJobsFault({ message: `${path} job ${name} passes a test.yml input that does not parse: ${issue.message}` })),
+  );
+  return {
+    name,
+    run: held.run === RELEASE_TEST_RUN ? DEFAULT_TEST_RUN : (held.run ?? DEFAULT_TEST_RUN),
+    browsers: held.browsers ?? "",
+    readsBuild: false,
+    runsOn: held["runs-on"] ?? DEFAULT_RUNNER,
+  } satisfies TestJob;
+});
+
 const holdsTestStep = (job: Readonly<Record<string, unknown>>): boolean => {
   const steps = job["steps"];
   return Array.isArray(steps) && steps.some((step) => isRecord(step) && step["id"] === TEST_STEP);
@@ -87,6 +123,10 @@ const fullCiJobsOf = Effect.fn("fullCiJobsOf")(function* (kind: RepositoryKind, 
   return { tests: yield* Effect.forEach(held, ([name, job]) => fullTestJobOf(kind, ci.path, name, job)) } satisfies CiJobs;
 });
 
+// A ci.yml that calls test.yml records its test jobs in the call, so --write keeps them.
 export const ciJobsOf = Effect.fn("ciJobsOf")(function* (kind: RepositoryKind, ci: Workflow | undefined) {
-  return ci === undefined ? DEFAULT_CI_JOBS[kind] : yield* fullCiJobsOf(kind, ci);
+  if (ci === undefined) return DEFAULT_CI_JOBS[kind];
+  const calls = workflowJobs(ci).flatMap(([name, job]) => (calledFileOf(job["uses"]) === "test.yml" ? [{ name, job }] : []));
+  if (calls.length > 0) return { tests: yield* Effect.forEach(calls, ({ name, job }) => testJobOf(ci.path, name, job)) } satisfies CiJobs;
+  return yield* fullCiJobsOf(kind, ci);
 });

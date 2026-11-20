@@ -3,7 +3,7 @@ import { KIT_PACKAGE_NAME } from "../core/test-script.ts";
 import { callerOptionsOf, type CallerOptions } from "./caller-options.ts";
 import { ciJobsOf, type CiJobs } from "./ci-jobs.ts";
 import { WorkspacePatterns, publicWorkspacesOf } from "./workspace-packages.ts";
-import { isRecord, type Workflow } from "./workflow-references.ts";
+import { calledFileOf, isRecord, workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export const WORKFLOWS = ".github/workflows";
 
@@ -39,6 +39,13 @@ class CallerSetFault extends Schema.TaggedError<CallerSetFault>()("CallerSetFaul
 
 type HeldName = { readonly key: SiteNameKey; readonly value: string; readonly path: string };
 
+const SITE_CALLERS = ["site-ci.yml", "site-main.yml", "site-production.yml", "site-preview.yml", "preview-remove.yml"] as const;
+
+function calledSiteCaller(uses: unknown): string | undefined {
+  const file = calledFileOf(uses);
+  return file !== undefined && (SITE_CALLERS as readonly string[]).includes(file) ? file : undefined;
+}
+
 function writtenNames(workflow: Workflow): readonly HeldName[] {
   const env = isRecord(workflow.document) ? workflow.document["env"] : undefined;
   if (!isRecord(env)) return [];
@@ -48,8 +55,25 @@ function writtenNames(workflow: Workflow): readonly HeldName[] {
   });
 }
 
+function calledNames(workflow: Workflow): readonly HeldName[] {
+  return workflowJobs(workflow)
+    .filter(([, job]) => calledSiteCaller(job["uses"]) !== undefined)
+    .flatMap(([, job]) => {
+      const inputs = job["with"];
+      if (!isRecord(inputs)) return [];
+      return SITE_NAME_KEYS.flatMap((key): readonly HeldName[] => {
+        const value = inputs[key];
+        return typeof value === "string" ? [{ key, value, path: workflow.path }] : [];
+      });
+    });
+}
+
+function heldNames(workflow: Workflow): readonly HeldName[] {
+  return [...writtenNames(workflow), ...calledNames(workflow)];
+}
+
 function holdsSiteWorkflow(workflows: readonly Workflow[]): boolean {
-  return workflows.some((workflow) => writtenNames(workflow).length > 0);
+  return workflows.some((workflow) => writtenNames(workflow).length > 0 || workflowJobs(workflow).some(([, job]) => calledSiteCaller(job["uses"]) !== undefined));
 }
 
 function conflictOf(held: readonly HeldName[]): string | undefined {
@@ -65,7 +89,7 @@ function conflictOf(held: readonly HeldName[]): string | undefined {
 }
 
 export function flagMismatchOf(workflows: readonly Workflow[], flags: SiteNameFlags): string | undefined {
-  const held = workflows.flatMap(writtenNames);
+  const held = workflows.flatMap(heldNames);
   for (const key of SITE_NAME_KEYS) {
     const flag = flags[key];
     if (flag === undefined) continue;
@@ -85,14 +109,36 @@ function flagsOf(keys: readonly SiteNameKey[]): string {
 
 const heldWorkflow = (workflows: readonly Workflow[]) => (name: string) => workflows.find(({ path }) => path === `${WORKFLOWS}/${name}`);
 
+type UncarriedInput = { readonly path: string; readonly name: string; readonly file: string; readonly input: string };
+
+function uncarriedInputs(workflows: readonly Workflow[]): readonly UncarriedInput[] {
+  return workflows.flatMap((workflow) =>
+    workflowJobs(workflow).flatMap(([name, job]) => {
+      const file = calledSiteCaller(job["uses"]);
+      if (file === undefined) return [];
+      const inputs = job["with"];
+      if (!isRecord(inputs)) return [];
+      return Object.keys(inputs)
+        .filter((input) => !SITE_NAME_KEYS.some((key) => key === input))
+        .map((input) => ({ path: workflow.path, name, file, input }));
+    })
+  );
+}
+
 const heldCiJobs = (kind: CallerSet["kind"], workflows: readonly Workflow[]) =>
   ciJobsOf(kind, heldWorkflow(workflows)("ci.yml")).pipe(Effect.mapError((fault) => new CallerSetFault({ message: fault.message })));
 
 export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean) {
   const flagged = SITE_NAME_KEYS.some((key) => flags[key] !== undefined);
   const options = callerOptionsOf(heldWorkflow(workflows), publishes, publishWorkspaces, needsReleaseChecks);
+  const [extra] = uncarriedInputs(workflows);
+  if (extra !== undefined) {
+    return yield* new CallerSetFault({
+      message: `${extra.path} job ${extra.name} passes ${extra.input} to ${extra.file}, an input the written set cannot carry, so remove it by hand`,
+    });
+  }
   if (!holdsSiteWorkflow(workflows) && !flagged) return { kind: "code", ci: yield* heldCiJobs("code", workflows), options } satisfies CallerSet;
-  const held = workflows.flatMap(writtenNames).filter(({ key }) => flags[key] === undefined);
+  const held = workflows.flatMap(heldNames).filter(({ key }) => flags[key] === undefined);
   const conflict = conflictOf(held);
   if (conflict !== undefined) return yield* new CallerSetFault({ message: conflict });
   const named: Partial<Record<SiteNameKey, string>> = { ...Object.fromEntries(held.map(({ key, value }) => [key, value])), ...flags };

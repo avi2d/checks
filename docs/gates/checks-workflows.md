@@ -160,6 +160,9 @@ With `--write` it writes every file of the set and its actions, and rewrites a p
 It deletes every other workflow file except `pr-text.yml`.
 It writes `ci.yml` with the jobs the present `ci.yml` holds, in the shape the kit writes.
 A rewrite of a site keeps the three names its workflows hold.
+A job that calls a shared site workflow passes the three names in `with`, and `--write` keeps them as the site names.
+A job that calls the shared `test.yml` keeps its `run`, its `browsers` and its `runs-on`.
+A caller input the set cannot carry refuses the write, and the message names the input.
 `--pages`, `--domain` and `--production` name a site with no site workflow yet, and each replaces the name the workflows hold.
 A site write with a missing name, two values of one, or an unparsable name writes nothing.
 It names the fix.
@@ -169,8 +172,8 @@ It names the fix.
 | Code | When |
 | --- | --- |
 | 0 | the workflow files are the set, or `--write` wrote it |
-| 1 | a file of the set is missing or differs, another workflow file appears, a job calls a workflow of another repository, the site workflows hold none, two values or an unparsable value of a name, or a test job of `ci.yml` holds an unparsable input or a name a job cannot take |
-| 2 | the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, holds two values of one, or names one that does not parse, or a test job of `ci.yml` holds an unparsable input or a name a job cannot take |
+| 1 | a file of the set is missing or differs, another workflow file appears, a job calls a workflow of another repository, the site workflows hold none, two values or an unparsable value of a name, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, or a caller passes an input the set cannot carry |
+| 2 | the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, holds two values of one, or names one that does not parse, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, or a caller passes an input the set cannot carry |
 
 ## Sample output
 
