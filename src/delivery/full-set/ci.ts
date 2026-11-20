@@ -1,6 +1,6 @@
 import { type CallerSet } from "../site-names.ts";
-import { type TestJob, TEST_STEP, PLAYWRIGHT_USES, RELEASE_RUN, SITE_BUILD, DEFAULT_TEST_RUN, RELEASE_TEST_RUN } from "../ci-jobs.ts";
-import { CACHE, UPLOAD, DOWNLOAD, WRANGLER_VERSION, type Step, type Job, type Workflow, expression, scalar, HEAD, TOKEN, HOSTED, checkout, SETUP, ciCommand, DRAFT_HOLD, keepArtifacts, claudeInstall, node24, cloudflare, CLOUDFLARE_SET, ASTRO_QUIET, PREVIEW_PROJECT, PREVIEW_MARKER, siteEnv } from "./steps.ts";
+import { type TestJob, TEST_STEP, PLAYWRIGHT_USES, RELEASE_RUN, SITE_BUILD, DEFAULT_TEST_RUN, RELEASE_TEST_RUN, runnerOf } from "../ci-jobs.ts";
+import { CACHE, UPLOAD, DOWNLOAD, WRANGLER_VERSION, type Step, type Job, type Workflow, expression, scalar, HEAD, TOKEN, checkout, SETUP, ciCommand, DRAFT_HOLD, keepArtifacts, claudeInstall, node24, cloudflare, CLOUDFLARE_SET, ASTRO_QUIET, PREVIEW_PROJECT, PREVIEW_MARKER, siteEnv } from "./steps.ts";
 
 const NOT_RELEASED = "needs.changes.outputs.release != 'true'";
 const CHECKED_RELEASE = "needs.changes.outputs.check-release == 'true'";
@@ -14,7 +14,7 @@ const notReleased = (set: CallerSet): string => (checksRelease(set) ? "(" + NOT_
 
 const changesJob = (set: CallerSet): Job => ({
   id: "changes",
-  runsOn: HOSTED,
+  runsOn: runnerOf(set.options.publishes),
   timeout: 10,
   permissions: ["contents: read"],
   env: [["RELEASE", expression(RELEASE_RUN)]],
@@ -45,7 +45,7 @@ function staticJob(set: CallerSet, kit: boolean): Job {
     id: "static",
     needs: "changes",
     if: notReleased(set),
-    runsOn: HOSTED,
+    runsOn: runnerOf(set.options.publishes),
     timeout: 20,
     permissions: holdPermissions(hold),
     steps: [
@@ -79,7 +79,7 @@ const siteJob = (set: CallerSet): Job => ({
   id: "site",
   needs: "changes",
   if: [notReleased(set), NOT_DOCS_ONLY, NOT_TESTS_ONLY].join(" && "),
-  runsOn: HOSTED,
+  runsOn: runnerOf(set.options.publishes),
   timeout: 15,
   permissions: ["contents: read", "pull-requests: write"],
   env: [ASTRO_QUIET, CLOUDFLARE_SET],
@@ -186,7 +186,7 @@ function gateJob(set: CallerSet): Job {
     id: "checks",
     needs: "[" + needed.join(", ") + "]",
     if: "always()",
-    runsOn: HOSTED,
+    runsOn: runnerOf(set.options.publishes),
     timeout: 5,
     permissions: ["contents: read", "statuses: write", "pull-requests: read"],
     steps: [

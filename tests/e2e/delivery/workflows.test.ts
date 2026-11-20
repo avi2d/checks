@@ -250,8 +250,8 @@ test("a shared ci.yml that passes hold, artifact and heavy keeps the site browse
   });
   expect(await parsed(repo, "ci.yml")).toMatchObject({
     jobs: {
-      unit: { "runs-on": "ubuntu-latest", steps: expect.arrayContaining([{ id: "test" }]) },
-      browser: { "runs-on": "ubuntu-latest", needs: "site", steps: expect.arrayContaining([{ id: "test" }]) },
+      unit: { "runs-on": "ubuntu-latest", steps: expect.arrayContaining([expect.objectContaining({ id: "test" })]) },
+      browser: { "runs-on": "ubuntu-latest", needs: "site", steps: expect.arrayContaining([expect.objectContaining({ id: "test" })]) },
     },
   });
   await expectNoRemoteCall(repo);

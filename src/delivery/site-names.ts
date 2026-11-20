@@ -125,8 +125,8 @@ function uncarriedInputs(workflows: readonly Workflow[]): readonly UncarriedInpu
   );
 }
 
-const heldCiJobs = (kind: CallerSet["kind"], workflows: readonly Workflow[]) =>
-  ciJobsOf(kind, heldWorkflow(workflows)("ci.yml")).pipe(Effect.mapError((fault) => new CallerSetFault({ message: fault.message })));
+const heldCiJobs = (kind: CallerSet["kind"], workflows: readonly Workflow[], publishes: boolean) =>
+  ciJobsOf(kind, heldWorkflow(workflows)("ci.yml"), publishes).pipe(Effect.mapError((fault) => new CallerSetFault({ message: fault.message })));
 
 export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean) {
   const flagged = SITE_NAME_KEYS.some((key) => flags[key] !== undefined);
@@ -137,7 +137,7 @@ export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readon
       message: `${extra.path} job ${extra.name} passes ${extra.input} to ${extra.file}, an input the written set cannot carry, so remove it by hand`,
     });
   }
-  if (!holdsSiteWorkflow(workflows) && !flagged) return { kind: "code", ci: yield* heldCiJobs("code", workflows), options } satisfies CallerSet;
+  if (!holdsSiteWorkflow(workflows) && !flagged) return { kind: "code", ci: yield* heldCiJobs("code", workflows, publishes), options } satisfies CallerSet;
   const held = workflows.flatMap(heldNames).filter(({ key }) => flags[key] === undefined);
   const conflict = conflictOf(held);
   if (conflict !== undefined) return yield* new CallerSetFault({ message: conflict });
@@ -147,7 +147,7 @@ export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readon
     return yield* new CallerSetFault({ message: `the site workflows name no ${listed(missing)}, so run ${rerun} ${flagsOf(missing)}` });
   }
   const names = yield* decodeSiteNames(named).pipe(Effect.mapError((issue) => new CallerSetFault({ message: `a site name ${issue.message}` })));
-  return { kind: "site", names, ci: yield* heldCiJobs("site", workflows), options } satisfies CallerSet;
+  return { kind: "site", names, ci: yield* heldCiJobs("site", workflows, publishes), options } satisfies CallerSet;
 });
 
 const FLAGS = new Map(SITE_NAME_KEYS.map((key) => [`--${key}`, key]));

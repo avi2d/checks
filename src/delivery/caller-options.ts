@@ -14,6 +14,7 @@ export type CallerOptions = {
   readonly claudeVersion: string | undefined;
   readonly publishWorkspaces: boolean;
   readonly checkRelease: boolean;
+  readonly publishes: boolean;
 };
 
 export const NO_CALLER_OPTIONS: CallerOptions = {
@@ -25,6 +26,7 @@ export const NO_CALLER_OPTIONS: CallerOptions = {
   claudeVersion: undefined,
   publishWorkspaces: false,
   checkRelease: false,
+  publishes: false,
 };
 
 export type HeldWorkflow = (name: string) => Workflow | undefined;
@@ -147,5 +149,6 @@ export function callerOptionsOf(held: HeldWorkflow, publishes: boolean, publishW
     claudeVersion: claudeVersionOf([held("ci.yml"), held("flake.yml")]),
     publishWorkspaces,
     checkRelease: !publishes && needsReleaseChecks,
+    publishes,
   };
 }

@@ -141,7 +141,7 @@ A `ci.yml` with no test job gets the default jobs of its kind:
 | code | `test`, which runs `bunx checks-test --pr` |
 | site | `unit`, which runs `bunx checks-test --pr`, and `browser`, which runs `bunx checks-browser --pr` on `webkit` against the `site-dist` build |
 
-Each default test job runs on `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`, so the `CI_RUNS_ON` variable picks the runner.
+Each default test job runs on `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` in a private repository and on `ubuntu-latest` in a public one, so the `CI_RUNS_ON` variable picks the runner.
 
 To add a test job, copy the `test` job of `ci.yml` under a new name, change the `run` of its step with id `test`, then run `checks-workflows --write`.
 

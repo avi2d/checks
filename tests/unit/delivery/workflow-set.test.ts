@@ -26,6 +26,7 @@ const EVERY_OPTION: CallerSet = {
     claudeVersion: undefined,
     publishWorkspaces: false,
     checkRelease: false,
+    publishes: true,
   },
 };
 
@@ -127,7 +128,7 @@ test("every option lands in the file that uses it, so a pack lint without the se
   expect(stepsOf(jobsOf(documentOf(EVERY_OPTION, "ci.yml"))["static"] ?? {})).toContainEqual(
     expect.objectContaining({ env: { PACK: EXPRESSION + "{{ secrets.CHECKS_SECRETS_PACK }}" }, run: "bunx checks-ci secrets-pack" }),
   );
-  expect(stepsOf(jobsOf(documentOf(EVERY_OPTION, "main.yml"))["release"] ?? {}).map((step) => step["run"])).toContain("bun run test --full");
+  expect(stepsOf(jobsOf(documentOf(EVERY_OPTION, "main.yml"))["suite"] ?? {}).map((step) => step["run"])).toContain("bun run test --full");
   expect(stepsOf(jobsOf(documentOf(CODE, "main.yml"))["release"] ?? {}).map((step) => step["run"])).not.toContain("bun run test --full");
   expect(documentOf(EVERY_OPTION, "advisories.yml")).toMatchObject({ on: { schedule: [{ cron: "21 5 * * 1" }] } });
   expect(stepsOf(jobsOf(documentOf(EVERY_OPTION, "flake.yml"))["flake"] ?? {})).toContainEqual(expect.objectContaining({ with: { "node-version-file": ".node-version" } }));

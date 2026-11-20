@@ -89,7 +89,12 @@ const REPLACED_INPUTS = ["hold", "heavy", "claude-version"] as const;
 
 const CARRIED_INPUTS = ["run", "browsers", "artifact", "runs-on"] as const;
 
-const testJobOf = Effect.fn("testJobOf")(function* (kind: RepositoryKind, path: string, name: string, job: Readonly<Record<string, unknown>>) {
+// The public gate refuses an expression it cannot show hosted, and the private gate refuses a literal it cannot override.
+export const runnerOf = (publishes: boolean): string => (publishes ? "ubuntu-latest" : DEFAULT_RUNNER);
+
+const defaultJobs = (kind: RepositoryKind, runsOn: string): CiJobs => ({ tests: DEFAULT_CI_JOBS[kind].tests.map((test) => ({ ...test, runsOn })) });
+
+const testJobOf = Effect.fn("testJobOf")(function* (kind: RepositoryKind, path: string, name: string, job: Readonly<Record<string, unknown>>, runsOn: string) {
   if (!JOB_ID.test(name) || FIXED_JOBS.some((fixed) => fixed === name)) {
     return yield* new CiJobsFault({ message: `${path} calls test.yml from job ${name}, a name the written ci.yml cannot give a test job, so rename it` });
   }
@@ -116,7 +121,7 @@ const testJobOf = Effect.fn("testJobOf")(function* (kind: RepositoryKind, path: 
     run: held.run === RELEASE_TEST_RUN ? DEFAULT_TEST_RUN : (held.run ?? DEFAULT_TEST_RUN),
     browsers: held.browsers ?? "",
     readsBuild: kind === "site" && held.artifact === SITE_BUILD,
-    runsOn: held["runs-on"] ?? DEFAULT_RUNNER,
+    runsOn: held["runs-on"] ?? runsOn,
   } satisfies TestJob;
 });
 
@@ -126,16 +131,17 @@ const holdsTestStep = (job: Readonly<Record<string, unknown>>): boolean => {
 };
 
 // A written ci.yml marks each test job by the step whose id is test.
-const fullCiJobsOf = Effect.fn("fullCiJobsOf")(function* (kind: RepositoryKind, ci: Workflow) {
+const fullCiJobsOf = Effect.fn("fullCiJobsOf")(function* (kind: RepositoryKind, ci: Workflow, runsOn: string) {
   const held = workflowJobs(ci).filter(([, job]) => holdsTestStep(job));
-  if (held.length === 0) return DEFAULT_CI_JOBS[kind];
+  if (held.length === 0) return defaultJobs(kind, runsOn);
   return { tests: yield* Effect.forEach(held, ([name, job]) => fullTestJobOf(kind, ci.path, name, job)) } satisfies CiJobs;
 });
 
 // A ci.yml that calls test.yml records its test jobs in the call, so --write keeps them.
-export const ciJobsOf = Effect.fn("ciJobsOf")(function* (kind: RepositoryKind, ci: Workflow | undefined) {
-  if (ci === undefined) return DEFAULT_CI_JOBS[kind];
+export const ciJobsOf = Effect.fn("ciJobsOf")(function* (kind: RepositoryKind, ci: Workflow | undefined, publishes: boolean) {
+  const runsOn = runnerOf(publishes);
+  if (ci === undefined) return defaultJobs(kind, runsOn);
   const calls = workflowJobs(ci).flatMap(([name, job]) => (calledFileOf(job["uses"]) === "test.yml" ? [{ name, job }] : []));
-  if (calls.length > 0) return { tests: yield* Effect.forEach(calls, ({ name, job }) => testJobOf(kind, ci.path, name, job)) } satisfies CiJobs;
-  return yield* fullCiJobsOf(kind, ci);
+  if (calls.length > 0) return { tests: yield* Effect.forEach(calls, ({ name, job }) => testJobOf(kind, ci.path, name, job, runsOn)) } satisfies CiJobs;
+  return yield* fullCiJobsOf(kind, ci, runsOn);
 });
