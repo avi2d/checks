@@ -4,11 +4,10 @@ import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
 import { CHECKOUT, fixtureRepos, ran, type FixtureRepo, type Ran } from "../lib/fixture-repo.ts";
+import { expectNoRemoteUses } from "../lib/local-uses.ts";
 
 const SCRIPT = join(CHECKOUT, "src", "delivery", "workflows.ts");
 const SITE_FLAGS = ["--pages", "acme", "--domain", "acme.example", "--production", "acme/acme.example"];
-const REMOTE_CALL = /uses: [\w.-]+\/[\w.-]+\/\.github\/workflows\//;
-
 const open = fixtureRepos("checks-full-set-");
 
 const manifest = JSON.stringify({ name: "acme", scripts: { lint: "oxlint", build: "tsc", typecheck: "tsc --noEmit", test: "bun test" } });
@@ -30,7 +29,7 @@ test("a code write that leaves a job calling another repository's workflow, or a
   expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 4 workflow file(s) of the code set and its 2 action file(s)\n" });
   expect(await listed(repo, ".github/workflows")).toEqual(["ci.yml", "main.yml", "pr-title.yml", "release.yml"]);
   expect(await listed(repo, ".github/actions")).toEqual(["setup", "setup/action.yml", "setup/bun-without-unzip.sh"]);
-  for (const name of await listed(repo, ".github/workflows")) expect(await text(repo, join(".github", "workflows", name))).not.toMatch(REMOTE_CALL);
+  for (const name of await listed(repo, ".github/workflows")) expectNoRemoteUses(name, await text(repo, join(".github", "workflows", name)));
   expect(await parsed(repo, "ci.yml")).toMatchObject({ jobs: { checks: { needs: ["changes", "static", "test"], if: "always()" } } });
   expect(await parsed(repo, "ci.yml")).not.toMatchObject({ jobs: { checks: { uses: expect.anything() } } });
   expect(await parsed(repo, "pr-title.yml")).toMatchObject({ on: { pull_request: { types: ["opened", "synchronize", "reopened", "edited"] } } });
@@ -63,7 +62,7 @@ test("a site write that drops the playwright action, the site workflows or the s
   expect(await workflows(repo, ["--write", ...SITE_FLAGS])).toEqual({ exitCode: 0, text: "workflows: wrote the 6 workflow file(s) of the site set and its 3 action file(s)\n" });
   expect(await listed(repo, ".github/workflows")).toEqual(["ci.yml", "main.yml", "pr-title.yml", "preview-close.yml", "production.yml", "release.yml"]);
   expect(await listed(repo, ".github/actions")).toContain("playwright/action.yml");
-  for (const name of await listed(repo, ".github/workflows")) expect(await text(repo, join(".github", "workflows", name))).not.toMatch(REMOTE_CALL);
+  for (const name of await listed(repo, ".github/workflows")) expectNoRemoteUses(name, await text(repo, join(".github", "workflows", name)));
   expect(await parsed(repo, "production.yml")).toMatchObject({ env: { SITE_PAGES: "acme", SITE_DOMAIN: "acme.example", SITE_PRODUCTION: "acme/acme.example" } });
 
   expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the site set checks-workflows writes\n" });

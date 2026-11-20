@@ -5,6 +5,7 @@ import { Schema } from "effect";
 import { join } from "node:path";
 import { MUTATION_WORKFLOW } from "../../../src/delivery/full-set/mutation.ts";
 import { CHECKOUT, fixtureRepos, ran, scratchDirs, type FixtureRepo } from "../lib/fixture-repo.ts";
+import { expectNoRemoteUses } from "../lib/local-uses.ts";
 
 const open = fixtureRepos("checks-setup-");
 const scratch = scratchDirs();
@@ -431,8 +432,6 @@ expect(privWiring.exitCode).toBe(0);
 60_000,
 );
 
-const REMOTE_CALL = /uses: [\w.-]+\/[\w.-]+\/\.github\/workflows\//;
-
 test(
 "a site repository named by the three flags gains the site workflows with the names in their env and no mutation workflow, and passes checks-workflows without --write",
 async () => {
@@ -441,7 +440,7 @@ const run = await setup(repo, "--pages", "shop", "--domain", "shop.example.com",
 expect(run.exitCode).toBe(0);
 expect(await Bun.file(join(repo.dir, ".github/workflows/mutation.yml")).exists()).toBe(false);
 const ci = await readFile(join(repo.dir, ".github/workflows/ci.yml"), "utf8");
-expect(ci).not.toMatch(REMOTE_CALL);
+expectNoRemoteUses("ci.yml", ci);
 expect(workflowSteps(ci).runs).toContain("bunx checks-ci require-success");
 expect(Bun.YAML.parse(ci)).toMatchObject({ env: { SITE_PAGES: "shop" } });
 expect(Bun.YAML.parse(await readFile(join(repo.dir, ".github/workflows/production.yml"), "utf8"))).toMatchObject({
@@ -477,7 +476,7 @@ const dir = await scratch("mutation-workflow");
 expect((await $`bun ${join(CHECKOUT, "src", "delivery", "setup.ts")}`.cwd(dir).nothrow().quiet()).exitCode).toBe(0);
 const text = await readFile(join(dir, ".github/workflows/mutation.yml"), "utf8");
 expect(text).toBe(MUTATION_WORKFLOW);
-expect(text).not.toMatch(REMOTE_CALL);
+expectNoRemoteUses("mutation.yml", text);
 expect(Bun.YAML.parse(text)).toMatchObject({ on: { workflow_dispatch: null, workflow_call: null } });
 },
 60_000,

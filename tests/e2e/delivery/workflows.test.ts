@@ -4,13 +4,12 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
 import { CHECKOUT, fixtureRepos, ran, type FixtureRepo, type Ran } from "../lib/fixture-repo.ts";
+import { expectNoRemoteUses } from "../lib/local-uses.ts";
 
 const SCRIPT = join(CHECKOUT, "src", "delivery", "workflows.ts");
 const WIRING = join(CHECKOUT, "src", "delivery", "ci-wiring.ts");
 const SITE = { pages: "acme", domain: "acme.example", production: "acme/acme.example" };
 const FLEET_BUN_VERSION = (await readFile(join(CHECKOUT, ".bun-version"), "utf8")).trim();
-const REMOTE_CALL = /uses: [\w.-]+\/[\w.-]+\/\.github\/workflows\//;
-
 const open = fixtureRepos("checks-workflows-");
 
 const manifest = (extra: Readonly<Record<string, unknown>> = {}): string =>
@@ -27,7 +26,7 @@ const text = async (repo: FixtureRepo, name: string): Promise<string> => readFil
 const parsed = async (repo: FixtureRepo, name: string): Promise<unknown> => Bun.YAML.parse(await text(repo, name));
 
 async function expectNoRemoteCall(repo: FixtureRepo): Promise<void> {
-  for (const name of await held(repo)) expect(await text(repo, name)).not.toMatch(REMOTE_CALL);
+  for (const name of await held(repo)) expectNoRemoteUses(name, await text(repo, name));
 }
 
 test("a code repository without workflow files is refused until --write writes ci, pr-title, main, release and the setup action, which ci-wiring then accepts", async () => {

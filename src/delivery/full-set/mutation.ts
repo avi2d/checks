@@ -9,7 +9,8 @@ const prune: Step = { name: "prune superseded baselines", env: [TOKEN], run: "bu
 const MUTATION: Workflow = {
   name: "mutation",
   on: [...BY_HAND, "workflow_call:"],
-  concurrency: "mutation-${{ github.workflow }}",
+  concurrency: "mutation-refresh",
+  cancelInProgress: false,
   env: [["RUNNER_ENVIRONMENT", "github-hosted"]],
   jobs: [
     {

@@ -42,6 +42,7 @@ export type Workflow = {
   readonly name: string;
   readonly on: readonly string[];
   readonly concurrency?: string;
+  readonly cancelInProgress?: boolean;
   readonly env?: readonly Pair[];
   readonly jobs: readonly Job[];
 };
@@ -92,7 +93,8 @@ function jobLines(job: Job): readonly string[] {
 
 export function workflowText(workflow: Workflow): string {
   const lines = ["name: " + workflow.name, "", "on:", ...workflow.on.map((line) => "  " + line), ""];
-  if (workflow.concurrency !== undefined) lines.push("concurrency:", "  group: " + workflow.concurrency, "  cancel-in-progress: true", "");
+  if (workflow.concurrency !== undefined)
+    lines.push("concurrency:", "  group: " + workflow.concurrency, "  cancel-in-progress: " + (workflow.cancelInProgress === false ? "false" : "true"), "");
   lines.push("permissions:", "  contents: read", "");
   if (workflow.env !== undefined) lines.push(...block("", "env", workflow.env), "");
   return [...lines, "jobs:", ...workflow.jobs.flatMap((job, index) => [...(index === 0 ? [] : [""]), ...jobLines(job)]), ""].join("\n");
