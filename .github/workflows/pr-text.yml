@@ -40,7 +40,7 @@ jobs:
       # Only the repository secret decides the skip; no pull request value reaches this step.
       - id: pack
         name: write the private pack or skip when none is configured
-        uses: avi2d/workflows/actions/secrets-pack@v2
+        uses: avi2d/workflows/actions/secrets-pack@v3
         with:
           pack: ${{ secrets.CHECKS_SECRETS_PACK }}
           if-missing: skip
