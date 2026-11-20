@@ -170,12 +170,10 @@
                     },
                     "width": {
                       "type": "integer",
-                      "maximum": 9007199254740991,
                       "exclusiveMinimum": 0
                     },
                     "height": {
                       "type": "integer",
-                      "maximum": 9007199254740991,
                       "exclusiveMinimum": 0
                     },
                     "touch": {
@@ -228,12 +226,10 @@
                   },
                   "width": {
                     "type": "integer",
-                    "maximum": 9007199254740991,
                     "exclusiveMinimum": 0
                   },
                   "height": {
                     "type": "integer",
-                    "maximum": 9007199254740991,
                     "exclusiveMinimum": 0
                   },
                   "touch": {
@@ -288,7 +284,6 @@
                     },
                     "textPx": {
                       "type": "integer",
-                      "maximum": 9007199254740991,
                       "exclusiveMinimum": 0
                     },
                     "reducedMotion": {
@@ -378,7 +373,6 @@
                   },
                   "textPx": {
                     "type": "integer",
-                    "maximum": 9007199254740991,
                     "exclusiveMinimum": 0
                   },
                   "reducedMotion": {
@@ -583,17 +577,14 @@
           "properties": {
             "nonImageBytes": {
               "type": "integer",
-              "maximum": 9007199254740991,
               "exclusiveMinimum": 0
             },
             "scriptBytes": {
               "type": "integer",
-              "maximum": 9007199254740991,
               "exclusiveMinimum": 0
             },
             "imageBytes": {
               "type": "integer",
-              "maximum": 9007199254740991,
               "exclusiveMinimum": 0
             }
           },
