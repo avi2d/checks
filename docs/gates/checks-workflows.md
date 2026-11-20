@@ -75,7 +75,7 @@ Each optional file keeps what the file it replaces does:
 | File | Starts on | Keeps |
 | --- | --- | --- |
 | `advisories.yml` | `workflow_dispatch` | its `schedule` cron when it holds exactly one and that one is weekly, such as `"21 5 * * 1"`, and drops any other schedule |
-| `mutation.yml` | `workflow_dispatch` | nothing, since it is the same in every code repository: it splits the tree into shards, runs each shard, merges the reports and keeps the merged report as the baseline |
+| `mutation.yml` | `workflow_dispatch` and `workflow_call` | nothing, since it is the same in every code repository: it splits the tree into shards, runs each shard, merges the reports and keeps the merged report as the baseline |
 | `flake.yml` | `workflow_dispatch` | the `node-version-file` an `actions/setup-node` step sets up |
 | `docs.yml` | a push to `main` and `workflow_dispatch` | the one `run` step and the `actions/upload-pages-artifact` path of the job that uploads the site |
 
