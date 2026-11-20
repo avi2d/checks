@@ -215,9 +215,9 @@ const readShared = Effect.fn("readShared")(function* (
 
 function visitCells(visiting: Visiting, visitIndex: number, checks: readonly PlannedCheck[]): readonly Cell<readonly OrderedReading[], BrowserFailure>[] {
   const indexed = checks.map((check, checkIndex) => ({ ...check, checkIndex }));
-  const { shared, separate } = planCells(indexed);
+  const { shared: sharedChecks, separate } = planCells(indexed);
   return [
-    ...(shared.length === 0 ? [] : [{ reading: readShared(visiting, visitIndex, shared), alone: false }]),
+    ...(sharedChecks.length === 0 ? [] : [{ reading: readShared(visiting, visitIndex, sharedChecks), alone: false }]),
     ...separate.map((check) => ({
       reading: Effect.map(check.read(visiting), (settle) => [{ visitIndex, checkIndex: check.checkIndex, settle }]),
       alone: check.alone,
