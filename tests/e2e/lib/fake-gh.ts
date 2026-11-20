@@ -209,6 +209,7 @@ function releasesApi(state: FakeState, method: string, route: string, body: Body
 }
 
 async function answerOf(origin: string, state: FakeState, method: string, route: string, body: Body): Promise<Answer | "missing" | undefined> {
+  if (method === "GET" && route === "") return { state, body: { default_branch: "main" } };
   const released = releasesApi(state, method, route, body);
   if (released !== undefined) return released;
   const fromGit = await gitApi(origin, method, route, body);
@@ -235,13 +236,13 @@ async function main(): Promise<number> {
   const recorded = decodeState(await readFile(statePath, "utf8"));
   const state = { ...recorded, calls: [...recorded.calls, `${method} ${endpoint}`] };
   await writeFile(statePath, JSON.stringify(state));
-  if (command !== "api" || !endpoint.startsWith(REPOSITORY)) return refuse(`fake gh: unknown call ${process.argv.slice(2).join(" ")}`);
+  if (command !== "api" || !(endpoint.startsWith(REPOSITORY) || endpoint === REPOSITORY.slice(0, -1))) return refuse(`fake gh: unknown call ${process.argv.slice(2).join(" ")}`);
   if (process.env["FAKE_GH_FAIL"] === `${method} ${endpoint}`) return refuse("gh: Resource not accessible by integration (HTTP 403)");
   const failRunsTimes = Number(process.env["FAKE_GH_FAIL_RUNS_TIMES"] ?? "0");
   if (method === "GET" && endpoint.startsWith(`${REPOSITORY}actions/runs`) && state.calls.slice(state.calls.findLastIndex((call) => call.endsWith("/dispatches"))).filter((call) => call.startsWith("GET repos/{owner}/{repo}/actions/runs")).length <= failRunsTimes)
     return refuse("gh: HTTP 502: Bad Gateway");
   const body = rest.includes("--input") ? decodeBody(await Bun.stdin.text()) : {};
-  const route = endpoint.slice(REPOSITORY.length);
+  const route = endpoint.startsWith(REPOSITORY) ? endpoint.slice(REPOSITORY.length) : "";
   if (await isForcedOver(origin, method, route, body)) return refuse("gh: Update is not a fast forward (HTTP 422)");
   const answer = await answerOf(origin, state, method, route, body);
   if (answer === "missing") return refuse("gh: Not Found (HTTP 404)");
