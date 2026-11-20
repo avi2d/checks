@@ -43,6 +43,7 @@ It reads the `v*` tags, the commit subjects since the last one, `package.json` a
 It also reads each workspace `package.json` and each caller of `release-main.yml` for the workspace publishing opt-in.
 It names the workflow it runs in by `GITHUB_WORKFLOW`, or as `release-pr` when that is unset.
 It refuses a shallow checkout, a detached `HEAD` and a working tree with changes to tracked files.
+It reads the default branch from the GitHub repository and refuses any other branch unless `--allow-non-default-branch` is passed.
 It reads the release branch from `origin` with `git ls-remote` and `git fetch`.
 It calls the GitHub API through `gh api`, which takes the repository from the checkout's remote and the token from `GH_TOKEN`.
 The token needs `contents: write`, `pull-requests: write` and `actions: write`.
@@ -51,10 +52,12 @@ The repository needs **Allow GitHub Actions to create and approve pull requests*
 ## Arguments
 
 ```sh
-checks-release-pr <workflow>...
+checks-release-pr [--allow-non-default-branch] <workflow>...
 ```
 
-Each argument names a workflow file under `.github/workflows/` whose jobs report the checks the default branch requires, such as `ci.yml`.
+Pass `--help` or `-h` to print usage without calling git or GitHub.
+Pass `--allow-non-default-branch` to plan a release from the current branch when it is not the default branch.
+Each workflow argument names a file under `.github/workflows/` whose jobs report the checks the default branch requires, such as `ci.yml`.
 Each named workflow triggers on `workflow_dispatch`.
 Name no workflow that runs something else on dispatch, such as a mutation refresh.
 
@@ -62,7 +65,7 @@ Name no workflow that runs something else on dispatch, such as a mutation refres
 
 | Code | When |
 | --- | --- |
-| 0 | nothing is unreleased, or the release pull request is open on the current `HEAD` and its checks are dispatched |
+| 0 | help was printed, nothing is unreleased, or the release pull request is open on the current `HEAD` and its checks are dispatched |
 | 2 | the arguments do not parse, a refusal above applies, the build fails, or a GitHub API call fails |
 
 ## Sample output
