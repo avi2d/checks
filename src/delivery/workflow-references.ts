@@ -94,14 +94,25 @@ function isPathTo(word: string, files: readonly string[]): boolean {
   return files.some((file) => word.endsWith(`/${file}`));
 }
 
+const RELEASE_PR_OPTIONS = new Set(["--allow-non-default-branch", "--help", "-h"]);
+
+function isReleasePr(word: string): boolean {
+  return word === "checks-release-pr" || word === "release-pr.ts" || isPathTo(word, ["checks-release-pr", "release-pr.ts"]);
+}
+
 function releaseArguments(program: Command): readonly string[] {
   const [head, target, entry] = program;
-  if (head !== undefined && (RELEASE_BINS.includes(head) || isPathTo(head, RELEASE_BINS))) return program.slice(1);
+  if (head !== undefined && (RELEASE_BINS.includes(head) || isPathTo(head, RELEASE_BINS))) {
+    const args = program.slice(1);
+    return isReleasePr(head) ? args.filter((arg) => !RELEASE_PR_OPTIONS.has(arg)) : args;
+  }
   if (head === "bun" && target === "run" && entry !== undefined && (RELEASE_SOURCES.includes(entry) || isPathTo(entry, [...RELEASE_SOURCES, ...RELEASE_BINS]))) {
-    return program.slice(3);
+    const args = program.slice(3);
+    return isReleasePr(entry) ? args.filter((arg) => !RELEASE_PR_OPTIONS.has(arg)) : args;
   }
   if (head === "bun" && target !== undefined && (RELEASE_SOURCES.includes(target) || isPathTo(target, [...RELEASE_SOURCES, ...RELEASE_BINS]))) {
-    return program.slice(2);
+    const args = program.slice(2);
+    return isReleasePr(target) ? args.filter((arg) => !RELEASE_PR_OPTIONS.has(arg)) : args;
   }
   return [];
 }

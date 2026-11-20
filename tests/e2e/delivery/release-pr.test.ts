@@ -139,7 +139,7 @@ test(
     expect(again.text).toContain(`release-pr: https://github.com/acme/widget/pull/1 releases 0.1.1 from ${(await head(widget.dir)).slice(0, 12)} and is current\n`);
     expect(again.exitCode).toBe(0);
     const after = await widget.state();
-    expect(after.calls.slice(before.calls.length)).toEqual(["GET repos/{owner}/{repo}/pulls?head={owner}:release%2Fmain&base=main&state=open"]);
+    expect(after.calls.slice(before.calls.length)).toEqual(["GET repos/{owner}/{repo}", "GET repos/{owner}/{repo}/pulls?head={owner}:release%2Fmain&base=main&state=open"]);
     expect(after.dispatches).toEqual(before.dispatches);
   },
   60_000,
@@ -183,6 +183,7 @@ test(
     expect(retried.exitCode).toBe(0);
     const after = await widget.state();
     expect(after.calls.slice(before.calls.length)).toEqual([
+      "GET repos/{owner}/{repo}",
       "GET repos/{owner}/{repo}/pulls?head={owner}:release%2Fmain&base=main&state=open",
       "POST repos/{owner}/{repo}/pulls",
       "POST repos/{owner}/{repo}/actions/workflows/ci.yml/dispatches",
@@ -200,7 +201,7 @@ test(
     await $`git tag v0.1.1`.cwd(widget.dir).quiet();
 
     expect(await widget.run(["ci.yml"])).toEqual({ exitCode: 0, text: "release-pr: no unreleased changes since v0.1.1\n" });
-    expect((await widget.state()).calls).toEqual([]);
+    expect((await widget.state()).calls).toEqual(["GET repos/{owner}/{repo}"]);
   },
   60_000,
 );
@@ -215,7 +216,7 @@ test(
     const refused = await widget.run(["ci.yml"], { GITHUB_WORKFLOW: "daily-release" });
     expect(refused.exitCode).toBe(2);
     expect(refused.text).toContain("rerun the tag job of daily-release on the release commit, whose refusal says what to fix");
-    expect((await widget.state()).calls).toEqual([]);
+    expect((await widget.state()).calls).toEqual(["GET repos/{owner}/{repo}"]);
   },
   60_000,
 );
@@ -239,11 +240,11 @@ test(
     await $`git checkout -q -- CHANGELOG.md && git checkout -q --detach`.cwd(widget.dir).quiet();
     const detached = await widget.run(["ci.yml"]);
     expect(detached.exitCode).toBe(2);
-    expect(detached.text).toContain("checks-release-pr: HEAD is detached; check out the branch the release goes to");
+    expect(detached.text).toContain("checks-release-pr: git symbolic-ref --quiet --short HEAD");
 
     const usage = await widget.run([]);
     expect(usage.exitCode).toBe(2);
-    expect(usage.text).toContain("usage: release-pr.ts <workflow>...");
+    expect(usage.text).toContain("usage: checks-release-pr [--allow-non-default-branch] <workflow>...");
 
     expect((await widget.state()).calls.filter((call) => !call.startsWith("GET "))).toEqual([]);
     expect(await widget.inOrigin("for-each-ref", "--format=%(refname)", "refs/heads/release/")).toBe("");
