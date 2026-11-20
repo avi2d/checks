@@ -2,7 +2,7 @@ import { Effect, Schema } from "effect";
 import { ADR_DIRECTORY, ADR_INDEX, ROOT_FILES } from "../src/docs/doc-rules.ts";
 import { listed, MODES, templateFile, VISION_PAGE } from "../src/docs/doc-templates.ts";
 import { EVERY_REPOSITORY, KIT_GATES, VECTORS, type KitGate } from "../src/core/gates.ts";
-import { SETTINGS_FILE } from "../src/core/settings.ts";
+import { AgentTests, SETTINGS_FILE, Settings, type SettingKey } from "../src/core/settings.ts";
 import { isDeclaredGate } from "../src/core/stage.ts";
 import { AGENT_NAMES, DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, HISTORY_NAMES, LIVING_NAMES, PROSE_RULES } from "../src/docs/prose-matchers.ts";
 import starter from "../src/quality/browser/browser-checks.json" with { type: "json" };
@@ -35,7 +35,7 @@ const SHIPPED = {
   "stryker.preset.js": "the Stryker mutation-testing preset, which refuses a full run outside CI",
   "tsconfig.effect.json": "the tsconfig fragment with the shared compiler options and the Effect language-service block",
   "ts-reset.d.ts": "the two ts-reset rules `tsconfig.effect.json` lists in `files`",
-  "dist/": "the compiled oxlint plugins, the config builders `@avi2dg/checks/oxlint`, `@avi2dg/checks/knip`, `@avi2dg/checks/dependency-cruiser` and `@avi2dg/checks/stylelint` resolve to, and the doc templates, one template per kind of doc file",
+  "dist/": "the compiled oxlint plugins, the config builders `@avi2dg/checks/oxlint`, `@avi2dg/checks/knip`, `@avi2dg/checks/dependency-cruiser` and `@avi2dg/checks/stylelint` resolve to, the doc templates, one template per kind of doc file, and the JSON Schema of `checks.config.ts`",
 } as const;
 
 type ShippedPath = keyof typeof SHIPPED;
@@ -113,7 +113,7 @@ export const kitFacts = (manifest: string): Effect.Effect<KitFacts, DocBlocksUnw
 export type Block = {
   readonly name: string;
   readonly from: readonly string[];
-  readonly render: (facts: KitFacts) => readonly string[];
+  readonly render: (facts: KitFacts) => Effect.Effect<readonly string[], DocBlocksUnwritable>;
 };
 
 function code(text: string): string {
@@ -124,22 +124,24 @@ export function optInInstall(names: readonly string[]): Block {
   return {
     name: "install",
     from: [MANIFEST],
-    render: ({ manifest }) => [
-      "```sh",
-      ["bun add -d", ...names.toSorted().map((name) => `${name}@${manifest.peerDependencies[name] ?? ""}`)].join(" "),
-      "```",
-    ],
+    render: ({ manifest }) =>
+      Effect.succeed([
+        "```sh",
+        ["bun add -d", ...names.toSorted().map((name) => `${name}@${manifest.peerDependencies[name] ?? ""}`)].join(" "),
+        "```",
+      ]),
   };
 }
 
 const UPGRADE_INSTALL: Block = {
   name: "install",
   from: [MANIFEST],
-  render: ({ manifest }) => [
-    "```sh",
-    ["bun add -d", ...Object.keys(manifest.peerDependencies).filter((name) => manifest.peerDependenciesMeta?.[name]?.optional !== true).toSorted().map((name) => `${name}@${manifest.peerDependencies[name] ?? ""}`)].join(" "),
-    "```",
-  ],
+  render: ({ manifest }) =>
+    Effect.succeed([
+      "```sh",
+      ["bun add -d", ...Object.keys(manifest.peerDependencies).filter((name) => manifest.peerDependenciesMeta?.[name]?.optional !== true).toSorted().map((name) => `${name}@${manifest.peerDependencies[name] ?? ""}`)].join(" "),
+      "```",
+    ]),
 };
 
 const READS = { tree: "the working tree", range: "the range" } as const;
@@ -147,9 +149,10 @@ const READS = { tree: "the working tree", range: "the range" } as const;
 const GATES: Block = {
   name: "gates",
   from: ["KIT_GATES in src/core/gates.ts", "src/core/stage.ts"],
-  render: () => [
-    "| Vector | Gate | Reads | Runs in | Stage |",
-    "| --- | --- | --- | --- | --- |",
+  render: () =>
+    Effect.succeed([
+      "| Vector | Gate | Reads | Runs in | Stage |",
+      "| --- | --- | --- | --- | --- |",
     ...KIT_GATES.toSorted((a, b) => VECTORS.indexOf(a.vector) - VECTORS.indexOf(b.vector)).map((gate: KitGate) => {
       const { vector, bin, reads, alsoReads, appliesTo } = gate;
       const runsIn = appliesTo === EVERY_REPOSITORY
@@ -159,27 +162,30 @@ const GATES: Block = {
           : `a repository whose ${code(SETTINGS_FILE)} sets ${code(appliesTo.setting)}`;
       const stage = isDeclaredGate(gate) ? "built, when a declared input matches no tracked file and every unmatched input has a static prefix git ignores, else source" : "source";
       return `| ${vector} | [${code(bin)}](gates/${bin}.md) | ${READS[reads]}${alsoReads === undefined ? "" : `, and ${alsoReads}`} | ${runsIn} | ${stage} |`;
-    }),
-  ],
+      }),
+    ]),
+
 };
 
 const DOC_KINDS: Block = {
   name: "doc-kinds",
   from: ["src/docs/doc-rules.ts", "src/docs/doc-templates.ts"],
-  render: () => [
+  render: () =>
+    Effect.succeed([
     "| File | Kind | Template |",
     "| --- | --- | --- |",
     ...[...ROOT_FILES].map(([path, kind]) => `| ${code(path)} | ${kind} | ${code(templateFile(kind))} |`),
     `| ${code(VISION_PAGE)} | vision | ${code(templateFile("vision"))} |`,
     `| each file in ${code(ADR_DIRECTORY)} but its generated index, ${code(ADR_INDEX.slice(ADR_DIRECTORY.length))} | adr | ${code(templateFile("adr"))} |`,
     `| a page with ${code("kind")} in front matter | ${listed(MODES)} | ${code("dist/templates/<mode>.md")} |`,
-  ],
+    ]),
 };
 
 const LIVING_DOCS: Block = {
   name: "living-docs",
   from: ["src/docs/prose-matchers.ts"],
-  render: () => [
+  render: () =>
+    Effect.succeed([
     "A living doc is one of these:",
     "",
     `- a ${listed(LIVING_NAMES.map(code))} in any directory`,
@@ -192,40 +198,86 @@ const LIVING_DOCS: Block = {
     `- a file in ${code(ADR_DIRECTORY)}`,
     `- a file whose name opens with four digits, as in ${listed(DATED_RECORD_EXAMPLES.map(code))}`,
     `- a ${listed(HISTORY_NAMES.map(code))}`,
-  ],
+    ]),
 };
 
 const PROSE: Block = {
   name: "prose-rules",
   from: ["PROSE_RULES in src/docs/prose-matchers.ts"],
-  render: () => [
+  render: () =>
+    Effect.succeed([
     "| Refused | For example | Write instead | In agent files |",
     "| --- | --- | --- | --- |",
     ...PROSE_RULES.map(({ readers, refuses, example, instead }) => `| ${refuses} | ${example} | ${instead} | ${readers.includes("agents") ? "yes" : "no"} |`),
-  ],
+    ]),
+};
+
+const SETTING_READERS = {
+  smoke: "[checks-test](../gates/checks-test.md)",
+  reach: "[checks-test](../gates/checks-test.md#the-reach-map)",
+  mutationRunner: "[checks-ci-wiring](../gates/checks-ci-wiring.md)",
+  selfHostedRunners: "[checks-ci-wiring](../gates/checks-ci-wiring.md)",
+  browser: "[checks-browser](../gates/checks-browser.md#what-it-reads)",
+  browserRoutes: "[checks-browser](../gates/checks-browser.md#what-it-reads)",
+  browserBuild: "[checks-browser](../gates/checks-browser.md#what-it-reads)",
+  copy: "[checks-copy](../gates/checks-copy.md)",
+  frontendSyntax: "[checks-frontend-syntax](../gates/checks-frontend-syntax.md)",
+  agentTests: "[checks-local-tests](../gates/checks-local-tests.md)",
+  "agentTests.allowLocal": "[checks-local-tests](../gates/checks-local-tests.md)",
+  testFileMaxSeconds: "[checks-test](../gates/checks-test.md#test-file-time-limit)",
+} satisfies Record<SettingKey | "agentTests.allowLocal", string>;
+
+function isSettingKey(key: string): key is SettingKey {
+  return Object.hasOwn(Settings.fields, key);
+}
+
+function settingRow([key, schema]: readonly [SettingKey | "agentTests.allowLocal", Schema.Top]): Effect.Effect<string, DocBlocksUnwritable> {
+  const annotations = Schema.resolveAnnotations(schema);
+  const fallback = annotations?.default === undefined ? "None" : code(JSON.stringify(annotations.default));
+  const description = annotations?.description;
+  if (description === undefined) return Effect.fail(new DocBlocksUnwritable({ message: `settings-keys: no description for ${key}` }));
+  return Effect.succeed(`| ${code(key)} | ${fallback} | ${description} | ${SETTING_READERS[key]} |`);
+}
+
+const SETTINGS: Block = {
+  name: "settings-keys",
+  from: ["src/core/settings.ts"],
+  render: () =>
+    Effect.map(
+      Effect.all(
+        Object.keys(Settings.fields).filter(isSettingKey).flatMap((key) =>
+          key === "agentTests"
+            ? [settingRow([key, Settings.fields[key]]), settingRow(["agentTests.allowLocal", AgentTests.fields.allowLocal])]
+            : [settingRow([key, Settings.fields[key]])]
+        ),
+      ),
+      (rows) => ["| Key | Default | What it holds | Reader |", "| --- | --- | --- | --- |", ...rows] as const,
+    ),
 };
 
 const SIZE_LIMITS: Block = {
   name: "size-limits",
   from: [`SOURCE_LIMITS, TEST_LIMITS, SOURCES and TESTS in ${OXLINT_PRESET}`],
-  render: () => [
+  render: () =>
+    Effect.succeed([
     `| Limits | oxlint rule | ${SOURCES.map(code).join(", ")} outside the tests | ${TESTS.map(code).join(", ")} |`,
     "| --- | --- | --- | --- |",
     ...Object.entries(SIZE_RULE_LIMITS).flatMap(([name, limits]) =>
       isSizeRule(name) ? [`| ${limits} | ${code(name)} | ${SOURCE_LIMITS[name]} | ${TEST_LIMITS[name]} |`] : [],
-    ),
-  ],
+      ),
+    ]),
 };
 
 const LINT_SAMPLE: Block = {
   name: "lint-sample",
   from: ["KIT_GATES in src/core/gates.ts"],
-  render: () => [
+  render: () =>
+    Effect.succeed([
     "```",
-    "checks-lint: range 2504acf098d120e73a8ece3c96f22b934f35c6a8..10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD against origin/main",
-    `checks-lint: 1 of ${KIT_GATES.length} gate(s) failed: checks-comment-gate`,
-    "```",
-  ],
+      "checks-lint: range 2504acf098d120e73a8ece3c96f22b934f35c6a8..10ba7d8935b73ed72624120a1542e51bd21ca7c7 from HEAD against origin/main",
+      `checks-lint: 1 of ${KIT_GATES.length} gate(s) failed: checks-comment-gate`,
+      "```",
+    ]),
 };
 
 function inline(value: unknown): string {
@@ -247,26 +299,28 @@ function compactJson(value: Readonly<Record<string, unknown>>): readonly string[
 const STARTER: Block = {
   name: "starter",
   from: [BROWSER_STARTER],
-  render: () => ["```json", ...compactJson(starter), "```"],
+  render: () => Effect.succeed(["```json", ...compactJson(starter), "```"]),
 };
 
 const SIZES: Block = {
   name: "screen-sizes",
   from: ["SCREEN_SIZES in src/quality/browser/screen-sizes.ts"],
-  render: () => [
+  render: () =>
+    Effect.succeed([
     "| Device | Width | Height | Name | Sets |",
     "| --- | --- | --- | --- | --- |",
     ...SCREEN_SIZES.full.map((size) => {
       const sets = SCREEN_SIZE_SETS.filter((set) => SCREEN_SIZES[set].includes(size));
       return `| ${size.device} | ${size.width} | ${size.height} | ${code(screenSizeName(size))} | ${sets.map(code).join(" and ")} |`;
-    }),
-  ],
+      }),
+    ]),
 };
 
 const WHERE: Block = {
   name: "shipped",
   from: [MANIFEST],
-  render: ({ shipped }) => ["| Path | What it holds |", "| --- | --- |", ...shipped.map((path) => `| ${code(path)} | ${SHIPPED[path]} |`)],
+  render: ({ shipped }) =>
+    Effect.succeed(["| Path | What it holds |", "| --- | --- |", ...shipped.map((path) => `| ${code(path)} | ${SHIPPED[path]} |`)]),
 };
 
 export const TARGETS: readonly { readonly file: string; readonly blocks: readonly Block[] }[] = [
@@ -277,7 +331,7 @@ export const TARGETS: readonly { readonly file: string; readonly blocks: readonl
   { file: `${GATE_PAGES}/checks-browser.md`, blocks: [SIZES, STARTER] },
   { file: `${GATE_PAGES}/checks-docs.md`, blocks: [DOC_KINDS, LIVING_DOCS, PROSE] },
   { file: `${GATE_PAGES}/checks-lint.md`, blocks: [LINT_SAMPLE] },
-  { file: "docs/configs/native-settings.md", blocks: [SIZE_LIMITS] },
+  { file: "docs/configs/native-settings.md", blocks: [SETTINGS, SIZE_LIMITS] },
 ];
 
 export type Spliced = { readonly type: "spliced"; readonly text: string } | { readonly type: "unmarked"; readonly blocks: readonly string[] };
@@ -291,23 +345,32 @@ function closing(block: Block): string {
   return `<!-- end generated ${block.name} -->`;
 }
 
-function spliceBlock(lines: readonly string[], block: Block, facts: KitFacts): readonly string[] | undefined {
+function spliceBlock(
+  lines: readonly string[],
+  block: Block,
+  facts: KitFacts,
+): Effect.Effect<readonly string[] | undefined, DocBlocksUnwritable> {
   const start = lines.findIndex((line) => line.trimStart().startsWith(`<!-- generated ${block.name}:`));
-  if (start === -1) return undefined;
+  if (start === -1) return Effect.succeed(undefined);
   const end = lines.findIndex((line, index) => index > start && line.trim() === closing(block));
-  if (end === -1) return undefined;
+  if (end === -1) return Effect.succeed(undefined);
   const indent = /^\s*/.exec(lines[start] ?? "")?.[0] ?? "";
-  const written = [opening(block), "", ...block.render(facts), "", closing(block)].map((line) => (line === "" ? "" : `${indent}${line}`));
-  return [...lines.slice(0, start), ...written, ...lines.slice(end + 1)];
+  return Effect.map(block.render(facts), (rendered) => {
+    const written = [opening(block), "", ...rendered, "", closing(block)].map((line) => (line === "" ? "" : `${indent}${line}`));
+    return [...lines.slice(0, start), ...written, ...lines.slice(end + 1)];
+  });
 }
 
-export function splice(text: string, blocks: readonly Block[], facts: KitFacts): Spliced {
-  const unmarked: string[] = [];
-  let lines: readonly string[] = text.split("\n");
-  for (const block of blocks) {
-    const spliced = spliceBlock(lines, block, facts);
-    if (spliced === undefined) unmarked.push(block.name);
-    else lines = spliced;
-  }
-  return unmarked.length === 0 ? { type: "spliced", text: lines.join("\n") } : { type: "unmarked", blocks: unmarked };
+export function splice(text: string, blocks: readonly Block[], facts: KitFacts): Effect.Effect<Spliced, DocBlocksUnwritable> {
+  return Effect.gen(function* () {
+    const unmarked: string[] = [];
+    let lines: readonly string[] = text.split("\n");
+    for (const block of blocks) {
+      const spliced = yield* spliceBlock(lines, block, facts);
+      if (spliced === undefined) unmarked.push(block.name);
+      else lines = spliced;
+    }
+    if (unmarked.length === 0) return { type: "spliced" as const, text: lines.join("\n") };
+    return { type: "unmarked" as const, blocks: unmarked };
+  });
 }

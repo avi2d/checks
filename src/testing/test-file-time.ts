@@ -1,12 +1,10 @@
 import { Console, Effect } from "effect";
 import { TEST_ENTRY_POINT } from "../core/gates.ts";
-import { decodeSetting, TestFileMaxSeconds } from "../core/settings.ts";
+import { decodeSetting, DEFAULT_TEST_FILE_MAX_SECONDS, TestFileMaxSeconds } from "../core/settings.ts";
 import { fileSeconds } from "./test-report.ts";
 
-const DEFAULT_MAX_SECONDS = 300;
-
 export const resolveTestFileMaxSeconds = Effect.fn("resolveTestFileMaxSeconds")(function* (configured: unknown) {
-  if (configured === undefined) return DEFAULT_MAX_SECONDS;
+  if (configured === undefined) return DEFAULT_TEST_FILE_MAX_SECONDS;
   return yield* decodeSetting("testFileMaxSeconds", TestFileMaxSeconds, configured);
 });
 

@@ -12,11 +12,12 @@ It refuses a full mutation run when `CI` is not `true`.
 A full run is one with no `--mutate <glob>` and no `--incremental` flag.
 A `--mutate` without a glob, `--incrementalFile` alone or `--incremental` with `--force` is still a full run.
 Its refusal names `gh workflow run mutation` as the command that starts the same run in CI.
-A run scoped with `--mutate <glob>`, `--mutate=<glob>` or `-m <glob>` stays allowed locally for a person, because the pull request run scopes to named files, but an agent run is refused while `localTests` is blocked, as [checks-local-tests](checks-local-tests.md) says.
-An incremental run stays allowed locally for a person only when its incremental report exists, because it reuses the results of mutants that did not change, but an agent run is refused while `localTests` is blocked, as [checks-local-tests](checks-local-tests.md) says.
+Outside CI, a person can run mutation testing on named files with `--mutate <glob>`, `--mutate=<glob>` or `-m <glob>`.
+A person can run incrementally outside CI only with an existing report, because the run reuses the results of unchanged mutants.
 That report is the `incrementalFile` Stryker resolves from the command line and the config file, else `reports/stryker-incremental.json`.
 With no report there, the refusal says to pass `--mutate <glob>`, or to start the full baseline in CI with `gh workflow run mutation`.
-`--help`, `-h` and `--version` are not runs, so they pass straight through to Stryker for a person, but an agent run is refused while `localTests` is blocked, as [checks-local-tests](checks-local-tests.md) says.
+The bin passes `--help`, `-h` and `--version` straight to Stryker for a person.
+For an agent outside CI, the bin refuses every invocation unless `agentTests.allowLocal` is `true`, as [checks-local-tests](checks-local-tests.md) says.
 A laptop with `CI=true` set opts in to a full run on purpose, and the refusal lets it through.
 
 The shared Stryker preset makes the same decision from `process.argv` when a `stryker run` loads it.
@@ -60,7 +61,7 @@ export default {
 
 ## What it reads
 
-It reads `CI` and `CHECKS_AGENT` from the environment and the `localTests` key of `checks.config.ts`.
+It reads `AI_AGENT`, `CHECKS_AGENT`, `CI`, and `agentTests.allowLocal` to decide whether an agent can run tests outside CI.
 When Stryker loads the preset, the preset reads `CHECKS_MUTATION_MODE` and `RUNNER_ENVIRONMENT` from the environment.
 It forwards every argument to `stryker run` through `bun x stryker run`.
 
@@ -78,7 +79,7 @@ Every argument after the bin name forwards to `stryker run`.
 | --- | --- |
 | 0 | Stryker exited 0 |
 | 1 | Stryker exited nonzero, including an incremental run refused for a missing report |
-| 2 | a full run outside CI was refused, an agent run is refused while `localTests` is blocked, an agent run outside CI whose `checks.config.ts` does not load, or Stryker could not start |
+| 2 | a full run outside CI was refused, an agent run is refused outside CI when `agentTests.allowLocal` is `false`, an agent run outside CI whose `checks.config.ts` does not load, or Stryker could not start |
 
 ## Sample output
 

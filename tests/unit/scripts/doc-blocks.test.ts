@@ -14,7 +14,7 @@ function read(file: string): string {
 const KIT = Effect.runSync(kitFacts(read(MANIFEST)));
 
 test("each committed doc carries the blocks bun run build writes from package.json and the code they copy", () => {
-  const written = TARGETS.map(({ file, blocks }) => ({ file, spliced: splice(read(file), blocks, KIT) }));
+  const written = TARGETS.map(({ file, blocks }) => ({ file, spliced: Effect.runSync(splice(read(file), blocks, KIT)) }));
   expect(written).toEqual(TARGETS.map(({ file }) => ({ file, spliced: { type: "spliced", text: read(file) } })));
 });
 
@@ -25,7 +25,7 @@ const FACTS = {
 
 test("a stale block is rewritten at its marker's indent, peers sorted by name, and the text around it is kept", () => {
   const stale = ["1. Add the peers:", "", "   <!-- generated install: by hand -->", "   bun add -d zod", "   <!-- end generated install -->", "", "1. Next."];
-  expect(splice(stale.join("\n"), [optInInstall(["zod", "@acme/peer"])], FACTS)).toEqual({
+  expect(Effect.runSync(splice(stale.join("\n"), [optInInstall(["zod", "@acme/peer"])], FACTS))).toEqual({
     type: "spliced",
     text: [
       "1. Add the peers:",
@@ -64,14 +64,14 @@ test("a stale lint sample count is rewritten from KIT_GATES", () => {
     "",
     "<!-- end generated lint-sample -->",
   ].join("\n");
-  const spliced = splice(stale, target?.blocks ?? [], FACTS);
+  const spliced = Effect.runSync(splice(stale, target?.blocks ?? [], FACTS));
   expect(spliced.type).toBe("spliced");
   if (spliced.type === "spliced") expect(spliced.text).toContain(`1 of ${KIT_GATES.length} gate(s) failed`);
 });
 
 test("a doc missing a block's markers is refused naming the block, rather than written without it", () => {
   const blocks = TARGETS.flatMap((target) => target.blocks);
-  expect(splice("# checks\n\n<!-- generated install: by hand -->\n", blocks, FACTS)).toEqual({
+  expect(Effect.runSync(splice("# checks\n\n<!-- generated install: by hand -->\n", blocks, FACTS))).toEqual({
     type: "unmarked",
     blocks: blocks.map(({ name }) => name),
   });
