@@ -11,8 +11,9 @@ audience: consumers
 It visits each declared route at each declared viewport in each declared state.
 `checks-browser` refuses to start for an agent when `localTests` is blocked, as [checks-local-tests](checks-local-tests.md) says.
 A state that names its own `checks` runs only those, and any other state runs every declared check.
-Each declared check that opens a page runs on its own fresh page.
 A visit is one route, one viewport and one state.
+Target discovery and `nesting` share one loaded page per visit.
+Each other check that opens a page uses a fresh one.
 Each check judges only the elements of a target that are visible at the visit.
 So a control the page renders once for each breakpoint is judged where it shows.
 
