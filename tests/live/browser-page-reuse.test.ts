@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { at, browserSite, declaration, failuresOf, page, type Declared } from "../lib/browser-site.ts";
+import { at, browserSite, declaration, failuresOf, page, type Declared } from "../e2e/lib/browser-site.ts";
 
 async function observeLoads(config: Declared) {
   const loads: string[] = [];

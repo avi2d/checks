@@ -26,6 +26,7 @@ import { serveSite, type Site } from "./serve.ts";
 import { judgePageWeight, weighPage } from "./weight.ts";
 import { judgeTargets } from "./targets.ts";
 import { reachedRoutes } from "./route-scope.ts";
+import { compareReport, PAGE_OF, planCells, type PagePlan, type PlannedCheckName } from "./schedule.ts";
 
 const NO_TARGET = "scanned no target";
 
@@ -158,7 +159,7 @@ const hookRun = Effect.fn("hookRun")(function* (check: ProductCheck, { browser, 
 
 type Reading = Effect.Effect<Settle, BrowserFailure>;
 
-type SharedCheck = { readonly mode: "shared"; readonly read: (loaded: LoadedVisit) => Reading };
+type SharedCheck = { readonly mode: "shared"; readonly alone: false; readonly read: (loaded: LoadedVisit) => Reading };
 type PlannedCheck = SharedCheck
   | { readonly mode: "independent"; readonly read: (visiting: Visiting) => Reading; readonly alone: boolean };
 
@@ -167,23 +168,31 @@ const now =
   (input: Input): Reading =>
     Effect.map(check(input), settled);
 
-const shared = (read: SharedCheck["read"]): SharedCheck => ({ mode: "shared", read });
+const shared = (read: SharedCheck["read"]): SharedCheck => ({ mode: "shared", alone: false, read });
 const independent = (read: (visiting: Visiting) => Reading, alone = false): PlannedCheck => ({ mode: "independent", read, alone });
 
+const plan = <Name extends PlannedCheckName>(
+  check: Name,
+  read: Name extends "nesting" | "targets" ? (loaded: LoadedVisit) => Reading : (visiting: Visiting) => Reading,
+): PlannedCheck => {
+  const page: PagePlan = PAGE_OF[check];
+  if (page.sharing === "shared") return shared(read as (loaded: LoadedVisit) => Reading);
+  return independent(read as (visiting: Visiting) => Reading, page.alone);
+};
+
 const BUILT_IN: Readonly<Record<CheckName, PlannedCheck>> = {
-  layout: independent(now(layoutRun)),
-  keyboard: independent(now(keyboardRun)),
-  // Other page loads can delay the motion read until after the transition ends.
-  motion: independent(now(motionRun), true),
-  axe: independent(now(axeRun)),
-  nesting: shared(now(nestingRun)),
-  html: independent(now(htmlRun)),
-  links: independent(now(linksRun)),
-  assets: independent(now(assetsRun)),
-  contrast: independent(now(contrastRun)),
-  weight: independent(now(weightRun)),
-  shift: independent(now(shiftRun)),
-  look: independent(lookRun),
+  layout: plan("layout", now(layoutRun)),
+  keyboard: plan("keyboard", now(keyboardRun)),
+  motion: plan("motion", now(motionRun)),
+  axe: plan("axe", now(axeRun)),
+  nesting: plan("nesting", now(nestingRun)),
+  html: plan("html", now(htmlRun)),
+  links: plan("links", now(linksRun)),
+  assets: plan("assets", now(assetsRun)),
+  contrast: plan("contrast", now(contrastRun)),
+  weight: plan("weight", now(weightRun)),
+  shift: plan("shift", now(shiftRun)),
+  look: plan("look", lookRun),
 };
 
 type OrderedReading = {
@@ -206,14 +215,14 @@ const readShared = Effect.fn("readShared")(function* (
 
 function visitCells(visiting: Visiting, visitIndex: number, checks: readonly PlannedCheck[]): readonly Cell<readonly OrderedReading[], BrowserFailure>[] {
   const indexed = checks.map((check, checkIndex) => ({ ...check, checkIndex }));
-  const sharedChecks = indexed.filter((check) => check.mode === "shared");
-  const separate = indexed.flatMap((check) =>
-    check.mode === "shared" ? [] : [{
+  const { shared, separate } = planCells(indexed);
+  return [
+    ...(shared.length === 0 ? [] : [{ reading: readShared(visiting, visitIndex, shared), alone: false }]),
+    ...separate.map((check) => ({
       reading: Effect.map(check.read(visiting), (settle) => [{ visitIndex, checkIndex: check.checkIndex, settle }]),
       alone: check.alone,
-    }],
-  );
-  return sharedChecks.length === 0 ? separate : [{ reading: readShared(visiting, visitIndex, sharedChecks), alone: false }, ...separate];
+    })),
+  ];
 }
 
 function applies(check: CheckName, visit: Visit, declaration: Declaration): boolean {
@@ -237,12 +246,12 @@ const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: D
       const visiting = { browser, declaration, visit, url: new URL(visit.route.path, origin).href };
       const reached = selected === undefined || selected.has(visit.route.path);
       return visitCells(visiting, visitIndex, [
-        ...(reached ? [shared(now(targetsRun))] : []),
+        ...(reached ? [plan("targets", now(targetsRun))] : []),
         ...declaration.checks.filter((one) => (reached || one === "look" || one === "links") && applies(one, visit, declaration)).map((check) => BUILT_IN[check]),
-        ...(reached ? hooks.filter((candidate) => hookApplies(candidate, visit)).map((hook) => independent(now((one) => hookRun(hook, one)), true)) : []),
+        ...(reached ? hooks.filter((candidate) => hookApplies(candidate, visit)).map((hook) => plan("hook", now((one) => hookRun(hook, one)))) : []),
       ]);
     });
-  const readings = (yield* walkCells(cells, 4)).flat().sort((a, b) => a.visitIndex - b.visitIndex || a.checkIndex - b.checkIndex);
+  const readings = (yield* walkCells(cells, 4)).flat().sort(compareReport);
   const firstLooks: FirstLooks = new Map();
   return { runs: readings.map(({ settle }) => settle(firstLooks)), missingRoutes };
 }, Effect.scoped);
