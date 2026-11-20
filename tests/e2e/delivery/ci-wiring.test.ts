@@ -175,7 +175,6 @@ test("runner labels left under package.json checks are refused naming the checks
 
 test("a private repository's shell-traced mutation jobs are refused outside the written workflow while its report job is not flagged, and the written file passes", async () => {
   const hosted = "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}";
-  const mutationRunner = "[self-hosted, gpu, x64]";
   const runs = ["bun run mutate:incremental", "./mutate.sh", "bun run ./scripts/mutate.sh", "cd tools && ./sweep.sh"];
   const mutation = (runsOn: string) =>
     `on: pull_request\njobs:\n${runs.map((run, index) => `  sweep-${index}:\n    runs-on: ${runsOn}\n    timeout-minutes: 10\n    steps:\n      - run: ${run}\n`).join("")}  report:\n    runs-on: ${hosted}\n    timeout-minutes: 10\n    steps:\n      - run: scripts/report.ts\n      - run: ./mutate.sh\n        working-directory: docs\n`;

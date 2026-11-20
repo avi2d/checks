@@ -1,6 +1,6 @@
 import { type SiteNames } from "../site-names.ts";
 import { PLAYWRIGHT_USES, runnerOf } from "../ci-jobs.ts";
-import { CHECKOUT, WRANGLER_VERSION, type Pair, type Workflow, expression, TOKEN, RUNNER, HOSTED, checkout, SETUP, ciCommand, keepArtifacts, node24, servedStep, cloudflare, CLOUDFLARE_SET, ASTRO_QUIET, PREVIEW_PROJECT, PREVIEW_MARKER, siteEnv } from "./steps.ts";
+import { CHECKOUT, WRANGLER_VERSION, type Pair, type Workflow, expression, TOKEN, RUNNER, checkout, SETUP, ciCommand, keepArtifacts, node24, servedStep, cloudflare, CLOUDFLARE_SET, ASTRO_QUIET, PREVIEW_PROJECT, PREVIEW_MARKER, siteEnv } from "./steps.ts";
 import { PULL_REQUEST_HEAD, PULL_REQUEST_BRANCH, PULL_REQUEST_NUMBER, BY_HAND } from "./ci.ts";
 
 export const PREVIEW_CLOSE = (names: SiteNames, publishes: boolean): Workflow => ({
