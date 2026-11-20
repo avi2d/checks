@@ -305,7 +305,7 @@ const entrySelection = Effect.fn("entrySelection")(function* (run: EntryRun, opt
 
 const runSuite = Effect.fn("runSuite")(function* (outfile: string, args: readonly string[], workers: number | undefined) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const command = ["test", "--randomize", `--parallel=${yield* resolveWorkerCount(workers)}`, ...args, ...reporterArgs(outfile)];
+  const command = ["test", "--pass-with-no-tests", "--randomize", `--parallel=${yield* resolveWorkerCount(workers)}`, ...args, ...reporterArgs(outfile)];
   return yield* spawner.exitCode(
     ChildProcess.make(process.execPath, command, {
       stdin: "ignore",
@@ -378,7 +378,11 @@ const judgeRun = Effect.fn("judgeRun")(function* (
       yield* Console.error(`${NAME}: bun test failed before it wrote a report, so no skip was judged`);
       return false;
     }
-    return yield* new ReportError({ message: `bun test passed but wrote no report to ${outfile}` });
+    if ((yield* scanTestFiles(process.cwd())).length > 0) {
+      return yield* new ReportError({ message: `bun test passed but wrote no report to ${outfile}` });
+    }
+    yield* Console.log(`${NAME}: no test file found`);
+    return true;
   }
 
   const xml = yield* fs.readFileString(outfile);

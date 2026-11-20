@@ -12,7 +12,8 @@ It runs the unit tier plus the smoke list outside CI and the full suite under CI
 `checks-test` refuses to start for an agent when `localTests` is blocked, as [checks-local-tests](checks-local-tests.md) says.
 A `--changed` run narrows that, as [Changed-file runs](#changed-file-runs) says, and so does a `--pr` run, as [The pull request entry](#the-pull-request-entry) says.
 It refuses `--full`, `--tier=e2e` and `--tier=pixel` outside CI, except a pixel run that approves pictures, as [Runs refused outside CI](#runs-refused-outside-ci) says.
-It runs them with `bun test --randomize --parallel=<workers>`, where the count comes from free memory as [Parallel runs](#parallel-runs) says, and reads Bun's JUnit report from that run.
+It runs them with `bun test --pass-with-no-tests --randomize --parallel=<workers>`, where the count comes from free memory as [Parallel runs](#parallel-runs) says, and reads Bun's JUnit report from that run.
+When Bun finds no test file, the run passes and reports that no test file was found.
 It runs Bun with `CI=true`, so `test.only` fails the run in every environment.
 Bun exits zero when tests skip, so `checks-test` checks every skipped test against its source declaration.
 A test that `test.skip`, `test.skipIf`, `test.if`, `test.todo` or an enclosing `describe.skip` skips fails unless the test declares its reason.
@@ -216,7 +217,7 @@ Bun ignores the live and pixel directories during the default run.
 
 ## Parallel runs
 
-`checks-test` runs `bun test --randomize --parallel=<workers>`, so Bun hands each test file to one of that many worker processes.
+`checks-test` runs `bun test --pass-with-no-tests --randomize --parallel=<workers>`, so Bun hands each test file to one of that many worker processes.
 Without `--parallel=<workers>`, the count comes from free memory, and never exceeds one worker per core.
 One worker needs about a gigabyte, each further worker about a hundred megabytes more, and a tenth of memory stays reserved.
 On macOS the count reads reclaimable pages too, since `freemem` leaves them out.
@@ -253,9 +254,9 @@ It refuses test filters because every test excluded by a filter would look skipp
 
 | Code | When |
 | --- | --- |
-| 0 | every test passed, every skip has a matching site reason, and no file exceeds the time limit in CI |
+| 0 | every test passed, every skip has a matching site reason, and no file exceeds the time limit in CI, or no test file was found |
 | 1 | a test failed, a parallel worker crashed, a skip lacks a site reason, a declaration is stale in CI, or a file exceeds the time limit in CI |
-| 2 | an argument is not one it takes, a run outside CI is refused, `APPROVE_SCREENS` is not a boolean in a pixel run, a declaration, the smoke list, or the time limit in CI cannot be read, a `checks` object in `package.json` still sets `smoke` or `reach`, a smoke entry names no runnable test, `CI` is not a boolean, Bun wrote no report, a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` or an agent run is refused while `localTests` is blocked |
+| 2 | an argument is not one it takes, a run outside CI is refused, `APPROVE_SCREENS` is not a boolean in a pixel run, a declaration, the smoke list, or the time limit in CI cannot be read, a `checks` object in `package.json` still sets `smoke` or `reach`, a smoke entry names no runnable test, `CI` is not a boolean, Bun passed but wrote no report though test files exist, a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` or an agent run is refused while `localTests` is blocked |
 
 ## Sample output
 

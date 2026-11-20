@@ -79,9 +79,8 @@ const jscpdBinary = Effect.fn("jscpdBinary")(function* () {
   return yield* path.fromFileUrl(main);
 });
 
-// jscpd reads files from disk, and the working tree need not hold the revision: a merge checkout or an uncommitted edit.
-// Both ends scan under the head's config, so a changed file set never reads as a change in repetition.
-// jscpd refuses a missing path, so a path in `emptied` the revision lacks is created empty.
+// jscpd needs files on disk, not a Git revision.
+// jscpd refuses a missing configured path.
 const scan = Effect.fn("scan")(
   function* (root: string, rev: string, config: string, emptied: readonly string[]) {
     const files = yield* pathsAt(rev, [], root);
@@ -152,22 +151,28 @@ export function heldOf(measured: number, rises: readonly Rise[], after: Readonly
   return { measured, rises, advisory: new Map(advisory.toSorted(([a], [b]) => a.localeCompare(b))) };
 }
 
+const configPathsOf = Effect.fn("configPathsOf")(function* (config: string) {
+  const { path: configPaths = [] } = yield* decodeConfigPaths(config).pipe(
+    Effect.mapError((cause) => new JscpdUnreadable({ message: `cannot read ${CONFIG}: ${cause.message}` })),
+  );
+  return configPaths;
+});
+
 const runHold = Effect.fn("runHold")(function* (root: string, config: string, base: string, head: string) {
   const formerPath = new Map(
     (yield* changedPaths(base, head, [], root)).flatMap((change) => (change.kind === "renamed" ? [[change.path, change.from]] : [])),
   );
-  const { path: configPaths = [] } = yield* decodeConfigPaths(config).pipe(
-    Effect.mapError((cause) => new JscpdUnreadable({ message: `cannot read ${CONFIG}: ${cause.message}` })),
-  );
+  const configPaths = yield* configPathsOf(config);
   const before = repeatedLines((yield* scan(root, base, config, configPaths)).clones);
-  const { sources, clones } = yield* scan(root, head, config, []);
+  const { sources, clones } = yield* scan(root, head, config, configPaths);
   const after = repeatedLines(clones);
   const rises = risesOf([...after.keys()], before, after, formerPath, clones);
   return heldOf(sources, rises, after) satisfies Held;
 });
 
 const runWholeTree = Effect.fn("runWholeTree")(function* (root: string, config: string, head: string) {
-  const { sources, clones } = yield* scan(root, head, config, []);
+  const configPaths = yield* configPathsOf(config);
+  const { sources, clones } = yield* scan(root, head, config, configPaths);
   const after = repeatedLines(clones);
   const rises = risesOf([...after.keys()], new Map(), after, new Map(), clones);
   return heldOf(sources, rises, after) satisfies Held;

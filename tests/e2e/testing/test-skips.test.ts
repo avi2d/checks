@@ -2,7 +2,7 @@ import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { CHECKOUT, ran, scratchDirs, type Ran } from "../lib/fixture-repo.ts";
+import { CHECKOUT, fixtureRepos, ran, scratchDirs, type Ran } from "../lib/fixture-repo.ts";
 import { settingsFile } from "../lib/settings-file.ts";
 
 const SCRIPT = join(CHECKOUT, "src", "testing", "test.ts");
@@ -10,6 +10,7 @@ const BUNFIG = '[test]\npathIgnorePatterns = ["**/tests/quarantine/**", "**/test
 
 const SUITE = "tests/unit/suite.test.ts";
 const scratch = scratchDirs();
+const repository = fixtureRepos("checks-test-empty-");
 let dir = "";
 
 async function consumer(suite: string, files: Readonly<Record<string, string>> = {}): Promise<void> {
@@ -32,6 +33,21 @@ function checksTest(ci: boolean, args: readonly string[] = [], extra: Readonly<R
   const { CI: _ci, APPROVE_SCREENS: _approve, ...env } = process.env;
   return ran($`bun ${SCRIPT} ${args}`.cwd(dir).env({ ...env, ...extra, ...(ci ? { CI: "true" } : {}) }));
 }
+
+test("an empty repository passes instead of reporting a failed test run", async () => {
+  const fixture = await repository({ "package.json": JSON.stringify({ name: "consumer", scripts: { test: "checks-test" } }) });
+  dir = fixture.dir;
+  await fixture.commit("chore: setup");
+  const empty = await checksTest(true, ["--full"]);
+  expect(empty.exitCode).toBe(0);
+  expect(empty.text).toContain("checks-test: no test file found");
+});
+
+test("a failing test file does not pass as an empty suite", async () => {
+  await consumer('import { expect, test } from "bun:test"; test("fails", () => expect(1).toBe(2));\n');
+  const failed = await checksTest(true, ["--full"]);
+  expect(failed.exitCode).toBe(1);
+});
 
 test("a reason at the test site passes without a package declaration", async () => {
   await consumer(
