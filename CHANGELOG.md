@@ -2,6 +2,21 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.110.0
+
+Released 2026-11-20.
+
+### Features
+
+- **testing:** fail CI when a test file exceeds five minutes [#176](https://github.com/avi2d/checks/pull/176)
+
+### Fixes
+
+- allow empty repositories through test and repetition gates [#179](https://github.com/avi2d/checks/pull/179)
+- **browser:** share one loaded page for target discovery and nesting [#177](https://github.com/avi2d/checks/pull/177)
+- **delivery:** update pinned GitHub Actions to current majors [#174](https://github.com/avi2d/checks/pull/174)
+- **delivery:** an unset ATTEMPTS reads as one try in commit-status [#175](https://github.com/avi2d/checks/pull/175)
+
 ## 0.109.0
 
 Released 2026-11-18.
