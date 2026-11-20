@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { findStepFaults, isJudged, report, runFaults, type YamlFile } from "../../../src/delivery/plain-steps.ts";
 
-const HINT = "run one command, or call a shared workflow or action that holds the logic:";
+const HINT = "run one command, or move the logic into a bin or an action:";
 
 function yamlFile(path: string, text: string): YamlFile {
   return { path, document: Bun.YAML.parse(text), text };
@@ -29,14 +29,14 @@ test("a block scalar is refused even when it holds a single command", () => {
   expect(findStepFaults([folded])).toEqual([{ location: '.github/workflows/ci.yml line 7 job smoke step "Smoke"', faults: ["a block scalar"] }]);
 });
 
-test("one command and calls to a shared workflow or action pass instead of being read as missing scripts", () => {
+test("one command and calls to a reusable workflow or action pass instead of being read as missing scripts", () => {
   const steps = workflow(
     [
-      "      - uses: avi2d/workflows/actions/setup@v1",
+      "      - uses: ./.github/actions/setup",
       "      - name: Smoke",
       "        run: bun scripts/smoke-pack.ts",
       "  shared:",
-      "    uses: avi2d/workflows/.github/workflows/mutation.yml@v1",
+      "    uses: ./.github/workflows/mutation.yml",
     ].join("\n"),
   );
   expect(findStepFaults([steps])).toEqual([]);

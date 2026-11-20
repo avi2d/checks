@@ -192,55 +192,24 @@ test("another action is not judged (oracle: the rule names only setup-bun steps)
   expect(bunFaults(other, bunPolicy())).toEqual([]);
 });
 
-const SETUP_SHA = "0123456789abcdef0123456789abcdef01234567";
-
-function sharedSetupSteps(uses = `avi2d/workflows/actions/setup@${SETUP_SHA}`): string {
-  return `on: pull_request\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: ${uses}\n      - run: bun run lint\n`;
+function localSetupSteps(): string {
+  return "on: pull_request\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: ./.github/actions/setup\n      - run: bun run lint\n";
 }
 
-test("a shared setup step pinned to a SHA passes on the fleet .bun-version (oracle: the S1 rule that the shared setup action reads .bun-version)", () => {
-  expect(bunFaults(sharedSetupSteps(), bunPolicy({ ".bun-version": `${FLEET_BUN_VERSION}\n` }))).toEqual([]);
+test("the local setup action passes on the fleet .bun-version instead of being refused as an unpinned setup (oracle: the written setup action reads .bun-version)", () => {
+  expect(bunFaults(localSetupSteps(), bunPolicy({ ".bun-version": FLEET_BUN_VERSION + "\n" }))).toEqual([]);
 });
 
-test("a shared setup step fails when .bun-version drifts from the fleet version (oracle: the S1 rule that the shared setup action reads .bun-version)", () => {
-  const faults = bunFaults(sharedSetupSteps(), bunPolicy({ ".bun-version": `${drifted}\n` }));
-  expect(faults).toEqual([{ location: ".github/workflows/ci.yml line 6", fault: `requests bun ${drifted} from .bun-version, want ${FLEET_BUN_VERSION}` }]);
-});
-
-test("a shared setup step fails when the caller holds no .bun-version file (oracle: the S1 rule that the caller holds .bun-version)", () => {
-  const faults = bunFaults(sharedSetupSteps(), bunPolicy());
-  expect(faults).toHaveLength(1);
-  expect(faults[0]?.location).toBe(".github/workflows/ci.yml line 6");
-  expect(faults[0]?.fault).toBe(
-    `uses avi2d/workflows/actions/setup@${SETUP_SHA}, which reads .bun-version, but the repository holds no .bun-version file, want ${FLEET_BUN_VERSION}`,
-  );
-  const manifestOnly = bunFaults(sharedSetupSteps(), bunPolicy({}, { "package.json": { packageManager: `bun@${FLEET_BUN_VERSION}` } }));
-  expect(manifestOnly).toHaveLength(1);
-  expect(manifestOnly[0]?.fault).toContain("holds no .bun-version file");
-});
-
-test("a short-ref shared setup step does not pass a drifted .bun-version unseen", () => {
-  const faults = bunFaults(sharedSetupSteps("avi2d/workflows/setup@v1"), bunPolicy({ ".bun-version": `${drifted}\n` }));
-  expect(faults).toEqual([{ location: ".github/workflows/ci.yml line 6", fault: `requests bun ${drifted} from .bun-version, want ${FLEET_BUN_VERSION}` }]);
-});
-
-test("a short-ref shared setup step is refused although the caller pins the fleet .bun-version", () => {
-  expect(bunFaults(sharedSetupSteps("avi2d/workflows/setup@v1"), bunPolicy({ ".bun-version": `${FLEET_BUN_VERSION}\n` }))).toEqual([]);
-});
-
-test("a shared setup step at the short path is not passed unjudged at a tag, a SHA or no ref", () => {
-  for (const uses of ["avi2d/workflows/setup@v1", "avi2d/workflows/setup@v1.1.0", `avi2d/workflows/setup@${SETUP_SHA}`, "avi2d/workflows/setup"]) {
-    expect(bunFaults(sharedSetupSteps(uses), bunPolicy())).toEqual([
-      { location: ".github/workflows/ci.yml line 6", fault: `uses ${uses}, which reads .bun-version, but the repository holds no .bun-version file, want ${FLEET_BUN_VERSION}` },
-    ]);
-  }
-});
-
-test("the local setup action of the full set passes a drifted .bun-version unseen", () => {
-  expect(bunFaults(sharedSetupSteps("./.github/actions/setup"), bunPolicy({ ".bun-version": `${drifted}\n` }))).toEqual([
-    { location: ".github/workflows/ci.yml line 6", fault: `requests bun ${drifted} from .bun-version, want ${FLEET_BUN_VERSION}` },
+test("the local setup action does not pass a drifted .bun-version unseen (oracle: the written setup action reads .bun-version)", () => {
+  expect(bunFaults(localSetupSteps(), bunPolicy({ ".bun-version": drifted + "\n" }))).toEqual([
+    { location: ".github/workflows/ci.yml line 6", fault: "requests bun " + drifted + " from .bun-version, want " + FLEET_BUN_VERSION },
   ]);
-  expect(bunFaults(sharedSetupSteps("./.github/actions/setup"), bunPolicy({ ".bun-version": `${FLEET_BUN_VERSION}\n` }))).toEqual([]);
+});
+
+test("the local setup action fails when the repository holds no .bun-version file, even with a pinned package.json (oracle: the written setup action reads only .bun-version)", () => {
+  const want = "uses ./.github/actions/setup, which reads .bun-version, but the repository holds no .bun-version file, want " + FLEET_BUN_VERSION;
+  expect(bunFaults(localSetupSteps(), bunPolicy())).toEqual([{ location: ".github/workflows/ci.yml line 6", fault: want }]);
+  expect(bunFaults(localSetupSteps(), bunPolicy({}, { "package.json": { packageManager: "bun@" + FLEET_BUN_VERSION } }))).toEqual([{ location: ".github/workflows/ci.yml line 6", fault: want }]);
 });
 
 test("the bun pin report names each step and the fleet version", () => {

@@ -105,26 +105,26 @@ To run the gates in CI:
 
    Each tier with test files also needs its `test:<tier>` script, as [checks-test-layout](../gates/checks-test-layout.md) says.
 
-1. Write the workflow callers for the repository kind:
+1. Write the workflow files for the repository kind:
 
    ```sh
    bunx checks-workflows --write
    ```
 
-   The command writes the caller set [checks-workflows](../gates/checks-workflows.md) holds.
-   A site with no site caller yet passes its three names on the first write:
+   The command writes the set [checks-workflows](../gates/checks-workflows.md) holds, and every file holds its own steps.
+   A site with no site workflow yet passes its three names on the first write:
 
    ```sh
    bunx checks-workflows --write --pages acme --domain acme.example --production acme/acme.example
    ```
 
-   A later `--write` keeps the names the site callers pass.
-   `ci.yml` composes the CI parts into jobs that run side by side, and each other caller runs one shared workflow.
+   A later `--write` keeps the names the site workflows hold.
+   `ci.yml` composes the jobs that run side by side.
    A first write gives `ci.yml` the default test jobs of the kind: `test` in a code repository, and `unit` and `browser` in a site.
-   To run another test command, add a job that calls `test.yml` with that command in `run` and run `--write` again.
+   To run another test command, copy the `test` job under a new name, change the `run` of its step with id `test`, and run `--write` again.
    A later `--write` keeps the test jobs `ci.yml` holds and rewrites the rest of the file.
-   The `static` job fails the pull request when a caller differs or an extra workflow file appears.
-   A new repository gets the same callers from [checks-setup](../gates/checks-setup.md).
+   The `static` job fails the pull request when a workflow file differs or an extra one appears.
+   A new repository gets the same files from [checks-setup](../gates/checks-setup.md).
 
 To run the four whole-tree gates on demand, a repository adds a whole-tree-run workflow:
 

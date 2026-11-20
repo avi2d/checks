@@ -93,41 +93,21 @@ An `--incremental` run with no report stops before instrumenting with the missin
 
 ## When it runs
 
-A repository runs mutation through the `mutation` caller that [checks-setup](checks-setup.md) writes.
-A pull request runs a scoped score over the changed files.
-A manual start with `gh workflow run mutation` starts `refresh`.
+A repository runs mutation through the `mutation` workflow that [checks-setup](checks-setup.md) writes.
+A manual start with `gh workflow run mutation` starts the refresh.
 No push to `main` starts a run.
 Run scoped checks locally during development.
 
 ## Running it in CI
 
-The caller [checks-setup](checks-setup.md) writes reaches only the refresh job and the pull request run.
-Only `avi2d/workflows` holds the baseline job, since [checks-ci-wiring](checks-ci-wiring.md#mutation-jobs) refuses it in any other repository.
-Only a caller that passes `mode: baseline` reaches that job, which takes these steps and keeps its report as an artifact:
-
-```yaml
-- env:
-    GH_TOKEN: ${{ github.token }}
-  run: bunx checks-mutation-baseline reports/stryker-incremental.json
-- run: bunx stryker run --incremental
-```
-
-The restore fetches the restored run's head commit from origin when the checkout lacks it, so the checkout needs no full history.
-
-A first baseline with no state tests every mutant.
-Each later run restores the newest `main` baseline, drops each result the 28-day refresh window or a changed config made stale, and retests the mutants its changes reach.
-A result made stale by a file a test reads at runtime stays stale past refresh, since refresh uploads only `mutation-baseline-full`.
-The job uploads the Stryker report and the incremental state as the `mutation-baseline` artifact and keeps it for 7 days.
-The next baseline restores that artifact with the ordinary restore.
-The job posts the score in its summary.
-
-A refresh job restores the previous full report with `--full` for shard balancing and runs the full suite with static mutants ignored.
-It merges the shard reports into a fresh `mutation-baseline-full` artifact.
+The `mutation.yml` [checks-setup](checks-setup.md) writes holds only the refresh, and [checks-ci-wiring](checks-ci-wiring.md#mutation-jobs) refuses every other mutation job.
+A refresh restores the previous full report with `--full` for shard balancing, splits the tree into 4 shards and runs each shard with static mutants ignored.
+It merges the shard reports, posts the score in its summary, and uploads the slimmed report as a fresh `mutation-baseline-full` artifact.
 It starts by hand every 28 days.
 [checks-mutation-scope](checks-mutation-scope.md) reads the full report to bring in the sources a changed unit test covers or kills.
 The restore reads only a successful run of `mutation.yml` on `main`, so a sweep that fails publishes nothing a scope step reads.
 
-The baseline job runs on `ubuntu-latest`.
+The refresh jobs run on `ubuntu-latest`.
 [checks-ci-wiring](checks-ci-wiring.md#runners) refuses a mutation job that names `CI_RUNS_ON` in `runs-on`.
 The `name: mutation` line is what `gh workflow run mutation` looks up.
 GitHub sets `CI=true` on every runner, so the preset lets the full run through there.

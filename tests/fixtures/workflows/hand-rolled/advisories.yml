@@ -10,4 +10,8 @@ jobs:
     permissions:
       contents: read
       issues: write
-    uses: avi2d/workflows/.github/workflows/advisories.yml@v1
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - run: bunx checks-advisories --all

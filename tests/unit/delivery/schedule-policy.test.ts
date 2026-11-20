@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
 import { parseWorkflow } from "../../../src/delivery/ci-wiring.ts";
+import { fullAdvisories } from "../../../src/delivery/full-set.ts";
 import { findScheduledRuns, weekly } from "../../../src/delivery/schedule-policy.ts";
 
 const PUBLIC_PACKAGE = { visibility: "public", publishes: true } as const;
@@ -31,34 +32,23 @@ test("a weekly advisory scan in a public repository passes, through the bin or t
 });
 
 function calling(cron: string, ...uses: readonly string[]): string {
-  const jobs = uses.map((target, index) => `  job${index}:\n    permissions:\n      contents: read\n      issues: write\n    uses: ${target}\n`).join("");
+  const jobs = uses.map((target, index) => `  job${index}:
+    permissions:
+      contents: read
+      issues: write
+    uses: ${target}
+`).join("");
   return `name: job\non:\n  schedule:\n    - cron: "${cron}"\n  workflow_dispatch:\njobs:\n${jobs}`;
 }
 
-test("a weekly public call of the shared advisories workflow passes instead of being refused as a hand-run job", () => {
-  expect(judged(calling("15 5 * * 1", "avi2d/workflows/.github/workflows/advisories.yml@v1"))).toEqual([]);
-  expect(judged(calling("15 5 * * 1", "Avi2d/Workflows/.github/workflows/advisories.yml@0123456789abcdef0123456789abcdef01234567"))).toEqual([]);
-});
-
-test("a scheduled call of the shared advisories workflow keeps the weekly and public rules of an advisories run step", () => {
-  const call = "avi2d/workflows/.github/workflows/advisories.yml@v1";
-  expect(faultOf(calling("15 5 * * *", call))).toEqual(['the advisory scan runs more than once a week; keep one cron at a minute, an hour and a weekday, such as "15 5 * * 1"']);
-  expect(faultOf(calling("15 5 * * 1", call), { visibility: "private", publishes: false })).toEqual([
-    "a private repository scans advisories by hand; drop the schedule, so it runs only when someone starts it with gh workflow run",
-  ]);
-});
-
-test("a scheduled call of some other workflow is still refused rather than passed as the shared advisory scan", () => {
-  for (const target of [
-    "avi2d/workflows/.github/workflows/runner.yml@v1",
-    "someone/workflows/.github/workflows/advisories.yml@v1",
-    "./.github/workflows/advisories.yml",
-  ]) {
+test("a scheduled call of a reusable workflow, even one named advisories.yml, is refused rather than passed as the advisory scan", () => {
+  for (const target of ["someone/workflows/.github/workflows/advisories.yml@v1", "./.github/workflows/advisories.yml"]) {
     expect(faultOf(calling("15 5 * * 1", target))).toEqual(["drop the schedule, so it runs only when someone starts it with gh workflow run"]);
   }
-  expect(faultOf(calling("15 5 * * 1", "avi2d/workflows/.github/workflows/advisories.yml@v1", "./.github/workflows/test.yml"))).toEqual([
-    "drop the schedule, so it runs only when someone starts it with gh workflow run",
-  ]);
+});
+
+test("the advisories.yml checks-workflows writes passes as the weekly scan instead of being refused as a hand-run job", () => {
+  expect(judged(fullAdvisories("15 5 * * 1").text)).toEqual([]);
 });
 
 test("a daily advisory scan is refused instead of passing as the weekly one", () => {

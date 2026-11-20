@@ -9,6 +9,7 @@ import { main as githubRelease } from "./github-release.ts";
 import { main as heldRuns } from "./held-runs.ts";
 import { runCheck } from "./lib/run.ts";
 import { main as lighthouse } from "./lighthouse/lighthouse.ts";
+import { main as mutation } from "./mutation/mutation.ts";
 import { main as pagesDeploy } from "./pages-deploy.ts";
 import { main as pagesPublish } from "./pages-publish.ts";
 import { main as pagesServed } from "./pages-served.ts";
@@ -29,6 +30,7 @@ const COMMANDS = {
   "github-release": () => githubRelease,
   "held-runs": () => heldRuns,
   lighthouse: () => lighthouse,
+  mutation,
   "pages-deploy": () => pagesDeploy,
   "pages-publish": pagesPublish,
   "pages-served": () => pagesServed,

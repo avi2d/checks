@@ -1,5 +1,4 @@
 import { Option, Schema } from "effect";
-import { sharedFileOf } from "./ci-jobs.ts";
 import { crons } from "./release-schedule.ts";
 import { weekly } from "./schedule-policy.ts";
 import { workflowJobs, type Workflow } from "./workflow-references.ts";
@@ -51,9 +50,13 @@ const stepsOf = (job: unknown): readonly Step[] => Option.match(decodeSteps(job)
 
 const callsAction = (step: Step, action: string): boolean => step.uses?.split("@")[0]?.endsWith(action) === true;
 
-function callsOf(workflow: Workflow | undefined, shared: string): readonly unknown[] {
+// A repository still on reusable workflow calls keeps the options it passes when --write replaces the calls.
+function callsOf(workflow: Workflow | undefined, file: string): readonly unknown[] {
   if (workflow === undefined) return [];
-  return workflowJobs(workflow).flatMap(([, job]) => (sharedFileOf(job["uses"]) === shared ? [job["with"] ?? {}] : []));
+  return workflowJobs(workflow).flatMap(([, job]) => {
+    const uses = job["uses"];
+    return typeof uses === "string" && uses.split("@")[0]?.split("/").at(-1) === file ? [job["with"] ?? {}] : [];
+  });
 }
 
 function weeklyCronOf(advisories: Workflow | undefined): string | undefined {
@@ -79,8 +82,11 @@ function flakeOf(flake: Workflow | undefined): Flake {
   return { nodeVersionFile: flake === undefined ? undefined : heldNodeVersionFile(flake) };
 }
 
-// A hand-rolled deploy builds with its one run step in the job that uploads the Pages artifact.
-function handRolledPagesOf(docs: Workflow): Pages | undefined {
+// A deploy builds with its one run step in the job that uploads the Pages artifact.
+function pagesOf(docs: Workflow | undefined): Pages | undefined {
+  if (docs === undefined) return undefined;
+  const [call] = callsOf(docs, "github-pages.yml");
+  if (call !== undefined) return Option.getOrUndefined(decodePagesInputs(call));
   for (const [, job] of workflowJobs(docs)) {
     const steps = stepsOf(job);
     const path = steps.find((step) => callsAction(step, "actions/upload-pages-artifact"))?.with?.["path"];
@@ -90,17 +96,10 @@ function handRolledPagesOf(docs: Workflow): Pages | undefined {
   return undefined;
 }
 
-function pagesOf(docs: Workflow | undefined): Pages | undefined {
-  if (docs === undefined) return undefined;
-  const [call] = callsOf(docs, "github-pages.yml");
-  if (call === undefined) return handRolledPagesOf(docs);
-  return Option.getOrUndefined(decodePagesInputs(call));
-}
-
 function readsSecretsPack(ci: Workflow | undefined): boolean {
   const passed = callsOf(ci, "static.yml").some((call) => Option.match(decodeStaticInputs(call), { onNone: () => false, onSome: (inputs) => inputs["secrets-pack"] === true }));
-  const written = ci !== undefined && workflowJobs(ci).some(([, job]) => stepsOf(job).some((step) => callsAction(step, "actions/secrets-pack")));
-  return passed || written;
+  const unpacks = (step: Step): boolean => step.run?.trim() === "bunx checks-ci secrets-pack" || callsAction(step, "/secrets-pack");
+  return passed || (ci !== undefined && workflowJobs(ci).some(([, job]) => stepsOf(job).some(unpacks)));
 }
 
 function claudeInputOf(inputs: unknown): string | undefined {
@@ -112,8 +111,8 @@ function claudeVersionOf(workflows: readonly (Workflow | undefined)[]): string |
   for (const workflow of workflows) {
     if (workflow === undefined) continue;
     for (const [, job] of workflowJobs(workflow)) {
-      const version = claudeInputOf(job["with"]);
-      if (version !== undefined) return version;
+      const passed = claudeInputOf(job["with"]);
+      if (passed !== undefined) return passed;
       for (const step of stepsOf(job)) {
         const installed = /(?:^|\s)@anthropic-ai\/claude-code@(\d+\.\d+\.\d+)(?=\s|$)/.exec(step.run ?? "")?.[1];
         if (installed !== undefined) return installed;
@@ -123,13 +122,21 @@ function claudeVersionOf(workflows: readonly (Workflow | undefined)[]): string |
   return undefined;
 }
 
+const decodeEnv = Schema.decodeUnknownOption(Schema.Struct({ env: Schema.Record(Schema.String, Schema.Unknown) }));
+
+const setsPublishWorkspaces = (step: unknown): boolean =>
+  Option.match(decodeEnv(step), { onNone: () => false, onSome: ({ env }) => String(env["CHECKS_PUBLISH_WORKSPACES"]) === "true" });
+
 const decodePublishWorkspaces = Schema.decodeUnknownOption(Schema.Struct({ "publish-workspaces": Schema.optionalKey(Schema.Boolean) }));
 
+const passesPublishWorkspaces = (call: unknown): boolean =>
+  Option.match(decodePublishWorkspaces(call), { onNone: () => false, onSome: (inputs) => inputs["publish-workspaces"] === true });
+
 export function readsPublishWorkspaces(workflows: readonly Workflow[]): boolean {
-  return workflows.some((workflow) =>
-    callsOf(workflow, "release-main.yml").some((call) =>
-      Option.match(decodePublishWorkspaces(call), { onNone: () => false, onSome: (inputs) => inputs["publish-workspaces"] === true }),
-    ),
+  return workflows.some(
+    (workflow) =>
+      callsOf(workflow, "release-main.yml").some(passesPublishWorkspaces) ||
+      workflowJobs(workflow).some(([, job]) => Array.isArray(job["steps"]) && job["steps"].some(setsPublishWorkspaces)),
   );
 }
 

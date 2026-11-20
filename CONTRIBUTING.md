@@ -26,11 +26,9 @@ A pull request runs only the tests it reaches.
 The `release` workflow runs the whole suite with `bun run test --full` before it publishes, as [checks-test](docs/gates/checks-test.md#pull-request-runs) says.
 `.github/workflows/pr-title.yml` lints the pull request title, so editing the title reruns only that.
 No workflow runs on a schedule except the weekly advisory scan, as [checks-ci-wiring](docs/gates/checks-ci-wiring.md#schedules) requires.
-No workflow runs mutation testing except `.github/workflows/mutation.yml`, which calls the shared mutation workflow.
-It is the caller [checks-setup](docs/gates/checks-setup.md) writes.
-It starts on no push, so a merge to `main` starts no mutation run.
-It runs `compare` on each pull request.
-It runs `refresh` when started by hand with `gh workflow run mutation`, every 28 days.
+No workflow runs mutation testing except `.github/workflows/mutation.yml`, the full file [checks-setup](docs/gates/checks-setup.md) writes.
+It starts on no push and no pull request, so a merge to `main` starts no mutation run.
+It runs the refresh when started by hand with `gh workflow run mutation`, every 28 days.
 No workflow runs the long test tiers, the whole-tree sweep or the issue filing on its own.
 `bun run lint` runs the three range whole-tree lint gates over each pull request's range.
 It runs `checks-lint-coverage` only when the change selects the tree gates, since that gate reads the working tree.

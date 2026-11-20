@@ -34,7 +34,7 @@ The workflow lints with the installed kit's `commitlint.config.ts`, so every rep
 The `ci` job reports the title step's outcome as a `commitlint` status on every run, so a required `commitlint` status stays while `commitlint.yml` goes away.
 That post needs the workflow's `statuses: write` permission.
 The title lint runs before the docs-only filter, so a change to top-level Markdown and `docs/` Markdown alone still lints its title.
-In the full set [checks-workflows](../gates/checks-workflows.md#the-full-set) writes, `pr-title.yml` lints the title on every push and title edit and posts the `commitlint` status.
+In the set [checks-workflows](../gates/checks-workflows.md#what-it-checks) writes, `pr-title.yml` lints the title on every push and title edit and posts the `commitlint` status.
 
 ## What it lints
 

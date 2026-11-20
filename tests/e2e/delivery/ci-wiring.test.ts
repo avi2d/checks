@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { pageWorkflow } from "../../lib/doc-workflows.ts";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
 import { CHECKOUT, fixtureRepos, ran, type FixtureRepo, type Ran } from "../lib/fixture-repo.ts";
+import { MUTATION_WORKFLOW } from "../../../src/delivery/full-set/mutation.ts";
 import { settingsFile } from "../lib/settings-file.ts";
 
 // The oracle is the file the check reads, not a constant in the code.
@@ -90,7 +91,7 @@ test("the default branch comes from origin HEAD, the pull request base or GitHub
   expect(release.text).toContain("limits pull_request to branches other than release");
 }, 30_000);
 
-const SHARED = { GITHUB_REPOSITORY: "avi2d/workflows" };
+const REPOSITORY = { GITHUB_REPOSITORY: "acme/acme" };
 
 test("a private repository's event holds mutation jobs to its configured labels and every other job to a hosted default", async () => {
   const old = `\${{ vars.CI_RUNS_ON || fromJSON('["self-hosted","gpu"]') }}`;
@@ -105,13 +106,13 @@ test("a private repository's event holds mutation jobs to its configured labels 
     "event.json": JSON.stringify({ repository: { default_branch: "main", private: true } }),
   });
   await repo.commit("start");
-  const privateEvent = { ...SHARED, GITHUB_EVENT_PATH: join(repo.dir, "event.json") };
+  const privateEvent = { ...REPOSITORY, GITHUB_EVENT_PATH: join(repo.dir, "event.json") };
   const red = await wiring(repo, privateEvent);
   expect(red.exitCode).toBe(1);
   expect(red.text).toContain("2 job(s) run on the wrong runner");
   expect(red.text).toContain(".github/workflows/mutation-compare.yml job mutation-compare: a mutation job reads CI_RUNS_ON");
   expect(red.text).toContain(".github/workflows/ci.yml job checks: the job is not on a hosted runner");
-  expect((await wiring(repo, SHARED)).exitCode).toBe(1);
+  expect((await wiring(repo, REPOSITORY)).exitCode).toBe(1);
   await repo.write({
     "checks.config.ts": settingsFile({}),
     ".github/workflows/ci.yml": workflow,
@@ -120,7 +121,7 @@ test("a private repository's event holds mutation jobs to its configured labels 
   const undeclared = await wiring(repo, privateEvent);
   expect(undeclared.exitCode).toBe(1);
   expect(undeclared.text).toContain("job mutation-compare: a mutation job in a private repository has no mutationRunner in checks.config.ts");
-  expect((await wiring(repo, SHARED)).exitCode).toBe(0);
+  expect((await wiring(repo, REPOSITORY)).exitCode).toBe(0);
   await repo.write({
     "checks.config.ts": runners,
     ".github/workflows/ci.yml": workflow,
@@ -163,7 +164,7 @@ test("runner labels left under package.json checks are refused naming the checks
     "event.json": JSON.stringify({ repository: { default_branch: "main", private: true } }),
   });
   await repo.commit("start");
-  const refused = await wiring(repo, { ...SHARED, GITHUB_EVENT_PATH: join(repo.dir, "event.json") });
+  const refused = await wiring(repo, { ...REPOSITORY, GITHUB_EVENT_PATH: join(repo.dir, "event.json") });
   expect(refused.text).toContain("package.json checks.selfHostedRunners is no longer read; move it to the selfHostedRunners key of checks.config.ts");
   expect(refused.exitCode).toBe(2);
 }, 30_000);
@@ -187,7 +188,7 @@ test("a private repository's mutation job through a repository shell script in i
     "event.json": JSON.stringify({ repository: { default_branch: "main", private: true } }),
   });
   await repo.commit("start");
-  const privateEvent = { ...SHARED, GITHUB_EVENT_PATH: join(repo.dir, "event.json") };
+  const privateEvent = { ...REPOSITORY, GITHUB_EVENT_PATH: join(repo.dir, "event.json") };
   const red = await wiring(repo, privateEvent);
   expect(red.exitCode).toBe(1);
   expect(red.text).toContain(`${runs.length} job(s) run on the wrong runner`);
@@ -199,37 +200,32 @@ test("a private repository's mutation job through a repository shell script in i
   expect(green.exitCode).toBe(0);
 }, 30_000);
 
-test("a mutation caller with a mode formula or a path list is refused, and only the caller checks-setup writes passes", async () => {
-  const written = ["name: mutation", "", "on:", "  workflow_dispatch:", "", "jobs:", "  mutation:", "    uses: avi2d/workflows/.github/workflows/mutation.yml@v3", "    permissions: { contents: read, actions: write, pull-requests: write }", ""].join("\n");
-  const formula = written.replace("    permissions:", "    with:\n      mode: ${{ github.event_name == 'pull_request' && 'compare' || 'baseline' }}\n    permissions:");
-  const paths = written.replace("  workflow_dispatch:", "  push:\n    branches: [main]\n    paths: [\"src/**\"]\n  workflow_dispatch:");
-  const repo = await open({ "package.json": scripts(["lint", "test"]), ".github/workflows/ci.yml": workflow, ".github/workflows/mutation.yml": formula });
+test("a mutation.yml edited away from the file checks-setup writes, or calling avi2d/workflows, is refused, and only the written file passes", async () => {
+  const caller = "name: mutation\non:\n  workflow_dispatch:\njobs:\n  mutation:\n    uses: avi2d/workflows/.github/workflows/mutation.yml@v3\n    permissions: { contents: read, actions: write, pull-requests: write }\n";
+  const edited = MUTATION_WORKFLOW.replace("  workflow_dispatch:", "  push:\n    branches: [main]\n    paths: [\"src/**\"]\n  workflow_dispatch:");
+  const repo = await open({ "package.json": scripts(["lint", "test"]), ".bun-version": `${FLEET_BUN_VERSION}\n`, ".github/workflows/ci.yml": workflow, ".github/workflows/mutation.yml": caller });
   await repo.commit("start");
-  const refused = await wiring(repo, { GITHUB_REPOSITORY: "avi2d/skills" });
+  const refused = await wiring(repo, REPOSITORY);
   expect(refused.exitCode).toBe(1);
-  expect(refused.text).toContain("differs from the caller checks-setup writes");
-  await repo.write({ ".github/workflows/mutation.yml": paths });
-  expect((await wiring(repo, { GITHUB_REPOSITORY: "avi2d/skills" })).text).toContain("differs from the caller checks-setup writes");
-  await repo.write({ ".github/workflows/mutation.yml": written });
-  const green = await wiring(repo, { GITHUB_REPOSITORY: "avi2d/skills" });
-  expect(green.text).not.toContain("differs from the caller");
+  expect(refused.text).toContain("ci-wiring: .github/workflows/mutation.yml differs from the file checks-setup writes: delete it and run checks-setup to write it again");
+  await repo.write({ ".github/workflows/mutation.yml": edited });
+  expect((await wiring(repo, REPOSITORY)).text).toContain(".github/workflows/mutation.yml differs from the file checks-setup writes");
+  await repo.write({ ".github/workflows/mutation.yml": MUTATION_WORKFLOW });
+  const green = await wiring(repo, REPOSITORY);
+  expect(green.text).not.toContain("differs from the file");
   expect(green.exitCode).toBe(0);
 }, 30_000);
 
-test("a consumer's hand-rolled stryker run job is refused under any repository case and passes once it calls the shared workflow", async () => {
-  const handRolled = `on: workflow_dispatch\njobs:\n  mutation:\n    runs-on: ubuntu-latest\n    timeout-minutes: 60\n    steps:\n      - run: bunx stryker run --incremental\n`;
-  const caller = `name: mutation\n\non:\n  workflow_dispatch:\n\njobs:\n  mutation:\n    uses: avi2d/workflows/.github/workflows/mutation.yml@v3\n    permissions: { contents: read, actions: write, pull-requests: write }\n`;
-  const repo = await open({ "package.json": scripts(["lint", "test"]), ".github/workflows/ci.yml": workflow, ".github/workflows/mutation.yml": handRolled });
+test("a hand-rolled stryker run job is refused in any repository and passes once mutation runs from the written mutation.yml", async () => {
+  const handRolled = "on: workflow_dispatch\njobs:\n  mutation:\n    runs-on: ubuntu-latest\n    timeout-minutes: 60\n    steps:\n      - run: bunx stryker run --incremental\n";
+  const repo = await open({ "package.json": scripts(["lint", "test"]), ".bun-version": `${FLEET_BUN_VERSION}\n`, ".github/workflows/ci.yml": workflow, ".github/workflows/mutation.yml": handRolled });
   await repo.commit("start");
-  const red = await wiring(repo, { GITHUB_REPOSITORY: "avi2d/skills" });
+  const red = await wiring(repo, REPOSITORY);
   expect(red.exitCode).toBe(1);
-  expect(red.text).toContain("ci-wiring: 1 job(s) run mutation outside the shared workflow:\n  .github/workflows/mutation.yml job mutation: run mutation through a job with uses: avi2d/workflows/.github/workflows/mutation.yml@v3, as checks-setup writes it");
-  await $`git -C ${repo.dir} remote add origin git@github.com:avi2d/skills.git`.quiet();
-  expect((await wiring(repo)).text).toContain("job mutation: run mutation through a job with uses:");
-  expect((await wiring(repo, { GITHUB_REPOSITORY: "Avi2d/Workflows" })).exitCode).toBe(0);
-  await repo.write({ ".github/workflows/mutation.yml": caller });
-  const green = await wiring(repo, { GITHUB_REPOSITORY: "avi2d/skills" });
-  expect(green.text).not.toContain("outside the shared workflow");
+  expect(red.text).toContain("ci-wiring: 1 job(s) run mutation outside the mutation workflow:\n  .github/workflows/mutation.yml job mutation: run mutation only from the .github/workflows/mutation.yml checks-setup writes");
+  await repo.write({ ".github/workflows/mutation.yml": MUTATION_WORKFLOW });
+  const green = await wiring(repo, REPOSITORY);
+  expect(green.text).not.toContain("outside the mutation workflow");
   expect(green.exitCode).toBe(0);
 }, 30_000);
 

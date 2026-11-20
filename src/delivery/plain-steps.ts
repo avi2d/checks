@@ -344,7 +344,7 @@ export const run = Effect.fn("run")(function* (root: string) {
 export function report(result: Result): string {
   if (result.violations.length === 0) return `${NAME}: every run step in ${result.files} workflow or action file(s) is one plain command`;
   return [
-    `${NAME}: ${result.violations.length} run step(s) are not one plain command; run one command, or call a shared workflow or action that holds the logic:`,
+    `${NAME}: ${result.violations.length} run step(s) are not one plain command; run one command, or move the logic into a bin or an action:`,
     ...result.violations.map(({ location, faults }) => `  ${location}: ${faults.join(", ")}`),
   ].join("\n");
 }

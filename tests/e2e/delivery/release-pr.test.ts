@@ -106,7 +106,20 @@ test(
     await mkdir(join(widget.dir, ".github", "workflows"), { recursive: true });
     await writeFile(
       join(widget.dir, ".github", "workflows", "main.yml"),
-      ["name: main", "on:", "  push:", "    branches: [main]", "jobs:", "  release:", "    uses: avi2d/workflows/.github/workflows/release-main.yml@v3", "    with:", "      publish-workspaces: true", ""].join("\n"),
+      [
+        "name: main",
+        "on:",
+        "  push:",
+        "    branches: [main]",
+        "jobs:",
+        "  release:",
+        "    runs-on: ubuntu-latest",
+        "    steps:",
+        "      - env:",
+        '          CHECKS_PUBLISH_WORKSPACES: "true"',
+        "        run: bunx checks-release-tag",
+        "",
+      ].join("\n"),
     );
     await $`git add package.json packages/public/package.json .github/workflows/main.yml && git commit -q -m ${"fix: include the public workspace"} && git push -q origin main`.cwd(widget.dir).quiet();
     expect((await widget.run(["ci.yml"])).exitCode).toBe(0);

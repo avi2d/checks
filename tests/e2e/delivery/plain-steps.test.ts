@@ -14,7 +14,7 @@ test(
     const { write, commit, script } = await open({
       "package.json": JSON.stringify({ name: "plain-steps-fixture", type: "module" }),
       ".github/workflows/smoke.yml": workflow([
-        "      - uses: avi2d/workflows/actions/setup@v1",
+        "      - uses: ./.github/actions/setup",
         "      - name: Smoke names",
         `        run: ${PRINTF_STEP}`,
         "      - name: Pack",
@@ -28,7 +28,7 @@ test(
     expect(red.exitCode).toBe(1);
     expect(red.text).toContain(
       [
-        "plain-steps: 2 run step(s) are not one plain command; run one command, or call a shared workflow or action that holds the logic:",
+        "plain-steps: 2 run step(s) are not one plain command; run one command, or move the logic into a bin or an action:",
         '  .github/workflows/smoke.yml line 10 job smoke step "Smoke names": a backslash escape, a redirect',
         '  .github/workflows/smoke.yml line 12 job smoke step "Pack": a block scalar',
         "",
@@ -37,7 +37,7 @@ test(
 
     await write({
       ".github/workflows/smoke.yml": workflow([
-        "      - uses: avi2d/workflows/actions/setup@v1",
+        "      - uses: ./.github/actions/setup",
         "      - name: Pack",
         "        run: bun scripts/smoke-pack.ts",
       ]),

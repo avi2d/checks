@@ -69,8 +69,7 @@ mutation-compare: REGRESSION (1 mutant(s))
 
 ## When it runs
 
-No caller-started run invokes it.
-On a pull request the shared workflow runs a scoped Stryker run over the changed files and posts a score comment for those files.
+No workflow the set writes invokes it.
 [checks-whole-tree-run](checks-whole-tree-run.md) judges the mutation score of `main` on each whole-tree run and opens an issue for each file whose score fell.
 Run it by hand to compare two Stryker reports.
 A full sweep runs in CI and never on a laptop.
@@ -79,22 +78,8 @@ The shared preset refuses a full `stryker run` outside CI and names that workflo
 
 ## Running it in CI
 
-The shared pull request run scores the scope instead of comparing reports.
-Only `avi2d/workflows` holds the shared workflow, so each other repository calls it from the caller [checks-setup](checks-setup.md) writes.
-The shared pull request run runs Stryker once at the pull request head over that scope without reading `main`.
-The shared workflow picks `compare` from the event on each pull request.
-
-The shared pull request run calls `checks-mutation-scope` with no report, so the scope holds the files the branch changes, as [checks-mutation-scope](checks-mutation-scope.md) says.
-No changed unit test widens that scope.
-A caller that passes a full baseline report also picks the sources its changed unit tests cover or kill.
-The head run mutates no file outside that scope.
-The job time follows the size of the change and not the size of the repository.
-An empty scope skips the head run, and the notice names the skip on the run's summary.
-A scope past the mutant cap skips the scoring, and a note names the skip.
-A changed unit test with no full baseline on `main` adds no covered source to the scope.
-With no other change the scope stays empty and the head run skips.
-With a report, a changed unit test that `main` edited after that baseline widens the scope to every file the `mutate` globs match.
-When that report path names no file, refresh the full baseline with `gh workflow run mutation`, as [checks-mutation](checks-mutation.md#running-it-in-ci) shows.
+The `mutation` workflow [checks-setup](checks-setup.md) writes runs only the full refresh, which starts by hand with `gh workflow run mutation`.
+It scores the merged report in its summary and keeps it as the `mutation-baseline-full` artifact, as [checks-mutation](checks-mutation.md#running-it-in-ci) says.
 A run with `--mutate` is scoped, so the preset lets it through without `CI=true`.
 A public repository keeps `runs-on: ubuntu-latest`, as [checks-ci-wiring](checks-ci-wiring.md#runners) requires of a job a fork can reach.
 [checks-ci-wiring](checks-ci-wiring.md#runners) refuses a mutation job that names `CI_RUNS_ON` in `runs-on`.
