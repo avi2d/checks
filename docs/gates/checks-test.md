@@ -217,7 +217,7 @@ Bun ignores the live and pixel directories during the default run.
 
 ## Parallel runs
 
-`checks-test` runs `bun test --randomize --parallel=<workers>`, so Bun hands each test file to one of that many worker processes.
+`checks-test` runs `bun test --pass-with-no-tests --randomize --parallel=<workers>`, so Bun hands each test file to one of that many worker processes.
 Without `--parallel=<workers>`, the count comes from free memory, and never exceeds one worker per core.
 One worker needs about a gigabyte, each further worker about a hundred megabytes more, and a tenth of memory stays reserved.
 On macOS the count reads reclaimable pages too, since `freemem` leaves them out.
@@ -256,7 +256,7 @@ It refuses test filters because every test excluded by a filter would look skipp
 | --- | --- |
 | 0 | every test passed, every skip has a matching site reason, and no file exceeds the time limit in CI, or no test file was found |
 | 1 | a test failed, a parallel worker crashed, a skip lacks a site reason, a declaration is stale in CI, or a file exceeds the time limit in CI |
-| 2 | an argument is not one it takes, a run outside CI is refused, `APPROVE_SCREENS` is not a boolean in a pixel run, a declaration, the smoke list, or the time limit in CI cannot be read, a `checks` object in `package.json` still sets `smoke` or `reach`, a smoke entry names no runnable test, `CI` is not a boolean, Bun wrote no report, a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` or an agent run is refused while `localTests` is blocked |
+| 2 | an argument is not one it takes, a run outside CI is refused, `APPROVE_SCREENS` is not a boolean in a pixel run, a declaration, the smoke list, or the time limit in CI cannot be read, a `checks` object in `package.json` still sets `smoke` or `reach`, a smoke entry names no runnable test, `CI` is not a boolean, Bun passed but wrote no report though test files exist, a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` or an agent run is refused while `localTests` is blocked |
 
 ## Sample output
 
