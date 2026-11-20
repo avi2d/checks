@@ -44,7 +44,7 @@ A run whose worker crashed gets a replay of that worker's files up to the crashe
 ## What it reads
 
 It reads bun's JUnit report of each run.
-It reads `CHECKS_AGENT` and `CI` from the environment and the `localTests` key of `checks.config.ts`, and refuses an agent run while `localTests` is blocked, as [checks-local-tests](checks-local-tests.md) says.
+It reads `AI_AGENT`, `CHECKS_AGENT`, `CI`, and `agentTests.allowLocal` to decide whether an agent can run tests outside CI, as [checks-local-tests](checks-local-tests.md) says.
 It reads the test runner from the `test` script in `package.json`, as [checks-test-layout](checks-test-layout.md) validates that script.
 It hunts serially when the file is missing or its `test` script does not run `checks-test`.
 Under workers it reads the two inputs of the worker count when the hunt starts, never a per-repository setting.
@@ -70,7 +70,7 @@ Under workers the record also holds `parallel`, the worker count and each replay
 | --- | --- |
 | 0 | every run passed |
 | 1 | a run failed |
-| 2 | an argument does not parse, `package.json` or the worker record does not decode, bun passed without writing its report, a replay's placeholder files did not each run once, an agent run is refused while `localTests` is blocked, or an agent run outside CI whose `checks.config.ts` does not load |
+| 2 | an argument does not parse, `package.json` or the worker record does not decode, bun passed without writing its report, a replay's placeholder files did not each run once, an agent run is refused outside CI when `agentTests.allowLocal` is `false`, or an agent run outside CI whose `checks.config.ts` does not load |
 
 ## Sample output
 

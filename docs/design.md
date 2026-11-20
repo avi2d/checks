@@ -95,7 +95,7 @@ Twenty-three `exports` keys name a path the file does not sit at, because consum
 `@avi2dg/checks/core/git.ts`, `@avi2dg/checks/core/main.ts`, `@avi2dg/checks/testing/test.ts` and `@avi2dg/checks/testing/test-report.ts` point at their files under `src/`, whose git, entry-point, test-report and skip-judging helpers a repository's own test runner script builds on.
 `@avi2dg/checks/delivery/gitleaks.ts`, `@avi2dg/checks/delivery/gitleaks.toml` and `@avi2dg/checks/dependencies/cache-root.ts` point at their files under `src/`, whose pinned gitleaks, rules and shared cache root a repository's own secret scanner builds on.
 `@avi2dg/checks/core/bun-platform.ts`, `@avi2dg/checks/core/chrome-path.ts`, `@avi2dg/checks/core/command-output.ts` and `@avi2dg/checks/testing/run-effect.ts` point at their files under `src/`, whose Bun platform layer, Chrome lookup, command output and test runner a product's own scripts and tests build on.
-`@avi2dg/checks/local-tests` points at `src/core/agent-marker.ts`, whose `AGENT_MARKER` names the environment marker an agent run carries.
+`@avi2dg/checks/local-tests` points at `src/core/agent-marker.ts`, whose `AGENT_MARKER` names `CHECKS_AGENT`, whose `AI_AGENT_MARKER` names `AI_AGENT`, and whose `isAgent` marks an agent run.
 `@avi2dg/checks/local-test-preload` points at `src/testing/local-test-preload.ts`, the preload the shipped `bunfig.toml` names.
 `@avi2dg/checks/config` points at `src/quality/config.ts`, whose `defineConfig` a repository's `checks.config.ts` imports.
 `@avi2dg/checks/templates/*` points at `dist/templates/`.

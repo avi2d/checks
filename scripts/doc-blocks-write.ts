@@ -9,7 +9,7 @@ const write = Effect.gen(function* () {
   const facts = yield* kitFacts(yield* checkout.read(MANIFEST));
   yield* Effect.forEach(TARGETS, ({ file, blocks }) =>
     Effect.gen(function* () {
-      const spliced = splice(yield* checkout.read(file), blocks, facts);
+      const spliced = yield* splice(yield* checkout.read(file), blocks, facts);
       if (spliced.type === "unmarked") {
         return yield* new DocBlocksUnwritable({ message: `${file} lacks the markers of its generated ${spliced.blocks.join(", ")} block(s)` });
       }

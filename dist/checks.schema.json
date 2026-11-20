@@ -1,0 +1,750 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "smoke": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "The extra test files to run with the local unit tier."
+    },
+    "reach": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "description": "The tests to run when a changed path is missing from the import graph."
+    },
+    "mutationRunner": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "string",
+          "minLength": 1
+        }
+      ],
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "The runner labels for mutation jobs in a private repository."
+    },
+    "selfHostedRunners": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "prefixItems": [
+          {
+            "type": "string",
+            "minLength": 1
+          }
+        ],
+        "minItems": 1,
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "description": "The other sets of self-hosted runner labels that jobs in a private repository may use."
+    },
+    "browser": {
+      "type": "object",
+      "properties": {
+        "site": {
+          "type": "string",
+          "minLength": 1
+        },
+        "routes": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    },
+                    "locale": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "locale"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "preset": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "every-page"
+                          ]
+                        }
+                      ]
+                    },
+                    "locale": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "preset",
+                    "locale"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          ],
+          "minItems": 1,
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "locale": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "path",
+                  "locale"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "preset": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "every-page"
+                        ]
+                      }
+                    ]
+                  },
+                  "locale": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "preset",
+                  "locale"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "viewports": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "width": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    },
+                    "height": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    },
+                    "touch": {
+                      "type": "boolean"
+                    },
+                    "device": {
+                      "type": "string",
+                      "enum": [
+                        "phone",
+                        "tablet",
+                        "desktop"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "width",
+                    "height"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "preset": {
+                      "type": "string",
+                      "enum": [
+                        "anchor",
+                        "full"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "preset"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          ],
+          "minItems": 1,
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "width": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  "height": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  "touch": {
+                    "type": "boolean"
+                  },
+                  "device": {
+                    "type": "string",
+                    "enum": [
+                      "phone",
+                      "tablet",
+                      "desktop"
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "width",
+                  "height"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "preset": {
+                    "type": "string",
+                    "enum": [
+                      "anchor",
+                      "full"
+                    ]
+                  }
+                },
+                "required": [
+                  "preset"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "states": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "textPx": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    },
+                    "reducedMotion": {
+                      "type": "string",
+                      "enum": [
+                        "reduce",
+                        "no-preference"
+                      ]
+                    },
+                    "checks": {
+                      "type": "array",
+                      "prefixItems": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "layout",
+                            "keyboard",
+                            "motion",
+                            "axe",
+                            "nesting",
+                            "html",
+                            "links",
+                            "assets",
+                            "contrast",
+                            "weight",
+                            "shift",
+                            "look"
+                          ]
+                        }
+                      ],
+                      "minItems": 1,
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "layout",
+                          "keyboard",
+                          "motion",
+                          "axe",
+                          "nesting",
+                          "html",
+                          "links",
+                          "assets",
+                          "contrast",
+                          "weight",
+                          "shift",
+                          "look"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "preset": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "enlarged-text"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "preset"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          ],
+          "minItems": 1,
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "textPx": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  "reducedMotion": {
+                    "type": "string",
+                    "enum": [
+                      "reduce",
+                      "no-preference"
+                    ]
+                  },
+                  "checks": {
+                    "type": "array",
+                    "prefixItems": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "layout",
+                          "keyboard",
+                          "motion",
+                          "axe",
+                          "nesting",
+                          "html",
+                          "links",
+                          "assets",
+                          "contrast",
+                          "weight",
+                          "shift",
+                          "look"
+                        ]
+                      }
+                    ],
+                    "minItems": 1,
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "layout",
+                        "keyboard",
+                        "motion",
+                        "axe",
+                        "nesting",
+                        "html",
+                        "links",
+                        "assets",
+                        "contrast",
+                        "weight",
+                        "shift",
+                        "look"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "preset": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "enlarged-text"
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "preset"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "targets": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "selector": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "routes": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  ],
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "focusable": {
+                  "type": "boolean"
+                },
+                "contrast": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "name",
+                "selector"
+              ],
+              "additionalProperties": false
+            }
+          ],
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "selector": {
+                "type": "string",
+                "minLength": 1
+              },
+              "routes": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                ],
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "focusable": {
+                "type": "boolean"
+              },
+              "contrast": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name",
+              "selector"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "checks": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string",
+              "enum": [
+                "layout",
+                "keyboard",
+                "motion",
+                "axe",
+                "nesting",
+                "html",
+                "links",
+                "assets",
+                "contrast",
+                "weight",
+                "shift",
+                "look"
+              ]
+            }
+          ],
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "enum": [
+              "layout",
+              "keyboard",
+              "motion",
+              "axe",
+              "nesting",
+              "html",
+              "links",
+              "assets",
+              "contrast",
+              "weight",
+              "shift",
+              "look"
+            ]
+          }
+        },
+        "weight": {
+          "type": "object",
+          "properties": {
+            "nonImageBytes": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "scriptBytes": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "imageBytes": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "nonImageBytes",
+            "scriptBytes",
+            "imageBytes"
+          ],
+          "additionalProperties": false
+        },
+        "shift": {
+          "type": "object",
+          "properties": {
+            "max": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "max"
+          ],
+          "additionalProperties": false
+        },
+        "roles": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "string",
+                "minLength": 1
+              }
+            ],
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "hooks": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "site",
+        "routes",
+        "viewports",
+        "states",
+        "targets",
+        "checks"
+      ],
+      "additionalProperties": false,
+      "description": "The site, routes, and checks for browser tests."
+    },
+    "browserRoutes": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "description": "The repository paths that can affect each browser route."
+    },
+    "browserBuild": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "string",
+          "minLength": 1
+        }
+      ],
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "The command that builds the site for the browser test-only proof."
+    },
+    "copy": {
+      "type": "object",
+      "properties": {
+        "inputs": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string",
+              "minLength": 1
+            }
+          ],
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "inputs"
+      ],
+      "additionalProperties": false,
+      "description": "The input globs for the copy gate."
+    },
+    "frontendSyntax": {
+      "type": "object",
+      "properties": {
+        "inputs": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "string",
+              "minLength": 1
+            }
+          ],
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "inputs"
+      ],
+      "additionalProperties": false,
+      "description": "The input globs for the frontend syntax gate."
+    },
+    "agentTests": {
+      "type": "object",
+      "properties": {
+        "allowLocal": {
+          "type": "boolean",
+          "description": "Whether agents may start tests outside CI. This setting does not restrict people or CI.",
+          "default": false
+        }
+      },
+      "additionalProperties": false,
+      "description": "The settings for test runs started by agents.",
+      "default": {
+        "allowLocal": false
+      }
+    },
+    "testFileMaxSeconds": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "The time limit in seconds for each test file in CI.",
+      "default": 300
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {}
+}

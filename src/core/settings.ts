@@ -1,15 +1,24 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
+import { Listed } from "./browser-settings.ts";
 import { Usage } from "./main.ts";
 
 export const SETTINGS_FILE = "checks.config.ts";
 
 const MANIFEST = "package.json";
 
-const SETTING_KEYS = ["smoke", "reach", "mutationRunner", "selfHostedRunners", "browser", "browserRoutes", "browserBuild", "copy", "frontendSyntax", "localTests", "testFileMaxSeconds"] as const;
+export const DEFAULT_AGENT_TESTS = { allowLocal: false } as const;
 
-export type SettingKey = (typeof SETTING_KEYS)[number];
+export const AgentTests = Schema.Struct({
+  allowLocal: Schema.optionalKey(Schema.Boolean.annotate({
+    description: "Whether agents may start tests outside CI. This setting does not restrict people or CI.",
+    default: DEFAULT_AGENT_TESTS.allowLocal,
+  })),
+}).annotate({
+  description: "The settings for test runs started by agents.",
+  default: DEFAULT_AGENT_TESTS,
+});
 
-export const LocalTests = Schema.Literals(["blocked", "allowed"]);
+export const DEFAULT_TEST_FILE_MAX_SECONDS = 300;
 
 export const TestFileMaxSeconds = Schema.Finite.check(Schema.isGreaterThan(0));
 
@@ -26,6 +35,27 @@ export const MutationRunner = Schema.NonEmptyArray(Schema.NonEmptyString);
 export const SelfHostedRunners = Schema.Array(Schema.NonEmptyArray(Schema.NonEmptyString));
 
 export const Inputs = Schema.Struct({ inputs: Schema.NonEmptyArray(Schema.NonEmptyString) });
+
+export const Settings = Schema.Struct({
+  smoke: Schema.optionalKey(Smoke.annotate({ description: "The extra test files to run with the local unit tier." })),
+  reach: Schema.optionalKey(Reach.annotate({ description: "The tests to run when a changed path is missing from the import graph." })),
+  mutationRunner: Schema.optionalKey(MutationRunner.annotate({ description: "The runner labels for mutation jobs in a private repository." })),
+  selfHostedRunners: Schema.optionalKey(SelfHostedRunners.annotate({ description: "The other sets of self-hosted runner labels that jobs in a private repository may use." })),
+  browser: Schema.optionalKey(Listed.annotate({ description: "The site, routes, and checks for browser tests." })),
+  browserRoutes: Schema.optionalKey(BrowserRoutes.annotate({ description: "The repository paths that can affect each browser route." })),
+  browserBuild: Schema.optionalKey(BrowserBuild.annotate({ description: "The command that builds the site for the browser test-only proof." })),
+  copy: Schema.optionalKey(Inputs.annotate({ description: "The input globs for the copy gate." })),
+  frontendSyntax: Schema.optionalKey(Inputs.annotate({ description: "The input globs for the frontend syntax gate." })),
+  agentTests: Schema.optionalKey(AgentTests),
+  testFileMaxSeconds: Schema.optionalKey(TestFileMaxSeconds.annotate({
+    description: "The time limit in seconds for each test file in CI.",
+    default: DEFAULT_TEST_FILE_MAX_SECONDS,
+  })),
+});
+
+export type SettingKey = keyof typeof Settings.fields;
+
+const SETTING_KEYS = Object.keys(Settings.fields);
 
 export type OldPlace = { readonly file: string } | { readonly manifestKey: string };
 
@@ -52,6 +82,9 @@ export const loadSettings = Effect.fn("loadSettings")(function* (root: string) {
   const { default: settings } = yield* decodeSettingsModule(loaded).pipe(
     Effect.mapError(() => new Usage({ message: `${SETTINGS_FILE} has no default export of a settings object; export defineConfig({ ... }) from @avi2dg/checks/config` })),
   );
+  if (Object.hasOwn(settings, "localTests")) {
+    return yield* new Usage({ message: `${SETTINGS_FILE} key localTests is no longer read; use agentTests.allowLocal instead` });
+  }
   const unknown = Object.keys(settings).filter((key) => !isSettingKey(key));
   if (unknown.length > 0) {
     return yield* new Usage({ message: `${SETTINGS_FILE} sets ${unknown.join(", ")}, which no command reads; its keys are ${SETTING_KEYS.join(", ")}` });
