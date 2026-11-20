@@ -34,6 +34,20 @@ function repository(files: Readonly<Record<string, string>>): Promise<FixtureRep
   return open({ ...files, ".jscpd.json": JSCPD });
 }
 
+test(
+  "a missing configured source folder passes instead of failing jscpd",
+  async () => {
+    const { commit, script } = await repository({ "package.json": "{}" });
+    const head = await commit("chore: setup");
+    for (const args of [[head], ["--whole-tree", head]]) {
+      const result = await script("complexity/repetition.ts", ...args);
+      expect(result.exitCode).toBe(0);
+      expect(result.text).toContain("repetition: 0 file(s)");
+    }
+  },
+  60_000,
+);
+
 const RULESET = [
   ".ledger-card {",
   "  display: grid;",

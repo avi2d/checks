@@ -25,7 +25,7 @@ The kit's default, which the refusal names, measures `src`:
 { "path": ["src"], "format": ["typescript"], "ignore": ["**/*.d.ts"] }
 ```
 
-A `path` entry the base revision lacks reads as empty there, so a newly measured folder never fails the scan.
+A `path` entry a revision lacks reads as empty there, so a missing folder never fails the scan.
 
 A repository whose TypeScript sits outside `src` names its own folders in `path`.
 
