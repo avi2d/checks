@@ -20,7 +20,7 @@ A consuming repository puts each setting in the file its tool reads, and checks.
 | `stylelint.config.ts` | The Baseline target, the token files, the CSS families the repository turns on, and any stylelint rule the repository sets over the kit's families | `checks-frontend-syntax` |
 | `dependency-cruiser.config.ts` | Entry points nothing imports, paths that may import dev dependencies, and import boundaries, when the kit's defaults do not fit | `checks-graphwalk` |
 | `tsconfig.json` | Compiler options, and the Effect language service plugin whose `overrides` and kit severities `checks-effect-scope` writes, keeping every other key | TypeScript and Effect language service |
-| `checks.config.ts` | The settings no tool file owns: `smoke`, `reach`, `mutationRunner`, `selfHostedRunners`, `browser`, `browserRoutes`, `browserBuild`, `copy`, `frontendSyntax`, `localTests` and `testFileMaxSeconds` | `checks-test`, `checks-ci-wiring`, `checks-browser`, `checks-copy`, `checks-frontend-syntax`, `checks-lint`, `checks-local-tests`, `checks-flake`, `checks-mutation` and the Bun test preload |
+| `checks.config.ts` | [The settings no tool file owns](#the-settings-file) | `checks-test`, `checks-ci-wiring`, `checks-browser`, `checks-copy`, `checks-frontend-syntax`, `checks-lint`, `checks-local-tests`, `checks-flake`, `checks-mutation` and the Bun test preload |
 | `package.json` | `scripts` with the `checks-vendor` arguments in `prepare`, `author` and `contributors` | Bun, `checks-commit-identity` and `checks-vendor` |
 | `bunfig.toml` | Test discovery, quarantine exclusion and the preload that guards agent runs | Bun and `checks-test-layout` |
 | `stryker.conf.mjs` | Mutation settings | Stryker |
@@ -103,19 +103,27 @@ export default defineConfig({
 });
 ```
 
-| Key | What it holds | Reader |
+<!-- generated settings-keys: bun run build writes it from src/core/settings.ts and scripts/doc-blocks.ts -->
+
+| Key | Default | What it holds |
 | --- | --- | --- |
-| `testFileMaxSeconds` | the per-file time limit in CI, in seconds, with a default of 300 | [checks-test](../gates/checks-test.md#test-file-time-limit) |
-| `smoke` | the test files a local run adds to the unit tier | [checks-test](../gates/checks-test.md) |
-| `reach` | the tests each changed path a site's import graph misses reaches | [checks-test](../gates/checks-test.md#the-reach-map) |
-| `mutationRunner` | the runner labels of a private repository's mutation jobs | [checks-ci-wiring](../gates/checks-ci-wiring.md) |
-| `selfHostedRunners` | the other self-hosted label sets a private repository's jobs may carry | [checks-ci-wiring](../gates/checks-ci-wiring.md) |
-| `browser` | the browser declaration | [checks-browser](../gates/checks-browser.md#what-it-reads) |
-| `browserRoutes` | the repository paths each browser route can reach | [checks-browser](../gates/checks-browser.md#what-it-reads) |
-| `browserBuild` | the build command the browser test-only proof runs | [checks-browser](../gates/checks-browser.md#what-it-reads) |
-| `copy` | the copy inputs | [checks-copy](../gates/checks-copy.md) |
-| `frontendSyntax` | the frontend syntax inputs | [checks-frontend-syntax](../gates/checks-frontend-syntax.md) |
-| `localTests` | whether agents may run tests outside CI, `"blocked"` by default or `"allowed"` | [checks-local-tests](../gates/checks-local-tests.md) |
+| `smoke` | None | The extra test files to run with the local unit tier. |
+| `reach` | None | The tests to run when a changed path is missing from the import graph. |
+| `mutationRunner` | None | The runner labels for mutation jobs in a private repository. |
+| `selfHostedRunners` | None | The other sets of self-hosted runner labels that jobs in a private repository may use. |
+| `browser` | None | The site, routes, and checks for browser tests. |
+| `browserRoutes` | None | The repository paths that can affect each browser route. |
+| `browserBuild` | None | The command that builds the site for the browser test-only proof. |
+| `copy` | None | The input globs for the copy gate. |
+| `frontendSyntax` | None | The input globs for the frontend syntax gate. |
+| `agentTests` | `{"allowLocal":false}` | The settings for test runs started by agents. |
+| `testFileMaxSeconds` | `300` | The time limit in seconds for each test file in CI. |
+| `agentTests.allowLocal` | `false` | Whether agents may start tests outside CI. This setting does not restrict people or CI. |
+
+<!-- end generated settings-keys -->
+
+The build also writes the [JSON Schema](../../dist/checks.schema.json) for the data the config exports.
+The kit still loads a TypeScript file, not a JSON config.
 
 A key the kit does not know fails the reading gate.
 A setting left in its old place fails its gate with exit 2 and a message naming the key it moves to.

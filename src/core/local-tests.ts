@@ -1,23 +1,31 @@
 import { NodeFileSystem, NodePath } from "@effect/platform-node-shared";
-import { Config, Effect, Layer } from "effect";
+import { Config, Effect, Layer, Schema } from "effect";
 import { Usage } from "./main.ts";
-import { decodeSetting, loadSettings, LocalTests, SETTINGS_FILE } from "./settings.ts";
-import { AGENT_MARKER } from "./agent-marker.ts";
+import { AgentTests, decodeSetting, DEFAULT_AGENT_TESTS, loadSettings, SETTINGS_FILE } from "./settings.ts";
+import { AGENT_MARKER, AI_AGENT_MARKER, isAgent } from "./agent-marker.ts";
+
+export class AgentTestsBlocked extends Schema.TaggedError<AgentTestsBlocked>()("AgentTestsBlocked", {
+  message: Schema.String,
+}) {}
 
 const platform = Layer.merge(NodeFileSystem.layer, NodePath.layer);
 
-export const localTestsSetting = Effect.fn("localTestsSetting")(function* (root: string) {
-  const value = (yield* loadSettings(root))["localTests"];
-  return value === undefined ? "blocked" : yield* decodeSetting("localTests", LocalTests, value);
+export const allowsLocalAgentTests = Effect.fn("allowsLocalAgentTests")(function* (root: string) {
+  const value = (yield* loadSettings(root))["agentTests"];
+  const { allowLocal } = value === undefined ? DEFAULT_AGENT_TESTS : yield* decodeSetting("agentTests", AgentTests, value);
+  return allowLocal;
 });
 
 export const refuseLocalTests = Effect.fn("refuseLocalTests")(function* (root: string) {
-  const agent = yield* Config.String(AGENT_MARKER).pipe(Config.withDefault(""), Effect.mapError((cause) => new Usage({ message: cause.message })));
-  if (agent !== "1") return;
+  const [checksAgent, aiAgent] = yield* Config.all([
+    Config.String(AGENT_MARKER).pipe(Config.withDefault("")),
+    Config.String(AI_AGENT_MARKER).pipe(Config.withDefault("")),
+  ]).pipe(Effect.mapError((cause) => new Usage({ message: cause.message })));
+  if (!isAgent(checksAgent, aiAgent)) return;
   const ci = yield* Config.Boolean("CI").pipe(Config.withDefault(false), Effect.mapError((cause) => new Usage({ message: cause.message })));
   if (ci) return;
-  if ((yield* localTestsSetting(root)) === "blocked") {
-    return yield* new Usage({ message: `${SETTINGS_FILE} localTests is blocked for agents outside CI` });
+  if (!(yield* allowsLocalAgentTests(root))) {
+    return yield* new AgentTestsBlocked({ message: `${SETTINGS_FILE}: agent tests are blocked outside CI; set agentTests.allowLocal to true to allow them` });
   }
 });
 

@@ -1,6 +1,8 @@
 import type { NonEmptyReadonlyArray } from "effect/Array";
 
-export const DEVICES = ["phone", "tablet", "desktop"] as const;
+import { DEVICES, SCREEN_SIZE_SETS } from "../../core/browser-options.ts";
+
+export { DEVICES, SCREEN_SIZE_SETS } from "../../core/browser-options.ts";
 
 type Device = (typeof DEVICES)[number];
 
@@ -34,8 +36,6 @@ const NIGHTLY = [
   desktop(1536, 864),
   desktop(2560, 1440),
 ] as const;
-
-export const SCREEN_SIZE_SETS = ["anchor", "full"] as const;
 
 export type ScreenSizeSet = (typeof SCREEN_SIZE_SETS)[number];
 

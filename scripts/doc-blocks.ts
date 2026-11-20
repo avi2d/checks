@@ -2,7 +2,7 @@ import { Effect, Schema } from "effect";
 import { ADR_DIRECTORY, ADR_INDEX, ROOT_FILES } from "../src/docs/doc-rules.ts";
 import { listed, MODES, templateFile, VISION_PAGE } from "../src/docs/doc-templates.ts";
 import { EVERY_REPOSITORY, KIT_GATES, VECTORS, type KitGate } from "../src/core/gates.ts";
-import { SETTINGS_FILE } from "../src/core/settings.ts";
+import { AgentTests, SETTINGS_FILE, Settings } from "../src/core/settings.ts";
 import { isDeclaredGate } from "../src/core/stage.ts";
 import { AGENT_NAMES, DATED_RECORD_EXAMPLES, DOCS_DIRECTORY, HISTORY_NAMES, LIVING_NAMES, PROSE_RULES } from "../src/docs/prose-matchers.ts";
 import starter from "../src/quality/browser/browser-checks.json" with { type: "json" };
@@ -205,6 +205,23 @@ const PROSE: Block = {
   ],
 };
 
+function settingRow([key, schema]: readonly [string, Schema.Top]): string {
+  const annotations = Schema.resolveAnnotations(schema);
+  const fallback = annotations?.default === undefined ? "None" : code(JSON.stringify(annotations.default));
+  return `| ${code(key)} | ${fallback} | ${annotations?.description ?? ""} |`;
+}
+
+const SETTINGS: Block = {
+  name: "settings-keys",
+  from: ["src/core/settings.ts"],
+  render: () => [
+    "| Key | Default | What it holds |",
+    "| --- | --- | --- |",
+    ...Object.entries(Settings.fields).map(settingRow),
+    settingRow(["agentTests.allowLocal", AgentTests.fields.allowLocal]),
+  ],
+};
+
 const SIZE_LIMITS: Block = {
   name: "size-limits",
   from: [`SOURCE_LIMITS, TEST_LIMITS, SOURCES and TESTS in ${OXLINT_PRESET}`],
@@ -277,7 +294,7 @@ export const TARGETS: readonly { readonly file: string; readonly blocks: readonl
   { file: `${GATE_PAGES}/checks-browser.md`, blocks: [SIZES, STARTER] },
   { file: `${GATE_PAGES}/checks-docs.md`, blocks: [DOC_KINDS, LIVING_DOCS, PROSE] },
   { file: `${GATE_PAGES}/checks-lint.md`, blocks: [LINT_SAMPLE] },
-  { file: "docs/configs/native-settings.md", blocks: [SIZE_LIMITS] },
+  { file: "docs/configs/native-settings.md", blocks: [SETTINGS, SIZE_LIMITS] },
 ];
 
 export type Spliced = { readonly type: "spliced"; readonly text: string } | { readonly type: "unmarked"; readonly blocks: readonly string[] };
