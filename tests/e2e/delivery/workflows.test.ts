@@ -179,6 +179,22 @@ test("a job that calls avi2d/workflows is refused instead of passing as the set,
   expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the code set checks-workflows writes\n" });
 }, 30_000);
 
+test("a pr-text.yml job that calls avi2d/workflows is refused instead of passing uncompared", async () => {
+  const caller = "name: pr-text\non: pull_request_target\njobs:\n  text:\n    uses: avi2d/workflows/.github/workflows/pr-text.yml@v3\n    permissions: { contents: read }\n";
+  const repo = await open({ "package.json": manifest(), ".github/workflows/pr-text.yml": caller });
+  await repo.commit("start");
+  await workflows(repo, ["--write"]);
+
+  const refused = await workflows(repo);
+  expect(refused.exitCode).toBe(1);
+  expect(refused.text).toContain(
+    [
+      "workflows: 1 job(s) call a workflow of another repository:",
+      "  .github/workflows/pr-text.yml job text: calls avi2d/workflows/.github/workflows/pr-text.yml@v3, a workflow of another repository, where the set holds every step itself",
+    ].join("\n"),
+  );
+}, 30_000);
+
 test("a test job a person adds to the written ci.yml is refused until --write, which keeps it and makes checks need it", async () => {
   const repo = await open({ "package.json": manifest() });
   await repo.commit("start");
