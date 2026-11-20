@@ -78,14 +78,18 @@ const fullTestJobOf = Effect.fn("fullTestJobOf")(function* (kind: RepositoryKind
 const TestInputs = Schema.Struct({
   run: Schema.optionalKey(Schema.String),
   browsers: Schema.optionalKey(Schema.String),
+  artifact: Schema.optionalKey(Schema.String),
   "runs-on": Schema.optionalKey(Schema.String),
 });
 
 const decodeTestInputs = Schema.decodeUnknownEffect(TestInputs);
 
-const TEST_INPUTS = ["run", "browsers", "runs-on"] as const;
+// The set decides hold itself, heavy no longer exists, and the options carry claude-version.
+const REPLACED_INPUTS = ["hold", "heavy", "claude-version"] as const;
 
-const testJobOf = Effect.fn("testJobOf")(function* (path: string, name: string, job: Readonly<Record<string, unknown>>) {
+const CARRIED_INPUTS = ["run", "browsers", "artifact", "runs-on"] as const;
+
+const testJobOf = Effect.fn("testJobOf")(function* (kind: RepositoryKind, path: string, name: string, job: Readonly<Record<string, unknown>>) {
   if (!JOB_ID.test(name) || FIXED_JOBS.some((fixed) => fixed === name)) {
     return yield* new CiJobsFault({ message: `${path} calls test.yml from job ${name}, a name the written ci.yml cannot give a test job, so rename it` });
   }
@@ -93,7 +97,7 @@ const testJobOf = Effect.fn("testJobOf")(function* (path: string, name: string, 
   if (!isRecord(inputs)) {
     return yield* new CiJobsFault({ message: `${path} job ${name} passes a test.yml input that does not parse, so remove it by hand` });
   }
-  const extra = Object.keys(inputs).find((input) => !TEST_INPUTS.some((key) => key === input));
+  const extra = Object.keys(inputs).find((input) => ![...CARRIED_INPUTS, ...REPLACED_INPUTS].some((key) => key === input));
   if (extra !== undefined) {
     return yield* new CiJobsFault({
       message: `${path} job ${name} passes ${extra} to test.yml, an input the written ci.yml cannot carry, so remove it by hand`,
@@ -106,7 +110,7 @@ const testJobOf = Effect.fn("testJobOf")(function* (path: string, name: string, 
     name,
     run: held.run === RELEASE_TEST_RUN ? DEFAULT_TEST_RUN : (held.run ?? DEFAULT_TEST_RUN),
     browsers: held.browsers ?? "",
-    readsBuild: false,
+    readsBuild: kind === "site" && held.artifact === SITE_BUILD,
     runsOn: held["runs-on"] ?? DEFAULT_RUNNER,
   } satisfies TestJob;
 });
@@ -127,6 +131,6 @@ const fullCiJobsOf = Effect.fn("fullCiJobsOf")(function* (kind: RepositoryKind, 
 export const ciJobsOf = Effect.fn("ciJobsOf")(function* (kind: RepositoryKind, ci: Workflow | undefined) {
   if (ci === undefined) return DEFAULT_CI_JOBS[kind];
   const calls = workflowJobs(ci).flatMap(([name, job]) => (calledFileOf(job["uses"]) === "test.yml" ? [{ name, job }] : []));
-  if (calls.length > 0) return { tests: yield* Effect.forEach(calls, ({ name, job }) => testJobOf(ci.path, name, job)) } satisfies CiJobs;
+  if (calls.length > 0) return { tests: yield* Effect.forEach(calls, ({ name, job }) => testJobOf(kind, ci.path, name, job)) } satisfies CiJobs;
   return yield* fullCiJobsOf(kind, ci);
 });

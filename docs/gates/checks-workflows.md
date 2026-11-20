@@ -12,6 +12,7 @@ Every file of the set holds its own steps, and no job calls a workflow of anothe
 Each step that needs more than one plain command runs `bunx checks-ci <command>`, as [checks-ci](checks-ci.md) says.
 `ci.yml` composes the jobs that run side by side, as [The composed ci.yml](#the-composed-ciyml) says.
 A repository whose workflow files set the workflow `env` `SITE_PAGES`, `SITE_DOMAIN` or `SITE_PRODUCTION` is a site.
+A job that calls `site-ci.yml`, `site-main.yml`, `site-production.yml`, `site-preview.yml` or `preview-remove.yml` also marks the repository a site.
 Any other repository is a code repository, and `package.json` decides neither kind.
 
 The site workflows hold the three site names as the workflow `env`:
@@ -160,7 +161,7 @@ With `--write` it writes every file of the set and its actions, and rewrites a p
 It deletes every other workflow file except `pr-text.yml`.
 It writes `ci.yml` with the jobs the present `ci.yml` holds, in the shape the kit writes.
 A rewrite of a site keeps the three names its workflows hold.
-A job that calls a shared site workflow passes the three names in `with`, and `--write` keeps them as the site names.
+A job that calls `site-ci.yml`, `site-main.yml`, `site-production.yml`, `site-preview.yml` or `preview-remove.yml` passes the three names in `with`, and `--write` keeps them as the site names.
 A job that calls the shared `test.yml` keeps its `run`, its `browsers` and its `runs-on`.
 A caller input the set cannot carry refuses the write, and the message names the input.
 `--pages`, `--domain` and `--production` name a site with no site workflow yet, and each replaces the name the workflows hold.

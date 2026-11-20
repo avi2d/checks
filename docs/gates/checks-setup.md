@@ -67,7 +67,7 @@ With `--private` it sets `private` to `true` in `package.json`, and the run name
 | Code | When |
 | --- | --- |
 | 0 | every file is written or already there |
-| 2 | an argument is unknown, a site lacks one of its three names, passes two values of one, names one that does not parse, passes a flag that differs from the name a present workflow holds, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a file it needs cannot be read, or a `lint`, `typecheck`, `test`, `test:fast` or `test:*` script it finds does not run the checks |
+| 2 | an argument is unknown, a site lacks one of its three names, passes two values of one, names one that does not parse, passes a flag that differs from the name a present workflow holds, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, a file it needs cannot be read, or a `lint`, `typecheck`, `test`, `test:fast` or `test:*` script it finds does not run the checks |
 
 ## Sample output
 

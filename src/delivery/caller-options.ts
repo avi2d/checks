@@ -1,7 +1,7 @@
 import { Option, Schema } from "effect";
 import { crons } from "./release-schedule.ts";
 import { weekly } from "./schedule-policy.ts";
-import { workflowJobs, type Workflow } from "./workflow-references.ts";
+import { calledFileOf, workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export type Flake = { readonly nodeVersionFile: string | undefined };
 
@@ -53,10 +53,7 @@ const callsAction = (step: Step, action: string): boolean => step.uses?.split("@
 // A repository still on reusable workflow calls keeps the options it passes when --write replaces the calls.
 function callsOf(workflow: Workflow | undefined, file: string): readonly unknown[] {
   if (workflow === undefined) return [];
-  return workflowJobs(workflow).flatMap(([, job]) => {
-    const uses = job["uses"];
-    return typeof uses === "string" && uses.split("@")[0]?.split("/").at(-1) === file ? [job["with"] ?? {}] : [];
-  });
+  return workflowJobs(workflow).flatMap(([, job]) => (calledFileOf(job["uses"]) === file ? [job["with"] ?? {}] : []));
 }
 
 function weeklyCronOf(advisories: Workflow | undefined): string | undefined {

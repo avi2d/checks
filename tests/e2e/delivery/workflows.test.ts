@@ -200,7 +200,7 @@ test("a pr-text.yml job that calls avi2d/workflows is refused instead of passing
 }, 30_000);
 
 test("a site-ci.yml shared caller is refused, and --write writes the site set with the caller names in SITE_* env", async () => {
-  const caller = "name: site-ci\non: pull_request\njobs:\n  ci:\n    uses: avi2d/workflows/.github/workflows/site-ci.yml@v3\n    with:\n      pages: acme\n      domain: acme.example\n      production: acme/acme.example\n";
+  const caller = "name: site-ci\non: pull_request\njobs:\n  ci:\n    uses: acme/workflows/.github/workflows/site-ci.yml@v3\n    with:\n      pages: acme\n      domain: acme.example\n      production: acme/acme.example\n";
   const repo = await open({ "package.json": manifest(), ".github/workflows/site-ci.yml": caller });
   await repo.commit("start");
 
@@ -221,7 +221,7 @@ test("a site-ci.yml shared caller is refused, and --write writes the site set wi
 }, 30_000);
 
 test("a ci.yml that calls test.yml keeps its run, browsers and runs-on, so --write carries the custom test job", async () => {
-  const caller = "name: ci\non: pull_request\njobs:\n  e2e:\n    uses: avi2d/workflows/.github/workflows/test.yml@v3\n    with:\n      run: bun run test:e2e\n      browsers: chromium\n      runs-on: ubuntu-latest\n";
+  const caller = "name: ci\non: pull_request\njobs:\n  e2e:\n    uses: acme/workflows/.github/workflows/test.yml@v3\n    with:\n      run: bun run test:e2e\n      browsers: chromium\n      runs-on: ubuntu-latest\n";
   const repo = await open({ "package.json": manifest(), ".github/workflows/ci.yml": caller });
   await repo.commit("start");
 
@@ -239,8 +239,27 @@ test("a ci.yml that calls test.yml keeps its run, browsers and runs-on, so --wri
   expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the code set checks-workflows writes\n" });
 }, 30_000);
 
+test("a shared ci.yml that passes hold, artifact and heavy keeps the site browser on the build", async () => {
+  const caller = "name: ci\non: pull_request\njobs:\n  unit:\n    uses: acme/workflows/.github/workflows/test.yml@v3\n    with:\n      hold: false\n      runs-on: ubuntu-latest\n  browser:\n    uses: acme/workflows/.github/workflows/test.yml@v3\n    with:\n      artifact: site-dist\n      heavy: true\n      runs-on: ubuntu-latest\n";
+  const repo = await open({ "package.json": manifest(), ".github/workflows/ci.yml": caller });
+  await repo.commit("start");
+
+  expect(await workflows(repo, ["--write", ...SITE_FLAGS])).toEqual({
+    exitCode: 0,
+    text: "workflows: wrote the 6 workflow file(s) of the site set and its 3 action file(s)\n",
+  });
+  expect(await parsed(repo, "ci.yml")).toMatchObject({
+    jobs: {
+      unit: { "runs-on": "ubuntu-latest", steps: expect.arrayContaining([{ id: "test" }]) },
+      browser: { "runs-on": "ubuntu-latest", needs: "site", steps: expect.arrayContaining([{ id: "test" }]) },
+    },
+  });
+  await expectNoRemoteCall(repo);
+  expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the site set checks-workflows writes\n" });
+}, 30_000);
+
 test("a caller with an input the set cannot carry refuses --write with the input named and writes nothing", async () => {
-  const caller = "name: site-ci\non: pull_request\njobs:\n  ci:\n    uses: avi2d/workflows/.github/workflows/site-ci.yml@v3\n    with:\n      pages: acme\n      domain: acme.example\n      production: acme/acme.example\n      runs-on: ubuntu-latest\n";
+  const caller = "name: site-ci\non: pull_request\njobs:\n  ci:\n    uses: acme/workflows/.github/workflows/site-ci.yml@v3\n    with:\n      pages: acme\n      domain: acme.example\n      production: acme/acme.example\n      runs-on: ubuntu-latest\n";
   const repo = await open({ "package.json": manifest(), ".github/workflows/site-ci.yml": caller });
   await repo.commit("start");
 
