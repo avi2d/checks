@@ -13,12 +13,13 @@ type Remote = {
 };
 
 const NAME = "checks-release-pr";
-const USAGE = "usage: release-pr.ts <workflow>...";
+const USAGE = "usage: checks-release-pr [--allow-non-default-branch] <workflow>...";
 
 const PullRequest = Schema.Struct({ number: Schema.Int, title: Schema.String, html_url: Schema.String });
 type PullRequest = typeof PullRequest.Type;
 const decodePullRequest = Schema.decodeUnknownEffect(Schema.fromJsonString(PullRequest));
 const decodePullRequests = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Array(PullRequest)));
+const decodeRepository = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ default_branch: Schema.String })));
 
 const readRemote = Effect.fn("readRemote")(function* (root: string, branch: string) {
   if (!(yield* hasBranch(root, branch))) return undefined;
@@ -50,9 +51,20 @@ const titlePullRequest = Effect.fn("titlePullRequest")(function* (open: PullRequ
 });
 
 const releasePullRequest = Effect.gen(function* () {
-  const workflows = process.argv.slice(2);
-  if (workflows.length === 0) return yield* new Usage({ message: USAGE });
+  const args = process.argv.slice(2);
+  if (args.includes("--help") || args.includes("-h")) {
+    yield* Console.log(USAGE);
+    return true;
+  }
+  const allowNonDefault = args.includes("--allow-non-default-branch");
+  const workflows = args.filter((arg) => arg !== "--allow-non-default-branch");
+  if (workflows.length === 0 || workflows.some((arg) => arg.startsWith("-"))) return yield* new Usage({ message: USAGE });
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
+  if (!allowNonDefault) {
+    const branch = (yield* git(["symbolic-ref", "--quiet", "--short", "HEAD"], root)).trim();
+    const { default_branch } = yield* gitHubJson(decodeRepository, "GET", REPOSITORY);
+    if (branch !== default_branch) return yield* new Usage({ message: `branch ${branch} is not the default branch ${default_branch}; pass --allow-non-default-branch to release from it` });
+  }
   const untagged = `rerun the tag job of ${yield* runningWorkflow} on the release commit, whose refusal says what to fix`;
   const plan = yield* planRelease("release-pr", root, untagged);
   if (plan === undefined) return true;
