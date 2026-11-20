@@ -14,10 +14,12 @@ It refuses when the tag holds no GitHub release, or only a draft or a prerelease
 It refuses when the release notes lack the `CHANGELOG.md` section for that version, as the commit holds the file.
 
 `checks-release-tag` itself runs no test.
-Where `main.yml` passes `full-test: true` or `publish-workspaces: true`, the release `main` run tests the release tree with `bun run test --full` before `checks-release-tag` tags it.
+Where `main.yml` holds the `suite` job, the release `main` run tests the release tree with `bun run test --full` before `checks-release-tag` tags it.
 [checks-release-tag](checks-release-tag.md) creates the GitHub release only after the landed tree matches the tree the required checks of its release pull request passed on.
 Those checks passed on that tree, so a published release is a tree that passed them.
-In a repository whose `ci.yml` is the one [checks-workflows](checks-workflows.md) composes, without `check-release: true` those checks skip every job but `changes`, so the tag publishes code the pull requests into `main` tested, and the release commit adds only the version, the changelog, each public workspace version and its `bun.lock` entry where the caller publishes workspaces.
+In a repository whose `ci.yml` is the one [checks-workflows](checks-workflows.md) composes, without release checks those checks skip every job but `changes`.
+So the tag publishes code the pull requests into `main` tested.
+The release commit adds only the version, the changelog, and each public workspace version and its `bun.lock` entry where the repository publishes workspaces.
 
 ## What it reads
 

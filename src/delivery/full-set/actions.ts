@@ -3,7 +3,7 @@ import { SETUP_BUN, CACHE, type Pair, expression, stepLines } from "./steps.ts";
 
 export type RepositoryFile = { readonly path: string; readonly text: string };
 
-export const SETUP_ACTION = ".github/actions/setup/action.yml";
+const SETUP_ACTION = ".github/actions/setup/action.yml";
 const BUN_WITHOUT_UNZIP = ".github/actions/setup/bun-without-unzip.sh";
 const PLAYWRIGHT_ACTION = ".github/actions/playwright/action.yml";
 

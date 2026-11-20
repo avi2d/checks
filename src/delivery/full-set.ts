@@ -1,17 +1,18 @@
 import { type CallerSet } from "./site-names.ts";
-import { type Flake } from "./caller-options.ts";
-import { SETUP_NODE, type Step, type Workflow, expression, workflowText, TOKEN, RUNNER, HOSTED, checkout, SETUP, ciCommand, keepArtifacts, claudeInstall } from "./full-set/steps.ts";
+import { type CallerOptions, type Flake, type Pages } from "./caller-options.ts";
+import { runnerOf } from "./ci-jobs.ts";
+import { SETUP_NODE, CONFIGURE_PAGES, UPLOAD_PAGES, DEPLOY_PAGES, type Step, type Workflow, expression, scalar, workflowText, TOKEN, RUNNER, checkout, SETUP, ciCommand, keepArtifacts, claudeInstall } from "./full-set/steps.ts";
 import { PULL_REQUEST_HEAD, PULL_REQUEST_NUMBER, BY_HAND, ciWorkflow } from "./full-set/ci.ts";
 import { PREVIEW_CLOSE, SITE_MAIN, PRODUCTION } from "./full-set/site.ts";
 
-const PR_TITLE: Workflow = {
+const prTitle = (publishes: boolean): Workflow => ({
   name: "pr-title",
   on: ["pull_request:", "  types: [opened, synchronize, reopened, edited]"],
   concurrency: "pr-title-" + PULL_REQUEST_NUMBER,
   jobs: [
     {
       id: "title",
-      runsOn: HOSTED,
+      runsOn: runnerOf(publishes),
       timeout: 10,
       permissions: ["contents: read", "statuses: write", "pull-requests: read"],
       steps: [
@@ -33,7 +34,7 @@ const PR_TITLE: Workflow = {
       ],
     },
   ],
-};
+});
 
 const RELEASE: Workflow = {
   name: "release",
@@ -55,16 +56,87 @@ const RELEASE: Workflow = {
   ],
 };
 
+const RELEASE_COMMIT = "startsWith(github.event.head_commit.message, 'chore: release ')";
+
+// A full-test run gates the publish, so the release job waits for it and still runs when the commit is no release commit and it skips.
+function codeMain({ fullTest, checkRelease, publishWorkspaces }: CallerOptions): Workflow {
+  const suite = fullTest || checkRelease || publishWorkspaces;
+  return {
+    name: "main",
+    on: ["push:", "  branches: [main]"],
+    jobs: [
+      ...(suite
+        ? [
+            {
+              id: "suite",
+              if: JSON.stringify(RELEASE_COMMIT),
+              runsOn: RUNNER,
+              timeout: 45,
+              permissions: ["contents: read"],
+              steps: [checkout({ history: true }), SETUP, { name: "run the full test suite on the release commit", run: "bun run test --full" }],
+            },
+          ]
+        : []),
+      {
+        id: "release",
+        ...(suite ? { needs: "suite", if: expression("!cancelled() && (needs.suite.result == 'success' || needs.suite.result == 'skipped')") } : {}),
+        runsOn: RUNNER,
+        timeout: 15,
+        concurrency: "main",
+        permissions: ["contents: write", "id-token: write", "actions: read", "pull-requests: read"],
+        steps: [
+          checkout({ history: true, credentials: true }),
+          SETUP,
+          { note: "npm takes a trusted publish only from the Node it set up with its registry.", uses: SETUP_NODE, with: [["node-version", '"24"'], ["registry-url", "https://registry.npmjs.org"]] },
+          { env: [TOKEN, ...(publishWorkspaces ? [["CHECKS_PUBLISH_WORKSPACES", '"true"'] as const] : [])], run: "bunx checks-release-tag" },
+        ],
+      },
+    ],
+  };
+}
+
 export type FullWorkflow = { readonly name: string; readonly text: string };
 
 const fileOf = (workflow: Workflow): FullWorkflow => ({ name: workflow.name + ".yml", text: workflowText(workflow) });
 
 // The kit publishes through a release.yml that npm's trusted publishing names, so it keeps its own release files.
-export function fullRequiredSet(set: CallerSet, kit: boolean, codeMain: FullWorkflow): readonly FullWorkflow[] {
+export function fullRequiredSet(set: CallerSet, kit: boolean): readonly FullWorkflow[] {
   const ci = fileOf(ciWorkflow(set, kit));
-  if (set.kind === "site") return [ci, fileOf(PR_TITLE), fileOf(PREVIEW_CLOSE(set.names)), fileOf(SITE_MAIN(set.names)), fileOf(RELEASE), fileOf(PRODUCTION(set.names))];
-  return kit ? [ci, fileOf(PR_TITLE)] : [ci, fileOf(PR_TITLE), codeMain, fileOf(RELEASE)];
+  if (set.kind === "site") return [ci, fileOf(prTitle(set.options.publishes)), fileOf(PREVIEW_CLOSE(set.names, set.options.publishes)), fileOf(SITE_MAIN(set.names)), fileOf(RELEASE), fileOf(PRODUCTION(set.names))];
+  return kit ? [ci, fileOf(prTitle(set.options.publishes))] : [ci, fileOf(prTitle(set.options.publishes)), fileOf(codeMain(set.options)), fileOf(RELEASE)];
 }
+
+// A second deploy waits for the one in flight, since Pages serves one deployment at a time.
+export const fullDocs = ({ build, path }: Pages): FullWorkflow =>
+  fileOf({
+    name: "docs",
+    on: ["push:", "  branches: [main]", ...BY_HAND],
+    jobs: [
+      {
+        id: "build",
+        runsOn: RUNNER,
+        timeout: 15,
+        permissions: ["contents: read", "pages: read"],
+        steps: [
+          checkout({ history: true }),
+          SETUP,
+          { uses: CONFIGURE_PAGES },
+          { run: scalar(build) },
+          { uses: UPLOAD_PAGES, with: [["path", scalar(path)]] },
+        ],
+      },
+      {
+        id: "deploy",
+        needs: "build",
+        runsOn: RUNNER,
+        timeout: 10,
+        concurrency: "github-pages-deploy",
+        permissions: ["pages: write", "id-token: write"],
+        environment: { name: "github-pages", url: expression("steps.deployment.outputs.page_url") },
+        steps: [{ id: "deployment", uses: DEPLOY_PAGES }],
+      },
+    ],
+  });
 
 export const fullAdvisories = (cron: string | undefined): FullWorkflow =>
   fileOf({

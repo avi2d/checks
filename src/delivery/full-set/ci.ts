@@ -1,14 +1,20 @@
 import { type CallerSet } from "../site-names.ts";
-import { type TestJob, TEST_STEP, PLAYWRIGHT_USES, RELEASE_RUN, SITE_BUILD } from "../ci-jobs.ts";
-import { CACHE, UPLOAD, DOWNLOAD, WRANGLER_VERSION, type Step, type Job, type Workflow, expression, scalar, HEAD, TOKEN, HOSTED, checkout, SETUP, ciCommand, DRAFT_HOLD, keepArtifacts, claudeInstall, node24, cloudflare, CLOUDFLARE_SET, ASTRO_QUIET, PREVIEW_PROJECT, PREVIEW_MARKER, siteEnv } from "./steps.ts";
+import { type TestJob, TEST_STEP, PLAYWRIGHT_USES, RELEASE_RUN, SITE_BUILD, DEFAULT_TEST_RUN, RELEASE_TEST_RUN, runnerOf } from "../ci-jobs.ts";
+import { CACHE, UPLOAD, DOWNLOAD, WRANGLER_VERSION, type Step, type Job, type Workflow, expression, scalar, HEAD, TOKEN, checkout, SETUP, ciCommand, DRAFT_HOLD, keepArtifacts, claudeInstall, node24, cloudflare, CLOUDFLARE_SET, ASTRO_QUIET, PREVIEW_PROJECT, PREVIEW_MARKER, siteEnv } from "./steps.ts";
 
 const NOT_RELEASED = "needs.changes.outputs.release != 'true'";
+const CHECKED_RELEASE = "needs.changes.outputs.check-release == 'true'";
 const NOT_DOCS_ONLY = "needs.changes.outputs.docs-only != 'true'";
 const NOT_TESTS_ONLY = "needs.changes.outputs.tests-only != 'true'";
 
-const changesJob: Job = {
+const checksRelease = (set: CallerSet): boolean => set.kind === "code" && set.options.checkRelease;
+
+// A repository that checks release pull requests runs every job but the classify step on the release run too.
+const notReleased = (set: CallerSet): string => (checksRelease(set) ? "(" + NOT_RELEASED + " || " + CHECKED_RELEASE + ")" : NOT_RELEASED);
+
+const changesJob = (set: CallerSet): Job => ({
   id: "changes",
-  runsOn: HOSTED,
+  runsOn: runnerOf(set.options.publishes),
   timeout: 10,
   permissions: ["contents: read"],
   env: [["RELEASE", expression(RELEASE_RUN)]],
@@ -16,13 +22,14 @@ const changesJob: Job = {
     ["docs-only", expression("steps.classify.outputs.docs-only || 'false'")],
     ["tests-only", expression("steps.classify.outputs.tests-only || 'false'")],
     ["release", expression("env.RELEASE")],
+    ...(checksRelease(set) ? [["check-release", expression("env.RELEASE")] as const] : []),
   ],
   steps: [
     { if: "env.RELEASE != 'true'", ...checkout({ ref: HEAD, history: true }) },
     { if: "env.RELEASE != 'true'", ...SETUP },
     ciCommand("changes", { if: "env.RELEASE != 'true'", id: "classify", name: "classify the change as docs-only, tests-only or full" }, [["BASE_SHA", expression("github.event.pull_request.base.sha")]]),
   ],
-};
+});
 
 // A held job cancels the whole run on a push to a draft, and a site's preview link must still post.
 const holds = (set: CallerSet, test?: TestJob): boolean => set.kind === "code" || test?.readsBuild === true;
@@ -37,8 +44,8 @@ function staticJob(set: CallerSet, kit: boolean): Job {
   return {
     id: "static",
     needs: "changes",
-    if: NOT_RELEASED,
-    runsOn: HOSTED,
+    if: notReleased(set),
+    runsOn: runnerOf(set.options.publishes),
     timeout: 20,
     permissions: holdPermissions(hold),
     steps: [
@@ -55,6 +62,7 @@ function staticJob(set: CallerSet, kit: boolean): Job {
         ],
       },
       { run: "bunx checks-workflows" },
+      ...(set.options.secretsPack ? [ciCommand("secrets-pack", { name: "unpack the private secrets pack" }, [["PACK", expression("secrets.CHECKS_SECRETS_PACK")]])] : []),
       { run: "bun run lint" },
       { run: "bun run build" },
       { run: "git diff --exit-code" },
@@ -67,11 +75,11 @@ export const PULL_REQUEST_HEAD = expression("github.event.pull_request.head.sha"
 export const PULL_REQUEST_BRANCH = expression("github.event.pull_request.head.ref");
 export const PULL_REQUEST_NUMBER = expression("github.event.pull_request.number");
 
-const siteJob: Job = {
+const siteJob = (set: CallerSet): Job => ({
   id: "site",
   needs: "changes",
-  if: [NOT_RELEASED, NOT_DOCS_ONLY, NOT_TESTS_ONLY].join(" && "),
-  runsOn: HOSTED,
+  if: [notReleased(set), NOT_DOCS_ONLY, NOT_TESTS_ONLY].join(" && "),
+  runsOn: runnerOf(set.options.publishes),
   timeout: 15,
   permissions: ["contents: read", "pull-requests: write"],
   env: [ASTRO_QUIET, CLOUDFLARE_SET],
@@ -117,13 +125,15 @@ const siteJob: Job = {
       ],
     },
   ],
-};
+});
+
+const testRun = (set: CallerSet, test: TestJob): string => (checksRelease(set) && test.run === DEFAULT_TEST_RUN ? RELEASE_TEST_RUN : test.run);
 
 function testJob(set: CallerSet, test: TestJob, claudeVersion: string | undefined): Job {
   const hold = holds(set, test);
   return {
     id: test.name,
-    ...(test.readsBuild ? { needs: "site" } : { needs: "changes", if: NOT_RELEASED + " && " + NOT_DOCS_ONLY }),
+    ...(test.readsBuild ? { needs: "site" } : { needs: "changes", if: notReleased(set) + " && " + NOT_DOCS_ONLY }),
     runsOn: scalar(test.runsOn),
     timeout: 30,
     permissions: holdPermissions(hold),
@@ -144,7 +154,7 @@ function testJob(set: CallerSet, test: TestJob, claudeVersion: string | undefine
           ]
         : []),
       ...(test.browsers === "" ? [] : [{ uses: PLAYWRIGHT_USES, with: [["browsers", scalar(test.browsers)]] } satisfies Step]),
-      { id: TEST_STEP, run: scalar(test.run) },
+      { id: TEST_STEP, run: scalar(testRun(set, test)) },
       keepArtifacts("artifacts-" + expression("job.check_run_id"), "artifacts/"),
     ],
   };
@@ -157,7 +167,7 @@ function skipsOf(set: CallerSet): string {
   const afterSite = set.ci.tests.filter(({ readsBuild }) => readsBuild).map(({ name }) => name);
   const site = set.kind === "site" ? ["site"] : [];
   const choices: readonly (readonly [string, readonly string[]])[] = [
-    ["needs.changes.outputs.release == 'true'", ["static", ...site, ...tests]],
+    [checksRelease(set) ? "needs.changes.outputs.release == 'true' && needs.changes.outputs.check-release != 'true'" : "needs.changes.outputs.release == 'true'", ["static", ...site, ...tests]],
     ["needs.changes.outputs.docs-only == 'true'", [...site, ...tests]],
     ...(set.kind === "site" ? [["needs.changes.outputs.tests-only == 'true'", [...site, ...afterSite]] as const] : []),
   ];
@@ -176,7 +186,7 @@ function gateJob(set: CallerSet): Job {
     id: "checks",
     needs: "[" + needed.join(", ") + "]",
     if: "always()",
-    runsOn: HOSTED,
+    runsOn: runnerOf(set.options.publishes),
     timeout: 5,
     permissions: ["contents: read", "statuses: write", "pull-requests: read"],
     steps: [
@@ -206,6 +216,6 @@ export function ciWorkflow(set: CallerSet, kit: boolean): Workflow {
     on: PULL_REQUEST_EVENTS,
     concurrency: "ci-" + expression("github.event.pull_request.number || github.run_id"),
     ...(set.kind === "site" ? { env: siteEnv(set.names, ["pages"]) } : {}),
-    jobs: [changesJob, staticJob(set, kit), ...(set.kind === "site" ? [siteJob] : []), ...tests, gateJob(set)],
+    jobs: [changesJob(set), staticJob(set, kit), ...(set.kind === "site" ? [siteJob(set)] : []), ...tests, gateJob(set)],
   };
 }

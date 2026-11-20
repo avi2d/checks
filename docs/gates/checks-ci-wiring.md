@@ -64,8 +64,8 @@ In a private repository each mutation job carries exactly the labels the consume
 Every other job there carries exactly the hosted-default expression, or exactly one of the label sets the consumer declares under `selfHostedRunners` in `checks.config.ts`.
 A `checks` object in `package.json` that still sets `mutationRunner` or `selfHostedRunners` fails the gate with exit 2, naming the key it moves to.
 A job there also carries `runs-on: ${{ needs.<job>.outputs.runs-on }}` when the same workflow needs that job and that job calls the runner pick.
-The pick is the repository file `runner.yml` under `.github/workflows/` or `avi2d/workflows/.github/workflows/runner.yml` at a full SHA or at a version tag, `v<major>` or `v<major>.<minor>.<patch>`.
-A branch name or a missing ref is not the pick.
+The pick is the repository file `runner.yml` under `.github/workflows/`.
+A workflow of another repository is not the pick.
 A public repository still refuses that expression on a job a fork can reach.
 The resolved label cannot be shown to be a hosted runner before the run.
 A repository without those declarations fails each job they would pin until it declares them.
@@ -73,13 +73,11 @@ The check knows a repository is private only from GitHub's event, so a run outsi
 
 ### Mutation jobs
 
-A repository runs mutation through one job that calls `avi2d/workflows/.github/workflows/mutation.yml@v3`, the caller that [checks-setup](checks-setup.md) writes.
-The check refuses a `mutation.yml` that differs from that caller by a byte.
-A mode formula, a path list or any other code in it fails here.
-It refuses every mutation job of the repository's own, a job with a run step that calls mutation as [Runners](#runners) defines it.
-A job that calls a reusable workflow has no run step, so the caller passes.
-The `avi2d/workflows` repository holds the shared workflow, so there it refuses none.
-A hand-rolled job refusal names the workflow file and the job, and the caller refusal names only the file.
+A repository runs mutation only through the `mutation.yml` that [checks-setup](checks-setup.md) writes.
+The check refuses a `mutation.yml` that differs from that file by a byte.
+It refuses every other mutation job, a job with a run step that calls mutation as [Runners](#runners) defines it.
+The written `mutation.yml` runs on the hosted runner in every repository, so the runner rules above pass over it.
+A hand-rolled job refusal names the workflow file and the job, and the `mutation.yml` refusal names only the file.
 
 ### Bun version
 
@@ -100,8 +98,7 @@ The fleet version is the version the kit ships in its own `.bun-version`.
 The step fails the check when the version is missing or differs from the fleet bun version.
 A range fails because it differs from the fleet version.
 A version built from an expression fails because it cannot be shown equal before the run.
-A step that uses `avi2d/workflows/setup` or `avi2d/workflows/actions/setup`, at any ref or none, reads `.bun-version`.
-So does a step that uses `./.github/actions/setup`, the setup action of the full set [checks-workflows](checks-workflows.md#the-full-set) writes.
+A step that uses `./.github/actions/setup`, the setup action [checks-workflows](checks-workflows.md) writes, reads `.bun-version`.
 The step fails the check when `.bun-version` is missing or differs from the fleet bun version.
 This rule skips a repository with no setup-bun step and no setup step.
 A kit release that moves the fleet version turns each consumer red until its pin follows.
@@ -127,10 +124,10 @@ Each refusal names the workflow file, the line of its `schedule` trigger and wha
 ### Schedules
 
 It refuses every other workflow that triggers on `schedule`, since a test, flake, browser or whole-tree run starts only by hand, with `gh workflow run`.
-The `mutation` caller starts by hand.
+The `mutation` workflow starts by hand.
 The one schedule it keeps is a weekly advisory scan in a public repository.
-A workflow scans advisories when a run step calls `checks-advisories`, the same ways a release call counts, or a job calls the shared `avi2d/workflows/.github/workflows/advisories.yml` at any ref.
-Every other run step is then a `bun install`, and every other job that calls a workflow calls that one.
+A workflow scans advisories when a run step calls `checks-advisories`, the same ways a release call counts.
+Every other run step is then a `bun install`, and no job calls a reusable workflow.
 A weekly scan has one `cron` entry with one minute, one hour and one weekday, and `*` for the day of the month and the month.
 It refuses an advisory scan that runs more often, and any scheduled advisory scan in a private repository.
 A run outside CI cannot read whether the repository is private, so it refuses a scan there only for the cron.
@@ -150,7 +147,7 @@ Each refusal names the workflow file, the job and the limit.
 The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts`, `private` and `workspaces` fields in `package.json`, each workspace `package.json`, the `mutationRunner` and `selfHostedRunners` keys of `checks.config.ts` and the shell scripts those steps and scripts run from the working tree.
 It reads each shell script that a shell script it reads runs, until none is left.
 It reads each file a setup-bun step names for its version.
-It reads `.bun-version` for each step that uses the shared setup action.
+It reads `.bun-version` for each step that uses the local setup action.
 It reads the fleet pin from the kit's own `.bun-version`.
 It reads the target branch from `GITHUB_BASE_REF`, then from `refs/remotes/origin/HEAD` and then from the event file `GITHUB_EVENT_PATH` names.
 It reads whether the repository is private from `repository.private` in that event file.
@@ -166,7 +163,7 @@ It takes no arguments.
 | Code | Result |
 | --- | --- |
 | 0 | Every required command has a reachable step. |
-| 1 | A required command is missing or blocked, a job runs on the wrong runner, a job runs mutation outside the shared workflow, a `mutation.yml` differs from the caller checks-setup writes, a workflow names a missing workflow or job, a bun setup step drifts from the fleet bun version, a workflow that releases runs on a schedule outside a public npm package or more than once a day, a workflow other than a weekly public advisory scan runs on a schedule, or a job can run for more than 60 minutes. |
+| 1 | A required command is missing or blocked, a job runs on the wrong runner, a job runs mutation outside the mutation workflow, a `mutation.yml` differs from the file checks-setup writes, a workflow names a missing workflow or job, a bun setup step drifts from the fleet bun version, a workflow that releases runs on a schedule outside a public npm package or more than once a day, a workflow other than a weekly public advisory scan runs on a schedule, or a job can run for more than 60 minutes. |
 | 2 | A workflow or `package.json` cannot be decoded, `checks.config.ts` does not load or sets an unknown key, a runner key does not decode, a `checks` object in `package.json` still sets a runner key, or the kit's own `.bun-version` is missing, unreadable or blank. |
 
 ## Sample output
@@ -189,14 +186,14 @@ ci-wiring: 1 job(s) run on the wrong runner:
 A job that runs Stryker itself produces a report like this:
 
 ```
-ci-wiring: 1 job(s) run mutation outside the shared workflow:
-  .github/workflows/mutation.yml job mutation: run mutation through a job with uses: avi2d/workflows/.github/workflows/mutation.yml@v3, as checks-setup writes it
+ci-wiring: 1 job(s) run mutation outside the mutation workflow:
+  .github/workflows/stryker.yml job mutation: run mutation only from the .github/workflows/mutation.yml checks-setup writes
 ```
 
-A `mutation.yml` that differs from the caller checks-setup writes produces a report like this:
+A `mutation.yml` that differs from the file checks-setup writes produces a report like this:
 
 ```
-ci-wiring: .github/workflows/mutation.yml differs from the caller checks-setup writes: delete it and run checks-setup to write it again
+ci-wiring: .github/workflows/mutation.yml differs from the file checks-setup writes: delete it and run checks-setup to write it again
 ```
 
 A reference to a missing workflow produces a report like this:

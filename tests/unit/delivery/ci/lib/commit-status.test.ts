@@ -2,12 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { type CommitStatus, stateOf, statusArgs } from "../../../../../src/delivery/ci/lib/commit-status.ts";
 
 const STATUS: CommitStatus = {
-  repository: "avi2d/workflows",
+  repository: "acme/acme",
   sha: "0123456789abcdef0123456789abcdef01234567",
   state: "success",
   context: "commitlint",
   description: "",
-  targetUrl: "https://github.com/avi2d/workflows/actions/runs/42",
+  targetUrl: "https://github.com/acme/acme/actions/runs/42",
 };
 
 describe("stateOf", () => {
@@ -30,13 +30,13 @@ describe("statusArgs", () => {
   test("a status posted anywhere but the commit statuses endpoint, or with an empty description field, fails", () => {
     expect(statusArgs(STATUS)).toEqual([
       "api",
-      "repos/avi2d/workflows/statuses/0123456789abcdef0123456789abcdef01234567",
+      "repos/acme/acme/statuses/0123456789abcdef0123456789abcdef01234567",
       "-f",
       "state=success",
       "-f",
       "context=commitlint",
       "-f",
-      "target_url=https://github.com/avi2d/workflows/actions/runs/42",
+      "target_url=https://github.com/acme/acme/actions/runs/42",
       "--silent",
     ]);
   });

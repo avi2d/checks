@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-ci
 
-`checks-ci` runs one step of the workflows `checks-workflows --write --full` writes, so each step is a command of the kit rather than a script in the repository.
+`checks-ci` runs one step of the workflows `checks-workflows --write` writes, so each step is a command of the kit rather than a script in the repository.
 
 ## What it checks
 
@@ -27,6 +27,10 @@ Each command runs one step and reads its inputs from the environment the step se
 | `pages-staged-commit` | reads the commit the Pages project serves | `DEPLOY_KEY`, `PROJECT`, `BRANCH`, `WORKFLOW`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `GH_TOKEN` |
 | `pages-publish` | pushes the build to the production repository | `DEPLOY_KEY`, `SITE_PATH`, `DIRECTORY`, `REPOSITORY`, `CNAME`, `BRANCH`, `COMMIT_MESSAGE`, `SOURCE_SHA` |
 | `lighthouse` | audits each page and writes the median scores to the job summary | `SITE`, `REPORTS`, `RUNS`, `CHROME`, `PAGES`, `ORIGIN`, `LIGHTHOUSE` |
+| `secrets-pack` | writes the private secrets pack to a file and exports its path as `CHECKS_SECRETS_PACK`, or with `IF_MISSING` `skip` writes `configured=false` to `GITHUB_OUTPUT` when `PACK` is empty | `PACK`, `IF_MISSING`, `RUNNER_TEMP`, `GITHUB_ENV`, `GITHUB_STEP_SUMMARY` |
+| `release-version` | fails unless `TAG` is `v` and the version the manifest holds, and writes `version` to `GITHUB_OUTPUT` | `PACKAGE_PATH`, `TAG` |
+| `mutation` | with `score`, writes the score of `reports/mutation/mutation.json` to the job summary, and with `shards`, splits the tree into `SHARDS` shard globs with `checks-mutation-scope` and writes them as `shards` to `GITHUB_OUTPUT` | `SHARDS`, `RUNNER_TEMP`, `GITHUB_STEP_SUMMARY`, `GITHUB_OUTPUT` |
+| `github-release` | creates the GitHub release of a tag with the notes file, or updates the one that exists, and marks it latest only when its tag is the highest | `TAG`, `REF_TYPE`, `NOTES_FILE`, `GH_TOKEN` |
 
 `lighthouse` installs the Lighthouse the kit pins unless `LIGHTHOUSE` names one.
 
@@ -60,7 +64,7 @@ changes: 4 changed file(s), docs-only=false, tests-only=false
 
 ## When it runs
 
-The workflows and the two actions `checks-workflows --write --full` writes call `bunx checks-ci <command>` in their steps.
+The workflows and the two actions `checks-workflows --write` writes call `bunx checks-ci <command>` in their steps.
 
 ## Related topics
 

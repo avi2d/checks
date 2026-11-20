@@ -16,7 +16,7 @@ It tags that commit as `v<version>` and pushes the tag to `origin`.
 
 ### With no argument
 
-It is the one release step a `main.yml` caller runs on each push to `main`.
+It is the one release step the `main.yml` [checks-setup](checks-setup.md) writes runs on each push to `main`.
 When `HEAD` is no release commit, it walks the first parent history back to the newest release commit whose tag already tags it, or to the root.
 It releases the newest untagged release commit found there with the same steps as for `HEAD`.
 The walk stops with no release once the version `package.json` holds at `HEAD` is not the candidate's version, so a cancel commit ends it.
@@ -27,8 +27,8 @@ On a release commit it first fetches the head of the pull request the squash sub
 It refuses unless the tree of that commit equals the tree the required checks of that pull request passed on.
 That check is what lets the release publish a tested tree even though a release pull request without release checks runs no test.
 It matches the tree the required checks of the release pull request passed on.
-In a repository whose `ci.yml` is the one [checks-workflows](checks-workflows.md) composes, release checks run when the caller passes `check-release: true`.
-Without it, those checks skip every job but `changes`.
+In a repository whose `ci.yml` is the one [checks-workflows](checks-workflows.md) composes, release checks run in a private root with a `test` script.
+Elsewhere, those checks skip every job but `changes`.
 It then pushes the tag and creates the GitHub release `v<version>`, whose notes are the `CHANGELOG.md` section for that version.
 It publishes the package to npm as [checks-release-publish](checks-release-publish.md) says, unless `package.json` holds `"private": true`.
 When the root is private and `CHECKS_PUBLISH_WORKSPACES` is `true`, it publishes each public workspace package instead.
@@ -100,7 +100,7 @@ release-tag: tagged 3f2a9c81d0b4 as v0.4.0, and dispatched release.yml on it
 
 ## When it runs
 
-With no argument, the one job of a repository's `main.yml` runs it on each push to `main`, in the caller set `checks-workflows` writes.
+With no argument, the `release` job of the `main.yml` `checks-workflows` writes runs it on each push to `main`.
 With a workflow argument, the `tag` job of the `release-pr` workflow runs it on each push to `main` whose head commit reads as a release, as [checks-release-pr](checks-release-pr.md#running-it-in-ci) shows.
 
 ## Related topics

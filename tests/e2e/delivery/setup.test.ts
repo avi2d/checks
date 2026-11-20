@@ -3,7 +3,9 @@ import { expect, test } from "bun:test";
 import { readFile, writeFile } from "node:fs/promises";
 import { Schema } from "effect";
 import { join } from "node:path";
+import { MUTATION_WORKFLOW } from "../../../src/delivery/full-set/mutation.ts";
 import { CHECKOUT, fixtureRepos, ran, scratchDirs, type FixtureRepo } from "../lib/fixture-repo.ts";
+import { expectNoRemoteUses } from "../lib/local-uses.ts";
 
 const open = fixtureRepos("checks-setup-");
 const scratch = scratchDirs();
@@ -98,8 +100,9 @@ expect(tsconfig.extends).toBe("@avi2dg/checks/tsconfig.effect.json");
 const service = tsconfig.compilerOptions?.plugins?.find((plugin) => plugin.name === "@effect/language-service");
 expect(service?.overrides?.[0]?.include).toEqual(EXPECTED_INCLUDE);
 expect(service?.overrides?.[0]?.exclude).toEqual(EXPECTED_EXCLUDE);
-const { uses } = workflowSteps(await readFile(join(dir, ".github/workflows/ci.yml"), "utf8"));
-expect(uses).toBe("avi2d/workflows/.github/workflows/gate.yml@v3");
+const { uses, runs } = workflowSteps(await readFile(join(dir, ".github/workflows/ci.yml"), "utf8"));
+expect(uses).toBeUndefined();
+expect(runs).toContain("bunx checks-ci require-success");
 },
 60_000,
 );
@@ -168,8 +171,9 @@ expect(await readFile(join(repo.dir, ".gitignore"), "utf8")).toBe("dist/\nnode_m
 expect(run.text).toContain("added node_modules/ to .gitignore");
 const keptTsconfig = decodeTsconfig(await readFile(join(repo.dir, "tsconfig.json"), "utf8"));
 expect(keptTsconfig.extends).toBe("@avi2dg/checks/tsconfig.effect.json");
-const keptUses = workflowSteps(await readFile(join(repo.dir, ".github/workflows/ci.yml"), "utf8")).uses;
-expect(keptUses).toBe("avi2d/workflows/.github/workflows/gate.yml@v3");
+const keptGate = workflowSteps(await readFile(join(repo.dir, ".github/workflows/ci.yml"), "utf8"));
+expect(keptGate.uses).toBeUndefined();
+expect(keptGate.runs).toContain("bunx checks-ci require-success");
 },
 60_000,
 );
@@ -180,8 +184,9 @@ async () => {
 const repo = await open({});
 const run = await setup(repo, "--private");
 expect(run.exitCode).toBe(0);
-const { uses } = workflowSteps(await readFile(join(repo.dir, ".github/workflows/ci.yml"), "utf8"));
-expect(uses).toBe("avi2d/workflows/.github/workflows/gate.yml@v3");
+const { uses, runs } = workflowSteps(await readFile(join(repo.dir, ".github/workflows/ci.yml"), "utf8"));
+expect(uses).toBeUndefined();
+expect(runs).toContain("bunx checks-ci require-success");
 expect(run.text).toContain("set the CI_RUNS_ON variable to a self-hosted runner label");
 const manifest = decodeManifest(await readFile(join(repo.dir, "package.json"), "utf8"));
 expect(manifest.private).toBe(true);
@@ -427,24 +432,19 @@ expect(privWiring.exitCode).toBe(0);
 60_000,
 );
 
-const CallerSchema = Schema.Struct({
-  on: Schema.Struct({
-    workflow_dispatch: Schema.Null,
-  }),
-  jobs: Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.Unknown)),
-});
-
 test(
-"a site repository named by the three flags gains the site callers and no mutation workflow, and passes checks-workflows without --write",
+"a site repository named by the three flags gains the site workflows with the names in their env and no mutation workflow, and passes checks-workflows without --write",
 async () => {
 const repo = await open({ "package.json": JSON.stringify({ name: "shop", type: "module" }) });
 const run = await setup(repo, "--pages", "shop", "--domain", "shop.example.com", "--production", "shop/shop.example.com");
 expect(run.exitCode).toBe(0);
 expect(await Bun.file(join(repo.dir, ".github/workflows/mutation.yml")).exists()).toBe(false);
-const { uses } = workflowSteps(await readFile(join(repo.dir, ".github/workflows/ci.yml"), "utf8"));
-expect(uses).toBe("avi2d/workflows/.github/workflows/gate.yml@v3");
-expect(Bun.YAML.parse(await readFile(join(repo.dir, ".github/workflows/ci.yml"), "utf8"))).toMatchObject({
-  jobs: { site: { uses: "avi2d/workflows/.github/workflows/site-preview.yml@v3", with: { pages: "shop" } } },
+const ci = await readFile(join(repo.dir, ".github/workflows/ci.yml"), "utf8");
+expectNoRemoteUses("ci.yml", ci);
+expect(workflowSteps(ci).runs).toContain("bunx checks-ci require-success");
+expect(Bun.YAML.parse(ci)).toMatchObject({ env: { SITE_PAGES: "shop" } });
+expect(Bun.YAML.parse(await readFile(join(repo.dir, ".github/workflows/production.yml"), "utf8"))).toMatchObject({
+  env: { SITE_PAGES: "shop", SITE_DOMAIN: "shop.example.com", SITE_PRODUCTION: "shop/shop.example.com" },
 });
 const checked = await repo.script("delivery/workflows.ts");
 expect(checked.exitCode).toBe(0);
@@ -453,38 +453,31 @@ expect(checked.exitCode).toBe(0);
 );
 
 test(
-"a site whose callers pass the names gets a missing caller with the same names and no flag, and a site whose callers pass none is refused",
+"a site whose workflows name all three gets a missing file with the same names and no flag, and a site whose workflows name only some is refused",
 async () => {
-const named = "name: ci\non: pull_request\njobs:\n  checks:\n    uses: avi2d/workflows/.github/workflows/site-ci.yml@v3\n    with:\n      pages: shop\n      domain: shop.example.com\n      production: shop/shop.example.com\n";
-const repo = await open({ "package.json": JSON.stringify({ name: "shop", type: "module" }), ".github/workflows/ci.yml": named });
+const repo = await open({ "package.json": JSON.stringify({ name: "shop", type: "module" }), ".github/workflows/ci.yml": "name: ci\non: pull_request\nenv:\n  SITE_PAGES: shop\n  SITE_DOMAIN: shop.example.com\n  SITE_PRODUCTION: shop/shop.example.com\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n" });
 expect((await setup(repo)).exitCode).toBe(0);
-expect(Bun.YAML.parse(await readFile(join(repo.dir, ".github/workflows/main.yml"), "utf8"))).toMatchObject({
-  jobs: { release: { uses: "avi2d/workflows/.github/workflows/site-main.yml@v3", with: { pages: "shop", domain: "shop.example.com", production: "shop/shop.example.com" } } },
+expect(Bun.YAML.parse(await readFile(join(repo.dir, ".github/workflows/production.yml"), "utf8"))).toMatchObject({
+  env: { SITE_PAGES: "shop", SITE_DOMAIN: "shop.example.com", SITE_PRODUCTION: "shop/shop.example.com" },
 });
-const unnamed = await open({ "package.json": JSON.stringify({ name: "shop", type: "module" }), ".github/workflows/ci.yml": "name: ci\non: pull_request\njobs:\n  checks:\n    uses: avi2d/workflows/.github/workflows/site-ci.yml@v3\n" });
-const refused = await setup(unnamed);
+const partial = await open({ "package.json": JSON.stringify({ name: "shop", type: "module" }), ".github/workflows/ci.yml": "name: ci\non: pull_request\nenv:\n  SITE_PAGES: shop\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n" });
+const refused = await setup(partial);
 expect(refused.exitCode).toBe(2);
-expect(refused.text).toContain("the site callers pass no pages, domain and production, so run checks-setup --pages <project> --domain <domain> --production <owner/name>");
-expect(await Bun.file(join(unnamed.dir, ".github/workflows/main.yml")).exists()).toBe(false);
+expect(refused.text).toContain("the site workflows name no domain and production, so run checks-setup --domain <domain> --production <owner/name>");
+expect(await Bun.file(join(partial.dir, ".github/workflows/main.yml")).exists()).toBe(false);
 },
 60_000,
 );
 
 test(
-"the generated mutation workflow names the shared workflow at v2 and nothing else, so no mode formula or path list reaches the caller",
+"the generated mutation workflow is the full file checks-workflows compares and calls no workflow of another repository, so a shared caller never reaches a fresh repository",
 async () => {
-const dir = await scratch("mutation-caller");
+const dir = await scratch("mutation-workflow");
 expect((await $`bun ${join(CHECKOUT, "src", "delivery", "setup.ts")}`.cwd(dir).nothrow().quiet()).exitCode).toBe(0);
 const text = await readFile(join(dir, ".github/workflows/mutation.yml"), "utf8");
-const caller = Schema.decodeUnknownSync(CallerSchema)(Bun.YAML.parse(text));
-expect(Object.keys(caller.on)).toEqual(["workflow_dispatch"]);
-expect(caller.jobs).toEqual({
-  mutation: {
-    uses: "avi2d/workflows/.github/workflows/mutation.yml@v3",
-    permissions: { contents: "read", actions: "write", "pull-requests": "write" },
-  },
-});
-expect(text.split("\n").length).toBeLessThanOrEqual(20);
+expect(text).toBe(MUTATION_WORKFLOW);
+expectNoRemoteUses("mutation.yml", text);
+expect(Bun.YAML.parse(text)).toMatchObject({ on: { workflow_dispatch: null, workflow_call: null } });
 },
 60_000,
 );

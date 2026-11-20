@@ -6,6 +6,9 @@ export const CACHE = "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v
 export const SETUP_NODE = "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0";
 export const UPLOAD = "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2";
 export const DOWNLOAD = "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2";
+export const CONFIGURE_PAGES = "actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0";
+export const UPLOAD_PAGES = "actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0";
+export const DEPLOY_PAGES = "actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1";
 export const WRANGLER_VERSION = "4.156.1";
 
 export type Pair = readonly [key: string, value: string];
@@ -27,7 +30,9 @@ export type Job = {
   readonly runsOn: string;
   readonly timeout: number;
   readonly concurrency?: string;
+  readonly matrix?: Pair;
   readonly permissions: readonly string[];
+  readonly environment?: { readonly name: string; readonly url: string };
   readonly env?: readonly Pair[];
   readonly outputs?: readonly Pair[];
   readonly steps: readonly Step[];
@@ -37,6 +42,7 @@ export type Workflow = {
   readonly name: string;
   readonly on: readonly string[];
   readonly concurrency?: string;
+  readonly cancelInProgress?: boolean;
   readonly env?: readonly Pair[];
   readonly jobs: readonly Job[];
 };
@@ -78,14 +84,17 @@ function jobLines(job: Job): readonly string[] {
   if (job.if !== undefined) lines.push("    if: " + job.if);
   lines.push("    runs-on: " + job.runsOn, "    timeout-minutes: " + String(job.timeout));
   if (job.concurrency !== undefined) lines.push("    concurrency:", "      group: " + job.concurrency, "      cancel-in-progress: false");
+  if (job.matrix !== undefined) lines.push("    strategy:", "      matrix:", "        " + job.matrix[0] + ": " + job.matrix[1]);
   lines.push("    permissions:", ...job.permissions.map((permission) => "      " + permission));
+  if (job.environment !== undefined) lines.push("    environment:", "      name: " + job.environment.name, "      url: " + job.environment.url);
   lines.push(...block("    ", "env", job.env), ...block("    ", "outputs", job.outputs));
   return [...lines, "    steps:", ...job.steps.flatMap((step) => stepLines(step, "      "))];
 }
 
 export function workflowText(workflow: Workflow): string {
   const lines = ["name: " + workflow.name, "", "on:", ...workflow.on.map((line) => "  " + line), ""];
-  if (workflow.concurrency !== undefined) lines.push("concurrency:", "  group: " + workflow.concurrency, "  cancel-in-progress: true", "");
+  if (workflow.concurrency !== undefined)
+    lines.push("concurrency:", "  group: " + workflow.concurrency, "  cancel-in-progress: " + (workflow.cancelInProgress === false ? "false" : "true"), "");
   lines.push("permissions:", "  contents: read", "");
   if (workflow.env !== undefined) lines.push(...block("", "env", workflow.env), "");
   return [...lines, "jobs:", ...workflow.jobs.flatMap((job, index) => [...(index === 0 ? [] : [""]), ...jobLines(job)]), ""].join("\n");

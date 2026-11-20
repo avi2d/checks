@@ -156,8 +156,8 @@ mutation-scope: the baseline report did not run tests/unit/dashboard/snapshot.te
 
 ## When it runs
 
-Only a CI step runs it, in a branch's scoped head run.
-The shared `mutation` workflow runs it in its compare and refresh jobs, and a step the repository writes runs it too:
+Only a CI step runs it, either in the refresh plan or in a branch run the repository writes.
+The refresh plan of the `mutation.yml` [checks-setup](checks-setup.md) writes runs it with `--shards`, and a step the repository writes runs it for a branch:
 
 ```yaml
 - name: Select mutation scope
@@ -171,7 +171,6 @@ The shared `mutation` workflow runs it in its compare and refresh jobs, and a st
 ```
 
 Each later step reads `SCOPE` from the environment, and a failed scope step adds nothing to it.
-The shared pull request run mutates and scores the files it lists, as [checks-mutation-compare](checks-mutation-compare.md#running-it-in-ci) shows.
 The full baseline comes from the `mutation` workflow, as [checks-mutation](checks-mutation.md#running-it-in-ci) shows.
 
 ## Related topics

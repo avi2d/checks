@@ -132,7 +132,7 @@ Only a whole-tree workflow the repository writes runs it, after that workflow's 
 `checks-suppressions-ratchet` and `checks-quarantine-clock` run on every pull request, since `checks-lint` judges each pull request's range with them like every other range gate.
 `checks-repetition` runs on every pull request in a repository that tracks TypeScript.
 `checks-lint-coverage` reads the working tree, so a pull request run judges it only when the change selects the tree gates.
-On `main`, the `mutation` caller runs a full mutation run in `refresh` mode, which starts by hand every 28 days.
+On `main`, the `mutation` workflow runs a full mutation refresh, which starts by hand every 28 days.
 No workflow under `.github/workflows` in checks, skills, career, dotfiles, home-vpn, orc or shopping runs the whole-tree sweep or the issue filing.
 
 The whole-tree sweep runs only by hand through `checks-lint --whole-tree`.
@@ -154,10 +154,8 @@ concurrency:
   cancel-in-progress: false
 jobs:
   mutation:
-    uses: avi2d/workflows/.github/workflows/mutation.yml@v3
-    permissions: { contents: read, actions: write, pull-requests: write }
-    with:
-      mode: refresh
+    uses: ./.github/workflows/mutation.yml
+    permissions: { contents: read, actions: write }
   tests:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -209,7 +207,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - uses: actions/download-artifact@v8
         with:
-          pattern: mutation-refresh
+          pattern: mutation-baseline-full
           path: reports/mutation
       - if: needs.gates.result == 'success'
         uses: actions/download-artifact@v8
@@ -222,7 +220,7 @@ jobs:
           path: reports/whole-tree-run-tests
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: bunx checks-whole-tree-run --mutation reports/mutation/mutation-refresh/mutation.json --tests reports/whole-tree-run-tests/live.xml --tests reports/whole-tree-run-tests/pixel.xml ${{ needs.gates.result == 'success' && '--gates reports/whole-tree-run-gates/gates.log' || '' }}
+        run: bunx checks-whole-tree-run --mutation reports/mutation/mutation-baseline-full/mutation.json --tests reports/whole-tree-run-tests/live.xml --tests reports/whole-tree-run-tests/pixel.xml ${{ needs.gates.result == 'success' && '--gates reports/whole-tree-run-gates/gates.log' || '' }}
       - uses: actions/upload-artifact@v7
         with:
           name: whole-tree-run
@@ -238,8 +236,9 @@ The gates job runs the whole-tree lint gates and keeps the log, since a failing 
 The report job runs whenever the tests job succeeds, so a failing test that also stops Stryker still becomes an issue.
 It always passes `--mutation`, so a mutation job that failed or timed out leaves a missing report that becomes an issue.
 The download names the artifact by `pattern`, which downloads nothing rather than failing when the artifact is missing.
-The mutation job is the shared workflow's `refresh` mode, since [checks-ci-wiring](checks-ci-wiring.md#mutation-jobs) refuses a mutation job of the repository's own.
-That mode splits the full run into shards and uploads the merged report as the `mutation-refresh` artifact.
+The mutation job calls the `mutation.yml` [checks-setup](checks-setup.md) writes, since [checks-ci-wiring](checks-ci-wiring.md#mutation-jobs) refuses a mutation job of the repository's own.
+That workflow splits the full run into shards and uploads the merged report as the `mutation-baseline-full` artifact.
+A whole-tree run's mutation report is used only by that run and does not refresh the baseline.
 It passes `--gates` only when the gates job succeeded, and the failed gates job still fails the run.
 The concurrency group queues a run behind one already going, so two runs never file the same finding twice.
 A dispatch on a branch runs both jobs and lists its findings in the report job's log, and `if-no-files-found: ignore` lets that run upload no record.

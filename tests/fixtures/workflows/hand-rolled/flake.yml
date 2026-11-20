@@ -14,7 +14,7 @@ jobs:
       # The whole history, since the sweep-record tests find where the head branched from main.
       # ci.yml's toolchain, pinned the same, so a failing seed here is one
       # ci.yml can meet.
-      - uses: avi2d/workflows/setup@v1
+      - uses: ./.github/actions/setup
         with:
           fetch-depth: 0
       - uses: actions/setup-node@v7

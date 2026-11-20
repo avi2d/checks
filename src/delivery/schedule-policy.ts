@@ -1,5 +1,4 @@
 import { runsBin } from "./mutation-job.ts";
-import { SHARED_REPOSITORY } from "./mutation-workflow.ts";
 import { crons, isBinIn, releasesOnSchedule, schedules } from "./release-schedule.ts";
 import { jobRuns } from "./runner-policy.ts";
 import { invokes, plainCommand, type Command } from "./shell-command.ts";
@@ -13,7 +12,6 @@ export type ScheduledRun = {
 
 const ADVISORY_BINS = ["checks-advisories", "advisories.ts"];
 const INSTALL = ["bun", "install"];
-const ADVISORIES_CALL = /^([^/]+\/[^/]+)\/\.github\/workflows\/advisories\.yml@[^@\s]+$/;
 const NUMBER = /^\d+$/;
 const WEEKDAY = /^(?:[0-7]|sun|mon|tue|wed|thu|fri|sat)$/i;
 const BY_HAND = "drop the schedule, so it runs only when someone starts it with gh workflow run";
@@ -29,19 +27,13 @@ export function weekly(cron: unknown): boolean {
   return rest.length === 0 && NUMBER.test(minute) && NUMBER.test(hour) && day === "*" && month === "*" && WEEKDAY.test(weekday);
 }
 
-// GitHub matches an owner and a repository name in any case.
-function callsSharedAdvisories(uses: string): boolean {
-  return ADVISORIES_CALL.exec(uses)?.[1]?.toLowerCase() === SHARED_REPOSITORY;
-}
-
 function scansAdvisoriesOnly(workflow: Workflow, context: ScheduleContext): boolean {
   const files = (file: string) => context.files.get(file);
   const jobs = workflowJobs(workflow);
-  const calls = jobs.flatMap(([, job]) => (typeof job["uses"] === "string" ? [callsSharedAdvisories(job["uses"])] : []));
+  if (jobs.some(([, job]) => job["uses"] !== undefined)) return false;
   const runs = jobs.flatMap(([, job]) => jobRuns(workflow, job));
   const scans = runs.filter((run) => runsBin(run, context.scripts, files, isAdvisoryBin, true));
-  const scanned = scans.length > 0 || calls.includes(true);
-  return scanned && calls.every(Boolean) && runs.every((run) => scans.includes(run) || invokes(plainCommand(run.script), INSTALL));
+  return scans.length > 0 && runs.every((run) => scans.includes(run) || invokes(plainCommand(run.script), INSTALL));
 }
 
 function advisoryFault(workflow: Workflow, owner: ScheduleOwner): string | undefined {

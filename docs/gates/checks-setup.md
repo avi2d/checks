@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-setup
 
-`checks-setup` writes the kit config, the workflow callers and the doc templates into a repository that does not hold them yet.
+`checks-setup` writes the kit config, the workflow files and the doc templates into a repository that does not hold them yet.
 
 ## What it checks
 
@@ -22,20 +22,17 @@ It writes `.jscpd.json` with the kit default.
 It writes the Effect paths of the `oxlint.config.ts` it finds or writes into the language service entry of `tsconfig.json`.
 The pair passes `checks-effect-scope --check` from the first write.
 It writes `package.json` with the kit in `devDependencies` and with `lint`, `typecheck`, `test` and `test:fast` scripts, plus a `test:<tier>` script for each tier that holds test files.
-It writes the caller set `checks-workflows` writes.
-A repository whose workflow callers already call a shared site workflow gets the site callers, and so does a run given the site name flags.
-Any other repository gets the code callers.
-Each site caller passes the Pages project, the domain and the production repository, taken from the callers it finds.
-The `site` job of `ci.yml` passes the Pages project alone.
-Each flag fills only a name no caller passes.
+It writes the workflow files and local actions `checks-workflows` writes, and every one holds its own steps.
+A repository whose workflow files already name a site gets the site set, and so does a run given the site name flags.
+Any other repository gets the code set.
+Each site workflow holds the Pages project, the domain and the production repository, taken from the site workflows it finds.
+Each flag fills only a name no site workflow holds.
 It stops before writing anything when a site run lacks one of the three names, and names the fix.
-The same stop covers two values of one name, an unparsable name, and a flag that differs from a name its callers pass.
-The same stop covers a test job of `ci.yml` that passes an unparsable input or holds a fixed job name.
+The same stop covers two values of one name, an unparsable name, and a flag that differs from a name its workflows hold.
+The same stop covers a test job of `ci.yml` that holds an unparsable input or a name a job cannot take.
 A freshly set up repository passes `checks-workflows` without running `--write` first.
-In a code repository it writes `mutation.yml` under `.github/workflows/`, which names the shared mutation workflow `avi2d/workflows/.github/workflows/mutation.yml@v3` and nothing else.
-The shared workflow picks the run from the event.
-A pull request runs `compare`, and a manual dispatch runs `refresh`.
-A refresh starts by hand, as [checks-ci-wiring](checks-ci-wiring.md#schedules) requires.
+In a code repository it writes `mutation.yml` under `.github/workflows/`, which splits the tree into shards, runs each shard and keeps the merged report as the baseline.
+It starts by hand, as [checks-ci-wiring](checks-ci-wiring.md#schedules) requires.
 No run starts after a merge to `main`.
 It writes `stryker.conf.mjs`, which spreads the kit's Stryker preset and sets the `mutate` globs to the sources under `src/`.
 It adds the kit's own pins of `@stryker-mutator/core` and `@hughescr/stryker-bun-runner` to `devDependencies`, and keeps a pin it finds.
@@ -48,9 +45,9 @@ It tells the owner to declare the repository owners in `package.json` `author` o
 ## What it reads
 
 It reads the working tree, which is the repository it sets up.
-It reads the `.yml` and `.yaml` files under `.github/workflows/` to tell a site from a code repository and to take the site names its callers pass.
+It reads the `.yml` and `.yaml` files under `.github/workflows/` to tell a site from a code repository and to take the site names its workflows hold.
 It reads a `package.json` it finds for the fields and scripts it keeps, replaces or refuses.
-It reads the workspace patterns and each workspace `package.json` for the caller inputs the written manifest will hold.
+It reads the workspace patterns and each workspace `package.json` for the workflow options the written manifest will hold.
 It reads the kit install for `.bun-version`, `bunfig.toml`, its version, its Stryker pins and each template.
 
 ## Arguments
@@ -60,9 +57,9 @@ checks-setup [--private] [--pages <project>] [--domain <domain>] [--production <
 ```
 
 With no arguments the repository is public.
-With `--pages`, `--domain` and `--production` the repository is a site with those names, and each flag must match the name the site callers pass.
+With `--pages`, `--domain` and `--production` the repository is a site with those names, and each flag must match the name the site workflows hold.
 To rename a site, run `checks-workflows --write` with the flags.
-The three flags set up a site that has no site caller yet.
+The three flags set up a site that has no site workflow yet.
 With `--private` it sets `private` to `true` in `package.json`, and the run names the `CI_RUNS_ON` value to set.
 
 ## Exit codes
@@ -70,7 +67,7 @@ With `--private` it sets `private` to `true` in `package.json`, and the run name
 | Code | When |
 | --- | --- |
 | 0 | every file is written or already there |
-| 2 | an argument is unknown, a site lacks one of its three names, passes two values of one, names one that does not parse, passes a flag that differs from the name a present caller passes, a test job of `ci.yml` passes an unparsable input or holds a fixed job name, a file it needs cannot be read, or a `lint`, `typecheck`, `test`, `test:fast` or `test:*` script it finds does not run the checks |
+| 2 | an argument is unknown, a site lacks one of its three names, passes two values of one, names one that does not parse, passes a flag that differs from the name a present workflow holds, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, a file it needs cannot be read, or a `lint`, `typecheck`, `test`, `test:fast` or `test:*` script it finds does not run the checks |
 
 ## Sample output
 

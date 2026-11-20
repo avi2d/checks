@@ -1,17 +1,14 @@
 import { names, type Workflow } from "./workflow-references.ts";
 
 const NEEDS_RUNS_ON = /^\$\{\{\s*needs\.([\w-]+)\.outputs\.runs-on\s*\}\}$/i;
-const SHARED_RUNNER = /^[Aa][Vv][Ii]2[Dd]\/[Ww][Oo][Rr][Kk][Ff][Ll][Oo][Ww][Ss]\/\.github\/workflows\/runner\.yml@(?:[0-9a-fA-F]{40}|v\d+(?:\.\d+\.\d+)?)$/;
 const LOCAL_RUNNER = ".github/workflows/runner.yml";
 
 function callsRunnerPick(uses: unknown, workflows: readonly Workflow[]): boolean {
   if (typeof uses !== "string") return false;
   const target = uses.trim();
-  if (target.startsWith("./")) {
-    const path = target.slice(2);
-    return path === LOCAL_RUNNER && workflows.some((workflow) => workflow.path === path);
-  }
-  return SHARED_RUNNER.test(target);
+  if (!target.startsWith("./")) return false;
+  const path = target.slice(2);
+  return path === LOCAL_RUNNER && workflows.some((workflow) => workflow.path === path);
 }
 
 // GitHub fills needs.<job> only for jobs the current job needs.

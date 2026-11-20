@@ -62,6 +62,12 @@ export function localUses(uses: unknown): string | undefined {
   return typeof uses === "string" && uses.startsWith("./") ? uses.slice(2) : undefined;
 }
 
+export function calledFileOf(uses: unknown): string | undefined {
+  if (typeof uses !== "string") return undefined;
+  const [path] = uses.trim().split("@");
+  return path?.split("/").at(-1);
+}
+
 type Key = string | number;
 
 type Target = { readonly name: string; readonly invocation: number };

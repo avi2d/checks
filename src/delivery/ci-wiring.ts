@@ -6,16 +6,14 @@ import { ENTRY_POINT, KIT_GATES, type KitGate } from "../core/gates.ts";
 import { findBunPinFaults, formatBunPinReport, readBunPinPolicy } from "./bun-pin.ts";
 import { findLongJobs, formatLongJobReport } from "./job-timeout.ts";
 import { readScheduleFiles, readShellFiles } from "./mutation-job.ts";
-import { findHandRolledMutation, formatHandRolledReport, holdsSharedWorkflow, type MutationCalls } from "./mutation-workflow.ts";
-import { MUTATION_WORKFLOW } from "./setup-workflow.ts";
-import { ownerRepoOf } from "./release-preflight.ts";
+import { findHandRolledMutation, formatHandRolledReport, isWrittenMutation, MUTATION_PATH, type MutationCalls } from "./mutation-workflow.ts";
+import { MUTATION_WORKFLOW } from "./full-set/mutation.ts";
 import { findScheduledReleases, formatScheduleReport } from "./release-schedule.ts";
 import { findRunnerFaults, formatRunnerReport, jobRuns, readRunnerConfig } from "./runner-policy.ts";
 import { findScheduledRuns, formatScheduledRunReport } from "./schedule-policy.ts";
 import { invokes, mentions, plainCommand, type Command } from "./shell-command.ts";
 import { callerInputsOf, callerSetOf } from "./site-names.ts";
-import { countOf, heldDifferences, layoutOf, readActionFiles } from "./held-set.ts";
-import { fullRefusal } from "./workflow-set.ts";
+import { countOf, heldDifferences, readActionFiles } from "./held-set.ts";
 import { findMissingWorkflows, formatMissingReport, isRecord, localUses, names, skippedBy, switchedOff, workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export { BunPinError, findBunPinFaults, formatBunPinReport } from "./bun-pin.ts";
@@ -274,13 +272,6 @@ const readVisibility = Effect.gen(function* () {
   );
 });
 
-// Outside CI the origin remote names the repository, and a clone without one names none.
-export const readRepository = Effect.fn("readRepository")(function* (root: string) {
-  const running = yield* Config.String("GITHUB_REPOSITORY").pipe(Config.withDefault(""));
-  if (running !== "") return running;
-  return ownerRepoOf((yield* git(["remote", "get-url", "origin"], root).pipe(Effect.orElseSucceed(() => ""))).trim());
-});
-
 export const readWorkflows = Effect.fn("readWorkflows")(function* (root: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -296,40 +287,33 @@ export const readWorkflows = Effect.fn("readWorkflows")(function* (root: string)
   );
 });
 
-const callerFits = Effect.fn("callerFits")(function* (root: string) {
+const mutationFits = Effect.fn("mutationFits")(function* (root: string) {
   const fs = yield* FileSystem.FileSystem;
-  const full = (yield* Path.Path).join(root, WORKFLOWS, "mutation.yml");
-  const caller = (yield* fs.exists(full)) ? yield* fs.readFileString(full) : MUTATION_WORKFLOW;
-  if (caller === MUTATION_WORKFLOW) return true;
-  yield* Console.error(`ci-wiring: ${WORKFLOWS}/mutation.yml differs from the caller checks-setup writes: delete it and run checks-setup to write it again`);
+  const full = (yield* Path.Path).join(root, MUTATION_PATH);
+  const held = (yield* fs.exists(full)) ? yield* fs.readFileString(full) : MUTATION_WORKFLOW;
+  if (held === MUTATION_WORKFLOW) return true;
+  yield* Console.error(`ci-wiring: ${MUTATION_PATH} differs from the file checks-setup writes: delete it and run checks-setup to write it again`);
   return false;
 });
 
-const reportHandRolled = Effect.fn("reportHandRolled")(function* (
-  workflows: readonly Workflow[],
-  calls: MutationCalls,
-  repository: string | undefined,
-) {
-  const handRolled = findHandRolledMutation(workflows, calls, repository);
+const reportHandRolled = Effect.fn("reportHandRolled")(function* (workflows: readonly Workflow[], calls: MutationCalls) {
+  const handRolled = findHandRolledMutation(workflows, calls);
   if (handRolled.length > 0) yield* Console.error(formatHandRolledReport(handRolled));
   return handRolled;
 });
 
-// The shared workflows the set calls run every gate, and this check does not follow a remote workflow.
-const callsSharedSet = Effect.fn("callsSharedSet")(function* (root: string, workflows: readonly Workflow[]) {
+const holdsWrittenSet = Effect.fn("holdsWrittenSet")(function* (root: string, workflows: readonly Workflow[]) {
   const present = workflows.map(({ path, text }) => ({ name: path.slice(WORKFLOWS.length + 1), text }));
   if (present.length === 0) return false;
   return yield* Effect.gen(function* () {
     const inputs = yield* callerInputsOf(root);
     const set = yield* callerSetOf(workflows, {}, "checks-workflows --write", inputs.publishes, inputs.publishWorkspaces, inputs.needsReleaseChecks);
-    const layout = yield* layoutOf(root, inputs.kit, false);
-    if (layout.full && fullRefusal(set) !== undefined) return false;
-    return countOf(heldDifferences(set, present, yield* readActionFiles(root), layout)) === 0;
+    return countOf(heldDifferences(set, present, yield* readActionFiles(root), inputs.kit)) === 0;
   }).pipe(Effect.catch((fault) => Console.error(`ci-wiring: ${fault.message}`).pipe(Effect.as(false))));
 });
 
 const reportGaps = Effect.fn("reportGaps")(function* (root: string, workflows: readonly Workflow[]) {
-  if (yield* callsSharedSet(root, workflows)) {
+  if (yield* holdsWrittenSet(root, workflows)) {
     yield* Console.log(`ci-wiring: ${WORKFLOWS} holds the set checks-workflows writes, so the set runs every gate`);
     return [];
   }
@@ -352,11 +336,11 @@ const wiring = Effect.gen(function* () {
   const runs = workflows.flatMap((workflow) => workflowJobs(workflow).flatMap(([, job]) => jobRuns(workflow, job)));
   const runners = yield* readRunnerConfig(root);
   const shellFiles = yield* readShellFiles(root, scripts, runs);
-  const faults = findRunnerFaults({ visibility, scripts, files: shellFiles, runners }, workflows);
+  // The written mutation workflow runs on the hosted runner in every repository.
+  const faults = findRunnerFaults({ visibility, scripts, files: shellFiles, runners }, workflows.filter((workflow) => !isWrittenMutation(workflow)));
   if (faults.length > 0) yield* Console.error(formatRunnerReport(faults));
-  const repository = yield* readRepository(root);
-  const handRolled = yield* reportHandRolled(workflows, { scripts, files: shellFiles }, repository);
-  const callerOk = holdsSharedWorkflow(repository) ? true : yield* callerFits(root);
+  const handRolled = yield* reportHandRolled(workflows, { scripts, files: shellFiles });
+  const mutationOk = yield* mutationFits(root);
   const bunFaults = findBunPinFaults(yield* readBunPinPolicy(root, workflows), workflows);
   if (bunFaults.length > 0) yield* Console.error(formatBunPinReport(bunFaults));
   const scheduleFiles = yield* readScheduleFiles(root, scripts, runs);
@@ -367,7 +351,7 @@ const wiring = Effect.gen(function* () {
   if (scheduledRuns.length > 0) yield* Console.error(formatScheduledRunReport(scheduledRuns));
   const longJobs = findLongJobs(workflows);
   if (longJobs.length > 0) yield* Console.error(formatLongJobReport(longJobs));
-  return callerOk && [gaps, faults, handRolled, missing, bunFaults, scheduled, scheduledRuns, longJobs].every((found) => found.length === 0);
+  return mutationOk && [gaps, faults, handRolled, missing, bunFaults, scheduled, scheduledRuns, longJobs].every((found) => found.length === 0);
 });
 
 if (import.meta.main) runMain("ci-wiring", wiring);

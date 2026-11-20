@@ -1,8 +1,8 @@
 import { Effect, FileSystem, Path } from "effect";
-import { ACTION_FILES, fullActions, SETUP_ACTION, type RepositoryFile } from "./full-set/actions.ts";
+import { ACTION_FILES, fullActions, type RepositoryFile } from "./full-set/actions.ts";
 import type { CallerSet, HeldFile } from "./site-names.ts";
 import { WORKFLOWS } from "./site-names.ts";
-import { differenceLines, differencesOf, differentLines, type Difference, type Layout } from "./workflow-set.ts";
+import { differenceLines, differencesOf, differentLines, type Difference } from "./workflow-set.ts";
 
 export const readActionFiles = Effect.fn("readActionFiles")(function* (root: string) {
   const fs = yield* FileSystem.FileSystem;
@@ -14,13 +14,6 @@ export const readActionFiles = Effect.fn("readActionFiles")(function* (root: str
     }),
   );
   return held.flat();
-});
-
-// A repository opts into the full set by holding the setup action, so a kit upgrade alone moves no repository.
-export const layoutOf = Effect.fn("layoutOf")(function* (root: string, kit: boolean, chosen: boolean) {
-  const fs = yield* FileSystem.FileSystem;
-  const holdsSetup = yield* fs.exists((yield* Path.Path).join(root, SETUP_ACTION));
-  return chosen || holdsSetup ? ({ full: true, kit } satisfies Layout) : ({ full: false } satisfies Layout);
 });
 
 function actionDifferences(set: CallerSet, present: readonly RepositoryFile[]): readonly Difference[] {
@@ -38,16 +31,15 @@ function actionDifferences(set: CallerSet, present: readonly RepositoryFile[]): 
 
 export type HeldDifferences = { readonly workflows: readonly Difference[]; readonly actions: readonly Difference[] };
 
-export function heldDifferences(set: CallerSet, workflows: readonly Pick<HeldFile, "name" | "text">[], actions: readonly RepositoryFile[], layout: Layout): HeldDifferences {
-  return { workflows: differencesOf(set, workflows, layout), actions: layout.full ? actionDifferences(set, actions) : [] };
+export function heldDifferences(set: CallerSet, workflows: readonly Pick<HeldFile, "name" | "text">[], actions: readonly RepositoryFile[], kit: boolean): HeldDifferences {
+  return { workflows: differencesOf(set, workflows, kit), actions: actionDifferences(set, actions) };
 }
 
 export const countOf = ({ workflows, actions }: HeldDifferences): number => workflows.length + actions.length;
 
-export function heldDifferenceLines({ workflows, actions }: HeldDifferences, layout: Layout): readonly string[] {
-  const written = layout.full ? "file" : "caller";
+export function heldDifferenceLines({ workflows, actions }: HeldDifferences): readonly string[] {
   return [
-    ...workflows.flatMap((difference) => differenceLines(`${WORKFLOWS}/${difference.name}`, difference, written)),
-    ...actions.flatMap((difference) => differenceLines(difference.name, difference, "file")),
+    ...workflows.flatMap((difference) => differenceLines(`${WORKFLOWS}/${difference.name}`, difference)),
+    ...actions.flatMap((difference) => differenceLines(difference.name, difference)),
   ];
 }

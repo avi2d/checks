@@ -4,6 +4,7 @@ import { runMain, Usage } from "../core/main.ts";
 import { JSCPD_CONFIG, KNIP_CONFIG, STRYKER_CONFIG } from "./setup-workflow.ts";
 import { callerInputsOf, callerSetOf, flagMismatchOf, parseSiteNameFlags, readWorkflowFiles, type CallerSet } from "./site-names.ts";
 import { byHandSet, requiredSet } from "./workflow-set.ts";
+import { fullActions } from "./full-set/actions.ts";
 import { TEMPLATES, VISION_PAGE } from "../docs/doc-templates.ts";
 import { requiresName } from "../docs/doc-vision.ts";
 import { FAST_COMMAND, TEST_COMMAND } from "../core/test-script.ts";
@@ -311,8 +312,9 @@ const setupPackage = Effect.fn("setupPackage")(function* (root: string, isPrivat
   return yield* updatePackage(root, raw, record, isPrivate, fallbackName, pins);
 });
 
-const setupWorkflows = Effect.fn("setupWorkflows")(function* (root: string, set: CallerSet) {
-  for (const { name, text } of requiredSet(set)) yield* setupFile(root, `.github/workflows/${name}`, text);
+const setupWorkflows = Effect.fn("setupWorkflows")(function* (root: string, set: CallerSet, kit: boolean) {
+  for (const { name, text } of requiredSet(set, kit)) yield* setupFile(root, `.github/workflows/${name}`, text);
+  for (const { path, text } of fullActions(set)) yield* setupFile(root, path, text);
   const mutation = byHandSet(set).find((file) => file.name === "mutation.yml");
   if (mutation !== undefined) yield* setupFile(root, `.github/workflows/${mutation.name}`, mutation.text);
   yield* setupFile(root, "stryker.conf.mjs", STRYKER_CONFIG);
@@ -344,12 +346,12 @@ const argumentsOf = Effect.fn("argumentsOf")(function* (root: string) {
   const set = yield* callerSetOf(callers, parsed.flags, NAME, inputs.publishes, inputs.publishWorkspaces, inputs.needsReleaseChecks).pipe(
     Effect.mapError((fault) => new Usage({ message: fault.message })),
   );
-  return { isPrivate, set };
+  return { isPrivate, set, kit: inputs.kit };
 });
 
 const check = Effect.gen(function* () {
   const root = yield* Effect.sync(() => process.cwd());
-  const { isPrivate, set } = yield* argumentsOf(root);
+  const { isPrivate, set, kit: isKit } = yield* argumentsOf(root);
   const path = yield* Path.Path;
 
   const kit = yield* decodeKitManifest(yield* kitText("package.json")).pipe(
@@ -372,7 +374,7 @@ const check = Effect.gen(function* () {
   yield* setupTsconfig(root, oxlintText);
   yield* setupFile(root, "knip.config.ts", KNIP_CONFIG);
   yield* setupFile(root, ".jscpd.json", JSCPD_CONFIG);
-  yield* setupWorkflows(root, set);
+  yield* setupWorkflows(root, set, isKit);
   const { wroteAgents, wroteVision } = yield* setupDocFiles(root, requiresName({ name: outcome.name }));
   if (isPrivate) yield* Console.log(NAME + ": set the CI_RUNS_ON variable to a self-hosted runner label so the new jobs land there");
   if (!outcome.hasOwner) {

@@ -8,9 +8,8 @@ audience: consumers
 
 ## What it checks
 
-The logic a step needs lives in a shared workflow or action in `avi2d/workflows`, with its tests there.
-Any other repository's workflows only call them.
-A step that uses a shared workflow or action passes, and so does a step whose `run` is one plain command, such as `bun run test`, or `bun scripts/smoke-pack.ts` in `avi2d/workflows`.
+The logic a step needs lives in a bin, such as a `checks-ci` command, with its tests next to its source.
+A step that uses an action passes, and so does a step whose `run` is one plain command, such as `bun run test` or `bunx checks-ci secrets-pack`.
 
 One plain command is one line of words that runs one program.
 The check refuses a `run` that holds any of these:
@@ -39,7 +38,7 @@ GitHub substitutes an expression into the script before the shell reads it, so a
 
 ### The caller's command
 
-A shared workflow or action can run a command its caller names, since the caller's own file holds that command.
+A reusable workflow or action can run a command its caller names, since the caller's own file holds that command.
 Two shapes count as one plain command:
 
 - in a reusable workflow, a `run` whose whole value is one input, such as `run: ${{ inputs.publish-command }}`
@@ -63,7 +62,7 @@ This step fails, because it appends through a redirect and spells its data with 
 These steps pass:
 
 ```yaml
-- uses: avi2d/workflows/actions/setup@v1
+- uses: ./.github/actions/setup
 - name: Smoke names
   run: bun scripts/smoke-pack.ts
 ```
@@ -96,7 +95,7 @@ It checks the directory it runs in, or the directory it is given.
 ## Sample output
 
 ```
-plain-steps: 2 run step(s) are not one plain command; run one command, or call a shared workflow or action that holds the logic:
+plain-steps: 2 run step(s) are not one plain command; run one command, or move the logic into a bin or an action:
   .github/workflows/ci.yml line 14 job smoke step "Smoke names": a backslash escape, a redirect
   .github/workflows/ci.yml line 17 job smoke step "Pack": a block scalar
 ```

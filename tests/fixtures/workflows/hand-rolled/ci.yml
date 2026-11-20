@@ -12,15 +12,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: avi2d/workflows/setup@v1
+      - uses: ./.github/actions/setup
         with:
           fetch-depth: 0
       - run: bun run build
       - run: git diff --exit-code
       - run: bun run docs:build
-      - uses: avi2d/workflows/actions/secrets-pack@v2
-        with:
-          pack: ${{ secrets.CHECKS_SECRETS_PACK }}
+      - env:
+          PACK: ${{ secrets.CHECKS_SECRETS_PACK }}
+        run: bunx checks-ci secrets-pack
       - run: bun run lint
       - run: bun run typecheck
       - run: bun run test
