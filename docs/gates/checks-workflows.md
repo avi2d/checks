@@ -62,10 +62,14 @@ The files a site takes differ between sites only in the three names, the test jo
 A job that runs the suite cancels its run when a push to a draft pull request started it.
 In a site only the jobs that read the build do so, so a draft still gets its preview link.
 The kit itself keeps its own `release.yml` and `release-pr.yml`, since npm's trusted publishing names `release.yml`.
+The refusal still reads those files.
+Replace such a job with its own steps by hand.
 
 `pr-text.yml` stays as it is in both kinds.
 It runs on `pull_request_target` and comment events, so no `ci.yml` job replaces it.
 `checks-workflows` never compares it, `--write` neither writes nor deletes it, and it is no extra.
+The refusal of a call to another repository's workflow still reads it.
+Replace such a job with its own steps by hand.
 
 An optional file may be absent, but a present one holds exactly the file the set writes.
 A site may hold `advisories.yml` and `docs.yml`.
@@ -75,7 +79,7 @@ Each optional file keeps what the file it replaces does:
 | File | Starts on | Keeps |
 | --- | --- | --- |
 | `advisories.yml` | `workflow_dispatch` | its `schedule` cron when it holds exactly one and that one is weekly, such as `"21 5 * * 1"`, and drops any other schedule |
-| `mutation.yml` | `workflow_dispatch` and `workflow_call` | nothing, since it is the same in every code repository: it splits the tree into shards, runs each shard, merges the reports and keeps the merged report as the baseline |
+| `mutation.yml` | `workflow_dispatch` and `workflow_call` | nothing, since it is the same in every code repository: it splits the tree into shards, runs each shard and merges the reports. Only a `workflow_dispatch` run keeps the merged report as the baseline. A run started through `workflow_call` uses the report only within that run |
 | `flake.yml` | `workflow_dispatch` | the `node-version-file` an `actions/setup-node` step sets up |
 | `docs.yml` | a push to `main` and `workflow_dispatch` | the one `run` step and the `actions/upload-pages-artifact` path of the job that uploads the site |
 

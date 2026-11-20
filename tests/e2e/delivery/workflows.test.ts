@@ -171,6 +171,7 @@ test("a job that calls avi2d/workflows is refused instead of passing as the set,
     [
       "workflows: 1 job(s) call a workflow of another repository:",
       "  .github/workflows/ci.yml job checks: calls avi2d/workflows/.github/workflows/ci.yml@v3, a workflow of another repository, where the set holds every step itself",
+      "  run checks-workflows --write to write the set",
     ].join("\n"),
   );
 
@@ -186,13 +187,16 @@ test("a pr-text.yml job that calls avi2d/workflows is refused instead of passing
   await workflows(repo, ["--write"]);
 
   const refused = await workflows(repo);
-  expect(refused.exitCode).toBe(1);
-  expect(refused.text).toContain(
-    [
+  expect(refused).toEqual({
+    exitCode: 1,
+    text: [
+      "workflows: .github/workflows holds the code set checks-workflows writes",
       "workflows: 1 job(s) call a workflow of another repository:",
       "  .github/workflows/pr-text.yml job text: calls avi2d/workflows/.github/workflows/pr-text.yml@v3, a workflow of another repository, where the set holds every step itself",
+      "  checks-workflows --write never writes .github/workflows/pr-text.yml, so replace its calling jobs with their own steps by hand",
+      "",
     ].join("\n"),
-  );
+  });
 }, 30_000);
 
 test("a test job a person adds to the written ci.yml is refused until --write, which keeps it and makes checks need it", async () => {
