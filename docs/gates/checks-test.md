@@ -4,7 +4,7 @@ audience: consumers
 ---
 # checks-test
 
-`checks-test` runs the test suite and rejects skips without a reason at the test site.
+`checks-test` runs the test suite, rejects skips without a reason at the test site, and enforces a per-file time limit in CI.
 
 ## What it checks
 
@@ -45,6 +45,24 @@ A declaration whose test passes or does not register fails a CI run.
 A local run warns about the same declaration because a condition can depend on the machine.
 A skipped test or a todo without `skipReason` fails in every environment.
 
+## Test file time limit
+
+In CI, a test file that takes more than five minutes fails the run even when all its tests pass.
+A file that takes exactly the limit passes the time check.
+The check uses the whole file's elapsed time from Bun's JUnit report, not the time of each test or the whole suite.
+It judges only the files in the report after Bun finishes and does not stop a file while it runs.
+The failure names each file over the limit and its elapsed time in seconds.
+
+Set `testFileMaxSeconds` in `checks.config.ts` to change the default of 300 seconds.
+The value must be a finite number greater than zero, in seconds.
+Local runs do not enforce the limit.
+
+```ts
+import { defineConfig } from "@avi2dg/checks/config";
+
+export default defineConfig({ testFileMaxSeconds: 240 });
+```
+
 ## What it reads
 
 `checks-test` reads test source files and the JUnit report written by its own run.
@@ -52,7 +70,7 @@ A pull request run also reads the event file, the git history between the base a
 It reads the reach map under `reach` in `checks.config.ts` too, as [The reach map](#the-reach-map) says.
 A `--changed` run also reads the git history since the merge base with `origin/<default branch>`, the working tree diff and the untracked files.
 It reads the sources, `package.json`, `checks.config.ts` and `bunfig.toml` too, as [Changed-file runs](#changed-file-runs) says.
-It reads no skip list from `checks.config.ts`, only the smoke list.
+It reads no skip list from `checks.config.ts`.
 It reads `CHECKS_AGENT` and `CI` from the environment and the `localTests` key of `checks.config.ts`, and refuses an agent run while `localTests` is blocked, as [checks-local-tests](checks-local-tests.md) says.
 It counts a run as `ci` when `CI` is true and as `local` otherwise.
 A local run covers `./tests/unit` plus the smoke list the repository declares, except a `--changed` run, as [Changed-file runs](#changed-file-runs) says.
@@ -235,9 +253,9 @@ It refuses test filters because every test excluded by a filter would look skipp
 
 | Code | When |
 | --- | --- |
-| 0 | every test passed and every skip has a matching site reason |
-| 1 | a test failed, a parallel worker crashed, a skip lacks a site reason or a declaration is stale in CI |
-| 2 | an argument is not one it takes, a run outside CI is refused, `APPROVE_SCREENS` is not a boolean in a pixel run, a declaration or the smoke list cannot be read, a `checks` object in `package.json` still sets `smoke` or `reach`, a smoke entry names no runnable test, `CI` is not a boolean, Bun wrote no report, a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` or an agent run is refused while `localTests` is blocked |
+| 0 | every test passed, every skip has a matching site reason, and no file exceeds the time limit in CI |
+| 1 | a test failed, a parallel worker crashed, a skip lacks a site reason, a declaration is stale in CI, or a file exceeds the time limit in CI |
+| 2 | an argument is not one it takes, a run outside CI is refused, `APPROVE_SCREENS` is not a boolean in a pixel run, a declaration, the smoke list, or the time limit in CI cannot be read, a `checks` object in `package.json` still sets `smoke` or `reach`, a smoke entry names no runnable test, `CI` is not a boolean, Bun wrote no report, a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` or an agent run is refused while `localTests` is blocked |
 
 ## Sample output
 
@@ -246,7 +264,13 @@ checks-test: 1 skipped test(s) undeclared in this local run:
   tests/unit/pricing.test.ts:12 rounds half to even: skipped with no reason at its test site; use test.skipIf(condition)(skipReason(reason, name), fn)
 ```
 
-A run with no skipped tests ends with:
+A CI run with a test file over the time limit reports:
+
+```
+checks-test: tests/e2e/checkout.test.ts took 312.48s (limit 300s)
+```
+
+A passing run with no skipped tests ends with:
 
 ```
 checks-test: no test skipped
@@ -255,6 +279,8 @@ checks-test: no test skipped
 ## When it runs
 
 The repository's `test` script runs it.
+The kit's pull request workflow runs it as `bunx checks-test --pr`.
+Both commands enforce the time limit in CI without another workflow step.
 A repository that tracks no TypeScript source does not need it, as [checks-test-layout](checks-test-layout.md) says.
 
 ## Related topics
