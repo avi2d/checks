@@ -11,6 +11,7 @@ import { testOptions, type TestOptions, type TestTier } from "../core/test-scrip
 import { readRunScope } from "../core/pull-request-scope.ts";
 import { readChangedNarrowing, readLocalNarrowing } from "./affected-tests.ts";
 import { changedLocalPaths } from "./changed-tests.ts";
+import { judgeTestFileTimes, resolveTestFileMaxSeconds } from "./test-file-time.ts";
 import { APPROVE_VARIABLE, heavyRunRefusal, pullRequestRunRefusal } from "./test-refusal.ts";
 import {
   readDeclarationsIn,
@@ -316,19 +317,25 @@ const runSuite = Effect.fn("runSuite")(function* (outfile: string, args: readonl
   );
 });
 
+type RunPolicy = { readonly environment: "local" } | { readonly environment: "ci"; readonly maxFileSeconds: number };
+
 const testEntry = Effect.gen(function* () {
-  yield* refuseLocalTests(process.cwd());
+  const root = process.cwd();
+  yield* refuseLocalTests(root);
   const entry = entryOptions(process.argv.slice(2));
   if (entry === undefined) return yield* new Usage({ message: USAGE });
   const { options, junit, run } = entry;
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const environment = yield* environmentOf;
-  yield* refuseOldPlace(process.cwd(), "smoke", { manifestKey: "smoke" });
-  yield* refuseOldPlace(process.cwd(), "reach", { manifestKey: "reach" });
+  yield* refuseOldPlace(root, "smoke", { manifestKey: "smoke" });
+  yield* refuseOldPlace(root, "reach", { manifestKey: "reach" });
   const refusal =
     run === "pr" ? pullRequestRunRefusal(environment) : heavyRunRefusal(options, environment, options.tier === "pixel" && (yield* approvingScreens));
   if (refusal !== undefined) return yield* new RunRefusal({ message: refusal });
+  const policy: RunPolicy = environment === "ci"
+    ? { environment, maxFileSeconds: yield* resolveTestFileMaxSeconds((yield* loadSettings(root))["testFileMaxSeconds"]) }
+    : { environment };
   const selection = yield* entrySelection(run, options, environment);
   if (selection.kind === "files" && selection.files.length === 0) {
     if (run !== "pr") yield* Console.log(`${NAME}: the pull request changes no file a test reads, so no test ran`);
@@ -338,7 +345,7 @@ const testEntry = Effect.gen(function* () {
     yield* Console.log(`${NAME}: the change reaches no test file, so no test ran`);
     return true;
   }
-  const smoke = selection.kind === "smoke" ? yield* readSmokeList(process.cwd()) : [];
+  const smoke = selection.kind === "smoke" ? yield* readSmokeList(root) : [];
   const scope = yield* readScope(selection, smoke);
   if (scope.files?.length === 0) {
     yield* Console.log(`${NAME}: no unit test and no smoke list, so this local run ran nothing; declare the smoke key of ${SETTINGS_FILE}`);
@@ -349,7 +356,7 @@ const testEntry = Effect.gen(function* () {
   const outfile = path.join(yield* fs.makeTempDirectoryScoped({ prefix: "checks-test-" }), "junit.xml");
   const suitePassed =
     (yield* runSuite(outfile, suiteArgs(selection, smoke), options.workers)) === ChildProcessSpawner.ExitCode(0);
-  return yield* judgeRun(outfile, junit, suitePassed, declarations, environment);
+  return yield* judgeRun(outfile, junit, suitePassed, declarations, policy);
 }).pipe(Effect.scoped);
 
 const judgeRun = Effect.fn("judgeRun")(function* (
@@ -357,7 +364,7 @@ const judgeRun = Effect.fn("judgeRun")(function* (
   junit: Option.Option<string>,
   suitePassed: boolean,
   declarations: Parameters<typeof judgeSkips>[1],
-  environment: Environment,
+  policy: RunPolicy,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -374,12 +381,14 @@ const judgeRun = Effect.fn("judgeRun")(function* (
     return yield* new ReportError({ message: `bun test passed but wrote no report to ${outfile}` });
   }
 
-  const { results, crashedFiles } = yield* parseReport(yield* fs.readFileString(outfile));
+  const xml = yield* fs.readFileString(outfile);
+  const { results, crashedFiles } = yield* parseReport(xml);
   for (const file of crashedFiles) yield* Console.error(`${NAME}: the worker running ${file} crashed, so its skips were not judged`);
   const judged = declarations.filter((declaration) => !crashedFiles.includes(declaration.file));
-  const verdict = judgeSkips(results, judged, environment);
+  const verdict = judgeSkips(results, judged, policy.environment);
   yield* passes(verdict) ? Console.log(report(verdict)) : Console.error(report(verdict));
-  return suitePassed && crashedFiles.length === 0 && passes(verdict);
+  const withinFileLimit = policy.environment === "local" || (yield* judgeTestFileTimes(xml, policy.maxFileSeconds));
+  return suitePassed && crashedFiles.length === 0 && passes(verdict) && withinFileLimit;
 });
 
 if (import.meta.main) runMain(NAME, testEntry);

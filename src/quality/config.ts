@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { BrowserBuild, BrowserRoutes, Inputs, LocalTests, MutationRunner, Reach, SelfHostedRunners, Smoke, type SettingKey } from "../core/settings.ts";
+import { BrowserBuild, BrowserRoutes, Inputs, LocalTests, MutationRunner, Reach, SelfHostedRunners, Smoke, TestFileMaxSeconds, type SettingKey } from "../core/settings.ts";
 import { Listed } from "./browser/declaration.ts";
 
 const Settings = Schema.Struct({
@@ -13,6 +13,7 @@ const Settings = Schema.Struct({
   copy: Schema.optionalKey(Inputs),
   frontendSyntax: Schema.optionalKey(Inputs),
   localTests: Schema.optionalKey(LocalTests),
+  testFileMaxSeconds: Schema.optionalKey(TestFileMaxSeconds),
 } satisfies Record<SettingKey, Schema.Top>);
 
 export type ChecksConfig = typeof Settings.Encoded;
