@@ -224,6 +224,10 @@ async function isForcedOver(origin: string, method: string, route: string, body:
   return ancestor.exitCode !== 0;
 }
 
+function isRepositoryEndpoint(endpoint: string): boolean {
+  return endpoint.startsWith(REPOSITORY) || endpoint === REPOSITORY.slice(0, -1);
+}
+
 function refuse(message: string): number {
   process.stderr.write(`${message}\n`);
   return 1;
@@ -236,7 +240,7 @@ async function main(): Promise<number> {
   const recorded = decodeState(await readFile(statePath, "utf8"));
   const state = { ...recorded, calls: [...recorded.calls, `${method} ${endpoint}`] };
   await writeFile(statePath, JSON.stringify(state));
-  if (command !== "api" || !(endpoint.startsWith(REPOSITORY) || endpoint === REPOSITORY.slice(0, -1))) return refuse(`fake gh: unknown call ${process.argv.slice(2).join(" ")}`);
+  if (command !== "api" || !isRepositoryEndpoint(endpoint)) return refuse(`fake gh: unknown call ${process.argv.slice(2).join(" ")}`);
   if (process.env["FAKE_GH_FAIL"] === `${method} ${endpoint}`) return refuse("gh: Resource not accessible by integration (HTTP 403)");
   const failRunsTimes = Number(process.env["FAKE_GH_FAIL_RUNS_TIMES"] ?? "0");
   if (method === "GET" && endpoint.startsWith(`${REPOSITORY}actions/runs`) && state.calls.slice(state.calls.findLastIndex((call) => call.endsWith("/dispatches"))).filter((call) => call.startsWith("GET repos/{owner}/{repo}/actions/runs")).length <= failRunsTimes)
