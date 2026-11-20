@@ -205,20 +205,37 @@ const PROSE: Block = {
   ],
 };
 
+const SETTING_READERS: Readonly<Record<string, string>> = {
+  smoke: "[checks-test](../gates/checks-test.md)",
+  reach: "[checks-test](../gates/checks-test.md#the-reach-map)",
+  mutationRunner: "[checks-ci-wiring](../gates/checks-ci-wiring.md)",
+  selfHostedRunners: "[checks-ci-wiring](../gates/checks-ci-wiring.md)",
+  browser: "[checks-browser](../gates/checks-browser.md#what-it-reads)",
+  browserRoutes: "[checks-browser](../gates/checks-browser.md#what-it-reads)",
+  browserBuild: "[checks-browser](../gates/checks-browser.md#what-it-reads)",
+  copy: "[checks-copy](../gates/checks-copy.md)",
+  frontendSyntax: "[checks-frontend-syntax](../gates/checks-frontend-syntax.md)",
+  agentTests: "[checks-local-tests](../gates/checks-local-tests.md)",
+  "agentTests.allowLocal": "[checks-local-tests](../gates/checks-local-tests.md)",
+  testFileMaxSeconds: "[checks-test](../gates/checks-test.md#test-file-time-limit)",
+};
+
 function settingRow([key, schema]: readonly [string, Schema.Top]): string {
   const annotations = Schema.resolveAnnotations(schema);
   const fallback = annotations?.default === undefined ? "None" : code(JSON.stringify(annotations.default));
-  return `| ${code(key)} | ${fallback} | ${annotations?.description ?? ""} |`;
+  return `| ${code(key)} | ${fallback} | ${annotations?.description ?? ""} | ${SETTING_READERS[key] ?? ""} |`;
 }
 
 const SETTINGS: Block = {
   name: "settings-keys",
   from: ["src/core/settings.ts"],
   render: () => [
-    "| Key | Default | What it holds |",
-    "| --- | --- | --- |",
-    ...Object.entries(Settings.fields).map(settingRow),
-    settingRow(["agentTests.allowLocal", AgentTests.fields.allowLocal]),
+    "| Key | Default | What it holds | Reader |",
+    "| --- | --- | --- | --- |",
+    ...Object.entries(Settings.fields).flatMap(([key, schema]) =>
+      key === "agentTests"
+        ? [settingRow([key, schema]), settingRow(["agentTests.allowLocal", AgentTests.fields.allowLocal])]
+        : [settingRow([key, schema])]),
   ],
 };
 

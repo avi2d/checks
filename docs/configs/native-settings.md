@@ -105,25 +105,25 @@ export default defineConfig({
 
 <!-- generated settings-keys: bun run build writes it from src/core/settings.ts and scripts/doc-blocks.ts -->
 
-| Key | Default | What it holds |
-| --- | --- | --- |
-| `smoke` | None | The extra test files to run with the local unit tier. |
-| `reach` | None | The tests to run when a changed path is missing from the import graph. |
-| `mutationRunner` | None | The runner labels for mutation jobs in a private repository. |
-| `selfHostedRunners` | None | The other sets of self-hosted runner labels that jobs in a private repository may use. |
-| `browser` | None | The site, routes, and checks for browser tests. |
-| `browserRoutes` | None | The repository paths that can affect each browser route. |
-| `browserBuild` | None | The command that builds the site for the browser test-only proof. |
-| `copy` | None | The input globs for the copy gate. |
-| `frontendSyntax` | None | The input globs for the frontend syntax gate. |
-| `agentTests` | `{"allowLocal":false}` | The settings for test runs started by agents. |
-| `testFileMaxSeconds` | `300` | The time limit in seconds for each test file in CI. |
-| `agentTests.allowLocal` | `false` | Whether agents may start tests outside CI. This setting does not restrict people or CI. |
+| Key | Default | What it holds | Reader |
+| --- | --- | --- | --- |
+| `smoke` | None | The extra test files to run with the local unit tier. | [checks-test](../gates/checks-test.md) |
+| `reach` | None | The tests to run when a changed path is missing from the import graph. | [checks-test](../gates/checks-test.md#the-reach-map) |
+| `mutationRunner` | None | The runner labels for mutation jobs in a private repository. | [checks-ci-wiring](../gates/checks-ci-wiring.md) |
+| `selfHostedRunners` | None | The other sets of self-hosted runner labels that jobs in a private repository may use. | [checks-ci-wiring](../gates/checks-ci-wiring.md) |
+| `browser` | None | The site, routes, and checks for browser tests. | [checks-browser](../gates/checks-browser.md#what-it-reads) |
+| `browserRoutes` | None | The repository paths that can affect each browser route. | [checks-browser](../gates/checks-browser.md#what-it-reads) |
+| `browserBuild` | None | The command that builds the site for the browser test-only proof. | [checks-browser](../gates/checks-browser.md#what-it-reads) |
+| `copy` | None | The input globs for the copy gate. | [checks-copy](../gates/checks-copy.md) |
+| `frontendSyntax` | None | The input globs for the frontend syntax gate. | [checks-frontend-syntax](../gates/checks-frontend-syntax.md) |
+| `agentTests` | `{"allowLocal":false}` | The settings for test runs started by agents. | [checks-local-tests](../gates/checks-local-tests.md) |
+| `agentTests.allowLocal` | `false` | Whether agents may start tests outside CI. This setting does not restrict people or CI. | [checks-local-tests](../gates/checks-local-tests.md) |
+| `testFileMaxSeconds` | `300` | The time limit in seconds for each test file in CI. | [checks-test](../gates/checks-test.md#test-file-time-limit) |
 
 <!-- end generated settings-keys -->
 
 The build also writes the [JSON Schema](../../dist/checks.schema.json) for the data the config exports.
-The kit still loads a TypeScript file, not a JSON config.
+The kit loads a TypeScript file, not a JSON config.
 
 A key the kit does not know fails the reading gate.
 A setting left in its old place fails its gate with exit 2 and a message naming the key it moves to.

@@ -13,7 +13,7 @@ const platform = Layer.merge(NodeFileSystem.layer, NodePath.layer);
 export const allowsLocalAgentTests = Effect.fn("allowsLocalAgentTests")(function* (root: string) {
   const value = (yield* loadSettings(root))["agentTests"];
   const { allowLocal } = value === undefined ? DEFAULT_AGENT_TESTS : yield* decodeSetting("agentTests", AgentTests, value);
-  return allowLocal;
+  return allowLocal ?? DEFAULT_AGENT_TESTS.allowLocal;
 });
 
 export const refuseLocalTests = Effect.fn("refuseLocalTests")(function* (root: string) {

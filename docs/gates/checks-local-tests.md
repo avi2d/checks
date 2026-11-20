@@ -58,7 +58,7 @@ The kit treats a process as an agent if `AI_AGENT` is non-empty or `CHECKS_AGENT
 If an agent runs outside CI and `agentTests.allowLocal` is `false`, `checks-test`, `checks-browser`, `checks-flake`, `checks-mutation`, and the Bun test preload refuse to start.
 The refusal names `agentTests.allowLocal`.
 The guard does not block people or runs with `CI=true`.
-The kit exports the name `CHECKS_AGENT` as `AGENT_MARKER` from `@avi2dg/checks/local-tests`.
+The kit exports `AGENT_MARKER` for `CHECKS_AGENT`, `AI_AGENT_MARKER` for `AI_AGENT` and `isAgent` from `@avi2dg/checks/local-tests`.
 The guard does not restrict build, lint, or typecheck commands.
 
 The preload is in the `[test]` table of the shipped `bunfig.toml`.

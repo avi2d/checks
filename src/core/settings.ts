@@ -9,10 +9,10 @@ const MANIFEST = "package.json";
 export const DEFAULT_AGENT_TESTS = { allowLocal: false } as const;
 
 export const AgentTests = Schema.Struct({
-  allowLocal: Schema.Boolean.annotate({
+  allowLocal: Schema.optionalKey(Schema.Boolean.annotate({
     description: "Whether agents may start tests outside CI. This setting does not restrict people or CI.",
     default: DEFAULT_AGENT_TESTS.allowLocal,
-  }),
+  })),
 }).annotate({
   description: "The settings for test runs started by agents.",
   default: DEFAULT_AGENT_TESTS,
