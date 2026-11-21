@@ -31,13 +31,15 @@ export type CiJobs = { readonly tests: readonly TestJob[] };
 
 const FIXED_JOBS = ["changes", "static", "site", "checks"] as const;
 
-const UNIT: TestJob = { name: "unit", run: DEFAULT_TEST_RUN, browsers: "", readsBuild: false, runsOn: DEFAULT_RUNNER };
+const UNIT: TestJob = { name: "unit", run: `${DEFAULT_TEST_RUN} --tier=unit`, browsers: "", readsBuild: false, runsOn: DEFAULT_RUNNER };
+
+const E2E: TestJob = { name: "e2e", run: `${DEFAULT_TEST_RUN} --tier=e2e`, browsers: "chromium", readsBuild: false, runsOn: DEFAULT_RUNNER };
 
 const BROWSER: TestJob = { name: "browser", run: "bunx checks-browser --pr", browsers: "webkit", readsBuild: true, runsOn: DEFAULT_RUNNER };
 
 export const DEFAULT_CI_JOBS: Readonly<Record<RepositoryKind, CiJobs>> = {
-  code: { tests: [{ ...UNIT, name: "test" }] },
-  site: { tests: [UNIT, BROWSER] },
+  code: { tests: [UNIT, E2E] },
+  site: { tests: [UNIT, E2E, BROWSER] },
 };
 
 const JOB_ID = /^[A-Za-z_][A-Za-z0-9_-]*$/;
@@ -55,6 +57,7 @@ const FullStep = Schema.Struct({
   uses: Schema.optionalKey(Schema.String),
   run: Schema.optionalKey(Schema.String),
   with: Schema.optionalKey(Schema.Record(Schema.String, Schema.Unknown)),
+  env: Schema.optionalKey(Schema.Record(Schema.String, Schema.Unknown)),
 });
 
 const FullTestJob = Schema.Struct({
@@ -71,8 +74,10 @@ const fullTestJobOf = Effect.fn("fullTestJobOf")(function* (kind: RepositoryKind
   if (FIXED_JOBS.some((fixed) => fixed === name)) return yield* new CiJobsFault({ message: `${path} runs a test step in job ${name}, a name the written ci.yml gives its own job, so rename it` });
   if (!JOB_ID.test(name)) return yield* new CiJobsFault({ message: `${path} holds test job ${name}, a name the written ci.yml cannot give a test job, so rename it` });
   const held = yield* decodeFullTestJob(job).pipe(Effect.mapError((issue) => new CiJobsFault({ message: `${path} job ${name} is not a test job checks-workflows writes: ${issue.message}` })));
-  const run = held.steps.find((step) => step.id === TEST_STEP)?.run;
-  const browsers = held.steps.find((step) => step.uses === PLAYWRIGHT_USES)?.with?.["browsers"];
+  const step = held.steps.find((candidate) => candidate.id === TEST_STEP);
+  const tier = step?.env?.["TEST_TIER"];
+  const run = step?.run === RELEASE_TEST_RUN && (tier === "unit" || tier === "e2e") ? `${DEFAULT_TEST_RUN} --tier=${tier}` : step?.run;
+  const browsers = held.steps.find((candidate) => candidate.uses === PLAYWRIGHT_USES)?.with?.["browsers"];
   return {
     name,
     run: heldTestRun(run),
@@ -99,7 +104,24 @@ const CARRIED_INPUTS = ["run", "browsers", "artifact", "runs-on"] as const;
 // The public gate refuses an expression it cannot show hosted, and the private gate refuses a literal it cannot override.
 export const runnerOf = (publicRepository: boolean): string => (publicRepository ? "ubuntu-latest" : DEFAULT_RUNNER);
 
-const defaultJobs = (kind: RepositoryKind, runsOn: string): CiJobs => ({ tests: DEFAULT_CI_JOBS[kind].tests.map((test) => ({ ...test, runsOn })) });
+const defaultJobs = (kind: RepositoryKind, runsOn: string, hasE2e: boolean): CiJobs => ({ tests: DEFAULT_CI_JOBS[kind].tests.filter((test) => hasE2e || test.name !== "e2e").map((test) => ({ ...test, runsOn })) });
+
+function splitLegacyJobs(jobs: CiJobs, hasE2e: boolean): CiJobs {
+  const tests = jobs.tests.filter((job) => hasE2e || job.name !== "e2e");
+  const hasE2eJob = tests.some(({ name }) => name === "e2e");
+  const split = tests.flatMap((job) => {
+    const match = /^(bunx checks-test|bun run test)( --pr)( --parallel=[1-9][0-9]*)?$/.exec(job.run);
+    if (match === null || (job.name !== "test" && job.name !== "unit")) return [job];
+    const run = `${match[1]}${match[2]}${match[3] ?? ""}`;
+    const unit = { ...job, name: "unit", run: `${run} --tier=unit`, browsers: "" };
+    const e2e = { ...job, name: "e2e", run: `${run} --tier=e2e`, browsers: job.browsers || E2E.browsers };
+    return hasE2e && !hasE2eJob ? [unit, e2e] : [unit];
+  });
+  if (!hasE2e || split.some(({ name }) => name === "e2e")) return { tests: split };
+  const unit = split.find((job) => job.name === "unit" && /^(bunx checks-test|bun run test) --pr( --parallel=[1-9][0-9]*)? --tier=unit$/.test(job.run));
+  if (unit === undefined) return { tests: split };
+  return { tests: [...split, { ...unit, name: "e2e", run: unit.run.replace(/--tier=unit$/, "--tier=e2e"), browsers: E2E.browsers }] };
+}
 
 const testJobOf = Effect.fn("testJobOf")(function* (kind: RepositoryKind, path: string, name: string, job: Readonly<Record<string, unknown>>, runsOn: string) {
   if (!JOB_ID.test(name) || FIXED_JOBS.some((fixed) => fixed === name)) {
@@ -138,17 +160,18 @@ const holdsTestStep = (job: Readonly<Record<string, unknown>>): boolean => {
 };
 
 // A written ci.yml marks each test job by the step whose id is test.
-const fullCiJobsOf = Effect.fn("fullCiJobsOf")(function* (kind: RepositoryKind, ci: Workflow, runsOn: string) {
+const fullCiJobsOf = Effect.fn("fullCiJobsOf")(function* (kind: RepositoryKind, ci: Workflow, runsOn: string, hasE2e: boolean) {
   const held = workflowJobs(ci).filter(([, job]) => holdsTestStep(job));
-  if (held.length === 0) return defaultJobs(kind, runsOn);
-  return { tests: yield* Effect.forEach(held, ([name, job]) => fullTestJobOf(kind, ci.path, name, job, runsOn)) } satisfies CiJobs;
+  if (held.length === 0) return defaultJobs(kind, runsOn, hasE2e);
+  return splitLegacyJobs({ tests: yield* Effect.forEach(held, ([name, job]) => fullTestJobOf(kind, ci.path, name, job, runsOn)) }, hasE2e);
 });
 
 // A ci.yml that calls test.yml records its test jobs in the call, so --write keeps them.
-export const ciJobsOf = Effect.fn("ciJobsOf")(function* (kind: RepositoryKind, ci: Workflow | undefined, publicRepository: boolean) {
+export const ciJobsOf = Effect.fn("ciJobsOf")(function* (kind: RepositoryKind, ci: Workflow | undefined, publicRepository: boolean, hasE2e?: boolean) {
   const runsOn = runnerOf(publicRepository);
-  if (ci === undefined) return defaultJobs(kind, runsOn);
+  const includeE2e = hasE2e !== false;
+  if (ci === undefined) return defaultJobs(kind, runsOn, includeE2e);
   const calls = workflowJobs(ci).flatMap(([name, job]) => (calledFileOf(job["uses"]) === "test.yml" ? [{ name, job }] : []));
-  if (calls.length > 0) return { tests: yield* Effect.forEach(calls, ({ name, job }) => testJobOf(kind, ci.path, name, job, runsOn)) } satisfies CiJobs;
-  return yield* fullCiJobsOf(kind, ci, runsOn);
+  if (calls.length > 0) return splitLegacyJobs({ tests: yield* Effect.forEach(calls, ({ name, job }) => testJobOf(kind, ci.path, name, job, runsOn)) }, includeE2e);
+  return yield* fullCiJobsOf(kind, ci, runsOn, includeE2e);
 });

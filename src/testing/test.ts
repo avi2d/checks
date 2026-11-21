@@ -44,7 +44,7 @@ class RunRefusal extends Schema.TaggedError<RunRefusal>()("RunRefusal", {
 }) {}
 
 const NAME = TEST_ENTRY_POINT.bin;
-const USAGE = `usage: ${NAME} [--tier=live | --tier=pixel | --tier=unit | --tier=e2e | --full | --changed | --pr] [--parallel=<workers>] [--junit=<file>], and it refuses test filters`;
+const USAGE = `usage: ${NAME} [--tier=live | --tier=pixel | --tier=unit | --tier=e2e | --full | --changed | --pr] [--parallel=<workers>] [--junit=<file>], with --pr optionally combined with --tier=unit or --tier=e2e, and it refuses test filters`;
 const JUNIT = /^--junit=(.+)$/;
 
 export type EntryRun = "default" | "changed" | "pr";
@@ -66,7 +66,8 @@ export function entryOptions(args: readonly string[]): EntryOptions | undefined 
   const options = testOptions(args.filter((arg) => !JUNIT.test(arg) && !RUN_FLAGS.has(arg)));
   if (options === undefined || junit.length > 1 || runs.length > 1) return undefined;
   const [run = "default"] = runs;
-  if (run !== "default" && (options.tier !== undefined || options.full === true)) return undefined;
+  if ((run === "changed" && options.tier !== undefined) || (run !== "default" && options.full === true)) return undefined;
+  if (run === "pr" && (options.tier === "live" || options.tier === "pixel")) return undefined;
   return { options, junit: Option.fromNullishOr(junit[0]), run };
 }
 
@@ -242,7 +243,7 @@ const reachedSelection = Effect.fn("reachedSelection")(function* (changed: reado
   const tests = (yield* scanTestFiles(process.cwd())).filter((file) => selectedTierFile(file, tier));
   const narrowing = yield* readChangedNarrowing(process.cwd(), changed, tests);
   if (narrowing.kind === "full") {
-    yield* Console.log(`${NAME}: ${narrowing.because}, so the whole suite runs`);
+    yield* Console.log(`${NAME}: ${narrowing.because}, so ${tier === undefined ? "the whole suite" : `the ${tier} tier`} runs`);
     return undefined;
   }
   yield* Console.log(`${NAME}: the pull request reaches ${narrowing.files.length} of ${tests.length} test file(s)`);
@@ -284,22 +285,22 @@ const changedSelection = Effect.fn("changedSelection")(function* () {
   return { kind: "changed", files: narrowing.files } satisfies SuiteSelection;
 });
 
-const pullRequestSelection = Effect.fn("pullRequestSelection")(function* () {
+const pullRequestSelection = Effect.fn("pullRequestSelection")(function* (tier: TestTier | undefined) {
   const scope = yield* readRunScope(process.cwd());
   if (scope.kind === "whole") {
-    yield* Console.log(`${NAME}: ${scope.because}, so the whole suite runs`);
-    return { kind: "full" } satisfies SuiteSelection;
+    yield* Console.log(`${NAME}: ${scope.because}, so ${tier === undefined ? "the whole suite" : `the ${tier} tier`} runs`);
+    return tier === undefined ? ({ kind: "full" } satisfies SuiteSelection) : ({ kind: "tier", tier } satisfies SuiteSelection);
   }
   if (scope.kind === "docs-only") {
     yield* Console.log(`${NAME}: the pull request changes only top-level and docs/ Markdown, so no test ran`);
     return { kind: "files", files: [] } satisfies SuiteSelection;
   }
-  return (yield* reachedSelection(scope.changed, undefined)) ?? ({ kind: "full" } satisfies SuiteSelection);
+  return (yield* reachedSelection(scope.changed, tier)) ?? (tier === undefined ? ({ kind: "full" } satisfies SuiteSelection) : ({ kind: "tier", tier } satisfies SuiteSelection));
 });
 
 const entrySelection = Effect.fn("entrySelection")(function* (run: EntryRun, options: TestOptions, environment: Environment) {
   if (run === "changed") return yield* changedSelection();
-  if (run === "pr") return yield* pullRequestSelection();
+  if (run === "pr") return yield* pullRequestSelection(options.tier);
   return yield* narrowSelection(options, selectSuite(options, environment), environment);
 });
 
@@ -345,12 +346,10 @@ const testEntry = Effect.gen(function* () {
     yield* Console.log(`${NAME}: the change reaches no test file, so no test ran`);
     return true;
   }
+  if (selection.kind === "tier" && !(yield* scanTestFiles(root)).some((file) => selectedTierFile(file, selection.tier))) return yield* Console.log(`${NAME}: the ${selection.tier} tier has no test files`).pipe(Effect.as(true));
   const smoke = selection.kind === "smoke" ? yield* readSmokeList(root) : [];
   const scope = yield* readScope(selection, smoke);
-  if (scope.files?.length === 0) {
-    yield* Console.log(`${NAME}: no unit test and no smoke list, so this local run ran nothing; declare the smoke key of ${SETTINGS_FILE}`);
-    return true;
-  }
+  if (scope.files?.length === 0) return yield* Console.log(`${NAME}: no unit test and no smoke list, so this local run ran nothing; declare the smoke key of ${SETTINGS_FILE}`).pipe(Effect.as(true));
   const { declarations } = scope;
 
   const outfile = path.join(yield* fs.makeTempDirectoryScoped({ prefix: "checks-test-" }), "junit.xml");

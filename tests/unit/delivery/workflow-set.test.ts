@@ -209,13 +209,14 @@ const gateSkips = (set: CallerSet): string => {
 
 test("the site ci.yml runs the browser job on the preview build and gates every job with always(), so a gate that skips on a failure or a browser job that does not wait for the build fails here", () => {
   const jobs = ciJobs(SITE);
-  expect(Object.keys(jobs)).toEqual(["changes", "static", "site", "unit", "browser", "checks"]);
+  expect(Object.keys(jobs)).toEqual(["changes", "static", "site", "unit", "e2e", "browser", "checks"]);
   expect(jobs).toMatchObject({
     static: { needs: "changes", if: NOT_RELEASED },
     site: { needs: "changes", if: CHANGED + " && needs.changes.outputs.tests-only != 'true'" },
     unit: { needs: "changes", if: CHANGED },
     browser: { needs: "site" },
-    checks: { needs: ["changes", "static", "site", "unit", "browser"], if: "always()" },
+    e2e: { needs: "changes", if: CHANGED },
+    checks: { needs: ["changes", "static", "site", "unit", "e2e", "browser"], if: "always()" },
   });
   expect(jobs["changes"]).not.toHaveProperty("if");
   expect(jobs["browser"]).not.toHaveProperty("if");
@@ -225,18 +226,23 @@ test("the site ci.yml runs the browser job on the preview build and gates every 
 
 test("the code ci.yml reads the release rule from the changes output, and the gate passes the test job only when it skips", () => {
   const jobs = ciJobs(CODE);
-  expect(Object.keys(jobs)).toEqual(["changes", "static", "test", "checks"]);
+  expect(Object.keys(jobs)).toEqual(["changes", "static", "unit", "e2e", "checks"]);
   expect(jobs).toMatchObject({
     static: { needs: "changes", if: NOT_RELEASED },
-    test: { needs: "changes", if: CHANGED, "runs-on": EXPRESSION + "{{ vars.CI_RUNS_ON || 'ubuntu-latest' }}" },
-    checks: { needs: ["changes", "static", "test"], if: "always()" },
+    unit: { needs: "changes", if: CHANGED, "runs-on": EXPRESSION + "{{ vars.CI_RUNS_ON || 'ubuntu-latest' }}" },
+    e2e: { needs: "changes", if: CHANGED },
+    checks: { needs: ["changes", "static", "unit", "e2e"], if: "always()" },
   });
-  expect(gateSkips(CODE)).toBe(EXPRESSION + "{{ needs.changes.outputs.release == 'true' && 'static test' || needs.changes.outputs.docs-only == 'true' && 'test' || '' }}");
+  expect(gateSkips(CODE)).toBe(EXPRESSION + "{{ needs.changes.outputs.release == 'true' && 'static unit e2e' || needs.changes.outputs.docs-only == 'true' && 'unit e2e' || '' }}");
+  expect(stepsOf(jobs["unit"] ?? {})).toContainEqual({ id: "test", run: "bunx checks-test --pr --tier=unit" });
+  expect(stepsOf(jobs["unit"] ?? {}).some((step) => step["uses"] === "./.github/actions/playwright")).toBe(false);
+  expect(stepsOf(jobs["e2e"] ?? {})).toContainEqual({ id: "test", run: "bunx checks-test --pr --tier=e2e" });
+  expect(stepsOf(jobs["e2e"] ?? {})).toContainEqual({ uses: "./.github/actions/playwright", with: { browsers: "chromium" } });
 });
 
 test("a ci.yml that writes the long release rule into a job other than changes, instead of reading its output, fails here", () => {
-  const twoTests: CallerSet = { ...CODE, ci: { tests: [...CODE.ci.tests, ...CODE.ci.tests.map((job) => ({ ...job, name: "e2e" }))] } };
-  for (const set of [CODE, SITE, CHECKED, twoTests]) expect(textOf(set, "ci.yml").split("github.head_ref").length - 1).toBe(1);
+  const oneTest: CallerSet = { ...CODE, ci: { tests: CODE.ci.tests.slice(0, 1) } };
+  for (const set of [CODE, SITE, CHECKED, oneTest]) expect(textOf(set, "ci.yml").split("github.head_ref").length - 1).toBe(1);
 });
 
 test("a fork pull request from a release/ branch still runs every job instead of skipping as the release run", () => {
@@ -276,15 +282,15 @@ function skippedAndPassed(set: CallerSet, change: Change): readonly (readonly st
 }
 
 test("on the release run every job but changes skips and the gate passes exactly those skips, unless the repository checks its release pull request", () => {
-  expect(skippedAndPassed(SITE, "release")).toEqual([["static", "site", "unit", "browser"], ["static", "site", "unit", "browser"]]);
-  expect(skippedAndPassed(CODE, "release")).toEqual([["static", "test"], ["static", "test"]]);
+  expect(skippedAndPassed(SITE, "release")).toEqual([["static", "site", "unit", "e2e", "browser"], ["static", "site", "unit", "e2e", "browser"]]);
+  expect(skippedAndPassed(CODE, "release")).toEqual([["static", "unit", "e2e"], ["static", "unit", "e2e"]]);
   expect(skippedAndPassed(CHECKED, "release")).toEqual([[], []]);
 });
 
 test("a docs-only change skips the site and test jobs and a tests-only one skips the site build, and the gate passes exactly those skips", () => {
-  expect(skippedAndPassed(SITE, "docs-only")).toEqual([["site", "unit", "browser"], ["site", "unit", "browser"]]);
-  expect(skippedAndPassed(CODE, "docs-only")).toEqual([["test"], ["test"]]);
-  expect(skippedAndPassed(CHECKED, "docs-only")).toEqual([["test"], ["test"]]);
+  expect(skippedAndPassed(SITE, "docs-only")).toEqual([["site", "unit", "e2e", "browser"], ["site", "unit", "e2e", "browser"]]);
+  expect(skippedAndPassed(CODE, "docs-only")).toEqual([["unit", "e2e"], ["unit", "e2e"]]);
+  expect(skippedAndPassed(CHECKED, "docs-only")).toEqual([["unit", "e2e"], ["unit", "e2e"]]);
   expect(skippedAndPassed(SITE, "tests-only")).toEqual([["site", "browser"], ["site", "browser"]]);
   expect(skippedAndPassed(CODE, "tests-only")).toEqual([[], []]);
   for (const set of [SITE, CODE, CHECKED]) expect(skippedAndPassed(set, "full")).toEqual([[], []]);
@@ -299,10 +305,10 @@ const faultOfCi = (document: unknown): string => Effect.runSync(Effect.flip(call
 const withE2e = (name: string, edit: (job: Record<string, unknown>) => Record<string, unknown> = (job) => job): Record<string, unknown> => {
   const document = documentOf(CODE, "ci.yml");
   const jobs = jobsOf(document);
-  const unit = jobs["test"] ?? {};
+  const unit = jobs["unit"] ?? {};
   const e2e = {
     ...unit,
-    needs: "test",
+    needs: "unit",
     "runs-on": "macos-latest",
     steps: [
       ...stepsOf(unit).filter((step) => step["id"] !== "test"),
@@ -316,13 +322,13 @@ const withE2e = (name: string, edit: (job: Record<string, unknown>) => Record<st
 
 test("a write keeps a test job added to ci.yml with its command, browsers and runner, and drops its hand-added needs and a job with no test step", () => {
   const set = setOfCi(withE2e("e2e"));
-  expect(set.ci.tests.map(({ name }) => name)).toEqual(["test", "e2e"]);
+  expect(set.ci.tests.map(({ name }) => name)).toEqual(["unit", "e2e"]);
   const jobs = ciJobs(set);
-  expect(Object.keys(jobs)).toEqual(["changes", "static", "test", "e2e", "checks"]);
+  expect(Object.keys(jobs)).toEqual(["changes", "static", "unit", "e2e", "checks"]);
   expect(jobs["e2e"]).toMatchObject({ needs: "changes", if: CHANGED, "runs-on": "macos-latest" });
   expect(stepsOf(jobs["e2e"] ?? {})).toContainEqual({ uses: "./.github/actions/playwright", with: { browsers: "chromium webkit" } });
   expect(stepsOf(jobs["e2e"] ?? {})).toContainEqual({ id: "test", run: "bun run test:e2e" });
-  expect(jobs["checks"]).toMatchObject({ needs: ["changes", "static", "test", "e2e"] });
+  expect(jobs["checks"]).toMatchObject({ needs: ["changes", "static", "unit", "e2e"] });
   const text = textOf(set, "ci.yml");
   expect(textOf(setOfCi(Bun.YAML.parse(text)), "ci.yml")).toBe(text);
 });
@@ -330,13 +336,13 @@ test("a write keeps a test job added to ci.yml with its command, browsers and ru
 test("a ci.yml whose release test step picks its command by an expression is rewritten to checks-ci test, instead of keeping the step checks-plain-steps refuses", () => {
   const document = documentOf(CHECKED, "ci.yml");
   const jobs = jobsOf(document);
-  const unit = jobs["test"] ?? {};
+  const unit = jobs["unit"] ?? {};
   const expressionRun = EXPRESSION + "{{ needs.changes.outputs.check-release == 'true' && 'bun run test' || 'bunx checks-test --pr' }}";
   const steps = stepsOf(unit).map((step) => (step["id"] === "test" ? { id: "test", run: expressionRun } : step));
-  const held = { ...document, jobs: { ...jobs, test: { ...unit, steps } } };
+  const held = { ...document, jobs: { ...jobs, unit: { ...unit, steps } } };
   const reread = Effect.runSync(callerSetOf([heldCi(held)], {}, "checks-workflows --write", false, false, true, false));
   expect(reread).toEqual(CHECKED);
-  expect(stepsOf(ciJobs(reread)["test"] ?? {})).toContainEqual({ id: "test", env: { CHECK_RELEASE: EXPRESSION + "{{ needs.changes.outputs.check-release }}" }, run: "bunx checks-ci test" });
+  expect(stepsOf(ciJobs(reread)["unit"] ?? {})).toContainEqual({ id: "test", env: { CHECK_RELEASE: EXPRESSION + "{{ needs.changes.outputs.check-release }}", TEST_TIER: "unit" }, run: "bunx checks-ci test" });
 });
 
 test("a test job named like a fixed job or no job id, or one whose runner is not one label, is refused, so a write never drops it silently", () => {

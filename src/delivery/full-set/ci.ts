@@ -127,10 +127,12 @@ const siteJob = (set: CallerSet): Job => ({
   ],
 });
 
-const testStep = (set: CallerSet, test: TestJob): Step =>
-  checksRelease(set) && test.run === DEFAULT_TEST_RUN
-    ? { id: TEST_STEP, env: [["CHECK_RELEASE", expression("needs.changes.outputs.check-release")]], run: RELEASE_TEST_RUN }
+const testStep = (set: CallerSet, test: TestJob): Step => {
+  const tier = test.run === `${DEFAULT_TEST_RUN} --tier=unit` ? "unit" : test.run === `${DEFAULT_TEST_RUN} --tier=e2e` ? "e2e" : undefined;
+  return checksRelease(set) && tier !== undefined
+    ? { id: TEST_STEP, env: [["CHECK_RELEASE", expression("needs.changes.outputs.check-release")], ["TEST_TIER", tier]], run: RELEASE_TEST_RUN }
     : { id: TEST_STEP, run: scalar(test.run) };
+};
 
 function testJob(set: CallerSet, test: TestJob, claudeVersion: string | undefined): Job {
   const hold = holds(set, test);
