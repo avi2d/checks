@@ -3,7 +3,9 @@ import { expect, test } from "bun:test";
 import { Effect } from "effect";
 import { NO_CALLER_OPTIONS } from "../../../src/delivery/caller-options.ts";
 import { DEFAULT_CI_JOBS } from "../../../src/delivery/ci-jobs.ts";
+import { fullActions } from "../../../src/delivery/full-set/actions.ts";
 import { MUTATION_WORKFLOW } from "../../../src/delivery/full-set/mutation.ts";
+import { findStepFaults } from "../../../src/delivery/plain-steps.ts";
 import { remoteCallsOf } from "../../../src/delivery/remote-calls.ts";
 import { callerSetOf } from "../../../src/delivery/site-names.ts";
 import { byHandSet, differencesOf, requiredSet, type WorkflowFile } from "../../../src/delivery/workflow-set.ts";
@@ -88,6 +90,14 @@ test("a written file that calls another repository's workflow, or an action at a
   const named = uses.filter((use): use is string => typeof use === "string");
   expect(named.length).toBeGreaterThan(0);
   expect(named.filter((use) => !use.startsWith("./") && !/@[0-9a-f]{40}$/.test(use))).toEqual([]);
+});
+
+test("a written run step checks-plain-steps refuses, such as a test command an expression names only at run time, fails here", () => {
+  const files = [CODE, SITE, CHECKED, EVERY_OPTION].flatMap((set) => [
+    ...written(set).map(({ name, text }) => ({ path: ".github/workflows/" + name, text })),
+    ...fullActions(set).filter(({ path }) => path.endsWith(".yml")),
+  ]);
+  expect(findStepFaults(files.map(({ path, text }) => ({ path, text, document: Bun.YAML.parse(text) })))).toEqual([]);
 });
 
 test("a ci.yml that omits ready_for_review never starts when a draft is marked ready, so the draft hold never releases", () => {
@@ -314,6 +324,18 @@ test("a write keeps a test job added to ci.yml with its command, browsers and ru
   expect(jobs["checks"]).toMatchObject({ needs: ["changes", "static", "test", "e2e"] });
   const text = textOf(set, "ci.yml");
   expect(textOf(setOfCi(Bun.YAML.parse(text)), "ci.yml")).toBe(text);
+});
+
+test("a ci.yml whose release test step picks its command by an expression is rewritten to checks-ci test, instead of keeping the step checks-plain-steps refuses", () => {
+  const document = documentOf(CHECKED, "ci.yml");
+  const jobs = jobsOf(document);
+  const unit = jobs["test"] ?? {};
+  const expressionRun = EXPRESSION + "{{ needs.changes.outputs.check-release == 'true' && 'bun run test' || 'bunx checks-test --pr' }}";
+  const steps = stepsOf(unit).map((step) => (step["id"] === "test" ? { id: "test", run: expressionRun } : step));
+  const held = { ...document, jobs: { ...jobs, test: { ...unit, steps } } };
+  const reread = Effect.runSync(callerSetOf([heldCi(held)], {}, "checks-workflows --write", false, false, true));
+  expect(reread).toEqual(CHECKED);
+  expect(stepsOf(ciJobs(reread)["test"] ?? {})).toContainEqual({ id: "test", env: { CHECK_RELEASE: EXPRESSION + "{{ needs.changes.outputs.check-release }}" }, run: "bunx checks-ci test" });
 });
 
 test("a test job named like a fixed job or no job id, or one whose runner is not one label, is refused, so a write never drops it silently", () => {

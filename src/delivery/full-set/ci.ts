@@ -127,7 +127,10 @@ const siteJob = (set: CallerSet): Job => ({
   ],
 });
 
-const testRun = (set: CallerSet, test: TestJob): string => (checksRelease(set) && test.run === DEFAULT_TEST_RUN ? RELEASE_TEST_RUN : test.run);
+const testStep = (set: CallerSet, test: TestJob): Step =>
+  checksRelease(set) && test.run === DEFAULT_TEST_RUN
+    ? { id: TEST_STEP, env: [["CHECK_RELEASE", expression("needs.changes.outputs.check-release")]], run: RELEASE_TEST_RUN }
+    : { id: TEST_STEP, run: scalar(test.run) };
 
 function testJob(set: CallerSet, test: TestJob, claudeVersion: string | undefined): Job {
   const hold = holds(set, test);
@@ -154,7 +157,7 @@ function testJob(set: CallerSet, test: TestJob, claudeVersion: string | undefine
           ]
         : []),
       ...(test.browsers === "" ? [] : [{ uses: PLAYWRIGHT_USES, with: [["browsers", scalar(test.browsers)]] } satisfies Step]),
-      { id: TEST_STEP, run: scalar(testRun(set, test)) },
+      testStep(set, test),
       keepArtifacts("artifacts-" + expression("job.check_run_id"), "artifacts/"),
     ],
   };
