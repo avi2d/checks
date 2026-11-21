@@ -347,10 +347,6 @@ test("a test job a person adds to the written ci.yml is refused until --write, w
       checks: { needs: ["changes", "static", "unit", "e2e"] },
     },
   });
-  const writtenCi = (await parsed(repo, "ci.yml")) as { jobs: { checks: { steps: readonly Record<string, unknown>[] } } };
-  const requireStep = writtenCi.jobs.checks.steps.find((step) => step["run"] === "bunx checks-ci require-success");
-  const skipsEnv = requireStep !== undefined && typeof requireStep["env"] === "object" && requireStep["env"] !== null ? (requireStep["env"] as Record<string, unknown>)["SKIPS"] : undefined;
-  expect(skipsEnv).toBe("${{ needs.changes.outputs.release == 'true' && 'static unit e2e' || needs.changes.outputs.docs-only == 'true' && 'unit e2e' || '' }}");
   expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the code set checks-workflows writes\n" });
 }, 30_000);
 

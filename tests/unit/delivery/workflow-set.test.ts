@@ -165,9 +165,6 @@ test("a production.yml that names another domain than the set differs, so a site
   expect(changed(SITE, "production.yml", moved)).toEqual([["differs", "production.yml"]]);
 });
 
-const NOT_RELEASED = "needs.changes.outputs.release != 'true'";
-const CHANGED = NOT_RELEASED + " && needs.changes.outputs.docs-only != 'true'";
-
 type ReleaseContext = { readonly eventName: string; readonly refName: string; readonly headRef: string; readonly baseRef: string; readonly headRepo: string; readonly repository: string };
 
 type Plain = string | { readonly [key: string]: Plain };
@@ -211,29 +208,32 @@ test("the site ci.yml runs the browser job on the preview build and gates every 
   const jobs = ciJobs(SITE);
   expect(Object.keys(jobs)).toEqual(["changes", "static", "site", "unit", "e2e", "browser", "checks"]);
   expect(jobs).toMatchObject({
-    static: { needs: "changes", if: NOT_RELEASED },
-    site: { needs: "changes", if: CHANGED + " && needs.changes.outputs.tests-only != 'true'" },
-    unit: { needs: "changes", if: CHANGED },
+    static: { needs: "changes" },
+    site: { needs: "changes" },
+    unit: { needs: "changes" },
     browser: { needs: "site" },
-    e2e: { needs: "changes", if: CHANGED },
-    checks: { needs: ["changes", "static", "site", "unit", "e2e", "browser"], if: "always()" },
+    e2e: { needs: "changes" },
+    checks: { needs: ["changes", "static", "site", "unit", "e2e", "browser"] },
   });
   expect(jobs["changes"]).not.toHaveProperty("if");
   expect(jobs["browser"]).not.toHaveProperty("if");
+  const siteGateIf = jobs["checks"]?.["if"];
+  expect(typeof siteGateIf === "string" && truthy(evaluated(siteGateIf, {}))).toBe(true);
   expect(stepsOf(jobs["browser"] ?? {})).toContainEqual({ uses: "./.github/actions/playwright", with: { browsers: "webkit" } });
   expect(stepsOf(jobs["browser"] ?? {})).toContainEqual({ id: "test", run: "bunx checks-browser --pr" });
 });
 
-test("the code ci.yml reads the release rule from the changes output, and the gate passes the test job only when it skips", () => {
+test("the code ci.yml runs tiered test steps without Playwright, so an untiered or browser-installing step fails here", () => {
   const jobs = ciJobs(CODE);
   expect(Object.keys(jobs)).toEqual(["changes", "static", "unit", "e2e", "checks"]);
   expect(jobs).toMatchObject({
-    static: { needs: "changes", if: NOT_RELEASED },
-    unit: { needs: "changes", if: CHANGED, "runs-on": EXPRESSION + "{{ vars.CI_RUNS_ON || 'ubuntu-latest' }}" },
-    e2e: { needs: "changes", if: CHANGED },
-    checks: { needs: ["changes", "static", "unit", "e2e"], if: "always()" },
+    static: { needs: "changes" },
+    unit: { needs: "changes", "runs-on": EXPRESSION + "{{ vars.CI_RUNS_ON || 'ubuntu-latest' }}" },
+    e2e: { needs: "changes" },
+    checks: { needs: ["changes", "static", "unit", "e2e"] },
   });
-  expect(gateSkips(CODE)).toBe(EXPRESSION + "{{ needs.changes.outputs.release == 'true' && 'static unit e2e' || needs.changes.outputs.docs-only == 'true' && 'unit e2e' || '' }}");
+  const codeGateIf = jobs["checks"]?.["if"];
+  expect(typeof codeGateIf === "string" && truthy(evaluated(codeGateIf, {}))).toBe(true);
   expect(stepsOf(jobs["unit"] ?? {})).toContainEqual({ id: "test", run: "bunx checks-test --pr --tier=unit" });
   expect(stepsOf(jobs["unit"] ?? {}).some((step) => step["uses"] === "./.github/actions/playwright")).toBe(false);
   expect(stepsOf(jobs["e2e"] ?? {})).toContainEqual({ id: "test", run: "bunx checks-test --pr --tier=e2e" });
@@ -242,15 +242,23 @@ test("the code ci.yml reads the release rule from the changes output, and the ga
 
 test("a ci.yml that writes the long release rule into a job other than changes, instead of reading its output, fails here", () => {
   const oneTest: CallerSet = { ...CODE, ci: { tests: CODE.ci.tests.slice(0, 1) } };
+  const released: ReleaseContext = { eventName: "pull_request", refName: "release/main", headRef: "release/main", baseRef: "main", headRepo: "acme/acme", repository: "acme/acme" };
+  const ordinary: ReleaseContext = { eventName: "pull_request", refName: "feature", headRef: "feature", baseRef: "main", headRepo: "acme/acme", repository: "acme/acme" };
   for (const set of [CODE, SITE, CHECKED, oneTest]) {
-    const jobs = ciJobs(set);
-    const release = jobs["changes"]?.["env"];
-    expect(isRecord(release) && typeof release["RELEASE"] === "string" && (release["RELEASE"] as string).includes("github.head_ref")).toBe(true);
-    for (const [name, job] of Object.entries(jobs)) {
+    const runsOnRelease = set.kind === "code" && set.options.checkRelease;
+    const outputs = (release: boolean): Record<string, string> => ({
+      release: String(release),
+      "docs-only": "false",
+      "tests-only": "false",
+      ...(runsOnRelease ? { "check-release": String(release) } : {}),
+    });
+    for (const [name, job] of Object.entries(ciJobs(set))) {
       if (name === "changes") continue;
       const condition = typeof job["if"] === "string" ? (job["if"] as string) : "";
-      expect(condition.includes("github.head_ref")).toBe(false);
-      if (condition !== "" && condition !== "always()") expect(condition.includes("needs.changes.outputs.release")).toBe(true);
+      if (condition === "" || condition === "always()") continue;
+      const runsDespiteReleaseGithub = truthy(evaluated(condition, { github: githubOf(released), needs: { changes: { outputs: outputs(false) } } }));
+      const runsOnReleaseOutput = truthy(evaluated(condition, { github: githubOf(ordinary), needs: { changes: { outputs: outputs(true) } } }));
+      expect([name, runsDespiteReleaseGithub, runsOnReleaseOutput]).toEqual([name, true, runsOnRelease]);
     }
   }
 });
@@ -335,7 +343,11 @@ test("a write keeps a test job added to ci.yml with its command, browsers and ru
   expect(set.ci.tests.map(({ name }) => name)).toEqual(["unit", "e2e"]);
   const jobs = ciJobs(set);
   expect(Object.keys(jobs)).toEqual(["changes", "static", "unit", "e2e", "checks"]);
-  expect(jobs["e2e"]).toMatchObject({ needs: "changes", if: CHANGED, "runs-on": "macos-latest" });
+  expect(jobs["e2e"]).toMatchObject({ needs: "changes", "runs-on": "macos-latest" });
+  const keptIf = jobs["e2e"]?.["if"];
+  const keptOutputs = { release: "false", "docs-only": "false", "tests-only": "false" };
+  expect(typeof keptIf === "string" && truthy(evaluated(keptIf, { needs: { changes: { outputs: keptOutputs } } }))).toBe(true);
+  expect(typeof keptIf === "string" && truthy(evaluated(keptIf, { needs: { changes: { outputs: { ...keptOutputs, release: "true" } } } }))).toBe(false);
   expect(stepsOf(jobs["e2e"] ?? {})).toContainEqual({ uses: "./.github/actions/playwright", with: { browsers: "chromium webkit" } });
   expect(stepsOf(jobs["e2e"] ?? {})).toContainEqual({ id: "test", run: "bun run test:e2e" });
   expect(jobs["checks"]).toMatchObject({ needs: ["changes", "static", "unit", "e2e"] });

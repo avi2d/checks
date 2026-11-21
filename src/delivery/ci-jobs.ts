@@ -108,13 +108,16 @@ const defaultJobs = (kind: RepositoryKind, runsOn: string, hasE2e: boolean): CiJ
 
 const splitLegacyJobs = Effect.fn("splitLegacyJobs")(function* (path: string, jobs: CiJobs, hasE2e: boolean) {
   const hasE2eJob = jobs.tests.some(({ name }) => name === "e2e");
+  const narrowed: { readonly name: string; readonly counterpart: string }[] = [];
   const split = jobs.tests.flatMap((job) => {
     const match = /^(bunx checks-test|bun run test)( --pr)( --parallel=[1-9][0-9]*)?$/.exec(job.run);
     if (match === null || (job.name !== "test" && job.name !== "unit")) return [job];
     const run = `${match[1]}${match[2]}${match[3] ?? ""}`;
     const unit = { ...job, name: "unit", run: `${run} --tier=unit`, browsers: "" };
     const e2e = { ...job, name: "e2e", run: `${run} --tier=e2e`, browsers: job.browsers };
-    return hasE2e && !hasE2eJob ? [unit, e2e] : [unit];
+    if (hasE2e && !hasE2eJob) return [unit, e2e];
+    if (hasE2e) narrowed.push({ name: job.name, counterpart: `${run} --tier=e2e` });
+    return [unit];
   });
   const tests = !hasE2e || split.some(({ name }) => name === "e2e") ? split : (() => {
     const unit = split.find((job) => job.name === "unit" && /^(bunx checks-test|bun run test) --pr( --parallel=[1-9][0-9]*)? --tier=unit$/.test(job.run));
@@ -124,6 +127,11 @@ const splitLegacyJobs = Effect.fn("splitLegacyJobs")(function* (path: string, jo
   for (const job of tests) {
     if (seen.has(job.name)) return yield* new CiJobsFault({ message: `${path} holds two test jobs named ${job.name}, so rename one` });
     seen.add(job.name);
+  }
+  for (const { name, counterpart } of narrowed) {
+    if (!tests.some((job) => job.name === "e2e" && job.run === counterpart)) {
+      return yield* new CiJobsFault({ message: `${path} narrows all-tier job ${name} to unit tests with no e2e job running ${counterpart}, so rename the e2e job` });
+    }
   }
   return { tests };
 });
