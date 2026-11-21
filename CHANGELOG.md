@@ -2,6 +2,22 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.111.0
+
+Released 2026-11-21.
+
+### Breaking changes
+
+- use agentTests.allowLocal for local agent tests [#181](https://github.com/avi2d/checks/pull/181)
+
+### Features
+
+- **delivery:** write full workflow files and refuse shared workflow callers [#182](https://github.com/avi2d/checks/pull/182)
+
+### Fixes
+
+- **delivery:** print release help early and gate non-default branch releases [#183](https://github.com/avi2d/checks/pull/183)
+
 ## 0.110.0
 
 Released 2026-11-20.
