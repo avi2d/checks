@@ -354,6 +354,14 @@ test("a ci.yml whose release test step picks its command by an expression is rew
   expect(stepsOf(ciJobs(reread)["test"] ?? {})).toContainEqual({ id: "test", env: { CHECK_RELEASE: EXPRESSION + "{{ needs.changes.outputs.check-release }}" }, run: "bunx checks-ci test" });
 });
 
+test("a held docs test job is kept when docs:build is absent and refused when present, so only the written docs job takes the name", () => {
+  const held = withE2e("docs");
+  const kept = Effect.runSync(callerSetOf([heldCi(held)], {}, "checks-workflows --write", false, false, false, false, false));
+  expect(kept.ci.tests.map(({ name }) => name)).toContain("docs");
+  const fault = Effect.runSync(Effect.flip(callerSetOf([heldCi(held)], {}, "checks-workflows --write", false, false, false, false, true))).message;
+  expect(fault).toBe(".github/workflows/ci.yml runs a test step in job docs, a name the written ci.yml gives its own job, so rename it");
+});
+
 test("a test job named like a fixed job or no job id, or one whose runner is not one label, is refused, so a write never drops it silently", () => {
   expect(faultOfCi(withE2e("site"))).toBe(".github/workflows/ci.yml runs a test step in job site, a name the written ci.yml gives its own job, so rename it");
   expect(faultOfCi(withE2e("e2e tests"))).toBe(".github/workflows/ci.yml holds test job e2e tests, a name the written ci.yml cannot give a test job, so rename it");
