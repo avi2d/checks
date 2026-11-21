@@ -1,52 +1,27 @@
 import { expect, test } from "bun:test";
-import { isTouchedOnly, violationsOf } from "../../../src/delivery/no-mistakes-test.ts";
+import { violationsOf } from "../../../src/delivery/no-mistakes-test.ts";
 
-const FAST = { scripts: { test: "bun src/testing/test.ts", "test:fast": "bun src/testing/test.ts --changed" } };
-
-test("an absent commands.test passes, since no suite runs", () => {
-  expect(violationsOf({}, FAST)).toEqual([]);
-  expect(violationsOf({ commands: {} }, FAST)).toEqual([]);
-  expect(violationsOf({ commands: { prepare: "bun install" } }, FAST)).toEqual([]);
+test("an absent commands.test passes, since no repository test runs", () => {
+  expect(violationsOf({})).toEqual([]);
+  expect(violationsOf({ commands: {} })).toEqual([]);
+  expect(violationsOf({ commands: { prepare: "bun install" } })).toEqual([]);
 });
 
-test("checks-test --changed passes as the touched-only command", () => {
-  expect(violationsOf({ commands: { test: "checks-test --changed" } }, {})).toEqual([]);
-  expect(isTouchedOnly("bun src/testing/test.ts --changed", {})).toBe(true);
-});
-
-test("a bun run script that runs checks-test --changed passes, like this repository's test:fast", () => {
-  expect(violationsOf({ commands: { test: "bun run test:fast" } }, FAST)).toEqual([]);
-});
-
-test("bun run test fails instead of running the whole suite", () => {
-  const violations = violationsOf({ commands: { test: "bun run test" } }, FAST);
+test("a changed-only test command fails instead of running tests on the pipeline machine", () => {
+  const violations = violationsOf({ commands: { test: "bunx checks-test --changed --parallel=3" } });
   expect(violations).toHaveLength(1);
-  expect(violations[0]?.message).toContain('found "bun run test"');
+  expect(violations[0]?.message).toContain('found "bunx checks-test --changed --parallel=3"');
 });
 
-test("a bare checks-test fails instead of running the whole suite", () => {
-  const violations = violationsOf({ commands: { test: "checks-test" } }, {});
-  expect(violations).toHaveLength(1);
-  expect(violations[0]?.message).toContain('found "checks-test"');
+test("a bun run script fails instead of passing because its target runs only changed tests", () => {
+  expect(violationsOf({ commands: { test: "bun run test:fast" } })).toHaveLength(1);
 });
 
-test("a direct suite path without --changed fails instead of running the whole suite", () => {
-  expect(violationsOf({ commands: { test: "bun src/testing/test.ts" } }, {})).toHaveLength(1);
+test("a whole-suite command fails instead of running every test on the pipeline machine", () => {
+  expect(violationsOf({ commands: { test: "bun run test" } })).toHaveLength(1);
 });
 
-test("a chained command fails instead of hiding a suite run after &&", () => {
-  expect(violationsOf({ commands: { test: "checks-test --changed && bun run test" } }, FAST)).toHaveLength(1);
-});
-
-test("an unknown bun run script fails instead of passing a command nothing defines", () => {
-  expect(violationsOf({ commands: { test: "bun run test:quick" } }, FAST)).toHaveLength(1);
-});
-
-test("a cyclic script chain fails instead of resolving forever", () => {
-  const manifest = { scripts: { a: "bun run b", b: "bun run a" } };
-  expect(violationsOf({ commands: { test: "bun run a" } }, manifest)).toHaveLength(1);
-});
-
-test("a changed run narrowed by a tier fails instead of passing a refused combination", () => {
-  expect(violationsOf({ commands: { test: "checks-test --changed --tier=unit" } }, {})).toHaveLength(1);
+test("an empty or null commands.test fails instead of passing as absent", () => {
+  expect(violationsOf({ commands: { test: "" } })).toHaveLength(1);
+  expect(violationsOf({ commands: { test: null } })[0]?.message).toContain("found null");
 });

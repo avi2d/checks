@@ -4,24 +4,21 @@ audience: consumers
 ---
 # checks-no-mistakes-test
 
-`checks-no-mistakes-test` is the gate that holds the no-mistakes test command to the tests the change reaches.
+`checks-no-mistakes-test` is the gate that keeps repository tests out of the no-mistakes test step.
 
 ## What it checks
 
-It fails when `commands.test` in `.no-mistakes.yaml` runs the whole suite instead of the tests the change reaches.
+It fails when `.no-mistakes.yaml` sets `commands.test` to any value, so the test step runs no repository test on the machine that runs the pipeline.
+CI on the pull request runs the tests instead.
+It fails on a command that runs only the changed tests, such as `checks-test --changed`, as well as on one that runs the whole suite.
+It fails on an empty or null `commands.test` too, so the key itself must go.
 It passes when `commands.test` is absent.
-It passes when `commands.test` runs `checks-test --changed` directly.
-It passes when `commands.test` runs a `bun run` script whose definition runs `checks-test --changed`.
-It fails on `bun run test` when the `test` script runs the whole suite, and on a bare `checks-test`.
-It fails with exit 1 when the command contains a shell control character, so a chained `checks-test --changed && ...` line fails.
-It fails with exit 1 when `--changed` is combined with `--full` or `--tier=`, since each combination refuses the run.
-It fails with exit 1 when a `bun run` script name cannot resolve or when a chain of script names cycles.
+Without `commands.test`, the no-mistakes test step runs no baseline command and keeps only its evidence agent.
 
 ## What it reads
 
 It reads the working tree.
-It reads `commands.test` from `.no-mistakes.yaml` and the script definitions from `package.json`.
-It resolves a `bun run` script name to its definition, and follows a chain of such names until it reaches the test command.
+It reads `commands.test` from `.no-mistakes.yaml`.
 
 ## Arguments
 
@@ -35,15 +32,15 @@ It checks the directory it runs in, or the directory it is given.
 
 | Code | When |
 | --- | --- |
-| 0 | `commands.test` is absent or runs only the tests the change reaches |
-| 1 | `commands.test` is anything other than a touched-only command |
-| 2 | `.no-mistakes.yaml` or `package.json` does not parse |
+| 0 | `commands.test` is absent |
+| 1 | `commands.test` is present |
+| 2 | `.no-mistakes.yaml` does not parse |
 
 ## Sample output
 
 ```
 no-mistakes-test: 1 violation(s)
-  .no-mistakes.yaml: commands.test must stay absent or run only the tests the change reaches as checks-test --changed, directly or through a bun run script that runs it, found "bun run test"
+  .no-mistakes.yaml: commands.test must stay absent, since the pipeline runs no repository tests on the machine it runs on and CI runs them, found "bun run test:fast"
 ```
 
 ## When it runs
@@ -53,5 +50,4 @@ no-mistakes-test: 1 violation(s)
 ## Related topics
 
 - [checks-test](checks-test.md)
-- [checks-test-layout](checks-test-layout.md)
 - [checks-lint](checks-lint.md)
