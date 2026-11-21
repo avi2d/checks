@@ -58,7 +58,7 @@ A Claude Code version pinned by an install step in `ci.yml` or `flake.yml` is ke
 
 The `ci.yml` run is one run per pull request, and a newer push cancels the run it replaces.
 The code `main.yml` release job holds group `main` without cancellation.
-The files differ with repository visibility, the test jobs of `ci.yml`, and the Claude Code version.
+Only the fork-reachable jobs differ with repository visibility, with the test jobs of `ci.yml` and the Claude Code version.
 The files a site takes also differ in the three site names.
 A job that runs the suite cancels its run when a push to a draft pull request started it.
 In a site only the jobs that read the build do so, so a draft still gets its preview link.
@@ -144,7 +144,8 @@ A `ci.yml` with no test job gets the default jobs of its kind:
 
 Set `repositoryVisibility: "private"` in `checks.config.ts` for a private GitHub repository.
 The setting defaults to `public` and is independent of the `private` field in `package.json`.
-A public repository uses hosted runners without `CI_RUNS_ON` in the generated workflows.
+A public repository uses hosted runners without `CI_RUNS_ON` in `ci.yml`, `pr-title.yml` and `preview-close.yml`.
+Its other workflows keep `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
 A private repository uses `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` for its default jobs.
 The generated mutation workflow always uses hosted runners.
 The default test runner follows the setting even when a previous `ci.yml` holds the other default.

@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   advisories:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 15
     permissions:
       contents: read

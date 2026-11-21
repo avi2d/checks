@@ -335,7 +335,7 @@ test("--write keeps a hand-rolled Pages deploy, secrets pack, flake run and week
   expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the code set checks-workflows writes\n" });
 }, 30_000);
 
-test("a public repository with a private package must not get the self-hosted override", async () => {
+test("a public repository with a private package keeps hosted runners on fork-reachable jobs and the override on trusted workflows", async () => {
   const repo = await open({
     "package.json": manifest({ private: true }),
     ".bun-version": `${FLEET_BUN_VERSION}\n`,
@@ -343,7 +343,8 @@ test("a public repository with a private package must not get the self-hosted ov
   });
   await repo.commit("start");
   expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
-  for (const name of await held(repo)) expect(await text(repo, name)).not.toContain("vars.CI_RUNS_ON");
+  for (const name of ["ci.yml", "pr-title.yml"]) expect(await text(repo, name)).not.toContain("vars.CI_RUNS_ON");
+  for (const name of ["main.yml", "release.yml"]) expect(await text(repo, name)).toContain("vars.CI_RUNS_ON");
   expect(await parsed(repo, "ci.yml")).toMatchObject({
     jobs: {
       changes: { "runs-on": "ubuntu-latest" },
@@ -351,6 +352,12 @@ test("a public repository with a private package must not get the self-hosted ov
       test: { "runs-on": "ubuntu-latest" },
       checks: { "runs-on": "ubuntu-latest" },
     },
+  });
+  expect(await parsed(repo, "main.yml")).toMatchObject({
+    jobs: { release: { "runs-on": "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}" } },
+  });
+  expect(await parsed(repo, "release.yml")).toMatchObject({
+    jobs: { "pull-request": { "runs-on": "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}" } },
   });
   const wiring = await ran($`bun ${WIRING}`.cwd(repo.dir).env({ ...withoutPullRequestEvent(), GITHUB_EVENT_PATH: join(repo.dir, "event.json") }));
   expect(wiring.exitCode).toBe(0);

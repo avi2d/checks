@@ -97,20 +97,17 @@ function codeMain({ fullTest, checkRelease, publishWorkspaces }: CallerOptions):
 
 export type FullWorkflow = { readonly name: string; readonly text: string };
 
-const fileOf = (workflow: Workflow, publicRepository: boolean): FullWorkflow => ({
-  name: workflow.name + ".yml",
-  text: workflowText(publicRepository ? { ...workflow, jobs: workflow.jobs.map((job) => job.runsOn === RUNNER ? { ...job, runsOn: "ubuntu-latest" } : job) } : workflow),
-});
+const fileOf = (workflow: Workflow): FullWorkflow => ({ name: workflow.name + ".yml", text: workflowText(workflow) });
 
 // The kit publishes through a release.yml that npm's trusted publishing names, so it keeps its own release files.
 export function fullRequiredSet(set: CallerSet, kit: boolean): readonly FullWorkflow[] {
-  const ci = fileOf(ciWorkflow(set, kit), set.options.publicRepository);
-  if (set.kind === "site") return [ci, fileOf(prTitle(set.options.publicRepository), set.options.publicRepository), fileOf(PREVIEW_CLOSE(set.names, set.options.publicRepository), set.options.publicRepository), fileOf(SITE_MAIN(set.names), set.options.publicRepository), fileOf(RELEASE, set.options.publicRepository), fileOf(PRODUCTION(set.names), set.options.publicRepository)];
-  return kit ? [ci, fileOf(prTitle(set.options.publicRepository), set.options.publicRepository)] : [ci, fileOf(prTitle(set.options.publicRepository), set.options.publicRepository), fileOf(codeMain(set.options), set.options.publicRepository), fileOf(RELEASE, set.options.publicRepository)];
+  const ci = fileOf(ciWorkflow(set, kit));
+  if (set.kind === "site") return [ci, fileOf(prTitle(set.options.publicRepository)), fileOf(PREVIEW_CLOSE(set.names, set.options.publicRepository)), fileOf(SITE_MAIN(set.names)), fileOf(RELEASE), fileOf(PRODUCTION(set.names))];
+  return kit ? [ci, fileOf(prTitle(set.options.publicRepository))] : [ci, fileOf(prTitle(set.options.publicRepository)), fileOf(codeMain(set.options)), fileOf(RELEASE)];
 }
 
 // A second deploy waits for the one in flight, since Pages serves one deployment at a time.
-export const fullDocs = ({ build, path }: Pages, publicRepository: boolean): FullWorkflow =>
+export const fullDocs = ({ build, path }: Pages): FullWorkflow =>
   fileOf({
     name: "docs",
     on: ["push:", "  branches: [main]", ...BY_HAND],
@@ -139,9 +136,9 @@ export const fullDocs = ({ build, path }: Pages, publicRepository: boolean): Ful
         steps: [{ id: "deployment", uses: DEPLOY_PAGES }],
       },
     ],
-  }, publicRepository);
+  });
 
-export const fullAdvisories = (cron: string | undefined, publicRepository: boolean): FullWorkflow =>
+export const fullAdvisories = (cron: string | undefined): FullWorkflow =>
   fileOf({
     name: "advisories",
     on: cron === undefined ? BY_HAND : [...BY_HAND, "schedule:", "  - cron: " + JSON.stringify(cron)],
@@ -154,9 +151,9 @@ export const fullAdvisories = (cron: string | undefined, publicRepository: boole
         steps: [checkout({}), SETUP, { name: "run the scan", env: [TOKEN], run: "bunx checks-advisories --all --issue" }],
       },
     ],
-  }, publicRepository);
+  });
 
-export const fullFlake = ({ nodeVersionFile }: Flake, claudeVersion: string | undefined, publicRepository: boolean): FullWorkflow =>
+export const fullFlake = ({ nodeVersionFile }: Flake, claudeVersion: string | undefined): FullWorkflow =>
   fileOf({
     name: "flake",
     on: BY_HAND,
@@ -176,5 +173,5 @@ export const fullFlake = ({ nodeVersionFile }: Flake, claudeVersion: string | un
         ],
       },
     ],
-  }, publicRepository);
+  });
 
