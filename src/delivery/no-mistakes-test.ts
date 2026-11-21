@@ -22,7 +22,7 @@ export function violationsOf(config: unknown): readonly Violation[] {
     {
       file: CONFIG,
       line: undefined,
-      message: `commands.test must stay absent, since the pipeline runs no repository tests on the machine it runs on and CI runs them, found ${JSON.stringify(commands["test"] ?? null)}`,
+      message: `commands.test must stay absent, since the test step runs no repository test command of its own and CI runs them, found ${JSON.stringify(commands["test"] ?? null)}`,
     },
   ];
 }
@@ -54,7 +54,7 @@ export function report({ files, violations }: Result): string {
   if (violations.length === 0) {
     return files === 0
       ? `${NAME}: no ${CONFIG}, so no test command to judge`
-      : `${NAME}: ${CONFIG} sets no commands.test, so the pipeline runs no repository tests`;
+      : `${NAME}: ${CONFIG} sets no commands.test, so the test step runs no repository test command of its own`;
   }
   return [`${NAME}: ${violations.length} violation(s)`, ...violations.map(({ file, message }) => `  ${file}: ${message}`)].join("\n");
 }
