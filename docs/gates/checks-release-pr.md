@@ -158,8 +158,7 @@ jobs:
 ```
 
 The `pull-request` job runs `checks-release-preflight` before planning, so a version the last tag does not name fails before `checks-release-pr` builds.
-A public repository keeps `runs-on: ubuntu-latest`.
-A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on both jobs, as [checks-ci-wiring](checks-ci-wiring.md#runners) requires of every job but a mutation job.
+Both jobs use the runner [checks-workflows](checks-workflows.md#the-composed-ciyml) selects.
 A repository whose build needs more than Bun adds the steps its `.github/workflows/ci.yml` runs before `bun run build` to both jobs, and nothing after it.
 Neither job runs a test suite or a mutation run.
 On a hosted runner the `pull-request` job takes about 25 seconds.
