@@ -326,6 +326,18 @@ test("a write keeps a test job added to ci.yml with its command, browsers and ru
   expect(textOf(setOfCi(Bun.YAML.parse(text)), "ci.yml")).toBe(text);
 });
 
+test("a ci.yml whose release test step picks its command by an expression is rewritten to checks-ci test, instead of keeping the step checks-plain-steps refuses", () => {
+  const document = documentOf(CHECKED, "ci.yml");
+  const jobs = jobsOf(document);
+  const unit = jobs["test"] ?? {};
+  const expressionRun = EXPRESSION + "{{ needs.changes.outputs.check-release == 'true' && 'bun run test' || 'bunx checks-test --pr' }}";
+  const steps = stepsOf(unit).map((step) => (step["id"] === "test" ? { id: "test", run: expressionRun } : step));
+  const held = { ...document, jobs: { ...jobs, test: { ...unit, steps } } };
+  const reread = Effect.runSync(callerSetOf([heldCi(held)], {}, "checks-workflows --write", false, false, true));
+  expect(reread).toEqual(CHECKED);
+  expect(stepsOf(ciJobs(reread)["test"] ?? {})).toContainEqual({ id: "test", env: { CHECK_RELEASE: EXPRESSION + "{{ needs.changes.outputs.check-release }}" }, run: "bunx checks-ci test" });
+});
+
 test("a test job named like a fixed job or no job id, or one whose runner is not one label, is refused, so a write never drops it silently", () => {
   expect(faultOfCi(withE2e("site"))).toBe(".github/workflows/ci.yml runs a test step in job site, a name the written ci.yml gives its own job, so rename it");
   expect(faultOfCi(withE2e("e2e tests"))).toBe(".github/workflows/ci.yml holds test job e2e tests, a name the written ci.yml cannot give a test job, so rename it");

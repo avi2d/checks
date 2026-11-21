@@ -22,6 +22,7 @@ import { main as previewRemove } from "./preview-remove.ts";
 import { main as releaseVersion } from "./release-version.ts";
 import { main as requireSuccess } from "./require-success.ts";
 import { main as secretsPack } from "./secrets-pack.ts";
+import { main as test } from "./test.ts";
 
 const COMMANDS = {
   changes: () => changes,
@@ -43,6 +44,7 @@ const COMMANDS = {
   "release-version": () => releaseVersion,
   "require-success": () => requireSuccess.pipe(Effect.as(true)),
   "secrets-pack": () => secretsPack,
+  test: () => test,
 } as const;
 
 const isCommand = (name: string | undefined): name is keyof typeof COMMANDS => name !== undefined && Object.hasOwn(COMMANDS, name);

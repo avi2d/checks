@@ -334,7 +334,7 @@ test("a private package's release runs the full suite instead of skipping it", a
   await repo.commit("start");
   expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
   expect(await text(repo, "main.yml")).toContain("        run: bun run test --full\n");
-  expect(await text(repo, "ci.yml")).toContain("needs.changes.outputs.check-release == 'true' && 'bun run test' || 'bunx checks-test --pr'");
+  expect(await text(repo, "ci.yml")).toContain("          CHECK_RELEASE: ${{ needs.changes.outputs.check-release }}\n        run: bunx checks-ci test\n");
   expect((await workflows(repo)).exitCode).toBe(0);
 }, 30_000);
 
