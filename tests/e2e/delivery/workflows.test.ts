@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
 import { CHECKOUT, fixtureRepos, ran, type FixtureRepo, type Ran } from "../lib/fixture-repo.ts";
 import { expectNoRemoteUses } from "../lib/local-uses.ts";
+import { isRecord } from "../../../src/delivery/workflow-references.ts";
 
 const SCRIPT = join(CHECKOUT, "src", "delivery", "workflows.ts");
 const WIRING = join(CHECKOUT, "src", "delivery", "ci-wiring.ts");
@@ -75,15 +76,16 @@ test("a legacy all-tier test job splits into gated unit and e2e jobs without ins
   await repo.commit("start");
   expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
   const jobs = jobsOf(await parsed(repo, "ci.yml"), "ci.yml");
-  const unitJob = (jobs as Record<string, { steps?: readonly unknown[] }>)["unit"];
-  const unitSteps: readonly unknown[] = unitJob !== undefined && unitJob.steps !== undefined ? unitJob.steps : [];
+  const jobsRecord: unknown = jobs;
+  const unitJob: unknown = isRecord(jobsRecord) ? jobsRecord["unit"] : undefined;
+  const unitSteps: readonly unknown[] = isRecord(unitJob) && Array.isArray(unitJob["steps"]) ? unitJob["steps"] : [];
   expect(jobs).toMatchObject({
     unit: { steps: expect.arrayContaining([{ id: "test", run: "bun run test --pr --parallel=6 --tier=unit" }]) },
     e2e: { steps: expect.arrayContaining([{ uses: "./.github/actions/playwright", with: { browsers: "chromium webkit" } }, { id: "test", run: "bun run test --pr --parallel=6 --tier=e2e" }]) },
     checks: { needs: ["changes", "static", "unit", "e2e"] },
   });
   expect(jobs).not.toHaveProperty("test");
-  const usesPlaywright = unitSteps.some((step) => typeof step === "object" && step !== null && (step as Record<string, unknown>)["uses"] === "./.github/actions/playwright");
+  const usesPlaywright = unitSteps.some((step) => isRecord(step) && step["uses"] === "./.github/actions/playwright");
   expect(usesPlaywright).toBe(false);
   expect((await workflows(repo)).exitCode).toBe(0);
 }, 30_000);

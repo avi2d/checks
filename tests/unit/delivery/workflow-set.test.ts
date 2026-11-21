@@ -256,7 +256,7 @@ test("a ci.yml that writes the long release rule into a job other than changes, 
     });
     for (const [name, job] of Object.entries(ciJobs(set))) {
       if (name === "changes") continue;
-      const condition = typeof job["if"] === "string" ? (job["if"] as string) : "";
+      const condition = typeof job["if"] === "string" ? job["if"] : "";
       if (condition === "" || condition === "always()") continue;
       const runsDespiteReleaseGithub = truthy(evaluated(condition, { github: githubOf(released), needs: { changes: { outputs: outputs(false) } } }));
       const runsOnReleaseOutput = truthy(evaluated(condition, { github: githubOf(ordinary), needs: { changes: { outputs: outputs(true) } } }));
