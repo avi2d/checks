@@ -26,6 +26,13 @@ const text = async (repo: FixtureRepo, name: string): Promise<string> => readFil
 
 const parsed = async (repo: FixtureRepo, name: string): Promise<unknown> => Bun.YAML.parse(await text(repo, name));
 
+const jobsOf = (workflow: unknown, file: string): object => {
+  if (typeof workflow !== "object" || workflow === null || !("jobs" in workflow)) throw new Error(`expected ${file} to hold a jobs table`);
+  const jobs: unknown = workflow.jobs;
+  if (typeof jobs !== "object" || jobs === null) throw new Error(`expected ${file} to hold a jobs table`);
+  return jobs;
+};
+
 async function expectNoRemoteCall(repo: FixtureRepo): Promise<void> {
   for (const name of await held(repo)) expectNoRemoteUses(name, await text(repo, name));
 }
@@ -344,12 +351,16 @@ test("a public repository with a private package keeps hosted runners on fork-re
   await repo.commit("start");
   expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
   for (const name of ["ci.yml", "pr-title.yml"]) {
-    const jobs = ((await parsed(repo, name)) as { readonly jobs: Readonly<Record<string, Record<string, unknown>>> }).jobs;
-    for (const job of Object.values(jobs)) expect(job["runs-on"]).toBe("ubuntu-latest");
+    for (const [jobName, job] of Object.entries(jobsOf(await parsed(repo, name), name))) {
+      if (typeof job !== "object" || job === null || !("runs-on" in job)) throw new Error(`expected ${name} job ${jobName} to name runs-on`);
+      expect(job["runs-on"]).toBe("ubuntu-latest");
+    }
   }
   for (const name of ["main.yml", "release.yml"]) {
-    const jobs = ((await parsed(repo, name)) as { readonly jobs: Readonly<Record<string, Record<string, unknown>>> }).jobs;
-    for (const job of Object.values(jobs)) expect(job["runs-on"]).toBe("${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}");
+    for (const [jobName, job] of Object.entries(jobsOf(await parsed(repo, name), name))) {
+      if (typeof job !== "object" || job === null || !("runs-on" in job)) throw new Error(`expected ${name} job ${jobName} to name runs-on`);
+      expect(job["runs-on"]).toBe("${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}");
+    }
   }
   expect(await parsed(repo, "ci.yml")).toMatchObject({
     jobs: {
