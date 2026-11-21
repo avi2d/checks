@@ -16,9 +16,9 @@ const plain = (name: string): Workflow => ({ path: `.github/workflows/${name}`, 
 
 const PRIVATE_OPTIONS = { ...NO_CALLER_OPTIONS, checkRelease: true };
 
-const setOf = (workflows: readonly Workflow[], flags: SiteNameFlags = {}) => Effect.runSync(callerSetOf(workflows, flags, "checks-workflows --write", false, false, true, false));
+const setOf = (workflows: readonly Workflow[], flags: SiteNameFlags = {}) => Effect.runSync(callerSetOf(workflows, flags, "checks-workflows --write", false, false, true, false, false));
 const faultOf = (workflows: readonly Workflow[], flags: SiteNameFlags = {}) =>
-  Effect.runSync(Effect.flip(callerSetOf(workflows, flags, "checks-workflows --write", false, false, true, false))).message;
+  Effect.runSync(Effect.flip(callerSetOf(workflows, flags, "checks-workflows --write", false, false, true, false, false))).message;
 
 test("a repository whose workflows name no site is a code repository, so a ci.yml is never read as a site", () => {
   expect(setOf([])).toEqual({ kind: "code", ci: DEFAULT_CI_JOBS.code, options: PRIVATE_OPTIONS });

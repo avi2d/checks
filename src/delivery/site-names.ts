@@ -129,9 +129,9 @@ function uncarriedInputs(workflows: readonly Workflow[]): readonly UncarriedInpu
 const heldCiJobs = (kind: CallerSet["kind"], workflows: readonly Workflow[], publicRepository: boolean) =>
   ciJobsOf(kind, heldWorkflow(workflows)("ci.yml"), publicRepository).pipe(Effect.mapError((fault) => new CallerSetFault({ message: fault.message })));
 
-export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild?: boolean) {
+export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild: boolean) {
   const flagged = SITE_NAME_KEYS.some((key) => flags[key] !== undefined);
-  const options = callerOptionsOf(heldWorkflow(workflows), publishes, publishWorkspaces, needsReleaseChecks, publicRepository, docsBuild === true);
+  const options = callerOptionsOf(heldWorkflow(workflows), publishes, publishWorkspaces, needsReleaseChecks, publicRepository, docsBuild);
   const [extra] = uncarriedInputs(workflows);
   if (extra !== undefined) {
     return yield* new CallerSetFault({

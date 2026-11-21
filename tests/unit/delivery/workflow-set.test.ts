@@ -154,7 +154,7 @@ test("a set written with every option reads back as the same set, so a check rig
   for (const set of [EVERY_OPTION, CHECKED, SITE]) {
     const files = written(set);
     const held = files.map(({ name, text }) => ({ path: ".github/workflows/" + name, document: Bun.YAML.parse(text), text }));
-    const reread = Effect.runSync(callerSetOf(held, {}, "checks-workflows --write", set.options.fullTest, false, set.options.checkRelease, set.options.publicRepository));
+    const reread = Effect.runSync(callerSetOf(held, {}, "checks-workflows --write", set.options.fullTest, false, set.options.checkRelease, set.options.publicRepository, false));
     expect(reread).toEqual(set);
     expect(differencesOf(reread, files, false)).toEqual([]);
   }
@@ -307,9 +307,9 @@ test("a docs-only pull request that skips the docs build or lets its failure pas
 
 const heldCi = (document: unknown) => ({ path: ".github/workflows/ci.yml", document, text: JSON.stringify(document) });
 
-const setOfCi = (document: unknown): CallerSet => Effect.runSync(callerSetOf([heldCi(document)], {}, "checks-workflows --write", false, false, false, false));
+const setOfCi = (document: unknown): CallerSet => Effect.runSync(callerSetOf([heldCi(document)], {}, "checks-workflows --write", false, false, false, false, false));
 
-const faultOfCi = (document: unknown): string => Effect.runSync(Effect.flip(callerSetOf([heldCi(document)], {}, "checks-workflows --write", false, false, false, false))).message;
+const faultOfCi = (document: unknown): string => Effect.runSync(Effect.flip(callerSetOf([heldCi(document)], {}, "checks-workflows --write", false, false, false, false, false))).message;
 
 const withE2e = (name: string, edit: (job: Record<string, unknown>) => Record<string, unknown> = (job) => job): Record<string, unknown> => {
   const document = documentOf(CODE, "ci.yml");
@@ -349,7 +349,7 @@ test("a ci.yml whose release test step picks its command by an expression is rew
   const expressionRun = EXPRESSION + "{{ needs.changes.outputs.check-release == 'true' && 'bun run test' || 'bunx checks-test --pr' }}";
   const steps = stepsOf(unit).map((step) => (step["id"] === "test" ? { id: "test", run: expressionRun } : step));
   const held = { ...document, jobs: { ...jobs, test: { ...unit, steps } } };
-  const reread = Effect.runSync(callerSetOf([heldCi(held)], {}, "checks-workflows --write", false, false, true, false));
+  const reread = Effect.runSync(callerSetOf([heldCi(held)], {}, "checks-workflows --write", false, false, true, false, false));
   expect(reread).toEqual(CHECKED);
   expect(stepsOf(ciJobs(reread)["test"] ?? {})).toContainEqual({ id: "test", env: { CHECK_RELEASE: EXPRESSION + "{{ needs.changes.outputs.check-release }}" }, run: "bunx checks-ci test" });
 });
