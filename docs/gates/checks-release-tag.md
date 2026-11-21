@@ -30,6 +30,7 @@ It matches the tree the required checks of the release pull request passed on.
 In a repository whose `ci.yml` is the one [checks-workflows](checks-workflows.md) composes, release checks run in a private root with a `test` script.
 Elsewhere, those checks skip every job but `changes`.
 It then pushes the tag and creates the GitHub release `v<version>`, whose notes are the `CHANGELOG.md` section for that version.
+It runs `bun run build` before publishing, including when the tag already points at the release commit.
 It publishes the package to npm as [checks-release-publish](checks-release-publish.md) says, unless `package.json` holds `"private": true`.
 When the root is private and `CHECKS_PUBLISH_WORKSPACES` is `true`, it publishes each public workspace package instead.
 Each public workspace version must equal the root release version before it tags anything.
