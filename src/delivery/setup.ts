@@ -339,7 +339,7 @@ const argumentsOf = Effect.fn("argumentsOf")(function* (root: string) {
   const inputs = yield* callerInputsOf(root, isPrivate ? { private: true, hasTestScript: true } : { hasTestScript: true }).pipe(
     Effect.mapError((fault) => new Usage({ message: fault.message })),
   );
-  const set = yield* callerSetOf(callers, parsed.flags, NAME, inputs.publishes, inputs.publishWorkspaces, inputs.needsReleaseChecks, inputs.publicRepository, inputs.hasE2e).pipe(
+  const set = yield* callerSetOf(callers, parsed.flags, NAME, inputs.publishes, inputs.publishWorkspaces, inputs.needsReleaseChecks, inputs.publicRepository, inputs.docsBuild, inputs.hasE2e).pipe(
     Effect.mapError((fault) => new Usage({ message: fault.message })),
   );
   return { isPrivate, set, kit: inputs.kit };

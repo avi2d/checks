@@ -71,6 +71,16 @@ function staticJob(set: CallerSet, kit: boolean): Job {
   };
 }
 
+const docsJob = (set: CallerSet): Job => ({
+  id: "docs",
+  needs: "changes",
+  if: notReleased(set),
+  runsOn: runnerOf(set.options.publicRepository),
+  timeout: 15,
+  permissions: ["contents: read"],
+  steps: [checkout({ ref: HEAD }), SETUP, { run: "bun run docs:build" }],
+});
+
 export const PULL_REQUEST_HEAD = expression("github.event.pull_request.head.sha");
 export const PULL_REQUEST_BRANCH = expression("github.event.pull_request.head.ref");
 export const PULL_REQUEST_NUMBER = expression("github.event.pull_request.number");
@@ -172,7 +182,7 @@ function skipsOf(set: CallerSet): string {
   const afterSite = set.ci.tests.filter(({ readsBuild }) => readsBuild).map(({ name }) => name);
   const site = set.kind === "site" ? ["site"] : [];
   const choices: readonly (readonly [string, readonly string[]])[] = [
-    [checksRelease(set) ? "needs.changes.outputs.release == 'true' && needs.changes.outputs.check-release != 'true'" : "needs.changes.outputs.release == 'true'", ["static", ...site, ...tests]],
+    [checksRelease(set) ? "needs.changes.outputs.release == 'true' && needs.changes.outputs.check-release != 'true'" : "needs.changes.outputs.release == 'true'", ["static", ...site, ...(set.options.docsBuild ? ["docs"] : []), ...tests]],
     ["needs.changes.outputs.docs-only == 'true'", [...site, ...tests]],
     ...(set.kind === "site" ? [["needs.changes.outputs.tests-only == 'true'", [...site, ...afterSite]] as const] : []),
   ];
@@ -186,7 +196,7 @@ const dispatchedStatus = (name: string, outcome: string, context: string): Step 
   ciCommand("commit-status", { if: DISPATCHED, name }, [TOKEN, ["JOB_STATUS", expression(outcome)], ["CONTEXT", context], ["ATTEMPTS", '"5"']]);
 
 function gateJob(set: CallerSet): Job {
-  const needed = ["changes", "static", ...(set.kind === "site" ? ["site"] : []), ...set.ci.tests.map(({ name }) => name)];
+  const needed = ["changes", "static", ...(set.kind === "site" ? ["site"] : []), ...(set.options.docsBuild ? ["docs"] : []), ...set.ci.tests.map(({ name }) => name)];
   return {
     id: "checks",
     needs: "[" + needed.join(", ") + "]",
@@ -221,6 +231,6 @@ export function ciWorkflow(set: CallerSet, kit: boolean): Workflow {
     on: PULL_REQUEST_EVENTS,
     concurrency: "ci-" + expression("github.event.pull_request.number || github.run_id"),
     ...(set.kind === "site" ? { env: siteEnv(set.names, ["pages"]) } : {}),
-    jobs: [changesJob(set), staticJob(set, kit), ...(set.kind === "site" ? [siteJob(set)] : []), ...tests, gateJob(set)],
+    jobs: [changesJob(set), staticJob(set, kit), ...(set.kind === "site" ? [siteJob(set)] : []), ...(set.options.docsBuild ? [docsJob(set)] : []), ...tests, gateJob(set)],
   };
 }

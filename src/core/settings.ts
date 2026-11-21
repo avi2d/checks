@@ -18,9 +18,14 @@ export const AgentTests = Schema.Struct({
   default: DEFAULT_AGENT_TESTS,
 });
 
-export const DEFAULT_TEST_FILE_MAX_SECONDS = 300;
+export const DEFAULT_TEST_FILE_MAX_SECONDS = 120;
 
-export const TestFileMaxSeconds = Schema.Finite.check(Schema.isGreaterThan(0));
+export const TestFileMaxSeconds = Schema.Finite.check(
+  Schema.isGreaterThan(0),
+  Schema.isLessThanOrEqualTo(DEFAULT_TEST_FILE_MAX_SECONDS),
+);
+
+export const TestFileSkips = Schema.Array(Schema.NonEmptyString);
 
 export const Smoke = Schema.Array(Schema.NonEmptyString);
 
@@ -53,6 +58,10 @@ export const Settings = Schema.Struct({
   testFileMaxSeconds: Schema.optionalKey(TestFileMaxSeconds.annotate({
     description: "The time limit in seconds for each test file in CI.",
     default: DEFAULT_TEST_FILE_MAX_SECONDS,
+  })),
+  testFileSkips: Schema.optionalKey(TestFileSkips.annotate({
+    description: "The repository-relative paths of test files to exclude from checks-test.",
+    default: [],
   })),
 });
 

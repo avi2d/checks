@@ -104,6 +104,25 @@ test("a repository without e2e test files gets no e2e job or Playwright action",
   expect(withE2e).toMatchObject({ e2e: { needs: "changes" }, checks: { needs: ["changes", "static", "unit", "e2e"] } });
 }, 30_000);
 
+test("a project with docs:build loses its docs-only pull request build, or a project without it gets a docs job", async () => {
+  const scripts = { lint: "oxlint", build: "tsc", typecheck: "tsc --noEmit", test: "bun test" };
+  const repo = await open({ "package.json": manifest({ scripts: { ...scripts, "docs:build": "echo docs" } }) });
+  await repo.commit("start");
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  expect(await parsed(repo, "ci.yml")).toMatchObject({
+    jobs: {
+      docs: { needs: "changes", if: "needs.changes.outputs.release != 'true'", steps: expect.arrayContaining([{ run: "bun run docs:build" }]) },
+      checks: { needs: ["changes", "static", "docs", "unit"] },
+    },
+  });
+  expect((await workflows(repo)).exitCode).toBe(0);
+  await Bun.write(join(repo.dir, "package.json"), manifest({ scripts }));
+  expect((await workflows(repo)).exitCode).toBe(1);
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  expect(jobsOf(await parsed(repo, "ci.yml"), "ci.yml")).not.toHaveProperty("docs");
+  expect((await workflows(repo)).exitCode).toBe(0);
+}, 30_000);
+
 const SITE_FLAGS = ["--pages", SITE.pages, "--domain", SITE.domain, "--production", SITE.production];
 
 test("a first site write takes the three names as flags, writes them into the workflow env, keeps the weekly advisories cron, and loses the workflow files the set replaces", async () => {

@@ -31,6 +31,9 @@ export type CiJobs = { readonly tests: readonly TestJob[] };
 
 const FIXED_JOBS = ["changes", "static", "site", "checks"] as const;
 
+const isFixed = (name: string, docsBuild: boolean): boolean =>
+  (FIXED_JOBS as readonly string[]).includes(name) || (docsBuild && name === "docs");
+
 const UNIT: TestJob = { name: "unit", run: `${DEFAULT_TEST_RUN} --tier=unit`, browsers: "", readsBuild: false, runsOn: DEFAULT_RUNNER };
 
 const E2E: TestJob = { name: "e2e", run: `${DEFAULT_TEST_RUN} --tier=e2e`, browsers: "", readsBuild: false, runsOn: DEFAULT_RUNNER };
@@ -70,8 +73,8 @@ const decodeFullTestJob = Schema.decodeUnknownEffect(FullTestJob);
 
 const defaultRunner = (held: string, runsOn: string): string => held === "ubuntu-latest" || held === DEFAULT_RUNNER ? runsOn : held;
 
-const fullTestJobOf = Effect.fn("fullTestJobOf")(function* (kind: RepositoryKind, path: string, name: string, job: unknown, runsOn: string) {
-  if (FIXED_JOBS.some((fixed) => fixed === name)) return yield* new CiJobsFault({ message: `${path} runs a test step in job ${name}, a name the written ci.yml gives its own job, so rename it` });
+const fullTestJobOf = Effect.fn("fullTestJobOf")(function* (kind: RepositoryKind, path: string, name: string, job: unknown, runsOn: string, docsBuild: boolean) {
+  if (isFixed(name, docsBuild)) return yield* new CiJobsFault({ message: `${path} runs a test step in job ${name}, a name the written ci.yml gives its own job, so rename it` });
   if (!JOB_ID.test(name)) return yield* new CiJobsFault({ message: `${path} holds test job ${name}, a name the written ci.yml cannot give a test job, so rename it` });
   const held = yield* decodeFullTestJob(job).pipe(Effect.mapError((issue) => new CiJobsFault({ message: `${path} job ${name} is not a test job checks-workflows writes: ${issue.message}` })));
   const step = held.steps.find((candidate) => candidate.id === TEST_STEP);
@@ -136,8 +139,8 @@ const splitLegacyJobs = Effect.fn("splitLegacyJobs")(function* (path: string, jo
   return { tests };
 });
 
-const testJobOf = Effect.fn("testJobOf")(function* (kind: RepositoryKind, path: string, name: string, job: Readonly<Record<string, unknown>>, runsOn: string) {
-  if (!JOB_ID.test(name) || FIXED_JOBS.some((fixed) => fixed === name)) {
+const testJobOf = Effect.fn("testJobOf")(function* (kind: RepositoryKind, path: string, name: string, job: Readonly<Record<string, unknown>>, runsOn: string, docsBuild: boolean) {
+  if (!JOB_ID.test(name) || isFixed(name, docsBuild)) {
     return yield* new CiJobsFault({ message: `${path} calls test.yml from job ${name}, a name the written ci.yml cannot give a test job, so rename it` });
   }
   const inputs = job["with"] ?? {};
@@ -173,18 +176,18 @@ const holdsTestStep = (job: Readonly<Record<string, unknown>>): boolean => {
 };
 
 // A written ci.yml marks each test job by the step whose id is test.
-const fullCiJobsOf = Effect.fn("fullCiJobsOf")(function* (kind: RepositoryKind, ci: Workflow, runsOn: string, hasE2e: boolean) {
+const fullCiJobsOf = Effect.fn("fullCiJobsOf")(function* (kind: RepositoryKind, ci: Workflow, runsOn: string, docsBuild: boolean, hasE2e: boolean) {
   const held = workflowJobs(ci).filter(([, job]) => holdsTestStep(job));
   if (held.length === 0) return defaultJobs(kind, runsOn, hasE2e);
-  return yield* splitLegacyJobs(ci.path, { tests: yield* Effect.forEach(held, ([name, job]) => fullTestJobOf(kind, ci.path, name, job, runsOn)) }, hasE2e);
+  return yield* splitLegacyJobs(ci.path, { tests: yield* Effect.forEach(held, ([name, job]) => fullTestJobOf(kind, ci.path, name, job, runsOn, docsBuild)) }, hasE2e);
 });
 
 // A ci.yml that calls test.yml records its test jobs in the call, so --write keeps them.
-export const ciJobsOf = Effect.fn("ciJobsOf")(function* (kind: RepositoryKind, ci: Workflow | undefined, publicRepository: boolean, hasE2e?: boolean) {
+export const ciJobsOf = Effect.fn("ciJobsOf")(function* (kind: RepositoryKind, ci: Workflow | undefined, publicRepository: boolean, docsBuild: boolean, hasE2e?: boolean) {
   const runsOn = runnerOf(publicRepository);
   const includeE2e = hasE2e !== false;
   if (ci === undefined) return defaultJobs(kind, runsOn, includeE2e);
   const calls = workflowJobs(ci).flatMap(([name, job]) => (calledFileOf(job["uses"]) === "test.yml" ? [{ name, job }] : []));
-  if (calls.length > 0) return yield* splitLegacyJobs(ci.path, { tests: yield* Effect.forEach(calls, ({ name, job }) => testJobOf(kind, ci.path, name, job, runsOn)) }, includeE2e);
-  return yield* fullCiJobsOf(kind, ci, runsOn, includeE2e);
+  if (calls.length > 0) return yield* splitLegacyJobs(ci.path, { tests: yield* Effect.forEach(calls, ({ name, job }) => testJobOf(kind, ci.path, name, job, runsOn, docsBuild)) }, includeE2e);
+  return yield* fullCiJobsOf(kind, ci, runsOn, docsBuild, includeE2e);
 });

@@ -48,20 +48,29 @@ A skipped test or a todo without `skipReason` fails in every environment.
 
 ## Test file time limit
 
-In CI, a test file that takes more than five minutes fails the run even when all its tests pass.
+In CI, a test file that takes more than two minutes fails the run even when all its tests pass.
 A file that takes exactly the limit passes the time check.
 The check uses the whole file's elapsed time from Bun's JUnit report, not the time of each test or the whole suite.
 It judges only the files in the report after Bun finishes and does not stop a file while it runs.
 The failure names each file over the limit and its elapsed time in seconds.
 
-Set `testFileMaxSeconds` in `checks.config.ts` to change the default of 300 seconds.
-The value must be a finite number greater than zero, in seconds.
+Set `testFileMaxSeconds` in `checks.config.ts` to use a shorter limit.
+The value must be a finite number greater than zero and at most 120, in seconds.
 Local runs do not enforce the limit.
+
+## Test file exclusions
+
+Set `testFileSkips` in `checks.config.ts` to keep test files out of `checks-test` runs while you rewrite them.
+The list is empty by default.
+Each entry names an existing test file by its exact path relative to the repository root.
+The run prints every entry, even when the run's tier or change already leaves that file out.
+The listed files do not run, and their test-site skip declarations are not judged.
+This applies in CI and locally.
 
 ```ts
 import { defineConfig } from "@avi2dg/checks/config";
 
-export default defineConfig({ testFileMaxSeconds: 240 });
+export default defineConfig({ testFileSkips: ["tests/e2e/checkout.test.ts"] });
 ```
 
 ## What it reads
@@ -71,7 +80,7 @@ A pull request run also reads the event file, the git history between the base a
 It reads the reach map under `reach` in `checks.config.ts` too, as [The reach map](#the-reach-map) says.
 A `--changed` run also reads the git history since the merge base with `origin/<default branch>`, the working tree diff and the untracked files.
 It reads the sources, `package.json`, `checks.config.ts` and `bunfig.toml` too, as [Changed-file runs](#changed-file-runs) says.
-It reads no skip list from `checks.config.ts`.
+It reads the file exclusions from `testFileSkips` in `checks.config.ts`, as [Test file exclusions](#test-file-exclusions) says.
 It reads `AI_AGENT`, `CHECKS_AGENT`, `CI`, and `agentTests.allowLocal` to decide whether an agent can run tests outside CI, as [checks-local-tests](checks-local-tests.md) says.
 It counts a run as `ci` when `CI` is true and as `local` otherwise.
 A local run covers `./tests/unit` plus the smoke list the repository declares, except a `--changed` run, as [Changed-file runs](#changed-file-runs) says.
@@ -258,7 +267,7 @@ It refuses test filters because every test excluded by a filter would look skipp
 | --- | --- |
 | 0 | every test passed, every skip has a matching site reason, and no file exceeds the time limit in CI, or no test file was found |
 | 1 | a test failed, a parallel worker crashed, a skip lacks a site reason, a declaration is stale in CI, or a file exceeds the time limit in CI |
-| 2 | an argument is not one it takes, a run outside CI is refused, `APPROVE_SCREENS` is not a boolean in a pixel run, a declaration, the smoke list, or the time limit in CI cannot be read, a `checks` object in `package.json` still sets `smoke` or `reach`, a smoke entry names no runnable test, `CI` is not a boolean, Bun passed but wrote no report though test files exist, a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` or an agent run is refused outside CI when `agentTests.allowLocal` is `false` |
+| 2 | an argument is not one it takes, a run outside CI is refused, `APPROVE_SCREENS` is not a boolean in a pixel run, a declaration, the smoke list, the file exclusions, or the time limit in CI cannot be read, a `checks` object in `package.json` still sets `smoke` or `reach`, a smoke entry names no runnable test, `CI` is not a boolean, Bun passed but wrote no report though test files exist, a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` or an agent run is refused outside CI when `agentTests.allowLocal` is `false` |
 
 ## Sample output
 
@@ -270,7 +279,7 @@ checks-test: 1 skipped test(s) undeclared in this local run:
 A CI run with a test file over the time limit reports:
 
 ```
-checks-test: tests/e2e/checkout.test.ts took 312.48s (limit 300s)
+checks-test: tests/e2e/checkout.test.ts took 132.48s (limit 120s)
 ```
 
 A passing run with no skipped tests ends with:
