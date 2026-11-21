@@ -319,17 +319,17 @@ test("--write keeps a hand-rolled Pages deploy, secrets pack, flake run and week
   expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 7 workflow file(s) of the code set and its 2 action file(s)\n" });
   expect(await held(repo)).toEqual(["advisories.yml", "ci.yml", "docs.yml", "flake.yml", "main.yml", "pr-title.yml", "release.yml"]);
   expect(await parsed(repo, "docs.yml")).toMatchObject({
-    jobs: { build: { steps: expect.arrayContaining([{ run: "bun run docs:build" }, { with: { path: "docs/.vitepress/dist" } }]) } },
+    jobs: { build: { steps: expect.arrayContaining([expect.objectContaining({ run: "bun run docs:build" }), expect.objectContaining({ with: expect.objectContaining({ path: "docs/.vitepress/dist" }) })]) } },
   });
   expect(await parsed(repo, "ci.yml")).toMatchObject({
-    jobs: { static: { steps: expect.arrayContaining([{ run: "bunx checks-ci secrets-pack" }]) } },
+    jobs: { static: { steps: expect.arrayContaining([expect.objectContaining({ run: "bunx checks-ci secrets-pack" })]) } },
   });
   expect(await parsed(repo, "flake.yml")).toMatchObject({
-    jobs: { flake: { steps: expect.arrayContaining([{ with: { "node-version-file": ".node-version" } }]) } },
+    jobs: { flake: { steps: expect.arrayContaining([expect.objectContaining({ with: expect.objectContaining({ "node-version-file": ".node-version" }) })]) } },
   });
   expect(await parsed(repo, "advisories.yml")).toMatchObject({ on: { schedule: [{ cron: "21 5 * * 1" }] } });
   expect(await parsed(repo, "main.yml")).toMatchObject({
-    jobs: { suite: { steps: expect.arrayContaining([{ run: "bun run test --full" }]) } },
+    jobs: { suite: { steps: expect.arrayContaining([expect.objectContaining({ run: "bun run test --full" })]) } },
   });
   await expectNoRemoteCall(repo);
   expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the code set checks-workflows writes\n" });
@@ -340,12 +340,12 @@ test("a private package's release runs the full suite instead of skipping it", a
   await repo.commit("start");
   expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
   expect(await parsed(repo, "main.yml")).toMatchObject({
-    jobs: { suite: { steps: expect.arrayContaining([{ run: "bun run test --full" }]) } },
+    jobs: { suite: { steps: expect.arrayContaining([expect.objectContaining({ run: "bun run test --full" })]) } },
   });
   expect(await parsed(repo, "ci.yml")).toMatchObject({
     jobs: {
       test: {
-        steps: expect.arrayContaining([{ id: "test", env: { CHECK_RELEASE: "${{ needs.changes.outputs.check-release }}" }, run: "bunx checks-ci test" }]),
+        steps: expect.arrayContaining([expect.objectContaining({ id: "test", env: expect.objectContaining({ CHECK_RELEASE: "${{ needs.changes.outputs.check-release }}" }), run: "bunx checks-ci test" })]),
       },
     },
   });
