@@ -282,7 +282,7 @@ checks-test: no test skipped
 ## When it runs
 
 The repository's `test` script runs it.
-The kit's pull request workflow runs the unit and e2e tiers in separate jobs with `--pr`.
+The kit's pull request workflow runs each tier the repository holds in a separate job with `--pr`.
 Both commands enforce the time limit in CI without another workflow step.
 A repository that tracks no TypeScript source does not need it, as [checks-test-layout](checks-test-layout.md) says.
 

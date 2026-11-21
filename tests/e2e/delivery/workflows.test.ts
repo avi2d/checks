@@ -75,14 +75,14 @@ test("a legacy all-tier test job splits into gated unit and e2e jobs without ins
   await repo.commit("start");
   expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
   const jobs = jobsOf(await parsed(repo, "ci.yml"), "ci.yml");
+  const unitJob = (jobs as Record<string, { steps?: readonly unknown[] }>)["unit"];
+  const unitSteps: readonly unknown[] = unitJob !== undefined && unitJob.steps !== undefined ? unitJob.steps : [];
   expect(jobs).toMatchObject({
     unit: { steps: expect.arrayContaining([{ id: "test", run: "bun run test --pr --parallel=6 --tier=unit" }]) },
     e2e: { steps: expect.arrayContaining([{ uses: "./.github/actions/playwright", with: { browsers: "chromium webkit" } }, { id: "test", run: "bun run test --pr --parallel=6 --tier=e2e" }]) },
     checks: { needs: ["changes", "static", "unit", "e2e"] },
   });
   expect(jobs).not.toHaveProperty("test");
-  const unitJob = (jobs as Record<string, { steps?: readonly unknown[] }>)["unit"];
-  const unitSteps: readonly unknown[] = unitJob !== undefined && unitJob.steps !== undefined ? unitJob.steps : [];
   const usesPlaywright = unitSteps.some((step) => typeof step === "object" && step !== null && (step as Record<string, unknown>)["uses"] === "./.github/actions/playwright");
   expect(usesPlaywright).toBe(false);
   expect((await workflows(repo)).exitCode).toBe(0);
