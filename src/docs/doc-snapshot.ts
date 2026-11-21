@@ -1,6 +1,5 @@
-import { Effect, FileSystem, Path, Schema } from "effect";
+import { Effect, FileSystem, Option, Path, Schema } from "effect";
 import { anchoredTargets, anchorsOf, PACKAGE_MANIFEST, packagesOf, snapshotOf, type Unresolved } from "./doc-references.ts";
-import { requiresName } from "./doc-vision.ts";
 import { git, pathsAt } from "../core/git.ts";
 
 class ManifestUnreadable extends Schema.TaggedError<ManifestUnreadable>()("ManifestUnreadable", {
@@ -15,18 +14,25 @@ export const readTexts = Effect.fn("readTexts")(function* (root: string, rev: st
   return new Map(paths.map((path, index) => [path, texts[index] ?? ""]));
 });
 
-class ManifestUnparseable extends Schema.TaggedError<ManifestUnparseable>()("ManifestUnparseable", { message: Schema.String }) {}
-
-export const visionRequiredAt = Effect.fn("visionRequiredAt")(function* (root: string, head: string) {
-  const manifest = yield* readTexts(root, head, [PACKAGE_MANIFEST]).pipe(
-    Effect.catchTag("GitFailure", () => Effect.succeed(new Map<string, string>())),
-  );
-  const parsed = yield* Effect.try({
-    try: (): unknown => JSON.parse(manifest.get(PACKAGE_MANIFEST) ?? ""),
-    catch: () => new ManifestUnparseable({ message: `${PACKAGE_MANIFEST} does not parse as JSON` }),
-  }).pipe(Effect.catchTag("ManifestUnparseable", () => Effect.void));
-  return requiresName(parsed);
+const Group = Schema.optionalKey(Schema.Record(Schema.String, Schema.Unknown));
+const Manifest = Schema.Struct({
+  name: Schema.optionalKey(Schema.String),
+  dependencies: Group,
+  devDependencies: Group,
+  peerDependencies: Group,
+  optionalDependencies: Group,
 });
+const decodeManifest = Schema.decodeUnknownOption(Schema.fromJsonString(Manifest));
+const NO_MANIFEST: typeof Manifest.Type = {};
+
+export const manifestAt = Effect.fn("manifestAt")(function* (root: string, head: string) {
+  const manifest = yield* git(["show", `${head}:${PACKAGE_MANIFEST}`], root).pipe(Effect.catchTag("GitFailure", () => Effect.succeed("")));
+  const { name, dependencies, devDependencies, peerDependencies, optionalDependencies } = Option.getOrElse(decodeManifest(manifest), () => NO_MANIFEST);
+  const deps = [dependencies, devDependencies, peerDependencies, optionalDependencies].flatMap((group) => Object.keys(group ?? {}));
+  return { name, deps: [...new Set(deps)] };
+});
+
+export type RepositoryManifest = Effect.Success<ReturnType<typeof manifestAt>>;
 
 function manifestIn(directory: string): string {
   return directory === "" ? PACKAGE_MANIFEST : `${directory}/${PACKAGE_MANIFEST}`;

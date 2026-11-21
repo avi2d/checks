@@ -5,19 +5,6 @@ export type VisionViolation = {
   readonly message: string;
 };
 
-const VISION_REPOS: readonly string[] = ["skills", "checks", "workflows", "orc"];
-
-export function shortName(manifestName: string): string {
-  return manifestName.slice(manifestName.lastIndexOf("/") + 1);
-};
-
-export function requiresName(value: unknown): boolean {
-  if (typeof value !== "object" || value === null || !("name" in value)) return false;
-  const name: unknown = value.name;
-  if (typeof name !== "string") return false;
-  return VISION_REPOS.includes(shortName(name));
-};
-
 const ALIGNS = /^ {0,3}A change aligns when\s+\S/;
 const RESISTED = /^ {0,3}A change should be resisted when\s+\S/;
 

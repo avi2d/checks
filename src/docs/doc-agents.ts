@@ -70,11 +70,11 @@ export function missingAgentFiles(files: ReadonlySet<string>): readonly RootAgen
 }
 
 export function missingVision(files: ReadonlySet<string>, required: boolean): readonly VisionFinding[] {
-  if (!hasManifest(files) || !required || files.has(VISION_PAGE)) return [];
+  if (!required || files.has(VISION_PAGE)) return [];
   return [
     {
       path: VISION_PAGE,
-      message: `is missing, and it holds the vision a repository where a change needs a referee keeps. Copy \`${KIT_TEMPLATES}/vision.md\` to \`${VISION_PAGE}\`, fill its opening, stance sections, Scope and closing lines, and name it in one line of \`AGENTS.md\``
+      message: `is missing from the repository root. Copy \`${KIT_TEMPLATES}/vision.md\` to \`${VISION_PAGE}\`, fill its opening, stance sections, Scope and closing lines, and name it in one line of \`AGENTS.md\``
     },
   ];
 }

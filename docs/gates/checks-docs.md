@@ -19,7 +19,7 @@ It fails when an agent file holds more than 3,000 characters or a `## Maintainin
 It fails when an entry in an agent file names no tracked path, link or `bun run` command, whatever the range touches.
 It fails when a range edits a README that is over 6,000 characters or holds a table cell over 300, as [README ceilings](#readme-ceilings) says.
 It fails when a range edits a doc file and a repository with a `package.json` is missing `AGENTS.md` or `CLAUDE.md` at its root, as [Root agent files](#root-agent-files) says.
-It fails when a range edits a doc file and a repository where a change needs a referee is missing `VISION.md`, as [The vision page](#the-vision-page) says.
+It fails when a range edits a doc file and a repository that uses the kit is missing `VISION.md`, as [The vision page](#the-vision-page) says.
 It fails when a living doc or an agent file names a code span the range removed from every file outside the docs, on any line.
 It fails when a record lacks `governs`, names a path that does not exist, or states a supersession outside its Status, as [Governed paths](#governed-paths) says.
 It fails when the range deletes a path a live record governs and leaves the record live, whatever else the range touches.
@@ -282,8 +282,9 @@ Any other range lists the missing file as advisory, so the first change that edi
 
 ## The vision page
 
-A repository where a change needs a referee keeps `VISION.md`, one page that says whether a change belongs and which principle decides it.
-A change needs a referee in the `skills`, `checks`, `workflows` and `orc` repositories, and any other repository is not asked for the page.
+Every repository that uses the kit keeps `VISION.md` at its root.
+The page says which changes belong and why.
+The gate requires it when the root `package.json` names `@avi2dg/checks` as a direct dependency or as the package itself.
 It is rewritten in place, and git holds its history.
 It opens with the outcome the repository exists for, who it serves and the one thing it owns, each in one line.
 Each stance section holds one stance, and a rule in it names what the stance allows, what it forbids and the trade it takes.
@@ -331,8 +332,8 @@ With one it is that commit against its parent, or against the empty tree for a r
 
 | Code | When |
 | --- | --- |
-| 0 | every doc file the range touches holds to its template, every line it adds to a living doc or an agent file holds to the prose rules and copies no pinned version, it adds or breaks no reference that does not resolve, every agent file holds to the ceiling and holds no `## Maintaining this file`, every entry in an agent file names a tracked path, a link or a command, every README the range edits holds to the README ceilings, a range that edits a doc file leaves `AGENTS.md` and `CLAUDE.md` in a repository with a `package.json` and `VISION.md` in a repository where a change needs a referee, no code span a living doc or an agent file names vanished from every file outside the docs, the range deletes no path a live record governs, and a range that touches `docs/adr/` leaves its index fresh |
-| 1 | a doc file the range touches does not hold to its template, a line the range adds to a living doc or an agent file breaks a prose rule or copies a pinned version, the range adds or breaks a reference that does not resolve, an agent file is over the ceiling or holds `## Maintaining this file`, an entry in an agent file names no tracked path, link or command, a README the range edits is over a README ceiling, a range that edits a doc file leaves `AGENTS.md` or `CLAUDE.md` missing in a repository with a `package.json` or `VISION.md` missing in a repository where a change needs a referee, the range removes a name a living doc or an agent file still carries, the range deletes a path a live record governs, or a range that touches `docs/adr/` leaves its index missing or stale |
+| 0 | every doc file the range touches holds to its template, every line it adds to a living doc or an agent file holds to the prose rules and copies no pinned version, it adds or breaks no reference that does not resolve, every agent file holds to the ceiling and holds no `## Maintaining this file`, every entry in an agent file names a tracked path, a link or a command, every README the range edits holds to the README ceilings, a range that edits a doc file leaves `AGENTS.md` and `CLAUDE.md` in a repository with a `package.json` and `VISION.md` in a repository that uses the kit, no code span a living doc or an agent file names vanished from every file outside the docs, the range deletes no path a live record governs, and a range that touches `docs/adr/` leaves its index fresh |
+| 1 | a doc file the range touches does not hold to its template, a line the range adds to a living doc or an agent file breaks a prose rule or copies a pinned version, the range adds or breaks a reference that does not resolve, an agent file is over the ceiling or holds `## Maintaining this file`, an entry in an agent file names no tracked path, link or command, a README the range edits is over a README ceiling, a range that edits a doc file leaves `AGENTS.md` or `CLAUDE.md` missing in a repository with a `package.json` or `VISION.md` missing in a repository that uses the kit, the range removes a name a living doc or an agent file still carries, the range deletes a path a live record governs, or a range that touches `docs/adr/` leaves its index missing or stale |
 | 2 | a `package.json` does not decode, a ref does not resolve, or `grep` cannot read an installed direct dependency |
 
 ## Sample output
@@ -367,7 +368,7 @@ A repository adopts the templates as its files change, and the prose rules as it
 It reshapes its agent files when it adopts the gate, because [Agent files](#agent-files) judges each one whatever the range touches.
 It shrinks an oversize README in the first change that edits it, because [README ceilings](#readme-ceilings) judges only a README the range edits.
 It adds `AGENTS.md` and `CLAUDE.md` at its root in the first change that edits a doc file, because [Root agent files](#root-agent-files) judges only such a range.
-It adds `VISION.md` in the first change that edits a doc file of a repository where a change needs a referee, for the same reason.
+If a repository uses the kit and lacks `VISION.md`, its first change that edits a doc file must add the page.
 A name the range removes fails wherever a doc still carries it, because the removal is what turned the line stale.
 
 ## Related topics
