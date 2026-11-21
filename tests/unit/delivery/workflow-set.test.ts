@@ -23,6 +23,7 @@ const EVERY_OPTION: CallerSet = {
     advisoriesCron: "21 5 * * 1",
     flake: { nodeVersionFile: ".node-version" },
     pages: { build: "bun run docs:build", path: "docs/.vitepress/dist" },
+    docsBuild: false,
     secretsPack: true,
     fullTest: true,
     claudeVersion: undefined,
@@ -288,6 +289,20 @@ test("a docs-only change skips the site and test jobs and a tests-only one skips
   expect(skippedAndPassed(SITE, "tests-only")).toEqual([["site", "browser"], ["site", "browser"]]);
   expect(skippedAndPassed(CODE, "tests-only")).toEqual([[], []]);
   for (const set of [SITE, CODE, CHECKED]) expect(skippedAndPassed(set, "full")).toEqual([[], []]);
+});
+
+test("a docs-only pull request that skips the docs build or lets its failure pass the gate fails here", () => {
+  for (const base of [CODE, SITE, CHECKED]) {
+    const set = { ...base, options: { ...base.options, docsBuild: true } };
+    const jobs = ciJobs(set);
+    expect(jobs["docs"]).toMatchObject({ needs: "changes", if: base === CHECKED ? "(" + NOT_RELEASED + " || needs.changes.outputs.check-release == 'true')" : NOT_RELEASED });
+    expect(stepsOf(jobs["docs"] ?? {})).toContainEqual({ run: "bun run docs:build" });
+    expect(jobs["checks"]?.["needs"]).toContain("docs");
+    expect(skippedAndPassed(set, "docs-only")[0]).not.toContain("docs");
+    expect(skippedAndPassed(set, "docs-only")[1]).not.toContain("docs");
+    expect(skippedAndPassed(set, "release")[0]).toEqual(skippedAndPassed(set, "release")[1]);
+  }
+  expect(ciJobs(CODE)).not.toHaveProperty("docs");
 });
 
 const heldCi = (document: unknown) => ({ path: ".github/workflows/ci.yml", document, text: JSON.stringify(document) });

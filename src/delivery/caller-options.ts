@@ -9,6 +9,7 @@ export type CallerOptions = {
   readonly advisoriesCron: string | undefined;
   readonly flake: Flake;
   readonly pages: Pages | undefined;
+  readonly docsBuild: boolean;
   readonly secretsPack: boolean;
   readonly fullTest: boolean;
   readonly claudeVersion: string | undefined;
@@ -22,6 +23,7 @@ export const NO_CALLER_OPTIONS: CallerOptions = {
   advisoriesCron: undefined,
   flake: { nodeVersionFile: undefined },
   pages: undefined,
+  docsBuild: false,
   secretsPack: false,
   fullTest: false,
   claudeVersion: undefined,
@@ -141,11 +143,12 @@ export function readsPublishWorkspaces(workflows: readonly Workflow[]): boolean 
   );
 }
 
-export function callerOptionsOf(held: HeldWorkflow, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean): CallerOptions {
+export function callerOptionsOf(held: HeldWorkflow, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild = false): CallerOptions {
   return {
     advisoriesCron: weeklyCronOf(held("advisories.yml")),
     flake: flakeOf(held("flake.yml")),
     pages: pagesOf(held("docs.yml")),
+    docsBuild,
     secretsPack: readsSecretsPack(held("ci.yml")),
     fullTest: publishes,
     claudeVersion: claudeVersionOf([held("ci.yml"), held("flake.yml")]),

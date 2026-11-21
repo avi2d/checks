@@ -29,7 +29,7 @@ export type TestJob = {
 
 export type CiJobs = { readonly tests: readonly TestJob[] };
 
-const FIXED_JOBS = ["changes", "static", "site", "checks"] as const;
+const FIXED_JOBS = ["changes", "static", "site", "docs", "checks"] as const;
 
 const UNIT: TestJob = { name: "unit", run: DEFAULT_TEST_RUN, browsers: "", readsBuild: false, runsOn: DEFAULT_RUNNER };
 

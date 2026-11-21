@@ -111,6 +111,7 @@ Each difference names the file, and each changed line names what the file holds 
 | `changes` | first, and tells whether the run checks the release pull request and whether the pull request changes only documentation |
 | `static` | after `changes`, and checks the workflow files, lints, builds and typechecks |
 | `site` | in a site, after `changes`, and builds the site, deploys the preview and uploads the build as `site-dist` |
+| `docs` | when `package.json` defines `docs:build`, after `changes`, and runs that script |
 | each test job | after `changes`, or after `site` when it reads the build, and runs its one command in the step whose id is `test` |
 | `checks` | always, after every other job, and fails unless each one passed or skipped as allowed |
 
@@ -121,13 +122,14 @@ Only two runs count as the release pull request.
 One is the `workflow_dispatch` run on a `release/` branch, which [checks-release-pr](checks-release-pr.md) dispatches.
 The other is the same repository pull request from `release/<base>` into `<base>`.
 On those runs every job but `changes` and `checks` skips, unless the repository is a private root with a `test` script.
-Then the static and test jobs run on the release pull request, and the gate does not accept their skips.
+Then the static, docs, and test jobs run on the release pull request, and the gate does not accept their skips.
 Its default test step runs `bunx checks-ci test` with `CHECK_RELEASE` set from the `check-release` output of `changes`.
 That step runs `bun run test` on the release pull request and `bunx checks-test --pr` on any other run.
 A fork pull request from a `release/` branch and a pull request from a `release/` branch that does not match `release/<base>` run every job.
 Each job reads the rule once from the `release` output of `changes`, as `if: needs.changes.outputs.release != 'true'`.
 
-The jobs `ci.yml` holds are the record of what the repository runs, and `package.json` names none of them.
+The test jobs `ci.yml` holds are the record of what the repository runs.
+The `docs` job runs on documentation-only pull requests and its result is required by `checks`.
 A job whose step with id `test` runs a command is a test job.
 It keeps its name, that command, the browsers its `playwright` step installs, and its `runs-on`.
 In a site, a test job that needs `site` reads the build.
