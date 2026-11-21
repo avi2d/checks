@@ -237,12 +237,22 @@ test("the code ci.yml reads the release rule from the changes output, and the ga
   expect(stepsOf(jobs["unit"] ?? {})).toContainEqual({ id: "test", run: "bunx checks-test --pr --tier=unit" });
   expect(stepsOf(jobs["unit"] ?? {}).some((step) => step["uses"] === "./.github/actions/playwright")).toBe(false);
   expect(stepsOf(jobs["e2e"] ?? {})).toContainEqual({ id: "test", run: "bunx checks-test --pr --tier=e2e" });
-  expect(stepsOf(jobs["e2e"] ?? {})).toContainEqual({ uses: "./.github/actions/playwright", with: { browsers: "chromium" } });
+  expect(stepsOf(jobs["e2e"] ?? {}).some((step) => step["uses"] === "./.github/actions/playwright")).toBe(false);
 });
 
 test("a ci.yml that writes the long release rule into a job other than changes, instead of reading its output, fails here", () => {
   const oneTest: CallerSet = { ...CODE, ci: { tests: CODE.ci.tests.slice(0, 1) } };
-  for (const set of [CODE, SITE, CHECKED, oneTest]) expect(textOf(set, "ci.yml").split("github.head_ref").length - 1).toBe(1);
+  for (const set of [CODE, SITE, CHECKED, oneTest]) {
+    const jobs = ciJobs(set);
+    const release = jobs["changes"]?.["env"];
+    expect(isRecord(release) && typeof release["RELEASE"] === "string" && (release["RELEASE"] as string).includes("github.head_ref")).toBe(true);
+    for (const [name, job] of Object.entries(jobs)) {
+      if (name === "changes") continue;
+      const condition = typeof job["if"] === "string" ? (job["if"] as string) : "";
+      expect(condition.includes("github.head_ref")).toBe(false);
+      if (condition !== "" && condition !== "always()") expect(condition.includes("needs.changes.outputs.release")).toBe(true);
+    }
+  }
 });
 
 test("a fork pull request from a release/ branch still runs every job instead of skipping as the release run", () => {

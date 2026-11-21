@@ -33,7 +33,7 @@ const FIXED_JOBS = ["changes", "static", "site", "checks"] as const;
 
 const UNIT: TestJob = { name: "unit", run: `${DEFAULT_TEST_RUN} --tier=unit`, browsers: "", readsBuild: false, runsOn: DEFAULT_RUNNER };
 
-const E2E: TestJob = { name: "e2e", run: `${DEFAULT_TEST_RUN} --tier=e2e`, browsers: "chromium", readsBuild: false, runsOn: DEFAULT_RUNNER };
+const E2E: TestJob = { name: "e2e", run: `${DEFAULT_TEST_RUN} --tier=e2e`, browsers: "", readsBuild: false, runsOn: DEFAULT_RUNNER };
 
 const BROWSER: TestJob = { name: "browser", run: "bunx checks-browser --pr", browsers: "webkit", readsBuild: true, runsOn: DEFAULT_RUNNER };
 
@@ -106,22 +106,27 @@ export const runnerOf = (publicRepository: boolean): string => (publicRepository
 
 const defaultJobs = (kind: RepositoryKind, runsOn: string, hasE2e: boolean): CiJobs => ({ tests: DEFAULT_CI_JOBS[kind].tests.filter((test) => hasE2e || test.name !== "e2e").map((test) => ({ ...test, runsOn })) });
 
-function splitLegacyJobs(jobs: CiJobs, hasE2e: boolean): CiJobs {
-  const tests = jobs.tests.filter((job) => hasE2e || job.name !== "e2e");
-  const hasE2eJob = tests.some(({ name }) => name === "e2e");
-  const split = tests.flatMap((job) => {
+const splitLegacyJobs = Effect.fn("splitLegacyJobs")(function* (path: string, jobs: CiJobs, hasE2e: boolean) {
+  const hasE2eJob = jobs.tests.some(({ name }) => name === "e2e");
+  const split = jobs.tests.flatMap((job) => {
     const match = /^(bunx checks-test|bun run test)( --pr)( --parallel=[1-9][0-9]*)?$/.exec(job.run);
     if (match === null || (job.name !== "test" && job.name !== "unit")) return [job];
     const run = `${match[1]}${match[2]}${match[3] ?? ""}`;
     const unit = { ...job, name: "unit", run: `${run} --tier=unit`, browsers: "" };
-    const e2e = { ...job, name: "e2e", run: `${run} --tier=e2e`, browsers: job.browsers || E2E.browsers };
+    const e2e = { ...job, name: "e2e", run: `${run} --tier=e2e`, browsers: job.browsers };
     return hasE2e && !hasE2eJob ? [unit, e2e] : [unit];
   });
-  if (!hasE2e || split.some(({ name }) => name === "e2e")) return { tests: split };
-  const unit = split.find((job) => job.name === "unit" && /^(bunx checks-test|bun run test) --pr( --parallel=[1-9][0-9]*)? --tier=unit$/.test(job.run));
-  if (unit === undefined) return { tests: split };
-  return { tests: [...split, { ...unit, name: "e2e", run: unit.run.replace(/--tier=unit$/, "--tier=e2e"), browsers: E2E.browsers }] };
-}
+  const tests = !hasE2e || split.some(({ name }) => name === "e2e") ? split : (() => {
+    const unit = split.find((job) => job.name === "unit" && /^(bunx checks-test|bun run test) --pr( --parallel=[1-9][0-9]*)? --tier=unit$/.test(job.run));
+    return unit === undefined ? split : [...split, { ...unit, name: "e2e", run: unit.run.replace(/--tier=unit$/, "--tier=e2e"), browsers: "" }];
+  })();
+  const seen = new Set<string>();
+  for (const job of tests) {
+    if (seen.has(job.name)) return yield* new CiJobsFault({ message: `${path} holds two test jobs named ${job.name}, so rename one` });
+    seen.add(job.name);
+  }
+  return { tests };
+});
 
 const testJobOf = Effect.fn("testJobOf")(function* (kind: RepositoryKind, path: string, name: string, job: Readonly<Record<string, unknown>>, runsOn: string) {
   if (!JOB_ID.test(name) || FIXED_JOBS.some((fixed) => fixed === name)) {
@@ -163,7 +168,7 @@ const holdsTestStep = (job: Readonly<Record<string, unknown>>): boolean => {
 const fullCiJobsOf = Effect.fn("fullCiJobsOf")(function* (kind: RepositoryKind, ci: Workflow, runsOn: string, hasE2e: boolean) {
   const held = workflowJobs(ci).filter(([, job]) => holdsTestStep(job));
   if (held.length === 0) return defaultJobs(kind, runsOn, hasE2e);
-  return splitLegacyJobs({ tests: yield* Effect.forEach(held, ([name, job]) => fullTestJobOf(kind, ci.path, name, job, runsOn)) }, hasE2e);
+  return yield* splitLegacyJobs(ci.path, { tests: yield* Effect.forEach(held, ([name, job]) => fullTestJobOf(kind, ci.path, name, job, runsOn)) }, hasE2e);
 });
 
 // A ci.yml that calls test.yml records its test jobs in the call, so --write keeps them.
@@ -172,6 +177,6 @@ export const ciJobsOf = Effect.fn("ciJobsOf")(function* (kind: RepositoryKind, c
   const includeE2e = hasE2e !== false;
   if (ci === undefined) return defaultJobs(kind, runsOn, includeE2e);
   const calls = workflowJobs(ci).flatMap(([name, job]) => (calledFileOf(job["uses"]) === "test.yml" ? [{ name, job }] : []));
-  if (calls.length > 0) return splitLegacyJobs({ tests: yield* Effect.forEach(calls, ({ name, job }) => testJobOf(kind, ci.path, name, job, runsOn)) }, includeE2e);
+  if (calls.length > 0) return yield* splitLegacyJobs(ci.path, { tests: yield* Effect.forEach(calls, ({ name, job }) => testJobOf(kind, ci.path, name, job, runsOn)) }, includeE2e);
   return yield* fullCiJobsOf(kind, ci, runsOn, includeE2e);
 });

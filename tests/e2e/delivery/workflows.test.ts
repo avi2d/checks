@@ -81,7 +81,10 @@ test("a legacy all-tier test job splits into gated unit and e2e jobs without ins
     checks: { needs: ["changes", "static", "unit", "e2e"] },
   });
   expect(jobs).not.toHaveProperty("test");
-  expect(JSON.stringify(Object.entries(jobs).find(([name]) => name === "unit")?.[1])).not.toContain("playwright");
+  const unitJob = (jobs as Record<string, { steps?: readonly unknown[] }>)["unit"];
+  const unitSteps: readonly unknown[] = unitJob !== undefined && unitJob.steps !== undefined ? unitJob.steps : [];
+  const usesPlaywright = unitSteps.some((step) => typeof step === "object" && step !== null && (step as Record<string, unknown>)["uses"] === "./.github/actions/playwright");
+  expect(usesPlaywright).toBe(false);
   expect((await workflows(repo)).exitCode).toBe(0);
 }, 30_000);
 
@@ -344,7 +347,10 @@ test("a test job a person adds to the written ci.yml is refused until --write, w
       checks: { needs: ["changes", "static", "unit", "e2e"] },
     },
   });
-  expect(await text(repo, "ci.yml")).toContain("'static unit e2e' || needs.changes.outputs.docs-only == 'true' && 'unit e2e' || ''");
+  const writtenCi = (await parsed(repo, "ci.yml")) as { jobs: { checks: { steps: readonly Record<string, unknown>[] } } };
+  const requireStep = writtenCi.jobs.checks.steps.find((step) => step["run"] === "bunx checks-ci require-success");
+  const skipsEnv = requireStep !== undefined && typeof requireStep["env"] === "object" && requireStep["env"] !== null ? (requireStep["env"] as Record<string, unknown>)["SKIPS"] : undefined;
+  expect(skipsEnv).toBe("${{ needs.changes.outputs.release == 'true' && 'static unit e2e' || needs.changes.outputs.docs-only == 'true' && 'unit e2e' || '' }}");
   expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the code set checks-workflows writes\n" });
 }, 30_000);
 

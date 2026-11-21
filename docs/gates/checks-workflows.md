@@ -145,9 +145,9 @@ A `ci.yml` with no test job gets the default jobs of its kind:
 | site | `unit`, `e2e` when present, and `browser`, which runs `bunx checks-browser --pr` on `webkit` against the `site-dist` build |
 
 The `unit` job runs `bunx checks-test --pr --tier=unit`.
-The `e2e` job installs Chromium and runs `bunx checks-test --pr --tier=e2e`.
+The `e2e` job runs `bunx checks-test --pr --tier=e2e`.
 The `checks` job requires both jobs when both exist.
-Rulesets that require individual test jobs must replace `unit / test` with `unit / unit` and, when present, `e2e / e2e`.
+Rulesets that require individual test jobs must require `unit` and, when present, `e2e`.
 A ruleset requiring only the aggregate `checks` job needs no change.
 
 Set `repositoryVisibility: "private"` in `checks.config.ts` for a private GitHub repository.

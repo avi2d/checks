@@ -147,7 +147,7 @@ A narrowed run judges only the skips the files it ran declare.
 
 ## The pull request entry
 
-`checks-test --pr` is the one test step a CI workflow runs, on a pull request and on `workflow_dispatch` alike.
+The CI workflow runs `checks-test --pr --tier=unit` and `checks-test --pr --tier=e2e` as separate test steps, on a pull request and on `workflow_dispatch` alike.
 It runs the unit and e2e test files the pull request reaches, as [Pull request runs](#pull-request-runs) says.
 A pull request that changes only top-level and `docs/` Markdown runs no test and passes.
 A release pull request and any run that is not a pull request run the whole suite.
