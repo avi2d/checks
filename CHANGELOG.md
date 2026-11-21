@@ -2,6 +2,20 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.112.0
+
+Released 2026-11-21.
+
+### Features
+
+- **delivery:** refuse commands.test so tests run only in CI [#186](https://github.com/avi2d/checks/pull/186)
+
+### Fixes
+
+- **delivery:** select workflow runners by repository visibility [#191](https://github.com/avi2d/checks/pull/191)
+- **delivery:** build before retrying a release publish [#190](https://github.com/avi2d/checks/pull/190)
+- **docs:** require a vision page in every kit repository [#189](https://github.com/avi2d/checks/pull/189)
+
 ## 0.111.1
 
 Released 2026-11-21.
