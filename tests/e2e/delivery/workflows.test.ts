@@ -362,11 +362,12 @@ const gatesOver = async (repo: FixtureRepo): Promise<readonly (readonly [string,
 
 test("every set --write writes passes checks-plain-steps, checks-workflows and checks-ci-wiring, so a release test step chosen by an expression fails here", async () => {
   const everyOption = await handRolledFiles();
+  const bunVersion = { ".bun-version": FLEET_BUN_VERSION + "\n" };
   const variants: readonly (readonly [string, Readonly<Record<string, string>>, readonly string[]])[] = [
-    ["code", { "package.json": manifest() }, []],
-    ["site", { "package.json": manifest() }, SITE_FLAGS],
-    ["release checks", { "package.json": manifest({ private: true }) }, []],
-    ["release checks with a secrets pack, Pages, flake and advisories", { "package.json": manifest({ private: true }), ...everyOption }, []],
+    ["code", { "package.json": manifest(), ...bunVersion }, []],
+    ["site", { "package.json": manifest(), ...bunVersion }, SITE_FLAGS],
+    ["release checks", { "package.json": manifest({ private: true }), ...bunVersion }, []],
+    ["release checks with a secrets pack, Pages, flake and advisories", { "package.json": manifest({ private: true }), ...bunVersion, ...everyOption }, []],
   ];
   for (const [variant, files, flags] of variants) {
     const repo = await open(files);
