@@ -128,7 +128,9 @@ To run the gates in CI:
 
    A later `--write` keeps the names the site workflows hold.
    `ci.yml` composes the jobs that run side by side.
-   A first write gives `ci.yml` the default test jobs of the kind: `unit` and, when `tests/e2e/` holds a test file, `e2e` in a code repository, and `unit`, `e2e` when present, and `browser` in a site.
+   A first write gives `ci.yml` the default test jobs of the kind.
+   A code repository gets `unit` and, when `tests/e2e/` holds a test file, `e2e`.
+   A site gets `unit`, `e2e` when present, and `browser`.
    To run another test command, copy the `unit` job under a new name, change the `run` of its step with id `test`, and run `--write` again.
    A later `--write` keeps the test jobs `ci.yml` holds and rewrites the rest of the file.
    The `static` job fails the pull request when a workflow file differs or an extra one appears.
