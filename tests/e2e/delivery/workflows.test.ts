@@ -343,8 +343,14 @@ test("a public repository with a private package keeps hosted runners on fork-re
   });
   await repo.commit("start");
   expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
-  for (const name of ["ci.yml", "pr-title.yml"]) expect(await text(repo, name)).not.toContain("vars.CI_RUNS_ON");
-  for (const name of ["main.yml", "release.yml"]) expect(await text(repo, name)).toContain("vars.CI_RUNS_ON");
+  for (const name of ["ci.yml", "pr-title.yml"]) {
+    const jobs = ((await parsed(repo, name)) as { readonly jobs: Readonly<Record<string, Record<string, unknown>>> }).jobs;
+    for (const job of Object.values(jobs)) expect(job["runs-on"]).toBe("ubuntu-latest");
+  }
+  for (const name of ["main.yml", "release.yml"]) {
+    const jobs = ((await parsed(repo, name)) as { readonly jobs: Readonly<Record<string, Record<string, unknown>>> }).jobs;
+    for (const job of Object.values(jobs)) expect(job["runs-on"]).toBe("${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}");
+  }
   expect(await parsed(repo, "ci.yml")).toMatchObject({
     jobs: {
       changes: { "runs-on": "ubuntu-latest" },
