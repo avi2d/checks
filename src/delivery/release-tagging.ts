@@ -162,7 +162,9 @@ export const releaseHead = Effect.fn("releaseHead")(function* (label: string, ro
   for (const workspace of workspaces) {
     if (workspace.version !== landed.version) return yield* new TagRefused({ message: `${workspace.path} holds ${workspace.version}, not the tested release version ${landed.version}` });
   }
-  if (yield* pushReleaseTag(label, root, landed, cuttingWorkflow)) yield* Console.log(`${label}: tagged ${landed.head.slice(0, 12)} as ${landed.tag}`);
+  const tagged = yield* pushReleaseTag(label, root, landed, cuttingWorkflow);
+  if (tagged) yield* Console.log(`${label}: tagged ${landed.head.slice(0, 12)} as ${landed.tag}`);
+  if (!tagged && (landed.publishes || workspaces.length > 0)) yield* runBuild(root);
   yield* writeGitHubRelease(label, root, landed);
   if (!landed.publishes) {
     if (workspaces.length === 0) yield* Console.log(`${label}: ${MANIFEST} is private, so no package is published`);

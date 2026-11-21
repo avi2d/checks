@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fakeGh, type FakeGh } from "../lib/fake-gh.ts";
 import { releasedMains } from "../lib/released-main.ts";
@@ -269,6 +269,25 @@ test(
     expect(released.text).toContain("release-publish: published widget@0.2.0\n");
     expect((await main.state()).releases.map(({ tag_name: tag }) => tag)).toEqual(["v0.2.0"]);
     expect((await main.npm()).latest).toBe("0.2.0");
+  },
+  60_000,
+);
+
+test(
+  "a rerun with the tag at head builds before npm rejects a publish without built files",
+  async () => {
+    const main = await onMain("chore: release 0.2.0 (#7)");
+    await $`git push -q origin HEAD:refs/tags/v0.2.0`.cwd(main.dir).quiet();
+    const build = join(main.dir, "scripts/build.ts");
+    await writeFile(build, `${await readFile(build, "utf8")}\nawait Bun.write("built-output", "built");\n`);
+    const npm = join((main.env["PATH"] ?? "").split(":")[0] ?? "", "npm");
+    await rename(npm, `${npm}-real`);
+    await writeFile(npm, `#!/bin/sh\nif [ "$1" = publish ] && [ ! -f built-output ]; then exit 1; fi\nexec "${npm}-real" "$@"\n`, { mode: 0o755 });
+
+    const released = await main.run(SCRIPT, []);
+    expect(released.exitCode).toBe(0);
+    expect(await readFile(join(main.dir, "built-output"), "utf8")).toBe("built");
+    expect((await main.npm()).published).toEqual([main.head]);
   },
   60_000,
 );
