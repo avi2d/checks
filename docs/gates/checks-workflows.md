@@ -53,7 +53,7 @@ A code repository whose `package.json` does not set `private: true` publishes to
 Then its `main.yml` holds a `suite` job that runs `bun run test --full` once on a release commit before the tag and the publish.
 A repository without a `package.json` counts as one that publishes.
 A private root with public workspace packages also holds the `suite` job and sets `CHECKS_PUBLISH_WORKSPACES: "true"` on the release step.
-A private root with a `test` script also holds the `suite` job, and its `ci.yml` runs static checks, the docs build and tests on release pull requests.
+A private root with a `test` script also holds the `suite` job, and its `ci.yml` runs static checks and tests on release pull requests, and the docs build when `package.json` defines `docs:build`.
 A Claude Code version pinned by an install step in `ci.yml` or `flake.yml` is kept in the test and flake jobs.
 
 The `ci.yml` run is one run per pull request, and a newer push cancels the run it replaces.
@@ -129,7 +129,7 @@ A fork pull request from a `release/` branch and a pull request from a `release/
 Each job reads the rule once from the `release` output of `changes`, as `if: needs.changes.outputs.release != 'true'`.
 
 The test jobs `ci.yml` holds are the record of what the repository runs.
-The `docs` job runs on every pull request but the release pull request, documentation-only ones included, and `checks` requires it to pass.
+The `docs` job runs on every pull request the `static` job runs on, documentation-only ones included, and `checks` requires it to pass.
 A job whose step with id `test` runs a command is a test job.
 It keeps its name, that command, the browsers its `playwright` step installs, and its `runs-on`.
 In a site, a test job that needs `site` reads the build.
