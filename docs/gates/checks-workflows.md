@@ -122,7 +122,8 @@ One is the `workflow_dispatch` run on a `release/` branch, which [checks-release
 The other is the same repository pull request from `release/<base>` into `<base>`.
 On those runs every job but `changes` and `checks` skips, unless the repository is a private root with a `test` script.
 Then the static and test jobs run on the release pull request, and the gate does not accept their skips.
-The default test command becomes `bun run test` there.
+Its default test step runs `bunx checks-ci test` with `CHECK_RELEASE` set from the `check-release` output of `changes`.
+That step runs `bun run test` on the release pull request and `bunx checks-test --pr` on any other run.
 A fork pull request from a `release/` branch and a pull request from a `release/` branch that does not match `release/<base>` run every job.
 Each job reads the rule once from the `release` output of `changes`, as `if: needs.changes.outputs.release != 'true'`.
 

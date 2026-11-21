@@ -8,6 +8,7 @@ import { expectNoRemoteUses } from "../lib/local-uses.ts";
 
 const SCRIPT = join(CHECKOUT, "src", "delivery", "workflows.ts");
 const WIRING = join(CHECKOUT, "src", "delivery", "ci-wiring.ts");
+const PLAIN_STEPS = join(CHECKOUT, "src", "delivery", "plain-steps.ts");
 const SITE = { pages: "acme", domain: "acme.example", production: "acme/acme.example" };
 const FLEET_BUN_VERSION = (await readFile(join(CHECKOUT, ".bun-version"), "utf8")).trim();
 const open = fixtureRepos("checks-workflows-");
@@ -308,22 +309,28 @@ const HAND_ROLLED = join(CHECKOUT, "tests", "fixtures", "workflows", "hand-rolle
 
 const handRolled = async (name: string): Promise<string> => readFile(join(HAND_ROLLED, name), "utf8");
 
+const handRolledFiles = async (): Promise<Readonly<Record<string, string>>> =>
+  Object.fromEntries(await Promise.all(["ci.yml", "docs.yml", "flake.yml", "advisories.yml"].map(async (name) => [`.github/workflows/${name}`, await handRolled(name)] as const)));
+
 test("--write keeps a hand-rolled Pages deploy, secrets pack, flake run and weekly scan as written steps, instead of deleting docs.yml or dropping the cron", async () => {
-  const files = Object.fromEntries(
-    await Promise.all(["ci.yml", "docs.yml", "flake.yml", "advisories.yml"].map(async (name) => [`.github/workflows/${name}`, await handRolled(name)] as const)),
-  );
-  const repo = await open({ "package.json": manifest(), ...files });
+  const repo = await open({ "package.json": manifest(), ...(await handRolledFiles()) });
   await repo.commit("start");
 
   expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 7 workflow file(s) of the code set and its 2 action file(s)\n" });
   expect(await held(repo)).toEqual(["advisories.yml", "ci.yml", "docs.yml", "flake.yml", "main.yml", "pr-title.yml", "release.yml"]);
-  const docs = await text(repo, "docs.yml");
-  expect(docs).toContain("      - run: bun run docs:build\n");
-  expect(docs).toContain("          path: docs/.vitepress/dist\n");
-  expect(await text(repo, "ci.yml")).toContain("        run: bunx checks-ci secrets-pack\n");
-  expect(await text(repo, "flake.yml")).toContain("          node-version-file: .node-version\n");
+  expect(await parsed(repo, "docs.yml")).toMatchObject({
+    jobs: { build: { steps: expect.arrayContaining([expect.objectContaining({ run: "bun run docs:build" }), expect.objectContaining({ with: expect.objectContaining({ path: "docs/.vitepress/dist" }) })]) } },
+  });
+  expect(await parsed(repo, "ci.yml")).toMatchObject({
+    jobs: { static: { steps: expect.arrayContaining([expect.objectContaining({ run: "bunx checks-ci secrets-pack" })]) } },
+  });
+  expect(await parsed(repo, "flake.yml")).toMatchObject({
+    jobs: { flake: { steps: expect.arrayContaining([expect.objectContaining({ with: expect.objectContaining({ "node-version-file": ".node-version" }) })]) } },
+  });
   expect(await parsed(repo, "advisories.yml")).toMatchObject({ on: { schedule: [{ cron: "21 5 * * 1" }] } });
-  expect(await text(repo, "main.yml")).toContain("        run: bun run test --full\n");
+  expect(await parsed(repo, "main.yml")).toMatchObject({
+    jobs: { suite: { steps: expect.arrayContaining([expect.objectContaining({ run: "bun run test --full" })]) } },
+  });
   await expectNoRemoteCall(repo);
   expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the code set checks-workflows writes\n" });
 }, 30_000);
@@ -332,10 +339,44 @@ test("a private package's release runs the full suite instead of skipping it", a
   const repo = await open({ "package.json": manifest({ private: true }) });
   await repo.commit("start");
   expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
-  expect(await text(repo, "main.yml")).toContain("        run: bun run test --full\n");
-  expect(await text(repo, "ci.yml")).toContain("needs.changes.outputs.check-release == 'true' && 'bun run test' || 'bunx checks-test --pr'");
+  expect(await parsed(repo, "main.yml")).toMatchObject({
+    jobs: { suite: { steps: expect.arrayContaining([expect.objectContaining({ run: "bun run test --full" })]) } },
+  });
+  expect(await parsed(repo, "ci.yml")).toMatchObject({
+    jobs: {
+      test: {
+        steps: expect.arrayContaining([expect.objectContaining({ id: "test", env: expect.objectContaining({ CHECK_RELEASE: "${{ needs.changes.outputs.check-release }}" }), run: "bunx checks-ci test" })]),
+      },
+    },
+  });
   expect((await workflows(repo)).exitCode).toBe(0);
 }, 30_000);
+
+const gatesOver = async (repo: FixtureRepo): Promise<readonly (readonly [string, number, string])[]> =>
+  Promise.all(
+    [["plain-steps", PLAIN_STEPS], ["workflows", SCRIPT], ["ci-wiring", WIRING]].map(async ([gate = "", script = ""]) => {
+      const { exitCode, text: output } = await ran($`bun ${script}`.cwd(repo.dir).env({ ...withoutPullRequestEvent(), GITHUB_REPOSITORY: "acme/acme" }));
+      return [gate, exitCode, exitCode === 0 ? "" : output] as const;
+    }),
+  );
+
+test("every set --write writes passes checks-plain-steps, checks-workflows and checks-ci-wiring, so a release test step chosen by an expression fails here", async () => {
+  const everyOption = await handRolledFiles();
+  const bunVersion = { ".bun-version": FLEET_BUN_VERSION + "\n" };
+  const variants: readonly (readonly [string, Readonly<Record<string, string>>, readonly string[]])[] = [
+    ["code", { "package.json": manifest(), ...bunVersion }, []],
+    ["site", { "package.json": manifest(), ...bunVersion }, SITE_FLAGS],
+    ["release checks", { "package.json": manifest({ private: true }), ...bunVersion }, []],
+    ["release checks with a secrets pack, Pages, flake and advisories", { "package.json": manifest({ private: true }), ...bunVersion, ...everyOption }, []],
+  ];
+  for (const [variant, files, flags] of variants) {
+    const repo = await open(files);
+    await repo.commit("start");
+    expect([variant, (await workflows(repo, ["--write", ...flags])).exitCode]).toEqual([variant, 0]);
+    await repo.commit("ci: write the workflow set");
+    expect([variant, await gatesOver(repo)]).toEqual([variant, [["plain-steps", 0, ""], ["workflows", 0, ""], ["ci-wiring", 0, ""]]]);
+  }
+}, 60_000);
 
 test("a private root with a public workspace does not omit workspace publishing", async () => {
   const repo = await open({

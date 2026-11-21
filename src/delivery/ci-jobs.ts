@@ -5,7 +5,12 @@ import { calledFileOf, isRecord, workflowJobs, type Workflow } from "./workflow-
 export type RepositoryKind = "code" | "site";
 
 export const DEFAULT_TEST_RUN = "bunx checks-test --pr";
-export const RELEASE_TEST_RUN = "${{ needs.changes.outputs.check-release == 'true' && 'bun run test' || 'bunx checks-test --pr' }}";
+export const RELEASE_TEST_RUN = "bunx checks-ci test";
+
+// Carried as a custom run, this keeps the step checks-plain-steps refuses, so a write reads it as the default.
+const EXPRESSION_TEST_RUN = "${{ needs.changes.outputs.check-release == 'true' && 'bun run test' || 'bunx checks-test --pr' }}";
+
+const heldTestRun = (run: string | undefined): string => (run === undefined || run === RELEASE_TEST_RUN || run === EXPRESSION_TEST_RUN ? DEFAULT_TEST_RUN : run);
 
 const DEFAULT_RUNNER = "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}";
 
@@ -68,7 +73,7 @@ const fullTestJobOf = Effect.fn("fullTestJobOf")(function* (kind: RepositoryKind
   const browsers = held.steps.find((step) => step.uses === PLAYWRIGHT_USES)?.with?.["browsers"];
   return {
     name,
-    run: run === undefined || run === RELEASE_TEST_RUN ? DEFAULT_TEST_RUN : run,
+    run: heldTestRun(run),
     browsers: typeof browsers === "string" ? browsers : "",
     readsBuild: kind === "site" && held.needs === "site",
     runsOn: held["runs-on"],
@@ -118,7 +123,7 @@ const testJobOf = Effect.fn("testJobOf")(function* (kind: RepositoryKind, path: 
   }
   return {
     name,
-    run: held.run === RELEASE_TEST_RUN ? DEFAULT_TEST_RUN : (held.run ?? DEFAULT_TEST_RUN),
+    run: heldTestRun(held.run),
     browsers: held.browsers ?? "",
     readsBuild: kind === "site" && held.artifact === SITE_BUILD,
     runsOn: held["runs-on"] ?? runsOn,
