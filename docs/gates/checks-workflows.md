@@ -58,8 +58,8 @@ A Claude Code version pinned by an install step in `ci.yml` or `flake.yml` is ke
 
 The `ci.yml` run is one run per pull request, and a newer push cancels the run it replaces.
 The code `main.yml` release job holds group `main` without cancellation.
-Every file a code repository takes except `ci.yml` and `main.yml` is byte-identical in every code repository.
-The files a site takes differ between sites only in the three names, the test jobs of `ci.yml`, and the Claude Code version.
+The files differ with repository visibility, the test jobs of `ci.yml`, and the Claude Code version.
+The files a site takes also differ in the three site names.
 A job that runs the suite cancels its run when a push to a draft pull request started it.
 In a site only the jobs that read the build do so, so a draft still gets its preview link.
 The kit itself keeps its own `release.yml` and `release-pr.yml`, since npm's trusted publishing names `release.yml`.
@@ -142,13 +142,19 @@ A `ci.yml` with no test job gets the default jobs of its kind:
 | code | `test`, which runs `bunx checks-test --pr` |
 | site | `unit`, which runs `bunx checks-test --pr`, and `browser`, which runs `bunx checks-browser --pr` on `webkit` against the `site-dist` build |
 
-Each default test job runs on `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` in a private repository and on `ubuntu-latest` in a public one, so the `CI_RUNS_ON` variable picks the runner.
+Set `repositoryVisibility: "private"` in `checks.config.ts` for a private GitHub repository.
+The setting defaults to `public` and is independent of the `private` field in `package.json`.
+A public repository uses hosted runners without `CI_RUNS_ON` in the generated workflows.
+A private repository uses `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` for its default jobs.
+The generated mutation workflow always uses hosted runners.
+The default test runner follows the setting even when a previous `ci.yml` holds the other default.
 
 To add a test job, copy the `test` job of `ci.yml` under a new name, change the `run` of its step with id `test`, then run `checks-workflows --write`.
 
 ## What it reads
 
-It reads the `.yml` and `.yaml` files under `.github/workflows/` and the files under `.github/actions/` from the repository root, and the root and workspace `package.json` files.
+It reads the `.yml` and `.yaml` files under `.github/workflows/`, the files under `.github/actions/`, and `checks.config.ts` from the repository root.
+It also reads the root and workspace `package.json` files.
 
 ## Arguments
 

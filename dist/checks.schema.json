@@ -2,6 +2,15 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
+    "repositoryVisibility": {
+      "type": "string",
+      "enum": [
+        "public",
+        "private"
+      ],
+      "description": "The GitHub repository visibility that selects generated workflow runners.",
+      "default": "public"
+    },
     "smoke": {
       "type": "array",
       "items": {

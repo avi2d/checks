@@ -339,7 +339,7 @@ const argumentsOf = Effect.fn("argumentsOf")(function* (root: string) {
   const inputs = yield* callerInputsOf(root, isPrivate ? { private: true, hasTestScript: true } : { hasTestScript: true }).pipe(
     Effect.mapError((fault) => new Usage({ message: fault.message })),
   );
-  const set = yield* callerSetOf(callers, parsed.flags, NAME, inputs.publishes, inputs.publishWorkspaces, inputs.needsReleaseChecks).pipe(
+  const set = yield* callerSetOf(callers, parsed.flags, NAME, inputs.publishes, inputs.publishWorkspaces, inputs.needsReleaseChecks, inputs.publicRepository).pipe(
     Effect.mapError((fault) => new Usage({ message: fault.message })),
   );
   return { isPrivate, set, kit: inputs.kit };
@@ -372,7 +372,7 @@ const check = Effect.gen(function* () {
   yield* setupFile(root, ".jscpd.json", JSCPD_CONFIG);
   yield* setupWorkflows(root, set, isKit);
   const { wroteAgents, wroteVision } = yield* setupDocFiles(root);
-  if (isPrivate) yield* Console.log(NAME + ": set the CI_RUNS_ON variable to a self-hosted runner label so the new jobs land there");
+  if (!set.options.publicRepository) yield* Console.log(NAME + ": set the CI_RUNS_ON variable to a self-hosted runner label so the new jobs land there");
   if (!outcome.hasOwner) {
     yield* Console.log(NAME + ": declare the repository owners in package.json author or contributors before the first commit");
   }

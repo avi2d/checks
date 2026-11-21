@@ -14,7 +14,7 @@ const notReleased = (set: CallerSet): string => (checksRelease(set) ? "(" + NOT_
 
 const changesJob = (set: CallerSet): Job => ({
   id: "changes",
-  runsOn: runnerOf(set.options.publishes),
+  runsOn: runnerOf(set.options.publicRepository),
   timeout: 10,
   permissions: ["contents: read"],
   env: [["RELEASE", expression(RELEASE_RUN)]],
@@ -45,7 +45,7 @@ function staticJob(set: CallerSet, kit: boolean): Job {
     id: "static",
     needs: "changes",
     if: notReleased(set),
-    runsOn: runnerOf(set.options.publishes),
+    runsOn: runnerOf(set.options.publicRepository),
     timeout: 20,
     permissions: holdPermissions(hold),
     steps: [
@@ -79,7 +79,7 @@ const siteJob = (set: CallerSet): Job => ({
   id: "site",
   needs: "changes",
   if: [notReleased(set), NOT_DOCS_ONLY, NOT_TESTS_ONLY].join(" && "),
-  runsOn: runnerOf(set.options.publishes),
+  runsOn: runnerOf(set.options.publicRepository),
   timeout: 15,
   permissions: ["contents: read", "pull-requests: write"],
   env: [ASTRO_QUIET, CLOUDFLARE_SET],
@@ -189,7 +189,7 @@ function gateJob(set: CallerSet): Job {
     id: "checks",
     needs: "[" + needed.join(", ") + "]",
     if: "always()",
-    runsOn: runnerOf(set.options.publishes),
+    runsOn: runnerOf(set.options.publicRepository),
     timeout: 5,
     permissions: ["contents: read", "statuses: write", "pull-requests: read"],
     steps: [

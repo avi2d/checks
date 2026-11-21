@@ -27,9 +27,9 @@ export function requiredSet(set: CallerSet, kit: boolean): readonly WorkflowFile
 // An optional file may be absent, but a present one holds exactly this text.
 export function byHandSet(set: CallerSet): readonly WorkflowFile[] {
   const { advisoriesCron, flake, pages } = set.options;
-  const docs = pages === undefined ? [] : [fullDocs(pages)];
-  const advisories = fullAdvisories(advisoriesCron);
-  return set.kind === "site" ? [advisories, ...docs] : [advisories, MUTATION, fullFlake(flake, set.options.claudeVersion), ...docs];
+  const docs = pages === undefined ? [] : [fullDocs(pages, set.options.publicRepository)];
+  const advisories = fullAdvisories(advisoriesCron, set.options.publicRepository);
+  return set.kind === "site" ? [advisories, ...docs] : [advisories, MUTATION, fullFlake(flake, set.options.claudeVersion, set.options.publicRepository), ...docs];
 }
 
 export function differentLines(holds: string, writes: string): readonly DifferentLine[] {

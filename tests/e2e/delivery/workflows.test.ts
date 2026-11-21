@@ -335,6 +335,43 @@ test("--write keeps a hand-rolled Pages deploy, secrets pack, flake run and week
   expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the code set checks-workflows writes\n" });
 }, 30_000);
 
+test("a public repository with a private package must not get the self-hosted override", async () => {
+  const repo = await open({
+    "package.json": manifest({ private: true }),
+    ".bun-version": `${FLEET_BUN_VERSION}\n`,
+    "event.json": JSON.stringify({ repository: { private: false } }),
+  });
+  await repo.commit("start");
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  for (const name of await held(repo)) expect(await text(repo, name)).not.toContain("vars.CI_RUNS_ON");
+  expect(await parsed(repo, "ci.yml")).toMatchObject({
+    jobs: {
+      changes: { "runs-on": "ubuntu-latest" },
+      static: { "runs-on": "ubuntu-latest" },
+      test: { "runs-on": "ubuntu-latest" },
+      checks: { "runs-on": "ubuntu-latest" },
+    },
+  });
+  const wiring = await ran($`bun ${WIRING}`.cwd(repo.dir).env({ ...withoutPullRequestEvent(), GITHUB_EVENT_PATH: join(repo.dir, "event.json") }));
+  expect(wiring.exitCode).toBe(0);
+}, 30_000);
+
+test("a private repository with a public package must not lose the runner override", async () => {
+  const repo = await open({
+    "package.json": manifest(),
+    ".bun-version": `${FLEET_BUN_VERSION}\n`,
+    "checks.config.ts": 'export default { repositoryVisibility: "private" };\n',
+    "event.json": JSON.stringify({ repository: { private: true } }),
+  });
+  await repo.commit("start");
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  expect(await parsed(repo, "ci.yml")).toMatchObject({
+    jobs: { test: { "runs-on": "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}" } },
+  });
+  const wiring = await ran($`bun ${WIRING}`.cwd(repo.dir).env({ ...withoutPullRequestEvent(), GITHUB_EVENT_PATH: join(repo.dir, "event.json") }));
+  expect(wiring.exitCode).toBe(0);
+}, 30_000);
+
 test("a private package's release runs the full suite instead of skipping it", async () => {
   const repo = await open({ "package.json": manifest({ private: true }) });
   await repo.commit("start");

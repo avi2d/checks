@@ -15,6 +15,7 @@ export type CallerOptions = {
   readonly publishWorkspaces: boolean;
   readonly checkRelease: boolean;
   readonly publishes: boolean;
+  readonly publicRepository: boolean;
 };
 
 export const NO_CALLER_OPTIONS: CallerOptions = {
@@ -27,6 +28,7 @@ export const NO_CALLER_OPTIONS: CallerOptions = {
   publishWorkspaces: false,
   checkRelease: false,
   publishes: false,
+  publicRepository: false,
 };
 
 export type HeldWorkflow = (name: string) => Workflow | undefined;
@@ -139,7 +141,7 @@ export function readsPublishWorkspaces(workflows: readonly Workflow[]): boolean 
   );
 }
 
-export function callerOptionsOf(held: HeldWorkflow, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean): CallerOptions {
+export function callerOptionsOf(held: HeldWorkflow, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean): CallerOptions {
   return {
     advisoriesCron: weeklyCronOf(held("advisories.yml")),
     flake: flakeOf(held("flake.yml")),
@@ -150,5 +152,6 @@ export function callerOptionsOf(held: HeldWorkflow, publishes: boolean, publishW
     publishWorkspaces,
     checkRelease: !publishes && needsReleaseChecks,
     publishes,
+    publicRepository,
   };
 }

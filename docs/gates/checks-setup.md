@@ -61,7 +61,9 @@ With no arguments the repository is public.
 With `--pages`, `--domain` and `--production` the repository is a site with those names, and each flag must match the name the site workflows hold.
 To rename a site, run `checks-workflows --write` with the flags.
 The three flags set up a site that has no site workflow yet.
-With `--private` it sets `private` to `true` in `package.json`, and the run names the `CI_RUNS_ON` value to set.
+With `--private` it sets `private` to `true` in `package.json`.
+For a private GitHub repository, set `repositoryVisibility: "private"` in `checks.config.ts` before running setup.
+Then the run names the `CI_RUNS_ON` value to set.
 
 ## Exit codes
 

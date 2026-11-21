@@ -48,7 +48,7 @@ test("a scheduled call of a reusable workflow, even one named advisories.yml, is
 });
 
 test("the advisories.yml checks-workflows writes passes as the weekly scan instead of being refused as a hand-run job", () => {
-  expect(judged(fullAdvisories("15 5 * * 1").text)).toEqual([]);
+  expect(judged(fullAdvisories("15 5 * * 1", true).text)).toEqual([]);
 });
 
 test("a daily advisory scan is refused instead of passing as the weekly one", () => {

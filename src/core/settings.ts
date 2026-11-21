@@ -36,7 +36,10 @@ export const SelfHostedRunners = Schema.Array(Schema.NonEmptyArray(Schema.NonEmp
 
 export const Inputs = Schema.Struct({ inputs: Schema.NonEmptyArray(Schema.NonEmptyString) });
 
+export const RepositoryVisibility = Schema.Literals(["public", "private"]);
+
 export const Settings = Schema.Struct({
+  repositoryVisibility: Schema.optionalKey(RepositoryVisibility.annotate({ description: "The GitHub repository visibility that selects generated workflow runners.", default: "public" })),
   smoke: Schema.optionalKey(Smoke.annotate({ description: "The extra test files to run with the local unit tier." })),
   reach: Schema.optionalKey(Reach.annotate({ description: "The tests to run when a changed path is missing from the import graph." })),
   mutationRunner: Schema.optionalKey(MutationRunner.annotate({ description: "The runner labels for mutation jobs in a private repository." })),
