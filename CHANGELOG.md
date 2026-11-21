@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.111.1
+
+Released 2026-11-21.
+
+### Fixes
+
+- **delivery:** run the release test step as one checks-ci command [#185](https://github.com/avi2d/checks/pull/185)
+
 ## 0.111.0
 
 Released 2026-11-21.
