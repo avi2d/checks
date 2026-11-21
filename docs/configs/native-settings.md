@@ -119,7 +119,8 @@ export default defineConfig({
 | `frontendSyntax` | None | The input globs for the frontend syntax gate. | [checks-frontend-syntax](../gates/checks-frontend-syntax.md) |
 | `agentTests` | `{"allowLocal":false}` | The settings for test runs started by agents. | [checks-local-tests](../gates/checks-local-tests.md) |
 | `agentTests.allowLocal` | `false` | Whether agents may start tests outside CI. This setting does not restrict people or CI. | [checks-local-tests](../gates/checks-local-tests.md) |
-| `testFileMaxSeconds` | `300` | The time limit in seconds for each test file in CI. | [checks-test](../gates/checks-test.md#test-file-time-limit) |
+| `testFileMaxSeconds` | `120` | The time limit in seconds for each test file in CI. | [checks-test](../gates/checks-test.md#test-file-time-limit) |
+| `testFileSkips` | `[]` | The repository-relative paths of test files to exclude from checks-test. | [checks-test](../gates/checks-test.md#test-file-exclusions) |
 
 <!-- end generated settings-keys -->
 

@@ -750,8 +750,18 @@
     "testFileMaxSeconds": {
       "type": "number",
       "exclusiveMinimum": 0,
+      "maximum": 120,
       "description": "The time limit in seconds for each test file in CI.",
-      "default": 300
+      "default": 120
+    },
+    "testFileSkips": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "The repository-relative paths of test files to exclude from checks-test.",
+      "default": []
     }
   },
   "additionalProperties": false,
