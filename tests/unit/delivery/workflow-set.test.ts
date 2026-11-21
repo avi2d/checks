@@ -3,7 +3,9 @@ import { expect, test } from "bun:test";
 import { Effect } from "effect";
 import { NO_CALLER_OPTIONS } from "../../../src/delivery/caller-options.ts";
 import { DEFAULT_CI_JOBS } from "../../../src/delivery/ci-jobs.ts";
+import { fullActions } from "../../../src/delivery/full-set/actions.ts";
 import { MUTATION_WORKFLOW } from "../../../src/delivery/full-set/mutation.ts";
+import { findStepFaults } from "../../../src/delivery/plain-steps.ts";
 import { remoteCallsOf } from "../../../src/delivery/remote-calls.ts";
 import { callerSetOf } from "../../../src/delivery/site-names.ts";
 import { byHandSet, differencesOf, requiredSet, type WorkflowFile } from "../../../src/delivery/workflow-set.ts";
@@ -88,6 +90,14 @@ test("a written file that calls another repository's workflow, or an action at a
   const named = uses.filter((use): use is string => typeof use === "string");
   expect(named.length).toBeGreaterThan(0);
   expect(named.filter((use) => !use.startsWith("./") && !/@[0-9a-f]{40}$/.test(use))).toEqual([]);
+});
+
+test("a written run step checks-plain-steps refuses, such as a test command an expression names only at run time, fails here", () => {
+  const files = [CODE, SITE, CHECKED, EVERY_OPTION].flatMap((set) => [
+    ...written(set).map(({ name, text }) => ({ path: ".github/workflows/" + name, text })),
+    ...fullActions(set).filter(({ path }) => path.endsWith(".yml")),
+  ]);
+  expect(findStepFaults(files.map(({ path, text }) => ({ path, text, document: Bun.YAML.parse(text) })))).toEqual([]);
 });
 
 test("a ci.yml that omits ready_for_review never starts when a draft is marked ready, so the draft hold never releases", () => {
