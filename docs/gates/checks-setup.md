@@ -38,7 +38,8 @@ It writes `stryker.conf.mjs`, which spreads the kit's Stryker preset and sets th
 It adds the kit's own pins of `@stryker-mutator/core` and `@hughescr/stryker-bun-runner` to `devDependencies`, and keeps a pin it finds.
 It copies each kit template under `dist/templates/` into `templates/`, so a new doc file starts from a copy there.
 It copies `dist/templates/agents.md` to `AGENTS.md` and `dist/templates/claude.md` to `CLAUDE.md` when the root lacks them, and keeps either file it finds.
-When a `skills`, `checks`, `workflows` or `orc` repository lacks `VISION.md`, it copies `dist/templates/vision.md` there, keeps the page it finds, and tells the owner to fill its opening, stance sections, Scope and closing lines.
+If the root has no `VISION.md`, it copies `dist/templates/vision.md` there.
+It leaves an existing `VISION.md` unchanged.
 It names every file it wrote and every file it kept.
 It tells the owner to declare the repository owners in `package.json` `author` or `contributors` before the first commit.
 
@@ -84,7 +85,9 @@ A repository owner runs it once in a new repository, before the first install.
 Declare the repository owners in `package.json` `author` or `contributors` before the first commit.
 Fill `AGENTS.md` with what an agent cannot infer from the code before the first commit.
 `checks-docs` fails on the unfilled placeholder entry until it is filled.
-Running it again with the same kit version changes nothing.
+If setup writes `VISION.md`, fill its opening, stance sections, Scope and closing lines before the first commit.
+Name the page once in `AGENTS.md`.
+Running setup again with the same kit version changes nothing.
 A later kit release arrives through [Upgrade the kit](../how-to/upgrade-the-kit.md).
 
 ## Related topics

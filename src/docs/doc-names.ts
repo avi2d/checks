@@ -1,7 +1,8 @@
-import { Effect, FileSystem, Option, Path, Schema } from "effect";
+import { Effect, FileSystem, Path, Schema } from "effect";
 import { ChildProcessSpawner } from "effect/process";
 import { collect, git, pathsAt } from "../core/git.ts";
 import type { Unresolved } from "./doc-references.ts";
+import type { RepositoryManifest } from "./doc-snapshot.ts";
 import { scanMarkdown } from "./prose-matchers.ts";
 
 export type VanishedName = { readonly path: string; readonly line: number; readonly named: string; readonly message: string };
@@ -37,17 +38,6 @@ class InstalledUnreadable extends Schema.TaggedError<InstalledUnreadable>()("Ins
   message: Schema.String,
 }) {}
 
-const Group = Schema.optionalKey(Schema.Record(Schema.String, Schema.Unknown));
-const Manifest = Schema.Struct({
-  name: Schema.optionalKey(Schema.String),
-  dependencies: Group,
-  devDependencies: Group,
-  peerDependencies: Group,
-  optionalDependencies: Group,
-});
-const decodeManifest = Schema.decodeUnknownOption(Schema.fromJsonString(Manifest));
-const NO_MANIFEST: typeof Manifest.Type = {};
-
 // git grep exits 1 when nothing matches, which is an answer rather than a failure.
 const matchedAt = Effect.fn("matchedAt")(function* (root: string, rev: string, names: readonly string[]) {
   if (names.length === 0) return new Set<string>();
@@ -64,13 +54,6 @@ const heldAt = Effect.fn("heldAt")(function* (root: string, rev: string, name: s
     Effect.as(true),
     Effect.catchTag("GitFailure", () => Effect.succeed(false)),
   );
-});
-
-const manifestAt = Effect.fn("manifestAt")(function* (root: string, head: string) {
-  const manifest = yield* git(["show", `${head}:package.json`], root).pipe(Effect.catchTag("GitFailure", () => Effect.succeed("")));
-  const { name, dependencies, devDependencies, peerDependencies, optionalDependencies } = Option.getOrElse(decodeManifest(manifest), () => NO_MANIFEST);
-  const deps = [dependencies, devDependencies, peerDependencies, optionalDependencies].flatMap((group) => Object.keys(group ?? {}));
-  return { name, deps: [...new Set(deps)] };
 });
 
 const installedDirs = Effect.fn("installedDirs")(function* (root: string, deps: readonly string[]) {
@@ -90,13 +73,11 @@ const installedHolds = Effect.fn("installedHolds")(function* (root: string, dirs
 });
 
 export const vanishedNames = Effect.fn("vanishedNames")(function* (
-  root: string,
-  base: string,
-  head: string,
+  { root, base, head }: { readonly root: string; readonly base: string; readonly head: string },
+  manifest: RepositoryManifest,
   texts: ReadonlyMap<string, string>,
   failed: readonly (Unresolved & { readonly path: string })[],
 ) {
-  const manifest = yield* manifestAt(root, head);
   const named = namesIn(texts, manifest.name);
   const names = [...new Set(named.map(({ name }) => name))];
   const atHead = yield* matchedAt(root, head, names);

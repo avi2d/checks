@@ -6,8 +6,7 @@ import { callerInputsOf, callerSetOf, flagMismatchOf, parseSiteNameFlags, readWo
 import { byHandSet, requiredSet } from "./workflow-set.ts";
 import { fullActions } from "./full-set/actions.ts";
 import { TEMPLATES, VISION_PAGE } from "../docs/doc-templates.ts";
-import { requiresName } from "../docs/doc-vision.ts";
-import { FAST_COMMAND, TEST_COMMAND } from "../core/test-script.ts";
+import { FAST_COMMAND, KIT_PACKAGE_NAME, TEST_COMMAND } from "../core/test-script.ts";
 import { readTestScriptContext, testScriptsFault, withTierDefaults, type MutableRecord } from "./test-scripts.ts";
 import { withServiceOverrides, type ServiceOverride } from "../quality/effect-scope.ts";
 import { SOURCES, TESTS } from "../quality/presets/oxlint.ts";
@@ -17,7 +16,6 @@ const NAME = "checks-setup";
 const USAGE = "usage: " + NAME + " [--private] [--pages <project>] [--domain <domain>] [--production <owner/name>]";
 const PRIVATE = "--private";
 const IGNORE_ENTRY = "node_modules/";
-const KIT_ID = "@avi2dg/checks";
 
 class SetupError extends Schema.TaggedError<SetupError>()("SetupError", {
   message: Schema.String,
@@ -241,14 +239,13 @@ function finalizePackage(
   devDependencies: MutableRecord,
   isPrivate: boolean,
   fallbackName: string,
-): { readonly merged: MutableRecord; readonly hasBuild: boolean; readonly hasOwner: boolean } {
+): { readonly merged: MutableRecord; readonly hasOwner: boolean } {
   const merged: MutableRecord = { ...record, scripts, devDependencies };
   if (typeof merged["name"] !== "string") merged["name"] = fallbackName;
   if (merged["type"] === undefined) merged["type"] = "module";
   if (isPrivate) merged["private"] = true;
   const hasOwner = "author" in merged || "contributors" in merged;
-  const hasBuild = typeof scripts["build"] === "string";
-  return { merged, hasBuild, hasOwner };
+  return { merged, hasOwner };
 }
 
 const writeFreshPackage = Effect.fn("writeFreshPackage")(function* (root: string, isPrivate: boolean, pins: Pins, fallbackName: string) {
@@ -261,12 +258,12 @@ const writeFreshPackage = Effect.fn("writeFreshPackage")(function* (root: string
     type: "module",
     ...(isPrivate ? { private: true } : {}),
     scripts,
-    devDependencies: { [KIT_ID]: pins.kit, ...pins.mutation },
+    devDependencies: { [KIT_PACKAGE_NAME]: pins.kit, ...pins.mutation },
   };
   yield* system.makeDirectory(path.dirname(full), { recursive: true });
   yield* system.writeFileString(full, JSON.stringify(manifest, undefined, 2) + "\n");
   yield* Console.log(NAME + ": wrote package.json");
-  return { hasBuild: false, hasOwner: false, name: fallbackName };
+  return { hasOwner: false };
 });
 
 const updatePackage = Effect.fn("updatePackage")(function* (
@@ -281,7 +278,7 @@ const updatePackage = Effect.fn("updatePackage")(function* (
   const full = (yield* Path.Path).join(root, "package.json");
   const baseScripts = yield* scriptsOf(record);
   const baseDeps = yield* depsOf(record);
-  const devDependencies: MutableRecord = { ...pins.mutation, ...baseDeps, [KIT_ID]: pins.kit };
+  const devDependencies: MutableRecord = { ...pins.mutation, ...baseDeps, [KIT_PACKAGE_NAME]: pins.kit };
   const fault = scriptFault(baseScripts);
   if (fault !== undefined) return yield* new SetupError({ message: fault });
   const context = yield* readTestScriptContext(root, record["name"]);
@@ -290,14 +287,13 @@ const updatePackage = Effect.fn("updatePackage")(function* (
   const scripts = withTierDefaults(withKitDefaults(baseScripts), context);
   const finalized = finalizePackage(record, scripts, devDependencies, isPrivate, fallbackName);
   const next = JSON.stringify(finalized.merged, undefined, 2) + "\n";
-  const name = typeof finalized.merged["name"] === "string" ? finalized.merged["name"] : fallbackName;
   if (next === raw) {
     yield* Console.log(NAME + ": kept package.json, already there");
-    return { hasBuild: finalized.hasBuild, hasOwner: finalized.hasOwner, name };
+  } else {
+    yield* system.writeFileString(full, next);
+    yield* Console.log(NAME + ": wrote package.json");
   }
-  yield* system.writeFileString(full, next);
-  yield* Console.log(NAME + ": wrote package.json");
-  return { hasBuild: finalized.hasBuild, hasOwner: finalized.hasOwner, name };
+  return { hasOwner: finalized.hasOwner };
 });
 const setupPackage = Effect.fn("setupPackage")(function* (root: string, isPrivate: boolean, pins: Pins, fallbackName: string) {
   const system = yield* FileSystem.FileSystem;
@@ -320,13 +316,13 @@ const setupWorkflows = Effect.fn("setupWorkflows")(function* (root: string, set:
   yield* setupFile(root, "stryker.conf.mjs", STRYKER_CONFIG);
 });
 
-const setupDocFiles = Effect.fn("setupDocFiles")(function* (root: string, visionRequired: boolean) {
+const setupDocFiles = Effect.fn("setupDocFiles")(function* (root: string) {
   for (const kind of Object.keys(TEMPLATES)) {
     yield* setupFile(root, "templates/" + kind + ".md", yield* kitText("dist/templates/" + kind + ".md"));
   }
   const wroteAgents = yield* setupFile(root, "AGENTS.md", yield* kitText("dist/templates/agents.md"));
   yield* setupFile(root, "CLAUDE.md", yield* kitText("dist/templates/claude.md"));
-  const wroteVision = visionRequired ? yield* setupFile(root, VISION_PAGE, yield* kitText("dist/templates/vision.md")) : false;
+  const wroteVision = yield* setupFile(root, VISION_PAGE, yield* kitText("dist/templates/vision.md"));
   return { wroteAgents, wroteVision };
 });
 
@@ -375,7 +371,7 @@ const check = Effect.gen(function* () {
   yield* setupFile(root, "knip.config.ts", KNIP_CONFIG);
   yield* setupFile(root, ".jscpd.json", JSCPD_CONFIG);
   yield* setupWorkflows(root, set, isKit);
-  const { wroteAgents, wroteVision } = yield* setupDocFiles(root, requiresName({ name: outcome.name }));
+  const { wroteAgents, wroteVision } = yield* setupDocFiles(root);
   if (isPrivate) yield* Console.log(NAME + ": set the CI_RUNS_ON variable to a self-hosted runner label so the new jobs land there");
   if (!outcome.hasOwner) {
     yield* Console.log(NAME + ": declare the repository owners in package.json author or contributors before the first commit");

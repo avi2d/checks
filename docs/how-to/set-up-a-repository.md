@@ -75,9 +75,9 @@ To give each tool the config it reads:
    export default defineConfig({ orphans: ["^src/bin[.]ts$"] });
    ```
 
-## Write the agent files
+## Write the root docs
 
-To give each agent the file it reads:
+To give the kit and each agent the files they read:
 
 1. Copy the agent templates to the repository root:
 
@@ -88,6 +88,14 @@ To give each agent the file it reads:
 
 1. Fill `AGENTS.md` with what an agent cannot infer from the code.
 1. Keep `CLAUDE.md` word for word, so Claude Code reads `AGENTS.md`.
+1. If `VISION.md` does not exist, copy the vision template to the repository root:
+
+   ```sh
+   cp node_modules/@avi2dg/checks/dist/templates/vision.md VISION.md
+   ```
+
+1. Fill the new page's opening, stance sections, Scope and closing lines.
+1. Name `VISION.md` once in `AGENTS.md`.
 
 ## Run the checks on every pull request
 

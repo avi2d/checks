@@ -3,22 +3,23 @@ import { docsRepos, GUIDE, OPENING, putAgentFiles, putVision, VISION, visionPage
 
 const repository = docsRepos();
 
-const MANIFEST = JSON.stringify({ name: "@avi2dg/checks" });
-const PERSONAL = JSON.stringify({ name: "widget" });
+const MANIFEST = JSON.stringify({ name: "widget", devDependencies: { "@avi2dg/checks": "1.0.0" } });
+const KIT_MANIFEST = JSON.stringify({ name: "@avi2dg/checks" });
+const STANDALONE_MANIFEST = JSON.stringify({ name: "checks" });
 const MISSING_VISION =
-  "  VISION.md: is missing, and it holds the vision a repository where a change needs a referee keeps. Copy `node_modules/@avi2dg/checks/dist/templates/vision.md` to `VISION.md`";
-const HELD = "docs: VISION.md holds the vision a repository where a change needs a referee keeps";
+  "  VISION.md: is missing from the repository root. Copy `node_modules/@avi2dg/checks/dist/templates/vision.md` to `VISION.md`";
+const HELD = "docs: the repository root holds VISION.md";
 
-async function packageRepo(): Promise<DocsRepo> {
+async function packageRepo(manifest = MANIFEST): Promise<DocsRepo> {
   const repo = await repository();
-  await repo.put("package.json", MANIFEST);
+  await repo.put("package.json", manifest);
   await putAgentFiles(repo.put);
   await repo.put(GUIDE, OPENING);
   return repo;
 }
 
 test(
-  "a referee repository without VISION.md fails a range that edits its docs naming the vision template, and passes once the page is added",
+  "a kit consumer cannot edit docs without VISION.md even when its package name is unrelated to the kit",
   async () => {
     const { put, commit, docs } = await packageRepo();
     const previous = await commit("a package with no vision page");
@@ -41,9 +42,9 @@ test(
 );
 
 test(
-  "a referee repository without VISION.md leaves the page advisory on a range that leaves its docs alone rather than failing the range",
+  "the kit itself sees a missing VISION.md advisory on code changes even without a kit dependency",
   async () => {
-    const { put, commit, docs } = await packageRepo();
+    const { put, commit, docs } = await packageRepo(KIT_MANIFEST);
     const previous = await commit("a package with no vision page");
     await put("widget.ts", "export const widget = 2;\n");
     const head = await commit("change code alone");
@@ -109,13 +110,13 @@ test(
   120_000,
 );
 test(
-  "a personal repository without VISION.md stays silent on a range that edits its docs rather than asking for the page",
+  "a repository named checks without the kit dependency does not need VISION.md",
   async () => {
     const repo = await repository();
-    await repo.put("package.json", PERSONAL);
+    await repo.put("package.json", STANDALONE_MANIFEST);
     await putAgentFiles(repo.put);
     await repo.put(GUIDE, OPENING);
-    const previous = await repo.commit("a personal package with no vision page");
+    const previous = await repo.commit("a standalone package with no vision page");
     await repo.put(GUIDE, `${OPENING}It prints a bill.\n`);
     const edited = await repo.commit("edit a doc");
 

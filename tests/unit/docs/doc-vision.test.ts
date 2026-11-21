@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { repeatedVisionFindings, requiresName, shapeFindings, shortName, trioFindings, visionPools } from "../../../src/docs/doc-vision.ts";
+import { repeatedVisionFindings, shapeFindings, trioFindings, visionPools } from "../../../src/docs/doc-vision.ts";
 
 const FIXTURES = resolve(import.meta.dir, "..", "..", "fixtures", "docs");
 
@@ -75,14 +75,6 @@ test("a fenced line behind an info-string closer stays out of the repeat check r
   ).toEqual(['12: repeats a line from README.md: "Shared line."']);
 });
 
-test("a scoped kit name requires a vision and a personal name leaves it advisory rather than failing the range", () => {
-  expect(["skills", "checks", "workflows", "orc"].map((name) => requiresName({ name }))).toEqual([true, true, true, true]);
-  expect(requiresName({ name: "@avi2dg/checks" })).toBe(true);
-  expect(requiresName({ name: "widget" })).toBe(false);
-  expect(requiresName(undefined)).toBe(false);
-  expect(requiresName(null)).toBe(false);
-  expect(requiresName({ name: 7 })).toBe(false);
-});
 test("a line the readme shares with the agent file is reported on both pages rather than only the vision", () => {
   const pages = new Map([
     ["README.md", "# Widget\n\nShared line.\n"],
@@ -99,11 +91,6 @@ test("a vision pool holds the vision findings while the template pool holds the 
   const { vision: visionPool, template: templatePool } = visionPools(templated, new Map([["VISION.md", "# Vision\n\nAlone.\n"]]));
   expect(visionPool.map(({ path }) => path)).toEqual(["VISION.md"]);
   expect(templatePool.map(({ path }) => path)).toEqual(["README.md"]);
-});
-
-test("a manifest name shortens past its scope rather than comparing the scope", () => {
-  expect(shortName("@avi2dg/checks")).toBe("checks");
-  expect(shortName("orc")).toBe("orc");
 });
 
 test("a table row shared with another file passes rather than comparing tables", () => {

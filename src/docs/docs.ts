@@ -34,9 +34,10 @@ import { vanishedNames } from "./doc-names.ts";
 import { VISION_PAGE } from "./doc-templates.ts";
 import { visionPools } from "./doc-vision.ts";
 import { pinsAt, versionFindings } from "./doc-versions.ts";
-import { readTexts, snapshotAt, stillMissing, visionRequiredAt } from "./doc-snapshot.ts";
+import { manifestAt, readTexts, snapshotAt, stillMissing, type RepositoryManifest } from "./doc-snapshot.ts";
 import { changedLines, changedPaths, git, pathsAt, pathsOf, rangeEnds, refArgs, type Change } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
+import { KIT_PACKAGE_NAME } from "../core/test-script.ts";
 import { proseFindings, readerOf } from "./prose-matchers.ts";
 import { longSentences } from "./sentence-length.ts";
 
@@ -193,12 +194,13 @@ const requiredFiles = Effect.fn("requiredFiles")(function* (
   changes: readonly Change[],
   text: (path: string) => string,
   files: ReadonlySet<string>,
-  visionRequired: boolean,
+  manifest: RepositoryManifest,
 ) {
+  const visionRequired = manifest.name === KIT_PACKAGE_NAME || manifest.deps.includes(KIT_PACKAGE_NAME);
   const absent = missingAgentFiles(files);
   const absentVision = missingVision(files, visionRequired);
   const editsDocs = absent.length + absentVision.length === 0 ? false : yield* rangeEditsDocs(root, base, changes, text);
-  return { rootAgents: missingFileFindings(absent, editsDocs), vision: missingFileFindings(absentVision, editsDocs) };
+  return { rootAgents: missingFileFindings(absent, editsDocs), vision: missingFileFindings(absentVision, editsDocs), visionRequired };
 });
 
 const recordIndex = Effect.fn("recordIndex")(function* (root: string, base: string, head: string, records: readonly GovernedRecord[], readme: string | undefined, changes: readonly Change[]) {
@@ -225,7 +227,7 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   });
   const texts = yield* readTexts(root, head, [...new Set([...present.filter((path) => path.endsWith(".md")), ...proseDocs.map(({ path }) => path)])]);
   const text = (path: string): string => texts.get(path) ?? "";
-  const visionRequired = yield* visionRequiredAt(root, head);
+  const manifest = yield* manifestAt(root, head);
   const records = recordsOf(present.filter((path) => path.startsWith(ADR_DIRECTORY)).map((path) => ({ path, text: text(path) })));
   const judged = present.map((path) => ({ path, placement: placementOf(path, text(path)) })).filter(({ placement }) => placement.type !== "unjudged");
   const { baseFiles, tracked, after, ...governed } = yield* governedFindings(root, base, head, present.filter(isRecord).map((path) => ({ path, text: text(path) })));
@@ -245,12 +247,12 @@ const runDocs = Effect.fn("runDocs")(function* (root: string, base: string, head
   const roots = rootsOf(baseFiles);
   const referenced = new Map(proseDocs.map(({ path }) => [path, text(path)]));
   const references = yield* referenceFindings({ root, base, head, roots, changed, renamedFrom }, referenced, judging);
-  const vanished = yield* vanishedNames(root, base, head, referenced, references.failed);
+  const vanished = yield* vanishedNames({ root, base, head }, manifest, referenced, references.failed);
   const agents = proseDocs.filter(({ path }) => isAgentFile(path));
   const shapes = agents.flatMap(({ path }) => agentFileFindings(path, text(path), tracked));
   const readmes = proseDocs.filter(({ path }) => isCeiledReadme(path, tracked.files));
   const oversize = readmes.flatMap(({ path }) => readmeFindings(text(path)).map((finding) => ({ path, ...finding })));
-  const { rootAgents, vision } = yield* requiredFiles(root, base, changes, text, tracked.files, visionRequired);
+  const { rootAgents, vision, visionRequired } = yield* requiredFiles(root, base, changes, text, tracked.files, manifest);
   const index = yield* recordIndex(root, base, head, after, present.includes(ADR_INDEX) ? text(ADR_INDEX) : undefined, changes);
   return {
     held: judged.map(({ path }) => path).filter((path) => touched.has(path)),
@@ -316,8 +318,8 @@ export function report({
       ? [`${NAME}: the repository root holds the AGENTS.md and CLAUDE.md a repository with a \`package.json\` keeps`]
       : [];
   const visionPage =
-    manifestHeld && visionRequired && visionAdvisory.length === 0
-      ? [`${NAME}: ${VISION_PAGE} holds the vision a repository where a change needs a referee keeps`]
+    visionRequired && visionAdvisory.length === 0
+      ? [`${NAME}: the repository root holds ${VISION_PAGE}`]
       : [];
   const verdict =
     findings.length === 0
