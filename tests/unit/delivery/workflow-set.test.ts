@@ -181,10 +181,12 @@ const githubOf = (ctx: ReleaseContext): Plain => ({
   event: { pull_request: { head: { repo: { full_name: ctx.headRepo } } } },
 });
 
+const runnerFunctions = new Map([["always", { name: "always", minArgs: 0, maxArgs: 0, call: (): data.ExpressionData => new data.BooleanData(true) }]]);
+
 const evaluated = (expression: string, contexts: Readonly<Record<string, Plain>>): data.ExpressionData => {
   const inner = expression.startsWith(EXPRESSION + "{{") && expression.endsWith("}}") ? expression.slice(3, -2).trim() : expression;
-  const parser = new Parser(new Lexer(inner).lex().tokens, Object.keys(contexts), []);
-  return new Evaluator(parser.parse(), dictionaryOf(contexts)).evaluate();
+  const parser = new Parser(new Lexer(inner).lex().tokens, Object.keys(contexts), [...runnerFunctions.values()]);
+  return new Evaluator(parser.parse(), dictionaryOf(contexts), runnerFunctions).evaluate();
 };
 
 const truthy = (result: data.ExpressionData): boolean => (result.kind === data.Kind.Boolean ? result.value : result.coerceString() !== "");
