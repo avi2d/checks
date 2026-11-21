@@ -177,7 +177,7 @@ jobs:
 A `preflight` job runs `checks-release-preflight` before the publish step, so a release whose version disagrees with the last tag or whose run lacks the trusted publisher prerequisites fails before the build.
 An untagged bump also fails earlier, since `checks-release-pr` refuses to plan a release the last tag does not name.
 The approval setting has no read only check under the release token, so `checks-release-pr` fails while opening the pull request when the setting is off.
-A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on each job in either workflow, as [checks-ci-wiring](checks-ci-wiring.md#runners) requires.
+Each job uses the runner [checks-workflows](checks-workflows.md#the-composed-ciyml) selects.
 A release is one commit that holds only the version bump and the built changelog.
 The kit releases on demand through the pull request [checks-release-pr](checks-release-pr.md) opens when someone runs the `release-pr` workflow.
 Firstmate decides when to release, only for a reason, such as another repository needing a merged change, a fix users need, or merged changes having waited a week.

@@ -26,6 +26,13 @@ const text = async (repo: FixtureRepo, name: string): Promise<string> => readFil
 
 const parsed = async (repo: FixtureRepo, name: string): Promise<unknown> => Bun.YAML.parse(await text(repo, name));
 
+const jobsOf = (workflow: unknown, file: string): object => {
+  if (typeof workflow !== "object" || workflow === null || !("jobs" in workflow)) throw new Error(`expected ${file} to hold a jobs table`);
+  const jobs: unknown = workflow.jobs;
+  if (typeof jobs !== "object" || jobs === null) throw new Error(`expected ${file} to hold a jobs table`);
+  return jobs;
+};
+
 async function expectNoRemoteCall(repo: FixtureRepo): Promise<void> {
   for (const name of await held(repo)) expectNoRemoteUses(name, await text(repo, name));
 }
@@ -333,6 +340,60 @@ test("--write keeps a hand-rolled Pages deploy, secrets pack, flake run and week
   });
   await expectNoRemoteCall(repo);
   expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the code set checks-workflows writes\n" });
+}, 30_000);
+
+test("a public repository with a private package keeps hosted runners on fork-reachable jobs and the override on trusted workflows", async () => {
+  const repo = await open({
+    "package.json": manifest({ private: true }),
+    ".bun-version": `${FLEET_BUN_VERSION}\n`,
+    "event.json": JSON.stringify({ repository: { private: false } }),
+  });
+  await repo.commit("start");
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  for (const name of ["ci.yml", "pr-title.yml"]) {
+    for (const [jobName, job] of Object.entries(jobsOf(await parsed(repo, name), name))) {
+      if (typeof job !== "object" || job === null || !("runs-on" in job)) throw new Error(`expected ${name} job ${jobName} to name runs-on`);
+      expect(job["runs-on"]).toBe("ubuntu-latest");
+    }
+  }
+  for (const name of ["main.yml", "release.yml"]) {
+    for (const [jobName, job] of Object.entries(jobsOf(await parsed(repo, name), name))) {
+      if (typeof job !== "object" || job === null || !("runs-on" in job)) throw new Error(`expected ${name} job ${jobName} to name runs-on`);
+      expect(job["runs-on"]).toBe("${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}");
+    }
+  }
+  expect(await parsed(repo, "ci.yml")).toMatchObject({
+    jobs: {
+      changes: { "runs-on": "ubuntu-latest" },
+      static: { "runs-on": "ubuntu-latest" },
+      test: { "runs-on": "ubuntu-latest" },
+      checks: { "runs-on": "ubuntu-latest" },
+    },
+  });
+  expect(await parsed(repo, "main.yml")).toMatchObject({
+    jobs: { release: { "runs-on": "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}" } },
+  });
+  expect(await parsed(repo, "release.yml")).toMatchObject({
+    jobs: { "pull-request": { "runs-on": "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}" } },
+  });
+  const wiring = await ran($`bun ${WIRING}`.cwd(repo.dir).env({ ...withoutPullRequestEvent(), GITHUB_EVENT_PATH: join(repo.dir, "event.json") }));
+  expect(wiring.exitCode).toBe(0);
+}, 30_000);
+
+test("a private repository with a public package must not lose the runner override", async () => {
+  const repo = await open({
+    "package.json": manifest(),
+    ".bun-version": `${FLEET_BUN_VERSION}\n`,
+    "checks.config.ts": 'export default { repositoryVisibility: "private" };\n',
+    "event.json": JSON.stringify({ repository: { private: true } }),
+  });
+  await repo.commit("start");
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  expect(await parsed(repo, "ci.yml")).toMatchObject({
+    jobs: { test: { "runs-on": "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}" } },
+  });
+  const wiring = await ran($`bun ${WIRING}`.cwd(repo.dir).env({ ...withoutPullRequestEvent(), GITHUB_EVENT_PATH: join(repo.dir, "event.json") }));
+  expect(wiring.exitCode).toBe(0);
 }, 30_000);
 
 test("a private package's release runs the full suite instead of skipping it", async () => {

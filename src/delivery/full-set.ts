@@ -102,8 +102,8 @@ const fileOf = (workflow: Workflow): FullWorkflow => ({ name: workflow.name + ".
 // The kit publishes through a release.yml that npm's trusted publishing names, so it keeps its own release files.
 export function fullRequiredSet(set: CallerSet, kit: boolean): readonly FullWorkflow[] {
   const ci = fileOf(ciWorkflow(set, kit));
-  if (set.kind === "site") return [ci, fileOf(prTitle(set.options.publishes)), fileOf(PREVIEW_CLOSE(set.names, set.options.publishes)), fileOf(SITE_MAIN(set.names)), fileOf(RELEASE), fileOf(PRODUCTION(set.names))];
-  return kit ? [ci, fileOf(prTitle(set.options.publishes))] : [ci, fileOf(prTitle(set.options.publishes)), fileOf(codeMain(set.options)), fileOf(RELEASE)];
+  if (set.kind === "site") return [ci, fileOf(prTitle(set.options.publicRepository)), fileOf(PREVIEW_CLOSE(set.names, set.options.publicRepository)), fileOf(SITE_MAIN(set.names)), fileOf(RELEASE), fileOf(PRODUCTION(set.names))];
+  return kit ? [ci, fileOf(prTitle(set.options.publicRepository))] : [ci, fileOf(prTitle(set.options.publicRepository)), fileOf(codeMain(set.options)), fileOf(RELEASE)];
 }
 
 // A second deploy waits for the one in flight, since Pages serves one deployment at a time.

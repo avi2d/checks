@@ -136,7 +136,7 @@ A passing run's job summary holds all its seeds, so a passing run uploads nothin
 In a private repository every upload counts against the account's Actions storage, and GitHub refuses each one once that storage is used up.
 A run that only uploads on failure stays green through that refusal, and a failing run is red for its tests either way.
 
-A private repository sets `runs-on: ${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` on the job, as [checks-ci-wiring](checks-ci-wiring.md#runners) requires.
+The job uses the runner [checks-workflows](checks-workflows.md#the-composed-ciyml) selects.
 
 ## Related topics
 
