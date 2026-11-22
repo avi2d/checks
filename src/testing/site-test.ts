@@ -1,10 +1,10 @@
 import { BunServices } from "@effect/platform-bun";
 import { afterAll, test } from "bun:test";
 import { Effect } from "effect";
-import type { Browser, LaunchOptions } from "playwright-core";
+import { chromium, webkit, type Browser, type BrowserServer, type LaunchOptions } from "playwright-core";
 import { Usage } from "../core/main.ts";
 import { listenSite, readSite, sitePages } from "../quality/browser/serve.ts";
-import { launchBrowser, type ScreenEngine } from "./block-screens.ts";
+import { type ScreenEngine } from "./block-screens.ts";
 
 export type ServedSite = {
   readonly url: string;
@@ -19,23 +19,36 @@ export type SiteTest = {
   readonly timeoutMs?: number;
 };
 
-const browsers = new Map<string, Promise<Browser>>();
+type OpenBrowser = { readonly browser: Browser; readonly server: BrowserServer };
+
+const browsers = new Map<string, Promise<OpenBrowser>>();
+
+function launchSiteBrowser(engine: ScreenEngine, launch: LaunchOptions | undefined): Promise<OpenBrowser> {
+  const browserType = engine === "webkit" ? webkit : chromium;
+  const options = engine === "webkit" ? launch : { ...launch, args: ["--font-render-hinting=none", ...(launch?.args ?? [])] };
+  return browserType.launchServer(options).then((server) =>
+    browserType.connect(server.wsEndpoint()).then(
+      (browser) => ({ browser, server }),
+      (error: unknown) => server.kill().then(() => Promise.reject(error)),
+    ),
+  );
+}
 
 function openBrowser(engine: ScreenEngine, launch: LaunchOptions | undefined): Promise<Browser> {
   const key = `${engine} ${JSON.stringify(launch ?? {})}`;
   const open = browsers.get(key)?.catch(() => undefined) ?? Promise.resolve(undefined);
-  return open.then((browser) => {
-    if (browser?.isConnected() === true) return browser;
-    const launched = launchBrowser(engine, launch);
+  return open.then((opened) => {
+    if (opened?.browser.isConnected() === true) return opened.browser;
+    const launched = (opened === undefined ? Promise.resolve() : opened.server.kill()).then(() => launchSiteBrowser(engine, launch));
     browsers.set(key, launched);
-    return launched;
+    return launched.then(({ browser }) => browser);
   });
 }
 
 function closeBrowsers(): Promise<unknown> {
   const open = [...browsers.values()];
   browsers.clear();
-  return Promise.all(open.map((launched) => launched.then((browser) => browser.close(), () => undefined)));
+  return Promise.all(open.map((launched) => launched.then(({ server }) => server.kill(), () => undefined)));
 }
 
 const builtSite = Effect.fn("builtSite")(function* (dir: string) {
