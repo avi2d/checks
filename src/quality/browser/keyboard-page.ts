@@ -353,4 +353,4 @@ export const recall = (el: PageElement): string => el.ownerDocument.defaultView.
 
 export const decodeRecall = Schema.decodeUnknownEffect(Schema.String);
 
-export type { Box, PageBitmap, PageElement, PageView };
+export type { Box, PageBitmap, PageElement };
