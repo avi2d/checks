@@ -1,6 +1,6 @@
 import { BunServices } from "@effect/platform-bun";
 import { afterAll, test } from "bun:test";
-import { Effect } from "effect";
+import { Duration, Effect, Schema } from "effect";
 import type { Browser, LaunchOptions } from "playwright-core";
 import { Usage } from "../core/main.ts";
 import { listenSite, readSite, sitePages } from "../quality/browser/serve.ts";
@@ -21,6 +21,21 @@ export type SiteTest = {
 
 const browsers = new Map<string, Promise<Browser>>();
 
+class BrowserCloseFailure extends Schema.TaggedError<BrowserCloseFailure>()("BrowserCloseFailure", {
+  cause: Schema.Unknown,
+}) {}
+
+class BrowserCloseTimeout extends Schema.TaggedError<BrowserCloseTimeout>()("BrowserCloseTimeout", {}) {}
+
+function closeBrowser(browser: Browser): Promise<void> {
+  return Effect.runPromise(
+    Effect.tryPromise({ try: () => browser.close(), catch: (cause) => new BrowserCloseFailure({ cause }) }).pipe(
+      Effect.timeoutOrElse({ duration: Duration.seconds(1), orElse: () => Effect.fail(new BrowserCloseTimeout()) }),
+      Effect.catchTag("BrowserCloseTimeout", () => Effect.logWarning("site-test: browser close timed out")),
+    ),
+  );
+}
+
 function openBrowser(engine: ScreenEngine, launch: LaunchOptions | undefined): Promise<Browser> {
   const key = `${engine} ${JSON.stringify(launch ?? {})}`;
   const open = browsers.get(key)?.catch(() => undefined) ?? Promise.resolve(undefined);
@@ -35,7 +50,7 @@ function openBrowser(engine: ScreenEngine, launch: LaunchOptions | undefined): P
 function closeBrowsers(): Promise<unknown> {
   const open = [...browsers.values()];
   browsers.clear();
-  return Promise.all(open.map((launched) => launched.then((browser) => browser.close(), () => undefined)));
+  return Promise.all(open.map((launched) => launched.then((browser) => closeBrowser(browser), () => undefined)));
 }
 
 const builtSite = Effect.fn("builtSite")(function* (dir: string) {
