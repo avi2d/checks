@@ -139,8 +139,28 @@ test(
     expect(again.text).toContain(`release-pr: https://github.com/acme/widget/pull/1 releases 0.1.1 from ${(await head(widget.dir)).slice(0, 12)} and is current\n`);
     expect(again.exitCode).toBe(0);
     const after = await widget.state();
-    expect(after.calls.slice(before.calls.length)).toEqual(["GET repos/{owner}/{repo}", "GET repos/{owner}/{repo}/pulls?head={owner}:release%2Fmain&base=main&state=open"]);
+    const releaseHead = await widget.inOrigin("rev-parse", "release/main");
+    expect(after.calls.slice(before.calls.length)).toEqual([
+      "GET repos/{owner}/{repo}",
+      "GET repos/{owner}/{repo}/git/ref/heads/release%2Fmain",
+      `GET repos/{owner}/{repo}/git/commits/${releaseHead}`,
+      `GET repos/{owner}/{repo}/contents/package.json?ref=${releaseHead}`,
+      "GET repos/{owner}/{repo}/pulls?head={owner}:release%2Fmain&base=main&state=open",
+    ]);
     expect(after.dispatches).toEqual(before.dispatches);
+  },
+  60_000,
+);
+
+test(
+  "an existing release branch on a private origin does not require git credentials",
+  async () => {
+    const widget = await consumer();
+    expect((await widget.run(["ci.yml"])).exitCode).toBe(0);
+    await $`git remote set-url origin https://github.com/acme/private-repository.git`.cwd(widget.dir).quiet();
+    const again = await widget.run(["ci.yml"], { GH_TOKEN: "fixture-token", GIT_TERMINAL_PROMPT: "0" });
+    expect(again.exitCode).toBe(0);
+    expect(again.text).toContain("is current");
   },
   60_000,
 );

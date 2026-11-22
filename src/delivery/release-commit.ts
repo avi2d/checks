@@ -82,10 +82,6 @@ const currentBranch = Effect.fn("currentBranch")(function* (root: string) {
   return branch;
 });
 
-export const hasBranch = Effect.fn("hasBranch")(function* (root: string, branch: string) {
-  return (yield* git(["ls-remote", "origin", `refs/heads/${branch}`], root)).trim() !== "";
-});
-
 type Plan = {
   readonly base: string;
   readonly branch: string;

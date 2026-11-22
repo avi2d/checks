@@ -54,7 +54,8 @@ The next run of the workflow that tags it then cuts the release again with every
 
 ## What it reads
 
-It reads the subject of `HEAD` and of each commit behind it, `package.json` at each of those commits and `CHANGELOG.md` at the release commit, and the tag from `origin` with `git ls-remote`.
+It reads the subject of `HEAD` and of each commit behind it, `package.json` at each of those commits and `CHANGELOG.md` at the release commit.
+It reads the tag through the GitHub API.
 When workspace publishing is enabled, it reads the workspace patterns and each workspace `package.json`.
 With a workflow argument it names the workflow it runs in by `GITHUB_WORKFLOW`, or as `release-pr` when that is unset.
 With no argument it names `release`.

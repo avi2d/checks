@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
-import { Console, Effect, Schema } from "effect";
-import { dispatch, gitHubJson, REPOSITORY } from "../core/github.ts";
+import { Console, Effect, Option, Schema } from "effect";
+import * as Base64 from "effect/encoding/Base64";
+import { dispatch, gitHubJson, gitHubOptional, REPOSITORY } from "../core/github.ts";
 import { releaseTitle, runningWorkflow } from "./release.ts";
-import { buildRelease, commitRelease, hasBranch, planRelease, pointBranch, versionIn } from "./release-commit.ts";
+import { buildRelease, commitRelease, planRelease, pointBranch, versionIn } from "./release-commit.ts";
 import { git } from "../core/git.ts";
 import { MANIFEST } from "../core/release-names.ts";
 import { runMain, Usage } from "../core/main.ts";
@@ -21,16 +22,21 @@ const decodePullRequest = Schema.decodeUnknownEffect(Schema.fromJsonString(PullR
 const decodePullRequests = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Array(PullRequest)));
 const decodeRepository = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ default_branch: Schema.String })));
 
-const readRemote = Effect.fn("readRemote")(function* (root: string, branch: string) {
-  if (!(yield* hasBranch(root, branch))) return undefined;
-  const tracking = `refs/remotes/origin/${branch}`;
-  yield* git(["fetch", "--quiet", "--no-tags", "origin", `+refs/heads/${branch}:${tracking}`], root);
-  const [, ...parents] = (yield* git(["rev-list", "--parents", "-n", "1", tracking], root)).trim().split(" ");
-  const version = yield* git(["show", `${tracking}:${MANIFEST}`], root).pipe(
-    Effect.flatMap(versionIn),
+const decodeRef = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ object: Schema.Struct({ sha: Schema.String }) })));
+const decodeCommit = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ parents: Schema.Array(Schema.Struct({ sha: Schema.String })) })));
+const decodeContent = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ content: Schema.String, encoding: Schema.Literal("base64") })));
+
+const readRemote = Effect.fn("readRemote")(function* (branch: string) {
+  const ref = yield* gitHubOptional(decodeRef, "GET", `${REPOSITORY}/git/ref/heads/${encodeURIComponent(branch)}`);
+  if (Option.isNone(ref)) return undefined;
+  const sha = ref.value.object.sha;
+  const commit = yield* gitHubJson(decodeCommit, "GET", `${REPOSITORY}/git/commits/${sha}`);
+  const content = yield* gitHubOptional(decodeContent, "GET", `${REPOSITORY}/contents/${MANIFEST}?ref=${sha}`);
+  const version = Option.isNone(content) ? undefined : yield* Effect.fromResult(Base64.decode(content.value.content.replaceAll("\n", ""))).pipe(
+    Effect.flatMap((bytes) => versionIn(new TextDecoder().decode(bytes))),
     Effect.orElseSucceed(() => undefined),
   );
-  return { parents, version } satisfies Remote;
+  return { parents: commit.parents.map((parent) => parent.sha), version } satisfies Remote;
 });
 
 const findOpen = Effect.fn("findOpen")(function* (base: string, branch: string) {
@@ -69,7 +75,7 @@ const releasePullRequest = Effect.gen(function* () {
   const plan = yield* planRelease("release-pr", root, untagged);
   if (plan === undefined) return true;
   const { base, branch, head, next, bumped } = plan;
-  const remote = yield* readRemote(root, branch);
+  const remote = yield* readRemote(branch);
   const current = remote?.version === next && remote.parents.length === 1 && remote.parents[0] === head;
   const open = yield* findOpen(base, branch);
   if (current && open?.title === releaseTitle(next)) {

@@ -16,15 +16,17 @@ class TagRefused extends Schema.TaggedError<TagRefused>()("TagRefused", {
 const decodeManifest = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ version: Schema.String, private: Schema.optionalKey(Schema.Boolean) })));
 const decodeRelease = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ id: Schema.Int })));
 
-// An annotated tag lists its own object first and the commit it tags on a `^{}` line after it.
-export function taggedCommitOf(listed: string): string | undefined {
-  const lines = listed.split("\n").filter((line) => line !== "");
-  const peeled = lines.find((line) => line.endsWith("^{}")) ?? lines[0];
-  return peeled?.split("\t")[0];
-}
+const decodeObject = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ object: Schema.Struct({ sha: Schema.String, type: Schema.String }) })));
 
-export const taggedOn = Effect.fn("taggedOn")(function* (root: string, tag: string) {
-  return taggedCommitOf(yield* git(["ls-remote", "--tags", "origin", `refs/tags/${tag}`, `refs/tags/${tag}^{}`], root));
+export const taggedOn = Effect.fn("taggedOn")(function* (tag: string) {
+  const ref = yield* gitHubOptional(decodeObject, "GET", `${REPOSITORY}/git/ref/tags/${encodeURIComponent(tag)}`);
+  if (Option.isNone(ref)) return undefined;
+  let object = ref.value.object;
+  for (let depth = 0; object.type === "tag"; depth += 1) {
+    if (depth === 32) return yield* new GitHubFailure({ message: `tag ${tag} has too many nested tag objects` });
+    object = (yield* gitHubJson(decodeObject, "GET", `${REPOSITORY}/git/tags/${object.sha}`)).object;
+  }
+  return object.sha;
 });
 
 type Landed = { readonly head: string; readonly subject: string; readonly version: string; readonly tag: string; readonly publishes: boolean };
@@ -65,7 +67,7 @@ const landedRelease = Effect.fn("landedRelease")(function* (label: string, root:
     const candidate = yield* landedOf(root, sha, line.slice(41));
     if (candidate === undefined) continue;
     if (candidate.version !== held.value.version) break;
-    if ((yield* taggedOn(root, candidate.tag)) === sha) break;
+    if ((yield* taggedOn(candidate.tag)) === sha) break;
     return candidate;
   }
   yield* Console.log(`${label}: ${head.slice(0, 12)} is no release commit; a release whose GitHub release or npm publish failed is finished by rerunning that release commit's own main run`);
@@ -74,7 +76,7 @@ const landedRelease = Effect.fn("landedRelease")(function* (label: string, root:
 
 // Returns false when the tag already tags the head, so a rerun pushes nothing.
 const pushReleaseTag = Effect.fn("pushReleaseTag")(function* (label: string, root: string, { head, version, tag }: Landed, cuttingWorkflow: string) {
-  const tagged = yield* taggedOn(root, tag);
+  const tagged = yield* taggedOn(tag);
   if (tagged === head) {
     yield* Console.log(`${label}: ${tag} already tags ${head.slice(0, 12)}`);
     return false;

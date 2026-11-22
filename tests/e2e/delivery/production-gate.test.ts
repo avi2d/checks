@@ -30,6 +30,28 @@ test(
 );
 
 test(
+  "a private origin without git credentials does not block a published release with GH_TOKEN",
+  async () => {
+    const main = await released();
+    await $`git remote set-url origin https://github.com/acme/private-repository.git`.cwd(main.dir).quiet();
+    const result = await ran($`bun ${GATE} ${main.head}`.cwd(main.dir).env({ ...process.env, ...main.env, GH_TOKEN: "fixture-token", GIT_TERMINAL_PROMPT: "0" }));
+    expect(result.exitCode).toBe(0);
+    expect(result.text).toContain(`is the release v0.2.0`);
+  },
+  60_000,
+);
+
+test(
+  "an annotated tag resolves to its commit rather than its tag object",
+  async () => {
+    const main = await released();
+    await $`git tag -fa v0.2.0 -m release ${main.head} && git push -q --force origin refs/tags/v0.2.0`.cwd(main.dir).quiet();
+    expect((await main.run(GATE, [])).exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
   "a release commit that was never released, whose tag does not exist, is refused",
   async () => {
     const main = await onMain("chore: release 0.2.0 (#7)");

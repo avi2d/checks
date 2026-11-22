@@ -95,7 +95,37 @@ async function buildTree(origin: string, body: Body): Promise<string> {
   }
 }
 
+async function gitReadApi(origin: string, route: string): Promise<unknown> {
+  if (route.startsWith("git/ref/")) {
+    const ref = `refs/${decodeURIComponent(route.slice("git/ref/".length))}`;
+    const result = await $`git show-ref --verify --hash ${ref}`.cwd(origin).nothrow().quiet();
+    if (result.exitCode !== 0) return "missing";
+    const sha = result.stdout.toString().trim();
+    const type = (await $`git cat-file -t ${sha}`.cwd(origin).quiet()).stdout.toString().trim();
+    return { object: { sha, type } };
+  }
+  if (route.startsWith("git/commits/")) {
+    const sha = route.slice("git/commits/".length);
+    const [, ...parents] = (await $`git rev-list --parents -n 1 ${sha}`.cwd(origin).quiet()).stdout.toString().trim().split(" ");
+    return { parents: parents.map((parent) => ({ sha: parent })) };
+  }
+  if (route.startsWith("contents/")) {
+    const [path = "", query = ""] = route.slice("contents/".length).split("?");
+    const ref = new URLSearchParams(query).get("ref") ?? "";
+    const result = await $`git show ${`${ref}:${path}`}`.cwd(origin).nothrow().quiet();
+    if (result.exitCode !== 0) return "missing";
+    return { encoding: "base64", content: result.stdout.toString("base64") };
+  }
+  if (route.startsWith("git/tags/")) {
+    const sha = route.slice("git/tags/".length);
+    const lines = (await $`git cat-file -p ${sha}`.cwd(origin).quiet()).stdout.toString().split("\n");
+    return { object: { sha: lines[0]?.slice(7), type: lines[1]?.slice(5) } };
+  }
+  return undefined;
+}
+
 async function gitApi(origin: string, method: string, route: string, body: Body): Promise<unknown> {
+  if (method === "GET") return gitReadApi(origin, route);
   if (method === "POST" && route === "git/blobs") {
     const bytes = Buffer.from(decodeString(body["content"]), "base64");
     return { sha: (await $`git hash-object -w --stdin < ${bytes}`.cwd(origin).quiet()).stdout.toString().trim() };
@@ -213,6 +243,7 @@ async function answerOf(origin: string, state: FakeState, method: string, route:
   const released = releasesApi(state, method, route, body);
   if (released !== undefined) return released;
   const fromGit = await gitApi(origin, method, route, body);
+  if (fromGit === "missing") return "missing";
   return fromGit === undefined ? pullsApi(origin, state, method, route, body) : { state, body: fromGit };
 }
 
