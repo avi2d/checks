@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Keyboard focus fixture</title>
+<style>
+.field { margin: 24px; padding: 24px; }
+input:focus { outline: none; }
+.field.is-focused { outline: 2px solid blue; }
+</style>
+</head>
+<body>
+<main>
+<div class="field"><input id="direct" aria-label="Direct focus handler"></div>
+<div class="field"><input id="delegated" aria-label="Delegated focus handler"></div>
+</main>
+<script>
+const direct = document.querySelector("#direct");
+direct.addEventListener("focus", () => direct.parentElement.classList.add("is-focused"));
+direct.addEventListener("blur", () => direct.parentElement.classList.remove("is-focused"));
+const delegated = document.querySelector("#delegated");
+document.addEventListener("focusin", (event) => {
+  if (event.target === delegated) delegated.parentElement.classList.add("is-focused");
+});
+document.addEventListener("focusout", (event) => {
+  if (event.target === delegated) delegated.parentElement.classList.remove("is-focused");
+});
+</script>
+</body>
+</html>

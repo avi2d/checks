@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Keyboard focus fixture</title>
+<style>
+a:focus, input:focus { outline: none; }
+.row { margin: 12px; padding: 32px; }
+.row:focus-within { outline: 3px solid black; }
+form:focus-within { outline: 6px solid transparent; }
+form:focus-within p { visibility: hidden; }
+form p { margin-top: 180px; }
+</style>
+</head>
+<body>
+<main>
+<div class="row"><span><a id="link" href="/">Details</a></span></div>
+<form>
+  <label>Name <input id="field" type="text"></label>
+  <p>Enter your full name.</p>
+</form>
+</main>
+</body>
+</html>

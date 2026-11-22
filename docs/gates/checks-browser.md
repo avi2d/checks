@@ -17,10 +17,15 @@ Each other check that opens a page uses a fresh one.
 Each check judges only the elements of a target that are visible at the visit.
 So a control the page renders once for each breakpoint is judged where it shows.
 
+The keyboard check captures the state Tab reaches before it removes focus.
+It takes the comparison screenshot with focus removed, then restores focus before continuing Tab.
+Page handlers can run during the comparison blur and focus restoration.
+A repaint caused by a blur handler can affect the comparison and count as visible focus.
+
 | Check | What fails | Built on |
 | --- | --- | --- |
 | `layout` | a page wider than the viewport, and a target that overflows the viewport, is reachable only by scrolling sideways, is cut off by a container that cannot scroll, clips its own text or hides its text, overlaps another target, or is covered by any element | the DevTools protocol's boxes and hit test |
-| `keyboard` | a `focusable` target that Tab does not reach once for each element it matches that is visible before the first Tab press, and a Tab stop on a target that shows no visible focus | Playwright's keyboard, and viewport screenshots before and after blur compared within the crop of the focused element and the ancestors changed by focus, with what their pseudo-elements paint |
+| `keyboard` | a `focusable` target that Tab does not reach once for each element it matches that is visible before the first Tab press, and a Tab stop on a target that shows no visible focus | Playwright's keyboard, and screenshots compared at the focused element and where focus changes the paint of ancestors or pseudo-elements |
 | `motion` | an animation or a transition longer than one frame that starts during load, on hover, on leaving a hovered control or on focus, and smooth scrolling, for a visitor who turns motion off | the page's own `document.getAnimations()`, in each state whose `reducedMotion` is `reduce` and whose own `checks`, when it names any, include `motion` |
 | `axe` | each violation of axe's WCAG 2.2 AA rules, which include `color-contrast`, `nested-interactive`, `meta-viewport` and `target-size` | axe-core through `@axe-core/playwright` |
 | `nesting` | an element the HTML content model does not permit where it sits in the rendered page, such as a `<button>` inside an `<a>` | html-validate's `element-permitted-content` rule |
