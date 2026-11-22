@@ -1,18 +1,16 @@
 import { Effect } from "effect";
 import type { ElementHandle, Page } from "playwright-core";
 import type { Target } from "./declaration.ts";
+import { compareCrops, decodeOutcome, type CropArgs } from "./keyboard-crops.ts";
 import {
   changedPaintBoxes,
-  compareCrops,
-  decodeOutcome,
   decodeRecall,
   decodeRingScans,
   recall,
   remember,
+  READ_RING_SCAN,
   RESOLVE_LEAF,
-  scanRings,
   type Box,
-  type CropArgs,
   type PageElement,
 } from "./keyboard-page.ts";
 import { moveProbeFocus } from "./keyboard-probe.ts";
@@ -69,13 +67,13 @@ const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page, leaf: 
   const screen = page.viewportSize();
   if (screen === null) return yield* new BrowserFailure({ message: "cannot read the viewport" });
   if (onScreen(box, screen) === null) return false;
-  const focusedSource: unknown = yield* attempt("cannot read the focused element and its ancestors", () => leaf.evaluate(scanRings));
+  const focusedSource: unknown = yield* attempt("cannot read the focused element and its ancestors", () => leaf.evaluate(READ_RING_SCAN));
   const focusedRings = yield* decodeRingScans(focusedSource).pipe(
     Effect.mapError(() => new BrowserFailure({ message: "the focused element gave no ring scan" })),
   );
   const withFocus = yield* attempt("cannot capture the focused element", () => page.screenshot({ animations: "disabled" }));
   yield* probeFocus(leaf, false);
-  const blurredSource: unknown = yield* attempt("cannot read the blurred element and its ancestors", () => leaf.evaluate(scanRings));
+  const blurredSource: unknown = yield* attempt("cannot read the blurred element and its ancestors", () => leaf.evaluate(READ_RING_SCAN));
   const blurredRings = yield* decodeRingScans(blurredSource).pipe(
     Effect.mapError(() => new BrowserFailure({ message: "the blurred element gave no ring scan" })),
   );

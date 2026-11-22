@@ -35,6 +35,14 @@ type PageStyle = {
   readonly display: string;
   readonly clipPath: string;
   readonly position: string;
+  readonly width: string;
+  readonly height: string;
+  readonly boxSizing: string;
+  readonly direction: string;
+  readonly paddingTop: string;
+  readonly paddingRight: string;
+  readonly paddingBottom: string;
+  readonly paddingLeft: string;
   readonly top: string;
   readonly right: string;
   readonly bottom: string;
@@ -115,8 +123,74 @@ type PageCanvas = {
   readonly getContext: (kind: string, options: { readonly willReadFrequently: boolean }) => PageContext | null;
 };
 
-export const scanRings = (el: PageElement): RingScan[] => {
-  const visibleColor = (color: string): boolean => !color.endsWith(", 0)") && !color.endsWith(" / 0)");
+const measurePseudoBox = (anchor: PageElement, pseudoStyle: PageStyle, hostBox: Box): Box => {
+  if (pseudoStyle.position !== "absolute") return hostBox;
+  const view = anchor.ownerDocument.defaultView;
+  const root = anchor.ownerDocument.documentElement;
+  const holdsPlaced = (style: PageStyle): boolean =>
+    style.position !== "static" ||
+    [style.transform, style.translate, style.rotate, style.scale, style.perspective, style.filter, style.backdropFilter].some((value) => value !== "none") ||
+    /layout|paint|strict|content/.test(style.contain) ||
+    style.containerType !== "normal" ||
+    /transform|perspective|filter/.test(style.willChange);
+  const cssPixels = (token: string): number => token.endsWith("px") ? parseFloat(token) : NaN;
+  const pxOrZero = (token: string): number => cssPixels(token) || 0;
+  const frameOf = (host: PageElement): Box => {
+    let holder: PageElement | null = host;
+    while (holder !== null && holder !== root && !holdsPlaced(view.getComputedStyle(holder))) holder = holder.parentElement;
+    if (holder === null || holder === root) {
+      return { x: -view.scrollX, y: -view.scrollY, width: root.clientWidth, height: root.clientHeight };
+    }
+    const rect = holder.getBoundingClientRect();
+    if (holder.clientWidth === 0 && holder.clientHeight === 0 && (rect.width !== 0 || rect.height !== 0)) {
+      const holderStyle = view.getComputedStyle(holder);
+      const borderLeft = pxOrZero(holderStyle.borderLeftWidth);
+      const borderTop = pxOrZero(holderStyle.borderTopWidth);
+      const borderRight = pxOrZero(holderStyle.borderRightWidth);
+      const borderBottom = pxOrZero(holderStyle.borderBottomWidth);
+      return { x: rect.x + borderLeft - holder.scrollLeft, y: rect.y + borderTop - holder.scrollTop, width: Math.max(0, rect.width - borderLeft - borderRight), height: Math.max(0, rect.height - borderTop - borderBottom) };
+    }
+    return { x: rect.x + holder.clientLeft - holder.scrollLeft, y: rect.y + holder.clientTop - holder.scrollTop, width: holder.clientWidth, height: holder.clientHeight };
+  };
+  type Axis = { readonly start: number; readonly size: number };
+  const insetAxis = (frameSize: number, start: number, end: number, size: number, fromEnd = false): Axis | null => {
+    if (Number.isFinite(size)) {
+      if (Number.isFinite(end) && (fromEnd || !Number.isFinite(start))) return { start: frameSize - end - size, size };
+      if (Number.isFinite(start)) return { start, size };
+    }
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+    return { start, size: Math.max(0, frameSize - start - end) };
+  };
+  const insetWithMargin = (inset: string, margin: string): number => cssPixels(inset) + pxOrZero(margin);
+  const borderBoxSize = (style: PageStyle, size: string, edges: readonly string[]): number =>
+    cssPixels(size) + (style.boxSizing === "border-box" ? 0 : edges.reduce((total, edge) => total + pxOrZero(edge), 0));
+  const horizontalAxis = (style: PageStyle, frame: Box): Axis | null => insetAxis(
+    frame.width,
+    insetWithMargin(style.left, style.marginLeft),
+    insetWithMargin(style.right, style.marginRight),
+    borderBoxSize(style, style.width, [style.paddingLeft, style.paddingRight, style.borderLeftWidth, style.borderRightWidth]),
+    style.direction === "rtl",
+  );
+  const verticalAxis = (style: PageStyle, frame: Box): Axis | null => insetAxis(
+    frame.height,
+    insetWithMargin(style.top, style.marginTop),
+    insetWithMargin(style.bottom, style.marginBottom),
+    borderBoxSize(style, style.height, [style.paddingTop, style.paddingBottom, style.borderTopWidth, style.borderBottomWidth]),
+  );
+  const frame = frameOf(anchor);
+  const horizontal = horizontalAxis(pseudoStyle, frame);
+  const vertical = verticalAxis(pseudoStyle, frame);
+  return {
+    x: horizontal === null ? hostBox.x : frame.x + horizontal.start,
+    y: vertical === null ? hostBox.y : frame.y + vertical.start,
+    width: horizontal?.size ?? hostBox.width,
+    height: vertical?.size ?? hostBox.height,
+  };
+};
+
+const scanRings = (el: PageElement, pseudoBox: typeof measurePseudoBox): RingScan[] => {
+  const visibleColor = (color: string): boolean =>
+    !(color.startsWith("rgba(") && color.endsWith(", 0)")) && !color.endsWith(" / 0)");
   const paintsEdge = (width: string, style: string, color: string): boolean =>
     style !== "none" && style !== "hidden" && parseFloat(width) > 0 && visibleColor(color);
   const edgePaint = (width: string, style: string, color: string): string =>
@@ -134,48 +208,10 @@ export const scanRings = (el: PageElement): RingScan[] => {
   ];
   const revealKeys = [
     "content", "opacity", "visibility", "display", "clipPath", "transform", "translate", "rotate", "scale",
-    "position", "top", "right", "bottom", "left",
+    "position", "top", "right", "bottom", "left", "width", "height",
     "marginTop", "marginRight", "marginBottom", "marginLeft",
   ] as const;
   const view = el.ownerDocument.defaultView;
-  const root = el.ownerDocument.documentElement;
-  const holdsPlaced = (style: PageStyle): boolean =>
-    style.position !== "static" ||
-    [style.transform, style.translate, style.rotate, style.scale, style.perspective, style.filter, style.backdropFilter].some((value) => value !== "none") ||
-    /layout|paint|strict|content/.test(style.contain) ||
-    style.containerType !== "normal" ||
-    /transform|perspective|filter/.test(style.willChange);
-  const frameOf = (host: PageElement): Box => {
-    let holder: PageElement | null = host;
-    while (holder !== null && holder !== root && !holdsPlaced(view.getComputedStyle(holder))) holder = holder.parentElement;
-    if (holder === null || holder === root) {
-      return { x: -view.scrollX, y: -view.scrollY, width: root.clientWidth, height: root.clientHeight };
-    }
-    const rect = holder.getBoundingClientRect();
-    if (holder.clientWidth === 0 && holder.clientHeight === 0 && (rect.width !== 0 || rect.height !== 0)) {
-      const holderStyle = view.getComputedStyle(holder);
-      const toPx = (token: string): number => {
-        const parsed = parseFloat(token);
-        return Number.isFinite(parsed) ? parsed : 0;
-      };
-      const borderLeft = toPx(holderStyle.borderLeftWidth);
-      const borderTop = toPx(holderStyle.borderTopWidth);
-      const borderRight = toPx(holderStyle.borderRightWidth);
-      const borderBottom = toPx(holderStyle.borderBottomWidth);
-      return { x: rect.x + borderLeft - holder.scrollLeft, y: rect.y + borderTop - holder.scrollTop, width: Math.max(0, rect.width - borderLeft - borderRight), height: Math.max(0, rect.height - borderTop - borderBottom) };
-    }
-    return { x: rect.x + holder.clientLeft - holder.scrollLeft, y: rect.y + holder.clientTop - holder.scrollTop, width: holder.clientWidth, height: holder.clientHeight };
-  };
-  const pseudoBox = (host: PageElement, painted: PageStyle, hostBox: Box): Box => {
-    if (painted.position !== "absolute") return hostBox;
-    const left = parseFloat(painted.left) + parseFloat(painted.marginLeft);
-    const top = parseFloat(painted.top) + parseFloat(painted.marginTop);
-    const right = parseFloat(painted.right) + parseFloat(painted.marginRight);
-    const bottom = parseFloat(painted.bottom) + parseFloat(painted.marginBottom);
-    if (![left, top, right, bottom].every((inset) => Number.isFinite(inset))) return hostBox;
-    const frame = frameOf(host);
-    return { x: frame.x + left, y: frame.y + top, width: frame.width - left - right, height: frame.height - top - bottom };
-  };
   const ringOf = (style: PageStyle, box: Box, paint: ReadonlyArray<string>): Ring => ({
     box,
     outlineWidth: paintsEdge(style.outlineWidth, style.outlineStyle, style.outlineColor) ? style.outlineWidth : "0",
@@ -205,6 +241,8 @@ export const scanRings = (el: PageElement): RingScan[] => {
   }
   return nodes;
 };
+
+export const READ_RING_SCAN = `(element) => (${scanRings.toString()})(element, (${measurePseudoBox.toString()}))`;
 
 const RingSchema = Schema.Struct({
   box: BoxSchema,
@@ -310,70 +348,6 @@ export const RESOLVE_LEAF = `(() => {
   return leaf;
 })()`;
 
-export type CropArgs = {
-  readonly first: string;
-  readonly second: string;
-  readonly boxes: readonly Box[];
-};
-
-const CompareOutcomeSchema = Schema.Union([
-  Schema.Struct({ compared: Schema.Literal(true), differs: Schema.Boolean }),
-  Schema.Struct({ compared: Schema.Literal(false) }),
-]);
-
-type CompareOutcome = typeof CompareOutcomeSchema.Type;
-
-export const compareCrops = (el: PageElement, args: CropArgs): Promise<CompareOutcome> => {
-  const view = el.ownerDocument.defaultView;
-  const scale = view.devicePixelRatio || 1;
-  const unreadable: CompareOutcome = { compared: false };
-  const changed: CompareOutcome = { compared: true, differs: true };
-  const same: CompareOutcome = { compared: true, differs: false };
-  const decode = (raw: string): Promise<PageBitmap> => {
-    const binary = view.atob(raw);
-    const bytes = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-    return view.createImageBitmap(new view.Blob([bytes], { type: "image/png" }));
-  };
-  const pixelsOf = (shot: PageBitmap, box: Box): ArrayLike<number> | null => {
-    const left = Math.floor(box.x * scale);
-    const top = Math.floor(box.y * scale);
-    const width = Math.ceil((box.x + box.width) * scale) - left;
-    const height = Math.ceil((box.y + box.height) * scale) - top;
-    const canvas = el.ownerDocument.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d", { willReadFrequently: true });
-    if (context === null) return null;
-    context.drawImage(shot, left, top, width, height, 0, 0, width, height);
-    return context.getImageData(0, 0, width, height).data;
-  };
-  const compareBox = (first: PageBitmap, second: PageBitmap, box: Box): CompareOutcome => {
-    const before = pixelsOf(first, box);
-    const after = pixelsOf(second, box);
-    if (before === null || after === null) return unreadable;
-    for (let index = 0; index < before.length; index += 1) {
-      if (before[index] !== after[index]) return changed;
-    }
-    return same;
-  };
-  const compareBoxes = (first: PageBitmap, second: PageBitmap): CompareOutcome => {
-    for (const box of args.boxes) {
-      const result = compareBox(first, second, box);
-      if (!result.compared || result.differs) return result;
-    }
-    return same;
-  };
-  return Promise.all([decode(args.first), decode(args.second)]).then(([first, second]) => {
-    const result = compareBoxes(first, second);
-    first.close();
-    second.close();
-    return result;
-  });
-};
-
-export const decodeOutcome = Schema.decodeUnknownEffect(CompareOutcomeSchema);
-
 export const remember = (el: PageElement, id: string): void => {
   const view = el.ownerDocument.defaultView;
   if (view.checksKb === undefined) view.checksKb = new WeakMap();
@@ -385,4 +359,4 @@ export const recall = (el: PageElement): string => el.ownerDocument.defaultView.
 
 export const decodeRecall = Schema.decodeUnknownEffect(Schema.String);
 
-export type { Box, PageElement, PageView, ProbeFocusEvent };
+export type { Box, PageBitmap, PageElement, PageView, ProbeFocusEvent };

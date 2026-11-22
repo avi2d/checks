@@ -17,7 +17,7 @@ Each other check that opens a page uses a fresh one.
 Each check judges only the elements of a target that are visible at the visit.
 So a control the page renders once for each breakpoint is judged where it shows.
 
-The keyboard check takes its focused screenshot as soon as Tab reaches the element.
+The keyboard check captures the state Tab reaches before it removes focus.
 It takes the comparison screenshot with focus removed, then restores focus before continuing Tab.
 The check blocks its own focus and blur events from reaching page handlers.
 Tab still sends its usual events.
