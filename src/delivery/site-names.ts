@@ -130,17 +130,18 @@ function uncarriedInputs(workflows: readonly Workflow[]): readonly UncarriedInpu
 const heldCiJobs = (kind: CallerSet["kind"], workflows: readonly Workflow[], publicRepository: boolean, docsBuild: boolean, hasE2e: boolean) =>
   ciJobsOf(kind, heldWorkflow(workflows)("ci.yml"), publicRepository, docsBuild, hasE2e).pipe(Effect.mapError((fault) => new CallerSetFault({ message: fault.message })));
 
-export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild = false, hasE2e?: boolean) {
+export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild?: boolean, hasE2e?: boolean) {
+  const buildDocs = docsBuild === true;
   const includeE2e = hasE2e !== false;
   const flagged = SITE_NAME_KEYS.some((key) => flags[key] !== undefined);
-  const options = callerOptionsOf(heldWorkflow(workflows), publishes, publishWorkspaces, needsReleaseChecks, publicRepository, docsBuild);
+  const options = callerOptionsOf(heldWorkflow(workflows), publishes, publishWorkspaces, needsReleaseChecks, publicRepository, buildDocs);
   const [extra] = uncarriedInputs(workflows);
   if (extra !== undefined) {
     return yield* new CallerSetFault({
       message: `${extra.path} job ${extra.name} passes ${extra.input} to ${extra.file}, an input the written set cannot carry, so remove it by hand`,
     });
   }
-  if (!holdsSiteWorkflow(workflows) && !flagged) return { kind: "code", ci: yield* heldCiJobs("code", workflows, publicRepository, docsBuild, includeE2e), options } satisfies CallerSet;
+  if (!holdsSiteWorkflow(workflows) && !flagged) return { kind: "code", ci: yield* heldCiJobs("code", workflows, publicRepository, buildDocs, includeE2e), options } satisfies CallerSet;
   const held = workflows.flatMap(heldNames).filter(({ key }) => flags[key] === undefined);
   const conflict = conflictOf(held);
   if (conflict !== undefined) return yield* new CallerSetFault({ message: conflict });
@@ -150,7 +151,7 @@ export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readon
     return yield* new CallerSetFault({ message: `the site workflows name no ${listed(missing)}, so run ${rerun} ${flagsOf(missing)}` });
   }
   const names = yield* decodeSiteNames(named).pipe(Effect.mapError((issue) => new CallerSetFault({ message: `a site name ${issue.message}` })));
-  return { kind: "site", names, ci: yield* heldCiJobs("site", workflows, publicRepository, docsBuild, includeE2e), options } satisfies CallerSet;
+  return { kind: "site", names, ci: yield* heldCiJobs("site", workflows, publicRepository, buildDocs, includeE2e), options } satisfies CallerSet;
 });
 
 const FLAGS = new Map(SITE_NAME_KEYS.map((key) => [`--${key}`, key]));
