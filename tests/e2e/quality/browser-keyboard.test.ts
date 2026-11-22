@@ -20,3 +20,5 @@ const checkFixture = async (file: string, labels: readonly string[], withoutFocu
 test("keyboard does not count a distant message inside a transparently outlined form", () => checkFixture("distant-message.html", ["link", "field"], ["field"]), 60_000);
 
 test("keyboard does not send a second blur or focusout before the next Tab lands", () => checkFixture("blur-count.html", ["first", "second"], []), 60_000);
+
+test("keyboard does not cut off sized before and after rings or a large outline offset", () => checkFixture("row-rings.html", ["before", "after", "offset"], []), 60_000);

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Keyboard focus fixture</title>
+<style>
+a:focus { outline: none; }
+.row { position: relative; margin: 40px; padding: 24px; }
+.before, .after { width: 90px; }
+.before::before, .after::after {
+  content: "";
+  position: absolute;
+  top: -24px;
+  left: 160px;
+  right: 160px;
+  width: 56px;
+  height: 8px;
+}
+.before:focus-within::before, .after:focus-within::after { outline: 3px solid black; }
+.offset:focus-within { outline: 3px solid black; outline-offset: 20px; }
+</style>
+</head>
+<body>
+<main>
+<div class="row before"><span><a id="before" href="/">Before</a></span></div>
+<div class="row after"><span><a id="after" href="/">After</a></span></div>
+<div class="row offset"><span><a id="offset" href="/">Offset</a></span></div>
+</main>
+</body>
+</html>
