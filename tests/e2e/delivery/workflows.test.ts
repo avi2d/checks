@@ -1,10 +1,11 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
 import { CHECKOUT, fixtureRepos, ran, type FixtureRepo, type Ran } from "../lib/fixture-repo.ts";
 import { expectNoRemoteUses } from "../lib/local-uses.ts";
+import { isRecord } from "../../../src/delivery/workflow-references.ts";
 
 const SCRIPT = join(CHECKOUT, "src", "delivery", "workflows.ts");
 const WIRING = join(CHECKOUT, "src", "delivery", "ci-wiring.ts");
@@ -51,7 +52,7 @@ test("a code repository without workflow files is refused until --write writes c
   expect(await parsed(repo, "ci.yml")).toMatchObject({
     on: { pull_request: { types: ["opened", "synchronize", "reopened", "ready_for_review"] }, workflow_dispatch: null },
     concurrency: { "cancel-in-progress": true },
-    jobs: { static: { needs: "changes" }, test: { needs: "changes" }, checks: { needs: ["changes", "static", "test"] } },
+    jobs: { static: { needs: "changes" }, unit: { needs: "changes" }, checks: { needs: ["changes", "static", "unit"] } },
   });
   expect(await parsed(repo, "pr-title.yml")).toMatchObject({ on: { pull_request: { types: ["opened", "synchronize", "reopened", "edited"] } } });
   expect(await parsed(repo, "main.yml")).toMatchObject({ on: { push: { branches: ["main"] } } });
@@ -64,6 +65,45 @@ test("a code repository without workflow files is refused until --write writes c
   expect(wiring).toEqual({ exitCode: 0, text: "ci-wiring: .github/workflows holds the set checks-workflows writes, so the set runs every gate\n" });
 }, 30_000);
 
+test("a legacy all-tier test job splits into gated unit and e2e jobs without installing Playwright in unit", async () => {
+  const legacy = "name: ci\non: pull_request\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: ./.github/actions/playwright\n        with:\n          browsers: chromium webkit\n      - id: test\n        run: bun run test --pr --parallel=6\n";
+  const repo = await open({
+    "package.json": manifest(),
+    "tests/unit/one.test.ts": "export {};\n",
+    "tests/e2e/one.test.ts": "export {};\n",
+    ".github/workflows/ci.yml": legacy,
+  });
+  await repo.commit("start");
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  const jobs = jobsOf(await parsed(repo, "ci.yml"), "ci.yml");
+  const jobsRecord: unknown = jobs;
+  const unitJob: unknown = isRecord(jobsRecord) ? jobsRecord["unit"] : undefined;
+  const unitSteps: readonly unknown[] = isRecord(unitJob) && Array.isArray(unitJob["steps"]) ? unitJob["steps"] : [];
+  expect(jobs).toMatchObject({
+    unit: { steps: expect.arrayContaining([{ id: "test", run: "bun run test --pr --parallel=6 --tier=unit" }]) },
+    e2e: { steps: expect.arrayContaining([{ uses: "./.github/actions/playwright", with: { browsers: "chromium webkit" } }, { id: "test", run: "bun run test --pr --parallel=6 --tier=e2e" }]) },
+    checks: { needs: ["changes", "static", "unit", "e2e"] },
+  });
+  expect(jobs).not.toHaveProperty("test");
+  const usesPlaywright = unitSteps.some((step) => isRecord(step) && step["uses"] === "./.github/actions/playwright");
+  expect(usesPlaywright).toBe(false);
+  expect((await workflows(repo)).exitCode).toBe(0);
+}, 30_000);
+
+test("a repository without e2e test files gets no e2e job or Playwright action", async () => {
+  const repo = await open({ "package.json": manifest(), "tests/unit/one.test.ts": "export {};\n" });
+  await repo.commit("start");
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  const jobs = jobsOf(await parsed(repo, "ci.yml"), "ci.yml");
+  expect(jobs).not.toHaveProperty("e2e");
+  expect(jobs).toMatchObject({ checks: { needs: ["changes", "static", "unit"] } });
+  expect(await readdir(join(repo.dir, ".github", "actions"))).not.toContain("playwright");
+  await repo.write({ "tests/e2e/one.test.ts": "export {};\n" });
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  const withE2e = jobsOf(await parsed(repo, "ci.yml"), "ci.yml");
+  expect(withE2e).toMatchObject({ e2e: { needs: "changes" }, checks: { needs: ["changes", "static", "unit", "e2e"] } });
+}, 30_000);
+
 test("a project with docs:build loses its docs-only pull request build, or a project without it gets a docs job", async () => {
   const scripts = { lint: "oxlint", build: "tsc", typecheck: "tsc --noEmit", test: "bun test" };
   const repo = await open({ "package.json": manifest({ scripts: { ...scripts, "docs:build": "echo docs" } }) });
@@ -72,7 +112,7 @@ test("a project with docs:build loses its docs-only pull request build, or a pro
   expect(await parsed(repo, "ci.yml")).toMatchObject({
     jobs: {
       docs: { needs: "changes", if: "needs.changes.outputs.release != 'true'", steps: expect.arrayContaining([{ run: "bun run docs:build" }]) },
-      checks: { needs: ["changes", "static", "docs", "test"] },
+      checks: { needs: ["changes", "static", "docs", "unit"] },
     },
   });
   expect((await workflows(repo)).exitCode).toBe(0);
@@ -80,6 +120,19 @@ test("a project with docs:build loses its docs-only pull request build, or a pro
   expect((await workflows(repo)).exitCode).toBe(1);
   expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
   expect(jobsOf(await parsed(repo, "ci.yml"), "ci.yml")).not.toHaveProperty("docs");
+  expect((await workflows(repo)).exitCode).toBe(0);
+}, 30_000);
+
+test("a generated e2e job kept after the last e2e test is deleted is rejected", async () => {
+  const repo = await open({ "package.json": manifest(), "tests/unit/one.test.ts": "export {};\n", "tests/e2e/one.test.ts": "export {};\n" });
+  await repo.commit("start");
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  expect(jobsOf(await parsed(repo, "ci.yml"), "ci.yml")).toHaveProperty("e2e");
+  await rm(join(repo.dir, "tests", "e2e", "one.test.ts"));
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  const jobs = jobsOf(await parsed(repo, "ci.yml"), "ci.yml");
+  expect(jobs).not.toHaveProperty("e2e");
+  expect(jobs).toMatchObject({ checks: { needs: ["changes", "static", "unit"] } });
   expect((await workflows(repo)).exitCode).toBe(0);
 }, 30_000);
 
@@ -315,6 +368,7 @@ test("a test job a person adds to the written ci.yml is refused until --write, w
   const repo = await open({ "package.json": manifest() });
   await repo.commit("start");
   await workflows(repo, ["--write"]);
+  await repo.write({ "tests/e2e/one.test.ts": "export {};\n" });
   const ci = join(repo.dir, ".github", "workflows", "ci.yml");
   const e2e = "  e2e:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: ./.github/actions/setup\n      - id: test\n        run: bun run test:e2e\n\n";
   await Bun.write(ci, (await readFile(ci, "utf8")).replace("  checks:\n", `${e2e}  checks:\n`));
@@ -324,10 +378,9 @@ test("a test job a person adds to the written ci.yml is refused until --write, w
   expect(await parsed(repo, "ci.yml")).toMatchObject({
     jobs: {
       e2e: { needs: "changes", "runs-on": "ubuntu-latest", steps: expect.arrayContaining([{ id: "test", run: "bun run test:e2e" }]) },
-      checks: { needs: ["changes", "static", "test", "e2e"] },
+      checks: { needs: ["changes", "static", "unit", "e2e"] },
     },
   });
-  expect(await text(repo, "ci.yml")).toContain("'static test e2e' || needs.changes.outputs.docs-only == 'true' && 'test e2e' || ''");
   expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the code set checks-workflows writes\n" });
 }, 30_000);
 
@@ -385,7 +438,7 @@ test("a public repository with a private package keeps hosted runners on fork-re
     jobs: {
       changes: { "runs-on": "ubuntu-latest" },
       static: { "runs-on": "ubuntu-latest" },
-      test: { "runs-on": "ubuntu-latest" },
+      unit: { "runs-on": "ubuntu-latest" },
       checks: { "runs-on": "ubuntu-latest" },
     },
   });
@@ -409,7 +462,7 @@ test("a private repository with a public package must not lose the runner overri
   await repo.commit("start");
   expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
   expect(await parsed(repo, "ci.yml")).toMatchObject({
-    jobs: { test: { "runs-on": "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}" } },
+    jobs: { unit: { "runs-on": "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}" } },
   });
   const wiring = await ran($`bun ${WIRING}`.cwd(repo.dir).env({ ...withoutPullRequestEvent(), GITHUB_EVENT_PATH: join(repo.dir, "event.json") }));
   expect(wiring.exitCode).toBe(0);
@@ -424,7 +477,7 @@ test("a private package's release runs the full suite instead of skipping it", a
   });
   expect(await parsed(repo, "ci.yml")).toMatchObject({
     jobs: {
-      test: {
+      unit: {
         steps: expect.arrayContaining([expect.objectContaining({ id: "test", env: expect.objectContaining({ CHECK_RELEASE: "${{ needs.changes.outputs.check-release }}" }), run: "bunx checks-ci test" })]),
       },
     },

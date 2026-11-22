@@ -124,8 +124,8 @@ One is the `workflow_dispatch` run on a `release/` branch, which [checks-release
 The other is the same repository pull request from `release/<base>` into `<base>`.
 On those runs every job but `changes` and `checks` skips, unless the repository is a private root with a `test` script.
 Then the static, docs, and test jobs run on the release pull request, and the gate does not accept their skips.
-Its default test step runs `bunx checks-ci test` with `CHECK_RELEASE` set from the `check-release` output of `changes`.
-That step runs `bun run test` on the release pull request and `bunx checks-test --pr` on any other run.
+Its default test step runs `bunx checks-ci test` with `CHECK_RELEASE` set from the `check-release` output of `changes` and `TEST_TIER` set to its tier.
+For each default tier, that step runs `bun run test --tier=<tier>` on the release pull request and `bunx checks-test --pr --tier=<tier>` on any other run.
 A fork pull request from a `release/` branch and a pull request from a `release/` branch that does not match `release/<base>` run every job.
 Each job reads the rule once from the `release` output of `changes`, as `if: needs.changes.outputs.release != 'true'`.
 
@@ -133,6 +133,8 @@ The test jobs `ci.yml` holds are the record of what the repository runs.
 The `docs` job runs on every pull request the `static` job runs on, documentation-only ones included, and `checks` requires it to pass.
 A job whose step with id `test` runs a command is a test job.
 It keeps its name, that command, the browsers its `playwright` step installs, and its `runs-on`.
+A single all-tier `test` or `unit` job using `bunx checks-test --pr` or `bun run test --pr` becomes separate tier jobs.
+The split keeps a `--parallel` argument and moves the browser setup to `e2e`.
 In a site, a test job that needs `site` reads the build.
 `changes`, `static`, `site` in a site and `checks` are always there.
 Every other line of the file is the shape the kit writes: the order of the jobs, `needs`, `if`, the pins and the permissions.
@@ -142,8 +144,14 @@ A `ci.yml` with no test job gets the default jobs of its kind:
 
 | Kind | Default test jobs |
 | --- | --- |
-| code | `test`, which runs `bunx checks-test --pr` |
-| site | `unit`, which runs `bunx checks-test --pr`, and `browser`, which runs `bunx checks-browser --pr` on `webkit` against the `site-dist` build |
+| code | `unit` and, when `tests/e2e/` holds a test file, `e2e` |
+| site | `unit`, `e2e` when present, and `browser`, which runs `bunx checks-browser --pr` on `webkit` against the `site-dist` build |
+
+The `unit` job runs `bunx checks-test --pr --tier=unit`.
+The `e2e` job runs `bunx checks-test --pr --tier=e2e`.
+The `checks` job requires both jobs when both exist.
+Rulesets that require individual test jobs must require `unit` and, when present, `e2e`.
+A ruleset requiring only the aggregate `checks` job needs no change.
 
 Set `repositoryVisibility: "private"` in `checks.config.ts` for a private GitHub repository.
 The setting defaults to `public` and is independent of the `private` field in `package.json`.
@@ -153,12 +161,12 @@ A private repository uses `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` for its de
 The generated mutation workflow always uses hosted runners.
 The default test runner follows the setting even when a previous `ci.yml` holds the other default.
 
-To add a test job, copy the `test` job of `ci.yml` under a new name, change the `run` of its step with id `test`, then run `checks-workflows --write`.
+To add a test job, copy the `unit` job of `ci.yml` under a new name, change the `run` of its step with id `test`, then run `checks-workflows --write`.
 
 ## What it reads
 
 It reads the `.yml` and `.yaml` files under `.github/workflows/`, the files under `.github/actions/`, and `checks.config.ts` from the repository root.
-It also reads the root and workspace `package.json` files.
+It also reads the root and workspace `package.json` files and the test files under `tests/e2e/`.
 
 ## Arguments
 

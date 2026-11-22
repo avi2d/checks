@@ -156,7 +156,7 @@ A narrowed run judges only the skips the files it ran declare.
 
 ## The pull request entry
 
-`checks-test --pr` is the one test step a CI workflow runs, on a pull request and on `workflow_dispatch` alike.
+The CI workflow runs `checks-test --pr --tier=unit` and `checks-test --pr --tier=e2e` as separate test steps, on a pull request and on `workflow_dispatch` alike.
 It runs the unit and e2e test files the pull request reaches, as [Pull request runs](#pull-request-runs) says.
 A pull request that changes only top-level and `docs/` Markdown runs no test and passes.
 A release pull request and any run that is not a pull request run the whole suite.
@@ -253,7 +253,8 @@ The default command takes no arguments except `--parallel=<workers>`, as [Parall
 A `package.json` script never takes `--full`, as [checks-test-layout](checks-test-layout.md) says of `scripts.test`.
 `--changed` runs the test files the change reaches, as [Changed-file runs](#changed-file-runs) says, and takes neither a tier nor `--full`.
 `scripts.test` never takes `--changed` either, so CI still runs the suite it reaches.
-`--pr` runs the tests a pull request reaches, as [The pull request entry](#the-pull-request-entry) says, and takes neither a tier, `--full` nor `--changed`.
+`--pr` runs the tests a pull request reaches, as [The pull request entry](#the-pull-request-entry) says.
+It takes `--tier=unit` or `--tier=e2e` to select one tier, but not `--full` or `--changed`.
 Its named tier options are `--tier=live`, `--tier=pixel`, `--tier=unit` and `--tier=e2e`, and a tier run takes `--parallel=<workers>` for one run too, but not `--full`.
 `--junit=<file>` keeps the JUnit report Bun wrote at `<file>`, whether the tests passed or failed, so a whole-tree run hands it to [checks-whole-tree-run](checks-whole-tree-run.md).
 A `package.json` script never takes `--junit`, as [checks-test-layout](checks-test-layout.md) says of `scripts.test`.
@@ -290,7 +291,7 @@ checks-test: no test skipped
 ## When it runs
 
 The repository's `test` script runs it.
-The kit's pull request workflow runs it as `bunx checks-test --pr`.
+The kit's pull request workflow runs each tier the repository holds in a separate job with `--pr`.
 Both commands enforce the time limit in CI without another workflow step.
 A repository that tracks no TypeScript source does not need it, as [checks-test-layout](checks-test-layout.md) says.
 

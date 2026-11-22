@@ -27,6 +27,36 @@ function testChanged(repo: FixtureRepo): Promise<Ran> {
   return ran($`bun ${join(CHECKOUT, "src", "testing", "test.ts")} --changed`.cwd(repo.dir).env(env));
 }
 
+test("--pr with a tier excludes the other tier and tests untouched by the pull request", async () => {
+  const repo = await repository();
+  await repo.write({ "tests/e2e/untouched.test.ts": FAILING });
+  await repo.commit("test: add an e2e file");
+  await branchedFromOrigin(repo);
+  await repo.write({ "tests/unit/a.test.ts": PASSING + "\n" });
+  await repo.commit("test: change the unit file");
+  const sha = (await $`git rev-parse HEAD`.cwd(repo.dir).text()).trim();
+  await repo.write({ "event.json": JSON.stringify({ pull_request: { number: 1, title: "test change", base: { ref: "main" }, head: { sha } } }) });
+  const env = { ...withoutPullRequestEvent(), CI: "true", GITHUB_EVENT_NAME: "pull_request", GITHUB_EVENT_PATH: join(repo.dir, "event.json") };
+  const script = join(CHECKOUT, "src", "testing", "test.ts");
+  const unit = await ran($`bun ${script} --pr --tier=unit --parallel=1`.cwd(repo.dir).env(env));
+  const e2e = await ran($`bun ${script} --pr --tier=e2e --parallel=1`.cwd(repo.dir).env(env));
+  expect(unit.exitCode).toBe(0);
+  expect(unit.text).toContain("the pull request reaches 1 of 1 test file(s)");
+  expect(unit.text).toContain("1 pass");
+  expect(e2e.exitCode).toBe(0);
+  expect(e2e.text).toContain("the pull request reaches 0 of 1 test file(s)");
+  expect(e2e.text).not.toContain("1 fail");
+}, 60_000);
+
+test("--pr with an empty unit tier passes instead of running the e2e tier or failing on a missing directory", async () => {
+  const repo = await open({ "package.json": JSON.stringify({ name: "test-tier-fixture" }), "tests/e2e/only.test.ts": FAILING });
+  const script = join(CHECKOUT, "src", "testing", "test.ts");
+  const result = await ran($`bun ${script} --pr --tier=unit`.cwd(repo.dir).env({ ...withoutPullRequestEvent(), CI: "true" }));
+  expect(result.exitCode).toBe(0);
+  expect(result.text).toContain("the unit tier has no test files");
+  expect(result.text).not.toContain("1 fail");
+}, 60_000);
+
 test("a clone without the remote-tracking default branch fails before any tier runs", async () => {
   const repo = await repository();
   await $`git checkout -q -b feature`.cwd(repo.dir).quiet();

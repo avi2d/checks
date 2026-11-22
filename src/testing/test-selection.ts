@@ -64,6 +64,7 @@ export const readSuiteScope = Effect.fn("readSuiteScope")(function* (
   if (files.length === 0 && selected.length > 0) {
     return { kind: "empty", message: "all selected test files are excluded, so no test ran" } as const;
   }
+  if (files.length === 0 && selection.kind === "tier") return { kind: "empty", message: `the ${selection.tier} tier has no test files` } as const;
   if (files.length === 0 && selection.kind === "smoke") {
     const message = `no unit test and no smoke list, so this local run ran nothing; declare the smoke key of ${SETTINGS_FILE}`;
     return { kind: "empty", message } as const;

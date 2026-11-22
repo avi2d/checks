@@ -30,7 +30,7 @@ test("a code write that leaves a job calling another repository's workflow, or a
   expect(await listed(repo, ".github/workflows")).toEqual(["ci.yml", "main.yml", "pr-title.yml", "release.yml"]);
   expect(await listed(repo, ".github/actions")).toEqual(["setup", "setup/action.yml", "setup/bun-without-unzip.sh"]);
   for (const name of await listed(repo, ".github/workflows")) expectNoRemoteUses(name, await text(repo, join(".github", "workflows", name)));
-  expect(await parsed(repo, "ci.yml")).toMatchObject({ jobs: { checks: { needs: ["changes", "static", "test"], if: "always()" } } });
+  expect(await parsed(repo, "ci.yml")).toMatchObject({ jobs: { checks: { needs: ["changes", "static", "unit"], if: "always()" } } });
   expect(await parsed(repo, "ci.yml")).not.toMatchObject({ jobs: { checks: { uses: expect.anything() } } });
   expect(await parsed(repo, "pr-title.yml")).toMatchObject({ on: { pull_request: { types: ["opened", "synchronize", "reopened", "edited"] } } });
 

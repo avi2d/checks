@@ -58,10 +58,13 @@ test("--changed combines with a worker count and a junit file, while a tier, --f
   expect(entryOptions(["--changed", "--changed"])).toBeUndefined();
 });
 
-test("--pr takes a worker count and a junit file, while a tier, --full, --changed or a second --pr is refused", () => {
+test("--pr accepts a unit or e2e tier but rejects live tiers and conflicting run modes", () => {
   expect(entryOptions(["--pr", "--junit=reports/pr.xml"])).toEqual({ options: {}, junit: expect.anything(), run: "pr" });
   expect(entryOptions(["--parallel=2", "--pr"])?.run).toBe("pr");
-  expect(entryOptions(["--pr", "--tier=e2e"])).toBeUndefined();
+  expect(entryOptions(["--pr", "--tier=e2e"])?.options.tier).toBe("e2e");
+  expect(entryOptions(["--pr", "--tier=unit"])?.options.tier).toBe("unit");
+  expect(entryOptions(["--pr", "--tier=live"])).toBeUndefined();
+  expect(entryOptions(["--pr", "--tier=pixel"])).toBeUndefined();
   expect(entryOptions(["--pr", "--full"])).toBeUndefined();
   expect(entryOptions(["--pr", "--changed"])).toBeUndefined();
   expect(entryOptions(["--pr", "--pr"])).toBeUndefined();
