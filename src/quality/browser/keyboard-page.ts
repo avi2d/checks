@@ -35,6 +35,14 @@ type PageStyle = {
   readonly display: string;
   readonly clipPath: string;
   readonly position: string;
+  readonly width: string;
+  readonly height: string;
+  readonly boxSizing: string;
+  readonly direction: string;
+  readonly paddingTop: string;
+  readonly paddingRight: string;
+  readonly paddingBottom: string;
+  readonly paddingLeft: string;
   readonly top: string;
   readonly right: string;
   readonly bottom: string;
@@ -83,6 +91,7 @@ type PageElement = {
   readonly scrollLeft: number;
   readonly scrollTop: number;
   readonly blur: () => void;
+  readonly focus: (options: { readonly preventScroll: true }) => void;
 };
 
 type PageBitmap = { readonly close: () => void };
@@ -110,24 +119,12 @@ type PageCanvas = {
   readonly getContext: (kind: string, options: { readonly willReadFrequently: boolean }) => PageContext | null;
 };
 
+type Axis = { readonly start: number; readonly size: number };
+
 export const scanRings = (el: PageElement): RingScan[] => {
-  const ringKeys = [
-    "outlineStyle", "outlineWidth", "outlineColor", "outlineOffset", "boxShadow",
-    "borderTopWidth", "borderTopStyle", "borderTopColor",
-    "borderRightWidth", "borderRightStyle", "borderRightColor",
-    "borderBottomWidth", "borderBottomStyle", "borderBottomColor",
-    "borderLeftWidth", "borderLeftStyle", "borderLeftColor",
-    "backgroundColor", "backgroundImage",
-  ] as const;
-  const ringPaint = (painted: PageStyle): ReadonlyArray<string> => ringKeys.map((key) => key + "=" + painted[key]);
-  const revealKeys = [
-    "content", "opacity", "visibility", "display", "clipPath", "transform", "translate", "rotate", "scale",
-    "position", "top", "right", "bottom", "left",
-    "marginTop", "marginRight", "marginBottom", "marginLeft",
-  ] as const;
-  const pseudoPaint = (painted: PageStyle): ReadonlyArray<string> => [...ringPaint(painted), ...revealKeys.map((key) => key + "=" + painted[key])];
   const view = el.ownerDocument.defaultView;
-  const root = el.ownerDocument.documentElement;
+  const cssPixels = (token: string): number => token.endsWith("px") ? parseFloat(token) : NaN;
+  const pxOrZero = (token: string): number => cssPixels(token) || 0;
   const holdsPlaced = (style: PageStyle): boolean =>
     style.position !== "static" ||
     [style.transform, style.translate, style.rotate, style.scale, style.perspective, style.filter, style.backdropFilter].some((value) => value !== "none") ||
@@ -135,77 +132,110 @@ export const scanRings = (el: PageElement): RingScan[] => {
     style.containerType !== "normal" ||
     /transform|perspective|filter/.test(style.willChange);
   const frameOf = (host: PageElement): Box => {
+    const root = host.ownerDocument.documentElement;
     let holder: PageElement | null = host;
     while (holder !== null && holder !== root && !holdsPlaced(view.getComputedStyle(holder))) holder = holder.parentElement;
-    if (holder === null || holder === root) {
-      return { x: -view.scrollX, y: -view.scrollY, width: root.clientWidth, height: root.clientHeight };
-    }
+    if (holder === null || holder === root) return { x: -view.scrollX, y: -view.scrollY, width: root.clientWidth, height: root.clientHeight };
     const rect = holder.getBoundingClientRect();
-    if (holder.clientWidth === 0 && holder.clientHeight === 0 && (rect.width !== 0 || rect.height !== 0)) {
-      const holderStyle = view.getComputedStyle(holder);
-      const toPx = (token: string): number => {
-        const parsed = parseFloat(token);
-        return Number.isFinite(parsed) ? parsed : 0;
-      };
-      const borderLeft = toPx(holderStyle.borderLeftWidth);
-      const borderTop = toPx(holderStyle.borderTopWidth);
-      const borderRight = toPx(holderStyle.borderRightWidth);
-      const borderBottom = toPx(holderStyle.borderBottomWidth);
-      return { x: rect.x + borderLeft - holder.scrollLeft, y: rect.y + borderTop - holder.scrollTop, width: Math.max(0, rect.width - borderLeft - borderRight), height: Math.max(0, rect.height - borderTop - borderBottom) };
+    if (holder.clientWidth !== 0 || holder.clientHeight !== 0 || (rect.width === 0 && rect.height === 0)) {
+      return { x: rect.x + holder.clientLeft - holder.scrollLeft, y: rect.y + holder.clientTop - holder.scrollTop, width: holder.clientWidth, height: holder.clientHeight };
     }
-    return { x: rect.x + holder.clientLeft - holder.scrollLeft, y: rect.y + holder.clientTop - holder.scrollTop, width: holder.clientWidth, height: holder.clientHeight };
+    const style = view.getComputedStyle(holder);
+    const left = pxOrZero(style.borderLeftWidth);
+    const top = pxOrZero(style.borderTopWidth);
+    const width = Math.max(0, rect.width - left - pxOrZero(style.borderRightWidth));
+    const height = Math.max(0, rect.height - top - pxOrZero(style.borderBottomWidth));
+    return { x: rect.x + left - holder.scrollLeft, y: rect.y + top - holder.scrollTop, width, height };
   };
-  const pseudoBox = (host: PageElement, painted: PageStyle, hostBox: Box): Box => {
-    if (painted.position !== "absolute") return hostBox;
-    const left = parseFloat(painted.left) + parseFloat(painted.marginLeft);
-    const top = parseFloat(painted.top) + parseFloat(painted.marginTop);
-    const right = parseFloat(painted.right) + parseFloat(painted.marginRight);
-    const bottom = parseFloat(painted.bottom) + parseFloat(painted.marginBottom);
-    if (![left, top, right, bottom].every((inset) => Number.isFinite(inset))) return hostBox;
+  const usedAxis = (style: PageStyle, frame: Box, axis: "width" | "height"): Axis | null => {
+    const horizontal = axis === "width";
+    const [near, far] = horizontal ? ["Left", "Right"] as const : ["Top", "Bottom"] as const;
+    const start = cssPixels(horizontal ? style.left : style.top) + pxOrZero(style[`margin${near}`]);
+    const end = cssPixels(horizontal ? style.right : style.bottom) + pxOrZero(style[`margin${far}`]);
+    const edges = [style[`padding${near}`], style[`padding${far}`], style[`border${near}Width`], style[`border${far}Width`]];
+    const size = cssPixels(style[axis]) + (style.boxSizing === "border-box" ? 0 : edges.reduce((sum, edge) => sum + pxOrZero(edge), 0));
+    const preferEnd = horizontal && style.direction === "rtl";
+    if (Number.isFinite(size)) {
+      if (Number.isFinite(end) && (preferEnd || !Number.isFinite(start))) return { start: frame[axis] - end - size, size };
+      if (Number.isFinite(start)) return { start, size };
+    }
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+    return { start, size: Math.max(0, frame[axis] - start - end) };
+  };
+  const measurePseudoBox = (host: PageElement, style: PageStyle, box: Box): Box => {
+    if (style.position !== "absolute") return box;
     const frame = frameOf(host);
-    return { x: frame.x + left, y: frame.y + top, width: frame.width - left - right, height: frame.height - top - bottom };
+    const horizontal = usedAxis(style, frame, "width");
+    const vertical = usedAxis(style, frame, "height");
+    return {
+      x: horizontal === null ? box.x : frame.x + horizontal.start, y: vertical === null ? box.y : frame.y + vertical.start,
+      width: horizontal?.size ?? box.width, height: vertical?.size ?? box.height,
+    };
   };
-  const ringOf = (painted: PageStyle, box: Box): Ring => ({
+  const visibleColor = (color: string): boolean =>
+    !(color.startsWith("rgba(") && color.endsWith(", 0)")) && !color.endsWith(" / 0)");
+  const paintsEdge = (width: string, style: string, color: string): boolean =>
+    style !== "none" && style !== "hidden" && parseFloat(width) > 0 && visibleColor(color);
+  const edgePaint = (width: string, style: string, color: string): string =>
+    paintsEdge(width, style, color) ? [width, style, color].join(" ") : "";
+  const ringPaint = (style: PageStyle): ReadonlyArray<string> => [
+    edgePaint(style.outlineWidth, style.outlineStyle, style.outlineColor) === ""
+      ? "" : [style.outlineWidth, style.outlineStyle, style.outlineColor, style.outlineOffset].join(" "),
+    edgePaint(style.borderTopWidth, style.borderTopStyle, style.borderTopColor),
+    edgePaint(style.borderRightWidth, style.borderRightStyle, style.borderRightColor),
+    edgePaint(style.borderBottomWidth, style.borderBottomStyle, style.borderBottomColor),
+    edgePaint(style.borderLeftWidth, style.borderLeftStyle, style.borderLeftColor),
+    style.boxShadow === "none" ? "" : style.boxShadow,
+    visibleColor(style.backgroundColor) ? style.backgroundColor : "",
+    style.backgroundImage === "none" ? "" : style.backgroundImage,
+  ];
+  const revealKeys = [
+    "content", "opacity", "visibility", "display", "clipPath", "transform", "translate", "rotate", "scale",
+    "position", "top", "right", "bottom", "left", "width", "height",
+    "marginTop", "marginRight", "marginBottom", "marginLeft",
+  ] as const;
+  const ringOf = (style: PageStyle, box: Box, paint: ReadonlyArray<string>): Ring => ({
     box,
-    outlineStyle: painted.outlineStyle,
-    outlineWidth: painted.outlineWidth,
-    outlineOffset: painted.outlineOffset,
-    boxShadow: painted.boxShadow,
+    outlineWidth: paintsEdge(style.outlineWidth, style.outlineStyle, style.outlineColor) ? style.outlineWidth : "0",
+    outlineOffset: style.outlineOffset,
+    boxShadow: style.boxShadow,
+    paint,
   });
+  const pseudoOf = (host: PageElement, pseudo: string, hostBox: Box): Ring | null => {
+    const style = view.getComputedStyle(host, pseudo);
+    if (["none", "normal"].includes(style.content) || style.display === "none" || style.visibility === "hidden" || style.opacity === "0") return null;
+    const edgesAndFill = ringPaint(style);
+    if (style.content === '""' && edgesAndFill.every((part) => part === "")) return null;
+    return ringOf(style, measurePseudoBox(host, style, hostBox), [...edgesAndFill, ...revealKeys.map((key) => style[key])]);
+  };
   const nodes: RingScan[] = [];
-  let current: PageElement | null = el;
-  while (current !== null) {
+  for (let current: PageElement | null = el; current !== null; current = current.parentElement) {
     const rect = current.getBoundingClientRect();
     const box: Box = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
     const self = view.getComputedStyle(current);
-    const before = view.getComputedStyle(current, "::before");
-    const after = view.getComputedStyle(current, "::after");
-    const rings = [ringOf(self, box)];
-    for (const pseudo of [before, after]) {
-      if (pseudo.content !== "none" && pseudo.content !== "normal") rings.push(ringOf(pseudo, pseudoBox(current, pseudo, box)));
-    }
     nodes.push({
-      rings,
-      paint: [...ringPaint(self), ...pseudoPaint(before).map((entry) => "before:" + entry), ...pseudoPaint(after).map((entry) => "after:" + entry)],
+      element: ringOf(self, box, ringPaint(self)),
+      before: pseudoOf(current, "::before", box),
+      after: pseudoOf(current, "::after", box),
     });
-    current = current.parentElement;
   }
   return nodes;
 };
 
 const RingSchema = Schema.Struct({
   box: BoxSchema,
-  outlineStyle: Schema.String,
   outlineWidth: Schema.String,
   outlineOffset: Schema.String,
   boxShadow: Schema.String,
+  paint: Schema.Array(Schema.String),
 });
 
 type Ring = typeof RingSchema.Type;
 
 const RingScanSchema = Schema.Struct({
-  rings: Schema.Array(RingSchema),
-  paint: Schema.Array(Schema.String),
+  element: RingSchema,
+  before: Schema.NullOr(RingSchema),
+  after: Schema.NullOr(RingSchema),
 });
 
 type RingScan = typeof RingScanSchema.Type;
@@ -259,16 +289,10 @@ const shadowOut = (value: string): number => {
 };
 
 const ringOut = (ring: Ring): number => {
-  const outline = ring.outlineStyle === "none" ? 0 : Math.max(0, (len(ring.outlineWidth) ?? 0) + (len(ring.outlineOffset) ?? 0));
+  const width = len(ring.outlineWidth) ?? 0;
+  const outline = width > 0 ? width + (len(ring.outlineOffset) ?? 0) : 0;
   return Math.max(outline, shadowOut(ring.boxShadow));
 };
-
-export const union = (first: Box, second: Box): Box => ({
-  x: Math.min(first.x, second.x),
-  y: Math.min(first.y, second.y),
-  width: Math.max(first.x + first.width, second.x + second.width) - Math.min(first.x, second.x),
-  height: Math.max(first.y + first.height, second.y + second.height) - Math.min(first.y, second.y),
-});
 
 const grown = (box: Box, margin: number): Box => ({
   x: box.x - margin,
@@ -277,8 +301,16 @@ const grown = (box: Box, margin: number): Box => ({
   height: box.height + margin * 2,
 });
 
-export const reachOf = (scan: RingScan, from: Box): Box =>
-  scan.rings.reduce((reach, ring) => union(reach, grown(ring.box, ringOut(ring))), from);
+const changedRingBoxes = (focused: Ring | null, blurred: Ring | null): readonly Box[] => {
+  if (focused?.paint.join("\n") === blurred?.paint.join("\n")) return [];
+  return [focused, blurred].flatMap((ring) => ring === null ? [] : [grown(ring.box, ringOut(ring))]);
+};
+
+export const changedPaintBoxes = (focused: RingScan, blurred: RingScan): readonly Box[] => [
+  ...changedRingBoxes(focused.element, blurred.element),
+  ...changedRingBoxes(focused.before, blurred.before),
+  ...changedRingBoxes(focused.after, blurred.after),
+];
 
 export const decodeRingScans = Schema.decodeUnknownEffect(Schema.Array(RingScanSchema));
 
@@ -294,66 +326,6 @@ export const RESOLVE_LEAF = `(() => {
   return leaf;
 })()`;
 
-export type CropArgs = {
-  readonly first: string;
-  readonly second: string;
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
-};
-
-const CompareOutcomeSchema = Schema.Union([
-  Schema.Struct({ compared: Schema.Literal(true), differs: Schema.Boolean }),
-  Schema.Struct({ compared: Schema.Literal(false) }),
-]);
-
-type CompareOutcome = typeof CompareOutcomeSchema.Type;
-
-export const compareCrops = (el: PageElement, args: CropArgs): Promise<CompareOutcome> => {
-  const view = el.ownerDocument.defaultView;
-  const scale = view.devicePixelRatio || 1;
-  const left = Math.round(args.x * scale);
-  const top = Math.round(args.y * scale);
-  const width = Math.max(1, Math.round(args.width * scale));
-  const height = Math.max(1, Math.round(args.height * scale));
-  const unreadable: CompareOutcome = { compared: false };
-  const changed: CompareOutcome = { compared: true, differs: true };
-  const same: CompareOutcome = { compared: true, differs: false };
-  const decode = (raw: string): Promise<PageBitmap> => {
-    const binary = view.atob(raw);
-    const bytes = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-    return view.createImageBitmap(new view.Blob([bytes], { type: "image/png" }));
-  };
-  const pixelsOf = (shot: PageBitmap): ArrayLike<number> | null => {
-    const canvas = el.ownerDocument.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d", { willReadFrequently: true });
-    if (context === null) return null;
-    context.drawImage(shot, left, top, width, height, 0, 0, width, height);
-    return context.getImageData(0, 0, width, height).data;
-  };
-  return decode(args.first).then((first) => {
-    const before = pixelsOf(first);
-    first.close();
-    if (before === null) return unreadable;
-    return decode(args.second).then((second) => {
-      const after = pixelsOf(second);
-      second.close();
-      if (after === null) return unreadable;
-      if (before.length !== after.length) return changed;
-      for (let index = 0; index < before.length; index += 1) {
-        if (before[index] !== after[index]) return changed;
-      }
-      return same;
-    });
-  });
-};
-
-export const decodeOutcome = Schema.decodeUnknownEffect(CompareOutcomeSchema);
-
 export const remember = (el: PageElement, id: string): void => {
   const view = el.ownerDocument.defaultView;
   if (view.checksKb === undefined) view.checksKb = new WeakMap();
@@ -365,8 +337,4 @@ export const recall = (el: PageElement): string => el.ownerDocument.defaultView.
 
 export const decodeRecall = Schema.decodeUnknownEffect(Schema.String);
 
-export const blurs = (el: PageElement): void => {
-  el.blur();
-};
-
-export type { Box, PageElement };
+export type { Box, PageBitmap, PageElement };
