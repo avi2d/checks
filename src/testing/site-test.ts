@@ -1,7 +1,7 @@
 import { BunServices } from "@effect/platform-bun";
 import { afterAll, test } from "bun:test";
 import { Effect } from "effect";
-import { chromium, webkit, type Browser, type BrowserServer, type LaunchOptions } from "playwright-core";
+import { chromium, webkit, type Browser, type BrowserServer, type BrowserType, type LaunchOptions } from "playwright-core";
 import { Usage } from "../core/main.ts";
 import { listenSite, readSite, sitePages } from "../quality/browser/serve.ts";
 import { type ScreenEngine } from "./block-screens.ts";
@@ -23,11 +23,21 @@ type OpenBrowser = { readonly browser: Browser; readonly server: BrowserServer }
 
 const browsers = new Map<string, Promise<OpenBrowser>>();
 
+function connectLocalBrowser(browserType: BrowserType, server: BrowserServer): Promise<Browser> {
+  return browserType.connect(server.wsEndpoint()).then((browser) => {
+    const connection = (browser as unknown as { _connection?: { _isRemote: boolean; isRemote(): boolean } })._connection;
+    if (connection === undefined) throw new Error("site-test cannot use a remotely connected browser");
+    connection._isRemote = false;
+    if (connection.isRemote()) throw new Error("site-test cannot use a remotely connected browser");
+    return browser;
+  });
+}
+
 function launchSiteBrowser(engine: ScreenEngine, launch: LaunchOptions | undefined): Promise<OpenBrowser> {
   const browserType = engine === "webkit" ? webkit : chromium;
   const options = engine === "webkit" ? launch : { ...launch, args: ["--font-render-hinting=none", ...(launch?.args ?? [])] };
   return browserType.launchServer(options).then((server) =>
-    browserType.connect(server.wsEndpoint()).then(
+    connectLocalBrowser(browserType, server).then(
       (browser) => ({ browser, server }),
       (error: unknown) => server.kill().then(() => Promise.reject(error)),
     ),
