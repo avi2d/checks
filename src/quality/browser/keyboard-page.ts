@@ -119,73 +119,60 @@ type PageCanvas = {
   readonly getContext: (kind: string, options: { readonly willReadFrequently: boolean }) => PageContext | null;
 };
 
-const measurePseudoBox = (anchor: PageElement, pseudoStyle: PageStyle, hostBox: Box): Box => {
-  if (pseudoStyle.position !== "absolute") return hostBox;
-  const view = anchor.ownerDocument.defaultView;
-  const root = anchor.ownerDocument.documentElement;
+type Axis = { readonly start: number; readonly size: number };
+
+export const scanRings = (el: PageElement): RingScan[] => {
+  const view = el.ownerDocument.defaultView;
+  const cssPixels = (token: string): number => token.endsWith("px") ? parseFloat(token) : NaN;
+  const pxOrZero = (token: string): number => cssPixels(token) || 0;
   const holdsPlaced = (style: PageStyle): boolean =>
     style.position !== "static" ||
     [style.transform, style.translate, style.rotate, style.scale, style.perspective, style.filter, style.backdropFilter].some((value) => value !== "none") ||
     /layout|paint|strict|content/.test(style.contain) ||
     style.containerType !== "normal" ||
     /transform|perspective|filter/.test(style.willChange);
-  const cssPixels = (token: string): number => token.endsWith("px") ? parseFloat(token) : NaN;
-  const pxOrZero = (token: string): number => cssPixels(token) || 0;
   const frameOf = (host: PageElement): Box => {
+    const root = host.ownerDocument.documentElement;
     let holder: PageElement | null = host;
     while (holder !== null && holder !== root && !holdsPlaced(view.getComputedStyle(holder))) holder = holder.parentElement;
-    if (holder === null || holder === root) {
-      return { x: -view.scrollX, y: -view.scrollY, width: root.clientWidth, height: root.clientHeight };
-    }
+    if (holder === null || holder === root) return { x: -view.scrollX, y: -view.scrollY, width: root.clientWidth, height: root.clientHeight };
     const rect = holder.getBoundingClientRect();
-    if (holder.clientWidth === 0 && holder.clientHeight === 0 && (rect.width !== 0 || rect.height !== 0)) {
-      const holderStyle = view.getComputedStyle(holder);
-      const borderLeft = pxOrZero(holderStyle.borderLeftWidth);
-      const borderTop = pxOrZero(holderStyle.borderTopWidth);
-      const borderRight = pxOrZero(holderStyle.borderRightWidth);
-      const borderBottom = pxOrZero(holderStyle.borderBottomWidth);
-      return { x: rect.x + borderLeft - holder.scrollLeft, y: rect.y + borderTop - holder.scrollTop, width: Math.max(0, rect.width - borderLeft - borderRight), height: Math.max(0, rect.height - borderTop - borderBottom) };
+    if (holder.clientWidth !== 0 || holder.clientHeight !== 0 || (rect.width === 0 && rect.height === 0)) {
+      return { x: rect.x + holder.clientLeft - holder.scrollLeft, y: rect.y + holder.clientTop - holder.scrollTop, width: holder.clientWidth, height: holder.clientHeight };
     }
-    return { x: rect.x + holder.clientLeft - holder.scrollLeft, y: rect.y + holder.clientTop - holder.scrollTop, width: holder.clientWidth, height: holder.clientHeight };
+    const style = view.getComputedStyle(holder);
+    const left = pxOrZero(style.borderLeftWidth);
+    const top = pxOrZero(style.borderTopWidth);
+    const width = Math.max(0, rect.width - left - pxOrZero(style.borderRightWidth));
+    const height = Math.max(0, rect.height - top - pxOrZero(style.borderBottomWidth));
+    return { x: rect.x + left - holder.scrollLeft, y: rect.y + top - holder.scrollTop, width, height };
   };
-  type Axis = { readonly start: number; readonly size: number };
-  const insetAxis = (frameSize: number, start: number, end: number, size: number, fromEnd = false): Axis | null => {
+  const usedAxis = (style: PageStyle, frame: Box, axis: "width" | "height"): Axis | null => {
+    const horizontal = axis === "width";
+    const [near, far] = horizontal ? ["Left", "Right"] as const : ["Top", "Bottom"] as const;
+    const start = cssPixels(horizontal ? style.left : style.top) + pxOrZero(style[`margin${near}`]);
+    const end = cssPixels(horizontal ? style.right : style.bottom) + pxOrZero(style[`margin${far}`]);
+    const edges = [style[`padding${near}`], style[`padding${far}`], style[`border${near}Width`], style[`border${far}Width`]];
+    const size = cssPixels(style[axis]) + (style.boxSizing === "border-box" ? 0 : edges.reduce((sum, edge) => sum + pxOrZero(edge), 0));
+    const preferEnd = horizontal && style.direction === "rtl";
     if (Number.isFinite(size)) {
-      if (Number.isFinite(end) && (fromEnd || !Number.isFinite(start))) return { start: frameSize - end - size, size };
+      if (Number.isFinite(end) && (preferEnd || !Number.isFinite(start))) return { start: frame[axis] - end - size, size };
       if (Number.isFinite(start)) return { start, size };
     }
     if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
-    return { start, size: Math.max(0, frameSize - start - end) };
+    return { start, size: Math.max(0, frame[axis] - start - end) };
   };
-  const insetWithMargin = (inset: string, margin: string): number => cssPixels(inset) + pxOrZero(margin);
-  const borderBoxSize = (style: PageStyle, size: string, edges: readonly string[]): number =>
-    cssPixels(size) + (style.boxSizing === "border-box" ? 0 : edges.reduce((total, edge) => total + pxOrZero(edge), 0));
-  const horizontalAxis = (style: PageStyle, frame: Box): Axis | null => insetAxis(
-    frame.width,
-    insetWithMargin(style.left, style.marginLeft),
-    insetWithMargin(style.right, style.marginRight),
-    borderBoxSize(style, style.width, [style.paddingLeft, style.paddingRight, style.borderLeftWidth, style.borderRightWidth]),
-    style.direction === "rtl",
-  );
-  const verticalAxis = (style: PageStyle, frame: Box): Axis | null => insetAxis(
-    frame.height,
-    insetWithMargin(style.top, style.marginTop),
-    insetWithMargin(style.bottom, style.marginBottom),
-    borderBoxSize(style, style.height, [style.paddingTop, style.paddingBottom, style.borderTopWidth, style.borderBottomWidth]),
-  );
-  const frame = frameOf(anchor);
-  const horizontal = horizontalAxis(pseudoStyle, frame);
-  const vertical = verticalAxis(pseudoStyle, frame);
-  return {
-    x: horizontal === null ? hostBox.x : frame.x + horizontal.start,
-    y: vertical === null ? hostBox.y : frame.y + vertical.start,
-    width: horizontal?.size ?? hostBox.width,
-    height: vertical?.size ?? hostBox.height,
+  const measurePseudoBox = (host: PageElement, style: PageStyle, box: Box): Box => {
+    if (style.position !== "absolute") return box;
+    const frame = frameOf(host);
+    const horizontal = usedAxis(style, frame, "width");
+    const vertical = usedAxis(style, frame, "height");
+    return {
+      x: horizontal === null ? box.x : frame.x + horizontal.start, y: vertical === null ? box.y : frame.y + vertical.start,
+      width: horizontal?.size ?? box.width, height: vertical?.size ?? box.height,
+    };
   };
-};
-
-export const scanRings = (el: PageElement): RingScan[] => {
-    const visibleColor = (color: string): boolean =>
+  const visibleColor = (color: string): boolean =>
     !(color.startsWith("rgba(") && color.endsWith(", 0)")) && !color.endsWith(" / 0)");
   const paintsEdge = (width: string, style: string, color: string): boolean =>
     style !== "none" && style !== "hidden" && parseFloat(width) > 0 && visibleColor(color);
@@ -207,7 +194,6 @@ export const scanRings = (el: PageElement): RingScan[] => {
     "position", "top", "right", "bottom", "left", "width", "height",
     "marginTop", "marginRight", "marginBottom", "marginLeft",
   ] as const;
-  const view = el.ownerDocument.defaultView;
   const ringOf = (style: PageStyle, box: Box, paint: ReadonlyArray<string>): Ring => ({
     box,
     outlineWidth: paintsEdge(style.outlineWidth, style.outlineStyle, style.outlineColor) ? style.outlineWidth : "0",
@@ -223,8 +209,7 @@ export const scanRings = (el: PageElement): RingScan[] => {
     return ringOf(style, measurePseudoBox(host, style, hostBox), [...edgesAndFill, ...revealKeys.map((key) => style[key])]);
   };
   const nodes: RingScan[] = [];
-  let current: PageElement | null = el;
-  while (current !== null) {
+  for (let current: PageElement | null = el; current !== null; current = current.parentElement) {
     const rect = current.getBoundingClientRect();
     const box: Box = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
     const self = view.getComputedStyle(current);
@@ -233,7 +218,6 @@ export const scanRings = (el: PageElement): RingScan[] => {
       before: pseudoOf(current, "::before", box),
       after: pseudoOf(current, "::after", box),
     });
-    current = current.parentElement;
   }
   return nodes;
 };
