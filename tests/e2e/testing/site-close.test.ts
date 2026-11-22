@@ -48,9 +48,10 @@ siteTest("serves the site", { site: ${JSON.stringify(site)} }, async () => {});
   expect(await readFile(marker, "utf8")).toBe("close called");
 }, 20_000);
 
-test("a browser that already closed does not fail teardown", async () => {
+test("teardown does not skip a clean browser close", async () => {
   const dir = await scratch("site-closed-");
   const site = join(dir, "site");
+  const marker = join(dir, "closed");
   await mkdir(site);
   await symlink(join(CHECKOUT, "node_modules"), join(dir, "node_modules"));
   await writeFile(join(site, "index.html"), "<title>Site</title>");
@@ -58,12 +59,13 @@ test("a browser that already closed does not fail teardown", async () => {
   await writeFile(
     suite,
     `import { mock } from "bun:test";
+import { writeFile } from "node:fs/promises";
 
 const device = { userAgent: "fixture", deviceScaleFactor: 2, isMobile: true, hasTouch: true };
 const browser = {
-  isConnected: () => false,
+  isConnected: () => true,
   contexts: () => [],
-  close: () => Promise.resolve(),
+  close: () => writeFile(${JSON.stringify(marker)}, "closed"),
 };
 const engine = { launch: () => Promise.resolve(browser) };
 mock.module("playwright-core", () => ({
@@ -85,4 +87,5 @@ siteTest("serves the site", { site: ${JSON.stringify(site)} }, async () => {});
   const run = await ran($`bun test ${suite}`.cwd(CHECKOUT));
 
   expect(run.exitCode).toBe(0);
+  expect(await readFile(marker, "utf8")).toBe("closed");
 }, 20_000);
