@@ -113,6 +113,7 @@ const splitLegacyJobs = Effect.fn("splitLegacyJobs")(function* (path: string, jo
   const hasE2eJob = jobs.tests.some(({ name }) => name === "e2e");
   const narrowed: { readonly name: string; readonly counterpart: string }[] = [];
   const split = jobs.tests.flatMap((job) => {
+    if (!hasE2e && job.name === "e2e" && /^(bunx checks-test|bun run test) --pr( --parallel=[1-9][0-9]*)? --tier=e2e$/.test(job.run)) return [];
     const match = /^(bunx checks-test|bun run test)( --pr)( --parallel=[1-9][0-9]*)?$/.exec(job.run);
     if (match === null || (job.name !== "test" && job.name !== "unit")) return [job];
     const run = `${match[1]}${match[2]}${match[3] ?? ""}`;

@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
 import { CHECKOUT, fixtureRepos, ran, type FixtureRepo, type Ran } from "../lib/fixture-repo.ts";
@@ -120,6 +120,19 @@ test("a project with docs:build loses its docs-only pull request build, or a pro
   expect((await workflows(repo)).exitCode).toBe(1);
   expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
   expect(jobsOf(await parsed(repo, "ci.yml"), "ci.yml")).not.toHaveProperty("docs");
+  expect((await workflows(repo)).exitCode).toBe(0);
+}, 30_000);
+
+test("a generated e2e job kept after the last e2e test is deleted is rejected", async () => {
+  const repo = await open({ "package.json": manifest(), "tests/unit/one.test.ts": "export {};\n", "tests/e2e/one.test.ts": "export {};\n" });
+  await repo.commit("start");
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  expect(jobsOf(await parsed(repo, "ci.yml"), "ci.yml")).toHaveProperty("e2e");
+  await rm(join(repo.dir, "tests", "e2e", "one.test.ts"));
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  const jobs = jobsOf(await parsed(repo, "ci.yml"), "ci.yml");
+  expect(jobs).not.toHaveProperty("e2e");
+  expect(jobs).toMatchObject({ checks: { needs: ["changes", "static", "unit"] } });
   expect((await workflows(repo)).exitCode).toBe(0);
 }, 30_000);
 
