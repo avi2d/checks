@@ -136,15 +136,17 @@ expect(workflow.concurrency).toEqual({ group: "ci-${{ github.event.pull_request.
 );
 
 test(
-"a second run writes nothing and keeps every file",
+"a second run does not reorder package.json or rewrite the config",
 async () => {
 const repo = await open({});
 expect((await setup(repo)).exitCode).toBe(0);
 const before = await readFile(join(repo.dir, "oxlint.config.ts"), "utf8");
+const manifestBefore = await readFile(join(repo.dir, "package.json"), "utf8");
 const rerun = await setup(repo);
 expect(rerun.exitCode).toBe(0);
 expect(rerun.text).toContain("kept oxlint.config.ts, already there");
 expect(await readFile(join(repo.dir, "oxlint.config.ts"), "utf8")).toBe(before);
+expect(await readFile(join(repo.dir, "package.json"), "utf8")).toBe(manifestBefore);
 },
 60_000,
 );

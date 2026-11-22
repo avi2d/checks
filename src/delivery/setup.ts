@@ -233,6 +233,10 @@ function withKitDefaults(scripts: MutableRecord): MutableRecord {
   return next;
 }
 
+function sortedDependencies(dependencies: MutableRecord): MutableRecord {
+  return Object.fromEntries(Object.entries(dependencies).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0));
+}
+
 function finalizePackage(
   record: MutableRecord,
   scripts: MutableRecord,
@@ -258,7 +262,7 @@ const writeFreshPackage = Effect.fn("writeFreshPackage")(function* (root: string
     type: "module",
     ...(isPrivate ? { private: true } : {}),
     scripts,
-    devDependencies: { [KIT_PACKAGE_NAME]: pins.kit, ...pins.mutation },
+    devDependencies: sortedDependencies({ [KIT_PACKAGE_NAME]: pins.kit, ...pins.mutation }),
   };
   yield* system.makeDirectory(path.dirname(full), { recursive: true });
   yield* system.writeFileString(full, JSON.stringify(manifest, undefined, 2) + "\n");
@@ -278,7 +282,7 @@ const updatePackage = Effect.fn("updatePackage")(function* (
   const full = (yield* Path.Path).join(root, "package.json");
   const baseScripts = yield* scriptsOf(record);
   const baseDeps = yield* depsOf(record);
-  const devDependencies: MutableRecord = { ...pins.mutation, ...baseDeps, [KIT_PACKAGE_NAME]: pins.kit };
+  const devDependencies = sortedDependencies({ ...pins.mutation, ...baseDeps, [KIT_PACKAGE_NAME]: pins.kit });
   const fault = scriptFault(baseScripts);
   if (fault !== undefined) return yield* new SetupError({ message: fault });
   const context = yield* readTestScriptContext(root, record["name"]);

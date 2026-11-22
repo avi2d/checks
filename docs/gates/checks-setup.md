@@ -11,6 +11,7 @@ audience: consumers
 A run writes each missing file and brings the files it finds up to what the checks need.
 It adds the `node_modules/` line to `.gitignore` when the file lacks it.
 It adds the kit entry and any missing script to a `package.json` it finds.
+It writes `devDependencies` in package name order, as `bun add` does.
 It replaces the kit version pin with its own version, and a `--private` run sets `private` to `true`.
 It stops when a `lint` script it finds does not run oxlint and the layout check, and names the script to fix.
 It stops when a `typecheck` script it finds does not run the Effect diagnostics, and names the script to fix.
