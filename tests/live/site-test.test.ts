@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { mkdir, readdir, realpath, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ran, scratchDirs } from "../e2e/lib/fixture-repo.ts";
 import { browserConsumer } from "../e2e/lib/packed.ts";
@@ -13,6 +13,19 @@ const BUILT = {
   "notes.html": "<title>Notes</title>",
   "style.css": "body { margin: 0 }",
 };
+
+const HANGING_CLOSE_SUITE = `import { $ } from "bun";
+import { writeFile } from "node:fs/promises";
+import { siteTest } from "@avi2dg/checks/site-test.ts";
+
+const marker = process.env.SITE_PROCESS_MARKER;
+const observed = process.env.SITE_PROCESS_OBSERVED;
+siteTest("starts a browser whose close hangs", { site: "dist", launch: { args: [\`--site-process-marker=\${marker}\`] } }, async (site) => {
+  const processes = await $\`ps -eo args=\`.text();
+  await writeFile(observed, processes.includes(\`--site-process-marker=\${marker}\`) ? "seen" : "missing");
+  site.browser.close = () => new Promise(() => {});
+});
+`;
 
 const SUITE = `import { expect } from "bun:test";
 import { existsSync } from "node:fs";
@@ -63,6 +76,26 @@ siteTest("a recording lands in the directory the test names", { site: dist }, as
 
 siteTest("a site never built", { site: join(dist, "..", "missing") }, async () => undefined);
 `;
+
+test(
+  "a hanging close leaves no marked browser process after the test process exits",
+  async () => {
+    const dir = await browserConsumer(scratch, "site-close");
+    await mkdir(join(dir, "dist"), { recursive: true });
+    await writeFile(join(dir, "dist", "index.html"), "<title>Site</title>");
+    await mkdir(join(dir, "tests", "e2e"), { recursive: true });
+    await writeFile(join(dir, "tests", "e2e", "close.test.ts"), HANGING_CLOSE_SUITE);
+    const marker = join(dir, "browser-marker");
+    const observed = join(dir, "observed");
+    const run = await ran($`timeout 30s bun test tests/e2e/close.test.ts`.cwd(dir).env({ ...process.env, SITE_PROCESS_MARKER: marker, SITE_PROCESS_OBSERVED: observed }));
+
+    expect(run.exitCode).toBe(0);
+    expect(await readFile(observed, "utf8")).toBe("seen");
+    const processes = await $`ps -eo args=`.text();
+    expect(processes).not.toContain(`--site-process-marker=${marker}`);
+  },
+  300_000,
+);
 
 test(
   "a consumer's site tests get every built page served and a recording where the test names it, and a site never built fails its test, instead of testing a page the build never wrote",
