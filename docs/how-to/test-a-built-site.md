@@ -48,7 +48,8 @@ The test reads the folder, serves it on a free local port and passes the test fu
 The server answers a folder asked for without its last `/` with a redirect to it, and anything missing with a 404.
 When the test ends, the server stops and every browser context the test opened closes.
 Each browser stays open for the next test in the file that names the same engine and launch options.
-After the last test, `siteTest` kills the browser process and waits for it to exit.
+After the last test, `siteTest` waits up to one second for the browser to close.
+If the browser does not close, Playwright ends its process when the test process exits.
 
 | Key | What it takes |
 | --- | --- |

@@ -1,6 +1,6 @@
 import { BunServices } from "@effect/platform-bun";
 import { afterAll, test } from "bun:test";
-import { Effect } from "effect";
+import { Duration, Effect, Schema } from "effect";
 import type { Browser, LaunchOptions } from "playwright-core";
 import { Usage } from "../core/main.ts";
 import { listenSite, readSite, sitePages } from "../quality/browser/serve.ts";
@@ -21,17 +21,18 @@ export type SiteTest = {
 
 const browsers = new Map<string, Promise<Browser>>();
 
-function killBrowser(browser: Browser): Promise<unknown> {
-  const root: unknown = browser;
-  if (typeof root !== "object" || root === null) return Promise.reject(new Error("site-test cannot kill the browser it launched"));
-  const channel: unknown = Reflect.get(root, "_channel");
-  if (typeof channel !== "object" || channel === null) return Promise.reject(new Error("site-test cannot kill the browser it launched"));
-  const kill: unknown = Reflect.get(channel, "killForTests");
-  if (typeof kill !== "function") return Promise.reject(new Error("site-test cannot kill the browser it launched"));
-  const killed: unknown = Reflect.apply(kill, channel, [{}]);
-  return Promise.resolve(killed).then(
-    () => undefined,
-    (reason: unknown) => (browser.isConnected() ? Promise.reject(reason) : undefined),
+class BrowserCloseFailure extends Schema.TaggedError<BrowserCloseFailure>()("BrowserCloseFailure", {
+  cause: Schema.Unknown,
+}) {}
+
+class BrowserCloseTimeout extends Schema.TaggedError<BrowserCloseTimeout>()("BrowserCloseTimeout", {}) {}
+
+function closeBrowser(browser: Browser): Promise<void> {
+  return Effect.runPromise(
+    Effect.tryPromise({ try: () => browser.close(), catch: (cause) => new BrowserCloseFailure({ cause }) }).pipe(
+      Effect.timeoutOrElse({ duration: Duration.seconds(1), orElse: () => Effect.fail(new BrowserCloseTimeout()) }),
+      Effect.catchTag("BrowserCloseTimeout", () => Effect.logWarning("site-test: browser close timed out")),
+    ),
   );
 }
 
@@ -49,7 +50,7 @@ function openBrowser(engine: ScreenEngine, launch: LaunchOptions | undefined): P
 function closeBrowsers(): Promise<unknown> {
   const open = [...browsers.values()];
   browsers.clear();
-  return Promise.all(open.map((launched) => launched.then((browser) => killBrowser(browser), () => undefined)));
+  return Promise.all(open.map((launched) => launched.then((browser) => closeBrowser(browser), () => undefined)));
 }
 
 const builtSite = Effect.fn("builtSite")(function* (dir: string) {
