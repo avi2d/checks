@@ -64,4 +64,3 @@ export const compareCrops = (el: PageElement, args: CropArgs): Promise<CompareOu
 };
 
 export const decodeOutcome = Schema.decodeUnknownEffect(CompareOutcomeSchema);
-
