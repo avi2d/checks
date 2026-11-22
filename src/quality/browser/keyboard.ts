@@ -2,16 +2,15 @@ import { Effect } from "effect";
 import type { ElementHandle, Page } from "playwright-core";
 import type { Target } from "./declaration.ts";
 import {
+  changedPaintBoxes,
   compareCrops,
   decodeOutcome,
   decodeRecall,
   decodeRingScans,
   recall,
   remember,
-  reachOf,
   RESOLVE_LEAF,
   scanRings,
-  union,
   type Box,
   type CropArgs,
   type PageElement,
@@ -80,26 +79,21 @@ const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page, leaf: 
   const blurredRings = yield* decodeRingScans(blurredSource).pipe(
     Effect.mapError(() => new BrowserFailure({ message: "the blurred element gave no ring scan" })),
   );
-  let region: Box = box;
+  const regions = [box];
   for (const [index, focused] of focusedRings.entries()) {
     const blurred = blurredRings[index];
     if (blurred === undefined) break;
-    if (focused.paint.join("\n") !== blurred.paint.join("\n")) {
-      region = union(reachOf(focused, region), reachOf(blurred, region));
-    }
+    regions.push(...changedPaintBoxes(focused, blurred));
   }
   const withoutFocus = yield* attempt("cannot capture the blurred element", () => page.screenshot({ animations: "disabled" }));
   yield* probeFocus(leaf, true);
-  const rect = cropTo(region, screen);
-  if (rect === null) return false;
+  const boxes = regions.map((region) => cropTo(region, screen)).filter((rect) => rect !== null);
+  if (boxes.length === 0) return false;
   const comparedSource: unknown = yield* attempt("cannot compare the focused and blurred captures", () =>
     leaf.evaluate(compareCrops, {
       first: withFocus.toString("base64"),
       second: withoutFocus.toString("base64"),
-      x: rect.x,
-      y: rect.y,
-      width: rect.width,
-      height: rect.height,
+      boxes,
     } satisfies CropArgs));
   const outcome = yield* decodeOutcome(comparedSource).pipe(
     Effect.mapError(() => new BrowserFailure({ message: "the page gave no usable comparison" })),

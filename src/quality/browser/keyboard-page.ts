@@ -116,21 +116,27 @@ type PageCanvas = {
 };
 
 export const scanRings = (el: PageElement): RingScan[] => {
-  const ringKeys = [
-    "outlineStyle", "outlineWidth", "outlineColor", "outlineOffset", "boxShadow",
-    "borderTopWidth", "borderTopStyle", "borderTopColor",
-    "borderRightWidth", "borderRightStyle", "borderRightColor",
-    "borderBottomWidth", "borderBottomStyle", "borderBottomColor",
-    "borderLeftWidth", "borderLeftStyle", "borderLeftColor",
-    "backgroundColor", "backgroundImage",
-  ] as const;
-  const ringPaint = (painted: PageStyle): ReadonlyArray<string> => ringKeys.map((key) => key + "=" + painted[key]);
+  const visibleColor = (color: string): boolean => !color.endsWith(", 0)") && !color.endsWith(" / 0)");
+  const paintsEdge = (width: string, style: string, color: string): boolean =>
+    style !== "none" && style !== "hidden" && parseFloat(width) > 0 && visibleColor(color);
+  const edgePaint = (width: string, style: string, color: string): string =>
+    paintsEdge(width, style, color) ? [width, style, color].join(" ") : "";
+  const ringPaint = (style: PageStyle): ReadonlyArray<string> => [
+    edgePaint(style.outlineWidth, style.outlineStyle, style.outlineColor) === ""
+      ? "" : [style.outlineWidth, style.outlineStyle, style.outlineColor, style.outlineOffset].join(" "),
+    edgePaint(style.borderTopWidth, style.borderTopStyle, style.borderTopColor),
+    edgePaint(style.borderRightWidth, style.borderRightStyle, style.borderRightColor),
+    edgePaint(style.borderBottomWidth, style.borderBottomStyle, style.borderBottomColor),
+    edgePaint(style.borderLeftWidth, style.borderLeftStyle, style.borderLeftColor),
+    style.boxShadow === "none" ? "" : style.boxShadow,
+    visibleColor(style.backgroundColor) ? style.backgroundColor : "",
+    style.backgroundImage === "none" ? "" : style.backgroundImage,
+  ];
   const revealKeys = [
     "content", "opacity", "visibility", "display", "clipPath", "transform", "translate", "rotate", "scale",
     "position", "top", "right", "bottom", "left",
     "marginTop", "marginRight", "marginBottom", "marginLeft",
   ] as const;
-  const pseudoPaint = (painted: PageStyle): ReadonlyArray<string> => [...ringPaint(painted), ...revealKeys.map((key) => key + "=" + painted[key])];
   const view = el.ownerDocument.defaultView;
   const root = el.ownerDocument.documentElement;
   const holdsPlaced = (style: PageStyle): boolean =>
@@ -170,28 +176,30 @@ export const scanRings = (el: PageElement): RingScan[] => {
     const frame = frameOf(host);
     return { x: frame.x + left, y: frame.y + top, width: frame.width - left - right, height: frame.height - top - bottom };
   };
-  const ringOf = (painted: PageStyle, box: Box): Ring => ({
+  const ringOf = (style: PageStyle, box: Box, paint: ReadonlyArray<string>): Ring => ({
     box,
-    outlineStyle: painted.outlineStyle,
-    outlineWidth: painted.outlineWidth,
-    outlineOffset: painted.outlineOffset,
-    boxShadow: painted.boxShadow,
+    outlineWidth: paintsEdge(style.outlineWidth, style.outlineStyle, style.outlineColor) ? style.outlineWidth : "0",
+    outlineOffset: style.outlineOffset,
+    boxShadow: style.boxShadow,
+    paint,
   });
+  const pseudoOf = (host: PageElement, pseudo: string, hostBox: Box): Ring | null => {
+    const style = view.getComputedStyle(host, pseudo);
+    if (["none", "normal"].includes(style.content) || style.display === "none" || style.visibility === "hidden" || style.opacity === "0") return null;
+    const edgesAndFill = ringPaint(style);
+    if (style.content === '""' && edgesAndFill.every((part) => part === "")) return null;
+    return ringOf(style, pseudoBox(host, style, hostBox), [...edgesAndFill, ...revealKeys.map((key) => style[key])]);
+  };
   const nodes: RingScan[] = [];
   let current: PageElement | null = el;
   while (current !== null) {
     const rect = current.getBoundingClientRect();
     const box: Box = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
     const self = view.getComputedStyle(current);
-    const before = view.getComputedStyle(current, "::before");
-    const after = view.getComputedStyle(current, "::after");
-    const rings = [ringOf(self, box)];
-    for (const pseudo of [before, after]) {
-      if (pseudo.content !== "none" && pseudo.content !== "normal") rings.push(ringOf(pseudo, pseudoBox(current, pseudo, box)));
-    }
     nodes.push({
-      rings,
-      paint: [...ringPaint(self), ...pseudoPaint(before).map((entry) => "before:" + entry), ...pseudoPaint(after).map((entry) => "after:" + entry)],
+      element: ringOf(self, box, ringPaint(self)),
+      before: pseudoOf(current, "::before", box),
+      after: pseudoOf(current, "::after", box),
     });
     current = current.parentElement;
   }
@@ -200,17 +208,18 @@ export const scanRings = (el: PageElement): RingScan[] => {
 
 const RingSchema = Schema.Struct({
   box: BoxSchema,
-  outlineStyle: Schema.String,
   outlineWidth: Schema.String,
   outlineOffset: Schema.String,
   boxShadow: Schema.String,
+  paint: Schema.Array(Schema.String),
 });
 
 type Ring = typeof RingSchema.Type;
 
 const RingScanSchema = Schema.Struct({
-  rings: Schema.Array(RingSchema),
-  paint: Schema.Array(Schema.String),
+  element: RingSchema,
+  before: Schema.NullOr(RingSchema),
+  after: Schema.NullOr(RingSchema),
 });
 
 type RingScan = typeof RingScanSchema.Type;
@@ -264,16 +273,10 @@ const shadowOut = (value: string): number => {
 };
 
 const ringOut = (ring: Ring): number => {
-  const outline = ring.outlineStyle === "none" ? 0 : Math.max(0, (len(ring.outlineWidth) ?? 0) + (len(ring.outlineOffset) ?? 0));
+  const width = len(ring.outlineWidth) ?? 0;
+  const outline = width > 0 ? width + (len(ring.outlineOffset) ?? 0) : 0;
   return Math.max(outline, shadowOut(ring.boxShadow));
 };
-
-export const union = (first: Box, second: Box): Box => ({
-  x: Math.min(first.x, second.x),
-  y: Math.min(first.y, second.y),
-  width: Math.max(first.x + first.width, second.x + second.width) - Math.min(first.x, second.x),
-  height: Math.max(first.y + first.height, second.y + second.height) - Math.min(first.y, second.y),
-});
 
 const grown = (box: Box, margin: number): Box => ({
   x: box.x - margin,
@@ -282,8 +285,16 @@ const grown = (box: Box, margin: number): Box => ({
   height: box.height + margin * 2,
 });
 
-export const reachOf = (scan: RingScan, from: Box): Box =>
-  scan.rings.reduce((reach, ring) => union(reach, grown(ring.box, ringOut(ring))), from);
+const changedRingBoxes = (focused: Ring | null, blurred: Ring | null): readonly Box[] => {
+  if (focused?.paint.join("\n") === blurred?.paint.join("\n")) return [];
+  return [focused, blurred].flatMap((ring) => ring === null ? [] : [grown(ring.box, ringOut(ring))]);
+};
+
+export const changedPaintBoxes = (focused: RingScan, blurred: RingScan): readonly Box[] => [
+  ...changedRingBoxes(focused.element, blurred.element),
+  ...changedRingBoxes(focused.before, blurred.before),
+  ...changedRingBoxes(focused.after, blurred.after),
+];
 
 export const decodeRingScans = Schema.decodeUnknownEffect(Schema.Array(RingScanSchema));
 
@@ -302,10 +313,7 @@ export const RESOLVE_LEAF = `(() => {
 export type CropArgs = {
   readonly first: string;
   readonly second: string;
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
+  readonly boxes: readonly Box[];
 };
 
 const CompareOutcomeSchema = Schema.Union([
@@ -318,10 +326,6 @@ type CompareOutcome = typeof CompareOutcomeSchema.Type;
 export const compareCrops = (el: PageElement, args: CropArgs): Promise<CompareOutcome> => {
   const view = el.ownerDocument.defaultView;
   const scale = view.devicePixelRatio || 1;
-  const left = Math.round(args.x * scale);
-  const top = Math.round(args.y * scale);
-  const width = Math.max(1, Math.round(args.width * scale));
-  const height = Math.max(1, Math.round(args.height * scale));
   const unreadable: CompareOutcome = { compared: false };
   const changed: CompareOutcome = { compared: true, differs: true };
   const same: CompareOutcome = { compared: true, differs: false };
@@ -331,7 +335,11 @@ export const compareCrops = (el: PageElement, args: CropArgs): Promise<CompareOu
     for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
     return view.createImageBitmap(new view.Blob([bytes], { type: "image/png" }));
   };
-  const pixelsOf = (shot: PageBitmap): ArrayLike<number> | null => {
+  const pixelsOf = (shot: PageBitmap, box: Box): ArrayLike<number> | null => {
+    const left = Math.floor(box.x * scale);
+    const top = Math.floor(box.y * scale);
+    const width = Math.ceil((box.x + box.width) * scale) - left;
+    const height = Math.ceil((box.y + box.height) * scale) - top;
     const canvas = el.ownerDocument.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
@@ -340,20 +348,27 @@ export const compareCrops = (el: PageElement, args: CropArgs): Promise<CompareOu
     context.drawImage(shot, left, top, width, height, 0, 0, width, height);
     return context.getImageData(0, 0, width, height).data;
   };
-  return decode(args.first).then((first) => {
-    const before = pixelsOf(first);
+  const compareBox = (first: PageBitmap, second: PageBitmap, box: Box): CompareOutcome => {
+    const before = pixelsOf(first, box);
+    const after = pixelsOf(second, box);
+    if (before === null || after === null) return unreadable;
+    for (let index = 0; index < before.length; index += 1) {
+      if (before[index] !== after[index]) return changed;
+    }
+    return same;
+  };
+  const compareBoxes = (first: PageBitmap, second: PageBitmap): CompareOutcome => {
+    for (const box of args.boxes) {
+      const result = compareBox(first, second, box);
+      if (!result.compared || result.differs) return result;
+    }
+    return same;
+  };
+  return Promise.all([decode(args.first), decode(args.second)]).then(([first, second]) => {
+    const result = compareBoxes(first, second);
     first.close();
-    if (before === null) return unreadable;
-    return decode(args.second).then((second) => {
-      const after = pixelsOf(second);
-      second.close();
-      if (after === null) return unreadable;
-      if (before.length !== after.length) return changed;
-      for (let index = 0; index < before.length; index += 1) {
-        if (before[index] !== after[index]) return changed;
-      }
-      return same;
-    });
+    second.close();
+    return result;
   });
 };
 
