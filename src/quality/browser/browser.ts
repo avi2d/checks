@@ -13,6 +13,7 @@ import { isDefaultState, readDeclaration, runsIn, targetsOn, visitsOf, type Chec
 import { hookApplies, loadHooks, runHook, type ProductCheck } from "./hooks.ts";
 import { judgeHtml } from "./html.ts";
 import { judgeKeyboard } from "./keyboard.ts";
+import { prepareFocusProbe } from "./keyboard-probe.ts";
 import { judgeLayout } from "./layout.ts";
 import { judgeLinks } from "./links.ts";
 import { judgeLook, readLook, type FirstLooks } from "./look.ts";
@@ -69,7 +70,7 @@ const layoutRun = Effect.fn("layoutRun")(function* ({ browser, declaration, visi
 
 const keyboardRun = Effect.fn("keyboardRun")(function* ({ browser, declaration, visit, url }: Visiting) {
   const targets = targetsOn(declaration, visit.route.path).filter(({ focusable }) => focusable === true);
-  const { page } = yield* openVisit(browser, visit);
+  const { page } = yield* openVisit(browser, visit, prepareFocusProbe);
   yield* load(page, url);
   const { found, reached } = yield* judgeKeyboard(page, targets);
   const inventory = [...reached].map(([name, times]) => `${name} ${times}`);

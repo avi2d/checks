@@ -55,6 +55,8 @@ type PageStyle = {
   readonly willChange: string;
 };
 
+type ProbeFocusEvent = { readonly stopImmediatePropagation: () => void };
+
 type PageView = {
   readonly getComputedStyle: (node: PageElement, pseudo?: string) => PageStyle;
   readonly devicePixelRatio: number;
@@ -63,6 +65,8 @@ type PageView = {
   readonly atob: (data: string) => string;
   readonly createImageBitmap: (image: PageBlob) => Promise<PageBitmap>;
   readonly Blob: new (parts: ReadonlyArray<Uint8Array>, options: { readonly type: string }) => PageBlob;
+  readonly addEventListener: (type: string, listener: (event: ProbeFocusEvent) => void, capture: true) => void;
+  checksFocusProbe?: (moveFocus: () => void) => void;
   checksKb?: WeakMap<object, string>;
 };
 
@@ -83,6 +87,7 @@ type PageElement = {
   readonly scrollLeft: number;
   readonly scrollTop: number;
   readonly blur: () => void;
+  readonly focus: (options: { readonly preventScroll: true }) => void;
 };
 
 type PageBitmap = { readonly close: () => void };
@@ -365,8 +370,4 @@ export const recall = (el: PageElement): string => el.ownerDocument.defaultView.
 
 export const decodeRecall = Schema.decodeUnknownEffect(Schema.String);
 
-export const blurs = (el: PageElement): void => {
-  el.blur();
-};
-
-export type { Box, PageElement };
+export type { Box, PageElement, PageView, ProbeFocusEvent };

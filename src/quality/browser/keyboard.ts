@@ -1,8 +1,7 @@
 import { Effect } from "effect";
-import type { Page } from "playwright-core";
+import type { ElementHandle, Page } from "playwright-core";
 import type { Target } from "./declaration.ts";
 import {
-  blurs,
   compareCrops,
   decodeOutcome,
   decodeRecall,
@@ -17,6 +16,7 @@ import {
   type CropArgs,
   type PageElement,
 } from "./keyboard-page.ts";
+import { moveProbeFocus } from "./keyboard-probe.ts";
 import { attempt, BrowserFailure } from "./page.ts";
 
 const FOCUS_RING_MARGIN_PX = 6;
@@ -59,9 +59,12 @@ const focusedLeaf = Effect.fn("focusedLeaf")(function* (page: Page) {
   return raw.asElement();
 });
 
-const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page) {
-  const leaf = yield* focusedLeaf(page);
-  if (leaf === null) return false;
+const probeFocus = Effect.fn("probeFocus")(function* (leaf: ElementHandle<PageElement>, focused: boolean) {
+  const moved: unknown = yield* attempt("cannot move focus for the comparison", () => leaf.evaluate(moveProbeFocus, focused));
+  if (moved !== true) return yield* new BrowserFailure({ message: "the page has no focus probe" });
+});
+
+const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page, leaf: ElementHandle<PageElement>) {
   const box = yield* attempt("cannot measure the focused element", () => leaf.boundingBox());
   if (box === null) return false;
   const screen = page.viewportSize();
@@ -72,7 +75,7 @@ const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page) {
     Effect.mapError(() => new BrowserFailure({ message: "the focused element gave no ring scan" })),
   );
   const withFocus = yield* attempt("cannot capture the focused element", () => page.screenshot({ animations: "disabled" }));
-  yield* attempt("cannot blur the focused element", () => leaf.evaluate(blurs));
+  yield* probeFocus(leaf, false);
   const blurredSource: unknown = yield* attempt("cannot read the blurred element and its ancestors", () => leaf.evaluate(scanRings));
   const blurredRings = yield* decodeRingScans(blurredSource).pipe(
     Effect.mapError(() => new BrowserFailure({ message: "the blurred element gave no ring scan" })),
@@ -85,10 +88,10 @@ const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page) {
       region = union(reachOf(focused, region), reachOf(blurred, region));
     }
   }
+  const withoutFocus = yield* attempt("cannot capture the blurred element", () => page.screenshot({ animations: "disabled" }));
+  yield* probeFocus(leaf, true);
   const rect = cropTo(region, screen);
   if (rect === null) return false;
-  const withoutFocus = yield* attempt("cannot capture the blurred element", () => page.screenshot({ animations: "disabled" }));
-  yield* attempt("cannot focus the element again", () => leaf.focus());
   const comparedSource: unknown = yield* attempt("cannot compare the focused and blurred captures", () =>
     leaf.evaluate(compareCrops, {
       first: withFocus.toString("base64"),
@@ -164,7 +167,7 @@ const walkTabs = Effect.fn("walkTabs")(function* (page: Page, snapshots: readonl
       Effect.mapError(() => new BrowserFailure({ message: "the focused element gave no mark" })),
     );
     const hit = hitTargets(snapshots, id);
-    if (hit.length > 0 && !(yield* focusRingShows(page))) {
+    if (hit.length > 0 && !(yield* focusRingShows(page, leaf))) {
       found.push(hit.map(({ name }) => name).join(" and ") + " shows no visible focus when Tab reaches it");
     }
   }
