@@ -19,8 +19,8 @@ So a control the page renders once for each breakpoint is judged where it shows.
 
 The keyboard check captures the state Tab reaches before it removes focus.
 It takes the comparison screenshot with focus removed, then restores focus before continuing Tab.
-The check blocks its own focus and blur events from reaching page handlers.
-Tab still sends its usual events.
+Page handlers can run during the comparison blur and focus restoration.
+A repaint caused by a blur handler can affect the comparison and count as visible focus.
 
 | Check | What fails | Built on |
 | --- | --- | --- |

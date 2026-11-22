@@ -13,7 +13,6 @@ import {
   type Box,
   type PageElement,
 } from "./keyboard-page.ts";
-import { moveProbeFocus } from "./keyboard-probe.ts";
 import { attempt, BrowserFailure } from "./page.ts";
 
 const FOCUS_RING_MARGIN_PX = 6;
@@ -56,11 +55,6 @@ const focusedLeaf = Effect.fn("focusedLeaf")(function* (page: Page) {
   return raw.asElement();
 });
 
-const probeFocus = Effect.fn("probeFocus")(function* (leaf: ElementHandle<PageElement>, focused: boolean) {
-  const moved: unknown = yield* attempt("cannot move focus for the comparison", () => leaf.evaluate(moveProbeFocus, focused));
-  if (moved !== true) return yield* new BrowserFailure({ message: "the page has no focus probe" });
-});
-
 const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page, leaf: ElementHandle<PageElement>) {
   const box = yield* attempt("cannot measure the focused element", () => leaf.boundingBox());
   if (box === null) return false;
@@ -72,7 +66,7 @@ const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page, leaf: 
     Effect.mapError(() => new BrowserFailure({ message: "the focused element gave no ring scan" })),
   );
   const withFocus = yield* attempt("cannot capture the focused element", () => page.screenshot({ animations: "disabled" }));
-  yield* probeFocus(leaf, false);
+  yield* attempt("cannot blur the focused element", () => leaf.evaluate((element: PageElement) => element.blur()));
   const blurredSource: unknown = yield* attempt("cannot read the blurred element and its ancestors", () => leaf.evaluate(scanRings));
   const blurredRings = yield* decodeRingScans(blurredSource).pipe(
     Effect.mapError(() => new BrowserFailure({ message: "the blurred element gave no ring scan" })),
@@ -84,7 +78,7 @@ const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page, leaf: 
     regions.push(...changedPaintBoxes(focused, blurred));
   }
   const withoutFocus = yield* attempt("cannot capture the blurred element", () => page.screenshot({ animations: "disabled" }));
-  yield* probeFocus(leaf, true);
+  yield* attempt("cannot focus the element again", () => leaf.evaluate((element: PageElement) => element.focus({ preventScroll: true })));
   const boxes = regions.map((region) => cropTo(region, screen)).filter((rect) => rect !== null);
   if (boxes.length === 0) return false;
   const comparedSource: unknown = yield* attempt("cannot compare the focused and blurred captures", () =>
