@@ -21,14 +21,18 @@ export type SiteTest = {
 
 const browsers = new Map<string, Promise<Browser>>();
 
-async function killBrowser(browser: Browser): Promise<unknown> {
-  const channel = (browser as unknown as { _channel?: { killForTests(params: object): Promise<unknown> } })._channel;
-  if (typeof channel?.killForTests !== "function") throw new Error("site-test cannot kill the browser it launched");
-  try {
-    await channel.killForTests({});
-  } catch (error) {
-    if (browser.isConnected()) throw error;
-  }
+function killBrowser(browser: Browser): Promise<unknown> {
+  const root: unknown = browser;
+  if (typeof root !== "object" || root === null) return Promise.reject(new Error("site-test cannot kill the browser it launched"));
+  const channel: unknown = Reflect.get(root, "_channel");
+  if (typeof channel !== "object" || channel === null) return Promise.reject(new Error("site-test cannot kill the browser it launched"));
+  const kill: unknown = Reflect.get(channel, "killForTests");
+  if (typeof kill !== "function") return Promise.reject(new Error("site-test cannot kill the browser it launched"));
+  const killed: unknown = Reflect.apply(kill, channel, [{}]);
+  return Promise.resolve(killed).then(
+    () => undefined,
+    (reason: unknown) => (browser.isConnected() ? Promise.reject(reason) : undefined),
+  );
 }
 
 function openBrowser(engine: ScreenEngine, launch: LaunchOptions | undefined): Promise<Browser> {
