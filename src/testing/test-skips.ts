@@ -212,11 +212,11 @@ export function unitTierPlus(scanned: readonly string[], extra: readonly string[
   return scanned.filter((file) => selectedTierFile(file, "unit") || wanted.has(file));
 }
 
-export const readSmokeDeclarations = Effect.fn("readSmokeDeclarations")(function* (
+export const readSmokeFiles = Effect.fn("readSmokeFiles")(function* (
   root: string,
   smoke: readonly string[],
 ) {
   const scoped = smokeFiles(yield* scanTestFiles(root), smoke);
   if (scoped.kind === "invalid") return yield* new SkipDeclarationError({ message: scoped.message });
-  return { files: scoped.files, declarations: yield* readDeclarationsIn(root, scoped.files) };
+  return scoped.files;
 });

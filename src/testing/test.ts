@@ -6,24 +6,18 @@ import { TEST_ENTRY_POINT } from "../core/gates.ts";
 import { collect } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { refuseLocalTests } from "../core/local-tests.ts";
-import { decodeSetting, loadSettings, refuseOldPlace, SETTINGS_FILE, Smoke } from "../core/settings.ts";
+import { decodeSetting, loadSettings, refuseOldPlace, Smoke } from "../core/settings.ts";
 import { testOptions, type TestOptions, type TestTier } from "../core/test-script.ts";
 import { readRunScope } from "../core/pull-request-scope.ts";
 import { readChangedNarrowing, readLocalNarrowing } from "./affected-tests.ts";
 import { changedLocalPaths } from "./changed-tests.ts";
 import { judgeTestFileTimes, resolveTestFileMaxSeconds } from "./test-file-time.ts";
 import { APPROVE_VARIABLE, heavyRunRefusal, pullRequestRunRefusal } from "./test-refusal.ts";
-import {
-  readDeclarationsIn,
-  readSkipDeclarations,
-  readSmokeDeclarations,
-  scanTestFiles,
-  selectedTierFile,
-  type Environment,
-  type SkipDeclaration,
-} from "./test-skips.ts";
+import { readSuiteScope, readTestFileSkips, type SuiteSelection } from "./test-selection.ts";
+import { scanTestFiles, selectedTierFile, type Environment, type SkipDeclaration } from "./test-skips.ts";
 import { NAME_SEPARATOR, parseReport, ReportError, reporterArgs, type TestResult } from "./test-report.ts";
 
+export { suiteArgs, type SuiteSelection } from "./test-selection.ts";
 export type { Environment, SkipDeclaration } from "./test-skips.ts";
 export { scriptOptions, testOptions, type TestOptions } from "../core/test-script.ts";
 
@@ -161,31 +155,10 @@ const approvingScreens = Config.Boolean(APPROVE_VARIABLE).pipe(
   Effect.mapError((cause) => new SkipGateError({ message: `cannot read ${APPROVE_VARIABLE}: ${cause.message}` })),
 );
 
-export type SuiteSelection =
-  | { readonly kind: "full" }
-  | { readonly kind: "tier"; readonly tier: TestTier }
-  | { readonly kind: "smoke" }
-  | { readonly kind: "files"; readonly files: readonly string[] }
-  | { readonly kind: "changed"; readonly files: readonly string[] };
-
 export function selectSuite(options: TestOptions, environment: Environment): SuiteSelection {
   if (options.tier !== undefined) return { kind: "tier", tier: options.tier };
   if (options.full === true || environment === "ci") return { kind: "full" };
   return { kind: "smoke" };
-}
-
-export function suiteArgs(selection: SuiteSelection, smoke: readonly string[]): readonly string[] {
-  if (selection.kind === "tier") return tierArgs(selection.tier);
-  if (selection.kind === "smoke") return ["./tests/unit", ...smoke.map((file) => `./${file}`)];
-  if (selection.kind === "files" || selection.kind === "changed") return selection.files.map((file) => `./${file}`);
-  return [];
-}
-
-function tierArgs(tier: TestTier | undefined): readonly string[] {
-  if (tier === undefined) return [];
-  // The preset ignores tests/live and tests/pixel, so only those tiers clear the ignore list.
-  if (tier === "live" || tier === "pixel") return ["--path-ignore-patterns", "", `./tests/${tier}`];
-  return [`./tests/${tier}`];
 }
 
 const FIRST_WORKER_BYTES = 1024 ** 3;
@@ -223,12 +196,6 @@ export const resolveWorkerCount = Effect.fn("resolveWorkerCount")(function* (wor
   return workerCountFor(yield* availableBytes(), totalmem(), availableParallelism());
 });
 
-const readSmokeList = Effect.fn("readSmokeList")(function* (root: string) {
-  const value = (yield* loadSettings(root))["smoke"];
-  if (value === undefined) return [];
-  return yield* decodeSetting("smoke", Smoke, value);
-});
-
 // A live or pixel tier and --full run whole, since no pull request picks them.
 export function narrowedTier(options: TestOptions, selection: SuiteSelection): { readonly tier: TestTier | undefined } | undefined {
   if (options.full === true) return undefined;
@@ -258,15 +225,6 @@ const narrowSelection = Effect.fn("narrowSelection")(function* (options: TestOpt
     return selection;
   }
   return (yield* reachedSelection(scope.changed, narrowed.tier)) ?? selection;
-});
-
-const readScope = Effect.fn("readScope")(function* (selection: SuiteSelection, smoke: readonly string[]) {
-  if (selection.kind === "smoke") return yield* readSmokeDeclarations(process.cwd(), smoke);
-  const declarations =
-    selection.kind === "files" || selection.kind === "changed"
-      ? yield* readDeclarationsIn(process.cwd(), selection.files)
-      : yield* readSkipDeclarations(process.cwd(), selection.kind === "tier" ? selection.tier : undefined);
-  return { files: undefined, declarations };
 });
 
 const changedSelection = Effect.fn("changedSelection")(function* () {
@@ -319,23 +277,29 @@ const runSuite = Effect.fn("runSuite")(function* (outfile: string, args: readonl
 
 type RunPolicy = { readonly environment: "local" } | { readonly environment: "ci"; readonly maxFileSeconds: number };
 
+const temporaryReportPath = Effect.fn("temporaryReportPath")(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  return path.join(yield* fs.makeTempDirectoryScoped({ prefix: "checks-test-" }), "junit.xml");
+});
+
 const testEntry = Effect.gen(function* () {
   const root = process.cwd();
   yield* refuseLocalTests(root);
   const entry = entryOptions(process.argv.slice(2));
   if (entry === undefined) return yield* new Usage({ message: USAGE });
   const { options, junit, run } = entry;
-  const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
   const environment = yield* environmentOf;
   yield* refuseOldPlace(root, "smoke", { manifestKey: "smoke" });
   yield* refuseOldPlace(root, "reach", { manifestKey: "reach" });
   const refusal =
     run === "pr" ? pullRequestRunRefusal(environment) : heavyRunRefusal(options, environment, options.tier === "pixel" && (yield* approvingScreens));
   if (refusal !== undefined) return yield* new RunRefusal({ message: refusal });
+  const settings = yield* loadSettings(root);
   const policy: RunPolicy = environment === "ci"
-    ? { environment, maxFileSeconds: yield* resolveTestFileMaxSeconds((yield* loadSettings(root))["testFileMaxSeconds"]) }
+    ? { environment, maxFileSeconds: yield* resolveTestFileMaxSeconds(settings["testFileMaxSeconds"]) }
     : { environment };
+  const excluded = yield* readTestFileSkips(root, settings["testFileSkips"]);
   const selection = yield* entrySelection(run, options, environment);
   if (selection.kind === "files" && selection.files.length === 0) {
     if (run !== "pr") yield* Console.log(`${NAME}: the pull request changes no file a test reads, so no test ran`);
@@ -345,18 +309,17 @@ const testEntry = Effect.gen(function* () {
     yield* Console.log(`${NAME}: the change reaches no test file, so no test ran`);
     return true;
   }
-  const smoke = selection.kind === "smoke" ? yield* readSmokeList(root) : [];
-  const scope = yield* readScope(selection, smoke);
-  if (scope.files?.length === 0) {
-    yield* Console.log(`${NAME}: no unit test and no smoke list, so this local run ran nothing; declare the smoke key of ${SETTINGS_FILE}`);
+  const configuredSmoke = settings["smoke"];
+  const smoke = selection.kind === "smoke" && configuredSmoke !== undefined ? yield* decodeSetting("smoke", Smoke, configuredSmoke) : [];
+  const scope = yield* readSuiteScope(root, selection, smoke, excluded);
+  if (scope.kind === "empty") {
+    yield* Console.log(`${NAME}: ${scope.message}`);
     return true;
   }
-  const { declarations } = scope;
 
-  const outfile = path.join(yield* fs.makeTempDirectoryScoped({ prefix: "checks-test-" }), "junit.xml");
-  const suitePassed =
-    (yield* runSuite(outfile, suiteArgs(selection, smoke), options.workers)) === ChildProcessSpawner.ExitCode(0);
-  return yield* judgeRun(outfile, junit, suitePassed, declarations, policy);
+  const outfile = yield* temporaryReportPath();
+  const suitePassed = (yield* runSuite(outfile, scope.args, options.workers)) === ChildProcessSpawner.ExitCode(0);
+  return yield* judgeRun(outfile, junit, suitePassed, scope.declarations, policy);
 }).pipe(Effect.scoped);
 
 const judgeRun = Effect.fn("judgeRun")(function* (

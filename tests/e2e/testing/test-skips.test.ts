@@ -334,6 +334,53 @@ test("CI refuses a zero file limit instead of treating it as disabled", async ()
   expect(ci.text).not.toContain("1 pass");
 });
 
+test("a listed file does not run or leave stale skips, and a similarly named file still runs", async () => {
+  const skipped = [
+    'import { test } from "bun:test";',
+    'import { skipReason } from "@avi2dg/checks/scripts/test-skips.ts";',
+    'test.skip(skipReason("needs a fixture", "declared skip"), () => {});',
+    'test("excluded test ran", () => { throw new Error("excluded file executed"); });',
+  ].join("\n");
+  const neighbor = 'import { test } from "bun:test"; test("neighbor ran", () => {});';
+  await consumer(skipped, { "tests/unit/suite.test.tsx": neighbor });
+  await writeFile(join(dir, "checks.config.ts"), settingsFile({ testFileSkips: [SUITE] }));
+
+  const ci = await checksTest(true, ["--full"]);
+
+  expect(ci.exitCode).toBe(0);
+  expect(ci.text).toContain(`checks-test: testFileSkips excludes ${SUITE}`);
+  expect(ci.text).toContain("neighbor ran");
+  expect(ci.text).not.toContain("excluded test ran");
+  expect(ci.text).not.toContain("no test skipped with this declaration");
+});
+
+test("excluding every file in a tier does not fall back to an unfiltered run", async () => {
+  const failing = 'import { test } from "bun:test"; test("unexpected run", () => { throw new Error("must not run"); });';
+  const live = "tests/live/machine.test.ts";
+  await consumer(failing, { [live]: failing });
+  await writeFile(join(dir, "checks.config.ts"), settingsFile({ testFileSkips: [SUITE, live] }));
+
+  const ci = await checksTest(true, ["--tier=live"]);
+
+  expect(ci.exitCode).toBe(0);
+  expect(ci.text).toContain(`checks-test: testFileSkips excludes ${SUITE}`);
+  expect(ci.text).toContain(`checks-test: testFileSkips excludes ${live}`);
+  expect(ci.text).toContain("all selected test files are excluded, so no test ran");
+  expect(ci.text).not.toContain("unexpected run");
+});
+
+test("a missing file in the skip list is not silently accepted", async () => {
+  await consumer('import { test } from "bun:test"; test("does not start", () => {});');
+  const missing = "tests/unit/missing.test.ts";
+  await writeFile(join(dir, "checks.config.ts"), settingsFile({ testFileSkips: [missing] }));
+
+  const ci = await checksTest(true);
+
+  expect(ci.exitCode).toBe(2);
+  expect(ci.text).toContain(`testFileSkips names no test file at ${missing}`);
+  expect(ci.text).not.toContain("1 pass");
+});
+
 async function declareSmoke(smoke: readonly string[]): Promise<void> {
   await writeFile(join(dir, "checks.config.ts"), settingsFile({ smoke }));
 }
