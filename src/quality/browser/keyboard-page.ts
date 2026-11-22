@@ -119,72 +119,73 @@ type PageCanvas = {
   readonly getContext: (kind: string, options: { readonly willReadFrequently: boolean }) => PageContext | null;
 };
 
-export const scanRings = (el: PageElement): RingScan[] => {
-  const measurePseudoBox = (anchor: PageElement, pseudoStyle: PageStyle, hostBox: Box): Box => {
-    if (pseudoStyle.position !== "absolute") return hostBox;
-    const view = anchor.ownerDocument.defaultView;
-    const root = anchor.ownerDocument.documentElement;
-    const holdsPlaced = (style: PageStyle): boolean =>
-      style.position !== "static" ||
-      [style.transform, style.translate, style.rotate, style.scale, style.perspective, style.filter, style.backdropFilter].some((value) => value !== "none") ||
-      /layout|paint|strict|content/.test(style.contain) ||
-      style.containerType !== "normal" ||
-      /transform|perspective|filter/.test(style.willChange);
-    const cssPixels = (token: string): number => token.endsWith("px") ? parseFloat(token) : NaN;
-    const pxOrZero = (token: string): number => cssPixels(token) || 0;
-    const frameOf = (host: PageElement): Box => {
-      let holder: PageElement | null = host;
-      while (holder !== null && holder !== root && !holdsPlaced(view.getComputedStyle(holder))) holder = holder.parentElement;
-      if (holder === null || holder === root) {
-        return { x: -view.scrollX, y: -view.scrollY, width: root.clientWidth, height: root.clientHeight };
-      }
-      const rect = holder.getBoundingClientRect();
-      if (holder.clientWidth === 0 && holder.clientHeight === 0 && (rect.width !== 0 || rect.height !== 0)) {
-        const holderStyle = view.getComputedStyle(holder);
-        const borderLeft = pxOrZero(holderStyle.borderLeftWidth);
-        const borderTop = pxOrZero(holderStyle.borderTopWidth);
-        const borderRight = pxOrZero(holderStyle.borderRightWidth);
-        const borderBottom = pxOrZero(holderStyle.borderBottomWidth);
-        return { x: rect.x + borderLeft - holder.scrollLeft, y: rect.y + borderTop - holder.scrollTop, width: Math.max(0, rect.width - borderLeft - borderRight), height: Math.max(0, rect.height - borderTop - borderBottom) };
-      }
-      return { x: rect.x + holder.clientLeft - holder.scrollLeft, y: rect.y + holder.clientTop - holder.scrollTop, width: holder.clientWidth, height: holder.clientHeight };
-    };
-    type Axis = { readonly start: number; readonly size: number };
-    const insetAxis = (frameSize: number, start: number, end: number, size: number, fromEnd = false): Axis | null => {
-      if (Number.isFinite(size)) {
-        if (Number.isFinite(end) && (fromEnd || !Number.isFinite(start))) return { start: frameSize - end - size, size };
-        if (Number.isFinite(start)) return { start, size };
-      }
-      if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
-      return { start, size: Math.max(0, frameSize - start - end) };
-    };
-    const insetWithMargin = (inset: string, margin: string): number => cssPixels(inset) + pxOrZero(margin);
-    const borderBoxSize = (style: PageStyle, size: string, edges: readonly string[]): number =>
-      cssPixels(size) + (style.boxSizing === "border-box" ? 0 : edges.reduce((total, edge) => total + pxOrZero(edge), 0));
-    const horizontalAxis = (style: PageStyle, frame: Box): Axis | null => insetAxis(
-      frame.width,
-      insetWithMargin(style.left, style.marginLeft),
-      insetWithMargin(style.right, style.marginRight),
-      borderBoxSize(style, style.width, [style.paddingLeft, style.paddingRight, style.borderLeftWidth, style.borderRightWidth]),
-      style.direction === "rtl",
-    );
-    const verticalAxis = (style: PageStyle, frame: Box): Axis | null => insetAxis(
-      frame.height,
-      insetWithMargin(style.top, style.marginTop),
-      insetWithMargin(style.bottom, style.marginBottom),
-      borderBoxSize(style, style.height, [style.paddingTop, style.paddingBottom, style.borderTopWidth, style.borderBottomWidth]),
-    );
-    const frame = frameOf(anchor);
-    const horizontal = horizontalAxis(pseudoStyle, frame);
-    const vertical = verticalAxis(pseudoStyle, frame);
-    return {
-      x: horizontal === null ? hostBox.x : frame.x + horizontal.start,
-      y: vertical === null ? hostBox.y : frame.y + vertical.start,
-      width: horizontal?.size ?? hostBox.width,
-      height: vertical?.size ?? hostBox.height,
-    };
+const measurePseudoBox = (anchor: PageElement, pseudoStyle: PageStyle, hostBox: Box): Box => {
+  if (pseudoStyle.position !== "absolute") return hostBox;
+  const view = anchor.ownerDocument.defaultView;
+  const root = anchor.ownerDocument.documentElement;
+  const holdsPlaced = (style: PageStyle): boolean =>
+    style.position !== "static" ||
+    [style.transform, style.translate, style.rotate, style.scale, style.perspective, style.filter, style.backdropFilter].some((value) => value !== "none") ||
+    /layout|paint|strict|content/.test(style.contain) ||
+    style.containerType !== "normal" ||
+    /transform|perspective|filter/.test(style.willChange);
+  const cssPixels = (token: string): number => token.endsWith("px") ? parseFloat(token) : NaN;
+  const pxOrZero = (token: string): number => cssPixels(token) || 0;
+  const frameOf = (host: PageElement): Box => {
+    let holder: PageElement | null = host;
+    while (holder !== null && holder !== root && !holdsPlaced(view.getComputedStyle(holder))) holder = holder.parentElement;
+    if (holder === null || holder === root) {
+      return { x: -view.scrollX, y: -view.scrollY, width: root.clientWidth, height: root.clientHeight };
+    }
+    const rect = holder.getBoundingClientRect();
+    if (holder.clientWidth === 0 && holder.clientHeight === 0 && (rect.width !== 0 || rect.height !== 0)) {
+      const holderStyle = view.getComputedStyle(holder);
+      const borderLeft = pxOrZero(holderStyle.borderLeftWidth);
+      const borderTop = pxOrZero(holderStyle.borderTopWidth);
+      const borderRight = pxOrZero(holderStyle.borderRightWidth);
+      const borderBottom = pxOrZero(holderStyle.borderBottomWidth);
+      return { x: rect.x + borderLeft - holder.scrollLeft, y: rect.y + borderTop - holder.scrollTop, width: Math.max(0, rect.width - borderLeft - borderRight), height: Math.max(0, rect.height - borderTop - borderBottom) };
+    }
+    return { x: rect.x + holder.clientLeft - holder.scrollLeft, y: rect.y + holder.clientTop - holder.scrollTop, width: holder.clientWidth, height: holder.clientHeight };
   };
-  const visibleColor = (color: string): boolean =>
+  type Axis = { readonly start: number; readonly size: number };
+  const insetAxis = (frameSize: number, start: number, end: number, size: number, fromEnd = false): Axis | null => {
+    if (Number.isFinite(size)) {
+      if (Number.isFinite(end) && (fromEnd || !Number.isFinite(start))) return { start: frameSize - end - size, size };
+      if (Number.isFinite(start)) return { start, size };
+    }
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+    return { start, size: Math.max(0, frameSize - start - end) };
+  };
+  const insetWithMargin = (inset: string, margin: string): number => cssPixels(inset) + pxOrZero(margin);
+  const borderBoxSize = (style: PageStyle, size: string, edges: readonly string[]): number =>
+    cssPixels(size) + (style.boxSizing === "border-box" ? 0 : edges.reduce((total, edge) => total + pxOrZero(edge), 0));
+  const horizontalAxis = (style: PageStyle, frame: Box): Axis | null => insetAxis(
+    frame.width,
+    insetWithMargin(style.left, style.marginLeft),
+    insetWithMargin(style.right, style.marginRight),
+    borderBoxSize(style, style.width, [style.paddingLeft, style.paddingRight, style.borderLeftWidth, style.borderRightWidth]),
+    style.direction === "rtl",
+  );
+  const verticalAxis = (style: PageStyle, frame: Box): Axis | null => insetAxis(
+    frame.height,
+    insetWithMargin(style.top, style.marginTop),
+    insetWithMargin(style.bottom, style.marginBottom),
+    borderBoxSize(style, style.height, [style.paddingTop, style.paddingBottom, style.borderTopWidth, style.borderBottomWidth]),
+  );
+  const frame = frameOf(anchor);
+  const horizontal = horizontalAxis(pseudoStyle, frame);
+  const vertical = verticalAxis(pseudoStyle, frame);
+  return {
+    x: horizontal === null ? hostBox.x : frame.x + horizontal.start,
+    y: vertical === null ? hostBox.y : frame.y + vertical.start,
+    width: horizontal?.size ?? hostBox.width,
+    height: vertical?.size ?? hostBox.height,
+  };
+};
+
+export const scanRings = (el: PageElement): RingScan[] => {
+    const visibleColor = (color: string): boolean =>
     !(color.startsWith("rgba(") && color.endsWith(", 0)")) && !color.endsWith(" / 0)");
   const paintsEdge = (width: string, style: string, color: string): boolean =>
     style !== "none" && style !== "hidden" && parseFloat(width) > 0 && visibleColor(color);
