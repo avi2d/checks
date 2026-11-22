@@ -23,6 +23,7 @@ const EVERY_OPTION: CallerSet = {
     advisoriesCron: "21 5 * * 1",
     flake: { nodeVersionFile: ".node-version" },
     pages: { build: "bun run docs:build", path: "docs/.vitepress/dist" },
+    docsBuild: false,
     secretsPack: true,
     fullTest: true,
     claudeVersion: undefined,
@@ -153,7 +154,7 @@ test("a set written with every option reads back as the same set, so a check rig
   for (const set of [EVERY_OPTION, CHECKED, SITE]) {
     const files = written(set);
     const held = files.map(({ name, text }) => ({ path: ".github/workflows/" + name, document: Bun.YAML.parse(text), text }));
-    const reread = Effect.runSync(callerSetOf(held, {}, "checks-workflows --write", set.options.fullTest, false, set.options.checkRelease, set.options.publicRepository));
+    const reread = Effect.runSync(callerSetOf(held, {}, "checks-workflows --write", set.options.fullTest, false, set.options.checkRelease, set.options.publicRepository, false));
     expect(reread).toEqual(set);
     expect(differencesOf(reread, files, false)).toEqual([]);
   }
@@ -290,11 +291,25 @@ test("a docs-only change skips the site and test jobs and a tests-only one skips
   for (const set of [SITE, CODE, CHECKED]) expect(skippedAndPassed(set, "full")).toEqual([[], []]);
 });
 
+test("a docs-only pull request that skips the docs build or lets its failure pass the gate fails here", () => {
+  for (const base of [CODE, SITE, CHECKED]) {
+    const set = { ...base, options: { ...base.options, docsBuild: true } };
+    const jobs = ciJobs(set);
+    expect(jobs["docs"]).toMatchObject({ needs: "changes", if: base === CHECKED ? "(" + NOT_RELEASED + " || needs.changes.outputs.check-release == 'true')" : NOT_RELEASED });
+    expect(stepsOf(jobs["docs"] ?? {})).toContainEqual({ run: "bun run docs:build" });
+    expect(jobs["checks"]?.["needs"]).toContain("docs");
+    expect(skippedAndPassed(set, "docs-only")[0]).not.toContain("docs");
+    expect(skippedAndPassed(set, "docs-only")[1]).not.toContain("docs");
+    expect(skippedAndPassed(set, "release")[0]).toEqual(skippedAndPassed(set, "release")[1]);
+  }
+  expect(ciJobs(CODE)).not.toHaveProperty("docs");
+});
+
 const heldCi = (document: unknown) => ({ path: ".github/workflows/ci.yml", document, text: JSON.stringify(document) });
 
-const setOfCi = (document: unknown): CallerSet => Effect.runSync(callerSetOf([heldCi(document)], {}, "checks-workflows --write", false, false, false, false));
+const setOfCi = (document: unknown): CallerSet => Effect.runSync(callerSetOf([heldCi(document)], {}, "checks-workflows --write", false, false, false, false, false));
 
-const faultOfCi = (document: unknown): string => Effect.runSync(Effect.flip(callerSetOf([heldCi(document)], {}, "checks-workflows --write", false, false, false, false))).message;
+const faultOfCi = (document: unknown): string => Effect.runSync(Effect.flip(callerSetOf([heldCi(document)], {}, "checks-workflows --write", false, false, false, false, false))).message;
 
 const withE2e = (name: string, edit: (job: Record<string, unknown>) => Record<string, unknown> = (job) => job): Record<string, unknown> => {
   const document = documentOf(CODE, "ci.yml");
@@ -334,9 +349,17 @@ test("a ci.yml whose release test step picks its command by an expression is rew
   const expressionRun = EXPRESSION + "{{ needs.changes.outputs.check-release == 'true' && 'bun run test' || 'bunx checks-test --pr' }}";
   const steps = stepsOf(unit).map((step) => (step["id"] === "test" ? { id: "test", run: expressionRun } : step));
   const held = { ...document, jobs: { ...jobs, test: { ...unit, steps } } };
-  const reread = Effect.runSync(callerSetOf([heldCi(held)], {}, "checks-workflows --write", false, false, true, false));
+  const reread = Effect.runSync(callerSetOf([heldCi(held)], {}, "checks-workflows --write", false, false, true, false, false));
   expect(reread).toEqual(CHECKED);
   expect(stepsOf(ciJobs(reread)["test"] ?? {})).toContainEqual({ id: "test", env: { CHECK_RELEASE: EXPRESSION + "{{ needs.changes.outputs.check-release }}" }, run: "bunx checks-ci test" });
+});
+
+test("a held docs test job is kept when docs:build is absent and refused when present, so only the written docs job takes the name", () => {
+  const held = withE2e("docs");
+  const kept = Effect.runSync(callerSetOf([heldCi(held)], {}, "checks-workflows --write", false, false, false, false, false));
+  expect(kept.ci.tests.map(({ name }) => name)).toContain("docs");
+  const fault = Effect.runSync(Effect.flip(callerSetOf([heldCi(held)], {}, "checks-workflows --write", false, false, false, false, true))).message;
+  expect(fault).toBe(".github/workflows/ci.yml runs a test step in job docs, a name the written ci.yml gives its own job, so rename it");
 });
 
 test("a test job named like a fixed job or no job id, or one whose runner is not one label, is refused, so a write never drops it silently", () => {
