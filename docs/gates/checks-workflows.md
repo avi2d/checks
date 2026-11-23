@@ -33,7 +33,7 @@ A site takes these files under `.github/workflows/`:
 
 | File | Event | Runs |
 | --- | --- | --- |
-| `ci.yml` | a pull request opened, pushed to, reopened or marked ready for review, and `workflow_dispatch` | the composed jobs, with a `site` job that builds the site and deploys the preview |
+| `ci.yml` | a pull request opened, pushed to, reopened or marked ready for review, a push to `main`, and `workflow_dispatch` | the composed jobs, with a `site` job that builds the site and deploys the preview |
 | `pr-title.yml` | every push to a pull request and every title edit | the title check, posted as the `commitlint` status |
 | `preview-close.yml` | a pull request closed | the removal of the pull request's preview |
 | `main.yml` | a push to `main` | the staging deploy |
@@ -44,7 +44,7 @@ A code repository takes these files:
 
 | File | Event | Runs |
 | --- | --- | --- |
-| `ci.yml` | a pull request opened, pushed to, reopened or marked ready for review, and `workflow_dispatch` | the composed jobs |
+| `ci.yml` | a pull request opened, pushed to, reopened or marked ready for review, a push to `main`, and `workflow_dispatch` | the composed jobs |
 | `pr-title.yml` | every push to a pull request and every title edit | the title check, posted as the `commitlint` status |
 | `main.yml` | a push to `main` | `bunx checks-release-tag`, which tags and publishes a release commit |
 | `release.yml` | `workflow_dispatch` | the release pull request |
@@ -57,7 +57,8 @@ A private root with a `test` script also holds the `suite` job, and its `ci.yml`
 Its `ci.yml` runs the docs build there when `package.json` defines `docs:build`.
 A Claude Code version pinned by an install step in `ci.yml` or `flake.yml` is kept in the test and flake jobs.
 
-The `ci.yml` run is one run per pull request, and a newer push cancels the run it replaces.
+For a pull request, a newer push cancels the `ci.yml` run it replaces.
+Pushes to `main` and manual dispatches each start a separate run.
 The code `main.yml` release job holds group `main` without cancellation.
 Only the fork-reachable jobs differ with repository visibility, with the test jobs of `ci.yml` and the Claude Code version.
 The files a site takes also differ in the three site names.
@@ -140,6 +141,16 @@ In a site, a test job that needs `site` reads the build.
 Every other line of the file is the shape the kit writes: the order of the jobs, `needs`, `if`, the pins and the permissions.
 A `ci.yml` with a step that runs `bunx checks-ci secrets-pack` keeps that step in `static`, which unpacks the `CHECKS_SECRETS_PACK` secret before lint.
 
+The generated `ci.yml` runs on pull requests, pushes to `main`, and manual dispatches.
+On pushes to `main`, the default test jobs run their whole tiers and the browser walks every route.
+If the pull request reaches no browser route, the browser job skips and the gate accepts the skip.
+A change confined to TypeScript files under `tests/unit/` and `tests/e2e/`, including helpers, skips both the site build and its dependent jobs.
+Existing screenshot test jobs keep their commands, and the kit adds no default screenshot job.
+A job that runs `bunx checks-test --pr-screens` narrows screenshot tests on pull requests and runs the whole pixel tier on other events.
+A site production run runs the full browser walk and compares screenshots on the staged release commit.
+
+Run `bunx checks-workflows --write` to write the workflow set.
+
 A `ci.yml` with no test job gets the default jobs of its kind:
 
 | Kind | Default test jobs |
@@ -166,7 +177,7 @@ To add a test job, copy the `unit` job of `ci.yml` under a new name, change the 
 ## What it reads
 
 It reads the `.yml` and `.yaml` files under `.github/workflows/`, the files under `.github/actions/`, and `checks.config.ts` from the repository root.
-It also reads the root and workspace `package.json` files and the test files under `tests/e2e/`.
+It also reads the root and workspace `package.json` files and checks for test files under `tests/e2e/` and `tests/pixel/`.
 
 ## Arguments
 

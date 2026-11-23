@@ -7,8 +7,8 @@ function pullRequestRefusal(run: string): string {
   return `refusing a \`${run}\` run outside CI; push the branch and open or update its pull request so CI runs the checks, and the full suite runs at release`;
 }
 
-export function pullRequestRunRefusal(environment: Environment): string | undefined {
-  return environment === "ci" ? undefined : pullRequestRefusal("--pr");
+export function pullRequestRunRefusal(environment: Environment, flag: "--pr" | "--pr-screens" = "--pr"): string | undefined {
+  return environment === "ci" ? undefined : pullRequestRefusal(flag);
 }
 
 export function heavyRunRefusal(options: TestOptions, environment: Environment, approvingScreens: boolean): string | undefined {

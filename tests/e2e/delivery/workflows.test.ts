@@ -208,7 +208,7 @@ test("an edited line in a written file is refused with the line it holds and the
     [
       "workflows: .github/workflows differs from the code set in 1 file(s):",
       "  .github/workflows/ci.yml: differs from the file checks-workflows writes",
-      '    line 10: holds "  cancel-in-progress: false", checks-workflows writes "  cancel-in-progress: true"',
+      '    line 12: holds "  cancel-in-progress: false", checks-workflows writes "  cancel-in-progress: true"',
       "  run checks-workflows --write to write the set",
     ].join("\n"),
   );

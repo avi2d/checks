@@ -38,14 +38,15 @@ class RunRefusal extends Schema.TaggedError<RunRefusal>()("RunRefusal", {
 }) {}
 
 const NAME = TEST_ENTRY_POINT.bin;
-const USAGE = `usage: ${NAME} [--tier=live | --tier=pixel | --tier=unit | --tier=e2e | --full | --changed | --pr] [--parallel=<workers>] [--junit=<file>], with --pr optionally combined with --tier=unit or --tier=e2e, and it refuses test filters`;
+const USAGE = `usage: ${NAME} [--tier=live | --tier=pixel | --tier=unit | --tier=e2e | --full | --changed | --pr | --pr-screens] [--parallel=<workers>] [--junit=<file>], with --pr optionally combined with --tier=unit or --tier=e2e, and it refuses test filters`;
 const JUNIT = /^--junit=(.+)$/;
 
-export type EntryRun = "default" | "changed" | "pr";
+export type EntryRun = "default" | "changed" | "pr" | "pr-screens";
 
 const RUN_FLAGS: ReadonlyMap<string, EntryRun> = new Map([
   ["--changed", "changed"],
   ["--pr", "pr"],
+  ["--pr-screens", "pr-screens"],
 ]);
 
 export type EntryOptions = {
@@ -60,7 +61,7 @@ export function entryOptions(args: readonly string[]): EntryOptions | undefined 
   const options = testOptions(args.filter((arg) => !JUNIT.test(arg) && !RUN_FLAGS.has(arg)));
   if (options === undefined || junit.length > 1 || runs.length > 1) return undefined;
   const [run = "default"] = runs;
-  if ((run === "changed" && options.tier !== undefined) || (run !== "default" && options.full === true)) return undefined;
+  if (((run === "changed" || run === "pr-screens") && options.tier !== undefined) || (run !== "default" && options.full === true)) return undefined;
   if (run === "pr" && (options.tier === "live" || options.tier === "pixel")) return undefined;
   return { options, junit: Option.fromNullishOr(junit[0]), run };
 }
@@ -208,13 +209,13 @@ export function narrowedTier(options: TestOptions, selection: SuiteSelection): {
 // Returns undefined when a shared file widens the run, so the caller keeps the selection it already had.
 const reachedSelection = Effect.fn("reachedSelection")(function* (changed: readonly string[], tier: TestTier | undefined) {
   const tests = (yield* scanTestFiles(process.cwd())).filter((file) => selectedTierFile(file, tier));
-  const narrowing = yield* readChangedNarrowing(process.cwd(), changed, tests);
+  const narrowing = yield* readChangedNarrowing(process.cwd(), changed, tests, tier);
   if (narrowing.kind === "full") {
     yield* Console.log(`${NAME}: ${narrowing.because}, so ${tier === undefined ? "the whole suite" : `the ${tier} tier`} runs`);
     return undefined;
   }
   yield* Console.log(`${NAME}: the pull request reaches ${narrowing.files.length} of ${tests.length} test file(s)`);
-  return { kind: "files", files: narrowing.files } satisfies SuiteSelection;
+  return { kind: "files", files: narrowing.files, ...(tier === "pixel" ? { tier } : {}) } satisfies SuiteSelection;
 });
 
 const narrowSelection = Effect.fn("narrowSelection")(function* (options: TestOptions, selection: SuiteSelection, environment: Environment) {
@@ -258,7 +259,7 @@ const pullRequestSelection = Effect.fn("pullRequestSelection")(function* (tier: 
 
 const entrySelection = Effect.fn("entrySelection")(function* (run: EntryRun, options: TestOptions, environment: Environment) {
   if (run === "changed") return yield* changedSelection();
-  if (run === "pr") return yield* pullRequestSelection(options.tier);
+  if (run === "pr" || run === "pr-screens") return yield* pullRequestSelection(run === "pr-screens" ? "pixel" : options.tier);
   return yield* narrowSelection(options, selectSuite(options, environment), environment);
 });
 
@@ -293,8 +294,10 @@ const testEntry = Effect.gen(function* () {
   const environment = yield* environmentOf;
   yield* refuseOldPlace(root, "smoke", { manifestKey: "smoke" });
   yield* refuseOldPlace(root, "reach", { manifestKey: "reach" });
-  const refusal =
-    run === "pr" ? pullRequestRunRefusal(environment) : heavyRunRefusal(options, environment, options.tier === "pixel" && (yield* approvingScreens));
+  const isPullRequest = run === "pr" || run === "pr-screens";
+  const refusal = isPullRequest
+    ? pullRequestRunRefusal(environment, run === "pr-screens" ? "--pr-screens" : "--pr")
+    : heavyRunRefusal(options, environment, options.tier === "pixel" && (yield* approvingScreens));
   if (refusal !== undefined) return yield* new RunRefusal({ message: refusal });
   const settings = yield* loadSettings(root);
   const policy: RunPolicy = environment === "ci"
@@ -303,7 +306,7 @@ const testEntry = Effect.gen(function* () {
   const excluded = yield* readTestFileSkips(root, settings["testFileSkips"]);
   const selection = yield* entrySelection(run, options, environment);
   if (selection.kind === "files" && selection.files.length === 0) {
-    if (run !== "pr") yield* Console.log(`${NAME}: the pull request changes no file a test reads, so no test ran`);
+    yield* Console.log(`${NAME}: no selected test file, so no test ran`);
     return true;
   }
   if (selection.kind === "changed" && selection.files.length === 0) {

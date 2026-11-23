@@ -65,7 +65,7 @@ const reportedSet = (present: readonly HeldFile[], flags: SiteNameFlags, inputs:
     inputs.needsReleaseChecks,
     inputs.publicRepository,
     inputs.docsBuild,
-    inputs.hasE2e,
+    inputs.testTiers,
   );
 
 const checkSet = Effect.fn("checkSet")(function* (root: string, set: CallerSet, present: readonly HeldFile[], kit: boolean) {

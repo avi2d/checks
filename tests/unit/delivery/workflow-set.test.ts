@@ -2,7 +2,7 @@ import { Evaluator, Lexer, Parser, data } from "@actions/expressions";
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
 import { NO_CALLER_OPTIONS } from "../../../src/delivery/caller-options.ts";
-import { DEFAULT_CI_JOBS } from "../../../src/delivery/ci-jobs.ts";
+import { ciJobsOf, DEFAULT_CI_JOBS } from "../../../src/delivery/ci-jobs.ts";
 import { fullActions } from "../../../src/delivery/full-set/actions.ts";
 import { MUTATION_WORKFLOW } from "../../../src/delivery/full-set/mutation.ts";
 import { findStepFaults } from "../../../src/delivery/plain-steps.ts";
@@ -214,12 +214,11 @@ test("the site ci.yml runs the browser job on the preview build and gates every 
     static: { needs: "changes" },
     site: { needs: "changes" },
     unit: { needs: "changes" },
-    browser: { needs: "site" },
+    browser: { needs: "site", if: "needs.site.outputs.browser != 'false'" },
     e2e: { needs: "changes" },
     checks: { needs: ["changes", "static", "site", "unit", "e2e", "browser"] },
   });
   expect(jobs["changes"]).not.toHaveProperty("if");
-  expect(jobs["browser"]).not.toHaveProperty("if");
   const siteGateIf = jobs["checks"]?.["if"];
   expect(typeof siteGateIf === "string" && truthy(evaluated(siteGateIf, {}))).toBe(true);
   expect(stepsOf(jobs["browser"] ?? {})).toContainEqual({ uses: "./.github/actions/playwright", with: { browsers: "webkit" } });
@@ -261,7 +260,7 @@ test("a ci.yml that writes the long release rule into a job other than changes, 
       if (condition === "" || condition === "always()") continue;
       const runsDespiteReleaseGithub = truthy(evaluated(condition, { github: githubOf(released), needs: { changes: { outputs: outputs(false) } } }));
       const runsOnReleaseOutput = truthy(evaluated(condition, { github: githubOf(ordinary), needs: { changes: { outputs: outputs(true) } } }));
-      expect([name, runsDespiteReleaseGithub, runsOnReleaseOutput]).toEqual([name, true, runsOnRelease]);
+      expect([name, runsDespiteReleaseGithub, runsOnReleaseOutput]).toEqual([name, true, runsOnRelease || job["needs"] === "site"]);
     }
   }
 });
@@ -281,17 +280,18 @@ test("a release/ branch that does not match release/<base> still runs every job 
   expect(decidesReleaseRun({ ...run, eventName: "workflow_dispatch", refName: "main", headRef: "" })).toBe(false);
 });
 
-type Change = "release" | "docs-only" | "tests-only" | "full";
+type Change = "release" | "docs-only" | "tests-only" | "tests-reach-route" | "no-route" | "full";
 
 function skippedAndPassed(set: CallerSet, change: Change): readonly (readonly string[])[] {
   const checksRelease = set.kind === "code" && set.options.checkRelease;
-  const outputs: Record<string, string> = {
+  const outputs = {
     release: String(change === "release"),
     "docs-only": String(change === "docs-only"),
-    "tests-only": String(change === "tests-only"),
+    "tests-only": String(change === "tests-only" || change === "tests-reach-route"),
+    browser: String(change !== "tests-only" && change !== "no-route"),
     ...(checksRelease ? { "check-release": String(change === "release") } : {}),
   };
-  const contexts = { needs: { changes: { outputs } } };
+  const contexts = { needs: { changes: { outputs }, site: { outputs: { browser: outputs["browser"] } } } };
   const skipped: string[] = [];
   for (const [name, job] of Object.entries(ciJobs(set)).filter(([id]) => id !== "checks")) {
     const needs = job["needs"];
@@ -315,6 +315,20 @@ test("a docs-only change skips the site and test jobs and a tests-only one skips
   expect(skippedAndPassed(SITE, "tests-only")).toEqual([["site", "browser"], ["site", "browser"]]);
   expect(skippedAndPassed(CODE, "tests-only")).toEqual([[], []]);
   for (const set of [SITE, CODE, CHECKED]) expect(skippedAndPassed(set, "full")).toEqual([[], []]);
+});
+
+test("a change that reaches no route skips the browser job, not the site build", () => {
+  expect(skippedAndPassed(SITE, "no-route")).toEqual([["browser"], ["browser"]]);
+  expect(skippedAndPassed(SITE, "tests-reach-route")).toEqual([["site", "browser"], ["site", "browser"]]);
+});
+
+test.each([[["unit", "e2e"]], [["unit", "e2e", "pixel"]]] as const)("site tiers %p do not add a screenshot job or delete a carried one", async (tiers) => {
+  const options = { publicRepository: true, docsBuild: false, testTiers: new Set(tiers) };
+  const fresh = await Effect.runPromise(ciJobsOf("site", undefined, options));
+  expect(fresh.tests.map(({ name }) => name)).toEqual(["unit", "e2e", "browser"]);
+  const document = { jobs: { screens: { "runs-on": "ubuntu-latest", steps: [{ id: "test", run: "bunx checks-test --pr-screens" }] } } };
+  const held = await Effect.runPromise(ciJobsOf("site", { path: ".github/workflows/ci.yml", document, text: "" }, options));
+  expect(held.tests.map(({ name, run }) => ({ name, run }))).toEqual([{ name: "screens", run: "bunx checks-test --pr-screens" }]);
 });
 
 test("a docs-only pull request that skips the docs build or lets its failure pass the gate fails here", () => {

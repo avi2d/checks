@@ -1,47 +1,52 @@
-import { Console, Data, Effect } from "effect";
+import { Config, Console, Effect } from "effect";
+import { pathsSinceMergeBase } from "../../core/git.ts";
+import { scopeOfChanges } from "../../core/pull-request-scope.ts";
+import { readRouteImpact } from "../../quality/browser/route-scope.ts";
 import { optionalInput } from "./lib/inputs.ts";
-import { commandOutput } from "./lib/run.ts";
 import { writeOutputs } from "./lib/step-output.ts";
 
-class ChangesError extends Data.TaggedError("ChangesError")<{ readonly message: string }> {}
-
-// tests/pixel and tests/quarantine stay outside, since a change there needs the whole run.
 const ORDINARY_TEST = /^tests\/(?:unit|e2e)\/.+\.tsx?$/;
 
 export function testsOnly(changed: readonly string[]): boolean {
   return changed.length > 0 && changed.every((path) => ORDINARY_TEST.test(path));
 }
 
-function docsOnlyVerdict(kitStdout: string): boolean {
-  return kitStdout.split("\n").includes("docs-only=true");
-}
-
-const git = Effect.fn("git")(function* (...args: readonly string[]) {
-  const { stdout, passed } = yield* commandOutput("git", args);
-  if (!passed) return yield* new ChangesError({ message: `git ${args.join(" ")} failed` });
-  return stdout;
+const browserNeeded = Effect.fn("browserNeeded")(function* (changed: readonly string[], docsOnly: boolean) {
+  if (docsOnly || testsOnly(changed)) {
+    for (const path of changed) yield* Console.log(`changes: ${path} -> no browser route`);
+    return false;
+  }
+  const impact = yield* readRouteImpact(process.cwd(), changed);
+  if (impact.kind === "full") {
+    yield* Console.log(`changes: ${impact.because}, so the browser walks every route`);
+    return true;
+  }
+  let reachable = false;
+  for (const [file, routes] of impact.byChange) {
+    yield* Console.log(`changes: ${file} -> ${routes.length === 0 ? "no browser route" : routes.join(", ")}`);
+    if (routes.length > 0) reachable = true;
+  }
+  return reachable;
 });
 
-const changedPaths = Effect.fn("changedPaths")(function* (base: string) {
-  const mergeBase = (yield* git("merge-base", base, "HEAD")).trim();
-  // Without --no-renames a test moved out of src/ would list only its new path.
-  const listed = yield* git("-c", "core.quotePath=false", "diff", "--no-renames", "--name-only", mergeBase, "HEAD");
-  return listed.split("\n").filter((path) => path !== "");
+const keepFullRun = Effect.fn("keepFullRun")(function* (reason: string, planBrowser: boolean) {
+  yield* Console.log(`changes: ${reason}, so the full run stays`);
+  yield* writeOutputs({ "docs-only": "false", "tests-only": "false", ...(planBrowser ? { browser: "true" } : {}) });
+  return true;
 });
 
 export const main = Effect.gen(function* () {
   const base = yield* optionalInput("BASE_SHA");
-  if (base === "") {
-    yield* Console.log("changes: no base commit, so the full run stays");
-    yield* writeOutputs({ "docs-only": "false", "tests-only": "false" });
-    return true;
-  }
-  const kit = yield* commandOutput("bunx", ["checks-docs-only", base, "HEAD"]);
-  if (!kit.passed) return yield* new ChangesError({ message: "checks-docs-only failed" });
-  const docsOnly = docsOnlyVerdict(kit.stdout);
-  const changed = yield* changedPaths(base);
+  const planBrowser = yield* Config.Boolean("PLAN_BROWSER").pipe(Config.withDefault(false));
+  if (base === "") return yield* keepFullRun("no base commit", planBrowser);
+  const changed = yield* pathsSinceMergeBase(base, "HEAD").pipe(
+    Effect.catchTag("GitFailure", (cause) => Console.log(`changes: ${cause.message}`).pipe(Effect.as(undefined))),
+  );
+  if (changed === undefined) return yield* keepFullRun("the pull request's changes cannot be read", planBrowser);
+  const docsOnly = scopeOfChanges("", changed).kind === "docs-only";
   const onlyTests = !docsOnly && testsOnly(changed);
   yield* Console.log(`changes: ${changed.length} changed file(s), docs-only=${docsOnly}, tests-only=${onlyTests}`);
-  yield* writeOutputs({ "docs-only": String(docsOnly), "tests-only": String(onlyTests) });
+  const browser = planBrowser ? yield* browserNeeded(changed, docsOnly) : undefined;
+  yield* writeOutputs({ "docs-only": String(docsOnly), "tests-only": String(onlyTests), ...(browser === undefined ? {} : { browser: String(browser) }) });
   return true;
 });

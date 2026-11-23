@@ -110,7 +110,8 @@ Files under `tests/quarantine/` are not run or judged, as [checks-test-layout](c
 
 ## Runs refused outside CI
 
-Outside CI, `checks-test` refuses `--full`, `--pr`, `--tier=e2e` and a `--tier=pixel` run that does not approve pictures before any test runs, and exits 2.
+Outside CI, `checks-test` refuses `--full`, `--pr`, `--pr-screens`, and `--tier=e2e` before any test runs and exits 2.
+It also refuses `--tier=pixel` outside CI unless the run approves pictures.
 `CI` counts as unset when it is missing or false.
 A refused `--full` or `--tier=e2e` run tells the reader to push the branch and open or update its pull request, so CI runs the checks.
 The full suite runs at release.
@@ -151,17 +152,23 @@ The run names how many test files it reached, or which shared file made it run t
 A change whose paths cannot be read runs the whole suite.
 A release pull request, whose title is `chore: release <version>`, runs the whole suite.
 A run on any other event, such as `workflow_dispatch` for a release, runs the whole suite.
-`--full` and the live and pixel tiers always run whole.
+`--full` and the live tier always run whole.
+The pixel tier runs whole unless `--pr-screens` selects the screenshot tests a pull request reaches.
 A narrowed run judges only the skips the files it ran declare.
 
 ## The pull request entry
 
-The CI workflow runs `checks-test --pr --tier=unit` and `checks-test --pr --tier=e2e` as separate test steps, on a pull request and on `workflow_dispatch` alike.
-It runs the unit and e2e test files the pull request reaches, as [Pull request runs](#pull-request-runs) says.
+The CI workflow runs `checks-test --pr --tier=unit` and `checks-test --pr --tier=e2e` as separate test steps.
+It runs changed tests and tests that import a changed file, even through several imports.
+It logs the test files each changed path reaches.
 A pull request that changes only top-level and `docs/` Markdown runs no test and passes.
-A release pull request and any run that is not a pull request run the whole suite.
-A shared file runs the whole suite too.
-Outside CI it is refused, as [Runs refused outside CI](#runs-refused-outside-ci) says of `--full`.
+A change to a lockfile, a config, or a shared helper runs the whole tier and logs the reason.
+A change under `.github/` runs only the tests that reach the changed file.
+A release pull request, a push to `main`, and a manual run also run the whole tier.
+
+A workflow that runs screenshot tests can use `checks-test --pr-screens` to narrow them on pull requests.
+A change confined to tests runs only the screenshot tests it reaches.
+A site source change without a `reach` entry runs all screenshot tests because the tests can open built pages without importing the source.
 
 ## The reach map
 
@@ -183,8 +190,11 @@ export default defineConfig({
 A changed path runs the tests every key that matches it lists, beside the tests that reach it by import, path or bin.
 A stylesheet, a font or a layout that a key matches runs only those tests, rather than the whole suite.
 A stylesheet, a font or a layout that no key matches still runs the whole suite.
-A lockfile, a config, a tool pin, a preloaded file or a test helper still runs the whole suite, even when a key matches it.
-A run on any other event, `--full` and the live and pixel tiers stay whole whatever the map says.
+A lockfile, a config, a tool pin, or a preloaded file still runs the whole tier, even when a key matches it.
+CI wiring runs the whole screenshot tier, but unit and e2e tests run only when they reach the changed file.
+A test helper runs the whole unit or e2e tier.
+In a screenshot pull request run, a test helper runs only the screenshot tests that reach it.
+Outside pull requests, the map does not narrow CI test runs.
 A value that matches no test file stops the narrowing.
 A pull request run and a `--changed` run then run the whole suite and name the value and the key that lists it.
 An empty list or a malformed entry stops the narrowing the same way.
@@ -253,7 +263,8 @@ The default command takes no arguments except `--parallel=<workers>`, as [Parall
 A `package.json` script never takes `--full`, as [checks-test-layout](checks-test-layout.md) says of `scripts.test`.
 `--changed` runs the test files the change reaches, as [Changed-file runs](#changed-file-runs) says, and takes neither a tier nor `--full`.
 `scripts.test` never takes `--changed` either, so CI still runs the suite it reaches.
-`--pr` runs the tests a pull request reaches, as [The pull request entry](#the-pull-request-entry) says.
+`--pr` runs the unit and e2e tests a pull request reaches, as [The pull request entry](#the-pull-request-entry) says.
+`--pr-screens` runs the screenshot tests a pull request reaches.
 It takes `--tier=unit` or `--tier=e2e` to select one tier, but not `--full` or `--changed`.
 Its named tier options are `--tier=live`, `--tier=pixel`, `--tier=unit` and `--tier=e2e`, and a tier run takes `--parallel=<workers>` for one run too, but not `--full`.
 `--junit=<file>` keeps the JUnit report Bun wrote at `<file>`, whether the tests passed or failed, so a whole-tree run hands it to [checks-whole-tree-run](checks-whole-tree-run.md).
@@ -291,7 +302,8 @@ checks-test: no test skipped
 ## When it runs
 
 The repository's `test` script runs it.
-The kit's pull request workflow runs each tier the repository holds in a separate job with `--pr`.
+The kit's pull request workflow runs the unit and e2e tiers in separate jobs with `--pr`.
+The site workflow also runs the pixel tier with `--pr-screens` when the repository has screenshot tests.
 Both commands enforce the time limit in CI without another workflow step.
 A repository that tracks no TypeScript source does not need it, as [checks-test-layout](checks-test-layout.md) says.
 

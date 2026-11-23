@@ -145,7 +145,7 @@ expect((await $`bun ${join(CHECKOUT, "src", "delivery", "setup.ts")}`.cwd(dir).n
 const workflow = Schema.decodeUnknownSync(
   Schema.Struct({ on: Schema.Record(Schema.String, Schema.Unknown), concurrency: Schema.Struct({ group: Schema.String, "cancel-in-progress": Schema.Boolean }) }),
 )(Bun.YAML.parse(await readFile(join(dir, ".github/workflows/ci.yml"), "utf8")));
-expect(Object.keys(workflow.on)).toEqual(["pull_request", "workflow_dispatch"]);
+expect(workflow.on).toMatchObject({ pull_request: expect.any(Object), push: { branches: ["main"] }, workflow_dispatch: null });
 expect(workflow.concurrency).toEqual({ group: "ci-${{ github.event.pull_request.number || github.run_id }}", "cancel-in-progress": true });
 },
 60_000,
