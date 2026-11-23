@@ -104,6 +104,120 @@ test("keyboard counts a ring the link draws with its own focus-visible pseudo-el
   expect(ran.exitCode).toBe(1);
 }, 120_000);
 
+test("keyboard does not count paint added by the field's blur handler as focus", async () => {
+  const site = await browserSite({
+    "dist/index.html": page(
+      `<input name="name"><script>document.querySelector("input").addEventListener("blur", (event) => event.target.classList.add("touched"));</script>`,
+      { head: `<style>input:focus { outline: none; } input.touched { background: red; }</style>` },
+    ),
+    "checks.config.ts": declaration({ targets: [{ name: "field", selector: "input", focusable: true }], checks: ["keyboard"] }),
+  });
+  const ran = await site.run();
+  expect(failuresOf(ran.text)).toEqual([`${at("keyboard", "/")} field shows no visible focus when Tab reaches it`]);
+  expect(ran.exitCode).toBe(1);
+}, 120_000);
+
+test("keyboard does not count paint a previous field adds on blur to the next field", async () => {
+  const site = await browserSite({
+    "dist/index.html": page(
+      `<input id="first"><input id="next"><script>document.querySelector("#first").addEventListener("blur", () => document.querySelector("#next").classList.add("touched"));</script>`,
+      { head: `<style>input:focus { outline: none; } #next.touched { background: red; }</style>` },
+    ),
+    "checks.config.ts": declaration({ targets: [{ name: "next field", selector: "#next", focusable: true }], checks: ["keyboard"] }),
+  });
+  const ran = await site.run();
+  expect(failuresOf(ran.text)).toEqual([`${at("keyboard", "/")} next field shows no visible focus when Tab reaches it`]);
+  expect(ran.exitCode).toBe(1);
+}, 120_000);
+
+test("keyboard does not count horizontal container scrolling as visible focus", async () => {
+  const site = await browserSite({
+    "dist/index.html": page(
+      `<nav><a href="/" style="background: blue">First</a><a id="offscreen" href="/" style="background: red">Next</a></nav>`,
+      { head: `<style>nav { width: 240px; overflow-x: auto; white-space: nowrap; } a { display: inline-block; width: 240px; height: 40px; } a:focus { outline: none; }</style>` },
+    ),
+    "checks.config.ts": declaration({ targets: [{ name: "offscreen link", selector: "#offscreen", focusable: true }], checks: ["keyboard"] }),
+  });
+  const ran = await site.run();
+  expect(failuresOf(ran.text)).toEqual([`${at("keyboard", "/")} offscreen link shows no visible focus when Tab reaches it`]);
+  expect(ran.exitCode).toBe(1);
+}, 120_000);
+
+test("keyboard fails a scrolled sticky stop with no focus indication and still checks later targets", async () => {
+  const site = await browserSite({
+    "dist/index.html": page(
+      `<div style="height: 1600px"></div><nav style="position: sticky; top: 0"><a id="sticky" href="/">Sticky</a></nav><a id="later" href="/">Later</a>`,
+      { head: `<style>#sticky:focus { outline: none; } #later:focus { outline: 3px solid black; }</style>` },
+    ),
+    "checks.config.ts": declaration({
+      targets: [
+        { name: "sticky link", selector: "#sticky", focusable: true },
+        { name: "later link", selector: "#later", focusable: true },
+      ],
+      viewports: [{ name: "phone", width: 320, height: 640, touch: true }],
+      checks: ["keyboard"],
+    }),
+  });
+  const ran = await site.run();
+  expect(failuresOf(ran.text)).toEqual([`${at("keyboard", "/", "default", "phone 320x640 touch")} sticky link shows no visible focus when Tab reaches it`]);
+  expect(ran.text).toContain("scanned sticky link 1, later link 1");
+  expect(ran.exitCode).toBe(1);
+}, 120_000);
+
+test("keyboard reports a scrolled sticky ring as not measured rather than crediting blur paint", async () => {
+  const site = await browserSite({
+    "dist/index.html": page(
+      `<div style="height: 1600px"></div><nav style="position: sticky; top: 0"><a id="sticky" href="/">Sticky</a></nav>`,
+      { head: `<style>#sticky:focus { outline: 3px solid black; }</style>` },
+    ),
+    "checks.config.ts": declaration({
+      targets: [{ name: "sticky link", selector: "#sticky", focusable: true }],
+      viewports: [{ name: "phone", width: 320, height: 640, touch: true }],
+      checks: ["keyboard"],
+    }),
+  });
+  const ran = await site.run();
+  expect(failuresOf(ran.text)).toEqual([]);
+  expect(ran.text).toContain("sticky link: Tab scrolled a sticky element, not measured");
+  expect(ran.exitCode).toBe(0);
+}, 120_000);
+
+test("keyboard reports changed and shortened Tab orders as unmeasured, not unreachable targets or page defects", async () => {
+  const changingPage = (change: string) => page(
+    `<a id="first" href="/">First</a><button>Middle</button><a id="footer" href="/">Footer</a>
+    <script>
+      const loaded = sessionStorage.getItem(location.pathname);
+      sessionStorage.setItem(location.pathname, "loaded");
+      if (loaded) { ${change} }
+    </script>`,
+  );
+  const pages = {
+    "changed-first.html": changingPage(`document.querySelector("main").prepend(document.createElement("button"));`),
+    "changed-later.html": changingPage(`document.querySelector("button").remove();`),
+    "shortened.html": changingPage(`document.querySelector("button").tabIndex = -1; document.querySelector("#footer").tabIndex = -1;`),
+    "extended.html": changingPage(`document.querySelector("main").append(document.createElement("button"));`),
+  };
+  const site = await browserSite({
+    ...sitePages(pages),
+    "checks.config.ts": declaration({
+      routes: routesOf(pages),
+      targets: [
+        { name: "first", selector: "#first", focusable: true },
+        { name: "footer", selector: "#footer", focusable: true },
+      ],
+      checks: ["keyboard"],
+    }),
+  });
+  const ran = await site.run();
+  expect(failuresOf(ran.text)).toEqual([]);
+  for (const path of Object.keys(pages)) {
+    const prefix = `browser: ${at("keyboard", "/" + path).slice(0, -1)} scanned `;
+    const measured = path === "changed-first.html" ? "" : path === "extended.html" ? "first 1, footer 1, " : "first 1, ";
+    expect(ran.text).toContain(prefix + measured + "Tab order differed from the reference pass, not measured");
+  }
+  expect(ran.exitCode).toBe(0);
+}, 120_000);
+
 test("keyboard still fails a ring that appears only after blur", async () => {
   const site = await browserSite({
     "dist/index.html": page(

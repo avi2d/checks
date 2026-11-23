@@ -17,10 +17,16 @@ Each other check that opens a page uses a fresh one.
 Each check judges only the elements of a target that are visible at the visit.
 So a control the page renders once for each breakpoint is judged where it shows.
 
-The keyboard check captures the state Tab reaches before it removes focus.
-It takes the comparison screenshot with focus removed, then restores focus before continuing Tab.
-Page handlers can run during the comparison blur and focus restoration.
-A repaint caused by a blur handler can affect the comparison and count as visible focus.
+The keyboard check records the Tab order, reloads the page, and checks that each stop matches the recorded order.
+Before each declared target stop, it blurs the previous element and takes one baseline screenshot in the target's coordinate system.
+Visible focus must differ from both that baseline and the blurred screenshot.
+If a stop does not match the recorded order, that stop and later stops are reported as not measured, without failing the check.
+An incomplete walk reports neither reach shortfalls nor a failure for reaching no target.
+It compares screenshots in document coordinates, or in viewport coordinates for fixed and sticky elements.
+When Tab scrolls a sticky element, the check fails it if its focused and blurred screenshots match.
+If those screenshots differ, the check reports the element as not measured without failing it.
+The check blurs and restores focus to locate changed paint on the element and its ancestors.
+Page handlers run during blur and focus restoration, so JavaScript focus rings remain measurable without counting blur-only or scroll-only paint as focus.
 
 | Check | What fails | Built on |
 | --- | --- | --- |
@@ -134,6 +140,7 @@ The runner prints one line for each check at each visit, narrowed by the `html`,
 The line names the route, its locale, the viewport, the state and what the check scanned.
 At every visit, whichever checks are declared, a `targets` run counts the visible elements each target that applies to the route matches.
 For `targets`, `layout`, `keyboard`, `contrast` and a hook, what it scanned is each target by name with the count of its elements.
+The keyboard inventory also lists stops not measured because Tab scrolled a sticky element, or notes that the Tab order differed from the reference pass.
 For `look`, it is each role with the count of its texts, the count of texts no role matches and the count of tokens.
 
 It fails, rather than passes, when a declaration leaves nothing to judge:

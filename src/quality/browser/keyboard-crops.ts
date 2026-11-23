@@ -2,8 +2,9 @@ import { Schema } from "effect";
 import type { Box, PageBitmap, PageElement } from "./keyboard-page.ts";
 
 export type CropArgs = {
-  readonly first: string;
-  readonly second: string;
+  readonly baseline: string | null;
+  readonly focused: string;
+  readonly blurred: string;
   readonly boxes: readonly Box[];
 };
 
@@ -14,7 +15,14 @@ const CompareOutcomeSchema = Schema.Union([
 
 type CompareOutcome = typeof CompareOutcomeSchema.Type;
 
-export const compareCrops = (el: PageElement, args: CropArgs): Promise<CompareOutcome> => {
+type CropElement = {
+  readonly ownerDocument: {
+    readonly defaultView: Pick<PageElement["ownerDocument"]["defaultView"], "devicePixelRatio" | "atob" | "createImageBitmap" | "Blob">;
+    readonly createElement: PageElement["ownerDocument"]["createElement"];
+  };
+};
+
+export const compareCrops = (el: CropElement, args: CropArgs): Promise<CompareOutcome> => {
   const view = el.ownerDocument.defaultView;
   const scale = view.devicePixelRatio || 1;
   const unreadable: CompareOutcome = { compared: false };
@@ -55,11 +63,14 @@ export const compareCrops = (el: PageElement, args: CropArgs): Promise<CompareOu
     }
     return same;
   };
-  return Promise.all([decode(args.first), decode(args.second)]).then(([first, second]) => {
-    const result = compareBoxes(first, second);
-    first.close();
-    second.close();
-    return result;
+  return Promise.all([args.baseline === null ? Promise.resolve(null) : decode(args.baseline), decode(args.focused), decode(args.blurred)]).then(([baseline, focused, blurred]) => {
+    const before = baseline === null ? null : compareBoxes(baseline, focused);
+    const after = compareBoxes(focused, blurred);
+    baseline?.close();
+    focused.close();
+    blurred.close();
+    if (!after.compared || (before !== null && !before.compared)) return unreadable;
+    return after.differs && (before === null || before.differs) ? changed : same;
   });
 };
 
