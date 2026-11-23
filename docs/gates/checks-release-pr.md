@@ -45,7 +45,7 @@ It also reads each workspace `package.json` and each workflow step's `CHECKS_PUB
 It names the workflow it runs in by `GITHUB_WORKFLOW`, or as `release-pr` when that is unset.
 It refuses a shallow checkout, a detached `HEAD` and a working tree with changes to tracked files.
 It reads the default branch from the GitHub repository and refuses any other branch unless `--allow-non-default-branch` is passed.
-It reads the release branch and its commit through the GitHub API.
+It reads the release branch from `origin` with `git ls-remote` and `git fetch`.
 It calls the GitHub API through `gh api`, which takes the repository from the checkout's remote and the token from `GH_TOKEN`.
 The token needs `contents: write`, `pull-requests: write` and `actions: write`.
 The repository needs **Allow GitHub Actions to create and approve pull requests** turned on under its Actions settings, or GitHub refuses the pull request.

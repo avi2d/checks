@@ -8,7 +8,7 @@ audience: consumers
 
 ## What it checks
 
-It reads the version `package.json` holds at the commit and looks for the tag `v<version>` on `origin`.
+It reads the version `package.json` holds at the commit and looks for the tag `v<version>` in the GitHub repository.
 It refuses the commit when that tag is missing or tags another commit.
 It refuses when the tag holds no GitHub release, or only a draft or a prerelease.
 It refuses when the release notes lack the `CHANGELOG.md` section for that version, as the commit holds the file.

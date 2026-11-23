@@ -22,8 +22,7 @@ export const taggedOn = Effect.fn("taggedOn")(function* (tag: string) {
   const ref = yield* gitHubOptional(decodeObject, "GET", `${REPOSITORY}/git/ref/tags/${encodeURIComponent(tag)}`);
   if (Option.isNone(ref)) return undefined;
   let object = ref.value.object;
-  for (let depth = 0; object.type === "tag"; depth += 1) {
-    if (depth === 32) return yield* new GitHubFailure({ message: `tag ${tag} has too many nested tag objects` });
+  while (object.type === "tag") {
     object = (yield* gitHubJson(decodeObject, "GET", `${REPOSITORY}/git/tags/${object.sha}`)).object;
   }
   return object.sha;

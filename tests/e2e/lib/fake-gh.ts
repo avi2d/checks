@@ -96,25 +96,13 @@ async function buildTree(origin: string, body: Body): Promise<string> {
 }
 
 async function gitReadApi(origin: string, route: string): Promise<unknown> {
-  if (route.startsWith("git/ref/")) {
-    const ref = `refs/${decodeURIComponent(route.slice("git/ref/".length))}`;
+  if (route.startsWith("git/ref/tags/")) {
+    const ref = `refs/tags/${decodeURIComponent(route.slice("git/ref/tags/".length))}`;
     const result = await $`git show-ref --verify --hash ${ref}`.cwd(origin).nothrow().quiet();
     if (result.exitCode !== 0) return "missing";
     const sha = result.stdout.toString().trim();
     const type = (await $`git cat-file -t ${sha}`.cwd(origin).quiet()).stdout.toString().trim();
     return { object: { sha, type } };
-  }
-  if (route.startsWith("git/commits/")) {
-    const sha = route.slice("git/commits/".length);
-    const [, ...parents] = (await $`git rev-list --parents -n 1 ${sha}`.cwd(origin).quiet()).stdout.toString().trim().split(" ");
-    return { parents: parents.map((parent) => ({ sha: parent })) };
-  }
-  if (route.startsWith("contents/")) {
-    const [path = "", query = ""] = route.slice("contents/".length).split("?");
-    const ref = new URLSearchParams(query).get("ref") ?? "";
-    const result = await $`git show ${`${ref}:${path}`}`.cwd(origin).nothrow().quiet();
-    if (result.exitCode !== 0) return "missing";
-    return { encoding: "base64", content: result.stdout.toString("base64") };
   }
   if (route.startsWith("git/tags/")) {
     const sha = route.slice("git/tags/".length);
