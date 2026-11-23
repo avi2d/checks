@@ -108,7 +108,7 @@ test(
       `checks-release-tag: the build rewrites CHANGELOG.md at ${main.head.slice(0, 12)}, which the release workflow's build check refuses; open a \`chore: cancel the unpublished 0.2.0\` pull request that returns package.json to 0.1.0 and commits what \`bun run build\` then writes to CHANGELOG.md, and the next release-pr run cuts the release again with every change since v0.1.0`,
     );
     expect(await main.inOrigin("tag", "--list")).toBe("");
-    expect((await main.state()).calls).toEqual([]);
+    expect((await main.state()).calls).toEqual(["GET repos/{owner}/{repo}/git/ref/tags/v0.2.0"]);
 
     await land("fix(parts): keep the parts after a refund (#6)", { "notes/6.txt": "refund\n" });
     await repo.write({ "package.json": manifest("0.1.0") });
