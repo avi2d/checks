@@ -44,6 +44,13 @@ test("with no timing recorded, a route costs its visits rather than counting eac
   expect(routesOf(planShard(routes, {}, { index: 2, count: 2 }))).toEqual(["/", "/a/"]);
 });
 
+test("a route with no check outside look lands in no shard rather than being listed as checked", () => {
+  const routes = [work("/", "axe"), work("/a/", "axe"), work("/x/"), work("/y/", "look")];
+  const plans = [1, 2].map((index) => planShard(routes, {}, { index, count: 2 }));
+  expect(plans.flatMap(routesOf).toSorted()).toEqual(["/", "/a/"]);
+  expect(plans.filter((plan) => runsInShard(plan, "/y/", "look"))).toHaveLength(1);
+});
+
 test("more shards than work leaves a shard empty rather than walking a route twice", () => {
   const plan = planShard([work("/", "axe")], {}, { index: 2, count: 2 });
   expect(plan.routes.size).toBe(0);

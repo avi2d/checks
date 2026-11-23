@@ -38,7 +38,7 @@ function costOf(timings: BrowserTimings): (path: string, check: string, visits: 
 
 function itemsOf(work: readonly RouteWork[], timings: BrowserTimings): readonly Item[] {
   const cost = costOf(timings);
-  const routes = work.map(({ path, checks }) => ({
+  const routes = work.filter(({ checks }) => [...checks.keys()].some((check) => check !== LOOK)).map(({ path, checks }) => ({
     routes: [path],
     look: false,
     cost: [...checks].filter(([check]) => check !== LOOK).reduce((sum, [check, visits]) => sum + cost(path, check, visits), 0),

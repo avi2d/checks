@@ -474,7 +474,7 @@ The optional `browserTimings` setting holds the milliseconds of each check at ea
 After the timing lines, a run prints one `browser: browserTimings` line in the form of this setting.
 The line holds only the checks that run ran.
 A shard prints only its own routes, and the shard that reads `look` prints `look` at every route.
-A `--pr` run prints only the routes it reaches, measured at the anchor sizes.
+A `--pr` run prints every check only at the routes it reaches, and only `look` and `links` at the other routes, all measured at the anchor sizes.
 So take the setting from a run that walks the full size list, either without `--shard` or by merging the lines of every shard check by check:
 
 ```ts
