@@ -23,7 +23,7 @@ Visible focus must differ from both that baseline and the blurred screenshot.
 If a stop does not match the recorded order, that stop and later stops are reported as not measured, without failing the check.
 An incomplete walk reports neither reach shortfalls nor a failure for reaching no target.
 It compares screenshots in document coordinates, or in viewport coordinates for fixed and sticky elements.
-A sticky element is not measured and fails the check when Tab changes the scroll position.
+When Tab changes the scroll position, a sticky element is reported as not measured without failing the check.
 The check blurs and restores focus to locate changed paint on the element and its ancestors.
 Page handlers run during blur and focus restoration, so JavaScript focus rings remain measurable without counting blur-only or scroll-only paint as focus.
 
@@ -139,6 +139,7 @@ The runner prints one line for each check at each visit, narrowed by the `html`,
 The line names the route, its locale, the viewport, the state and what the check scanned.
 At every visit, whichever checks are declared, a `targets` run counts the visible elements each target that applies to the route matches.
 For `targets`, `layout`, `keyboard`, `contrast` and a hook, what it scanned is each target by name with the count of its elements.
+The keyboard inventory also lists stops not measured because Tab scrolled a sticky element, or notes that the Tab order differed from the reference pass.
 For `look`, it is each role with the count of its texts, the count of texts no role matches and the count of tokens.
 
 It fails, rather than passes, when a declaration leaves nothing to judge:

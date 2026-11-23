@@ -71,8 +71,8 @@ const keyboardRun = Effect.fn("keyboardRun")(function* ({ browser, declaration, 
   const targets = targetsOn(declaration, visit.route.path).filter(({ focusable }) => focusable === true);
   const { page } = yield* openVisit(browser, visit);
   yield* load(page, url);
-  const { found, reached, complete } = yield* judgeKeyboard(page, targets);
-  const inventory = [...reached].map(([name, times]) => `${name} ${times}`);
+  const { found, reached, complete, notMeasured } = yield* judgeKeyboard(page, targets);
+  const inventory = [...[...reached].map(([name, times]) => `${name} ${times}`), ...notMeasured];
   if (!complete) inventory.push("Tab order differed from the reference pass, not measured");
   return run("keyboard", visit, inventory, targets.length === 0 || (complete && reached.size === 0) ? [...found, NO_TARGET] : found);
 }, Effect.scoped);

@@ -143,6 +143,27 @@ test("keyboard does not count horizontal container scrolling as visible focus", 
   expect(ran.exitCode).toBe(1);
 }, 120_000);
 
+test("keyboard reports a scrolled sticky stop without failing or skipping later targets", async () => {
+  const site = await browserSite({
+    "dist/index.html": page(
+      `<div style="height: 1600px"></div><nav style="position: sticky; top: 0"><a id="sticky" href="/">Sticky</a></nav><a id="later" href="/">Later</a>`,
+      { head: `<style>#sticky:focus { outline: none; } #later:focus { outline: 3px solid black; }</style>` },
+    ),
+    "checks.config.ts": declaration({
+      targets: [
+        { name: "sticky link", selector: "#sticky", focusable: true },
+        { name: "later link", selector: "#later", focusable: true },
+      ],
+      viewports: [{ name: "phone", width: 320, height: 640, touch: true }],
+      checks: ["keyboard"],
+    }),
+  });
+  const ran = await site.run();
+  expect(failuresOf(ran.text)).toEqual([]);
+  expect(ran.text).toContain("scanned sticky link 1, later link 1, sticky link: Tab scrolled a sticky element, not measured");
+  expect(ran.exitCode).toBe(0);
+}, 120_000);
+
 test("keyboard reports changed and shortened Tab orders as unmeasured, not unreachable targets or page defects", async () => {
   const changingPage = (change: string) => page(
     `<a id="first" href="/">First</a><button>Middle</button><a id="footer" href="/">Footer</a>

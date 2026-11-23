@@ -24,6 +24,7 @@ type KeyboardReport = {
   readonly found: readonly string[];
   readonly reached: ReadonlyMap<string, number>;
   readonly complete: boolean;
+  readonly notMeasured: readonly string[];
 };
 
 const ScrollSchema = Schema.Struct({ x: Schema.Finite, y: Schema.Finite });
@@ -235,15 +236,9 @@ const hitTargets = (snapshots: readonly Snapshot[], id: string): Target[] => {
   return hit;
 };
 
-const judgeStop = Effect.fn("judgeStop")(function* (page: Page, leaf: ElementHandle<PageElement>, hit: readonly Target[], baseline: Baseline) {
-  const visible = yield* focusRingShows(page, leaf, baseline);
-  const names = hit.map(({ name }) => name).join(" and ");
-  if (visible === "unmeasured") return names + " focus was not measured because Tab scrolled a sticky element";
-  return visible ? undefined : names + " shows no visible focus when Tab reaches it";
-});
-
 const walkTabs = Effect.fn("walkTabs")(function* (page: Page, snapshots: readonly Snapshot[], reference: readonly ReferenceStop[]) {
   const found: string[] = [];
+  const notMeasured: string[] = [];
   let complete = true;
   let stops = 0;
   while (true) {
@@ -269,10 +264,12 @@ const walkTabs = Effect.fn("walkTabs")(function* (page: Page, snapshots: readonl
       break;
     }
     if (baseline === null) continue;
-    const failure = yield* judgeStop(page, leaf, hitTargets(snapshots, id), baseline);
-    if (failure !== undefined) found.push(failure);
+    const names = hitTargets(snapshots, id).map(({ name }) => name).join(" and ");
+    const visible = yield* focusRingShows(page, leaf, baseline);
+    if (visible === "unmeasured") notMeasured.push(names + ": Tab scrolled a sticky element, not measured");
+    else if (!visible) found.push(names + " shows no visible focus when Tab reaches it");
   }
-  return { found, complete };
+  return { found, complete, notMeasured };
 });
 
 const reportReach = (
@@ -298,5 +295,5 @@ export const judgeKeyboard = Effect.fn("judgeKeyboard")(function* (page: Page, t
   const snapshots = yield* snapshotTargets(page, targets);
   const walked = yield* walkTabs(page, snapshots, reference);
   const reported = reportReach(snapshots, walked.complete);
-  return { found: [...walked.found, ...reported.found], reached: reported.reached, complete: walked.complete } satisfies KeyboardReport;
+  return { found: [...walked.found, ...reported.found], reached: reported.reached, complete: walked.complete, notMeasured: walked.notMeasured } satisfies KeyboardReport;
 });
