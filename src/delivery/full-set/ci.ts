@@ -94,7 +94,7 @@ export const PULL_REQUEST_NUMBER = expression("github.event.pull_request.number"
 const siteJob = (set: CallerSet): Job => ({
   id: "site",
   needs: "changes",
-  if: [notReleased(set), NOT_DOCS_ONLY, plansBrowser(set) ? `(${NOT_TESTS_ONLY} || needs.changes.outputs.browser == 'true')` : NOT_TESTS_ONLY].join(" && "),
+  if: [notReleased(set), NOT_DOCS_ONLY, NOT_TESTS_ONLY].join(" && "),
   runsOn: runnerOf(set.options.publicRepository),
   timeout: 15,
   permissions: ["contents: read", "pull-requests: write"],
@@ -104,7 +104,7 @@ const siteJob = (set: CallerSet): Job => ({
     checkout({ ref: HEAD }),
     SETUP,
     { note: "A fork's or Dependabot's pull request runs without the repository secrets, so it gets no preview.", if: "env.CLOUDFLARE_SET != 'true'", run: 'echo "the Cloudflare secrets are not set, so this run deploys no preview"' },
-    ciCommand("preview-address", { id: "preview", if: `env.CLOUDFLARE_SET == 'true' && github.event_name == 'pull_request' && ${NOT_TESTS_ONLY}`, name: "read the preview address of the branch" }, [
+    ciCommand("preview-address", { id: "preview", if: "env.CLOUDFLARE_SET == 'true' && github.event_name == 'pull_request'", name: "read the preview address of the branch" }, [
       ...cloudflare,
       ["PROJECT", PREVIEW_PROJECT],
       ["BRANCH", PULL_REQUEST_BRANCH],
@@ -192,7 +192,7 @@ function skipsOf(set: CallerSet): string {
   const choices: readonly (readonly [string, readonly string[]])[] = [
     [checksRelease(set) ? "needs.changes.outputs.release == 'true' && needs.changes.outputs.check-release != 'true'" : "needs.changes.outputs.release == 'true'", ["static", ...site, ...(set.options.docsBuild ? ["docs"] : []), ...tests]],
     ["needs.changes.outputs.docs-only == 'true'", [...site, ...tests]],
-    ...(set.kind === "site" ? [[plansBrowser(set) ? `needs.changes.outputs.tests-only == 'true' && ${BROWSER_NOT_REACHED}` : "needs.changes.outputs.tests-only == 'true'", [...site, ...afterSite]] as const] : []),
+    ...(set.kind === "site" ? [["needs.changes.outputs.tests-only == 'true'", [...site, ...afterSite]] as const] : []),
     [BROWSER_NOT_REACHED, set.ci.tests.filter(isBrowserWalk).map(({ name }) => name)],
   ];
   const chosen = choices.flatMap(([test, jobs]) => (jobs.length === 0 ? [] : [test + " && " + quotedWords(jobs)]));

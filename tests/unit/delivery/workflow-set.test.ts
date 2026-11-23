@@ -2,7 +2,7 @@ import { Evaluator, Lexer, Parser, data } from "@actions/expressions";
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
 import { NO_CALLER_OPTIONS } from "../../../src/delivery/caller-options.ts";
-import { DEFAULT_CI_JOBS } from "../../../src/delivery/ci-jobs.ts";
+import { ciJobsOf, DEFAULT_CI_JOBS } from "../../../src/delivery/ci-jobs.ts";
 import { fullActions } from "../../../src/delivery/full-set/actions.ts";
 import { MUTATION_WORKFLOW } from "../../../src/delivery/full-set/mutation.ts";
 import { findStepFaults } from "../../../src/delivery/plain-steps.ts";
@@ -319,7 +319,16 @@ test("a docs-only change skips the site and test jobs and a tests-only one skips
 
 test("a change that reaches no route skips the browser job, not the site build", () => {
   expect(skippedAndPassed(SITE, "no-route")).toEqual([["browser"], ["browser"]]);
-  expect(skippedAndPassed(SITE, "tests-reach-route")).toEqual([[], []]);
+  expect(skippedAndPassed(SITE, "tests-reach-route")).toEqual([["site", "browser"], ["site", "browser"]]);
+});
+
+test.each([[["unit", "e2e"]], [["unit", "e2e", "pixel"]]] as const)("site tiers %p do not add a screenshot job or delete a carried one", async (tiers) => {
+  const options = { publicRepository: true, docsBuild: false, testTiers: new Set(tiers) };
+  const fresh = await Effect.runPromise(ciJobsOf("site", undefined, options));
+  expect(fresh.tests.map(({ name }) => name)).toEqual(["unit", "e2e", "browser"]);
+  const document = { jobs: { screens: { "runs-on": "ubuntu-latest", steps: [{ id: "test", run: "bunx checks-test --pr-screens" }] } } };
+  const held = await Effect.runPromise(ciJobsOf("site", { path: ".github/workflows/ci.yml", document, text: "" }, options));
+  expect(held.tests.map(({ name, run }) => ({ name, run }))).toEqual([{ name: "screens", run: "bunx checks-test --pr-screens" }]);
 });
 
 test("a docs-only pull request that skips the docs build or lets its failure pass the gate fails here", () => {

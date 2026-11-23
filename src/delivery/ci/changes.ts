@@ -1,19 +1,18 @@
 import { Config, Console, Effect } from "effect";
 import { pathsSinceMergeBase } from "../../core/git.ts";
 import { scopeOfChanges } from "../../core/pull-request-scope.ts";
-import { testEnvironmentReason, TEST_FILE } from "../../core/test-impact.ts";
 import { readRouteImpact } from "../../quality/browser/route-scope.ts";
 import { optionalInput } from "./lib/inputs.ts";
 import { writeOutputs } from "./lib/step-output.ts";
 
-const ORDINARY_TEST = /^tests\/(?:unit|e2e)\//;
+const ORDINARY_TEST = /^tests\/(?:unit|e2e)\/.+\.tsx?$/;
 
 export function testsOnly(changed: readonly string[]): boolean {
-  return changed.length > 0 && changed.every((path) => ORDINARY_TEST.test(path) && TEST_FILE.test(path) && testEnvironmentReason(path) === undefined);
+  return changed.length > 0 && changed.every((path) => ORDINARY_TEST.test(path));
 }
 
 const browserNeeded = Effect.fn("browserNeeded")(function* (changed: readonly string[], docsOnly: boolean) {
-  if (docsOnly) {
+  if (docsOnly || testsOnly(changed)) {
     for (const path of changed) yield* Console.log(`changes: ${path} -> no browser route`);
     return false;
   }

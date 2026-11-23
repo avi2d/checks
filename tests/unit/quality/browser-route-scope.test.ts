@@ -149,6 +149,11 @@ test("an empty change widens instead of reaching no route", async () => {
   expect(await selected(root, [])).toEqual({ kind: "full", because: "the pull request changes no file" });
 });
 
+test("tests without a route map reach no route instead of widening", async () => {
+  const root = await rootWith("undefined");
+  expect(await selected(root, ["tests/unit/home.test.ts", "tests/e2e/home.test.ts"])).toEqual({ kind: "routes", routes: new Set() });
+});
+
 test("a missing map widens instead of narrowing", async () => {
   const dir = await mkdtemp(join(tmpdir(), "checks-route-scope-"));
   dirs.push(dir);

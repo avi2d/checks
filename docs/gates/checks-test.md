@@ -152,7 +152,8 @@ The run names how many test files it reached, or which shared file made it run t
 A change whose paths cannot be read runs the whole suite.
 A release pull request, whose title is `chore: release <version>`, runs the whole suite.
 A run on any other event, such as `workflow_dispatch` for a release, runs the whole suite.
-`--full` and the live and pixel tiers always run whole.
+`--full` and the live tier always run whole.
+The pixel tier runs whole unless `--pr-screens` selects the screenshot tests a pull request reaches.
 A narrowed run judges only the skips the files it ran declare.
 
 ## The pull request entry
@@ -161,10 +162,11 @@ The CI workflow runs `checks-test --pr --tier=unit` and `checks-test --pr --tier
 It runs changed tests and tests that import a changed file, even through several imports.
 It logs the test files each changed path reaches.
 A pull request that changes only top-level and `docs/` Markdown runs no test and passes.
-A change to CI wiring, a lockfile, a config, or a shared helper runs the whole tier and logs the reason.
+A change to a lockfile, a config, or a shared helper runs the whole tier and logs the reason.
+A change under `.github/` runs only the tests that reach the changed file.
 A release pull request, a push to `main`, and a manual run also run the whole tier.
 
-The site workflow runs `checks-test --pr-screens` for screenshot tests.
+A workflow that runs screenshot tests can use `checks-test --pr-screens` to narrow them on pull requests.
 A change confined to tests runs only the screenshot tests it reaches.
 A site source change without a `reach` entry runs all screenshot tests because the tests can open built pages without importing the source.
 
@@ -188,7 +190,8 @@ export default defineConfig({
 A changed path runs the tests every key that matches it lists, beside the tests that reach it by import, path or bin.
 A stylesheet, a font or a layout that a key matches runs only those tests, rather than the whole suite.
 A stylesheet, a font or a layout that no key matches still runs the whole suite.
-CI wiring, a lockfile, a config, a tool pin, or a preloaded file still runs the whole tier, even when a key matches it.
+A lockfile, a config, a tool pin, or a preloaded file still runs the whole tier, even when a key matches it.
+CI wiring runs the whole screenshot tier, but unit and e2e tests run only when they reach the changed file.
 A test helper runs the whole unit or e2e tier.
 In a screenshot pull request run, a test helper runs only the screenshot tests that reach it.
 Outside pull requests, the map does not narrow CI test runs.

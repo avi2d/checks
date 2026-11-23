@@ -246,7 +246,7 @@ function reachMapProblem(repository: Repository): string | undefined {
 function fullRunReason(changed: readonly string[], repository: Repository, tier?: TestTier): string | undefined {
   if (changed.length === 0) return "the pull request changes no file";
   for (const path of changed) {
-    const reason = path.startsWith(".github/") ? testEnvironmentReason(path) : undefined;
+    const reason = tier === "pixel" && path.startsWith(".github/") ? testEnvironmentReason(path) : undefined;
     if (reason !== undefined) return pullRequestReason(path, reason);
   }
   const shared = sharedChanges(changed, repository).find(({ reason }) => tier !== "pixel" || reason !== "a test helper");

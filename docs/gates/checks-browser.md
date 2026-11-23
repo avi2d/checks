@@ -422,7 +422,8 @@ It reads the declaration in the directory it runs in, or in the directory it is 
 On a pull request it walks each viewport preset at the eight anchor sizes only, while a viewport the declaration lists by hand stays.
 A pull request that changes only top-level and `docs/` Markdown checks no page and passes.
 A release pull request, a push to `main`, and a manual run walk the full size list.
-A change to CI wiring, a lockfile, a config, or a shared test helper also walks every route at the full size list.
+On a pull request, a change to CI wiring, a lockfile, a config, or a shared test helper walks every route at anchor sizes.
+A helper-only change can skip the walk through the build comparison below.
 
 The optional `browserRoutes` setting maps exact repository paths to the routes each path can change.
 For example, `browserRoutes: { "src/home.ts": ["/"] }` assigns the home source to the root route.
@@ -446,7 +447,10 @@ So does an unmapped importer that nothing imports, such as a page left out of th
 An empty change or an unknown route also makes every route run.
 In each of these cases, the runner prints the reason.
 A path mapped to no routes reaches no route.
-With a route map, a test file that no site source imports reaches no route unless its map entry lists one.
+A test file that no site source imports reaches no route unless its map entry lists one.
+This rule also holds without a route map.
+On a change confined to TypeScript files under `tests/unit/` and `tests/e2e/`, generated CI skips the site build and browser job.
+That skip includes helpers under those directories, with or without a route map.
 When no changed path reaches a route, generated CI skips the browser job.
 The `changes` job prints what routes each path reaches or why the whole walk is needed.
 The map is separate from the test selection in `reach`.

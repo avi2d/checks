@@ -34,7 +34,8 @@ Each command runs one step and reads its inputs from the environment the step se
 | `github-release` | creates the GitHub release of a tag with the notes file, or updates the one that exists, and marks it latest only when its tag is the highest | `TAG`, `REF_TYPE`, `NOTES_FILE`, `GH_TOKEN` |
 
 When `PLAN_BROWSER` is true, `changes` logs which routes each changed path reaches or why the browser must walk every route.
-It writes `browser=false` when no route is reached.
+It writes `browser=false` when no route is reached or the change is confined to TypeScript files under `tests/unit/` and `tests/e2e/`.
+The tests-only rule includes helpers under those directories and holds with or without `browserRoutes`.
 
 `lighthouse` installs the Lighthouse the kit pins unless `LIGHTHOUSE` names one.
 

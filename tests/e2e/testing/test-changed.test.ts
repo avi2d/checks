@@ -76,16 +76,21 @@ test("a pull request does not drop a test that reads a changed file through a ts
   expect(result.text).toContain("1 pass");
 }, 60_000);
 
-test("a pull request that changes the CI workflow runs a test that does not import the workflow", async () => {
+test.each([".github/workflows/ci.yml", ".github/actions/setup/action.yml"])("a pull request changing %s runs only the test that reads it", async (file) => {
   const repo = await repository();
-  await repo.write({ ".github/workflows/ci.yml": "name: checks\n" });
+  await repo.write({
+    [file]: "name: checks\n",
+    "tests/unit/a.test.ts": FAILING,
+    "tests/unit/wiring.test.ts": `import { expect, test } from "bun:test";\ntest("wiring", async () => expect(await Bun.file("${file}").text()).toBe("name: verification\\n"));\n`,
+  });
   await repo.commit("ci: add the workflow");
   await branchedFromOrigin(repo);
-  await repo.write({ ".github/workflows/ci.yml": "name: verification\n" });
+  await repo.write({ [file]: "name: verification\n" });
   await repo.commit("ci: rename the workflow");
   const result = await runPullRequest(repo, "--pr");
   expect(result.exitCode).toBe(0);
-  expect(result.text).toContain("the pull request changes .github/workflows/ci.yml, CI wiring, so the whole suite runs");
+  expect(result.text).toContain(`${file} -> tests/unit/wiring.test.ts`);
+  expect(result.text).toContain("the pull request reaches 1 of 2 test file(s)");
   expect(result.text).toContain("1 pass");
 }, 60_000);
 

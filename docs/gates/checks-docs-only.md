@@ -41,7 +41,7 @@ docs-only=true
 
 ## When it runs
 
-The `changes` job of the `ci` workflow runs `checks-ci changes`, which runs this bin and writes its verdict as the `docs-only` output.
+The `changes` job of the `ci` workflow runs `checks-ci changes`, which applies the same path rule and writes the `docs-only` output.
 On a docs-only change the test jobs skip, and the `checks` job accepts those skips.
 The `static` job still runs, so the build, its `git diff --exit-code`, `bun run lint` and `checks-docs` hold on a docs-only change.
 The `docs` job runs the docs build on a docs-only change when `package.json` defines `docs:build`, as it does on every pull request.
