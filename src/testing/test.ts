@@ -38,7 +38,7 @@ class RunRefusal extends Schema.TaggedError<RunRefusal>()("RunRefusal", {
 }) {}
 
 const NAME = TEST_ENTRY_POINT.bin;
-const USAGE = `usage: ${NAME} [--tier=live | --tier=pixel | --tier=unit | --tier=e2e | --full | --changed | --pr | --pr-screens] [--parallel=<workers>] [--junit=<file>], with --pr optionally combined with --tier=unit or --tier=e2e`;
+const USAGE = `usage: ${NAME} [--tier=live | --tier=pixel | --tier=unit | --tier=e2e | --full | --changed | --pr | --pr-screens] [--parallel=<workers>] [--junit=<file>], with --pr optionally combined with --tier=unit or --tier=e2e, and it refuses test filters`;
 const JUNIT = /^--junit=(.+)$/;
 
 export type EntryRun = "default" | "changed" | "pr" | "pr-screens";
