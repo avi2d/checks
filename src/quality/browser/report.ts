@@ -15,6 +15,28 @@ export type Outcome = {
   readonly missingRoutes: readonly string[];
 };
 
+export type Timing = {
+  readonly path: string;
+  readonly check: string;
+  readonly start: number;
+  readonly end: number;
+};
+
+export function formatTimings(timings: readonly Timing[]): string {
+  const pages = new Map<string, Timing[]>();
+  for (const timing of timings) {
+    const page = pages.get(timing.path) ?? [];
+    page.push(timing);
+    pages.set(timing.path, page);
+  }
+  return [...pages].map(([path, page]) => {
+    const checks = new Map<string, number>();
+    for (const { check, start, end } of page) checks.set(check, (checks.get(check) ?? 0) + end - start);
+    const total = [...checks.values()].reduce((sum, ms) => sum + ms, 0);
+    return `${NAME}: timing ${path}: ${[...checks].map(([check, ms]) => `${check} ${Math.round(ms)}ms`).join(", ")}; check sum ${Math.round(total)}ms`;
+  }).join("\n");
+}
+
 export function counted(names: readonly string[]): readonly string[] {
   const counts = new Map<string, number>();
   for (const name of names) counts.set(name, (counts.get(name) ?? 0) + 1);
