@@ -32,8 +32,8 @@ export function formatTimings(timings: readonly Timing[]): string {
   return [...pages].map(([path, page]) => {
     const checks = new Map<string, number>();
     for (const { check, start, end } of page) checks.set(check, (checks.get(check) ?? 0) + end - start);
-    const total = Math.max(...page.map(({ end }) => end)) - Math.min(...page.map(({ start }) => start));
-    return `${NAME}: timing ${path}: ${[...checks].map(([check, ms]) => `${check} ${Math.round(ms)}ms`).join(", ")}; total ${Math.round(total)}ms`;
+    const total = [...checks.values()].reduce((sum, ms) => sum + ms, 0);
+    return `${NAME}: timing ${path}: ${[...checks].map(([check, ms]) => `${check} ${Math.round(ms)}ms`).join(", ")}; check sum ${Math.round(total)}ms`;
   }).join("\n");
 }
 

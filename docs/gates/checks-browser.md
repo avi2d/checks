@@ -389,10 +389,11 @@ It drives the Chrome the machine has, which `CHROME_PATH` names, or Chrome's sta
 It runs up to four checks at once, each a check at one visit.
 The motion check and each product hook run alone, so their findings do not depend on the pages loading beside them.
 The report lists each visit in turn, and within it `targets`, the declared checks in their order and then the hooks, regardless of which finishes first.
-A timing line for each route sums the wall time of each check across its visits in milliseconds.
+After the report and any failure list, the runner prints a timing line for each route.
+Each line sums the wall time of each check across the route's visits in milliseconds.
 The first shared check includes the shared page load.
-The route total is the wall time from its first check starting to its last check finishing, including waits between checks.
-Checks can overlap, so their times need not add up to the route total.
+The route's `check sum` adds its check times, not elapsed time, and excludes gaps between checks.
+Checks can overlap, so this sum can exceed elapsed time.
 The product installs the optional peers the runner loads, at the versions the kit pins:
 
 <!-- generated install: bun run build writes it from package.json and scripts/doc-blocks.ts -->
@@ -454,6 +455,7 @@ browser: 1 contrast check(s) axe cannot measure, reported as unverified:
 browser: 2 failure(s) in 4 check run(s) over 1 route(s), 1 viewport(s), 1 state(s) and 3 target(s):
   layout at /ru/ (ru), phone-375x667 375x667 touch, enlarged text: email contact "Написать письмо владельцу" clips its own text
   axe at /ru/ (ru), phone-375x667 375x667 touch, enlarged text: nested-interactive (serious): button: Interactive controls must not be nested
+browser: timing /ru/: targets 120ms, layout 340ms, keyboard 560ms, axe 780ms; check sum 1800ms
 ```
 
 ## When it runs
