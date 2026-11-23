@@ -427,7 +427,8 @@ A file names a path when its file name follows a `/`, a quote, or `(`.
 A name without its extension also counts when it follows one of those characters and ends with a quote.
 For a name starting with an underscore, the name without that underscore also counts without its extension.
 So a doc that names a component path also makes every route run.
-A file reached only through `import.meta.glob`, a directory import such as `@/lib`, or a file type the scan does not read is not seen, and its routes can be left out.
+A file that a relative import reaches can also render through `import.meta.glob`, a directory import such as `@/lib`, or a file type the scan does not read.
+The scan does not see that other path, so the routes it renders can be left out.
 Map such a path in `browserRoutes` by hand.
 When every changed path reaches declared routes, the runner narrows targets, product hooks, and per-route checks to those routes.
 The `links` and `look` checks still visit every declared route, since they compare or reach across routes.
