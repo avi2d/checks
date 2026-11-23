@@ -49,7 +49,7 @@ const OXLINT_CONFIG = [
 const TSCONFIG_BASE = [
   "{",
   "  \"extends\": \"@avi2dg/checks/tsconfig.effect.json\",",
-  "  \"compilerOptions\": { \"types\": [\"bun\"] }",
+  "  \"compilerOptions\": { \"types\": [\"bun\"], \"allowImportingTsExtensions\": true, \"noEmit\": true }",
   "}",
   "",
 ].join("\n");
