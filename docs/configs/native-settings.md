@@ -115,6 +115,7 @@ export default defineConfig({
 | `browser` | None | The site, routes, and checks for browser tests. | [checks-browser](../gates/checks-browser.md#what-it-reads) |
 | `browserRoutes` | None | The repository paths that can affect each browser route. | [checks-browser](../gates/checks-browser.md#what-it-reads) |
 | `browserBuild` | None | The command that builds the site for the browser test-only proof. | [checks-browser](../gates/checks-browser.md#what-it-reads) |
+| `browserTimings` | None | The measured milliseconds of each browser check at each route, which browser shards balance on. | [checks-browser](../gates/checks-browser.md#shards) |
 | `copy` | None | The input globs for the copy gate. | [checks-copy](../gates/checks-copy.md) |
 | `frontendSyntax` | None | The input globs for the frontend syntax gate. | [checks-frontend-syntax](../gates/checks-frontend-syntax.md) |
 | `agentTests` | `{"allowLocal":false}` | The settings for test runs started by agents. | [checks-local-tests](../gates/checks-local-tests.md) |

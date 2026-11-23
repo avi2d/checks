@@ -278,10 +278,21 @@ test("a pull request run keeps a hand-listed viewport, so the cap never drops a 
 });
 
 test("checks-browser takes --pr and one directory in either order, and refuses a second --pr, a second directory or another flag", () => {
-  expect(browserArgs([])).toEqual({ pr: false, directory: "." });
-  expect(browserArgs(["--pr", "site"])).toEqual({ pr: true, directory: "site" });
-  expect(browserArgs(["site", "--pr"])).toEqual({ pr: true, directory: "site" });
+  expect(browserArgs([])).toEqual({ pr: false, directory: ".", shard: undefined });
+  expect(browserArgs(["--pr", "site"])).toEqual({ pr: true, directory: "site", shard: undefined });
+  expect(browserArgs(["site", "--pr"])).toEqual({ pr: true, directory: "site", shard: undefined });
   expect(browserArgs(["--pr", "--pr"])).toBeUndefined();
   expect(browserArgs(["one", "two"])).toBeUndefined();
   expect(browserArgs(["--full"])).toBeUndefined();
+});
+
+test("checks-browser takes one --shard=<index>/<count>, and refuses a second shard, a split value or an index past the count", () => {
+  expect(browserArgs(["--pr", "--shard=2/2"])).toEqual({ pr: true, directory: ".", shard: { index: 2, count: 2 } });
+  expect(browserArgs(["--shard=1/3", "site"])).toEqual({ pr: false, directory: "site", shard: { index: 1, count: 3 } });
+  expect(browserArgs(["--shard=1/2", "--shard=2/2"])).toBeUndefined();
+  expect(browserArgs(["--shard", "1/2"])).toBeUndefined();
+  expect(browserArgs(["--shard=3/2"])).toBeUndefined();
+  expect(browserArgs(["--shard=0/2"])).toBeUndefined();
+  expect(browserArgs(["--shard=1/0"])).toBeUndefined();
+  expect(browserArgs(["--shard=one/2"])).toBeUndefined();
 });
