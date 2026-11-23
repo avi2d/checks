@@ -208,7 +208,7 @@ export const checks: readonly ProductCheck[] = [
 
 ## What it reads
 
-It reads the `browser`, `browserRoutes` and `browserBuild` keys of `checks.config.ts` in the directory it runs in.
+It reads the `browser`, `browserRoutes`, `browserBuild` and `browserTimings` keys of `checks.config.ts` in the directory it runs in.
 It reads `AI_AGENT`, `CHECKS_AGENT`, `CI`, and `agentTests.allowLocal` to decide whether an agent can run tests outside CI, as [checks-local-tests](checks-local-tests.md) says.
 On a pull request it also reads the changed paths since the merge base:
 
@@ -401,6 +401,7 @@ Each line sums the wall time of each check across the route's visits in millisec
 The first shared check includes the shared page load.
 The route's `check sum` adds its check times, not elapsed time, and excludes gaps between checks.
 Checks can overlap, so this sum can exceed elapsed time.
+A last line prints the same times as the value of `browserTimings`, as [Shards](#shards) says.
 The product installs the optional peers the runner loads, at the versions the kit pins:
 
 <!-- generated install: bun run build writes it from package.json and scripts/doc-blocks.ts -->
@@ -414,7 +415,7 @@ bun add -d @axe-core/playwright@4.13.0 html-validate@11.16.0 playwright-core@1.6
 ## Arguments
 
 ```sh
-checks-browser [--pr] [<directory>]
+checks-browser [--pr] [--shard=<index>/<count>] [<directory>]
 ```
 
 It reads the declaration in the directory it runs in, or in the directory it is given.
@@ -457,6 +458,33 @@ The output directory must be a single directory name at the repository root for 
 Each build runs without the checkout's `node_modules`, so its command must install the dependencies it needs.
 Without `browserBuild`, the browser pass runs as usual.
 
+### Shards
+
+`--shard=<index>/<count>` runs one part of the walk, so a CI workflow can split it across `<count>` jobs.
+Each job runs the same command with its own index, from 1 to `<count>`, such as `--shard=1/2` and `--shard=2/2`.
+Each job works out the same split from the declaration, the pull request's route scope and `browserTimings`.
+Each route is checked whole in one shard, with every check, viewport and state the run would give it.
+`look` compares texts across routes, so one shard reads it at every route.
+The runner prints which routes each shard checks, and whether it reads `look`.
+A shard left with no check, such as the second of two shards over one route, checks no page and passes.
+A declared route the site does not serve fails every shard.
+
+The split balances the measured time of each shard.
+The optional `browserTimings` setting holds the milliseconds of each check at each route.
+After the timing lines, a run prints one `browser: browserTimings` line that holds the same times as the value of this setting, ready to copy:
+
+```ts
+browserTimings: {
+  "/": { targets: 1200, layout: 9800, axe: 21000, look: 6400 },
+  "/about/": { targets: 900, layout: 7100, axe: 15000, look: 5200 },
+}
+```
+
+A route or a check `browserTimings` does not name costs the mean of that check at the routes it names.
+A check no route names costs the mean of every recorded time.
+Without `browserTimings`, each check costs one for each visit that runs it.
+The split gives the most costly route to the shard with the least time so far, and repeats until each route has a shard.
+
 ## Exit codes
 
 | Code | When |
@@ -478,6 +506,7 @@ browser: 2 failure(s) in 4 check run(s) over 1 route(s), 1 viewport(s), 1 state(
   layout at /ru/ (ru), phone-375x667 375x667 touch, enlarged text: email contact "Написать письмо владельцу" clips its own text
   axe at /ru/ (ru), phone-375x667 375x667 touch, enlarged text: nested-interactive (serious): button: Interactive controls must not be nested
 browser: timing /ru/: targets 120ms, layout 340ms, keyboard 560ms, axe 780ms; check sum 1800ms
+browser: browserTimings {"/ru/":{"targets":120,"layout":340,"keyboard":560,"axe":780}}
 ```
 
 ## When it runs

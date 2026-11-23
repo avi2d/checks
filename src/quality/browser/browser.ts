@@ -21,12 +21,14 @@ import { judgeNesting } from "./nesting.ts";
 import { coldShift, formatShift, judgeShift, recordShifts } from "./shift.ts";
 import { walkCells, type Cell } from "./cells.ts";
 import { attempt, launchChrome, load, openVisit, type BrowserFailure } from "./page.ts";
-import { counted, formatTimings, NAME, passes, report, type Run, type Timing } from "./report.ts";
+import { counted, formatTimings, NAME, passes, report, timingsSetting, type Run, type Timing } from "./report.ts";
 import { serveSite, type Site } from "./serve.ts";
 import { judgePageWeight, weighPage } from "./weight.ts";
 import { judgeTargets } from "./targets.ts";
 import { reachedRoutes } from "./route-scope.ts";
 import { compareReport, PAGE_OF, planCells } from "./schedule.ts";
+import { planShard, runsInShard, type RouteWork, type Shard, type ShardPlan } from "./shard.ts";
+import { BrowserTimings, decodeSetting, loadSettings } from "../../core/settings.ts";
 
 const NO_TARGET = "scanned no target";
 
@@ -212,8 +214,8 @@ const readShared = Effect.fn("readShared")(function* (
   }));
 }, Effect.scoped);
 
-function visitCells(visiting: Visiting, visitIndex: number, checks: readonly PlannedCheck[]): readonly Cell<readonly OrderedReading[], BrowserFailure>[] {
-  const indexed = checks.map((check, checkIndex) => ({ ...check, checkIndex }));
+function visitCells(visiting: Visiting, visitIndex: number, checks: readonly NamedCheck[]): readonly Cell<readonly OrderedReading[], BrowserFailure>[] {
+  const indexed = checks.map(({ check }, checkIndex) => ({ ...check, checkIndex }));
   const { shared: sharedChecks, separate } = planCells(indexed);
   return [
     ...(sharedChecks.length === 0 ? [] : [{ reading: readShared(visiting, visitIndex, sharedChecks), alone: false }]),
@@ -238,23 +240,54 @@ function applies(check: CheckName, visit: Visit, declaration: Declaration): bool
   return true;
 }
 
-const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: Declaration, site: Site, selected: ReadonlySet<string> | undefined) {
+type NamedCheck = { readonly name: string; readonly check: PlannedCheck };
+
+function checksAt(visit: Visit, declaration: Declaration, hooks: readonly ProductCheck[], reached: boolean): readonly NamedCheck[] {
+  return [
+    ...(reached ? [{ name: "targets", check: shared(now(targetsRun)) }] : []),
+    ...declaration.checks.filter((one) => (reached || one === "look" || one === "links") && applies(one, visit, declaration)).map((name) => ({ name, check: BUILT_IN[name] })),
+    ...(reached ? hooks.filter((candidate) => hookApplies(candidate, visit)).map((hook) => ({ name: `hook ${hook.name}`, check: independent(now((one) => hookRun(hook, one)), PAGE_OF.hook.alone) })) : []),
+  ];
+}
+
+type Planned = { readonly visit: Visit; readonly checks: readonly NamedCheck[] };
+
+type Sharding = { readonly shard: Shard; readonly timings: BrowserTimings };
+
+function workOf(planned: readonly Planned[]): readonly RouteWork[] {
+  const work = new Map<string, Map<string, number>>();
+  for (const { visit, checks } of planned) {
+    const visits = work.get(visit.route.path) ?? new Map<string, number>();
+    for (const { name } of checks) visits.set(name, (visits.get(name) ?? 0) + 1);
+    work.set(visit.route.path, visits);
+  }
+  return [...work].map(([path, checks]) => ({ path, checks }));
+}
+
+function describePlan({ shard }: Sharding, plan: ShardPlan): string {
+  const routes = plan.routes.size === 0 ? "no route" : [...plan.routes].join(", ");
+  return `${NAME}: shard ${shard.index} of ${shard.count} checks ${routes}${plan.look ? ", and look at every route" : ""}`;
+}
+
+const inShard = Effect.fn("inShard")(function* (planned: readonly Planned[], sharding: Sharding | undefined) {
+  if (sharding === undefined) return planned;
+  const plan = planShard(workOf(planned), sharding.timings, sharding.shard);
+  yield* Console.log(describePlan(sharding, plan));
+  return planned.map(({ visit, checks }) => ({ visit, checks: checks.filter(({ name }) => runsInShard(plan, visit.route.path, name)) }));
+});
+
+const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: Declaration, site: Site, selected: ReadonlySet<string> | undefined, sharding: Sharding | undefined) {
   const paths = declaration.routes.map(({ path }) => path);
   const hooks = declaration.hooks === undefined ? [] : yield* loadHooks(root, declaration.hooks, paths);
   const missingRoutes = paths.filter((path) => !site.files.has(path));
+  const planned = yield* inShard(visitsOf(declaration)
+    .filter(({ route }) => !missingRoutes.includes(route.path))
+    .map((visit) => ({ visit, checks: checksAt(visit, declaration, hooks, selected === undefined || selected.has(visit.route.path)) })), sharding);
+  if (sharding !== undefined && missingRoutes.length === 0 && planned.every(({ checks }) => checks.length === 0)) return undefined;
   const origin = yield* serveSite(site);
   const browser = yield* launchChrome;
-  const cells = visitsOf(declaration)
-    .filter(({ route }) => !missingRoutes.includes(route.path))
-    .flatMap((visit, visitIndex) => {
-      const visiting = { browser, declaration, visit, url: new URL(visit.route.path, origin).href };
-      const reached = selected === undefined || selected.has(visit.route.path);
-      return visitCells(visiting, visitIndex, [
-        ...(reached ? [shared(now(targetsRun))] : []),
-        ...declaration.checks.filter((one) => (reached || one === "look" || one === "links") && applies(one, visit, declaration)).map((check) => BUILT_IN[check]),
-        ...(reached ? hooks.filter((candidate) => hookApplies(candidate, visit)).map((hook) => independent(now((one) => hookRun(hook, one)), PAGE_OF.hook.alone)) : []),
-      ]);
-    });
+  const cells = planned.flatMap(({ visit, checks }, visitIndex) =>
+    visitCells({ browser, declaration, visit, url: new URL(visit.route.path, origin).href }, visitIndex, checks));
   const readings = (yield* walkCells(cells, 4)).flat().sort(compareReport);
   const firstLooks: FirstLooks = new Map();
   const finished = readings.map(({ settle, start, end }) => ({ run: settle(firstLooks), start, end }));
@@ -262,7 +295,14 @@ const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: D
   return { runs: finished.map(({ run: one }) => one), missingRoutes, timings };
 }, Effect.scoped);
 
-const USAGE = `usage: ${NAME} [--pr] [<directory>]`;
+const USAGE = `usage: ${NAME} [--pr] [--shard=<index>/<count>] [<directory>]`;
+
+const readSharding = Effect.fn("readSharding")(function* (root: string, shard: Shard | undefined) {
+  if (shard === undefined) return undefined;
+  const raw = (yield* loadSettings(root))["browserTimings"];
+  const timings = raw === undefined ? {} : yield* decodeSetting("browserTimings", BrowserTimings, raw);
+  return { shard, timings } satisfies Sharding;
+});
 
 const largestSet = Effect.fn("largestSet")(function* (scope: RunScope | undefined) {
   if (scope === undefined) return "full" as const;
@@ -299,10 +339,14 @@ const browserChecks = Effect.gen(function* () {
     return true;
   }
   if (selected !== undefined) yield* Console.log(`${NAME}: the pull request reaches ${selected.size} of ${declaration.routes.length} route(s)`);
-  const outcome = yield* checkSite(root, declaration, site, selected);
+  const outcome = yield* checkSite(root, declaration, site, selected, yield* readSharding(root, args.shard));
+  if (outcome === undefined) {
+    yield* Console.log(`${NAME}: this shard holds no check, so no page was checked`);
+    return true;
+  }
   yield* Console.log(report(declaration, outcome));
   const timings = formatTimings(outcome.timings);
-  if (timings !== "") yield* Console.log(timings);
+  if (timings !== "") yield* Console.log(`${timings}\n${timingsSetting(outcome.timings)}`);
   return passes(outcome);
 });
 

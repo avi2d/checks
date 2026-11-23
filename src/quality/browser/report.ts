@@ -22,19 +22,27 @@ export type Timing = {
   readonly end: number;
 };
 
-export function formatTimings(timings: readonly Timing[]): string {
-  const pages = new Map<string, Timing[]>();
-  for (const timing of timings) {
-    const page = pages.get(timing.path) ?? [];
-    page.push(timing);
-    pages.set(timing.path, page);
+function checkTimes(timings: readonly Timing[]): ReadonlyMap<string, ReadonlyMap<string, number>> {
+  const pages = new Map<string, Map<string, number>>();
+  for (const { path, check, start, end } of timings) {
+    const checks = pages.get(path) ?? new Map<string, number>();
+    checks.set(check, (checks.get(check) ?? 0) + end - start);
+    pages.set(path, checks);
   }
-  return [...pages].map(([path, page]) => {
-    const checks = new Map<string, number>();
-    for (const { check, start, end } of page) checks.set(check, (checks.get(check) ?? 0) + end - start);
+  return pages;
+}
+
+export function formatTimings(timings: readonly Timing[]): string {
+  return [...checkTimes(timings)].map(([path, checks]) => {
     const total = [...checks.values()].reduce((sum, ms) => sum + ms, 0);
     return `${NAME}: timing ${path}: ${[...checks].map(([check, ms]) => `${check} ${Math.round(ms)}ms`).join(", ")}; check sum ${Math.round(total)}ms`;
   }).join("\n");
+}
+
+export function timingsSetting(timings: readonly Timing[]): string {
+  const record = Object.fromEntries([...checkTimes(timings)].map(([path, checks]) =>
+    [path, Object.fromEntries([...checks].map(([check, ms]) => [check, Math.round(ms)]))]));
+  return `${NAME}: browserTimings ${JSON.stringify(record)}`;
 }
 
 export function counted(names: readonly string[]): readonly string[] {

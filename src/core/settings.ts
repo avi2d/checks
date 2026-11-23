@@ -35,6 +35,10 @@ export const BrowserRoutes = Schema.Record(Schema.NonEmptyString, Schema.Array(S
 
 export const BrowserBuild = Schema.NonEmptyArray(Schema.NonEmptyString);
 
+export const BrowserTimings = Schema.Record(Schema.NonEmptyString, Schema.Record(Schema.NonEmptyString, Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0))));
+
+export type BrowserTimings = typeof BrowserTimings.Type;
+
 export const MutationRunner = Schema.NonEmptyArray(Schema.NonEmptyString);
 
 export const SelfHostedRunners = Schema.Array(Schema.NonEmptyArray(Schema.NonEmptyString));
@@ -52,6 +56,7 @@ export const Settings = Schema.Struct({
   browser: Schema.optionalKey(Listed.annotate({ description: "The site, routes, and checks for browser tests." })),
   browserRoutes: Schema.optionalKey(BrowserRoutes.annotate({ description: "The repository paths that can affect each browser route." })),
   browserBuild: Schema.optionalKey(BrowserBuild.annotate({ description: "The command that builds the site for the browser test-only proof." })),
+  browserTimings: Schema.optionalKey(BrowserTimings.annotate({ description: "The measured milliseconds of each browser check at each route, which browser shards balance on." })),
   copy: Schema.optionalKey(Inputs.annotate({ description: "The input globs for the copy gate." })),
   frontendSyntax: Schema.optionalKey(Inputs.annotate({ description: "The input globs for the frontend syntax gate." })),
   agentTests: Schema.optionalKey(AgentTests),

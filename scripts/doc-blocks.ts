@@ -221,6 +221,7 @@ const SETTING_READERS = {
   browser: "[checks-browser](../gates/checks-browser.md#what-it-reads)",
   browserRoutes: "[checks-browser](../gates/checks-browser.md#what-it-reads)",
   browserBuild: "[checks-browser](../gates/checks-browser.md#what-it-reads)",
+  browserTimings: "[checks-browser](../gates/checks-browser.md#shards)",
   copy: "[checks-copy](../gates/checks-copy.md)",
   frontendSyntax: "[checks-frontend-syntax](../gates/checks-frontend-syntax.md)",
   agentTests: "[checks-local-tests](../gates/checks-local-tests.md)",
