@@ -19,6 +19,7 @@ It stops when a `test` script it finds is not `checks-test`, or a `test:fast` sc
 It also stops when a `test:<tier>` script is not `checks-test --tier=<tier>` or names a tier with no test files, or another `test:*` script exists.
 It copies the fleet pin into `.bun-version` and the preset into `bunfig.toml`.
 It writes `oxlint.config.ts`, `tsconfig.json` and `knip.config.ts` from the kit builders, with Effect rules on.
+The fresh `tsconfig.json` enables `allowImportingTsExtensions` and `noEmit` so TypeScript can check the kit's source imports.
 It writes `.jscpd.json` with the kit default.
 It writes the Effect paths of the `oxlint.config.ts` it finds or writes into the language service entry of `tsconfig.json`.
 The pair passes `checks-effect-scope --check` from the first write.
