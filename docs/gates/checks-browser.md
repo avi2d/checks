@@ -389,6 +389,11 @@ It drives the Chrome the machine has, which `CHROME_PATH` names, or Chrome's sta
 It runs up to four checks at once, each a check at one visit.
 The motion check and each product hook run alone, so their findings do not depend on the pages loading beside them.
 The report lists each visit in turn, and within it `targets`, the declared checks in their order and then the hooks, regardless of which finishes first.
+After the report and any failure list, the runner prints a timing line for each route.
+Each line sums the wall time of each check across the route's visits in milliseconds.
+The first shared check includes the shared page load.
+The route's `check sum` adds its check times, not elapsed time, and excludes gaps between checks.
+Checks can overlap, so this sum can exceed elapsed time.
 The product installs the optional peers the runner loads, at the versions the kit pins:
 
 <!-- generated install: bun run build writes it from package.json and scripts/doc-blocks.ts -->
@@ -413,10 +418,25 @@ A release pull request and a run that is not a pull request, such as `workflow_d
 
 The optional `browserRoutes` setting maps exact repository paths to the routes each path can change.
 For example, `browserRoutes: { "src/home.ts": ["/"] }` assigns the home source to the root route.
-When every changed path has a mapping to declared routes, the runner narrows targets, product hooks, and per-route checks to those routes.
+A changed path with no mapping reaches the routes of each mapped file that imports it by a relative import, at any depth.
+For example, a component that a mapped page imports reaches that page's routes.
+Importers are read from script, component, Markdown, HTML and stylesheet files, so a stylesheet's `@import` counts.
+Files under `tests/` and `checks.config.ts` do not count as importers.
+A file that names an unmapped path any other way, such as through a tsconfig alias, a root path or a Markdown `layout`, makes every route run.
+A file names a path when its file name follows a `/`, a quote, or `(`.
+A name without its extension also counts when it follows one of those characters and ends with a quote.
+For a name starting with an underscore, the name without that underscore also counts without its extension.
+So a doc that names a component path also makes every route run.
+A file that a relative import reaches can also render through `import.meta.glob`, a directory import such as `@/lib`, or a file type the scan does not read.
+The scan does not see that other path, so the routes it renders can be left out.
+Map such a path in `browserRoutes` by hand.
+When every changed path reaches declared routes, the runner narrows targets, product hooks, and per-route checks to those routes.
 The `links` and `look` checks still visit every declared route, since they compare or reach across routes.
 Missing routes are still reported across the whole declaration.
-An unmapped path, an empty change, or an unknown route makes every route run.
+An unmapped path that no mapped file imports makes every route run.
+So does an unmapped importer that nothing imports, such as a page left out of the map.
+An empty change or an unknown route also makes every route run.
+In each of these cases, the runner prints the reason.
 A path mapped to no routes reaches no route.
 A change whose every path maps to no routes checks no page and passes.
 The map is separate from the test selection in `reach`.
@@ -450,6 +470,7 @@ browser: 1 contrast check(s) axe cannot measure, reported as unverified:
 browser: 2 failure(s) in 4 check run(s) over 1 route(s), 1 viewport(s), 1 state(s) and 3 target(s):
   layout at /ru/ (ru), phone-375x667 375x667 touch, enlarged text: email contact "Написать письмо владельцу" clips its own text
   axe at /ru/ (ru), phone-375x667 375x667 touch, enlarged text: nested-interactive (serious): button: Interactive controls must not be nested
+browser: timing /ru/: targets 120ms, layout 340ms, keyboard 560ms, axe 780ms; check sum 1800ms
 ```
 
 ## When it runs
