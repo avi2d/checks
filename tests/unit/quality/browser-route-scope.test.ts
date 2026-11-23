@@ -4,7 +4,7 @@ import { Effect } from "effect";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { reachedRoutes } from "../../../src/quality/browser/route-scope.ts";
+import { reachedRoutes, scopeRoutes } from "../../../src/quality/browser/route-scope.ts";
 import type { Declaration } from "../../../src/quality/browser/declaration.ts";
 
 const declaration: Declaration = {
@@ -47,9 +47,41 @@ test("a path mapped to no routes reaches no route instead of running every route
   expect(await selected(root, ["tests/unit/home.test.ts"])).toEqual({ kind: "routes", routes: new Set([]) });
 });
 
-test("an unmapped path widens instead of narrowing to the mapped route", async () => {
-  const root = await rootWith('{ "src/home.ts": ["/"] }');
-  expect(await selected(root, ["src/home.ts", "src/new.ts"])).toEqual({ kind: "full", because: "src/new.ts has no browserRoutes mapping" });
+const pages = { "src/pages/index.astro": ["/"], "src/pages/other.astro": ["/other/"] };
+
+test("an unmapped path no mapped file imports widens instead of narrowing to the mapped route", () => {
+  const sources = new Map([["src/home.ts", ""], ["src/new.ts", ""]]);
+  expect(scopeRoutes(["src/home.ts", "src/new.ts"], { "src/home.ts": ["/"] }, sources, declaration))
+    .toEqual({ kind: "full", because: "src/new.ts has no browserRoutes mapping and no mapped file imports it" });
+});
+
+test("an unmapped component narrows to the route of the page that imports it instead of walking every route", () => {
+  const sources = new Map([
+    ["src/pages/index.astro", '---\nimport Card from "../components/Card.astro";\n---\n<Card />\n'],
+    ["src/pages/other.astro", "<p>other</p>\n"],
+    ["src/components/Card.astro", "<div>card</div>\n"],
+  ]);
+  expect(scopeRoutes(["src/components/Card.astro"], pages, sources, declaration)).toEqual({ kind: "routes", routes: new Set(["/"]) });
+});
+
+test("a component a mapped page imports through an unmapped one narrows instead of walking every route", () => {
+  const sources = new Map([
+    ["src/pages/index.astro", '---\nimport Section from "../components/Section.astro";\n---\n<Section />\n'],
+    ["src/pages/other.astro", "<p>other</p>\n"],
+    ["src/components/Section.astro", '---\nimport Card from "./Card.astro";\n---\n<Card />\n'],
+    ["src/components/Card.astro", "<div>card</div>\n"],
+  ]);
+  expect(scopeRoutes(["src/components/Card.astro"], pages, sources, declaration)).toEqual({ kind: "routes", routes: new Set(["/"]) });
+});
+
+test("an unmapped page that imports the component widens instead of narrowing to the mapped page", () => {
+  const sources = new Map([
+    ["src/pages/index.astro", '---\nimport Card from "../components/Card.astro";\n---\n<Card />\n'],
+    ["src/pages/about.astro", '---\nimport Card from "../components/Card.astro";\n---\n<Card />\n'],
+    ["src/components/Card.astro", "<div>card</div>\n"],
+  ]);
+  expect(scopeRoutes(["src/components/Card.astro"], pages, sources, declaration))
+    .toEqual({ kind: "full", because: "src/components/Card.astro reaches src/pages/about.astro, which has no browserRoutes mapping" });
 });
 
 test("an unknown route widens instead of narrowing to it", async () => {
@@ -69,7 +101,3 @@ test("a missing map widens instead of narrowing", async () => {
   expect(await selected(dir, ["src/home.ts"])).toEqual({ kind: "full", because: "browserRoutes is not configured" });
 });
 
-test("a mapped non-page file narrows instead of walking every route", async () => {
-  const root = await rootWith('{ "src/card.css": ["/"] }');
-  expect(await selected(root, ["src/card.css"])).toEqual({ kind: "routes", routes: new Set(["/"]) });
-});
