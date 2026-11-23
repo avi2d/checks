@@ -2,7 +2,8 @@ import { Effect, FileSystem, Path, Schema } from "effect";
 import { workingTreeFiles } from "../core/git.ts";
 import { classifyPath } from "../core/scope.ts";
 import { decodeSetting, loadSettings, Reach, SETTINGS_FILE } from "../core/settings.ts";
-import { decodeBunfig, importedFile, importsOf, preloadPaths, resolved, TEST_TREE } from "./mutation-scope-graph.ts";
+import { importedFile, importsOf, resolved, TEST_TREE } from "../core/imports.ts";
+import { decodeBunfig, preloadPaths } from "./mutation-scope-graph.ts";
 
 export type Narrowing =
   | { readonly kind: "full"; readonly because: string }

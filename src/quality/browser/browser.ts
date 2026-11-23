@@ -291,7 +291,9 @@ const browserChecks = Effect.gen(function* () {
     yield* Console.log(`${NAME}: the test-only change builds the same site, so no page was checked`);
     return true;
   }
-  const selected = scope?.kind === "pull-request" ? yield* reachedRoutes(root, scope.changed, declaration) : undefined;
+  const selection = scope?.kind === "pull-request" ? yield* reachedRoutes(root, scope.changed, declaration) : undefined;
+  if (selection?.kind === "full") yield* Console.log(`${NAME}: ${selection.because}, so every route runs`);
+  const selected = selection?.kind === "routes" ? selection.routes : undefined;
   if (selected?.size === 0) {
     yield* Console.log(`${NAME}: the pull request reaches no route, so no page was checked`);
     return true;

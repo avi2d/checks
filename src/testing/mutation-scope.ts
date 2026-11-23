@@ -3,7 +3,8 @@ import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { escape, minimatch } from "minimatch";
 import { changedPaths, git, pathsAt, pathsOf, rangeEnds, type Change } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
-import { decodeBunfig, importedFile, importsOf, preloadPaths, readersOf, resolved, TEST_TREE } from "./mutation-scope-graph.ts";
+import { importedFile, importsOf, resolved, TEST_TREE } from "../core/imports.ts";
+import { decodeBunfig, preloadPaths, readersOf } from "./mutation-scope-graph.ts";
 import { balancedShards, MAX_SHARDS, mutantWeights, runnableMutants, type Shard } from "./mutation-shards.ts";
 
 const NAME = "mutation-scope";

@@ -70,6 +70,43 @@ test("a mapped stylesheet narrows the route selection instead of widening it", a
   expect(result.text).not.toContain("html at /other/ (en)");
 }, 60_000);
 
+test("an unmapped component narrows to the page that imports it instead of walking every route", async () => {
+  const repo = await open({
+    ".gitignore": "event.json\n",
+    "checks.config.ts": settings('browserRoutes: { "src/pages/index.astro": ["/"], "src/pages/other.astro": ["/other/"] },'),
+    "src/pages/index.astro": '---\nimport Card from "../components/Card.astro";\n---\n<Card />\n',
+    "src/pages/other.astro": "<p>other</p>\n",
+    "src/components/Card.astro": "<div>card</div>\n",
+    "dist/index.html": page('<a href="/">home</a>'),
+    "dist/other/index.html": page('<a href="/">other</a>'),
+  });
+  await base(repo);
+  await repo.write({ "src/components/Card.astro": "<div>changed card</div>\n" });
+  const result = await run(repo, await repo.commit("card"));
+  expect(result.exitCode).toBe(0);
+  expect(result.text).toContain("html at / (en)");
+  expect(result.text).not.toContain("html at /other/ (en)");
+}, 60_000);
+
+test("a stylesheet a mapped stylesheet imports reaches its routes instead of only the page that imports it", async () => {
+  const repo = await open({
+    ".gitignore": "event.json\n",
+    "checks.config.ts": settings('browserRoutes: { "src/pages/index.astro": ["/"], "src/styles/global.css": ["/other/"] }, reach: { "src/styles/tokens.css": [] },'),
+    "src/pages/index.astro": '---\nimport "../styles/tokens.css";\n---\n<p>home</p>\n',
+    "src/styles/global.css": '@import "./tokens.css";\n',
+    "src/styles/tokens.css": ":root { --ink: black; }\n",
+    "dist/index.html": page('<a href="/">home</a>'),
+    "dist/other/index.html": page('<a href="/">other</a>'),
+  });
+  await base(repo);
+  await repo.write({ "src/styles/tokens.css": ":root { --ink: navy; }\n" });
+  const result = await run(repo, await repo.commit("tokens"));
+  expect(result.exitCode).toBe(0);
+  expect(result.text).toContain("html at / (en)");
+  expect(result.text).toContain("html at /other/ (en)");
+  expect(result.text).not.toContain("every route runs");
+}, 60_000);
+
 test("test-only changes skip the browser only when both builds match the served site", async () => {
   const html = page('<a href="/">home</a>');
   const other = page('<a href="/">other</a>');
