@@ -1,7 +1,37 @@
 import { expect, test } from "bun:test";
+import { chromium } from "playwright-core";
+import { elementPath, RESOLVE_LEAF, type PageElement } from "../../src/quality/browser/keyboard-page.ts";
 import { at, browserSite, declaration, failuresOf, page, routesOf, sitePages } from "../e2e/lib/browser-site.ts";
 
 const COMPACT_BAR = `<script>addEventListener("scroll", () => { document.querySelector(".bar").hidden = scrollY < 200; });</script>`;
+
+test("keyboard reads a distinct path for each of two Tab stops, including one inside a shadow root", async () => {
+  const browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: "chrome" });
+  try {
+    const tab = await (await browser.newContext()).newPage();
+    await tab.setContent(page(
+      `<a href="/">Services</a><search-box></search-box><script>class SearchBox extends HTMLElement { constructor() { super(); this.attachShadow({ mode: "open" }).innerHTML = "<input aria-label=Search>"; } } customElements.define("search-box", SearchBox);</script>`,
+    ));
+    const nextPath = async () => {
+      await tab.keyboard.press("Tab");
+      return (await tab.evaluateHandle<PageElement>(RESOLVE_LEAF)).asElement()?.evaluate(elementPath);
+    };
+    expect([await nextPath(), await nextPath()]).toEqual(["html:0/body:1/main:0/a:0", "html:0/body:1/main:0/search-box:1/shadow/input:0"]);
+  } finally {
+    await browser.close();
+  }
+}, 120_000);
+
+test("keyboard scans every one of two Tab stops on a target", async () => {
+  const site = await browserSite({
+    "dist/index.html": page(`<a href="/">Services</a><a href="/">Contacts</a>`, { head: `<style>a:focus { outline: 3px solid #000; }</style>` }),
+    "checks.config.ts": declaration({ checks: ["keyboard"] }),
+  });
+  const ran = await site.run();
+  expect(failuresOf(ran.text)).toEqual([]);
+  expect(ran.text).toContain(`browser: ${at("keyboard", "/").slice(0, -1)} scanned link 2`);
+  expect(ran.exitCode).toBe(0);
+}, 120_000);
 
 test("keyboard judges a menu on the items visible before the first Tab press, not on the items a compact bar shows once Tab scrolls the page", async () => {
   const site = await browserSite({

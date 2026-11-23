@@ -6,6 +6,7 @@ import {
   changedPaintBoxes,
   decodeRecall,
   decodeRingScans,
+  elementPath,
   recall,
   remember,
   scanRings,
@@ -165,22 +166,8 @@ const tabToNextStop = Effect.fn("tabToNextStop")(function* (page: Page) {
   return (yield* count(page, ":focus")) > 0;
 });
 
-const elementPath = Effect.fn("elementPath")(function* (leaf: ElementHandle<PageElement>) {
-  const raw: unknown = yield* attempt("cannot identify the focused element", () => leaf.evaluate(`element => {
-    const parts = [];
-    let node = element;
-    while (node) {
-      const parent = node.parentElement;
-      const siblings = parent ? parent.children : node.getRootNode().children;
-      parts.push(node.localName + ':' + Array.prototype.indexOf.call(siblings, node));
-      if (parent) node = parent;
-      else {
-        node = node.getRootNode().host || null;
-        if (node) parts.push('shadow');
-      }
-    }
-    return parts.reverse().join('/');
-  }`));
+const pathOf = Effect.fn("pathOf")(function* (leaf: ElementHandle<PageElement>) {
+  const raw: unknown = yield* attempt("cannot identify the focused element", () => leaf.evaluate(elementPath));
   return yield* decodeRecall(raw).pipe(Effect.mapError(() => new BrowserFailure({ message: "the focused element gave no path" })));
 });
 
@@ -190,7 +177,7 @@ const referenceTabs = Effect.fn("referenceTabs")(function* (page: Page, targets:
   while (stops.length < STOP_LIMIT && (yield* tabToNextStop(page))) {
     const leaf = yield* focusedLeaf(page);
     if (leaf === null) return yield* new BrowserFailure({ message: "cannot identify a Tab stop" });
-    const path = yield* elementPath(leaf);
+    const path = yield* pathOf(leaf);
     if ((yield* readMark(leaf)) === "") {
       stops.push({ path, capture: null });
       continue;
@@ -262,7 +249,7 @@ const walkTabs = Effect.fn("walkTabs")(function* (page: Page, snapshots: readonl
       break;
     }
     const leaf = yield* focusedLeaf(page);
-    if (leaf === null || (yield* elementPath(leaf)) !== expected?.path) {
+    if (leaf === null || (yield* pathOf(leaf)) !== expected?.path) {
       complete = false;
       break;
     }

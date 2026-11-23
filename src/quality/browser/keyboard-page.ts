@@ -80,8 +80,16 @@ type PageDocument = {
   readonly createElement: (tag: string) => PageCanvas;
 };
 
+type PageRoot = {
+  readonly children: ArrayLike<PageElement>;
+  readonly host?: PageElement;
+};
+
 type PageElement = {
   readonly parentElement: PageElement | null;
+  readonly localName: string;
+  readonly children: ArrayLike<PageElement>;
+  readonly getRootNode: () => PageRoot;
   readonly ownerDocument: PageDocument;
   readonly getBoundingClientRect: () => Box;
   readonly clientLeft: number;
@@ -334,6 +342,22 @@ export const remember = (el: PageElement, id: string): void => {
 };
 
 export const recall = (el: PageElement): string => el.ownerDocument.defaultView.checksKb?.get(el) ?? "";
+
+export const elementPath = (el: PageElement): string => {
+  const parts: string[] = [];
+  let node: PageElement | null = el;
+  while (node !== null) {
+    const parent: PageElement | null = node.parentElement;
+    const siblings = parent === null ? node.getRootNode().children : parent.children;
+    parts.push(node.localName + ":" + Array.prototype.indexOf.call(siblings, node));
+    if (parent !== null) node = parent;
+    else {
+      node = node.getRootNode().host ?? null;
+      if (node !== null) parts.push("shadow");
+    }
+  }
+  return parts.reverse().join("/");
+};
 
 export const decodeRecall = Schema.decodeUnknownEffect(Schema.String);
 
