@@ -17,10 +17,13 @@ Each other check that opens a page uses a fresh one.
 Each check judges only the elements of a target that are visible at the visit.
 So a control the page renders once for each breakpoint is judged where it shows.
 
-The keyboard check captures the state Tab reaches before it removes focus.
-It takes the comparison screenshot with focus removed, then restores focus before continuing Tab.
-Page handlers can run during the comparison blur and focus restoration.
-A repaint caused by a blur handler can affect the comparison and count as visible focus.
+The keyboard check records the Tab order, reloads the page, and checks that each stop matches the recorded order.
+It blurs the previous element before taking the baseline screenshot, then compares that screenshot with the state Tab reaches.
+If a stop does not match the recorded order, the check fails and leaves that stop and later stops unmeasured.
+It compares screenshots in document coordinates, or in viewport coordinates for fixed and sticky elements.
+A sticky element is not measured and fails the check when Tab changes the scroll position.
+The check blurs and restores focus to locate changed paint on the element and its ancestors.
+Page handlers can run during that blur and focus restoration, but the check does not compare the blurred screenshot.
 
 | Check | What fails | Built on |
 | --- | --- | --- |

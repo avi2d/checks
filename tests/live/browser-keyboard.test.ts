@@ -104,6 +104,32 @@ test("keyboard counts a ring the link draws with its own focus-visible pseudo-el
   expect(ran.exitCode).toBe(1);
 }, 120_000);
 
+test("keyboard does not count paint added by the field's blur handler as focus", async () => {
+  const site = await browserSite({
+    "dist/index.html": page(
+      `<input name="name"><script>document.querySelector("input").addEventListener("blur", (event) => event.target.classList.add("touched"));</script>`,
+      { head: `<style>input:focus { outline: none; } input.touched { background: red; }</style>` },
+    ),
+    "checks.config.ts": declaration({ targets: [{ name: "field", selector: "input", focusable: true }], checks: ["keyboard"] }),
+  });
+  const ran = await site.run();
+  expect(failuresOf(ran.text)).toEqual([`${at("keyboard", "/")} field shows no visible focus when Tab reaches it`]);
+  expect(ran.exitCode).toBe(1);
+}, 120_000);
+
+test("keyboard does not count paint a previous field adds on blur to the next field", async () => {
+  const site = await browserSite({
+    "dist/index.html": page(
+      `<input id="first"><input id="next"><script>document.querySelector("#first").addEventListener("blur", () => document.querySelector("#next").classList.add("touched"));</script>`,
+      { head: `<style>input:focus { outline: none; } #next.touched { background: red; }</style>` },
+    ),
+    "checks.config.ts": declaration({ targets: [{ name: "next field", selector: "#next", focusable: true }], checks: ["keyboard"] }),
+  });
+  const ran = await site.run();
+  expect(failuresOf(ran.text)).toEqual([`${at("keyboard", "/")} next field shows no visible focus when Tab reaches it`]);
+  expect(ran.exitCode).toBe(1);
+}, 120_000);
+
 test("keyboard still fails a ring that appears only after blur", async () => {
   const site = await browserSite({
     "dist/index.html": page(

@@ -7,6 +7,14 @@ export type CropArgs = {
   readonly boxes: readonly Box[];
 };
 
+type FocusCaptures = { readonly baseline: string; readonly focused: string; readonly blurred: string };
+
+export const focusCrops = ({ baseline, focused }: FocusCaptures, boxes: readonly Box[]): CropArgs => ({
+  first: baseline,
+  second: focused,
+  boxes,
+});
+
 const CompareOutcomeSchema = Schema.Union([
   Schema.Struct({ compared: Schema.Literal(true), differs: Schema.Boolean }),
   Schema.Struct({ compared: Schema.Literal(false) }),
@@ -14,7 +22,14 @@ const CompareOutcomeSchema = Schema.Union([
 
 type CompareOutcome = typeof CompareOutcomeSchema.Type;
 
-export const compareCrops = (el: PageElement, args: CropArgs): Promise<CompareOutcome> => {
+type CropElement = {
+  readonly ownerDocument: {
+    readonly defaultView: Pick<PageElement["ownerDocument"]["defaultView"], "devicePixelRatio" | "atob" | "createImageBitmap" | "Blob">;
+    readonly createElement: PageElement["ownerDocument"]["createElement"];
+  };
+};
+
+export const compareCrops = (el: CropElement, args: CropArgs): Promise<CompareOutcome> => {
   const view = el.ownerDocument.defaultView;
   const scale = view.devicePixelRatio || 1;
   const unreadable: CompareOutcome = { compared: false };
