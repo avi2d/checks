@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { compareCrops, focusCrops } from "../../../src/quality/browser/keyboard-crops.ts";
+import { compareCrops } from "../../../src/quality/browser/keyboard-crops.ts";
+
 const element = () => {
   let pixels: ArrayLike<number> = [];
   const images = new WeakMap<object, Uint8Array>();
@@ -40,14 +41,21 @@ test("a page blur handler that paints after focus is not counted as a focus chan
   const before = pixel(0);
   const focused = pixel(0);
   const blurred = pixel(255);
-  expect(await compareCrops(element(), { first: before, second: blurred, boxes })).toEqual({ compared: true, differs: true });
-  expect(await compareCrops(element(), focusCrops({ baseline: before, focused, blurred }, boxes))).toEqual({ compared: true, differs: false });
+  expect(await compareCrops(element(), { baseline: before, focused, blurred, boxes })).toEqual({ compared: true, differs: false });
 });
 
 test("a JavaScript focus ring removed by blur is counted rather than suppressed", async () => {
   const before = pixel(0);
   const focused = pixel(255);
   const blurred = pixel(0);
-  expect(await compareCrops(element(), { first: before, second: blurred, boxes })).toEqual({ compared: true, differs: false });
-  expect(await compareCrops(element(), focusCrops({ baseline: before, focused, blurred }, boxes))).toEqual({ compared: true, differs: true });
+  expect(await compareCrops(element(), { baseline: before, focused, blurred, boxes })).toEqual({ compared: true, differs: true });
+});
+
+test("scroll-only paint that remains after blur is not counted as visible focus", async () => {
+  expect(await compareCrops(element(), {
+    baseline: pixel(0),
+    focused: pixel(255),
+    blurred: pixel(255),
+    boxes,
+  })).toEqual({ compared: true, differs: false });
 });

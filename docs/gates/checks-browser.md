@@ -18,12 +18,14 @@ Each check judges only the elements of a target that are visible at the visit.
 So a control the page renders once for each breakpoint is judged where it shows.
 
 The keyboard check records the Tab order, reloads the page, and checks that each stop matches the recorded order.
-It blurs the previous element before taking the baseline screenshot, then compares that screenshot with the state Tab reaches.
-If a stop does not match the recorded order, the check fails and leaves that stop and later stops unmeasured.
+Before each declared target stop, it blurs the previous element and takes one baseline screenshot in the target's coordinate system.
+Visible focus must differ from both that baseline and the blurred screenshot.
+If a stop does not match the recorded order, that stop and later stops are reported as not measured, without failing the check.
+An incomplete walk reports neither reach shortfalls nor a failure for reaching no target.
 It compares screenshots in document coordinates, or in viewport coordinates for fixed and sticky elements.
 A sticky element is not measured and fails the check when Tab changes the scroll position.
 The check blurs and restores focus to locate changed paint on the element and its ancestors.
-Page handlers can run during that blur and focus restoration, but the check does not compare the blurred screenshot.
+Page handlers run during blur and focus restoration, so JavaScript focus rings remain measurable without counting blur-only or scroll-only paint as focus.
 
 | Check | What fails | Built on |
 | --- | --- | --- |

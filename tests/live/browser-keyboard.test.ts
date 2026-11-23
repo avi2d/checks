@@ -130,6 +130,55 @@ test("keyboard does not count paint a previous field adds on blur to the next fi
   expect(ran.exitCode).toBe(1);
 }, 120_000);
 
+test("keyboard does not count horizontal container scrolling as visible focus", async () => {
+  const site = await browserSite({
+    "dist/index.html": page(
+      `<nav><a href="/" style="background: blue">First</a><a id="offscreen" href="/" style="background: red">Next</a></nav>`,
+      { head: `<style>nav { width: 240px; overflow-x: auto; white-space: nowrap; } a { display: inline-block; width: 240px; height: 40px; } a:focus { outline: none; }</style>` },
+    ),
+    "checks.config.ts": declaration({ targets: [{ name: "offscreen link", selector: "#offscreen", focusable: true }], checks: ["keyboard"] }),
+  });
+  const ran = await site.run();
+  expect(failuresOf(ran.text)).toEqual([`${at("keyboard", "/")} offscreen link shows no visible focus when Tab reaches it`]);
+  expect(ran.exitCode).toBe(1);
+}, 120_000);
+
+test("keyboard reports changed and shortened Tab orders as unmeasured, not unreachable targets or page defects", async () => {
+  const changingPage = (change: string) => page(
+    `<a id="first" href="/">First</a><button>Middle</button><a id="footer" href="/">Footer</a>
+    <script>
+      const loaded = sessionStorage.getItem(location.pathname);
+      sessionStorage.setItem(location.pathname, "loaded");
+      if (loaded) { ${change} }
+    </script>`,
+  );
+  const pages = {
+    "changed-first.html": changingPage(`document.querySelector("main").prepend(document.createElement("button"));`),
+    "changed-later.html": changingPage(`document.querySelector("button").remove();`),
+    "shortened.html": changingPage(`document.querySelector("button").tabIndex = -1; document.querySelector("#footer").tabIndex = -1;`),
+    "extended.html": changingPage(`document.querySelector("main").append(document.createElement("button"));`),
+  };
+  const site = await browserSite({
+    ...sitePages(pages),
+    "checks.config.ts": declaration({
+      routes: routesOf(pages),
+      targets: [
+        { name: "first", selector: "#first", focusable: true },
+        { name: "footer", selector: "#footer", focusable: true },
+      ],
+      checks: ["keyboard"],
+    }),
+  });
+  const ran = await site.run();
+  expect(failuresOf(ran.text)).toEqual([]);
+  for (const path of Object.keys(pages)) {
+    const prefix = `browser: ${at("keyboard", "/" + path).slice(0, -1)} scanned `;
+    const measured = path === "changed-first.html" ? "" : path === "extended.html" ? "first 1, footer 1, " : "first 1, ";
+    expect(ran.text).toContain(prefix + measured + "Tab order differed from the reference pass, not measured");
+  }
+  expect(ran.exitCode).toBe(0);
+}, 120_000);
+
 test("keyboard still fails a ring that appears only after blur", async () => {
   const site = await browserSite({
     "dist/index.html": page(

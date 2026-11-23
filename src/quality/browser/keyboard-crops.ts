@@ -2,18 +2,11 @@ import { Schema } from "effect";
 import type { Box, PageBitmap, PageElement } from "./keyboard-page.ts";
 
 export type CropArgs = {
-  readonly first: string;
-  readonly second: string;
+  readonly baseline: string;
+  readonly focused: string;
+  readonly blurred: string;
   readonly boxes: readonly Box[];
 };
-
-type FocusCaptures = { readonly baseline: string; readonly focused: string; readonly blurred: string };
-
-export const focusCrops = ({ baseline, focused }: FocusCaptures, boxes: readonly Box[]): CropArgs => ({
-  first: baseline,
-  second: focused,
-  boxes,
-});
 
 const CompareOutcomeSchema = Schema.Union([
   Schema.Struct({ compared: Schema.Literal(true), differs: Schema.Boolean }),
@@ -70,11 +63,14 @@ export const compareCrops = (el: CropElement, args: CropArgs): Promise<CompareOu
     }
     return same;
   };
-  return Promise.all([decode(args.first), decode(args.second)]).then(([first, second]) => {
-    const result = compareBoxes(first, second);
-    first.close();
-    second.close();
-    return result;
+  return Promise.all([decode(args.baseline), decode(args.focused), decode(args.blurred)]).then(([baseline, focused, blurred]) => {
+    const before = compareBoxes(baseline, focused);
+    const after = compareBoxes(focused, blurred);
+    baseline.close();
+    focused.close();
+    blurred.close();
+    if (!before.compared || !after.compared) return unreadable;
+    return before.differs && after.differs ? changed : same;
   });
 };
 
