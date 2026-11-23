@@ -8,7 +8,7 @@ audience: consumers
 
 ## What it checks
 
-It reads the version `package.json` holds at the commit and looks for the tag `v<version>` on `origin`.
+It reads the version `package.json` holds at the commit and looks for the tag `v<version>` in the GitHub repository.
 It refuses the commit when that tag is missing or tags another commit.
 It refuses when the tag holds no GitHub release, or only a draft or a prerelease.
 It refuses when the release notes lack the `CHANGELOG.md` section for that version, as the commit holds the file.
@@ -24,8 +24,7 @@ The release commit adds only the version, the changelog, and each public workspa
 ## What it reads
 
 It reads `package.json` and `CHANGELOG.md` at the commit with `git show`, so the checkout holds that commit.
-It reads the tag from `origin` with `git ls-remote`.
-It reads the release with `gh api`, which takes the repository from the checkout's remote and the token from `GH_TOKEN`.
+It reads the tag and release with `gh api`, which takes the repository from the checkout's remote and the token from `GH_TOKEN`.
 The token needs `contents: read`.
 
 ## Arguments
@@ -43,7 +42,7 @@ Without it the gate judges `HEAD`.
 | --- | --- |
 | 0 | the commit is a published release |
 | 1 | the commit is no published release |
-| 2 | the arguments do not parse, the commit does not exist, the commit holds no `package.json` or no `CHANGELOG.md`, its `package.json` does not parse, `git ls-remote` to `origin` fails, or a GitHub API call fails |
+| 2 | the arguments do not parse, the commit does not exist, the commit holds no `package.json` or no `CHANGELOG.md`, its `package.json` does not parse, or a GitHub API call fails |
 
 ## Sample output
 

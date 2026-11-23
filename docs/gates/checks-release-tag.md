@@ -22,7 +22,7 @@ It releases the newest untagged release commit found there with the same steps a
 The walk stops with no release once the version `package.json` holds at `HEAD` is not the candidate's version, so a cancel commit ends it.
 When the release commit sits behind `HEAD`, it checks out the release commit in the same checkout and installs its dependencies with `bun install --frozen-lockfile`, refusing when the checkout holds uncommitted changes.
 It then runs the build check and the publish there, so npm ships the tree the required checks of the release pull request passed on.
-A merge with no untagged release commit behind it ends at once, before any API call.
+A merge with no untagged release commit behind it ends at once, without pushing a tag or creating a release.
 On a release commit it first fetches the head of the pull request the squash subject names, such as `(#7)`.
 It refuses unless the tree of that commit equals the tree the required checks of that pull request passed on.
 That check is what lets the release publish a tested tree even though a release pull request without release checks runs no test.
@@ -54,7 +54,8 @@ The next run of the workflow that tags it then cuts the release again with every
 
 ## What it reads
 
-It reads the subject of `HEAD` and of each commit behind it, `package.json` at each of those commits and `CHANGELOG.md` at the release commit, and the tag from `origin` with `git ls-remote`.
+It reads the subject of `HEAD` and of each commit behind it, `package.json` at each of those commits and `CHANGELOG.md` at the release commit.
+It reads the tag through the GitHub API.
 When workspace publishing is enabled, it reads the workspace patterns and each workspace `package.json`.
 With a workflow argument it names the workflow it runs in by `GITHUB_WORKFLOW`, or as `release-pr` when that is unset.
 With no argument it names `release`.

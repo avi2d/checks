@@ -30,7 +30,7 @@ const flawOf = Effect.fn("flawOf")(function* (commit: string) {
     Effect.mapError((cause) => new GateFailed({ message: `${MANIFEST} at ${commit.slice(0, 12)}: ${cause.message}` })),
   );
   const tag = releaseTag(version);
-  const tagged = yield* taggedOn(process.cwd(), tag);
+  const tagged = yield* taggedOn(tag);
   if (tagged !== commit) return { tag, flaw: tagged === undefined ? `no tag ${tag}` : `${tag} on ${tagged.slice(0, 12)}, not on it` };
   const release = yield* publishedRelease(tag);
   if (Option.isNone(release)) return { tag, flaw: `the tag ${tag} but no GitHub release` };
