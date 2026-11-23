@@ -401,7 +401,7 @@ Each line sums the wall time of each check across the route's visits in millisec
 The first shared check includes the shared page load.
 The route's `check sum` adds its check times, not elapsed time, and excludes gaps between checks.
 Checks can overlap, so this sum can exceed elapsed time.
-A last line prints the same times as the value of `browserTimings`, as [Shards](#shards) says.
+A last line prints those times in the form of the `browserTimings` value, as [Shards](#shards) says.
 The product installs the optional peers the runner loads, at the versions the kit pins:
 
 <!-- generated install: bun run build writes it from package.json and scripts/doc-blocks.ts -->
@@ -466,12 +466,16 @@ Each job works out the same split from the declaration, the pull request's route
 Each route is checked whole in one shard, with every check, viewport and state the run would give it.
 `look` compares texts across routes, so one shard reads it at every route.
 The runner prints which routes each shard checks, and whether it reads `look`.
-A shard left with no check, such as the second of two shards over one route, checks no page and passes.
-A declared route the site does not serve fails every shard.
+A shard left with no check, such as the second of two shards over one route without `look`, checks no page and passes.
+A declared route the site does not serve fails every shard, including a shard left with no check.
 
 The split balances the measured time of each shard.
 The optional `browserTimings` setting holds the milliseconds of each check at each route.
-After the timing lines, a run prints one `browser: browserTimings` line that holds the same times as the value of this setting, ready to copy:
+After the timing lines, a run prints one `browser: browserTimings` line in the form of this setting.
+The line holds only the checks that run ran.
+A shard prints only its own routes, and the shard that reads `look` prints `look` at every route.
+A `--pr` run prints only the routes it reaches, measured at the anchor sizes.
+So take the setting from a run that walks the full size list, either without `--shard` or by merging the lines of every shard check by check:
 
 ```ts
 browserTimings: {

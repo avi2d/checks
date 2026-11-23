@@ -51,9 +51,21 @@ export function counted(names: readonly string[]): readonly string[] {
   return [...counts].map(([name, count]) => `${name} ${count}`);
 }
 
+function missingRouteFailure(path: string): string {
+  return `route ${path} serves no page from the declared site`;
+}
+
+export function emptyShardReport(missingRoutes: readonly string[]): string {
+  const failures = missingRoutes.map(missingRouteFailure);
+  return [
+    `${NAME}: this shard holds no check, so no page was checked`,
+    ...(failures.length === 0 ? [] : [`${NAME}: ${failures.length} failure(s) in this shard:`, ...failures.map((one) => `  ${one}`)]),
+  ].join("\n");
+}
+
 function failuresOf({ runs, missingRoutes }: Outcome): readonly string[] {
   return [
-    ...missingRoutes.map((path) => `route ${path} serves no page from the declared site`),
+    ...missingRoutes.map(missingRouteFailure),
     ...(runs.length === 0 ? ["the declaration leaves no check to run"] : []),
     ...runs.flatMap(({ check, visit, found }) => found.map((one) => `${check} at ${describeVisit(visit)}: ${one}`)),
   ];

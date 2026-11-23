@@ -21,7 +21,7 @@ import { judgeNesting } from "./nesting.ts";
 import { coldShift, formatShift, judgeShift, recordShifts } from "./shift.ts";
 import { walkCells, type Cell } from "./cells.ts";
 import { attempt, launchChrome, load, openVisit, type BrowserFailure } from "./page.ts";
-import { counted, formatTimings, NAME, passes, report, timingsSetting, type Run, type Timing } from "./report.ts";
+import { counted, emptyShardReport, formatTimings, NAME, passes, report, timingsSetting, type Run, type Timing } from "./report.ts";
 import { serveSite, type Site } from "./serve.ts";
 import { judgePageWeight, weighPage } from "./weight.ts";
 import { judgeTargets } from "./targets.ts";
@@ -283,7 +283,7 @@ const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: D
   const planned = yield* inShard(visitsOf(declaration)
     .filter(({ route }) => !missingRoutes.includes(route.path))
     .map((visit) => ({ visit, checks: checksAt(visit, declaration, hooks, selected === undefined || selected.has(visit.route.path)) })), sharding);
-  if (sharding !== undefined && missingRoutes.length === 0 && planned.every(({ checks }) => checks.length === 0)) return undefined;
+  if (sharding !== undefined && planned.every(({ checks }) => checks.length === 0)) return { kind: "empty shard" as const, missingRoutes };
   const origin = yield* serveSite(site);
   const browser = yield* launchChrome;
   const cells = planned.flatMap(({ visit, checks }, visitIndex) =>
@@ -292,7 +292,7 @@ const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: D
   const firstLooks: FirstLooks = new Map();
   const finished = readings.map(({ settle, start, end }) => ({ run: settle(firstLooks), start, end }));
   const timings: Timing[] = finished.map(({ run: one, start, end }) => ({ path: one.visit.route.path, check: one.check, start, end }));
-  return { runs: finished.map(({ run: one }) => one), missingRoutes, timings };
+  return { kind: "walked" as const, runs: finished.map(({ run: one }) => one), missingRoutes, timings };
 }, Effect.scoped);
 
 const USAGE = `usage: ${NAME} [--pr] [--shard=<index>/<count>] [<directory>]`;
@@ -340,9 +340,9 @@ const browserChecks = Effect.gen(function* () {
   }
   if (selected !== undefined) yield* Console.log(`${NAME}: the pull request reaches ${selected.size} of ${declaration.routes.length} route(s)`);
   const outcome = yield* checkSite(root, declaration, site, selected, yield* readSharding(root, args.shard));
-  if (outcome === undefined) {
-    yield* Console.log(`${NAME}: this shard holds no check, so no page was checked`);
-    return true;
+  if (outcome.kind === "empty shard") {
+    yield* Console.log(emptyShardReport(outcome.missingRoutes));
+    return outcome.missingRoutes.length === 0;
   }
   yield* Console.log(report(declaration, outcome));
   const timings = formatTimings(outcome.timings);
