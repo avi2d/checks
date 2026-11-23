@@ -143,7 +143,7 @@ test("keyboard does not count horizontal container scrolling as visible focus", 
   expect(ran.exitCode).toBe(1);
 }, 120_000);
 
-test("keyboard reports a scrolled sticky stop without failing or skipping later targets", async () => {
+test("keyboard fails a scrolled sticky stop with no focus indication and still checks later targets", async () => {
   const site = await browserSite({
     "dist/index.html": page(
       `<div style="height: 1600px"></div><nav style="position: sticky; top: 0"><a id="sticky" href="/">Sticky</a></nav><a id="later" href="/">Later</a>`,
@@ -159,8 +159,26 @@ test("keyboard reports a scrolled sticky stop without failing or skipping later 
     }),
   });
   const ran = await site.run();
+  expect(failuresOf(ran.text)).toEqual([`${at("keyboard", "/", "default", "phone 320x640 touch")} sticky link shows no visible focus when Tab reaches it`]);
+  expect(ran.text).toContain("scanned sticky link 1, later link 1");
+  expect(ran.exitCode).toBe(1);
+}, 120_000);
+
+test("keyboard reports a scrolled sticky ring as not measured rather than crediting blur paint", async () => {
+  const site = await browserSite({
+    "dist/index.html": page(
+      `<div style="height: 1600px"></div><nav style="position: sticky; top: 0"><a id="sticky" href="/">Sticky</a></nav>`,
+      { head: `<style>#sticky:focus { outline: 3px solid black; }</style>` },
+    ),
+    "checks.config.ts": declaration({
+      targets: [{ name: "sticky link", selector: "#sticky", focusable: true }],
+      viewports: [{ name: "phone", width: 320, height: 640, touch: true }],
+      checks: ["keyboard"],
+    }),
+  });
+  const ran = await site.run();
   expect(failuresOf(ran.text)).toEqual([]);
-  expect(ran.text).toContain("scanned sticky link 1, later link 1, sticky link: Tab scrolled a sticky element, not measured");
+  expect(ran.text).toContain("sticky link: Tab scrolled a sticky element, not measured");
   expect(ran.exitCode).toBe(0);
 }, 120_000);
 

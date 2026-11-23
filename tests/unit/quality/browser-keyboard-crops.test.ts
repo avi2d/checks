@@ -51,6 +51,12 @@ test("a JavaScript focus ring removed by blur is counted rather than suppressed"
   expect(await compareCrops(element(), { baseline: before, focused, blurred, boxes })).toEqual({ compared: true, differs: true });
 });
 
+test("a missing baseline still detects whether blur changes the focused pixels", async () => {
+  const focused = pixel(255);
+  expect(await compareCrops(element(), { baseline: null, focused, blurred: pixel(0), boxes })).toEqual({ compared: true, differs: true });
+  expect(await compareCrops(element(), { baseline: null, focused, blurred: focused, boxes })).toEqual({ compared: true, differs: false });
+});
+
 test("scroll-only paint that remains after blur is not counted as visible focus", async () => {
   expect(await compareCrops(element(), {
     baseline: pixel(0),

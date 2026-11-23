@@ -112,6 +112,9 @@ const readMark = Effect.fn("readMark")(function* (leaf: ElementHandle<PageElemen
   );
 });
 
+export const focusVerdict = (scrolledSticky: boolean, differs: boolean): boolean | "unmeasured" =>
+  scrolledSticky && differs ? "unmeasured" : differs;
+
 const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page, leaf: ElementHandle<PageElement>, baseline: Baseline) {
   const box = yield* attempt("cannot measure the focused element", () => leaf.boundingBox());
   if (box === null) return false;
@@ -124,7 +127,7 @@ const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page, leaf: 
   );
   const scroll = yield* scrollPosition(page);
   const position = yield* elementPosition(leaf);
-  if (position.sticky && (scroll.x !== baseline.scroll.x || scroll.y !== baseline.scroll.y)) return "unmeasured" as const;
+  const scrolledSticky = position.sticky && (scroll.x !== baseline.scroll.x || scroll.y !== baseline.scroll.y);
   const viewport = baseline.capture === "viewport";
   const withFocus = yield* attempt("cannot capture the focused element", () => page.screenshot({ animations: "disabled", fullPage: !viewport }));
   yield* attempt("cannot blur the focused element", () => leaf.evaluate((element: PageElement) => element.blur()));
@@ -145,7 +148,7 @@ const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page, leaf: 
   if (boxes.length === 0) return false;
   const comparedSource: unknown = yield* attempt("cannot compare the baseline, focused and blurred captures", () =>
     leaf.evaluate(compareCrops, {
-      baseline: baseline.shot.toString("base64"),
+      baseline: scrolledSticky ? null : baseline.shot.toString("base64"),
       focused: withFocus.toString("base64"),
       blurred: withoutFocus.toString("base64"),
       boxes,
@@ -154,7 +157,7 @@ const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page, leaf: 
     Effect.mapError(() => new BrowserFailure({ message: "the page gave no usable comparison" })),
   );
   if (!outcome.compared) return yield* new BrowserFailure({ message: "cannot read the capture" });
-  return outcome.differs;
+  return focusVerdict(scrolledSticky, outcome.differs);
 });
 
 const tabToNextStop = Effect.fn("tabToNextStop")(function* (page: Page) {
@@ -236,6 +239,11 @@ const hitTargets = (snapshots: readonly Snapshot[], id: string): Target[] => {
   return hit;
 };
 
+export const recordFocusVerdict = (names: string, visible: boolean | "unmeasured", found: string[], notMeasured: string[]): void => {
+  if (visible === "unmeasured") notMeasured.push(names + ": Tab scrolled a sticky element, not measured");
+  else if (!visible) found.push(names + " shows no visible focus when Tab reaches it");
+};
+
 const walkTabs = Effect.fn("walkTabs")(function* (page: Page, snapshots: readonly Snapshot[], reference: readonly ReferenceStop[]) {
   const found: string[] = [];
   const notMeasured: string[] = [];
@@ -266,8 +274,7 @@ const walkTabs = Effect.fn("walkTabs")(function* (page: Page, snapshots: readonl
     if (baseline === null) continue;
     const names = hitTargets(snapshots, id).map(({ name }) => name).join(" and ");
     const visible = yield* focusRingShows(page, leaf, baseline);
-    if (visible === "unmeasured") notMeasured.push(names + ": Tab scrolled a sticky element, not measured");
-    else if (!visible) found.push(names + " shows no visible focus when Tab reaches it");
+    recordFocusVerdict(names, visible, found, notMeasured);
   }
   return { found, complete, notMeasured };
 });

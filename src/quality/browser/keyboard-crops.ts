@@ -2,7 +2,7 @@ import { Schema } from "effect";
 import type { Box, PageBitmap, PageElement } from "./keyboard-page.ts";
 
 export type CropArgs = {
-  readonly baseline: string;
+  readonly baseline: string | null;
   readonly focused: string;
   readonly blurred: string;
   readonly boxes: readonly Box[];
@@ -63,14 +63,14 @@ export const compareCrops = (el: CropElement, args: CropArgs): Promise<CompareOu
     }
     return same;
   };
-  return Promise.all([decode(args.baseline), decode(args.focused), decode(args.blurred)]).then(([baseline, focused, blurred]) => {
-    const before = compareBoxes(baseline, focused);
+  return Promise.all([args.baseline === null ? Promise.resolve(null) : decode(args.baseline), decode(args.focused), decode(args.blurred)]).then(([baseline, focused, blurred]) => {
+    const before = baseline === null ? null : compareBoxes(baseline, focused);
     const after = compareBoxes(focused, blurred);
-    baseline.close();
+    baseline?.close();
     focused.close();
     blurred.close();
-    if (!before.compared || !after.compared) return unreadable;
-    return before.differs && after.differs ? changed : same;
+    if (!after.compared || (before !== null && !before.compared)) return unreadable;
+    return after.differs && (before === null || before.differs) ? changed : same;
   });
 };
 

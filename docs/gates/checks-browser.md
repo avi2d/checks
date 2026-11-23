@@ -23,7 +23,8 @@ Visible focus must differ from both that baseline and the blurred screenshot.
 If a stop does not match the recorded order, that stop and later stops are reported as not measured, without failing the check.
 An incomplete walk reports neither reach shortfalls nor a failure for reaching no target.
 It compares screenshots in document coordinates, or in viewport coordinates for fixed and sticky elements.
-When Tab changes the scroll position, a sticky element is reported as not measured without failing the check.
+When Tab scrolls a sticky element, the check fails it if its focused and blurred screenshots match.
+If those screenshots differ, the check reports the element as not measured without failing it.
 The check blurs and restores focus to locate changed paint on the element and its ancestors.
 Page handlers run during blur and focus restoration, so JavaScript focus rings remain measurable without counting blur-only or scroll-only paint as focus.
 
