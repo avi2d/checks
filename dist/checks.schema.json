@@ -684,6 +684,25 @@
       },
       "description": "The command that builds the site for the browser test-only proof."
     },
+    "browserTimings": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string",
+          "minLength": 1
+        },
+        "additionalProperties": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "description": "The measured milliseconds of each browser check at each route, which browser shards balance on."
+    },
     "copy": {
       "type": "object",
       "properties": {
