@@ -14,7 +14,7 @@ test("keyboard reads a distinct path for each of two Tab stops, including one in
     ));
     const nextPath = async () => {
       await tab.keyboard.press("Tab");
-      return (await tab.evaluateHandle<PageElement>(RESOLVE_LEAF)).asElement()?.evaluate(elementPath);
+      return (await tab.evaluateHandle<PageElement>(RESOLVE_LEAF)).evaluate(elementPath);
     };
     expect([await nextPath(), await nextPath()]).toEqual(["html:0/body:1/main:0/a:0", "html:0/body:1/main:0/search-box:1/shadow/input:0"]);
   } finally {
