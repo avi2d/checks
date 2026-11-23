@@ -2,6 +2,23 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.113.0
+
+Released 2026-11-23.
+
+### Features
+
+- **delivery:** split CI test jobs into unit and e2e tiers [#192](https://github.com/avi2d/checks/pull/192)
+- **delivery:** run docs builds on pull requests [#194](https://github.com/avi2d/checks/pull/194)
+- **testing:** add test file exclusions and cap file time at two minutes [#193](https://github.com/avi2d/checks/pull/193)
+
+### Fixes
+
+- **delivery:** read release refs through GitHub API [#200](https://github.com/avi2d/checks/pull/200)
+- **testing:** kill site browsers after tests [#199](https://github.com/avi2d/checks/pull/199)
+- **browser:** measure keyboard focus rings within their paint bounds [#198](https://github.com/avi2d/checks/pull/198)
+- **delivery:** keep setup dependency order stable [#197](https://github.com/avi2d/checks/pull/197)
+
 ## 0.112.0
 
 Released 2026-11-21.
