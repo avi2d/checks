@@ -2,6 +2,21 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.114.0
+
+Released 2026-11-23.
+
+### Features
+
+- **browser:** split checks across timing-balanced shards [#206](https://github.com/avi2d/checks/pull/206)
+- **browser:** print check timings per route [#202](https://github.com/avi2d/checks/pull/202)
+
+### Fixes
+
+- **browser:** exclude blur paint from keyboard focus checks [#205](https://github.com/avi2d/checks/pull/205)
+- **delivery:** allow TS extension imports in fresh setup tsconfig [#204](https://github.com/avi2d/checks/pull/204)
+- **browser:** scope PR routes through importing pages [#203](https://github.com/avi2d/checks/pull/203)
+
 ## 0.113.0
 
 Released 2026-11-23.
