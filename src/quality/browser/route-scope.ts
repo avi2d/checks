@@ -25,7 +25,10 @@ function importersOf(sources: ReadonlyMap<string, string>, changed: readonly str
 function namesPath(text: string, path: string): boolean {
   const name = path.slice(path.lastIndexOf("/") + 1);
   const stem = name.replace(/\.[^.]*$/, "");
-  return text.includes(`/${name}`) || QUOTES.some((quote) => text.includes(`/${stem}${quote}`));
+  const stems = stem.startsWith("_") ? [stem, stem.slice(1)] : [stem];
+  return ["/", ...QUOTES, "("].some((prefix) =>
+    text.includes(`${prefix}${name}`) || stems.some((part) => QUOTES.some((quote) => text.includes(`${prefix}${part}${quote}`))),
+  );
 }
 
 // Relative edges miss an alias, a root path or frontmatter, so a file that names the path any other way may still render it.

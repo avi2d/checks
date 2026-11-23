@@ -418,7 +418,9 @@ For example, a component that a mapped page imports reaches that page's routes.
 Importers are read from script, component, Markdown, HTML and stylesheet files, so a stylesheet's `@import` counts.
 Files under `tests/` and `checks.config.ts` do not count as importers.
 A file that names an unmapped path any other way, such as through a tsconfig alias, a root path or a Markdown `layout`, makes every route run.
-A file names a path when it holds the path's file name after a `/`, or its name without the extension before a closing quote.
+A file names a path when its file name follows a `/`, a quote, or `(`.
+A name without its extension also counts when it follows one of those characters and ends with a quote.
+For a name starting with an underscore, the name without that underscore also counts without its extension.
 So a doc that names a component path also makes every route run.
 A file reached only through `import.meta.glob`, a directory import such as `@/lib`, or a file type the scan does not read is not seen, and its routes can be left out.
 Map such a path in `browserRoutes` by hand.

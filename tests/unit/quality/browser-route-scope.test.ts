@@ -94,6 +94,28 @@ test("a component one page imports through a tsconfig alias widens instead of na
     .toEqual({ kind: "full", because: "src/pages/other.astro names src/components/Card.astro outside a relative import" });
 });
 
+test("a bare sibling stylesheet import widens instead of omitting the other route", () => {
+  const sources = new Map([
+    ["src/pages/index.astro", 'import "../styles/tokens.css";'],
+    ["src/pages/other.astro", 'import "../styles/global.css";'],
+    ["src/styles/global.css", '@import "tokens.css";'],
+    ["src/styles/tokens.css", ""],
+  ]);
+  expect(scopeRoutes(["src/styles/tokens.css"], pages, sources, declaration))
+    .toEqual({ kind: "full", because: "src/styles/global.css names src/styles/tokens.css outside a relative import" });
+});
+
+test("a Sass partial named without its underscore widens instead of omitting the other route", () => {
+  const sources = new Map([
+    ["src/pages/index.astro", 'import "../styles/_vars.scss";'],
+    ["src/pages/other.astro", 'import "../styles/global.scss";'],
+    ["src/styles/global.scss", '@use "vars";'],
+    ["src/styles/_vars.scss", ""],
+  ]);
+  expect(scopeRoutes(["src/styles/_vars.scss"], pages, sources, declaration))
+    .toEqual({ kind: "full", because: "src/styles/global.scss names src/styles/_vars.scss outside a relative import" });
+});
+
 test("a component an unmapped one reaches through an alias widens instead of narrowing to the relative importer", () => {
   const sources = new Map([
     ["src/pages/index.astro", '---\nimport Section from "../components/Section.astro";\n---\n<Section />\n'],
