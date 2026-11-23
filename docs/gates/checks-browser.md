@@ -418,10 +418,25 @@ A release pull request and a run that is not a pull request, such as `workflow_d
 
 The optional `browserRoutes` setting maps exact repository paths to the routes each path can change.
 For example, `browserRoutes: { "src/home.ts": ["/"] }` assigns the home source to the root route.
-When every changed path has a mapping to declared routes, the runner narrows targets, product hooks, and per-route checks to those routes.
+A changed path with no mapping reaches the routes of each mapped file that imports it by a relative import, at any depth.
+For example, a component that a mapped page imports reaches that page's routes.
+Importers are read from script, component, Markdown, HTML and stylesheet files, so a stylesheet's `@import` counts.
+Files under `tests/` and `checks.config.ts` do not count as importers.
+A file that names an unmapped path any other way, such as through a tsconfig alias, a root path or a Markdown `layout`, makes every route run.
+A file names a path when its file name follows a `/`, a quote, or `(`.
+A name without its extension also counts when it follows one of those characters and ends with a quote.
+For a name starting with an underscore, the name without that underscore also counts without its extension.
+So a doc that names a component path also makes every route run.
+A file that a relative import reaches can also render through `import.meta.glob`, a directory import such as `@/lib`, or a file type the scan does not read.
+The scan does not see that other path, so the routes it renders can be left out.
+Map such a path in `browserRoutes` by hand.
+When every changed path reaches declared routes, the runner narrows targets, product hooks, and per-route checks to those routes.
 The `links` and `look` checks still visit every declared route, since they compare or reach across routes.
 Missing routes are still reported across the whole declaration.
-An unmapped path, an empty change, or an unknown route makes every route run.
+An unmapped path that no mapped file imports makes every route run.
+So does an unmapped importer that nothing imports, such as a page left out of the map.
+An empty change or an unknown route also makes every route run.
+In each of these cases, the runner prints the reason.
 A path mapped to no routes reaches no route.
 A change whose every path maps to no routes checks no page and passes.
 The map is separate from the test selection in `reach`.
