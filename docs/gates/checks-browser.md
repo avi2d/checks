@@ -416,7 +416,7 @@ For example, `browserRoutes: { "src/home.ts": ["/"] }` assigns the home source t
 When every changed path has a mapping to declared routes, the runner narrows targets, product hooks, and per-route checks to those routes.
 The `links` and `look` checks still visit every declared route, since they compare or reach across routes.
 Missing routes are still reported across the whole declaration.
-An unmapped path, an empty change, or an unknown route makes every route run.
+An unmapped path, an empty change, or an unknown route makes every route run, and the runner prints the reason.
 A path mapped to no routes reaches no route.
 A change whose every path maps to no routes checks no page and passes.
 The map is separate from the test selection in `reach`.

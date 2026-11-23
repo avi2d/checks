@@ -38,33 +38,38 @@ function selected(root: string, changed: readonly string[]) {
 
 test("a mapped path narrows to its route instead of running every route", async () => {
   const root = await rootWith('{ "src/home.ts": ["/"] }');
-  expect(await selected(root, ["src/home.ts"])).toEqual(new Set(["/"]));
+  expect(await selected(root, ["src/home.ts"])).toEqual({ kind: "routes", routes: new Set(["/"]) });
 });
 
 test("a path mapped to no routes reaches no route instead of running every route", async () => {
   const root = await rootWith('{ "src/home.ts": ["/"], "tests/unit/home.test.ts": [] }');
-  expect(await selected(root, ["src/home.ts", "tests/unit/home.test.ts"])).toEqual(new Set(["/"]));
-  expect(await selected(root, ["tests/unit/home.test.ts"])).toEqual(new Set([]));
+  expect(await selected(root, ["src/home.ts", "tests/unit/home.test.ts"])).toEqual({ kind: "routes", routes: new Set(["/"]) });
+  expect(await selected(root, ["tests/unit/home.test.ts"])).toEqual({ kind: "routes", routes: new Set([]) });
 });
 
 test("an unmapped path widens instead of narrowing to the mapped route", async () => {
   const root = await rootWith('{ "src/home.ts": ["/"] }');
-  expect(await selected(root, ["src/home.ts", "src/new.ts"])).toBeUndefined();
+  expect(await selected(root, ["src/home.ts", "src/new.ts"])).toEqual({ kind: "full", because: "src/new.ts has no browserRoutes mapping" });
 });
 
 test("an unknown route widens instead of narrowing to it", async () => {
   const root = await rootWith('{ "src/home.ts": ["/missing/"] }');
-  expect(await selected(root, ["src/home.ts"])).toBeUndefined();
+  expect(await selected(root, ["src/home.ts"])).toEqual({ kind: "full", because: "browserRoutes names undeclared route /missing/" });
 });
 
 test("an empty change widens instead of reaching no route", async () => {
   const root = await rootWith('{ "src/home.ts": ["/"] }');
-  expect(await selected(root, [])).toBeUndefined();
+  expect(await selected(root, [])).toEqual({ kind: "full", because: "the pull request changes no file" });
 });
 
 test("a missing map widens instead of narrowing", async () => {
   const dir = await mkdtemp(join(tmpdir(), "checks-route-scope-"));
   dirs.push(dir);
   await writeFile(join(dir, "checks.config.ts"), "export default {};\n");
-  expect(await selected(dir, ["src/home.ts"])).toBeUndefined();
+  expect(await selected(dir, ["src/home.ts"])).toEqual({ kind: "full", because: "browserRoutes is not configured" });
+});
+
+test("a mapped non-page file narrows instead of walking every route", async () => {
+  const root = await rootWith('{ "src/card.css": ["/"] }');
+  expect(await selected(root, ["src/card.css"])).toEqual({ kind: "routes", routes: new Set(["/"]) });
 });
