@@ -39,7 +39,7 @@ To give each tool the config it reads:
    ```json
    {
      "extends": "@avi2dg/checks/tsconfig.effect.json",
-     "compilerOptions": { "types": ["bun"] }
+     "compilerOptions": { "types": ["bun"], "allowImportingTsExtensions": true, "noEmit": true }
    }
    ```
 
