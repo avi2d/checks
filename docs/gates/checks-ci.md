@@ -12,7 +12,7 @@ Each command runs one step and reads its inputs from the environment the step se
 
 | Command | Runs | Reads |
 | --- | --- | --- |
-| `changes` | classifies the change as docs-only, tests-only or full and writes `docs-only` and `tests-only` to `GITHUB_OUTPUT` | `BASE_SHA` |
+| `changes` | writes `docs-only` and `tests-only` to `GITHUB_OUTPUT`, plus `browser` when `PLAN_BROWSER` is true | `BASE_SHA`, `PLAN_BROWSER` |
 | `draft-hold` | cancels its own run when a push to a draft pull request started it, and fails the job when the job outlives the cancel | `DRAFT`, `GH_TOKEN`, `WAIT_SECONDS` |
 | `require-success` | fails unless every job the gate needs passed, or skipped where `SKIPS` allows | `RESULTS`, `SKIPS` |
 | `commit-status` | posts a job's result as a commit status. `ci.yml` uses it on a dispatched run, and `pr-title.yml` uses it on every pull request event to post the commitlint status | `JOB_STATUS`, `CONTEXT`, `HEAD_SHA`, `PULL_REQUEST`, `DESCRIPTION`, `ATTEMPTS`, `GH_TOKEN` |
@@ -32,6 +32,9 @@ Each command runs one step and reads its inputs from the environment the step se
 | `release-version` | fails unless `TAG` is `v` and the version the manifest holds, and writes `version` to `GITHUB_OUTPUT` | `PACKAGE_PATH`, `TAG` |
 | `mutation` | with `score`, writes the score of `reports/mutation/mutation.json` to the job summary, and with `shards`, splits the tree into `SHARDS` shard globs with `checks-mutation-scope` and writes them as `shards` to `GITHUB_OUTPUT` | `SHARDS`, `RUNNER_TEMP`, `GITHUB_STEP_SUMMARY`, `GITHUB_OUTPUT` |
 | `github-release` | creates the GitHub release of a tag with the notes file, or updates the one that exists, and marks it latest only when its tag is the highest | `TAG`, `REF_TYPE`, `NOTES_FILE`, `GH_TOKEN` |
+
+When `PLAN_BROWSER` is true, `changes` logs which routes each changed path reaches or why the browser must walk every route.
+It writes `browser=false` when no route is reached.
 
 `lighthouse` installs the Lighthouse the kit pins unless `LIGHTHOUSE` names one.
 

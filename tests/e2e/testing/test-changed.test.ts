@@ -48,6 +48,71 @@ test("--pr with a tier excludes the other tier and tests untouched by the pull r
   expect(e2e.text).not.toContain("1 fail");
 }, 60_000);
 
+async function runPullRequest(repo: FixtureRepo, flag: "--pr" | "--pr-screens"): Promise<Ran> {
+  const sha = (await $`git rev-parse HEAD`.cwd(repo.dir).text()).trim();
+  const event = join(repo.dir, "event.json");
+  await Bun.write(event, JSON.stringify({ pull_request: { number: 1, title: "test change", base: { ref: "main" }, head: { sha } } }));
+  return ran($`bun ${join(CHECKOUT, "src", "testing", "test.ts")} ${flag} --parallel=1`.cwd(repo.dir)
+    .env({ ...withoutPullRequestEvent(), CI: "true", GITHUB_EVENT_NAME: "pull_request", GITHUB_EVENT_PATH: event }));
+}
+
+test("a pull request does not drop a test that reads a changed file through a tsconfig alias", async () => {
+  const repo = await repository();
+  await repo.write({
+    "tsconfig.json": JSON.stringify({ compilerOptions: { paths: { "@/*": ["./src/*"] } } }),
+    "src/message.ts": 'export const message = "home";\n',
+    "src/home.ts": 'export { message } from "@/message";\n',
+    "tests/unit/home.test.ts": 'import { expect, test } from "bun:test";\nimport { message } from "../../src/home.ts";\ntest("home", () => expect(message).toBe("home"));\n',
+    "tests/unit/a.test.ts": FAILING,
+  });
+  await repo.commit("test: add a test that reads an alias");
+  await branchedFromOrigin(repo);
+  await repo.write({ "src/message.ts": 'export const message = "home";\n\n' });
+  await repo.commit("test: change the aliased dependency");
+  const result = await runPullRequest(repo, "--pr");
+  expect(result.exitCode).toBe(0);
+  expect(result.text).toContain("src/message.ts -> tests/unit/home.test.ts");
+  expect(result.text).toContain("the pull request reaches 1 of 2 test file(s)");
+  expect(result.text).toContain("1 pass");
+}, 60_000);
+
+test("a pull request that changes the CI workflow runs a test that does not import the workflow", async () => {
+  const repo = await repository();
+  await repo.write({ ".github/workflows/ci.yml": "name: checks\n" });
+  await repo.commit("ci: add the workflow");
+  await branchedFromOrigin(repo);
+  await repo.write({ ".github/workflows/ci.yml": "name: verification\n" });
+  await repo.commit("ci: rename the workflow");
+  const result = await runPullRequest(repo, "--pr");
+  expect(result.exitCode).toBe(0);
+  expect(result.text).toContain("the pull request changes .github/workflows/ci.yml, CI wiring, so the whole suite runs");
+  expect(result.text).toContain("1 pass");
+}, 60_000);
+
+test("a pixel pull request ignores unit helpers until a screenshot test imports them", async () => {
+  const repo = await repository();
+  await repo.write({
+    "tests/pixel/home.test.ts": 'import "../unit/helper.ts";\n' + PASSING,
+    "tests/pixel/other.test.ts": FAILING,
+    "tests/unit/helper.ts": "export {};",
+    "tests/unit/unrelated.ts": "export {};",
+  });
+  await repo.commit("test: add two screenshots and two helpers");
+  await branchedFromOrigin(repo);
+  await repo.write({ "tests/unit/unrelated.ts": "export {};\n" });
+  await repo.commit("test: change the unused helper");
+  const unused = await runPullRequest(repo, "--pr-screens");
+  expect(unused.exitCode).toBe(0);
+  expect(unused.text).toContain("the pull request reaches 0 of 2 test file(s)");
+  await repo.write({ "tests/unit/helper.ts": "export {};\n" });
+  await repo.commit("test: change the screenshot helper");
+  const used = await runPullRequest(repo, "--pr-screens");
+  expect(used.exitCode).toBe(0);
+  expect(used.text).toContain("tests/unit/helper.ts -> tests/pixel/home.test.ts");
+  expect(used.text).toContain("the pull request reaches 1 of 2 test file(s)");
+  expect(used.text).toContain("1 pass");
+}, 60_000);
+
 test("--pr with an empty unit tier passes instead of running the e2e tier or failing on a missing directory", async () => {
   const repo = await open({ "package.json": JSON.stringify({ name: "test-tier-fixture" }), "tests/e2e/only.test.ts": FAILING });
   const script = join(CHECKOUT, "src", "testing", "test.ts");

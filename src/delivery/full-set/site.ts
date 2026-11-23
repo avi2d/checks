@@ -75,7 +75,7 @@ const PRODUCTION_ORIGIN = "https://" + expression("env.SITE_DOMAIN");
 const STAGED = expression("steps.staging.outputs.sha");
 const DEPLOY_KEY: Pair = ["DEPLOY_KEY", expression("secrets.PRODUCTION_DEPLOY_KEY")];
 
-export const PRODUCTION = (names: SiteNames): Workflow => ({
+export const PRODUCTION = (names: SiteNames, browserWalk: boolean): Workflow => ({
   name: "production",
   on: BY_HAND,
   env: siteEnv(names, ["pages", "domain", "production"]),
@@ -105,6 +105,7 @@ export const PRODUCTION = (names: SiteNames): Workflow => ({
         { name: "run the full test suite on the release commit", run: "bun run test --full" },
         { name: "run the pixel screenshots on the release commit", run: "bun run test:pixel" },
         { run: "bun run build:production" },
+        ...(browserWalk ? [{ name: "walk every route on the release commit", run: "bunx checks-browser" }] : []),
         ciCommand("pages-publish guard", { name: "check the deploy key is set" }, [DEPLOY_KEY]),
         {
           uses: CHECKOUT,

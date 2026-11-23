@@ -9,7 +9,7 @@ export type SuiteSelection =
   | { readonly kind: "full" }
   | { readonly kind: "tier"; readonly tier: TestTier }
   | { readonly kind: "smoke" }
-  | { readonly kind: "files"; readonly files: readonly string[] }
+  | { readonly kind: "files"; readonly files: readonly string[]; readonly tier?: "pixel" }
   | { readonly kind: "changed"; readonly files: readonly string[] };
 
 const SKIP_KEY = "testFileSkips";
@@ -29,7 +29,7 @@ export const readTestFileSkips = Effect.fn("readTestFileSkips")(function* (root:
 });
 
 function tierUnignoreArgs(selection: SuiteSelection): readonly string[] {
-  if (selection.kind === "tier" && (selection.tier === "live" || selection.tier === "pixel")) {
+  if ((selection.kind === "tier" && (selection.tier === "live" || selection.tier === "pixel")) || (selection.kind === "files" && selection.tier === "pixel")) {
     return ["--path-ignore-patterns", ""];
   }
   return [];
@@ -42,7 +42,7 @@ function fileArgs(files: readonly string[]): readonly string[] {
 export function suiteArgs(selection: SuiteSelection, smoke: readonly string[]): readonly string[] {
   if (selection.kind === "tier") return [...tierUnignoreArgs(selection), `./tests/${selection.tier}`];
   if (selection.kind === "smoke") return ["./tests/unit", ...fileArgs(smoke)];
-  if (selection.kind === "files" || selection.kind === "changed") return fileArgs(selection.files);
+  if (selection.kind === "files" || selection.kind === "changed") return [...tierUnignoreArgs(selection), ...fileArgs(selection.files)];
   return [];
 }
 

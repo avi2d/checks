@@ -1,11 +1,13 @@
 import { type CallerSet } from "../site-names.ts";
-import { type TestJob, TEST_STEP, PLAYWRIGHT_USES, RELEASE_RUN, SITE_BUILD, DEFAULT_TEST_RUN, RELEASE_TEST_RUN, runnerOf } from "../ci-jobs.ts";
+import { type TestJob, TEST_STEP, PLAYWRIGHT_USES, RELEASE_RUN, SITE_BUILD, DEFAULT_TEST_RUN, RELEASE_TEST_RUN, isBrowserWalk, runnerOf } from "../ci-jobs.ts";
 import { CACHE, UPLOAD, DOWNLOAD, WRANGLER_VERSION, type Step, type Job, type Workflow, expression, scalar, HEAD, TOKEN, checkout, SETUP, ciCommand, DRAFT_HOLD, keepArtifacts, claudeInstall, node24, cloudflare, CLOUDFLARE_SET, ASTRO_QUIET, PREVIEW_PROJECT, PREVIEW_MARKER, siteEnv } from "./steps.ts";
 
 const NOT_RELEASED = "needs.changes.outputs.release != 'true'";
 const CHECKED_RELEASE = "needs.changes.outputs.check-release == 'true'";
 const NOT_DOCS_ONLY = "needs.changes.outputs.docs-only != 'true'";
 const NOT_TESTS_ONLY = "needs.changes.outputs.tests-only != 'true'";
+const BROWSER_NOT_REACHED = "needs.changes.outputs.browser == 'false'";
+const plansBrowser = (set: CallerSet): boolean => set.ci.tests.some(isBrowserWalk);
 
 const checksRelease = (set: CallerSet): boolean => set.kind === "code" && set.options.checkRelease;
 
@@ -22,12 +24,16 @@ const changesJob = (set: CallerSet): Job => ({
     ["docs-only", expression("steps.classify.outputs.docs-only || 'false'")],
     ["tests-only", expression("steps.classify.outputs.tests-only || 'false'")],
     ["release", expression("env.RELEASE")],
+    ...(plansBrowser(set) ? [["browser", expression("steps.classify.outputs.browser || 'true'")] as const] : []),
     ...(checksRelease(set) ? [["check-release", expression("env.RELEASE")] as const] : []),
   ],
   steps: [
     { if: "env.RELEASE != 'true'", ...checkout({ ref: HEAD, history: true }) },
     { if: "env.RELEASE != 'true'", ...SETUP },
-    ciCommand("changes", { if: "env.RELEASE != 'true'", id: "classify", name: "classify the change as docs-only, tests-only or full" }, [["BASE_SHA", expression("github.event.pull_request.base.sha")]]),
+    ciCommand("changes", { if: "env.RELEASE != 'true'", id: "classify", name: "classify the change as docs-only, tests-only or full" }, [
+      ["BASE_SHA", expression("github.event.pull_request.base.sha")],
+      ...(plansBrowser(set) ? [["PLAN_BROWSER", '"true"'] as const] : []),
+    ]),
   ],
 });
 
@@ -88,16 +94,17 @@ export const PULL_REQUEST_NUMBER = expression("github.event.pull_request.number"
 const siteJob = (set: CallerSet): Job => ({
   id: "site",
   needs: "changes",
-  if: [notReleased(set), NOT_DOCS_ONLY, NOT_TESTS_ONLY].join(" && "),
+  if: [notReleased(set), NOT_DOCS_ONLY, plansBrowser(set) ? `(${NOT_TESTS_ONLY} || needs.changes.outputs.browser == 'true')` : NOT_TESTS_ONLY].join(" && "),
   runsOn: runnerOf(set.options.publicRepository),
   timeout: 15,
   permissions: ["contents: read", "pull-requests: write"],
   env: [ASTRO_QUIET, CLOUDFLARE_SET],
+  ...(plansBrowser(set) ? { outputs: [["browser", expression("needs.changes.outputs.browser")]] } : {}),
   steps: [
     checkout({ ref: HEAD }),
     SETUP,
     { note: "A fork's or Dependabot's pull request runs without the repository secrets, so it gets no preview.", if: "env.CLOUDFLARE_SET != 'true'", run: 'echo "the Cloudflare secrets are not set, so this run deploys no preview"' },
-    ciCommand("preview-address", { id: "preview", if: "env.CLOUDFLARE_SET == 'true' && github.event_name == 'pull_request'", name: "read the preview address of the branch" }, [
+    ciCommand("preview-address", { id: "preview", if: `env.CLOUDFLARE_SET == 'true' && github.event_name == 'pull_request' && ${NOT_TESTS_ONLY}`, name: "read the preview address of the branch" }, [
       ...cloudflare,
       ["PROJECT", PREVIEW_PROJECT],
       ["BRANCH", PULL_REQUEST_BRANCH],
@@ -149,6 +156,7 @@ function testJob(set: CallerSet, test: TestJob, claudeVersion: string | undefine
   return {
     id: test.name,
     ...(test.readsBuild ? { needs: "site" } : { needs: "changes", if: notReleased(set) + " && " + NOT_DOCS_ONLY }),
+    ...(isBrowserWalk(test) ? { if: "needs.site.outputs.browser != 'false'" } : {}),
     runsOn: scalar(test.runsOn),
     timeout: 30,
     permissions: holdPermissions(hold),
@@ -184,7 +192,8 @@ function skipsOf(set: CallerSet): string {
   const choices: readonly (readonly [string, readonly string[]])[] = [
     [checksRelease(set) ? "needs.changes.outputs.release == 'true' && needs.changes.outputs.check-release != 'true'" : "needs.changes.outputs.release == 'true'", ["static", ...site, ...(set.options.docsBuild ? ["docs"] : []), ...tests]],
     ["needs.changes.outputs.docs-only == 'true'", [...site, ...tests]],
-    ...(set.kind === "site" ? [["needs.changes.outputs.tests-only == 'true'", [...site, ...afterSite]] as const] : []),
+    ...(set.kind === "site" ? [[plansBrowser(set) ? `needs.changes.outputs.tests-only == 'true' && ${BROWSER_NOT_REACHED}` : "needs.changes.outputs.tests-only == 'true'", [...site, ...afterSite]] as const] : []),
+    [BROWSER_NOT_REACHED, set.ci.tests.filter(isBrowserWalk).map(({ name }) => name)],
   ];
   const chosen = choices.flatMap(([test, jobs]) => (jobs.length === 0 ? [] : [test + " && " + quotedWords(jobs)]));
   return expression([...chosen, "''"].join(" || "));
@@ -221,14 +230,14 @@ function gateJob(set: CallerSet): Job {
   };
 }
 
-const PULL_REQUEST_EVENTS = ["pull_request:", "  types: [opened, synchronize, reopened, ready_for_review]", "workflow_dispatch:"];
+const CI_EVENTS = ["pull_request:", "  types: [opened, synchronize, reopened, ready_for_review]", "push:", "  branches: [main]", "workflow_dispatch:"];
 export const BY_HAND = ["workflow_dispatch:"];
 
 export function ciWorkflow(set: CallerSet, kit: boolean): Workflow {
   const tests = set.ci.tests.map((test) => testJob(set, test, set.options.claudeVersion));
   return {
     name: "ci",
-    on: PULL_REQUEST_EVENTS,
+    on: CI_EVENTS,
     concurrency: "ci-" + expression("github.event.pull_request.number || github.run_id"),
     ...(set.kind === "site" ? { env: siteEnv(set.names, ["pages"]) } : {}),
     jobs: [changesJob(set), staticJob(set, kit), ...(set.kind === "site" ? [siteJob(set)] : []), ...(set.options.docsBuild ? [docsJob(set)] : []), ...tests, gateJob(set)],

@@ -421,7 +421,8 @@ It reads the declaration in the directory it runs in, or in the directory it is 
 `--pr` is the browser step a CI workflow runs.
 On a pull request it walks each viewport preset at the eight anchor sizes only, while a viewport the declaration lists by hand stays.
 A pull request that changes only top-level and `docs/` Markdown checks no page and passes.
-A release pull request and a run that is not a pull request, such as `workflow_dispatch`, walk the full size list.
+A release pull request, a push to `main`, and a manual run walk the full size list.
+A change to CI wiring, a lockfile, a config, or a shared test helper also walks every route at the full size list.
 
 The optional `browserRoutes` setting maps exact repository paths to the routes each path can change.
 For example, `browserRoutes: { "src/home.ts": ["/"] }` assigns the home source to the root route.
@@ -445,7 +446,9 @@ So does an unmapped importer that nothing imports, such as a page left out of th
 An empty change or an unknown route also makes every route run.
 In each of these cases, the runner prints the reason.
 A path mapped to no routes reaches no route.
-A change whose every path maps to no routes checks no page and passes.
+With a route map, a test file that no site source imports reaches no route unless its map entry lists one.
+When no changed path reaches a route, generated CI skips the browser job.
+The `changes` job prints what routes each path reaches or why the whole walk is needed.
 The map is separate from the test selection in `reach`.
 
 The optional `browserBuild` setting is an array holding the build command and its arguments, such as `["bun", "run", "build"]`.

@@ -140,6 +140,14 @@ In a site, a test job that needs `site` reads the build.
 Every other line of the file is the shape the kit writes: the order of the jobs, `needs`, `if`, the pins and the permissions.
 A `ci.yml` with a step that runs `bunx checks-ci secrets-pack` keeps that step in `static`, which unpacks the `CHECKS_SECRETS_PACK` secret before lint.
 
+The generated `ci.yml` runs on pull requests, pushes to `main`, and manual dispatches.
+On pushes to `main`, the default test jobs run their whole tiers and the browser walks every route.
+If the pull request reaches no browser route, the browser job skips and the gate accepts the skip.
+A site with pixel tests gets a `route-screens` job unless its workflow already names that job.
+A site production run also compares screenshots on the staged release commit.
+
+After you update the kit, run `bunx checks-workflows --write` to get the new workflow steps.
+
 A `ci.yml` with no test job gets the default jobs of its kind:
 
 | Kind | Default test jobs |
@@ -166,7 +174,7 @@ To add a test job, copy the `unit` job of `ci.yml` under a new name, change the 
 ## What it reads
 
 It reads the `.yml` and `.yaml` files under `.github/workflows/`, the files under `.github/actions/`, and `checks.config.ts` from the repository root.
-It also reads the root and workspace `package.json` files and the test files under `tests/e2e/`.
+It also reads the root and workspace `package.json` files and checks for test files under `tests/e2e/` and `tests/pixel/`.
 
 ## Arguments
 

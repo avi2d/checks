@@ -1,6 +1,6 @@
 import { type CallerSet } from "./site-names.ts";
 import { type CallerOptions, type Flake, type Pages } from "./caller-options.ts";
-import { runnerOf } from "./ci-jobs.ts";
+import { isBrowserWalk, runnerOf } from "./ci-jobs.ts";
 import { SETUP_NODE, CONFIGURE_PAGES, UPLOAD_PAGES, DEPLOY_PAGES, type Step, type Workflow, expression, scalar, workflowText, TOKEN, RUNNER, checkout, SETUP, ciCommand, keepArtifacts, claudeInstall } from "./full-set/steps.ts";
 import { PULL_REQUEST_HEAD, PULL_REQUEST_NUMBER, BY_HAND, ciWorkflow } from "./full-set/ci.ts";
 import { PREVIEW_CLOSE, SITE_MAIN, PRODUCTION } from "./full-set/site.ts";
@@ -102,7 +102,7 @@ const fileOf = (workflow: Workflow): FullWorkflow => ({ name: workflow.name + ".
 // The kit publishes through a release.yml that npm's trusted publishing names, so it keeps its own release files.
 export function fullRequiredSet(set: CallerSet, kit: boolean): readonly FullWorkflow[] {
   const ci = fileOf(ciWorkflow(set, kit));
-  if (set.kind === "site") return [ci, fileOf(prTitle(set.options.publicRepository)), fileOf(PREVIEW_CLOSE(set.names, set.options.publicRepository)), fileOf(SITE_MAIN(set.names)), fileOf(RELEASE), fileOf(PRODUCTION(set.names))];
+  if (set.kind === "site") return [ci, fileOf(prTitle(set.options.publicRepository)), fileOf(PREVIEW_CLOSE(set.names, set.options.publicRepository)), fileOf(SITE_MAIN(set.names)), fileOf(RELEASE), fileOf(PRODUCTION(set.names, set.ci.tests.some(isBrowserWalk)))];
   return kit ? [ci, fileOf(prTitle(set.options.publicRepository))] : [ci, fileOf(prTitle(set.options.publicRepository)), fileOf(codeMain(set.options)), fileOf(RELEASE)];
 }
 

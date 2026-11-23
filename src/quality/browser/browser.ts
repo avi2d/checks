@@ -25,7 +25,7 @@ import { counted, formatTimings, NAME, passes, report, type Run, type Timing } f
 import { serveSite, type Site } from "./serve.ts";
 import { judgePageWeight, weighPage } from "./weight.ts";
 import { judgeTargets } from "./targets.ts";
-import { reachedRoutes } from "./route-scope.ts";
+import { fullRouteReason, reachedRoutes } from "./route-scope.ts";
 import { compareReport, PAGE_OF, planCells } from "./schedule.ts";
 
 const NO_TARGET = "scanned no target";
@@ -280,7 +280,9 @@ const browserChecks = Effect.gen(function* () {
   if (args === undefined) return yield* new Usage({ message: USAGE });
   const root = (yield* Path.Path).resolve(args.directory);
   yield* refuseLocalTests(root);
-  const scope = args.pr ? yield* readRunScope(root) : undefined;
+  const requested = args.pr ? yield* readRunScope(root) : undefined;
+  const because = requested?.kind === "pull-request" ? fullRouteReason(requested.changed) : undefined;
+  const scope = because === undefined ? requested : { kind: "whole", because } satisfies RunScope;
   const largest = yield* largestSet(scope);
   if (largest === undefined) {
     yield* Console.log(`${NAME}: the pull request changes only top-level and docs/ Markdown, so no page was checked`);

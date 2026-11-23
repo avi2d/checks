@@ -132,6 +132,18 @@ test("an unknown route widens instead of narrowing to it", async () => {
   expect(await selected(root, ["src/home.ts"])).toEqual({ kind: "full", because: "browserRoutes names undeclared route /missing/" });
 });
 
+test("an unconnected test beside a mapped component does not widen to every route", () => {
+  const sources = new Map([["src/pages/index.astro", 'import "../home.ts";']]);
+  expect(scopeRoutes(["tests/unit/home.test.ts", "src/home.ts"], pages, sources, declaration)).toEqual({ kind: "routes", routes: new Set(["/"]) });
+});
+
+test("a workflow change widens instead of trusting an empty route map entry", async () => {
+  const root = await rootWith('{ ".github/workflows/ci.yml": [] }');
+  expect(await selected(root, [".github/workflows/ci.yml"])).toEqual({
+    kind: "full", because: "the pull request changes .github/workflows/ci.yml, CI wiring",
+  });
+});
+
 test("an empty change widens instead of reaching no route", async () => {
   const root = await rootWith('{ "src/home.ts": ["/"] }');
   expect(await selected(root, [])).toEqual({ kind: "full", because: "the pull request changes no file" });

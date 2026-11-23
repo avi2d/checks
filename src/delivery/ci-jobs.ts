@@ -1,11 +1,14 @@
 import { Effect, Schema } from "effect";
 import { RELEASE_BRANCH_PREFIX } from "../core/release-names.ts";
+import type { TestTier } from "../core/test-script.ts";
 import { calledFileOf, isRecord, workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export type RepositoryKind = "code" | "site";
 
 export const DEFAULT_TEST_RUN = "bunx checks-test --pr";
 export const RELEASE_TEST_RUN = "bunx checks-ci test";
+const BROWSER_RUN = "bunx checks-browser --pr";
+const SCREEN_RUN = "bunx checks-test --pr-screens";
 
 // Carried as a custom run, this keeps the step checks-plain-steps refuses, so a write reads it as the default.
 const EXPRESSION_TEST_RUN = "${{ needs.changes.outputs.check-release == 'true' && 'bun run test' || 'bunx checks-test --pr' }}";
@@ -38,7 +41,11 @@ const UNIT: TestJob = { name: "unit", run: `${DEFAULT_TEST_RUN} --tier=unit`, br
 
 const E2E: TestJob = { name: "e2e", run: `${DEFAULT_TEST_RUN} --tier=e2e`, browsers: "", readsBuild: false, runsOn: DEFAULT_RUNNER };
 
-const BROWSER: TestJob = { name: "browser", run: "bunx checks-browser --pr", browsers: "webkit", readsBuild: true, runsOn: DEFAULT_RUNNER };
+const BROWSER: TestJob = { name: "browser", run: BROWSER_RUN, browsers: "webkit", readsBuild: true, runsOn: DEFAULT_RUNNER };
+
+const SCREENS: TestJob = { name: "route-screens", run: SCREEN_RUN, browsers: "webkit", readsBuild: false, runsOn: DEFAULT_RUNNER };
+
+export const isBrowserWalk = (test: TestJob): boolean => test.readsBuild && test.run === BROWSER_RUN;
 
 export const DEFAULT_CI_JOBS: Readonly<Record<RepositoryKind, CiJobs>> = {
   code: { tests: [UNIT, E2E] },
@@ -184,11 +191,22 @@ const fullCiJobsOf = Effect.fn("fullCiJobsOf")(function* (kind: RepositoryKind, 
 });
 
 // A ci.yml that calls test.yml records its test jobs in the call, so --write keeps them.
-export const ciJobsOf = Effect.fn("ciJobsOf")(function* (kind: RepositoryKind, ci: Workflow | undefined, publicRepository: boolean, docsBuild: boolean, hasE2e?: boolean) {
-  const runsOn = runnerOf(publicRepository);
-  const includeE2e = hasE2e !== false;
+const heldJobs = Effect.fn("heldJobs")(function* (kind: RepositoryKind, ci: Workflow | undefined, runsOn: string, docsBuild: boolean, includeE2e: boolean) {
   if (ci === undefined) return defaultJobs(kind, runsOn, includeE2e);
   const calls = workflowJobs(ci).flatMap(([name, job]) => (calledFileOf(job["uses"]) === "test.yml" ? [{ name, job }] : []));
   if (calls.length > 0) return yield* splitLegacyJobs(ci.path, { tests: yield* Effect.forEach(calls, ({ name, job }) => testJobOf(kind, ci.path, name, job, runsOn, docsBuild)) }, includeE2e);
   return yield* fullCiJobsOf(kind, ci, runsOn, docsBuild, includeE2e);
+});
+
+export const ciJobsOf = Effect.fn("ciJobsOf")(function* (
+  kind: RepositoryKind,
+  ci: Workflow | undefined,
+  { publicRepository, docsBuild, testTiers }: { readonly publicRepository: boolean; readonly docsBuild: boolean; readonly testTiers: ReadonlySet<TestTier> | undefined },
+) {
+  const runsOn = runnerOf(publicRepository);
+  const jobs = yield* heldJobs(kind, ci, runsOn, docsBuild, testTiers?.has("e2e") !== false);
+  if (kind !== "site" || testTiers === undefined) return jobs;
+  if (!testTiers.has("pixel")) return { tests: jobs.tests.filter(({ run }) => run !== SCREEN_RUN) };
+  if (jobs.tests.some(({ name, run }) => name === SCREENS.name || run === SCREEN_RUN)) return jobs;
+  return { tests: [...jobs.tests, { ...SCREENS, runsOn }] };
 });
