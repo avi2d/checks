@@ -389,6 +389,10 @@ It drives the Chrome the machine has, which `CHROME_PATH` names, or Chrome's sta
 It runs up to four checks at once, each a check at one visit.
 The motion check and each product hook run alone, so their findings do not depend on the pages loading beside them.
 The report lists each visit in turn, and within it `targets`, the declared checks in their order and then the hooks, regardless of which finishes first.
+A timing line for each route sums the wall time of each check across its visits in milliseconds.
+The first shared check includes the shared page load.
+The route total is the wall time from its first check starting to its last check finishing, including waits between checks.
+Checks can overlap, so their times need not add up to the route total.
 The product installs the optional peers the runner loads, at the versions the kit pins:
 
 <!-- generated install: bun run build writes it from package.json and scripts/doc-blocks.ts -->

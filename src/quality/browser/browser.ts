@@ -21,7 +21,7 @@ import { judgeNesting } from "./nesting.ts";
 import { coldShift, formatShift, judgeShift, recordShifts } from "./shift.ts";
 import { walkCells, type Cell } from "./cells.ts";
 import { attempt, launchChrome, load, openVisit, type BrowserFailure } from "./page.ts";
-import { counted, NAME, passes, report, type Run } from "./report.ts";
+import { counted, formatTimings, NAME, passes, report, type Run, type Timing } from "./report.ts";
 import { serveSite, type Site } from "./serve.ts";
 import { judgePageWeight, weighPage } from "./weight.ts";
 import { judgeTargets } from "./targets.ts";
@@ -190,6 +190,8 @@ type OrderedReading = {
   readonly visitIndex: number;
   readonly checkIndex: number;
   readonly settle: Settle;
+  readonly start: number;
+  readonly end: number;
 };
 
 const readShared = Effect.fn("readShared")(function* (
@@ -197,11 +199,16 @@ const readShared = Effect.fn("readShared")(function* (
   visitIndex: number,
   checks: readonly (SharedCheck & { readonly checkIndex: number })[],
 ) {
+  let start = yield* Effect.sync(() => performance.now());
   const { page } = yield* openVisit(browser, visit);
   yield* load(page, url);
-  return yield* Effect.forEach(checks, ({ read, checkIndex }) =>
-    Effect.map(read({ declaration, visit, page }), (settle) => ({ visitIndex, checkIndex, settle })),
-  );
+  return yield* Effect.forEach(checks, ({ read, checkIndex }) => Effect.gen(function* () {
+    const checkStart = start;
+    const settle = yield* read({ declaration, visit, page });
+    const end = yield* Effect.sync(() => performance.now());
+    start = end;
+    return { visitIndex, checkIndex, settle, start: checkStart, end };
+  }));
 }, Effect.scoped);
 
 function visitCells(visiting: Visiting, visitIndex: number, checks: readonly PlannedCheck[]): readonly Cell<readonly OrderedReading[], BrowserFailure>[] {
@@ -210,7 +217,12 @@ function visitCells(visiting: Visiting, visitIndex: number, checks: readonly Pla
   return [
     ...(sharedChecks.length === 0 ? [] : [{ reading: readShared(visiting, visitIndex, sharedChecks), alone: false }]),
     ...separate.map((check) => ({
-      reading: Effect.map(check.read(visiting), (settle) => [{ visitIndex, checkIndex: check.checkIndex, settle }]),
+      reading: Effect.gen(function* () {
+        const start = yield* Effect.sync(() => performance.now());
+        const settle = yield* check.read(visiting);
+        const end = yield* Effect.sync(() => performance.now());
+        return [{ visitIndex, checkIndex: check.checkIndex, settle, start, end }];
+      }),
       alone: check.alone,
     })),
   ];
@@ -244,7 +256,9 @@ const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: D
     });
   const readings = (yield* walkCells(cells, 4)).flat().sort(compareReport);
   const firstLooks: FirstLooks = new Map();
-  return { runs: readings.map(({ settle }) => settle(firstLooks)), missingRoutes };
+  const finished = readings.map(({ settle, start, end }) => ({ run: settle(firstLooks), start, end }));
+  const timings: Timing[] = finished.map(({ run: one, start, end }) => ({ path: one.visit.route.path, check: one.check, start, end }));
+  return { runs: finished.map(({ run: one }) => one), missingRoutes, timings };
 }, Effect.scoped);
 
 const USAGE = `usage: ${NAME} [--pr] [<directory>]`;
@@ -284,6 +298,8 @@ const browserChecks = Effect.gen(function* () {
   if (selected !== undefined) yield* Console.log(`${NAME}: the pull request reaches ${selected.size} of ${declaration.routes.length} route(s)`);
   const outcome = yield* checkSite(root, declaration, site, selected);
   yield* Console.log(report(declaration, outcome));
+  const timings = formatTimings(outcome.timings);
+  if (timings !== "") yield* Console.log(timings);
   return passes(outcome);
 });
 
