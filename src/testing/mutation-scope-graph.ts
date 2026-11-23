@@ -1,7 +1,6 @@
 import { Schema } from "effect";
-import { importsOf, resolved } from "../core/imports.ts";
+import { importsOf, resolved, TEST_TREE } from "../core/imports.ts";
 
-export const TEST_TREE = "tests/";
 const FIXTURES = "tests/fixtures/";
 
 const LISTED_SEGMENTS = /["'`][ \t]*,[ \t]*["'`]/g;

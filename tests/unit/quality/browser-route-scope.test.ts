@@ -84,6 +84,27 @@ test("an unmapped page that imports the component widens instead of narrowing to
     .toEqual({ kind: "full", because: "src/components/Card.astro reaches src/pages/about.astro, which has no browserRoutes mapping" });
 });
 
+test("a component one page imports through a tsconfig alias widens instead of narrowing to the relative importer", () => {
+  const sources = new Map([
+    ["src/pages/index.astro", '---\nimport Card from "../components/Card.astro";\n---\n<Card />\n'],
+    ["src/pages/other.astro", '---\nimport Card from "@/components/Card.astro";\n---\n<Card />\n'],
+    ["src/components/Card.astro", "<div>card</div>\n"],
+  ]);
+  expect(scopeRoutes(["src/components/Card.astro"], pages, sources, declaration))
+    .toEqual({ kind: "full", because: "src/pages/other.astro names src/components/Card.astro outside a relative import" });
+});
+
+test("a component an unmapped one reaches through an alias widens instead of narrowing to the relative importer", () => {
+  const sources = new Map([
+    ["src/pages/index.astro", '---\nimport Section from "../components/Section.astro";\n---\n<Section />\n'],
+    ["src/pages/other.astro", '---\nimport Section from "@/components/Section";\n---\n<Section />\n'],
+    ["src/components/Section.astro", '---\nimport Card from "./Card.astro";\n---\n<Card />\n'],
+    ["src/components/Card.astro", "<div>card</div>\n"],
+  ]);
+  expect(scopeRoutes(["src/components/Card.astro"], pages, sources, declaration))
+    .toEqual({ kind: "full", because: "src/components/Card.astro reaches src/components/Section.astro, which src/pages/other.astro names outside a relative import" });
+});
+
 test("an unknown route widens instead of narrowing to it", async () => {
   const root = await rootWith('{ "src/home.ts": ["/missing/"] }');
   expect(await selected(root, ["src/home.ts"])).toEqual({ kind: "full", because: "browserRoutes names undeclared route /missing/" });

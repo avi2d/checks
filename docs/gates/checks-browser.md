@@ -415,7 +415,13 @@ The optional `browserRoutes` setting maps exact repository paths to the routes e
 For example, `browserRoutes: { "src/home.ts": ["/"] }` assigns the home source to the root route.
 A changed path with no mapping reaches the routes of each mapped file that imports it by a relative import, at any depth.
 For example, a component that a mapped page imports reaches that page's routes.
-Files under `tests/` do not count as importers.
+Importers are read from script, component, Markdown, HTML and stylesheet files, so a stylesheet's `@import` counts.
+Files under `tests/` and `checks.config.ts` do not count as importers.
+A file that names an unmapped path any other way, such as through a tsconfig alias, a root path or a Markdown `layout`, makes every route run.
+A file names a path when it holds the path's file name after a `/`, or its name without the extension before a closing quote.
+So a doc that names a component path also makes every route run.
+A file reached only through `import.meta.glob`, a directory import such as `@/lib`, or a file type the scan does not read is not seen, and its routes can be left out.
+Map such a path in `browserRoutes` by hand.
 When every changed path reaches declared routes, the runner narrows targets, product hooks, and per-route checks to those routes.
 The `links` and `look` checks still visit every declared route, since they compare or reach across routes.
 Missing routes are still reported across the whole declaration.
