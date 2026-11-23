@@ -495,7 +495,7 @@ The split gives the most costly route to the shard with the least time so far, a
 | --- | --- |
 | 0 | every check passes at every visit, and every declared route and target is there |
 | 1 | a check fails at a visit, a declared route is not served, a declared target matches no visible element, or a run scans no target |
-| 2 | an argument is not one it takes, `checks.config.ts` sets no `browser` key, the key does not decode or contradicts itself, `browser-checks.json` is still there, the site directory or the hooks module is missing, the site holds no `.html` page while a route lists `every-page`, a peer cannot load, Chrome cannot start, or an agent run is refused outside CI when `agentTests.allowLocal` is `false` |
+| 2 | an argument is not one it takes, `checks.config.ts` sets no `browser` key, the key does not decode or contradicts itself, `browserTimings` does not decode on a `--shard` run, `browser-checks.json` is still there, the site directory or the hooks module is missing, the site holds no `.html` page while a route lists `every-page`, a peer cannot load, Chrome cannot start, or an agent run is refused outside CI when `agentTests.allowLocal` is `false` |
 
 ## Sample output
 
