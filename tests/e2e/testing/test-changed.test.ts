@@ -1,5 +1,6 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
 import { CHECKOUT, fixtureRepos, ran, UNVENDORED_BUNFIG, type FixtureRepo, type Ran } from "../lib/fixture-repo.ts";
@@ -52,8 +53,12 @@ async function runPullRequest(repo: FixtureRepo, flag: "--pr" | "--pr-screens"):
   const sha = (await $`git rev-parse HEAD`.cwd(repo.dir).text()).trim();
   const event = join(repo.dir, "event.json");
   await Bun.write(event, JSON.stringify({ pull_request: { number: 1, title: "test change", base: { ref: "main" }, head: { sha } } }));
-  return ran($`bun ${join(CHECKOUT, "src", "testing", "test.ts")} ${flag} --parallel=1`.cwd(repo.dir)
-    .env({ ...withoutPullRequestEvent(), CI: "true", GITHUB_EVENT_NAME: "pull_request", GITHUB_EVENT_PATH: event }));
+  try {
+    return await ran($`bun ${join(CHECKOUT, "src", "testing", "test.ts")} ${flag} --parallel=1`.cwd(repo.dir)
+      .env({ ...withoutPullRequestEvent(), CI: "true", GITHUB_EVENT_NAME: "pull_request", GITHUB_EVENT_PATH: event }));
+  } finally {
+    await rm(event, { force: true });
+  }
 }
 
 test("a pull request does not drop a test that reads a changed file through a tsconfig alias", async () => {

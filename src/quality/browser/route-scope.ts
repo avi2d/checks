@@ -58,9 +58,14 @@ function indirectImportReason(path: string, node: string, importer: string): str
 }
 
 // An unmapped importer that nothing imports renders where no route is known, so it places the path nowhere.
+function unmappedPlacement(test: boolean): Fallback | { readonly kind: "placed"; readonly routes: readonly string[] } {
+  if (test) return { kind: "placed", routes: [] };
+  return { kind: "full", because: "browserRoutes is not configured" };
+}
+
 function placed(path: string, map: RouteMap | undefined, sources: ReadonlyMap<string, string>, importers: ReadonlyMap<string, readonly string[]>): Fallback | { readonly kind: "placed"; readonly routes: readonly string[] } {
   const test = path.startsWith(TEST_TREE) && TEST_FILE.test(path);
-  if (map === undefined) return test ? { kind: "placed", routes: [] } : { kind: "full", because: "browserRoutes is not configured" };
+  if (map === undefined) return unmappedPlacement(test);
   const routes: string[] = [];
   const seen = new Set<string>();
   let mapped = false;
