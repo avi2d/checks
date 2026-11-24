@@ -81,6 +81,8 @@ const BASE = {
     "typescript/no-non-null-assertion": "error",
     "typescript/no-deprecated": "error",
     "typescript/consistent-return": "off",
+    "oxc/no-accumulating-spread": "error",
+    "data-shape/no-reduce-accumulator-copy": "error",
   },
   overrides: [
     {
