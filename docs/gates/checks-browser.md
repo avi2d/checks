@@ -394,6 +394,7 @@ It runs `checks-browser <directory>` on that directory.
 
 It drives the Chrome the machine has, which `CHROME_PATH` names, or Chrome's standard install when it is unset.
 It runs up to four checks at once, each a check at one visit.
+Set `CI_CORES` to the positive whole number of cores granted to the job to use that count instead.
 The motion check and each product hook run alone, so their findings do not depend on the pages loading beside them.
 The report lists each visit in turn, and within it `targets`, the declared checks in their order and then the hooks, regardless of which finishes first.
 After the report and any failure list, the runner prints a timing line for each route.

@@ -238,7 +238,9 @@ Bun ignores the live and pixel directories during the default run.
 ## Parallel runs
 
 `checks-test` runs `bun test --pass-with-no-tests --randomize --parallel=<workers>`, so Bun hands each test file to one of that many worker processes.
-Without `--parallel=<workers>`, the count comes from free memory, and never exceeds one worker per core.
+Without `--parallel=<workers>`, `CI_CORES` sets the count to the cores granted to the job.
+Set `CI_CORES` to a positive whole number.
+When it is unset, the count comes from free memory and never exceeds one worker per core.
 One worker needs about a gigabyte, each further worker about a hundred megabytes more, and a tenth of memory stays reserved.
 On macOS the count reads reclaimable pages too, since `freemem` leaves them out.
 For example, 2 GiB free of 8 GiB total on 8 cores gives three workers.

@@ -5,7 +5,7 @@ import { runMain, Usage } from "../core/main.ts";
 import { NAME_SEPARATOR, parseReport, ReportError, reporterArgs, type TestResult } from "./test-report.ts";
 import { KIT_PACKAGE_NAME, ownTestScriptToBin, scriptOptions } from "../core/test-script.ts";
 import { refuseLocalTests } from "../core/local-tests.ts";
-import { resolveWorkerCount } from "./test.ts";
+import { resolveMemoryWorkerCount } from "./test.ts";
 
 export type Run = {
   readonly seed: number;
@@ -95,7 +95,7 @@ const workersOf = Effect.fn("workersOf")(function* (root: string) {
   const test = name === KIT_PACKAGE_NAME ? (ownTestScriptToBin(scripts?.["test"]) ?? scripts?.["test"]) : scripts?.["test"];
   const options = scriptOptions(test);
   if (options === undefined) return undefined;
-  return yield* resolveWorkerCount(options.workers);
+  return yield* resolveMemoryWorkerCount(options.workers);
 });
 
 const assignmentOf = Effect.fn("assignmentOf")(function* (log: string) {

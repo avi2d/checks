@@ -3,6 +3,7 @@ import { availableParallelism, freemem, totalmem } from "node:os";
 import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { TEST_ENTRY_POINT } from "../core/gates.ts";
+import { ciCores } from "../core/ci-cores.ts";
 import { collect } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { refuseLocalTests } from "../core/local-tests.ts";
@@ -193,9 +194,16 @@ const availableBytes = Effect.fn("availableBytes")(function* () {
   return reclaimableBytes(vmStat) ?? freemem();
 });
 
-export const resolveWorkerCount = Effect.fn("resolveWorkerCount")(function* (workers: number | undefined) {
+export const resolveMemoryWorkerCount = Effect.fn("resolveMemoryWorkerCount")(function* (workers: number | undefined) {
   if (workers !== undefined) return workers;
   return workerCountFor(yield* availableBytes(), totalmem(), availableParallelism());
+});
+
+export const resolveWorkerCount = Effect.fn("resolveWorkerCount")(function* (workers: number | undefined) {
+  if (workers !== undefined) return workers;
+  const cores = yield* ciCores;
+  if (Option.isSome(cores)) return cores.value;
+  return yield* resolveMemoryWorkerCount(undefined);
 });
 
 // A live or pixel tier and --full run whole, since no pull request picks them.
