@@ -31,12 +31,12 @@ test(
 );
 
 test(
-  "a flag-shaped CHECKS_RELEASE_VERSION is refused as a version rather than printing help",
+  "a flag-shaped CHECKS_RELEASE_VERSION is refused by its own name rather than printing help or blaming --version",
   async () => {
     const widget = await consumer(MAINTENANCE);
     const refused = await widget.run(["ci.yml"], { CHECKS_RELEASE_VERSION: "-h" });
     expect(refused.exitCode).toBe(2);
-    expect(refused.text).toContain("-h is no plain major.minor.patch version");
+    expect(refused.text).toBe("checks-release-pr: CHECKS_RELEASE_VERSION -h is no plain major.minor.patch version\n");
     expect((await widget.state()).calls).toEqual(["GET repos/{owner}/{repo}"]);
   },
   60_000,
@@ -109,10 +109,13 @@ test(
   60_000,
 );
 
-test(
-  "--version refuses a version that is not newer, not plain, below the unreleased changes or with no commit since the tag, and pushes nothing",
-  async () => {
+test.each(["--version", "CHECKS_RELEASE_VERSION"] as const)(
+  "%s refuses invalid versions by the input actually used and pushes nothing",
+  async (source) => {
     const widget = await consumer(MAINTENANCE);
+    const run = (version: string) => source === "--version"
+      ? widget.run(["--version", version, "ci.yml"], { CHECKS_RELEASE_VERSION: "0.9.0" })
+      : widget.run(["ci.yml"], { CHECKS_RELEASE_VERSION: version });
     const refusals: Record<string, string> = {
       "0.1.0": "checks-release-pr: --version 0.1.0 is not newer than 0.1.0, which package.json holds",
       "0.0.9": "checks-release-pr: --version 0.0.9 is not newer than 0.1.0, which package.json holds",
@@ -121,22 +124,22 @@ test(
       "0.2.0-rc.1": "checks-release-pr: --version 0.2.0-rc.1 is no plain major.minor.patch version",
     };
     for (const [version, message] of Object.entries(refusals)) {
-      const refused = await widget.run(["--version", version, "ci.yml"]);
+      const refused = await run(version);
       expect(refused.exitCode).toBe(2);
-      expect(refused.text).toContain(message);
+      expect(refused.text).toBe(`${message.replace("--version", source)}\n`);
     }
 
     await widget.commit("feat: price a bill (#5)");
-    const below = await widget.run(["--version", "0.1.1", "ci.yml"]);
+    const below = await run("0.1.1");
     expect(below.exitCode).toBe(2);
-    expect(below.text).toContain("checks-release-pr: --version 0.1.1 is below 0.2.0, which the unreleased changes since v0.1.0 need");
+    expect(below.text).toBe(`checks-release-pr: ${source} 0.1.1 is below 0.2.0, which the unreleased changes since v0.1.0 need\n`);
 
     await writeFile(join(widget.dir, "package.json"), manifest("0.2.0"));
     await widget.commit("chore: release 0.2.0 (#6)");
     await $`git tag v0.2.0`.cwd(widget.dir).quiet();
-    const empty = await widget.run(["--version", "0.2.1", "ci.yml"]);
+    const empty = await run("0.2.1");
     expect(empty.exitCode).toBe(2);
-    expect(empty.text).toContain("checks-release-pr: --version 0.2.1 has no commit to release since v0.2.0");
+    expect(empty.text).toBe(`checks-release-pr: ${source} 0.2.1 has no commit to release since v0.2.0\n`);
 
     const missing = await widget.run(["ci.yml", "--version"]);
     expect(missing.exitCode).toBe(2);

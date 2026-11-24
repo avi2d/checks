@@ -3,7 +3,7 @@ import * as Base64 from "effect/encoding/Base64";
 import { gitHubJson, REPOSITORY } from "../core/github.ts";
 import { hasCommitsSince, isPlainVersion, nextVersion, type Pending, readPending, releaseTitle, runBuild, withVersion, withWorkspaceVersion } from "./release.ts";
 import { git } from "../core/git.ts";
-import { MANIFEST, RELEASE_BRANCH_PREFIX, releaseTag, taggedVersion } from "../core/release-names.ts";
+import { MANIFEST, RELEASE_BRANCH_PREFIX, RELEASE_VERSION_ENV, releaseTag, taggedVersion } from "../core/release-names.ts";
 import { publicWorkspaces, type Workspace } from "./workspace-packages.ts";
 import { readsPublishWorkspaces } from "./caller-options.ts";
 import { readWorkflowFiles } from "./site-names.ts";
@@ -57,16 +57,21 @@ export const versionIn = (manifest: string): Effect.Effect<string | undefined> =
     Effect.orElseSucceed(() => undefined),
   );
 
-const chosenVersion = Effect.fn("chosenVersion")(function* (version: string, needed: string, requested: string, since: string | undefined) {
-  if (!isPlainVersion(requested)) return yield* refused(`--version ${requested} is no plain major.minor.patch version`);
-  if (Bun.semver.order(requested, version) <= 0) return yield* refused(`--version ${requested} is not newer than ${version}, which ${MANIFEST} holds`);
+export type RequestedVersion = {
+  readonly value: string;
+  readonly source: "--version" | typeof RELEASE_VERSION_ENV;
+};
+
+const chosenVersion = Effect.fn("chosenVersion")(function* (version: string, needed: string, { value: requested, source }: RequestedVersion, since: string | undefined) {
+  if (!isPlainVersion(requested)) return yield* refused(`${source} ${requested} is no plain major.minor.patch version`);
+  if (Bun.semver.order(requested, version) <= 0) return yield* refused(`${source} ${requested} is not newer than ${version}, which ${MANIFEST} holds`);
   if (Bun.semver.order(requested, needed) < 0) {
-    return yield* refused(`--version ${requested} is below ${needed}, which the unreleased changes${since === undefined ? "" : ` since ${since}`} need`);
+    return yield* refused(`${source} ${requested} is below ${needed}, which the unreleased changes${since === undefined ? "" : ` since ${since}`} need`);
   }
   return requested;
 });
 
-const releaseVersion = Effect.fn("releaseVersion")(function* (manifest: string, { since, unreleased }: Pending, untagged: string, requested: string | undefined) {
+const releaseVersion = Effect.fn("releaseVersion")(function* (manifest: string, { since, unreleased }: Pending, untagged: string, requested: RequestedVersion | undefined) {
   const { version } = yield* decodeVersion(manifest).pipe(Effect.mapError((cause) => refused(`${MANIFEST}: ${cause.message}`)));
   if (since !== undefined && since !== releaseTag(version)) {
     return yield* refused(
@@ -105,10 +110,10 @@ type Plan = {
 };
 
 // Undefined means nothing is unreleased, which it has already said.
-export const planRelease = Effect.fn("planRelease")(function* (label: string, root: string, untagged: string, requested?: string) {
+export const planRelease = Effect.fn("planRelease")(function* (label: string, root: string, untagged: string, requested?: RequestedVersion) {
   const pending = yield* readPending(root);
   if (requested !== undefined && !(yield* hasCommitsSince(root, pending.since))) {
-    return yield* refused(`--version ${requested} has no commit to release ${pending.since === undefined ? "with no tag yet" : `since ${pending.since}`}`);
+    return yield* refused(`${requested.source} ${requested.value} has no commit to release ${pending.since === undefined ? "with no tag yet" : `since ${pending.since}`}`);
   }
   if (requested === undefined && pending.unreleased.length === 0) {
     yield* Console.log(`${label}: no unreleased changes ${pending.since === undefined ? "with no tag yet" : `since ${pending.since}`}`);

@@ -2,7 +2,7 @@
 import { Config, Console, Effect, Schema } from "effect";
 import { dispatch, gitHubJson, REPOSITORY } from "../core/github.ts";
 import { releaseTitle, runningWorkflow } from "./release.ts";
-import { buildRelease, commitRelease, hasBranch, planRelease, pointBranch, versionIn } from "./release-commit.ts";
+import { buildRelease, commitRelease, hasBranch, planRelease, pointBranch, type RequestedVersion, versionIn } from "./release-commit.ts";
 import { git } from "../core/git.ts";
 import { MANIFEST, RELEASE_VERSION_ENV } from "../core/release-names.ts";
 import { runMain, Usage } from "../core/main.ts";
@@ -55,7 +55,7 @@ const parseVersionArgument = Effect.fn("parseVersionArgument")(function* (args: 
   if (index === -1) return { requested: undefined, rest: args };
   const requested = args[index + 1];
   if (requested === undefined || requested.startsWith("-")) return yield* new Usage({ message: USAGE });
-  return { requested, rest: [...args.slice(0, index), ...args.slice(index + 2)] };
+  return { requested: { value: requested, source: "--version" } satisfies RequestedVersion, rest: [...args.slice(0, index), ...args.slice(index + 2)] };
 });
 
 const releasePullRequest = Effect.gen(function* () {
@@ -69,7 +69,7 @@ const releasePullRequest = Effect.gen(function* () {
   const workflows = rest.filter((arg) => arg !== "--allow-non-default-branch");
   if (workflows.length === 0 || workflows.some((arg) => arg.startsWith("-"))) return yield* new Usage({ message: USAGE });
   const inputVersion = yield* Config.String(RELEASE_VERSION_ENV).pipe(Config.withDefault(""));
-  const requested = cliVersion ?? (inputVersion === "" ? undefined : inputVersion);
+  const requested = cliVersion ?? (inputVersion === "" ? undefined : { value: inputVersion, source: RELEASE_VERSION_ENV } satisfies RequestedVersion);
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   if (!allowNonDefault) {
     const branch = (yield* git(["symbolic-ref", "--quiet", "--short", "HEAD"], root)).trim();
@@ -87,7 +87,7 @@ const releasePullRequest = Effect.gen(function* () {
     yield* Console.log(`release-pr: ${open.html_url} releases ${next} from ${head.slice(0, 12)} and is current`);
     return true;
   }
-  if (!current) yield* pointBranch(branch, yield* commitRelease(root, head, yield* buildRelease(NAME, root, bumped, requested), next), remote !== undefined);
+  if (!current) yield* pointBranch(branch, yield* commitRelease(root, head, yield* buildRelease(NAME, root, bumped, requested?.value), next), remote !== undefined);
   const { verb, url } = yield* titlePullRequest(open, base, branch, next);
   yield* Effect.forEach(workflows, (workflow) => dispatch(workflow, branch));
   yield* Console.log(`release-pr: ${verb} ${url} to release ${next}, and dispatched ${workflows.join(", ")} on ${branch}`);
