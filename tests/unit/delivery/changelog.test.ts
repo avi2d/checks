@@ -122,8 +122,39 @@ test("the release being prepared covers everything past every release and keeps 
 });
 
 test("a release with no conventional commit worth listing has no entries to write", () => {
-  expect(hasEntries(["docs: say why", "chore: tidy", "ci: run the suite"])).toBe(false);
+  expect(hasEntries(["docs: say why", "chore: tidy", "refactor: split the reader"])).toBe(false);
   expect(hasEntries(["chore: tidy", "fix: keep the order"])).toBe(true);
+  expect(hasEntries(["chore: release 0.2.1", "ci: run the suite"])).toBe(true);
+});
+
+test("a release of only ci and test commits lists them under Maintenance and leaves its release commit out", () => {
+  const subjects = ["chore: release 0.2.1 (#6)", "test(parts): cover an empty bill (#5)", "docs: say why (#4)", "ci: run the suite on pull requests (#3)"];
+  const rendered = renderChangelog("widget", [{ version: "0.2.1", date: "2026-09-20", subjects }], "https://github.com/acme/widget");
+  expect(rendered).toBe(
+    [
+      "# Changelog",
+      "",
+      "Every release of `widget`, newest first, written by the release from its conventional commits.",
+      "",
+      "## 0.2.1",
+      "",
+      "Released 2026-09-20.",
+      "",
+      "### Maintenance",
+      "",
+      "- **parts:** cover an empty bill [#5](https://github.com/acme/widget/pull/5)",
+      "- run the suite on pull requests [#3](https://github.com/acme/widget/pull/3)",
+      "",
+    ].join("\n"),
+  );
+  expect(judge("changelog", { path: "CHANGELOG.md", text: rendered }, recordsOf([]))).toEqual([]);
+});
+
+test("a release with a fix lists no Maintenance group beside it", () => {
+  const subjects = ["test: cover an empty bill (#5)", "fix: keep the order (#4)", "ci: run the suite (#3)"];
+  const rendered = renderChangelog("widget", [{ version: "0.2.1", date: "2026-09-20", subjects }], "https://github.com/acme/widget");
+  expect(rendered).not.toContain("Maintenance");
+  expect(rendered).toContain("### Fixes\n\n- keep the order [#4](https://github.com/acme/widget/pull/4)\n");
 });
 
 test("a changelog with no release to write holds only its title and lead, which its template allows", () => {

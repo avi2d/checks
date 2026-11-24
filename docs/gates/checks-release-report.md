@@ -9,7 +9,7 @@ audience: consumers
 ## What it checks
 
 It lists the conventional commits after the last tag reachable from `HEAD` that reads as a version such as `v0.2.0`.
-It counts a commit when its subject falls in Features, Fixes, Performance, Reverts or Breaking changes, the groups `checks-changelog` writes.
+It counts a commit when its subject falls in Features, Fixes, Performance, Reverts or Breaking changes, the groups `checks-changelog` lists ahead of Maintenance.
 It prints each unreleased subject on its own line under a count.
 A repository with no tag yet reports every such commit in its history.
 A history with no conventional release-worthy commit reports no unreleased changes.
