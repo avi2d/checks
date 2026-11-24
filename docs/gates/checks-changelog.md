@@ -9,7 +9,7 @@ audience: consumers
 ## What it checks
 
 It reads the version from `package.json` and treats that version as the release being prepared.
-It lists every conventional commit the release closes, grouped as Features, Fixes, Performance, Reverts and Breaking changes.
+It lists every conventional commit the release closes, grouped as Features, Fixes, Performance, Reverts, Maintenance and Breaking changes.
 A release that holds none of those lists its `ci` and `test` commits under Maintenance instead, so a version bumped by hand over them still gets a section.
 A release that holds one of those lists no Maintenance group.
 It lists the commits a branch merged in after its bump under that bump, since the squash merge releases them there.
