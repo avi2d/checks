@@ -9,7 +9,9 @@ audience: consumers
 ## What it checks
 
 It reads the version from `package.json` and treats that version as the release being prepared.
-It lists every conventional commit the release closes, grouped as Features, Fixes, Performance, Reverts and Breaking changes.
+It lists every conventional commit the release closes, grouped as Features, Fixes, Performance, Reverts, Maintenance and Breaking changes.
+A release that holds none of those lists its `ci` and `test` commits under Maintenance instead, so a version bumped by hand over them still gets a section.
+A release that holds one of those lists no Maintenance group.
 It lists the commits a branch merged in after its bump under that bump, since the squash merge releases them there.
 It leaves out what the branch added past its bump, since the squash merge folds it into the release commit.
 Only a branch carrying its own unlanded bump lists the commits of an unlanded branch it merges, so such a branch takes in only main.
@@ -18,7 +20,7 @@ It links each entry to its pull request under the repository address `package.js
 It keeps the date a released section already carries and dates a new section today.
 It writes the whole file newest first, so the changelog is never edited by hand.
 A repository with no tag yet releases from its first commit.
-A version with no conventional commit worth listing writes no section.
+A version with no conventional commit worth listing, and no `ci` or `test` commit, writes no section.
 
 ## What it reads
 

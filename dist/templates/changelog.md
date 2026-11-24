@@ -37,3 +37,9 @@ Released <YYYY-MM-DD>.
 <Leave this section out when the release holds no such commit.>
 
 - **<the commit's scope, when it has one>:** <its description>
+
+### Maintenance
+
+<Leave this section out when the release holds a change another group lists, or no ci or test commit.>
+
+- **<the commit's scope, when it has one>:** <its description>
