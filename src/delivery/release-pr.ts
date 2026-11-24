@@ -13,7 +13,7 @@ type Remote = {
 };
 
 const NAME = "checks-release-pr";
-const USAGE = "usage: checks-release-pr [--allow-non-default-branch] <workflow>...";
+const USAGE = "usage: checks-release-pr [--allow-non-default-branch] [--version <major.minor.patch>] <workflow>...";
 
 const PullRequest = Schema.Struct({ number: Schema.Int, title: Schema.String, html_url: Schema.String });
 type PullRequest = typeof PullRequest.Type;
@@ -50,6 +50,14 @@ const titlePullRequest = Effect.fn("titlePullRequest")(function* (open: PullRequ
   return { verb: "refreshed", url: open.html_url };
 });
 
+const parseVersionArgument = Effect.fn("parseVersionArgument")(function* (args: readonly string[]) {
+  const index = args.indexOf("--version");
+  if (index === -1) return { requested: undefined, rest: args };
+  const requested = args[index + 1];
+  if (requested === undefined || requested.startsWith("-")) return yield* new Usage({ message: USAGE });
+  return { requested, rest: [...args.slice(0, index), ...args.slice(index + 2)] };
+});
+
 const releasePullRequest = Effect.gen(function* () {
   const args = process.argv.slice(2);
   if (args.includes("--help") || args.includes("-h")) {
@@ -57,7 +65,8 @@ const releasePullRequest = Effect.gen(function* () {
     return true;
   }
   const allowNonDefault = args.includes("--allow-non-default-branch");
-  const workflows = args.filter((arg) => arg !== "--allow-non-default-branch");
+  const { requested, rest } = yield* parseVersionArgument(args);
+  const workflows = rest.filter((arg) => arg !== "--allow-non-default-branch");
   if (workflows.length === 0 || workflows.some((arg) => arg.startsWith("-"))) return yield* new Usage({ message: USAGE });
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   if (!allowNonDefault) {
@@ -66,7 +75,7 @@ const releasePullRequest = Effect.gen(function* () {
     if (branch !== default_branch) return yield* new Usage({ message: `branch ${branch} is not the default branch ${default_branch}; pass --allow-non-default-branch to release from it` });
   }
   const untagged = `rerun the tag job of ${yield* runningWorkflow} on the release commit, whose refusal says what to fix`;
-  const plan = yield* planRelease("release-pr", root, untagged);
+  const plan = yield* planRelease("release-pr", root, untagged, requested);
   if (plan === undefined) return true;
   const { base, branch, head, next, bumped } = plan;
   const remote = yield* readRemote(root, branch);
@@ -76,7 +85,7 @@ const releasePullRequest = Effect.gen(function* () {
     yield* Console.log(`release-pr: ${open.html_url} releases ${next} from ${head.slice(0, 12)} and is current`);
     return true;
   }
-  if (!current) yield* pointBranch(branch, yield* commitRelease(root, head, yield* buildRelease(NAME, root, bumped), next), remote !== undefined);
+  if (!current) yield* pointBranch(branch, yield* commitRelease(root, head, yield* buildRelease(NAME, root, bumped, requested), next), remote !== undefined);
   const { verb, url } = yield* titlePullRequest(open, base, branch, next);
   yield* Effect.forEach(workflows, (workflow) => dispatch(workflow, branch));
   yield* Console.log(`release-pr: ${verb} ${url} to release ${next}, and dispatched ${workflows.join(", ")} on ${branch}`);

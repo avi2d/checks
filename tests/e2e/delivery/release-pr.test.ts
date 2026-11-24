@@ -2,65 +2,7 @@ import { $ } from "bun";
 import { expect, test } from "bun:test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { fakeGh, type FakeGh } from "../lib/fake-gh.ts";
-import { CHECKOUT, fixtureRepos, ran, type Ran, scratchDirs } from "../lib/fixture-repo.ts";
-
-const SCRIPT = join(CHECKOUT, "src", "delivery", "release-pr.ts");
-const CHANGELOG = join(CHECKOUT, "src", "delivery", "changelog-write.ts");
-
-const repository = fixtureRepos("checks-release-pr-");
-const scratch = scratchDirs();
-
-type Consumer = {
-  readonly dir: string;
-  readonly run: (args: readonly string[], env?: Readonly<Record<string, string>>) => Promise<Ran>;
-  readonly commit: (message: string) => Promise<string>;
-  readonly state: FakeGh["state"];
-  readonly land: (message: string) => Promise<string>;
-  readonly inOrigin: (...args: readonly string[]) => Promise<string>;
-};
-
-function manifest(version: string): string {
-  const scripts = { build: `bun ${CHANGELOG}` };
-  return `${JSON.stringify({ name: "widget", version, repository: { type: "git", url: "git+https://github.com/acme/widget.git" }, scripts }, null, 2)}\n`;
-}
-
-// A consumer released at v0.1.0, with one fix on main since, whose origin is a bare repository the fake gh writes into.
-async function consumer(): Promise<Consumer> {
-  const repo = await repository({ "package.json": manifest("0.1.0") });
-  const { dir } = repo;
-  let changes = 0;
-  const commit = async (message: string): Promise<string> => {
-    changes += 1;
-    await repo.write({ [`notes/${changes}.txt`]: `${message}\n` });
-    return repo.commit(message);
-  };
-  await commit("feat: build a bill (#1)");
-  await $`bun ${CHANGELOG}`.cwd(dir).quiet();
-  await commit("docs: write the changelog (#2)");
-  await $`git tag v0.1.0`.cwd(dir).quiet();
-  await commit("fix(parts): keep the order of parts (#3)");
-  const home = await scratch("checks-release-pr-home-");
-  const origin = join(home, "origin.git");
-  await $`git init -q --bare -b main ${origin} && git remote add origin ${origin} && git push -q origin main --tags`.cwd(dir).quiet();
-  const fake = await fakeGh(home, origin);
-  return {
-    dir,
-    run: (args, env = {}) => ran($`bun ${SCRIPT} ${args}`.cwd(dir).env({ ...process.env, ...fake.env, ...env })),
-    commit,
-    state: fake.state,
-    land: async (message) => {
-      const sha = await commit(message);
-      await $`git push -q origin main`.cwd(dir).quiet();
-      return sha;
-    },
-    inOrigin: async (...args) => (await $`git ${args}`.cwd(origin).quiet()).stdout.toString().trim(),
-  };
-}
-
-async function head(dir: string): Promise<string> {
-  return (await $`git rev-parse HEAD`.cwd(dir).quiet()).stdout.toString().trim();
-}
+import { consumer, head, manifest } from "../lib/release-pr-fixture.ts";
 
 test(
   "a fix since the last tag opens one pull request that bumps the patch, carries the built changelog and dispatches the checks on its head",
@@ -244,7 +186,7 @@ test(
 
     const usage = await widget.run([]);
     expect(usage.exitCode).toBe(2);
-    expect(usage.text).toContain("usage: checks-release-pr [--allow-non-default-branch] <workflow>...");
+    expect(usage.text).toContain("usage: checks-release-pr [--allow-non-default-branch] [--version <major.minor.patch>] <workflow>...");
 
     expect((await widget.state()).calls.filter((call) => !call.startsWith("GET "))).toEqual([]);
     expect(await widget.inOrigin("for-each-ref", "--format=%(refname)", "refs/heads/release/")).toBe("");

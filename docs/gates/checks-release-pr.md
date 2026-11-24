@@ -8,7 +8,7 @@ audience: consumers
 
 ## What it checks
 
-It lists the unreleased changes the way [checks-release-report](checks-release-report.md) does, and does nothing when there are none.
+Without `--version`, it does nothing when [checks-release-report](checks-release-report.md) lists no unreleased changes.
 It bumps the version `package.json` holds by the kit's rule:
 
 | Unreleased changes | Below 1.0.0 | From 1.0.0 |
@@ -21,8 +21,13 @@ It refuses when the last release tag names a version other than the one `package
 The refusal points at the `tag` job of the workflow it runs in, rerun on the release commit, rather than at a tag pushed by hand.
 That job's own refusal says what to fix.
 It refuses a version that is not a plain `major.minor.patch`.
+With `--version <major.minor.patch>`, it plans the requested version instead of the automatic bump.
+The requested version must be newer than the version in `package.json`.
+It must also be at least as high as the bump the unreleased changes need.
+At least one commit must exist since the last tag, but it need not be a listed change.
 It writes the next version into `package.json`, and into each public workspace package and its `bun.lock` entry where a workflow step sets `CHECKS_PUBLISH_WORKSPACES` to `true`.
 It runs `bun run build` so the build writes `CHANGELOG.md`.
+If an explicit version would have no changelog entries, [checks-changelog](checks-changelog.md) lists the commits since the last tag under Maintenance.
 It commits every tracked file the build changed as `chore: release <version>`.
 The commit's one parent is `HEAD`.
 It makes the commit through the GitHub API, which attributes it to `github-actions[bot]` and signs it, so the job sets no git identity.
@@ -53,11 +58,12 @@ The repository needs **Allow GitHub Actions to create and approve pull requests*
 ## Arguments
 
 ```sh
-checks-release-pr [--allow-non-default-branch] <workflow>...
+checks-release-pr [--allow-non-default-branch] [--version <major.minor.patch>] <workflow>...
 ```
 
 Pass `--help` or `-h` to print usage without calling git or GitHub.
 Pass `--allow-non-default-branch` to plan a release from the current branch when it is not the default branch.
+Pass `--version <major.minor.patch>` to release that version, even when the changes are only maintenance commits.
 Each workflow argument names a file under `.github/workflows/` whose jobs report the checks the default branch requires, such as `ci.yml`.
 Each named workflow triggers on `workflow_dispatch`.
 Name no workflow that runs something else on dispatch, such as a mutation refresh.
@@ -66,7 +72,7 @@ Name no workflow that runs something else on dispatch, such as a mutation refres
 
 | Code | When |
 | --- | --- |
-| 0 | help was printed, nothing is unreleased, or the release pull request is open on the current `HEAD` and its checks are dispatched |
+| 0 | help was printed, nothing is unreleased and no `--version` was passed, or the release pull request is open on the current `HEAD` and its checks are dispatched |
 | 2 | the arguments do not parse, a refusal above applies, the build fails, or a GitHub API call fails |
 
 ## Sample output
