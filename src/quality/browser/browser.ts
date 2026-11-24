@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
-import { Console, Effect, Path } from "effect";
+import { Console, Effect, Option, Path } from "effect";
+import { ciCores } from "../../core/ci-cores.ts";
 import type { Browser, Page } from "playwright-core";
 import { runMain, Usage } from "../../core/main.ts";
 import { refuseLocalTests } from "../../core/local-tests.ts";
@@ -288,7 +289,8 @@ const checkSite = Effect.fn("checkSite")(function* (root: string, declaration: D
   const browser = yield* launchChrome;
   const cells = planned.flatMap(({ visit, checks }, visitIndex) =>
     visitCells({ browser, declaration, visit, url: new URL(visit.route.path, origin).href }, visitIndex, checks));
-  const readings = (yield* walkCells(cells, 4)).flat().sort(compareReport);
+  const cores = yield* ciCores;
+  const readings = (yield* walkCells(cells, Option.getOrElse(cores, () => 4))).flat().sort(compareReport);
   const firstLooks: FirstLooks = new Map();
   const finished = readings.map(({ settle, start, end }) => ({ run: settle(firstLooks), start, end }));
   const timings: Timing[] = finished.map(({ run: one, start, end }) => ({ path: one.visit.route.path, check: one.check, start, end }));

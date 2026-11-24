@@ -3,6 +3,7 @@ import { availableParallelism, freemem, totalmem } from "node:os";
 import { Config, Console, Effect, FileSystem, Option, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { TEST_ENTRY_POINT } from "../core/gates.ts";
+import { ciCores } from "../core/ci-cores.ts";
 import { collect } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { refuseLocalTests } from "../core/local-tests.ts";
@@ -195,6 +196,8 @@ const availableBytes = Effect.fn("availableBytes")(function* () {
 
 export const resolveWorkerCount = Effect.fn("resolveWorkerCount")(function* (workers: number | undefined) {
   if (workers !== undefined) return workers;
+  const cores = yield* ciCores;
+  if (Option.isSome(cores)) return cores.value;
   return workerCountFor(yield* availableBytes(), totalmem(), availableParallelism());
 });
 

@@ -210,6 +210,7 @@ export const checks: readonly ProductCheck[] = [
 
 It reads the `browser`, `browserRoutes`, `browserBuild` and `browserTimings` keys of `checks.config.ts` in the directory it runs in.
 It reads `AI_AGENT`, `CHECKS_AGENT`, `CI`, and `agentTests.allowLocal` to decide whether an agent can run tests outside CI, as [checks-local-tests](checks-local-tests.md) says.
+It reads `CI_CORES` for the number of checks to run at once, as [Chrome and the peers](#chrome-and-the-peers) says.
 On a pull request it also reads the changed paths since the merge base:
 
 ```ts
@@ -393,7 +394,8 @@ It runs `checks-browser <directory>` on that directory.
 ### Chrome and the peers
 
 It drives the Chrome the machine has, which `CHROME_PATH` names, or Chrome's standard install when it is unset.
-It runs up to four checks at once, each a check at one visit.
+With `CI_CORES` unset, it runs up to four checks at once, each a check at one visit.
+Set `CI_CORES` to the positive whole number of cores granted to the job to use that count instead.
 The motion check and each product hook run alone, so their findings do not depend on the pages loading beside them.
 The report lists each visit in turn, and within it `targets`, the declared checks in their order and then the hooks, regardless of which finishes first.
 After the report and any failure list, the runner prints a timing line for each route.
@@ -502,7 +504,7 @@ The split gives the most costly route to the shard with the least time so far, a
 | --- | --- |
 | 0 | every check passes at every visit, and every declared route and target is there |
 | 1 | a check fails at a visit, a declared route is not served, a declared target matches no visible element, or a run scans no target |
-| 2 | an argument is not one it takes, `checks.config.ts` sets no `browser` key, the key does not decode or contradicts itself, `browserTimings` does not decode on a `--shard` run, `browser-checks.json` is still there, the site directory or the hooks module is missing, the site holds no `.html` page while a route lists `every-page`, a peer cannot load, Chrome cannot start, or an agent run is refused outside CI when `agentTests.allowLocal` is `false` |
+| 2 | an argument is not one it takes, `checks.config.ts` sets no `browser` key, the key does not decode or contradicts itself, `browserTimings` does not decode on a `--shard` run, `browser-checks.json` is still there, the site directory or the hooks module is missing, the site holds no `.html` page while a route lists `every-page`, a peer cannot load, Chrome cannot start, `CI_CORES` is read but is not a positive whole number, or an agent run is refused outside CI when `agentTests.allowLocal` is `false` |
 
 ## Sample output
 

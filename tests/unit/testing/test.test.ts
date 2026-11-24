@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
+import { ConfigProvider, Effect, Layer } from "effect";
+import { BunServices } from "@effect/platform-bun";
 import {
   entryOptions,
   reclaimableBytes,
+  resolveWorkerCount,
   scriptOptions,
   selectSuite,
   suiteArgs,
@@ -11,6 +14,19 @@ import {
 import { standardScript } from "../../../src/core/test-script.ts";
 import { scriptViolations } from "../../../src/testing/test-layout.ts";
 import { smokeFiles } from "../../../src/testing/test-skips.ts";
+
+test("runner cores replace the memory-based worker count unless the CLI overrides them", () => {
+  const provider = Layer.merge(ConfigProvider.layer(ConfigProvider.fromUnknown({ CI_CORES: "3" })), BunServices.layer);
+  expect(Effect.runSync(resolveWorkerCount(undefined).pipe(Effect.provide(provider)))).toBe(3);
+  expect(Effect.runSync(resolveWorkerCount(2).pipe(Effect.provide(provider)))).toBe(2);
+});
+
+test("invalid runner cores do not start a test run", () => {
+  for (const cores of ["0", "-1", "1.5", "abc"]) {
+    const provider = Layer.merge(ConfigProvider.layer(ConfigProvider.fromUnknown({ CI_CORES: cores })), BunServices.layer);
+    expect(() => Effect.runSync(resolveWorkerCount(undefined).pipe(Effect.provide(provider)))).toThrow();
+  }
+});
 
 test("outside CI the default run is the unit tier plus the smoke list", () => {
   expect(selectSuite({}, "local")).toEqual({ kind: "smoke" });

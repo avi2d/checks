@@ -16,8 +16,9 @@ A run that fails with no failing test, such as a test file that throws while loa
 ## Parallel hunts
 
 A repository whose `test` script runs [checks-test](checks-test.md#parallel-runs) is hunted with the worker count `checks-test` runs on.
-That is the count free memory allows, as [checks-test](checks-test.md#parallel-runs) says.
-So each run is `bun test --randomize --seed=<seed> --parallel=<workers>` with the worker count free memory allows when the hunt runs.
+An explicit `--parallel=<workers>` in that script sets the count.
+Otherwise, `CI_CORES` sets it to the cores granted to the job, or free memory sets it when `CI_CORES` is unset.
+Each run is `bun test --randomize --seed=<seed> --parallel=<workers>` with the count resolved when the hunt starts.
 A `test` script that does not run `checks-test` gets the serial hunt.
 
 Under workers a seed fixes the order Bun hands out the files.
@@ -47,8 +48,9 @@ It reads bun's JUnit report of each run.
 It reads `AI_AGENT`, `CHECKS_AGENT`, `CI`, and `agentTests.allowLocal` to decide whether an agent can run tests outside CI, as [checks-local-tests](checks-local-tests.md) says.
 It reads the test runner from the `test` script in `package.json`, as [checks-test-layout](checks-test-layout.md) validates that script.
 It hunts serially when the file is missing or its `test` script does not run `checks-test`.
-Under workers it reads the two inputs of the worker count when the hunt starts, never a per-repository setting.
-The first is the machine's memory, free and total, and the second is its core count, as [checks-test](checks-test.md#parallel-runs) says.
+Under workers it reads `CI_CORES` unless the test script sets `--parallel=<workers>`.
+`CI_CORES` must be a positive whole number.
+When both are absent, it reads the machine's free and total memory and core count, as [checks-test](checks-test.md#parallel-runs) says.
 Under workers it reads the record its preload writes of which worker ran each file.
 For each replay it reads the order Bun ran its placeholder files.
 Under GitHub Actions it appends its summary to the file `GITHUB_STEP_SUMMARY` names, which is the job summary.
@@ -70,7 +72,7 @@ Under workers the record also holds `parallel`, the worker count and each replay
 | --- | --- |
 | 0 | every run passed |
 | 1 | a run failed |
-| 2 | an argument does not parse, `package.json` or the worker record does not decode, bun passed without writing its report, a replay's placeholder files did not each run once, an agent run is refused outside CI when `agentTests.allowLocal` is `false`, or an agent run outside CI whose `checks.config.ts` does not load |
+| 2 | an argument does not parse, `CI_CORES` is read but is not a positive whole number, `package.json` or the worker record does not decode, bun passed without writing its report, a replay's placeholder files did not each run once, an agent run is refused outside CI when `agentTests.allowLocal` is `false`, or an agent run outside CI whose `checks.config.ts` does not load |
 
 ## Sample output
 
