@@ -38,7 +38,9 @@ These rules read the types, so they run only with `oxlint-tsgolint` installed an
 
 The base loads the kit's `data-shape` plugin from `dist/` and turns on `data-shape/no-reduce-accumulator-copy` for every file oxlint lints, and two more of its rules for every TypeScript file, tests included.
 
-- `data-shape/no-reduce-accumulator-copy` refuses a `reduce` or `reduceRight` callback that copies its accumulator on every step, so the work grows with the square of the input.
+- `data-shape/no-reduce-accumulator-copy` refuses a `reduce` or `reduceRight` callback that copies its accumulator on every step.
+- The work grows with the square of the input when the accumulator grows with the input.
+- It also refuses a copy of an accumulator with a fixed shape, since a syntax rule cannot tell the two apart.
 - It refuses `Object.assign` into a new object literal with the accumulator as a source, `Array.from` of the accumulator, and `concat`, `slice`, `toSpliced`, `toSorted`, `toReversed` or `with` called on it.
 - It follows a `const` alias of the accumulator, and passes over a name that shadows the accumulator, `Object` or `Array`.
 - It refuses an array method only when the reduce starts from an array literal, a name typed as an array, or a `const` that holds one, so a string accumulator's `concat` passes.
