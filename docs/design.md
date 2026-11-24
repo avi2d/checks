@@ -30,6 +30,9 @@ oxlint reads a relative `jsPlugins` path against the consumer's config, so `base
 `.gitignore` keeps oxlint out of `node_modules/`, because oxlint still walks the installed package when only `ignorePatterns` names it.
 
 The base turns `data-shape/readonly-collection-param` and `data-shape/schema-twin` on for every TypeScript file, tests included.
+It turns `oxc/no-accumulating-spread` and `data-shape/no-reduce-accumulator-copy` on for every file, since oxlint puts the first in its `perf` category, which the base does not turn on.
+The native rule sees only a spread, so the kit rule holds the other copies of a reduce accumulator.
+Neither reads types, so the kit rule refuses an array method only with local evidence that the accumulator is an array, and a string's `concat` stays legal.
 It leaves `data-shape/no-shell-in-strings` off, so a release that adds it turns no repository red, and keeps it off in tests, where a fake tool is a shell fixture.
 `typescript/prefer-readonly-parameter-types` would flag every object parameter for deep `readonly`, so the kit rule stays with the collections a function never mutates.
 
@@ -114,8 +117,9 @@ Each oxlint plugin and each config builder ships compiled under `dist/`, because
 The settings builder ships as source because only the kit's Bun bins load it.
 Stryker loads its config under Node too, so the guard plugin and run-scope helpers the Stryker preset imports ship compiled under `dist/mutation/`.
 oxlint loads `oxlint.config.ts` under Node, so the builders ship as JavaScript beside a `.d.ts` that `tsc` reads.
-`@oxlint/plugins` ships no RuleTester, so each `effect-channel`, `readability` and `data-shape` rule is proven red and green against an installed consumer in `tests/e2e/package/consumer.test.ts`, except `readability/thin-astro` and `data-shape/no-shell-in-strings`.
+`@oxlint/plugins` ships no RuleTester, so each `effect-channel`, `readability` and `data-shape` rule is proven red and green against an installed consumer in `tests/e2e/package/consumer.test.ts`, except `readability/thin-astro`, `data-shape/no-shell-in-strings` and `data-shape/no-reduce-accumulator-copy`.
 `data-shape/no-shell-in-strings` is proven against a consumer tree linked to the checkout in `tests/e2e/quality/shell-in-strings-consumer.test.ts`.
+`data-shape/no-reduce-accumulator-copy` is proven against a consumer tree linked to the checkout in `tests/e2e/quality/reduce-accumulator-copy-consumer.test.ts`.
 `readability/thin-astro` is proven against a consumer tree linked to the checkout in `tests/e2e/complexity/astro-consumer.test.ts`.
 `dist/` is committed, with the doc templates in `dist/templates/`, and so is `CHANGELOG.md`, which the same build writes.
 No `prepack` or `prepublishOnly` script rebuilds them, so a publish ships the committed files.

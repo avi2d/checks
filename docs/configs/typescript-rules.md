@@ -16,6 +16,7 @@ The kit's oxlint base and the tsconfig fragment hold a repository's TypeScript t
 - `typescript/explicit-module-boundary-types` refuses an exported function without a return type, and an exported function parameter typed `any`.
 - `typescript/no-non-null-assertion` refuses the non-null assertion `!`.
 - `eslint/no-unused-vars` refuses a variable, a parameter or an import nothing reads, and passes over a variable or a parameter whose name starts with `_` and the siblings of a rest property.
+- `oxc/no-accumulating-spread` refuses a spread of the accumulator inside a `reduce` callback or a loop, as in `[...acc, item]` or `{ ...acc, [key]: value }`.
 
 The base turns off `typescript/consistent-return`, which its categories would otherwise turn on.
 It turns on `effect-channel/no-error-channel-escape` as well, and [The Effect rules](effect-rules.md) says what that rule refuses.
@@ -35,14 +36,24 @@ These rules read the types, so they run only with `oxlint-tsgolint` installed an
 
 ## Data-shape rules
 
-The base loads the kit's `data-shape` plugin from `dist/` and turns on two of its rules for every TypeScript file, tests included.
+The base loads the kit's `data-shape` plugin from `dist/` and turns on `data-shape/no-reduce-accumulator-copy` for every file oxlint lints, and two more of its rules for every TypeScript file, tests included.
+
+- `data-shape/no-reduce-accumulator-copy` refuses a `reduce` or `reduceRight` callback that copies its accumulator on every step.
+- The work grows with the square of the input when the accumulator grows with the input.
+- It also refuses a copy of an accumulator with a fixed shape, since a syntax rule cannot tell the two apart.
+- It refuses `Object.assign` into a new object literal with the accumulator as a source, `Array.from` of the accumulator, and `concat`, `slice`, `toSpliced`, `toSorted`, `toReversed` or `with` called on it.
+- It follows a `const` alias of the accumulator, and passes over a name that shadows the accumulator, `Object` or `Array`.
+- It refuses an array method only when the reduce starts from an array literal, a name typed as an array, or a `const` that holds one, so a string accumulator's `concat` passes.
+- It reads only the callback written inline as the first argument, and passes over a copy inside a function that callback declares.
+- Change the accumulator in place, as with `push` or `Object.assign(acc, item)`, and return it.
+- `oxc/no-accumulating-spread` holds the spread form of the same copy.
 
 - `data-shape/readonly-collection-param` refuses a parameter typed `T[]`, `Array<T>`, `Map` or `Set` that the function never mutates, stores, returns or passes on, and passing it to a readonly parameter of a function declared in the same file does not count as passing it on.
 - Type such a parameter `readonly T[]`, `ReadonlyArray<T>`, `ReadonlyMap` or `ReadonlySet`.
 - `data-shape/schema-twin` refuses an object type whose fields match a `Schema.Struct`, `TaggedStruct` or `Class` in the same file by name, count, optionality and kind.
 - Derive such a type from the schema with `typeof Name.Type` instead of writing both.
 
-The plugin carries a third rule that the base leaves off:
+The plugin carries a fourth rule that the base leaves off:
 
 - `data-shape/no-shell-in-strings` refuses a string, a template literal, an array of them or a `+` chain of them that holds five or more lines that read as shell, and names the first such line and the count.
 - A line reads as shell when `if`, `elif`, `while` or `until` starts the line without a following `(`, when the line is `then`, `fi`, `do`, `done` or `esac`, alone or followed by `;`, when `then` or `do` closes the line after `;`, when the whole line is `case … in`, when it holds `;;`, `$(…)`, `"$@"`, `${NAME}`, `&&` or `||`, when `trap` or `exec` starts the line, or when it is a `#!/bin/sh` line.

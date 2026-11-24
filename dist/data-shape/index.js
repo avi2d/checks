@@ -1,3 +1,219 @@
+// src/quality/data-shape/no-reduce-accumulator-copy.ts
+/*!
+Adapted from the no-reduce-accumulator-copy rule of anti-slop, https://github.com/dmmulroy/anti-slop
+
+MIT License
+
+Copyright (c) 2026 Dillon Mulroy
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+var REDUCERS = new Set(["reduce", "reduceRight"]);
+var ARRAY_COPIES = new Set(["concat", "slice", "toSpliced", "toSorted", "toReversed", "with"]);
+var ARRAY_RESULTS = new Set(["map", "filter", "flatMap", "slice", "concat", "toSorted", "toReversed", "toSpliced"]);
+var ARRAY_TYPE_NAMES = new Set(["Array", "ReadonlyArray"]);
+function unwrap(node) {
+  let current = node;
+  while (current.type === "ParenthesizedExpression" || current.type === "ChainExpression" || current.type === "TSAsExpression" || current.type === "TSTypeAssertion" || current.type === "TSNonNullExpression" || current.type === "TSSatisfiesExpression") {
+    current = current.expression;
+  }
+  return current;
+}
+function binding(sourceCode, node) {
+  const target = unwrap(node);
+  if (target.type !== "Identifier")
+    return;
+  let scope = sourceCode.getScope(target);
+  while (scope !== null) {
+    const variable = scope.set.get(target.name);
+    if (variable !== undefined)
+      return variable;
+    scope = scope.upper;
+  }
+  return;
+}
+function methodOf(callee) {
+  const member = unwrap(callee);
+  if (member.type !== "MemberExpression")
+    return;
+  const { property } = member;
+  if (!member.computed && property.type === "Identifier")
+    return { name: property.name, object: member.object };
+  if (member.computed && property.type === "Literal" && typeof property.value === "string") {
+    return { name: property.value, object: member.object };
+  }
+  return;
+}
+function reassigned(variable) {
+  return variable.references.some((reference) => reference.isWrite() && !reference.init);
+}
+function constInit(variable) {
+  for (const definition of variable.defs) {
+    const { node } = definition;
+    if (definition.type !== "Variable" || node.type !== "VariableDeclarator")
+      continue;
+    if (node.id.type !== "Identifier" || node.init === null)
+      continue;
+    if (node.parent.type === "VariableDeclaration" && node.parent.kind === "const")
+      return node.init;
+  }
+  return;
+}
+function readsAccumulator(sourceCode, node, accumulator, seen) {
+  const variable = binding(sourceCode, node);
+  if (variable === undefined || seen.has(variable))
+    return false;
+  if (variable === accumulator)
+    return true;
+  seen.add(variable);
+  if (reassigned(variable))
+    return false;
+  const init = constInit(variable);
+  return init !== undefined && readsAccumulator(sourceCode, init, accumulator, seen);
+}
+function isArrayType(type) {
+  if (type.type === "TSArrayType" || type.type === "TSTupleType")
+    return true;
+  if (type.type === "TSParenthesizedType")
+    return isArrayType(type.typeAnnotation);
+  if (type.type === "TSTypeOperator" && type.operator === "readonly")
+    return isArrayType(type.typeAnnotation);
+  return type.type === "TSTypeReference" && type.typeName.type === "Identifier" && ARRAY_TYPE_NAMES.has(type.typeName.name);
+}
+function annotation(variable) {
+  for (const identifier of variable.identifiers) {
+    if ("typeAnnotation" in identifier && identifier.typeAnnotation)
+      return identifier.typeAnnotation.typeAnnotation;
+  }
+  return;
+}
+function isKnownArray(sourceCode, node, seen) {
+  const value = unwrap(node);
+  if (value.type === "ArrayExpression")
+    return true;
+  if (value.type === "CallExpression") {
+    const method = methodOf(value.callee);
+    return method !== undefined && ARRAY_RESULTS.has(method.name) && isKnownArray(sourceCode, method.object, seen);
+  }
+  const variable = binding(sourceCode, value);
+  if (variable === undefined || seen.has(variable))
+    return false;
+  seen.add(variable);
+  if (reassigned(variable))
+    return false;
+  const type = annotation(variable);
+  if (type !== undefined)
+    return isArrayType(type);
+  const init = constInit(variable);
+  return init !== undefined && isKnownArray(sourceCode, init, seen);
+}
+function isCallback(node) {
+  return node.type === "ArrowFunctionExpression" || node.type === "FunctionExpression";
+}
+function nearestFunction(node) {
+  let current = node.parent;
+  while (current !== null) {
+    if (current.type === "FunctionDeclaration")
+      return;
+    if (isCallback(current))
+      return current;
+    current = current.parent;
+  }
+  return;
+}
+function reducerCall(callback) {
+  let owner = callback.parent;
+  while (owner !== null && unwrap(owner) === callback)
+    owner = owner.parent;
+  if (owner?.type !== "CallExpression" || owner.arguments.length > 2)
+    return;
+  const method = methodOf(owner.callee);
+  const [first] = owner.arguments;
+  if (method === undefined || !REDUCERS.has(method.name) || first === undefined)
+    return;
+  return unwrap(first) === callback ? owner : undefined;
+}
+function enclosingReducer(sourceCode, node) {
+  const callback = nearestFunction(node);
+  if (callback === undefined)
+    return;
+  const call = reducerCall(callback);
+  if (call === undefined)
+    return;
+  const [first] = callback.params;
+  const parameter = first?.type === "AssignmentPattern" ? first.left : first;
+  if (parameter?.type !== "Identifier")
+    return;
+  const accumulator = sourceCode.getDeclaredVariables(callback).find((variable) => variable.identifiers.some((identifier) => identifier.start === parameter.start));
+  return accumulator === undefined ? undefined : { accumulator, initialValue: call.arguments[1] };
+}
+function isGlobal(sourceCode, node, name) {
+  const owner = unwrap(node);
+  if (owner.type !== "Identifier" || owner.name !== name)
+    return false;
+  const variable = binding(sourceCode, owner);
+  return variable === undefined || variable.defs.length === 0;
+}
+var GROWS = "on every step, so the work grows with the square of the input when the accumulator grows with the input";
+function copyMessage(sourceCode, call, method, reducer) {
+  const name = reducer.accumulator.name;
+  const reads = (node) => readsAccumulator(sourceCode, node, reducer.accumulator, new Set);
+  const [first, ...rest] = call.arguments;
+  if (method.name === "assign" && isGlobal(sourceCode, method.object, "Object")) {
+    if (first === undefined || unwrap(first).type !== "ObjectExpression" || !rest.some(reads))
+      return;
+    return `\`Object.assign\` into a new object copies the reduce accumulator \`${name}\` ${GROWS}. Assign into the accumulator, as in \`Object.assign(${name}, item)\`, and return it.`;
+  }
+  if (method.name === "from" && isGlobal(sourceCode, method.object, "Array")) {
+    if (first === undefined || !reads(first))
+      return;
+    return `\`Array.from\` copies the reduce accumulator \`${name}\` ${GROWS}. Push into the accumulator and return it.`;
+  }
+  if (!ARRAY_COPIES.has(method.name) || reducer.initialValue === undefined)
+    return;
+  if (!isKnownArray(sourceCode, reducer.initialValue, new Set) || !reads(method.object))
+    return;
+  return `\`.${method.name}()\` copies the reduce accumulator \`${name}\` ${GROWS}. Change the accumulator in place, as with \`push\`, and return it.`;
+}
+var rule = {
+  meta: {
+    type: "problem",
+    docs: { description: "Refuse a reduce callback that copies its accumulator with Object.assign, Array.from or an array copy method" }
+  },
+  create(context) {
+    return {
+      CallExpression: (node) => {
+        const method = methodOf(node.callee);
+        if (method === undefined)
+          return;
+        const reducer = enclosingReducer(context.sourceCode, node);
+        if (reducer === undefined)
+          return;
+        const message = copyMessage(context.sourceCode, node, method, reducer);
+        if (message !== undefined)
+          context.report({ node, message });
+      }
+    };
+  }
+};
+var no_reduce_accumulator_copy_default = rule;
+
 // src/quality/data-shape/no-shell-in-strings.ts
 var LEAST_SHELL_LINES = 5;
 var SHELL_MARKS = [
@@ -77,7 +293,7 @@ function insideLargerString(node) {
   const { parent } = node;
   return parent?.type === "ArrayExpression" || parent?.type === "BinaryExpression" && parent.operator === "+";
 }
-var rule = {
+var rule2 = {
   meta: {
     type: "suggestion",
     docs: { description: "Refuse a shell program written as TypeScript strings, which no linter of either language reads" }
@@ -98,7 +314,7 @@ var rule = {
     return { Literal: check, TemplateLiteral: check, ArrayExpression: check, BinaryExpression: check };
   }
 };
-var no_shell_in_strings_default = rule;
+var no_shell_in_strings_default = rule2;
 
 // src/quality/data-shape/readonly-collection-param.ts
 var ARRAY_METHODS = new Set([
@@ -121,7 +337,7 @@ var HANDOFF_PARENTS = new Set([
   "JSXSpreadAttribute"
 ]);
 var READONLY_NAMES = new Set(["ReadonlyArray", "ReadonlyMap", "ReadonlySet"]);
-function isArrayType(type) {
+function isArrayType2(type) {
   if (type === undefined)
     return false;
   if (type.type === "TSArrayType")
@@ -197,7 +413,7 @@ function watch(params) {
     const named = namedOf(param);
     if (named === undefined || named.type === undefined)
       continue;
-    if (isArrayType(named.type))
+    if (isArrayType2(named.type))
       found.push({ name: named.name, type: named.type, methods: ARRAY_METHODS });
     else if (isMapOrSet(named.type))
       found.push({ name: named.name, type: named.type, methods: COLLECTION_METHODS });
@@ -207,7 +423,7 @@ function watch(params) {
 function fixOf(type, text) {
   return type.type === "TSArrayType" ? `readonly ${text}` : `Readonly${text}`;
 }
-var rule2 = {
+var rule3 = {
   meta: {
     type: "problem",
     docs: { description: "Type a collection parameter the function never mutates as readonly" }
@@ -318,7 +534,7 @@ var rule2 = {
     };
   }
 };
-var readonly_collection_param_default = rule2;
+var readonly_collection_param_default = rule3;
 
 // src/quality/data-shape/schema-twin.ts
 var STRUCTS = new Set(["Struct", "TaggedStruct", "Class"]);
@@ -480,7 +696,7 @@ function describeTwin(type, schema) {
     return `${subject} repeats the fields of a Schema in this file. Derive it from the schema instead of writing both.`;
   return `${subject} repeats the fields of schema \`${schema}\` in this file. Derive it as \`typeof ${schema}.Type\` instead of writing both.`;
 }
-var rule3 = {
+var rule4 = {
   meta: {
     type: "problem",
     docs: { description: "Derive an object type from the Schema it repeats instead of writing both" }
@@ -514,12 +730,13 @@ var rule3 = {
     };
   }
 };
-var schema_twin_default = rule3;
+var schema_twin_default = rule4;
 
 // src/quality/data-shape/index.ts
 var plugin = {
   meta: { name: "data-shape" },
   rules: {
+    "no-reduce-accumulator-copy": no_reduce_accumulator_copy_default,
     "no-shell-in-strings": no_shell_in_strings_default,
     "readonly-collection-param": readonly_collection_param_default,
     "schema-twin": schema_twin_default
