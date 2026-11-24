@@ -12,7 +12,7 @@ const TITLE_CHANGED = "github.event.action != 'edited' || github.event.changes.t
 const prTitle = (publishes: boolean): Workflow => ({
   name: "pr-title",
   on: ["pull_request:", "  types: [opened, synchronize, reopened, edited]"],
-  concurrency: "pr-title-" + PULL_REQUEST_NUMBER,
+  concurrency: "pr-title-" + PULL_REQUEST_NUMBER + "-" + expression("(" + TITLE_CHANGED + ") && 'title' || github.run_id"),
   jobs: [
     {
       id: "title",
