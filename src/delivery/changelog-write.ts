@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
-import { Console, DateTime, Effect, FileSystem, Path, Schema } from "effect";
+import { Config, Console, DateTime, Effect, FileSystem, Path, Schema } from "effect";
 import { cuts, hasEntries, namesPullRequest, releaseDates, renderChangelog, type Bump, type Cut, type Release } from "./changelog.ts";
 import { git } from "../core/git.ts";
-import { MANIFEST, TAG_PREFIX, taggedVersion } from "../core/release-names.ts";
+import { lastTag } from "./release.ts";
+import { CHANGELOG_MAINTENANCE_VERSION, MANIFEST, releasedVersionOf, TAG_PREFIX, taggedVersion } from "../core/release-names.ts";
 import { runMain } from "../core/main.ts";
 
 const NAME = "checks-changelog";
@@ -100,10 +101,30 @@ const mergedTips = Effect.fn("mergedTips")(function* (root: string, through: str
   return tips;
 });
 
-// The bump reaches no commit main gained after it, yet the squash merge releases them under it.
-const subjectsOf = Effect.fn("subjectsOf")(function* (root: string, { version, date, through, after }: Cut, extra: readonly string[] = []) {
+const maintenanceSubjects = Effect.fn("maintenanceSubjects")(function* (root: string, { version, through, after }: Cut, extra: readonly string[]) {
+  // The bump's parent cannot see the tag of the release being rebuilt.
+  const tag = yield* lastTag(root, through === "HEAD" ? through : `${through}^`);
+  const since = tag === undefined ? after : [...after, tag];
+  const log = yield* git(["log", "--topo-order", "--format=%H%x1f%s", through, ...extra, "--not", ...since], root);
+  return log.split("\n").flatMap((line) => {
+    const separator = line.indexOf(FIELD);
+    if (separator === -1) return [];
+    const sha = line.slice(0, separator);
+    const subject = line.slice(separator + FIELD.length);
+    if (sha === through && releasedVersionOf(subject) === version) return [];
+    return [subject === "" ? `commit ${sha.slice(0, 12)}` : subject];
+  });
+});
+
+const releaseOf = Effect.fn("releaseOf")(function* (root: string, cut: Cut, extra: readonly string[], allowUnlisted: boolean) {
+  const { version, date, through, after } = cut;
   const log = yield* git(["log", "--topo-order", "--format=%s", through, ...extra, "--not", ...after], root);
-  return { version, date, subjects: log.split("\n").filter((subject) => subject !== "") } satisfies Release;
+  const subjects = log.split("\n").filter((subject) => subject !== "");
+  if (hasEntries(subjects)) return { version, date, subjects } satisfies Release;
+  if (!allowUnlisted) return undefined;
+  const maintenance = yield* maintenanceSubjects(root, cut, extra);
+  if (maintenance.length === 0) return undefined;
+  return { version, date, subjects: maintenance, includeUnlisted: true } satisfies Release;
 });
 
 const write = Effect.gen(function* () {
@@ -129,8 +150,12 @@ const write = Effect.gen(function* () {
   const released = cuts(bumps, recorded, yield* readPublishedShas(root, bumps), pending);
   const tip = released.at(-1);
   const extra = tip === undefined || tip.through === "HEAD" ? [] : yield* mergedTips(root, tip.through);
-  const found = (yield* Effect.forEach(released, (cut, index) => subjectsOf(root, cut, index === released.length - 1 ? extra : [])))
-    .filter(({ subjects }) => hasEntries(subjects))
+  const requested = yield* Config.String(CHANGELOG_MAINTENANCE_VERSION).pipe(Config.withDefault(""));
+  const found = (yield* Effect.forEach(released, (cut) => {
+    const maintenance = cut.through === "HEAD" ? cut.version === requested : recorded.has(cut.version);
+    return releaseOf(root, cut, cut === tip ? extra : [], maintenance);
+  }))
+    .filter((release) => release !== undefined)
     .toReversed();
   yield* fs.writeFileString(target, renderChangelog(name, found, repositoryUrl));
   yield* Console.log(`${NAME}: wrote ${found.length} release(s) to ${CHANGELOG}`);

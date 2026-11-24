@@ -20,7 +20,9 @@ It links each entry to its pull request under the repository address `package.js
 It keeps the date a released section already carries and dates a new section today.
 It writes the whole file newest first, so the changelog is never edited by hand.
 A repository with no tag yet releases from its first commit.
-A version with no conventional commit worth listing, and no `ci` or `test` commit, writes no section.
+If a version would have no entries, it writes no section unless [checks-release-pr](checks-release-pr.md) plans it with `--version`.
+For that explicit version, it lists the commits since the last tag under Maintenance.
+A later build keeps that section from the same commits.
 
 ## What it reads
 

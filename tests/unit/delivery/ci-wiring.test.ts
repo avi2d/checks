@@ -130,6 +130,17 @@ test("a checks-release-pr argument must name a workflow the repository holds", (
   );
 });
 
+test("checks-release-pr ignores --version and its value without hiding a missing workflow", () => {
+  const commands = ["bunx checks-release-pr", "bun src/delivery/release-pr.ts", "bun run ./node_modules/.bin/checks-release-pr"];
+  for (const command of commands) {
+    const workflows = named({
+      "ci.yml": held,
+      "daily-release.yml": `on: workflow_dispatch\njobs:\n  release:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ${command} ci.yml --version 0.2.0 gone.yml\n`,
+    });
+    expect(findMissingWorkflows(workflows).map(({ fault }) => fault)).toEqual(["names missing workflow gone.yml"]);
+  }
+});
+
 test("a checks-release-tag argument must name a workflow the repository holds", () => {
   const tag = (run: string) =>
     named({

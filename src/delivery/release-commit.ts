@@ -1,7 +1,7 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import * as Base64 from "effect/encoding/Base64";
 import { gitHubJson, REPOSITORY } from "../core/github.ts";
-import { isPlainVersion, nextVersion, type Pending, readPending, releaseTitle, runBuild, withVersion, withWorkspaceVersion } from "./release.ts";
+import { hasCommitsSince, isPlainVersion, nextVersion, type Pending, readPending, releaseTitle, runBuild, withVersion, withWorkspaceVersion } from "./release.ts";
 import { git } from "../core/git.ts";
 import { MANIFEST, RELEASE_BRANCH_PREFIX, releaseTag, taggedVersion } from "../core/release-names.ts";
 import { publicWorkspaces, type Workspace } from "./workspace-packages.ts";
@@ -107,7 +107,7 @@ type Plan = {
 // Undefined means nothing is unreleased, which it has already said.
 export const planRelease = Effect.fn("planRelease")(function* (label: string, root: string, untagged: string, requested?: string) {
   const pending = yield* readPending(root);
-  if (requested !== undefined && pending.commits === 0) {
+  if (requested !== undefined && !(yield* hasCommitsSince(root, pending.since))) {
     return yield* refused(`--version ${requested} has no commit to release ${pending.since === undefined ? "with no tag yet" : `since ${pending.since}`}`);
   }
   if (requested === undefined && pending.unreleased.length === 0) {
@@ -129,7 +129,7 @@ const readStaged = Effect.fn("readStaged")(function* (root: string, staged: Stag
 });
 
 // The build writes into the working tree, so the tree it starts from has to hold nothing a release would sweep in.
-export const buildRelease = Effect.fn("buildRelease")(function* (name: string, root: string, bumped: string) {
+export const buildRelease = Effect.fn("buildRelease")(function* (name: string, root: string, bumped: string, requested?: string) {
   if ((yield* git(["status", "--porcelain", "--untracked-files=no"], root)).trim() !== "") {
     return yield* refused("the working tree has changes to tracked files; the release commits only what the build writes");
   }
@@ -154,7 +154,7 @@ export const buildRelease = Effect.fn("buildRelease")(function* (name: string, r
       }
       yield* syncWorkspaceLock(root, workspaces, version);
     }
-    yield* runBuild(root);
+    yield* runBuild(root, requested);
     yield* git(["add", "--update"], root);
     const tree = (yield* git(["write-tree"], root)).trim();
     const staged = stagedOf(yield* git(["diff", "--cached", "--raw", "-z", "--no-renames", "HEAD"], root));

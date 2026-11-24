@@ -100,19 +100,29 @@ function isReleasePr(word: string): boolean {
   return word === "checks-release-pr" || word === "release-pr.ts" || isPathTo(word, ["checks-release-pr", "release-pr.ts"]);
 }
 
+function releasePrWorkflows(args: readonly string[]): readonly string[] {
+  const workflows: string[] = [];
+  const words = args.values();
+  for (const arg of words) {
+    if (arg === "--version") words.next();
+    else if (!RELEASE_PR_OPTIONS.has(arg)) workflows.push(arg);
+  }
+  return workflows;
+}
+
 function releaseArguments(program: Command): readonly string[] {
   const [head, target, entry] = program;
   if (head !== undefined && (RELEASE_BINS.includes(head) || isPathTo(head, RELEASE_BINS))) {
     const args = program.slice(1);
-    return isReleasePr(head) ? args.filter((arg) => !RELEASE_PR_OPTIONS.has(arg)) : args;
+    return isReleasePr(head) ? releasePrWorkflows(args) : args;
   }
   if (head === "bun" && target === "run" && entry !== undefined && (RELEASE_SOURCES.includes(entry) || isPathTo(entry, [...RELEASE_SOURCES, ...RELEASE_BINS]))) {
     const args = program.slice(3);
-    return isReleasePr(entry) ? args.filter((arg) => !RELEASE_PR_OPTIONS.has(arg)) : args;
+    return isReleasePr(entry) ? releasePrWorkflows(args) : args;
   }
   if (head === "bun" && target !== undefined && (RELEASE_SOURCES.includes(target) || isPathTo(target, [...RELEASE_SOURCES, ...RELEASE_BINS]))) {
     const args = program.slice(2);
-    return isReleasePr(target) ? args.filter((arg) => !RELEASE_PR_OPTIONS.has(arg)) : args;
+    return isReleasePr(target) ? releasePrWorkflows(args) : args;
   }
   return [];
 }

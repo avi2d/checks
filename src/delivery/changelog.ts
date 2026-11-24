@@ -19,6 +19,7 @@ export type Release = {
   readonly version: string;
   readonly date: string;
   readonly subjects: readonly string[];
+  readonly includeUnlisted?: boolean;
 };
 
 type Entry = {
@@ -56,7 +57,7 @@ export function namesPullRequest(subject: string): boolean {
 }
 
 function entryOf(subject: string, group: ChangeGroup, repositoryUrl: string): Entry {
-  const [, , scope = "", , description = ""] = CONVENTIONAL.exec(subject) ?? [];
+  const [, , scope = "", , description = subject] = CONVENTIONAL.exec(subject) ?? [];
   const linkedDescription = description.replace(PULL_REQUEST, (_, number: string) => ` [#${number}](${repositoryUrl}/pull/${number})`);
   return { group, text: scope === "" ? linkedDescription : `**${scope}:** ${linkedDescription}` };
 }
@@ -99,17 +100,19 @@ export function hasEntries(subjects: readonly string[]): boolean {
 }
 
 // Listing ci and test commits beside a listed change would rewrite every released section, so only a release with no listed change lists them.
-function entriesOf(subjects: readonly string[], repositoryUrl: string): readonly Entry[] {
+function entriesOf({ subjects, includeUnlisted }: Release, repositoryUrl: string): readonly Entry[] {
   const listed = subjects.flatMap((subject) => {
     const group = groupOf(subject);
     return group === undefined ? [] : [entryOf(subject, group, repositoryUrl)];
   });
   if (listed.length > 0) return listed;
-  return subjects.filter(isMaintenance).map((subject) => entryOf(subject, "Maintenance", repositoryUrl));
+  const maintenance = includeUnlisted === true ? subjects : subjects.filter(isMaintenance);
+  return maintenance.map((subject) => entryOf(subject, "Maintenance", repositoryUrl));
 }
 
-function renderRelease({ version, date, subjects }: Release, repositoryUrl: string): readonly string[] {
-  const entries = entriesOf(subjects, repositoryUrl);
+function renderRelease(release: Release, repositoryUrl: string): readonly string[] {
+  const { version, date } = release;
+  const entries = entriesOf(release, repositoryUrl);
   const groups = CHANGE_GROUPS.flatMap((group) => {
     const listed = entries.filter((entry) => entry.group === group).map(({ text }) => `- ${text}`);
     return listed.length === 0 ? [] : [`### ${group}`, listed.join("\n")];

@@ -2,7 +2,7 @@ import { Config, Effect, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { groupOf } from "./changelog.ts";
 import { git } from "../core/git.ts";
-import { RELEASE_TAG_GLOB } from "../core/release-names.ts";
+import { CHANGELOG_MAINTENANCE_VERSION, RELEASE_TAG_GLOB } from "../core/release-names.ts";
 
 class ReleaseUnreadable extends Schema.TaggedError<ReleaseUnreadable>()("ReleaseUnreadable", {
   message: Schema.String,
@@ -15,13 +15,13 @@ class BuildFailed extends Schema.TaggedError<BuildFailed>()("BuildFailed", {
 export type Pending = {
   readonly since: string | undefined;
   readonly unreleased: readonly string[];
-  readonly commits: number;
 };
 
 const PLAIN_VERSION = /^(\d+)\.(\d+)\.(\d+)$/;
 
 export function isPlainVersion(version: string): boolean {
-  return PLAIN_VERSION.test(version);
+  const [matched, ...parts] = PLAIN_VERSION.exec(version) ?? [];
+  return matched === version && parts.every((part) => part === "0" || !part.startsWith("0"));
 }
 
 export function unreleasedOf(subjects: readonly string[]): readonly string[] {
@@ -62,25 +62,33 @@ export function releaseTitle(version: string): string {
   return `chore: release ${version}`;
 }
 
-export const runBuild = Effect.fn("runBuild")(function* (root: string) {
+export const runBuild = Effect.fn("runBuild")(function* (root: string, maintenanceVersion?: string) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const env = maintenanceVersion === undefined ? undefined : { [CHANGELOG_MAINTENANCE_VERSION]: maintenanceVersion };
   const exitCode = yield* spawner.exitCode(
-    ChildProcess.make(process.execPath, ["run", "build"], { cwd: root, stdin: "ignore", stdout: "inherit", stderr: "inherit" }),
+    ChildProcess.make(process.execPath, ["run", "build"], { cwd: root, env, extendEnv: true, stdin: "ignore", stdout: "inherit", stderr: "inherit" }),
   );
   if (exitCode !== ChildProcessSpawner.ExitCode(0)) return yield* new BuildFailed({ message: `bun run build exited ${exitCode}` });
 });
 
-export const lastTag = Effect.fn("lastTag")(function* (root: string) {
-  const described = yield* git(["describe", "--tags", "--abbrev=0", `--match=${RELEASE_TAG_GLOB}`, "HEAD"], root).pipe(
+export const lastTag = Effect.fn("lastTag")(function* (root: string, revision = "HEAD") {
+  const described = yield* git(["describe", "--tags", "--abbrev=0", `--match=${RELEASE_TAG_GLOB}`, revision], root).pipe(
     Effect.map((tag) => tag.trim()),
     Effect.catchTag("GitFailure", () => Effect.succeed("")),
   );
   return described === "" ? undefined : described;
 });
 
+function rangeSince(since: string | undefined): string {
+  return since === undefined ? "HEAD" : `${since}..HEAD`;
+}
+
+export const hasCommitsSince = Effect.fn("hasCommitsSince")(function* (root: string, since: string | undefined) {
+  return (yield* git(["rev-list", "-1", rangeSince(since)], root)).trim() !== "";
+});
+
 const subjectsSince = Effect.fn("subjectsSince")(function* (root: string, since: string | undefined) {
-  const range = since === undefined ? "HEAD" : `${since}..HEAD`;
-  const log = yield* git(["log", "--topo-order", "--no-merges", "--format=%s", range], root);
+  const log = yield* git(["log", "--topo-order", "--no-merges", "--format=%s", rangeSince(since)], root);
   return log.split("\n").filter((subject) => subject !== "");
 });
 
@@ -89,6 +97,5 @@ export const readPending = Effect.fn("readPending")(function* (root: string) {
     return yield* new ReleaseUnreadable({ message: "the checkout is shallow, so the tag it sees may not be the last one; fetch all of it" });
   }
   const since = yield* lastTag(root);
-  const subjects = yield* subjectsSince(root, since);
-  return { since, unreleased: unreleasedOf(subjects), commits: subjects.length } satisfies Pending;
+  return { since, unreleased: unreleasedOf(yield* subjectsSince(root, since)) } satisfies Pending;
 });
