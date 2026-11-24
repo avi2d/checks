@@ -15,9 +15,14 @@ class BuildFailed extends Schema.TaggedError<BuildFailed>()("BuildFailed", {
 export type Pending = {
   readonly since: string | undefined;
   readonly unreleased: readonly string[];
+  readonly commits: number;
 };
 
 const PLAIN_VERSION = /^(\d+)\.(\d+)\.(\d+)$/;
+
+export function isPlainVersion(version: string): boolean {
+  return PLAIN_VERSION.test(version);
+}
 
 export function unreleasedOf(subjects: readonly string[]): readonly string[] {
   return subjects.filter((subject) => groupOf(subject) !== undefined);
@@ -84,5 +89,6 @@ export const readPending = Effect.fn("readPending")(function* (root: string) {
     return yield* new ReleaseUnreadable({ message: "the checkout is shallow, so the tag it sees may not be the last one; fetch all of it" });
   }
   const since = yield* lastTag(root);
-  return { since, unreleased: unreleasedOf(yield* subjectsSince(root, since)) } satisfies Pending;
+  const subjects = yield* subjectsSince(root, since);
+  return { since, unreleased: unreleasedOf(subjects), commits: subjects.length } satisfies Pending;
 });

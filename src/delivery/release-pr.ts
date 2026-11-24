@@ -13,7 +13,7 @@ type Remote = {
 };
 
 const NAME = "checks-release-pr";
-const USAGE = "usage: checks-release-pr [--allow-non-default-branch] <workflow>...";
+const USAGE = "usage: checks-release-pr [--allow-non-default-branch] [--version <major.minor.patch>] <workflow>...";
 
 const PullRequest = Schema.Struct({ number: Schema.Int, title: Schema.String, html_url: Schema.String });
 type PullRequest = typeof PullRequest.Type;
@@ -57,7 +57,10 @@ const releasePullRequest = Effect.gen(function* () {
     return true;
   }
   const allowNonDefault = args.includes("--allow-non-default-branch");
-  const workflows = args.filter((arg) => arg !== "--allow-non-default-branch");
+  const versionAt = args.indexOf("--version");
+  const requested = versionAt === -1 ? undefined : args[versionAt + 1];
+  if (versionAt !== -1 && (requested === undefined || requested.startsWith("-"))) return yield* new Usage({ message: USAGE });
+  const workflows = args.filter((arg, index) => arg !== "--allow-non-default-branch" && (versionAt === -1 || (index !== versionAt && index !== versionAt + 1)));
   if (workflows.length === 0 || workflows.some((arg) => arg.startsWith("-"))) return yield* new Usage({ message: USAGE });
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   if (!allowNonDefault) {
@@ -66,7 +69,7 @@ const releasePullRequest = Effect.gen(function* () {
     if (branch !== default_branch) return yield* new Usage({ message: `branch ${branch} is not the default branch ${default_branch}; pass --allow-non-default-branch to release from it` });
   }
   const untagged = `rerun the tag job of ${yield* runningWorkflow} on the release commit, whose refusal says what to fix`;
-  const plan = yield* planRelease("release-pr", root, untagged);
+  const plan = yield* planRelease("release-pr", root, untagged, requested);
   if (plan === undefined) return true;
   const { base, branch, head, next, bumped } = plan;
   const remote = yield* readRemote(root, branch);

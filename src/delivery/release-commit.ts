@@ -1,7 +1,7 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import * as Base64 from "effect/encoding/Base64";
 import { gitHubJson, REPOSITORY } from "../core/github.ts";
-import { nextVersion, type Pending, readPending, releaseTitle, runBuild, withVersion, withWorkspaceVersion } from "./release.ts";
+import { isPlainVersion, nextVersion, type Pending, readPending, releaseTitle, runBuild, withVersion, withWorkspaceVersion } from "./release.ts";
 import { git } from "../core/git.ts";
 import { MANIFEST, RELEASE_BRANCH_PREFIX, releaseTag, taggedVersion } from "../core/release-names.ts";
 import { publicWorkspaces, type Workspace } from "./workspace-packages.ts";
@@ -57,15 +57,25 @@ export const versionIn = (manifest: string): Effect.Effect<string | undefined> =
     Effect.orElseSucceed(() => undefined),
   );
 
-const releaseVersion = Effect.fn("releaseVersion")(function* (manifest: string, { since, unreleased }: Pending, untagged: string) {
+const chosenVersion = Effect.fn("chosenVersion")(function* (version: string, needed: string, requested: string, since: string | undefined) {
+  if (!isPlainVersion(requested)) return yield* refused(`--version ${requested} is no plain major.minor.patch version`);
+  if (Bun.semver.order(requested, version) <= 0) return yield* refused(`--version ${requested} is not newer than ${version}, which ${MANIFEST} holds`);
+  if (Bun.semver.order(requested, needed) < 0) {
+    return yield* refused(`--version ${requested} is below ${needed}, which the unreleased changes${since === undefined ? "" : ` since ${since}`} need`);
+  }
+  return requested;
+});
+
+const releaseVersion = Effect.fn("releaseVersion")(function* (manifest: string, { since, unreleased }: Pending, untagged: string, requested: string | undefined) {
   const { version } = yield* decodeVersion(manifest).pipe(Effect.mapError((cause) => refused(`${MANIFEST}: ${cause.message}`)));
   if (since !== undefined && since !== releaseTag(version)) {
     return yield* refused(
       `${MANIFEST} holds ${version}, but the last release tag is ${since}, so ${releaseTag(version)} is untagged; ${untagged}, or return its version to ${taggedVersion(since)}`,
     );
   }
-  const next = nextVersion(version, unreleased);
-  if (next === undefined) return yield* refused(`${MANIFEST} holds ${version}, which is no plain major.minor.patch version`);
+  const needed = nextVersion(version, unreleased);
+  if (needed === undefined) return yield* refused(`${MANIFEST} holds ${version}, which is no plain major.minor.patch version`);
+  const next = requested === undefined ? needed : yield* chosenVersion(version, needed, requested, since);
   const bumped = withVersion(manifest, version, next);
   if (bumped === undefined || (yield* versionIn(bumped)) !== next) {
     return yield* refused(`cannot rewrite the version ${version} in ${MANIFEST} as ${next}`);
@@ -95,16 +105,19 @@ type Plan = {
 };
 
 // Undefined means nothing is unreleased, which it has already said.
-export const planRelease = Effect.fn("planRelease")(function* (label: string, root: string, untagged: string) {
+export const planRelease = Effect.fn("planRelease")(function* (label: string, root: string, untagged: string, requested?: string) {
   const pending = yield* readPending(root);
-  if (pending.unreleased.length === 0) {
+  if (requested !== undefined && pending.commits === 0) {
+    return yield* refused(`--version ${requested} has no commit to release ${pending.since === undefined ? "with no tag yet" : `since ${pending.since}`}`);
+  }
+  if (requested === undefined && pending.unreleased.length === 0) {
     yield* Console.log(`${label}: no unreleased changes ${pending.since === undefined ? "with no tag yet" : `since ${pending.since}`}`);
     return undefined;
   }
   const base = yield* currentBranch(root);
   const head = (yield* git(["rev-parse", "HEAD"], root)).trim();
   const manifest = yield* (yield* FileSystem.FileSystem).readFileString((yield* Path.Path).join(root, MANIFEST));
-  const { next, bumped } = yield* releaseVersion(manifest, pending, untagged);
+  const { next, bumped } = yield* releaseVersion(manifest, pending, untagged, requested);
   return { base, branch: releaseBranchOf(base), head, next, bumped } satisfies Plan;
 });
 

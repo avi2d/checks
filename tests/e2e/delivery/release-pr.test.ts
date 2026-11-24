@@ -25,8 +25,11 @@ function manifest(version: string): string {
   return `${JSON.stringify({ name: "widget", version, repository: { type: "git", url: "git+https://github.com/acme/widget.git" }, scripts }, null, 2)}\n`;
 }
 
-// A consumer released at v0.1.0, with one fix on main since, whose origin is a bare repository the fake gh writes into.
-async function consumer(): Promise<Consumer> {
+const FIX = "fix(parts): keep the order of parts (#3)";
+const MAINTENANCE = ["ci: cache the bun install (#3)", "test: cover the bill total (#4)"];
+
+// A consumer released at v0.1.0, with the given commits on main since, whose origin is a bare repository the fake gh writes into.
+async function consumer(since: readonly string[] = [FIX]): Promise<Consumer> {
   const repo = await repository({ "package.json": manifest("0.1.0") });
   const { dir } = repo;
   let changes = 0;
@@ -39,7 +42,7 @@ async function consumer(): Promise<Consumer> {
   await $`bun ${CHANGELOG}`.cwd(dir).quiet();
   await commit("docs: write the changelog (#2)");
   await $`git tag v0.1.0`.cwd(dir).quiet();
-  await commit("fix(parts): keep the order of parts (#3)");
+  for (const message of since) await commit(message);
   const home = await scratch("checks-release-pr-home-");
   const origin = join(home, "origin.git");
   await $`git init -q --bare -b main ${origin} && git remote add origin ${origin} && git push -q origin main --tags`.cwd(dir).quiet();
@@ -244,7 +247,77 @@ test(
 
     const usage = await widget.run([]);
     expect(usage.exitCode).toBe(2);
-    expect(usage.text).toContain("usage: checks-release-pr [--allow-non-default-branch] <workflow>...");
+    expect(usage.text).toContain("usage: checks-release-pr [--allow-non-default-branch] [--version <major.minor.patch>] <workflow>...");
+
+    expect((await widget.state()).calls.filter((call) => !call.startsWith("GET "))).toEqual([]);
+    expect(await widget.inOrigin("for-each-ref", "--format=%(refname)", "refs/heads/release/")).toBe("");
+  },
+  60_000,
+);
+
+test(
+  "with only ci and test commits since the last tag a run without --version opens nothing",
+  async () => {
+    const widget = await consumer(MAINTENANCE);
+    expect(await widget.run(["ci.yml"])).toEqual({ exitCode: 0, text: "release-pr: no unreleased changes since v0.1.0\n" });
+    expect((await widget.state()).calls).toEqual(["GET repos/{owner}/{repo}"]);
+  },
+  60_000,
+);
+
+test(
+  "--version 0.2.0 over only ci and test commits opens chore: release 0.2.0 whose changelog lists them",
+  async () => {
+    const widget = await consumer(MAINTENANCE);
+    const main = await head(widget.dir);
+
+    const opened = await widget.run(["--version", "0.2.0", "ci.yml"]);
+    expect(opened.text).toContain("release-pr: opened https://github.com/acme/widget/pull/1 to release 0.2.0, and dispatched ci.yml on release/main\n");
+    expect(opened.exitCode).toBe(0);
+    expect(await widget.inOrigin("log", "-1", "--format=%s %P", "release/main")).toBe(`chore: release 0.2.0 ${main}`);
+    expect(await widget.inOrigin("show", "release/main:package.json")).toBe(manifest("0.2.0").trim());
+    const changelog = await widget.inOrigin("show", "release/main:CHANGELOG.md");
+    const section = changelog.slice(changelog.indexOf("## 0.2.0"), changelog.indexOf("## 0.1.0"));
+    expect(section).toContain("### Maintenance");
+    expect(section).toContain("- cache the bun install [#3](https://github.com/acme/widget/pull/3)");
+    expect(section).toContain("- cover the bill total [#4](https://github.com/acme/widget/pull/4)");
+    expect((await widget.state()).pulls.map(({ title, body }) => ({ title, body }))).toEqual([{ title: "chore: release 0.2.0", body: "Release 0.2.0." }]);
+    expect(await readFile(join(widget.dir, "package.json"), "utf8")).toBe(manifest("0.1.0"));
+  },
+  60_000,
+);
+
+test(
+  "--version refuses a version that is not newer, not plain, below the unreleased changes or with no commit since the tag, and pushes nothing",
+  async () => {
+    const widget = await consumer(MAINTENANCE);
+    const refusals: Record<string, string> = {
+      "0.1.0": "checks-release-pr: --version 0.1.0 is not newer than 0.1.0, which package.json holds",
+      "0.0.9": "checks-release-pr: --version 0.0.9 is not newer than 0.1.0, which package.json holds",
+      "0.2": "checks-release-pr: --version 0.2 is no plain major.minor.patch version",
+      "0.2.0-rc.1": "checks-release-pr: --version 0.2.0-rc.1 is no plain major.minor.patch version",
+    };
+    for (const [version, message] of Object.entries(refusals)) {
+      const refused = await widget.run(["--version", version, "ci.yml"]);
+      expect(refused.exitCode).toBe(2);
+      expect(refused.text).toContain(message);
+    }
+
+    await widget.commit("feat: price a bill (#5)");
+    const below = await widget.run(["--version", "0.1.1", "ci.yml"]);
+    expect(below.exitCode).toBe(2);
+    expect(below.text).toContain("checks-release-pr: --version 0.1.1 is below 0.2.0, which the unreleased changes since v0.1.0 need");
+
+    await writeFile(join(widget.dir, "package.json"), manifest("0.2.0"));
+    await widget.commit("chore: release 0.2.0 (#6)");
+    await $`git tag v0.2.0`.cwd(widget.dir).quiet();
+    const empty = await widget.run(["--version", "0.2.0", "ci.yml"]);
+    expect(empty.exitCode).toBe(2);
+    expect(empty.text).toContain("checks-release-pr: --version 0.2.0 has no commit to release since v0.2.0");
+
+    const missing = await widget.run(["ci.yml", "--version"]);
+    expect(missing.exitCode).toBe(2);
+    expect(missing.text).toContain("usage: checks-release-pr");
 
     expect((await widget.state()).calls.filter((call) => !call.startsWith("GET "))).toEqual([]);
     expect(await widget.inOrigin("for-each-ref", "--format=%(refname)", "refs/heads/release/")).toBe("");

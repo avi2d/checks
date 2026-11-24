@@ -21,6 +21,9 @@ It refuses when the last release tag names a version other than the one `package
 The refusal points at the `tag` job of the workflow it runs in, rerun on the release commit, rather than at a tag pushed by hand.
 That job's own refusal says what to fix.
 It refuses a version that is not a plain `major.minor.patch`.
+With `--version <major.minor.patch>`, it plans that version instead of the bump whenever any commit exists since the last tag, even when none of them is a listed change.
+It refuses that version when it is not a plain `major.minor.patch`, when it is not newer than the version `package.json` holds, or when it is below the bump the unreleased changes need.
+It refuses `--version` when no commit exists since the last tag.
 It writes the next version into `package.json`, and into each public workspace package and its `bun.lock` entry where a workflow step sets `CHECKS_PUBLISH_WORKSPACES` to `true`.
 It runs `bun run build` so the build writes `CHANGELOG.md`.
 It commits every tracked file the build changed as `chore: release <version>`.
@@ -53,11 +56,12 @@ The repository needs **Allow GitHub Actions to create and approve pull requests*
 ## Arguments
 
 ```sh
-checks-release-pr [--allow-non-default-branch] <workflow>...
+checks-release-pr [--allow-non-default-branch] [--version <major.minor.patch>] <workflow>...
 ```
 
 Pass `--help` or `-h` to print usage without calling git or GitHub.
 Pass `--allow-non-default-branch` to plan a release from the current branch when it is not the default branch.
+Pass `--version <major.minor.patch>` to release that version, such as a release of only `ci` and `test` commits that the kit's rule would skip.
 Each workflow argument names a file under `.github/workflows/` whose jobs report the checks the default branch requires, such as `ci.yml`.
 Each named workflow triggers on `workflow_dispatch`.
 Name no workflow that runs something else on dispatch, such as a mutation refresh.
@@ -66,7 +70,7 @@ Name no workflow that runs something else on dispatch, such as a mutation refres
 
 | Code | When |
 | --- | --- |
-| 0 | help was printed, nothing is unreleased, or the release pull request is open on the current `HEAD` and its checks are dispatched |
+| 0 | help was printed, nothing is unreleased and no `--version` was passed, or the release pull request is open on the current `HEAD` and its checks are dispatched |
 | 2 | the arguments do not parse, a refusal above applies, the build fails, or a GitHub API call fails |
 
 ## Sample output
