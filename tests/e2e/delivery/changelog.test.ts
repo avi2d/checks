@@ -416,7 +416,7 @@ test(
   async () => {
     await initRepo();
     await bump("0.1.0");
-    await commit("ci: run the suite on pull requests (#1)");
+    await commit("docs: say why (#1)");
     await commit("chore: tidy the build (#2)");
 
     expect(await rewritten(0)).toBe(written());
