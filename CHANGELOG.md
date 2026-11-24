@@ -2,6 +2,17 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.116.0
+
+Released 2026-11-24.
+
+### Features
+
+- **delivery:** support optional release version input [#214](https://github.com/avi2d/checks/pull/214)
+- **release-pr:** allow explicit maintenance versions [#213](https://github.com/avi2d/checks/pull/213)
+- size test and browser workers from runner cores [#212](https://github.com/avi2d/checks/pull/212)
+- **delivery:** list ci and test commits as Maintenance with no listed changes [#211](https://github.com/avi2d/checks/pull/211)
+
 ## 0.115.0
 
 Released 2026-11-23.
