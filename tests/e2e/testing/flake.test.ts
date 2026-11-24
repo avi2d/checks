@@ -220,7 +220,11 @@ test.each(["0", "-1", "1.5", "abc"])("invalid runner cores %s refuse a flake hun
     .quiet();
   expect(result.exitCode).toBe(2);
   expect(result.stderr.toString()).toContain("CI_CORES");
-  await expect(readFile(join(dir, "started"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+  const started = await readFile(join(dir, "started"), "utf8").then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(started).toMatchObject({ code: "ENOENT" });
 });
 
 test("a test script that does not run checks-test hunts serially", async () => {
