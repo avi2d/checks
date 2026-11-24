@@ -6,6 +6,9 @@ import { SETUP_NODE, CONFIGURE_PAGES, UPLOAD_PAGES, DEPLOY_PAGES, type Step, typ
 import { PULL_REQUEST_HEAD, PULL_REQUEST_NUMBER, BY_HAND, ciWorkflow } from "./full-set/ci.ts";
 import { PREVIEW_CLOSE, SITE_MAIN, PRODUCTION } from "./full-set/site.ts";
 
+// The pull_request types cannot filter an edit by its changed field, so the job reads the changes payload.
+const TITLE_CHANGED = "github.event.action != 'edited' || github.event.changes.title != null";
+
 const prTitle = (publishes: boolean): Workflow => ({
   name: "pr-title",
   on: ["pull_request:", "  types: [opened, synchronize, reopened, edited]"],
@@ -13,6 +16,7 @@ const prTitle = (publishes: boolean): Workflow => ({
   jobs: [
     {
       id: "title",
+      if: TITLE_CHANGED,
       runsOn: runnerOf(publishes),
       timeout: 10,
       permissions: ["contents: read", "statuses: write", "pull-requests: read"],

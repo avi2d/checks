@@ -76,6 +76,21 @@ test("the two kinds share pr-title and release byte for byte, so neither drifts 
   expect(textOf(SITE, "ci.yml")).not.toBe(textOf(CODE, "ci.yml"));
 });
 
+test("a ci.yml without a push-to-main trigger in any set fails here, so a merge that skipped the branch update gets no main run", () => {
+  for (const set of [CODE, SITE, CHECKED, EVERY_OPTION]) expect(documentOf(set, "ci.yml")).toMatchObject({ on: { push: { branches: ["main"] } } });
+});
+
+test("a body-only edit that runs the pr-title job fails here, while a title edit, a new pull request and a push to it still run it", () => {
+  const condition = jobsOf(documentOf(CODE, "pr-title.yml"))["title"]?.["if"];
+  expect(typeof condition).toBe("string");
+  const runs = (event: Plain): boolean => truthy(evaluated(String(condition), { github: { event } }));
+  expect(runs({ action: "edited", changes: { body: { from: "old body" } } })).toBe(false);
+  expect(runs({ action: "edited", changes: { title: { from: "old title" } } })).toBe(true);
+  expect(runs({ action: "opened" })).toBe(true);
+  expect(runs({ action: "reopened" })).toBe(true);
+  expect(runs({ action: "synchronize" })).toBe(true);
+});
+
 test("an absent optional file is no difference, but an edited one is, and a site holds no mutation file", () => {
   const required = requiredSet(CODE, false);
   expect(differencesOf(CODE, required, false)).toEqual([]);
