@@ -192,6 +192,37 @@ test(
   120_000,
 );
 
+test.each([
+  { name: "consumer", script: "checks-test", cores: "2", workers: 2 },
+  { name: "@avi2dg/checks", script: "bun src/testing/test.ts", cores: "2", workers: 2 },
+  { name: "explicit workers", script: "checks-test --parallel=1", cores: "invalid", workers: 1 },
+  { name: "serial script", script: "bun test", cores: "invalid", workers: undefined },
+])("$name hunts use runner cores without overriding explicit workers or enabling serial scripts' workers", async ({ name, script, cores, workers }) => {
+  await consumer(ORDER_FREE);
+  await writeFile(join(dir, "package.json"), JSON.stringify({ name, scripts: { test: script } }));
+  const result = await $`bun ${SCRIPT} --seed 1 --report flake-report.json`
+    .cwd(dir)
+    .env({ ...process.env, CI: "true", CI_CORES: cores })
+    .nothrow()
+    .quiet();
+  expect(result.exitCode).toBe(0);
+  const record = Schema.decodeSync(FlakeRecord)(await readFile(join(dir, "flake-report.json"), "utf8"));
+  expect(record.parallel).toEqual(workers === undefined ? undefined : { workers, replays: [] });
+  expect(record.runs).toEqual([{ seed: 1, passed: true, tests: 3, failed: [] }]);
+});
+
+test.each(["0", "-1", "1.5", "abc"])("invalid runner cores %s refuse a flake hunt before any test starts", async (cores) => {
+  await consumer(`import { writeFileSync } from "node:fs";\nwriteFileSync("started", "yes");\n${ORDER_FREE}`, { test: "checks-test" });
+  const result = await $`bun ${SCRIPT} --seed 1 --report flake-report.json`
+    .cwd(dir)
+    .env({ ...process.env, CI: "true", CI_CORES: cores })
+    .nothrow()
+    .quiet();
+  expect(result.exitCode).toBe(2);
+  expect(result.stderr.toString()).toContain("CI_CORES");
+  await expect(readFile(join(dir, "started"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+});
+
 test("a test script that does not run checks-test hunts serially", async () => {
   await consumer(ORDER_FREE, { test: "bun test" });
   const serial = await flake(join(dir, "step-summary.md"));

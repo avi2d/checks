@@ -12,7 +12,8 @@ It runs the unit tier plus the smoke list outside CI and the full suite under CI
 Outside CI, `checks-test` refuses to start for agents unless `agentTests.allowLocal` is `true`, as [checks-local-tests](checks-local-tests.md) says.
 A `--changed` run narrows that, as [Changed-file runs](#changed-file-runs) says, and so does a `--pr` run, as [The pull request entry](#the-pull-request-entry) says.
 It refuses `--full`, `--tier=e2e` and `--tier=pixel` outside CI, except a pixel run that approves pictures, as [Runs refused outside CI](#runs-refused-outside-ci) says.
-It runs them with `bun test --pass-with-no-tests --randomize --parallel=<workers>`, where the count comes from free memory as [Parallel runs](#parallel-runs) says, and reads Bun's JUnit report from that run.
+It runs them with `bun test --pass-with-no-tests --randomize --parallel=<workers>` and reads Bun's JUnit report from that run.
+The worker count follows [Parallel runs](#parallel-runs).
 When Bun finds no test file, the run passes and reports that no test file was found.
 It runs Bun with `CI=true`, so `test.only` fails the run in every environment.
 Bun exits zero when tests skip, so `checks-test` checks every skipped test against its source declaration.
@@ -82,6 +83,7 @@ A `--changed` run also reads the git history since the merge base with `origin/<
 It reads the sources, `package.json`, `checks.config.ts` and `bunfig.toml` too, as [Changed-file runs](#changed-file-runs) says.
 It reads the file exclusions from `testFileSkips` in `checks.config.ts`, as [Test file exclusions](#test-file-exclusions) says.
 It reads `AI_AGENT`, `CHECKS_AGENT`, `CI`, and `agentTests.allowLocal` to decide whether an agent can run tests outside CI, as [checks-local-tests](checks-local-tests.md) says.
+It reads `CI_CORES` for the worker count unless `--parallel=<workers>` overrides it, as [Parallel runs](#parallel-runs) says.
 It counts a run as `ci` when `CI` is true and as `local` otherwise.
 A local run covers `./tests/unit` plus the smoke list the repository declares, except a `--changed` run, as [Changed-file runs](#changed-file-runs) says.
 The smoke list lives in `checks.config.ts` under `smoke` as an array of test file paths.
@@ -249,7 +251,7 @@ The count is a whole number from 1 up.
 Each file runs in a fresh global, so a file cannot lean on state another file left behind.
 Tests still run in random order, and `test.only` still fails the run.
 Bun merges every worker's results into the one JUnit report, so each skipped test and each todo is judged across the whole suite.
-[checks-flake](checks-flake.md#parallel-hunts) hunts with the worker count the same memory rule selects.
+[checks-flake](checks-flake.md#parallel-hunts) hunts with the worker count the same rule selects.
 
 A file whose worker crashes, for example when a test calls `process.exit`, fails the run.
 Bun reports no result from that file, so its skips are not judged and its declarations are not reported as stale.
@@ -260,7 +262,7 @@ A timings option waits for Bun to honour timings under random order.
 ## Arguments
 
 The default command takes no arguments except `--parallel=<workers>`, as [Parallel runs](#parallel-runs) says, `--full`, `--changed`, `--pr` and `--junit=<file>`.
-`--parallel=<workers>` overrides the memory count for one run.
+`--parallel=<workers>` overrides `CI_CORES` or the memory count for one run.
 `--full` runs the full suite in CI even when a pull request would narrow it, and is refused outside CI, as [Runs refused outside CI](#runs-refused-outside-ci) says.
 A `package.json` script never takes `--full`, as [checks-test-layout](checks-test-layout.md) says of `scripts.test`.
 `--changed` runs the test files the change reaches, as [Changed-file runs](#changed-file-runs) says, and takes neither a tier nor `--full`.
@@ -280,7 +282,7 @@ It refuses test filters because every test excluded by a filter would look skipp
 | --- | --- |
 | 0 | every test passed, every skip has a matching site reason, and no file exceeds the time limit in CI, or no test file was found |
 | 1 | a test failed, a parallel worker crashed, a skip lacks a site reason, a declaration is stale in CI, or a file exceeds the time limit in CI |
-| 2 | an argument is not one it takes, a run outside CI is refused, `APPROVE_SCREENS` is not a boolean in a pixel run, a declaration, the smoke list, the file exclusions, or the time limit in CI cannot be read, a `checks` object in `package.json` still sets `smoke` or `reach`, a smoke entry names no runnable test, `CI` is not a boolean, Bun passed but wrote no report though test files exist, a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` or an agent run is refused outside CI when `agentTests.allowLocal` is `false` |
+| 2 | an argument is not one it takes, a run outside CI is refused, `APPROVE_SCREENS` is not a boolean in a pixel run, a declaration, the smoke list, the file exclusions, or the time limit in CI cannot be read, a `checks` object in `package.json` still sets `smoke` or `reach`, a smoke entry names no runnable test, `CI` is not a boolean, `CI_CORES` is read but is not a positive whole number, Bun passed but wrote no report though test files exist, a `--changed` run cannot find where `HEAD` branched from `origin/<default branch>` or an agent run is refused outside CI when `agentTests.allowLocal` is `false` |
 
 ## Sample output
 

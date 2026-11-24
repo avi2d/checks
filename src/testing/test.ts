@@ -194,16 +194,11 @@ const availableBytes = Effect.fn("availableBytes")(function* () {
   return reclaimableBytes(vmStat) ?? freemem();
 });
 
-export const resolveMemoryWorkerCount = Effect.fn("resolveMemoryWorkerCount")(function* (workers: number | undefined) {
-  if (workers !== undefined) return workers;
-  return workerCountFor(yield* availableBytes(), totalmem(), availableParallelism());
-});
-
 export const resolveWorkerCount = Effect.fn("resolveWorkerCount")(function* (workers: number | undefined) {
   if (workers !== undefined) return workers;
   const cores = yield* ciCores;
   if (Option.isSome(cores)) return cores.value;
-  return yield* resolveMemoryWorkerCount(undefined);
+  return workerCountFor(yield* availableBytes(), totalmem(), availableParallelism());
 });
 
 // A live or pixel tier and --full run whole, since no pull request picks them.
