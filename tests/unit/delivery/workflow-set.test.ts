@@ -76,6 +76,43 @@ test("the two kinds share pr-title and release byte for byte, so neither drifts 
   expect(textOf(SITE, "ci.yml")).not.toBe(textOf(CODE, "ci.yml"));
 });
 
+test("a ci.yml without a push-to-main trigger in any set fails here, so a merge that skipped the branch update gets no main run", () => {
+  for (const set of [CODE, SITE, CHECKED, EVERY_OPTION]) expect(documentOf(set, "ci.yml")).toMatchObject({ on: { push: { branches: ["main"] } } });
+});
+
+test("body-only edits neither run nor cancel title checks, while title edits and pushes share a cancellation group", async () => {
+  const generated = [CODE, SITE, CHECKED, EVERY_OPTION].flatMap((set) =>
+    [false, true].map((kit) => parsedRecord(requiredSet(set, kit).find(({ name }) => name === "pr-title.yml")?.text ?? "")),
+  );
+  const workflows = [...generated, parsedRecord(await Bun.file(".github/workflows/pr-title.yml").text())];
+  for (const workflow of workflows) {
+    const condition = jobsOf(workflow)["title"]?.["if"];
+    expect(typeof condition).toBe("string");
+    const concurrency = workflow["concurrency"];
+    expect(concurrency).toMatchObject({ "cancel-in-progress": true });
+    const group = isRecord(concurrency) ? concurrency["group"] : undefined;
+    expect(typeof group).toBe("string");
+    const runs = (event: Plain): boolean => truthy(evaluated(String(condition), { github: { event } }));
+    const groupOf = (event: { readonly [key: string]: Plain }, runId: string, number = "42"): string =>
+      String(group).replace(/\$\{\{([\s\S]*?)\}\}/g, (_match: string, expression: string) =>
+        evaluated(expression, { github: { event: { ...event, pull_request: { number } }, run_id: runId } }).coerceString(),
+      );
+    const push = { action: "synchronize" };
+    const bodyEdit = { action: "edited", changes: { body: { from: "old body" } } };
+    const titleEdit = { action: "edited", changes: { title: { from: "old title" } } };
+    const combinedEdit = { action: "edited", changes: { ...bodyEdit.changes, ...titleEdit.changes } };
+    const pushGroup = groupOf(push, "100");
+    expect(runs(bodyEdit)).toBe(false);
+    expect(groupOf(bodyEdit, "101")).not.toBe(pushGroup);
+    expect(groupOf(bodyEdit, "101")).not.toBe(groupOf(bodyEdit, "102"));
+    expect(groupOf(push, "103", "43")).not.toBe(pushGroup);
+    for (const event of [titleEdit, combinedEdit, { action: "opened" }, { action: "reopened" }, push]) {
+      expect(runs(event)).toBe(true);
+      expect(groupOf(event, "104")).toBe(pushGroup);
+    }
+  }
+});
+
 test("an absent optional file is no difference, but an edited one is, and a site holds no mutation file", () => {
   const required = requiredSet(CODE, false);
   expect(differencesOf(CODE, required, false)).toEqual([]);
