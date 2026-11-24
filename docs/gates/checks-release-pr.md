@@ -8,7 +8,7 @@ audience: consumers
 
 ## What it checks
 
-Without `--version`, it does nothing when [checks-release-report](checks-release-report.md) lists no unreleased changes.
+Without an explicit version, it does nothing when [checks-release-report](checks-release-report.md) lists no unreleased changes.
 It bumps the version `package.json` holds by the kit's rule:
 
 | Unreleased changes | Below 1.0.0 | From 1.0.0 |
@@ -21,7 +21,7 @@ It refuses when the last release tag names a version other than the one `package
 The refusal points at the `tag` job of the workflow it runs in, rerun on the release commit, rather than at a tag pushed by hand.
 That job's own refusal says what to fix.
 It refuses a version that is not a plain `major.minor.patch`.
-With `--version <major.minor.patch>`, it plans the requested version instead of the automatic bump.
+With `--version <major.minor.patch>` or a nonempty `CHECKS_RELEASE_VERSION`, it plans the requested version instead of the automatic bump.
 The requested version must be newer than the version in `package.json`.
 It must also be at least as high as the bump the unreleased changes need.
 At least one commit must exist since the last tag, but it need not be a listed change.
@@ -48,6 +48,8 @@ It leaves the working tree as it found it.
 It reads the `v*` tags, the commit subjects since the last one, `package.json` and `bun.lock` from the checkout.
 It also reads each workspace `package.json` and each workflow step's `CHECKS_PUBLISH_WORKSPACES` for the workspace publishing opt-in.
 It names the workflow it runs in by `GITHUB_WORKFLOW`, or as `release-pr` when that is unset.
+It reads `CHECKS_RELEASE_VERSION` as a version, not as a command-line argument.
+If you omit `--version` and leave `CHECKS_RELEASE_VERSION` unset or empty, it plans the automatic bump.
 It refuses a shallow checkout, a detached `HEAD` and a working tree with changes to tracked files.
 It reads the default branch from the GitHub repository and refuses any other branch unless `--allow-non-default-branch` is passed.
 It reads the release branch from `origin` with `git ls-remote` and `git fetch`.
@@ -64,6 +66,7 @@ checks-release-pr [--allow-non-default-branch] [--version <major.minor.patch>] <
 Pass `--help` or `-h` to print usage without calling git or GitHub.
 Pass `--allow-non-default-branch` to plan a release from the current branch when it is not the default branch.
 Pass `--version <major.minor.patch>` to release that version, even when the changes are only maintenance commits.
+The flag takes precedence over `CHECKS_RELEASE_VERSION`.
 Each workflow argument names a file under `.github/workflows/` whose jobs report the checks the default branch requires, such as `ci.yml`.
 Each named workflow triggers on `workflow_dispatch`.
 Name no workflow that runs something else on dispatch, such as a mutation refresh.
@@ -72,7 +75,7 @@ Name no workflow that runs something else on dispatch, such as a mutation refres
 
 | Code | When |
 | --- | --- |
-| 0 | help was printed, nothing is unreleased and no `--version` was passed, or the release pull request is open on the current `HEAD` and its checks are dispatched |
+| 0 | help was printed, nothing is unreleased and no explicit version was given, or the release pull request is open on the current `HEAD` and its checks are dispatched |
 | 2 | the arguments do not parse, a refusal above applies, the build fails, or a GitHub API call fails |
 
 ## Sample output
@@ -162,6 +165,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: ./node_modules/.bin/checks-release-tag release.yml
 ```
+
+In the `release.yml` that [checks-workflows](checks-workflows.md#release-a-chosen-version) writes, the optional `version` dispatch input reaches `checks-release-pr` as `CHECKS_RELEASE_VERSION`.
+To opt in, raise the kit range to a version that supports the input and run `bun install`.
+Add the input and run `bunx checks-workflows --write`.
+Merge the changes to the default branch.
+Run `gh workflow run release.yml -f version=X.Y.Z` on that branch.
 
 The `pull-request` job runs `checks-release-preflight` before planning, so a version the last tag does not name fails before `checks-release-pr` builds.
 Both jobs use the runner [checks-workflows](checks-workflows.md#the-composed-ciyml) selects.

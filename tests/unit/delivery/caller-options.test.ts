@@ -131,3 +131,13 @@ test("the full test before a publish follows whether the package publishes, not 
   expect(optionsOf({}, true).fullTest).toBe(true);
   expect(optionsOf({ "main.yml": "name: main\non: push\njobs:\n  release:\n    uses: acme/workflows/.github/workflows/release-main.yml@v3\n    with:\n      full-test: true\n" }, false).fullTest).toBe(false);
 });
+
+test("only a release.yml dispatch with an optional string version input opts into passing a version to checks-release-pr", () => {
+  const release = (input: string) => `name: release\non:\n  workflow_dispatch:\n    inputs:\n      version:\n${input}jobs: {}\n`;
+  expect(optionsOf({ "release.yml": release("        required: false\n        type: string\n") }).releaseVersionInput).toBe(true);
+  expect(optionsOf({ "release.yml": release("        type: string\n") }).releaseVersionInput).toBe(true);
+  expect(optionsOf({ "release.yml": release("        required: true\n        type: string\n") }).releaseVersionInput).toBe(false);
+  expect(optionsOf({ "release.yml": release("        type: boolean\n") }).releaseVersionInput).toBe(false);
+  expect(optionsOf({ "release.yml": "name: release\non:\n  workflow_dispatch:\njobs: {}\n" }).releaseVersionInput).toBe(false);
+  expect(optionsOf({ "flake.yml": release("        type: string\n") }).releaseVersionInput).toBe(false);
+});

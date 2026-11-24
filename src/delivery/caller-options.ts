@@ -17,6 +17,7 @@ export type CallerOptions = {
   readonly checkRelease: boolean;
   readonly publishes: boolean;
   readonly publicRepository: boolean;
+  readonly releaseVersionInput: boolean;
 };
 
 export const NO_CALLER_OPTIONS: CallerOptions = {
@@ -31,6 +32,7 @@ export const NO_CALLER_OPTIONS: CallerOptions = {
   checkRelease: false,
   publishes: false,
   publicRepository: false,
+  releaseVersionInput: false,
 };
 
 export type HeldWorkflow = (name: string) => Workflow | undefined;
@@ -143,6 +145,18 @@ export function readsPublishWorkspaces(workflows: readonly Workflow[]): boolean 
   );
 }
 
+const decodeVersionInput = Schema.decodeUnknownOption(
+  Schema.Struct({
+    on: Schema.Struct({
+      workflow_dispatch: Schema.Struct({
+        inputs: Schema.Struct({ version: Schema.Struct({ type: Schema.Literal("string"), required: Schema.optionalKey(Schema.Literal(false)) }) }),
+      }),
+    }),
+  }),
+);
+
+const holdsVersionInput = (release: Workflow | undefined): boolean => release !== undefined && Option.isSome(decodeVersionInput(release.document));
+
 export function callerOptionsOf(held: HeldWorkflow, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild: boolean): CallerOptions {
   return {
     advisoriesCron: weeklyCronOf(held("advisories.yml")),
@@ -156,5 +170,6 @@ export function callerOptionsOf(held: HeldWorkflow, publishes: boolean, publishW
     checkRelease: !publishes && needsReleaseChecks,
     publishes,
     publicRepository,
+    releaseVersionInput: holdsVersionInput(held("release.yml")),
   };
 }

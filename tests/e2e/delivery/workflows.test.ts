@@ -12,6 +12,7 @@ const WIRING = join(CHECKOUT, "src", "delivery", "ci-wiring.ts");
 const PLAIN_STEPS = join(CHECKOUT, "src", "delivery", "plain-steps.ts");
 const SITE = { pages: "acme", domain: "acme.example", production: "acme/acme.example" };
 const FLEET_BUN_VERSION = (await readFile(join(CHECKOUT, ".bun-version"), "utf8")).trim();
+const RELEASE_WITHOUT_VERSION = join(CHECKOUT, "tests", "fixtures", "workflows", "release-without-version.yml");
 const open = fixtureRepos("checks-workflows-");
 
 const manifest = (extra: Readonly<Record<string, unknown>> = {}): string =>
@@ -38,7 +39,7 @@ async function expectNoRemoteCall(repo: FixtureRepo): Promise<void> {
   for (const name of await held(repo)) expectNoRemoteUses(name, await text(repo, name));
 }
 
-test("a code repository without workflow files is refused until --write writes ci, pr-title, main, release and the setup action, which ci-wiring then accepts", async () => {
+test("a code repository without workflows is refused until --write writes the set, with no byte changes to the opt-out release template", async () => {
   const repo = await open({ "package.json": manifest(), ".bun-version": `${FLEET_BUN_VERSION}\n` });
   await repo.commit("start");
 
@@ -56,7 +57,7 @@ test("a code repository without workflow files is refused until --write writes c
   });
   expect(await parsed(repo, "pr-title.yml")).toMatchObject({ on: { pull_request: { types: ["opened", "synchronize", "reopened", "edited"] } } });
   expect(await parsed(repo, "main.yml")).toMatchObject({ on: { push: { branches: ["main"] } } });
-  expect(await parsed(repo, "release.yml")).toMatchObject({ on: { workflow_dispatch: null } });
+  expect(await text(repo, "release.yml")).toBe(await readFile(RELEASE_WITHOUT_VERSION, "utf8"));
   await expectNoRemoteCall(repo);
 
   expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the code set checks-workflows writes\n" });
@@ -212,6 +213,32 @@ test("an edited line in a written file is refused with the line it holds and the
       "  run checks-workflows --write to write the set",
     ].join("\n"),
   );
+}, 30_000);
+
+test("an opted-in release.yml keeps the version in env rather than run and refuses an inline edit", async () => {
+  const optIn = "name: release\non:\n  workflow_dispatch:\n    inputs:\n      version:\n        type: string\njobs: {}\n";
+  const repo = await open({ "package.json": manifest(), ".github/workflows/release.yml": optIn });
+  await repo.commit("start");
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  const release = await parsed(repo, "release.yml");
+  expect(release).toMatchObject({
+    on: { workflow_dispatch: { inputs: { version: { type: "string", required: false } } } },
+    jobs: {
+      "pull-request": {
+        steps: expect.arrayContaining([expect.objectContaining({ run: "bunx checks-release-pr ci.yml", env: expect.objectContaining({ CHECKS_RELEASE_VERSION: "${{ inputs.version }}" }) })]),
+      },
+    },
+  });
+  expect(release).toHaveProperty("jobs.pull-request.permissions", { contents: "write", "pull-requests": "write", actions: "write" });
+  expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the code set checks-workflows writes\n" });
+
+  const inline = (await text(repo, "release.yml"))
+    .replace("          CHECKS_RELEASE_VERSION: ${{ inputs.version }}\n", "")
+    .replace("run: bunx checks-release-pr ci.yml", "run: bunx checks-release-pr --version ${{ inputs.version }} ci.yml");
+  await Bun.write(join(repo.dir, ".github", "workflows", "release.yml"), inline);
+  const refused = await workflows(repo);
+  expect(refused.exitCode).toBe(1);
+  expect(refused.text).toContain("  .github/workflows/release.yml: differs from the file checks-workflows writes\n");
 }, 30_000);
 
 test("a pr-text.yml scan stays as it is: it is no extra, --write keeps it, and it is never compared", async () => {

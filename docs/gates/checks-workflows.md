@@ -104,6 +104,36 @@ It also fails when a test job of `ci.yml` holds an input that does not parse, or
 The message names the flags that fix it.
 Each difference names the file, and each changed line names what the file holds and what `checks-workflows` writes.
 
+### Release a chosen version
+
+`checks-workflows` keeps an optional string input named `version` on the `workflow_dispatch` of `release.yml`.
+The release step sets `CHECKS_RELEASE_VERSION: ${{ inputs.version }}` under `env` and still runs `bunx checks-release-pr ci.yml`.
+[checks-release-pr](checks-release-pr.md) plans the version from that variable, or plans the automatic bump when the variable is empty.
+GitHub substitutes expressions in `run` before the shell parses the script.
+`checks-workflows` refuses a `release.yml` that puts the input in `run`.
+The job grants `contents: write`, `pull-requests: write`, and `actions: write` with or without the input.
+Without the opt-in, the generated `release.yml` has no `inputs` or `CHECKS_RELEASE_VERSION`.
+
+To opt in:
+
+1. Raise the `@avi2dg/checks` range in `package.json` to a version that supports the input.
+2. Run `bun install`.
+3. Add the input to `.github/workflows/release.yml`:
+
+   ```yaml
+   on:
+     workflow_dispatch:
+       inputs:
+         version:
+           type: string
+   ```
+
+4. Run `bunx checks-workflows --write` to write the input and the step that reads it.
+5. Merge the dependency and workflow changes to the default branch.
+6. Run `gh workflow run release.yml -f version=X.Y.Z` on the default branch.
+
+A run without `-f version` plans the bump the unreleased changes need.
+
 ## The composed ci.yml
 
 `ci.yml` holds one job per concern:

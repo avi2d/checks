@@ -1,3 +1,4 @@
+import { RELEASE_VERSION_ENV } from "../core/release-names.ts";
 import { type CallerSet } from "./site-names.ts";
 import { type CallerOptions, type Flake, type Pages } from "./caller-options.ts";
 import { isBrowserWalk, runnerOf } from "./ci-jobs.ts";
@@ -36,9 +37,11 @@ const prTitle = (publishes: boolean): Workflow => ({
   ],
 });
 
-const RELEASE: Workflow = {
+const VERSION_INPUT = ["  inputs:", "    version:", "      description: the version to release instead of the planned bump", "      required: false", "      type: string"];
+
+const release = (versionInput: boolean): Workflow => ({
   name: "release",
-  on: BY_HAND,
+  on: versionInput ? [...BY_HAND, ...VERSION_INPUT] : BY_HAND,
   jobs: [
     {
       id: "pull-request",
@@ -49,12 +52,12 @@ const RELEASE: Workflow = {
       steps: [
         { note: "A rerun plans the branch tip, not the commit the dispatch named.", ...checkout({ ref: expression("github.ref"), history: true, credentials: true }) },
         SETUP,
-        { env: [TOKEN], run: "bunx checks-release-pr ci.yml" },
+        { env: [TOKEN, ...(versionInput ? [[RELEASE_VERSION_ENV, expression("inputs.version")] as const] : [])], run: "bunx checks-release-pr ci.yml" },
         ciCommand("held-runs", { name: "delete the runs held for approval on the branch tip" }, [TOKEN, ["BRANCH", "release/" + expression("github.ref_name")]]),
       ],
     },
   ],
-};
+});
 
 const RELEASE_COMMIT = "startsWith(github.event.head_commit.message, 'chore: release ')";
 
@@ -102,8 +105,8 @@ const fileOf = (workflow: Workflow): FullWorkflow => ({ name: workflow.name + ".
 // The kit publishes through a release.yml that npm's trusted publishing names, so it keeps its own release files.
 export function fullRequiredSet(set: CallerSet, kit: boolean): readonly FullWorkflow[] {
   const ci = fileOf(ciWorkflow(set, kit));
-  if (set.kind === "site") return [ci, fileOf(prTitle(set.options.publicRepository)), fileOf(PREVIEW_CLOSE(set.names, set.options.publicRepository)), fileOf(SITE_MAIN(set.names)), fileOf(RELEASE), fileOf(PRODUCTION(set.names, set.ci.tests.some(isBrowserWalk)))];
-  return kit ? [ci, fileOf(prTitle(set.options.publicRepository))] : [ci, fileOf(prTitle(set.options.publicRepository)), fileOf(codeMain(set.options)), fileOf(RELEASE)];
+  if (set.kind === "site") return [ci, fileOf(prTitle(set.options.publicRepository)), fileOf(PREVIEW_CLOSE(set.names, set.options.publicRepository)), fileOf(SITE_MAIN(set.names)), fileOf(release(set.options.releaseVersionInput)), fileOf(PRODUCTION(set.names, set.ci.tests.some(isBrowserWalk)))];
+  return kit ? [ci, fileOf(prTitle(set.options.publicRepository))] : [ci, fileOf(prTitle(set.options.publicRepository)), fileOf(codeMain(set.options)), fileOf(release(set.options.releaseVersionInput))];
 }
 
 // A second deploy waits for the one in flight, since Pages serves one deployment at a time.
