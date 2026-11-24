@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
-import { Console, Effect, Schema } from "effect";
+import { Config, Console, Effect, Schema } from "effect";
 import { dispatch, gitHubJson, REPOSITORY } from "../core/github.ts";
 import { releaseTitle, runningWorkflow } from "./release.ts";
 import { buildRelease, commitRelease, hasBranch, planRelease, pointBranch, versionIn } from "./release-commit.ts";
 import { git } from "../core/git.ts";
-import { MANIFEST } from "../core/release-names.ts";
+import { MANIFEST, RELEASE_VERSION_ENV } from "../core/release-names.ts";
 import { runMain, Usage } from "../core/main.ts";
 
 type Remote = {
@@ -65,9 +65,11 @@ const releasePullRequest = Effect.gen(function* () {
     return true;
   }
   const allowNonDefault = args.includes("--allow-non-default-branch");
-  const { requested, rest } = yield* parseVersionArgument(args);
+  const { requested: cliVersion, rest } = yield* parseVersionArgument(args);
   const workflows = rest.filter((arg) => arg !== "--allow-non-default-branch");
   if (workflows.length === 0 || workflows.some((arg) => arg.startsWith("-"))) return yield* new Usage({ message: USAGE });
+  const inputVersion = yield* Config.String(RELEASE_VERSION_ENV).pipe(Config.withDefault(""));
+  const requested = cliVersion ?? (inputVersion === "" ? undefined : inputVersion);
   const root = (yield* git(["rev-parse", "--show-toplevel"])).trim();
   if (!allowNonDefault) {
     const branch = (yield* git(["symbolic-ref", "--quiet", "--short", "HEAD"], root)).trim();

@@ -31,6 +31,7 @@ const EVERY_OPTION: CallerSet = {
     checkRelease: false,
     publishes: true,
     publicRepository: true,
+    releaseVersionInput: false,
   },
 };
 

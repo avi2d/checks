@@ -7,10 +7,36 @@ import { consumer, head, manifest } from "../lib/release-pr-fixture.ts";
 const MAINTENANCE = ["ci: cache the bun install (#3)", "test: cover the bill total (#4)"];
 
 test(
-  "with only ci and test commits since the last tag a run without --version opens nothing",
+  "an unset or empty CHECKS_RELEASE_VERSION does not open a pull request for only maintenance commits",
   async () => {
     const widget = await consumer(MAINTENANCE);
-    expect(await widget.run(["ci.yml"])).toEqual({ exitCode: 0, text: "release-pr: no unreleased changes since v0.1.0\n" });
+    const noChanges = { exitCode: 0, text: "release-pr: no unreleased changes since v0.1.0\n" };
+    expect(await widget.run(["ci.yml"])).toEqual(noChanges);
+    expect(await widget.run(["ci.yml"], { CHECKS_RELEASE_VERSION: "" })).toEqual(noChanges);
+    expect((await widget.state()).calls).toEqual(["GET repos/{owner}/{repo}", "GET repos/{owner}/{repo}"]);
+  },
+  60_000,
+);
+
+test(
+  "CHECKS_RELEASE_VERSION plans a maintenance release rather than skipping it",
+  async () => {
+    const widget = await consumer(MAINTENANCE);
+    const opened = await widget.run(["ci.yml"], { CHECKS_RELEASE_VERSION: "0.2.0" });
+    expect(opened.exitCode).toBe(0);
+    expect(opened.text).toContain("to release 0.2.0, and dispatched ci.yml on release/main");
+    expect(await widget.inOrigin("show", "release/main:package.json")).toBe(manifest("0.2.0").trim());
+  },
+  60_000,
+);
+
+test(
+  "a flag-shaped CHECKS_RELEASE_VERSION is refused as a version rather than printing help",
+  async () => {
+    const widget = await consumer(MAINTENANCE);
+    const refused = await widget.run(["ci.yml"], { CHECKS_RELEASE_VERSION: "-h" });
+    expect(refused.exitCode).toBe(2);
+    expect(refused.text).toContain("-h is no plain major.minor.patch version");
     expect((await widget.state()).calls).toEqual(["GET repos/{owner}/{repo}"]);
   },
   60_000,

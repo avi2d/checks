@@ -1,5 +1,6 @@
 export const MANIFEST = "package.json";
 export const CHANGELOG_MAINTENANCE_VERSION = "CHECKS_CHANGELOG_MAINTENANCE_VERSION";
+export const RELEASE_VERSION_ENV = "CHECKS_RELEASE_VERSION";
 
 export const TAG_PREFIX = "v";
 
