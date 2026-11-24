@@ -44,13 +44,18 @@ export function groupOf(subject: string): ChangeGroup | undefined {
   return breaking === "!" ? "Breaking changes" : GROUP_OF_TYPE.get(type);
 }
 
+const MAINTENANCE_TYPES = new Set(["ci", "test"]);
+
+function isMaintenance(subject: string): boolean {
+  const [, type = "", , breaking] = CONVENTIONAL.exec(subject) ?? [];
+  return breaking === undefined && MAINTENANCE_TYPES.has(type);
+}
+
 export function namesPullRequest(subject: string): boolean {
   return PULL_REQUEST.test(subject);
 }
 
-function entryOf(subject: string, repositoryUrl: string): Entry | undefined {
-  const group = groupOf(subject);
-  if (group === undefined) return undefined;
+function entryOf(subject: string, group: ChangeGroup, repositoryUrl: string): Entry {
   const [, , scope = "", , description = ""] = CONVENTIONAL.exec(subject) ?? [];
   const linkedDescription = description.replace(PULL_REQUEST, (_, number: string) => ` [#${number}](${repositoryUrl}/pull/${number})`);
   return { group, text: scope === "" ? linkedDescription : `**${scope}:** ${linkedDescription}` };
@@ -90,11 +95,21 @@ export function cuts(
 }
 
 export function hasEntries(subjects: readonly string[]): boolean {
-  return subjects.some((subject) => groupOf(subject) !== undefined);
+  return subjects.some((subject) => groupOf(subject) !== undefined || isMaintenance(subject));
+}
+
+// Listing ci and test commits beside a listed change would rewrite every released section, so only a release with no listed change lists them.
+function entriesOf(subjects: readonly string[], repositoryUrl: string): readonly Entry[] {
+  const listed = subjects.flatMap((subject) => {
+    const group = groupOf(subject);
+    return group === undefined ? [] : [entryOf(subject, group, repositoryUrl)];
+  });
+  if (listed.length > 0) return listed;
+  return subjects.filter(isMaintenance).map((subject) => entryOf(subject, "Maintenance", repositoryUrl));
 }
 
 function renderRelease({ version, date, subjects }: Release, repositoryUrl: string): readonly string[] {
-  const entries = subjects.flatMap((subject) => entryOf(subject, repositoryUrl) ?? []);
+  const entries = entriesOf(subjects, repositoryUrl);
   const groups = CHANGE_GROUPS.flatMap((group) => {
     const listed = entries.filter((entry) => entry.group === group).map(({ text }) => `- ${text}`);
     return listed.length === 0 ? [] : [`### ${group}`, listed.join("\n")];

@@ -148,7 +148,7 @@ test("a changelog is refused for a release out of order, a release without its d
     "7: `## 1.1.0` does not open with a `Released YYYY-MM-DD.` line",
   ]);
   expect(found("changelog", changelog.replace("### Fixes", "### Chores"))).toEqual([
-    "13: `### Chores` is not a section the template has there, as the template's order is Breaking changes, Features, Fixes, Performance, Reverts",
+    "13: `### Chores` is not a section the template has there, as the template's order is Breaking changes, Features, Fixes, Performance, Reverts, Maintenance",
   ]);
   expect(found("changelog", changelog.replace("## 1.1.0", "## Next"))).toEqual(["5: `## Next` is not a version such as 1.2.0"]);
 });

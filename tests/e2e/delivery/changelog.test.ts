@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { CHECKOUT, fixtureRepos, ran, type Ran } from "../lib/fixture-repo.ts";
 
 const SCRIPT = join(CHECKOUT, "src", "delivery", "changelog-write.ts");
+const NOTES = join(CHECKOUT, "src", "delivery", "release-notes.ts");
 const DATED = { GIT_AUTHOR_DATE: "2026-09-01T12:00:00+00:00", GIT_COMMITTER_DATE: "2026-09-01T12:00:00+00:00" };
 // bun test pins its own zone to UTC, so the writer and the expected date both take this one instead.
 const ZONE = "Pacific/Kiritimati";
@@ -73,6 +74,59 @@ test(
     expect(await rewritten(2)).toBe(expected);
     await commit("feat: after the release (#4)");
     expect(await rewritten(2)).toBe(expected);
+  },
+  { timeout: 30_000 },
+);
+
+test(
+  "a version bumped by hand over only ci and test commits lists them under Maintenance and checks-release-notes takes its section",
+  async () => {
+    await initRepo();
+    await bump("0.2.0");
+    await commit("feat: build a bill (#1)");
+    const released = (await $`git rev-parse HEAD`.cwd(dir).quiet()).stdout.toString().trim();
+    await commit("ci: run the suite on pull requests (#2)");
+    await commit("test(parts): cover an empty bill (#3)");
+
+    await bump("0.2.1");
+    const before = localDate();
+    const bumped = await rewritten(2);
+    const pending = /^Released (\S+)\.$/m.exec(bumped)?.[1] ?? "";
+    expect([before, localDate()]).toContain(pending);
+    const range = (await $`git log --format=%s ${released}..HEAD`.cwd(dir).quiet()).stdout.toString().trim().split("\n");
+    expect(range).toEqual(["test(parts): cover an empty bill (#3)", "ci: run the suite on pull requests (#2)"]);
+    const maintenance = section("0.2.1", pending, [
+      "Maintenance",
+      "**parts:** cover an empty bill [#3](https://github.com/acme/widget/pull/3)",
+      "run the suite on pull requests [#2](https://github.com/acme/widget/pull/2)",
+    ]);
+    const expected = written(maintenance, section("0.2.0", "2026-09-01", ["Features", "build a bill [#1](https://github.com/acme/widget/pull/1)"]));
+    expect(bumped).toBe(expected);
+
+    await commit("chore: release 0.2.1 (#4)");
+    await commit("ci: cache the install (#5)");
+    expect(await rewritten(2)).toBe(expected);
+
+    expect(await ran($`bun ${NOTES} 0.2.1 notes.md`.cwd(dir))).toEqual({ exitCode: 0, text: "" });
+    expect(await readFile(join(dir, "notes.md"), "utf8")).toBe(maintenance.slice(2, -1).join("\n"));
+  },
+  { timeout: 30_000 },
+);
+
+test(
+  "a release with a fix lists no Maintenance group beside its ci and test commits",
+  async () => {
+    await initRepo();
+    await bump("0.1.0");
+    await commit("feat: build a bill (#1)");
+    await commit("ci: run the suite on pull requests (#2)");
+    await commit("fix: keep the order of parts (#3)");
+    await commit("test: cover an empty bill (#4)");
+    await bump("0.1.1");
+
+    const rendered = await rewritten(2);
+    expect(rendered).not.toContain("Maintenance");
+    expect(rendered).toContain(section("0.1.1", localDate(), ["Fixes", "keep the order of parts [#3](https://github.com/acme/widget/pull/3)"]).slice(2).join("\n"));
   },
   { timeout: 30_000 },
 );
@@ -362,7 +416,7 @@ test(
   async () => {
     await initRepo();
     await bump("0.1.0");
-    await commit("ci: run the suite on pull requests (#1)");
+    await commit("docs: say why (#1)");
     await commit("chore: tidy the build (#2)");
 
     expect(await rewritten(0)).toBe(written());

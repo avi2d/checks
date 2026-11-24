@@ -60,7 +60,7 @@ const BEFORE_YOU_BEGIN = fixed("Before you begin", REQUIRED, ["- <each prerequis
 
 const STEPS = ["To <do the task>:", "", "1. <step>", "1. <step>"];
 
-export const CHANGE_GROUPS = ["Breaking changes", "Features", "Fixes", "Performance", "Reverts"] as const;
+export const CHANGE_GROUPS = ["Breaking changes", "Features", "Fixes", "Performance", "Reverts", "Maintenance"] as const;
 export type ChangeGroup = (typeof CHANGE_GROUPS)[number];
 
 export const TEMPLATES: Readonly<Record<Kind, Template>> = {
@@ -96,7 +96,11 @@ export const TEMPLATES: Readonly<Record<Kind, Template>> = {
     sections: [
       open("<version>", "version", optional("no release holds a conventional commit worth listing yet"), ["Released <YYYY-MM-DD>."], {
         subsections: CHANGE_GROUPS.map((group) =>
-          fixed(group, optional("the release holds no such commit"), ["- **<the commit's scope, when it has one>:** <its description>"]),
+          fixed(
+            group,
+            optional(group === "Maintenance" ? "the release holds a change another group lists, or no ci or test commit" : "the release holds no such commit"),
+            ["- **<the commit's scope, when it has one>:** <its description>"],
+          ),
         ),
       }),
     ],
