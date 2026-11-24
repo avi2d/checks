@@ -26,11 +26,11 @@ function optionOf(arg: string): TestOptions | undefined {
 }
 
 export function testOptions(args: readonly string[]): TestOptions | undefined {
-  let options: TestOptions = {};
+  const options: TestOptions = {};
   for (const arg of args) {
     const option = optionOf(arg);
     if (option === undefined || Object.keys(option).some((key) => key in options)) return undefined;
-    options = { ...options, ...option };
+    Object.assign(options, option);
   }
   if (options.tier !== undefined && options.full === true) return undefined;
   return options;

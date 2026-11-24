@@ -66,11 +66,13 @@ function entryOf(subject: string, group: ChangeGroup, repositoryUrl: string): En
 // returns to, except a published one. A version cancelled and bumped again holds two bumps, so a bump is
 // published by its sha and never by its version.
 function standing(bumps: readonly Bump[], publishedShas: ReadonlySet<string>): readonly Bump[] {
-  return bumps.reduce<readonly Bump[]>((kept, bump) => {
+  let kept: Bump[] = [];
+  for (const bump of bumps) {
     const before = kept.at(-1);
-    if (before === undefined || Bun.semver.order(bump.version, before.version) === 1) return [...kept, bump];
-    return kept.filter(({ sha, version }) => publishedShas.has(sha) || Bun.semver.order(version, bump.version) !== 1);
-  }, []);
+    if (before === undefined || Bun.semver.order(bump.version, before.version) === 1) kept.push(bump);
+    else kept = kept.filter(({ sha, version }) => publishedShas.has(sha) || Bun.semver.order(version, bump.version) !== 1);
+  }
+  return kept;
 }
 
 // The changelog records what was released: a version older than the newest it lists and absent from it
