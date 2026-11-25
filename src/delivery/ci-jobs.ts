@@ -1,6 +1,5 @@
 import { Effect, Schema } from "effect";
 import { RELEASE_BRANCH_PREFIX } from "../core/release-names.ts";
-import type { TestTier } from "../core/test-script.ts";
 import { calledFileOf, isRecord, workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export type RepositoryKind = "code" | "site";
@@ -191,10 +190,10 @@ const fullCiJobsOf = Effect.fn("fullCiJobsOf")(function* (kind: RepositoryKind, 
 export const ciJobsOf = Effect.fn("ciJobsOf")(function* (
   kind: RepositoryKind,
   ci: Workflow | undefined,
-  { publicRepository, docsBuild, testTiers }: { readonly publicRepository: boolean; readonly docsBuild: boolean; readonly testTiers: ReadonlySet<TestTier> | undefined },
+  { publicRepository, docsBuild, hasE2e }: { readonly publicRepository: boolean; readonly docsBuild: boolean; readonly hasE2e: boolean | undefined },
 ) {
   const runsOn = runnerOf(publicRepository);
-  const includeE2e = testTiers?.has("e2e") !== false;
+  const includeE2e = hasE2e !== false;
   if (ci === undefined) return defaultJobs(kind, runsOn, includeE2e);
   const calls = workflowJobs(ci).flatMap(([name, job]) => (calledFileOf(job["uses"]) === "test.yml" ? [{ name, job }] : []));
   if (calls.length > 0) return yield* splitLegacyJobs(ci.path, { tests: yield* Effect.forEach(calls, ({ name, job }) => testJobOf(kind, ci.path, name, job, runsOn, docsBuild)) }, includeE2e);

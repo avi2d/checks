@@ -307,7 +307,7 @@ const holdsWrittenSet = Effect.fn("holdsWrittenSet")(function* (root: string, wo
   if (present.length === 0) return false;
   return yield* Effect.gen(function* () {
     const inputs = yield* callerInputsOf(root);
-    const set = yield* callerSetOf(workflows, {}, "checks-workflows --write", inputs.publishes, inputs.publishWorkspaces, inputs.needsReleaseChecks, inputs.publicRepository, inputs.docsBuild, inputs.testTiers, inputs.releaseAssets);
+    const set = yield* callerSetOf(workflows, {}, "checks-workflows --write", inputs.publishes, inputs.publishWorkspaces, inputs.needsReleaseChecks, inputs.publicRepository, inputs.docsBuild, inputs.hasE2e, inputs.releaseAssets);
     return countOf(heldDifferences(set, present, yield* readActionFiles(root), inputs.kit)) === 0;
   }).pipe(Effect.catch((fault) => Console.error(`ci-wiring: ${fault.message}`).pipe(Effect.as(false))));
 });
