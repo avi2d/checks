@@ -34,6 +34,21 @@ To hold a repository to the kit:
 Each gate that fails names the file it needs, and [Set up a repository](docs/how-to/set-up-a-repository.md) writes every one.
 A repository the kit holds ends with `checks-lint: <count> gate(s) pass`.
 
+### Run the compiled commands
+
+On Linux x64 or macOS arm64, download the binary for the installed package version:
+
+```sh
+sh node_modules/@avi2dg/checks/src/core/install-native.sh
+bunx checks-lint
+```
+
+The download checks the SHA-256 sum before installing the binary beside the package.
+The same `bunx checks-*` commands run from source if you skip this step or use another platform.
+After a package upgrade or a clean install, run the download again to use the matching binary.
+Keep Bun and the npm package installed because the commands read package files and run Bun tools.
+`checks-lint-coverage` remains a shell command on every platform.
+
 ## Find the page you need
 
 | To | Read |

@@ -1,7 +1,7 @@
 import { $ } from "bun";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { existsSync, realpathSync } from "node:fs";
-import { mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { Schema } from "effect";
@@ -29,6 +29,34 @@ type Output = {
 };
 
 type Kind = "file" | "tarball";
+
+test("the native launcher rejects a version-only twin and runs checks-workflows with the consumer config", async () => {
+  await useConsumer("tarball");
+  await $`git init -q`.cwd(dir).quiet();
+  const config = 'import { defineConfig } from "@avi2dg/checks/config";\nexport default defineConfig({ releaseAssets: true });\n';
+  await writeFile(join(dir, "checks.config.ts"), config);
+  const root = join(dir, "node_modules/@avi2dg/checks");
+  const native = join(root, "native");
+  await mkdir(native, { recursive: true });
+  const { version } = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Struct({ version: Schema.String })))(await readFile(join(root, "package.json"), "utf8"));
+  const platform = `${process.platform}-${process.arch}`;
+  const binary = join(native, `checks-${version}-${platform}`);
+  const check = () => ran($`bunx --no-install checks-workflows --write`.cwd(dir));
+  const configRead = (result: Ran) => result.exitCode === 2 && result.text.includes("package.json defines no release:assets script");
+  try {
+    await writeFile(binary, `#!/bin/sh\nprintf '%s\\n' '${version}'\n`);
+    await chmod(binary, 0o755);
+    const wrong = await check();
+    expect(wrong.text.trim()).toBe(version);
+    expect(configRead(wrong)).toBe(false);
+    await $`bun run release:assets ${packDir}`.cwd(CHECKOUT).quiet();
+    await copyFile(join(packDir, "checks-" + platform), binary);
+    expect((await $`${binary} --version`.quiet()).stdout.toString().trim()).toBe(version);
+    expect(configRead(await check())).toBe(true);
+  } finally {
+    await rm(native, { recursive: true, force: true });
+  }
+}, 120_000);
 
 // Every dependency and its version are the same across every fixture, so one
 // `bun install` per kind serves every test that uses it.

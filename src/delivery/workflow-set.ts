@@ -41,9 +41,9 @@ export function differentLines(holds: string, writes: string): readonly Differen
 }
 
 export function differencesOf(set: CallerSet, present: readonly WorkflowFile[], kit: boolean): readonly Difference[] {
-  const ignored = (name: string): boolean => isIgnoredWorkflow(name, kit);
-  const held = new Map(present.filter(({ name }) => !ignored(name)).map(({ name, text }) => [name, text]));
   const required = requiredSet(set, kit);
+  const ignored = (name: string): boolean => isIgnoredWorkflow(name, kit) && !required.some((file) => file.name === name);
+  const held = new Map(present.filter(({ name }) => !ignored(name)).map(({ name, text }) => [name, text]));
   const byHand = byHandSet(set);
   const known = new Set([...required, ...byHand].map(({ name }) => name));
   const judged = [...required, ...byHand.filter(({ name }) => held.has(name))];

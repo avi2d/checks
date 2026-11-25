@@ -87,3 +87,26 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
           NOTES_FILE: ${{ runner.temp }}/release-notes.md
         run: bunx checks-ci github-release
+
+  assets:
+    needs: github-release
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, macos-latest]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.ref_name }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: build the release assets
+        run: bun run release:assets
+      - name: attach the release assets to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release upload "$TAG" release-assets/* --clobber

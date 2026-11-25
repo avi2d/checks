@@ -64,7 +64,8 @@ Only the fork-reachable jobs differ with repository visibility, with the test jo
 The files a site takes also differ in the three site names.
 A job that runs the suite cancels its run when a push to a draft pull request started it.
 In a site only the jobs that read the build do so, so a draft still gets its preview link.
-The kit itself keeps its own `release.yml` and `release-pr.yml`, since npm's trusted publishing names `release.yml`.
+The kit keeps its own `release-pr.yml` because npm trusted publishing names `release.yml`.
+With `releaseAssets` enabled, `checks-workflows` writes the kit's `release.yml` with an `assets` job after `github-release`.
 A job in those files that calls another repository's workflow is still refused.
 Replace it with its own steps by hand.
 
