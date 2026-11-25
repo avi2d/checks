@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.117.2
+
+Released 2026-11-25.
+
+### Fixes
+
+- **delivery:** publish each release version once and stay green when it is already on npm [#222](https://github.com/avi2d/checks/pull/222)
+
 ## 0.117.1
 
 Released 2026-11-25.
