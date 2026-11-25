@@ -73,6 +73,16 @@ test("a helper selects both its direct and indirect importers, not the unrelated
   assertHelperTests(await run(sources));
 });
 
+test.each(["js", "jsx", "mjs", "cjs", "mjsx", "cjsx"])("JSX in a %s module neither forces a full run nor omits transitive helper tests", async (extension) => {
+  const tree = new Map(sources);
+  tree.set(`src/component.${extension}`, 'import { helper } from "../tests/e2e/lib/helper.ts"; export const Component = () => <div>{helper}</div>;');
+  tree.set(B, `import "../../src/component.${extension}";`);
+  tree.set(`src/unrelated.${extension}`, "export const Unrelated = () => <aside/>;");
+  const reached = await run(tree);
+  expect(reached).toBeDefined();
+  expect(TESTS.filter((file) => reached?.has(file))).toEqual([A, B]);
+});
+
 test("a root-level importer does not resolve relative to its filename", async () => {
   const tree = new Map(sources);
   tree.set("runner.ts", 'import "./tests/e2e/lib/helper.ts";');

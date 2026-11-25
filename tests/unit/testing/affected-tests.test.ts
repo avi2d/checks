@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
+import { refuseReachMap } from "../../../src/core/reach-change.ts";
 import {
   narrowLocalTests,
   narrowTests,
-  refuseReachMap,
   sharedReason,
   staleReachPatterns,
   type Repository,

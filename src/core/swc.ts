@@ -7,7 +7,9 @@ class TypeScriptParseError extends Schema.TaggedError<TypeScriptParseError>()("T
 
 export const parseTypeScript = Effect.fn("parseTypeScript")(function* (file: string, source: string) {
   return yield* Effect.tryPromise({
-    try: () => parse(source, { syntax: "typescript", tsx: file.endsWith(".tsx"), target: "esnext" }),
+    try: () => parse(source, /\.[cm]?jsx?$/.test(file)
+      ? { syntax: "ecmascript", jsx: true, target: "esnext" }
+      : { syntax: "typescript", tsx: file.endsWith(".tsx"), target: "esnext" }),
     catch: (cause) => new TypeScriptParseError({ message: `cannot parse ${file}: ${String(cause)}` }),
   });
 });

@@ -1,7 +1,6 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
 import { workingTreeFiles } from "../core/git.ts";
 import { addReachTests, readReachChange, refuseReachMap, type ReachChange } from "../core/reach-change.ts";
-export { refuseReachMap } from "../core/reach-change.ts";
 import { basenameOf, pullRequestReason, testEnvironmentReason, TEST_FILE, TEST_FIXTURES } from "../core/test-impact.ts";
 import type { TestTier } from "../core/test-script.ts";
 import { decodeSetting, loadSettings, Reach, SETTINGS_FILE } from "../core/settings.ts";
@@ -362,10 +361,10 @@ const readRepository = Effect.fn("readRepository")(function* (root: string) {
 });
 
 const readDefaultNarrowing = Effect.fn("readDefaultNarrowing")(function* (root: string, changed: readonly string[], tests: readonly string[], tier?: TestTier, base?: string) {
-  const mapChange: ReachChange = changed.includes(SETTINGS_FILE) && base !== undefined
-    ? yield* readReachChange(root, base)
-    : { kind: "full" };
-  if (changed.includes(SETTINGS_FILE) && mapChange.kind === "full") {
+  const mapChange: ReachChange = !changed.includes(SETTINGS_FILE)
+    ? { kind: "mapped", patterns: [] }
+    : base === undefined ? { kind: "full" } : yield* readReachChange(root, base);
+  if (mapChange.kind === "full") {
     return { kind: "full", because: pullRequestReason(SETTINGS_FILE, "a config every test runs under") } satisfies Narrowing;
   }
   const repository = yield* readRepository(root);
@@ -376,12 +375,12 @@ const readDefaultNarrowing = Effect.fn("readDefaultNarrowing")(function* (root: 
   if (helpers.some((file) => preloadClosure(repository).has(file))) return { kind: "full", because: "a changed test helper is preloaded" } satisfies Narrowing;
   const helperTests = helpers.length === 0 ? new Set<string>() : yield* helperImpact(root, helpers, repository.sources, repository.files, graphOf(repository, helpers).readers).pipe(Effect.orElseSucceed(() => undefined));
   if (helperTests === undefined) return { kind: "full", because: "the changed test helper's import graph cannot be resolved" } satisfies Narrowing;
-  const remaining = changed.filter((file) => !helpers.includes(file) && (file !== SETTINGS_FILE || mapChange.kind === "full"));
+  const remaining = changed.filter((file) => !helpers.includes(file) && file !== SETTINGS_FILE);
   const impact = remaining.length === 0 ? undefined : testImpact(remaining, repository, tests, tier);
   if (impact?.kind === "full") return impact;
   if (impact !== undefined) yield* reportImpact(impact.byChange);
   const reached = new Set([...(impact === undefined ? [] : [...impact.byChange.values()].flat()), ...helperTests, ...helpers.flatMap((file) => mappedTests(file, repository) ?? [])]);
-  return { kind: "files", files: mapChange.kind === "mapped" ? addReachTests(tests, reached, mapChange) : tests.filter((file) => reached.has(file)) } satisfies Narrowing;
+  return { kind: "files", files: addReachTests(tests, reached, mapChange) } satisfies Narrowing;
 });
 
 export const readChangedNarrowing = Effect.fn("readChangedNarrowing")(function* (root: string, changed: readonly string[], tests: readonly string[], tier?: TestTier, base?: string) {
