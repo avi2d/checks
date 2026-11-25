@@ -197,7 +197,8 @@ export default defineConfig({
 });
 ```
 
-A changed path runs the tests every key that matches it lists, beside the tests that reach it by import, path or bin, unless a full-run rule applies.
+A changed path runs the tests every key that matches it lists, beside the tests that reach it by import, path or bin.
+A full-run rule below overrides this.
 A stylesheet, a font or a layout that a key matches runs only those tests, rather than the whole suite.
 A stylesheet, a font or a layout that no key matches still runs the whole suite.
 A lockfile, a config, a tool pin, or a preloaded file still runs the whole tier, even when a key matches it.
