@@ -222,9 +222,12 @@ test("the assets job builds on Linux x64 and macOS arm64 from the released tag a
     permissions: { contents: "write" },
   });
   expect(Object.keys(isRecord(assets["permissions"]) ? assets["permissions"] : {})).toEqual(["contents"]);
-  const runs = (tag: string): boolean => truthy(evaluated(String(assets["if"]), { needs: { release: { outputs: { tag } } } }));
-  expect(runs("")).toBe(false);
-  expect(runs("v1.4.0")).toBe(true);
+  const runs = (tag: string, suite: string, release = "success"): boolean =>
+    jobRuns(String(assets["if"]), { needs: { suite: { result: suite }, release: { result: release, outputs: { tag } } } }, suite === "success" && release === "success");
+  expect(runs("", "success")).toBe(false);
+  expect(runs("v1.4.0", "success")).toBe(true);
+  expect(runs("v1.4.0", "skipped")).toBe(true);
+  expect(runs("v1.4.0", "success", "failure")).toBe(false);
   const tagged = EXPRESSION + "{{ needs.release.outputs.tag }}";
   expect(stepsOf(assets)).toEqual([
     expect.objectContaining({ with: { ref: tagged, "persist-credentials": false } }),
@@ -265,6 +268,23 @@ const evaluated = (expression: string, contexts: Readonly<Record<string, Plain>>
 };
 
 const truthy = (result: data.ExpressionData): boolean => (result.kind === data.Kind.Boolean ? result.value : result.coerceString() !== "");
+
+const STATUS_FUNCTION = /\b(?:success|failure|cancelled|always)\(\)/;
+
+const statusFunction = (name: string, value: boolean) => ({ name, minArgs: 0, maxArgs: 0, call: (): data.ExpressionData => new data.BooleanData(value) });
+
+const jobRuns = (expression: string, contexts: Readonly<Record<string, Plain>>, everyAncestorSucceeded: boolean): boolean => {
+  const inner = expression.startsWith(EXPRESSION + "{{") && expression.endsWith("}}") ? expression.slice(3, -2).trim() : expression;
+  const checked = STATUS_FUNCTION.test(inner) ? inner : `success() && (${inner})`;
+  const functions = new Map([
+    ["always", statusFunction("always", true)],
+    ["cancelled", statusFunction("cancelled", false)],
+    ["failure", statusFunction("failure", false)],
+    ["success", statusFunction("success", everyAncestorSucceeded)],
+  ]);
+  const parser = new Parser(new Lexer(checked).lex().tokens, Object.keys(contexts), [...functions.values()]);
+  return truthy(new Evaluator(parser.parse(), dictionaryOf(contexts), functions).evaluate());
+};
 
 const ciJobs = (set: CallerSet): Record<string, Record<string, unknown>> => jobsOf(documentOf(set, "ci.yml"));
 

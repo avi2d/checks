@@ -50,7 +50,7 @@ It tells the owner to declare the repository owners in `package.json` `author` o
 It reads the working tree, which is the repository it sets up.
 It reads the `.yml` and `.yaml` files under `.github/workflows/` to tell a site from a code repository and to take the site names its workflows hold.
 It reads a `package.json` it finds for the fields and scripts it keeps, replaces or refuses.
-It reads `checks.config.ts` for the repository visibility that selects the workflow runners.
+It reads `checks.config.ts` for the repository visibility that selects the workflow runners and for `releaseAssets`, which adds the `assets` job to `main.yml`.
 It reads the workspace patterns and each workspace `package.json` for the workflow options the written manifest will hold.
 It reads the kit install for `.bun-version`, `bunfig.toml`, its version, its Stryker pins and each template.
 
@@ -73,7 +73,7 @@ Then the run names the `CI_RUNS_ON` value to set.
 | Code | When |
 | --- | --- |
 | 0 | every file is written or already there |
-| 2 | an argument is unknown, a site lacks one of its three names, passes two values of one, names one that does not parse, passes a flag that differs from the name a present workflow holds, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, a file it needs cannot be read, or a `lint`, `typecheck`, `test`, `test:fast` or `test:*` script it finds does not run the checks |
+| 2 | an argument is unknown, a site lacks one of its three names, passes two values of one, names one that does not parse, passes a flag that differs from the name a present workflow holds, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, `checks.config.ts` sets `releaseAssets` in a site, in a private repository or without a `release:assets` script in `package.json`, a file it needs cannot be read, or a `lint`, `typecheck`, `test`, `test:fast` or `test:*` script it finds does not run the checks |
 
 ## Sample output
 

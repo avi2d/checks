@@ -68,10 +68,11 @@ const RELEASE_COMMIT = "startsWith(github.event.head_commit.message, 'chore: rel
 const RELEASED_TAG = "needs.release.outputs.tag";
 
 // The release step sets the tag output only when it wrote a GitHub release, so a merge that releases nothing builds no asset.
+// The implicit success() also reads the suite job, which skips on a push that releases an earlier release commit.
 const ASSETS: Job = {
   id: "assets",
   needs: "release",
-  if: expression(RELEASED_TAG + " != ''"),
+  if: expression("!cancelled() && needs.release.result == 'success' && " + RELEASED_TAG + " != ''"),
   runsOn: expression("matrix.runner"),
   timeout: 30,
   matrix: ["runner", "[ubuntu-latest, macos-latest]"],
