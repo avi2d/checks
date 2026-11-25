@@ -69,6 +69,7 @@ test("a rerun of a release npm already holds publishes nothing", async () => {
 const shasum = "df443a432e0632f91433878d7a807a91df42d6a8";
 const staged = 'code E409\nnpm error 409 Conflict - Cannot publish over previously staged version "0.23.0".';
 const published = "code E403\nnpm error You cannot publish over the previously published versions: 0.23.0.";
+const codeless = '409 Conflict - PUT https://registry.npmjs.org/@avi2dg%2forc - Cannot publish over previously staged version "0.23.0".';
 
 function duplicate(refusal: string, visibleAfter: number): Readonly<Record<string, string>> {
   return {
@@ -120,7 +121,7 @@ test("a visible version with a lagging latest skips publish instead of uploading
   });
 }, 30_000);
 
-test.each([staged, published])("a duplicate refusal waits instead of rejecting a delayed matching tarball: %s", async (refusal) => {
+test.each([staged, published, codeless])("a duplicate refusal waits instead of rejecting a delayed matching tarball: %s", async (refusal) => {
   const a = await release("0.23.0", "0.22.0", "immediate");
   const result = await a.publish(duplicate(refusal, 2));
   expect(result.exitCode).toBe(0);
@@ -133,7 +134,7 @@ test.each([staged, published])("a duplicate refusal waits instead of rejecting a
   expect(state.published).toEqual([]);
 }, 30_000);
 
-test.each([staged, published])("a duplicate refusal rejects a different tarball instead of accepting any visible version: %s", async (refusal) => {
+test.each([staged, published, codeless])("a duplicate refusal rejects a different tarball instead of accepting any visible version: %s", async (refusal) => {
   const a = await release("0.23.0", "0.22.0");
   const result = await a.publish({ ...duplicate(refusal, 1), FAKE_NPM_SHASUM: "0000000000000000000000000000000000000000" });
   expect(result.exitCode).toBe(2);
@@ -141,7 +142,7 @@ test.each([staged, published])("a duplicate refusal rejects a different tarball 
   expect((await a.state()).published).toEqual([]);
 }, 30_000);
 
-test.each([staged, published])("a duplicate refusal rejects a version that never appears instead of claiming success: %s", async (refusal) => {
+test.each([staged, published, codeless])("a duplicate refusal rejects a version that never appears instead of claiming success: %s", async (refusal) => {
   const a = await release("0.23.0", "0.22.0", "immediate");
   const result = await a.publish(duplicate(refusal, 11));
   expect(result.exitCode).toBe(2);

@@ -11,12 +11,25 @@ test("a staged E409 reads the shasum instead of accepting another version", () =
   expect(stagedShasum(staged.replace("E409", "E403"), "0.23.0")).toBeUndefined();
 });
 
+const codeless = `npm notice shasum: ${shasum}\nnpm error 409 Conflict - PUT https://registry.npmjs.org/@avi2dg%2forc - Cannot publish over previously staged version "0.23.0".\n`;
+
+test("a codeless staged refusal with lagging latest accepts only the matching tarball", async () => {
+  const extracted = stagedShasum(codeless, "0.23.0");
+  expect(extracted).toBe(shasum);
+  expect(stagedShasum(codeless, "0.23.1")).toBeUndefined();
+  expect(stagedShasum(codeless.replace("Cannot publish over previously staged version", "permission denied for version"), "0.23.0")).toBeUndefined();
+  if (extracted === undefined) return;
+  expect(await Effect.runPromise(awaitStagedVersion(extracted, () => Effect.succeed(shasum), () => Effect.void, 1))).toBe(true);
+  expect(await Effect.runPromise(awaitStagedVersion(extracted, () => Effect.succeed("0000000000000000000000000000000000000000"), () => Effect.void, 1))).toBe(false);
+});
+
 const published = `npm notice shasum: ${shasum}\nnpm error code E403\nnpm error You cannot publish over the previously published versions: 0.23.0.\n`;
 
 test("a same-version E403 reads the shasum instead of failing while latest lags", () => {
   expect(stagedShasum(published, "0.23.0")).toBe(shasum);
   expect(stagedShasum(published, "0.23.1")).toBeUndefined();
   expect(stagedShasum(published, "0.23")).toBeUndefined();
+  expect(stagedShasum(published.replace("npm error code E403\n", ""), "0.23.0")).toBe(shasum);
   expect(stagedShasum(published.replace("E403", "E409"), "0.23.0")).toBeUndefined();
   expect(stagedShasum(published.replace("You cannot publish over the previously published versions: 0.23.0.", "permission denied"), "0.23.0")).toBeUndefined();
 });
