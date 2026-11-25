@@ -23,7 +23,7 @@ export const judgeAxe = Effect.fn("judgeAxe")(function* (page: Page) {
     import("@axe-core/playwright"),
   );
   yield* settle(page);
-  const results = yield* attempt("axe cannot analyse the page", () => new AxeBuilder({ page }).withTags(WCAG_AA).analyze());
+  const results = yield* attempt("axe cannot analyse the page", () => new AxeBuilder({ page }).options({ resultTypes: ["violations", "incomplete"] }).withTags(WCAG_AA).analyze());
   const found = results.violations.flatMap((violation) =>
     violation.nodes.map((node) => `${violation.id} (${violation.impact ?? "unknown"}): ${where(node)}: ${violation.help}`),
   );
