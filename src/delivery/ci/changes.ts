@@ -1,6 +1,8 @@
 import { Config, Console, Effect } from "effect";
 import { pathsSinceMergeBase } from "../../core/git.ts";
 import { scopeOfChanges } from "../../core/pull-request-scope.ts";
+import { readReachChange } from "../../core/reach-change.ts";
+import { SETTINGS_FILE } from "../../core/settings.ts";
 import { readRouteImpact } from "../../quality/browser/route-scope.ts";
 import { optionalInput } from "./lib/inputs.ts";
 import { writeOutputs } from "./lib/step-output.ts";
@@ -11,8 +13,12 @@ export function testsOnly(changed: readonly string[]): boolean {
   return changed.length > 0 && changed.every((path) => ORDINARY_TEST.test(path));
 }
 
-const browserNeeded = Effect.fn("browserNeeded")(function* (changed: readonly string[], docsOnly: boolean) {
-  if (docsOnly || testsOnly(changed)) {
+export function testsOnlyWithReach(changed: readonly string[], mapOnly: boolean): boolean {
+  return mapOnly ? changed.every((file) => file === SETTINGS_FILE || ORDINARY_TEST.test(file)) : testsOnly(changed);
+}
+
+const browserNeeded = Effect.fn("browserNeeded")(function* (changed: readonly string[], docsOnly: boolean, onlyTests: boolean) {
+  if (docsOnly || onlyTests) {
     for (const path of changed) yield* Console.log(`changes: ${path} -> no browser route`);
     return false;
   }
@@ -44,9 +50,10 @@ export const main = Effect.gen(function* () {
   );
   if (changed === undefined) return yield* keepFullRun("the pull request's changes cannot be read", planBrowser);
   const docsOnly = scopeOfChanges("", changed).kind === "docs-only";
-  const onlyTests = !docsOnly && testsOnly(changed);
+  const mapOnly = changed.includes(SETTINGS_FILE) && (yield* readReachChange(process.cwd(), base)).kind === "mapped";
+  const onlyTests = !docsOnly && testsOnlyWithReach(changed, mapOnly);
   yield* Console.log(`changes: ${changed.length} changed file(s), docs-only=${docsOnly}, tests-only=${onlyTests}`);
-  const browser = planBrowser ? yield* browserNeeded(changed, docsOnly) : undefined;
+  const browser = planBrowser ? yield* browserNeeded(changed, docsOnly, onlyTests) : undefined;
   yield* writeOutputs({ "docs-only": String(docsOnly), "tests-only": String(onlyTests), ...(browser === undefined ? {} : { browser: String(browser) }) });
   return true;
 });

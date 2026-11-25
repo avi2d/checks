@@ -13,8 +13,13 @@ export function resolved(directory: string, spec: string): string {
   return parts.join("/");
 }
 
+export function importPath(specifier: string): string {
+  return specifier.replace(/(?!^)[?#].*$/, "");
+}
+
 // Bun takes the file a specifier names, then one with an extension added, and only then the directory's index.
-export function importedFile(path: string, files: ReadonlySet<string>): readonly string[] {
+export function importedFile(input: string, files: ReadonlySet<string>): readonly string[] {
+  const path = importPath(input);
   const bare = path.replace(/\.m?js$/, "");
   const direct = [path, ...CANDIDATE_EXTENSIONS.map((extension) => bare + extension)].filter((file) => files.has(file));
   if (direct.length > 0) return direct;
@@ -23,5 +28,5 @@ export function importedFile(path: string, files: ReadonlySet<string>): readonly
 
 export function importsOf(file: string, text: string, files: ReadonlySet<string>): readonly string[] {
   const directory = file.slice(0, Math.max(file.lastIndexOf("/"), 0));
-  return [...text.matchAll(IMPORT)].flatMap(([, throughImport = "", throughRequire = ""]) => importedFile(resolved(directory, throughImport || throughRequire), files));
+  return [...text.matchAll(IMPORT)].flatMap(([, throughImport = "", throughRequire = ""]) => importedFile(resolved(directory, importPath(throughImport || throughRequire)), files));
 }

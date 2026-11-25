@@ -428,8 +428,12 @@ It reads the declaration in the directory it runs in, or in the directory it is 
 On a pull request it walks each viewport preset at the eight anchor sizes only, while a viewport the declaration lists by hand stays.
 A pull request that changes only top-level and `docs/` Markdown checks no page and passes.
 A release pull request, a push to `main`, and a manual run walk the full size list.
-On a pull request, a change to CI wiring, a lockfile, a config, or a shared test helper walks every route at anchor sizes.
-A helper-only change can skip the walk through the build comparison below.
+On a pull request, shared files make the browser step walk every route at anchor sizes.
+Shared files include CI wiring, lockfiles, configs, and test helpers.
+The CI `changes` step treats a reach-map-only config change as tests-only.
+That change can include TypeScript files under `tests/unit/` and `tests/e2e/`, but no other paths.
+A tests-only change skips the browser walk.
+Other helper-only changes can skip the walk through the build comparison below.
 
 The optional `browserRoutes` setting maps exact repository paths to the routes each path can change.
 For example, `browserRoutes: { "src/home.ts": ["/"] }` assigns the home source to the root route.

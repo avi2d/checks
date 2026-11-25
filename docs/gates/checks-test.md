@@ -143,10 +143,18 @@ A shared file runs the whole suite instead:
 
 - a lockfile, `package.json`, a `*.config.*` or `tsconfig` file, `bunfig.toml`, or a tool pin such as `.bun-version`
 - a file Bun preloads into every test, or a file a preload imports
-- a test helper, which is a file under `tests/` that is neither a test nor a fixture
 - a stylesheet, a font, or a layout under `layouts/` or named `layout.*`
 
 A stylesheet, a font or a layout the reach map names runs the tests the map gives it instead, as [The reach map](#the-reach-map) says.
+In a unit or end-to-end pull request run, a changed JavaScript or TypeScript test helper runs the tests that reach it.
+Literal imports and paths named by files under `tests/` count as references, at any depth.
+Literal dynamic imports count as imports, including in Astro, Svelte, and Vue sources.
+Type-only imports and re-exports do not need to resolve at runtime.
+Vite query suffixes and hash suffixes do not change which file an import reaches.
+Unresolved bare package imports do not add local dependencies.
+When a relative import or a configured alias cannot be resolved, or an import has a non-literal target, the whole tier runs.
+Other test helpers still run the whole tier.
+A screenshot pull request run selects the screenshot tests that reach the helper.
 A dependency bump changes `package.json` or the lockfile, so it runs the whole suite in every repository.
 A workflow under `.github/` is not a shared file, since the suite runs under it rather than reading it.
 A pull request that changes no file a test reaches runs no test and passes.
@@ -164,7 +172,7 @@ The CI workflow runs `checks-test --pr --tier=unit` and `checks-test --pr --tier
 It runs changed tests and tests that import a changed file, even through several imports.
 It logs the test files each changed path reaches.
 A pull request that changes only top-level and `docs/` Markdown runs no test and passes.
-A change to a lockfile, a config, or a shared helper runs the whole tier and logs the reason.
+A lockfile, a config change outside the reach map, or a preloaded helper runs the whole tier and logs the reason.
 A change under `.github/` runs only the tests that reach the changed file.
 A release pull request, a push to `main`, and a manual run also run the whole tier.
 
@@ -190,12 +198,16 @@ export default defineConfig({
 ```
 
 A changed path runs the tests every key that matches it lists, beside the tests that reach it by import, path or bin.
+A full-run rule below overrides this.
 A stylesheet, a font or a layout that a key matches runs only those tests, rather than the whole suite.
 A stylesheet, a font or a layout that no key matches still runs the whole suite.
 A lockfile, a config, a tool pin, or a preloaded file still runs the whole tier, even when a key matches it.
+A unit or end-to-end pull request change confined to entries of the reach map is an exception.
+It runs the tests named in the old and new entries, along with the tests other changed files reach.
+The runner compares the loaded settings at the merge base and the head, not the text of the config.
+When the base config cannot load or another setting changes, the whole tier runs.
+A head config that cannot load stops the test command with an error.
 CI wiring runs the whole screenshot tier, but unit and e2e tests run only when they reach the changed file.
-A test helper runs the whole unit or e2e tier.
-In a screenshot pull request run, a test helper runs only the screenshot tests that reach it.
 Outside pull requests, the map does not narrow CI test runs.
 A value that matches no test file stops the narrowing.
 A pull request run and a `--changed` run then run the whole suite and name the value and the key that lists it.

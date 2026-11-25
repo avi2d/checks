@@ -195,6 +195,7 @@ The generated `ci.yml` runs on pull requests, pushes to `main`, and manual dispa
 On pushes to `main`, the default test jobs run their whole tiers and the browser walks every route.
 If the pull request reaches no browser route, the browser job skips and the gate accepts the skip.
 A change confined to TypeScript files under `tests/unit/` and `tests/e2e/`, including helpers, skips both the site build and its dependent jobs.
+A `checks.config.ts` change confined to `reach` entries counts the same way, as [checks-ci](checks-ci.md) says.
 Existing screenshot test jobs keep their commands, and the kit adds no default screenshot job.
 A job that runs `bunx checks-test --pr-screens` narrows screenshot tests on pull requests and runs the whole pixel tier on other events.
 A site production run runs the full browser walk and compares screenshots on the staged release commit.

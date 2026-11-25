@@ -36,6 +36,9 @@ Each command runs one step and reads its inputs from the environment the step se
 When `PLAN_BROWSER` is true, `changes` logs which routes each changed path reaches or why the browser must walk every route.
 It writes `browser=false` when no route is reached or the change is confined to TypeScript files under `tests/unit/` and `tests/e2e/`.
 The tests-only rule includes helpers under those directories and holds with or without `browserRoutes`.
+A change to `checks.config.ts` also counts as tests-only when it changes only reach map entries and every other changed path is under those test directories.
+The command compares the loaded settings at the merge base and the head.
+When either config cannot load or another setting changes, the config makes the change full.
 
 `lighthouse` installs the Lighthouse the kit pins unless `LIGHTHOUSE` names one.
 

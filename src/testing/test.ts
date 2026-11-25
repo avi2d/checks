@@ -210,9 +210,9 @@ export function narrowedTier(options: TestOptions, selection: SuiteSelection): {
 }
 
 // Returns undefined when a shared file widens the run, so the caller keeps the selection it already had.
-const reachedSelection = Effect.fn("reachedSelection")(function* (changed: readonly string[], tier: TestTier | undefined) {
+const reachedSelection = Effect.fn("reachedSelection")(function* (changed: readonly string[], tier: TestTier | undefined, base?: string) {
   const tests = (yield* scanTestFiles(process.cwd())).filter((file) => selectedTierFile(file, tier));
-  const narrowing = yield* readChangedNarrowing(process.cwd(), changed, tests, tier);
+  const narrowing = yield* readChangedNarrowing(process.cwd(), changed, tests, tier, base);
   if (narrowing.kind === "full") {
     yield* Console.log(`${NAME}: ${narrowing.because}, so ${tier === undefined ? "the whole suite" : `the ${tier} tier`} runs`);
     return undefined;
@@ -229,7 +229,7 @@ const narrowSelection = Effect.fn("narrowSelection")(function* (options: TestOpt
     yield* Console.log(`${NAME}: ${scope.because}, so the whole suite runs`);
     return selection;
   }
-  return (yield* reachedSelection(scope.changed, narrowed.tier)) ?? selection;
+  return (yield* reachedSelection(scope.changed, narrowed.tier, scope.kind === "pull-request" ? scope.ends?.base : undefined)) ?? selection;
 });
 
 const changedSelection = Effect.fn("changedSelection")(function* () {
@@ -256,7 +256,7 @@ const pullRequestSelection = Effect.fn("pullRequestSelection")(function* (tier: 
   if (scope.kind === "docs-only") {
     return { kind: "files", files: [] } satisfies SuiteSelection;
   }
-  return (yield* reachedSelection(scope.changed, tier)) ?? (tier === undefined ? ({ kind: "full" } satisfies SuiteSelection) : ({ kind: "tier", tier } satisfies SuiteSelection));
+  return (yield* reachedSelection(scope.changed, tier, scope.ends?.base)) ?? (tier === undefined ? ({ kind: "full" } satisfies SuiteSelection) : ({ kind: "tier", tier } satisfies SuiteSelection));
 });
 
 const entrySelection = Effect.fn("entrySelection")(function* (run: EntryRun, options: TestOptions, environment: Environment) {
@@ -296,8 +296,7 @@ const testEntry = Effect.gen(function* () {
   const environment = yield* environmentOf;
   yield* refuseOldPlace(root, "smoke", { manifestKey: "smoke" });
   yield* refuseOldPlace(root, "reach", { manifestKey: "reach" });
-  const isPullRequest = run === "pr" || run === "pr-screens";
-  const refusal = isPullRequest
+  const refusal = run === "pr" || run === "pr-screens"
     ? pullRequestRunRefusal(environment, run === "pr-screens" ? "--pr-screens" : "--pr")
     : heavyRunRefusal(options, environment, options.tier === "pixel" && (yield* approvingScreens));
   if (refusal !== undefined) return yield* new RunRefusal({ message: refusal });
