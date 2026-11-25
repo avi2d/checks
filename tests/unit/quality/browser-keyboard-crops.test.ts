@@ -35,33 +35,32 @@ const element = () => {
 };
 
 const pixel = (red: number) => btoa(String.fromCharCode(red, 0, 0, 255));
-const boxes = [{ x: 0, y: 0, width: 1, height: 1 }];
+const crops = (image: string) => [{ image, width: 1, height: 1 }];
 
 test("a page blur handler that paints after focus is not counted as a focus change", async () => {
   const before = pixel(0);
   const focused = pixel(0);
   const blurred = pixel(255);
-  expect(await compareCrops(element(), { baseline: before, focused, blurred, boxes })).toEqual({ compared: true, differs: false });
+  expect(await compareCrops(element(), { baseline: crops(before), focused: crops(focused), blurred: crops(blurred) })).toEqual({ compared: true, differs: false });
 });
 
 test("a JavaScript focus ring removed by blur is counted rather than suppressed", async () => {
   const before = pixel(0);
   const focused = pixel(255);
   const blurred = pixel(0);
-  expect(await compareCrops(element(), { baseline: before, focused, blurred, boxes })).toEqual({ compared: true, differs: true });
+  expect(await compareCrops(element(), { baseline: crops(before), focused: crops(focused), blurred: crops(blurred) })).toEqual({ compared: true, differs: true });
 });
 
 test("a missing baseline still detects whether blur changes the focused pixels", async () => {
   const focused = pixel(255);
-  expect(await compareCrops(element(), { baseline: null, focused, blurred: pixel(0), boxes })).toEqual({ compared: true, differs: true });
-  expect(await compareCrops(element(), { baseline: null, focused, blurred: focused, boxes })).toEqual({ compared: true, differs: false });
+  expect(await compareCrops(element(), { baseline: null, focused: crops(focused), blurred: crops(pixel(0)) })).toEqual({ compared: true, differs: true });
+  expect(await compareCrops(element(), { baseline: null, focused: crops(focused), blurred: crops(focused) })).toEqual({ compared: true, differs: false });
 });
 
 test("scroll-only paint that remains after blur is not counted as visible focus", async () => {
   expect(await compareCrops(element(), {
-    baseline: pixel(0),
-    focused: pixel(255),
-    blurred: pixel(255),
-    boxes,
+    baseline: crops(pixel(0)),
+    focused: crops(pixel(255)),
+    blurred: crops(pixel(255)),
   })).toEqual({ compared: true, differs: false });
 });

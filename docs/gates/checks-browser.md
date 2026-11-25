@@ -26,6 +26,7 @@ It compares screenshots in document coordinates, or in viewport coordinates for 
 When Tab scrolls a sticky element, the check fails it if its focused and blurred screenshots match.
 If those screenshots differ, the check reports the element as not measured without failing it.
 The check blurs and restores focus to locate changed paint on the element and its ancestors.
+It crops each screenshot to those paint regions before sending the images to the page for comparison.
 Page handlers run during blur and focus restoration, so JavaScript focus rings remain measurable without counting blur-only or scroll-only paint as focus.
 
 | Check | What fails | Built on |
