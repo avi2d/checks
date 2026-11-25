@@ -48,7 +48,7 @@ const settled = (name: string, version: string, standing: Standing, latest: stri
     ? `${LABEL}: npm already holds ${name}@${version}`
     : `${LABEL}: npm already holds ${name}@${latest ?? ""}, which carries every change in ${version}, so ${version} stays off npm`;
 
-export const publishPackage = Effect.fn("publishPackage")(function* (root: string, wait = () => Effect.sleep("10 seconds")) {
+export const publishPackage = Effect.fn("publishPackage")(function* (root: string, wait: () => Effect.Effect<void> = () => Effect.sleep("10 seconds")) {
   const manifest = yield* (yield* FileSystem.FileSystem).readFileString((yield* Path.Path).join(root, MANIFEST));
   const { name, version } = yield* decodeManifest(manifest).pipe(Effect.mapError((cause) => new PublishFailed({ message: `${MANIFEST}: ${cause.message}` })));
   const before = yield* latestOnNpm(name);
