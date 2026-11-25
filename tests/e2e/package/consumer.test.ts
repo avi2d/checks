@@ -5,6 +5,8 @@ import { chmod, copyFile, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFi
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { Schema } from "effect";
+import { nativeHost } from "../../../src/core/native-launch.ts";
+import { skipReason } from "../../../src/testing/test-skips.ts";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
 import { consumerManifest, installConsumer } from "../lib/consumer-install.ts";
 import { CHECKOUT, ran, LAYOUT_BUNFIG, type Ran } from "../lib/fixture-repo.ts";
@@ -30,7 +32,7 @@ type Output = {
 
 type Kind = "file" | "tarball";
 
-test("the native launcher rejects a version-only twin and runs checks-workflows with the consumer config", async () => {
+test.skipIf(!nativeHost)(skipReason("the launcher runs a compiled build only on macOS arm64 and Linux x64", "the native launcher rejects a version-only twin and runs checks-workflows with the consumer config", "local"), async () => {
   await useConsumer("tarball");
   await $`git init -q`.cwd(dir).quiet();
   const config = 'import { defineConfig } from "@avi2dg/checks/config";\nexport default defineConfig({ releaseAssets: true });\n';

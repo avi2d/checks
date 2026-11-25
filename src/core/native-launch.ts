@@ -1,11 +1,12 @@
 import manifest from "../../package.json";
 
+export const nativeHost = (process.platform === "darwin" && process.arch === "arm64") || (process.platform === "linux" && process.arch === "x64");
+
 export function launch(command: string, source: string): void {
   const root = Bun.fileURLToPath(new URL("../../", import.meta.url));
   const native = root + `native/checks-${manifest.version}-${process.platform}-${process.arch}`;
-  const supported = (process.platform === "darwin" && process.arch === "arm64") || (process.platform === "linux" && process.arch === "x64");
   const args = process.argv.slice(2);
-  if (supported && Bun.which(native) !== null && process.execve !== undefined) {
+  if (nativeHost && Bun.which(native) !== null && process.execve !== undefined) {
     process.execve(native, [native, command, root, process.execPath, ...args]);
   }
   if (process.platform !== "win32" && process.execve !== undefined) process.execve(process.execPath, [process.execPath, source, ...args]);

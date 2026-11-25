@@ -13,7 +13,7 @@
     },
     "releaseAssets": {
       "type": "boolean",
-      "description": "Whether the generated main.yml builds the files bun run release:assets writes on Linux and macOS and attaches them to each GitHub release.",
+      "description": "Whether the generated main.yml, or the kit's release.yml, builds the files bun run release:assets writes on Linux and macOS and attaches them to each GitHub release.",
       "default": false
     },
     "smoke": {

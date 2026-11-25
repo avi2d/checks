@@ -10,9 +10,8 @@ const dispatcher = [
   'const [command, root, bun] = process.argv.slice(2);',
   'switch (command) {',
   `case "--version": console.log(${JSON.stringify(manifest.version)}); break;`,
-  `case "--help": console.log(${JSON.stringify(commands.map(({ name }) => name).join("\n"))}); break;`,
   ...commands.map(({ name, source }) => `case "${name}": selectSource(root, "${source}", bun); await import("../${source}"); break;`),
-  'default: console.error("Pass --help for the list of compiled checks."); process.exitCode = 2;',
+  'default: console.error(`checks: no compiled check is named ${command}`); process.exitCode = 2;',
   '}',
 ].join("\n");
 

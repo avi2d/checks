@@ -43,10 +43,11 @@ const writeSet = Effect.fn("writeSet")(function* (root: string, set: CallerSet, 
   yield* fs.makeDirectory(directory, { recursive: true });
   const held = new Set(present.map(({ name }) => name));
   const byHand = byHandSet(set).filter(({ name }) => held.has(name));
-  const written = [...requiredSet(set, kit), ...byHand];
+  const required = requiredSet(set, kit);
+  const written = [...required, ...byHand];
   for (const { name, text } of written) yield* fs.writeFileString(`${directory}/${name}`, text);
   const kept = new Set(written.map(({ name }) => name));
-  const removed = present.filter(({ name }) => !kept.has(name) && !isIgnoredWorkflow(name, kit));
+  const removed = present.filter(({ name }) => !kept.has(name) && !isIgnoredWorkflow(name, kit, required));
   for (const { name } of removed) yield* fs.remove(`${directory}/${name}`);
   const actions = yield* writeActions(root, set, yield* readActionFiles(root));
   const deletedNames = [...removed.map(({ name }) => name), ...actions.removed];
@@ -82,10 +83,10 @@ const checkSet = Effect.fn("checkSet")(function* (root: string, set: CallerSet, 
   return false;
 });
 
-const refuseRemoteCalls = Effect.fn("refuseRemoteCalls")(function* (present: readonly HeldFile[], kit: boolean) {
+const refuseRemoteCalls = Effect.fn("refuseRemoteCalls")(function* (present: readonly HeldFile[], kit: boolean, required: readonly WorkflowFile[]) {
   const calls = remoteCallsOf(present.map(({ workflow }) => workflow));
   if (calls.length === 0) return true;
-  const kept = new Set(present.filter(({ name }) => isIgnoredWorkflow(name, kit)).map(({ workflow }) => workflow.path));
+  const kept = new Set(present.filter(({ name }) => isIgnoredWorkflow(name, kit, required)).map(({ workflow }) => workflow.path));
   const hand = [...new Set(calls.flatMap(({ path }) => (kept.has(path) ? [path] : [])))];
   const lines = [`${NAME}: ${calls.length} job(s) call a workflow of another repository:`, ...remoteCallLines(calls)];
   if (hand.length < new Set(calls.map(({ path }) => path)).size) lines.push(`  run ${REWRITE} to write the set`);
@@ -102,7 +103,7 @@ const workflows = Effect.gen(function* () {
   const inputs = yield* callerInputsOf(root).pipe(Effect.mapError((fault) => new Usage({ message: fault.message })));
   if (!mode.write) {
     const set = yield* reportedSet(present, {}, inputs).pipe(Effect.catchTag("CallerSetFault", (fault) => Console.error(`${NAME}: ${fault.message}`).pipe(Effect.as(undefined))));
-    const local = yield* refuseRemoteCalls(present, inputs.kit);
+    const local = yield* refuseRemoteCalls(present, inputs.kit, set === undefined ? [] : requiredSet(set, inputs.kit));
     return set === undefined ? false : (yield* checkSet(root, set, present, inputs.kit)) && local;
   }
   const set = yield* reportedSet(present, mode.flags, inputs).pipe(Effect.mapError((fault) => new Usage({ message: fault.message })));

@@ -129,7 +129,7 @@ export type FullWorkflow = { readonly name: string; readonly text: string };
 
 const fileOf = (workflow: Workflow): FullWorkflow => ({ name: workflow.name + ".yml", text: workflowText(workflow) });
 
-// The kit publishes through a release.yml that npm's trusted publishing names, so it keeps its own release files.
+// npm trusted publishing names the kit's release.yml, so the kit's set writes it only to add the assets job to the kit's own release jobs.
 export function fullRequiredSet(set: CallerSet, kit: boolean): readonly FullWorkflow[] {
   const ci = fileOf(ciWorkflow(set, kit));
   if (set.kind === "site") return [ci, fileOf(prTitle(set.options.publicRepository)), fileOf(PREVIEW_CLOSE(set.names, set.options.publicRepository)), fileOf(SITE_MAIN(set.names)), fileOf(release(set.options.releaseVersionInput)), fileOf(PRODUCTION(set.names, set.ci.tests.some(isBrowserWalk)))];
