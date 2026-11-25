@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.117.1
+
+Released 2026-11-25.
+
+### Fixes
+
+- **browser:** compare keyboard focus screenshots in Bun instead of the page [#220](https://github.com/avi2d/checks/pull/220)
+
 ## 0.117.0
 
 Released 2026-11-25.
