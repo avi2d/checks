@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { compareCrops } from "../../../src/quality/browser/keyboard-crops.ts";
 
-const pixel = (red: number, green = 0, blue = 0) => ({ data: Buffer.from([red, green, blue, 255]) });
+const pixel = (red: number, green = 0, blue = 0) => ({ data: Buffer.from([red, green, blue]) });
 const crops = (red: number) => [pixel(red)];
 
 test("a page blur handler that paints after focus is not counted as a focus change", () => {
