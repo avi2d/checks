@@ -17,7 +17,6 @@ const source = () => {
 const box = [{ x: 1, y: 1, width: 2, height: 1 }];
 
 const assertCrop = (crop: PixelCrop) => {
-  expect([crop.width, crop.height]).toEqual([2, 1]);
   expect([...crop.data]).toEqual([5, 0, 0, 255, 6, 0, 0, 255]);
 };
 

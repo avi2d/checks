@@ -1,7 +1,7 @@
 import { PNG } from "pngjs";
 import type { Box } from "./keyboard-page.ts";
 
-export type PixelCrop = Readonly<Pick<PNG, "data" | "width" | "height">>;
+export type PixelCrop = Readonly<Pick<PNG, "data">>;
 
 export const cropPng = (source: Buffer, boxes: readonly Box[], scale: number): readonly PixelCrop[] => {
   const image = PNG.sync.read(source);
@@ -14,6 +14,6 @@ export const cropPng = (source: Buffer, boxes: readonly Box[], scale: number): r
     const copyWidth = Math.max(0, Math.min(width, image.width - x));
     const copyHeight = Math.max(0, Math.min(height, image.height - y));
     if (copyWidth > 0 && copyHeight > 0) PNG.bitblt(image, crop, x, y, copyWidth, copyHeight, 0, 0);
-    return { data: crop.data, width, height };
+    return { data: crop.data };
   });
 };

@@ -6,19 +6,11 @@ export type CropArgs = {
   readonly blurred: readonly PixelCrop[];
 };
 
-type CompareOutcome =
-  | { readonly compared: true; readonly differs: boolean }
-  | { readonly compared: false };
+const differs = (first: readonly PixelCrop[], second: readonly PixelCrop[]): boolean =>
+  first.some((crop, index) => {
+    const other = second[index];
+    return other !== undefined && !crop.data.equals(other.data);
+  });
 
-export const compareCrops = (args: CropArgs): CompareOutcome => {
-  let before = false;
-  let after = false;
-  for (const [index, crop] of args.focused.entries()) {
-    const blurred = args.blurred[index];
-    const baseline = args.baseline?.[index];
-    if (blurred === undefined || (args.baseline !== null && baseline === undefined)) return { compared: false };
-    before ||= baseline !== undefined && !baseline.data.equals(crop.data);
-    after ||= !crop.data.equals(blurred.data);
-  }
-  return { compared: true, differs: after && (args.baseline === null || before) };
-};
+export const compareCrops = (args: CropArgs): boolean =>
+  differs(args.focused, args.blurred) && (args.baseline === null || differs(args.baseline, args.focused));

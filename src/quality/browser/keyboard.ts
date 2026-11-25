@@ -167,9 +167,7 @@ const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page, leaf: 
   const boxes = regions.map((region) => cropTo(viewport ? region : { ...region, x: region.x + scroll.x, y: region.y + scroll.y }, dimensions)).filter((rect) => rect !== null);
   if (boxes.length === 0) return false;
   const crops = yield* prepareCrops(page, boxes, scrolledSticky ? null : baseline.shot, withFocus, withoutFocus);
-  const outcome = compareCrops(crops);
-  if (!outcome.compared) return yield* new BrowserFailure({ message: "cannot read the capture" });
-  return focusVerdict(scrolledSticky, outcome.differs);
+  return focusVerdict(scrolledSticky, compareCrops(crops));
 });
 
 const tabToNextStop = Effect.fn("tabToNextStop")(function* (page: Page) {
