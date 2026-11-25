@@ -254,7 +254,6 @@ const pullRequestSelection = Effect.fn("pullRequestSelection")(function* (tier: 
     return tier === undefined ? ({ kind: "full" } satisfies SuiteSelection) : ({ kind: "tier", tier } satisfies SuiteSelection);
   }
   if (scope.kind === "docs-only") {
-    yield* Console.log(`${NAME}: the pull request changes only top-level and docs/ Markdown, so no test ran`);
     return { kind: "files", files: [] } satisfies SuiteSelection;
   }
   return (yield* reachedSelection(scope.changed, tier)) ?? (tier === undefined ? ({ kind: "full" } satisfies SuiteSelection) : ({ kind: "tier", tier } satisfies SuiteSelection));

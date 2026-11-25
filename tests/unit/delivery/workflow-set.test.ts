@@ -416,8 +416,8 @@ test("a change that reaches no route skips the browser job, not the site build",
   expect(skippedAndPassed(SITE, "tests-reach-route")).toEqual([["site", "browser"], ["site", "browser"]]);
 });
 
-test.each([[["unit", "e2e"]], [["unit", "e2e", "pixel"]]] as const)("site tiers %p do not add a screenshot job or delete a carried one", async (tiers) => {
-  const options = { publicRepository: true, docsBuild: false, testTiers: new Set(tiers) };
+test("site workflows do not add a screenshot job or delete a carried one", async () => {
+  const options = { publicRepository: true, docsBuild: false, hasE2e: true };
   const fresh = await Effect.runPromise(ciJobsOf("site", undefined, options));
   expect(fresh.tests.map(({ name }) => name)).toEqual(["unit", "e2e", "browser"]);
   const document = { jobs: { screens: { "runs-on": "ubuntu-latest", steps: [{ id: "test", run: "bunx checks-test --pr-screens" }] } } };
