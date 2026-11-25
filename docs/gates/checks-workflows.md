@@ -140,7 +140,6 @@ A run without `-f version` plans the bump the unreleased changes need.
 Set `releaseAssets: true` in `checks.config.ts` to attach built files to each GitHub release of a code repository.
 The setting defaults to `false`, and without it `main.yml` holds no `assets` job.
 With it, `main.yml` holds an `assets` job after the `release` job.
-In the kit, `release.yml` holds the `assets` job after the `github-release` job instead, and that job builds the tag the run started from.
 
 The `release` job sets a `tag` output once `checks-release-tag` writes the GitHub release, and the `assets` job runs only when that output is set.
 It runs once on `ubuntu-latest`, a Linux x64 runner, and once on `macos-latest`, a macOS arm64 runner.
@@ -153,6 +152,9 @@ Each run attaches only what its own runner built.
 So the script writes each compiled file and its SHA-256 file under a name that holds the platform, such as `<name>-<os>-<arch>` and `<name>-<os>-<arch>.sha256`.
 A file of one name from both runners replaces the other on the release.
 A release then holds a compiled file and its SHA-256 file for each platform.
+
+In the kit, `release.yml` builds both platforms before it publishes to npm.
+After the `github-release` job, the `assets` job attaches the files from those builds.
 
 `checks-workflows` refuses the setting when `package.json` has no `release:assets` script, in a site, and when `repositoryVisibility` is `private`.
 

@@ -61,7 +61,8 @@ To regenerate after an edit:
 ## Release a version
 
 A release is a tag on `main`.
-The `release` workflow publishes it through npm trusted publishing.
+The `release` workflow publishes the platform packages before the main package at the same version.
+It uses npm trusted publishing with provenance for each package.
 GitHub mints the publish credential for each run, so no npm token is stored anywhere.
 
 The kit releases on demand through a release pull request.
@@ -84,7 +85,7 @@ To release a version:
    Once it passes, the workflow creates or updates the GitHub release with the matching `CHANGELOG.md` section.
 
 `publishConfig.access` in `package.json` is what makes the scoped package public.
-The package's npm settings name the repository `avi2d/checks` and the workflow `release.yml` as its trusted publisher.
+Each package's npm settings name the repository `avi2d/checks` and the workflow `release.yml` as its trusted publisher.
 
 ## Find where a change goes
 

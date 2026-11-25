@@ -78,7 +78,7 @@ export function stepLines(step: Step, indent: string): readonly string[] {
   return [...(step.note === undefined ? [] : [indent + "# " + step.note]), indent + "- " + first.trimStart(), ...rest];
 }
 
-export function jobLines(job: Job): readonly string[] {
+function jobLines(job: Job): readonly string[] {
   const lines = ["  " + job.id + ":"];
   if (job.needs !== undefined) lines.push("    needs: " + job.needs);
   if (job.if !== undefined) lines.push("    if: " + job.if);

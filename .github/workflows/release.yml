@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   preflight:
@@ -23,7 +22,7 @@ jobs:
       - uses: ./.github/actions/setup
       - name: fail fast when the release cannot run
         run: bun src/delivery/release-preflight.ts release.yml
-  publish:
+  verify:
     needs: preflight
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -49,11 +48,58 @@ jobs:
           PACKAGE_PATH: package.json
           TAG: ${{ github.ref_name }}
         run: bunx checks-ci release-version
+
+  build-binaries:
+    needs: preflight
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: build and run the compiled binary
+        run: bun run release:assets
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-binary-${{ matrix.runner }}
+          path: release-assets/checks-*
+          if-no-files-found: error
+
+  publish:
+    needs: [verify, build-binaries]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      NPM_CONFIG_PROVENANCE: "true"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release-binary-*
+          merge-multiple: true
+          path: release-assets
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-      - run: bun src/delivery/release-publish.ts
+      - name: stage the platform packages
+        run: bun scripts/package-release.ts stage release-assets
+      - name: publish the platform packages
+        run: bun scripts/package-release.ts publish release-assets
+      - name: add the matching optional dependencies
+        run: bun scripts/package-release.ts manifest package.json
+      - name: publish the main package
+        run: bun src/delivery/release-publish.ts
 
   github-release:
     needs: publish
@@ -90,23 +136,19 @@ jobs:
 
   assets:
     needs: github-release
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
-    strategy:
-      matrix:
-        runner: [ubuntu-latest, macos-latest]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          ref: ${{ github.ref_name }}
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-      - name: build the release assets
-        run: bun run release:assets
-      - name: attach the release assets to the GitHub release
+          pattern: release-binary-*
+          merge-multiple: true
+          path: release-assets
+      - name: attach the binaries and checksums to the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
         run: gh release upload "$TAG" release-assets/* --clobber

@@ -3,7 +3,7 @@ import { RELEASE_VERSION_ENV } from "../core/release-names.ts";
 import { type CallerSet } from "./site-names.ts";
 import { RELEASE_ASSETS_DIRECTORY, RELEASE_ASSETS_SCRIPT, type CallerOptions, type Flake, type Pages } from "./caller-options.ts";
 import { isBrowserWalk, runnerOf } from "./ci-jobs.ts";
-import { SETUP_NODE, CONFIGURE_PAGES, UPLOAD_PAGES, DEPLOY_PAGES, type Job, type Step, type Workflow, expression, scalar, workflowText, jobLines, TOKEN, RUNNER, checkout, SETUP, ciCommand, keepArtifacts, claudeInstall } from "./full-set/steps.ts";
+import { SETUP_NODE, CONFIGURE_PAGES, UPLOAD_PAGES, DEPLOY_PAGES, type Job, type Step, type Workflow, expression, scalar, workflowText, TOKEN, RUNNER, checkout, SETUP, ciCommand, keepArtifacts, claudeInstall } from "./full-set/steps.ts";
 import { PULL_REQUEST_HEAD, PULL_REQUEST_NUMBER, BY_HAND, ciWorkflow } from "./full-set/ci.ts";
 import { PREVIEW_CLOSE, SITE_MAIN, PRODUCTION } from "./full-set/site.ts";
 
@@ -129,14 +129,14 @@ export type FullWorkflow = { readonly name: string; readonly text: string };
 
 const fileOf = (workflow: Workflow): FullWorkflow => ({ name: workflow.name + ".yml", text: workflowText(workflow) });
 
-// npm trusted publishing names the kit's release.yml, so the kit's set writes it only to add the assets job to the kit's own release jobs.
+// The kit cannot use the caller's release workflow because npm trusts release.yml.
 export function fullRequiredSet(set: CallerSet, kit: boolean): readonly FullWorkflow[] {
   const ci = fileOf(ciWorkflow(set, kit));
   if (set.kind === "site") return [ci, fileOf(prTitle(set.options.publicRepository)), fileOf(PREVIEW_CLOSE(set.names, set.options.publicRepository)), fileOf(SITE_MAIN(set.names)), fileOf(release(set.options.releaseVersionInput)), fileOf(PRODUCTION(set.names, set.ci.tests.some(isBrowserWalk)))];
   const shared = [ci, fileOf(prTitle(set.options.publicRepository))];
   if (!kit) return [...shared, fileOf(codeMain(set.options)), fileOf(release(set.options.releaseVersionInput))];
   if (!set.options.releaseAssets) return shared;
-  return [...shared, { name: "release.yml", text: [kitRelease, ...jobLines(assets("github-release", "github.ref_name")), ""].join("\n") }];
+  return [...shared, { name: "release.yml", text: kitRelease }];
 }
 
 // A second deploy waits for the one in flight, since Pages serves one deployment at a time.
