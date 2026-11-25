@@ -19,6 +19,7 @@ const HELPER = "tests/e2e/lib/site.ts";
 
 test("type-only and Vite asset imports do not make a map entry, new helper and new test run unrelated tests or build the site", async () => {
   const repo = await open({
+    ".gitignore": "node_modules/\n",
     "checks.config.ts": `export default { reach: { "src/components/Hero.astro": ["${A}"] } };`,
     "src/content.config.ts": 'import { defineCollection } from "astro:content";',
     "src/lib/articles.ts": 'import { getCollection } from "astro:content"; import type { Element } from "hast"; export type { Element } from "hast";',
