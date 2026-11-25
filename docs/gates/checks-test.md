@@ -146,11 +146,11 @@ A shared file runs the whole suite instead:
 - a stylesheet, a font, or a layout under `layouts/` or named `layout.*`
 
 A stylesheet, a font or a layout the reach map names runs the tests the map gives it instead, as [The reach map](#the-reach-map) says.
-In a unit or end-to-end pull request run, a changed test helper runs the tests that import it directly or through other files.
-When the import graph cannot be resolved, a dynamic import reaches the helper, or an import is not a literal, the whole tier runs.
-The runner scans unparsed source files for a path or basename in the helper's importer chain.
-A matching reference or dynamic import in an unparsed source runs the whole tier.
-A changed Astro, Svelte, Vue or shell source also runs the whole tier.
+In a unit or end-to-end pull request run, a changed JavaScript or TypeScript test helper runs the tests that reach it.
+Literal imports and paths named by files under `tests/` count as references, at any depth.
+Literal dynamic imports count as imports, including in Astro, Svelte, and Vue sources.
+When an import cannot be resolved or has a non-literal target, the whole tier runs.
+Other test helpers still run the whole tier.
 A screenshot pull request run selects the screenshot tests that reach the helper.
 A dependency bump changes `package.json` or the lockfile, so it runs the whole suite in every repository.
 A workflow under `.github/` is not a shared file, since the suite runs under it rather than reading it.
@@ -169,7 +169,7 @@ The CI workflow runs `checks-test --pr --tier=unit` and `checks-test --pr --tier
 It runs changed tests and tests that import a changed file, even through several imports.
 It logs the test files each changed path reaches.
 A pull request that changes only top-level and `docs/` Markdown runs no test and passes.
-A change to a lockfile, a config, or a shared helper runs the whole tier and logs the reason.
+A lockfile, a config change outside the reach map, or a preloaded helper runs the whole tier and logs the reason.
 A change under `.github/` runs only the tests that reach the changed file.
 A release pull request, a push to `main`, and a manual run also run the whole tier.
 
@@ -189,7 +189,7 @@ import { defineConfig } from "@avi2dg/checks/config";
 export default defineConfig({
   reach: {
     "src/styles/hero.css": ["tests/e2e/hero.test.ts"],
-    "src/components/{nav,menu}.ts": ["tests/e2e/menu.test.ts", "tests/e2e/hero.test.ts"],
+    "src/components/{Nav,Menu}.astro": ["tests/e2e/menu.test.ts", "tests/e2e/hero.test.ts"],
   },
 });
 ```
@@ -201,7 +201,8 @@ A lockfile, a config, a tool pin, or a preloaded file still runs the whole tier,
 A unit or end-to-end pull request change confined to entries of the reach map is an exception.
 It runs the tests named in the old and new entries, along with the tests other changed files reach.
 The runner compares the loaded settings at the merge base and the head, not the text of the config.
-When either config cannot load, or another setting changes, the whole tier runs.
+When the base config cannot load or another setting changes, the whole tier runs.
+A head config that cannot load stops the test command with an error.
 CI wiring runs the whole screenshot tier, but unit and e2e tests run only when they reach the changed file.
 Outside pull requests, the map does not narrow CI test runs.
 A value that matches no test file stops the narrowing.

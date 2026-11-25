@@ -287,22 +287,6 @@ const temporaryReportPath = Effect.fn("temporaryReportPath")(function* () {
   return path.join(yield* fs.makeTempDirectoryScoped({ prefix: "checks-test-" }), "junit.xml");
 });
 
-const loadRunSettings = Effect.fn("loadRunSettings")(function* (root: string, environment: Environment) {
-  const emptySettings: Readonly<Record<string, unknown>> = {};
-  return yield* loadSettings(root).pipe(
-    Effect.map((settings) => ({ settings, failed: false })),
-    Effect.catch((cause) => environment === "ci"
-      ? Console.log(`${NAME}: ${cause.message}, so the whole requested suite runs`).pipe(Effect.as({ settings: emptySettings, failed: true }))
-      : Effect.fail(cause)),
-  );
-});
-
-const safeEntrySelection = Effect.fn("safeEntrySelection")(function* (run: EntryRun, options: TestOptions, environment: Environment, settingsFailed: boolean) {
-  if (!settingsFailed) return yield* entrySelection(run, options, environment);
-  if (run === "pr-screens") return { kind: "tier", tier: "pixel" } satisfies SuiteSelection;
-  return selectSuite(options, environment);
-});
-
 const testEntry = Effect.gen(function* () {
   const root = process.cwd();
   yield* refuseLocalTests(root);
@@ -316,13 +300,12 @@ const testEntry = Effect.gen(function* () {
     ? pullRequestRunRefusal(environment, run === "pr-screens" ? "--pr-screens" : "--pr")
     : heavyRunRefusal(options, environment, options.tier === "pixel" && (yield* approvingScreens));
   if (refusal !== undefined) return yield* new RunRefusal({ message: refusal });
-  const loaded = yield* loadRunSettings(root, environment);
-  const { settings } = loaded;
+  const settings = yield* loadSettings(root);
   const policy: RunPolicy = environment === "ci"
     ? { environment, maxFileSeconds: yield* resolveTestFileMaxSeconds(settings["testFileMaxSeconds"]) }
     : { environment };
   const excluded = yield* readTestFileSkips(root, settings["testFileSkips"]);
-  const selection = yield* safeEntrySelection(run, options, environment, loaded.failed);
+  const selection = yield* entrySelection(run, options, environment);
   if (selection.kind === "files" && selection.files.length === 0) {
     yield* Console.log(`${NAME}: no selected test file, so no test ran`);
     return true;

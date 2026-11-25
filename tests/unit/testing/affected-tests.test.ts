@@ -166,9 +166,9 @@ test("a stylesheet the site's reach map names runs the tests the map gives it, n
   });
 });
 
-test("a changed Astro component runs every test even when the reach map names it", () => {
-  expect(narrowTests(["src/components/Hero.astro"], SITE, SITE_TESTS).kind).toBe("full");
-  expect(narrowTests(["src/components/Footer.astro"], SITE, SITE_TESTS).kind).toBe("full");
+test("a component no test imports runs the tests the reach map gives it, matched by glob, rather than no test", () => {
+  expect(narrowTests(["src/components/Hero.astro"], SITE, SITE_TESTS)).toEqual({ kind: "files", files: ["tests/e2e/hero.test.ts"] });
+  expect(narrowTests(["src/components/Footer.astro"], SITE, SITE_TESTS)).toEqual({ kind: "files", files: ["tests/e2e/footer.test.ts"] });
 });
 
 test("a stylesheet the reach map does not name still runs the whole suite beside a mapped one", () => {

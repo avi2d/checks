@@ -234,8 +234,6 @@ function reachMapProblem(repository: Repository): string | undefined {
 
 function fullRunReason(changed: readonly string[], repository: Repository, tier?: TestTier): string | undefined {
   if (changed.length === 0) return "the pull request changes no file";
-  const unsupported = tier === "pixel" ? undefined : changed.find((path) => /\.(?:astro|svelte|vue|sh)$/.test(path));
-  if (unsupported !== undefined) return pullRequestReason(unsupported, "a source whose import graph cannot be read");
   for (const path of changed) {
     const reason = tier === "pixel" && path.startsWith(".github/") ? testEnvironmentReason(path) : undefined;
     if (reason !== undefined) return pullRequestReason(path, reason);
@@ -374,15 +372,15 @@ const readDefaultNarrowing = Effect.fn("readDefaultNarrowing")(function* (root: 
   const problem = reachMapProblem(repository);
   if (problem !== undefined) return { kind: "full", because: problem } satisfies Narrowing;
   if (changed.length === 0) return { kind: "full", because: "the pull request changes no file" } satisfies Narrowing;
-  const helpers = changed.filter((file) => file.startsWith(TEST_TREE) && !file.startsWith(TEST_FIXTURES) && !TEST_FILE.test(file));
+  const helpers = changed.filter((file) => /\.(?:[cm]?[jt]sx?)$/.test(file) && testEnvironmentReason(file) === "a test helper");
   if (helpers.some((file) => preloadClosure(repository).has(file))) return { kind: "full", because: "a changed test helper is preloaded" } satisfies Narrowing;
-  const helperTests = helpers.length === 0 ? new Set<string>() : yield* helperImpact(root, helpers, repository.sources, repository.files).pipe(Effect.orElseSucceed(() => undefined));
+  const helperTests = helpers.length === 0 ? new Set<string>() : yield* helperImpact(root, helpers, repository.sources, repository.files, graphOf(repository, helpers).readers).pipe(Effect.orElseSucceed(() => undefined));
   if (helperTests === undefined) return { kind: "full", because: "the changed test helper's import graph cannot be resolved" } satisfies Narrowing;
   const remaining = changed.filter((file) => !helpers.includes(file) && (file !== SETTINGS_FILE || mapChange.kind === "full"));
   const impact = remaining.length === 0 ? undefined : testImpact(remaining, repository, tests, tier);
   if (impact?.kind === "full") return impact;
   if (impact !== undefined) yield* reportImpact(impact.byChange);
-  const reached = new Set([...(impact === undefined ? [] : [...impact.byChange.values()].flat()), ...helperTests]);
+  const reached = new Set([...(impact === undefined ? [] : [...impact.byChange.values()].flat()), ...helperTests, ...helpers.flatMap((file) => mappedTests(file, repository) ?? [])]);
   return { kind: "files", files: mapChange.kind === "mapped" ? addReachTests(tests, reached, mapChange) : tests.filter((file) => reached.has(file)) } satisfies Narrowing;
 });
 

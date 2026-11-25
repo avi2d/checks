@@ -20,27 +20,6 @@ test("a map entry change selects its old and new tests and the changed test, not
   expect(testsOnlyWithReach(["checks.config.ts", B, "tests/e2e/lib/helper.ts"], change.kind === "mapped")).toBe(true);
 });
 
-function assertMappedSelection(select: () => readonly string[]): void {
-  expect(select()).toEqual([A, B]);
-}
-
-function showRejected(assertion: () => void): void {
-  let failure = "";
-  try {
-    assertion();
-  } catch (cause) {
-    failure = String(cause);
-  }
-  console.log(failure);
-  expect(failure).not.toBe("");
-}
-
-test("the map selection check rejects an implementation that always runs everything", () => {
-  showRejected(() => assertMappedSelection(() => TESTS));
-  const change = compareReach({ reach: { "src/page.css": [A] } }, { reach: { "src/page.css": [A, B] } });
-  assertMappedSelection(() => addReachTests(TESTS, new Set(), change));
-});
-
 test("a non-map change runs every test rather than using the reach map", () => {
   const change = compareReach({ reach: { "src/a": [A] }, smoke: [A] }, { reach: { "src/a": [B] }, smoke: [B] });
   expect(change.kind).toBe("full");
@@ -78,15 +57,13 @@ test("a helper selects both its direct and indirect importers, not the unrelated
   expect(reached).toEqual([A, B]);
 });
 
-function assertHelperSelection(reached: ReadonlySet<string>): void {
-  expect(TESTS.filter((file) => reached.has(file))).toEqual([A, B]);
-}
-
-test("the helper selection check rejects an implementation that selects only direct importers", async () => {
-  showRejected(() => assertHelperSelection(new Set([A])));
-  const reached = await run(sources);
+test("a root-level importer does not resolve relative to its filename", async () => {
+  const tree = new Map(sources);
+  tree.set("runner.ts", 'import "./tests/e2e/lib/helper.ts";');
+  tree.set(C, 'import "../../runner.ts";');
+  const reached = await run(tree);
   expect(reached).toBeDefined();
-  assertHelperSelection(reached ?? new Set());
+  expect(TESTS.filter((file) => reached?.has(file))).toEqual(TESTS);
 });
 
 test("an unresolvable import cannot narrow the helper's tests", async () => {
@@ -95,20 +72,22 @@ test("an unresolvable import cannot narrow the helper's tests", async () => {
   expect(await run(broken)).toBeUndefined();
 });
 
-test("an unchanged Astro importer makes the helper graph fall back rather than omit its test", async () => {
-  const unsupported = new Map(sources);
-  unsupported.set("src/page.astro", '---\nimport "../tests/e2e/lib/helper.ts";\n---');
-  unsupported.set(C, 'import "../../src/page.astro";');
-  const ignoringAstro = new Map(unsupported);
-  ignoringAstro.set("src/page.astro", "");
-  const wrong = await run(ignoringAstro);
-  showRejected(() => expect(wrong).toBeUndefined());
-  expect(await run(unsupported)).toBeUndefined();
+test.each([
+  ["astro", '---\nimport "../tests/e2e/lib/helper.ts";\n---'],
+  ["svelte", '<script>import "../tests/e2e/lib/helper.ts";</script>'],
+  ["vue", '<script>import "../tests/e2e/lib/helper.ts";</script>'],
+])("a literal import through %s does not omit the helper's transitive test", async (extension, source) => {
+  const tree = new Map(sources);
+  tree.set(`src/page.${extension}`, source);
+  tree.set(C, `import "../../src/page.${extension}";`);
+  const reached = await run(tree);
+  expect(reached).toBeDefined();
+  expect(TESTS.filter((file) => reached?.has(file))).toEqual(TESTS);
 });
 
-test("a dynamic import in an unparsed source cannot narrow a helper change", async () => {
+test.each(["import(path)", 'import("./" + path)', "require(path)"])("a non-literal %s in an unparsed source cannot silently omit a helper's importer", async (expression) => {
   const dynamic = new Map(sources);
-  dynamic.set("src/page.astro", "---\nconst component = import(path);\n---");
+  dynamic.set("src/page.astro", `---\nconst component = ${expression};\n---`);
   expect(await run(dynamic)).toBeUndefined();
 });
 
@@ -126,7 +105,9 @@ test("an unrelated Astro file does not turn a transitive helper chain into a ful
     [second, 'import { captured } from "./lib/contacts-paint.ts";'],
     [changed, "export {};"],
     [unrelated, "export {};"],
-    ["src/page.astro", "<p>unrelated</p>"],
+    ["src/content.config.ts", 'import { defineCollection } from "astro:content";'],
+    ["src/page.astro", '---\nimport { getCollection } from "astro:content";\nconst panel = import("./VariantPanel.astro");\n---\n<p>capture</p>'],
+    ["src/VariantPanel.astro", "<aside>unrelated</aside>"],
   ]);
   const reached = await Effect.runPromise(helperImpact(process.cwd(), [capture], tree, [...tree.keys()]).pipe(Effect.provide(platform)));
   expect(reached).toBeDefined();
@@ -134,13 +115,29 @@ test("an unrelated Astro file does not turn a transitive helper chain into a ful
   expect(selected).toEqual([first, second, changed]);
 });
 
-test("a changed Astro source runs everything rather than relying on an incomplete graph", () => {
-  const tree: Repository = { files: [], sources: new Map(), bins: new Map(), self: undefined, preloads: [], reach: [] };
-  expect(narrowTests(["src/page.astro"], tree, TESTS).kind).toBe("full");
+test.each(["astro", "svelte", "vue", "sh"])("a mapped %s source does not run the whole suite", (extension) => {
+  const file = `src/page.${extension}`;
+  const tree: Repository = {
+    files: [file, ...TESTS],
+    sources: new Map(),
+    bins: new Map(),
+    self: undefined,
+    preloads: [],
+    reach: [{ changed: file, tests: [A] }],
+  };
+  expect(narrowTests([file], tree, TESTS)).toEqual({ kind: "files", files: [A] });
 });
 
-test("a dynamic import of a helper cannot narrow the helper's tests", async () => {
+test("a literal dynamic import does not omit the helper's importer or force a full run", async () => {
   const dynamic = new Map(sources);
   dynamic.set(C, 'import("./lib/helper.ts");');
+  const reached = await run(dynamic);
+  expect(reached).toBeDefined();
+  expect(TESTS.filter((file) => reached?.has(file))).toEqual(TESTS);
+});
+
+test("a non-literal module import cannot silently omit a helper's importer", async () => {
+  const dynamic = new Map(sources);
+  dynamic.set(C, "import(path);");
   expect(await run(dynamic)).toBeUndefined();
 });
