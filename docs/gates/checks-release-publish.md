@@ -15,7 +15,11 @@ It publishes nothing and ends cleanly when `latest` is the version, so a rerun o
 It publishes nothing and ends cleanly when `latest` is above the version.
 The release workflow refuses a tag off `main`, so the newer version already carries every change of the older one.
 After a publish refusal, it reads `latest` again and ends cleanly if npm holds this version or a newer version.
-Otherwise, an `E409` for this staged version starts a shasum check.
+Otherwise, either refusal starts a shasum check for this version:
+
+- An `E409` refusal to overwrite a staged version.
+- An `E403` refusal to overwrite a published version.
+
 It reads that version's `dist.shasum` up to ten times, with ten seconds between attempts.
 The check succeeds only when the published shasum matches the shasum in the publish output.
 A different shasum, a version that does not appear, or any other publish failure without the same or a newer version fails it.
@@ -29,7 +33,7 @@ If `latest` lands on the older version, `npm dist-tag add <package>@<newer versi
 It reads `name` and `version` from `package.json` in the working directory.
 It reads `latest` with `npm view <name> dist-tags --json`, and takes npm's `E404` answer for a package npm does not hold yet.
 Before publishing, it reads `npm view <name>@<version> dist.shasum --json`, and takes `E404` as a version not yet visible.
-The same command checks the shasum after a refusal to overwrite a staged version.
+The same command checks the shasum after an `E409` staged-version refusal or an `E403` published-version refusal.
 `npm publish` takes its registry and credentials from the workflow, as trusted publishing sets them.
 
 ## Arguments

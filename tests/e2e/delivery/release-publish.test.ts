@@ -68,6 +68,7 @@ test("a rerun of a release npm already holds publishes nothing", async () => {
 
 const shasum = "df443a432e0632f91433878d7a807a91df42d6a8";
 const staged = 'code E409\nnpm error 409 Conflict - Cannot publish over previously staged version "0.23.0".';
+const published = "code E403\nnpm error You cannot publish over the previously published versions: 0.23.0.";
 
 function duplicate(refusal: string, visibleAfter: number): Readonly<Record<string, string>> {
   return {
@@ -119,26 +120,30 @@ test("a visible version with a lagging latest skips publish instead of uploading
   });
 }, 30_000);
 
-test("a staged E409 waits for visibility instead of rejecting a delayed matching tarball", async () => {
+test.each([staged, published])("a duplicate refusal waits instead of rejecting a delayed matching tarball: %s", async (refusal) => {
   const a = await release("0.23.0", "0.22.0", "immediate");
-  expect((await a.publish(duplicate(staged, 2))).exitCode).toBe(0);
+  const result = await a.publish(duplicate(refusal, 2));
+  expect(result.exitCode).toBe(0);
+  expect(result.text).toContain("release-publish: npm holds @acme/widget@0.23.0 with the same shasum\n");
+
   const state = await a.state();
+  expect(state.latest).toBe("0.22.0");
   expect(state.calls.filter((call) => call === "view @acme/widget@0.23.0 dist.shasum --json")).toHaveLength(3);
   expect(state.calls.filter((call) => call === "publish")).toHaveLength(1);
   expect(state.published).toEqual([]);
 }, 30_000);
 
-test("a staged E409 rejects a different tarball instead of accepting any visible version", async () => {
+test.each([staged, published])("a duplicate refusal rejects a different tarball instead of accepting any visible version: %s", async (refusal) => {
   const a = await release("0.23.0", "0.22.0");
-  const result = await a.publish({ ...duplicate(staged, 1), FAKE_NPM_SHASUM: "0000000000000000000000000000000000000000" });
+  const result = await a.publish({ ...duplicate(refusal, 1), FAKE_NPM_SHASUM: "0000000000000000000000000000000000000000" });
   expect(result.exitCode).toBe(2);
   expect(result.text).toContain("checks-release-publish: npm publish refused @acme/widget@0.23.0\n");
   expect((await a.state()).published).toEqual([]);
 }, 30_000);
 
-test("a staged E409 rejects a version that never appears instead of claiming success", async () => {
+test.each([staged, published])("a duplicate refusal rejects a version that never appears instead of claiming success: %s", async (refusal) => {
   const a = await release("0.23.0", "0.22.0", "immediate");
-  const result = await a.publish(duplicate(staged, 11));
+  const result = await a.publish(duplicate(refusal, 11));
   expect(result.exitCode).toBe(2);
   expect(result.text).toContain("checks-release-publish: npm publish refused @acme/widget@0.23.0\n");
   const state = await a.state();
