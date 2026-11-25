@@ -134,6 +134,25 @@ To opt in:
 
 A run without `-f version` plans the bump the unreleased changes need.
 
+### Attach release assets
+
+Set `releaseAssets: true` in `checks.config.ts` to attach built files to each GitHub release of a code repository.
+The setting defaults to `false`, and without it `main.yml` holds no `assets` job.
+With it, `main.yml` holds an `assets` job after the `release` job.
+
+The `release` job sets a `tag` output once `checks-release-tag` writes the GitHub release, and the `assets` job runs only when that output is set.
+It runs once on `ubuntu-latest`, a Linux x64 runner, and once on `macos-latest`, a macOS arm64 runner.
+Each run checks out the released tag, sets up Bun, and runs `bun run release:assets`.
+It then runs `gh release upload` with `--clobber` for every file in `release-assets/`, so a rerun replaces the files it attached before.
+The job grants only `contents: write`.
+
+The `release:assets` script in `package.json` writes the files to attach into `release-assets/` at the repository root.
+Each run attaches only what its own runner built.
+So the script names each file, its checksum file included, for its platform.
+Two files of one name from the two runners replace each other on the release.
+
+`checks-workflows` refuses the setting when `package.json` has no `release:assets` script, in a site, and when `repositoryVisibility` is `private`.
+
 ## The composed ci.yml
 
 `ci.yml` holds one job per concern:

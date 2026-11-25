@@ -32,6 +32,7 @@ const EVERY_OPTION: CallerSet = {
     publishes: true,
     publicRepository: true,
     releaseVersionInput: false,
+    releaseAssets: true,
   },
 };
 
@@ -192,10 +193,45 @@ test("a set written with every option reads back as the same set, so a check rig
   for (const set of [EVERY_OPTION, CHECKED, SITE]) {
     const files = written(set);
     const held = files.map(({ name, text }) => ({ path: ".github/workflows/" + name, document: Bun.YAML.parse(text), text }));
-    const reread = Effect.runSync(callerSetOf(held, {}, "checks-workflows --write", set.options.fullTest, false, set.options.checkRelease, set.options.publicRepository, false));
+    const reread = Effect.runSync(callerSetOf(held, {}, "checks-workflows --write", set.options.fullTest, false, set.options.checkRelease, set.options.publicRepository, false, undefined, set.options.releaseAssets));
     expect(reread).toEqual(set);
     expect(differencesOf(reread, files, false)).toEqual([]);
   }
+});
+
+test("the releaseAssets option adds only the assets job and the tag output to main.yml, so a repository without it gets every other file unchanged", () => {
+  const without: CallerSet = { ...EVERY_OPTION, options: { ...EVERY_OPTION.options, releaseAssets: false } };
+  const before = new Map(written(without).map(({ name, text }) => [name, text]));
+  const after = written(EVERY_OPTION);
+  expect(after.map(({ name }) => name)).toEqual([...before.keys()]);
+  expect(after.filter(({ name, text }) => before.get(name) !== text).map(({ name }) => name)).toEqual(["main.yml"]);
+  expect(Object.keys(jobsOf(documentOf(without, "main.yml")))).toEqual(["suite", "release"]);
+  expect(jobsOf(documentOf(without, "main.yml"))["release"]?.["outputs"]).toBeUndefined();
+});
+
+test("the assets job builds on Linux x64 and macOS arm64 from the released tag and attaches release-assets/ with contents: write only, so a job that runs without a release or holds a wider token fails here", () => {
+  const jobs = jobsOf(documentOf(EVERY_OPTION, "main.yml"));
+  expect(Object.keys(jobs)).toEqual(["suite", "release", "assets"]);
+  expect(jobs["release"]?.["outputs"]).toEqual({ tag: EXPRESSION + "{{ steps.release.outputs.tag }}" });
+  expect(stepsOf(jobs["release"] ?? {})).toContainEqual(expect.objectContaining({ id: "release", run: "bunx checks-release-tag" }));
+  const assets = jobs["assets"] ?? {};
+  expect(assets).toMatchObject({
+    needs: "release",
+    "runs-on": EXPRESSION + "{{ matrix.runner }}",
+    strategy: { matrix: { runner: ["ubuntu-latest", "macos-latest"] } },
+    permissions: { contents: "write" },
+  });
+  expect(Object.keys(isRecord(assets["permissions"]) ? assets["permissions"] : {})).toEqual(["contents"]);
+  const runs = (tag: string): boolean => truthy(evaluated(String(assets["if"]), { needs: { release: { outputs: { tag } } } }));
+  expect(runs("")).toBe(false);
+  expect(runs("v1.4.0")).toBe(true);
+  const tagged = EXPRESSION + "{{ needs.release.outputs.tag }}";
+  expect(stepsOf(assets)).toEqual([
+    expect.objectContaining({ with: { ref: tagged, "persist-credentials": false } }),
+    { uses: "./.github/actions/setup" },
+    expect.objectContaining({ run: "bun run release:assets" }),
+    expect.objectContaining({ env: { GH_TOKEN: EXPRESSION + "{{ github.token }}", TAG: tagged }, run: 'gh release upload "$TAG" release-assets/* --clobber' }),
+  ]);
 });
 
 test("a production.yml that names another domain than the set differs, so a site file cannot drift from its siblings", () => {

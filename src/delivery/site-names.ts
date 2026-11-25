@@ -1,7 +1,7 @@
 import { Effect, FileSystem, Path, Schema } from "effect";
 import { KIT_PACKAGE_NAME } from "../core/test-script.ts";
-import { decodeSetting, loadSettings, RepositoryVisibility } from "../core/settings.ts";
-import { callerOptionsOf, type CallerOptions } from "./caller-options.ts";
+import { decodeSetting, loadSettings, ReleaseAssets, RepositoryVisibility, SETTINGS_FILE } from "../core/settings.ts";
+import { callerOptionsOf, RELEASE_ASSETS_SCRIPT, type CallerOptions } from "./caller-options.ts";
 import { ciJobsOf, type CiJobs } from "./ci-jobs.ts";
 import { WorkspacePatterns, publicWorkspacesOf } from "./workspace-packages.ts";
 import { readTestScriptContext } from "./test-scripts.ts";
@@ -131,17 +131,27 @@ function uncarriedInputs(workflows: readonly Workflow[]): readonly UncarriedInpu
 const heldCiJobs = (kind: CallerSet["kind"], workflows: readonly Workflow[], publicRepository: boolean, docsBuild: boolean, testTiers: CallerInputs["testTiers"] | undefined) =>
   ciJobsOf(kind, heldWorkflow(workflows)("ci.yml"), { publicRepository, docsBuild, testTiers }).pipe(Effect.mapError((fault) => new CallerSetFault({ message: fault.message })));
 
-export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild?: boolean, testTiers?: CallerInputs["testTiers"]) {
+function releaseAssetsFault(site: boolean, publicRepository: boolean): string | undefined {
+  if (site) return `${SETTINGS_FILE} sets releaseAssets, but a site's main.yml holds no release job to attach the assets to, so remove it`;
+  if (!publicRepository) return `${SETTINGS_FILE} sets releaseAssets in a private repository, where checks-ci-wiring refuses the macOS runner the assets job needs, so remove it`;
+  return undefined;
+}
+
+export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild?: boolean, testTiers?: CallerInputs["testTiers"], releaseAssets?: boolean) {
   const buildDocs = docsBuild === true;
+  const attachAssets = releaseAssets === true;
   const flagged = SITE_NAME_KEYS.some((key) => flags[key] !== undefined);
-  const options = callerOptionsOf(heldWorkflow(workflows), publishes, publishWorkspaces, needsReleaseChecks, publicRepository, buildDocs);
+  const options = callerOptionsOf(heldWorkflow(workflows), publishes, publishWorkspaces, needsReleaseChecks, publicRepository, buildDocs, attachAssets);
   const [extra] = uncarriedInputs(workflows);
   if (extra !== undefined) {
     return yield* new CallerSetFault({
       message: `${extra.path} job ${extra.name} passes ${extra.input} to ${extra.file}, an input the written set cannot carry, so remove it by hand`,
     });
   }
-  if (!holdsSiteWorkflow(workflows) && !flagged) return { kind: "code", ci: yield* heldCiJobs("code", workflows, publicRepository, buildDocs, testTiers), options } satisfies CallerSet;
+  const site = holdsSiteWorkflow(workflows) || flagged;
+  const assetsFault = attachAssets ? releaseAssetsFault(site, publicRepository) : undefined;
+  if (assetsFault !== undefined) return yield* new CallerSetFault({ message: assetsFault });
+  if (!site) return { kind: "code", ci: yield* heldCiJobs("code", workflows, publicRepository, buildDocs, testTiers), options } satisfies CallerSet;
   const held = workflows.flatMap(heldNames).filter(({ key }) => flags[key] === undefined);
   const conflict = conflictOf(held);
   if (conflict !== undefined) return yield* new CallerSetFault({ message: conflict });
@@ -198,19 +208,25 @@ const readPackage = Effect.fn("readPackage")(function* (root: string) {
   );
 });
 
-export type CallerInputs = { readonly publishes: boolean; readonly publishWorkspaces: boolean; readonly needsReleaseChecks: boolean; readonly kit: boolean; readonly publicRepository: boolean; readonly docsBuild: boolean; readonly testTiers: ReadonlySet<TestTier> };
+export type CallerInputs = { readonly publishes: boolean; readonly publishWorkspaces: boolean; readonly needsReleaseChecks: boolean; readonly kit: boolean; readonly publicRepository: boolean; readonly docsBuild: boolean; readonly testTiers: ReadonlySet<TestTier>; readonly releaseAssets: boolean };
 
 export type CallerInputOverrides = { readonly private?: boolean; readonly hasTestScript?: boolean };
 
 export const callerInputsOf = Effect.fn("callerInputsOf")(function* (root: string, overrides?: CallerInputOverrides) {
   const held = yield* readPackage(root);
-  const configuredVisibility = (yield* loadSettings(root))["repositoryVisibility"];
+  const settings = yield* loadSettings(root);
+  const configuredVisibility = settings["repositoryVisibility"];
   const visibility = configuredVisibility === undefined ? "public" : yield* decodeSetting("repositoryVisibility", RepositoryVisibility, configuredVisibility);
+  const configuredAssets = settings["releaseAssets"];
+  const releaseAssets = configuredAssets === undefined ? false : yield* decodeSetting("releaseAssets", ReleaseAssets, configuredAssets);
+  if (releaseAssets && held?.scripts?.[RELEASE_ASSETS_SCRIPT] === undefined) {
+    return yield* new CallerSetFault({ message: `${SETTINGS_FILE} sets releaseAssets, but package.json defines no ${RELEASE_ASSETS_SCRIPT} script to build the assets, so add the script or remove the setting` });
+  }
   const isPrivate = overrides?.private ?? held?.private === true;
   const needsReleaseChecks = overrides?.hasTestScript ?? held?.scripts?.["test"] !== undefined;
   const workspaces = yield* publicWorkspacesOf(root, { private: isPrivate, workspaces: held?.workspaces });
   const testTiers = (yield* readTestScriptContext(root, held?.name)).present;
-  return { publishes: !isPrivate, publishWorkspaces: workspaces.length > 0, needsReleaseChecks, kit: held?.name === KIT_PACKAGE_NAME, publicRepository: visibility === "public", docsBuild: held?.scripts?.["docs:build"] !== undefined, testTiers } satisfies CallerInputs;
+  return { publishes: !isPrivate, publishWorkspaces: workspaces.length > 0, needsReleaseChecks, kit: held?.name === KIT_PACKAGE_NAME, publicRepository: visibility === "public", docsBuild: held?.scripts?.["docs:build"] !== undefined, testTiers, releaseAssets } satisfies CallerInputs;
 });
 
 export const readWorkflowFiles = Effect.fn("readWorkflowFiles")(function* (root: string) {

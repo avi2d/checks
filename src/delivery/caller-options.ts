@@ -3,6 +3,9 @@ import { crons } from "./release-schedule.ts";
 import { weekly } from "./schedule-policy.ts";
 import { calledFileOf, workflowJobs, type Workflow } from "./workflow-references.ts";
 
+export const RELEASE_ASSETS_SCRIPT = "release:assets";
+export const RELEASE_ASSETS_DIRECTORY = "release-assets";
+
 export type Flake = { readonly nodeVersionFile: string | undefined };
 
 export type CallerOptions = {
@@ -18,6 +21,7 @@ export type CallerOptions = {
   readonly publishes: boolean;
   readonly publicRepository: boolean;
   readonly releaseVersionInput: boolean;
+  readonly releaseAssets: boolean;
 };
 
 export const NO_CALLER_OPTIONS: CallerOptions = {
@@ -33,6 +37,7 @@ export const NO_CALLER_OPTIONS: CallerOptions = {
   publishes: false,
   publicRepository: false,
   releaseVersionInput: false,
+  releaseAssets: false,
 };
 
 export type HeldWorkflow = (name: string) => Workflow | undefined;
@@ -157,7 +162,7 @@ const decodeVersionInput = Schema.decodeUnknownOption(
 
 const holdsVersionInput = (release: Workflow | undefined): boolean => release !== undefined && Option.isSome(decodeVersionInput(release.document));
 
-export function callerOptionsOf(held: HeldWorkflow, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild: boolean): CallerOptions {
+export function callerOptionsOf(held: HeldWorkflow, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild: boolean, releaseAssets: boolean): CallerOptions {
   return {
     advisoriesCron: weeklyCronOf(held("advisories.yml")),
     flake: flakeOf(held("flake.yml")),
@@ -171,5 +176,6 @@ export function callerOptionsOf(held: HeldWorkflow, publishes: boolean, publishW
     publishes,
     publicRepository,
     releaseVersionInput: holdsVersionInput(held("release.yml")),
+    releaseAssets,
   };
 }

@@ -8,7 +8,7 @@ const optionsOf = (files: Readonly<Record<string, string>>, publishes = false, p
   callerOptionsOf((name) => {
     const text = files[name];
     return text === undefined ? undefined : workflow(name, text);
-  }, publishes, publishWorkspaces, needsReleaseChecks, publishes, false);
+  }, publishes, publishWorkspaces, needsReleaseChecks, publishes, false, false);
 
 const HAND_ROLLED_DOCS = [
   "name: docs",

@@ -8,6 +8,7 @@ import { checkTestedTreeOf } from "./tested-tree.ts";
 import { collect, git } from "../core/git.ts";
 import { MANIFEST, releasedVersionOf, releaseTag, taggedVersion } from "../core/release-names.ts";
 import { publicWorkspaces } from "./workspace-packages.ts";
+import { writeOutputs } from "./ci/lib/step-output.ts";
 
 class TagRefused extends Schema.TaggedError<TagRefused>()("TagRefused", {
   message: Schema.String,
@@ -137,6 +138,11 @@ const writeGitHubRelease = Effect.fn("writeGitHubRelease")(function* (label: str
   yield* Console.log(`${label}: created the GitHub release ${tag} with the CHANGELOG.md section for ${version}`);
 });
 
+const writeReleasedTagOutput = Effect.fn("writeReleasedTagOutput")(function* (tag: string) {
+  if ((yield* Config.String("GITHUB_OUTPUT").pipe(Config.withDefault(""))) === "") return;
+  yield* writeOutputs({ tag });
+});
+
 const checkoutRelease = Effect.fn("checkoutRelease")(function* (root: string, head: string) {
   const current = (yield* git(["rev-parse", "HEAD"], root)).trim();
   if (current === head) return;
@@ -167,6 +173,7 @@ export const releaseHead = Effect.fn("releaseHead")(function* (label: string, ro
   if (tagged) yield* Console.log(`${label}: tagged ${landed.head.slice(0, 12)} as ${landed.tag}`);
   if (!tagged && (landed.publishes || workspaces.length > 0)) yield* runBuild(root);
   yield* writeGitHubRelease(label, root, landed);
+  yield* writeReleasedTagOutput(landed.tag);
   if (!landed.publishes) {
     if (workspaces.length === 0) yield* Console.log(`${label}: ${MANIFEST} is private, so no package is published`);
     const path = yield* Path.Path;

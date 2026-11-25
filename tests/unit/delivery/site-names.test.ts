@@ -20,6 +20,16 @@ const setOf = (workflows: readonly Workflow[], flags: SiteNameFlags = {}) => Eff
 const faultOf = (workflows: readonly Workflow[], flags: SiteNameFlags = {}) =>
   Effect.runSync(Effect.flip(callerSetOf(workflows, flags, "checks-workflows --write", false, false, true, false, false))).message;
 
+const assetsFaultOf = (workflows: readonly Workflow[], flags: SiteNameFlags, publicRepository: boolean) =>
+  Effect.runSync(Effect.flip(callerSetOf(workflows, flags, "checks-workflows --write", false, false, true, publicRepository, false, undefined, true))).message;
+
+test("releaseAssets in a site or a private repository is refused, instead of writing an assets job with no release to attach to or a runner checks-ci-wiring refuses", () => {
+  expect(assetsFaultOf([], AZALIALAW, true)).toBe("checks.config.ts sets releaseAssets, but a site's main.yml holds no release job to attach the assets to, so remove it");
+  expect(assetsFaultOf([], {}, false)).toBe("checks.config.ts sets releaseAssets in a private repository, where checks-ci-wiring refuses the macOS runner the assets job needs, so remove it");
+  const attached = Effect.runSync(callerSetOf([], {}, "checks-workflows --write", false, false, true, true, false, undefined, true));
+  expect(attached.options.releaseAssets).toBe(true);
+});
+
 test("a repository whose workflows name no site is a code repository, so a ci.yml is never read as a site", () => {
   expect(setOf([])).toEqual({ kind: "code", ci: DEFAULT_CI_JOBS.code, options: PRIVATE_OPTIONS });
   expect(setOf([plain("ci.yml"), plain("pr-title.yml")])).toEqual({ kind: "code", ci: DEFAULT_CI_JOBS.code, options: PRIVATE_OPTIONS });
