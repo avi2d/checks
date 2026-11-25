@@ -11,12 +11,21 @@ const B = "tests/e2e/b.test.ts";
 const C = "tests/e2e/c.test.ts";
 const TESTS = [A, B, C];
 
+function assertMappedTests(selected: readonly string[]): void {
+  expect(selected).toEqual([A, B]);
+}
+
+test("the reach assertion rejects a selector that always runs every test", () => {
+  const alwaysRunEverything = () => TESTS;
+  expect(() => assertMappedTests(alwaysRunEverything())).toThrow();
+});
+
 test("a map entry change selects its old and new tests and the changed test, not the whole suite", () => {
   const before = { reach: { "src/page.css": [A] }, smoke: [A] };
   const after = { reach: { "src/page.css": [A, B] }, smoke: [A] };
   const change = compareReach(before, after);
   const selected = addReachTests(TESTS, new Set([B]), change);
-  expect(selected).toEqual([A, B]);
+  assertMappedTests(selected);
   expect(testsOnlyWithReach(["checks.config.ts", B, "tests/e2e/lib/helper.ts"], change.kind === "mapped")).toBe(true);
 });
 
@@ -50,11 +59,18 @@ const sources = new Map([
 
 const run = (input: ReadonlyMap<string, string>) => Effect.runPromise(helperImpact(process.cwd(), [HELPER], input, [...input.keys()]).pipe(Effect.provide(platform)));
 
-test("a helper selects both its direct and indirect importers, not the unrelated test", async () => {
-  const selected = await run(sources);
+function assertHelperTests(selected: ReadonlySet<string> | undefined): void {
   expect(selected).toBeDefined();
-  const reached = TESTS.filter((file) => selected?.has(file));
-  expect(reached).toEqual([A, B]);
+  expect(TESTS.filter((file) => selected?.has(file))).toEqual([A, B]);
+}
+
+test("the helper assertion rejects a selector that omits transitive importers", () => {
+  const directImportersOnly = () => new Set([A]);
+  expect(() => assertHelperTests(directImportersOnly())).toThrow();
+});
+
+test("a helper selects both its direct and indirect importers, not the unrelated test", async () => {
+  assertHelperTests(await run(sources));
 });
 
 test("a root-level importer does not resolve relative to its filename", async () => {
