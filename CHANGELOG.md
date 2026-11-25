@@ -2,6 +2,18 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.117.0
+
+Released 2026-11-25.
+
+### Breaking changes
+
+- **quality:** refuse reduce accumulator copies; orc, skills, dotfiles fix on upgrade [#217](https://github.com/avi2d/checks/pull/217)
+
+### Features
+
+- **delivery:** attach compiled release assets to GitHub releases [#218](https://github.com/avi2d/checks/pull/218)
+
 ## 0.116.0
 
 Released 2026-11-24.
