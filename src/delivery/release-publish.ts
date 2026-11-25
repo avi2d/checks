@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { Console, Effect, FileSystem, Option, Path, Schema } from "effect";
-import { ChildProcess, ChildProcessSpawner } from "effect/process";
+import { ChildProcessSpawner } from "effect/process";
+import { awaitStagedVersion, stagedShasum } from "./staged-publish.ts";
 import { collect } from "../core/git.ts";
 import { MANIFEST } from "../core/release-names.ts";
 import { runMain, Usage } from "../core/main.ts";
@@ -15,6 +16,7 @@ class PublishFailed extends Schema.TaggedError<PublishFailed>()("PublishFailed",
 
 const decodeManifest = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ name: Schema.String, version: Schema.String })));
 const decodeTags = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({ latest: Schema.String })));
+const decodeShasum = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.String));
 const decodeMissing = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Struct({ error: Schema.Struct({ code: Schema.Literal("E404") }) })));
 
 type Standing = "unpublished" | "published" | "superseded";
@@ -34,21 +36,19 @@ const latestOnNpm = Effect.fn("latestOnNpm")(function* (name: string) {
   return (yield* decodeTags(stdout).pipe(Effect.mapError((cause) => failed(cause.message)))).latest;
 });
 
-const npmPublish = Effect.fn("npmPublish")(
-  function* (root: string) {
-    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-    const handle = yield* spawner.spawn(ChildProcess.make("npm", ["publish"], { cwd: root, stdin: "ignore", stdout: "inherit", stderr: "inherit" }));
-    return (yield* handle.exitCode) === ChildProcessSpawner.ExitCode(0);
-  },
-  Effect.scoped,
-);
+const shasumOnNpm = Effect.fn("shasumOnNpm")(function* (name: string, version: string) {
+  const failed = (reason: string) => new PublishFailed({ message: `npm view ${name}@${version} dist.shasum: ${reason.trim()}` });
+  const { stdout, stderr, exitCode } = yield* collect("npm", ["view", `${name}@${version}`, "dist.shasum", "--json"]).pipe(Effect.mapError((cause) => failed(cause.message)));
+  if (exitCode !== ChildProcessSpawner.ExitCode(0)) return Option.isSome(decodeMissing(stdout)) ? undefined : yield* failed(stderr);
+  return yield* decodeShasum(stdout).pipe(Effect.mapError((cause) => failed(cause.message)));
+});
 
 const settled = (name: string, version: string, standing: Standing, latest: string | undefined): string =>
   standing === "published"
     ? `${LABEL}: npm already holds ${name}@${version}`
     : `${LABEL}: npm already holds ${name}@${latest ?? ""}, which carries every change in ${version}, so ${version} stays off npm`;
 
-export const publishPackage = Effect.fn("publishPackage")(function* (root: string) {
+export const publishPackage = Effect.fn("publishPackage")(function* (root: string, wait: () => Effect.Effect<void> = () => Effect.sleep("10 seconds")) {
   const manifest = yield* (yield* FileSystem.FileSystem).readFileString((yield* Path.Path).join(root, MANIFEST));
   const { name, version } = yield* decodeManifest(manifest).pipe(Effect.mapError((cause) => new PublishFailed({ message: `${MANIFEST}: ${cause.message}` })));
   const before = yield* latestOnNpm(name);
@@ -57,16 +57,29 @@ export const publishPackage = Effect.fn("publishPackage")(function* (root: strin
     yield* Console.log(settled(name, version, standing, before));
     return true;
   }
-  if (yield* npmPublish(root)) {
+  if ((yield* shasumOnNpm(name, version)) !== undefined) {
+    yield* Console.log(`${LABEL}: npm already holds ${name}@${version}`);
+    return true;
+  }
+  const result = yield* collect("npm", ["publish"], root).pipe(Effect.mapError((cause) => new PublishFailed({ message: cause.message })));
+  if (result.stdout !== "") yield* Console.log(result.stdout.trimEnd());
+  if (result.stderr !== "") yield* Console.error(result.stderr.trimEnd());
+  if (result.exitCode === ChildProcessSpawner.ExitCode(0)) {
     yield* Console.log(`${LABEL}: published ${name}@${version}`);
     return true;
   }
-  // A release that published while this one ran makes npm refuse it, which leaves nothing to publish.
   const after = yield* latestOnNpm(name);
   const now = standingOf(version, after);
-  if (now === "unpublished") return yield* new PublishFailed({ message: `npm publish refused ${name}@${version}` });
-  yield* Console.log(settled(name, version, now, after));
-  return true;
+  if (now !== "unpublished") {
+    yield* Console.log(settled(name, version, now, after));
+    return true;
+  }
+  const shasum = stagedShasum(result.stderr, version);
+  if (shasum !== undefined && (yield* awaitStagedVersion(shasum, () => shasumOnNpm(name, version), wait, 10))) {
+    yield* Console.log(`${LABEL}: npm holds ${name}@${version} with the same shasum`);
+    return true;
+  }
+  return yield* new PublishFailed({ message: `npm publish refused ${name}@${version}` });
 });
 
 const releasePublish = Effect.gen(function* () {
