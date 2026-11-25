@@ -1,0 +1,89 @@
+name: release
+on:
+  push:
+    tags: ["v*"]
+  # A tag pushed with the workflow token starts no push run, so checks-release-tag dispatches this.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: fail fast when the release cannot run
+        run: bun src/delivery/release-preflight.ts release.yml
+  publish:
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: ref is a tag
+        run: test "$GITHUB_REF_TYPE" = tag
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: tag is on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - name: landed tree matches the tested pull request tree
+        run: bun src/delivery/tested-tree.ts
+      - run: bun run build
+      - run: git diff --exit-code
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun run test --full
+      - name: tag matches package version
+        env:
+          PACKAGE_PATH: package.json
+          TAG: ${{ github.ref_name }}
+        run: bunx checks-ci release-version
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: bun src/delivery/release-publish.ts
+
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    concurrency:
+      group: github-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.ref_name }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - id: version
+        name: read the released version
+        env:
+          PACKAGE_PATH: package.json
+          TAG: ${{ github.ref_name }}
+        run: bunx checks-ci release-version
+      - name: extract release notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: bun src/delivery/release-notes.ts "$VERSION" "$RUNNER_TEMP/release-notes.md"
+      - name: create or update GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          NOTES_FILE: ${{ runner.temp }}/release-notes.md
+        run: bunx checks-ci github-release

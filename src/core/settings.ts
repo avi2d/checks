@@ -52,7 +52,7 @@ export const ReleaseAssets = Schema.Boolean;
 export const Settings = Schema.Struct({
   repositoryVisibility: Schema.optionalKey(RepositoryVisibility.annotate({ description: "The GitHub repository visibility that selects generated workflow runners.", default: "public" })),
   releaseAssets: Schema.optionalKey(ReleaseAssets.annotate({
-    description: "Whether the generated main.yml builds the files bun run release:assets writes on Linux and macOS and attaches them to each GitHub release.",
+    description: "Whether the generated main.yml, or the kit's release.yml, builds the files bun run release:assets writes on Linux and macOS and attaches them to each GitHub release.",
     default: false,
   })),
   smoke: Schema.optionalKey(Smoke.annotate({ description: "The extra test files to run with the local unit tier." })),

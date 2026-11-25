@@ -2,11 +2,11 @@ import { fullAdvisories, fullDocs, fullFlake, fullRequiredSet } from "./full-set
 import { MUTATION_WORKFLOW } from "./full-set/mutation.ts";
 import type { CallerSet } from "./site-names.ts";
 
-// The kit publishes through the release.yml that npm's trusted publishing names, so it writes its release files by hand.
+// npm trusted publishing names the kit's release.yml, so a kit release file the set does not write stays as the kit holds it.
 const KIT_OWN = ["release.yml", "release-pr.yml"];
 
-export function isIgnoredWorkflow(name: string, kit: boolean): boolean {
-  return name === "pr-text.yml" || (kit && KIT_OWN.includes(name));
+export function isIgnoredWorkflow(name: string, kit: boolean, required: readonly WorkflowFile[]): boolean {
+  return name === "pr-text.yml" || (kit && KIT_OWN.includes(name) && !required.some((file) => file.name === name));
 }
 
 export type WorkflowFile = { readonly name: string; readonly text: string };
@@ -41,9 +41,9 @@ export function differentLines(holds: string, writes: string): readonly Differen
 }
 
 export function differencesOf(set: CallerSet, present: readonly WorkflowFile[], kit: boolean): readonly Difference[] {
-  const ignored = (name: string): boolean => isIgnoredWorkflow(name, kit);
-  const held = new Map(present.filter(({ name }) => !ignored(name)).map(({ name, text }) => [name, text]));
   const required = requiredSet(set, kit);
+  const ignored = (name: string): boolean => isIgnoredWorkflow(name, kit, required);
+  const held = new Map(present.filter(({ name }) => !ignored(name)).map(({ name, text }) => [name, text]));
   const byHand = byHandSet(set);
   const known = new Set([...required, ...byHand].map(({ name }) => name));
   const judged = [...required, ...byHand.filter(({ name }) => held.has(name))];

@@ -64,7 +64,8 @@ Only the fork-reachable jobs differ with repository visibility, with the test jo
 The files a site takes also differ in the three site names.
 A job that runs the suite cancels its run when a push to a draft pull request started it.
 In a site only the jobs that read the build do so, so a draft still gets its preview link.
-The kit itself keeps its own `release.yml` and `release-pr.yml`, since npm's trusted publishing names `release.yml`.
+The kit keeps its own `release-pr.yml` because npm trusted publishing names `release.yml`.
+With `releaseAssets` enabled, `checks-workflows` writes the kit's `release.yml` with an `assets` job after `github-release`.
 A job in those files that calls another repository's workflow is still refused.
 Replace it with its own steps by hand.
 
@@ -139,6 +140,7 @@ A run without `-f version` plans the bump the unreleased changes need.
 Set `releaseAssets: true` in `checks.config.ts` to attach built files to each GitHub release of a code repository.
 The setting defaults to `false`, and without it `main.yml` holds no `assets` job.
 With it, `main.yml` holds an `assets` job after the `release` job.
+In the kit, `release.yml` holds the `assets` job after the `github-release` job instead, and that job builds the tag the run started from.
 
 The `release` job sets a `tag` output once `checks-release-tag` writes the GitHub release, and the `assets` job runs only when that output is set.
 It runs once on `ubuntu-latest`, a Linux x64 runner, and once on `macos-latest`, a macOS arm64 runner.

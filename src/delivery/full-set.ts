@@ -1,8 +1,9 @@
+import kitRelease from "./full-set/kit-release.txt";
 import { RELEASE_VERSION_ENV } from "../core/release-names.ts";
 import { type CallerSet } from "./site-names.ts";
 import { RELEASE_ASSETS_DIRECTORY, RELEASE_ASSETS_SCRIPT, type CallerOptions, type Flake, type Pages } from "./caller-options.ts";
 import { isBrowserWalk, runnerOf } from "./ci-jobs.ts";
-import { SETUP_NODE, CONFIGURE_PAGES, UPLOAD_PAGES, DEPLOY_PAGES, type Job, type Step, type Workflow, expression, scalar, workflowText, TOKEN, RUNNER, checkout, SETUP, ciCommand, keepArtifacts, claudeInstall } from "./full-set/steps.ts";
+import { SETUP_NODE, CONFIGURE_PAGES, UPLOAD_PAGES, DEPLOY_PAGES, type Job, type Step, type Workflow, expression, scalar, workflowText, jobLines, TOKEN, RUNNER, checkout, SETUP, ciCommand, keepArtifacts, claudeInstall } from "./full-set/steps.ts";
 import { PULL_REQUEST_HEAD, PULL_REQUEST_NUMBER, BY_HAND, ciWorkflow } from "./full-set/ci.ts";
 import { PREVIEW_CLOSE, SITE_MAIN, PRODUCTION } from "./full-set/site.ts";
 
@@ -69,21 +70,21 @@ const RELEASED_TAG = "needs.release.outputs.tag";
 
 // The release step sets the tag output only when it wrote a GitHub release, so a merge that releases nothing builds no asset.
 // The implicit success() also reads the suite job, which skips on a push that releases an earlier release commit.
-const ASSETS: Job = {
+const assets = (needs: string, tag: string, when?: string): Job => ({
   id: "assets",
-  needs: "release",
-  if: expression("!cancelled() && needs.release.result == 'success' && " + RELEASED_TAG + " != ''"),
+  needs,
+  ...(when === undefined ? {} : { if: when }),
   runsOn: expression("matrix.runner"),
   timeout: 30,
   matrix: ["runner", "[ubuntu-latest, macos-latest]"],
   permissions: ["contents: write"],
   steps: [
-    checkout({ ref: expression(RELEASED_TAG) }),
+    checkout({ ref: expression(tag) }),
     SETUP,
     { name: "build the release assets", run: "bun run " + RELEASE_ASSETS_SCRIPT },
-    { name: "attach the release assets to the GitHub release", env: [TOKEN, ["TAG", expression(RELEASED_TAG)]], run: 'gh release upload "$TAG" ' + RELEASE_ASSETS_DIRECTORY + "/* --clobber" },
+    { name: "attach the release assets to the GitHub release", env: [TOKEN, ["TAG", expression(tag)]], run: 'gh release upload "$TAG" ' + RELEASE_ASSETS_DIRECTORY + "/* --clobber" },
   ],
-};
+});
 
 // A full-test run gates the publish, so the release job waits for it and still runs when the commit is no release commit and it skips.
 function codeMain({ fullTest, checkRelease, publishWorkspaces, releaseAssets }: CallerOptions): Workflow {
@@ -119,7 +120,7 @@ function codeMain({ fullTest, checkRelease, publishWorkspaces, releaseAssets }: 
           { ...(releaseAssets ? { id: "release" } : {}), env: [TOKEN, ...(publishWorkspaces ? [["CHECKS_PUBLISH_WORKSPACES", '"true"'] as const] : [])], run: "bunx checks-release-tag" },
         ],
       },
-      ...(releaseAssets ? [ASSETS] : []),
+      ...(releaseAssets ? [assets("release", RELEASED_TAG, expression("!cancelled() && needs.release.result == 'success' && " + RELEASED_TAG + " != ''"))] : []),
     ],
   };
 }
@@ -128,11 +129,14 @@ export type FullWorkflow = { readonly name: string; readonly text: string };
 
 const fileOf = (workflow: Workflow): FullWorkflow => ({ name: workflow.name + ".yml", text: workflowText(workflow) });
 
-// The kit publishes through a release.yml that npm's trusted publishing names, so it keeps its own release files.
+// npm trusted publishing names the kit's release.yml, so the kit's set writes it only to add the assets job to the kit's own release jobs.
 export function fullRequiredSet(set: CallerSet, kit: boolean): readonly FullWorkflow[] {
   const ci = fileOf(ciWorkflow(set, kit));
   if (set.kind === "site") return [ci, fileOf(prTitle(set.options.publicRepository)), fileOf(PREVIEW_CLOSE(set.names, set.options.publicRepository)), fileOf(SITE_MAIN(set.names)), fileOf(release(set.options.releaseVersionInput)), fileOf(PRODUCTION(set.names, set.ci.tests.some(isBrowserWalk)))];
-  return kit ? [ci, fileOf(prTitle(set.options.publicRepository))] : [ci, fileOf(prTitle(set.options.publicRepository)), fileOf(codeMain(set.options)), fileOf(release(set.options.releaseVersionInput))];
+  const shared = [ci, fileOf(prTitle(set.options.publicRepository))];
+  if (!kit) return [...shared, fileOf(codeMain(set.options)), fileOf(release(set.options.releaseVersionInput))];
+  if (!set.options.releaseAssets) return shared;
+  return [...shared, { name: "release.yml", text: [kitRelease, ...jobLines(assets("github-release", "github.ref_name")), ""].join("\n") }];
 }
 
 // A second deploy waits for the one in flight, since Pages serves one deployment at a time.

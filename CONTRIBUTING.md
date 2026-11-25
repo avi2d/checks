@@ -102,7 +102,7 @@ To place a change:
    | `src/delivery/` | the gates and bins for how a change reaches `main` and a release, and what a commit may not carry |
    | `src/dependencies/` | what code may import, which library sources an agent reads, which locked package versions carry a known advisory, and the pinned download of each scanner a gate runs |
    | `scripts/` | the kit's own build and CI tooling, which nothing ships |
-   | `dist/` | the committed oxlint plugin bundles, the config builders compiled under `dist/presets/`, and the Stryker preset's helpers compiled under `dist/mutation/` |
+   | `dist/` | the committed oxlint plugin bundles, the config builders compiled under `dist/presets/`, the Stryker preset's helpers compiled under `dist/mutation/`, and the command launchers under `dist/bin/` |
    | `dist/templates/` | one template per kind of doc file, which `bun run build` renders |
    | `src/quality/presets/` | the oxlint, Knip, dependency-cruiser and stylelint config builders, and the Effect language service severities |
    | `CHANGELOG.md` | every release, which `bun run build` writes from the conventional commits |
@@ -115,6 +115,7 @@ To place a change:
 
 1. Change the page under `docs/` that describes the behaviour in the same commit as the behaviour.
    A new bin gets its page under `docs/gates/`, and the suite fails until it has one.
+   A new `.ts` bin maps to `dist/bin/<path under src/>` in `package.json` `bin`, and `bun run build` writes its launcher.
 
 This repository holds itself to the kit through its own `oxlint.config.ts`, `knip.config.ts` and `dependency-cruiser.config.ts`, with these exceptions:
 
