@@ -1,7 +1,9 @@
 import { Effect } from "effect";
 
 export function stagedShasum(stderr: string, version: string): string | undefined {
-  if (!stderr.includes("npm error code E409") || !stderr.includes(`Cannot publish over previously staged version "${version}"`)) return undefined;
+  const staged = stderr.includes("npm error code E409") && stderr.includes(`Cannot publish over previously staged version "${version}"`);
+  const published = stderr.includes("npm error code E403") && stderr.includes(`You cannot publish over the previously published versions: ${version}.`);
+  if (!staged && !published) return undefined;
   return stderr.match(/^npm notice shasum:\s*([a-f0-9]{40})\s*$/m)?.[1];
 }
 

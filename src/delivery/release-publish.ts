@@ -48,7 +48,7 @@ const settled = (name: string, version: string, standing: Standing, latest: stri
     ? `${LABEL}: npm already holds ${name}@${version}`
     : `${LABEL}: npm already holds ${name}@${latest ?? ""}, which carries every change in ${version}, so ${version} stays off npm`;
 
-export const publishPackage = Effect.fn("publishPackage")(function* (root: string) {
+export const publishPackage = Effect.fn("publishPackage")(function* (root: string, wait = () => Effect.sleep("10 seconds")) {
   const manifest = yield* (yield* FileSystem.FileSystem).readFileString((yield* Path.Path).join(root, MANIFEST));
   const { name, version } = yield* decodeManifest(manifest).pipe(Effect.mapError((cause) => new PublishFailed({ message: `${MANIFEST}: ${cause.message}` })));
   const before = yield* latestOnNpm(name);
@@ -68,9 +68,14 @@ export const publishPackage = Effect.fn("publishPackage")(function* (root: strin
     yield* Console.log(`${LABEL}: published ${name}@${version}`);
     return true;
   }
+  const after = yield* latestOnNpm(name);
+  if (standingOf(version, after) === "superseded") {
+    yield* Console.log(settled(name, version, "superseded", after));
+    return true;
+  }
   const shasum = stagedShasum(result.stderr, version);
-  if (shasum !== undefined && (yield* awaitStagedVersion(shasum, () => shasumOnNpm(name, version), () => Effect.sleep("10 seconds"), 10))) {
-    yield* Console.log(`${LABEL}: npm holds the staged ${name}@${version} with the same shasum`);
+  if (shasum !== undefined && (yield* awaitStagedVersion(shasum, () => shasumOnNpm(name, version), wait, 10))) {
+    yield* Console.log(`${LABEL}: npm holds ${name}@${version} with the same shasum`);
     return true;
   }
   return yield* new PublishFailed({ message: `npm publish refused ${name}@${version}` });
