@@ -12,7 +12,9 @@ It visits each declared route at each declared viewport in each declared state.
 Outside CI, `checks-browser` refuses to start for agents unless `agentTests.allowLocal` is `true`, as [checks-local-tests](checks-local-tests.md) says.
 A state that names its own `checks` runs only those, and any other state runs every declared check.
 A visit is one route, one viewport and one state.
-Target discovery and `nesting` share one loaded page per visit.
+Target discovery, `nesting`, and `axe` share one loaded page per visit.
+Axe runs last on that page so its injected scripts cannot affect the other readings.
+The report keeps the declared check order.
 Each other check that opens a page uses a fresh one.
 Each check judges only the elements of a target that are visible at the visit.
 So a control the page renders once for each breakpoint is judged where it shows.

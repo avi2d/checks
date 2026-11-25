@@ -4,22 +4,17 @@ import { compareReport, PAGE_OF, planCells, type PlannedCheckName } from "../../
 const isPlanned = (name: string): name is PlannedCheckName => Object.hasOwn(PAGE_OF, name);
 
 const scheduled = (names: readonly PlannedCheckName[]) =>
-  names.map((name) => {
-    const page = PAGE_OF[name];
-    return page.sharing === "shared"
-      ? { name, mode: "shared" as const, alone: page.alone }
-      : { name, mode: "independent" as const, alone: page.alone };
-  });
+  names.map((name) => ({ name, ...PAGE_OF[name] }));
 
-test("target discovery and nesting share one load within a visit rather than opening separate pages", () => {
-  const { shared, separate } = planCells(scheduled(["targets", "nesting"]));
-  expect(shared.map(({ name }) => name)).toEqual(["targets", "nesting"]);
+test("axe does not reload the visit or inject scripts before nesting reads the page", () => {
+  const { shared, separate } = planCells(scheduled(["targets", "axe", "nesting"]));
+  expect(shared.map(({ name }) => name)).toEqual(["targets", "nesting", "axe"]);
   expect(separate).toEqual([]);
 });
 
 test("every other check loads its own page rather than joining the shared one", () => {
-  const names = Object.keys(PAGE_OF).filter(isPlanned).filter((name) => name !== "targets" && name !== "nesting");
-  expect(names).toEqual(["layout", "keyboard", "motion", "axe", "html", "links", "assets", "contrast", "weight", "shift", "look", "hook"]);
+  const names = Object.keys(PAGE_OF).filter(isPlanned).filter((name) => name !== "targets" && name !== "nesting" && name !== "axe");
+  expect(names).toEqual(["layout", "keyboard", "motion", "html", "links", "assets", "contrast", "weight", "shift", "look", "hook"]);
   expect(names.filter((name) => PAGE_OF[name].alone)).toEqual(["motion", "hook"]);
   for (const name of names) {
     const { shared, separate } = planCells([...scheduled(["targets", "nesting"]), ...scheduled([name])]);

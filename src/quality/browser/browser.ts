@@ -88,12 +88,10 @@ const motionRun = Effect.fn("motionRun")(function* ({ browser, visit, url }: Vis
   return run("motion", visit, inventory, controls === 0 ? [...found, "scanned no control"] : found);
 }, Effect.scoped);
 
-const axeRun = Effect.fn("axeRun")(function* ({ browser, visit, url }: Visiting) {
-  const { page } = yield* openVisit(browser, visit);
-  yield* load(page, url);
+const axeRun = Effect.fn("axeRun")(function* ({ visit, page }: LoadedVisit) {
   const { found, unverified, rules } = yield* judgeAxe(page);
   return run("axe", visit, [`${rules} rule(s)`], rules === 0 ? [...found, "axe ran no rule"] : found, unverified);
-}, Effect.scoped);
+});
 
 const nestingRun = Effect.fn("nestingRun")(function* ({ visit, page }: LoadedVisit) {
   const { found, elements } = yield* judgeNesting(page);
@@ -172,22 +170,19 @@ const now =
   (input: Input): Reading =>
     Effect.map(check(input), settled);
 
-const shared = (read: SharedCheck["read"]): SharedCheck => ({ mode: "shared", alone: false, read });
-const independent = (read: (visiting: Visiting) => Reading, alone = false): PlannedCheck => ({ mode: "independent", read, alone });
-
 const BUILT_IN: Readonly<Record<CheckName, PlannedCheck>> = {
-  layout: independent(now(layoutRun), PAGE_OF.layout.alone),
-  keyboard: independent(now(keyboardRun), PAGE_OF.keyboard.alone),
-  motion: independent(now(motionRun), PAGE_OF.motion.alone),
-  axe: independent(now(axeRun), PAGE_OF.axe.alone),
-  nesting: shared(now(nestingRun)),
-  html: independent(now(htmlRun), PAGE_OF.html.alone),
-  links: independent(now(linksRun), PAGE_OF.links.alone),
-  assets: independent(now(assetsRun), PAGE_OF.assets.alone),
-  contrast: independent(now(contrastRun), PAGE_OF.contrast.alone),
-  weight: independent(now(weightRun), PAGE_OF.weight.alone),
-  shift: independent(now(shiftRun), PAGE_OF.shift.alone),
-  look: independent(lookRun, PAGE_OF.look.alone),
+  layout: { ...PAGE_OF.layout, read: now(layoutRun) },
+  keyboard: { ...PAGE_OF.keyboard, read: now(keyboardRun) },
+  motion: { ...PAGE_OF.motion, read: now(motionRun) },
+  axe: { ...PAGE_OF.axe, read: now(axeRun) },
+  nesting: { ...PAGE_OF.nesting, read: now(nestingRun) },
+  html: { ...PAGE_OF.html, read: now(htmlRun) },
+  links: { ...PAGE_OF.links, read: now(linksRun) },
+  assets: { ...PAGE_OF.assets, read: now(assetsRun) },
+  contrast: { ...PAGE_OF.contrast, read: now(contrastRun) },
+  weight: { ...PAGE_OF.weight, read: now(weightRun) },
+  shift: { ...PAGE_OF.shift, read: now(shiftRun) },
+  look: { ...PAGE_OF.look, read: lookRun },
 };
 
 type OrderedReading = {
@@ -216,7 +211,7 @@ const readShared = Effect.fn("readShared")(function* (
 }, Effect.scoped);
 
 function visitCells(visiting: Visiting, visitIndex: number, checks: readonly NamedCheck[]): readonly Cell<readonly OrderedReading[], BrowserFailure>[] {
-  const indexed = checks.map(({ check }, checkIndex) => ({ ...check, checkIndex }));
+  const indexed = checks.map(({ name, check }, checkIndex) => ({ ...check, name, checkIndex }));
   const { shared: sharedChecks, separate } = planCells(indexed);
   return [
     ...(sharedChecks.length === 0 ? [] : [{ reading: readShared(visiting, visitIndex, sharedChecks), alone: false }]),
@@ -245,9 +240,9 @@ type NamedCheck = { readonly name: string; readonly check: PlannedCheck };
 
 function checksAt(visit: Visit, declaration: Declaration, hooks: readonly ProductCheck[], reached: boolean): readonly NamedCheck[] {
   return [
-    ...(reached ? [{ name: "targets", check: shared(now(targetsRun)) }] : []),
+    ...(reached ? [{ name: "targets", check: { ...PAGE_OF.targets, read: now(targetsRun) } }] : []),
     ...declaration.checks.filter((one) => (reached || one === "look" || one === "links") && applies(one, visit, declaration)).map((name) => ({ name, check: BUILT_IN[name] })),
-    ...(reached ? hooks.filter((candidate) => hookApplies(candidate, visit)).map((hook) => ({ name: `hook ${hook.name}`, check: independent(now((one) => hookRun(hook, one)), PAGE_OF.hook.alone) })) : []),
+    ...(reached ? hooks.filter((candidate) => hookApplies(candidate, visit)).map((hook) => ({ name: `hook ${hook.name}`, check: { ...PAGE_OF.hook, read: now((one: Visiting) => hookRun(hook, one)) } })) : []),
   ];
 }
 
