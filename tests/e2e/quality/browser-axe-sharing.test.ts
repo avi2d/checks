@@ -1,20 +1,8 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
-import { symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { browserSite, declaration, failuresOf, page, routesOf, sitePages } from "../lib/browser-site.ts";
-import { CHECKOUT, ran, scratchDirs } from "../lib/fixture-repo.ts";
-
-const scratch = scratchDirs();
-const runner = "src/quality/browser/browser.ts";
-
-async function baseRunner(base: string): Promise<string> {
-  const dir = await scratch("checks-browser-base-");
-  const revision = (await $`git -C ${CHECKOUT} merge-base HEAD ${"refs/remotes/origin/" + base}`.text()).trim();
-  await $`git -C ${CHECKOUT} archive ${revision} src | tar -x -C ${dir}`.quiet();
-  await symlink(join(CHECKOUT, "node_modules"), join(dir, "node_modules"));
-  return join(dir, runner);
-}
+import { CHECKOUT, ran } from "../lib/fixture-repo.ts";
 
 test("axe reports both unnamed buttons per visit without loading a second copy of the page", async () => {
   let loads = 0;
@@ -36,22 +24,12 @@ test("axe reports both unnamed buttons per visit without loading a second copy o
         viewports: [{ name: "phone", width: 375, height: 667 }, { name: "desktop", width: 1440, height: 900 }],
       }),
     });
-    const measure = async (label: string, bin: string) => {
-      const start = performance.now();
-      const result = await ran($`bun ${bin}`.cwd(site.dir));
-      console.log(`browser fixture ${label}: ${Math.round(performance.now() - start)}ms wall, ${loads} page loads, ${failuresOf(result.text).length} findings`);
-      return result;
-    };
-    const base = process.env["GITHUB_BASE_REF"];
-    if (base) {
-      const before = await measure("base", await baseRunner(base));
-      expect(before.exitCode).toBe(1);
-      loads = 0;
-    }
-    const head = await measure("head", join(CHECKOUT, runner));
-    expect(head.exitCode).toBe(1);
+    const start = performance.now();
+    const result = await ran($`bun ${join(CHECKOUT, "src/quality/browser/browser.ts")}`.cwd(site.dir));
+    const failures = failuresOf(result.text);
+    console.log(`browser fixture: ${Math.round(performance.now() - start)}ms wall, ${loads} page loads, ${failures.length} findings`);
+    expect(result.exitCode).toBe(1);
     expect(loads).toBe(8);
-    const failures = failuresOf(head.text);
     expect(failures).toHaveLength(16);
     for (const id of ["first", "second"]) {
       expect(failures.filter((one) => one.includes(`button-name (critical): #${id}:`))).toHaveLength(8);
