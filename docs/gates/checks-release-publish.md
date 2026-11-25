@@ -20,6 +20,7 @@ Otherwise, either refusal starts a shasum check for this version:
 - An `E409` refusal to overwrite a staged version.
 - An `E403` refusal to overwrite a published version.
 
+The same refusals start the check when npm omits the error code.
 It reads that version's `dist.shasum` up to ten times, with ten seconds between attempts.
 The check succeeds only when the published shasum matches the shasum in the publish output.
 A different shasum, a version that does not appear, or any other publish failure without the same or a newer version fails it.
@@ -33,7 +34,7 @@ If `latest` lands on the older version, `npm dist-tag add <package>@<newer versi
 It reads `name` and `version` from `package.json` in the working directory.
 It reads `latest` with `npm view <name> dist-tags --json`, and takes npm's `E404` answer for a package npm does not hold yet.
 Before publishing, it reads `npm view <name>@<version> dist.shasum --json`, and takes `E404` as a version not yet visible.
-The same command checks the shasum after an `E409` staged-version refusal or an `E403` published-version refusal.
+The same command checks the shasum after a staged-version or published-version refusal, including one without an error code.
 `npm publish` takes its registry and credentials from the workflow, as trusted publishing sets them.
 
 ## Arguments
