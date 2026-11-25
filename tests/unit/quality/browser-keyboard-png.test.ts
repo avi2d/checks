@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { PNG } from "pngjs";
-import { cropPng } from "../../../src/quality/browser/keyboard-png.ts";
+import { cropPng, type PixelCrop } from "../../../src/quality/browser/keyboard-png.ts";
 
 const source = () => {
   const image = new PNG({ width: 4, height: 3 });
@@ -16,19 +16,18 @@ const source = () => {
 
 const box = [{ x: 1, y: 1, width: 2, height: 1 }];
 
-const assertCrop = (image: string) => {
-  const decoded = PNG.sync.read(Buffer.from(image, "base64"));
-  expect([decoded.width, decoded.height]).toEqual([2, 1]);
-  expect([...decoded.data]).toEqual([5, 0, 0, 255, 6, 0, 0, 255]);
+const assertCrop = (crop: PixelCrop) => {
+  expect([crop.width, crop.height]).toEqual([2, 1]);
+  expect([...crop.data]).toEqual([5, 0, 0, 255, 6, 0, 0, 255]);
 };
 
 test("the crop oracle rejects a cropper that returns the full screenshot", () => {
-  const wrongCrop = (image: Buffer) => image.toString("base64");
+  const wrongCrop = (image: Buffer) => PNG.sync.read(image);
   expect(() => assertCrop(wrongCrop(source()))).toThrow();
 });
 
 test("the screenshot crop does not include pixels outside the selected rectangle", () => {
   const [crop] = cropPng(source(), box, 1);
   expect(crop).toBeDefined();
-  if (crop !== undefined) assertCrop(crop.image);
+  if (crop !== undefined) assertCrop(crop);
 });

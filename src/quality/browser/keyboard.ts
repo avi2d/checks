@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect";
 import type { ElementHandle, Page } from "playwright-core";
 import type { Target } from "./declaration.ts";
-import { compareCrops, decodeOutcome, type CropArgs } from "./keyboard-crops.ts";
+import { compareCrops, type CropArgs } from "./keyboard-crops.ts";
 import { cropPng } from "./keyboard-png.ts";
 import {
   changedPaintBoxes,
@@ -167,11 +167,7 @@ const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page, leaf: 
   const boxes = regions.map((region) => cropTo(viewport ? region : { ...region, x: region.x + scroll.x, y: region.y + scroll.y }, dimensions)).filter((rect) => rect !== null);
   if (boxes.length === 0) return false;
   const crops = yield* prepareCrops(page, boxes, scrolledSticky ? null : baseline.shot, withFocus, withoutFocus);
-  const comparedSource: unknown = yield* attempt("cannot compare the baseline, focused and blurred captures", () =>
-    leaf.evaluate(compareCrops, crops));
-  const outcome = yield* decodeOutcome(comparedSource).pipe(
-    Effect.mapError(() => new BrowserFailure({ message: "the page gave no usable comparison" })),
-  );
+  const outcome = compareCrops(crops);
   if (!outcome.compared) return yield* new BrowserFailure({ message: "cannot read the capture" });
   return focusVerdict(scrolledSticky, outcome.differs);
 });
