@@ -65,6 +65,10 @@ async function main(): Promise<number> {
   await save(state.latest);
   const [command, name = ""] = args;
   if (command === "view" && args.slice(2).join(" ") === "dist-tags --json") return view(name, state.latest);
+  if (command === "view" && args.slice(2).join(" ") === "dist.shasum --json") {
+    process.stdout.write(JSON.stringify({ error: { code: "E404" } }));
+    return refuse("code E404");
+  }
   if (command === "publish" && args.length === 1) return publish(state, save);
   return refuse(`fake npm: unknown call ${args.join(" ")}`);
 }
