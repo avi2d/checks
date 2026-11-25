@@ -19,6 +19,12 @@ To hold a repository to the kit:
    bun add -d @avi2dg/checks
    ```
 
+1. Pin the Bun version the kit runs on:
+
+   ```sh
+   cp node_modules/@avi2dg/checks/.bun-version .bun-version
+   ```
+
 1. Run the gates:
 
    ```sh

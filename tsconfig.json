@@ -44,7 +44,8 @@
               "src/quality/presets/stylelint.ts",
               "src/testing/flake-preload.ts",
               "src/testing/local-test-preload.ts",
-              "src/testing/mutation-guard-plugin.ts"
+              "src/testing/mutation-guard-plugin.ts",
+              "src/core/native-launch.ts"
             ],
             "options": {
               "diagnosticSeverity": {

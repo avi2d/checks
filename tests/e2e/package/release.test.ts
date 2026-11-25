@@ -11,8 +11,9 @@ import { CHECKOUT, ran, scratchDirs } from "../lib/fixture-repo.ts";
 const scratch = scratchDirs();
 const stage = join(CHECKOUT, "scripts", "package-release.ts");
 const versionFrom = Schema.decodeSync(Schema.fromJsonString(Schema.Struct({ version: Schema.String })));
+const libcFrom = Schema.decodeSync(Schema.fromJsonString(Schema.Struct({ libc: Schema.optional(Schema.Array(Schema.String)) })));
 
-test("staging keeps native binaries out of the main package and never points it at a different platform version", async () => {
+test("staging keeps native binaries out of the main package, never points it at a different platform version and never offers the glibc build to musl", async () => {
   const assets = await scratch("checks-release-assets-");
   await writeFile(join(assets, "checks-darwin-arm64"), "darwin artifact");
   await writeFile(join(assets, "checks-linux-x64"), "linux artifact");
@@ -29,18 +30,19 @@ test("staging keeps native binaries out of the main package and never points it 
     version,
     optionalDependencies: { "@avi2dg/checks-darwin-arm64": version, "@avi2dg/checks-linux-x64": version },
   });
-  for (const [os, cpu] of [["darwin", "arm64"], ["linux", "x64"]]) {
+  for (const [os, cpu, libc] of [["darwin", "arm64", undefined], ["linux", "x64", ["glibc"]]] as const) {
     const name = `@avi2dg/checks-${os}-${cpu}`;
     const directory = join(assets, "npm", name);
     expect((await readdir(directory)).sort()).toEqual([binary, "package.json"]);
     expect(JSON.parse(await readFile(join(directory, "package.json"), "utf8"))).toMatchObject({
       name, version, os: [os], cpu: [cpu], files: [binary],
     });
+    expect(libcFrom(await readFile(join(directory, "package.json"), "utf8")).libc).toEqual(libc);
     expect(await readFile(join(directory, binary), "utf8")).toBe(os + " artifact");
   }
 });
 
-test.skipIf(nativePlatform === undefined)(skipReason("the launcher runs a compiled build only on macOS arm64 and Linux x64", "the launcher ignores an older optional binary and prefers the matching binary over source", "local"), async () => {
+test.skipIf(nativePlatform === undefined)(skipReason("the launcher runs a compiled build only on macOS arm64 and Linux x64", "the launcher ignores an older optional binary, runs source when the matching binary cannot execute, and prefers a working matching binary over source", "local"), async () => {
   const pack = await scratch("checks-release-pack-");
   const app = await scratch("checks-release-app-");
   const packed = await $`bun pm pack --destination ${pack} --quiet --ignore-scripts`.cwd(CHECKOUT).quiet();
@@ -62,6 +64,10 @@ test.skipIf(nativePlatform === undefined)(skipReason("the launcher runs a compil
   const fallback = await check();
   expect(fallback.exitCode).toBe(2);
   expect(fallback.text).toContain("package.json defines no release:assets script");
+
+  await writeFile(binary, "#!/no/such/loader\n");
+  await chmod(binary, 0o755);
+  expect(await check()).toEqual(fallback);
 
   await $`bun run release:assets ${pack}`.cwd(CHECKOUT).quiet();
   await copyFile(join(pack, "checks-" + platform), binary);

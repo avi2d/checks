@@ -2,7 +2,7 @@ import manifest from "../../package.json";
 
 export const nativePlatforms = [
   { os: "darwin", cpu: "arm64" },
-  { os: "linux", cpu: "x64" },
+  { os: "linux", cpu: "x64", libc: "glibc" },
 ] as const;
 
 export type NativePlatform = (typeof nativePlatforms)[number];

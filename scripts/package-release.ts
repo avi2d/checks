@@ -2,7 +2,7 @@ import { Effect, FileSystem, Path } from "effect";
 import manifest from "../package.json";
 import { runMain, Usage } from "../src/core/main.ts";
 import { assetName, nativePlatforms, platformBinary, platformPackage, type NativePlatform } from "../src/core/native-platforms.ts";
-import { publishExactPackage } from "../src/delivery/release-publish.ts";
+import { publishPackage } from "../src/delivery/release-publish.ts";
 
 const npmManifest = (value: object): string => JSON.stringify(value, null, 2) + "\n";
 const packageDir = (directory: string, platform: NativePlatform) =>
@@ -21,6 +21,7 @@ const writePlatform = Effect.fn("writePlatform")(function* (directory: string, p
     version: manifest.version,
     os: [platform.os],
     cpu: [platform.cpu],
+    ...("libc" in platform ? { libc: [platform.libc] } : {}),
     files: [platformBinary],
     license: manifest.license,
     repository: manifest.repository,
@@ -40,7 +41,7 @@ const packageRelease = Effect.gen(function* () {
       for (const platform of nativePlatforms) yield* writePlatform(destination, platform);
       break;
     case "publish":
-      for (const platform of nativePlatforms) yield* publishExactPackage(yield* packageDir(destination, platform));
+      for (const platform of nativePlatforms) yield* publishPackage(yield* packageDir(destination, platform));
       break;
     case "manifest": {
       const optionalDependencies = Object.fromEntries(nativePlatforms.map((platform) => [platformPackage(platform), manifest.version]));

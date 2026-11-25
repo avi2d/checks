@@ -48,12 +48,10 @@ const settled = (name: string, version: string, standing: Standing, latest: stri
     ? `${LABEL}: npm already holds ${name}@${version}`
     : `${LABEL}: npm already holds ${name}@${latest ?? ""}, which carries every change in ${version}, so ${version} stays off npm`;
 
-const retryDelay = () => Effect.sleep("10 seconds");
-
-const publishToNpm = Effect.fn("publishToNpm")(function* (root: string, order: "latest" | "exact", wait: () => Effect.Effect<void>) {
+export const publishPackage = Effect.fn("publishPackage")(function* (root: string, wait: () => Effect.Effect<void> = () => Effect.sleep("10 seconds")) {
   const manifest = yield* (yield* FileSystem.FileSystem).readFileString((yield* Path.Path).join(root, MANIFEST));
   const { name, version } = yield* decodeManifest(manifest).pipe(Effect.mapError((cause) => new PublishFailed({ message: `${MANIFEST}: ${cause.message}` })));
-  const before = order === "latest" ? yield* latestOnNpm(name) : undefined;
+  const before = yield* latestOnNpm(name);
   const standing = standingOf(version, before);
   if (standing !== "unpublished") {
     yield* Console.log(settled(name, version, standing, before));
@@ -70,7 +68,7 @@ const publishToNpm = Effect.fn("publishToNpm")(function* (root: string, order: "
     yield* Console.log(`${LABEL}: published ${name}@${version}`);
     return true;
   }
-  const after = order === "latest" ? yield* latestOnNpm(name) : undefined;
+  const after = yield* latestOnNpm(name);
   const now = standingOf(version, after);
   if (now !== "unpublished") {
     yield* Console.log(settled(name, version, now, after));
@@ -83,11 +81,6 @@ const publishToNpm = Effect.fn("publishToNpm")(function* (root: string, order: "
   }
   return yield* new PublishFailed({ message: `npm publish refused ${name}@${version}` });
 });
-
-type Publication = ReturnType<typeof publishToNpm>;
-
-export const publishPackage = (root: string, wait = retryDelay): Publication => publishToNpm(root, "latest", wait);
-export const publishExactPackage = (root: string): Publication => publishToNpm(root, "exact", retryDelay);
 
 const releasePublish = Effect.gen(function* () {
   if (process.argv.length > 2) return yield* new Usage({ message: USAGE });
