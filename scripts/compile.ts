@@ -1,6 +1,9 @@
 import { Effect, FileSystem, Path } from "effect";
+import { ChildProcessSpawner } from "effect/process";
 import manifest from "../package.json";
+import { collect } from "../src/core/git.ts";
 import { runMain, Usage } from "../src/core/main.ts";
+import { assetName, nativePlatform } from "../src/core/native-platforms.ts";
 import { commands } from "./cli-sources.ts";
 
 const dispatcher = [
@@ -55,7 +58,8 @@ const compile = Effect.gen(function* () {
   const root = path.resolve(import.meta.dir, "..");
   const entry = path.join(root, "scripts/compiled-entry.ts");
   const directory = process.argv[2] ?? path.join(root, "release-assets");
-  const name = `checks-${process.platform}-${process.arch}`;
+  if (nativePlatform === undefined) return yield* new Usage({ message: `no compiled build for ${process.platform}-${process.arch}` });
+  const name = assetName(nativePlatform);
   const outfile = path.join(directory, name);
   yield* fs.makeDirectory(directory, { recursive: true });
   const files = yield* virtualSources(root, entry);
@@ -63,6 +67,10 @@ const compile = Effect.gen(function* () {
     try: () => Bun.build({ entrypoints: [entry], compile: { outfile, autoloadPackageJson: true }, bytecode: true, format: "esm", plugins: [installedPeers(root)], files }),
     catch: (cause) => new Usage({ message: cause instanceof AggregateError ? cause.errors.map(String).join("\n") : String(cause) }),
   });
+  const built = yield* collect(path.resolve(outfile), ["--version"]);
+  if (built.exitCode !== ChildProcessSpawner.ExitCode(0) || built.stdout.trim() !== manifest.version) {
+    return yield* new Usage({ message: `${name} did not report the package version ${manifest.version}: ${built.stderr || built.stdout}` });
+  }
   const digest = new Bun.CryptoHasher("sha256").update(yield* fs.readFile(outfile)).digest("hex");
   yield* fs.writeFileString(outfile + ".sha256", `${digest}  ${name}\n`);
   return true;

@@ -17,6 +17,8 @@ export default defineConfig({
       "src/testing/local-test-preload.ts",
       // Stryker loads this plugin synchronously and stops the run on a throw, so it cannot run an Effect.
       "src/testing/mutation-guard-plugin.ts",
+      // Every bin loads this launcher before it can exec the compiled build, so an Effect import would slow the path the build exists to speed up.
+      "src/core/native-launch.ts",
     ],
   },
   ignorePatterns: ["node_modules/**", "dist/**/*.js"],

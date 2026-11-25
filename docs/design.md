@@ -130,7 +130,8 @@ Each runnable script ships as a `checks-` bin, so a consumer's `package.json` sc
 The package manager puts a bin on `PATH` only inside a package script.
 A shell reaches it through `bun run`, which never falls back to the registry the way `bunx` does.
 Each `.ts` bin is a launcher under `dist/bin/` with a `bun` shebang, which `bun run build` writes from the `package.json` `bin` map.
-The launcher runs the compiled build under `native/` when one matches the package version and the platform, and its `src/` file otherwise.
+The launcher runs the binary from the platform package `@avi2dg/checks-<os>-<cpu>` when that package holds the package version.
+Otherwise it runs its `src/` file, as it does when the host cannot run the binary.
 
 The bins are written in Effect.
 So `effect` is a peer dependency, and `@effect/platform-bun`, which the bins and the block screenshot helper use, is a dependency.
