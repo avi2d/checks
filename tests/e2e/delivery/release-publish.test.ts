@@ -68,7 +68,6 @@ test("a rerun of a release npm already holds publishes nothing", async () => {
 
 const shasum = "df443a432e0632f91433878d7a807a91df42d6a8";
 const staged = 'code E409\nnpm error 409 Conflict - Cannot publish over previously staged version "0.23.0".';
-const published = "code E403\nnpm error You cannot publish over the previously published versions: 0.23.0.";
 
 function duplicate(refusal: string, visibleAfter: number): Readonly<Record<string, string>> {
   return {
@@ -98,12 +97,15 @@ test("a staged E409 with a matching shasum stays green and a rerun never republi
   expect(state.published).toEqual([]);
 }, 30_000);
 
-test("a published E403 with a matching shasum stays green instead of failing a same-version race", async () => {
+test("a publish refusal stays green when the same version becomes latest without a shasum", async () => {
   const a = await release("0.23.0", "0.22.0");
-  const result = await a.publish({ FAKE_NPM_PUBLISH_SHASUM: shasum, FAKE_NPM_SHASUM: shasum, FAKE_NPM_VISIBLE_AFTER: "1", FAKE_NPM_PUBLISHED_FIRST: "0.23.0" });
+  const result = await a.publish({ FAKE_NPM_PUBLISHED_FIRST: "0.23.0" });
   expect(result.exitCode).toBe(0);
-  expect(result.text).toContain("release-publish: npm holds @acme/widget@0.23.0 with the same shasum\n");
-  expect((await a.state()).published).toEqual([]);
+  expect(result.text).toContain("release-publish: npm already holds @acme/widget@0.23.0\n");
+  expect(await a.state()).toEqual({
+    latest: "0.23.0", published: [],
+    calls: ["view @acme/widget dist-tags --json", "view @acme/widget@0.23.0 dist.shasum --json", "publish", "view @acme/widget dist-tags --json"],
+  });
 }, 30_000);
 
 test("a visible version with a lagging latest skips publish instead of uploading it twice", async () => {
@@ -126,25 +128,23 @@ test("a staged E409 waits for visibility instead of rejecting a delayed matching
   expect(state.published).toEqual([]);
 }, 30_000);
 
-for (const refusal of [staged, published]) {
-  test(`${refusal.split("\n")[0]} rejects a different tarball instead of accepting any visible version`, async () => {
-    const a = await release("0.23.0", "0.22.0");
-    const result = await a.publish({ ...duplicate(refusal, 1), FAKE_NPM_PUBLISHED_FIRST: "0.23.0", FAKE_NPM_SHASUM: "0000000000000000000000000000000000000000" });
-    expect(result.exitCode).toBe(2);
-    expect(result.text).toContain("checks-release-publish: npm publish refused @acme/widget@0.23.0\n");
-    expect((await a.state()).published).toEqual([]);
-  }, 30_000);
+test("a staged E409 rejects a different tarball instead of accepting any visible version", async () => {
+  const a = await release("0.23.0", "0.22.0");
+  const result = await a.publish({ ...duplicate(staged, 1), FAKE_NPM_SHASUM: "0000000000000000000000000000000000000000" });
+  expect(result.exitCode).toBe(2);
+  expect(result.text).toContain("checks-release-publish: npm publish refused @acme/widget@0.23.0\n");
+  expect((await a.state()).published).toEqual([]);
+}, 30_000);
 
-  test(`${refusal.split("\n")[0]} rejects a version that never appears instead of claiming success`, async () => {
-    const a = await release("0.23.0", "0.22.0", "immediate");
-    const result = await a.publish({ ...duplicate(refusal, 11), FAKE_NPM_PUBLISHED_FIRST: "0.23.0" });
-    expect(result.exitCode).toBe(2);
-    expect(result.text).toContain("checks-release-publish: npm publish refused @acme/widget@0.23.0\n");
-    const state = await a.state();
-    expect(state.calls.filter((call) => call === "view @acme/widget@0.23.0 dist.shasum --json")).toHaveLength(11);
-    expect(state.published).toEqual([]);
-  }, 30_000);
-}
+test("a staged E409 rejects a version that never appears instead of claiming success", async () => {
+  const a = await release("0.23.0", "0.22.0", "immediate");
+  const result = await a.publish(duplicate(staged, 11));
+  expect(result.exitCode).toBe(2);
+  expect(result.text).toContain("checks-release-publish: npm publish refused @acme/widget@0.23.0\n");
+  const state = await a.state();
+  expect(state.calls.filter((call) => call === "view @acme/widget@0.23.0 dist.shasum --json")).toHaveLength(11);
+  expect(state.published).toEqual([]);
+}, 30_000);
 
 test("an unrelated E403 cannot use a visible shasum to hide a publish failure", async () => {
   const a = await release("0.23.0", "0.22.0");

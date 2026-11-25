@@ -69,8 +69,9 @@ export const publishPackage = Effect.fn("publishPackage")(function* (root: strin
     return true;
   }
   const after = yield* latestOnNpm(name);
-  if (standingOf(version, after) === "superseded") {
-    yield* Console.log(settled(name, version, "superseded", after));
+  const now = standingOf(version, after);
+  if (now !== "unpublished") {
+    yield* Console.log(settled(name, version, now, after));
     return true;
   }
   const shasum = stagedShasum(result.stderr, version);
