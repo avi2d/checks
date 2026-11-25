@@ -65,7 +65,7 @@ const reportedSet = (present: readonly HeldFile[], flags: SiteNameFlags, inputs:
     inputs.needsReleaseChecks,
     inputs.publicRepository,
     inputs.docsBuild,
-    inputs.testTiers,
+    inputs.hasE2e,
     inputs.releaseAssets,
   );
 

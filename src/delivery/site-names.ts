@@ -5,7 +5,6 @@ import { callerOptionsOf, RELEASE_ASSETS_SCRIPT, type CallerOptions } from "./ca
 import { ciJobsOf, type CiJobs } from "./ci-jobs.ts";
 import { WorkspacePatterns, publicWorkspacesOf } from "./workspace-packages.ts";
 import { readTestScriptContext } from "./test-scripts.ts";
-import type { TestTier } from "../core/test-script.ts";
 import { calledFileOf, isRecord, workflowJobs, type Workflow } from "./workflow-references.ts";
 
 export const WORKFLOWS = ".github/workflows";
@@ -128,8 +127,8 @@ function uncarriedInputs(workflows: readonly Workflow[]): readonly UncarriedInpu
   );
 }
 
-const heldCiJobs = (kind: CallerSet["kind"], workflows: readonly Workflow[], publicRepository: boolean, docsBuild: boolean, testTiers: CallerInputs["testTiers"] | undefined) =>
-  ciJobsOf(kind, heldWorkflow(workflows)("ci.yml"), { publicRepository, docsBuild, testTiers }).pipe(Effect.mapError((fault) => new CallerSetFault({ message: fault.message })));
+const heldCiJobs = (kind: CallerSet["kind"], workflows: readonly Workflow[], publicRepository: boolean, docsBuild: boolean, hasE2e: boolean | undefined) =>
+  ciJobsOf(kind, heldWorkflow(workflows)("ci.yml"), { publicRepository, docsBuild, hasE2e }).pipe(Effect.mapError((fault) => new CallerSetFault({ message: fault.message })));
 
 function releaseAssetsFault(site: boolean, publicRepository: boolean): string | undefined {
   if (site) return `${SETTINGS_FILE} sets releaseAssets, but a site's main.yml holds no release job to attach the assets to, so remove it`;
@@ -137,7 +136,7 @@ function releaseAssetsFault(site: boolean, publicRepository: boolean): string | 
   return undefined;
 }
 
-export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild?: boolean, testTiers?: CallerInputs["testTiers"], releaseAssets?: boolean) {
+export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild?: boolean, hasE2e?: boolean, releaseAssets?: boolean) {
   const buildDocs = docsBuild === true;
   const attachAssets = releaseAssets === true;
   const flagged = SITE_NAME_KEYS.some((key) => flags[key] !== undefined);
@@ -151,7 +150,7 @@ export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readon
   const site = holdsSiteWorkflow(workflows) || flagged;
   const assetsFault = attachAssets ? releaseAssetsFault(site, publicRepository) : undefined;
   if (assetsFault !== undefined) return yield* new CallerSetFault({ message: assetsFault });
-  if (!site) return { kind: "code", ci: yield* heldCiJobs("code", workflows, publicRepository, buildDocs, testTiers), options } satisfies CallerSet;
+  if (!site) return { kind: "code", ci: yield* heldCiJobs("code", workflows, publicRepository, buildDocs, hasE2e), options } satisfies CallerSet;
   const held = workflows.flatMap(heldNames).filter(({ key }) => flags[key] === undefined);
   const conflict = conflictOf(held);
   if (conflict !== undefined) return yield* new CallerSetFault({ message: conflict });
@@ -161,7 +160,7 @@ export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readon
     return yield* new CallerSetFault({ message: `the site workflows name no ${listed(missing)}, so run ${rerun} ${flagsOf(missing)}` });
   }
   const names = yield* decodeSiteNames(named).pipe(Effect.mapError((issue) => new CallerSetFault({ message: `a site name ${issue.message}` })));
-  return { kind: "site", names, ci: yield* heldCiJobs("site", workflows, publicRepository, buildDocs, testTiers), options } satisfies CallerSet;
+  return { kind: "site", names, ci: yield* heldCiJobs("site", workflows, publicRepository, buildDocs, hasE2e), options } satisfies CallerSet;
 });
 
 const FLAGS = new Map(SITE_NAME_KEYS.map((key) => [`--${key}`, key]));
@@ -208,7 +207,7 @@ const readPackage = Effect.fn("readPackage")(function* (root: string) {
   );
 });
 
-export type CallerInputs = { readonly publishes: boolean; readonly publishWorkspaces: boolean; readonly needsReleaseChecks: boolean; readonly kit: boolean; readonly publicRepository: boolean; readonly docsBuild: boolean; readonly testTiers: ReadonlySet<TestTier>; readonly releaseAssets: boolean };
+export type CallerInputs = { readonly publishes: boolean; readonly publishWorkspaces: boolean; readonly needsReleaseChecks: boolean; readonly kit: boolean; readonly publicRepository: boolean; readonly docsBuild: boolean; readonly hasE2e: boolean; readonly releaseAssets: boolean };
 
 export type CallerInputOverrides = { readonly private?: boolean; readonly hasTestScript?: boolean };
 
@@ -225,8 +224,8 @@ export const callerInputsOf = Effect.fn("callerInputsOf")(function* (root: strin
   const isPrivate = overrides?.private ?? held?.private === true;
   const needsReleaseChecks = overrides?.hasTestScript ?? held?.scripts?.["test"] !== undefined;
   const workspaces = yield* publicWorkspacesOf(root, { private: isPrivate, workspaces: held?.workspaces });
-  const testTiers = (yield* readTestScriptContext(root, held?.name)).present;
-  return { publishes: !isPrivate, publishWorkspaces: workspaces.length > 0, needsReleaseChecks, kit: held?.name === KIT_PACKAGE_NAME, publicRepository: visibility === "public", docsBuild: held?.scripts?.["docs:build"] !== undefined, testTiers, releaseAssets } satisfies CallerInputs;
+  const hasE2e = (yield* readTestScriptContext(root, held?.name)).present.has("e2e");
+  return { publishes: !isPrivate, publishWorkspaces: workspaces.length > 0, needsReleaseChecks, kit: held?.name === KIT_PACKAGE_NAME, publicRepository: visibility === "public", docsBuild: held?.scripts?.["docs:build"] !== undefined, hasE2e, releaseAssets } satisfies CallerInputs;
 });
 
 export const readWorkflowFiles = Effect.fn("readWorkflowFiles")(function* (root: string) {
