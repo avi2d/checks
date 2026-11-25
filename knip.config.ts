@@ -12,5 +12,6 @@ export default defineConfig({
     "dist/mutation/unit-test-order.js",
     "src/dependencies/kit-defaults.ts",
     "src/testing/flake-preload.ts",
+    "scripts/native-meta.ts",
   ],
 });
