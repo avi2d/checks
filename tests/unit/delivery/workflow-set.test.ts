@@ -32,6 +32,7 @@ const EVERY_OPTION: CallerSet = {
     publishes: true,
     publicRepository: true,
     releaseVersionInput: false,
+    releaseAssets: true,
   },
 };
 
@@ -192,10 +193,48 @@ test("a set written with every option reads back as the same set, so a check rig
   for (const set of [EVERY_OPTION, CHECKED, SITE]) {
     const files = written(set);
     const held = files.map(({ name, text }) => ({ path: ".github/workflows/" + name, document: Bun.YAML.parse(text), text }));
-    const reread = Effect.runSync(callerSetOf(held, {}, "checks-workflows --write", set.options.fullTest, false, set.options.checkRelease, set.options.publicRepository, false));
+    const reread = Effect.runSync(callerSetOf(held, {}, "checks-workflows --write", set.options.fullTest, false, set.options.checkRelease, set.options.publicRepository, false, undefined, set.options.releaseAssets));
     expect(reread).toEqual(set);
     expect(differencesOf(reread, files, false)).toEqual([]);
   }
+});
+
+test("the releaseAssets option adds only the assets job and the tag output to main.yml, so a repository without it gets every other file unchanged", () => {
+  const without: CallerSet = { ...EVERY_OPTION, options: { ...EVERY_OPTION.options, releaseAssets: false } };
+  const before = new Map(written(without).map(({ name, text }) => [name, text]));
+  const after = written(EVERY_OPTION);
+  expect(after.map(({ name }) => name)).toEqual([...before.keys()]);
+  expect(after.filter(({ name, text }) => before.get(name) !== text).map(({ name }) => name)).toEqual(["main.yml"]);
+  expect(Object.keys(jobsOf(documentOf(without, "main.yml")))).toEqual(["suite", "release"]);
+  expect(jobsOf(documentOf(without, "main.yml"))["release"]?.["outputs"]).toBeUndefined();
+});
+
+test("the assets job builds on Linux x64 and macOS arm64 from the released tag and each runner uploads only its own release-assets/ with contents: write only, so the script must name every compiled and SHA-256 file for its platform, and a job that runs without a release or holds a wider token fails here", () => {
+  const jobs = jobsOf(documentOf(EVERY_OPTION, "main.yml"));
+  expect(Object.keys(jobs)).toEqual(["suite", "release", "assets"]);
+  expect(jobs["release"]?.["outputs"]).toEqual({ tag: EXPRESSION + "{{ steps.release.outputs.tag }}" });
+  expect(stepsOf(jobs["release"] ?? {})).toContainEqual(expect.objectContaining({ id: "release", run: "bunx checks-release-tag" }));
+  const assets = jobs["assets"] ?? {};
+  expect(assets).toMatchObject({
+    needs: "release",
+    "runs-on": EXPRESSION + "{{ matrix.runner }}",
+    strategy: { matrix: { runner: ["ubuntu-latest", "macos-latest"] } },
+    permissions: { contents: "write" },
+  });
+  expect(Object.keys(isRecord(assets["permissions"]) ? assets["permissions"] : {})).toEqual(["contents"]);
+  const runs = (tag: string, suite: string, release = "success"): boolean =>
+    jobRuns(String(assets["if"]), { needs: { suite: { result: suite }, release: { result: release, outputs: { tag } } } }, suite === "success" && release === "success");
+  expect(runs("", "success")).toBe(false);
+  expect(runs("v1.4.0", "success")).toBe(true);
+  expect(runs("v1.4.0", "skipped")).toBe(true);
+  expect(runs("v1.4.0", "success", "failure")).toBe(false);
+  const tagged = EXPRESSION + "{{ needs.release.outputs.tag }}";
+  expect(stepsOf(assets)).toEqual([
+    expect.objectContaining({ with: { ref: tagged, "persist-credentials": false } }),
+    { uses: "./.github/actions/setup" },
+    expect.objectContaining({ run: "bun run release:assets" }),
+    expect.objectContaining({ env: { GH_TOKEN: EXPRESSION + "{{ github.token }}", TAG: tagged }, run: 'gh release upload "$TAG" release-assets/* --clobber' }),
+  ]);
 });
 
 test("a production.yml that names another domain than the set differs, so a site file cannot drift from its siblings", () => {
@@ -229,6 +268,23 @@ const evaluated = (expression: string, contexts: Readonly<Record<string, Plain>>
 };
 
 const truthy = (result: data.ExpressionData): boolean => (result.kind === data.Kind.Boolean ? result.value : result.coerceString() !== "");
+
+const STATUS_FUNCTION = /\b(?:success|failure|cancelled|always)\(\)/;
+
+const statusFunction = (name: string, value: boolean) => ({ name, minArgs: 0, maxArgs: 0, call: (): data.ExpressionData => new data.BooleanData(value) });
+
+const jobRuns = (expression: string, contexts: Readonly<Record<string, Plain>>, everyAncestorSucceeded: boolean): boolean => {
+  const inner = expression.startsWith(EXPRESSION + "{{") && expression.endsWith("}}") ? expression.slice(3, -2).trim() : expression;
+  const checked = STATUS_FUNCTION.test(inner) ? inner : `success() && (${inner})`;
+  const functions = new Map([
+    ["always", statusFunction("always", true)],
+    ["cancelled", statusFunction("cancelled", false)],
+    ["failure", statusFunction("failure", false)],
+    ["success", statusFunction("success", everyAncestorSucceeded)],
+  ]);
+  const parser = new Parser(new Lexer(checked).lex().tokens, Object.keys(contexts), [...functions.values()]);
+  return truthy(new Evaluator(parser.parse(), dictionaryOf(contexts), functions).evaluate());
+};
 
 const ciJobs = (set: CallerSet): Record<string, Record<string, unknown>> => jobsOf(documentOf(set, "ci.yml"));
 

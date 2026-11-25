@@ -1,8 +1,8 @@
 import { RELEASE_VERSION_ENV } from "../core/release-names.ts";
 import { type CallerSet } from "./site-names.ts";
-import { type CallerOptions, type Flake, type Pages } from "./caller-options.ts";
+import { RELEASE_ASSETS_DIRECTORY, RELEASE_ASSETS_SCRIPT, type CallerOptions, type Flake, type Pages } from "./caller-options.ts";
 import { isBrowserWalk, runnerOf } from "./ci-jobs.ts";
-import { SETUP_NODE, CONFIGURE_PAGES, UPLOAD_PAGES, DEPLOY_PAGES, type Step, type Workflow, expression, scalar, workflowText, TOKEN, RUNNER, checkout, SETUP, ciCommand, keepArtifacts, claudeInstall } from "./full-set/steps.ts";
+import { SETUP_NODE, CONFIGURE_PAGES, UPLOAD_PAGES, DEPLOY_PAGES, type Job, type Step, type Workflow, expression, scalar, workflowText, TOKEN, RUNNER, checkout, SETUP, ciCommand, keepArtifacts, claudeInstall } from "./full-set/steps.ts";
 import { PULL_REQUEST_HEAD, PULL_REQUEST_NUMBER, BY_HAND, ciWorkflow } from "./full-set/ci.ts";
 import { PREVIEW_CLOSE, SITE_MAIN, PRODUCTION } from "./full-set/site.ts";
 
@@ -65,8 +65,28 @@ const release = (versionInput: boolean): Workflow => ({
 
 const RELEASE_COMMIT = "startsWith(github.event.head_commit.message, 'chore: release ')";
 
+const RELEASED_TAG = "needs.release.outputs.tag";
+
+// The release step sets the tag output only when it wrote a GitHub release, so a merge that releases nothing builds no asset.
+// The implicit success() also reads the suite job, which skips on a push that releases an earlier release commit.
+const ASSETS: Job = {
+  id: "assets",
+  needs: "release",
+  if: expression("!cancelled() && needs.release.result == 'success' && " + RELEASED_TAG + " != ''"),
+  runsOn: expression("matrix.runner"),
+  timeout: 30,
+  matrix: ["runner", "[ubuntu-latest, macos-latest]"],
+  permissions: ["contents: write"],
+  steps: [
+    checkout({ ref: expression(RELEASED_TAG) }),
+    SETUP,
+    { name: "build the release assets", run: "bun run " + RELEASE_ASSETS_SCRIPT },
+    { name: "attach the release assets to the GitHub release", env: [TOKEN, ["TAG", expression(RELEASED_TAG)]], run: 'gh release upload "$TAG" ' + RELEASE_ASSETS_DIRECTORY + "/* --clobber" },
+  ],
+};
+
 // A full-test run gates the publish, so the release job waits for it and still runs when the commit is no release commit and it skips.
-function codeMain({ fullTest, checkRelease, publishWorkspaces }: CallerOptions): Workflow {
+function codeMain({ fullTest, checkRelease, publishWorkspaces, releaseAssets }: CallerOptions): Workflow {
   const suite = fullTest || checkRelease || publishWorkspaces;
   return {
     name: "main",
@@ -91,13 +111,15 @@ function codeMain({ fullTest, checkRelease, publishWorkspaces }: CallerOptions):
         timeout: 15,
         concurrency: "main",
         permissions: ["contents: write", "id-token: write", "actions: read", "pull-requests: read"],
+        ...(releaseAssets ? { outputs: [["tag", expression("steps.release.outputs.tag")] as const] } : {}),
         steps: [
           checkout({ history: true, credentials: true }),
           SETUP,
           { note: "npm takes a trusted publish only from the Node it set up with its registry.", uses: SETUP_NODE, with: [["node-version", '"24"'], ["registry-url", "https://registry.npmjs.org"]] },
-          { env: [TOKEN, ...(publishWorkspaces ? [["CHECKS_PUBLISH_WORKSPACES", '"true"'] as const] : [])], run: "bunx checks-release-tag" },
+          { ...(releaseAssets ? { id: "release" } : {}), env: [TOKEN, ...(publishWorkspaces ? [["CHECKS_PUBLISH_WORKSPACES", '"true"'] as const] : [])], run: "bunx checks-release-tag" },
         ],
       },
+      ...(releaseAssets ? [ASSETS] : []),
     ],
   };
 }

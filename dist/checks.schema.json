@@ -11,6 +11,11 @@
       "description": "The GitHub repository visibility that selects generated workflow runners.",
       "default": "public"
     },
+    "releaseAssets": {
+      "type": "boolean",
+      "description": "Whether the generated main.yml builds the files bun run release:assets writes on Linux and macOS and attaches them to each GitHub release.",
+      "default": false
+    },
     "smoke": {
       "type": "array",
       "items": {

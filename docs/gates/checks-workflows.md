@@ -134,6 +134,26 @@ To opt in:
 
 A run without `-f version` plans the bump the unreleased changes need.
 
+### Attach release assets
+
+Set `releaseAssets: true` in `checks.config.ts` to attach built files to each GitHub release of a code repository.
+The setting defaults to `false`, and without it `main.yml` holds no `assets` job.
+With it, `main.yml` holds an `assets` job after the `release` job.
+
+The `release` job sets a `tag` output once `checks-release-tag` writes the GitHub release, and the `assets` job runs only when that output is set.
+It runs once on `ubuntu-latest`, a Linux x64 runner, and once on `macos-latest`, a macOS arm64 runner.
+Each run checks out the released tag, sets up Bun, and runs `bun run release:assets`.
+It then runs `gh release upload` with `--clobber` for every file in `release-assets/`, so a rerun replaces the files it attached before.
+The job grants only `contents: write`.
+
+The `release:assets` script in `package.json` writes the files to attach into `release-assets/` at the repository root.
+Each run attaches only what its own runner built.
+So the script writes each compiled file and its SHA-256 file under a name that holds the platform, such as `<name>-<os>-<arch>` and `<name>-<os>-<arch>.sha256`.
+A file of one name from both runners replaces the other on the release.
+A release then holds a compiled file and its SHA-256 file for each platform.
+
+`checks-workflows` refuses the setting when `package.json` has no `release:assets` script, in a site, and when `repositoryVisibility` is `private`.
+
 ## The composed ci.yml
 
 `ci.yml` holds one job per concern:
@@ -235,8 +255,8 @@ It names the fix.
 | Code | When |
 | --- | --- |
 | 0 | the workflow files are the set, or `--write` wrote it |
-| 1 | a file of the set is missing or differs, another workflow file appears, a job calls a workflow of another repository, the site workflows hold none, two values or an unparsable value of a name, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, or a caller passes an input the set cannot carry |
-| 2 | the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, holds two values of one, or names one that does not parse, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, or a caller passes an input the set cannot carry |
+| 1 | a file of the set is missing or differs, another workflow file appears, a job calls a workflow of another repository, the site workflows hold none, two values or an unparsable value of a name, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, or `checks.config.ts` sets `releaseAssets` in a site or a private repository |
+| 2 | the arguments do not parse, a workflow file or `package.json` cannot be read, a site write lacks one of the three names, holds two values of one, or names one that does not parse, a test job of `ci.yml` holds an unparsable input or a name a job cannot take, a caller passes an input the set cannot carry, `checks.config.ts` sets `releaseAssets` and `package.json` defines no `release:assets` script, or `--write` meets `releaseAssets` in a site or a private repository |
 
 ## Sample output
 

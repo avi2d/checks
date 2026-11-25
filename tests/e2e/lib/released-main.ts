@@ -1,5 +1,5 @@
 import { $ } from "bun";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fakeGh, type FakeGh } from "./fake-gh.ts";
 import { fakeNpm, type FakeNpm } from "./fake-npm.ts";
@@ -12,6 +12,7 @@ export type OnMain = {
   readonly dir: string;
   readonly env: Readonly<Record<string, string>>;
   readonly run: (script: string, args: readonly string[]) => Promise<Ran>;
+  readonly output: () => Promise<string>;
   readonly state: FakeGh["state"];
   readonly npm: FakeNpm["state"];
   readonly inOrigin: (...args: readonly string[]) => Promise<string>;
@@ -59,12 +60,15 @@ export function releasedMains(prefix: string): (subject: string, shape?: Shape) 
     await $`git update-ref refs/pull/7/head ${tested}`.cwd(origin).quiet();
     const gh = await fakeGh(home, origin);
     const npm = await fakeNpm(home, "0.1.0");
-    const env = { ...gh.env, ...npm.env };
+    const output = join(home, "github-output");
+    await writeFile(output, "");
+    const env = { ...gh.env, ...npm.env, GITHUB_OUTPUT: output };
     return {
       head,
       dir: repo.dir,
       env,
       run: (script, args) => ran($`bun ${script} ${args}`.cwd(repo.dir).env({ ...process.env, ...env })),
+      output: () => readFile(output, "utf8"),
       state: gh.state,
       npm: npm.state,
       inOrigin: async (...args) => (await $`git ${args}`.cwd(origin).quiet()).stdout.toString().trim(),
