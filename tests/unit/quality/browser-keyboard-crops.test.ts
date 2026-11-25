@@ -1,67 +1,41 @@
 import { expect, test } from "bun:test";
 import { compareCrops } from "../../../src/quality/browser/keyboard-crops.ts";
 
-const element = () => {
-  let pixels: ArrayLike<number> = [];
-  const images = new WeakMap<object, Uint8Array>();
-  class ImageBlob {
-    readonly size: number;
+const pixel = (red: number, green = 0, blue = 0) => ({ data: Buffer.from([red, green, blue]) });
+const crops = (red: number) => [pixel(red)];
 
-    constructor(parts: readonly Uint8Array[]) {
-      const data = parts[0] ?? new Uint8Array();
-      this.size = data.length;
-      images.set(this, data);
-    }
-  }
-  const view = {
-    devicePixelRatio: 1,
-    atob,
-    Blob: ImageBlob,
-    createImageBitmap: (blob: { readonly size: number }) => {
-      const bitmap = { close: () => {} };
-      images.set(bitmap, images.get(blob) ?? new Uint8Array());
-      return Promise.resolve(bitmap);
-    },
-  };
-  const canvas = {
-    width: 0,
-    height: 0,
-    getContext: () => ({
-      drawImage: (bitmap: object) => { pixels = images.get(bitmap) ?? []; },
-      getImageData: () => ({ data: pixels }),
-    }),
-  };
-  return { ownerDocument: { defaultView: view, createElement: () => canvas } } satisfies Parameters<typeof compareCrops>[0];
-};
-
-const pixel = (red: number) => btoa(String.fromCharCode(red, 0, 0, 255));
-const boxes = [{ x: 0, y: 0, width: 1, height: 1 }];
-
-test("a page blur handler that paints after focus is not counted as a focus change", async () => {
-  const before = pixel(0);
-  const focused = pixel(0);
-  const blurred = pixel(255);
-  expect(await compareCrops(element(), { baseline: before, focused, blurred, boxes })).toEqual({ compared: true, differs: false });
+test("a page blur handler that paints after focus is not counted as a focus change", () => {
+  expect(compareCrops({ baseline: crops(0), focused: crops(0), blurred: crops(255) })).toBe(false);
 });
 
-test("a JavaScript focus ring removed by blur is counted rather than suppressed", async () => {
-  const before = pixel(0);
-  const focused = pixel(255);
-  const blurred = pixel(0);
-  expect(await compareCrops(element(), { baseline: before, focused, blurred, boxes })).toEqual({ compared: true, differs: true });
+test("a JavaScript focus ring removed by blur is counted rather than suppressed", () => {
+  expect(compareCrops({ baseline: crops(0), focused: crops(255), blurred: crops(0) })).toBe(true);
 });
 
-test("a missing baseline still detects whether blur changes the focused pixels", async () => {
-  const focused = pixel(255);
-  expect(await compareCrops(element(), { baseline: null, focused, blurred: pixel(0), boxes })).toEqual({ compared: true, differs: true });
-  expect(await compareCrops(element(), { baseline: null, focused, blurred: focused, boxes })).toEqual({ compared: true, differs: false });
+test("a missing baseline still detects whether blur changes the focused pixels", () => {
+  expect(compareCrops({ baseline: null, focused: crops(255), blurred: crops(0) })).toBe(true);
+  expect(compareCrops({ baseline: null, focused: crops(255), blurred: crops(255) })).toBe(false);
 });
 
-test("scroll-only paint that remains after blur is not counted as visible focus", async () => {
-  expect(await compareCrops(element(), {
-    baseline: pixel(0),
-    focused: pixel(255),
-    blurred: pixel(255),
-    boxes,
-  })).toEqual({ compared: true, differs: false });
+test("scroll-only paint that remains after blur is not counted as visible focus", () => {
+  expect(compareCrops({ baseline: crops(0), focused: crops(255), blurred: crops(255) })).toBe(false);
+});
+
+test("changes in separate later regions are not lost by requiring both changes in one region", () => {
+  expect(compareCrops({
+    baseline: [pixel(0), pixel(0), pixel(255)],
+    focused: [pixel(0), pixel(255), pixel(255)],
+    blurred: [pixel(0), pixel(255), pixel(0)],
+  })).toBe(true);
+});
+
+test.each([
+  [0, 255, 0],
+  [0, 0, 255],
+])("a ring painted with RGB %p %p %p is not missed by comparing only red", (red, green, blue) => {
+  expect(compareCrops({
+    baseline: crops(0),
+    focused: [pixel(red, green, blue)],
+    blurred: crops(0),
+  })).toBe(true);
 });

@@ -1,7 +1,8 @@
 import { Effect, Schema } from "effect";
 import type { ElementHandle, Page } from "playwright-core";
 import type { Target } from "./declaration.ts";
-import { compareCrops, decodeOutcome, type CropArgs } from "./keyboard-crops.ts";
+import { compareCrops, type CropArgs } from "./keyboard-crops.ts";
+import { cropPicture } from "./keyboard-png.ts";
 import {
   changedPaintBoxes,
   decodeRecall,
@@ -15,6 +16,7 @@ import {
   type PageElement,
 } from "./keyboard-page.ts";
 import { attempt, BrowserFailure, load } from "./page.ts";
+import { decodePng } from "./png.ts";
 
 const FOCUS_RING_MARGIN_PX = 6;
 
@@ -116,6 +118,24 @@ const readMark = Effect.fn("readMark")(function* (leaf: ElementHandle<PageElemen
 export const focusVerdict = (scrolledSticky: boolean, differs: boolean): boolean | "unmeasured" =>
   scrolledSticky && differs ? "unmeasured" : differs;
 
+const prepareCrops = Effect.fn("prepareCrops")(function* (
+  page: Page,
+  boxes: readonly Box[],
+  baseline: Buffer | null,
+  focused: Buffer,
+  blurred: Buffer,
+) {
+  const scaleSource: unknown = yield* attempt("cannot read the pixel ratio", () => page.evaluate("window.devicePixelRatio || 1"));
+  const scale = yield* Schema.decodeUnknownEffect(Schema.Finite)(scaleSource).pipe(
+    Effect.mapError(() => new BrowserFailure({ message: "the page gave no pixel ratio" })),
+  );
+  return {
+    baseline: baseline === null ? null : cropPicture(yield* decodePng(baseline), boxes, scale),
+    focused: cropPicture(yield* decodePng(focused), boxes, scale),
+    blurred: cropPicture(yield* decodePng(blurred), boxes, scale),
+  } satisfies CropArgs;
+});
+
 const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page, leaf: ElementHandle<PageElement>, baseline: Baseline) {
   const box = yield* attempt("cannot measure the focused element", () => leaf.boundingBox());
   if (box === null) return false;
@@ -147,18 +167,10 @@ const focusRingShows = Effect.fn("focusRingShows")(function* (page: Page, leaf: 
   const dimensions = viewport ? screen : yield* pageSize(page);
   const boxes = regions.map((region) => cropTo(viewport ? region : { ...region, x: region.x + scroll.x, y: region.y + scroll.y }, dimensions)).filter((rect) => rect !== null);
   if (boxes.length === 0) return false;
-  const comparedSource: unknown = yield* attempt("cannot compare the baseline, focused and blurred captures", () =>
-    leaf.evaluate(compareCrops, {
-      baseline: scrolledSticky ? null : baseline.shot.toString("base64"),
-      focused: withFocus.toString("base64"),
-      blurred: withoutFocus.toString("base64"),
-      boxes,
-    } satisfies CropArgs));
-  const outcome = yield* decodeOutcome(comparedSource).pipe(
-    Effect.mapError(() => new BrowserFailure({ message: "the page gave no usable comparison" })),
+  const crops = yield* prepareCrops(page, boxes, scrolledSticky ? null : baseline.shot, withFocus, withoutFocus).pipe(
+    Effect.catchTag("PngFailure", ({ message }) => Effect.fail(new BrowserFailure({ message: "cannot decode the captures: " + message }))),
   );
-  if (!outcome.compared) return yield* new BrowserFailure({ message: "cannot read the capture" });
-  return focusVerdict(scrolledSticky, outcome.differs);
+  return focusVerdict(scrolledSticky, compareCrops(crops));
 });
 
 const tabToNextStop = Effect.fn("tabToNextStop")(function* (page: Page) {

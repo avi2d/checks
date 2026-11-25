@@ -65,19 +65,14 @@ type PageStyle = {
 
 type PageView = {
   readonly getComputedStyle: (node: PageElement, pseudo?: string) => PageStyle;
-  readonly devicePixelRatio: number;
   readonly scrollX: number;
   readonly scrollY: number;
-  readonly atob: (data: string) => string;
-  readonly createImageBitmap: (image: PageBlob) => Promise<PageBitmap>;
-  readonly Blob: new (parts: ReadonlyArray<Uint8Array>, options: { readonly type: string }) => PageBlob;
   checksKb?: WeakMap<object, string>;
 };
 
 type PageDocument = {
   readonly defaultView: PageView;
   readonly documentElement: PageElement;
-  readonly createElement: (tag: string) => PageCanvas;
 };
 
 type PageRoot = {
@@ -100,31 +95,6 @@ type PageElement = {
   readonly scrollTop: number;
   readonly blur: () => void;
   readonly focus: (options: { readonly preventScroll: true }) => void;
-};
-
-type PageBitmap = { readonly close: () => void };
-
-type PageBlob = { readonly size: number };
-
-type PageContext = {
-  readonly drawImage: (
-    image: PageBitmap,
-    sx: number,
-    sy: number,
-    sw: number,
-    sh: number,
-    dx: number,
-    dy: number,
-    dw: number,
-    dh: number,
-  ) => void;
-  readonly getImageData: (x: number, y: number, width: number, height: number) => { readonly data: ArrayLike<number> };
-};
-
-type PageCanvas = {
-  width: number;
-  height: number;
-  readonly getContext: (kind: string, options: { readonly willReadFrequently: boolean }) => PageContext | null;
 };
 
 type Axis = { readonly start: number; readonly size: number };
@@ -361,4 +331,4 @@ export const elementPath = (el: PageElement): string => {
 
 export const decodeRecall = Schema.decodeUnknownEffect(Schema.String);
 
-export type { Box, PageBitmap, PageElement };
+export type { Box, PageElement };
