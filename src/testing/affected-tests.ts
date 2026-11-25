@@ -1,10 +1,13 @@
-import { Console, Effect, FileSystem, Path, Schema } from "effect";
+import { Effect, FileSystem, Path, Schema } from "effect";
 import { workingTreeFiles } from "../core/git.ts";
+import { addReachTests, readReachChange, refuseReachMap, type ReachChange } from "../core/reach-change.ts";
+export { refuseReachMap } from "../core/reach-change.ts";
 import { basenameOf, pullRequestReason, testEnvironmentReason, TEST_FILE, TEST_FIXTURES } from "../core/test-impact.ts";
 import type { TestTier } from "../core/test-script.ts";
 import { decodeSetting, loadSettings, Reach, SETTINGS_FILE } from "../core/settings.ts";
 import { importedFile, importsOf, resolved, TEST_TREE } from "../core/imports.ts";
 import { decodeBunfig, preloadPaths } from "./mutation-scope-graph.ts";
+import { helperImpact, reportImpact } from "./helper-impact.ts";
 
 export type Narrowing =
   | { readonly kind: "full"; readonly because: string }
@@ -79,20 +82,6 @@ function mappedTests(path: string, repository: Repository): readonly string[] | 
   if (rules.length === 0) return undefined;
   const patterns = rules.flatMap((rule) => rule.tests);
   return testFilesOf(repository).filter((file) => patterns.some((pattern) => globMatches(pattern, file)));
-}
-
-export function refuseReachMap(value: unknown): string | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return `${REACH} is not a map of changed paths to test files`;
-  }
-  for (const [key, entry] of Object.entries(value)) {
-    if (key === "") return `${REACH} has an empty changed-path key`;
-    if (!Array.isArray(entry) || entry.length === 0) return `${REACH} lists no test file for ${key}`;
-    const bad = entry.find((candidate) => typeof candidate !== "string" || candidate === "");
-    if (bad !== undefined) return `${REACH} names an empty test file for ${key}`;
-  }
-  return undefined;
 }
 
 // A test pattern that matches no test file would silently drop the tests a renamed file used to name.
@@ -245,6 +234,8 @@ function reachMapProblem(repository: Repository): string | undefined {
 
 function fullRunReason(changed: readonly string[], repository: Repository, tier?: TestTier): string | undefined {
   if (changed.length === 0) return "the pull request changes no file";
+  const unsupported = tier === "pixel" ? undefined : changed.find((path) => /\.(?:astro|svelte|vue|sh)$/.test(path));
+  if (unsupported !== undefined) return pullRequestReason(unsupported, "a source whose import graph cannot be read");
   for (const path of changed) {
     const reason = tier === "pixel" && path.startsWith(".github/") ? testEnvironmentReason(path) : undefined;
     if (reason !== undefined) return pullRequestReason(path, reason);
@@ -372,13 +363,33 @@ const readRepository = Effect.fn("readRepository")(function* (root: string) {
   return { ...repository, packageImports: yield* readPackageImports(root, repository) } satisfies Repository;
 });
 
-export const readChangedNarrowing = Effect.fn("readChangedNarrowing")(function* (root: string, changed: readonly string[], tests: readonly string[], tier?: TestTier) {
-  const impact = testImpact(changed, yield* readRepository(root), tests, tier);
-  if (impact.kind === "files") {
-    for (const [path, reached] of impact.byChange) {
-      for (const test of reached.length === 0 ? ["no test file"] : reached) yield* Console.log(`checks-test: ${path} -> ${test}`);
-    }
+const readDefaultNarrowing = Effect.fn("readDefaultNarrowing")(function* (root: string, changed: readonly string[], tests: readonly string[], tier?: TestTier, base?: string) {
+  const mapChange: ReachChange = changed.includes(SETTINGS_FILE) && base !== undefined
+    ? yield* readReachChange(root, base)
+    : { kind: "full" };
+  if (changed.includes(SETTINGS_FILE) && mapChange.kind === "full") {
+    return { kind: "full", because: pullRequestReason(SETTINGS_FILE, "a config every test runs under") } satisfies Narrowing;
   }
+  const repository = yield* readRepository(root);
+  const problem = reachMapProblem(repository);
+  if (problem !== undefined) return { kind: "full", because: problem } satisfies Narrowing;
+  if (changed.length === 0) return { kind: "full", because: "the pull request changes no file" } satisfies Narrowing;
+  const helpers = changed.filter((file) => file.startsWith(TEST_TREE) && !file.startsWith(TEST_FIXTURES) && !TEST_FILE.test(file));
+  if (helpers.some((file) => preloadClosure(repository).has(file))) return { kind: "full", because: "a changed test helper is preloaded" } satisfies Narrowing;
+  const helperTests = helpers.length === 0 ? new Set<string>() : yield* helperImpact(root, helpers, repository.sources, repository.files).pipe(Effect.orElseSucceed(() => undefined));
+  if (helperTests === undefined) return { kind: "full", because: "the changed test helper's import graph cannot be resolved" } satisfies Narrowing;
+  const remaining = changed.filter((file) => !helpers.includes(file) && (file !== SETTINGS_FILE || mapChange.kind === "full"));
+  const impact = remaining.length === 0 ? undefined : testImpact(remaining, repository, tests, tier);
+  if (impact?.kind === "full") return impact;
+  if (impact !== undefined) yield* reportImpact(impact.byChange);
+  const reached = new Set([...(impact === undefined ? [] : [...impact.byChange.values()].flat()), ...helperTests]);
+  return { kind: "files", files: mapChange.kind === "mapped" ? addReachTests(tests, reached, mapChange) : tests.filter((file) => reached.has(file)) } satisfies Narrowing;
+});
+
+export const readChangedNarrowing = Effect.fn("readChangedNarrowing")(function* (root: string, changed: readonly string[], tests: readonly string[], tier?: TestTier, base?: string) {
+  if (tier !== "pixel") return yield* readDefaultNarrowing(root, changed, tests, tier, base);
+  const impact = testImpact(changed, yield* readRepository(root), tests, tier);
+  if (impact.kind === "files") yield* reportImpact(impact.byChange);
   return selectedTests(impact, tests);
 });
 

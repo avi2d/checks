@@ -210,9 +210,9 @@ export function narrowedTier(options: TestOptions, selection: SuiteSelection): {
 }
 
 // Returns undefined when a shared file widens the run, so the caller keeps the selection it already had.
-const reachedSelection = Effect.fn("reachedSelection")(function* (changed: readonly string[], tier: TestTier | undefined) {
+const reachedSelection = Effect.fn("reachedSelection")(function* (changed: readonly string[], tier: TestTier | undefined, base?: string) {
   const tests = (yield* scanTestFiles(process.cwd())).filter((file) => selectedTierFile(file, tier));
-  const narrowing = yield* readChangedNarrowing(process.cwd(), changed, tests, tier);
+  const narrowing = yield* readChangedNarrowing(process.cwd(), changed, tests, tier, base);
   if (narrowing.kind === "full") {
     yield* Console.log(`${NAME}: ${narrowing.because}, so ${tier === undefined ? "the whole suite" : `the ${tier} tier`} runs`);
     return undefined;
@@ -229,7 +229,7 @@ const narrowSelection = Effect.fn("narrowSelection")(function* (options: TestOpt
     yield* Console.log(`${NAME}: ${scope.because}, so the whole suite runs`);
     return selection;
   }
-  return (yield* reachedSelection(scope.changed, narrowed.tier)) ?? selection;
+  return (yield* reachedSelection(scope.changed, narrowed.tier, scope.kind === "pull-request" ? scope.ends?.base : undefined)) ?? selection;
 });
 
 const changedSelection = Effect.fn("changedSelection")(function* () {
@@ -256,7 +256,7 @@ const pullRequestSelection = Effect.fn("pullRequestSelection")(function* (tier: 
   if (scope.kind === "docs-only") {
     return { kind: "files", files: [] } satisfies SuiteSelection;
   }
-  return (yield* reachedSelection(scope.changed, tier)) ?? (tier === undefined ? ({ kind: "full" } satisfies SuiteSelection) : ({ kind: "tier", tier } satisfies SuiteSelection));
+  return (yield* reachedSelection(scope.changed, tier, scope.ends?.base)) ?? (tier === undefined ? ({ kind: "full" } satisfies SuiteSelection) : ({ kind: "tier", tier } satisfies SuiteSelection));
 });
 
 const entrySelection = Effect.fn("entrySelection")(function* (run: EntryRun, options: TestOptions, environment: Environment) {
@@ -287,6 +287,22 @@ const temporaryReportPath = Effect.fn("temporaryReportPath")(function* () {
   return path.join(yield* fs.makeTempDirectoryScoped({ prefix: "checks-test-" }), "junit.xml");
 });
 
+const loadRunSettings = Effect.fn("loadRunSettings")(function* (root: string, environment: Environment) {
+  const emptySettings: Readonly<Record<string, unknown>> = {};
+  return yield* loadSettings(root).pipe(
+    Effect.map((settings) => ({ settings, failed: false })),
+    Effect.catch((cause) => environment === "ci"
+      ? Console.log(`${NAME}: ${cause.message}, so the whole requested suite runs`).pipe(Effect.as({ settings: emptySettings, failed: true }))
+      : Effect.fail(cause)),
+  );
+});
+
+const safeEntrySelection = Effect.fn("safeEntrySelection")(function* (run: EntryRun, options: TestOptions, environment: Environment, settingsFailed: boolean) {
+  if (!settingsFailed) return yield* entrySelection(run, options, environment);
+  if (run === "pr-screens") return { kind: "tier", tier: "pixel" } satisfies SuiteSelection;
+  return selectSuite(options, environment);
+});
+
 const testEntry = Effect.gen(function* () {
   const root = process.cwd();
   yield* refuseLocalTests(root);
@@ -296,17 +312,17 @@ const testEntry = Effect.gen(function* () {
   const environment = yield* environmentOf;
   yield* refuseOldPlace(root, "smoke", { manifestKey: "smoke" });
   yield* refuseOldPlace(root, "reach", { manifestKey: "reach" });
-  const isPullRequest = run === "pr" || run === "pr-screens";
-  const refusal = isPullRequest
+  const refusal = run === "pr" || run === "pr-screens"
     ? pullRequestRunRefusal(environment, run === "pr-screens" ? "--pr-screens" : "--pr")
     : heavyRunRefusal(options, environment, options.tier === "pixel" && (yield* approvingScreens));
   if (refusal !== undefined) return yield* new RunRefusal({ message: refusal });
-  const settings = yield* loadSettings(root);
+  const loaded = yield* loadRunSettings(root, environment);
+  const { settings } = loaded;
   const policy: RunPolicy = environment === "ci"
     ? { environment, maxFileSeconds: yield* resolveTestFileMaxSeconds(settings["testFileMaxSeconds"]) }
     : { environment };
   const excluded = yield* readTestFileSkips(root, settings["testFileSkips"]);
-  const selection = yield* entrySelection(run, options, environment);
+  const selection = yield* safeEntrySelection(run, options, environment, loaded.failed);
   if (selection.kind === "files" && selection.files.length === 0) {
     yield* Console.log(`${NAME}: no selected test file, so no test ran`);
     return true;
