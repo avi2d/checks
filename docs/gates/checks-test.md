@@ -149,7 +149,10 @@ A stylesheet, a font or a layout the reach map names runs the tests the map give
 In a unit or end-to-end pull request run, a changed JavaScript or TypeScript test helper runs the tests that reach it.
 Literal imports and paths named by files under `tests/` count as references, at any depth.
 Literal dynamic imports count as imports, including in Astro, Svelte, and Vue sources.
-When an import cannot be resolved or has a non-literal target, the whole tier runs.
+Type-only imports and re-exports do not need to resolve at runtime.
+Vite query suffixes and hash suffixes do not change which file an import reaches.
+Unresolved bare package imports do not add local dependencies.
+When a relative import or a configured alias cannot be resolved, or an import has a non-literal target, the whole tier runs.
 Other test helpers still run the whole tier.
 A screenshot pull request run selects the screenshot tests that reach the helper.
 A dependency bump changes `package.json` or the lockfile, so it runs the whole suite in every repository.

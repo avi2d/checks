@@ -17,11 +17,16 @@ const C = "tests/e2e/c.test.ts";
 const TESTS = [A, B, C];
 const HELPER = "tests/e2e/lib/site.ts";
 
-test("a map entry, new helper and new test do not select unrelated tests or request a site build", async () => {
+test("type-only and Vite asset imports do not make a map entry, new helper and new test run unrelated tests or build the site", async () => {
   const repo = await open({
     "checks.config.ts": `export default { reach: { "src/components/Hero.astro": ["${A}"] } };`,
     "src/content.config.ts": 'import { defineCollection } from "astro:content";',
-    "src/lib/articles.ts": 'import { getCollection } from "astro:content";',
+    "src/lib/articles.ts": 'import { getCollection } from "astro:content"; import type { Element } from "hast"; export type { Element } from "hast";',
+    "node_modules/@types/hast/package.json": '{"name":"@types/hast","types":"index.d.ts"}',
+    "node_modules/@types/hast/index.d.ts": "export interface Element { tagName: string; }",
+    "src/pages/og-image.png.ts": 'import css from "../styles/tokens.css?raw"; import font from "../fonts/playfair.woff2?inline";',
+    "src/styles/tokens.css": ":root { color: black; }",
+    "src/fonts/playfair.woff2": "font fixture",
     "src/pages/index.astro": '---\nconst panel = import("../components/VariantPanel.astro");\n---\n<main>site</main>',
     "src/components/VariantPanel.astro": "<aside />",
     "src/components/Hero.astro": "<section />",
@@ -53,6 +58,32 @@ test("a map entry, new helper and new test do not select unrelated tests or requ
     "tests-only": "true",
     browser: "false",
   });
+});
+
+test.each(["@helpers/*", "internal/*", "site-helper"])("an unresolved %s alias does not silently omit helper tests", async (alias) => {
+  const specifier = alias.replace("*", "missing");
+  const repo = await open({
+    "tsconfig.json": '{"extends":"./config/paths.json"}',
+    "config/paths.json": JSON.stringify({ compilerOptions: { paths: { [alias]: ["./tests/e2e/lib/*"] } } }),
+    [HELPER]: "export const site = 1;",
+    [A]: 'import { site } from "./lib/site.ts";',
+    [B]: `import "${specifier}?raw";`,
+    [C]: "export {};",
+  });
+  const result = await Effect.runPromise(readChangedNarrowing(repo.dir, [HELPER], TESTS, "e2e").pipe(Effect.provide(platform)));
+  expect(result).toEqual({ kind: "full", because: "the changed test helper's import graph cannot be resolved" });
+});
+
+test("a resolved alias with a Vite suffix does not omit a helper importer or run an unrelated test", async () => {
+  const repo = await open({
+    "tsconfig.json": '{"compilerOptions":{"paths":{"@helpers/*":["./tests/e2e/lib/*"]}}}',
+    [HELPER]: "export const site = 1;",
+    [A]: 'import { site } from "@helpers/site.ts?raw";',
+    [B]: 'import { site } from "./lib/site.ts";',
+    [C]: "export {};",
+  });
+  const result = await Effect.runPromise(readChangedNarrowing(repo.dir, [HELPER], TESTS, "e2e").pipe(Effect.provide(platform)));
+  expect(result).toEqual({ kind: "files", files: [A, B] });
 });
 
 test("a helper read by path through another helper does not omit the transitive test", async () => {

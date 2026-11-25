@@ -66,9 +66,9 @@ test("a root-level importer does not resolve relative to its filename", async ()
   expect(TESTS.filter((file) => reached?.has(file))).toEqual(TESTS);
 });
 
-test("an unresolvable import cannot narrow the helper's tests", async () => {
+test.each(['import "./missing.ts";', 'export * from "./missing.ts?raw";', 'import("./missing.ts#fragment");', 'require("./missing.ts?inline");'])("an unresolved relative %s cannot narrow the helper's tests", async (source) => {
   const broken = new Map(sources);
-  broken.set(C, 'import "./missing.ts";');
+  broken.set(C, source);
   expect(await run(broken)).toBeUndefined();
 });
 
@@ -134,6 +134,62 @@ test("a literal dynamic import does not omit the helper's importer or force a fu
   const reached = await run(dynamic);
   expect(reached).toBeDefined();
   expect(TESTS.filter((file) => reached?.has(file))).toEqual(TESTS);
+});
+
+test.each([
+  'import type { Element } from "hast";',
+  'export type { Element } from "hast";',
+  'export type * from "hast";',
+  'import { type Element } from "hast";',
+  'export { type Element } from "hast";',
+  'import type { Element } from "./missing.ts";',
+  'export type { Element } from "./missing.ts";',
+  'export type * from "./missing.ts";',
+  'import { type Element } from "./missing.ts";',
+  'export { type Element } from "./missing.ts";',
+  'import "uninstalled-package";',
+  'export * from "uninstalled-package";',
+  'import("uninstalled-package");',
+  'require("uninstalled-package");',
+])("an erased type or external %s does not force unrelated helper tests to run", async (source) => {
+  const tree = new Map(sources);
+  tree.set("src/unrelated.ts", source);
+  const reached = await run(tree);
+  expect(reached).toBeDefined();
+  expect(TESTS.filter((file) => reached?.has(file))).toEqual([A, B]);
+});
+
+test.each([
+  'import "./lib/helper.ts?raw";',
+  'export { helper } from "./lib/helper.ts?inline";',
+  'export * from "./lib/helper.ts#fragment";',
+  'import("./lib/helper.ts?raw#fragment");',
+  'import("./lib/helper.ts?raw/../other");',
+  'require("./lib/helper.ts?inline");',
+])("a suffixed %s does not omit the helper's importer", async (source) => {
+  const tree = new Map(sources);
+  tree.set(C, source);
+  const reached = await run(tree);
+  expect(reached).toBeDefined();
+  expect(TESTS.filter((file) => reached?.has(file))).toEqual(TESTS);
+});
+
+test.each(["astro", "svelte", "vue"])("a query-suffixed import in %s does not omit the helper's transitive test", async (extension) => {
+  const tree = new Map(sources);
+  tree.set(`src/page.${extension}`, '<script>import "../tests/e2e/lib/helper.ts?raw/../other#fragment";</script>');
+  tree.set(C, `import "../../src/page.${extension}";`);
+  const reached = await run(tree);
+  expect(reached).toBeDefined();
+  expect(TESTS.filter((file) => reached?.has(file))).toEqual(TESTS);
+});
+
+test.each([
+  'import { type Element, helper } from "./missing.ts";',
+  'export { type Element, helper } from "./missing.ts";',
+])("a mixed type and runtime %s cannot hide an unresolved local dependency", async (source) => {
+  const tree = new Map(sources);
+  tree.set(C, source);
+  expect(await run(tree)).toBeUndefined();
 });
 
 test("a non-literal module import cannot silently omit a helper's importer", async () => {
