@@ -148,8 +148,9 @@ The job grants only `contents: write`.
 
 The `release:assets` script in `package.json` writes the files to attach into `release-assets/` at the repository root.
 Each run attaches only what its own runner built.
-So the script names each file, its checksum file included, for its platform.
-Two files of one name from the two runners replace each other on the release.
+So the script writes each compiled file and its SHA-256 file under a name that holds the platform, such as `<name>-<os>-<arch>` and `<name>-<os>-<arch>.sha256`.
+A file of one name from both runners replaces the other on the release.
+A release then holds a compiled file and its SHA-256 file for each platform.
 
 `checks-workflows` refuses the setting when `package.json` has no `release:assets` script, in a site, and when `repositoryVisibility` is `private`.
 

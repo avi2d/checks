@@ -209,7 +209,7 @@ test("the releaseAssets option adds only the assets job and the tag output to ma
   expect(jobsOf(documentOf(without, "main.yml"))["release"]?.["outputs"]).toBeUndefined();
 });
 
-test("the assets job builds on Linux x64 and macOS arm64 from the released tag and attaches release-assets/ with contents: write only, so a job that runs without a release or holds a wider token fails here", () => {
+test("the assets job builds on Linux x64 and macOS arm64 from the released tag and each runner uploads only its own release-assets/ with contents: write only, so the script must name every compiled and SHA-256 file for its platform, and a job that runs without a release or holds a wider token fails here", () => {
   const jobs = jobsOf(documentOf(EVERY_OPTION, "main.yml"));
   expect(Object.keys(jobs)).toEqual(["suite", "release", "assets"]);
   expect(jobs["release"]?.["outputs"]).toEqual({ tag: EXPRESSION + "{{ steps.release.outputs.tag }}" });

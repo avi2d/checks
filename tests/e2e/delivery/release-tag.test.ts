@@ -206,6 +206,20 @@ test(
 );
 
 test(
+  "with no argument a release run writes tag=v<version> to GITHUB_OUTPUT and a merge that releases nothing writes no tag, so the assets job never skips after a release nor runs without one",
+  async () => {
+    const release = await onMain("chore: release 0.2.0 (#7)");
+    expect((await release.run(SCRIPT, [])).exitCode).toBe(0);
+    expect(await release.output()).toBe("tag=v0.2.0\n");
+
+    const plain = await onMain("feat: price a bill (#8)");
+    expect((await plain.run(SCRIPT, [])).exitCode).toBe(0);
+    expect(await plain.output()).toBe("");
+  },
+  60_000,
+);
+
+test(
   "with no argument a merge that releases nothing ends at once, calling neither GitHub nor npm",
   async () => {
     const main = await onMain("feat: price a bill (#8)");
