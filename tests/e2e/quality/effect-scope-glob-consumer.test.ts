@@ -88,16 +88,18 @@ test.each([".gitignore", "ignorePatterns"])("%s non-TypeScript extension classes
 }, 180_000);
 
 test("a basename glob cannot certify newly added files under tsgo's implicit dependency directories", async () => {
-  await consumer();
+  const dependency = "scripts/bower_components/local.ts";
+  await consumer([dependency]);
   await configure(["*.ts"]);
   await tree.put(SCOPED, ASYNC_PLANT);
   await tree.put(UNSCOPED, ASYNC_PLANT);
   expect((await scopeGate()).exitCode).toBe(0);
 
-  const dependency = "scripts/bower_components/local.ts";
   await tree.put(dependency, ASYNC_PLANT);
   expect((await oxlint([])).linted.get(dependency)).toContain(ASYNC_RULE);
-  expect((await diagnostics()).get(dependency)).not.toContain(ASYNC_DIAGNOSTIC);
+  const unscoped = (await diagnostics()).get(dependency);
+  expect(unscoped).toContain(SHARED);
+  expect(unscoped).not.toContain(ASYNC_DIAGNOSTIC);
   const refused = await scopeGate("--check");
   expect(refused.exitCode).toBe(2);
   expect(refused.text).toContain(dependency);
