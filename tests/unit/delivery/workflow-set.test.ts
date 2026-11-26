@@ -80,7 +80,7 @@ test("mutation is never both required and optional, and stays optional only in t
   for (const [set, kit, names] of [[CODE, false, ["advisories.yml", "flake.yml"]], [SITE, false, ["advisories.yml"]], [CODE, true, ["advisories.yml", "mutation.yml", "flake.yml"]]] as const) {
     const required = requiredSet(set, kit);
     const optional = byHandSet(set, kit);
-    expect(optional.map(({ name }) => name)).toEqual(names);
+    expect(optional.map(({ name }) => name)).toEqual([...names]);
     expect(optional.filter(({ name }) => required.some((file) => file.name === name))).toEqual([]);
   }
   const kit = requiredSet(CODE, true);
