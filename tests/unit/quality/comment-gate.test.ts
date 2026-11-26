@@ -147,3 +147,11 @@ test("a file-wide TypeScript suppression is refused, not ignored", () => {
     "src/a.ts:2 carries the machine-read directive \`@ts-nocheck\`. Fix what the tool is reporting, or stop running the tool on this file",
   ]);
 });
+
+
+test("a tracker key is refused, not treated as ordinary text", () => {
+  expect(Effect.runSync(refused("src/a.ts", "const a = 1;\n// ABC-123\n", new Set([2])))).toEqual([
+    'src/a.ts:2 points at a record or a ticket ("ABC-123"). Drop the pointer: a record is reached by searching docs/adr, and the story of the change goes in the commit message',
+  ]);
+  expect(Effect.runSync(refused("src/a.ts", "const a = 1;\n// handles utf8 and version2\n", new Set([2])))).toEqual([]);
+});
