@@ -853,7 +853,7 @@
         "type": "number",
         "exclusiveMinimum": 0
       },
-      "description": "The recorded seconds per test file used to balance shards."
+      "description": "The recorded seconds per test file, which balance the shards."
     },
     "testFileSkips": {
       "type": "array",

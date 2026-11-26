@@ -124,7 +124,7 @@ export default defineConfig({
 | `agentTests.allowLocal` | `false` | Whether agents may start tests outside CI. This setting does not restrict people or CI. | [checks-local-tests](../gates/checks-local-tests.md) |
 | `testFileMaxSeconds` | `120` | The time limit in seconds for each test file in CI. | [checks-test](../gates/checks-test.md#test-file-time-limit) |
 | `testTierShards` | None | The number of parallel CI jobs for each test tier. | [checks-test](../gates/checks-test.md#parallel-runs) |
-| `testFileTimings` | None | The recorded seconds per test file used to balance shards. | [checks-test](../gates/checks-test.md#parallel-runs) |
+| `testFileTimings` | None | The recorded seconds per test file, which balance the shards. | [checks-test](../gates/checks-test.md#parallel-runs) |
 | `testFileSkips` | `[]` | The repository-relative paths of test files to exclude from checks-test. | [checks-test](../gates/checks-test.md#test-file-exclusions) |
 
 <!-- end generated settings-keys -->

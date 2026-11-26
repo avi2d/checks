@@ -95,7 +95,7 @@ export const Settings = Schema.Struct({
     default: DEFAULT_TEST_FILE_MAX_SECONDS,
   })),
   testTierShards: Schema.optionalKey(TestTierShards.annotate({ description: "The number of parallel CI jobs for each test tier." })),
-  testFileTimings: Schema.optionalKey(TestFileTimings.annotate({ description: "The recorded seconds per test file used to balance shards." })),
+  testFileTimings: Schema.optionalKey(TestFileTimings.annotate({ description: "The recorded seconds per test file, which balance the shards." })),
   testFileSkips: Schema.optionalKey(TestFileSkips.annotate({
     description: "The repository-relative paths of test files to exclude from checks-test.",
     default: [],
