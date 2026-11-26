@@ -37,11 +37,11 @@ class NestedOxlintError extends Schema.TaggedError<NestedOxlintError>()("NestedO
   message: Schema.String,
 }) {}
 
-type Weakening = "off" | "down" | "options";
+const WEAKENINGS = ["off", "down", "options"] as const;
 
-const WEAKENINGS: readonly Weakening[] = ["off", "down", "options"];
+type Weakening = (typeof WEAKENINGS)[number];
 
-type Allowed = Readonly<Record<string, readonly string[]>>;
+type Allowed = typeof NestedOxlintConfigs.Type;
 
 type WeakenedByConfig = ReadonlyMap<string, ReadonlyMap<string, Weakening>>;
 

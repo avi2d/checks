@@ -48,7 +48,7 @@ export default defineConfig({
 The gate fails on each rule a nested config turns off that its entry does not list.
 It also fails on an entry for a path that holds no tracked nested config.
 It fails on a listed rule the config no longer turns off, so the list holds only what each config switches off.
-A rule reads as oxlint prints it, so `eslint/max-lines` is `max-lines` and `@typescript-eslint/no-explicit-any` is `typescript/no-explicit-any`.
+A rule reads as oxlint prints it, so `eslint/max-lines` is `max-lines`, `@typescript-eslint/no-explicit-any` is `typescript/no-explicit-any` and `eslint-plugin-unicorn/no-null` is `unicorn/no-null`.
 
 ## What it reads
 
@@ -59,7 +59,8 @@ It reads the program from `tsc --listFilesOnly -p tsconfig.json`, and passes ove
 It reads the resolved rules of the root config from `oxlint --print-config`, and those of each nested config from `oxlint -c <config> --print-config`.
 That output leaves out the top-level rules of a JS plugin, so the gate reads those from the config file itself.
 It does not read a plugin rule a config takes through `extends`.
-It reads the `nestedOxlintConfigs` key of `checks.config.ts`, and runs `bun` from `PATH` to load it.
+It reads the `nestedOxlintConfigs` key of `checks.config.ts`.
+It runs `bun` from `PATH` on each run past the two skips, to load `checks.config.ts` and judge the nested configs.
 The gate runs oxlint and tsc from the repository's own `node_modules/.bin`, so they need no `PATH` entry.
 
 ## Arguments
@@ -70,9 +71,9 @@ It takes none.
 
 | Code | When |
 | --- | --- |
-| 0 | the repository root holds no `package.json`, the repository tracks no `.ts`, `.tsx` or `.astro` file, or oxlint walks each one and the program holds both ts-reset rules, the repository tracks no `.ts` or `.tsx` file or the root holds no `tsconfig.json` |
+| 0 | the repository root holds no `package.json`, the repository tracks no `.ts`, `.tsx` or `.astro` file, or oxlint walks each one, each nested oxlint config turns off or down only the rules its `nestedOxlintConfigs` entry lists, no entry is stale, and the program holds both ts-reset rules, the repository tracks no `.ts` or `.tsx` file or the root holds no `tsconfig.json` |
 | 1 | oxlint skips a tracked file, a nested oxlint config turns off a rule its entry does not list, `nestedOxlintConfigs` lists a config or a rule it does not need, or the program drops a ts-reset rule |
-| 2 | oxlint cannot walk the tree or print a config, a config does not load, `checks.config.ts` does not load or its `nestedOxlintConfigs` key does not decode, or tsc cannot list the program after oxlint walks every tracked file, as when the repository's install lacks either tool or a config does not parse |
+| 2 | oxlint cannot walk the tree or print a config, a config does not load, `checks.config.ts` does not load or its `nestedOxlintConfigs` key does not decode, or tsc cannot list the program after oxlint walks every tracked file, as when the repository's install lacks either tool, `bun` is not on `PATH` or a config does not parse |
 
 ## Sample output
 

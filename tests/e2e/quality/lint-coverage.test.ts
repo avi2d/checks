@@ -328,6 +328,22 @@ test(
 );
 
 test(
+  "lint-coverage matches an eslint-plugin-unicorn/ entry to the unicorn/ rule oxlint prints, rather than calling the rule unlisted and the entry stale",
+  async () => {
+    const tree = await vendoredTypesTree();
+    const prefixed = EFFECT_RULE_NAMES.map((rule) => (rule === "unicorn/no-process-exit" ? "eslint-plugin-unicorn/no-process-exit" : rule));
+    await tree.put("checks.config.ts", allowing([...SIZE_AND_ANY, ...prefixed]));
+    await $`git add -A`.cwd(tree.dir).quiet();
+
+    const green = await tree.run(SCRIPT, []);
+    expect(green.text).not.toContain("turns off or down rules the root oxlint config sets");
+    expect(green.text).not.toContain("which it does not turn off or down");
+    expect(green.exitCode).toBe(0);
+  },
+  60_000,
+);
+
+test(
   "lint-coverage goes red on a checks.config.ts entry the nested configs no longer need, rather than letting the list outgrow what each config turns off",
   async () => {
     const tree = await vendoredTypesTree();

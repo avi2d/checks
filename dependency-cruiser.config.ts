@@ -28,7 +28,7 @@ function areaBoundary([area, listed]: readonly [string, readonly Area[]]): IForb
 }
 
 export default defineConfig({
-  // Consumers load each plugin through its dist bundle, checks-graphwalk hands the kit's defaults to dependency-cruiser by path, and checks-flake hands its preload to bun by path, and scripts/compile.ts writes the import of scripts/native-meta.ts into the compiled build's source text, so no source file here imports them.
+  // Consumers load each plugin through its dist bundle, checks-graphwalk hands the kit's defaults to dependency-cruiser by path, and checks-flake hands its preload to bun by path, lint-coverage.sh runs nested-oxlint.ts with bun by path, and scripts/compile.ts writes the import of scripts/native-meta.ts into the compiled build's source text, so no source file here imports them.
   orphans: ["(^|/)effect-channel/index[.]ts$", "(^|/)readability/index[.]ts$", "(^|/)data-shape/index[.]ts$", "^src/testing/mutation-guard-plugin[.]ts$", "^src/dependencies/kit-defaults[.]ts$", "^src/testing/flake-preload[.]ts$", "^scripts/native-meta[.]ts$", "^src/quality/nested-oxlint[.]ts$"],
   forbidden: [
     {
