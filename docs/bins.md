@@ -5,6 +5,8 @@ audience: consumers
 # The bins
 
 The kit ships one bin per check, each named `checks-` and called from a package script.
+The TypeScript bin launchers require the exact Effect peer version in the kit manifest.
+A launcher reports the required and resolved versions before it loads the gate when they differ.
 
 ## What runs
 
