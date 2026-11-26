@@ -300,8 +300,8 @@ test(
     await $`git add -A`.cwd(tree.dir).quiet();
 
     const oxlint = join(KIT_BIN, "oxlint");
-    expect((await tree.run(oxlint, ["src/vendor/control.d.ts"])).exitCode).toBe(1);
-    expect((await tree.run(oxlint, ["packages/app/vendor/kit.d.ts"])).exitCode).toBe(0);
+    expect((await tree.run(oxlint, ["src/vendor/control.d.ts"])).text).toContain("no-explicit-any");
+    expect((await tree.run(oxlint, ["packages/app/vendor/kit.d.ts"])).text).not.toContain("no-explicit-any");
 
     const red = await tree.run(SCRIPT, []);
     expect(red.text).toContain(`lint-coverage: ${VENDOR_APP} turns off or down rules the root oxlint config sets`);

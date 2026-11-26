@@ -4,12 +4,11 @@ import { ChildProcessSpawner } from "effect/process";
 import { collect, git } from "../core/git.ts";
 import { runMain } from "../core/main.ts";
 import { decodeSetting, loadSettings, NestedOxlintConfigs, SETTINGS_FILE } from "../core/settings.ts";
+import { OXLINT_CONFIG_NAMES } from "./effect-scope-paths.ts";
 
 const NAME = "lint-coverage";
 
 const KEY = "nestedOxlintConfigs";
-
-const CONFIG_NAMES: readonly string[] = [".oxlintrc.json", ".oxlintrc.jsonc", "oxlint.config.ts", "oxlint.config.mts"];
 
 const LINTED_SOURCE = /\.(?:tsx?|astro)$/;
 
@@ -60,8 +59,12 @@ function canonicalRule(rule: string): string {
   return rule.replace(/^@typescript-eslint\//, "typescript/").replace(/^eslint\//, "").replace(/^eslint-plugin-([^/]+)\//, "$1/");
 }
 
+function asOxlintGlob(pattern: string): string {
+  return pattern.includes("/") ? pattern.replace(/^\.\//, "") : `**/${pattern}`;
+}
+
 function matchesAny(globs: readonly string[] | null | undefined, file: string): boolean {
-  return (globs ?? []).some((glob) => new Bun.Glob(glob.replace(/^\.\//, "")).match(file));
+  return (globs ?? []).some((glob) => new Bun.Glob(asOxlintGlob(glob)).match(file));
 }
 
 function effectiveRules({ rules, overrides = [] }: Resolved, file: string): ReadonlyMap<string, unknown> {
@@ -143,8 +146,8 @@ const resolveConfig = Effect.fn("resolveConfig")(function* (root: string, config
 const rootConfigFile = Effect.fn("rootConfigFile")(function* (root: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const present = yield* Effect.forEach(CONFIG_NAMES, (name) => fs.exists(path.join(root, name)).pipe(Effect.mapError(failed(`cannot read ${name}`))));
-  return CONFIG_NAMES.find((_, index) => present[index]);
+  const present = yield* Effect.forEach(OXLINT_CONFIG_NAMES, (name) => fs.exists(path.join(root, name)).pipe(Effect.mapError(failed(`cannot read ${name}`))));
+  return OXLINT_CONFIG_NAMES.find((_, index) => present[index]);
 });
 
 const readAllowed = Effect.fn("readAllowed")(function* (root: string) {
@@ -154,7 +157,7 @@ const readAllowed = Effect.fn("readAllowed")(function* (root: string) {
 });
 
 function isNestedConfig(file: string): boolean {
-  return file.includes("/") && CONFIG_NAMES.includes(file.slice(file.lastIndexOf("/") + 1));
+  return file.includes("/") && OXLINT_CONFIG_NAMES.includes(file.slice(file.lastIndexOf("/") + 1));
 }
 
 const weakenedBy = Effect.fn("weakenedBy")(function* (root: string, base: Resolved, config: string, files: readonly string[]) {

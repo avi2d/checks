@@ -197,6 +197,8 @@ export const validateScopePaths = Effect.fn("validateScopePaths")(function* (roo
 
 const CONFIG_NAMES = [".oxlintrc.json", ".oxlintrc.jsonc", "oxlint.config.mts", "oxlint.config.cts", "oxlint.config.js", "oxlint.config.mjs", "oxlint.config.cjs"];
 
+export const OXLINT_CONFIG_NAMES: readonly string[] = ["oxlint.config.ts", ...CONFIG_NAMES];
+
 const nestedConfigFault = (file: string) =>
   new EffectScopeError({ message: `${file} may change what oxlint checks; put its rules in ordered overrides in the root oxlint.config.ts instead` });
 
@@ -204,8 +206,7 @@ const gitScopeFiles = Effect.fn("gitScopeFiles")(function* (root: string) {
   const path = yield* Path.Path;
   const fs = yield* FileSystem.FileSystem;
   if (!(yield* fs.exists(path.join(root, ".git")))) return [];
-  const sources = ["oxlint.config.ts", ...CONFIG_NAMES];
-  const files = yield* git(["-c", "core.excludesFile=/dev/null", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", ...sources.map((name) => `:(glob)**/${name}`)], root);
+  const files = yield* git(["-c", "core.excludesFile=/dev/null", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", ...OXLINT_CONFIG_NAMES.map((name) => `:(glob)**/${name}`)], root);
   const nested = [...new Set(files.split("\0").filter((file) => file.includes("/")))].sort();
   yield* Effect.forEach(nested, (file) => Effect.gen(function* () {
     if (yield* fs.exists(path.join(root, file))) return yield* nestedConfigFault(file);

@@ -36,7 +36,7 @@ A repository the kit holds ends with `checks-lint: <count> gate(s) pass`.
 
 The commands use the compiled binary if your package manager installs the matching optional dependency.
 If it does not, the commands run from source.
-`checks-lint-coverage` is a shell command.
+`checks-lint-coverage` is a shell command that also runs `bun` from `PATH`.
 
 ## Find the page you need
 
