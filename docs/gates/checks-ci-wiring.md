@@ -8,7 +8,8 @@ audience: consumers
 
 ## What it checks
 
-A repository whose workflows call `checks-release-pr` or `checks-release-tag` must hold `CHANGELOG.md` at its root.
+A repository whose workflows call `checks-release-pr` or `checks-release-tag` must hold `CHANGELOG.md` at its root in `HEAD`.
+An untracked file does not satisfy the check.
 The check follows package scripts and shell scripts for these calls.
 
 The kit requires `bunx checks-commit-title` on every pull request.
@@ -148,6 +149,7 @@ Each refusal names the workflow file, the job and the limit.
 ## What it reads
 
 The bin reads `.github/workflows/*.yml`, `*.yaml`, the `scripts`, `private` and `workspaces` fields in `package.json`, each workspace `package.json`, the `mutationRunner` and `selfHostedRunners` keys of `checks.config.ts` and the shell scripts those steps and scripts run from the working tree.
+It checks that `HEAD:CHANGELOG.md` is a committed file at the repository root when workflows use the release tools.
 It reads each shell script that a shell script it reads runs, until none is left.
 It reads each file a setup-bun step names for its version.
 It reads `.bun-version` for each step that uses the local setup action.

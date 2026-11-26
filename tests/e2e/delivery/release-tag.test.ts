@@ -57,6 +57,17 @@ test("a release without CHANGELOG.md cannot create a tag", async () => {
   }
 }, 30_000);
 
+test("an existing release tag without CHANGELOG.md does not refuse or dispatch again", async () => {
+  const repo = await repository({ "package.json": manifest("0.2.0") });
+  const main = await withOrigin(repo, await repo.commit("chore: release 0.2.0 (#7)"));
+  await main.inOrigin("tag", "v0.2.0", main.head);
+
+  const again = await main.run(["release.yml"]);
+  expect(again).toEqual({ exitCode: 0, text: `release-tag: v0.2.0 already tags ${main.head.slice(0, 12)}\n` });
+  expect(await main.inOrigin("rev-parse", "v0.2.0^{commit}")).toBe(main.head);
+  expect((await main.state()).dispatches).toEqual([]);
+}, 30_000);
+
 test(
   "a landed release commit is tagged with its version once, and the release workflow is dispatched on the tag",
   async () => {

@@ -8,7 +8,8 @@ import { findLongJobs, formatLongJobReport } from "./job-timeout.ts";
 import { readScheduleFiles, readShellFiles, runsBin } from "./mutation-job.ts";
 import { findHandRolledMutation, formatHandRolledReport, isWrittenMutation, MUTATION_PATH, type MutationCalls } from "./mutation-workflow.ts";
 import { MUTATION_WORKFLOW } from "./full-set/mutation.ts";
-import { findScheduledReleases, formatScheduleReport, isBinIn } from "./release-schedule.ts";
+import { findScheduledReleases, formatScheduleReport, isBinIn, RELEASE_PREPARATION_BINS } from "./release-schedule.ts";
+import { CHANGELOG, committedChangelog } from "./release-changelog.ts";
 import { findRunnerFaults, formatRunnerReport, jobRuns, readRunnerConfig } from "./runner-policy.ts";
 import { findScheduledRuns, formatScheduledRunReport } from "./schedule-policy.ts";
 import { invokes, mentions, plainCommand, type Command } from "./shell-command.ts";
@@ -326,10 +327,8 @@ const reportGaps = Effect.fn("reportGaps")(function* (root: string, workflows: r
 
 const changelogPresent = Effect.fn("changelogPresent")(function* (root: string, usesRelease: boolean) {
   if (!usesRelease) return true;
-  const fs = yield* FileSystem.FileSystem;
-  const changelogPath = (yield* Path.Path).join(root, "CHANGELOG.md");
-  if ((yield* fs.exists(changelogPath)) && (yield* fs.stat(changelogPath)).type === "File") return true;
-  yield* Console.error("ci-wiring: CHANGELOG.md is missing from the repository root; add CHANGELOG.md before releasing");
+  if (yield* committedChangelog(root, "HEAD")) return true;
+  yield* Console.error(`ci-wiring: ${CHANGELOG} is missing from HEAD at the repository root; add and commit ${CHANGELOG} before releasing`);
   return false;
 });
 
@@ -353,7 +352,7 @@ const wiring = Effect.gen(function* () {
   const bunFaults = findBunPinFaults(yield* readBunPinPolicy(root, workflows), workflows);
   if (bunFaults.length > 0) yield* Console.error(formatBunPinReport(bunFaults));
   const scheduleFiles = yield* readScheduleFiles(root, scripts, runs);
-  const changelog = yield* changelogPresent(root, runs.some((run) => runsBin(run, scripts, (file) => scheduleFiles.get(file), ([program = ""]) => isBinIn(["checks-release-pr", "checks-release-tag", "release-pr.ts", "release-tag.ts"], program), true)));
+  const changelog = yield* changelogPresent(root, runs.some((run) => runsBin(run, scripts, (file) => scheduleFiles.get(file), ([program = ""]) => isBinIn(RELEASE_PREPARATION_BINS, program), true)));
   const owner = { visibility, publishes: manifest.private !== true };
   const scheduled = findScheduledReleases(workflows, { scripts, files: scheduleFiles }, owner);
   if (scheduled.length > 0) yield* Console.error(formatScheduleReport(scheduled));

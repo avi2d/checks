@@ -48,6 +48,7 @@ It leaves the working tree as it found it.
 
 ## What it reads
 
+It first checks for `CHANGELOG.md` at the repository root in `HEAD`.
 It reads the `v*` tags, the commit subjects since the last one, `package.json` and `bun.lock` from the checkout.
 It also reads each workspace `package.json` and each workflow step's `CHECKS_PUBLISH_WORKSPACES` for the workspace publishing opt-in.
 It names the workflow it runs in by `GITHUB_WORKFLOW`, or as `release-pr` when that is unset.

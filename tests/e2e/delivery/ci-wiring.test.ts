@@ -21,14 +21,29 @@ function wiring(repo: FixtureRepo, ci: Readonly<Record<string, string>> = {}): P
   return ran($`bun ${SCRIPT}`.cwd(repo.dir).env({ ...withoutPullRequestEvent(), ...ci }));
 }
 
-test("release tools without CHANGELOG.md fail wiring, and adding it passes", async () => {
-  const release = `on: workflow_dispatch\njobs:\n  release:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    steps:\n      - run: bunx checks-release-tag\n`;
-  const repo = await open({ "package.json": scripts(["lint", "test"]), ".github/workflows/ci.yml": workflow, ".github/workflows/release.yml": release });
+test.each([
+  "bunx checks-release-pr ci.yml",
+  "bunx checks-release-tag",
+  "bun src/delivery/release-pr.ts ci.yml",
+  "bun src/delivery/release-tag.ts",
+  "bun run release",
+])("release tools reject an untracked CHANGELOG.md for %s", async (command) => {
+  const release = `on: workflow_dispatch\njobs:\n  release:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    steps:\n      - run: ${command}\n`;
+  const repo = await open({
+    "package.json": JSON.stringify({ name: "consumer", scripts: { lint: "lint", test: "test", release: "bash scripts/release.sh" } }),
+    "scripts/release.sh": "#!/bin/sh\nbunx checks-release-tag\n",
+    ".github/workflows/ci.yml": workflow,
+    ".github/workflows/release.yml": release,
+  });
   await repo.commit("start");
   const missing = await wiring(repo);
   expect(missing.exitCode).toBe(1);
   expect(missing.text).toContain("CHANGELOG.md is missing");
   await repo.write({ "CHANGELOG.md": "# Changelog\n" });
+  const untracked = await wiring(repo);
+  expect(untracked.exitCode).toBe(1);
+  expect(untracked.text).toContain("CHANGELOG.md is missing from HEAD");
+  await repo.commit("docs: add changelog");
   expect((await wiring(repo)).exitCode).toBe(0);
 }, 30_000);
 
