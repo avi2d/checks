@@ -272,6 +272,70 @@ test(
   60_000,
 );
 
+const VENDOR_APP = "packages/app/oxlint.config.ts";
+
+const VENDORED_ANY = "export declare function vendored(value: any): any;\n";
+
+test(
+  "lint-coverage goes red on a nested override whose slashless files pattern oxlint applies at any depth, rather than matching it beside the config alone",
+  async () => {
+    const tree = await consumerTree({ paths: ["src/**/*.ts", "packages/**/*.ts"], include: ["src/**/*.ts", "packages/**/*.ts"], types: [] });
+    await tree.put("package.json", { name: "nested-consumer", type: "module" });
+    await tree.put("src/vendor/control.d.ts", VENDORED_ANY);
+    await tree.put("packages/app/vendor/kit.d.ts", VENDORED_ANY);
+    await tree.put(
+      VENDOR_APP,
+      [
+        'import { defineConfig } from "@avi2dg/checks/oxlint";',
+        "",
+        "const { options: _rootOnly, ...config } = defineConfig({",
+        '  effect: { files: ["**/*.ts"] },',
+        '  overrides: [{ files: ["*.d.ts"], rules: { "typescript/no-explicit-any": "off" } }],',
+        "});",
+        "",
+        "export default config;",
+        "",
+      ].join("\n"),
+    );
+    await $`git add -A`.cwd(tree.dir).quiet();
+
+    const oxlint = join(KIT_BIN, "oxlint");
+    expect((await tree.run(oxlint, ["src/vendor/control.d.ts"])).exitCode).toBe(1);
+    expect((await tree.run(oxlint, ["packages/app/vendor/kit.d.ts"])).exitCode).toBe(0);
+
+    const red = await tree.run(SCRIPT, []);
+    expect(red.text).toContain(`lint-coverage: ${VENDOR_APP} turns off or down rules the root oxlint config sets`);
+    expect(red.text).toContain("  off: typescript/no-explicit-any\n");
+    expect(red.exitCode).toBe(1);
+  },
+  60_000,
+);
+
+const PLAIN_JS = "packages/plain/oxlint.config.js";
+
+test(
+  "lint-coverage goes red on a nested oxlint.config.js that turns a rule off, rather than reporting no nested oxlint config",
+  async () => {
+    const tree = await consumerTree({ paths: ["src/**/*.ts", "packages/**/*.ts"], include: ["src/**/*.ts", "packages/**/*.ts"], types: [] });
+    await tree.put("package.json", { name: "nested-consumer", type: "module" });
+    await tree.put("src/control.ts", ANY_BOUNDARY);
+    await tree.put("packages/plain/src/seed.ts", ANY_BOUNDARY);
+    await tree.put(PLAIN_JS, 'export default { rules: { "typescript/no-explicit-any": "off" } };\n');
+    await $`git add -A`.cwd(tree.dir).quiet();
+
+    const oxlint = join(KIT_BIN, "oxlint");
+    expect((await tree.run(oxlint, ["src/control.ts"])).exitCode).toBe(1);
+    expect((await tree.run(oxlint, ["packages/plain/src/seed.ts"])).exitCode).toBe(0);
+
+    const red = await tree.run(SCRIPT, []);
+    expect(red.text).not.toContain("no nested oxlint config");
+    expect(red.text).toContain(`lint-coverage: ${PLAIN_JS} turns off or down rules the root oxlint config sets`);
+    expect(red.text).toMatch(/ {2}off: .*\btypescript\/no-explicit-any\b/);
+    expect(red.exitCode).toBe(1);
+  },
+  60_000,
+);
+
 const DEEPER = "packages/a/b/.oxlintrc.json";
 
 test(
