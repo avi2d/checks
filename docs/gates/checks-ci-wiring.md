@@ -168,7 +168,7 @@ It takes no arguments.
 | Code | Result |
 | --- | --- |
 | 0 | Every required command has a reachable step. |
-| 1 | A required command is missing or blocked, a job runs on the wrong runner, a job runs mutation outside the mutation workflow, a `mutation.yml` differs from the file checks-setup writes, a workflow names a missing workflow or job, a bun setup step drifts from the fleet bun version, a workflow that releases runs on a schedule outside a public npm package or more than once a day, a workflow other than a weekly public advisory scan runs on a schedule, or a job can run for more than 60 minutes. |
+| 1 | A repository using the release tools lacks `CHANGELOG.md` at `HEAD`, a required command is missing or blocked, a job runs on the wrong runner, a job runs mutation outside the mutation workflow, a `mutation.yml` differs from the file checks-setup writes, a workflow names a missing workflow or job, a bun setup step drifts from the fleet bun version, a workflow that releases runs on a schedule outside a public npm package or more than once a day, a workflow other than a weekly public advisory scan runs on a schedule, or a job can run for more than 60 minutes. |
 | 2 | A workflow or `package.json` cannot be decoded, `checks.config.ts` does not load or sets an unknown key, a runner key does not decode, a `checks` object in `package.json` still sets a runner key, or the kit's own `.bun-version` is missing, unreadable or blank. |
 
 ## Sample output

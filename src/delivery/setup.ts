@@ -2,6 +2,7 @@
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { runMain, Usage } from "../core/main.ts";
 import { JSCPD_CONFIG, KNIP_CONFIG, STRYKER_CONFIG } from "./setup-workflow.ts";
+import { renderChangelog } from "./changelog.ts";
 import { callerInputsOf, callerSetOf, flagMismatchOf, parseSiteNameFlags, readWorkflowFiles, type CallerSet } from "./site-names.ts";
 import { byHandSet, requiredSet } from "./workflow-set.ts";
 import { fullActions } from "./full-set/actions.ts";
@@ -327,7 +328,10 @@ const setupDocFiles = Effect.fn("setupDocFiles")(function* (root: string) {
   const wroteAgents = yield* setupFile(root, "AGENTS.md", yield* kitText("dist/templates/agents.md"));
   yield* setupFile(root, "CLAUDE.md", yield* kitText("dist/templates/claude.md"));
   const wroteVision = yield* setupFile(root, VISION_PAGE, yield* kitText("dist/templates/vision.md"));
-  yield* setupFile(root, "CHANGELOG.md", "# Changelog\n");
+  const system = yield* FileSystem.FileSystem;
+  const manifest = yield* parsePackageRecord(yield* system.readFileString((yield* Path.Path).join(root, "package.json")));
+  const name = typeof manifest["name"] === "string" ? manifest["name"] : (yield* Path.Path).basename(root);
+  yield* setupFile(root, "CHANGELOG.md", renderChangelog(name, [], ""));
   return { wroteAgents, wroteVision };
 });
 

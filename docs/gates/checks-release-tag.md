@@ -89,7 +89,7 @@ That workflow triggers on `workflow_dispatch` and keeps its own guards, as [chec
 | Code | When |
 | --- | --- |
 | 0 | `HEAD` is no release commit, its tag already tags it, the tag is pushed and the release workflow dispatched, or the release is tagged, released on GitHub and published |
-| 2 | the arguments do not parse, `package.json` disagrees with the subject, the tree differs from the one the release pull request tested, the publish fails, the tag tags another commit, the build or the install fails, the build rewrites a committed file, the checkout holds uncommitted changes, `checks.config.ts` sets `platformPackages` and `CHECKS_PLATFORM_BINARIES` is unset, a platform's binary is missing or a private root publishes no workspace or more than one, or the push or a GitHub API call fails |
+| 2 | the arguments do not parse, the release commit lacks `CHANGELOG.md`, `package.json` disagrees with the subject, the tree differs from the one the release pull request tested, the publish fails, the tag tags another commit, the build or the install fails, the build rewrites a committed file, the checkout holds uncommitted changes, `checks.config.ts` sets `platformPackages` and `CHECKS_PLATFORM_BINARIES` is unset, a platform's binary is missing or a private root publishes no workspace or more than one, or the push or a GitHub API call fails |
 
 ## Sample output
 

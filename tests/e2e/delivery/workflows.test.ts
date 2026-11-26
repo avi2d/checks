@@ -38,7 +38,6 @@ const jobsOf = (workflow: unknown, file: string): object => {
 async function expectNoRemoteCall(repo: FixtureRepo): Promise<void> {
   for (const name of await held(repo)) expectNoRemoteUses(name, await text(repo, name));
 }
-
 test("a written code workflow set still refuses a missing or untracked changelog without changing the opt-out release template", async () => {
   const repo = await open({ "package.json": manifest(), ".bun-version": `${FLEET_BUN_VERSION}\n` });
   await repo.commit("start");
@@ -73,7 +72,6 @@ test("a written code workflow set still refuses a missing or untracked changelog
   const wiring = await ran($`bun ${WIRING}`.cwd(repo.dir).env(withoutPullRequestEvent()));
   expect(wiring).toEqual({ exitCode: 0, text: "ci-wiring: .github/workflows holds the set checks-workflows writes, so the set runs every gate\n" });
 }, 30_000);
-
 test("a legacy all-tier test job splits into gated unit and e2e jobs without installing Playwright in unit", async () => {
   const legacy = "name: ci\non: pull_request\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: ./.github/actions/playwright\n        with:\n          browsers: chromium webkit\n      - id: test\n        run: bun run test --pr --parallel=6\n";
   const repo = await open({
@@ -98,7 +96,6 @@ test("a legacy all-tier test job splits into gated unit and e2e jobs without ins
   expect(usesPlaywright).toBe(false);
   expect((await workflows(repo)).exitCode).toBe(0);
 }, 30_000);
-
 test("a repository without e2e test files gets no e2e job or Playwright action", async () => {
   const repo = await open({ "package.json": manifest(), "tests/unit/one.test.ts": "export {};\n" });
   await repo.commit("start");
@@ -112,7 +109,6 @@ test("a repository without e2e test files gets no e2e job or Playwright action",
   const withE2e = jobsOf(await parsed(repo, "ci.yml"), "ci.yml");
   expect(withE2e).toMatchObject({ e2e: { needs: "changes" }, checks: { needs: ["changes", "static", "unit", "e2e"] } });
 }, 30_000);
-
 test("a project with docs:build loses its docs-only pull request build, or a project without it gets a docs job", async () => {
   const scripts = { lint: "oxlint", build: "tsc", typecheck: "tsc --noEmit", test: "bun test" };
   const repo = await open({ "package.json": manifest({ scripts: { ...scripts, "docs:build": "echo docs" } }) });
@@ -131,7 +127,6 @@ test("a project with docs:build loses its docs-only pull request build, or a pro
   expect(jobsOf(await parsed(repo, "ci.yml"), "ci.yml")).not.toHaveProperty("docs");
   expect((await workflows(repo)).exitCode).toBe(0);
 }, 30_000);
-
 test("a generated e2e job kept after the last e2e test is deleted is rejected", async () => {
   const repo = await open({ "package.json": manifest(), "tests/unit/one.test.ts": "export {};\n", "tests/e2e/one.test.ts": "export {};\n" });
   await repo.commit("start");
@@ -146,7 +141,6 @@ test("a generated e2e job kept after the last e2e test is deleted is rejected", 
 }, 30_000);
 
 const SITE_FLAGS = ["--pages", SITE.pages, "--domain", SITE.domain, "--production", SITE.production];
-
 test("a first site write takes the three names as flags, writes them into the workflow env, keeps the weekly advisories cron, and loses the workflow files the set replaces", async () => {
   const repo = await open({
     "package.json": manifest(),
@@ -185,13 +179,11 @@ test("a first site write takes the three names as flags, writes them into the wo
   expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 7 workflow file(s) of the site set and its 3 action file(s)\n" });
   expect((await $`git status --porcelain`.cwd(repo.dir).text()).trim()).toBe("");
 }, 30_000);
-
 test("a package.json site field makes no site, so a repository with one and no site workflow is judged as code", async () => {
   const repo = await open({ "package.json": manifest({ site: SITE }) });
   await repo.commit("start");
   expect(await workflows(repo, ["--write"])).toEqual({ exitCode: 0, text: "workflows: wrote the 4 workflow file(s) of the code set and its 2 action file(s)\n" });
 }, 30_000);
-
 test("a site workflow that names only its Pages project is refused with the flags to pass, and --write without them writes nothing", async () => {
   const partial = "name: ci\non: pull_request\nenv:\n  SITE_PAGES: acme\njobs:\n  checks:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bun run lint\n";
   const repo = await open({ "package.json": manifest(), ".github/workflows/ci.yml": partial });
@@ -203,7 +195,6 @@ test("a site workflow that names only its Pages project is refused with the flag
   expect(await held(repo)).toEqual(["ci.yml"]);
   expect(await workflows(repo, ["--write", ...SITE_FLAGS])).toEqual({ exitCode: 0, text: "workflows: wrote the 6 workflow file(s) of the site set and its 3 action file(s)\n" });
 }, 30_000);
-
 test("an edited line in a written file is refused with the line it holds and the line checks-workflows writes", async () => {
   const repo = await open({ "package.json": manifest() });
   await repo.commit("start");
@@ -222,7 +213,6 @@ test("an edited line in a written file is refused with the line it holds and the
     ].join("\n"),
   );
 }, 30_000);
-
 test("an opted-in release.yml keeps the version in env rather than run and refuses an inline edit", async () => {
   const optIn = "name: release\non:\n  workflow_dispatch:\n    inputs:\n      version:\n        type: string\njobs: {}\n";
   const repo = await open({ "package.json": manifest(), ".github/workflows/release.yml": optIn });
@@ -248,7 +238,6 @@ test("an opted-in release.yml keeps the version in env rather than run and refus
   expect(refused.exitCode).toBe(1);
   expect(refused.text).toContain("  .github/workflows/release.yml: differs from the file checks-workflows writes\n");
 }, 30_000);
-
 test("a pr-text.yml scan stays as it is: it is no extra, --write keeps it, and it is never compared", async () => {
   const scan = "name: pr-text\non:\n  pull_request_target:\n    types: [opened]\n";
   const repo = await open({ "package.json": manifest(), ".github/workflows/pr-text.yml": scan });
