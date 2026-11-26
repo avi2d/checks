@@ -199,7 +199,7 @@ const availableBytes = Effect.fn("availableBytes")(function* () {
   if (process.platform !== "darwin") return freemem();
   const vmStat = yield* collect("vm_stat", []).pipe(
     Effect.map(({ stdout }) => stdout),
-    Effect.orElseSucceed(() => ""),
+    Effect.catchTag("PlatformError", () => Effect.succeed("")),
   );
   return reclaimableBytes(vmStat) ?? freemem();
 });

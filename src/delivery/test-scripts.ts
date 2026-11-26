@@ -41,7 +41,7 @@ export type TestScriptContext = {
 
 export const readTestScriptContext = Effect.fn("readTestScriptContext")(function* (root: string, knownName: unknown) {
   const present = new Set<TestTier>();
-  const listed = yield* workingTreeFiles(root).pipe(Effect.orElseSucceed(() => undefined));
+  const listed = yield* workingTreeFiles(root).pipe(Effect.catchTag(["GitFailure", "PlatformError"], () => Effect.void));
   if (listed !== undefined) {
     for (const tier of STANDARD_TIERS) {
       if (hasTierTests(listed, tier)) present.add(tier);

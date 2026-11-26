@@ -56,6 +56,24 @@ A config that leaves `effect` out, sets it to a string or gives `files` no glob 
 
 `unicorn/no-process-exit` does not check a shebang script, so a bin can use `eslint/no-restricted-properties` for `process.exit`.
 
+## Error-channel refusals
+
+`effect-channel/no-error-channel-escape` refuses these combinators:
+
+| Combinator | Refused use |
+| --- | --- |
+| `ignore`, `ignoreCause` | Every value reference, because both failure and success become an indistinguishable success |
+| `catchCause` | Every value reference, because recovery includes typed errors, defects, and interruption |
+| `catchCauseIf`, `catchCauseFilter` | Every value reference, because matching causes can include defects or interruption, though unmatched causes still fail |
+| `catch`, `catchEager`, `orElseSucceed` | A direct call whose inline handler has no parameters or only parameters named with underscores |
+
+The handler check covers both data-first and piped calls.
+The rule follows the `Effect` export from `effect` and namespace or named imports from `effect/Effect`, including renamed imports.
+It follows const namespace aliases and const destructures, including renamed bindings.
+Member access and destructures accept static string keys and template literals without substitutions.
+Scope resolution keeps unrelated parameters and locals outside the rule.
+Type queries, dynamic keys, and aliases or destructures declared with `let` or `var` are not checked.
+
 ## Language service
 
 The repository's `tsconfig.json` holds its Effect override under `compilerOptions.plugins`.
@@ -72,6 +90,10 @@ The preset turns these diagnostics to errors:
 
 Effect's `Config` reads the environment in place of `process.env`.
 The kit's `tsconfig.effect.json` holds the shared language service diagnostics.
+It turns off `catchAllToMapError`, `catchToIgnore`, and `catchToOrElseSucceed`.
+A mixed cause can make `Effect.catch` and `Effect.mapError` produce different failures.
+`catchToIgnore` suggests `Effect.ignore`, which the oxlint base refuses.
+`catchToOrElseSucceed` turns a blind `Effect.catch` fallback, which the oxlint base refuses, into `Effect.orElseSucceed`, the same blind recovery under another name.
 A plugin entry in the repository's `tsconfig.json` stands in for the kit's, so `checks-effect-scope` writes those severities into it on every run.
 The kit owns the severities of its own keys, and a repository adds keys of its own but does not change the kit's.
 

@@ -269,7 +269,7 @@ const readVisibility = Effect.gen(function* () {
   return yield* (yield* FileSystem.FileSystem).readFileString(eventPath).pipe(
     Effect.flatMap(Schema.decodeUnknownEffect(EventRepository)),
     Effect.map(({ repository }): Visibility => (repository.private ? "private" : "public")),
-    Effect.orElseSucceed((): Visibility => "unknown"),
+    Effect.catchTag(["PlatformError", "SchemaError"], () => Effect.succeed<Visibility>("unknown")),
   );
 });
 

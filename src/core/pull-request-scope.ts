@@ -32,7 +32,7 @@ export function scopeOfEvent(name: string): RunScope | undefined {
 }
 
 export const readRunScope = Effect.fn("readRunScope")(function* (root: string) {
-  const event = yield* eventOf.pipe(Effect.orElseSucceed(() => ({ name: "", path: "" })));
+  const event = yield* eventOf.pipe(Effect.catchTag("ConfigError", () => Effect.succeed({ name: "", path: "" })));
   const outside = scopeOfEvent(event.name);
   if (outside !== undefined) return outside;
   const scope = Effect.gen(function* () {

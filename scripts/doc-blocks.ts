@@ -359,9 +359,9 @@ function spliceBlock(
   facts: KitFacts,
 ): Effect.Effect<readonly string[] | undefined, DocBlocksUnwritable> {
   const start = lines.findIndex((line) => line.trimStart().startsWith(`<!-- generated ${block.name}:`));
-  if (start === -1) return Effect.succeed(undefined);
+  if (start === -1) return Effect.undefined;
   const end = lines.findIndex((line, index) => index > start && line.trim() === closing(block));
-  if (end === -1) return Effect.succeed(undefined);
+  if (end === -1) return Effect.undefined;
   const indent = /^\s*/.exec(lines[start] ?? "")?.[0] ?? "";
   return Effect.map(block.render(facts), (rendered) => {
     const written = [opening(block), "", ...rendered, "", closing(block)].map((line) => (line === "" ? "" : `${indent}${line}`));

@@ -209,7 +209,7 @@ const readFiles = Effect.fn("readFiles")(function* (root: string, scripts: Reado
   for (let pending = wanted(runs, scripts, contents, read); pending.length > 0; pending = wanted(runs, scripts, contents, read)) {
     for (const file of pending) {
       read.add(file);
-      const text = yield* fs.readFileString(path.join(root, file)).pipe(Effect.orElseSucceed(() => undefined));
+      const text = yield* fs.readFileString(path.join(root, file)).pipe(Effect.catchTag("PlatformError", () => Effect.void));
       if (text !== undefined && (file.endsWith(".sh") || SHELL_SHEBANG.test(text))) contents.set(file, text);
     }
   }

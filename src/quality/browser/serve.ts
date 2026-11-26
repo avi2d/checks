@@ -13,7 +13,7 @@ export const readSite = Effect.fn("readSite")(function* (root: string, site: str
   const dir = path.resolve(root, site);
   const isDirectory = yield* fs.stat(dir).pipe(
     Effect.map(({ type }) => type === "Directory"),
-    Effect.orElseSucceed(() => false),
+    Effect.catchTag("PlatformError", () => Effect.succeed(false)),
   );
   if (!isDirectory) return yield* new Usage({ message: `the declared site ${site} is not a directory, so build the site before the browser checks run` });
   const files = new Map<string, string>();

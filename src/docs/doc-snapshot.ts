@@ -74,7 +74,7 @@ const installedBin = Effect.fn("installedBin")(function* (root: string, director
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const bins = [...new Set([directory, ""])].map((from) => path.join(root, from, "node_modules", ".bin", name));
-  const found = yield* Effect.forEach(bins, (bin) => fs.exists(bin).pipe(Effect.orElseSucceed(() => false)));
+  const found = yield* Effect.forEach(bins, (bin) => fs.exists(bin).pipe(Effect.catchTag("PlatformError", () => Effect.succeed(false))));
   return found.some(Boolean);
 });
 
