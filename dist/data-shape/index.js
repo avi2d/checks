@@ -537,7 +537,7 @@ var rule3 = {
 var readonly_collection_param_default = rule3;
 
 // src/quality/data-shape/schema-twin.ts
-var STRUCTS = new Set(["Struct", "TaggedStruct", "Class"]);
+var STRUCTS = new Set(["Struct", "TaggedStruct", "Class", "TaggedErrorClass"]);
 var REFINEMENTS = new Set(["check", "annotate"]);
 var SCHEMA_KINDS = {
   String: "string",
@@ -597,15 +597,15 @@ function referenceKind(value) {
     return "record";
   return "wild";
 }
-function schemaCallName(node) {
+function schemaCallName(node, isSchema) {
   if (node === undefined)
     return;
   if (node.type === "CallExpression")
-    return schemaCallName(node.callee);
+    return schemaCallName(node.callee, isSchema);
   if (node.type !== "MemberExpression")
     return;
   const { object, property } = node;
-  if (object.type !== "Identifier" || object.name !== "Schema" || property.type !== "Identifier")
+  if (object.type !== "Identifier" || !isSchema(object) || node.computed || property.type !== "Identifier")
     return;
   return property.name;
 }
@@ -620,66 +620,86 @@ function refinedBase(value) {
     return;
   return callee.object;
 }
-function schemaKind(value) {
+function schemaLiteral(value, name) {
+  const arg = value.arguments[0];
+  return name === "Literal" && value.arguments.length === 1 && arg?.type === "Literal" ? JSON.stringify(arg.value) : undefined;
+}
+function schemaKind(value, isSchema) {
   if (value !== undefined && value.type === "CallExpression") {
-    const name = schemaCallName(value.callee);
-    if (name === "optionalKey" || name === "optional") {
+    const name = schemaCallName(value.callee, isSchema);
+    if (name === "optionalKey") {
       const first = value.arguments[0];
       const inner = first === undefined || first.type === "SpreadElement" ? undefined : first;
-      return { optional: true, kind: schemaKind(inner).kind };
+      return { ...schemaKind(inner, isSchema), optional: true };
     }
     const base = refinedBase(value);
     if (base !== undefined)
-      return schemaKind(base);
+      return schemaKind(base, isSchema);
+    const literal = schemaLiteral(value, name);
+    if (literal !== undefined)
+      return { optional: false, kind: "literal", literal };
     return { optional: false, kind: kindOf(name) };
   }
-  return { optional: false, kind: kindOf(schemaCallName(value)) };
+  return { optional: false, kind: kindOf(schemaCallName(value, isSchema)) };
 }
 function shapeFields(node) {
   const members = node.type === "TSTypeLiteral" ? node.members : node.body;
   const found = [];
   for (const member of members) {
-    if (member.type !== "TSPropertySignature")
-      continue;
+    if (member.type !== "TSPropertySignature" || member.computed)
+      return [];
     const name = keyName(member.key);
     if (name === undefined)
-      continue;
-    found.push({ name, optional: member.optional, kind: typeKind(member.typeAnnotation?.typeAnnotation) });
+      return [];
+    const type = member.typeAnnotation?.typeAnnotation;
+    const literal = type?.type === "TSLiteralType" && type.literal.type === "Literal" ? JSON.stringify(type.literal.value) : undefined;
+    found.push({ name, optional: member.optional, kind: typeKind(type), ...literal === undefined ? {} : { literal } });
   }
   return found;
 }
-function schemaFields(call) {
+function tagField(call, tagged) {
+  if (!tagged)
+    return [];
+  const tag = call.arguments[0];
+  if (tag?.type !== "Literal" || typeof tag.value !== "string")
+    return;
+  return [{ name: "_tag", optional: false, kind: "literal", literal: JSON.stringify(tag.value) }];
+}
+function schemaFields(call, isSchema) {
   const { callee } = call;
   const inner = callee.type === "CallExpression" ? callee.callee : callee;
   if (inner.type !== "MemberExpression")
     return;
   const { object, property } = inner;
-  if (object.type !== "Identifier" || object.name !== "Schema" || property.type !== "Identifier" || !STRUCTS.has(property.name)) {
+  if (object.type !== "Identifier" || !isSchema(object) || inner.computed || property.type !== "Identifier" || !STRUCTS.has(property.name)) {
     return;
   }
   const fields = call.arguments.find((one) => one.type === "ObjectExpression");
   if (fields === undefined)
     return;
-  const found = property.name === "TaggedStruct" ? [{ name: "_tag", optional: false, kind: "literal" }] : [];
+  const found = tagField(call, property.name === "TaggedStruct" || property.name === "TaggedErrorClass");
+  if (found === undefined)
+    return;
   for (const prop of fields.properties) {
     if (prop.type !== "Property" || prop.computed)
-      continue;
+      return;
     const name = keyName(prop.key);
     if (name === undefined)
-      continue;
-    const { optional, kind } = schemaKind(prop.value);
-    found.push({ name, optional, kind });
+      return;
+    found.push({ name, ...schemaKind(prop.value, isSchema) });
   }
   return found.length >= 2 ? found : undefined;
 }
 function twins(typeFields, schema) {
   return typeFields.length === schema.length && typeFields.every((field) => {
     const match = schema.find((one) => one.name === field.name);
-    return match !== undefined && match.optional === field.optional && field.kind === match.kind;
+    return match !== undefined && match.optional === field.optional && field.kind === match.kind && !["wild", "array", "object", "record"].includes(field.kind) && (field.kind !== "literal" || field.literal !== undefined && field.literal === match.literal);
   });
 }
 function schemaName(call) {
   const { parent } = call;
+  if (parent.type === "ClassDeclaration" && parent.id !== null)
+    return parent.id.name;
   if (parent.type !== "VariableDeclarator" || parent.id.type !== "Identifier")
     return;
   return parent.id.name;
@@ -690,11 +710,11 @@ function shapeName(node) {
     return;
   return parent.id.name;
 }
-function describeTwin(type, schema) {
+function describeTwin(type, schema, encoded) {
   const subject = type === undefined ? "This object type" : `Type \`${type}\``;
   if (schema === undefined)
     return `${subject} repeats the fields of a Schema in this file. Derive it from the schema instead of writing both.`;
-  return `${subject} repeats the fields of schema \`${schema}\` in this file. Derive it as \`typeof ${schema}.Type\` instead of writing both.`;
+  return `${subject} repeats the fields of schema \`${schema}\` in this file. Derive it as \`typeof ${schema}.${encoded ? "Encoded" : "Type"}\` instead of writing both.`;
 }
 var rule4 = {
   meta: {
@@ -704,6 +724,16 @@ var rule4 = {
   create(context) {
     const shapes = [];
     const schemas = [];
+    const isSchema = (node) => {
+      let scope = context.sourceCode.getScope(node);
+      while (scope !== null) {
+        const variable = scope.set.get(node.name);
+        if (variable !== undefined)
+          return variable.defs.some((def) => def.type === "ImportBinding" && def.node.type === "ImportSpecifier" && def.node.imported.type === "Identifier" && def.node.imported.name === "Schema" && def.parent?.type === "ImportDeclaration" && def.parent.source.value === "effect");
+        scope = scope.upper;
+      }
+      return false;
+    };
     const collect = (node) => {
       if (node.parent.type === "TSInterfaceDeclaration" && node.parent.extends.length > 0)
         return;
@@ -715,16 +745,16 @@ var rule4 = {
       TSTypeLiteral: collect,
       TSInterfaceBody: collect,
       CallExpression(node) {
-        const fields = schemaFields(node);
+        const fields = schemaFields(node, isSchema);
         if (fields !== undefined)
-          schemas.push({ name: schemaName(node), fields });
+          schemas.push({ name: schemaName(node), fields, encoded: node.parent.type === "ClassDeclaration" });
       },
       "Program:exit"() {
         for (const shape of shapes) {
           const twin = schemas.find((schema) => twins(shape.fields, schema.fields));
           if (twin === undefined)
             continue;
-          context.report({ node: shape.node, message: describeTwin(shapeName(shape.node), twin.name) });
+          context.report({ node: shape.node, message: describeTwin(shapeName(shape.node), twin.name, twin.encoded) });
         }
       }
     };
