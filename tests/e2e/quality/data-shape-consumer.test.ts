@@ -118,7 +118,7 @@ export const Lot = Schema.Struct({ id: Schema.String, name: Schema.String });
 export type Copy = { readonly id: string; readonly name: string };
 `);
   await tree.put("src/error.ts", `import { Schema } from "effect";
-export class LotError extends Schema.TaggedErrorClass<LotError>()("Lot", { id: Schema.String }) {}
+export class LotError extends Schema.TaggedError<LotError>()("Lot", { id: Schema.String }) {}
 export type LotEncoded = typeof LotError.Encoded;
 export type ErrorCopy = { readonly _tag: "Lot"; readonly id: string };
 `);

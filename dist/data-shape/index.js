@@ -537,7 +537,7 @@ var rule3 = {
 var readonly_collection_param_default = rule3;
 
 // src/quality/data-shape/schema-twin.ts
-var STRUCTS = new Set(["Struct", "TaggedStruct", "Class", "TaggedErrorClass"]);
+var STRUCTS = new Set(["Struct", "TaggedStruct", "Class", "TaggedError"]);
 var REFINEMENTS = new Set(["check", "annotate"]);
 var SCHEMA_KINDS = {
   String: "string",
@@ -680,7 +680,7 @@ function schemaFields(call, isSchema) {
   const fields = call.arguments.find((one) => one.type === "ObjectExpression");
   if (fields === undefined)
     return;
-  const found = tagField(call, property.name === "TaggedStruct" || property.name === "TaggedErrorClass");
+  const found = tagField(call, property.name === "TaggedStruct" || property.name === "TaggedError");
   if (found === undefined)
     return;
   for (const prop of fields.properties) {

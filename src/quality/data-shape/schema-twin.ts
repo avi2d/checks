@@ -8,7 +8,7 @@ type Shape = ESTree.TSTypeLiteral | ESTree.TSInterfaceBody;
 
 type IsSchema = (node: Extract<ESTree.Expression, { type: "Identifier" }>) => boolean;
 
-const STRUCTS: ReadonlySet<string> = new Set(["Struct", "TaggedStruct", "Class", "TaggedErrorClass"]);
+const STRUCTS: ReadonlySet<string> = new Set(["Struct", "TaggedStruct", "Class", "TaggedError"]);
 
 const REFINEMENTS: ReadonlySet<string> = new Set(["check", "annotate"]);
 
@@ -137,7 +137,7 @@ function schemaFields(call: ESTree.CallExpression, isSchema: IsSchema): Field[] 
   }
   const fields = call.arguments.find((one): one is ESTree.ObjectExpression => one.type === "ObjectExpression");
   if (fields === undefined) return undefined;
-  const found = tagField(call, property.name === "TaggedStruct" || property.name === "TaggedErrorClass");
+  const found = tagField(call, property.name === "TaggedStruct" || property.name === "TaggedError");
   if (found === undefined) return undefined;
   for (const prop of fields.properties) {
     if (prop.type !== "Property" || prop.computed) return undefined;
