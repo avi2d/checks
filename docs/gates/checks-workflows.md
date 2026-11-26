@@ -56,6 +56,8 @@ A private root with public workspace packages also holds the `suite` job and set
 A private root with a `test` script also holds the `suite` job, and its `ci.yml` runs static checks and tests on release pull requests.
 Its `ci.yml` runs the docs build there when `package.json` defines `docs:build`.
 A Claude Code version pinned by an install step in `ci.yml` or `flake.yml` is kept in the test and flake jobs.
+The `testTierShards` setting splits a default unit or e2e test job into matrix jobs while the `checks` job keeps its name.
+[checks-test](checks-test.md#parallel-runs) describes the setting and file assignment.
 
 For a pull request, a newer push cancels the `ci.yml` run it replaces.
 Pushes to `main` and manual dispatches each start a separate run.

@@ -268,12 +268,34 @@ Bun merges every worker's results into the one JUnit report, so each skipped tes
 A file whose worker crashes, for example when a test calls `process.exit`, fails the run.
 Bun reports no result from that file, so its skips are not judged and its declarations are not reported as stale.
 
-`checks-test` takes no timings file, because Bun ignores the order a timings file sets whenever `--randomize` is on.
-A timings option waits for Bun to honour timings under random order.
+A tier run takes `--shard=<index>/<count>` to run one part of the selected files.
+The index starts at 1 and cannot exceed the count.
+A `--pr` tier run selects the reached files before assigning them to shards.
+Set `testFileTimings` in `checks.config.ts` to map test file paths to recorded seconds.
+Each value must be finite and greater than zero.
+The longest files go first to the shard with the smallest total recorded time.
+A file without a time uses the mean of the recorded times of the selected files.
+When none have a time, the files are split evenly by count.
+A shard with no files passes without starting Bun.
+
+Set `testTierShards` to generate parallel CI jobs for the default unit or e2e tier job.
+Each count is a whole number from 1 through 256.
+Run `checks-workflows --write` after changing the setting.
+The `checks` job still requires every shard to pass.
+
+```ts
+import { defineConfig } from "@avi2dg/checks/config";
+
+export default defineConfig({
+  testTierShards: { e2e: 2 },
+  testFileTimings: { "tests/e2e/checkout.test.ts": 24 },
+});
+```
 
 ## Arguments
 
 The default command takes no arguments except `--parallel=<workers>`, as [Parallel runs](#parallel-runs) says, `--full`, `--changed`, `--pr` and `--junit=<file>`.
+A tier run also takes `--shard=<index>/<count>`, including with `--pr`.
 `--parallel=<workers>` overrides `CI_CORES` or the memory count for one run.
 `--full` runs the full suite in CI even when a pull request would narrow it, and is refused outside CI, as [Runs refused outside CI](#runs-refused-outside-ci) says.
 A `package.json` script never takes `--full`, as [checks-test-layout](checks-test-layout.md) says of `scripts.test`.
