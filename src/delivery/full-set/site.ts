@@ -1,7 +1,7 @@
 import { type SiteNames } from "../site-names.ts";
 import { PLAYWRIGHT_USES, runnerOf } from "../ci-jobs.ts";
 import { CHECKOUT, WRANGLER_VERSION, type Pair, type Workflow, expression, TOKEN, RUNNER, checkout, SETUP, ciCommand, keepArtifacts, node24, servedStep, cloudflare, CLOUDFLARE_SET, ASTRO_QUIET, PREVIEW_PROJECT, PREVIEW_MARKER, siteEnv } from "./steps.ts";
-import { PULL_REQUEST_HEAD, PULL_REQUEST_BRANCH, PULL_REQUEST_NUMBER, BY_HAND } from "./ci.ts";
+import { PULL_REQUEST_HEAD, PULL_REQUEST_BRANCH, PULL_REQUEST_NUMBER, BY_HAND, gitleaksCache } from "./ci.ts";
 
 export const PREVIEW_CLOSE = (names: SiteNames, publishes: boolean): Workflow => ({
   name: "preview-close",
@@ -75,7 +75,7 @@ const PRODUCTION_ORIGIN = "https://" + expression("env.SITE_DOMAIN");
 const STAGED = expression("steps.staging.outputs.sha");
 const DEPLOY_KEY: Pair = ["DEPLOY_KEY", expression("secrets.PRODUCTION_DEPLOY_KEY")];
 
-export const PRODUCTION = (names: SiteNames, browserWalk: boolean): Workflow => ({
+export const PRODUCTION = (names: SiteNames, browserWalk: boolean, kit: boolean): Workflow => ({
   name: "production",
   on: BY_HAND,
   env: siteEnv(names, ["pages", "domain", "production"]),
@@ -102,6 +102,8 @@ export const PRODUCTION = (names: SiteNames, browserWalk: boolean): Workflow => 
         { env: [["SHA", STAGED]], run: 'git checkout --detach "$SHA"' },
         { run: "bun install --frozen-lockfile" },
         { uses: PLAYWRIGHT_USES, with: [["browsers", "webkit"]] },
+        gitleaksCache(kit),
+        { run: "bunx checks-ci gitleaks" },
         { name: "run the full test suite on the release commit", run: "bun run test --full" },
         { name: "run the pixel screenshots on the release commit", run: "bun run test:pixel" },
         { run: "bun run build:production" },
