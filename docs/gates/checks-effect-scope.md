@@ -26,6 +26,8 @@ It reads `oxlint.config.ts`, `tsconfig.json`, and tracked and non-ignored untrac
 Git ignore discovery uses `git ls-files --cached --others --exclude-standard` without changing the index.
 Before Git initialization, it reads the root `.gitignore`, including the one setup writes.
 It adds paths from oxlint `ignorePatterns` and those Git ignore files to the exclusion list for each scoped override.
+A trailing slash in either ignore source restricts a pattern to directories, including when the pattern ends in `/**/`.
+It reads the first line of a `.gitignore` even when the file starts with a UTF-8 byte order mark.
 It does not use Git's `info/exclude` for scope exclusions.
 It supports relative paths, `*`, `?`, and `**`.
 A basename glob in `files` or `excludeFiles` matches in every directory unless it starts with `./`.
@@ -33,12 +35,20 @@ In `files` and `excludeFiles`, brace expansion and character classes are refused
 Use a separate glob for each alternative.
 A directory selector in `files` or `excludeFiles` must end in `/**`, not a bare directory name.
 On every generation and check, the gate examines matching TypeScript paths, including newly added paths.
-It refuses a hidden path that oxlint includes but tsgo's wildcard include skips.
+It refuses a path that oxlint includes but tsgo's wildcard include skips.
+These include hidden files and directories and the dependency directories `node_modules`, `bower_components`, and `jspm_packages`.
 Name that path explicitly in `files` or exclude its directory with a glob ending in `/**`.
+For paths with non-ASCII characters, `?` can match differently because oxlint counts UTF-8 bytes and tsgo counts characters.
+When their matches differ, the gate names the pattern and the path.
+Use literal paths in place of that pattern.
+The gate also refuses a minified file that tsgo includes and oxlint skips.
+A filename containing `.min.`, `-min.`, or `_min.` counts as minified.
+Add the file to `excludeFiles` or rename it.
 It also refuses a directory that matches `excludeFiles` when oxlint still includes a file beneath that directory.
 Use a directory glob ending in `/**` to exclude those contents too, or rename that directory.
 An ignore pattern with `!`, a character class, braces, or a backslash is refused if it may affect a TypeScript path inside an include.
-The gate recognizes simple non-TypeScript extension patterns such as `*.py[cod]`.
+The gate expands simple non-TypeScript extension classes such as `*.py[cod]` into separate patterns for `*.pyc`, `*.pyo`, and `*.pyd`.
+Those patterns exclude matching directories as well as files.
 With includes limited to `scripts/**/*.ts`, a negation rooted outside `scripts/` also passes, such as `!.vscode/extensions.json`.
 A literal negation also passes when it names a tracked regular file with a non-TypeScript extension relative to its ignore file, such as `!.vscode/extensions.json`.
 The path must contain a slash or start with `/` so it cannot match at any depth.
@@ -77,7 +87,7 @@ With `--check` it only compares.
 | --- | --- |
 | 0 | `tsconfig.json` holds the Effect paths and the kit's severities, or was written to hold them |
 | 1 | with `--check`, the plugin is missing or its Effect paths or severities for the kit's keys differ from what the gate would write |
-| 2 | `oxlint.config.ts` does not load or has no default config, a scope or ignore pattern or a scoped rule severity cannot be mapped, a hidden or pruned path would differ between oxlint and tsgo, a second oxlint config, `extends`, `.eslintignore` or `style` or `restriction` category may change a scoped override, or `tsconfig.json` does not parse, sets `compilerOptions` or `plugins` to `null`, holds a `diagnosticSeverity` that is not an object, or lacks the objects the gate writes into |
+| 2 | `oxlint.config.ts` does not load or has no default config, a scope or ignore pattern or a scoped rule severity cannot be mapped, a path would differ between oxlint and tsgo, a second oxlint config, `extends`, `.eslintignore` or `style` or `restriction` category may change a scoped override, or `tsconfig.json` does not parse, sets `compilerOptions` or `plugins` to `null`, holds a `diagnosticSeverity` that is not an object, or lacks the objects the gate writes into |
 
 ## Sample output
 
