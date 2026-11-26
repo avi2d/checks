@@ -18,6 +18,8 @@ const ASYNC_DECLARATION = "export async function later(): Promise<number> { retu
 
 const UNKNOWN_ERROR = /index\.ts\(\d+,\d+\): error effect\(anyUnknownInErrorContext\)/;
 
+const SOURCE_IMPORT_CONFIG = 'import { defineConfig } from "@avi2dg/checks/config";\nexport default defineConfig({});\n';
+
 async function installKit(repo: FixtureRepo): Promise<void> {
   const dir = await scratch("checks-setup-pack-");
   const packed = await $`bun pm pack --destination ${dir} --quiet --ignore-scripts`.cwd(CHECKOUT).quiet();
@@ -39,19 +41,23 @@ test("setup refuses a typecheck script that only echoes the checker names", asyn
   expect(setup.exitCode).toBe(2);
 }, 60_000);
 
-test("a clean install from setup reaches Effect diagnostics instead of failing to resolve Bun types", async () => {
+test("a clean install from setup reaches Effect diagnostics instead of failing to resolve Bun types or the kit's source imports", async () => {
   const repo = await open({
     "index.ts": EFFECT_FAILURE,
   });
   expect(await repo.script("delivery/setup.ts")).toMatchObject({ exitCode: 0 });
   await installKit(repo);
+  await repo.write({ "checks.config.ts": SOURCE_IMPORT_CONFIG });
 
   const checked = await typecheck(repo);
   expect(checked.text).toMatch(UNKNOWN_ERROR);
+  expect(checked.text).not.toContain("TS5097");
   expect(checked.exitCode).toBe(1);
 
   await repo.write({ "index.ts": TAGGED_FAILURE });
-  expect((await typecheck(repo)).exitCode).toBe(0);
+  const corrected = await typecheck(repo);
+  expect(corrected.text).not.toContain("TS5097");
+  expect(corrected.exitCode).toBe(0);
 }, 120_000);
 
 test("setup does not drop shared Effect diagnostics when an unextended config has no scoped rules", async () => {

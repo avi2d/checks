@@ -20,7 +20,9 @@ It also stops when a `test:<tier>` script is not `checks-test --tier=<tier>` or 
 It copies the fleet pin into `.bun-version` and the preset into `bunfig.toml`.
 It writes `oxlint.config.ts`, `tsconfig.json` and `knip.config.ts` from the kit builders, with Effect rules on.
 The fresh `tsconfig.json` enables `allowImportingTsExtensions` and `noEmit` so TypeScript can check the kit's source imports.
-Setup adds `@types/bun` to `devDependencies` for the generated `tsconfig.json`, and keeps an existing dev dependency version.
+It adds the kit's `@types/bun` version to `devDependencies`, whether it writes `tsconfig.json` or keeps the one it finds.
+It keeps an existing `@types/bun` dev dependency version.
+The fresh `tsconfig.json` names `bun` in `types`.
 It writes `.jscpd.json` with the kit default.
 It writes the Effect paths of the `oxlint.config.ts` it finds or writes into the language service entry of `tsconfig.json`.
 The pair passes `checks-effect-scope --check` from the first write.
