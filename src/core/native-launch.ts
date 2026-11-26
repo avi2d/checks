@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { nativePlatform, platformBinary, platformPackage } from "./native-platforms.ts";
 
 function execInstalledBinary(command: string, root: string, args: readonly string[]): void {
@@ -11,8 +12,44 @@ function execInstalledBinary(command: string, root: string, args: readonly strin
   }
 }
 
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readObject(file: string): Record<string, unknown> {
+  const value: unknown = JSON.parse(readFileSync(file, "utf8"));
+  if (!isObject(value)) throw new Error(`Invalid manifest: ${file}`);
+  return value;
+}
+
+function resolvedEffectVersion(): string {
+  try {
+    const manifest = readObject(Bun.resolveSync("effect/package.json", import.meta.path));
+    return typeof manifest["version"] === "string" ? manifest["version"] : "unknown";
+  } catch {
+    return "not installed or unreadable";
+  }
+}
+
+function compatibleEffect(root: string): boolean {
+  const manifest = readObject(`${root}/package.json`);
+  const peers = manifest["peerDependencies"];
+  if (!isObject(peers) || typeof peers["effect"] !== "string") {
+    throw new Error("Missing Effect peer version in checks manifest");
+  }
+  const required = peers["effect"];
+  const found = resolvedEffectVersion();
+  if (found === required) return true;
+  console.error(`checks: requires effect ${required}, found ${found}`);
+  return false;
+}
+
 export function launch(command: string, source: string): void {
   const root = Bun.fileURLToPath(new URL("../../", import.meta.url));
+  if (!compatibleEffect(root)) {
+    process.exitCode = 2;
+    return;
+  }
   const args = process.argv.slice(2);
   execInstalledBinary(command, root, args);
   if (process.platform !== "win32" && process.execve !== undefined) process.execve(process.execPath, [process.execPath, source, ...args]);
