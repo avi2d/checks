@@ -33,6 +33,8 @@ const ShardCount = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1), Schema.isL
 export const TestTierShards = Schema.Struct({ unit: Schema.optionalKey(ShardCount), e2e: Schema.optionalKey(ShardCount) });
 export type TestTierShards = typeof TestTierShards.Type;
 
+export const TrackerKeyPrefixes = Schema.Array(Schema.String.check(Schema.isPattern(/^[A-Z][A-Z0-9]*$/)));
+
 export const Smoke = Schema.Array(Schema.NonEmptyString);
 
 export const Reach = Schema.Record(Schema.String, Schema.Array(Schema.String));
@@ -78,6 +80,10 @@ export const Settings = Schema.Struct({
   })),
   platformPackages: Schema.optionalKey(PlatformPackages.annotate({
     description: "The compiled binary the generated main.yml builds on each named platform and publishes as one npm package per platform before the main package, which lists them as optionalDependencies.",
+  })),
+  trackerKeyPrefixes: Schema.optionalKey(TrackerKeyPrefixes.annotate({
+    description: "The uppercase tracker prefixes whose numbered keys the comment gate refuses.",
+    default: [],
   })),
   smoke: Schema.optionalKey(Smoke.annotate({ description: "The extra test files to run with the local unit tier." })),
   reach: Schema.optionalKey(Reach.annotate({ description: "The tests to run when a changed path is missing from the import graph." })),
