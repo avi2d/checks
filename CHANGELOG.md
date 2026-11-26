@@ -2,6 +2,22 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.120.0
+
+Released 2026-11-26.
+
+### Features
+
+- **testing:** shard test tiers over parallel CI jobs [#239](https://github.com/avi2d/checks/pull/239)
+- **delivery:** require CHANGELOG.md for repositories using the release tools [#238](https://github.com/avi2d/checks/pull/238)
+
+### Fixes
+
+- **delivery:** fetch gitleaks in the e2e job the kit writes [#240](https://github.com/avi2d/checks/pull/240)
+- **quality:** update Effect error-channel lint checks [#241](https://github.com/avi2d/checks/pull/241)
+- **core:** refuse an incompatible resolved Effect before launching a bin [#243](https://github.com/avi2d/checks/pull/243)
+- stop recommending non-equivalent and banned Effect error rewrites [#242](https://github.com/avi2d/checks/pull/242)
+
 ## 0.119.1
 
 Released 2026-11-26.
