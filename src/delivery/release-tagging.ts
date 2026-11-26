@@ -175,18 +175,18 @@ export const releaseHead = Effect.fn("releaseHead")(function* (label: string, ro
   yield* checkoutRelease(root, landed.head);
   yield* checkTestedTreeOf(label, root, cuttingWorkflow, landed.head, landed.subject);
   const workspaces = yield* checkedWorkspaces(root, landed);
-  const platforms = landed.publishes ? yield* configuredPlatformRelease(root, landed.head) : undefined;
+  const platforms = yield* configuredPlatformRelease(root, landed.head, landed.publishes ? undefined : workspaces.map((workspace) => workspace.path));
   const tagged = yield* pushReleaseTag(label, root, landed, cuttingWorkflow);
   if (tagged) yield* Console.log(`${label}: tagged ${landed.head.slice(0, 12)} as ${landed.tag}`);
   if (!tagged && (landed.publishes || workspaces.length > 0)) yield* runBuild(root);
   yield* writeGitHubRelease(label, root, landed);
   yield* writeReleasedTagOutput(landed.tag);
+  if (platforms !== undefined) yield* publishPlatformRelease(platforms);
   if (!landed.publishes) {
     if (workspaces.length === 0) yield* Console.log(`${label}: ${MANIFEST} is private, so no package is published`);
     const path = yield* Path.Path;
     for (const workspace of workspaces) yield* publishPackage(path.dirname(path.join(root, workspace.path)));
     return true;
   }
-  if (platforms !== undefined) yield* publishPlatformRelease(root, platforms);
   return yield* publishPackage(root);
 });
