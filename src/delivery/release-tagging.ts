@@ -160,16 +160,21 @@ const checkoutRelease = Effect.fn("checkoutRelease")(function* (root: string, he
   }
 });
 
+const checkedWorkspaces = Effect.fn("checkedWorkspaces")(function* (root: string, { publishes, version }: Landed) {
+  const publishWorkspaces = (yield* Config.String("CHECKS_PUBLISH_WORKSPACES").pipe(Config.withDefault("false"))) === "true";
+  const workspaces = !publishes && publishWorkspaces ? yield* publicWorkspaces(root) : [];
+  for (const workspace of workspaces) {
+    if (workspace.version !== version) return yield* new TagRefused({ message: `${workspace.path} holds ${workspace.version}, not the tested release version ${version}` });
+  }
+  return workspaces;
+});
+
 export const releaseHead = Effect.fn("releaseHead")(function* (label: string, root: string, cuttingWorkflow: string) {
   const landed = yield* landedRelease(label, root);
   if (landed === undefined) return true;
   yield* checkoutRelease(root, landed.head);
   yield* checkTestedTreeOf(label, root, cuttingWorkflow, landed.head, landed.subject);
-  const publishWorkspaces = (yield* Config.String("CHECKS_PUBLISH_WORKSPACES").pipe(Config.withDefault("false"))) === "true";
-  const workspaces = !landed.publishes && publishWorkspaces ? yield* publicWorkspaces(root) : [];
-  for (const workspace of workspaces) {
-    if (workspace.version !== landed.version) return yield* new TagRefused({ message: `${workspace.path} holds ${workspace.version}, not the tested release version ${landed.version}` });
-  }
+  const workspaces = yield* checkedWorkspaces(root, landed);
   const platforms = landed.publishes ? yield* configuredPlatformRelease(root, landed.head) : undefined;
   const tagged = yield* pushReleaseTag(label, root, landed, cuttingWorkflow);
   if (tagged) yield* Console.log(`${label}: tagged ${landed.head.slice(0, 12)} as ${landed.tag}`);
