@@ -21,19 +21,27 @@ With `--check` it fails when the override or the kit's severities in `tsconfig.j
 
 ## What it reads
 
-It reads `oxlint.config.ts`, `tsconfig.json`, and tracked `.gitignore` files.
-It adds paths from oxlint `ignorePatterns` and tracked Git ignore files to the exclusion list for each scoped override.
-It does not use Git's `info/exclude` or untracked `.gitignore` files for scope exclusions, so the committed output does not depend on clone-local ignores.
+It reads `oxlint.config.ts`, `tsconfig.json`, and tracked and non-ignored untracked `.gitignore` files.
+Git ignore discovery uses `git ls-files --cached --others --exclude-standard` without changing the index.
+Before Git initialization, it reads the root `.gitignore`, including the one setup writes.
+It adds paths from oxlint `ignorePatterns` and those Git ignore files to the exclusion list for each scoped override.
+It does not use Git's `info/exclude` for scope exclusions.
 It supports relative paths, `*`, `?`, and `**`.
 A basename glob in `files` or `excludeFiles` matches in every directory unless it starts with `./`.
 In `files` and `excludeFiles`, brace expansion and character classes are refused.
 Use a separate glob for each alternative.
 A directory selector in `files` or `excludeFiles` must end in `/**`, not a bare directory name.
+On every generation and check, the gate examines matching TypeScript paths, including newly added paths.
+It refuses a hidden path that oxlint includes but tsgo's wildcard include skips.
+Name that path explicitly in `files` or exclude its directory with a glob ending in `/**`.
+It also refuses a directory that matches `excludeFiles` when oxlint still includes a file beneath that directory.
+Use a directory glob ending in `/**` to exclude those contents too, or rename that directory.
 An ignore pattern with `!`, a character class, braces, or a backslash is refused if it may affect a TypeScript path inside an include.
 The gate recognizes simple non-TypeScript extension patterns such as `*.py[cod]`.
-A pattern rooted under a directory disjoint from every include also passes, such as `!.vscode/extensions.json`.
+With includes limited to `scripts/**/*.ts`, a negation rooted outside `scripts/` also passes, such as `!.vscode/extensions.json`.
 A literal negation also passes when it names a tracked regular file with a non-TypeScript extension relative to its ignore file, such as `!.vscode/extensions.json`.
 The path must contain a slash or start with `/` so it cannot match at any depth.
+A missing tracked negation target is refused by name, with instructions to restore the file or remove the negation.
 Other negations outside a disjoint directory are refused, because a dotted name such as `!.vitepress` can be a directory.
 When the gate cannot establish that a pattern is unrelated, it refuses the pattern.
 Use positive patterns that exclude only the paths you want to skip.

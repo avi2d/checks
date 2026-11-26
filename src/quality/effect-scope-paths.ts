@@ -65,7 +65,12 @@ const trackedNonTypeScriptNegation = Effect.fn("trackedNonTypeScriptNegation")(f
   if (extension === "" || SOURCES.some((source) => source.endsWith(extension))) return false;
   const file = directory === "" ? relative : `${directory}/${relative}`;
   if (!trackedFiles.has(file)) return false;
-  return (yield* (yield* FileSystem.FileSystem).lstat(path.join(root, file))).type === "File";
+  const fs = yield* FileSystem.FileSystem;
+  const full = path.join(root, file);
+  if (!(yield* fs.exists(full))) {
+    return yield* new EffectScopeError({ message: `negation ${JSON.stringify(pattern)} names missing tracked file ${file}; restore that file or remove the negation` });
+  }
+  return (yield* fs.lstat(full)).type === "File";
 });
 
 const ignoreGlobs = Effect.fn("ignoreGlobs")(function* (root: string, { file, directory, patterns }: IgnoreSource, includes: readonly string[], trackedFiles: ReadonlySet<string>) {
@@ -93,6 +98,32 @@ const readIgnore = Effect.fn("readIgnore")(function* (root: string, file: string
   if (!(yield* fs.exists(full))) return [];
   const text = yield* fs.readFileString(full);
   return yield* ignoreGlobs(root, { file, directory, patterns: text.split(/\r?\n/) }, includes, trackedFiles).pipe(Effect.map((lists) => lists.flat()));
+});
+
+type ScopePaths = { readonly include: readonly string[]; readonly exclude?: readonly string[] };
+
+const matchesPath = (file: string, patterns: readonly string[], dot: boolean) =>
+  patterns.some((pattern) => minimatch(file, pattern, { dot }));
+
+export const validateScopePaths = Effect.fn("validateScopePaths")(function* (root: string, overrides: readonly ScopePaths[], ignored: readonly string[]) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const includes = [...new Set(overrides.flatMap(({ include }) => include))];
+  const reached = yield* Effect.forEach(includes, (include) => fs.glob(include, { root, dot: true, exclude: [".git/**", ...ignored] }));
+  for (const file of [...new Set(reached.flat())].sort()) {
+    if (!matchesPath(file, SOURCES, true) || (yield* fs.stat(path.join(root, file))).type !== "File") continue;
+    for (const { include, exclude = [] } of overrides) {
+      if (!matchesPath(file, include, true) || matchesPath(file, exclude, true)) continue;
+      if (!matchesPath(file, include, false)) {
+        return yield* new EffectScopeError({ message: `${file} matches oxlint files but tsgo wildcard includes skip its hidden path; name ${file} explicitly in files or exclude its directory with a glob ending in /**` });
+      }
+      const directories = file.split("/").slice(0, -1).map((_, index, segments) => segments.slice(0, index + 1).join("/"));
+      const pruned = directories.find((directory) => matchesPath(directory, exclude, true));
+      if (pruned !== undefined) {
+        return yield* new EffectScopeError({ message: `${file} is reached by oxlint but tsgo excludeFiles prunes directory ${pruned}; use ${pruned}/** to exclude its contents too, or rename that directory` });
+      }
+    }
+  }
 });
 
 const CONFIG_NAMES = [".oxlintrc.json", ".oxlintrc.jsonc", "oxlint.config.mts", "oxlint.config.cts", "oxlint.config.js", "oxlint.config.mjs", "oxlint.config.cjs"];
@@ -125,7 +156,10 @@ export const globalExcludes = Effect.fn("globalExcludes")(function* (root: strin
   }
   const trackedFiles = new Set(yield* gitScopeFiles(root));
   const configured = yield* ignoreGlobs(root, { file: "oxlint ignorePatterns", directory: "", patterns }, includes, trackedFiles);
-  const ignored = yield* Effect.forEach([...trackedFiles].filter((file) => file === ".gitignore" || file.endsWith("/.gitignore")), (file) =>
+  const ignoreFiles = (yield* fs.exists(path.join(root, ".git")))
+    ? (yield* git(["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", ":(glob)**/.gitignore"], root)).split("\0").filter(Boolean)
+    : [".gitignore"];
+  const ignored = yield* Effect.forEach([...new Set(ignoreFiles)].sort(), (file) =>
     readIgnore(root, file, file.includes("/") ? path.dirname(file) : "", includes, trackedFiles));
   return [...configured.flat(), ...ignored.flat()];
 });

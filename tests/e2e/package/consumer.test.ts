@@ -539,6 +539,29 @@ test(
   180_000,
 );
 
+test(
+  "installed setup does not become stale after git init or the first commit",
+  async () => {
+    for (const setupBeforeInit of [false, true]) {
+      await useConsumer("tarball");
+      await rm(join(dir, ".oxlintrc.json"));
+      await rm(join(dir, ".gitignore"));
+      if (!setupBeforeInit) await $`git init -q`.cwd(dir).quiet();
+      expect((await packedBin("checks-setup")).exitCode).toBe(0);
+      const written = await readFile(join(dir, "tsconfig.json"), "utf8");
+      if (setupBeforeInit) await $`git init -q`.cwd(dir).quiet();
+      expect((await packedBin("checks-effect-scope", "--check")).exitCode).toBe(0);
+      expect((await ran($`git ls-files`.cwd(dir))).text).toBe("");
+      await $`git add . && git -c user.name="Wren Fixture" -c user.email=wren@example.com commit -qm "feat: fixture"`.cwd(dir).quiet();
+      expect((await packedBin("checks-effect-scope", "--check")).exitCode).toBe(0);
+      expect((await packedBin("checks-setup")).exitCode).toBe(0);
+      expect((await packedBin("checks-effect-scope")).exitCode).toBe(0);
+      expect(await readFile(join(dir, "tsconfig.json"), "utf8")).toBe(written);
+    }
+  },
+  180_000,
+);
+
 const SETUP_SCOPE_CASES = [
   '{ effect: { files: ["src/**/*.ts"] }, overrides: [{ files: ["src/host.ts"], rules: { "oxc/no-async-await": "off" } }] }',
   '{ effect: { files: ["src/**/*.ts"], excludeFiles: [] } }',

@@ -3,7 +3,7 @@ import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import { git } from "../core/git.ts";
 import { runMain, Usage } from "../core/main.ts";
 import { hasMember, type Step, withMember, withoutMember } from "./jsonc-patch.ts";
-import { EffectScopeError, globalExcludes, scopeGlobs } from "./effect-scope-paths.ts";
+import { EffectScopeError, globalExcludes, scopeGlobs, validateScopePaths } from "./effect-scope-paths.ts";
 import { defineConfig, effectRules } from "./presets/oxlint.ts";
 import severities from "./presets/effect.language-service.json" with { type: "json" };
 import kitTsconfig from "../../tsconfig.effect.json" with { type: "json" };
@@ -179,6 +179,7 @@ const readScope = Effect.fn("readScope")(function* (root: string, mode: ConfigLo
     return { include: yield* scopeGlobs(include, "oxlint files"), exclude: yield* scopeGlobs(exclude, "oxlint excludeFiles"), options };
   }));
   const ignored = yield* globalExcludes(root, config.ignorePatterns ?? [], translated.flatMap(({ include }) => include));
+  yield* validateScopePaths(root, translated, ignored);
   return translated.map(({ include, exclude, options }) => {
     const excluded = [...new Set([...exclude, ...ignored])];
     return { include, ...(excluded.length === 0 ? {} : { exclude: excluded }), options };

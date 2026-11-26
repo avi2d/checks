@@ -116,7 +116,7 @@ async function diagnostics(): Promise<ReadonlyMap<string, readonly string[]>> {
   ]);
   return findings(
     text.replaceAll(`${realpathSync(tree.dir)}/`, ""),
-    /((?:scripts|tests)\/[\w/]+\.ts)\(\d+,\d+\): error effect\((\w+)\)/g,
+    /((?:scripts|tests)\/[^\s(]+\.ts)\(\d+,\d+\): error effect\((\w+)\)/g,
   );
 }
 
@@ -287,6 +287,61 @@ export default defineConfig({ effect: ${scope}${extra} });
   }
 }, 180_000);
 
+test("scope generation refuses hidden includes and file exclusions that tsgo resolves differently, even for late paths", async () => {
+  const cases = [
+    { file: "scripts/.hidden.ts", exclude: [], repairedInclude: ["scripts/**/*.ts", "scripts/.hidden.ts"], repairedExclude: [] },
+    { file: "scripts/.hidden/a.ts", exclude: [], repairedInclude: ["scripts/**/*.ts", "scripts/.hidden/a.ts"], repairedExclude: [] },
+    { file: "scripts/a.ts/nested.ts", exclude: ["scripts/a.ts"], repairedInclude: ["scripts/**/*.ts"], repairedExclude: ["scripts/a.ts/**"] },
+    { file: "scripts/nested/a.ts/child.ts", exclude: ["a.ts"], repairedInclude: ["scripts/**/*.ts"], repairedExclude: ["**/a.ts/**"] },
+  ];
+  for (const { file, exclude, repairedInclude, repairedExclude } of cases) {
+    await consumer();
+    const configure = (include: readonly string[], excludeFiles: readonly string[]) =>
+      tree.put("oxlint.config.ts", `import { defineConfig } from "@avi2dg/checks/oxlint";
+export default defineConfig({ effect: { files: ${JSON.stringify(include)}, excludeFiles: ${JSON.stringify(excludeFiles)} } });
+`);
+    await configure(["scripts/**/*.ts"], exclude);
+    await tree.put(SCOPED, ASYNC_PLANT);
+    await tree.put(UNSCOPED, ASYNC_PLANT);
+    await tree.put("tsconfig.json", {
+      extends: ["@avi2dg/checks/tsconfig.effect.json"],
+      compilerOptions: { target: "esnext", module: "preserve", moduleResolution: "bundler", strict: true, noEmit: true, types: ["bun"] },
+      files: [SCOPED, UNSCOPED, file],
+    });
+    expect((await scopeGate()).exitCode).toBe(0);
+    await tree.put(file, ASYNC_PLANT);
+    const before = await readFile(join(tree.dir, "tsconfig.json"), "utf8");
+    expect((await oxlint([])).linted.get(file)).toContain(ASYNC_RULE);
+    const mismatched = await diagnostics();
+    expect(mismatched.get(file) ?? []).not.toContain(ASYNC_DIAGNOSTIC);
+    expect(mismatched.get(UNSCOPED)).toContain("anyUnknownInErrorContext");
+    for (const args of [[], ["--check"]]) {
+      const refused = await scopeGate(...args);
+      expect(refused.exitCode).toBe(2);
+      expect(refused.text).toContain(file);
+      expect(refused.text).toContain(file.includes("/.") ? "explicitly in files" : "rename that directory");
+      expect(await readFile(join(tree.dir, "tsconfig.json"), "utf8")).toBe(before);
+    }
+    await configure(repairedInclude, repairedExclude);
+    expect((await scopeGate()).exitCode).toBe(0);
+    expect((await scopeGate("--check")).exitCode).toBe(0);
+    await expectAsyncPaths(file.includes("/.") ? [SCOPED, file] : [SCOPED]);
+    expect((await diagnostics()).get(UNSCOPED)).toContain("anyUnknownInErrorContext");
+  }
+}, 180_000);
+
+test("basename file exclusions do not reject ordinary files or suppress unrelated paths", async () => {
+  await consumer();
+  await tree.put("oxlint.config.ts", `import { defineConfig } from "@avi2dg/checks/oxlint";
+export default defineConfig({ effect: { files: ["scripts/**/*.ts"], excludeFiles: ["a.ts"] } });
+`);
+  for (const file of ["scripts/a.ts", "scripts/nested/a.ts", SCOPED, UNSCOPED]) await tree.put(file, ASYNC_PLANT);
+  expect((await scopeGate()).exitCode).toBe(0);
+  expect((await scopeGate("--check")).exitCode).toBe(0);
+  await expectAsyncPaths([SCOPED]);
+  expect((await diagnostics()).get(UNSCOPED)).toContain("anyUnknownInErrorContext");
+}, 180_000);
+
 test("globstar and question mark include new matches without dropping ordinary excludes", async () => {
   await consumer();
   await tree.put("oxlint.config.ts", `import { defineConfig } from "@avi2dg/checks/oxlint";
@@ -452,6 +507,12 @@ export default defineConfig({ effect: true, ignorePatterns: ${JSON.stringify(sou
     expect((await scopeGate("--check")).exitCode).toBe(0);
     await expectAsyncPaths([SCOPED]);
     await rm(join(tree.dir, file));
+    for (const args of [[], ["--check"]]) {
+      const refused = await scopeGate(...args);
+      expect(refused.exitCode).toBe(2);
+      expect(refused.text).toContain(`missing tracked file ${file}`);
+      expect(refused.text).toContain("restore that file or remove the negation");
+    }
     await tree.put(`${file}/plant.ts`, ASYNC_PLANT);
     for (const args of [[], ["--check"]]) expect((await scopeGate(...args)).exitCode).toBe(2);
     expect((await tree.run("git", ["add", "-f", file])).exitCode).toBe(0);
@@ -481,7 +542,7 @@ test("default Effect scope does not accept untracked files, TypeScript files, or
   }
 }, 180_000);
 
-test("clone-local ignores do not change committed scope while tracked nested ignores still apply", async () => {
+test("info/exclude does not change scope while untracked and tracked nested ignores both apply", async () => {
   await consumer();
   await tree.put(".gitignore", "node_modules/\n");
   await tree.put("scripts/tracked/.gitignore", "ignored/\n");
@@ -490,13 +551,16 @@ test("clone-local ignores do not change committed scope while tracked nested ign
   expect((await scopeGate()).exitCode).toBe(0);
   const before = await readFile(join(tree.dir, "tsconfig.json"), "utf8");
   await tree.put(".git/info/exclude", "scripts/local/\n");
-  await tree.put("scripts/untracked/.gitignore", "*\n");
   expect((await scopeGate("--check")).exitCode).toBe(0);
   expect((await scopeGate()).exitCode).toBe(0);
   expect(await readFile(join(tree.dir, "tsconfig.json"), "utf8")).toBe(before);
+  await tree.put("scripts/untracked/.gitignore", "a.ts\n");
+  expect((await scopeGate("--check")).exitCode).toBe(1);
+  expect((await scopeGate()).exitCode).toBe(0);
+  expect((await scopeGate("--check")).exitCode).toBe(0);
   const diagnosed = await diagnostics();
-  for (const file of [SCOPED, "scripts/local/a.ts", "scripts/untracked/a.ts"]) expect(diagnosed.get(file)).toContain(ASYNC_DIAGNOSTIC);
-  expect(diagnosed.get("scripts/tracked/ignored/a.ts") ?? []).not.toContain(ASYNC_DIAGNOSTIC);
+  for (const file of [SCOPED, "scripts/local/a.ts"]) expect(diagnosed.get(file)).toContain(ASYNC_DIAGNOSTIC);
+  for (const file of ["scripts/tracked/ignored/a.ts", "scripts/untracked/a.ts"]) expect(diagnosed.get(file) ?? []).not.toContain(ASYNC_DIAGNOSTIC);
 }, 180_000);
 
 test(

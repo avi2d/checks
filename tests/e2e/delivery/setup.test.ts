@@ -74,7 +74,7 @@ function decodeTsconfig(text: string): typeof Tsconfig.Type {
 }
 
 const EXPECTED_INCLUDE = ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"];
-const EXPECTED_EXCLUDE = ["tests/**/*", "**/*.test.ts", "**/*.test.tsx"];
+const EXPECTED_EXCLUDE = ["tests/**/*", "**/*.test.ts", "**/*.test.tsx", "**/node_modules/**/*"];
 
 test(
 "an empty directory gains the kit config, the CI workflow and the doc templates byte for byte from the kit",
