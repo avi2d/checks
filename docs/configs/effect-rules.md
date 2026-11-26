@@ -62,6 +62,7 @@ A config that leaves `effect` out, sets it to a string or gives `files` no glob 
 The repository's `tsconfig.json` holds its Effect override under `compilerOptions.plugins`.
 [checks-effect-scope](../gates/checks-effect-scope.md) writes that override from `oxlint.config.ts`, so it includes and excludes the same paths as oxlint.
 The override takes its `options` from the severity values the kit ships in `src/quality/presets/effect.language-service.json`.
+`asyncFunction` and `newPromise` follow the oxlint settings of `oxc/no-async-await` and `promise/avoid-new`, as [checks-effect-scope](../gates/checks-effect-scope.md#what-it-checks) says.
 The preset turns these diagnostics to errors:
 
 - `nodeBuiltinImport` refuses an import of a Node built-in module that has an Effect counterpart.
