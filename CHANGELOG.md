@@ -2,6 +2,14 @@
 
 Every release of `@avi2dg/checks`, newest first, written by the release from its conventional commits.
 
+## 0.119.0
+
+Released 2026-11-26.
+
+### Features
+
+- **core:** print per-gate wall time in checks-lint [#233](https://github.com/avi2d/checks/pull/233)
+
 ## 0.118.0
 
 Released 2026-11-26.
