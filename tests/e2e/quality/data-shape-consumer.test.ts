@@ -102,6 +102,47 @@ export type NewUser = { readonly id: string; readonly name: string };
 
 const consumerTree = consumerTrees("checks-data-shape-consumer-");
 
+test("schema-twin rejects a different tag and a bigint literal crash without missing a twin, a namespace import or derived types", async () => {
+  const tree = await consumerTree({ paths: ["scripts/**/*.ts"], include: ["src/**/*.ts"], types: [] });
+  await tree.put("src/different.ts", `import { Schema } from "effect";
+export const Lot = Schema.TaggedStruct("Lot", { id: Schema.String });
+export type Other = { readonly _tag: "Other"; readonly id: string };
+`);
+  await tree.put("src/twin.ts", `import { Schema as S } from "effect";
+export const Lot = S.TaggedStruct("Lot", { id: S.String });
+export type LotCopy = { readonly _tag: "Lot"; readonly id: string };
+export type LotType = typeof Lot.Type;
+`);
+  await tree.put("src/unrelated.ts", `const Schema = { Struct: (value: unknown) => value, String: "" };
+export const Lot = Schema.Struct({ id: Schema.String, name: Schema.String });
+export type Copy = { readonly id: string; readonly name: string };
+`);
+  await tree.put("src/error.ts", `import { Schema } from "effect";
+export class LotError extends Schema.TaggedError<LotError>()("Lot", { id: Schema.String }) {}
+export type LotEncoded = typeof LotError.Encoded;
+export type ErrorCopy = { readonly _tag: "Lot"; readonly id: string };
+`);
+  await tree.put("src/namespace.ts", `import * as Schema from "effect/Schema";
+export const Lot = Schema.Struct({ id: Schema.String, name: Schema.String });
+export type Copy = { readonly id: string; readonly name: string };
+`);
+  await tree.put("src/bigint.ts", `import { Schema } from "effect";
+export const Flag = Schema.Struct({ a: Schema.Literal(0n), b: Schema.String });
+export type FlagCopy = { readonly a: 0n; readonly b: string };
+export type Other = { readonly a: 1n; readonly b: string };
+`);
+  const { text } = await tree.run(join(KIT_BIN, "oxlint"), ["--type-aware", "-f", "unix", "src"]);
+  expect(findings(text, /^(\S+?):\d+:\d+: .*\[Error\/([^\]]+)\]$/gm)).toEqual(
+    new Map([
+      ["src/twin.ts", ["data-shape(schema-twin)"]],
+      ["src/error.ts", ["data-shape(schema-twin)"]],
+      ["src/namespace.ts", ["data-shape(schema-twin)"]],
+      ["src/bigint.ts", ["data-shape(schema-twin)"]],
+    ]),
+  );
+  expect(text).toContain("typeof LotError.Encoded");
+}, 180_000);
+
 test(
   "data-shape stays silent on a parameter that may be mutated, a domain type, an extended interface, a tagged payload, a narrowed string, a refined domain type and a branded pipe, and reports a readonly callee and true twins",
   async () => {
