@@ -105,7 +105,7 @@ const coveringFiles = async (testFiles: ReadonlyArray<string>, testId: string): 
   };
   // The runner reads only bun and mutate from the options, and StrykerOptions declares every other Stryker setting as required.
   const runner: BunTestRunner = Reflect.construct(BunTestRunner, [logger, { bun: { testFiles } }]);
-  runner["cachedTestFiles"] = await runner["getOrDiscoverTestFiles"]();
+  runner["effectiveTestFiles"] = await runner["getOrDiscoverTestFiles"]();
   return runner["resolveCoveringTestFiles"]([testId]);
 };
 
@@ -115,7 +115,7 @@ test("unitTestFiles lists every repository unit test with no leading ./, so a ne
   expect(files.filter((file) => !file.startsWith("tests/unit/"))).toEqual([]);
 });
 
-test("unitTestFiles paths are what resolveCoveringTestFiles at @hughescr/stryker-bun-runner/dist/index.js:8451 matches, and the directory form is not", async () => {
+test("unitTestFiles paths are what resolveCoveringTestFiles in @hughescr/stryker-bun-runner matches, and the directory form is not", async () => {
   const testId = "tests/unit/testing/stryker-preset.test.ts > unitTestFiles lists every repository unit test with no leading ./, so a new file joins on its own";
   expect(await coveringFiles(unitTestFiles(), testId)).toEqual(["tests/unit/testing/stryker-preset.test.ts"]);
   expect(await coveringFiles(["./tests/unit/"], testId)).toBeUndefined();
