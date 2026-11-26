@@ -70,7 +70,7 @@ for (const ci of [false, true]) {
       const timings = Effect.runSync(Schema.decodeUnknownEffect(TestFileTimings)(json));
       const xml = await Bun.file(join(repo.dir, "report.xml")).text();
       const suites = [...xml.matchAll(/<testsuite\b[^>]*file="([^"]+)"[^>]*time="([^"]+)"[^>]*>/g)];
-      expect(suites.map(([, file]) => file).sort()).toEqual(["tests/unit/one.test.ts", "tests/unit/two.test.ts"]);
+      expect(suites.map(([, file]) => file ?? "").sort((left, right) => left.localeCompare(right))).toEqual(["tests/unit/one.test.ts", "tests/unit/two.test.ts"]);
       expect(Object.keys(timings).every((file) => suites.some(([, reported]) => reported === file))).toBe(true);
       for (const [, file, time] of suites) {
         const seconds = Number(time);
