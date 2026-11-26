@@ -30,9 +30,9 @@ const blindToTheError = (handler: ESTree.Node | undefined): boolean => {
   return handler.params.every((param) => param.type === "Identifier" && /^_+$/.test(param.name));
 };
 
-function memberName(member: ESTree.MemberExpression): string | undefined {
-  if (!member.computed) return member.property.name;
-  const property = member.property;
+function propertyName(node: ESTree.MemberExpression | ESTree.Property): string | undefined {
+  const property = node.type === "MemberExpression" ? node.property : node.key;
+  if (!node.computed && property.type === "Identifier") return property.name;
   if (property.type === "Literal" && typeof property.value === "string") return property.value;
   if (property.type === "TemplateLiteral" && property.expressions.length === 0) return property.quasis[0]?.value.cooked ?? undefined;
   return undefined;
@@ -65,16 +65,32 @@ const rule: CreateRule = {
     }
 
     function checkModuleReference(identifier: ESTree.Node): void {
-      const member = identifier.parent;
-      if (member?.type !== "MemberExpression" || member.object !== identifier) return;
-      const combinator = memberName(member);
-      if (combinator !== undefined) checkReference(member, combinator);
+      const parent = identifier.parent;
+      if (parent?.type === "MemberExpression" && parent.object === identifier) {
+        const combinator = propertyName(parent);
+        if (combinator !== undefined) checkReference(parent, combinator);
+        return;
+      }
+      if (parent?.type !== "VariableDeclarator" || parent.init !== identifier || parent.parent?.type !== "VariableDeclaration" || parent.parent.kind !== "const") return;
+      if (parent.id.type === "Identifier") {
+        checkBinding(parent, parent.id, { kind: "module" });
+        return;
+      }
+      if (parent.id.type !== "ObjectPattern") return;
+      for (const property of parent.id.properties) {
+        if (property.type !== "Property" || property.value.type !== "Identifier") continue;
+        const name = propertyName(property);
+        if (name !== undefined && (REFUSED.has(name) || BLIND_RECOVERY.has(name))) {
+          checkBinding(parent, property.value, { kind: "combinator", name });
+        }
+      }
     }
 
-    function checkBinding(specifier: ESTree.ImportDeclaration["specifiers"][number], binding: EffectBinding): void {
-      for (const variable of context.sourceCode.getDeclaredVariables(specifier)) {
+    function checkBinding(declaration: ESTree.Node, identifier: ESTree.Identifier, binding: EffectBinding): void {
+      for (const variable of context.sourceCode.getDeclaredVariables(declaration)) {
+        if (variable.name !== identifier.name) continue;
         for (const reference of variable.references) {
-          if (!reference.isRead()) continue;
+          if (!reference.isRead() || reference.identifier.parent?.type === "TSTypeQuery" || reference.identifier.parent?.type === "TSQualifiedName") continue;
           if (binding.kind === "module") checkModuleReference(reference.identifier);
           else checkReference(reference.identifier, binding.name);
         }
@@ -87,7 +103,7 @@ const rule: CreateRule = {
         if (node.importKind === "type" || (source !== EFFECT_BARREL && source !== EFFECT_MODULE)) return;
         for (const specifier of node.specifiers) {
           const binding = effectBinding(source, specifier);
-          if (binding !== undefined) checkBinding(specifier, binding);
+          if (binding !== undefined) checkBinding(specifier, specifier.local, binding);
         }
       },
     };

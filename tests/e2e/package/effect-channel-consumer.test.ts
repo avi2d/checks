@@ -59,6 +59,80 @@ test("consumer rejects named imports, aliases, and static member names instead o
   expect(await lint(DYNAMIC_ACCESS)).toEqual({ exitCode: 0, text: "" });
 });
 
+const CONST_BINDINGS = `import { Effect } from "effect";
+import * as Direct from "effect/Effect";
+const Fx = Effect;
+const Next = Fx;
+const { ignore, ignoreCause: discard, ["catchCause"]: recoverCause } = Next;
+const { [\`ignore\`]: drop, catchEager: recover } = Direct;
+const { orElseSucceed: fallback } = Fx;
+const failed = Effect.fail("boom");
+export const a = Fx.ignore(failed);
+export const b = Next["ignoreCause"](failed);
+export const c = ignore(failed);
+export const d = discard(failed);
+export const e = recoverCause(failed, () => Effect.succeed(0));
+export const f = drop(failed);
+export const g = recover(failed, () => Effect.succeed(0));
+export const h = failed.pipe(fallback(() => 0));
+`;
+
+const TYPE_QUERIES = `import { Effect } from "effect";
+import * as Direct from "effect/Effect";
+import { ignore, ignoreCause as discard } from "effect/Effect";
+const Fx = Effect;
+const { ignore: drop } = Fx;
+export type Named = typeof ignore;
+export type Renamed = typeof discard;
+export type Qualified = typeof ignore.call;
+export type Module = typeof Effect;
+export type Namespace = typeof Direct;
+export type Alias = typeof Fx;
+export type Destructured = typeof drop;
+export type Member = typeof Fx.ignore;
+`;
+
+const SAFE_CONST_BINDINGS = `import { Effect } from "effect";
+const Fx = Effect;
+const { catchEager: recover, orElseSucceed: fallback } = Fx;
+const failed = Effect.fail("boom");
+export const a = recover(failed, (error) => Effect.succeed(error.length));
+export const b = failed.pipe(recover((error: string) => Effect.succeed(error.length)));
+export const c = fallback(failed, (error) => error.length);
+export const d = failed.pipe(fallback((error: string) => error.length));
+export function parameter(Fx: { ignore: () => number }, recover: () => number): number {
+  return Fx.ignore() + recover();
+}
+export function local(): number {
+  const Fx = { ignore: (): number => 1 };
+  const recover = (): number => 2;
+  return Fx.ignore() + recover();
+}
+export const dynamic = (key: "ignore" | "ignoreCause"): typeof Fx.ignore | typeof Fx.ignoreCause => Fx[key];
+let Mutable = Effect;
+var Variable = Effect;
+let { ignore: mutableDrop } = Effect;
+var { ignore: variableDrop } = Effect;
+export const e = Mutable.ignore(failed);
+export const f = Variable.ignore(failed);
+export const g = mutableDrop(failed);
+export const h = variableDrop(failed);
+`;
+
+test("consumer rejects const namespace aliases and renamed destructures instead of allowing static escapes", async () => {
+  const result = await lint(CONST_BINDINGS);
+  expect(result.exitCode).toBe(1);
+  expect(refusals(result)).toEqual([
+    "9: Effect.ignore", "10: Effect.ignoreCause", "11: Effect.ignore", "12: Effect.ignoreCause",
+    "13: Effect.catchCause", "14: Effect.ignore", "15: Effect.catchEager", "16: Effect.orElseSucceed",
+  ]);
+  expect(await lint(SAFE_CONST_BINDINGS)).toEqual({ exitCode: 0, text: "" });
+});
+
+test("consumer permits type queries instead of reporting type-only combinator references as escapes", async () => {
+  expect(await lint(TYPE_QUERIES)).toEqual({ exitCode: 0, text: "" });
+});
+
 const SHADOWED = `import { Effect } from "effect";
 import { ignore as discard } from "effect/Effect";
 export const effect = Effect.succeed(discard(Effect.succeed(1)));
