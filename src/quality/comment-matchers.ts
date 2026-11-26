@@ -246,8 +246,11 @@ function openingBlock(found: readonly Comment[], source: string): Comment[] {
 export const REFUSED_DIRECTIVES = [
   "@ts-expect-error",
   "@ts-ignore",
+  "@ts-nocheck",
   "biome-ignore",
   "eslint-disable",
+  "oxlint-disable",
+  "oxlint-enable",
   "prettier-ignore",
   "stylelint-disable",
 ] as const satisfies readonly string[];
@@ -267,6 +270,9 @@ type Check = {
   readonly refusal: (match: string) => string;
 };
 
+const recordRefusal = (match: string): string =>
+  `points at a record or a ticket (${JSON.stringify(match.trim())}). Drop the pointer: a record is reached by searching docs/adr, and the story of the change goes in the commit message`;
+
 const CHECKS: readonly Check[] = [
   {
     find: DIRECTIVE,
@@ -275,8 +281,11 @@ const CHECKS: readonly Check[] = [
   },
   {
     find: /\bADR[\s-]?\d+|\bdocs\/adr\b|(?:^|[\s(["'`])#\d+\b|[\w.-]+\/[\w.-]+#\d+|\/(?:issues|pull)\/\d+/i,
-    refusal: (match) =>
-      `points at a record or a ticket (${JSON.stringify(match.trim())}). Drop the pointer: a record is reached by searching docs/adr, and the story of the change goes in the commit message`,
+    refusal: recordRefusal,
+  },
+  {
+    find: /\b(?!SHA-(?:1|224|256|384|512)\b)[A-Z]{2,}-\d+\b/,
+    refusal: recordRefusal,
   },
   {
     find: /^\/\*\*/,

@@ -154,4 +154,5 @@ test("a tracker key is refused, not treated as ordinary text", () => {
     'src/a.ts:2 points at a record or a ticket ("ABC-123"). Drop the pointer: a record is reached by searching docs/adr, and the story of the change goes in the commit message',
   ]);
   expect(Effect.runSync(refused("src/a.ts", "const a = 1;\n// handles utf8 and version2\n", new Set([2])))).toEqual([]);
+  expect(Effect.runSync(refused("src/a.ts", "const a = 1;\n// verify SHA-256\n", new Set([2])))).toEqual([]);
 });
