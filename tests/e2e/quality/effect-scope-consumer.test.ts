@@ -173,6 +173,95 @@ test(
   180_000,
 );
 
+const ASYNC_PLANT = `import { Effect } from "effect";
+export async function later(): Promise<number> {
+  return 1;
+}
+export const shared = (cause: unknown): Effect.Effect<never, unknown> => Effect.fail(cause);
+`;
+
+const ASYNC_RULE = "oxc(no-async-await)";
+const ASYNC_DIAGNOSTIC = "asyncFunction";
+
+function scopeGate(...args: readonly string[]) {
+  return tree.run(process.execPath, [join(CHECKOUT, "src", "quality", "effect-scope.ts"), ...args]);
+}
+
+async function expectAsyncPaths(expected: readonly string[]): Promise<void> {
+  const { linted } = await oxlint([]);
+  const diagnosed = await diagnostics();
+  const pathsWith = (report: ReadonlyMap<string, readonly string[]>, rule: string) =>
+    [...report].filter(([, rules]) => rules.includes(rule)).map(([file]) => file).sort();
+  expect(pathsWith(linted, ASYNC_RULE)).toEqual([...expected].sort());
+  expect(pathsWith(diagnosed, ASYNC_DIAGNOSTIC)).toEqual(pathsWith(linted, ASYNC_RULE));
+}
+
+test("scope generation does not certify async diagnostics that disagree with ordered oxlint overrides", async () => {
+  await consumer();
+  await tree.put("oxlint.config.ts", `import { defineConfig } from "@avi2dg/checks/oxlint";
+const config = defineConfig({
+  effect: { files: ["scripts/**/*.ts"], excludeFiles: ["scripts/excluded.ts"] },
+  overrides: [
+    { files: ["scripts/host/**"], excludeFiles: ["scripts/host/pass.ts"], rules: { "oxc/no-async-await": "off" } },
+    { files: ["scripts/host/again.ts"], rules: { "oxc/no-async-await": ["error"] } },
+  ],
+});
+export default {
+  ...config,
+  overrides: config.overrides.map((override) => override.rules?.["effect-channel/no-try-catch"] === "error"
+    ? { ...override, rules: { ...Object.fromEntries(Object.entries(override.rules).reverse()), "eslint/no-debugger": "error" } }
+    : override),
+};
+`);
+  const positive = ["scripts/main.ts", "scripts/host/again.ts", "scripts/host/pass.ts"];
+  for (const path of [...positive, "scripts/host/off.ts", "scripts/excluded.ts", UNSCOPED]) await tree.put(path, ASYNC_PLANT);
+  const generated = await scopeGate();
+  expect(generated.exitCode).toBe(0);
+  expect((await scopeGate("--check")).exitCode).toBe(0);
+  await expectAsyncPaths(positive);
+  expect((await diagnostics()).get(UNSCOPED)).toContain("anyUnknownInErrorContext");
+}, 180_000);
+
+test("scope check does not certify brace or basename paths or paths ignored only by oxlint", async () => {
+  const cases = [
+    { scope: '{ files: ["scripts/{a,b}.ts"] }', extra: "", ignore: "", expected: ["scripts/a.ts", "scripts/b.ts"] },
+    { scope: '{ files: ["scripts/**/*.ts"], excludeFiles: ["scripts/{a,b}.ts"] }', extra: "", ignore: "", expected: ["scripts/nested/a.ts"] },
+    { scope: '{ files: ["a.ts"] }', extra: "", ignore: "", expected: ["scripts/a.ts", "scripts/nested/a.ts"] },
+    { scope: '{ files: ["scripts/**/*.ts"] }', extra: ', ignorePatterns: ["scripts/b.ts"]', ignore: "", expected: ["scripts/a.ts", "scripts/nested/a.ts"] },
+    { scope: '{ files: ["scripts/**/*.ts"] }', extra: "", ignore: "scripts/b.ts\\n", expected: ["scripts/a.ts", "scripts/nested/a.ts"] },
+  ];
+  for (const { scope, extra, ignore, expected } of cases) {
+    await consumer();
+    await tree.put(".gitignore", "node_modules/\n" + ignore.replaceAll("\\n", "\n"));
+    await tree.put("oxlint.config.ts", `import { defineConfig } from "@avi2dg/checks/oxlint";
+export default defineConfig({ effect: ${scope}${extra} });
+`);
+    for (const path of ["scripts/a.ts", "scripts/b.ts", "scripts/nested/a.ts"]) await tree.put(path, ASYNC_PLANT);
+    const generated = await scopeGate();
+    const checked = await scopeGate("--check");
+    if (generated.exitCode === 0) {
+      expect(checked.exitCode).toBe(0);
+      await expectAsyncPaths(expected);
+    } else {
+      expect(checked.exitCode).toBe(2);
+    }
+  }
+}, 180_000);
+
+test("globstar and question mark include new matches without dropping ordinary excludes", async () => {
+  await consumer();
+  await tree.put("oxlint.config.ts", `import { defineConfig } from "@avi2dg/checks/oxlint";
+export default defineConfig({ effect: { files: ["scripts/**/task?.ts"], excludeFiles: ["scripts/host/**"] } });
+`);
+  for (const path of ["scripts/task1.ts", "scripts/nested/task2.ts", "scripts/host/task3.ts", "scripts/task10.ts"]) {
+    await tree.put(path, ASYNC_PLANT);
+  }
+  expect((await scopeGate()).exitCode).toBe(0);
+  await tree.put("scripts/nested/task4.ts", ASYNC_PLANT);
+  expect((await scopeGate("--check")).exitCode).toBe(0);
+  await expectAsyncPaths(["scripts/task1.ts", "scripts/nested/task2.ts", "scripts/nested/task4.ts"]);
+}, 180_000);
+
 test(
   "this checkout's own oxlint config fails a shebang bin on process.exit through the stand-in rule",
   async () => {
