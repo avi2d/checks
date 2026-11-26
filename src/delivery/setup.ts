@@ -244,13 +244,13 @@ function finalizePackage(
   devDependencies: MutableRecord,
   isPrivate: boolean,
   fallbackName: string,
-): { readonly merged: MutableRecord; readonly hasOwner: boolean } {
-  const merged: MutableRecord = { ...record, scripts, devDependencies };
-  if (typeof merged["name"] !== "string") merged["name"] = fallbackName;
+): { readonly merged: MutableRecord; readonly hasOwner: boolean; readonly name: string } {
+  const name = typeof record["name"] === "string" ? record["name"] : fallbackName;
+  const merged: MutableRecord = { ...record, name, scripts, devDependencies };
   if (merged["type"] === undefined) merged["type"] = "module";
   if (isPrivate) merged["private"] = true;
   const hasOwner = "author" in merged || "contributors" in merged;
-  return { merged, hasOwner };
+  return { merged, hasOwner, name };
 }
 
 const writeFreshPackage = Effect.fn("writeFreshPackage")(function* (root: string, isPrivate: boolean, pins: Pins, fallbackName: string) {
@@ -268,7 +268,7 @@ const writeFreshPackage = Effect.fn("writeFreshPackage")(function* (root: string
   yield* system.makeDirectory(path.dirname(full), { recursive: true });
   yield* system.writeFileString(full, JSON.stringify(manifest, undefined, 2) + "\n");
   yield* Console.log(NAME + ": wrote package.json");
-  return { hasOwner: false };
+  return { hasOwner: false, name: fallbackName };
 });
 
 const updatePackage = Effect.fn("updatePackage")(function* (
@@ -298,7 +298,7 @@ const updatePackage = Effect.fn("updatePackage")(function* (
     yield* system.writeFileString(full, next);
     yield* Console.log(NAME + ": wrote package.json");
   }
-  return { hasOwner: finalized.hasOwner };
+  return { hasOwner: finalized.hasOwner, name: finalized.name };
 });
 const setupPackage = Effect.fn("setupPackage")(function* (root: string, isPrivate: boolean, pins: Pins, fallbackName: string) {
   const system = yield* FileSystem.FileSystem;
@@ -321,16 +321,13 @@ const setupWorkflows = Effect.fn("setupWorkflows")(function* (root: string, set:
   yield* setupFile(root, "stryker.conf.mjs", STRYKER_CONFIG);
 });
 
-const setupDocFiles = Effect.fn("setupDocFiles")(function* (root: string) {
+const setupDocFiles = Effect.fn("setupDocFiles")(function* (root: string, name: string) {
   for (const kind of Object.keys(TEMPLATES)) {
     yield* setupFile(root, "templates/" + kind + ".md", yield* kitText("dist/templates/" + kind + ".md"));
   }
   const wroteAgents = yield* setupFile(root, "AGENTS.md", yield* kitText("dist/templates/agents.md"));
   yield* setupFile(root, "CLAUDE.md", yield* kitText("dist/templates/claude.md"));
   const wroteVision = yield* setupFile(root, VISION_PAGE, yield* kitText("dist/templates/vision.md"));
-  const system = yield* FileSystem.FileSystem;
-  const manifest = yield* parsePackageRecord(yield* system.readFileString((yield* Path.Path).join(root, "package.json")));
-  const name = typeof manifest["name"] === "string" ? manifest["name"] : (yield* Path.Path).basename(root);
   yield* setupFile(root, "CHANGELOG.md", renderChangelog(name, [], ""));
   return { wroteAgents, wroteVision };
 });
@@ -380,7 +377,7 @@ const check = Effect.gen(function* () {
   yield* setupFile(root, "knip.config.ts", KNIP_CONFIG);
   yield* setupFile(root, ".jscpd.json", JSCPD_CONFIG);
   yield* setupWorkflows(root, set, isKit);
-  const { wroteAgents, wroteVision } = yield* setupDocFiles(root);
+  const { wroteAgents, wroteVision } = yield* setupDocFiles(root, outcome.name);
   if (!set.options.publicRepository) yield* Console.log(NAME + ": set the CI_RUNS_ON variable to a self-hosted runner label so the new jobs land there");
   if (!outcome.hasOwner) {
     yield* Console.log(NAME + ": declare the repository owners in package.json author or contributors before the first commit");
