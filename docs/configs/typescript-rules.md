@@ -51,10 +51,11 @@ The base loads the kit's `data-shape` plugin from `dist/` and turns on `data-sha
 - `data-shape/readonly-collection-param` refuses a parameter typed `T[]`, `Array<T>`, `Map` or `Set` that the function never mutates, stores, returns or passes on, and passing it to a readonly parameter of a function declared in the same file does not count as passing it on.
 - Type such a parameter `readonly T[]`, `ReadonlyArray<T>`, `ReadonlyMap` or `ReadonlySet`.
 - `data-shape/schema-twin` refuses an object type whose fields match a `Schema.Struct`, `TaggedStruct`, `Class` or `TaggedErrorClass` in the same file.
-- It compares field names, optionality, supported scalar types and literal values, and passes over fields it cannot compare.
-- It recognizes `Schema` imported from `effect`, including an alias.
-- Derive such a type from the schema with `typeof Name.Type` instead of writing both.
-- For a tagged error class, derive the encoded shape with `typeof Name.Encoded`.
+- It compares field names, optionality, supported scalar types and literal values.
+- It does not report an object type when any of its fields is one it cannot compare.
+- It recognizes `Schema` imported from `effect`, including an alias, and a namespace import of `effect/Schema`.
+- Derive such a type from a `Struct` or `TaggedStruct` with `typeof Name.Type` instead of writing both.
+- Derive it from a `Class` or `TaggedErrorClass` with `typeof Name.Encoded`, the plain object shape rather than the class instance.
 
 The plugin carries a fourth rule that the base leaves off:
 

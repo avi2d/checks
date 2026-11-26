@@ -605,7 +605,7 @@ function schemaCallName(node, isSchema) {
   if (node.type !== "MemberExpression")
     return;
   const { object, property } = node;
-  if (object.type !== "Identifier" || !isSchema(object) || node.computed || property.type !== "Identifier")
+  if (node.computed || property.type !== "Identifier" || object.type !== "Identifier" || !isSchema(object))
     return;
   return property.name;
 }
@@ -620,9 +620,12 @@ function refinedBase(value) {
     return;
   return callee.object;
 }
+function literalKey(value) {
+  return typeof value === "bigint" ? `${value}n` : JSON.stringify(value);
+}
 function schemaLiteral(value, name) {
   const arg = value.arguments[0];
-  return name === "Literal" && value.arguments.length === 1 && arg?.type === "Literal" ? JSON.stringify(arg.value) : undefined;
+  return name === "Literal" && value.arguments.length === 1 && arg?.type === "Literal" ? literalKey(arg.value) : undefined;
 }
 function schemaKind(value, isSchema) {
   if (value !== undefined && value.type === "CallExpression") {
@@ -652,7 +655,7 @@ function shapeFields(node) {
     if (name === undefined)
       return [];
     const type = member.typeAnnotation?.typeAnnotation;
-    const literal = type?.type === "TSLiteralType" && type.literal.type === "Literal" ? JSON.stringify(type.literal.value) : undefined;
+    const literal = type?.type === "TSLiteralType" && type.literal.type === "Literal" ? literalKey(type.literal.value) : undefined;
     found.push({ name, optional: member.optional, kind: typeKind(type), ...literal === undefined ? {} : { literal } });
   }
   return found;
@@ -663,7 +666,7 @@ function tagField(call, tagged) {
   const tag = call.arguments[0];
   if (tag?.type !== "Literal" || typeof tag.value !== "string")
     return;
-  return [{ name: "_tag", optional: false, kind: "literal", literal: JSON.stringify(tag.value) }];
+  return [{ name: "_tag", optional: false, kind: "literal", literal: literalKey(tag.value) }];
 }
 function schemaFields(call, isSchema) {
   const { callee } = call;
@@ -671,7 +674,7 @@ function schemaFields(call, isSchema) {
   if (inner.type !== "MemberExpression")
     return;
   const { object, property } = inner;
-  if (object.type !== "Identifier" || !isSchema(object) || inner.computed || property.type !== "Identifier" || !STRUCTS.has(property.name)) {
+  if (inner.computed || property.type !== "Identifier" || !STRUCTS.has(property.name) || object.type !== "Identifier" || !isSchema(object)) {
     return;
   }
   const fields = call.arguments.find((one) => one.type === "ObjectExpression");
@@ -729,7 +732,7 @@ var rule4 = {
       while (scope !== null) {
         const variable = scope.set.get(node.name);
         if (variable !== undefined)
-          return variable.defs.some((def) => def.type === "ImportBinding" && def.node.type === "ImportSpecifier" && def.node.imported.type === "Identifier" && def.node.imported.name === "Schema" && def.parent?.type === "ImportDeclaration" && def.parent.source.value === "effect");
+          return variable.defs.some((def) => def.type === "ImportBinding" && def.parent?.type === "ImportDeclaration" && (def.node.type === "ImportSpecifier" && def.parent.source.value === "effect" && def.node.imported.type === "Identifier" && def.node.imported.name === "Schema" || def.node.type === "ImportNamespaceSpecifier" && def.parent.source.value === "effect/Schema"));
         scope = scope.upper;
       }
       return false;

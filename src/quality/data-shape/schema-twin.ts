@@ -6,6 +6,8 @@ type Field = { readonly name: string; readonly optional: boolean; readonly kind:
 
 type Shape = ESTree.TSTypeLiteral | ESTree.TSInterfaceBody;
 
+type IsSchema = (node: Extract<ESTree.Expression, { type: "Identifier" }>) => boolean;
+
 const STRUCTS: ReadonlySet<string> = new Set(["Struct", "TaggedStruct", "Class", "TaggedErrorClass"]);
 
 const REFINEMENTS: ReadonlySet<string> = new Set(["check", "annotate"]);
@@ -57,12 +59,12 @@ function referenceKind(value: ESTree.TSTypeReference): Kind {
   return "wild";
 }
 
-function schemaCallName(node: ESTree.Expression | undefined, isSchema: (node: Extract<ESTree.Expression, { type: "Identifier" }>) => boolean): string | undefined {
+function schemaCallName(node: ESTree.Expression | undefined, isSchema: IsSchema): string | undefined {
   if (node === undefined) return undefined;
   if (node.type === "CallExpression") return schemaCallName(node.callee, isSchema);
   if (node.type !== "MemberExpression") return undefined;
   const { object, property } = node;
-  if (object.type !== "Identifier" || !isSchema(object) || node.computed || property.type !== "Identifier") return undefined;
+  if (node.computed || property.type !== "Identifier" || object.type !== "Identifier" || !isSchema(object)) return undefined;
   return property.name;
 }
 
@@ -77,13 +79,17 @@ function refinedBase(value: ESTree.CallExpression): ESTree.Expression | undefine
   return callee.object;
 }
 
+function literalKey(value: Extract<ESTree.Expression, { type: "Literal" }>["value"]): string {
+  return typeof value === "bigint" ? `${value}n` : JSON.stringify(value);
+}
+
 function schemaLiteral(value: ESTree.CallExpression, name: string | undefined): string | undefined {
   const arg = value.arguments[0];
   return name === "Literal" && value.arguments.length === 1 && arg?.type === "Literal"
-    ? JSON.stringify(arg.value) : undefined;
+    ? literalKey(arg.value) : undefined;
 }
 
-function schemaKind(value: ESTree.Expression | undefined, isSchema: (node: Extract<ESTree.Expression, { type: "Identifier" }>) => boolean): { readonly optional: boolean; readonly kind: Kind; readonly literal?: string } {
+function schemaKind(value: ESTree.Expression | undefined, isSchema: IsSchema): { readonly optional: boolean; readonly kind: Kind; readonly literal?: string } {
   if (value !== undefined && value.type === "CallExpression") {
     const name = schemaCallName(value.callee, isSchema);
     if (name === "optionalKey") {
@@ -108,7 +114,7 @@ function shapeFields(node: Shape): Field[] {
     const name = keyName(member.key);
     if (name === undefined) return [];
     const type = member.typeAnnotation?.typeAnnotation;
-    const literal = type?.type === "TSLiteralType" && type.literal.type === "Literal" ? JSON.stringify(type.literal.value) : undefined;
+    const literal = type?.type === "TSLiteralType" && type.literal.type === "Literal" ? literalKey(type.literal.value) : undefined;
     found.push({ name, optional: member.optional, kind: typeKind(type), ...(literal === undefined ? {} : { literal }) });
   }
   return found;
@@ -118,15 +124,15 @@ function tagField(call: ESTree.CallExpression, tagged: boolean): Field[] | undef
   if (!tagged) return [];
   const tag = call.arguments[0];
   if (tag?.type !== "Literal" || typeof tag.value !== "string") return undefined;
-  return [{ name: "_tag", optional: false, kind: "literal", literal: JSON.stringify(tag.value) }];
+  return [{ name: "_tag", optional: false, kind: "literal", literal: literalKey(tag.value) }];
 }
 
-function schemaFields(call: ESTree.CallExpression, isSchema: (node: Extract<ESTree.Expression, { type: "Identifier" }>) => boolean): Field[] | undefined {
+function schemaFields(call: ESTree.CallExpression, isSchema: IsSchema): Field[] | undefined {
   const { callee } = call;
   const inner = callee.type === "CallExpression" ? callee.callee : callee;
   if (inner.type !== "MemberExpression") return undefined;
   const { object, property } = inner;
-  if (object.type !== "Identifier" || !isSchema(object) || inner.computed || property.type !== "Identifier" || !STRUCTS.has(property.name)) {
+  if (inner.computed || property.type !== "Identifier" || !STRUCTS.has(property.name) || object.type !== "Identifier" || !isSchema(object)) {
     return undefined;
   }
   const fields = call.arguments.find((one): one is ESTree.ObjectExpression => one.type === "ObjectExpression");
@@ -181,14 +187,16 @@ const rule: CreateRule = {
     const shapes: { readonly node: Shape; readonly fields: readonly Field[] }[] = [];
     const schemas: { readonly name: string | undefined; readonly fields: readonly Field[]; readonly encoded: boolean }[] = [];
 
-    const isSchema = (node: Extract<ESTree.Expression, { type: "Identifier" }>): boolean => {
+    const isSchema: IsSchema = (node) => {
       let scope: Scope | null = context.sourceCode.getScope(node);
       while (scope !== null) {
         const variable = scope.set.get(node.name);
         if (variable !== undefined) return variable.defs.some((def) =>
-          def.type === "ImportBinding" && def.node.type === "ImportSpecifier" &&
-          def.node.imported.type === "Identifier" && def.node.imported.name === "Schema" &&
-          def.parent?.type === "ImportDeclaration" && def.parent.source.value === "effect"
+          def.type === "ImportBinding" && def.parent?.type === "ImportDeclaration" && (
+            (def.node.type === "ImportSpecifier" && def.parent.source.value === "effect" &&
+              def.node.imported.type === "Identifier" && def.node.imported.name === "Schema") ||
+            (def.node.type === "ImportNamespaceSpecifier" && def.parent.source.value === "effect/Schema")
+          )
         );
         scope = scope.upper;
       }
