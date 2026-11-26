@@ -30,7 +30,7 @@ const blindToTheError = (handler: ESTree.Node | undefined): boolean => {
   return handler.params.every((param) => param.type === "Identifier" && /^_+$/.test(param.name));
 };
 
-function propertyName(node: ESTree.MemberExpression | ESTree.Property): string | undefined {
+function propertyName(node: ESTree.MemberExpression | ESTree.BindingProperty): string | undefined {
   const property = node.type === "MemberExpression" ? node.property : node.key;
   if (!node.computed && property.type === "Identifier") return property.name;
   if (property.type === "Literal" && typeof property.value === "string") return property.value;
@@ -71,26 +71,31 @@ const rule: CreateRule = {
         if (combinator !== undefined) checkReference(parent, combinator);
         return;
       }
-      if (parent?.type !== "VariableDeclarator" || parent.init !== identifier || parent.parent?.type !== "VariableDeclaration" || parent.parent.kind !== "const") return;
-      if (parent.id.type === "Identifier") {
-        checkBinding(parent, parent.id, { kind: "module" });
+      if (parent?.type === "VariableDeclarator" && parent.init === identifier && parent.parent.type === "VariableDeclaration" && parent.parent.kind === "const") {
+        checkModuleBinding(parent);
+      }
+    }
+
+    function checkModuleBinding(declarator: ESTree.VariableDeclarator): void {
+      if (declarator.id.type === "Identifier") {
+        checkBinding(declarator, declarator.id, { kind: "module" });
         return;
       }
-      if (parent.id.type !== "ObjectPattern") return;
-      for (const property of parent.id.properties) {
+      if (declarator.id.type !== "ObjectPattern") return;
+      for (const property of declarator.id.properties) {
         if (property.type !== "Property" || property.value.type !== "Identifier") continue;
         const name = propertyName(property);
         if (name !== undefined && (REFUSED.has(name) || BLIND_RECOVERY.has(name))) {
-          checkBinding(parent, property.value, { kind: "combinator", name });
+          checkBinding(declarator, property.value, { kind: "combinator", name });
         }
       }
     }
 
-    function checkBinding(declaration: ESTree.Node, identifier: ESTree.Identifier, binding: EffectBinding): void {
+    function checkBinding(declaration: ESTree.Node, identifier: ESTree.BindingIdentifier, binding: EffectBinding): void {
       for (const variable of context.sourceCode.getDeclaredVariables(declaration)) {
         if (variable.name !== identifier.name) continue;
         for (const reference of variable.references) {
-          if (!reference.isRead() || reference.identifier.parent?.type === "TSTypeQuery" || reference.identifier.parent?.type === "TSQualifiedName") continue;
+          if (!reference.isRead() || reference.identifier.parent.type === "TSTypeQuery" || reference.identifier.parent.type === "TSQualifiedName") continue;
           if (binding.kind === "module") checkModuleReference(reference.identifier);
           else checkReference(reference.identifier, binding.name);
         }

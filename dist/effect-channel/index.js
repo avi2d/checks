@@ -66,20 +66,23 @@ var rule = {
           checkReference(parent, combinator);
         return;
       }
-      if (parent?.type !== "VariableDeclarator" || parent.init !== identifier || parent.parent?.type !== "VariableDeclaration" || parent.parent.kind !== "const")
-        return;
-      if (parent.id.type === "Identifier") {
-        checkBinding(parent, parent.id, { kind: "module" });
+      if (parent?.type === "VariableDeclarator" && parent.init === identifier && parent.parent.type === "VariableDeclaration" && parent.parent.kind === "const") {
+        checkModuleBinding(parent);
+      }
+    }
+    function checkModuleBinding(declarator) {
+      if (declarator.id.type === "Identifier") {
+        checkBinding(declarator, declarator.id, { kind: "module" });
         return;
       }
-      if (parent.id.type !== "ObjectPattern")
+      if (declarator.id.type !== "ObjectPattern")
         return;
-      for (const property of parent.id.properties) {
+      for (const property of declarator.id.properties) {
         if (property.type !== "Property" || property.value.type !== "Identifier")
           continue;
         const name = propertyName(property);
         if (name !== undefined && (REFUSED.has(name) || BLIND_RECOVERY.has(name))) {
-          checkBinding(parent, property.value, { kind: "combinator", name });
+          checkBinding(declarator, property.value, { kind: "combinator", name });
         }
       }
     }
@@ -88,7 +91,7 @@ var rule = {
         if (variable.name !== identifier.name)
           continue;
         for (const reference of variable.references) {
-          if (!reference.isRead() || reference.identifier.parent?.type === "TSTypeQuery" || reference.identifier.parent?.type === "TSQualifiedName")
+          if (!reference.isRead() || reference.identifier.parent.type === "TSTypeQuery" || reference.identifier.parent.type === "TSQualifiedName")
             continue;
           if (binding.kind === "module")
             checkModuleReference(reference.identifier);

@@ -221,7 +221,7 @@ const throughCache = Effect.fn("throughCache")(function* (run: number, artifact:
   // An entry already there stays, since a job sharing the runner may be copying from it, and the staged copy is whole.
   const placed = yield* fs.rename(staged, entry).pipe(
     Effect.as(entry),
-    Effect.orElseSucceed(() => staged),
+    Effect.catchTag("PlatformError", () => Effect.succeed(staged)),
   );
   yield* prune(shelf, String(artifact.id));
   return Option.some<Fetched>({ dir: placed, how: "downloaded it into the runner's cache" });
