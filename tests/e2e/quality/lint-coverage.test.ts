@@ -326,3 +326,25 @@ test(
   },
   60_000,
 );
+
+test(
+  "lint-coverage goes red on a checks.config.ts entry the nested configs no longer need, rather than letting the list outgrow what each config turns off",
+  async () => {
+    const tree = await vendoredTypesTree();
+    await tree.put(
+      "checks.config.ts",
+      `import { defineConfig } from "@avi2dg/checks/config";\n\nexport default defineConfig({ nestedOxlintConfigs: ${JSON.stringify({
+        [HERDR]: [...SIZE_AND_ANY, ...EFFECT_RULE_NAMES, "no-debugger"],
+        "packages/gone/oxlint.config.ts": ["max-lines"],
+      })} });\n`,
+    );
+    await $`git add -A`.cwd(tree.dir).quiet();
+
+    const red = await tree.run(SCRIPT, []);
+    expect(red.text).toContain(`lint-coverage: checks.config.ts nestedOxlintConfigs lets ${HERDR} turn off no-debugger, which it does not turn off or down`);
+    expect(red.text).toContain("lint-coverage: checks.config.ts nestedOxlintConfigs names packages/gone/oxlint.config.ts, which is not a tracked nested oxlint config");
+    expect(red.text).not.toContain("turns off or down rules the root oxlint config sets");
+    expect(red.exitCode).toBe(1);
+  },
+  60_000,
+);
