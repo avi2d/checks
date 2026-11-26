@@ -89,7 +89,7 @@ type Linted = {
 
 type ScopeConsumer = {
   readonly tree: KitTree;
-  readonly consumer: () => Promise<void>;
+  readonly consumer: (extraInclude?: readonly string[]) => Promise<void>;
   readonly ownOxlintConfig: () => Promise<void>;
   readonly plantViolations: () => Promise<void>;
   readonly plantClean: () => Promise<void>;
@@ -112,10 +112,10 @@ export function scopeConsumer(prefix: string): ScopeConsumer {
     run: (program, args) => current.run(program, args),
   };
 
-  async function consumer(): Promise<void> {
+  async function consumer(extraInclude: readonly string[] = []): Promise<void> {
     current = await consumerTree({
       paths: ["scripts/**/*.ts"],
-      include: ["scripts/**/*.ts", "tests/**/*.ts"],
+      include: ["scripts/**/*.ts", "tests/**/*.ts", ...extraInclude],
       types: ["bun"],
     });
   }
@@ -159,7 +159,7 @@ export function scopeConsumer(prefix: string): ScopeConsumer {
   }
 
   function scopeGate(...args: readonly string[]) {
-    return tree.run(process.execPath, [join(CHECKOUT, "src", "quality", "effect-scope.ts"), ...args]);
+    return tree.run(join(KIT_BIN, "checks-effect-scope"), args);
   }
 
   async function expectAsyncPaths(expected: readonly string[]): Promise<void> {

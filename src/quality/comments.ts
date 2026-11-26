@@ -16,6 +16,6 @@ export const comments = Effect.fn("comments")(function* (path: string, source: s
   return commentsIn(source, yield* syntaxFor(path));
 });
 
-export const refused = Effect.fn("refused")(function* (path: string, source: string, within?: ReadonlySet<number>) {
-  return refusalsIn(path, source, yield* syntaxFor(path), within);
+export const refused = Effect.fn("refused")(function* (path: string, source: string, within?: ReadonlySet<number>, trackerKeyPrefixes: readonly string[] = []) {
+  return refusalsIn(path, source, yield* syntaxFor(path), within, trackerKeyPrefixes);
 });

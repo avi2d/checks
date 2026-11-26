@@ -73,7 +73,7 @@ A repository that declares an HTML file installs the optional peer the gate load
 <!-- generated install: bun run build writes it from package.json and scripts/doc-blocks.ts -->
 
 ```sh
-bun add -d html-validate@11.16.0
+bun add -d html-validate@11.23.0
 ```
 
 <!-- end generated install -->
