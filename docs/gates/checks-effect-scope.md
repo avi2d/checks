@@ -32,7 +32,9 @@ A directory selector in `files` or `excludeFiles` must end in `/**`, not a bare 
 An ignore pattern with `!`, a character class, braces, or a backslash is refused if it may affect a TypeScript path inside an include.
 The gate recognizes simple non-TypeScript extension patterns such as `*.py[cod]`.
 A pattern rooted under a directory disjoint from every include also passes, such as `!.vscode/extensions.json`.
-A negation outside such a directory is refused, because a name with a dot, such as `!.vitepress`, can be a directory, and a name without a slash, such as `!keep/`, matches at any depth.
+A literal negation also passes when it names a tracked regular file with a non-TypeScript extension relative to its ignore file, such as `!.vscode/extensions.json`.
+The path must contain a slash or start with `/` so it cannot match at any depth.
+Other negations outside a disjoint directory are refused, because a dotted name such as `!.vitepress` can be a directory.
 When the gate cannot establish that a pattern is unrelated, it refuses the pattern.
 Use positive patterns that exclude only the paths you want to skip.
 When scoped overrides exist, a second oxlint config, `extends`, or `.eslintignore` is refused because it can change their paths or severities.

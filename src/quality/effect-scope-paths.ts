@@ -56,7 +56,19 @@ function outsideIncludes(pattern: string, directory: string, includes: readonly 
     && SOURCES.every((source) => !minimatch(source.slice(source.lastIndexOf(".")), extension));
 }
 
-const ignoreGlobs = Effect.fn("ignoreGlobs")(function* ({ file, directory, patterns }: IgnoreSource, includes: readonly string[]) {
+const trackedNonTypeScriptNegation = Effect.fn("trackedNonTypeScriptNegation")(function* (root: string, pattern: string, directory: string, trackedFiles: ReadonlySet<string>) {
+  if (!pattern.startsWith("!")) return false;
+  const relative = pattern.slice(1).replace(/^\//, "");
+  if ((!pattern.startsWith("!/") && !relative.includes("/")) || /[*?]/.test(relative) || UNSUPPORTED_GLOB.test(relative)) return false;
+  const path = yield* Path.Path;
+  const extension = path.extname(relative).toLowerCase();
+  if (extension === "" || SOURCES.some((source) => source.endsWith(extension))) return false;
+  const file = directory === "" ? relative : `${directory}/${relative}`;
+  if (!trackedFiles.has(file)) return false;
+  return (yield* (yield* FileSystem.FileSystem).lstat(path.join(root, file))).type === "File";
+});
+
+const ignoreGlobs = Effect.fn("ignoreGlobs")(function* (root: string, { file, directory, patterns }: IgnoreSource, includes: readonly string[], trackedFiles: ReadonlySet<string>) {
   return yield* Effect.forEach(patterns, (line) => {
     const pattern = line.trimEnd();
     if (pattern === "" || pattern.startsWith("#")) return Effect.succeed([]);
@@ -64,7 +76,9 @@ const ignoreGlobs = Effect.fn("ignoreGlobs")(function* ({ file, directory, patte
     const unanchored = pattern.replace(/^\//, "").replace(/\/$/, "");
     if (unanchored === "" || UNSUPPORTED_GLOB.test(unanchored)) {
       if (outsideIncludes(pattern, directory, includes)) return Effect.succeed([]);
-      return Effect.fail(pathFault(file, line, "use separate positive file or directory patterns with * or ? instead"));
+      return trackedNonTypeScriptNegation(root, pattern, directory, trackedFiles).pipe(Effect.flatMap((safe) => safe
+        ? Effect.succeed([])
+        : Effect.fail(pathFault(file, line, "use separate positive file or directory patterns with * or ? instead"))));
     }
     const relative = pattern.startsWith("/") || unanchored.includes("/") ? unanchored : `**/${unanchored}`;
     const rooted = directory === "" ? relative : `${directory}/${relative}`;
@@ -72,13 +86,13 @@ const ignoreGlobs = Effect.fn("ignoreGlobs")(function* ({ file, directory, patte
   });
 });
 
-const readIgnore = Effect.fn("readIgnore")(function* (root: string, file: string, directory: string, includes: readonly string[]) {
+const readIgnore = Effect.fn("readIgnore")(function* (root: string, file: string, directory: string, includes: readonly string[], trackedFiles: ReadonlySet<string>) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const full = path.resolve(root, file);
   if (!(yield* fs.exists(full))) return [];
   const text = yield* fs.readFileString(full);
-  return yield* ignoreGlobs({ file, directory, patterns: text.split(/\r?\n/) }, includes).pipe(Effect.map((lists) => lists.flat()));
+  return yield* ignoreGlobs(root, { file, directory, patterns: text.split(/\r?\n/) }, includes, trackedFiles).pipe(Effect.map((lists) => lists.flat()));
 });
 
 const CONFIG_NAMES = [".oxlintrc.json", ".oxlintrc.jsonc", "oxlint.config.mts", "oxlint.config.cts", "oxlint.config.js", "oxlint.config.mjs", "oxlint.config.cjs"];
@@ -86,7 +100,7 @@ const CONFIG_NAMES = [".oxlintrc.json", ".oxlintrc.jsonc", "oxlint.config.mts", 
 const nestedConfigFault = (file: string) =>
   new EffectScopeError({ message: `${file} may change what oxlint checks; put its rules in ordered overrides in the root oxlint.config.ts instead` });
 
-const gitScopeIgnores = Effect.fn("gitScopeIgnores")(function* (root: string, includes: readonly string[]) {
+const gitScopeFiles = Effect.fn("gitScopeFiles")(function* (root: string) {
   const path = yield* Path.Path;
   const fs = yield* FileSystem.FileSystem;
   if (!(yield* fs.exists(path.join(root, ".git")))) return [];
@@ -96,10 +110,8 @@ const gitScopeIgnores = Effect.fn("gitScopeIgnores")(function* (root: string, in
   yield* Effect.forEach(nested, (file) => Effect.gen(function* () {
     if (yield* fs.exists(path.join(root, file))) return yield* nestedConfigFault(file);
   }));
-  const tracked = yield* git(["ls-files", "-z", "--cached", "--", ":(glob)**/.gitignore"], root);
-  const ignored = yield* Effect.forEach(tracked.split("\0").filter(Boolean).sort(), (file) =>
-    readIgnore(root, file, file.includes("/") ? path.dirname(file) : "", includes));
-  return ignored.flat();
+  const tracked = yield* git(["ls-files", "-z", "--cached"], root);
+  return tracked.split("\0").filter(Boolean).sort();
 });
 
 export const globalExcludes = Effect.fn("globalExcludes")(function* (root: string, patterns: readonly string[], includes: readonly string[]) {
@@ -111,9 +123,9 @@ export const globalExcludes = Effect.fn("globalExcludes")(function* (root: strin
   if (yield* fs.exists(path.join(root, ".eslintignore"))) {
     return yield* new EffectScopeError({ message: ".eslintignore may change what oxlint checks; use ignorePatterns in oxlint.config.ts instead" });
   }
-  const configured = yield* ignoreGlobs({ file: "oxlint ignorePatterns", directory: "", patterns }, includes);
-  return [
-    ...configured.flat(),
-    ...(yield* gitScopeIgnores(root, includes)),
-  ];
+  const trackedFiles = new Set(yield* gitScopeFiles(root));
+  const configured = yield* ignoreGlobs(root, { file: "oxlint ignorePatterns", directory: "", patterns }, includes, trackedFiles);
+  const ignored = yield* Effect.forEach([...trackedFiles].filter((file) => file === ".gitignore" || file.endsWith("/.gitignore")), (file) =>
+    readIgnore(root, file, file.includes("/") ? path.dirname(file) : "", includes, trackedFiles));
+  return [...configured.flat(), ...ignored.flat()];
 });
