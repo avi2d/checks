@@ -272,6 +272,41 @@ test(
   60_000,
 );
 
+const DEEPER = "packages/a/b/.oxlintrc.json";
+
+test(
+  "lint-coverage judges a file by the nested config in its own directory, rather than by a shallower one whose longer file name sorts first",
+  async () => {
+    const tree = await consumerTree({ paths: ["src/**/*.ts", "packages/**/*.ts"], include: ["src/**/*.ts", "packages/**/*.ts"], types: [] });
+    await tree.put("package.json", { name: "nested-consumer", type: "module" });
+    await tree.put("src/control.ts", ANY_BOUNDARY);
+    await tree.put("packages/a/b/x.ts", ANY_BOUNDARY);
+    await tree.put(
+      "packages/a/oxlint.config.mts",
+      [
+        'import { defineConfig } from "@avi2dg/checks/oxlint";',
+        "",
+        'const { options: _rootOnly, ...config } = defineConfig({ effect: { files: ["**/*.ts"] } });',
+        "",
+        "export default config;",
+        "",
+      ].join("\n"),
+    );
+    await tree.put(DEEPER, { plugins: ["typescript"], rules: { "typescript/no-explicit-any": "off" } });
+    await $`git add -A`.cwd(tree.dir).quiet();
+
+    const oxlint = join(KIT_BIN, "oxlint");
+    expect((await tree.run(oxlint, ["src/control.ts"])).exitCode).toBe(1);
+    expect((await tree.run(oxlint, ["packages/a/b/x.ts"])).exitCode).toBe(0);
+
+    const red = await tree.run(SCRIPT, []);
+    expect(red.text).toContain(`lint-coverage: ${DEEPER} turns off or down rules the root oxlint config sets`);
+    expect(red.text).toContain("  off: typescript/no-explicit-any\n");
+    expect(red.exitCode).toBe(1);
+  },
+  60_000,
+);
+
 const HERDR = "packages/herdr-app/oxlint.config.ts";
 
 const SIZE_AND_ANY = ["typescript/no-explicit-any", "max-lines", "max-lines-per-function", "max-statements", "readability/cognitive-complexity", "max-depth"];
