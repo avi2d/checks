@@ -3,7 +3,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { consumerTrees } from "../lib/consumer-tree.ts";
+import { consumerTrees, KIT_BIN } from "../lib/consumer-tree.ts";
 import { CHECKOUT, ran, type Ran } from "../lib/fixture-repo.ts";
 
 const SCRIPT = join(CHECKOUT, "src", "quality", "lint-coverage.sh");
@@ -237,6 +237,37 @@ test(
       expect(green.text).toContain("holds the ts-reset rules is-array and json-parse");
       expect(green.exitCode).toBe(0);
     }
+  },
+  60_000,
+);
+
+const QUEUES = "packages/queues/oxlint.config.ts";
+
+const ANY_BOUNDARY = "export function seed(value: any) {\n  return value;\n}\n";
+
+test(
+  "lint-coverage goes red on a nested oxlint config that turns rules off for its package, rather than passing what oxlint no longer flags there",
+  async () => {
+    const tree = await consumerTree({ paths: ["src/**/*.ts", "packages/**/*.ts"], include: ["src/**/*.ts", "packages/**/*.ts"], types: [] });
+    await tree.put("package.json", { name: "nested-consumer", type: "module" });
+    await tree.put("src/control.ts", ANY_BOUNDARY);
+    await tree.put("packages/queues/src/seed-nested.ts", ANY_BOUNDARY);
+    await tree.put(
+      QUEUES,
+      'export default { rules: { "typescript/no-explicit-any": "off", "typescript/explicit-module-boundary-types": "off", "max-lines": "off" } };\n',
+    );
+    await $`git add -A`.cwd(tree.dir).quiet();
+
+    const oxlint = join(KIT_BIN, "oxlint");
+    expect((await tree.run(oxlint, ["src/control.ts"])).exitCode).toBe(1);
+    expect((await tree.run(oxlint, ["packages/queues/src/seed-nested.ts"])).exitCode).toBe(0);
+
+    const red = await tree.run(SCRIPT, []);
+    expect(red.text).toContain(`lint-coverage: ${QUEUES} turns off or down rules the root oxlint config sets`);
+    expect(red.text).toMatch(/ {2}off: .*\btypescript\/no-explicit-any\b/);
+    expect(red.text).toMatch(/ {2}off: .*\btypescript\/explicit-module-boundary-types\b/);
+    expect(red.text).toMatch(/ {2}off: .*\bmax-lines\b/);
+    expect(red.exitCode).toBe(1);
   },
   60_000,
 );
