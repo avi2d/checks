@@ -119,3 +119,50 @@ test(
   },
   120_000,
 );
+
+test("configured tracker keys go red while undeclared standards and other prefixes stay green", async () => {
+  const { write, commit, script } = await repository({
+    "checks.config.ts": 'export default { trackerKeyPrefixes: ["ORC", "ADR"] };\n',
+    "widget.ts": "export const widget = 1;\n",
+  });
+  const base = await commit("start with declared tracker prefixes");
+  await write({ "widget.ts": "export const widget = 1;\n// IEEE-754, CRC-32, SHA-3 and ORC-123\n// ADR-0013\n" });
+  const dirty = await commit("add a configured key and an ADR pointer");
+  const red = await script(GATE, base, dirty);
+  expect(red.exitCode).toBe(1);
+  expect(red.text).toContain("comment-gate: 2 violation(s):");
+  expect(red.text).toContain('widget.ts:2 points at a record or a ticket ("ORC-123")');
+  expect(red.text).toContain('widget.ts:3 points at a record or a ticket ("ADR-0013")');
+
+  await write({ "widget.ts": "export const widget = 1;\n// IEEE-754, CRC-32, SHA-3 and OTHER-123\n" });
+  const fixed = await commit("remove only the refused pointers");
+  const green = await script(GATE, dirty, fixed);
+  expect(green.exitCode).toBe(0);
+  expect(green.text).toContain("carry no refused comment");
+}, 120_000);
+
+for (const config of [undefined, "export default { trackerKeyPrefixes: [] };\n"]) {
+  test(`${config === undefined ? "missing" : "empty"} tracker prefix settings do not refuse arbitrary keys`, async () => {
+    const { write, commit, script } = await repository(config === undefined ? {} : { "checks.config.ts": config });
+    await write({ "widget.ts": "export const widget = 1;\n" });
+    const base = await commit("start without tracker prefixes");
+    await write({ "widget.ts": "export const widget = 1;\n// ORC-123 and IEEE-754, CRC-32, SHA-3\n" });
+    const head = await commit("add keys without declaring their prefixes");
+    const result = await script(GATE, base, head);
+    expect(result.exitCode).toBe(0);
+    expect(result.text).toContain("carry no refused comment");
+  }, 120_000);
+}
+
+for (const prefixes of ["ORC", [1], [""], ["orc"], ["ORC|ADR"]]) {
+  test(`invalid tracker prefixes ${JSON.stringify(prefixes)} fail instead of silently widening matching`, async () => {
+    const { commit, script } = await repository({
+      "checks.config.ts": `export default { trackerKeyPrefixes: ${JSON.stringify(prefixes)} };\n`,
+      "widget.ts": "export const widget = 1;\n",
+    });
+    const head = await commit("set invalid tracker prefixes");
+    const result = await script(GATE, head);
+    expect(result.exitCode).toBe(2);
+    expect(result.text).toContain("checks.config.ts key trackerKeyPrefixes does not decode");
+  }, 120_000);
+}
