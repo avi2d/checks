@@ -59,7 +59,7 @@ function isSizeRule(name: string): name is SizeRule {
 const OPT_IN_PEERS = {
   "checks-browser": ["playwright-core", "@axe-core/playwright", "html-validate"],
   "checks-copy": ["html-validate"],
-  "checks-frontend-syntax": ["stylelint", "postcss-html", "stylelint-config-standard", "stylelint-plugin-use-baseline", "postcss-value-parser"],
+  "checks-frontend-syntax": ["stylelint", "postcss-html", "stylelint-config-standard", "stylelint-plugin-use-baseline"],
 } as const;
 
 export type KitFacts = {

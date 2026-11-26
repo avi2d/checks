@@ -14,7 +14,7 @@ test("packed consumer detects invalid CSS without installing the kit's parser as
     const packed = await $`bun pm pack --destination ${root} --quiet --ignore-scripts`.cwd(CHECKOUT).quiet();
     const manifest = Schema.decodeSync(Manifest)(await readFile(join(CHECKOUT, "package.json"), "utf8"));
     const names = ["effect", "postcss-html", "stylelint", "stylelint-config-standard", "stylelint-plugin-use-baseline"];
-    const dependencies = Object.fromEntries(names.map((name) => [name, manifest.peerDependencies[name]]));
+    const dependencies = { ...Object.fromEntries(names.map((name) => [name, manifest.peerDependencies[name]])), postcss: "^8.5.0" };
     await writeFile(join(root, "package.json"), JSON.stringify({ name: "frontend-consumer", private: true, type: "module", dependencies: { ...dependencies, "@avi2dg/checks": `file:${packed.stdout.toString().trim()}` } }));
     await $`npm install --ignore-scripts --legacy-peer-deps --install-strategy=nested`.cwd(root).quiet();
     await writeFile(join(root, "checks.config.ts"), 'export default { frontendSyntax: { inputs: ["site.css"] } };\n');
