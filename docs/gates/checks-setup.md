@@ -93,6 +93,8 @@ Fill `AGENTS.md` with what an agent cannot infer from the code before the first 
 `checks-docs` fails on the unfilled placeholder entry until it is filled.
 If setup writes `VISION.md`, fill its opening, stance sections, Scope and closing lines before the first commit.
 Name the page once in `AGENTS.md`.
+If the root has no `CHANGELOG.md`, setup writes one containing only `# Changelog` and keeps an existing file unchanged.
+Commit `CHANGELOG.md` with the setup files so `checks-ci-wiring` can read it at `HEAD`.
 Running setup again with the same kit version changes nothing.
 A later kit release arrives through [Upgrade the kit](../how-to/upgrade-the-kit.md).
 

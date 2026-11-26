@@ -327,6 +327,7 @@ const setupDocFiles = Effect.fn("setupDocFiles")(function* (root: string) {
   const wroteAgents = yield* setupFile(root, "AGENTS.md", yield* kitText("dist/templates/agents.md"));
   yield* setupFile(root, "CLAUDE.md", yield* kitText("dist/templates/claude.md"));
   const wroteVision = yield* setupFile(root, VISION_PAGE, yield* kitText("dist/templates/vision.md"));
+  yield* setupFile(root, "CHANGELOG.md", "# Changelog\n");
   return { wroteAgents, wroteVision };
 });
 
