@@ -3,7 +3,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { consumerTrees, KIT_BIN } from "../lib/consumer-tree.ts";
+import { consumerTrees, KIT_BIN, type KitTree } from "../lib/consumer-tree.ts";
 import { CHECKOUT, ran, type Ran } from "../lib/fixture-repo.ts";
 
 const SCRIPT = join(CHECKOUT, "src", "quality", "lint-coverage.sh");
@@ -267,6 +267,61 @@ test(
     expect(red.text).toMatch(/ {2}off: .*\btypescript\/no-explicit-any\b/);
     expect(red.text).toMatch(/ {2}off: .*\btypescript\/explicit-module-boundary-types\b/);
     expect(red.text).toMatch(/ {2}off: .*\bmax-lines\b/);
+    expect(red.exitCode).toBe(1);
+  },
+  60_000,
+);
+
+const HERDR = "packages/herdr-app/oxlint.config.ts";
+
+const SIZE_AND_ANY = ["typescript/no-explicit-any", "max-lines", "max-lines-per-function", "max-statements", "readability/cognitive-complexity", "max-depth"];
+
+const EFFECT_RULE_NAMES = ["node/no-sync", "oxc/no-async-await", "promise/avoid-new", "unicorn/no-process-exit", "effect-channel/no-throw", "effect-channel/no-try-catch"];
+
+async function vendoredTypesTree(): Promise<KitTree> {
+  const tree = await consumerTree({ paths: ["src/**/*.ts", "packages/**/*.ts"], include: ["src/**/*.ts", "packages/**/*.ts"], types: [] });
+  await tree.put("package.json", { name: "nested-consumer", type: "module" });
+  await tree.put("src/app.ts", "export const app = 1;\n");
+  await tree.put("packages/herdr-app/src/main.ts", "export const main = 1;\n");
+  await tree.put("packages/herdr-app/app-types/0.1.0/kit.d.ts", "export declare function vendored(value: any): any;\n");
+  await tree.put(
+    HERDR,
+    [
+      'import { defineConfig } from "@avi2dg/checks/oxlint";',
+      "",
+      "const { options: _rootOnly, ...config } = defineConfig({",
+      "  effect: false,",
+      `  overrides: [{ files: ["app-types/**/*.d.ts"], rules: ${JSON.stringify(Object.fromEntries(SIZE_AND_ANY.map((rule) => [rule, "off"])))} }],`,
+      "});",
+      "",
+      "export default config;",
+      "",
+    ].join("\n"),
+  );
+  return tree;
+}
+
+function allowing(rules: readonly string[]): string {
+  return `import { defineConfig } from "@avi2dg/checks/config";\n\nexport default defineConfig({ nestedOxlintConfigs: ${JSON.stringify({ [HERDR]: rules })} });\n`;
+}
+
+test(
+  "lint-coverage passes a nested oxlint config whose turned-off rules checks.config.ts lists, and goes red on the one rule the list leaves out rather than on every rule",
+  async () => {
+    const tree = await vendoredTypesTree();
+    await tree.put("checks.config.ts", allowing([...SIZE_AND_ANY, ...EFFECT_RULE_NAMES]));
+    await $`git add -A`.cwd(tree.dir).quiet();
+
+    const green = await tree.run(SCRIPT, []);
+    expect(green.text).not.toContain("turns off or down");
+    expect(green.exitCode).toBe(0);
+
+    await tree.put("checks.config.ts", allowing([...SIZE_AND_ANY.filter((rule) => rule !== "typescript/no-explicit-any"), ...EFFECT_RULE_NAMES]));
+    const red = await tree.run(SCRIPT, []);
+    expect(red.text).toContain(`lint-coverage: ${HERDR} turns off or down rules the root oxlint config sets`);
+    expect(red.text).toContain("  off: typescript/no-explicit-any\n");
+    expect(red.text).not.toContain("  off: max-lines\n");
+    expect(red.text).not.toContain("  off: node/no-sync\n");
     expect(red.exitCode).toBe(1);
   },
   60_000,
