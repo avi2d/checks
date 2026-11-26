@@ -42,6 +42,7 @@ It copies each kit template under `dist/templates/` into `templates/`, so a new 
 It copies `dist/templates/agents.md` to `AGENTS.md` and `dist/templates/claude.md` to `CLAUDE.md` when the root lacks them, and keeps either file it finds.
 If the root has no `VISION.md`, it copies `dist/templates/vision.md` there.
 It leaves an existing `VISION.md` unchanged.
+If the root has no `CHANGELOG.md`, it writes one with a title and a lead sentence, and keeps an existing one unchanged.
 It names every file it wrote and every file it kept.
 It tells the owner to declare the repository owners in `package.json` `author` or `contributors` before the first commit.
 
@@ -93,8 +94,6 @@ Fill `AGENTS.md` with what an agent cannot infer from the code before the first 
 `checks-docs` fails on the unfilled placeholder entry until it is filled.
 If setup writes `VISION.md`, fill its opening, stance sections, Scope and closing lines before the first commit.
 Name the page once in `AGENTS.md`.
-If the root has no `CHANGELOG.md`, setup writes one with a title and a lead sentence.
-Setup keeps an existing changelog unchanged.
 Commit `CHANGELOG.md` with the setup files so `checks-ci-wiring` can read it at `HEAD`.
 Running setup again with the same kit version changes nothing.
 A later kit release arrives through [Upgrade the kit](../how-to/upgrade-the-kit.md).

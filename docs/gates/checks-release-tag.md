@@ -24,6 +24,7 @@ The walk stops with no release once the version `package.json` holds at `HEAD` i
 When the release commit sits behind `HEAD`, it checks out the release commit in the same checkout and installs its dependencies with `bun install --frozen-lockfile`, refusing when the checkout holds uncommitted changes.
 It then runs the build check and the publish there, so npm ships the tree the required checks of the release pull request passed on.
 A merge with no untagged release commit behind it ends at once, without pushing a tag or creating a release.
+It refuses before it checks out or tags anything when the release commit lacks `CHANGELOG.md` at the repository root.
 On a release commit it first fetches the head of the pull request the squash subject names, such as `(#7)`.
 It refuses unless the tree of that commit equals the tree the required checks of that pull request passed on.
 That check is what lets the release publish a tested tree even though a release pull request without release checks runs no test.
