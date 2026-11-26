@@ -49,7 +49,6 @@ export function guard(run: () => void): void {
 declare const failing: Effect.Effect<number, string>;
 export const unknownFailure = (cause: unknown) => Effect.fail(cause);
 export const narrowed = failing as Effect.Effect<number>;
-export const remapped = failing.pipe(Effect.catch((error) => Effect.fail(error.length)));
 export const missing: Effect.Effect<number> = failing;
 export const home = process.env["HOME"];
 export const homeInEffect = Effect.gen(function* () {
