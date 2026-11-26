@@ -543,12 +543,8 @@ const SETUP_SCOPE_CASES = [
   '{ effect: { files: ["src/**/*.ts"] }, overrides: [{ files: ["src/host.ts"], rules: { "oxc/no-async-await": "off" } }] }',
   '{ effect: { files: ["src/**/*.ts"], excludeFiles: [] } }',
   '{ effect: useEffect }',
-] as const;
-
-async function packedBin(bin: string, ...args: readonly string[]): Promise<Ran> {
-  return ran($`${join(dir, "node_modules", ".bin", bin)} ${args}`.cwd(dir));
-}
-
+];
+const packedBin = (bin: string, ...args: readonly string[]) => ran($`${join(dir, "node_modules", ".bin", bin)} ${args}`.cwd(dir));
 test(
   "installed setup does not write a stale tsconfig for overlapping, empty-exclude, or computed Effect scopes",
   async () => {

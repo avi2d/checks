@@ -22,7 +22,10 @@ It writes `oxlint.config.ts`, `tsconfig.json` and `knip.config.ts` from the kit 
 The fresh `tsconfig.json` enables `allowImportingTsExtensions` and `noEmit` so TypeScript can check the kit's source imports.
 It writes `.jscpd.json` with the kit default.
 It writes the Effect paths of the `oxlint.config.ts` it finds or writes into the language service entry of `tsconfig.json`.
+Setup loads the oxlint config and uses the same JSONC patch as [checks-effect-scope](checks-effect-scope.md).
 The pair passes `checks-effect-scope --check` from the first write.
+If an existing oxlint config imports packages, those imports must resolve before setup can read the paths.
+Setup refuses the same unsupported scope patterns as `checks-effect-scope`.
 It writes `package.json` with the kit in `devDependencies` and with `lint`, `typecheck`, `test` and `test:fast` scripts, plus a `test:<tier>` script for each tier that holds test files.
 It writes the workflow files and local actions `checks-workflows` writes, and every one holds its own steps.
 A repository whose workflow files already name a site gets the site set, and so does a run given the site name flags.

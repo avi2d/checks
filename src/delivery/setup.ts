@@ -9,9 +9,7 @@ import { fullActions } from "./full-set/actions.ts";
 import { TEMPLATES, VISION_PAGE } from "../docs/doc-templates.ts";
 import { FAST_COMMAND, KIT_PACKAGE_NAME, TEST_COMMAND } from "../core/test-script.ts";
 import { readTestScriptContext, testScriptsFault, withTierDefaults, type MutableRecord } from "./test-scripts.ts";
-import { withServiceOverrides, type ServiceOverride } from "../quality/effect-scope.ts";
-import { SOURCES, TESTS } from "../quality/presets/oxlint.ts";
-import severities from "../quality/presets/effect.language-service.json" with { type: "json" };
+import { DEFAULT_OXLINT_CONFIG, OXLINT_CONFIG, scopedTsconfig, TSCONFIG } from "../quality/effect-scope.ts";
 
 const NAME = "checks-setup";
 const USAGE = "usage: " + NAME + " [--private] [--pages <project>] [--domain <domain>] [--production <owner/name>]";
@@ -40,13 +38,6 @@ const DEFAULT_SCRIPTS: Record<string, string> = {
   "test:fast": FAST_COMMAND,
 };
 
-const OXLINT_CONFIG = [
-  "import { defineConfig } from \"@avi2dg/checks/oxlint\";",
-  "",
-  "export default defineConfig({ effect: true });",
-  "",
-].join("\n");
-
 const TSCONFIG_BASE = [
   "{",
   "  \"extends\": \"@avi2dg/checks/tsconfig.effect.json\",",
@@ -54,69 +45,6 @@ const TSCONFIG_BASE = [
   "}",
   "",
 ].join("\n");
-
-const DEFAULT_OVERRIDES: readonly ServiceOverride[] = [
-  { include: [...SOURCES], exclude: [...TESTS], options: severities },
-];
-
-function quotedStrings(text: string): readonly string[] {
-  const found: string[] = [];
-  const pattern = new RegExp("\"((?:[^\"\\\\]|\\\\.)*)\"|'((?:[^'\\\\]|\\\\.)*)'", "g");
-  for (;;) {
-    const match = pattern.exec(text);
-    if (match === null) return found;
-    found.push(match[1] ?? match[2] ?? "");
-  }
-}
-
-function delimitedInner(text: string, at: number, openChar: string, closeChar: string): string | undefined {
-  const open = text.indexOf(openChar, at);
-  if (open === -1) return undefined;
-  let depth = 0;
-  let quote: string | undefined;
-  for (let index = open; index < text.length; index += 1) {
-    const char = text[index];
-    if (quote !== undefined) {
-      if (char === "\\") index += 1;
-      else if (char === quote) quote = undefined;
-    } else if (char === "\"" || char === "'") {
-      quote = char;
-    } else if (char === openChar) {
-      depth += 1;
-    } else if (char === closeChar) {
-      depth -= 1;
-      if (depth === 0) return text.slice(open + 1, index);
-    }
-  }
-  return undefined;
-}
-
-function arrayAfter(text: string, key: string): readonly string[] | undefined {
-  const at = text.search(new RegExp(key + "\\s*:"));
-  if (at === -1) return undefined;
-  const inner = delimitedInner(text, at, "[", "]");
-  if (inner === undefined) return undefined;
-  return quotedStrings(inner);
-}
-
-function blockAfter(text: string, at: number): string | undefined {
-  return delimitedInner(text, at, "{", "}");
-}
-
-const effectScopeOf = (text: string): Effect.Effect<readonly ServiceOverride[], SetupError> => {
-  const match = new RegExp("effect\\s*:\\s*(true|false|\\{)").exec(text);
-  if (match === null || match[1] === "true") return Effect.succeed(DEFAULT_OVERRIDES);
-  if (match[1] === "false") return Effect.succeed([]);
-  const block = blockAfter(text, match.index);
-  if (block === undefined) return Effect.succeed(DEFAULT_OVERRIDES);
-  const files = arrayAfter(block, "files");
-  const excludeFiles = arrayAfter(block, "excludeFiles") ?? [];
-  if (files !== undefined && files.length === 0) {
-    return Effect.fail(new SetupError({ message: "cannot read the effect scope of oxlint.config.ts, give files at least one glob or remove the file so setup writes a fresh config" }));
-  }
-  if (files === undefined) return Effect.succeed([{ include: [...SOURCES], exclude: [...TESTS, ...excludeFiles], options: severities }]);
-  return Effect.succeed([{ include: files, exclude: excludeFiles, options: severities }]);
-};
 
 const kitText = Effect.fn("kitText")(function* (file: string) {
   const system = yield* FileSystem.FileSystem;
@@ -170,24 +98,15 @@ const parseRecord = (
     Effect.flatMap((parsed) => decodeRecord(parsed).pipe(Effect.map((decoded) => ({ ...decoded })), Effect.mapError(() => shapeFault))),
   );
 
-const parseTsconfigRecord = (current: string): Effect.Effect<MutableRecord, SetupError> =>
-  parseRecord(
-    (): unknown => Bun.JSONC.parse(current),
-    () => new SetupError({ message: "cannot read tsconfig.json as JSONC, fix the file or remove it so setup writes a fresh config" }),
-    new SetupError({ message: "cannot read tsconfig.json as JSONC, fix the file or remove it so setup writes a fresh config: expected an object" }),
-  );
-
-const setupTsconfig = Effect.fn("setupTsconfig")(function* (root: string, oxlintText: string) {
+const setupTsconfig = Effect.fn("setupTsconfig")(function* (root: string) {
   const system = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const full = path.join(root, "tsconfig.json");
+  const full = path.join(root, TSCONFIG);
   const present = yield* system.exists(full);
   const current = present
     ? yield* system.readFileString(full).pipe(Effect.mapError((cause) => new SetupError({ message: "cannot read tsconfig.json: " + cause.message })))
     : TSCONFIG_BASE;
-  yield* parseTsconfigRecord(current);
-  const overrides = yield* effectScopeOf(oxlintText);
-  const next = withServiceOverrides(current, overrides);
+  const next = yield* scopedTsconfig(root, current, "allow-uninstalled-default");
   if (present && next === current) {
     yield* Console.log(NAME + ": kept tsconfig.json, already there");
     return;
@@ -364,16 +283,8 @@ const check = Effect.gen(function* () {
   yield* setupFile(root, ".bun-version", yield* kitText(".bun-version"));
   yield* setupFile(root, "bunfig.toml", yield* kitText("bunfig.toml"));
   yield* setupIgnore(root);
-  const oxlintFull = path.join(root, "oxlint.config.ts");
-  const system = yield* FileSystem.FileSystem;
-  const oxlintRetained = yield* system.exists(oxlintFull);
-  yield* setupFile(root, "oxlint.config.ts", OXLINT_CONFIG);
-  const oxlintText = oxlintRetained
-    ? yield* system.readFileString(oxlintFull).pipe(
-      Effect.mapError((cause) => new SetupError({ message: "cannot read oxlint.config.ts: " + cause.message })),
-    )
-    : OXLINT_CONFIG;
-  yield* setupTsconfig(root, oxlintText);
+  yield* setupFile(root, OXLINT_CONFIG, DEFAULT_OXLINT_CONFIG);
+  yield* setupTsconfig(root);
   yield* setupFile(root, "knip.config.ts", KNIP_CONFIG);
   yield* setupFile(root, ".jscpd.json", JSCPD_CONFIG);
   yield* setupWorkflows(root, set, isKit);

@@ -205,7 +205,7 @@ test(
     expect((await bin("checks-effect-scope")).exitCode).toBe(0);
     const { compilerOptions } = await Bun.file(join(dir, "tsconfig.json")).json();
     const [kitService] = kitTsconfig.compilerOptions.plugins;
-    expect(compilerOptions.plugins).toEqual([{ ...kitService, overrides: [{ include: ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"], exclude: ["tests/**", "**/*.test.ts", "**/*.test.tsx"], options: severities }] }]);
+    expect(compilerOptions.plugins).toEqual([{ ...kitService, overrides: [{ include: ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"], exclude: ["tests/**/*", "**/*.test.ts", "**/*.test.tsx", "**/node_modules/**/*"], options: severities }] }]);
     const fresh = await bin("checks-effect-scope", ["--check"]);
     expect(fresh.text).toContain("tsconfig.json holds the Effect paths of oxlint.config.ts");
     expect(fresh.exitCode).toBe(0);

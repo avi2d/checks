@@ -19,6 +19,7 @@ The kit's oxlint `base` loads `effect-channel/no-error-channel-escape` across th
 | `{ files, excludeFiles }` | these globs, less `excludeFiles`, with at least one glob in `files` |
 
 `files` and `excludeFiles` read as they do in an oxlint override.
+[checks-effect-scope](../gates/checks-effect-scope.md#what-it-reads) lists the patterns it can carry into TypeScript.
 Every source file is `SOURCES`, the `.ts`, `.tsx`, `.mts` and `.cts` files, and the tests are `TESTS`, the files under `tests/` and each `*.test.ts` or `*.test.tsx`.
 A comment beside an excluded glob says why that path stays outside Effect:
 
@@ -73,7 +74,8 @@ The preset turns these diagnostics to errors:
 Effect's `Config` reads the environment in place of `process.env`.
 The kit's `tsconfig.effect.json` holds the shared language service diagnostics.
 A plugin entry in the repository's `tsconfig.json` stands in for the kit's, so `checks-effect-scope` writes those severities into it on every run.
-The kit owns the severities of its own keys, and a repository adds keys of its own but does not change the kit's.
+The kit owns the shared severities and writes the scoped severities in path overrides.
+A repository can add its own keys without changing the kit's.
 
 ## Related topics
 

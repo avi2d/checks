@@ -177,6 +177,7 @@ const ASYNC_PLANT = `import { Effect } from "effect";
 export async function later(): Promise<number> {
   return 1;
 }
+export const promised = new Promise<number>((resolve) => resolve(1));
 export const shared = (cause: unknown): Effect.Effect<never, unknown> => Effect.fail(cause);
 `;
 
@@ -219,31 +220,40 @@ export default {
   expect(generated.exitCode).toBe(0);
   expect((await scopeGate("--check")).exitCode).toBe(0);
   await expectAsyncPaths(positive);
-  expect((await diagnostics()).get(UNSCOPED)).toContain("anyUnknownInErrorContext");
+  const diagnosed = await diagnostics();
+  expect(diagnosed.get("scripts/host/off.ts")).toContain("newPromise");
+  expect(diagnosed.get(UNSCOPED)).toContain("anyUnknownInErrorContext");
 }, 180_000);
 
 test("scope check does not certify brace or basename paths or paths ignored only by oxlint", async () => {
   const cases = [
-    { scope: '{ files: ["scripts/{a,b}.ts"] }', extra: "", ignore: "", expected: ["scripts/a.ts", "scripts/b.ts"] },
-    { scope: '{ files: ["scripts/**/*.ts"], excludeFiles: ["scripts/{a,b}.ts"] }', extra: "", ignore: "", expected: ["scripts/nested/a.ts"] },
-    { scope: '{ files: ["a.ts"] }', extra: "", ignore: "", expected: ["scripts/a.ts", "scripts/nested/a.ts"] },
-    { scope: '{ files: ["scripts/**/*.ts"] }', extra: ', ignorePatterns: ["scripts/b.ts"]', ignore: "", expected: ["scripts/a.ts", "scripts/nested/a.ts"] },
-    { scope: '{ files: ["scripts/**/*.ts"] }', extra: "", ignore: "scripts/b.ts\\n", expected: ["scripts/a.ts", "scripts/nested/a.ts"] },
-  ];
-  for (const { scope, extra, ignore, expected } of cases) {
+    { scope: '{ files: ["scripts/{a,b}.ts"] }', extra: "", ignore: "", refused: "scripts/{a,b}.ts" },
+    { scope: '{ files: ["scripts/**/*.ts"], excludeFiles: ["scripts/{a,b}.ts"] }', extra: "", ignore: "", refused: "scripts/{a,b}.ts" },
+    { scope: '{ files: ["a.ts"] }', extra: "", ignore: "" },
+    { scope: '{ files: ["scripts/**/*.ts"] }', extra: ', ignorePatterns: ["scripts/b.ts"]', ignore: "" },
+    { scope: '{ files: ["scripts/**/*.ts"] }', extra: "", ignore: "scripts/b.ts\n" },
+  ] as const;
+  for (const entry of cases) {
+    const { scope, extra, ignore } = entry;
     await consumer();
-    await tree.put(".gitignore", "node_modules/\n" + ignore.replaceAll("\\n", "\n"));
+    await tree.put(".gitignore", "node_modules/\n" + ignore);
     await tree.put("oxlint.config.ts", `import { defineConfig } from "@avi2dg/checks/oxlint";
 export default defineConfig({ effect: ${scope}${extra} });
 `);
-    for (const path of ["scripts/a.ts", "scripts/b.ts", "scripts/nested/a.ts"]) await tree.put(path, ASYNC_PLANT);
+    for (const path of ["scripts/a.ts", "scripts/b.ts", "scripts/nested/a.ts", UNSCOPED]) await tree.put(path, ASYNC_PLANT);
     const generated = await scopeGate();
     const checked = await scopeGate("--check");
-    if (generated.exitCode === 0) {
-      expect(checked.exitCode).toBe(0);
-      await expectAsyncPaths(expected);
+    if ("refused" in entry) {
+      for (const run of [generated, checked]) {
+        expect(run.exitCode).toBe(2);
+        expect(run.text).toContain(entry.refused);
+        expect(run.text).toContain("use separate relative globs");
+      }
     } else {
-      expect(checked.exitCode).toBe(2);
+      expect(generated.exitCode).toBe(0);
+      expect(checked.exitCode).toBe(0);
+      await expectAsyncPaths(["scripts/a.ts", "scripts/nested/a.ts"]);
+      expect((await diagnostics()).get("scripts/b.ts")).toContain("anyUnknownInErrorContext");
     }
   }
 }, 180_000);
