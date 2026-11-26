@@ -31,6 +31,7 @@ Each command runs one step and reads its inputs from the environment the step se
 | `test` | runs `bun run test` when `CHECK_RELEASE` is `true`, and `bunx checks-test --pr` when it is `false` or unset, appending `--tier=<tier>` from `TEST_TIER` when set | `CHECK_RELEASE`, `TEST_TIER` |
 | `release-version` | fails unless `TAG` is `v` and the version the manifest holds, and writes `version` to `GITHUB_OUTPUT` | `PACKAGE_PATH`, `TAG` |
 | `mutation` | with `score`, writes the score of `reports/mutation/mutation.json` to the job summary, and with `shards`, splits the tree into `SHARDS` shard globs with `checks-mutation-scope` and writes them as `shards` to `GITHUB_OUTPUT` | `SHARDS`, `RUNNER_TEMP`, `GITHUB_STEP_SUMMARY`, `GITHUB_OUTPUT` |
+| `gitleaks` | downloads and verifies the gitleaks binary the kit pins in its shared cache | `HOME` |
 | `github-release` | creates the GitHub release of a tag with the notes file, or updates the one that exists, and marks it latest only when its tag is the highest | `TAG`, `REF_TYPE`, `NOTES_FILE`, `GH_TOKEN` |
 
 When `PLAN_BROWSER` is true, `changes` logs which routes each changed path reaches or why the browser must walk every route.

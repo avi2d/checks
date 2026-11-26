@@ -44,9 +44,18 @@ const holdSteps = (hold: boolean): readonly Step[] => (hold ? [DRAFT_HOLD] : [])
 
 const holdPermissions = (hold: boolean): readonly string[] => (hold ? ["contents: read", "actions: write"] : ["contents: read"]);
 
+const gitleaksCache = (kit: boolean): Step => ({
+  name: "cache the gitleaks the kit pins",
+  if: "runner.environment == 'github-hosted'",
+  uses: CACHE,
+  with: [
+    ["path", "~/.cache/avi2dg-checks/gitleaks"],
+    ["key", "gitleaks-" + expression("runner.os") + "-" + expression("runner.arch") + "-" + expression("hashFiles('" + (kit ? "src/delivery/gitleaks.ts" : "node_modules/@avi2dg/checks/src/delivery/gitleaks.ts") + "')")],
+  ],
+});
+
 function staticJob(set: CallerSet, kit: boolean): Job {
   const hold = holds(set);
-  const gitleaks = kit ? "src/delivery/gitleaks.ts" : "node_modules/@avi2dg/checks/src/delivery/gitleaks.ts";
   return {
     id: "static",
     needs: "changes",
@@ -58,15 +67,7 @@ function staticJob(set: CallerSet, kit: boolean): Job {
       checkout({ ref: HEAD, history: true }),
       SETUP,
       ...holdSteps(hold),
-      {
-        name: "cache the gitleaks the kit pins",
-        if: "runner.environment == 'github-hosted'",
-        uses: CACHE,
-        with: [
-          ["path", "~/.cache/avi2dg-checks/gitleaks"],
-          ["key", "gitleaks-" + expression("runner.os") + "-" + expression("runner.arch") + "-" + expression("hashFiles('" + gitleaks + "')")],
-        ],
-      },
+      gitleaksCache(kit),
       { run: "bunx checks-workflows" },
       ...(set.options.secretsPack ? [ciCommand("secrets-pack", { name: "unpack the private secrets pack" }, [["PACK", expression("secrets.CHECKS_SECRETS_PACK")]])] : []),
       { run: "bun run lint" },
@@ -151,7 +152,7 @@ const testStep = (set: CallerSet, test: TestJob): Step => {
     : { id: TEST_STEP, run: scalar(test.run) };
 };
 
-function testJob(set: CallerSet, test: TestJob, claudeVersion: string | undefined): Job {
+function testJob(set: CallerSet, test: TestJob, claudeVersion: string | undefined, kit: boolean): Job {
   const hold = holds(set, test);
   return {
     id: test.name,
@@ -165,6 +166,7 @@ function testJob(set: CallerSet, test: TestJob, claudeVersion: string | undefine
       SETUP,
       ...holdSteps(hold),
       ...claudeInstall(claudeVersion),
+      ...(test.name === "e2e" ? [gitleaksCache(kit), { run: "bunx checks-ci gitleaks" } satisfies Step] : []),
       ...(test.readsBuild
         ? [
             {
@@ -234,7 +236,7 @@ const CI_EVENTS = ["pull_request:", "  types: [opened, synchronize, reopened, re
 export const BY_HAND = ["workflow_dispatch:"];
 
 export function ciWorkflow(set: CallerSet, kit: boolean): Workflow {
-  const tests = set.ci.tests.map((test) => testJob(set, test, set.options.claudeVersion));
+  const tests = set.ci.tests.map((test) => testJob(set, test, set.options.claudeVersion, kit));
   return {
     name: "ci",
     on: CI_EVENTS,

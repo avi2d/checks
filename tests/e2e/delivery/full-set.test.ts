@@ -37,6 +37,28 @@ test("a code write that leaves a job calling another repository's workflow, or a
   expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the code set checks-workflows writes\n" });
 }, 30_000);
 
+test("the e2e job does not run tests before it provisions the pinned gitleaks", async () => {
+  const repo = await open({ "package.json": manifest, "tests/e2e/scan.test.ts": "export {};\n" });
+  await repo.commit("start");
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+
+  const ci = await parsed(repo, "ci.yml");
+  expect(ci).toMatchObject({
+    jobs: {
+      e2e: {
+        steps: expect.arrayContaining([
+          expect.objectContaining({ run: "bunx checks-ci gitleaks" }),
+          expect.objectContaining({ id: "test" }),
+        ]),
+      },
+    },
+  });
+  const written = await text(repo, ".github/workflows/ci.yml");
+  const e2e = written.split("  e2e:\n")[1]?.split("\n  checks:")[0] ?? "";
+  expect(e2e.indexOf("run: bunx checks-ci gitleaks")).toBeGreaterThanOrEqual(0);
+  expect(e2e.indexOf("run: bunx checks-ci gitleaks")).toBeLessThan(e2e.indexOf("id: test"));
+}, 30_000);
+
 test("an edited setup action that passes the check, or that --write leaves edited, fails", async () => {
   const repo = await open({ "package.json": manifest });
   await repo.commit("start");

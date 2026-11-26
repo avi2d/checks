@@ -123,6 +123,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           DRAFT: ${{ github.event.pull_request.draft }}
         run: bunx checks-ci draft-hold
+      - if: runner.environment == 'github-hosted'
+        name: cache the gitleaks the kit pins
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/avi2dg-checks/gitleaks
+          key: gitleaks-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('src/delivery/gitleaks.ts') }}
+      - run: bunx checks-ci gitleaks
       - id: test
         run: bun run test:e2e
       - if: ${{ !cancelled() }}

@@ -229,6 +229,7 @@ It also refuses a private root without exactly one public workspace.
 | `checks` | always, after every other job, and fails unless each one passed or skipped as allowed |
 
 Branch protection reads the gate job as `checks`.
+The `e2e` job installs the gitleaks binary the kit pins in the shared cache before it runs tests.
 On a dispatched run, the `checks` job posts its result as the `checks` status and the title as the `commitlint` status.
 On a pull request that changes only documentation, the `site` job and the test jobs skip, and the gate passes those skips.
 Only two runs count as the release pull request.
