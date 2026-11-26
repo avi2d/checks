@@ -25,6 +25,7 @@ import { main as releaseVersion } from "./release-version.ts";
 import { main as requireSuccess } from "./require-success.ts";
 import { main as secretsPack } from "./secrets-pack.ts";
 import { main as test } from "./test.ts";
+import { main as wholeTree } from "./whole-tree.ts";
 
 const COMMANDS = {
   changes: () => changes,
@@ -48,6 +49,7 @@ const COMMANDS = {
   "require-success": () => requireSuccess.pipe(Effect.as(true)),
   "secrets-pack": () => secretsPack,
   test: () => test,
+  "whole-tree": wholeTree,
 } as const;
 
 const isCommand = (name: string | undefined): name is keyof typeof COMMANDS => name !== undefined && Object.hasOwn(COMMANDS, name);

@@ -135,7 +135,8 @@ The kit's own repository runs the sweep by hand.
 
 The mutation job calls the generated `mutation.yml` as a reusable workflow.
 Its report is used only by that whole-tree run and does not refresh the mutation baseline.
-The tests job keeps a JUnit report for each long tier with tracked test files.
+Each of the tests, gates and report jobs runs one `checks-ci whole-tree` step, as [checks-ci](checks-ci.md) says.
+The tests job keeps a JUnit report for each long tier with test files.
 In a site it installs Chromium and WebKit before running tests.
 It also installs any browsers the test jobs in `ci.yml` require.
 A failing test does not stop the upload, since the report turns it into an issue.
@@ -160,6 +161,7 @@ Run `checks-lint --whole-tree` to run only the whole-tree gates.
 
 ## Related topics
 
+- [checks-ci](checks-ci.md)
 - [checks-test](checks-test.md)
 - [checks-mutation](checks-mutation.md)
 - [checks-mutation-compare](checks-mutation-compare.md)

@@ -18,7 +18,7 @@ jobs:
       - uses: __CHECKOUT__
       - uses: ./.github/actions/setup
 __PLAYWRIGHT__
-      - run: bash node_modules/@avi2dg/checks/src/delivery/ci/whole-tree/tests.sh
+      - run: bunx checks-ci whole-tree tests
       - uses: __UPLOAD__
         with:
           name: whole-tree-run-tests
@@ -33,7 +33,7 @@ __PLAYWRIGHT__
         with:
           fetch-depth: 0
       - uses: ./.github/actions/setup
-      - run: bash node_modules/@avi2dg/checks/src/delivery/ci/whole-tree/gates.sh
+      - run: bunx checks-ci whole-tree gates
       - uses: __UPLOAD__
         with:
           name: whole-tree-run-gates
@@ -67,7 +67,7 @@ __PLAYWRIGHT__
       - env:
           GH_TOKEN: ${{ github.token }}
           GATES_RESULT: ${{ needs.gates.result }}
-        run: bash node_modules/@avi2dg/checks/src/delivery/ci/whole-tree/report.sh
+        run: bunx checks-ci whole-tree report
       - uses: __UPLOAD__
         with:
           name: whole-tree-run

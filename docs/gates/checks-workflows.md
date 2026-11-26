@@ -9,8 +9,7 @@ audience: consumers
 ## What it checks
 
 Every file of the set holds its own steps, and no job calls a workflow of another repository.
-Steps that need more than one plain command run `bunx checks-ci <command>` or a shell script the kit ships.
-The whole-tree workflow runs the scripts under `src/delivery/ci/whole-tree/`, as [checks-whole-tree-run](checks-whole-tree-run.md) says.
+Each step that needs more than one plain command runs `bunx checks-ci <command>`, as [checks-ci](checks-ci.md) says.
 `ci.yml` composes the jobs that run side by side, as [The composed ci.yml](#the-composed-ciyml) says.
 A repository whose workflow files set the workflow `env` `SITE_PAGES`, `SITE_DOMAIN` or `SITE_PRODUCTION` is a site.
 A job that calls `site-ci.yml`, `site-main.yml`, `site-production.yml`, `site-preview.yml` or `preview-remove.yml` also marks the repository a site.

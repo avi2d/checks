@@ -96,7 +96,7 @@ test("whole-tree tests install site and carried browsers before testing, without
   for (const [set, browsers] of [[CODE, ""], [SITE, "chromium webkit"], [carried, "firefox chromium"], [carriedSite, "chromium webkit firefox"]] as const) {
     const steps = stepsOf(jobsOf(documentOf(set, "whole-tree-run.yml"))["tests"] ?? {});
     const install = steps.findIndex((step) => step["uses"] === "./.github/actions/playwright");
-    const run = steps.findIndex((step) => step["run"] === "bash node_modules/@avi2dg/checks/src/delivery/ci/whole-tree/tests.sh");
+    const run = steps.findIndex((step) => step["run"] === "bunx checks-ci whole-tree tests");
     expect(run).toBeGreaterThan(0);
     if (browsers === "") {
       expect(install).toBe(-1);

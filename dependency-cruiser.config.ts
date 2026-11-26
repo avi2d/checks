@@ -11,7 +11,7 @@ const AREA_IMPORTS = {
   quality: [],
   testing: ["dependencies", "quality"],
   docs: [],
-  delivery: ["dependencies", "docs", "quality"],
+  delivery: ["dependencies", "docs", "quality", "testing"],
   dependencies: ["quality"],
 } as const satisfies Record<Area, readonly Area[]>;
 
