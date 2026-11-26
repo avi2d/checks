@@ -14,12 +14,13 @@ It adds the kit entry and any missing script to a `package.json` it finds.
 It writes `devDependencies` in package name order, as `bun add` does.
 It replaces the kit version pin with its own version, and a `--private` run sets `private` to `true`.
 It stops when a `lint` script it finds does not run oxlint and the layout check, and names the script to fix.
-It stops when a `typecheck` script it finds does not run the Effect diagnostics, and names the script to fix.
+It stops when an existing `typecheck` script does not match `tsc --noEmit && effect-tsgo diagnostics --project tsconfig.json --format text --strict`.
 It stops when a `test` script it finds is not `checks-test`, or a `test:fast` script is not `checks-test --changed`, and names the script to fix.
 It also stops when a `test:<tier>` script is not `checks-test --tier=<tier>` or names a tier with no test files, or another `test:*` script exists.
 It copies the fleet pin into `.bun-version` and the preset into `bunfig.toml`.
 It writes `oxlint.config.ts`, `tsconfig.json` and `knip.config.ts` from the kit builders, with Effect rules on.
 The fresh `tsconfig.json` enables `allowImportingTsExtensions` and `noEmit` so TypeScript can check the kit's source imports.
+Setup adds `@types/bun` to `devDependencies` for the generated `tsconfig.json`, and keeps an existing dev dependency version.
 It writes `.jscpd.json` with the kit default.
 It writes the Effect paths of the `oxlint.config.ts` it finds or writes into the language service entry of `tsconfig.json`.
 The pair passes `checks-effect-scope --check` from the first write.
@@ -54,7 +55,7 @@ It reads a `package.json` it finds for the fields and scripts it keeps, replaces
 It reads `checks.config.ts` for the repository visibility that selects the workflow runners and for `releaseAssets`, which adds the `assets` job to `main.yml`, or to `release.yml` in the kit.
 It also reads `platformPackages`, which adds the `binaries` job to `main.yml`.
 It reads the workspace patterns and each workspace `package.json` for the workflow options the written manifest will hold.
-It reads the kit install for `.bun-version`, `bunfig.toml`, its version, its Stryker pins and each template.
+It reads the kit install for `.bun-version`, `bunfig.toml`, its version, its Stryker pins, its `@types/bun` version, and each template.
 
 ## Arguments
 

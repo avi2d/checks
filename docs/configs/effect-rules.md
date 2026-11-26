@@ -72,6 +72,7 @@ The preset turns these diagnostics to errors:
 
 Effect's `Config` reads the environment in place of `process.env`.
 The kit's `tsconfig.effect.json` holds the shared language service diagnostics.
+With `effect: false`, the shared diagnostics still run, but the plugin has no scoped overrides.
 A plugin entry in the repository's `tsconfig.json` stands in for the kit's, so `checks-effect-scope` writes those severities into it on every run.
 The kit owns the severities of its own keys, and a repository adds keys of its own but does not change the kit's.
 
