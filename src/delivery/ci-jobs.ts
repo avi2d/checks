@@ -4,7 +4,7 @@ import { calledFileOf, isRecord, workflowJobs, type Workflow } from "./workflow-
 
 export type RepositoryKind = "code" | "site";
 
-export const DEFAULT_TEST_RUN = "bunx checks-test --pr";
+const DEFAULT_TEST_RUN = "bunx checks-test --pr";
 export const RELEASE_TEST_RUN = "bunx checks-ci test";
 const BROWSER_RUN = "bunx checks-browser --pr";
 

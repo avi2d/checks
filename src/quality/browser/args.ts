@@ -1,4 +1,4 @@
-import { parseShard, type Shard } from "./shard.ts";
+import { parseShard, type Shard } from "../../core/shard.ts";
 
 const PR = "--pr";
 const SHARD = "--shard=";

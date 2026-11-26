@@ -144,6 +144,11 @@ function platformPackagesFault(site: boolean, publicRepository: boolean, publish
   return undefined;
 }
 
+function testTierShardsFault(ci: CiJobs, testTierShards: TestTierShards | undefined): string | undefined {
+  const tier = (["unit", "e2e"] as const).find((candidate) => testTierShards?.[candidate] !== undefined && !ci.tests.some((test) => testTierOf(test.run) === candidate));
+  return tier === undefined ? undefined : `${SETTINGS_FILE} sets testTierShards.${tier}, but ci.yml has no default ${tier} test job running bunx checks-test --pr --tier=${tier}, so use that command or remove the key`;
+}
+
 export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readonly Workflow[], flags: SiteNameFlags, rerun: string, publishes: boolean, publishWorkspaces: boolean, needsReleaseChecks: boolean, publicRepository: boolean, docsBuild?: boolean, hasE2e?: boolean, releaseAssets?: boolean, platformPackages?: PlatformPackages, testTierShards?: TestTierShards) {
   const buildDocs = docsBuild === true;
   const attachAssets = releaseAssets === true;
@@ -161,11 +166,8 @@ export const callerSetOf = Effect.fn("callerSetOf")(function* (workflows: readon
   const packagesFault = platformPackages === undefined ? undefined : platformPackagesFault(site, publicRepository, publishes, publishWorkspaces);
   if (packagesFault !== undefined) return yield* new CallerSetFault({ message: packagesFault });
   const ci = yield* heldCiJobs(site ? "site" : "code", workflows, publicRepository, buildDocs, hasE2e);
-  for (const tier of ["unit", "e2e"] as const) {
-    if (testTierShards?.[tier] !== undefined && !ci.tests.some((test) => testTierOf(test.run) === tier)) {
-      return yield* new CallerSetFault({ message: `${SETTINGS_FILE} sets testTierShards.${tier}, but ci.yml has no default ${tier} test job running bunx checks-test --pr --tier=${tier}, so use that command or remove the key` });
-    }
-  }
+  const shardsFault = testTierShardsFault(ci, testTierShards);
+  if (shardsFault !== undefined) return yield* new CallerSetFault({ message: shardsFault });
   if (!site) return { kind: "code", ci, options, ...(testTierShards === undefined ? {} : { testTierShards }) } satisfies CallerSet;
   const held = workflows.flatMap(heldNames).filter(({ key }) => flags[key] === undefined);
   const conflict = conflictOf(held);

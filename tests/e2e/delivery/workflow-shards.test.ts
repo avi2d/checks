@@ -47,8 +47,8 @@ test.each([false, true])("default tier shards survive a write and reread instead
   const document: unknown = Bun.YAML.parse(await Bun.file(join(repo.dir, ".github/workflows/ci.yml")).text());
   expect(document).toMatchObject({
     jobs: {
-      unit: { strategy: { matrix: { shard: [1, 2] } } },
-      e2e: { strategy: { matrix: { shard: [1, 2] } } },
+      unit: { strategy: { "fail-fast": false, matrix: { shard: [1, 2] } } },
+      e2e: { strategy: { "fail-fast": false, matrix: { shard: [1, 2] } } },
       checks: { needs: ["changes", "static", "unit", "e2e"] },
     },
   });

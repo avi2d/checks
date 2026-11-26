@@ -1,6 +1,6 @@
 import { Config, Console, Effect, Schema } from "effect";
 import { commandPasses } from "./lib/run.ts";
-import { parseShard } from "../../testing/test-shard.ts";
+import { parseShard } from "../../core/shard.ts";
 
 const CheckRelease = Schema.Literals(["true", "false"]);
 const TestTier = Schema.Literals(["unit", "e2e"]);

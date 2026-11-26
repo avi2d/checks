@@ -159,7 +159,7 @@ function testJob(set: CallerSet, test: TestJob, claudeVersion: string | undefine
   const count = tier === undefined ? undefined : set.testTierShards?.[tier];
   return {
     id: test.name,
-    ...(count === undefined || count === 1 ? {} : { matrix: ["shard", "[" + Array.from({ length: count }, (_, index) => index + 1).join(", ") + "]"] as const }),
+    ...(count === undefined || count === 1 ? {} : { matrix: ["shard", "[" + Array.from({ length: count }, (_, index) => index + 1).join(", ") + "]"] as const, failFast: false as const }),
     ...(test.readsBuild ? { needs: "site" } : { needs: "changes", if: notReleased(set) + " && " + NOT_DOCS_ONLY }),
     ...(isBrowserWalk(test) ? { if: "needs.site.outputs.browser != 'false'" } : {}),
     runsOn: scalar(test.runsOn),

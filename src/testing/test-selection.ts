@@ -3,7 +3,8 @@ import { TEST_ENTRY_POINT } from "../core/gates.ts";
 import { Usage } from "../core/main.ts";
 import { decodeSetting, SETTINGS_FILE, TestFileSkips } from "../core/settings.ts";
 import type { TestTier } from "../core/test-script.ts";
-import { shardFiles, type Shard } from "./test-shard.ts";
+import type { Shard } from "../core/shard.ts";
+import { shardFiles } from "./test-shard.ts";
 import { readDeclarationsIn, readSmokeFiles, scanTestFiles, selectedTierFile } from "./test-skips.ts";
 
 export type SuiteSelection =
