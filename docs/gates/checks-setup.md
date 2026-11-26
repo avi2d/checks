@@ -39,8 +39,11 @@ It stops before writing anything when a site run lacks one of the three names, a
 The same stop covers two values of one name, an unparsable name, and a flag that differs from a name its workflows hold.
 The same stop covers a test job of `ci.yml` that holds an unparsable input or a name a job cannot take.
 A freshly set up repository passes `checks-workflows` without running `--write` first.
-In a code repository it writes `mutation.yml` under `.github/workflows/`, which splits the tree into shards, runs each shard and keeps the merged report as the baseline.
-It starts by hand, as [checks-ci-wiring](checks-ci-wiring.md#schedules) requires.
+In consumer site and code repositories it writes `mutation.yml` and `whole-tree-run.yml` under `.github/workflows/`.
+The mutation workflow splits the tree into shards, runs each shard and keeps the merged report as the baseline.
+The whole-tree workflow runs mutation, long test tiers, whole-tree gates and issue filing, as [checks-whole-tree-run](checks-whole-tree-run.md) says.
+Both start by hand, as [checks-ci-wiring](checks-ci-wiring.md#schedules) requires.
+In the kit it writes `mutation.yml` but no `whole-tree-run.yml`.
 No run starts after a merge to `main`.
 It writes `stryker.conf.mjs`, which spreads the kit's Stryker preset and sets the `mutate` globs to the sources under `src/`.
 It adds the kit's own pins of `@stryker-mutator/core` and `@hughescr/stryker-bun-runner` to `devDependencies`, and keeps a pin it finds.

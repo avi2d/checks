@@ -126,7 +126,7 @@ checks-whole-tree-run: recorded 42 file score(s) in reports/whole-tree-run.json
 ## When it runs
 
 `checks-workflows` generates `whole-tree-run.yml` for each consumer repository.
-The workflow starts on a push to `main` or a manual dispatch.
+The workflow starts only by hand through `workflow_dispatch`.
 It runs the full mutation refresh, the live and pixel test tiers that have test files, and the whole-tree lint gates.
 It calls `checks-whole-tree-run` to file findings after those jobs.
 The kit's own repository runs the sweep by hand.
@@ -135,6 +135,8 @@ The kit's own repository runs the sweep by hand.
 
 The mutation job calls the generated `mutation.yml` as a reusable workflow.
 The tests job keeps a JUnit report for each long tier with tracked test files.
+In a site it installs Chromium and WebKit before running tests.
+It also installs any browsers the test jobs in `ci.yml` require.
 A failing test does not stop the upload, since the report turns it into an issue.
 A missing report for a tier with tests fails the report job.
 The gates job keeps the output of `checks-lint --whole-tree` even when a gate fails.

@@ -43,7 +43,7 @@ const writeSet = Effect.fn("writeSet")(function* (root: string, set: CallerSet, 
   yield* fs.makeDirectory(directory, { recursive: true });
   const held = new Set(present.map(({ name }) => name));
   const required = requiredSet(set, kit);
-  const byHand = byHandSet(set).filter(({ name }) => held.has(name) && !required.some((file) => file.name === name));
+  const byHand = byHandSet(set, kit).filter(({ name }) => held.has(name));
   const written = [...required, ...byHand];
   for (const { name, text } of written) yield* fs.writeFileString(`${directory}/${name}`, text);
   const kept = new Set(written.map(({ name }) => name));

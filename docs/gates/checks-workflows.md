@@ -9,7 +9,8 @@ audience: consumers
 ## What it checks
 
 Every file of the set holds its own steps, and no job calls a workflow of another repository.
-Each step that needs more than one plain command runs `bunx checks-ci <command>`, as [checks-ci](checks-ci.md) says.
+Steps that need more than one plain command run `bunx checks-ci <command>` or a shell script the kit ships.
+The whole-tree workflow runs the scripts under `src/delivery/ci/whole-tree/`, as [checks-whole-tree-run](checks-whole-tree-run.md) says.
 `ci.yml` composes the jobs that run side by side, as [The composed ci.yml](#the-composed-ciyml) says.
 A repository whose workflow files set the workflow `env` `SITE_PAGES`, `SITE_DOMAIN` or `SITE_PRODUCTION` is a site.
 A job that calls `site-ci.yml`, `site-main.yml`, `site-production.yml`, `site-preview.yml` or `preview-remove.yml` also marks the repository a site.
@@ -40,7 +41,7 @@ A site takes these files under `.github/workflows/`:
 | `release.yml` | `workflow_dispatch` | the release pull request |
 | `production.yml` | `workflow_dispatch` | the production deploy |
 | `mutation.yml` | `workflow_dispatch` and `workflow_call` | the full mutation refresh |
-| `whole-tree-run.yml` | a push to `main` and `workflow_dispatch` | the whole-tree run and issue filing |
+| `whole-tree-run.yml` | `workflow_dispatch` | the whole-tree run and issue filing |
 
 A code repository takes these files:
 
@@ -51,7 +52,10 @@ A code repository takes these files:
 | `main.yml` | a push to `main` | `bunx checks-release-tag`, which tags and publishes a release commit |
 | `release.yml` | `workflow_dispatch` | the release pull request |
 | `mutation.yml` | `workflow_dispatch` and `workflow_call` | the full mutation refresh |
-| `whole-tree-run.yml` | a push to `main` and `workflow_dispatch` | the whole-tree run and issue filing |
+| `whole-tree-run.yml` | `workflow_dispatch` | the whole-tree run and issue filing |
+
+The kit requires neither `mutation.yml` nor `whole-tree-run.yml`.
+It may hold `mutation.yml` as an optional file, but `whole-tree-run.yml` is outside its set.
 
 A code repository whose `package.json` does not set `private: true` publishes to npm.
 Then its `main.yml` holds a `suite` job that runs `bun run test --full` once on a release commit before the tag and the publish.
@@ -87,6 +91,7 @@ Replace a job that calls another repository's workflow with its own steps by han
 An optional file may be absent, but a present one holds exactly the file the set writes.
 A site may hold `advisories.yml` and `docs.yml`.
 A code repository may hold `advisories.yml`, `flake.yml` and `docs.yml`.
+The kit may also hold `mutation.yml`, which starts on `workflow_dispatch` or `workflow_call` and keeps the full mutation refresh.
 Each optional file keeps what the file it replaces does:
 
 | File | Starts on | Keeps |
@@ -289,7 +294,7 @@ A ruleset requiring only the aggregate `checks` job needs no change.
 
 Set `repositoryVisibility: "private"` in `checks.config.ts` for a private GitHub repository.
 The setting defaults to `public` and is independent of the `private` field in `package.json`.
-A public repository uses hosted runners without `CI_RUNS_ON` in `ci.yml`, `pr-title.yml` and `preview-close.yml`.
+A public repository uses hosted runners without `CI_RUNS_ON` in `ci.yml`, `pr-title.yml`, `preview-close.yml` and `whole-tree-run.yml`.
 Its other workflows keep `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}`.
 A private repository uses `${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}` for its default jobs.
 The generated mutation workflow always uses hosted runners.

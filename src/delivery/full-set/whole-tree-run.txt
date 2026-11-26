@@ -1,7 +1,5 @@
 name: whole-tree-run
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -16,10 +14,11 @@ jobs:
     runs-on: __RUNNER__
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: __CHECKOUT__
       - uses: ./.github/actions/setup
+__PLAYWRIGHT__
       - run: bash node_modules/@avi2dg/checks/src/delivery/ci/whole-tree/tests.sh
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: __UPLOAD__
         with:
           name: whole-tree-run-tests
           path: reports/whole-tree-run-tests/
@@ -28,12 +27,12 @@ jobs:
     runs-on: __RUNNER__
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: __CHECKOUT__
         with:
           fetch-depth: 0
       - uses: ./.github/actions/setup
       - run: bash node_modules/@avi2dg/checks/src/delivery/ci/whole-tree/gates.sh
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: __UPLOAD__
         with:
           name: whole-tree-run-gates
           path: reports/whole-tree-run-gates/
@@ -48,18 +47,18 @@ jobs:
       actions: read
       issues: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: __CHECKOUT__
       - uses: ./.github/actions/setup
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      - uses: __DOWNLOAD__
         with:
           pattern: mutation-baseline-full
           path: reports/mutation
       - if: needs.gates.result == 'success'
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        uses: __DOWNLOAD__
         with:
           name: whole-tree-run-gates
           path: reports/whole-tree-run-gates
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      - uses: __DOWNLOAD__
         with:
           name: whole-tree-run-tests
           path: reports/whole-tree-run-tests
@@ -67,7 +66,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GATES_RESULT: ${{ needs.gates.result }}
         run: bash node_modules/@avi2dg/checks/src/delivery/ci/whole-tree/report.sh
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: __UPLOAD__
         with:
           name: whole-tree-run
           path: reports/whole-tree-run.json

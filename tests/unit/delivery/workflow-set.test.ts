@@ -5,6 +5,7 @@ import { NO_CALLER_OPTIONS } from "../../../src/delivery/caller-options.ts";
 import { ciJobsOf, DEFAULT_CI_JOBS } from "../../../src/delivery/ci-jobs.ts";
 import { fullActions } from "../../../src/delivery/full-set/actions.ts";
 import { MUTATION_WORKFLOW } from "../../../src/delivery/full-set/mutation.ts";
+import { CHECKOUT, DOWNLOAD, UPLOAD } from "../../../src/delivery/full-set/steps.ts";
 import { findStepFaults } from "../../../src/delivery/plain-steps.ts";
 import { remoteCallsOf } from "../../../src/delivery/remote-calls.ts";
 import { callerSetOf } from "../../../src/delivery/site-names.ts";
@@ -43,10 +44,7 @@ const FIXTURES = new URL("../../fixtures/workflows/", import.meta.url);
 
 const EXPRESSION = "$";
 
-const written = (set: CallerSet): readonly WorkflowFile[] => {
-  const required = requiredSet(set, false);
-  return [...required, ...byHandSet(set).filter(({ name }) => !required.some((file) => file.name === name))];
-};
+const written = (set: CallerSet): readonly WorkflowFile[] => [...requiredSet(set, false), ...byHandSet(set, false)];
 
 const everyFile = (): readonly WorkflowFile[] => [CODE, SITE, CHECKED, EVERY_OPTION].flatMap(written);
 
@@ -77,6 +75,55 @@ const changed = (set: CallerSet, name: string, text: string): readonly (readonly
 test("both workflow sets require mutation and the whole-tree run", () => {
   expect(requiredSet(CODE, false).map(({ name }) => name)).toEqual(["ci.yml", "pr-title.yml", "main.yml", "release.yml", "mutation.yml", "whole-tree-run.yml"]);
   expect(requiredSet(SITE, false).map(({ name }) => name)).toEqual(["ci.yml", "pr-title.yml", "preview-close.yml", "main.yml", "release.yml", "production.yml", "mutation.yml", "whole-tree-run.yml"]);
+  for (const set of [CODE, SITE]) expect(documentOf(set, "whole-tree-run.yml")["on"]).toEqual({ workflow_dispatch: null });
+});
+
+test("mutation is never both required and optional, and stays optional only in the kit", () => {
+  for (const [set, kit, names] of [[CODE, false, ["advisories.yml", "flake.yml"]], [SITE, false, ["advisories.yml"]], [CODE, true, ["advisories.yml", "mutation.yml", "flake.yml"]]] as const) {
+    const required = requiredSet(set, kit);
+    const optional = byHandSet(set, kit);
+    expect(optional.map(({ name }) => name)).toEqual(names);
+    expect(optional.filter(({ name }) => required.some((file) => file.name === name))).toEqual([]);
+  }
+  const kit = requiredSet(CODE, true);
+  expect(kit.map(({ name }) => name)).not.toContain("mutation.yml");
+  expect(kit.map(({ name }) => name)).not.toContain("whole-tree-run.yml");
+  expect(differencesOf(CODE, kit, true)).toEqual([]);
+  expect(differencesOf(CODE, [...kit, { name: "mutation.yml", text: MUTATION_WORKFLOW }], true)).toEqual([]);
+});
+
+test("whole-tree tests install site and carried browsers before testing, without calling an absent action", () => {
+  const carried: CallerSet = { ...CODE, ci: { tests: CODE.ci.tests.map((job) => ({ ...job, browsers: "firefox chromium" })) } };
+  const carriedSite: CallerSet = { ...SITE, ci: carried.ci };
+  for (const [set, browsers] of [[CODE, ""], [SITE, "chromium webkit"], [carried, "firefox chromium"], [carriedSite, "chromium webkit firefox"]] as const) {
+    const steps = stepsOf(jobsOf(documentOf(set, "whole-tree-run.yml"))["tests"] ?? {});
+    const install = steps.findIndex((step) => step["uses"] === "./.github/actions/playwright");
+    const run = steps.findIndex((step) => step["run"] === "bash node_modules/@avi2dg/checks/src/delivery/ci/whole-tree/tests.sh");
+    expect(run).toBeGreaterThan(0);
+    if (browsers === "") {
+      expect(install).toBe(-1);
+    } else {
+      expect(install).toBeGreaterThan(steps.findIndex((step) => step["uses"] === "./.github/actions/setup"));
+      expect(install).toBeLessThan(run);
+      expect(steps[install]).toEqual({ uses: "./.github/actions/playwright", with: { browsers } });
+      expect(fullActions(set).some(({ path }) => path === ".github/actions/playwright/action.yml")).toBe(true);
+    }
+  }
+});
+
+test("whole-tree jobs keep the shared action pins and visibility runner instead of drifting", () => {
+  for (const base of [CODE, SITE]) {
+    for (const publicRepository of [false, true]) {
+      const set = { ...base, options: { ...base.options, publicRepository } };
+      const jobs = jobsOf(documentOf(set, "whole-tree-run.yml"));
+      for (const name of ["tests", "gates", "report"]) {
+        const job = jobs[name] ?? {};
+        expect(job["runs-on"]).toBe(publicRepository ? "ubuntu-latest" : "${{ vars.CI_RUNS_ON || 'ubuntu-latest' }}");
+        const uses = stepsOf(job).map((step) => step["uses"]).filter((use) => typeof use === "string" && !use.startsWith("./"));
+        expect(uses).toEqual((name === "report" ? [CHECKOUT, DOWNLOAD, DOWNLOAD, DOWNLOAD, UPLOAD] : [CHECKOUT, UPLOAD]).map((pin) => pin.split(" ")[0]));
+      }
+    }
+  }
 });
 
 test("configured tier shards keep the aggregate checks job and pull request selection", () => {
@@ -133,7 +180,7 @@ test("body-only edits neither run nor cancel title checks, while title edits and
 test("an absent optional file is no difference, but a modified mutation workflow fails in either set", () => {
   const required = requiredSet(CODE, false);
   expect(differencesOf(CODE, required, false)).toEqual([]);
-  expect(byHandSet(SITE).map(({ name }) => name)).toEqual(["advisories.yml"]);
+  expect(byHandSet(SITE, false).map(({ name }) => name)).toEqual(["advisories.yml"]);
   const handRolled = { name: "mutation.yml", text: "name: mutation\non:\n  workflow_dispatch:\n" };
   expect(differencesOf(CODE, [...required, handRolled], false).map(({ kind, name }) => [kind, name])).toEqual([["differs", "mutation.yml"]]);
   expect(differencesOf(SITE, [...requiredSet(SITE, false), handRolled], false).map(({ kind, name }) => [kind, name])).toEqual([["differs", "mutation.yml"]]);
@@ -170,10 +217,13 @@ test("a workflow that grants more than contents: read to every job, or a job tha
 });
 
 test("the whole-tree run queues concurrent runs, and a main release job does not cancel a pending release", () => {
-  const grouped = (set: CallerSet): readonly string[] => written(set).filter(({ text }) => /^concurrency:/m.test(text)).map(({ name }) => name);
+  const grouped = (set: CallerSet): readonly string[] => written(set).filter(({ text }) => parsedRecord(text)["concurrency"] !== undefined).map(({ name }) => name);
   expect(grouped(CODE)).toEqual(["ci.yml", "pr-title.yml", "mutation.yml", "whole-tree-run.yml"]);
   expect(grouped(SITE)).toEqual(["ci.yml", "pr-title.yml", "mutation.yml", "whole-tree-run.yml"]);
-  for (const set of [CODE, SITE]) expect(jobsOf(documentOf(set, "main.yml"))["release"]).toMatchObject({ concurrency: { "cancel-in-progress": false } });
+  for (const set of [CODE, SITE]) {
+    expect(documentOf(set, "whole-tree-run.yml")["concurrency"]).toEqual({ group: "whole-tree-run", "cancel-in-progress": false });
+    expect(jobsOf(documentOf(set, "main.yml"))["release"]).toMatchObject({ concurrency: { "cancel-in-progress": false } });
+  }
 });
 
 test("a written file that hands every secret to a job with secrets: inherit fails here", () => {
