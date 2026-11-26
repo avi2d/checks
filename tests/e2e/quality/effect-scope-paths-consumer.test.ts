@@ -1,14 +1,15 @@
 import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { KIT_BIN } from "../lib/consumer-tree.ts";
 import { SCOPED, UNSCOPED, SCOPE_SERVICE, KIT_SERVICE, PLANT, ASYNC_PLANT, ASYNC_RULE, ASYNC_DIAGNOSTIC, scopeConsumer } from "../lib/effect-scope-consumer.ts";
 
 const { tree, consumer, oxlint, diagnostics, scopeGate, expectAsyncPaths } = scopeConsumer("checks-effect-scope-paths-");
 
 test("scope check does not certify brace or basename paths or paths ignored only by oxlint", async () => {
   const cases = [
-    { scope: '{ files: ["scripts/{a,b}.ts"] }', extra: "", ignore: "", refused: "scripts/{a,b}.ts" },
-    { scope: '{ files: ["scripts/**/*.ts"], excludeFiles: ["scripts/{a,b}.ts"] }', extra: "", ignore: "", refused: "scripts/{a,b}.ts" },
+    { scope: '{ files: ["scripts/{a,b}.ts"] }', extra: "", ignore: "", refused: "scripts/{a,b}.ts", linted: ["scripts/a.ts", "scripts/b.ts"] },
+    { scope: '{ files: ["scripts/**/*.ts"], excludeFiles: ["scripts/{a,b}.ts"] }', extra: "", ignore: "", refused: "scripts/{a,b}.ts", linted: ["scripts/nested/a.ts"] },
     { scope: '{ files: ["a.ts"] }', extra: "", ignore: "" },
     { scope: '{ files: ["scripts/**/*.ts"] }', extra: ', ignorePatterns: ["scripts/b.ts"]', ignore: "" },
     { scope: '{ files: ["scripts/**/*.ts"] }', extra: "", ignore: "scripts/b.ts\n" },
@@ -25,7 +26,10 @@ export default defineConfig({ effect: ${scope}${extra} });
     const generated = await scopeGate();
     const checked = await scopeGate("--check");
     if ("refused" in entry) {
-      for (const run of [generated, checked]) {
+      const { linted } = await oxlint([]);
+      expect([...linted].filter(([, rules]) => rules.includes(ASYNC_RULE)).map(([file]) => file).sort()).toEqual([...entry.linted]);
+      const setup = await tree.run(join(KIT_BIN, "checks-setup"), []);
+      for (const run of [generated, checked, setup]) {
         expect(run.exitCode).toBe(2);
         expect(run.text).toContain(entry.refused);
         expect(run.text).toContain("use separate relative globs");
