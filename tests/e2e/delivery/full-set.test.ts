@@ -1,5 +1,6 @@
 import { $ } from "bun";
 import { expect, test } from "bun:test";
+import { Schema } from "effect";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { withoutPullRequestEvent } from "../../lib/env.ts";
@@ -22,6 +23,27 @@ const text = (repo: FixtureRepo, path: string): Promise<string> => readFile(join
 
 const parsed = async (repo: FixtureRepo, name: string): Promise<unknown> => Bun.YAML.parse(await text(repo, join(".github", "workflows", name)));
 
+const decodeJobs = Schema.decodeUnknownSync(Schema.Struct({ jobs: Schema.Record(Schema.String, Schema.Unknown) }));
+const Step = Schema.Struct({
+  run: Schema.optionalKey(Schema.String),
+  id: Schema.optionalKey(Schema.String),
+  uses: Schema.optionalKey(Schema.String),
+  with: Schema.optionalKey(Schema.Struct({ path: Schema.optionalKey(Schema.String) })),
+});
+const decodeJob = Schema.decodeUnknownSync(Schema.Struct({ steps: Schema.Array(Step) }));
+
+async function expectGitleaksBeforeTests(repo: FixtureRepo, file: string, job: string): Promise<void> {
+  const { jobs } = decodeJobs(await parsed(repo, file));
+  const { steps } = decodeJob(jobs[job]);
+  const cache = steps.findIndex((step) => step.with?.path === "~/.cache/avi2dg-checks/gitleaks");
+  const install = steps.findIndex((step) => step.run === "bunx checks-ci gitleaks");
+  const tests = steps.findIndex((step) => step.id === "test" || step.run === "bun run test --full");
+  expect(cache).toBeGreaterThanOrEqual(0);
+  expect(steps[cache]?.uses?.startsWith("actions/cache@")).toBe(true);
+  expect(install).toBeGreaterThan(cache);
+  expect(tests).toBeGreaterThan(install);
+}
+
 test("a code write that leaves a job calling another repository's workflow, or a gate job that branch protection reads as checks / checks, fails", async () => {
   const repo = await open({ "package.json": manifest });
   await repo.commit("start");
@@ -37,26 +59,38 @@ test("a code write that leaves a job calling another repository's workflow, or a
   expect(await workflows(repo)).toEqual({ exitCode: 0, text: "workflows: .github/workflows holds the code set checks-workflows writes\n" });
 }, 30_000);
 
-test("the e2e job does not run tests before it provisions the pinned gitleaks", async () => {
+test.each([
+  { kind: "code", flags: [] },
+  { kind: "site", flags: SITE_FLAGS },
+])("the $kind e2e job does not run tests before it provisions the pinned gitleaks", async ({ flags }) => {
   const repo = await open({ "package.json": manifest, "tests/e2e/scan.test.ts": "export {};\n" });
   await repo.commit("start");
-  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  expect((await workflows(repo, ["--write", ...flags])).exitCode).toBe(0);
+  await expectGitleaksBeforeTests(repo, "ci.yml", "e2e");
+}, 30_000);
 
-  const ci = await parsed(repo, "ci.yml");
-  expect(ci).toMatchObject({
-    jobs: {
-      e2e: {
-        steps: expect.arrayContaining([
-          expect.objectContaining({ run: "bunx checks-ci gitleaks" }),
-          expect.objectContaining({ id: "test" }),
-        ]),
-      },
+test.each<{ kind: string; files: Readonly<Record<string, string>> }>([
+  { kind: "public package", files: { "package.json": manifest } },
+  { kind: "private package with tests", files: { "package.json": JSON.stringify({ name: "acme", private: true, scripts: { test: "bun test" } }) } },
+  {
+    kind: "public workspace",
+    files: {
+      "package.json": JSON.stringify({ name: "acme", private: true, workspaces: ["packages/*"] }),
+      "packages/run/package.json": JSON.stringify({ name: "@acme/run", version: "1.0.0" }),
     },
-  });
-  const written = await text(repo, ".github/workflows/ci.yml");
-  const e2e = written.split("  e2e:\n")[1]?.split("\n  checks:")[0] ?? "";
-  expect(e2e.indexOf("run: bunx checks-ci gitleaks")).toBeGreaterThanOrEqual(0);
-  expect(e2e.indexOf("run: bunx checks-ci gitleaks")).toBeLessThan(e2e.indexOf("id: test"));
+  },
+])("the $kind release suite does not run tests before it provisions the pinned gitleaks", async ({ files }) => {
+  const repo = await open(files);
+  await repo.commit("start");
+  expect((await workflows(repo, ["--write"])).exitCode).toBe(0);
+  await expectGitleaksBeforeTests(repo, "main.yml", "suite");
+}, 30_000);
+
+test("site production does not test the staged release before it provisions the pinned gitleaks", async () => {
+  const repo = await open({ "package.json": manifest });
+  await repo.commit("start");
+  expect((await workflows(repo, ["--write", ...SITE_FLAGS])).exitCode).toBe(0);
+  await expectGitleaksBeforeTests(repo, "production.yml", "production");
 }, 30_000);
 
 test("an edited setup action that passes the check, or that --write leaves edited, fails", async () => {

@@ -44,7 +44,7 @@ const holdSteps = (hold: boolean): readonly Step[] => (hold ? [DRAFT_HOLD] : [])
 
 const holdPermissions = (hold: boolean): readonly string[] => (hold ? ["contents: read", "actions: write"] : ["contents: read"]);
 
-const gitleaksCache = (kit: boolean): Step => ({
+export const gitleaksCache = (kit: boolean): Step => ({
   name: "cache the gitleaks the kit pins",
   if: "runner.environment == 'github-hosted'",
   uses: CACHE,

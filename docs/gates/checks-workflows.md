@@ -51,6 +51,7 @@ A code repository takes these files:
 
 A code repository whose `package.json` does not set `private: true` publishes to npm.
 Then its `main.yml` holds a `suite` job that runs `bun run test --full` once on a release commit before the tag and the publish.
+The code `main.yml` suite job and the site `production.yml` job cache and install the pinned gitleaks before running `bun run test --full`.
 A repository without a `package.json` counts as one that publishes.
 A private root with public workspace packages also holds the `suite` job and sets `CHECKS_PUBLISH_WORKSPACES: "true"` on the release step.
 A private root with a `test` script also holds the `suite` job, and its `ci.yml` runs static checks and tests on release pull requests.
