@@ -6,7 +6,7 @@ import { type CallerSet } from "./site-names.ts";
 import { RELEASE_ASSETS_DIRECTORY, RELEASE_ASSETS_SCRIPT, type CallerOptions, type Flake, type Pages } from "./caller-options.ts";
 import { isBrowserWalk, runnerOf } from "./ci-jobs.ts";
 import { SETUP_NODE, UPLOAD, DOWNLOAD, CONFIGURE_PAGES, UPLOAD_PAGES, DEPLOY_PAGES, type Job, type Step, type Workflow, expression, scalar, workflowText, TOKEN, RUNNER, checkout, SETUP, ciCommand, keepArtifacts, claudeInstall } from "./full-set/steps.ts";
-import { PULL_REQUEST_HEAD, PULL_REQUEST_NUMBER, BY_HAND, ciWorkflow } from "./full-set/ci.ts";
+import { PULL_REQUEST_HEAD, PULL_REQUEST_NUMBER, BY_HAND, ciWorkflow, gitleaksCache } from "./full-set/ci.ts";
 import { PREVIEW_CLOSE, SITE_MAIN, PRODUCTION } from "./full-set/site.ts";
 
 // The pull_request types cannot filter an edit by its changed field, so the job reads the changes payload.
@@ -138,7 +138,7 @@ function codeMain({ fullTest, checkRelease, publishWorkspaces, releaseAssets, pl
               runsOn: RUNNER,
               timeout: 45,
               permissions: ["contents: read"],
-              steps: [checkout({ history: true }), SETUP, { name: "run the full test suite on the release commit", run: "bun run test --full" }],
+              steps: [checkout({ history: true }), SETUP, gitleaksCache(false), { run: "bunx checks-ci gitleaks" }, { name: "run the full test suite on the release commit", run: "bun run test --full" }],
             },
           ]
         : []),
@@ -175,7 +175,7 @@ const fileOf = (workflow: Workflow): FullWorkflow => ({ name: workflow.name + ".
 // The kit cannot use the caller's release workflow because npm trusts release.yml.
 export function fullRequiredSet(set: CallerSet, kit: boolean): readonly FullWorkflow[] {
   const ci = fileOf(ciWorkflow(set, kit));
-  if (set.kind === "site") return [ci, fileOf(prTitle(set.options.publicRepository)), fileOf(PREVIEW_CLOSE(set.names, set.options.publicRepository)), fileOf(SITE_MAIN(set.names)), fileOf(release(set.options.releaseVersionInput)), fileOf(PRODUCTION(set.names, set.ci.tests.some(isBrowserWalk)))];
+  if (set.kind === "site") return [ci, fileOf(prTitle(set.options.publicRepository)), fileOf(PREVIEW_CLOSE(set.names, set.options.publicRepository)), fileOf(SITE_MAIN(set.names)), fileOf(release(set.options.releaseVersionInput)), fileOf(PRODUCTION(set.names, set.ci.tests.some(isBrowserWalk), kit))];
   const shared = [ci, fileOf(prTitle(set.options.publicRepository))];
   if (!kit) return [...shared, fileOf(codeMain(set.options)), fileOf(release(set.options.releaseVersionInput))];
   if (!set.options.releaseAssets) return shared;

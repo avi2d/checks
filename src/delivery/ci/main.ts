@@ -2,6 +2,8 @@
 import type { BunServices } from "@effect/platform-bun";
 import { Console, Effect } from "effect";
 import { runExitMain, UNDECIDED } from "../../core/main.ts";
+import { cacheRoot } from "../../dependencies/cache-root.ts";
+import { pinnedGitleaks } from "../gitleaks.ts";
 import { main as changes } from "./changes.ts";
 import { main as commitStatus } from "./commit-status.ts";
 import { main as draftHold } from "./draft-hold.ts";
@@ -29,6 +31,7 @@ const COMMANDS = {
   "commit-status": () => commitStatus,
   "draft-hold": () => draftHold,
   "github-release": () => githubRelease,
+  gitleaks: () => cacheRoot().pipe(Effect.flatMap(pinnedGitleaks), Effect.as(true)),
   "held-runs": () => heldRuns,
   lighthouse: () => lighthouse,
   mutation,
