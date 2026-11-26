@@ -13,7 +13,6 @@ const SEVERITIES = [
   "globalErrorInEffectCatch",
   "globalErrorInEffectFailure",
   "catchUnfailableEffect",
-  "catchAllToMapError",
   "missingReturnYieldStar",
   "floatingEffect",
   "outdatedApi",
@@ -56,13 +55,20 @@ function tsc(): Promise<Ran> {
   return run(join(CHECKOUT, "node_modules", ".bin", "tsc"), ["--noEmit"]);
 }
 
-async function consumer(include: readonly string[]): Promise<void> {
+type Severities = "kit" | "upstream defaults";
+
+async function consumer(include: readonly string[], severities: Severities = "kit"): Promise<void> {
   dir = await scratch("checks-tsconfig-");
+  const policy =
+    severities === "kit"
+      ? { extends: join(CHECKOUT, "tsconfig.effect.json") }
+      : { plugins: [{ name: "@effect/language-service" }] };
   await writeFile(
     join(dir, "tsconfig.json"),
     JSON.stringify({
-      extends: join(CHECKOUT, "tsconfig.effect.json"),
+      extends: policy.extends,
       compilerOptions: {
+        plugins: policy.plugins,
         strict: true,
         noEmit: true,
         module: "preserve",
@@ -114,6 +120,54 @@ test("tsconfig.effect.json carries the language-service block and erasableSyntax
   const typecheck = await tsc();
   expect(typecheck.exitCode).not.toBe(0);
   expect(typecheck.text).toContain("erasableSyntaxOnly");
+});
+
+const MIXED_CAUSE = `import { Cause, Effect, Exit } from "effect";
+const input = Effect.failCause(Cause.combine(Cause.fail("bad"), Cause.die("bug")));
+const outputs = {
+  catch: Effect.runSyncExit(Effect.catch(input, (error) => Effect.fail(error.length))),
+  mapError: Effect.runSyncExit(Effect.mapError(input, (error) => error.length)),
+};
+for (const [name, exit] of Object.entries(outputs)) {
+  if (Exit.isFailure(exit)) {
+    console.log(name, JSON.stringify(exit.cause.reasons.map((reason) =>
+      Cause.isFailReason(reason) ? ["Fail", reason.error] :
+      Cause.isDieReason(reason) ? ["Die", reason.defect] : ["Interrupt"]
+    )));
+  }
+}
+`;
+
+const RECOVERY = `import { Effect } from "effect";
+declare const input: Effect.Effect<void, string>;
+export const ignored = Effect.catch(input, () => Effect.void);
+export const fallback = Effect.catch(input, () => Effect.succeed("fallback"));
+`;
+
+const RECOVERY_REWRITES = ["catchAllToMapError", "catchToIgnore", "catchToOrElseSucceed"];
+
+async function recoveryDiagnostics(severities: Severities): Promise<Ran> {
+  await consumer(["mixed-cause.ts", "recovery.ts"], severities);
+  await writeFile(join(dir, "mixed-cause.ts"), MIXED_CAUSE);
+  await writeFile(join(dir, "recovery.ts"), RECOVERY);
+  return run(join(CHECKOUT, "node_modules", ".bin", "effect-tsgo"), [
+    "diagnostics", "--project", "tsconfig.json", "--format", "text", "--strict",
+  ]);
+}
+
+test("the shared policy silences the recovery rewrites the upstream defaults suggest", async () => {
+  const upstream = await recoveryDiagnostics("upstream defaults");
+  for (const rule of RECOVERY_REWRITES) expect(upstream.text).toContain(`message effect(${rule})`);
+
+  const kit = await recoveryDiagnostics("kit");
+  for (const rule of RECOVERY_REWRITES) expect(kit.text).not.toContain(`effect(${rule})`);
+  expect(kit.text).toContain("0 errors, 0 warnings and 0 messages.");
+  expect(kit.exitCode).toBe(0);
+
+  const runtime = await run(process.execPath, ["mixed-cause.ts"]);
+  expect(runtime.exitCode).toBe(0);
+  expect(runtime.text).toContain('catch [["Die","bad"],["Die","bug"]]');
+  expect(runtime.text).toContain('mapError [["Fail",3],["Die","bug"]]');
 });
 
 test("a consumer of tsconfig.effect.json fails an undefined in a Schema.optionalKey field, passes once the key is left out", async () => {
